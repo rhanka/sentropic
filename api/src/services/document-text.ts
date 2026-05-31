@@ -2,8 +2,7 @@
  * Text extraction helpers for document summarization.
  * MVP requirement: support pdf, docx, pptx, xlsx, md.
  */
-import JSZip from 'jszip';
-import { DOMParser } from '@xmldom/xmldom';
+import ExcelJS from 'exceljs';
 
 type ExtractedDocumentMetadata = {
   title?: string;
@@ -48,184 +47,126 @@ function countWords(text: string): number {
 
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-function isXlsxDocument(mimeType: string, fileName: string): boolean {
-  return mimeType === XLSX_MIME_TYPE || fileName.endsWith('.xlsx');
+export function isXlsxDocument(mimeType: string, fileName: string): boolean {
+  return mimeType === XLSX_MIME_TYPE || fileName.toLowerCase().endsWith('.xlsx');
 }
 
-type XmlNodeListLike = {
-  length: number;
-  item(index: number): XmlElementLike | null;
+/** One extracted worksheet: tab-separated content where formula cells surface formula + value. */
+export type ExtractedSheet = {
+  name: string;
+  /** 1-based sheet position in the workbook. */
+  index: number;
+  /** Number of non-empty rows captured in `text`. */
+  rowCount: number;
+  /** Tab-separated rows, no `Sheet:` header (caller adds labelling where relevant). */
+  text: string;
 };
-
-type XmlElementLike = {
-  getAttribute?(name: string): string | null;
-  getElementsByTagName?(tagName: string): XmlNodeListLike;
-  textContent?: string | null;
-};
-
-function parseXml(xml: string): XmlElementLike {
-  return new DOMParser().parseFromString(xml, 'application/xml') as unknown as XmlElementLike;
-}
-
-function xmlElements(parent: XmlElementLike | null | undefined, tagName: string): XmlElementLike[] {
-  const nodes = parent?.getElementsByTagName?.(tagName);
-  if (!nodes || typeof nodes.length !== 'number') return [];
-  const out: XmlElementLike[] = [];
-  for (let i = 0; i < nodes.length; i += 1) {
-    const node = nodes.item(i);
-    if (node) out.push(node);
-  }
-  return out;
-}
-
-function xmlAttribute(node: XmlElementLike | null | undefined, name: string): string | null {
-  const value = node?.getAttribute?.(name);
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function xmlText(node: XmlElementLike | null | undefined): string {
-  const value = node?.textContent;
-  return typeof value === 'string' ? value : '';
-}
 
 function normalizeCellText(value: string): string {
   return value.replace(/[\t\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function normalizeZipPath(input: string): string {
-  const parts: string[] = [];
-  for (const part of input.replace(/^\/+/, '').split('/')) {
-    if (!part || part === '.') continue;
-    if (part === '..') parts.pop();
-    else parts.push(part);
-  }
-  return parts.join('/');
-}
+/**
+ * Render a single exceljs cell to a string.
+ * - Formula cells surface BOTH the formula and the computed value: `=FORMULA → value`
+ *   (Anthropic xlsx skill principle: preserve formulas, never collapse them to values).
+ * - Shared formulas (`sharedFormula`) resolve to the master formula via `cell.formula`.
+ * - Dates are normalized to ISO; other types use exceljs' own `text` rendering.
+ */
+function renderCell(cell: ExcelJS.Cell): string {
+  const value = cell.value as unknown;
 
-function resolveWorkbookTarget(target: string): string {
-  if (target.startsWith('/')) return normalizeZipPath(target);
-  if (target.startsWith('xl/')) return normalizeZipPath(target);
-  return normalizeZipPath(`xl/${target}`);
-}
+  if (value === null || value === undefined) return '';
 
-function columnIndexFromReference(reference: string | null): number | null {
-  if (!reference) return null;
-  const letters = reference.match(/^[A-Z]+/i)?.[0]?.toUpperCase();
-  if (!letters) return null;
-  let index = 0;
-  for (const ch of letters) {
-    index = index * 26 + (ch.charCodeAt(0) - 64);
-  }
-  return index > 0 ? index - 1 : null;
-}
-
-async function readZipText(zip: JSZip, path: string): Promise<string | null> {
-  const file = zip.file(path);
-  return file ? file.async('text') : null;
-}
-
-function readSharedStrings(xml: string | null): string[] {
-  if (!xml) return [];
-  const doc = parseXml(xml);
-  return xmlElements(doc, 'si').map((si) =>
-    xmlElements(si, 't')
-      .map((node) => xmlText(node))
-      .join(''),
-  );
-}
-
-function readWorkbookSheets(workbookXml: string | null, relationshipsXml: string | null): Array<{
-  name: string;
-  path: string;
-}> {
-  if (!workbookXml) return [];
-  const rels = new Map<string, string>();
-  if (relationshipsXml) {
-    for (const rel of xmlElements(parseXml(relationshipsXml), 'Relationship')) {
-      const id = xmlAttribute(rel, 'Id');
-      const target = xmlAttribute(rel, 'Target');
-      if (id && target) rels.set(id, resolveWorkbookTarget(target));
-    }
+  // Formula cell: exceljs exposes { formula, result } (and { sharedFormula, result } for shared).
+  if (cell.type === ExcelJS.ValueType.Formula || (typeof value === 'object' && value !== null && ('formula' in value || 'sharedFormula' in value))) {
+    const formula = typeof cell.formula === 'string' && cell.formula.trim() ? cell.formula.trim() : null;
+    const resultText = renderFormulaResult(cell);
+    if (formula && resultText) return normalizeCellText(`=${formula} → ${resultText}`);
+    if (formula) return normalizeCellText(`=${formula}`);
+    return normalizeCellText(resultText);
   }
 
-  return xmlElements(parseXml(workbookXml), 'sheet')
-    .map((sheet) => {
-      const name = xmlAttribute(sheet, 'name') ?? 'Sheet';
-      const relationshipId = xmlAttribute(sheet, 'r:id');
-      const path = relationshipId ? rels.get(relationshipId) : null;
-      return path ? { name, path } : null;
-    })
-    .filter((sheet): sheet is { name: string; path: string } => Boolean(sheet));
-}
-
-function readCellValue(cell: XmlElementLike, sharedStrings: string[]): string {
-  const type = xmlAttribute(cell, 't');
-
-  if (type === 'inlineStr') {
-    return normalizeCellText(
-      xmlElements(cell, 't')
-        .map((node) => xmlText(node))
-        .join(''),
-    );
+  if (cell.type === ExcelJS.ValueType.Date && value instanceof Date) {
+    return value.toISOString();
   }
 
-  const raw = normalizeCellText(xmlText(xmlElements(cell, 'v')[0]));
-  if (!raw) return '';
-  if (type === 's') {
-    const index = Number.parseInt(raw, 10);
-    return Number.isFinite(index) ? normalizeCellText(sharedStrings[index] ?? raw) : raw;
-  }
-  if (type === 'b') return raw === '1' ? 'TRUE' : 'FALSE';
-  return raw;
+  // Booleans, numbers, strings, hyperlinks, rich text, errors: exceljs `text` is a sane string.
+  const text = cell.text;
+  return typeof text === 'string' ? normalizeCellText(text) : normalizeCellText(String(value));
 }
 
-function extractWorksheetRows(xml: string, sharedStrings: string[]): string[][] {
+function renderFormulaResult(cell: ExcelJS.Cell): string {
+  const raw = cell.result as unknown;
+  if (raw === null || raw === undefined) return '';
+  if (raw instanceof Date) return raw.toISOString();
+  if (typeof raw === 'object') {
+    // Formula error results surface as { error: '#DIV/0!' }.
+    const error = (raw as { error?: unknown }).error;
+    if (typeof error === 'string') return error;
+    const text = cell.text;
+    return typeof text === 'string' ? normalizeCellText(text) : '';
+  }
+  return normalizeCellText(String(raw));
+}
+
+function extractSheetRows(worksheet: ExcelJS.Worksheet): string[][] {
   const rows: string[][] = [];
-  for (const row of xmlElements(parseXml(xml), 'row')) {
+  worksheet.eachRow({ includeEmpty: false }, (row) => {
     const values: string[] = [];
-    let nextColumnIndex = 0;
-    for (const cell of xmlElements(row, 'c')) {
-      const explicitColumnIndex = columnIndexFromReference(xmlAttribute(cell, 'r'));
-      const columnIndex = explicitColumnIndex ?? nextColumnIndex;
-      while (values.length < columnIndex) values.push('');
-      values[columnIndex] = readCellValue(cell, sharedStrings);
-      nextColumnIndex = columnIndex + 1;
-    }
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      while (values.length < colNumber - 1) values.push('');
+      values[colNumber - 1] = renderCell(cell);
+    });
     while (values.length > 0 && !values[values.length - 1]) values.pop();
     if (values.some((value) => value.trim().length > 0)) rows.push(values);
-  }
+  });
   return rows;
+}
+
+async function loadXlsxWorkbook(bytes: Uint8Array): Promise<ExcelJS.Workbook> {
+  const workbook = new ExcelJS.Workbook();
+  // exceljs accepts a Node Buffer; copy into a standalone ArrayBuffer-backed Buffer to be safe.
+  await workbook.xlsx.load(Buffer.from(bytes));
+  return workbook;
+}
+
+/**
+ * Structured per-sheet extraction for the documentary query tool (`list_sheets` / `get_sheet_content`).
+ * Each sheet's `text` is tab-separated rows; formula cells surface `=FORMULA → value`.
+ * Empty sheets are skipped (no rows captured) to mirror the flattened indexing behavior.
+ */
+export async function extractXlsxSheets(bytes: Uint8Array): Promise<ExtractedSheet[]> {
+  const workbook = await loadXlsxWorkbook(bytes);
+  const sheets: ExtractedSheet[] = [];
+  let position = 0;
+  workbook.eachSheet((worksheet) => {
+    position += 1;
+    const rows = extractSheetRows(worksheet);
+    if (rows.length === 0) return;
+    const name = worksheet.name?.trim() ? worksheet.name.trim() : `Sheet ${position}`;
+    sheets.push({
+      name,
+      index: position,
+      rowCount: rows.length,
+      text: rows.map((row) => row.join('\t')).join('\n'),
+    });
+  });
+  return sheets;
 }
 
 async function extractXlsxDocumentInfo(params: {
   bytes: Uint8Array;
   filename?: string | null;
 }): Promise<ExtractedDocumentInfo> {
-  const zip = await JSZip.loadAsync(Buffer.from(params.bytes));
-  const workbookXml = await readZipText(zip, 'xl/workbook.xml');
-  const relationshipsXml = await readZipText(zip, 'xl/_rels/workbook.xml.rels');
-  const sharedStrings = readSharedStrings(await readZipText(zip, 'xl/sharedStrings.xml'));
-  const workbookSheets = readWorkbookSheets(workbookXml, relationshipsXml);
-  const sheets =
-    workbookSheets.length > 0
-      ? workbookSheets
-      : Object.keys(zip.files)
-          .filter((path) => /^xl\/worksheets\/[^/]+\.xml$/i.test(path))
-          .sort()
-          .map((path, index) => ({ name: `Sheet ${index + 1}`, path }));
+  const sheets = await extractXlsxSheets(params.bytes);
 
-  const sections: string[] = [];
-  const headingsH1: string[] = [];
-  for (const sheet of sheets) {
-    const worksheetXml = await readZipText(zip, sheet.path);
-    if (!worksheetXml) continue;
-    const rows = extractWorksheetRows(worksheetXml, sharedStrings);
-    if (rows.length === 0) continue;
-    headingsH1.push(sheet.name);
-    sections.push([`Sheet: ${sheet.name}`, ...rows.map((row) => row.join('\t'))].join('\n'));
-  }
+  const headingsH1 = sheets.map((sheet) => sheet.name);
+  const text = sheets
+    .map((sheet) => [`Sheet: ${sheet.name}`, sheet.text].join('\n'))
+    .join('\n\n')
+    .trim();
 
-  const text = sections.join('\n\n').trim();
   const metadata: ExtractedDocumentMetadata = {};
   const title = params.filename?.trim();
   if (title) metadata.title = title;
