@@ -62,6 +62,7 @@
   },
   "dependencies": {
     "@lucide/svelte": "^0.562.0",
+    "@sentropic/auth-ui": "file:../packages/auth-ui",
     "@sentropic/chat-ui": "file:../packages/chat-ui",
     "@sentropic/cowork-bridge": "file:../packages/cowork-bridge",
     "@simplewebauthn/browser": "^13.2.2",

@@ -44,13 +44,10 @@
     "redirecting": "Redirection…",
     "user": "Utilisateur",
     "na": "N/A",
-    "readOnlyDisabled": "Mode lecture seule : création / suppression désactivées."
-    ,
+    "readOnlyDisabled": "Mode lecture seule : création / suppression désactivées.",
     "ai": "IA",
-    "references": "Références"
-    ,
-    "pointsAbbr": "pts"
-    ,
+    "references": "Références",
+    "pointsAbbr": "pts",
     "add": "Ajouter",
     "general": "Général",
     "yesterday": "Hier",
@@ -59,8 +56,7 @@
     "retry": "Réessayer",
     "openMenu": "Ouvrir le menu",
     "saving": "Sauvegarde…",
-    "unsavedChanges": "Modifications non sauvegardées"
-    ,
+    "unsavedChanges": "Modifications non sauvegardées",
     "unspecified": "Non renseigné",
     "useMedian": "Utiliser la médiane",
     "actions": "Actions",
@@ -119,114 +115,6 @@
     "notFoundMessage": "La page demandée n'existe pas.",
     "backHome": "Retour à l'accueil"
   },
-  "auth": {
-    "emailPlaceholder": "vous@example.com",
-    "webauthnRegisterNotice": "Vous allez enregistrer un nouvel appareil WebAuthn. Nous vous enverrons un email de confirmation.",
-    "devicesTitle": "Mes appareils",
-    "loading": "Chargement…",
-    "noDevices": "Aucun appareil enregistré",
-    "addedOn": "Ajouté le {date}",
-    "lastUsed": "Dernière utilisation : {date}",
-    "verifyInProgress": "Vérification en cours…",
-    "redirectingDashboard": "Redirection vers le tableau de bord…",
-    "registerDeviceNow": "Vous allez maintenant enregistrer votre appareil WebAuthn",
-    "devices": {
-      "title": "Mes appareils",
-      "subtitle": "Gérez les appareils enregistrés pour l'authentification WebAuthn",
-      "empty": "Aucun appareil enregistré",
-      "register": "Enregistrer un appareil",
-      "addNew": "Ajouter un nouvel appareil",
-      "rename": "Renommer",
-      "revoke": "Révoquer",
-      "uvEnabled": "UV activée",
-      "addedOn": "Ajouté le {date}",
-      "lastUsed": "Dernière utilisation : {date}",
-      "confirmRevoke": "Êtes-vous sûr de vouloir révoquer l'appareil \"{deviceName}\" ? Vous ne pourrez plus vous connecter avec cet appareil.",
-      "errors": {
-        "load": "Erreur lors du chargement des appareils",
-        "update": "Erreur lors de la mise à jour",
-        "revoke": "Erreur lors de la révocation"
-      },
-      "pair": {
-        "title": "Appairer un appareil",
-        "subtitle": "Saisissez le code affiché par l'application Sentropic Cowork sur votre poste de travail.",
-        "codeLabel": "Code d'appairage",
-        "codePlaceholder": "PAIR-XXXX",
-        "deviceNameLabel": "Nom de l'appareil",
-        "deviceNamePlaceholder": "Mon poste de travail",
-        "confirm": "Appairer l'appareil",
-        "confirming": "Appairage…",
-        "success": "Appareil appairé. Vous pouvez retourner à l'application sur votre poste de travail.",
-        "back": "Retour aux appareils",
-        "errors": {
-          "codeRequired": "Le code d'appairage est requis.",
-          "notFound": "Code invalide ou expiré.",
-          "generic": "Échec de l'appairage de l'appareil."
-        }
-      }
-    },
-    "magicLink": {
-      "title": "Vérification du lien magique",
-      "successTitle": "Connexion réussie !",
-      "errorTitle": "Erreur de vérification",
-      "backToLogin": "Retour à la connexion",
-      "errors": {
-        "missingToken": "Token manquant dans l'URL",
-        "verifyFailed": "Erreur lors de la vérification du lien magique"
-      }
-    },
-    "login": {
-      "title": "Connexion",
-      "supportedHint": "Utilisez votre passkey ou biométrie",
-      "notAvailable": "WebAuthn non disponible sur ce navigateur",
-      "unsupportedBrowser": "Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).",
-      "button": "Se connecter avec WebAuthn",
-      "buttonLoading": "Connexion…",
-      "lostDevice": "J'ai perdu mon appareil",
-      "noAccount": "Pas encore de compte ? S'inscrire",
-      "lostDeviceTitle": "Perte d'appareil",
-      "registerNewDevice": "Enregistrer un nouvel appareil (workflow complet)",
-      "backToLogin": "Retour à la connexion normale"
-    },
-    "register": {
-      "title": "Créer un compte",
-      "subtitle": "Authentification sécurisée avec WebAuthn",
-      "unsupportedBrowserTitle": "Navigateur non compatible",
-      "unsupportedBrowser": "Votre navigateur ne supporte pas WebAuthn. Utilisez un navigateur moderne (Chrome, Firefox, Safari, Edge).",
-      "emailLabel": "Email",
-      "getCode": "Obtenir un code",
-      "sendingCode": "Envoi…",
-      "alreadyHaveAccount": "Déjà un compte ? Se connecter",
-      "codeLabel": "Code à 6 chiffres",
-      "codeHelp": "Saisissez le code reçu par email",
-      "verifyCode": "Vérifier le code",
-      "verifyingCode": "Vérification…",
-      "changeEmail": "Modifier l'email",
-      "codeVerifiedTitle": "Code vérifié !",
-      "registerDevice": "Enregistrer mon appareil WebAuthn",
-      "registering": "Enregistrement…",
-      "successTitle": "Inscription réussie !",
-      "success": {
-        "codeSent": "Code envoyé par email",
-        "redirecting": "Inscription réussie ! Redirection…"
-      },
-      "errors": {
-        "invalidEmail": "Veuillez saisir une adresse email valide",
-        "sendCode": "Erreur lors de l'envoi du code"
-      }
-    }
-    ,
-    "webauthn": {
-      "errors": {
-        "registrationCancelled": "Vous avez annulé l'inscription",
-        "authenticationCancelled": "Vous avez annulé l'authentification",
-        "alreadyRegistered": "Cet appareil est déjà enregistré",
-        "noMatchingAuthenticator": "Aucun appareil reconnu",
-        "notSupportedAuthenticator": "Cet authentificateur n'est pas supporté",
-        "notSupportedBrowser": "Votre navigateur ne supporte pas WebAuthn"
-      }
-    }
-  },
   "matrix": {
     "title": "Configuration de l'évaluation Valeur/Complexité",
     "details": {
@@ -271,8 +159,7 @@
     "pleaseSelectFolder": "Veuillez sélectionner un dossier pour voir sa matrice",
     "folderLoaded": "Évaluation du dossier \"{name}\" chargée",
     "folderNoMatrix": "Le dossier \"{name}\" n'a pas de matrice configurée",
-    "loadError": "Erreur lors du chargement de la matrice"
-    ,
+    "loadError": "Erreur lors du chargement de la matrice",
     "autoSaveError": "Erreur lors de la sauvegarde automatique de la configuration",
     "saveSuccess": "Configuration de la matrice mise à jour",
     "saveError": "Erreur lors de la sauvegarde de la matrice",
@@ -281,14 +168,14 @@
     "newComplexityAxisName": "Nouvel axe de complexité",
     "valueAxisAdded": "Nouvel axe de valeur ajouté",
     "complexityAxisAdded": "Nouvel axe de complexité ajouté",
-  "confirmDeleteAxis": "Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des initiatives.",
-  "valueAxisDeleted": "Axe de valeur supprimé",
-  "complexityAxisDeleted": "Axe de complexité supprimé",
-  "weightsRecalcWarning": "Attention : Modifier les poids recalculera automatiquement tous les scores de vos initiatives existantes.",
-  "levelN": "Niveau {level}",
-  "selectedFolder": "Dossier sélectionné",
-  "createNew": "Créer une nouvelle matrice",
-  "createDialogBody": "Choisissez le type de matrice à créer :",
+    "confirmDeleteAxis": "Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des initiatives.",
+    "valueAxisDeleted": "Axe de valeur supprimé",
+    "complexityAxisDeleted": "Axe de complexité supprimé",
+    "weightsRecalcWarning": "Attention : Modifier les poids recalculera automatiquement tous les scores de vos initiatives existantes.",
+    "levelN": "Niveau {level}",
+    "selectedFolder": "Dossier sélectionné",
+    "createNew": "Créer une nouvelle matrice",
+    "createDialogBody": "Choisissez le type de matrice à créer :",
     "help": {
       "intro": "Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des initiatives.",
       "details": "La matrice utilise 5 niveaux pour chaque critère, avec des descriptions spécifiques pour chacun. Cliquez sur un critère pour voir et modifier les descriptions détaillées des 5 niveaux."
@@ -342,14 +229,14 @@
         "readOnlyAction": "Action non autorisée (mode lecture seule)."
       }
     },
-  "new": {
-    "nameLabel": "Nom du dossier",
-    "namePlaceholder": "Saisir le nom du dossier (optionnel)",
-    "orgOptional": "Organisation (optionnel)",
-    "unspecified": "Non spécifié",
-    "createOrg": "Créer une organisation",
-    "context": "Contexte",
-    "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
+    "new": {
+      "nameLabel": "Nom du dossier",
+      "namePlaceholder": "Saisir le nom du dossier (optionnel)",
+      "orgOptional": "Organisation (optionnel)",
+      "unspecified": "Non spécifié",
+      "createOrg": "Créer une organisation",
+      "context": "Contexte",
+      "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
       "useCaseCount": "Nombre d'initiatives",
       "modelLabel": "Modèle de génération",
       "modelHint": "Utilisé pour la génération des initiatives et de la matrice de ce dossier.",
@@ -450,8 +337,7 @@
       "create": "Erreur lors de la création de l'organisation",
       "load": "Erreur lors du chargement de l'organisation",
       "loadList": "Erreur lors du chargement des organisations"
-    }
-    ,
+    },
     "confirmDelete": "Êtes-vous sûr de vouloir supprimer cette organisation ?"
   },
   "locks": {
@@ -490,19 +376,19 @@
     "execSummaryEmpty": "Aucune synthèse exécutive disponible pour ce dossier",
     "execSummaryGenerate": "Générer la synthèse exécutive",
     "loadingData": "Chargement des données…",
-  "useCaseCount": "Nombre d'initiatives",
-  "quickWins": "Gains rapides",
-  "roiQuadrants": {
+    "useCaseCount": "Nombre d'initiatives",
     "quickWins": "Gains rapides",
-    "majorProjects": "Projets majeurs",
-    "wait": "Attendre",
-    "dontDo": "Ne pas faire"
-  },
-  "roiQuadrantConfig": "Configuration du quadrant ROI",
-  "roiStats": {
-    "medianValue": "Valeur médiane",
-    "medianComplexity": "Complexité médiane"
-  },
+    "roiQuadrants": {
+      "quickWins": "Gains rapides",
+      "majorProjects": "Projets majeurs",
+      "wait": "Attendre",
+      "dontDo": "Ne pas faire"
+    },
+    "roiQuadrantConfig": "Configuration du quadrant ROI",
+    "roiStats": {
+      "medianValue": "Valeur médiane",
+      "medianComplexity": "Complexité médiane"
+    },
     "roiConfig": {
       "buttonTitle": "Configuration du quadrant ROI",
       "close": "Fermer la configuration",
@@ -520,8 +406,7 @@
     "annex": "Annexe",
     "annexUseCases": "Fiches des initiatives",
     "subtitle": "Priorisez vos innovations par l'apport de valeur",
-    "about": "À Propos"
-    ,
+    "about": "À Propos",
     "backCover": {
       "p1": "Top AI Ideas s'inscrit dans la vision de SENT-tech : plus de vingt ans d'expertise en innovation, données, digital et intelligence artificielle. Ici, l'IA n'est jamais une finalité, mais un levier devenu indispensable à la compétitivité.",
       "p2": "La valeur naît d'une approche holistique, où les opportunités d'affaires rencontrent les capacités technologiques. Conçu pour guider les organisations dans leurs choix, Top AI Ideas aide à identifier les initiatives les plus prometteuses, dans une démarche collaborative, rigoureuse et orientée impact.",
@@ -744,8 +629,7 @@
     "promptDescription": "Description",
     "detectedVariables": "Variables détectées",
     "noVariablesDetected": "Aucune variable détectée",
-    "promptContent": "Contenu du prompt"
-    ,
+    "promptContent": "Contenu du prompt",
     "confirmDeactivate": "Désactiver votre compte ? Vous pourrez demander une réactivation.",
     "confirmDeleteAccount": "SUPPRESSION DÉFINITIVE: supprimer votre compte et toutes vos données immédiatement ?",
     "deactivateAccount": "Désactiver mon compte",
@@ -1283,14 +1167,30 @@
         "label": "Code: git",
         "description": "Exécuter des actions git (status/diff/ls-files/add/commit/push/...) avec contrôle de politique"
       },
-      "organizationRead": { "label": "Organisation (lecture)" },
-      "organizationUpdate": { "label": "Organisation (édition)" },
-      "folderRead": { "label": "Dossier (lecture)" },
-      "folderUpdate": { "label": "Dossier (édition)" },
-      "usecaseRead": { "label": "Initiative (lecture)" },
-      "usecaseUpdate": { "label": "Initiative (édition)" },
-      "matrix": { "label": "Matrice (lecture/édition)" },
-      "executiveSummary": { "label": "Synthèse exécutive" }
+      "organizationRead": {
+        "label": "Organisation (lecture)"
+      },
+      "organizationUpdate": {
+        "label": "Organisation (édition)"
+      },
+      "folderRead": {
+        "label": "Dossier (lecture)"
+      },
+      "folderUpdate": {
+        "label": "Dossier (édition)"
+      },
+      "usecaseRead": {
+        "label": "Initiative (lecture)"
+      },
+      "usecaseUpdate": {
+        "label": "Initiative (édition)"
+      },
+      "matrix": {
+        "label": "Matrice (lecture/édition)"
+      },
+      "executiveSummary": {
+        "label": "Synthèse exécutive"
+      }
     },
     "todoCard": {
       "title": "Plan créé depuis le chat",
@@ -1591,7 +1491,7 @@
     "types": {
       "neutral": "Personnel (neutre)",
       "aiIdeas": "AI Ideas",
-      "opportunity": "Opportunit\u00e9",
+      "opportunity": "Opportunité",
       "code": "Code"
     },
     "confirm": {
