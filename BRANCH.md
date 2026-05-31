@@ -46,11 +46,11 @@
 - [x] Lot 0: fold handover finalization scope into plan/14e
 - [x] Lot 0: recover interrupted Claude 14e session and fold verified spec decisions into `BRANCH.md` + `plan/14e`
 - [ ] Lot 1: display-name sweep (`Top AI Ideas` -> `Sentropic`, 44 occurrences / 20 files)
-  - [ ] Update tests first where assertions pin the old brand: `api/tests/utils/auth-helper.ts`, focused auth/email/report fixtures if present.
+  - [x] Update tests first where assertions pin the old brand: `api/tests/utils/auth-helper.ts`, focused auth/email/report fixtures if present.
   - [ ] Update locales `ui/src/locales/fr.json`, `ui/src/locales/en.json`.
-  - [ ] Update auth email subjects/signatures: `api/src/services/magic-link.ts`, `api/src/services/email-verification.ts`.
-  - [ ] Update API titles/defaults: `api/src/openapi/export.ts`, `api/src/app.ts`, `api/src/routes/auth/session.ts`, `api/src/services/webauthn-config.ts`.
-  - [ ] Update DOCX report title: `api/src/services/docx-service.ts`.
+  - [x] Update auth email subjects/signatures: `api/src/services/magic-link.ts`, `api/src/services/email-verification.ts`.
+  - [x] Update API titles/defaults: `api/src/openapi/export.ts`, `api/src/app.ts`, `api/src/routes/auth/session.ts`, `api/src/services/webauthn-config.ts`.
+  - [x] Update DOCX report title: `api/src/services/docx-service.ts`.
   - [ ] Update extension display strings and document titles: `ui/vscode-ext/package.json`, `ui/vscode-ext/extension.ts`, `ui/chrome-ext/manifest.json`, `ui/chrome-ext/popup.html`, `ui/chrome-ext/sidepanel.html`, `ui/chrome-ext/content.ts`, `ui/chrome-ext/background.ts`, `ui/chrome-ext/extension-auth.ts`.
   - [ ] Update web page titles: `ui/src/routes/+layout.svelte`, `ui/src/routes/dashboard/+page.svelte`.
   - [ ] Gate: `make typecheck-api typecheck-ui ENV=br14e`; `make lint-api lint-ui ENV=br14e`.
