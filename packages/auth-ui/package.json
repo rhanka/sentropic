@@ -32,11 +32,31 @@
       "svelte": "./src/transport-fetch.ts",
       "import": "./dist/transport-fetch.js"
     },
-    "./components/AuthLogin.svelte": "./src/components/AuthLogin.svelte",
-    "./components/AuthRegister.svelte": "./src/components/AuthRegister.svelte",
-    "./components/AuthMagicLinkVerify.svelte": "./src/components/AuthMagicLinkVerify.svelte",
-    "./components/AuthDevices.svelte": "./src/components/AuthDevices.svelte",
-    "./components/AuthDevicePair.svelte": "./src/components/AuthDevicePair.svelte"
+    "./components/AuthLogin.svelte": {
+      "types": "./src/components/AuthLogin.svelte.d.ts",
+      "svelte": "./src/components/AuthLogin.svelte",
+      "import": "./src/components/AuthLogin.svelte"
+    },
+    "./components/AuthRegister.svelte": {
+      "types": "./src/components/AuthRegister.svelte.d.ts",
+      "svelte": "./src/components/AuthRegister.svelte",
+      "import": "./src/components/AuthRegister.svelte"
+    },
+    "./components/AuthMagicLinkVerify.svelte": {
+      "types": "./src/components/AuthMagicLinkVerify.svelte.d.ts",
+      "svelte": "./src/components/AuthMagicLinkVerify.svelte",
+      "import": "./src/components/AuthMagicLinkVerify.svelte"
+    },
+    "./components/AuthDevices.svelte": {
+      "types": "./src/components/AuthDevices.svelte.d.ts",
+      "svelte": "./src/components/AuthDevices.svelte",
+      "import": "./src/components/AuthDevices.svelte"
+    },
+    "./components/AuthDevicePair.svelte": {
+      "types": "./src/components/AuthDevicePair.svelte.d.ts",
+      "svelte": "./src/components/AuthDevicePair.svelte",
+      "import": "./src/components/AuthDevicePair.svelte"
+    }
   },
   "files": [
     "dist",
