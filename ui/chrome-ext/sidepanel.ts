@@ -2,8 +2,8 @@ import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 import { CHATWIDGET_HANDOFF_STORAGE_KEY } from '$lib/core/chatwidget-handoff';
 import { mount } from './chatwidget-entry';
 
-const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
-const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
+const HANDOFF_EVENT = 'sentropic:chatwidget-handoff-state';
+const OPEN_OVERLAY_EVENT = 'sentropic:open-overlay';
 const SIDEPANEL_STATE_MESSAGE = 'sidepanel_state';
 type ChatTab = 'chat' | 'queue' | 'comments';
 let ownerTabId: number | null = null;
