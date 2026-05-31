@@ -60,8 +60,8 @@ export type ExtensionAuthConnectResult =
         loginUrl?: string;
     };
 
-const EXTENSION_AUTH_PERSISTENT_KEY = 'topAiIdeas:extensionAuth:v1';
-const EXTENSION_AUTH_SESSION_KEY = 'topAiIdeas:extensionAuthSession:v1';
+const EXTENSION_AUTH_PERSISTENT_KEY = 'sentropic:extensionAuth:v1';
+const EXTENSION_AUTH_SESSION_KEY = 'sentropic:extensionAuthSession:v1';
 const REFRESH_SKEW_MS = 60_000;
 
 const decodeJwtExpMs = (token: string): number | null => {

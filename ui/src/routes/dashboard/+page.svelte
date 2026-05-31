@@ -374,13 +374,13 @@
   const openExecutiveSummaryComments = (sectionKey: ExecutiveSummaryField | 'references') => {
     if (!selectedFolderId) return;
     const detail = { contextType: 'executive_summary', contextId: selectedFolderId, sectionKey };
-    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+    window.dispatchEvent(new CustomEvent('sentropic:open-comments', { detail }));
   };
 
   const openFolderComments = (sectionKey: 'name') => {
     if (!selectedFolderId) return;
     const detail = { contextType: 'folder', contextId: selectedFolderId, sectionKey };
-    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+    window.dispatchEvent(new CustomEvent('sentropic:open-comments', { detail }));
   };
 
   const canLoadCommentCounts = () =>
