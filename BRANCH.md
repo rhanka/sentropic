@@ -67,10 +67,20 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - Owner: Conductor
   - Severity: medium
   - Status: resolved
-  - Rationale: `@sentropic/auth-ui` cannot be validated through the mandatory make-only workflow without package-specific Makefile targets.
-  - Impact: add `typecheck-auth-ui`, `build-auth-ui`, `pack-auth-ui`, `test-auth-ui`, and `test-packages` dispatch for `packages/auth-ui/**`.
+  - Rationale: `@sentropic/auth-ui` cannot be validated or published through the mandatory make-only workflow without package-specific Makefile targets.
+  - Impact: add `typecheck-auth-ui`, `build-auth-ui`, `pack-auth-ui`, `test-auth-ui`, `publish-auth-ui`, `publish-auth-ui-token`, and `test-packages` dispatch for `packages/auth-ui/**` (consistent with the BR-39b `auth-hono` target set).
   - Rollback: revert the Makefile target block and return `BR39a-Q1` to `attention`.
   - Evidence: `BR39a-Q1` captured the missing targets before the exception; new targets passed on `ENV=test-feat-auth-ui-sdk`.
+
+- `BR39a-EX2`
+  - Branch: `feat/auth-ui-sdk`
+  - Owner: Conductor
+  - Severity: medium
+  - Status: resolved
+  - Rationale: `@sentropic/auth-ui` requires CI gates symmetric to `@sentropic/auth-hono` (validate-* + publish-* + bootstrap-publish enum entry) so that package changes don't slip into main without dedicated typecheck/test/build/pack validation and so first-publish bootstrap is reachable via `workflow_dispatch`.
+  - Impact: add `auth_ui` + `auth_ui_publish` filters and outputs, `validate-auth-ui` job, `publish-auth-ui` job, `auth-ui` entry in `bootstrap_publish_target` enum and `Bootstrap publish auth-ui` step — all mirroring the BR-39b pattern verbatim.
+  - Rollback: revert the `.github/workflows/ci.yml` change block; package-level validation falls back to whatever `test-ui`/`test-api` indirectly catches.
+  - Evidence: BR-39b set the precedent with `validate-auth-hono`/`publish-auth-hono`/`Bootstrap publish auth-hono`; same shape applied here, no new CI patterns introduced.
 
 - `BR39a-Q1`
   - Branch: `feat/auth-ui-sdk`
