@@ -20,7 +20,8 @@ describe('Magic Link API Routes', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.success).toBe(true);
-      expect(data.message).toBeDefined();
+      expect(data.delivery).toBe('magic_link');
+      expect(data.expiresAt).toBeDefined();
     });
 
     it('should request magic link for existing email', async () => {
@@ -41,7 +42,8 @@ describe('Magic Link API Routes', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.success).toBe(true);
-      expect(data.message).toBeDefined();
+      expect(data.delivery).toBe('magic_link');
+      expect(data.expiresAt).toBeDefined();
     });
 
     it('should reject invalid email format', async () => {
