@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 const openapiDoc = {
   openapi: '3.1.0',
   info: {
-    title: 'Top AI Ideas API',
+    title: 'Sentropic API',
     version: '0.1.0'
   },
   paths: {
