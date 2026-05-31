@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createChatServer, createInMemoryChatServerDeps } from '../src/index';
+import {
+  createChatServer,
+  createInMemoryChatServerDeps,
+  readAppContractStreamEvents,
+} from '../src/index';
 
 describe('chat-server route mode contract', () => {
   it('serves the canonical chat-ui transport routes only in canonical mode', async () => {
@@ -118,5 +122,62 @@ describe('chat-server route mode contract', () => {
 
     const replay = await app.request('/chat/sessions/session_a/events?fromSeq=1');
     expect(replay.status).toBe(404);
+  });
+
+  it('delegates app-contract stream replay through the chat stream port', async () => {
+    const calls: unknown[] = [];
+    const events = await readAppContractStreamEvents(
+      {
+        readSessionEvents: async () => [],
+        isStreamAllowed: async (input) => {
+          calls.push(['allowed', input]);
+          return true;
+        },
+        readStreamEvents: async (input) => {
+          calls.push(['read', input]);
+          return [
+            {
+              streamId: input.streamId,
+              eventType: 'content_delta',
+              data: { delta: 'Hello' },
+              sequence: 2,
+            },
+          ];
+        },
+      },
+      {
+        streamId: 'assistant-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        sinceSequence: 1,
+      },
+    );
+
+    expect(events).toEqual([
+      {
+        streamId: 'assistant-1',
+        eventType: 'content_delta',
+        data: { delta: 'Hello' },
+        sequence: 2,
+      },
+    ]);
+    expect(calls).toEqual([
+      [
+        'allowed',
+        {
+          streamId: 'assistant-1',
+          userId: 'user-1',
+          workspaceId: 'workspace-1',
+        },
+      ],
+      [
+        'read',
+        {
+          streamId: 'assistant-1',
+          userId: 'user-1',
+          sinceSequence: 1,
+        },
+      ],
+    ]);
   });
 });
