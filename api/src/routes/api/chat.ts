@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
-import { chatService } from '../../services/chat-service';
-import { queueManager } from '../../services/queue-manager';
+import { createChatServer } from '../../../../packages/chat-server/src/index';
+import { chatService, type ChatContextType } from '../../services/chat-service';
+import { queueManager, type ChatMessageJobData } from '../../services/queue-manager';
 import { writeStreamEventWithSequenceRetry } from '../../services/stream-service';
+import type { ProviderId } from '../../services/provider-runtime';
 import { db } from '../../db/client';
 import { chatMessages, chatSessions, extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
@@ -122,6 +124,20 @@ const TOOL_PATTERN_REGEX = /^[a-z0-9:_*-]{1,96}$/i;
 const HOSTNAME_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 const IPV4_REGEX =
   /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+
+const toProviderId = (value: string | null | undefined): ProviderId | undefined =>
+  value ? (value as ProviderId) : undefined;
+
+const toProviderIdOrNull = (value: string | null | undefined): ProviderId | null =>
+  value ? (value as ProviderId) : null;
+
+const toChatContexts = (
+  contexts: Array<{ contextType: string; contextId: string }> | undefined,
+): Array<{ contextType: ChatContextType; contextId: string }> | undefined =>
+  contexts?.map((context) => ({
+    contextType: context.contextType as ChatContextType,
+    contextId: context.contextId,
+  }));
 
 const normalizeToolPattern = (raw: string): string | null => {
   const value = raw.trim().toLowerCase();
@@ -299,6 +315,63 @@ chatRouter.delete(
     return c.json({ ok: true });
   },
 );
+
+const chatServerRouter = createChatServer(
+  {
+    getUser: (c) => c.get('user'),
+    messages: {
+      createUserMessageWithAssistantPlaceholder: (input) =>
+        chatService.createUserMessageWithAssistantPlaceholder({
+          userId: input.userId,
+          sessionId: input.sessionId ?? null,
+          content: input.content,
+          providerId: toProviderIdOrNull(input.providerId),
+          providerApiKey: input.providerApiKey ?? null,
+          model: input.model ?? null,
+          workspaceId: input.workspaceId ?? null,
+          primaryContextType: (input.primaryContextType as ChatContextType | undefined) ?? null,
+          primaryContextId: input.primaryContextId ?? null,
+          contexts: toChatContexts(input.contexts),
+          sessionTitle: input.sessionTitle ?? null,
+        }),
+      listMessages: (input) =>
+        chatService.listMessages(input.sessionId, input.userId),
+      getSessionBootstrap: (input) =>
+        chatService.getSessionBootstrap({
+          sessionId: input.sessionId,
+          userId: input.userId,
+        }),
+    },
+    queue: {
+      enqueueChatMessage: (input, options) =>
+        queueManager.addJob(
+          'chat_message',
+          {
+            userId: input.userId,
+            sessionId: input.sessionId,
+            assistantMessageId: input.assistantMessageId,
+            providerId: toProviderId(input.providerId),
+            providerApiKey: input.providerApiKey,
+            model: input.model ?? undefined,
+            contexts: toChatContexts(input.contexts),
+            tools: input.tools,
+            localToolDefinitions:
+              input.localToolDefinitions as ChatMessageJobData['localToolDefinitions'],
+            vscodeCodeAgent: input.vscodeCodeAgent as ChatMessageJobData['vscodeCodeAgent'],
+            resumeFrom: input.resumeFrom as ChatMessageJobData['resumeFrom'],
+            locale: input.locale,
+          },
+          { workspaceId: options?.workspaceId ?? undefined },
+        ),
+    },
+    stream: {
+      readSessionEvents: async () => [],
+    },
+  },
+  { routes: 'app-contract', basePath: '', includeControls: false },
+);
+
+chatRouter.route('/', chatServerRouter);
 
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
