@@ -5,6 +5,8 @@ test.describe('Page Paramètres', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
+  // Admin (admin_app) state — the extension/desktop download cards are admin-only.
+  const ADMIN_STATE = './.auth/state.json';
   let workspaceAlphaId = '';
   let workspaceAlphaName = '';
   const toCanonicalRole = (value: string): string => {
@@ -81,7 +83,7 @@ test.describe('Page Paramètres', () => {
   });
 
   test('devrait afficher la carte de téléchargement de l’extension Chrome', async ({ browser }) => {
-    const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
+    const { context, page } = await createScopedPage(browser, ADMIN_STATE, workspaceAlphaId);
     try {
       await page.route('**/api/v1/chrome-extension/download**', async (route) => {
         await route.fulfill({
@@ -111,7 +113,7 @@ test.describe('Page Paramètres', () => {
   });
 
   test('devrait afficher une erreur si le téléchargement extension est indisponible', async ({ browser }) => {
-    const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
+    const { context, page } = await createScopedPage(browser, ADMIN_STATE, workspaceAlphaId);
     try {
       await page.route('**/api/v1/chrome-extension/download**', async (route) => {
         await route.fulfill({
