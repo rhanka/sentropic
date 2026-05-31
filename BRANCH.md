@@ -147,6 +147,14 @@ web app. See `spec/SPEC_COWORK.md`.
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
   (at least one success on same commit + command). Never add timeouts. Record signature in this file.
+- **AI flaky accepted (CI, PR #192 run `26699459726`)** — `tests/ai/chat-tools.test.ts > should call
+  update_initiative_field and update database` (`Test timed out in 15000ms`) and `> should handle
+  web_extract with array of URLs correctly` (`Test timed out in 30000ms`), plus a `chat_stream_events`
+  FK race (`violates chat_stream_events_message_id_chat_messages_id_fk`). Command: CI `make test-api-ai`
+  shard `(ai, chat-tools,...)`. Non-systematic: **re-run of the same failed shard on the SAME commit
+  passed** (`gh run rerun --failed` → shard `success`, overall run `success`). On the allowlist
+  (`api/tests/ai/**`); the branch does not touch `update_initiative_field`/`web_extract`/chat-tools
+  logic. No timeout inflation applied. **User sign-off required before merge** (per acceptance rule).
 - **Local-only env artifact (accepted, not a branch regression)** — `tests/api/workspace-types.test.ts >
   creates a workspace with explicit type` failed locally with `Error: Hook timed out in 10000ms.` in the
   `beforeEach` (cold-start `importApp()` + 2 `createAuthenticatedUser`, first test of the file). Command:
