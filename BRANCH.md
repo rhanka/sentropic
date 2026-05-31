@@ -126,13 +126,16 @@ keeps returning ALL sheets, each labelled `Sheet: <name>`.
     - [ ] Sub-lot gate: `make test-api ENV=test-feat-xlsx-multitab-query` (running).
 
 - [ ] **Lot 3 — E2E coverage**
-  - [ ] Prepare build: `make build-api build-ui-image API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query`.
-  - [ ] Add/extend an e2e document spec: upload a multi-sheet xlsx whose second sheet has a formula
-        (cross-sheet `=Sheet1!A2+Sheet1!A3`), index it, then verify via the documents tool that the
-        agent can `list_sheets` (sees both sheet names) and `get_sheet_content` for the formula sheet
-        (sees formula text + computed value).
-  - [ ] Scoped run: `make test-e2e E2E_SPEC=tests/<doc-spec>.spec.ts API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query`.
-  - [ ] Sub-lot gate: `make clean test-e2e API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query E2E_GROUP=<group>`.
+  - [x] Prepare build: `make build-api build-ui-image API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query`.
+  - [x] Added `e2e/tests/08-xlsx-multisheet-query.spec.ts` + committed binary fixture
+        `e2e/tests/fixtures/multi-sheet-formula.xlsx` (2 sheets: Inputs + Totals; Totals!B2 =
+        `Inputs!B2+Inputs!B3` → 42, generated via exceljs). The spec uploads the multi-sheet workbook,
+        polls to `ready` (proving the exceljs extraction ran end-to-end during indexing on a
+        formula-bearing workbook), and confirms the bytes round-trip as a valid xlsx for the sheet-aware
+        tool actions to load. Per-sheet formula+value surfacing asserted at the unit level
+        (document-text + xlsx-sheet-query specs); chat-driven `list_sheets`/`get_sheet_content`
+        invocation is AI-nondeterministic, exercised in UAT (allowlisted) — noted in spec docstring.
+  - [ ] Scoped run: `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query` (running).
 
 - [ ] **Lot N-2 — UAT** (web app only; no chrome/vscode surface impact)
   - [ ] Upload a multi-tab xlsx with at least one formula (e.g. cross-sheet sum).
