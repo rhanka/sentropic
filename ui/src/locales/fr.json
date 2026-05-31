@@ -109,7 +109,7 @@
     "admin": "Admin"
   },
   "home": {
-    "welcomeTitle": "Bienvenue sur Top AI Ideas",
+    "welcomeTitle": "Bienvenue sur Sentropic",
     "tagline": "Décrivez votre contexte métier et découvrez des initiatives d'intelligence artificielle priorisées par valeur et complexité.",
     "getStarted": "Commencer",
     "redirectingTo": "Redirection vers {path}…"
@@ -466,7 +466,7 @@
     }
   },
   "dashboard": {
-    "reportTitle": "Rapport Top AI Ideas",
+    "reportTitle": "Rapport Sentropic",
     "execSummary": "Synthèse exécutive",
     "execSummaryGenerating": "Génération de la synthèse exécutive en cours…",
     "execSummaryGeneratingHint": "Cela peut prendre quelques instants",
@@ -506,9 +506,9 @@
     "about": "À Propos"
     ,
     "backCover": {
-      "p1": "Top AI Ideas s'inscrit dans la vision de SENT-tech : plus de vingt ans d'expertise en innovation, données, digital et intelligence artificielle. Ici, l'IA n'est jamais une finalité, mais un levier devenu indispensable à la compétitivité.",
-      "p2": "La valeur naît d'une approche holistique, où les opportunités d'affaires rencontrent les capacités technologiques. Conçu pour guider les organisations dans leurs choix, Top AI Ideas aide à identifier les initiatives les plus prometteuses, dans une démarche collaborative, rigoureuse et orientée impact.",
-      "p3": "Le présent échantillon est entièrement généré, à des fins de démonstration. Top AI Ideas permet une édition collaborative pour la validation de son contenu tout en permettant un rendu final dans un format professionnel."
+      "p1": "Sentropic s'inscrit dans la vision de SENT-tech : plus de vingt ans d'expertise en innovation, données, digital et intelligence artificielle. Ici, l'IA n'est jamais une finalité, mais un levier devenu indispensable à la compétitivité.",
+      "p2": "La valeur naît d'une approche holistique, où les opportunités d'affaires rencontrent les capacités technologiques. Conçu pour guider les organisations dans leurs choix, Sentropic aide à identifier les initiatives les plus prometteuses, dans une démarche collaborative, rigoureuse et orientée impact.",
+      "p3": "Le présent échantillon est entièrement généré, à des fins de démonstration. Sentropic permet une édition collaborative pour la validation de son contenu tout en permettant un rendu final dans un format professionnel."
     },
     "readOnlyGenerationDisabled": "Mode lecture seule : génération désactivée.",
     "docx": {

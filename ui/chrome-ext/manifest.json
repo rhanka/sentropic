@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Top AI Ideas Assistant",
+    "name": "Sentropic Assistant",
     "version": "0.1.0",
-    "description": "AI assistant for Top AI Ideas — chat, analyze pages, automate tasks",
+    "description": "AI assistant for Sentropic — chat, analyze pages, automate tasks",
     "permissions": [
         "storage",
         "tabs",
@@ -39,7 +39,7 @@
     },
     "action": {
         "default_popup": "chrome-ext/popup.html",
-        "default_title": "Top AI Ideas Assistant"
+        "default_title": "Sentropic Assistant"
     },
     "web_accessible_resources": [
         {

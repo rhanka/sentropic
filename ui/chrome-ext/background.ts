@@ -1,4 +1,4 @@
-// Service Worker for Top AI Ideas Extension
+// Service Worker for Sentropic Extension
 import {
     loadExtensionConfig,
     saveExtensionConfig,

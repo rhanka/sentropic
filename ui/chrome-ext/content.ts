@@ -1,10 +1,10 @@
-// Top AI Ideas Extension - Content Script
+// Sentropic Extension - Content Script
 // Bootstraps the ChatWidget inside a Shadow DOM to avoid CSS conflicts.
 
 import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 import type { ChatWidgetMountOptions } from './chatwidget-entry';
 
-console.log('Top AI Ideas Content Script loading...');
+console.log('Sentropic Content Script loading...');
 
 const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
 const CHATWIDGET_HANDOFF_STORAGE_KEY = 'topAiIdeas:chatWidgetHandoff:v1';
@@ -171,7 +171,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 function bootstrap() {
     if (isBlockedHost()) {
-        console.log('Top AI Ideas extension skipped for blocked host:', window.location.hostname);
+        console.log('Sentropic extension skipped for blocked host:', window.location.hostname);
         return;
     }
     if (document.getElementById('top-ai-ideas-ext')) return;
