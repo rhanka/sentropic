@@ -440,13 +440,14 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
        - lire un RÉSUMÉ COURT (get_summary) pour une information de surface,
        - lire le CONTENU (get_content) : soit le text complet (petit doc) soit un résumé (10k mots si le document est long) - pour une information détaillée
        - lancer une analyse ciblée (analyze) - pour une requête ciblée (recherche d'un contenu).
+       - pour un classeur xlsx multi-onglets: lister les onglets (list_sheets) puis lire le contenu d'un onglet précis (get_sheet_content). Le contenu d'un onglet expose à la fois la formule (=SUM(...)) ET la valeur calculée de chaque cellule, et les références croisées suivent la sémantique Sheet!A1.
        `,
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['list', 'get_summary', 'get_content', 'analyze'],
+          enum: ['list', 'get_summary', 'get_content', 'analyze', 'list_sheets', 'get_sheet_content'],
           description: 'Action à effectuer.'
         },
         contextType: {
@@ -455,7 +456,15 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
           description: 'Type du contexte.'
         },
         contextId: { type: 'string', description: 'ID du contexte.' },
-        documentId: { type: 'string', description: 'ID du document (requis pour get_summary/get_content).' },
+        documentId: { type: 'string', description: 'ID du document (requis pour get_summary/get_content/list_sheets/get_sheet_content).' },
+        sheetName: {
+          type: 'string',
+          description: "Optionnel pour get_sheet_content: nom exact de l'onglet (tel que renvoyé par list_sheets). Si absent, fournir sheetIndex."
+        },
+        sheetIndex: {
+          type: 'number',
+          description: "Optionnel pour get_sheet_content: position 1-based de l'onglet (alternative à sheetName)."
+        },
         maxChars: {
           type: 'number',
           description: 'Optionnel: borne de caractères pour get_content (max 50000).'
@@ -1352,6 +1361,33 @@ export const executeWithToolsStream = async (
               contextId: matched.contextId,
               documentId,
               maxChars,
+              userId,
+            });
+          } else if (action === 'list_sheets') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.list_sheets: documentId is required');
+            result = await toolService.listDocumentSheets({
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
+              documentId,
+              userId,
+            });
+          } else if (action === 'get_sheet_content') {
+            const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+            if (!documentId) throw new Error('documents.get_sheet_content: documentId is required');
+            const sheetName = typeof args.sheetName === 'string' ? args.sheetName : undefined;
+            const sheetIndex = typeof args.sheetIndex === 'number' ? args.sheetIndex : undefined;
+            if (!sheetName && typeof sheetIndex !== 'number') {
+              throw new Error('documents.get_sheet_content: sheetName or sheetIndex is required');
+            }
+            result = await toolService.getDocumentSheetContent({
+              workspaceId: matched.workspaceId,
+              contextType: matched.contextType,
+              contextId: matched.contextId,
+              documentId,
+              sheetName,
+              sheetIndex,
               userId,
             });
           } else if (action === 'analyze') {

@@ -105,23 +105,25 @@ keeps returning ALL sheets, each labelled `Sheet: <name>`.
           per-sheet content. 3/3 passing.
     - [x] Scoped run: `make test-api SCOPE=tests/unit/document-text.test.ts ENV=test-feat-xlsx-multitab-query` → 3 passed.
 
-- [ ] **Lot 2 — Query-tool sheet awareness (list_sheets / get_sheet_content)**
-  - [ ] `tools.ts`: add `list_sheets` + `get_sheet_content` to the `documents` action enum; add
-        `sheetName` / `sheetIndex` params; document them; wire dispatch to the new tool-service methods.
-  - [ ] `tool-service.ts`: add `listDocumentSheets` (sheet names + row counts) and
-        `getDocumentSheetContent` (per-sheet content incl. formulas+values, by name or index). Load
-        bytes via `loadContextDocumentContent`, extract via the new structured xlsx extractor, reuse
-        the same security/context checks as `getDocumentContent` (`assertDocumentExplorable`,
-        context match). Non-xlsx documents return a clear "not a spreadsheet" error/empty list.
-  - [ ] Keep `get_content` returning all sheets labelled (unchanged behavior).
-  - [ ] Lot gate: `make typecheck-api ENV=test-feat-xlsx-multitab-query` +
-        `make lint-api ENV=test-feat-xlsx-multitab-query`.
-  - [ ] **API tests**
-    - [ ] Add `api/tests/unit/xlsx-sheet-query.test.ts` (or extend an existing tool-service spec):
-          unit-test the structured extractor + per-sheet selection by name and index, formula+value
-          surfacing, and the non-xlsx guard.
-    - [ ] Scoped run: `make test-api SCOPE=tests/unit/xlsx-sheet-query.test.ts ENV=test-feat-xlsx-multitab-query`.
-    - [ ] Sub-lot gate: `make test-api ENV=test-feat-xlsx-multitab-query`.
+- [x] **Lot 2 — Query-tool sheet awareness (list_sheets / get_sheet_content)**
+  - [x] `tools.ts`: added `list_sheets` + `get_sheet_content` to the `documents` action enum; added
+        `sheetName` / `sheetIndex` params; documented them; wired dispatch to the new tool-service
+        methods (sheetName OR sheetIndex required for get_sheet_content).
+  - [x] `tool-service.ts`: added `listDocumentSheets` (sheet names + 1-based index + row counts) and
+        `getDocumentSheetContent` (per-sheet content incl. formulas+values, by name or index). Shared
+        private `loadXlsxDocument`/`fetchDocumentRow` reuse the same security/context checks as
+        `getDocumentContent` (`assertDocumentExplorable`, context match) and load bytes via
+        `loadContextDocumentContent`. Non-xlsx documents raise a clear "not a spreadsheet" error;
+        unknown sheet selector raises an error listing available sheets.
+  - [x] Kept `get_content` returning all sheets labelled (unchanged behavior).
+  - [x] Lot gate: `make typecheck-api ENV=test-feat-xlsx-multitab-query` (clean) +
+        `make lint-api ENV=test-feat-xlsx-multitab-query` (0 errors, 178 pre-existing no-console warnings).
+  - [x] **API tests**
+    - [x] Added `api/tests/unit/xlsx-sheet-query.test.ts`: unit-tests the structured extractor +
+          per-sheet selection by name and index, formula+value surfacing
+          (`Sum\t=Inputs!B2+Inputs!B3 → 42`), and the `isXlsxDocument` guard. 4/4 passing.
+    - [x] Scoped run: `make test-api SCOPE=tests/unit/xlsx-sheet-query.test.ts ENV=test-feat-xlsx-multitab-query` → 4 passed.
+    - [ ] Sub-lot gate: `make test-api ENV=test-feat-xlsx-multitab-query` (running).
 
 - [ ] **Lot 3 — E2E coverage**
   - [ ] Prepare build: `make build-api build-ui-image API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query`.
