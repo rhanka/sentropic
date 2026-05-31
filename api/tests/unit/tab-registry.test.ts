@@ -7,6 +7,7 @@ import {
   resolveTarget,
   touchTab,
   evictStaleTabs,
+  isBrowserSource,
   clearAll,
 } from '../../src/services/tab-registry';
 
@@ -56,6 +57,32 @@ describe('TabRegistry', () => {
       });
 
       expect(entry.tab_id).toMatch(/^bookmarklet_/);
+    });
+
+    it('should accept a desktop_cowork source and auto-assign a device_ id', () => {
+      const entry = register({
+        source: 'desktop_cowork',
+        url: '',
+        title: 'Workstation',
+        userId: 'user-1',
+      });
+
+      expect(entry.source).toBe('desktop_cowork');
+      expect(entry.tab_id).toMatch(/^device_/);
+      expect(entry.status).toBe('active');
+    });
+
+    it('should keep an explicit desktop_cowork tab_id', () => {
+      const entry = register({
+        tab_id: 'device_custom',
+        source: 'desktop_cowork',
+        url: '',
+        title: 'Workstation',
+        userId: 'user-1',
+      });
+
+      expect(entry.tab_id).toBe('device_custom');
+      expect(getTab('device_custom')?.source).toBe('desktop_cowork');
     });
 
     it('should overwrite an existing tab with the same tab_id', () => {
@@ -183,6 +210,17 @@ describe('TabRegistry', () => {
 
       touchTab('tab-1');
       expect(getTab('tab-1')!.status).toBe('active');
+    });
+  });
+
+  describe('isBrowserSource', () => {
+    it('returns true for browser sources', () => {
+      expect(isBrowserSource('chrome_plugin')).toBe(true);
+      expect(isBrowserSource('bookmarklet')).toBe(true);
+    });
+
+    it('returns false for desktop_cowork', () => {
+      expect(isBrowserSource('desktop_cowork')).toBe(false);
     });
   });
 
