@@ -94,7 +94,8 @@ const extensionByExportMimeType: Record<string, string> = {
 
 const ingestExportMimeTypeBySourceMimeType: Record<GoogleWorkspaceMimeType, string> = {
   [GOOGLE_WORKSPACE_MIME_TYPES.document]: 'text/markdown',
-  [GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet]: 'text/csv',
+  [GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet]:
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   [GOOGLE_WORKSPACE_MIME_TYPES.presentation]: 'text/plain',
 };
 
