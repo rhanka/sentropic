@@ -51,11 +51,72 @@ type FolderXlsxSource = {
 };
 
 type QuadrantRow = {
+  id: string;
   name: string;
   value: number;
   complexity: number;
   quadrant: QuadrantLabel;
 };
+
+/**
+ * Cross-sheet anchors emitted by the matrix sheet so the use-cases tab can build
+ * live weighted-mean formulas that reference the matrix axis weights.
+ *
+ * - `sheetRef` is the formula-safe (quoted when needed) sheet name.
+ * - `valueWeightCells` / `complexityWeightCells` map an axis id to the absolute
+ *   address of the cell holding that axis weight (e.g. `$B$4`).
+ */
+type MatrixAnchors = {
+  sheetName: string;
+  sheetRef: string;
+  valueWeightCells: Record<string, string>;
+  complexityWeightCells: Record<string, string>;
+};
+
+/**
+ * Anchors emitted by the use-cases sheet so the quadrant tab can reference the
+ * already-computed score cells (keeping the whole chain matrix-driven and live).
+ */
+type UseCasesAnchors = {
+  sheetName: string;
+  sheetRef: string;
+  /** Initiative id -> 1-based worksheet row index in the use-cases tab. */
+  rowById: Record<string, number>;
+  /** Column letters of the score/quadrant columns in the use-cases tab. */
+  valueCol: string;
+  complexityCol: string;
+  /** First/last data row indices (for MEDIAN ranges). */
+  firstRow: number;
+  lastRow: number;
+};
+
+/** Build a formula-safe sheet reference, quoting when the name needs it. */
+function sheetRefOf(sheetName: string): string {
+  const needsQuote = !/^[A-Za-z_][A-Za-z0-9_]*$/.test(sheetName);
+  return needsQuote ? `'${sheetName.replace(/'/g, "''")}'` : sheetName;
+}
+
+/** Convert a 1-based column index to its spreadsheet letter (1 -> A, 27 -> AA). */
+function columnLetter(index: number): string {
+  let n = index;
+  let letter = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter;
+}
+
+/**
+ * Set a worksheet display order. `orderNo` is supported by exceljs at runtime but
+ * absent from its public type defs, so it is set via a narrow typed accessor.
+ */
+function setSheetOrder(sheet: ExcelJS.Worksheet | undefined, orderNo: number): void {
+  if (sheet) {
+    (sheet as ExcelJS.Worksheet & { orderNo: number }).orderNo = orderNo;
+  }
+}
 
 const I18N: Record<'fr' | 'en', Record<string, string>> = {
   en: {
@@ -240,9 +301,70 @@ const QUADRANT_PRIORITY: Record<QuadrantLabel, number> = {
   thankless_task: 3,
 };
 
+/** An exceljs formula cell value carrying both the live formula and a cached result. */
+type FormulaCell = { formula: string; result: number | string };
+
+/**
+ * Build the live weighted-mean score formula for a single initiative, mirroring
+ * `calculateScores`: ROUND( Σ(rating_i × weight_i) / Σ(weight_i) ).
+ *
+ * Ratings are inlined as literals (per-initiative source data); axis weights are
+ * referenced cross-sheet against the matrix tab, so editing a weight there
+ * recomputes the score. Returns `null` when no rated axis maps to a weight cell.
+ */
+function buildWeightedScoreFormula(
+  matrixRef: string,
+  weightCells: Record<string, string>,
+  scores: ScoreEntry[],
+  computed: number
+): FormulaCell | null {
+  const terms: string[] = [];
+  const weights: string[] = [];
+  for (const entry of scores) {
+    const cell = weightCells[entry.axisId];
+    if (!cell) continue;
+    const weightRef = `${matrixRef}!${cell}`;
+    terms.push(`${entry.rating}*${weightRef}`);
+    weights.push(weightRef);
+  }
+  if (terms.length === 0) return null;
+  const numerator = terms.join('+');
+  const denominator = weights.join('+');
+  return {
+    formula: `ROUND((${numerator})/(${denominator}),0)`,
+    result: computed,
+  };
+}
+
+/**
+ * Build the live quadrant-label formula referencing the value/complexity score
+ * cells and their column medians. Mirrors `classifyQuadrant`
+ * (high value + low complexity => quick win) and returns the localized label
+ * for each branch. `result` carries the JS-computed label so it displays before
+ * a recalc.
+ */
+function buildQuadrantFormula(
+  valueCellRef: string,
+  complexityCellRef: string,
+  valueMedianRange: string,
+  complexityMedianRange: string,
+  t: Record<string, string>,
+  computed: QuadrantLabel
+): FormulaCell {
+  const highValue = `${valueCellRef}>=MEDIAN(${valueMedianRange})`;
+  const lowComplexity = `${complexityCellRef}<=MEDIAN(${complexityMedianRange})`;
+  const q = (label: QuadrantLabel) => `"${t[label].replace(/"/g, '""')}"`;
+  const formula =
+    `IF(AND(${highValue},${lowComplexity}),${q('quick_win')},` +
+    `IF(${highValue},${q('major_project')},` +
+    `IF(${lowComplexity},${q('fill_in')},${q('thankless_task')})))`;
+  return { formula, result: t[computed] };
+}
+
 function buildQuadrantRows(source: FolderXlsxSource): QuadrantRow[] {
   const scored = source.initiatives
     .map((initiative) => ({
+      id: initiative.id,
       name: safeText(initiative.data.name),
       value: initiative.totalValueScore ?? 0,
       complexity: initiative.totalComplexityScore ?? 0,
@@ -284,11 +406,21 @@ function styleHeaderRow(row: ExcelJS.Row): void {
   });
 }
 
+/**
+ * Build the use-cases sheet. Score and quadrant cells are emitted as LIVE Excel
+ * formulas (not static values): the value/complexity scores are weighted-mean
+ * formulas referencing the matrix tab axis weights (cross-sheet), and the
+ * quadrant label is an IF/MEDIAN formula over the score columns. Each formula
+ * carries a cached `result` so the value shows before a recalc.
+ *
+ * Returns `UseCasesAnchors` so the quadrant tab can reference these score cells.
+ */
 function buildUseCasesSheet(
   workbook: ExcelJS.Workbook,
   source: FolderXlsxSource,
-  t: Record<string, string>
-): void {
+  t: Record<string, string>,
+  matrix: MatrixAnchors | null
+): UseCasesAnchors {
   const sheet = workbook.addWorksheet(t.useCasesTab);
   sheet.columns = [
     { header: t.colName, key: 'name', width: 32 },
@@ -303,6 +435,11 @@ function buildUseCasesSheet(
   ];
   styleHeaderRow(sheet.getRow(1));
 
+  // Column letters (1-based): name=A .. valueScore=G, complexityScore=H, quadrant=I.
+  const valueCol = columnLetter(7);
+  const complexityCol = columnLetter(8);
+  const quadrantCol = columnLetter(9);
+
   const medianValue = median(
     source.initiatives.filter(() => source.matrix).map((i) => i.totalValueScore ?? 0)
   );
@@ -310,33 +447,92 @@ function buildUseCasesSheet(
     source.initiatives.filter(() => source.matrix).map((i) => i.totalComplexityScore ?? 0)
   );
 
+  const rowById: Record<string, number> = {};
+  const firstRow = 2;
+
   for (const initiative of source.initiatives) {
     const value = initiative.totalValueScore ?? 0;
     const complexity = initiative.totalComplexityScore ?? 0;
-    const quadrant = source.matrix
-      ? t[classifyQuadrant(value, complexity, medianValue, medianComplexity)]
-      : '';
-    sheet.addRow({
+    const row = sheet.addRow({
       name: safeText(initiative.data.name),
       domain: safeText(initiative.data.domain),
       status: safeText(initiative.status),
       description: safeText(initiative.data.description),
       problem: safeText(initiative.data.problem),
       solution: safeText(initiative.data.solution),
-      valueScore: source.matrix ? value : '',
-      complexityScore: source.matrix ? complexity : '',
-      quadrant,
     });
+    rowById[initiative.id] = row.number;
+
+    if (!matrix || !source.matrix) {
+      row.getCell('valueScore').value = '';
+      row.getCell('complexityScore').value = '';
+      row.getCell('quadrant').value = '';
+      continue;
+    }
+
+    const valueFormula = buildWeightedScoreFormula(
+      matrix.sheetRef,
+      matrix.valueWeightCells,
+      initiative.data.valueScores ?? [],
+      value
+    );
+    const complexityFormula = buildWeightedScoreFormula(
+      matrix.sheetRef,
+      matrix.complexityWeightCells,
+      initiative.data.complexityScores ?? [],
+      complexity
+    );
+
+    row.getCell('valueScore').value = valueFormula ?? value;
+    row.getCell('complexityScore').value = complexityFormula ?? complexity;
+  }
+
+  const lastRow = Math.max(firstRow, firstRow + source.initiatives.length - 1);
+
+  // Second pass: quadrant formulas reference the score columns + their medians.
+  if (matrix && source.matrix && source.initiatives.length > 0) {
+    const valueRange = `$${valueCol}$${firstRow}:$${valueCol}$${lastRow}`;
+    const complexityRange = `$${complexityCol}$${firstRow}:$${complexityCol}$${lastRow}`;
+    for (const initiative of source.initiatives) {
+      const rowNumber = rowById[initiative.id];
+      const value = initiative.totalValueScore ?? 0;
+      const complexity = initiative.totalComplexityScore ?? 0;
+      const computed = classifyQuadrant(value, complexity, medianValue, medianComplexity);
+      const quadrantFormula = buildQuadrantFormula(
+        `$${valueCol}$${rowNumber}`,
+        `$${complexityCol}$${rowNumber}`,
+        valueRange,
+        complexityRange,
+        t,
+        computed
+      );
+      sheet.getCell(`${quadrantCol}${rowNumber}`).value = quadrantFormula;
+    }
   }
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  return {
+    sheetName: t.useCasesTab,
+    sheetRef: sheetRefOf(t.useCasesTab),
+    rowById,
+    valueCol,
+    complexityCol,
+    firstRow,
+    lastRow,
+  };
 }
 
+/**
+ * Build the evaluation matrix sheet and return cross-sheet anchors (axis weight
+ * cell addresses) so the use-cases tab can reference the weights in live formulas.
+ * Returns `null` when the folder has no matrix.
+ */
 function buildMatrixSheet(
   workbook: ExcelJS.Workbook,
   source: FolderXlsxSource,
   t: Record<string, string>
-): void {
+): MatrixAnchors | null {
   const sheet = workbook.addWorksheet(t.matrixTab);
   sheet.getColumn(1).width = 32;
   sheet.getColumn(2).width = 12;
@@ -344,20 +540,26 @@ function buildMatrixSheet(
 
   if (!source.matrix) {
     sheet.addRow([t.noMatrix]);
-    return;
+    return null;
   }
+
+  const valueWeightCells: Record<string, string> = {};
+  const complexityWeightCells: Record<string, string> = {};
 
   const addAxesSection = (
     title: string,
     axes: MatrixConfig['valueAxes'],
-    thresholds: MatrixConfig['valueThresholds']
+    thresholds: MatrixConfig['valueThresholds'],
+    weightCells: Record<string, string>
   ) => {
     const sectionRow = sheet.addRow([title]);
     sectionRow.getCell(1).font = { bold: true, size: 13 };
     const headerRow = sheet.addRow([t.matrixAxis, t.matrixWeight, t.matrixAxisDescription]);
     styleHeaderRow(headerRow);
     for (const axis of axes) {
-      sheet.addRow([safeText(axis.name), axis.weight, safeText(axis.description)]);
+      const axisRow = sheet.addRow([safeText(axis.name), axis.weight, safeText(axis.description)]);
+      // Absolute address of the weight cell (column B) for cross-sheet formulas.
+      weightCells[axis.id] = `$B$${axisRow.number}`;
     }
     sheet.addRow([]);
     const thRow = sheet.addRow([t.matrixThresholds]);
@@ -370,22 +572,42 @@ function buildMatrixSheet(
     sheet.addRow([]);
   };
 
-  addAxesSection(t.matrixSectionValue, source.matrix.valueAxes, source.matrix.valueThresholds);
+  addAxesSection(
+    t.matrixSectionValue,
+    source.matrix.valueAxes,
+    source.matrix.valueThresholds,
+    valueWeightCells
+  );
   addAxesSection(
     t.matrixSectionComplexity,
     source.matrix.complexityAxes,
-    source.matrix.complexityThresholds
+    source.matrix.complexityThresholds,
+    complexityWeightCells
   );
+
+  return {
+    sheetName: t.matrixTab,
+    sheetRef: sheetRefOf(t.matrixTab),
+    valueWeightCells,
+    complexityWeightCells,
+  };
 }
 
 /**
- * Build the prioritization quadrant sheet (data rows) and return the cell-range
- * metadata needed to wire the native scatter chart.
+ * Build the prioritization quadrant sheet and return the cell-range metadata
+ * needed to wire the native scatter chart.
+ *
+ * The value/complexity cells are LIVE cross-sheet references to the use-cases
+ * tab score cells (themselves matrix-driven formulas), and the quadrant label
+ * is an IF/MEDIAN formula over this tab's own value/complexity columns. Each
+ * formula carries a cached `result` so values (and the chart) show before a
+ * recalc, while remaining fully editable/recomputing in Excel/LibreOffice.
  */
 function buildQuadrantSheet(
   workbook: ExcelJS.Workbook,
   source: FolderXlsxSource,
-  t: Record<string, string>
+  t: Record<string, string>,
+  useCases: UseCasesAnchors
 ): { sheetName: string; rowCount: number } {
   const sheet = workbook.addWorksheet(t.quadrantTab);
   sheet.columns = [
@@ -396,14 +618,45 @@ function buildQuadrantSheet(
   ];
   styleHeaderRow(sheet.getRow(1));
 
+  // Column letters (1-based): name=A, value=B, complexity=C, quadrant=D.
+  const valueCol = columnLetter(2);
+  const complexityCol = columnLetter(3);
+
   const rows = buildQuadrantRows(source);
+  const firstRow = 2;
+  const lastRow = Math.max(firstRow, firstRow + rows.length - 1);
+  const valueRange = `$${valueCol}$${firstRow}:$${valueCol}$${lastRow}`;
+  const complexityRange = `$${complexityCol}$${firstRow}:$${complexityCol}$${lastRow}`;
+
   for (const row of rows) {
-    sheet.addRow({
-      name: row.name,
-      value: row.value,
-      complexity: row.complexity,
-      quadrant: t[row.quadrant],
-    });
+    const added = sheet.addRow({ name: row.name });
+    const rowNumber = added.number;
+    const ucRow = useCases.rowById[row.id];
+
+    // Value/complexity: live cross-sheet refs to the use-cases score cells.
+    if (ucRow != null) {
+      added.getCell('value').value = {
+        formula: `${useCases.sheetRef}!$${useCases.valueCol}$${ucRow}`,
+        result: row.value,
+      };
+      added.getCell('complexity').value = {
+        formula: `${useCases.sheetRef}!$${useCases.complexityCol}$${ucRow}`,
+        result: row.complexity,
+      };
+    } else {
+      added.getCell('value').value = row.value;
+      added.getCell('complexity').value = row.complexity;
+    }
+
+    // Quadrant: live IF/MEDIAN formula over this tab's value/complexity columns.
+    added.getCell('quadrant').value = buildQuadrantFormula(
+      `$${valueCol}$${rowNumber}`,
+      `$${complexityCol}$${rowNumber}`,
+      valueRange,
+      complexityRange,
+      t,
+      row.quadrant
+    );
   }
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
@@ -470,9 +723,19 @@ export async function generateFolderXlsx(
   workbook.creator = 'Sentropic';
   workbook.created = new Date();
 
-  buildUseCasesSheet(workbook, source, t);
-  buildMatrixSheet(workbook, source, t);
-  const quadrant = buildQuadrantSheet(workbook, source, t);
+  // Build the matrix sheet first so its axis-weight cell addresses are available
+  // as cross-sheet anchors for the use-cases score formulas. Tab order is fixed
+  // afterwards (use cases, matrix, quadrant) — purely cosmetic, since cross-sheet
+  // formulas reference sheet names, not positions.
+  const matrix = buildMatrixSheet(workbook, source, t);
+  const useCases = buildUseCasesSheet(workbook, source, t, matrix);
+  const quadrant = buildQuadrantSheet(workbook, source, t, useCases);
+
+  // Restore the intended display order: use cases (1), matrix (2), quadrant (3).
+  // `orderNo` is supported by exceljs at runtime but missing from its type defs.
+  setSheetOrder(workbook.getWorksheet(t.useCasesTab), 1);
+  setSheetOrder(workbook.getWorksheet(t.matrixTab), 2);
+  setSheetOrder(workbook.getWorksheet(t.quadrantTab), 3);
 
   const baseBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
 

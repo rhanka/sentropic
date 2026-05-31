@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import JSZip from 'jszip';
+import ExcelJS from 'exceljs';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { folders, jobQueue, initiatives } from '../../src/db/schema';
@@ -302,5 +303,166 @@ describe('XLSX API', () => {
     const workbookXml = await zip.file('xl/workbook.xml')!.async('string');
     const sheetCount = (workbookXml.match(/<sheet\b/g) || []).length;
     expect(sheetCount).toBe(3);
+  });
+
+  // --- Live-formula read-back verification (no LibreOffice / no Python sidecar) ---
+  // Reopen the generated workbook with exceljs and assert that the score/quadrant
+  // cells carry live cross-sheet formulas (not static values), that the cached
+  // results are coherent, and that no formula-error tokens are present.
+  const ERROR_TOKENS = ['#REF!', '#DIV/0!', '#VALUE!', '#NAME?', '#N/A', '#NUM!', '#NULL!'];
+
+  async function generateScoredWorkbook(locale: 'en' | 'fr') {
+    const folderId = createTestId();
+    await db.insert(folders).values({
+      id: folderId,
+      name: 'Scored folder',
+      description: 'has matrix',
+      workspaceId: user.workspaceId!,
+      matrixConfig: JSON.stringify(defaultMatrixConfig),
+      createdAt: new Date(),
+    });
+
+    const v = defaultMatrixConfig.valueAxes;
+    const c = defaultMatrixConfig.complexityAxes;
+
+    // Two initiatives with full per-axis ratings so weighted means are well-defined.
+    await db.insert(initiatives).values([
+      {
+        id: createTestId(),
+        folderId,
+        workspaceId: user.workspaceId!,
+        status: 'completed',
+        data: {
+          name: 'Case A',
+          domain: 'Ops',
+          description: 'desc',
+          problem: 'prob',
+          solution: 'sol',
+          valueScores: v.map((axis, i) => ({ axisId: axis.id, rating: 80 + i, description: '' })),
+          complexityScores: c.map((axis, i) => ({ axisId: axis.id, rating: 20 + i, description: '' })),
+        },
+        createdAt: new Date(),
+      },
+      {
+        id: createTestId(),
+        folderId,
+        workspaceId: user.workspaceId!,
+        status: 'completed',
+        data: {
+          name: 'Case B',
+          domain: 'Sales',
+          description: 'desc',
+          problem: 'prob',
+          solution: 'sol',
+          valueScores: v.map((axis, i) => ({ axisId: axis.id, rating: 30 + i, description: '' })),
+          complexityScores: c.map((axis, i) => ({ axisId: axis.id, rating: 70 + i, description: '' })),
+        },
+        createdAt: new Date(),
+      },
+    ]);
+
+    const result = await generateFolderXlsx({
+      entityId: folderId,
+      workspaceId: user.workspaceId!,
+      locale,
+    });
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(result.buffer as unknown as ArrayBuffer);
+    return wb;
+  }
+
+  it('writes live cross-sheet score formulas referencing the matrix tab', async () => {
+    const wb = await generateScoredWorkbook('en');
+
+    const useCases = wb.getWorksheet('Use cases')!;
+    expect(useCases).toBeDefined();
+
+    // Columns: G=value score, H=complexity score, I=quadrant. Data rows 2..3.
+    for (const rowNumber of [2, 3]) {
+      const valueCell = useCases.getCell(`G${rowNumber}`);
+      const complexityCell = useCases.getCell(`H${rowNumber}`);
+
+      // exceljs surfaces formula cells as { formula, result }.
+      expect(valueCell.type).toBe(ExcelJS.ValueType.Formula);
+      expect(complexityCell.type).toBe(ExcelJS.ValueType.Formula);
+
+      const valueFormula = (valueCell.value as ExcelJS.CellFormulaValue).formula;
+      const complexityFormula = (complexityCell.value as ExcelJS.CellFormulaValue).formula;
+
+      // Cross-sheet reference to the matrix tab + ROUND wrapper (weighted mean).
+      expect(valueFormula).toContain("'Evaluation matrix'!");
+      expect(valueFormula).toContain('ROUND(');
+      expect(complexityFormula).toContain("'Evaluation matrix'!");
+      expect(complexityFormula).toContain('ROUND(');
+
+      // Cached result is a coherent 0..100 score.
+      const valueResult = (valueCell.value as ExcelJS.CellFormulaValue).result as number;
+      const complexityResult = (complexityCell.value as ExcelJS.CellFormulaValue).result as number;
+      expect(typeof valueResult).toBe('number');
+      expect(valueResult).toBeGreaterThanOrEqual(0);
+      expect(valueResult).toBeLessThanOrEqual(100);
+      expect(typeof complexityResult).toBe('number');
+      expect(complexityResult).toBeGreaterThanOrEqual(0);
+      expect(complexityResult).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('writes live quadrant formulas (IF/MEDIAN) on both score-bearing tabs', async () => {
+    const wb = await generateScoredWorkbook('en');
+
+    const useCases = wb.getWorksheet('Use cases')!;
+    const quadrant = wb.getWorksheet('Prioritization quadrant')!;
+    expect(quadrant).toBeDefined();
+
+    for (const rowNumber of [2, 3]) {
+      // Use-cases quadrant column I = IF/MEDIAN formula.
+      const ucQuadrant = useCases.getCell(`I${rowNumber}`);
+      expect(ucQuadrant.type).toBe(ExcelJS.ValueType.Formula);
+      const ucFormula = (ucQuadrant.value as ExcelJS.CellFormulaValue).formula;
+      expect(ucFormula).toContain('IF(');
+      expect(ucFormula).toContain('MEDIAN(');
+      // Cached label is one of the localized quadrant labels.
+      const ucLabel = (ucQuadrant.value as ExcelJS.CellFormulaValue).result as string;
+      expect(['Quick win', 'Major project', 'Fill-in', 'Thankless task']).toContain(ucLabel);
+
+      // Quadrant tab value (B) / complexity (C) are cross-sheet refs to use cases.
+      const qValue = quadrant.getCell(`B${rowNumber}`);
+      const qComplexity = quadrant.getCell(`C${rowNumber}`);
+      expect(qValue.type).toBe(ExcelJS.ValueType.Formula);
+      expect(qComplexity.type).toBe(ExcelJS.ValueType.Formula);
+      expect((qValue.value as ExcelJS.CellFormulaValue).formula).toContain("'Use cases'!");
+      expect((qComplexity.value as ExcelJS.CellFormulaValue).formula).toContain("'Use cases'!");
+
+      // Quadrant tab label column D = IF/MEDIAN formula.
+      const qQuadrant = quadrant.getCell(`D${rowNumber}`);
+      expect(qQuadrant.type).toBe(ExcelJS.ValueType.Formula);
+      expect((qQuadrant.value as ExcelJS.CellFormulaValue).formula).toContain('IF(');
+    }
+  });
+
+  it('produces no formula-error tokens anywhere in the workbook', async () => {
+    const wb = await generateScoredWorkbook('fr');
+
+    for (const sheet of wb.worksheets) {
+      sheet.eachRow((row) => {
+        row.eachCell((cell) => {
+          // Inspect both formula strings and cached results / static values.
+          const parts: string[] = [];
+          if (cell.type === ExcelJS.ValueType.Formula) {
+            const fv = cell.value as ExcelJS.CellFormulaValue;
+            parts.push(String(fv.formula ?? ''));
+            parts.push(String(fv.result ?? ''));
+          } else if (cell.value != null) {
+            parts.push(String(cell.value));
+          }
+          for (const token of ERROR_TOKENS) {
+            for (const part of parts) {
+              expect(part.includes(token)).toBe(false);
+            }
+          }
+        });
+      });
+    }
   });
 });
