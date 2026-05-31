@@ -1,12 +1,16 @@
-type ToolExecutionContext = {
+import type {
+    ToolExecutionContext as BridgeToolExecutionContext,
+    ToolExecutor as BridgeToolExecutor,
+} from '@sentropic/cowork-bridge/tools';
+
+// Chrome-specific execution context: extends the portable bridge base with the
+// sender tab/window ids supplied by the service worker.
+type ToolExecutionContext = BridgeToolExecutionContext & {
     senderTabId?: number;
     senderWindowId?: number;
 };
 
-type ToolExecutor = (
-    args: Record<string, unknown>,
-    context: ToolExecutionContext,
-) => Promise<unknown>;
+type ToolExecutor = BridgeToolExecutor<ToolExecutionContext>;
 
 type ScrollDirection = 'up' | 'down' | 'top' | 'bottom';
 type TabReadMode = 'info' | 'dom' | 'screenshot' | 'elements';

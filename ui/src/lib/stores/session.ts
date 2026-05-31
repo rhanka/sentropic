@@ -1,7 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
-import { getNavigation } from '$lib/core/navigation-adapter';
+import { getNavigation } from '@sentropic/cowork-bridge/core';
 import { API_BASE_URL } from '$lib/config';
-import { getApiAuthToken, getApiBaseUrl } from '$lib/core/api-client';
+import { getApiAuthToken, getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 
 /**
  * Session Store

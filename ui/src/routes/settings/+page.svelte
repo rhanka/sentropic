@@ -19,6 +19,13 @@
     type VsCodeExtensionDownloadMetadata,
   } from '$lib/utils/vscode-extension-download';
   import {
+    fetchCoworkDesktopDownloadMetadata,
+    getCoworkDesktopDownloadErrorMessage,
+    setCoworkDesktopChannel,
+    type CoworkDesktopChannel,
+    type CoworkDesktopDownloadMetadata,
+  } from '$lib/utils/cowork-desktop-download';
+  import {
     completeCodexProviderEnrollment,
     disconnectCodexProviderEnrollment,
     startCodexProviderEnrollment,
@@ -99,6 +106,12 @@
   let vscodeExtensionDownloadMetadata: VsCodeExtensionDownloadMetadata | null = null;
   let vscodeExtensionDownloadError = '';
   let isLoadingVsCodeExtensionDownload = false;
+  let coworkDesktopDownloadMetadata: CoworkDesktopDownloadMetadata | null = null;
+  let coworkDesktopDownloadError = '';
+  let isLoadingCoworkDesktopDownload = false;
+  let coworkDesktopChannel: CoworkDesktopChannel = 'release';
+  let isUpdatingCoworkDesktopChannel = false;
+  let coworkDesktopChannelError = '';
   let isLoadingVsCodeExtensionToken = false;
   let isIssuingVsCodeExtensionToken = false;
   let isRevokingVsCodeExtensionToken = false;
@@ -173,12 +186,16 @@
 
   onMount(async () => {
     await loadMe();
-    await loadChromeExtensionDownloadMetadata();
-    await loadVsCodeExtensionDownloadMetadata();
     await loadModelCatalog();
     await loadUserAISettings();
     await syncGoogleDriveConnection();
     await revealGoogleDriveConnectors();
+    // Download cards (chrome/cowork/vscode) are display-gated by {#if isAdmin()} in the template;
+    // fetch their metadata unconditionally so it is populated by the time the card renders (isAdmin()
+    // reads a non-reactive session snapshot and can be false at onMount before the session hydrates).
+    await loadChromeExtensionDownloadMetadata();
+    await loadVsCodeExtensionDownloadMetadata();
+    await loadCoworkDesktopDownloadMetadata();
     if (isAdmin()) {
       await loadAISettings();
       await loadQueueStats();
@@ -196,6 +213,14 @@
     const s = get(session);
     return s.user?.role === 'admin_app' || s.user?.role === 'admin_org';
   };
+
+  // Reactive admin flag for template gating. Derive from the `me` store (loaded
+  // via loadMe() in onMount and reactive), NOT from `isAdmin()`/`session`: the
+  // session store may not be hydrated at initial render (and isAdmin() reads a
+  // non-reactive snapshot), so a session-based `{#if}` can stay false / not
+  // re-render. `$me.data.user.role` is the app-level role.
+  $: isAdminView =
+    $me.data?.user?.role === 'admin_app' || $me.data?.user?.role === 'admin_org';
 
   const isAdminApp = () => {
     const s = get(session);
@@ -368,6 +393,44 @@
       );
     } finally {
       isLoadingVsCodeExtensionDownload = false;
+    }
+  };
+
+  const loadCoworkDesktopDownloadMetadata = async () => {
+    isLoadingCoworkDesktopDownload = true;
+    coworkDesktopDownloadError = '';
+
+    try {
+      coworkDesktopDownloadMetadata = await fetchCoworkDesktopDownloadMetadata();
+      coworkDesktopChannel = coworkDesktopDownloadMetadata.channel;
+    } catch (error) {
+      console.error('Failed to load cowork desktop metadata:', error);
+      coworkDesktopDownloadMetadata = null;
+      coworkDesktopDownloadError = getCoworkDesktopDownloadErrorMessage(
+        error,
+        get(_)('settings.coworkDesktop.errors.load')
+      );
+    } finally {
+      isLoadingCoworkDesktopDownload = false;
+    }
+  };
+
+  const updateCoworkDesktopChannel = async (channel: CoworkDesktopChannel) => {
+    if (channel === coworkDesktopChannel || isUpdatingCoworkDesktopChannel) return;
+    isUpdatingCoworkDesktopChannel = true;
+    coworkDesktopChannelError = '';
+
+    try {
+      coworkDesktopChannel = await setCoworkDesktopChannel(channel);
+      await loadCoworkDesktopDownloadMetadata();
+    } catch (error) {
+      console.error('Failed to update cowork desktop channel:', error);
+      coworkDesktopChannelError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.coworkDesktop.channel.errors.update');
+    } finally {
+      isUpdatingCoworkDesktopChannel = false;
     }
   };
 
@@ -1074,218 +1137,316 @@
     <ViewTemplateCatalog />
   </div>
 
-  <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="chrome-extension-download-card">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div class="space-y-1">
-        <h2 class="text-lg font-semibold text-slate-800">{$_('settings.chromeExtension.title')}</h2>
-        <p class="text-sm text-slate-600">{$_('settings.chromeExtension.description')}</p>
-        <p class="text-sm font-medium text-rose-700">
-          {$_('settings.chromeExtension.experimentalWarning')}
-        </p>
-      </div>
-
-      {#if isLoadingChromeExtensionDownload}
-        <span class="text-sm text-slate-600" data-testid="chrome-extension-download-loading">
-          {$_('settings.chromeExtension.loading')}
-        </span>
-      {:else if chromeExtensionDownloadMetadata}
-        <a
-          class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
-          href={chromeExtensionDownloadMetadata.downloadUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label={$_('settings.chromeExtension.downloadTooltip')}
-          title={$_('settings.chromeExtension.downloadTooltip')}
-          data-testid="chrome-extension-download-cta"
-        >
-          <Download class="h-5 w-5" />
-        </a>
-      {:else}
-        <button
-          class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          type="button"
-          on:click={loadChromeExtensionDownloadMetadata}
-          data-testid="chrome-extension-download-retry"
-        >
-          {$_('settings.chromeExtension.retry')}
-        </button>
-      {/if}
-    </div>
-
-    {#if chromeExtensionDownloadMetadata}
-      <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
-        <div class="rounded border border-slate-200 p-3">
-          <dt class="text-slate-500">{$_('settings.chromeExtension.versionLabel')}</dt>
-          <dd class="font-medium text-slate-900" data-testid="chrome-extension-version">
-            {chromeExtensionDownloadMetadata.version}
-          </dd>
-        </div>
-        <div class="rounded border border-slate-200 p-3">
-          <dt class="text-slate-500">{$_('settings.chromeExtension.sourceLabel')}</dt>
-          <dd class="font-medium text-slate-900" data-testid="chrome-extension-source">
-            {chromeExtensionDownloadMetadata.source}
-          </dd>
-        </div>
-      </dl>
-    {:else if chromeExtensionDownloadError}
-      <p class="text-sm text-rose-700" data-testid="chrome-extension-download-error">
-        {chromeExtensionDownloadError}
-      </p>
-    {/if}
-  </div>
-
-  <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="vscode-extension-download-card">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div class="space-y-1">
-        <h2 class="text-lg font-semibold text-slate-800">{$_('settings.vscodeExtension.title')}</h2>
-        <p class="text-sm text-slate-600">{$_('settings.vscodeExtension.description')}</p>
-        <p class="text-sm font-medium text-rose-700">
-          {$_('settings.vscodeExtension.experimentalWarning')}
-        </p>
-      </div>
-
-      {#if isLoadingVsCodeExtensionDownload}
-        <span class="text-sm text-slate-600" data-testid="vscode-extension-download-loading">
-          {$_('settings.vscodeExtension.loading')}
-        </span>
-      {:else if vscodeExtensionDownloadMetadata}
-        <a
-          class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
-          href={vscodeExtensionDownloadMetadata.downloadUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label={$_('settings.vscodeExtension.downloadTooltip')}
-          title={$_('settings.vscodeExtension.downloadTooltip')}
-          data-testid="vscode-extension-download-cta"
-        >
-          <Download class="h-5 w-5" />
-        </a>
-      {:else}
-        <button
-          class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          type="button"
-          on:click={loadVsCodeExtensionDownloadMetadata}
-          data-testid="vscode-extension-download-retry"
-        >
-          {$_('settings.vscodeExtension.retry')}
-        </button>
-      {/if}
-    </div>
-
-    {#if vscodeExtensionDownloadMetadata}
-      <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
-        <div class="rounded border border-slate-200 p-3">
-          <dt class="text-slate-500">{$_('settings.vscodeExtension.versionLabel')}</dt>
-          <dd class="font-medium text-slate-900" data-testid="vscode-extension-version">
-            {vscodeExtensionDownloadMetadata.version}
-          </dd>
-        </div>
-        <div class="rounded border border-slate-200 p-3">
-          <dt class="text-slate-500">{$_('settings.vscodeExtension.sourceLabel')}</dt>
-          <dd class="font-medium text-slate-900" data-testid="vscode-extension-source">
-            {vscodeExtensionDownloadMetadata.source}
-          </dd>
-        </div>
-      </dl>
-    {:else if vscodeExtensionDownloadError}
-      <p class="text-sm text-rose-700" data-testid="vscode-extension-download-error">
-        {vscodeExtensionDownloadError}
-      </p>
-    {/if}
-    {#if isAdmin()}
-      <div class="space-y-3 rounded border border-slate-200 bg-slate-50 p-4" data-testid="vscode-extension-token-card">
+  {#if isAdminView}
+    <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="chrome-extension-download-card">
+      <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
-          <h3 class="text-sm font-semibold text-slate-800">{$_('settings.vscodeExtension.token.title')}</h3>
-          <p class="text-xs text-slate-600">{$_('settings.vscodeExtension.token.description')}</p>
+          <h2 class="text-lg font-semibold text-slate-800">{$_('settings.chromeExtension.title')}</h2>
+          <p class="text-sm text-slate-600">{$_('settings.chromeExtension.description')}</p>
+          <p class="text-sm font-medium text-rose-700">
+            {$_('settings.chromeExtension.experimentalWarning')}
+          </p>
         </div>
-        {#if isLoadingVsCodeExtensionToken}
-          <p class="text-xs text-slate-600">{$_('settings.vscodeExtension.token.loading')}</p>
+
+        {#if isLoadingChromeExtensionDownload}
+          <span class="text-sm text-slate-600" data-testid="chrome-extension-download-loading">
+            {$_('settings.chromeExtension.loading')}
+          </span>
+        {:else if chromeExtensionDownloadMetadata}
+          <a
+            class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
+            href={chromeExtensionDownloadMetadata.downloadUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={$_('settings.chromeExtension.downloadTooltip')}
+            title={$_('settings.chromeExtension.downloadTooltip')}
+            data-testid="chrome-extension-download-cta"
+          >
+            <Download class="h-5 w-5" />
+          </a>
         {:else}
-          <dl class="grid gap-2 text-xs text-slate-700 md:grid-cols-2">
-            <div class="rounded border border-slate-200 bg-white p-2">
-              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.statusLabel')}</dt>
-              <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-status">
-                {vscodeExtensionTokenActive
-                  ? $_('settings.vscodeExtension.token.statusActive')
-                  : $_('settings.vscodeExtension.token.statusInactive')}
-              </dd>
-            </div>
-            <div class="rounded border border-slate-200 bg-white p-2">
-              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.last4Label')}</dt>
-              <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-last4">
-                {vscodeExtensionTokenMeta?.last4 ?? $_('settings.vscodeExtension.token.notAvailable')}
-              </dd>
-            </div>
-            <div class="rounded border border-slate-200 bg-white p-2">
-              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.issuedAtLabel')}</dt>
-              <dd class="font-medium text-slate-900">
-                {formatDateTime(vscodeExtensionTokenMeta?.issuedAt)}
-              </dd>
-            </div>
-            <div class="rounded border border-slate-200 bg-white p-2">
-              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.expiresAtLabel')}</dt>
-              <dd class="font-medium text-slate-900">
-                {formatDateTime(vscodeExtensionTokenMeta?.expiresAt)}
-              </dd>
-            </div>
-          </dl>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <button
-              class={settingsPrimaryButtonClass}
-              type="button"
-              on:click={issueVsCodeExtensionToken}
-              disabled={isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
-            >
-              <RefreshCw class="h-3.5 w-3.5" />
-              {vscodeExtensionTokenActive
-                ? $_('settings.vscodeExtension.token.rotate')
-                : $_('settings.vscodeExtension.token.issue')}
-            </button>
-            <button
-              class={settingsSecondaryButtonClass}
-              type="button"
-              on:click={revokeVsCodeExtensionToken}
-              disabled={!vscodeExtensionTokenActive || isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
-            >
-              {$_('settings.vscodeExtension.token.revoke')}
-            </button>
-          </div>
-
-          {#if vscodeExtensionTokenPlaintext}
-            <div class="space-y-2 rounded border border-amber-200 bg-amber-50 p-3">
-              <p class="text-xs text-amber-800">{$_('settings.vscodeExtension.token.oneTimeNotice')}</p>
-              <div class="flex items-center gap-2">
-                <input
-                  class="w-full rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700"
-                  type="text"
-                  readonly
-                  value={vscodeExtensionTokenPlaintext}
-                  data-testid="vscode-extension-token-plaintext"
-                />
-                <button
-                  class="inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-amber-100 disabled:opacity-50"
-                  type="button"
-                  on:click={copyVsCodeExtensionToken}
-                  disabled={isCopyingVsCodeExtensionToken}
-                  data-testid="vscode-extension-token-copy"
-                >
-                  <Copy class="h-3.5 w-3.5" />
-                  {$_('settings.vscodeExtension.token.copy')}
-                </button>
-              </div>
-            </div>
-          {/if}
-
-          {#if vscodeExtensionTokenError}
-            <p class="text-sm text-rose-700" data-testid="vscode-extension-token-error">
-              {vscodeExtensionTokenError}
-            </p>
-          {/if}
+          <button
+            class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            type="button"
+            on:click={loadChromeExtensionDownloadMetadata}
+            data-testid="chrome-extension-download-retry"
+          >
+            {$_('settings.chromeExtension.retry')}
+          </button>
         {/if}
       </div>
-    {/if}
-  </div>
+
+      {#if chromeExtensionDownloadMetadata}
+        <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.chromeExtension.versionLabel')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="chrome-extension-version">
+              {chromeExtensionDownloadMetadata.version}
+            </dd>
+          </div>
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.chromeExtension.sourceLabel')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="chrome-extension-source">
+              {chromeExtensionDownloadMetadata.source}
+            </dd>
+          </div>
+        </dl>
+      {:else if chromeExtensionDownloadError}
+        <p class="text-sm text-rose-700" data-testid="chrome-extension-download-error">
+          {chromeExtensionDownloadError}
+        </p>
+      {/if}
+    </div>
+
+    <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="cowork-desktop-download-card">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="space-y-1">
+          <h2 class="text-lg font-semibold text-slate-800">{$_('settings.coworkDesktop.title')}</h2>
+          <p class="text-sm text-slate-600">{$_('settings.coworkDesktop.description')}</p>
+          <p class="text-sm font-medium text-rose-700">
+            {$_('settings.coworkDesktop.experimentalWarning')}
+          </p>
+        </div>
+
+        {#if isLoadingCoworkDesktopDownload}
+          <span class="text-sm text-slate-600" data-testid="cowork-desktop-download-loading">
+            {$_('settings.coworkDesktop.loading')}
+          </span>
+        {:else if coworkDesktopDownloadMetadata}
+          <a
+            class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
+            href={coworkDesktopDownloadMetadata.downloadUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={$_('settings.coworkDesktop.downloadTooltip')}
+            title={$_('settings.coworkDesktop.downloadTooltip')}
+            data-testid="cowork-desktop-download-cta"
+          >
+            <Download class="h-5 w-5" />
+          </a>
+        {:else}
+          <button
+            class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            type="button"
+            on:click={loadCoworkDesktopDownloadMetadata}
+            data-testid="cowork-desktop-download-retry"
+          >
+            {$_('settings.coworkDesktop.retry')}
+          </button>
+        {/if}
+      </div>
+
+      {#if coworkDesktopDownloadMetadata}
+        <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.coworkDesktop.versionLabel')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="cowork-desktop-version">
+              {coworkDesktopDownloadMetadata.version}
+            </dd>
+          </div>
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.coworkDesktop.sourceLabel')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="cowork-desktop-source">
+              {coworkDesktopDownloadMetadata.source}
+            </dd>
+          </div>
+        </dl>
+      {:else if coworkDesktopDownloadError}
+        <p class="text-sm text-rose-700" data-testid="cowork-desktop-download-error">
+          {coworkDesktopDownloadError}
+        </p>
+      {/if}
+
+      <div class="space-y-3 rounded border border-slate-200 bg-slate-50 p-4" data-testid="cowork-desktop-channel-card">
+        <div class="space-y-1">
+          <h3 class="text-sm font-semibold text-slate-800">{$_('settings.coworkDesktop.channel.title')}</h3>
+          <p class="text-xs text-slate-600">{$_('settings.coworkDesktop.channel.description')}</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-slate-500">{$_('settings.coworkDesktop.channel.label')}:</span>
+          <button
+            class={coworkDesktopChannel === 'release' ? settingsPrimaryButtonClass : settingsSecondaryButtonClass}
+            type="button"
+            on:click={() => updateCoworkDesktopChannel('release')}
+            disabled={isUpdatingCoworkDesktopChannel}
+            data-testid="cowork-desktop-channel-release"
+          >
+            {$_('settings.coworkDesktop.channel.release')}
+          </button>
+          <button
+            class={coworkDesktopChannel === 'prerelease' ? settingsPrimaryButtonClass : settingsSecondaryButtonClass}
+            type="button"
+            on:click={() => updateCoworkDesktopChannel('prerelease')}
+            disabled={isUpdatingCoworkDesktopChannel}
+            data-testid="cowork-desktop-channel-prerelease"
+          >
+            {$_('settings.coworkDesktop.channel.prerelease')}
+          </button>
+          {#if isUpdatingCoworkDesktopChannel}
+            <span class="text-xs text-slate-600">{$_('settings.coworkDesktop.channel.updating')}</span>
+          {/if}
+        </div>
+        {#if coworkDesktopChannelError}
+          <p class="text-sm text-rose-700" data-testid="cowork-desktop-channel-error">
+            {coworkDesktopChannelError}
+          </p>
+        {/if}
+      </div>
+    </div>
+
+    <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="vscode-extension-download-card">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="space-y-1">
+          <h2 class="text-lg font-semibold text-slate-800">{$_('settings.vscodeExtension.title')}</h2>
+          <p class="text-sm text-slate-600">{$_('settings.vscodeExtension.description')}</p>
+          <p class="text-sm font-medium text-rose-700">
+            {$_('settings.vscodeExtension.experimentalWarning')}
+          </p>
+        </div>
+
+        {#if isLoadingVsCodeExtensionDownload}
+          <span class="text-sm text-slate-600" data-testid="vscode-extension-download-loading">
+            {$_('settings.vscodeExtension.loading')}
+          </span>
+        {:else if vscodeExtensionDownloadMetadata}
+          <a
+            class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
+            href={vscodeExtensionDownloadMetadata.downloadUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={$_('settings.vscodeExtension.downloadTooltip')}
+            title={$_('settings.vscodeExtension.downloadTooltip')}
+            data-testid="vscode-extension-download-cta"
+          >
+            <Download class="h-5 w-5" />
+          </a>
+        {:else}
+          <button
+            class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            type="button"
+            on:click={loadVsCodeExtensionDownloadMetadata}
+            data-testid="vscode-extension-download-retry"
+          >
+            {$_('settings.vscodeExtension.retry')}
+          </button>
+        {/if}
+      </div>
+
+      {#if vscodeExtensionDownloadMetadata}
+        <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.vscodeExtension.versionLabel')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="vscode-extension-version">
+              {vscodeExtensionDownloadMetadata.version}
+            </dd>
+          </div>
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.vscodeExtension.sourceLabel')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="vscode-extension-source">
+              {vscodeExtensionDownloadMetadata.source}
+            </dd>
+          </div>
+        </dl>
+      {:else if vscodeExtensionDownloadError}
+        <p class="text-sm text-rose-700" data-testid="vscode-extension-download-error">
+          {vscodeExtensionDownloadError}
+        </p>
+      {/if}
+      {#if isAdmin()}
+        <div class="space-y-3 rounded border border-slate-200 bg-slate-50 p-4" data-testid="vscode-extension-token-card">
+          <div class="space-y-1">
+            <h3 class="text-sm font-semibold text-slate-800">{$_('settings.vscodeExtension.token.title')}</h3>
+            <p class="text-xs text-slate-600">{$_('settings.vscodeExtension.token.description')}</p>
+          </div>
+          {#if isLoadingVsCodeExtensionToken}
+            <p class="text-xs text-slate-600">{$_('settings.vscodeExtension.token.loading')}</p>
+          {:else}
+            <dl class="grid gap-2 text-xs text-slate-700 md:grid-cols-2">
+              <div class="rounded border border-slate-200 bg-white p-2">
+                <dt class="text-slate-500">{$_('settings.vscodeExtension.token.statusLabel')}</dt>
+                <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-status">
+                  {vscodeExtensionTokenActive
+                    ? $_('settings.vscodeExtension.token.statusActive')
+                    : $_('settings.vscodeExtension.token.statusInactive')}
+                </dd>
+              </div>
+              <div class="rounded border border-slate-200 bg-white p-2">
+                <dt class="text-slate-500">{$_('settings.vscodeExtension.token.last4Label')}</dt>
+                <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-last4">
+                  {vscodeExtensionTokenMeta?.last4 ?? $_('settings.vscodeExtension.token.notAvailable')}
+                </dd>
+              </div>
+              <div class="rounded border border-slate-200 bg-white p-2">
+                <dt class="text-slate-500">{$_('settings.vscodeExtension.token.issuedAtLabel')}</dt>
+                <dd class="font-medium text-slate-900">
+                  {formatDateTime(vscodeExtensionTokenMeta?.issuedAt)}
+                </dd>
+              </div>
+              <div class="rounded border border-slate-200 bg-white p-2">
+                <dt class="text-slate-500">{$_('settings.vscodeExtension.token.expiresAtLabel')}</dt>
+                <dd class="font-medium text-slate-900">
+                  {formatDateTime(vscodeExtensionTokenMeta?.expiresAt)}
+                </dd>
+              </div>
+            </dl>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                class={settingsPrimaryButtonClass}
+                type="button"
+                on:click={issueVsCodeExtensionToken}
+                disabled={isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
+              >
+                <RefreshCw class="h-3.5 w-3.5" />
+                {vscodeExtensionTokenActive
+                  ? $_('settings.vscodeExtension.token.rotate')
+                  : $_('settings.vscodeExtension.token.issue')}
+              </button>
+              <button
+                class={settingsSecondaryButtonClass}
+                type="button"
+                on:click={revokeVsCodeExtensionToken}
+                disabled={!vscodeExtensionTokenActive || isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
+              >
+                {$_('settings.vscodeExtension.token.revoke')}
+              </button>
+            </div>
+
+            {#if vscodeExtensionTokenPlaintext}
+              <div class="space-y-2 rounded border border-amber-200 bg-amber-50 p-3">
+                <p class="text-xs text-amber-800">{$_('settings.vscodeExtension.token.oneTimeNotice')}</p>
+                <div class="flex items-center gap-2">
+                  <input
+                    class="w-full rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700"
+                    type="text"
+                    readonly
+                    value={vscodeExtensionTokenPlaintext}
+                    data-testid="vscode-extension-token-plaintext"
+                  />
+                  <button
+                    class="inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-amber-100 disabled:opacity-50"
+                    type="button"
+                    on:click={copyVsCodeExtensionToken}
+                    disabled={isCopyingVsCodeExtensionToken}
+                    data-testid="vscode-extension-token-copy"
+                  >
+                    <Copy class="h-3.5 w-3.5" />
+                    {$_('settings.vscodeExtension.token.copy')}
+                  </button>
+                </div>
+              </div>
+            {/if}
+
+            {#if vscodeExtensionTokenError}
+              <p class="text-sm text-rose-700" data-testid="vscode-extension-token-error">
+                {vscodeExtensionTokenError}
+              </p>
+            {/if}
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <GoogleDriveConnectorCard
     connection={googleDriveConnection}

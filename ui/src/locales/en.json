@@ -146,6 +146,23 @@
         "load": "Error while loading devices",
         "update": "Error while updating device",
         "revoke": "Error while revoking device"
+      },
+      "pair": {
+        "title": "Pair a device",
+        "subtitle": "Enter the code shown by the Sentropic Cowork app on your workstation.",
+        "codeLabel": "Pairing code",
+        "codePlaceholder": "PAIR-XXXX",
+        "deviceNameLabel": "Device name",
+        "deviceNamePlaceholder": "My workstation",
+        "confirm": "Pair device",
+        "confirming": "Pairing…",
+        "success": "Device paired. You can return to the app on your workstation.",
+        "back": "Back to devices",
+        "errors": {
+          "codeRequired": "The pairing code is required.",
+          "notFound": "Invalid or expired code.",
+          "generic": "Failed to pair the device."
+        }
       }
     },
     "magicLink": {
@@ -646,6 +663,31 @@
       "sourceLabel": "Source",
       "errors": {
         "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/top-ai-ideas-chrome-extension.zip, then restart the API."
+      }
+    },
+    "coworkDesktop": {
+      "title": "Sentropic Cowork (Windows)",
+      "description": "Download the Sentropic Cowork Windows binary (eyes/hands on your workstation) configured for this instance, then pair it with a code.",
+      "experimentalWarning": "(experimental, POC — unsigned binary: SmartScreen may warn)",
+      "loading": "Loading Cowork binary…",
+      "downloadTooltip": "Download Sentropic Cowork (Windows)",
+      "retry": "Retry",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "channel": {
+        "title": "Distribution channel",
+        "description": "Choose which build is exposed to users: Release (official signed build) or Prerelease (branch-built unsigned build for UAT).",
+        "label": "Active channel",
+        "release": "Release",
+        "prerelease": "Prerelease",
+        "updating": "Updating channel…",
+        "errors": {
+          "load": "Unable to load the active channel.",
+          "update": "Unable to update the channel."
+        }
+      },
+      "errors": {
+        "load": "Unable to load the Sentropic Cowork card. Set COWORK_DESKTOP_DOWNLOAD_URL in the API configuration (an http(s) URL served from the Sentropic domain), then restart the API."
       }
     },
     "vscodeExtension": {

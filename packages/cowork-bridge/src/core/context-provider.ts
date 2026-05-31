@@ -38,7 +38,7 @@ export interface ContextProvider {
  * ```ts
  * import { page } from '$app/stores';
  * import { browser } from '$app/environment';
- * import { createSvelteKitContextProvider } from '$lib/core/context-provider';
+ * import { createSvelteKitContextProvider } from '@sentropic/cowork-bridge/core';
  *
  * const ctx = createSvelteKitContextProvider(page, browser);
  * ```

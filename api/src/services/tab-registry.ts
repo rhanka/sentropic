@@ -5,8 +5,24 @@
  * The registry is process-scoped — entries do not survive server restarts.
  */
 
-export type TabSource = 'chrome_plugin' | 'bookmarklet';
+export type TabSource = 'chrome_plugin' | 'bookmarklet' | 'desktop_cowork';
 export type TabStatus = 'active' | 'disconnected';
+
+/**
+ * Browser sources expose a DOM (tab_read/tab_action). Non-browser sources
+ * (e.g. desktop_cowork) do not, so browser-DOM tools must not be offered to them.
+ */
+const BROWSER_TAB_SOURCES: ReadonlySet<TabSource> = new Set<TabSource>([
+  'chrome_plugin',
+  'bookmarklet',
+]);
+
+/**
+ * Whether a registry source exposes a browser DOM (i.e. supports tab_read/tab_action).
+ */
+export function isBrowserSource(source: TabSource): boolean {
+  return BROWSER_TAB_SOURCES.has(source);
+}
 
 export interface TabEntry {
   tab_id: string;
@@ -21,13 +37,14 @@ export interface TabEntry {
 
 const tabs = new Map<string, TabEntry>();
 
-function generateBookmarkletTabId(): string {
-  return `bookmarklet_${crypto.randomUUID()}`;
+function generateTabId(source: TabSource): string {
+  const prefix = source === 'desktop_cowork' ? 'device' : 'bookmarklet';
+  return `${prefix}_${crypto.randomUUID()}`;
 }
 
 /**
- * Register a new tab. If `tab_id` is empty/missing, auto-assigns one with
- * the `bookmarklet_<uuid>` pattern.
+ * Register a new tab/device. If `tab_id` is empty/missing, auto-assigns one with
+ * the `bookmarklet_<uuid>` pattern (browser) or `device_<uuid>` (desktop_cowork).
  */
 export function register(entry: {
   tab_id?: string;
@@ -36,7 +53,7 @@ export function register(entry: {
   title: string;
   userId: string;
 }): TabEntry {
-  const tab_id = (entry.tab_id || '').trim() || generateBookmarkletTabId();
+  const tab_id = (entry.tab_id || '').trim() || generateTabId(entry.source);
   const now = new Date();
   const tabEntry: TabEntry = {
     tab_id,

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import type { ContextProvider } from '$lib/core/context-provider';
+  import type { ContextProvider } from '@sentropic/cowork-bridge/core';
   import { _ } from 'svelte-i18n';
-  import { initApiClient } from '$lib/core/api-client';
+  import { initApiClient } from '@sentropic/cowork-bridge/core';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
@@ -31,7 +31,7 @@
     chatWidgetLayout,
     type ChatWidgetDisplayMode,
   } from '@sentropic/chat-ui/stores/chatWidgetLayout';
-  import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
+  import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
   import {
     deleteLocalToolPermissionPolicy,
     listLocalToolPermissionPolicies,

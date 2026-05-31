@@ -146,6 +146,23 @@
         "load": "Erreur lors du chargement des appareils",
         "update": "Erreur lors de la mise à jour",
         "revoke": "Erreur lors de la révocation"
+      },
+      "pair": {
+        "title": "Appairer un appareil",
+        "subtitle": "Saisissez le code affiché par l'application Sentropic Cowork sur votre poste de travail.",
+        "codeLabel": "Code d'appairage",
+        "codePlaceholder": "PAIR-XXXX",
+        "deviceNameLabel": "Nom de l'appareil",
+        "deviceNamePlaceholder": "Mon poste de travail",
+        "confirm": "Appairer l'appareil",
+        "confirming": "Appairage…",
+        "success": "Appareil appairé. Vous pouvez retourner à l'application sur votre poste de travail.",
+        "back": "Retour aux appareils",
+        "errors": {
+          "codeRequired": "Le code d'appairage est requis.",
+          "notFound": "Code invalide ou expiré.",
+          "generic": "Échec de l'appairage de l'appareil."
+        }
       }
     },
     "magicLink": {
@@ -646,6 +663,31 @@
       "sourceLabel": "Source",
       "errors": {
         "load": "Impossible de charger la carte Paramètres Plugin Chrome. Configurez CHROME_EXTENSION_DOWNLOAD_URL dans l'API, ou assurez-vous qu'un package local est disponible à /chrome-extension/top-ai-ideas-chrome-extension.zip, puis redémarrez l'API."
+      }
+    },
+    "coworkDesktop": {
+      "title": "Sentropic Cowork (Windows)",
+      "description": "Téléchargez le binaire Windows Sentropic Cowork (yeux/mains sur le poste) configuré pour cette instance, puis appairez-le via un code.",
+      "experimentalWarning": "(expérimental, POC — binaire non signé : SmartScreen peut avertir)",
+      "loading": "Chargement du binaire Cowork…",
+      "downloadTooltip": "Télécharger Sentropic Cowork (Windows)",
+      "retry": "Réessayer",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "channel": {
+        "title": "Canal de distribution",
+        "description": "Choisissez le binaire exposé aux utilisateurs : Release (build officiel signé) ou Préversion (build de branche non signé, pour l'UAT).",
+        "label": "Canal actif",
+        "release": "Release",
+        "prerelease": "Préversion",
+        "updating": "Mise à jour du canal…",
+        "errors": {
+          "load": "Impossible de charger le canal actif.",
+          "update": "Impossible de mettre à jour le canal."
+        }
+      },
+      "errors": {
+        "load": "Impossible de charger la carte Sentropic Cowork. Configurez COWORK_DESKTOP_DOWNLOAD_URL dans l'API (URL http(s) servie sur le domaine Sentropic), puis redémarrez l'API."
       }
     },
     "vscodeExtension": {

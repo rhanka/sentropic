@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '$lib/config';
-import { getApiAuthToken, getApiBaseUrl } from '$lib/core/api-client';
+import { getApiAuthToken, getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 
 export type DocumentContextType = 'organization' | 'folder' | 'initiative' | 'chat_session';
 export const DOCUMENT_UPLOAD_ACCEPT =

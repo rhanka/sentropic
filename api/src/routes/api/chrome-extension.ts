@@ -43,7 +43,7 @@ export const chromeExtensionRouter = new Hono();
 
 // --- Tab registration / keepalive / unregister endpoints ---
 
-const VALID_TAB_SOURCES = new Set<TabSource>(['chrome_plugin', 'bookmarklet']);
+const VALID_TAB_SOURCES = new Set<TabSource>(['chrome_plugin', 'bookmarklet', 'desktop_cowork']);
 
 chromeExtensionRouter.post('/tabs/register', async (c) => {
   const user = c.get('user');
@@ -54,7 +54,10 @@ chromeExtensionRouter.post('/tabs/register', async (c) => {
   const source = typeof body.source === 'string' ? body.source.trim() : '';
 
   if (!VALID_TAB_SOURCES.has(source as TabSource)) {
-    return c.json({ message: 'Invalid source. Must be "chrome_plugin" or "bookmarklet".' }, 400);
+    return c.json(
+      { message: 'Invalid source. Must be "chrome_plugin", "bookmarklet" or "desktop_cowork".' },
+      400,
+    );
   }
 
   const entry = register({

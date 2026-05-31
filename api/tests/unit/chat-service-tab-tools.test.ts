@@ -190,6 +190,96 @@ describe('ChatService - tab tool injection (unit, mocked OpenAI)', () => {
     expect(tabActionCount).toBe(1);
   });
 
+  it('should NOT inject browser-DOM tab tools for a desktop_cowork (non-browser) device (BR41a-F1)', async () => {
+    // A non-browser device must never be offered tab_read/tab_action.
+    registerTab({
+      tab_id: 'device_test-1',
+      source: 'desktop_cowork',
+      url: '',
+      title: 'Cowork Workstation',
+      userId,
+    });
+
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    let capturedTools: string[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      capturedTools = toolNames(opts?.tools);
+      return stream([
+        { type: 'content_delta', data: { delta: 'OK' } },
+        { type: 'done', data: {} },
+      ]);
+    });
+
+    const { sessionId, assistantMessageId, model } =
+      await chatService.createUserMessageWithAssistantPlaceholder({
+        userId,
+        workspaceId,
+        content: 'test desktop device',
+        primaryContextType: 'folder',
+        primaryContextId: folderId,
+        model: 'gpt-4.1-nano',
+      });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model,
+    });
+
+    expect(capturedTools).not.toContain('tab_read');
+    expect(capturedTools).not.toContain('tab_action');
+  });
+
+  it('should still inject tab tools for a chrome_plugin device even when a desktop_cowork device is also registered (BR41a-F1)', async () => {
+    registerTab({
+      tab_id: 'device_test-2',
+      source: 'desktop_cowork',
+      url: '',
+      title: 'Cowork Workstation',
+      userId,
+    });
+    registerTab({
+      tab_id: 'chrome-tab-mixed',
+      source: 'chrome_plugin',
+      url: 'https://example.com',
+      title: 'Chrome Tab',
+      userId,
+    });
+
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    let capturedTools: string[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      capturedTools = toolNames(opts?.tools);
+      return stream([
+        { type: 'content_delta', data: { delta: 'OK' } },
+        { type: 'done', data: {} },
+      ]);
+    });
+
+    const { sessionId, assistantMessageId, model } =
+      await chatService.createUserMessageWithAssistantPlaceholder({
+        userId,
+        workspaceId,
+        content: 'test mixed devices',
+        primaryContextType: 'folder',
+        primaryContextId: folderId,
+        model: 'gpt-4.1-nano',
+      });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model,
+    });
+
+    expect(capturedTools).toContain('tab_read');
+    expect(capturedTools).toContain('tab_action');
+  });
+
   it('should NOT inject tab tools when no tabs are registered', async () => {
     // No tabs registered for this user
 
