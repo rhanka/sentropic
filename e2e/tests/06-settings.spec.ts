@@ -88,7 +88,7 @@ test.describe('Page Paramètres', () => {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            downloadUrl: 'https://downloads.example.com/top-ai-ideas/chrome-ext.zip',
+            downloadUrl: 'https://downloads.example.com/sentropic/chrome-ext.zip',
             version: '1.4.2',
             source: 'ci:build-ext',
           }),
@@ -103,7 +103,7 @@ test.describe('Page Paramètres', () => {
       await expect(page.getByTestId('chrome-extension-source')).toHaveText('ci:build-ext');
       await expect(page.getByTestId('chrome-extension-download-cta')).toHaveAttribute(
         'href',
-        'https://downloads.example.com/top-ai-ideas/chrome-ext.zip'
+        'https://downloads.example.com/sentropic/chrome-ext.zip'
       );
     } finally {
       await context.close();

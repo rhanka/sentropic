@@ -43,4 +43,20 @@ describe('Sentropic extension contract', () => {
       'sentropic-vscode-extension.vsix',
     );
   });
+
+  it('uses Sentropic identity for the self-hosted VSCode extension', () => {
+    const manifest = JSON.parse(readUiFile('vscode-ext/package.json')) as {
+      name?: string;
+      publisher?: string;
+    };
+
+    expect(manifest.name).toBe('sentropic-vscode-extension');
+    expect(manifest.publisher).toBe('sentropic');
+    expect(readUiFile('vscode-ext/webview-entry.ts')).toContain(
+      'https://sentropic.local/vscode',
+    );
+    expect(readUiFile('vscode-ext/webview-entry.ts')).not.toContain(
+      'https://top-ai-ideas.local/vscode',
+    );
+  });
 });
