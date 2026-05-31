@@ -100,7 +100,7 @@
     const isMobileFullScreenDock =
       $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss === '100vw';
     if (!isMobileFullScreenDock) return;
-    window.dispatchEvent(new CustomEvent('topai:close-chat'));
+    window.dispatchEvent(new CustomEvent('sentropic:close-chat'));
   };
 
   const onLocaleChange = (event: Event) => {
@@ -140,7 +140,7 @@
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     (belowLgMql as any).addListener?.(belowLgHandler);
     window.addEventListener('keydown', onGlobalKeyDown);
-    window.addEventListener('topai:toggle-burger-menu', onExternalToggleBurgerMenu as any);
+    window.addEventListener('sentropic:toggle-burger-menu', onExternalToggleBurgerMenu as any);
   });
 
   onDestroy(() => {
@@ -152,7 +152,7 @@
       // ignore
     }
     if (typeof window !== 'undefined') window.removeEventListener('keydown', onGlobalKeyDown);
-    if (typeof window !== 'undefined') window.removeEventListener('topai:toggle-burger-menu', onExternalToggleBurgerMenu as any);
+    if (typeof window !== 'undefined') window.removeEventListener('sentropic:toggle-burger-menu', onExternalToggleBurgerMenu as any);
   });
 </script>
 

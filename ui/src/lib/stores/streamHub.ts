@@ -48,7 +48,7 @@ const createExtensionStreamPort = (): RuntimePortLike | null => {
   }).chrome?.runtime;
   if (!runtime?.connect) return null;
   try {
-    return runtime.connect({ name: 'topai-stream-proxy' });
+    return runtime.connect({ name: 'sentropic-stream-proxy' });
   } catch {
     return null;
   }

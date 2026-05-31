@@ -193,7 +193,7 @@
 
   const openCommentsFor = (sectionKey: string) => {
     const detail = { contextType: 'folder', contextId: folderId, sectionKey };
-    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+    window.dispatchEvent(new CustomEvent('sentropic:open-comments', { detail }));
   };
 
   const handleFolderNameSaved = () => {

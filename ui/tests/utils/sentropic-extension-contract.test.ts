@@ -59,4 +59,30 @@ describe('Sentropic extension contract', () => {
       'https://top-ai-ideas.local/vscode',
     );
   });
+
+  it('uses Sentropic event and storage prefixes for extension handoff', () => {
+    for (const relativePath of [
+      'chrome-ext/background.ts',
+      'chrome-ext/chatwidget-entry.ts',
+      'chrome-ext/content.ts',
+      'chrome-ext/extension-auth.ts',
+      'chrome-ext/sidepanel.ts',
+      'chrome-ext/tool-permissions.ts',
+      'src/lib/components/ChatWidget.svelte',
+      'src/lib/components/Header.svelte',
+      'src/lib/core/chatwidget-handoff.ts',
+      'src/lib/stores/streamHub.ts',
+      'src/lib/utils/user-ai-settings-events.ts',
+      'src/routes/dashboard/+page.svelte',
+      'src/routes/folders/[id]/+page.svelte',
+      'src/routes/initiative/[id]/+page.svelte',
+      'src/routes/organizations/[id]/+page.svelte',
+    ]) {
+      const source = readUiFile(relativePath);
+      expect(source).not.toContain('topAiIdeas');
+      expect(source).not.toContain('topai:');
+      expect(source).not.toContain('topai-stream-proxy');
+      expect(source).toContain('sentropic');
+    }
+  });
 });

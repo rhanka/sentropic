@@ -209,7 +209,7 @@ type StreamProxyStartPayload = {
     streamIds: string[];
 };
 
-const STREAM_PROXY_PORT_NAME = 'topai-stream-proxy';
+const STREAM_PROXY_PORT_NAME = 'sentropic-stream-proxy';
 
 const normalizeStreamProxyPayload = (
     raw: any,
