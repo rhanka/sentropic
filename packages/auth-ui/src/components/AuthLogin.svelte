@@ -2,14 +2,16 @@
   import { onMount } from 'svelte';
   import {
     createDefaultAuthUiLabels,
-    isWebAuthnSupported,
-    startPasskeyAuthentication,
-    getWebAuthnErrorMessage,
     type AuthUiError,
     type AuthUiLabels,
     type AuthUiSession,
     type AuthUiTransport,
   } from '../contracts.js';
+  import {
+    isWebAuthnSupported,
+    startPasskeyAuthentication,
+    getWebAuthnErrorMessage,
+  } from '../webauthn.js';
 
   interface Props {
     transport: AuthUiTransport;
