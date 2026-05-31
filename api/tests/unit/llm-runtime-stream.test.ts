@@ -696,8 +696,8 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   // -----------------------------------------------------------------------
   {
     providerId: 'gemini',
-    model: 'gemini-3.5-thinking',
-    label: 'Gemini 3.5 Thinking',
+    model: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash Lite',
     chatEvents: [
       { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
       { candidates: [{ content: { parts: [{ text: ' world' }] } }] },

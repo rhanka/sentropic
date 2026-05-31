@@ -507,4 +507,38 @@ describe('Use Cases Generate - Matrix Mode', () => {
       })
     ).rejects.toThrow('Matrix generation failed for strict-policy test');
   });
+
+  describe('per-folder use-case soft cap (BR-40a)', () => {
+    it('accepts a generation request with initiative_count at the raised soft cap of 50', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/initiatives/generate',
+        user.sessionToken!,
+        {
+          input: `Generate ${createTestId()}`,
+          initiative_count: 50,
+        }
+      );
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.jobId).toBeDefined();
+    });
+
+    it('rejects a generation request above the soft cap of 50', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/initiatives/generate',
+        user.sessionToken!,
+        {
+          input: `Generate ${createTestId()}`,
+          initiative_count: 51,
+        }
+      );
+
+      expect(response.status).toBe(400);
+    });
+  });
 });

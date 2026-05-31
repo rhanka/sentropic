@@ -35,18 +35,25 @@ Rules:
 - No extra text before or after JSON.
 - If a field is missing, infer the safest schema-compliant value from context.`;
 
+export interface InitiativeListDomain {
+  id: string; // snake_case stable id
+  label: string; // human-readable legend label
+}
+
 export interface InitiativeListItem {
   titre: string;
   description: string; // 30-60 caractères (description courte)
   problem?: string; // 40-80 caractères (nouveau champ)
   solution?: string; // 40-80 caractères (nouveau champ)
   ref: string;
+  domainId?: string; // references one of InitiativeList.domains[].id (BR40a-EX2: normalized business domain)
   organizationIds?: string[]; // optional — reserved for BR-20 workflow branching
   organizationName?: string; // optional — reserved for BR-20 workflow branching
 }
 
 export interface InitiativeList {
   dossier: string;
+  domains?: InitiativeListDomain[]; // BR40a-EX2: normalized business-domain taxonomy derived in the list phase
   initiatives: InitiativeListItem[];
 }
 
@@ -55,7 +62,6 @@ export interface InitiativeDetail {
   description: string; // 30-60 caractères (description courte)
   problem?: string; // 40-80 caractères (nouveau champ)
   solution?: string; // 40-80 caractères (nouveau champ)
-  domain: string;
   technologies: string[];
   leadtime: string;
   prerequisites: string;
@@ -117,7 +123,6 @@ function buildInitiativeDetailFallback(params: {
     description: rawExcerpt || `Synthèse opérationnelle de ${params.initiative} générée à partir du contexte disponible.`,
     problem: `Le contexte métier décrit un besoin prioritaire autour de ${params.initiative.toLowerCase()}.`,
     solution: `Déployer une première version cadrée de ${params.initiative.toLowerCase()} sur le périmètre le plus simple à industrialiser.`,
-    domain: 'Transformation IA',
     technologies: ['IA générative', 'Automatisation', 'Intégration SI'],
     leadtime: '6 à 12 semaines',
     prerequisites: `Valider le cadrage métier, les accès aux données et le sponsor de déploiement. Contexte de départ: ${contextExcerpt}`,
@@ -294,6 +299,18 @@ const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   properties: {
     dossier: { type: 'string' },
+    domains: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          label: { type: 'string' },
+        },
+        required: ['id', 'label'],
+      },
+    },
     initiatives: {
       type: 'array',
       items: {
@@ -303,12 +320,13 @@ const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
           titre: { type: 'string' },
           description: { type: 'string' },
           ref: { type: 'string' },
+          domainId: { type: 'string' },
         },
-        required: ['titre', 'description', 'ref'],
+        required: ['titre', 'description', 'ref', 'domainId'],
       },
     },
   },
-  required: ['dossier', 'initiatives'],
+  required: ['dossier', 'domains', 'initiatives'],
 };
 
 /** @deprecated Fallback only — schema now comes from agent config.outputSchema */
@@ -320,7 +338,6 @@ const USE_CASE_DETAIL_STRUCTURED_SCHEMA: Record<string, unknown> = {
     description: { type: 'string' },
     problem: { type: 'string' },
     solution: { type: 'string' },
-    domain: { type: 'string' },
     technologies: { type: 'array', items: { type: 'string' } },
     leadtime: { type: 'string' },
     prerequisites: { type: 'string' },
@@ -379,7 +396,6 @@ const USE_CASE_DETAIL_STRUCTURED_SCHEMA: Record<string, unknown> = {
     'description',
     'problem',
     'solution',
-    'domain',
     'technologies',
     'leadtime',
     'prerequisites',
