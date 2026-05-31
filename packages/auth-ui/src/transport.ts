@@ -15,6 +15,7 @@ export const assertAuthUiTransport = (candidate: unknown): AuthUiTransport => {
     'listCredentials',
     'renameCredential',
     'revokeCredential',
+    'approveDevicePairing',
   ];
 
   if (!candidate || typeof candidate !== 'object') {

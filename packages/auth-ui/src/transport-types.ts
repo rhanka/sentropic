@@ -73,6 +73,15 @@ export interface ListCredentialsResult {
   credentials: AuthUiCredential[];
 }
 
+export interface ApproveDevicePairingInput {
+  userCode: string;
+  deviceName?: string;
+}
+
+export interface ApproveDevicePairingResult {
+  deviceName?: string;
+}
+
 export interface AuthUiTransport {
   requestEmailCode(input: RequestEmailCodeInput): Promise<AuthUiResult<RequestEmailCodeResult>>;
   verifyEmailCode(input: VerifyEmailCodeInput): Promise<AuthUiResult<VerifyEmailCodeResult>>;
@@ -90,4 +99,7 @@ export interface AuthUiTransport {
   listCredentials(): Promise<AuthUiResult<ListCredentialsResult>>;
   renameCredential(input: RenameCredentialInput): Promise<AuthUiResult<AuthUiCredential>>;
   revokeCredential(input: RevokeCredentialInput): Promise<AuthUiResult<void>>;
+  approveDevicePairing(
+    input: ApproveDevicePairingInput,
+  ): Promise<AuthUiResult<ApproveDevicePairingResult>>;
 }
