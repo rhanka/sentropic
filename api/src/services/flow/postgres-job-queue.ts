@@ -285,6 +285,7 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
     return `
       CASE type
         WHEN 'docx_generate' THEN 'publishing'
+        WHEN 'xlsx_generate' THEN 'publishing'
         WHEN 'chat_message' THEN 'chat'
         ELSE 'ai'
       END
