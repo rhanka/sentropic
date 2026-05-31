@@ -2,15 +2,17 @@
   import { onMount, tick } from 'svelte';
   import {
     createDefaultAuthUiLabels,
-    isWebAuthnSupported,
     normalizeAuthEmail,
-    startPasskeyRegistration,
-    getWebAuthnErrorMessage,
     type AuthUiError,
     type AuthUiLabels,
     type AuthUiSession,
     type AuthUiTransport,
   } from '../contracts.js';
+  import {
+    isWebAuthnSupported,
+    startPasskeyRegistration,
+    getWebAuthnErrorMessage,
+  } from '../webauthn.js';
 
   type Step = 'email' | 'code' | 'webauthn' | 'success';
 
