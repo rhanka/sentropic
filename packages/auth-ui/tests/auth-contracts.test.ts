@@ -5,6 +5,7 @@ import {
   createAuthUiError,
   createDefaultAuthUiBranding,
   createDefaultAuthUiLabels,
+  createFrenchAuthUiLabels,
   normalizeAuthEmail,
   type AuthUiTransport,
 } from '../src/index.js';
@@ -25,6 +26,7 @@ const createTransport = (): AuthUiTransport => ({
   listCredentials: vi.fn(async () => ({ ok: true, value: { credentials: [] } })),
   renameCredential: vi.fn(async () => ({ ok: true, value: { id: 'credential-1', credentialId: 'public-id', deviceName: 'Laptop', uv: true, createdAt: '2026-05-24T00:00:00.000Z', lastUsedAt: null } })),
   revokeCredential: vi.fn(async () => ({ ok: true, value: undefined })),
+  approveDevicePairing: vi.fn(async () => ({ ok: true, value: { deviceName: 'Laptop' } })),
 });
 
 describe('auth UI contracts', () => {
@@ -39,6 +41,19 @@ describe('auth UI contracts', () => {
         requestEmailCode: async () => ({ ok: true, value: { delivery: 'email' } }),
       }),
     ).toThrow('verifyEmailCode');
+  });
+
+  it('requires approveDevicePairing as part of the host transport', () => {
+    const partial = createTransport() as unknown as Record<string, unknown>;
+    delete partial.approveDevicePairing;
+    expect(() => assertAuthUiTransport(partial)).toThrow('approveDevicePairing');
+  });
+
+  it('exposes a French label preset that consumers can pass into components', () => {
+    const labels = createFrenchAuthUiLabels();
+    expect(labels.loginButton).toBe('Se connecter avec WebAuthn');
+    expect(labels.devicePairTitle).toBe('Appairer un appareil');
+    expect(JSON.stringify(labels)).not.toContain('Sentropic');
   });
 
   it('normalizes email before host transports receive it', () => {
