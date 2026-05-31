@@ -605,7 +605,7 @@ const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   'gpt-4.1-nano':  1_000_000,
   // Gemini
   'gemini-3.5-flash':              1_000_000,
-  'gemini-3.5-thinking':           1_000_000,
+  'gemini-3.1-flash-lite':  1_000_000,
   // Anthropic
   'claude-sonnet-4-6': 1_000_000,
   'claude-opus-4-7':   1_000_000,
@@ -788,7 +788,7 @@ const compactConversationContext = async (input: {
     providerId: input.providerId,
     model:
       input.providerId === 'gemini'
-        ? 'gemini-3.5-thinking'
+        ? 'gemini-3.1-flash-lite'
         : 'gpt-4.1-nano',
     userId: input.userId,
     workspaceId: input.workspaceId,
@@ -2116,7 +2116,7 @@ export class ChatService {
       selectedProviderId === 'gemini' ? 'gemini' : 'openai';
     const evaluatorModel =
       selectedProviderId === 'gemini'
-        ? 'gemini-3.5-thinking'
+        ? 'gemini-3.1-flash-lite'
         : 'gpt-4.1-nano';
     if (!shouldEvaluateReasoningEffort) {
       return {
