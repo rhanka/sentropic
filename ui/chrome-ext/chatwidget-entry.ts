@@ -5,9 +5,9 @@
 
 import '../src/app.css';
 import ChatWidget from '$lib/components/ChatWidget.svelte';
-import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
-import { initApiClient } from '$lib/core/api-client';
-import { createExtensionContextProvider } from '$lib/core/context-provider';
+import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
+import { initApiClient } from '@sentropic/cowork-bridge/core';
+import { createExtensionContextProvider } from '@sentropic/cowork-bridge/core';
 import { clearUser } from '$lib/stores/session';
 import { loadExtensionConfig, type ExtensionRuntimeConfig } from './extension-config';
 import { installOverlayFetchProxy } from './network-bridge';

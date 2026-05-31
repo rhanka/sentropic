@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import type { Readable } from 'svelte/store';
-  import type { AppContext } from '$lib/core/context-provider';
-  import { getNavigation } from '$lib/core/navigation-adapter';
+  import type { AppContext } from '@sentropic/cowork-bridge/core';
+  import { getNavigation } from '@sentropic/cowork-bridge/core';
   import { _, locale } from 'svelte-i18n';
   import {
     apiFetch,
