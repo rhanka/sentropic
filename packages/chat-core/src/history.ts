@@ -44,6 +44,7 @@ export type ChatHistoryMessage = {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content?: string | null;
   reasoning?: string | null;
+  attachments?: unknown;
   model?: string | null;
   promptId?: string | null;
   promptVersionId?: string | null;

@@ -15,6 +15,10 @@ const GOOGLE_DRIVE_PICKER_SUPPORTED_MIME_TYPES = [
   'text/markdown',
   'text/plain',
   'text/xml',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
 ].join(',');
 
 type PickerCallbackData = {

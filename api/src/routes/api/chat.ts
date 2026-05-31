@@ -57,7 +57,7 @@ const vscodeCodeAgentInput = z.object({
 
 const createMessageInput = z.object({
   sessionId: z.string().optional(),
-  content: z.string().min(1),
+  content: z.string().max(200_000).optional().default(''),
   providerId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere']).optional(),
   providerApiKey: z.string().min(1).optional(),
   model: z.string().optional(),
@@ -66,9 +66,51 @@ const createMessageInput = z.object({
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional(),
   contexts: z.array(chatContextInput).optional(),
+  attachments: z.array(z.object({
+    kind: z.enum(['image', 'file']),
+    source: z.enum(['context_document', 'external_url']).default('context_document'),
+    documentId: z.string().min(1).max(256).optional(),
+    fileName: z.string().min(1).max(512).optional(),
+    mimeType: z.string().min(1).max(128).optional(),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    url: z.string().url().max(4096).optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    data: z.record(z.string(), z.unknown()).optional(),
+  }).superRefine((attachment, ctx) => {
+    if (attachment.source === 'context_document' && !attachment.documentId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['documentId'],
+        message: 'documentId is required for context_document attachments',
+      });
+    }
+    if (attachment.source === 'external_url' && !attachment.url) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['url'],
+        message: 'url is required for external_url attachments',
+      });
+    }
+    if (attachment.kind === 'image' && attachment.mimeType && !attachment.mimeType.toLowerCase().startsWith('image/')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['mimeType'],
+        message: 'image attachments require an image/* MIME type',
+      });
+    }
+  })).max(16).optional(),
   tools: z.array(z.string()).optional(),
   localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional(),
   vscodeCodeAgent: vscodeCodeAgentInput.optional(),
+}).superRefine((input, ctx) => {
+  if (input.content.trim().length > 0) return;
+  if ((input.attachments ?? []).length > 0) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['content'],
+    message: 'content or attachments is required',
+  });
 });
 
 const feedbackInput = z.object({
@@ -737,6 +779,7 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     primaryContextType: body.primaryContextType ?? null,
     primaryContextId: body.primaryContextId ?? null,
     contexts: body.contexts ?? undefined,
+    attachments: body.attachments ?? null,
     sessionTitle: body.sessionTitle ?? null
   });
 

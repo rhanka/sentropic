@@ -77,6 +77,10 @@ describe('google drive client', () => {
     expect(isSupportedGoogleDriveMimeType(GOOGLE_WORKSPACE_MIME_TYPES.presentation)).toBe(true);
     expect(isSupportedGoogleDriveMimeType('application/pdf')).toBe(true);
     expect(isSupportedGoogleDriveMimeType('text/markdown')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/png')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/jpeg')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/webp')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/gif')).toBe(true);
     expect(isSupportedGoogleDriveMimeType('application/vnd.google-apps.folder')).toBe(false);
   });
 

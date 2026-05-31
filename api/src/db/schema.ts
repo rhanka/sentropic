@@ -295,6 +295,7 @@ export const chatMessages = pgTable('chat_messages', {
   role: text('role').notNull(), // 'user' | 'assistant' | 'system' | 'tool'
   content: text('content'), // nullable for tool calls
   contexts: jsonb('contexts'), // array of { contextType, contextId } for message traceability
+  attachments: jsonb('attachments'), // array of media/document refs attached to the message
   toolCalls: jsonb('tool_calls'), // array of tool calls OpenAI
   toolCallId: text('tool_call_id'), // ID du tool call si ce message est un résultat d'outil
   reasoning: text('reasoning'), // Tokens de reasoning (pour modèles avec reasoning)
