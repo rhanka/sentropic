@@ -10,13 +10,13 @@ describe('chrome extension download utils', () => {
     const data = await fetchChromeExtensionDownloadMetadata(async () => ({
       version: ' 1.2.3 ',
       source: ' ui/chrome-ext ',
-      downloadUrl: ' https://downloads.example.com/top-ai-ideas/chrome-ext.zip ',
+      downloadUrl: ' https://downloads.example.com/sentropic/chrome-ext.zip ',
     }));
 
     expect(data).toEqual({
       version: '1.2.3',
       source: 'ui/chrome-ext',
-      downloadUrl: 'https://downloads.example.com/top-ai-ideas/chrome-ext.zip',
+      downloadUrl: 'https://downloads.example.com/sentropic/chrome-ext.zip',
     });
   });
 
@@ -25,7 +25,7 @@ describe('chrome extension download utils', () => {
       fetchChromeExtensionDownloadMetadata(async () => ({
         version: '1.2.3',
         source: '',
-        downloadUrl: 'https://downloads.example.com/top-ai-ideas/chrome-ext.zip',
+        downloadUrl: 'https://downloads.example.com/sentropic/chrome-ext.zip',
       }))
     ).rejects.toThrow('Invalid Chrome extension download metadata response.');
   });

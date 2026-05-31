@@ -45,7 +45,7 @@ describe('extension auth UI state', () => {
         isExtensionConfigAvailable: true,
         sessionToken: '',
         connected: false,
-        loginUrl: 'https://top-ai-ideas.local/auth/login',
+        loginUrl: 'https://sentropic.local/auth/login',
       }).showOpenLogin,
     ).toBe(true);
 
@@ -55,7 +55,7 @@ describe('extension auth UI state', () => {
         isExtensionConfigAvailable: true,
         sessionToken: '',
         connected: true,
-        loginUrl: 'https://top-ai-ideas.local/auth/login',
+        loginUrl: 'https://sentropic.local/auth/login',
       }).showOpenLogin,
     ).toBe(false);
 
@@ -65,7 +65,7 @@ describe('extension auth UI state', () => {
         isExtensionConfigAvailable: true,
         sessionToken: '',
         connected: false,
-        loginUrl: 'https://top-ai-ideas.local/auth/login',
+        loginUrl: 'https://sentropic.local/auth/login',
       }).showOpenLogin,
     ).toBe(false);
   });
