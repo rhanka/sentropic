@@ -559,6 +559,9 @@ jobs:
       - name: Build VSCode extension target
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make build-ext-vscode
+      - name: Build Cowork desktop binary
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        run: make package-desktop-windows
       - name: Build UI image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make build-ui-image
