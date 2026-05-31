@@ -226,24 +226,21 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - [x] `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` not edited — no cross-reference change needed (both packages follow the same host-adapter-driven pattern but stay independent).
   - [x] Rewrote `packages/auth-ui/README.md` with: install, quick-start, public surface table, transport endpoint mapping, Sentropic + admin mounting recipes, brand asset / FR labels / post-login redirect notes, BR-39b coupling note, versioning + first-publish bootstrap.
 
-- [ ] **Lot N - Final validation**
-  - [ ] Typecheck and lint:
-    - [ ] `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk`
-    - [ ] `make typecheck-ui ENV=test-feat-auth-ui-sdk`
-    - [ ] `make lint-ui ENV=test-feat-auth-ui-sdk`
-  - [ ] Retest packages:
-    - [ ] `make test-packages SCOPE=packages/auth-ui/tests ENV=test-feat-auth-ui-sdk`
-  - [ ] Retest UI:
-    - [ ] `make test-ui ENV=test-feat-auth-ui-sdk`
-  - [ ] Retest E2E:
-    - [ ] `make build-api build-ui-image API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=e2e-feat-auth-ui-sdk`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-simple.spec.ts API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=e2e-feat-auth-ui-sdk`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-routes.spec.ts API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=e2e-feat-auth-ui-sdk`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-workflow.spec.ts API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=e2e-feat-auth-ui-sdk`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-webauthn.spec.ts API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=e2e-feat-auth-ui-sdk`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-devices.spec.ts API_PORT=9195 UI_PORT=5395 MAILDEV_UI_PORT=1295 ENV=e2e-feat-auth-ui-sdk`
-  - [ ] Bump affected package versions for every touched package `src/**`.
-  - [ ] Complete first-publish bootstrap documentation for `@sentropic/auth-ui`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+- [x] **Lot N - Final validation**
+  - [x] Typecheck and lint:
+    - [x] `make typecheck-auth-ui` clean (validated by CI `validate-auth-ui` job)
+    - [x] `make typecheck-ui` clean (validated by CI `typecheck-lint-ui` job)
+    - [x] `make lint-ui` clean (validated by CI `typecheck-lint-ui` job)
+  - [x] Retest packages: `make test-packages SCOPE=packages/auth-ui/tests` — 28/28 pass (auth-contracts, webauthn, transport-fetch, example-admin-fetch-transport) — validated by CI `validate-auth-ui` job
+  - [x] Retest UI: `make test-ui` 416/418 pass (`google-drive-picker.test.ts` 2 fails confirmed pre-existing on main, see BR39a-Q2)
+  - [x] Retest E2E: CI `test-e2e (group-a..e)` all green on rerun (run 26705496187 → 26705852530); `tests/03-chat.spec.ts` AI flaky on first pass, green on rerun (BR39a-Q4 accepted per allowlist)
+  - [x] Bump affected package versions: `packages/auth-ui` 0.1.0 → 0.2.0 (minor: 5 new components + extended labels + new contract method). Validated by CI `enforce-package-bump`.
+  - [x] First-publish bootstrap documentation: `packages/auth-ui/README.md` "First publish" section + `BRANCH.md` BR39a-EX2 covers the `workflow_dispatch` + npm trusted publisher attach.
+  - [x] Final gate step 1: PR #178 https://github.com/rhanka/sentropic/pull/178 ready for review with full `BRANCH.md` body.
+  - [x] Final gate step 2: CI run 26705852530 — fully green on HEAD `2dccc2f3`.
+  - [ ] Final gate step 3: awaiting user UAT on root (Lot N-2 below). Once UAT signed off, commit deletion of `BRANCH.md`, push, merge.
+
+## Post-Merge User Actions (for first publish)
+- [ ] On `https://github.com/rhanka/sentropic/actions/workflows/ci.yml`, trigger `Run workflow` with `bootstrap_publish_target=auth-ui` (uses `NPM_TOKEN` secret).
+- [ ] On `https://www.npmjs.com/package/@sentropic/auth-ui/access`, attach the OIDC trusted publisher pointing to `rhanka/sentropic` workflow `ci.yml`.
+- [ ] From there on, steady-state CI publishes via OIDC on every merge to `main` that bumps `packages/auth-ui/package.json` `version`.
