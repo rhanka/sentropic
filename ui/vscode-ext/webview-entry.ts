@@ -1223,7 +1223,7 @@ const bootstrapRuntimeState = async (): Promise<RuntimeState> => {
 const contextProvider = createExtensionContextProvider({
   route: { id: '/vscode' },
   params: {},
-  url: new URL('https://top-ai-ideas.local/vscode'),
+  url: new URL('https://sentropic.local/vscode'),
 });
 
 const initialState: ChatWidgetHandoffState = {

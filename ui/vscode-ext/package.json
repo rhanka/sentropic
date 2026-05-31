@@ -1,10 +1,10 @@
 {
-  "name": "top-ai-ideas-vscode-extension",
+  "name": "sentropic-vscode-extension",
   "type": "module",
   "displayName": "Sentropic",
   "description": "Sentropic VSCode plugin v1 runtime shell.",
   "version": "0.1.1",
-  "publisher": "top-ai-ideas",
+  "publisher": "sentropic",
   "engines": {
     "vscode": "^1.85.0"
   },
