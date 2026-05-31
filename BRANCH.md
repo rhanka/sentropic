@@ -189,10 +189,10 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
     - [ ] Existing session restore/logout behavior still works.
     - [ ] Existing Chrome extension token exchange remains unchanged.
 
-- [ ] **Lot N-1 - Docs consolidation**
-  - [ ] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` with the `@sentropic/auth-ui` package boundary.
-  - [ ] Update `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` only if shared UI package rules need cross-reference.
-  - [ ] Keep a consumer note for `spa-transpose-cv` in `packages/auth-ui/README.md`; do not edit sibling repositories from this branch.
+- [x] **Lot N-1 - Docs consolidation**
+  - [x] Updated `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` row 25 to enumerate the full `@sentropic/auth-ui` surface (5 components + 13-method transport + label presets + slots + CSS vars + `skipEmailVerification` + Sentropic adapter pattern).
+  - [x] `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` not edited — no cross-reference change needed (both packages follow the same host-adapter-driven pattern but stay independent).
+  - [x] Rewrote `packages/auth-ui/README.md` with: install, quick-start, public surface table, transport endpoint mapping, Sentropic + admin mounting recipes, brand asset / FR labels / post-login redirect notes, BR-39b coupling note, versioning + first-publish bootstrap.
 
 - [ ] **Lot N - Final validation**
   - [ ] Typecheck and lint:
