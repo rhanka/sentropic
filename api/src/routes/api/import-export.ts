@@ -965,7 +965,7 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
   const meta = {
     title: 'Exported workspace data',
     notes: `Created by user ${user.userId}`,
-    source: 'top-ai-ideas',
+    source: 'sentropic',
     warnings:
       skippedExternalDocuments > 0
         ? [`Skipped ${skippedExternalDocuments} external documents (non-local sources are not exported).`]
