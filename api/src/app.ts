@@ -165,4 +165,4 @@ if (!env.DISABLE_RATE_LIMIT) {
 app.route('/api/v1', apiRouter);
 app.route('/api/v1/auth', authRouter);
 
-app.get('/', (c) => c.json({ name: 'Top AI Ideas API', version: '0.1.0' }));
+app.get('/', (c) => c.json({ name: 'Sentropic API', version: '0.1.0' }));
