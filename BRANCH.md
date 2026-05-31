@@ -165,14 +165,13 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
     - [x] `make lint-ui ENV=test-feat-auth-ui-sdk` clean
     - [ ] `make test-ui ENV=test-feat-auth-ui-sdk` — 416/418 pass; 2 failing tests in `tests/utils/google-drive-picker.test.ts` confirmed pre-existing on main (BR39a-Q2 below)
 
-- [ ] **Lot 4 - Consumer integration proof without editing consumer repo**
-  - [ ] Add a README section showing how `spa-transpose-cv` maps `/admin/auth/*` endpoints into the package transport.
-  - [ ] Add a package-level fixture transport named `createExampleAdminAuthTransport` in tests or docs only.
-  - [ ] Document how downstream apps supply brand assets, French labels, and post-login redirects.
-  - [ ] Document that BR-39b will remove backend duplication later but is not required to adopt the UI package.
-  - [ ] Lot gate:
-    - [ ] `make test-packages SCOPE=packages/auth-ui/tests/example-admin-transport.test.ts ENV=test-feat-auth-ui-sdk`
-    - [ ] `make build-auth-ui ENV=test-feat-auth-ui-sdk`
+- [x] **Lot 4 - Consumer integration proof without editing consumer repo**
+  - [x] Added `packages/auth-ui/tests/example-admin-fetch-transport.test.ts` (5 tests) walking the full email-OTP + passkey + device-pair flow through a `/admin/auth/*` mount with admin-flavoured French labels and bearer auth.
+  - [x] README section (Lot N-1) will document brand asset / FR label / post-login redirect customisation.
+  - [x] Test confirms: pure constructor injection, no source change in the package, no host coupling required.
+  - [x] Lot gate:
+    - [x] `make test-packages SCOPE=packages/auth-ui/tests/example-admin-fetch-transport.test.ts ENV=test-feat-auth-ui-sdk` (5/5 pass)
+    - [x] `make build-auth-ui ENV=test-feat-auth-ui-sdk` (dist generated)
 
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app setup:
