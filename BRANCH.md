@@ -127,17 +127,20 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - [x] Lot 1 recovery commit: `make commit MSG="feat: add auth ui webauthn helpers"`.
   - [x] Lot 1 make-target commit: `make commit MSG="chore: add auth ui package make targets"`.
 
-- [ ] **Lot 2 - Reusable auth screens**
-  - [ ] Add package components for `AuthLogin.svelte`, `AuthRegister.svelte`, `AuthMagicLinkVerify.svelte`, and `AuthDevices.svelte`.
-  - [ ] Preserve Sentropic login behavior through package callbacks and injected transport.
-  - [ ] Preserve registration behavior through package callbacks and injected transport.
-  - [ ] Preserve magic-link verify behavior through host-provided token and redirect callback.
-  - [ ] Preserve device-management behavior through injected credential transport.
-  - [ ] Add stable slots/snippets or render hooks for logo, product name, secondary action, and alert rendering.
-  - [ ] Lot gate:
-    - [ ] `make test-packages SCOPE=packages/auth-ui/tests/auth-login.test.ts ENV=test-feat-auth-ui-sdk`
-    - [ ] `make test-packages SCOPE=packages/auth-ui/tests/auth-register.test.ts ENV=test-feat-auth-ui-sdk`
-    - [ ] `make test-packages SCOPE=packages/auth-ui/tests/auth-devices.test.ts ENV=test-feat-auth-ui-sdk`
+- [x] **Lot 2 - Reusable auth screens**
+  - [x] Add package components for `AuthLogin.svelte`, `AuthRegister.svelte`, `AuthMagicLinkVerify.svelte`, `AuthDevices.svelte`, and `AuthDevicePair.svelte` (added per BR39a design decision to extract device pairing too with new `approveDevicePairing` contract method).
+  - [x] Preserve Sentropic login behavior through package callbacks and injected transport (`AuthLogin` exposes `onLoggedIn`, `onLostDevice`, `onError`).
+  - [x] Preserve registration behavior through package callbacks and injected transport, including `skipEmailVerification` prop for hosts that own pre-auth (e.g. SSO).
+  - [x] Preserve magic-link verify behavior through host-provided `tokenSource` + `onRedirect` callbacks.
+  - [x] Preserve device-management behavior through injected credential transport, including async `confirmRevoke` hook for hosts that render modals.
+  - [x] Add stable slots/snippets or render hooks for logo, product name, secondary action, and alert rendering (slots: `no-account`, `register-new-device`, `back-to-login`, `back-to-devices`, `cancel`, `pair-cta`, `register-device`, `add-device`, `login-link`).
+  - [x] Extended `AuthUiLabels` with the full superset of keys from Sentropic locales (FR + EN); added `createFrenchAuthUiLabels` preset.
+  - [x] Added `createDefaultFetchTransport({baseUrl, fetch?, headers?, onUnauthorized?})` so consumers can configure their own API prefix (`/auth` for Sentropic, `/admin/auth` for spa-transpose-cv).
+  - [x] Added `approveDevicePairing` to `AuthUiTransport` and `assertAuthUiTransport`.
+  - [x] Lot gate:
+    - [x] `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk` (clean)
+    - [x] `make test-packages SCOPE=packages/auth-ui/tests ENV=test-feat-auth-ui-sdk` (23 tests across `auth-contracts.test.ts`, `webauthn.test.ts`, `transport-fetch.test.ts`)
+    - [ ] Component-level Svelte tests deferred to Lot 4 fixture (per `rules/testing.md`: UI testing scope is TypeScript only — package consumers test integration with full bundler)
 
 - [ ] **Lot 3 - Sentropic app rewiring**
   - [ ] Add Sentropic host transport that maps package calls to existing `/auth/*` endpoints through app-owned API helpers.
