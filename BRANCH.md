@@ -62,6 +62,17 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - Evidence: failing tests under `api/tests/ai/**` which is in the AI flaky allowlist; failure signature matches LLM nondeterminism (tool call timeout) + transient PostgreSQL serialization conflict on the stream-events insert. Not systematic.
   - Resolution: re-trigger via `gh run rerun --failed` after current run completes; if still flaky, accept under allowlist (non-blocking) and proceed to merge.
 
+- `BR39a-Q4`
+  - Branch: `feat/auth-ui-sdk`
+  - Owner: Conductor
+  - Severity: low
+  - Status: AI flaky accepted (per `rules/testing.md` AI flaky allowlist for `e2e/tests/03-chat.spec.ts`)
+  - Repro steps: CI run 26705496187 → `test-e2e (group-c, 03)` shard.
+  - Expected: shard green.
+  - Actual: 4 tests in `e2e/tests/03-chat.spec.ts` timed out — lines 203 (reload-history), 475 (non-regression extension menu), 541 (multi-message conversation), 592 (message actions: copy/edit/retry/feedback). Same shard scope already in the AI flaky allowlist alongside `00-ai-generation`, `03-chat-chrome-extension`, `07_comment_assistant`. Not touched by BR-39a.
+  - Evidence: `03-chat.spec.ts` is in the canonical allowlist; failure pattern is LLM streaming nondeterminism (chat conversation flow + maildev wait for magic link tokens).
+  - Resolution: same as `BR39a-Q3` — `gh run rerun --failed`; accept if signature stable.
+
 - `BR39a-Q2`
   - Branch: `feat/auth-ui-sdk`
   - Owner: Conductor
