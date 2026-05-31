@@ -1,37 +1,44 @@
+import { createAuthSessionRouteHandlers } from '@sentropic/auth-hono';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { logger } from '../../logger';
-import {
-  validateSession,
-  createSession,
-  refreshSession,
-  revokeSession,
-  revokeAllSessions,
-  listUserSessions,
-} from '../../services/session-manager';
 import { db } from '../../db/client';
 import { users } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { logger } from '../../logger';
+import {
+  authHonoCookiePort,
+  authHonoSessionService,
+} from '../../services/auth/session-adapter';
+import {
+  createSession,
+  listUserSessions,
+  revokeAllSessions,
+  validateSession,
+} from '../../services/session-manager';
 
 /**
  * Session Management Routes
- * 
- * GET /auth/session - Get current session info
- * POST /auth/session/refresh - Refresh session token
- * DELETE /auth/session - Logout current session
- * DELETE /auth/session/all - Logout all sessions
- * GET /auth/session/list - List all user sessions
+ *
+ * GET    /auth/session                  - Get current session info (app-owned)
+ * POST   /auth/session/refresh          - Refresh session token (@sentropic/auth-hono)
+ * POST   /auth/session/extension-token  - Exchange session for extension token (app-owned)
+ * DELETE /auth/session                  - Logout current session (@sentropic/auth-hono)
+ * DELETE /auth/session/all              - Logout all sessions (app-owned)
+ * GET    /auth/session/list             - List all user sessions (app-owned)
+ *
+ * `refresh` and `logout` consume the package route handlers; remaining routes stay
+ * app-owned because they carry Sentropic-specific workspace/extension/role policy.
  */
 
 export const sessionRouter = new Hono();
 
-// Request schemas
-const refreshSessionSchema = z.object({
-  refreshToken: z.string(),
-});
-
 const extensionIssueSchema = z.object({
   deviceName: z.string().min(1).max(100).optional(),
+});
+
+const sessionHandlers = createAuthSessionRouteHandlers({
+  cookies: authHonoCookiePort,
+  service: authHonoSessionService,
 });
 
 /**
@@ -40,16 +47,16 @@ const extensionIssueSchema = z.object({
  */
 sessionRouter.get('/', async (c) => {
   try {
-    const sessionToken = 
+    const sessionToken =
       c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
       c.req.header('authorization')?.replace('Bearer ', '');
 
     if (!sessionToken) {
       return c.json({ error: 'No session token provided' }, 401);
     }
-    
+
     const session = await validateSession(sessionToken);
-    
+
     if (!session) {
       return c.json({ error: 'Invalid or expired session' }, 401);
     }
@@ -59,7 +66,7 @@ sessionRouter.get('/', async (c) => {
       .from(users)
       .where(eq(users.id, session.userId))
       .limit(1);
-    
+
     return c.json({
       userId: session.userId,
       sessionId: session.sessionId,
@@ -75,43 +82,9 @@ sessionRouter.get('/', async (c) => {
 
 /**
  * POST /auth/session/refresh
- * Refresh session using refresh token
+ * Refresh session using refresh token (@sentropic/auth-hono)
  */
-sessionRouter.post('/refresh', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { refreshToken } = refreshSessionSchema.parse(body);
-    
-    // Refresh session
-    const newSession = await refreshSession(refreshToken);
-    
-    if (!newSession) {
-      return c.json({ error: 'Invalid or expired refresh token' }, 401);
-    }
-    
-    // Set new session cookie
-    c.header('Set-Cookie',
-      `session=${newSession.sessionToken}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`
-    );
-    
-    return c.json({
-      success: true,
-      sessionToken: newSession.sessionToken,
-      refreshToken: newSession.refreshToken,
-      expiresAt: newSession.expiresAt.toISOString(),
-    });
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      return c.json({ error: 'Invalid JSON' }, 400);
-    }
-    if (error instanceof z.ZodError) {
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    
-    logger.error({ err: error }, 'Error refreshing session');
-    return c.json({ error: 'Failed to refresh session' }, 500);
-  }
-});
+sessionRouter.post('/refresh', sessionHandlers.refreshSession!);
 
 /**
  * POST /auth/session/extension-token
@@ -175,42 +148,9 @@ sessionRouter.post('/extension-token', async (c) => {
 
 /**
  * DELETE /auth/session
- * Logout current session
+ * Logout current session (@sentropic/auth-hono)
  */
-sessionRouter.delete('/', async (c) => {
-  try {
-    // Get session token
-    const sessionToken = 
-      c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
-      c.req.header('authorization')?.replace('Bearer ', '');
-    
-    if (!sessionToken) {
-      return c.json({ error: 'No session token provided' }, 401);
-    }
-    
-    // Validate and get session info
-    const session = await validateSession(sessionToken);
-    
-    if (!session) {
-      return c.json({ error: 'Invalid session' }, 401);
-    }
-    
-    // Revoke session
-    await revokeSession(session.sessionId);
-    
-    // Clear session cookie
-    c.header('Set-Cookie',
-      'session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0'
-    );
-    
-    logger.info({ sessionId: session.sessionId }, 'Session logged out');
-    
-    return c.json({ success: true, message: 'Logged out successfully' });
-  } catch (error) {
-    logger.error({ err: error }, 'Error logging out');
-    return c.json({ error: 'Failed to logout' }, 500);
-  }
-});
+sessionRouter.delete('/', sessionHandlers.logout!);
 
 /**
  * DELETE /auth/session/all
@@ -218,32 +158,26 @@ sessionRouter.delete('/', async (c) => {
  */
 sessionRouter.delete('/all', async (c) => {
   try {
-    // Get session token
-    const sessionToken = 
+    const sessionToken =
       c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
       c.req.header('authorization')?.replace('Bearer ', '');
-    
+
     if (!sessionToken) {
       return c.json({ error: 'No session token provided' }, 401);
     }
-    
-    // Validate and get session info
+
     const session = await validateSession(sessionToken);
-    
+
     if (!session) {
       return c.json({ error: 'Invalid session' }, 401);
     }
-    
-    // Revoke all user sessions
+
     await revokeAllSessions(session.userId);
-    
-    // Clear session cookie
-    c.header('Set-Cookie',
-      'session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0'
-    );
-    
+
+    c.header('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0');
+
     logger.info({ userId: session.userId }, 'All sessions logged out');
-    
+
     return c.json({ success: true, message: 'Logged out from all devices' });
   } catch (error) {
     logger.error({ err: error }, 'Error logging out all sessions');
@@ -257,25 +191,22 @@ sessionRouter.delete('/all', async (c) => {
  */
 sessionRouter.get('/list', async (c) => {
   try {
-    // Get session token
-    const sessionToken = 
+    const sessionToken =
       c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
       c.req.header('authorization')?.replace('Bearer ', '');
-    
+
     if (!sessionToken) {
       return c.json({ error: 'No session token provided' }, 401);
     }
-    
-    // Validate and get session info
+
     const session = await validateSession(sessionToken);
-    
+
     if (!session) {
       return c.json({ error: 'Invalid session' }, 401);
     }
-    
-    // List user sessions
+
     const sessions = await listUserSessions(session.userId);
-    
+
     return c.json({ sessions });
   } catch (error) {
     logger.error({ err: error }, 'Error listing sessions');
