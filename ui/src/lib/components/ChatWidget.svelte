@@ -190,8 +190,8 @@
       codeWorkspaces: [],
     },
     prod: {
-      apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
-      appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
+      apiBaseUrl: 'https://sentropic.sent-tech.ca/api/v1',
+      appBaseUrl: 'https://sentropic.sent-tech.ca',
       wsBaseUrl: '',
       sessionToken: '',
       codeAgentPromptDefault: '',

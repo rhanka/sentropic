@@ -16,7 +16,7 @@ const distDir = path.resolve(__dirname, 'dist');
 const distExtensionPath = path.join(distDir, 'extension.cjs');
 const distWebviewPath = path.join(distDir, 'webview-entry.js');
 const staticVsCodeExtensionDir = path.resolve(rootDir, 'static', 'vscode-extension');
-const vsixName = 'top-ai-ideas-vscode-extension.vsix';
+const vsixName = 'sentropic-vscode-extension.vsix';
 const vsixOutputPath = path.join(staticVsCodeExtensionDir, vsixName);
 const nodeProcess = globalThis.process;
 const DEFAULT_EXTENSION_API_BASE_URL =
@@ -68,7 +68,7 @@ const createVsixManifestXml = (manifest) => `<?xml version="1.0" encoding="utf-8
       Publisher="${xmlEscape(manifest.publisher)}" />
     <DisplayName>${xmlEscape(manifest.displayName)}</DisplayName>
     <Description xml:space="preserve">${xmlEscape(manifest.description)}</Description>
-    <Tags>top-ai-ideas,vscode,agent,workflow</Tags>
+    <Tags>sentropic,vscode,agent,workflow</Tags>
     <Categories>Other</Categories>
     <Properties>
       <Property Id="Microsoft.VisualStudio.Code.Engine" Value="${xmlEscape(manifest.engine)}" />
@@ -109,7 +109,7 @@ const packageVsix = () => {
   fs.mkdirSync(staticVsCodeExtensionDir, { recursive: true });
   fs.rmSync(vsixOutputPath, { force: true });
 
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'top-ai-ideas-vsix-'));
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sentropic-vsix-'));
   const stagedRoot = path.join(tmpRoot, 'stage');
   const stagedExtensionRoot = path.join(stagedRoot, 'extension');
 

@@ -13,7 +13,7 @@ const OPEN_CHAT_EVENT = 'topai:open-chat';
 const BLOCKED_HOSTNAMES = new Set([
     'localhost',
     '127.0.0.1',
-    'top-ai-ideas.sent-tech.ca',
+    'sentropic.sent-tech.ca',
     'app.sent-tech.ca',
 ]);
 type ChatTab = 'chat' | 'queue' | 'comments';
@@ -174,11 +174,11 @@ function bootstrap() {
         console.log('Sentropic extension skipped for blocked host:', window.location.hostname);
         return;
     }
-    if (document.getElementById('top-ai-ideas-ext')) return;
+    if (document.getElementById('sentropic-ext')) return;
 
     // Create Shadow DOM container
     const host = document.createElement('div');
-    host.id = 'top-ai-ideas-ext';
+    host.id = 'sentropic-ext';
     host.style.cssText = 'all: initial; position: fixed; z-index: 2147483647; top: 0; left: 0;';
     document.body.appendChild(host);
     hostContainer = host;
