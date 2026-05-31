@@ -46,6 +46,22 @@ function getEntityLoopFields(template: any): any[] {
   return collectFields(template).filter((f: any) => f.type === 'entity-loop');
 }
 
+/**
+ * BR-40a: an executiveSummary.* section must show a skeleton (not an empty
+ * titled card) while the folder is still generating and its content is empty.
+ * Mirrors the component-internal helper.
+ */
+function isExecutiveSummaryField(key: string): boolean {
+  return typeof key === 'string' && key.startsWith('executiveSummary.');
+}
+function isSectionPending(key: string, data: any): boolean {
+  return (
+    isExecutiveSummaryField(key) &&
+    data?.status === 'generating' &&
+    String(getFieldValue(data, key) || '').trim().length === 0
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -242,6 +258,38 @@ describe('TemplateRenderer pure logic', () => {
       expect(componentFields[0].key).toBe('scatter_plot');
       expect(componentFields[1].key).toBe('cover_page');
       expect(componentFields[1].printOnly).toBe(true);
+    });
+  });
+
+  describe('isSectionPending (executive-summary generating skeleton)', () => {
+    it('is pending when generating and the exec-summary section is empty', () => {
+      const data = { status: 'generating', executiveSummary: { introduction: '' } };
+      expect(isSectionPending('executiveSummary.introduction', data)).toBe(true);
+    });
+
+    it('is pending when generating and the exec-summary section is missing', () => {
+      const data = { status: 'generating', executiveSummary: {} };
+      expect(isSectionPending('executiveSummary.analyse', data)).toBe(true);
+    });
+
+    it('is NOT pending once the section has content (even while generating)', () => {
+      const data = { status: 'generating', executiveSummary: { introduction: 'Done' } };
+      expect(isSectionPending('executiveSummary.introduction', data)).toBe(false);
+    });
+
+    it('is NOT pending when the folder is not generating', () => {
+      const data = { status: 'completed', executiveSummary: { introduction: '' } };
+      expect(isSectionPending('executiveSummary.introduction', data)).toBe(false);
+    });
+
+    it('never applies to non-exec-summary fields (e.g. use-case fields)', () => {
+      const data = { status: 'generating', description: '' };
+      expect(isSectionPending('description', data)).toBe(false);
+    });
+
+    it('treats whitespace-only content as empty', () => {
+      const data = { status: 'generating', executiveSummary: { recommandation: '   \n  ' } };
+      expect(isSectionPending('executiveSummary.recommandation', data)).toBe(true);
     });
   });
 });

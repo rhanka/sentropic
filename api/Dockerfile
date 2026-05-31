@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 FROM node:24-alpine3.23 AS base
-# Security: Update npm to latest version to fix glob vulnerabilities in npm dependencies
-RUN npm install -g npm@latest
+# Security: Pin npm to a known-good version (reproducible build) to fix glob vulnerabilities in npm dependencies
+RUN npm install -g npm@11.16.0
 # Security: Force update glob in npm itself to fix CVE-2025-64756
 # Download glob 11.1.0 first, then replace npm's glob directory
 RUN mkdir -p /tmp/glob-update && \

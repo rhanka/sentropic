@@ -38,7 +38,6 @@ describe('queue manager contracts', () => {
       description: 'Generated description',
       problem: 'Current workflow is slow',
       solution: 'Automate qualification and routing',
-      domain: 'Operations',
       technologies: ['OCR', 'NLP'],
       leadtime: '8 weeks',
       prerequisites: 'Training data',
@@ -59,6 +58,8 @@ describe('queue manager contracts', () => {
       {
         name: 'Existing name',
         description: 'Existing description',
+        // BR40a-EX2: domain is the normalized label assigned by the list phase.
+        domain: 'Operations',
         process: 'Legacy process',
         prerequisites: 'Legacy prerequisites',
       } as any,
@@ -67,14 +68,17 @@ describe('queue manager contracts', () => {
 
     expect(initiativeData.name).toBe('Existing name');
     expect(initiativeData.description).toBe('Existing description');
+    // BR40a-EX2: detail does not regenerate domain; the list-assigned label is preserved.
     expect(initiativeData.domain).toBe('Operations');
     expect(initiativeData.deadline).toBe('8 weeks');
     expect('process' in initiativeData).toBe(false);
     expect('prerequisites' in initiativeData).toBe(false);
 
     expect(generatedInitiativeFields).toEqual(
-      expect.arrayContaining(['data.problem', 'data.solution', 'data.domain', 'data.deadline'])
+      expect.arrayContaining(['data.problem', 'data.solution', 'data.deadline'])
     );
+    // domain is unchanged (preserved from existing data) -> not flagged as generated.
+    expect(generatedInitiativeFields).not.toContain('data.domain');
     expect(generatedInitiativeFields).not.toContain('data.process');
     expect(generatedInitiativeFields).not.toContain('data.prerequisites');
     expect(generatedInitiativeFields).not.toContain('data.name');

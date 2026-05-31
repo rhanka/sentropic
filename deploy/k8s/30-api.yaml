@@ -20,6 +20,17 @@ data:
   SCW_TEM_PROJECT_ID: "09ac728a-e3b9-4a5b-9749-664b0f147c70"
   SCW_TEM_FROM_EMAIL: "no-reply@sent-tech.ca"
   SCW_TEM_FROM_NAME: "Sentropic"
+  # WebAuthn/passkey: RP ID is the PARENT registrable domain (sent-tech.ca), not the
+  # specific subdomain, so passkeys stay portable across every *.sent-tech.ca origin
+  # and survive a future hostname/rebrand change (a passkey is bound to its RP ID; a
+  # subdomain RP ID would break on any domain move). Origin stays the exact serving URL.
+  WEBAUTHN_RP_ID: "sent-tech.ca"
+  WEBAUTHN_RP_NAME: "Sentropic"
+  WEBAUTHN_ORIGIN: "https://sentropic.sent-tech.ca"
+  # Public base URL for user-facing callbacks. Builds magic-link login emails
+  # (auth/magic-link.ts, else defaults to http://localhost:5173) and the Google
+  # Drive OAuth redirect_uri base. Must be the public host.
+  AUTH_CALLBACK_BASE_URL: "https://sentropic.sent-tech.ca"
 ---
 apiVersion: v1
 kind: Service

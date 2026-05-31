@@ -652,7 +652,7 @@ initiativesRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), as
 const generateInput = z.object({
   input: z.string().min(1),
   folder_id: z.string().optional(),
-  initiative_count: z.coerce.number().int().min(1).max(25).optional(),
+  initiative_count: z.coerce.number().int().min(1).max(50).optional(),
   organization_id: z.string().optional(),
   matrix_mode: z.enum(['organization', 'generate', 'default']).optional(),
   model: z.string().optional(),
