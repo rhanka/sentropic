@@ -214,6 +214,14 @@
     return s.user?.role === 'admin_app' || s.user?.role === 'admin_org';
   };
 
+  // Reactive admin flag for template gating. Derive from the `me` store (loaded
+  // via loadMe() in onMount and reactive), NOT from `isAdmin()`/`session`: the
+  // session store may not be hydrated at initial render (and isAdmin() reads a
+  // non-reactive snapshot), so a session-based `{#if}` can stay false / not
+  // re-render. `$me.data.user.role` is the app-level role.
+  $: isAdminView =
+    $me.data?.user?.role === 'admin_app' || $me.data?.user?.role === 'admin_org';
+
   const isAdminApp = () => {
     const s = get(session);
     return s.user?.role === 'admin_app';
@@ -1129,7 +1137,7 @@
     <ViewTemplateCatalog />
   </div>
 
-  {#if isAdmin()}
+  {#if isAdminView}
     <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="chrome-extension-download-card">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
