@@ -9,28 +9,28 @@
     "url": "git+https://github.com/rhanka/sentropic.git",
     "directory": "packages/auth-ui"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
       "svelte": "./src/index.ts",
-      "import": "./dist/index.js"
+      "import": "./src/index.ts"
     },
     "./contracts": {
-      "types": "./dist/contracts.d.ts",
+      "types": "./src/contracts.ts",
       "svelte": "./src/contracts.ts",
-      "import": "./dist/contracts.js"
+      "import": "./src/contracts.ts"
     },
     "./webauthn": {
-      "types": "./dist/webauthn.d.ts",
+      "types": "./src/webauthn.ts",
       "svelte": "./src/webauthn.ts",
-      "import": "./dist/webauthn.js"
+      "import": "./src/webauthn.ts"
     },
     "./transport-fetch": {
-      "types": "./dist/transport-fetch.d.ts",
+      "types": "./src/transport-fetch.ts",
       "svelte": "./src/transport-fetch.ts",
-      "import": "./dist/transport-fetch.js"
+      "import": "./src/transport-fetch.ts"
     },
     "./components/AuthLogin.svelte": {
       "types": "./src/components/AuthLogin.svelte.d.ts",
