@@ -52,7 +52,6 @@ describe('generateInitiativeDetail payload contract', () => {
       detail.description,
       detail.problem,
       detail.solution,
-      detail.domain,
       detail.leadtime,
       detail.prerequisites,
       detail.contact,

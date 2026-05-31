@@ -105,6 +105,18 @@ Format JSON attendu:
         additionalProperties: false,
         properties: {
           dossier: { type: 'string' },
+          domains: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                id: { type: 'string' },
+                label: { type: 'string' },
+              },
+              required: ['id', 'label'],
+            },
+          },
           initiatives: {
             type: 'array',
             items: {
@@ -114,12 +126,13 @@ Format JSON attendu:
                 titre: { type: 'string' },
                 description: { type: 'string' },
                 ref: { type: 'string' },
+                domainId: { type: 'string' },
               },
-              required: ['titre', 'description', 'ref'],
+              required: ['titre', 'description', 'ref', 'domainId'],
             },
           },
         },
-        required: ['dossier', 'initiatives'],
+        required: ['dossier', 'domains', 'initiatives'],
       },
       promptTemplate: `Génère une liste de cas d'usage d'IA innovants selon la demande suivante:
     - la demande utilisateur spécifique suivante: {{user_input}},
@@ -127,11 +140,21 @@ Format JSON attendu:
     - les informations de l'organisation: {{organization_info}},
     - les organisations disponibles dans le workspace: {{organizations_list}},
     - le nombre de cas d'usage à générer: {{use_case_count}}
-Pour chaque cas d'usage, propose un titre court et explicite.
+
+ÉTAPE 1 — Taxonomie de domaines métier (OBLIGATOIRE, à produire AVANT la liste):
+- Dérive 5 à 8 domaines métier NORMALISÉS, mutuellement exclusifs, qui serviront de légende filtrable.
+- ANCRE EN PRIORITÉ ces domaines sur le profil de l'organisation {{organization_info}} (secteur, lignes de métier réelles, processus, offres, clients, enjeux) afin qu'ils reflètent LES lignes réelles de CETTE organisation et non des catégories génériques.
+- Si le profil est insuffisant pour dériver des domaines fiables, complète via le tool web_search sur l'organisation / le secteur.
+- Chaque domaine: "id" en snake_case (stable, sans accent, sans espace) et "label" lisible (court, sans markdown, sans "**").
+
+ÉTAPE 2 — Liste:
+Pour chaque cas d'usage, propose un titre court et explicite, et attribue un "domainId" qui DOIT être l'un des "id" définis à l'ÉTAPE 1.
+Répartis raisonnablement les cas d'usage entre les domaines.
 Format: JSON
 
 IMPORTANT:
 - Génère exactement {{use_case_count}} cas d'usages (ni plus, ni moins)
+- "domains" contient 5 à 8 entrées { "id", "label" }; chaque "domainId" de cas d'usage référence un "id" existant.
 - Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
 - Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
@@ -140,19 +163,25 @@ IMPORTANT:
 - La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
 - Pour chaque cas d'usage, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
 
-Réponds UNIQUEMENT avec un JSON valide:
+Réponds UNIQUEMENT avec un JSON valide (respecte EXACTEMENT ces clés):
 {
   "dossier": "titre court du dossier",
+  "domains": [
+    { "id": "domaine_un", "label": "Domaine un" },
+    { "id": "domaine_deux", "label": "Domaine deux" }
+  ],
   "initiatives": [
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots) du cas d'usage",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "domainId": "domaine_un"
     },
     {
       "titre": "titre court 2",
       "description": "Description courte (60-100 mots) du cas d'usage",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "domainId": "domaine_deux"
     },
     ...
   ]
@@ -205,7 +234,6 @@ Réponds UNIQUEMENT avec un JSON valide:
           description: { type: 'string' },
           problem: { type: 'string' },
           solution: { type: 'string' },
-          domain: { type: 'string' },
           technologies: { type: 'array', items: { type: 'string' } },
           leadtime: { type: 'string' },
           prerequisites: { type: 'string' },
@@ -266,7 +294,6 @@ Réponds UNIQUEMENT avec un JSON valide:
           'description',
           'problem',
           'solution',
-          'domain',
           'technologies',
           'leadtime',
           'prerequisites',
@@ -297,7 +324,6 @@ La réponse doit impérativement contenir tous les éléments suivants au format
   "description": "Description courte (60-100 mots) qui résume le cas d'usage.",
   "problem": "Le problème métier à résoudre (40-80 mots)",
   "solution": "La solution IA proposée (40-80 mots)",
-  "domain": "Le domaine d'application principal (industrie ou processus)",
   "technologies": [
     "technologie 1 (e.g IA / NLP, computer vision, etc.)",
     "technologie 2 (e.g IA / NLP, computer vision, etc.)",

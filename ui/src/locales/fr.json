@@ -938,6 +938,12 @@
       "loading": "Chargement de la matrice…",
       "placingLabels": "Placement des labels en cours…",
       "clickHint": "Cliquez sur un point pour voir le détail.",
+      "hideLabels": "Masquer les étiquettes",
+      "showLabels": "Afficher les étiquettes",
+      "legend": {
+        "title": "Domaine",
+        "none": "Sans domaine"
+      },
       "axis": {
         "value": "Valeur (0-100 pts)",
         "complexity": "Complexité (0-100 pts)"
@@ -945,7 +951,9 @@
       "tooltip": {
         "descriptionPrefix": "Description:",
         "valueLine": "Valeur: {pts} pts ({stars})",
-        "complexityLine": "Complexité: {pts} pts ({crosses})"
+        "complexityLine": "Complexité: {pts} pts ({crosses})",
+        "domainLine": "Domaine: {domain}",
+        "statusLine": "Statut: {status}"
       }
     }
   },
