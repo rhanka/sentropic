@@ -123,10 +123,19 @@ keeps returning ALL sheets, each labelled `Sheet: <name>`.
           per-sheet selection by name and index, formula+value surfacing
           (`Sum\t=Inputs!B2+Inputs!B3 → 42`), and the `isXlsxDocument` guard. 4/4 passing.
     - [x] Scoped run: `make test-api SCOPE=tests/unit/xlsx-sheet-query.test.ts ENV=test-feat-xlsx-multitab-query` → 4 passed.
-    - [ ] Sub-lot gate: `make test-api ENV=test-feat-xlsx-multitab-query` (running).
+    - [x] Sub-lot gate: `make test-api ENV=test-feat-xlsx-multitab-query` → all suites green
+          (smoke 20, endpoints 49, queue 30, +others; 0 FAIL) on a clean test env. (A first run showed
+          4 unrelated endpoint failures caused by a dirty DB from a concurrent dev stack on the same
+          ENV — the documented npm-ci/live-stack footgun; resolved by `make down` then a clean rerun.)
 
-- [ ] **Lot 3 — E2E coverage**
+- [x] **Lot 3 — E2E coverage**
   - [x] Prepare build: `make build-api build-ui-image API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query`.
+  - [x] Build fix: externalized exceljs in the api esbuild bundle (`api/package.json` build script:
+        added `--external:exceljs` next to `--external:officeparser`). exceljs does
+        `require('crypto')` dynamically, which esbuild's bundled ESM cannot resolve at runtime
+        (`Error: Dynamic require of "crypto" is not supported`); externalizing loads it from
+        node_modules at runtime (same pattern as officeparser). exceljs is a production dependency so it
+        survives `npm prune --omit=dev` in the api image; no high/critical audit findings.
   - [x] Added `e2e/tests/08-xlsx-multisheet-query.spec.ts` + committed binary fixture
         `e2e/tests/fixtures/multi-sheet-formula.xlsx` (2 sheets: Inputs + Totals; Totals!B2 =
         `Inputs!B2+Inputs!B3` → 42, generated via exceljs). The spec uploads the multi-sheet workbook,
@@ -135,7 +144,8 @@ keeps returning ALL sheets, each labelled `Sheet: <name>`.
         tool actions to load. Per-sheet formula+value surfacing asserted at the unit level
         (document-text + xlsx-sheet-query specs); chat-driven `list_sheets`/`get_sheet_content`
         invocation is AI-nondeterministic, exercised in UAT (allowlisted) — noted in spec docstring.
-  - [ ] Scoped run: `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query` (running).
+  - [x] Scoped run: `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query` → 1 passed (17.9s test).
+  - [x] `make clean ... ENV=e2e-feat-xlsx-multitab-query` afterward; `make ps-all` shows no remaining services.
 
 - [ ] **Lot N-2 — UAT** (web app only; no chrome/vscode surface impact)
   - [ ] Upload a multi-tab xlsx with at least one formula (e.g. cross-sheet sum).
