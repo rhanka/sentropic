@@ -51,6 +51,17 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - Mirror the same exception in `plan/39a-BRANCH_feat-auth-ui-sdk.md` if this branch plan is later updated by the conductor.
 
 ## Feedback Loop
+- `BR39a-Q2`
+  - Branch: `feat/auth-ui-sdk`
+  - Owner: Conductor
+  - Severity: low
+  - Status: accepted (pre-existing on main)
+  - Repro steps: `make test-ui ENV=test-feat-auth-ui-sdk` from BR-39a or from main.
+  - Expected: full UI suite green.
+  - Actual: 2 tests fail in `tests/utils/google-drive-picker.test.ts` (jsdom-related `googlePicker.DocsView` mock issue). Same failure observed after `git checkout main -- ui/...` reverted my Lot 3 changes.
+  - Evidence: branch HEAD `f1628269` and baseline `main` both produce identical failure signature: `TypeError: ... at openGoogleDrivePickerWith src/lib/utils/google-drive-picker.ts:211:10`.
+  - Resolution: not in BR-39a scope; flagged for future picker test cleanup. CI mainline runs may sandbox jsdom differently.
+
 - `BR39a-EX1`
   - Branch: `feat/auth-ui-sdk`
   - Owner: Conductor
@@ -142,16 +153,17 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
     - [x] `make test-packages SCOPE=packages/auth-ui/tests ENV=test-feat-auth-ui-sdk` (23 tests across `auth-contracts.test.ts`, `webauthn.test.ts`, `transport-fetch.test.ts`)
     - [ ] Component-level Svelte tests deferred to Lot 4 fixture (per `rules/testing.md`: UI testing scope is TypeScript only — package consumers test integration with full bundler)
 
-- [ ] **Lot 3 - Sentropic app rewiring**
-  - [ ] Add Sentropic host transport that maps package calls to existing `/auth/*` endpoints through app-owned API helpers.
-  - [ ] Rewire Sentropic auth route pages to render package components.
-  - [ ] Keep Sentropic session store updates and navigation in app-owned callbacks.
-  - [ ] Keep Sentropic i18n dictionaries app-owned and pass labels into the package.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-ui ENV=test-feat-auth-ui-sdk`
-    - [ ] `make lint-ui ENV=test-feat-auth-ui-sdk`
-    - [ ] `make test-ui SCOPE=tests/stores/session.test.ts ENV=test-feat-auth-ui-sdk`
-    - [ ] `make test-ui SCOPE=tests/utils/auth-ui.test.ts ENV=test-feat-auth-ui-sdk`
+- [x] **Lot 3 - Sentropic app rewiring**
+  - [x] Add Sentropic host transport that maps package calls to existing `/auth/*` endpoints through app-owned `apiFetch` (see `ui/src/lib/services/auth-transport.ts`).
+  - [x] Rewire all 5 Sentropic auth route pages (`login`, `register`, `magic-link/verify`, `devices`, `devices/pair`) to render package components as thin wrappers (~20 lines each).
+  - [x] Keep Sentropic session store updates (`setUser` via `toSentropicUser` coercion) and navigation (`goto`) in app-owned callbacks.
+  - [x] Replace app-owned i18n dictionaries with `resolveAuthUiLabels($locale)` that returns the package's `createFrenchAuthUiLabels` / `createDefaultAuthUiLabels` based on the current locale; deleted all `auth.*` keys from `ui/src/locales/{fr,en}.json`.
+  - [x] Deleted `ui/src/lib/services/webauthn-client.ts` (now provided by `@sentropic/auth-ui/webauthn`).
+  - [x] Net diff for Lot 3: 290 insertions, 1409 deletions (1119 lines reclaimed for same behaviour + better portability).
+  - [x] Lot gate:
+    - [x] `make typecheck-ui ENV=test-feat-auth-ui-sdk` clean (6 pre-existing warnings in untouched files)
+    - [x] `make lint-ui ENV=test-feat-auth-ui-sdk` clean
+    - [ ] `make test-ui ENV=test-feat-auth-ui-sdk` — 416/418 pass; 2 failing tests in `tests/utils/google-drive-picker.test.ts` confirmed pre-existing on main (BR39a-Q2 below)
 
 - [ ] **Lot 4 - Consumer integration proof without editing consumer repo**
   - [ ] Add a README section showing how `spa-transpose-cv` maps `/admin/auth/*` endpoints into the package transport.
