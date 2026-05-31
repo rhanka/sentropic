@@ -868,6 +868,13 @@ test.describe('Chat', () => {
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
 
+    // Start from a fresh session so retries / shared-account state don't leave
+    // an active assistant (which flips the send button to "steer").
+    const { sessionMenuButton } = await ensureSessionMenuOpen(page);
+    await page.getByRole('button', { name: sessionNewLabel }).first().click();
+    await sessionMenuButton.click().catch(() => {});
+    await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+
     // Default model is text-only (gpt-4.1-nano); switch to a vision-capable one.
     const modelSelect = page.locator('#chat-model-selection');
     await expect(
