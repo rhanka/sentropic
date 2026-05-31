@@ -373,7 +373,7 @@ export const connectExtensionAuth = async (
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                deviceName: 'Top AI Ideas Extension',
+                deviceName: 'Sentropic Extension',
             }),
         });
     } catch (error) {
