@@ -1,6 +1,9 @@
 import type { AuthUiBranding, AuthUiLabels } from './types.js';
 
 export const createDefaultAuthUiLabels = (overrides: Partial<AuthUiLabels> = {}): AuthUiLabels => ({
+  loading: 'Loading...',
+  save: 'Save',
+  cancel: 'Cancel',
   emailPlaceholder: 'you@example.com',
   webauthnRegisterNotice: 'You are about to register a new WebAuthn device. We will send you a confirmation email.',
   verifyInProgress: 'Verification in progress...',
@@ -85,6 +88,9 @@ export const createDefaultAuthUiLabels = (overrides: Partial<AuthUiLabels> = {})
 
 export const createFrenchAuthUiLabels = (overrides: Partial<AuthUiLabels> = {}): AuthUiLabels =>
   createDefaultAuthUiLabels({
+    loading: 'Chargement…',
+    save: 'Enregistrer',
+    cancel: 'Annuler',
     emailPlaceholder: 'vous@example.com',
     webauthnRegisterNotice: "Vous allez enregistrer un nouvel appareil WebAuthn. Nous vous enverrons un email de confirmation.",
     verifyInProgress: 'Vérification en cours…',

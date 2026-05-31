@@ -68,6 +68,9 @@ export interface AuthUiBranding {
 }
 
 export interface AuthUiLabels {
+  loading: string;
+  save: string;
+  cancel: string;
   emailPlaceholder: string;
   webauthnRegisterNotice: string;
   verifyInProgress: string;
