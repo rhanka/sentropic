@@ -190,11 +190,13 @@
     await loadUserAISettings();
     await syncGoogleDriveConnection();
     await revealGoogleDriveConnectors();
+    // Download cards (chrome/cowork/vscode) are display-gated by {#if isAdmin()} in the template;
+    // fetch their metadata unconditionally so it is populated by the time the card renders (isAdmin()
+    // reads a non-reactive session snapshot and can be false at onMount before the session hydrates).
+    await loadChromeExtensionDownloadMetadata();
+    await loadVsCodeExtensionDownloadMetadata();
+    await loadCoworkDesktopDownloadMetadata();
     if (isAdmin()) {
-      // Download cards (chrome/cowork/vscode) are admin-only — only load their metadata for admins.
-      await loadChromeExtensionDownloadMetadata();
-      await loadVsCodeExtensionDownloadMetadata();
-      await loadCoworkDesktopDownloadMetadata();
       await loadAISettings();
       await loadQueueStats();
       await loadVsCodeExtensionTokenStatus();
