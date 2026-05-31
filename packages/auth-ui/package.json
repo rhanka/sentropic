@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/auth-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reusable Svelte authentication UI contracts and browser passkey helpers for Sentropic-compatible apps.",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,17 @@
       "types": "./dist/webauthn.d.ts",
       "svelte": "./src/webauthn.ts",
       "import": "./dist/webauthn.js"
-    }
+    },
+    "./transport-fetch": {
+      "types": "./dist/transport-fetch.d.ts",
+      "svelte": "./src/transport-fetch.ts",
+      "import": "./dist/transport-fetch.js"
+    },
+    "./components/AuthLogin.svelte": "./src/components/AuthLogin.svelte",
+    "./components/AuthRegister.svelte": "./src/components/AuthRegister.svelte",
+    "./components/AuthMagicLinkVerify.svelte": "./src/components/AuthMagicLinkVerify.svelte",
+    "./components/AuthDevices.svelte": "./src/components/AuthDevices.svelte",
+    "./components/AuthDevicePair.svelte": "./src/components/AuthDevicePair.svelte"
   },
   "files": [
     "dist",
