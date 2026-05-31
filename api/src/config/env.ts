@@ -66,6 +66,13 @@ const envSchema = z.object({
   WEBAUTHN_ATTESTATION: z.enum(['none', 'indirect', 'direct']).optional(),
   // JWT Configuration
   JWT_SECRET: z.string().optional(),
+  // OAuth2 / OIDC IdP Configuration
+  OAUTH_SIGNING_KEK: z.string().optional(),
+  OAUTH_ISSUER_URL: z.string().optional(),
+  OAUTH_ACCESS_TOKEN_TTL_SEC: z.coerce.number().default(3600),
+  OAUTH_ID_TOKEN_TTL_SEC: z.coerce.number().default(3600),
+  OAUTH_AUTHORIZATION_CODE_TTL_SEC: z.coerce.number().default(60),
+  OAUTH_DPOP_IAT_SKEW_SEC: z.coerce.number().default(60),
   // Admin Configuration
   ADMIN_EMAIL: z.string().email().optional(),
   // Test Configuration
