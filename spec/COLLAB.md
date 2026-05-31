@@ -225,6 +225,33 @@ Notes:
 - `export_kind` is used for workspace list exports (organizations or folders) to build filenames.
 - Filename pattern: `<scope>_<slug>_YYYYMMDD.zip` (workspace list exports append `export_kind`).
 
+### Folder XLSX Export (BR-40c)
+
+In addition to the ZIP archive, a folder can be exported as a multi-tab Excel workbook
+(`.xlsx`) for analysts. Delivery mirrors the asynchronous DOCX flow (queue job + S3 storage),
+not the synchronous ZIP path.
+
+- Endpoints:
+  - `POST /api/v1/xlsx/generate` — enqueues a `xlsx_generate` publishing job for
+    `{ entityType: "folder", entityId }`; returns `{ jobId, status, queueClass: "publishing", streamId }`.
+    Identical source snapshots are cache-reused (source hash), mirroring DOCX.
+  - `GET /api/v1/xlsx/jobs/:id/download` — streams the workbook from S3 once the job completes
+    (409 while running, 422 on failure, 400 on wrong job type, 404 when not owned by the workspace).
+- Workbook tabs:
+  1. **Use cases** — one row per initiative: name, domain, status, description, problem, solution,
+     total value score, total complexity score, quadrant.
+  2. **Evaluation matrix** — value and complexity axes (name, weight, description) and the scoring
+     grid thresholds (level, points). Renders a notice when the folder has no matrix.
+  3. **Prioritization quadrant** — data rows (value, complexity, computed quadrant label, sorted by
+     priority) PLUS a **native, editable XY scatter chart** referencing the quadrant cell ranges
+     (X = complexity, Y = value, both 0–100).
+- Quadrant labels are derived from medians: high value + low complexity = quick win;
+  high value + high complexity = major project; low value + low complexity = fill-in;
+  low value + high complexity = thankless task.
+- Writer: `exceljs` builds the data tabs; the native chart is produced by injecting the OOXML chart
+  part (`xl/charts/chart1.xml` + drawing relationships) into the workbook zip, because `exceljs`
+  can read but cannot write charts. No rasterized-image fallback.
+
 ### Scope Behavior
 
 - `workspace`: all workspace-scoped data, filtered by `include[]` when provided.

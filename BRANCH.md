@@ -69,8 +69,10 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 
 ## Feedback Loop
 - **BR40bc38a-M1** `acknowledge`: integration branch created from local `main` `ff32a06f` because BR-40b/40c were based there; remote `origin/main` is currently older in this clone.
-- **BR40bc38a-M2** `acknowledge`: first 38a merge conflict in `packages/llm-mesh/src/catalog.ts` resolved by keeping `main`'s `gemini-3.1-flash-lite` replacement for erroneous `gemini-3.5-thinking`, while preserving BR-38a vision capability on the real Gemini model.
-- **BR40bc38a-M3** `attention`: root currently has a `dev` stack on `8791/5177/1081`; integrated UAT must avoid clobbering it until the requested `uat/40bc-38a` clone/worktree is ready.
+- **BR40bc38a-M2** `acknowledge`: 38a merge conflict in `packages/llm-mesh/src/catalog.ts` resolved by keeping `main`'s `gemini-3.1-flash-lite` replacement for erroneous `gemini-3.5-thinking`, while preserving BR-38a vision capability on the real Gemini model.
+- **BR40bc38a-M3** `acknowledge`: 40b merge conflict in `ui/src/lib/utils/documents.ts` resolved by preserving both image upload MIME support from 38a and xlsx upload/label support from 40b.
+- **BR40bc38a-M4** `acknowledge`: 40c merge conflict in `api/package.json` resolved by keeping the combined build external list with `exceljs` externalized.
+- **BR40bc38a-M5** `attention`: root currently has a `dev` stack on `8791/5177/1081`; integrated UAT must avoid clobbering it until the requested `uat/40bc-38a` clone/worktree is ready.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -119,39 +121,47 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
   - [x] Imported `list_sheets` and `get_sheet_content` document tool actions.
 - [x] **Lot 40b-3 - E2E coverage**
   - [x] Imported `08-xlsx-multisheet-query.spec.ts` and formula workbook fixture.
-- [ ] **Lot 40b-N-2 - UAT**
-  - [ ] Upload a multi-sheet xlsx with a cross-sheet formula.
-  - [ ] Ask the agent to list sheets.
-  - [ ] Ask the agent for one sheet's content and verify formula plus computed value.
-  - [ ] Verify full content still labels all sheets.
-  - [ ] Verify single-sheet xlsx and pdf/docx/pptx document reads still work.
-- [ ] **Lot 40c-0 - Baseline, async pattern & chart spike**
-  - [ ] Merge BR-40c into this integration branch.
-- [ ] **Lot 40c-R - Rebase/import validation**
-  - [ ] Preserve BR-40c rebase decisions and lockfile/package changes.
-- [ ] **Lot 40c-1 - XLSX generation service**
-  - [ ] Import folder xlsx generation service and native chart injection.
-- [ ] **Lot 40c-2 - Route and queue wiring**
-  - [ ] Import `/api/xlsx` route and `xlsx_generate` queue handling.
-- [ ] **Lot 40c-3 - UI export entry point**
-  - [ ] Import folder page xlsx export action and i18n.
-- [ ] **Lot 40c-4 - Live cross-sheet formulas**
-  - [ ] Import formula cells for scores/quadrants and read-back tests.
-- [ ] **Lot 40c-5 - E2E**
-  - [ ] Import `07-import-export.spec.ts` xlsx export coverage.
-- [ ] **Lot 40c-N-2 - UAT**
-  - [ ] Export a scored folder as xlsx.
-  - [ ] Verify 3 tabs, live formulas, native editable scatter chart.
-  - [ ] Verify DOCX/PPTX/ZIP exports still work.
+- [x] **Lot 40c-0 - Baseline, async pattern & chart spike**
+  - [x] Imported BR-40c async DOCX/PPTX-style delivery decision and native chart spike.
+- [x] **Lot 40c-R - Rebase/import validation**
+  - [x] Imported BR-40c rebase decisions and lockfile/package changes.
+- [x] **Lot 40c-1 - XLSX generation service**
+  - [x] Imported folder xlsx generation service and native chart injection.
+- [x] **Lot 40c-2 - Route and queue wiring**
+  - [x] Imported `/api/xlsx` route and `xlsx_generate` queue handling.
+- [x] **Lot 40c-3 - UI export entry point**
+  - [x] Imported folder page xlsx export action and i18n.
+- [x] **Lot 40c-4 - Live cross-sheet formulas**
+  - [x] Imported formula cells for scores/quadrants and read-back tests.
+- [x] **Lot 40c-5 - E2E**
+  - [x] Imported `07-import-export.spec.ts` xlsx export coverage from BR-40c.
 - [ ] **Lot 40bc38a-I - Integration gates**
-  - [ ] Resolve merge conflicts across 38a, 40b, and 40c.
+  - [x] Resolve merge conflicts across 38a, 40b, and 40c.
   - [ ] `make typecheck-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
   - [ ] `make typecheck-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
   - [ ] `make lint-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
   - [ ] `make lint-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-  - [ ] Run focused API/UI/package tests covering 38a, 40b, and 40c changed surfaces.
-  - [ ] Build API/UI images for e2e.
-  - [ ] Run scoped E2E: `03-chat`, `07-import-export`, `08-xlsx-multisheet-query`.
+  - [ ] Focused API tests:
+    - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_TEST_WORKERS=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-api-unit SCOPE=tests/unit/document-text.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-api-unit SCOPE=tests/unit/xlsx-sheet-query.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/xlsx.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [ ] Focused UI/package tests:
+    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-ui SCOPE=tests/components/chat/ChatComposer-wrapper.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-ui SCOPE=tests/stores/folders.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [ ] `make test-llm-mesh ENV=test-feat-40bc-38a`
+    - [ ] `make test-chat-ui ENV=test-feat-40bc-38a`
+    - [ ] `make test-pkg-chat-core ENV=test-feat-40bc-38a`
+  - [ ] E2E build:
+    - [ ] `make build-api build-ui-image API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
+  - [ ] Scoped E2E:
+    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
+    - [ ] `make test-e2e E2E_SPEC=tests/07-import-export.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
+    - [ ] `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
 - [ ] **Lot 40bc38a-UAT - Combined preUAT**
   - [ ] Prepare `uat/40bc-38a` clone/worktree at the integration HEAD.
   - [ ] Start stack on `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
