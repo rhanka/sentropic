@@ -1066,6 +1066,13 @@
         "chat": "Écrire un message…"
       }
     },
+    "attachments": {
+      "enlarge": "Agrandir l'image",
+      "lightbox": {
+        "close": "Fermer",
+        "download": "Télécharger"
+      }
+    },
     "documents": {
       "addFile": "Ajouter un fichier",
       "googleDrive": {

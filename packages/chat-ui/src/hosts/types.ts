@@ -66,3 +66,23 @@ export interface LocalToolsAdapter {
     item?: unknown;
   }>;
 }
+
+export type ChatComposerAttachmentDraft = {
+  id: string;
+  kind: 'image' | 'file';
+  source: 'paste' | 'upload' | 'drive' | 'context_document' | 'external_url';
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  state: 'pending' | 'uploading' | 'ready' | 'failed';
+  documentId?: string;
+  previewUrl?: string;
+  error?: string;
+};
+
+export interface ChatAttachmentHostAdapter {
+  acceptMimeTypes: readonly string[];
+  createPreviewUrl?: (file: File) => string;
+  uploadAttachment: (draft: ChatComposerAttachmentDraft, file?: File) => Promise<ChatComposerAttachmentDraft>;
+  removeAttachment?: (draft: ChatComposerAttachmentDraft) => Promise<string> | string;
+}
