@@ -59,8 +59,8 @@ type RemoteListResponse = {
     }>;
 };
 
-const STORAGE_KEY_POLICIES = 'topAiIdeas:toolPermissions:v1';
-const STORAGE_KEY_QUEUE = 'topAiIdeas:toolPermissionsQueue:v1';
+const STORAGE_KEY_POLICIES = 'sentropic:toolPermissions:v1';
+const STORAGE_KEY_QUEUE = 'sentropic:toolPermissionsQueue:v1';
 const SYNC_TTL_MS = 60_000;
 
 const policiesByKey = new Map<string, ToolPermissionEntry>();

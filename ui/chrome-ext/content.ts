@@ -6,10 +6,10 @@ import type { ChatWidgetMountOptions } from './chatwidget-entry';
 
 console.log('Sentropic Content Script loading...');
 
-const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
-const CHATWIDGET_HANDOFF_STORAGE_KEY = 'topAiIdeas:chatWidgetHandoff:v1';
-const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
-const OPEN_CHAT_EVENT = 'topai:open-chat';
+const HANDOFF_EVENT = 'sentropic:chatwidget-handoff-state';
+const CHATWIDGET_HANDOFF_STORAGE_KEY = 'sentropic:chatWidgetHandoff:v1';
+const OPEN_SIDEPANEL_EVENT = 'sentropic:open-sidepanel';
+const OPEN_CHAT_EVENT = 'sentropic:open-chat';
 const BLOCKED_HOSTNAMES = new Set([
     'localhost',
     '127.0.0.1',
@@ -118,7 +118,7 @@ const requestOpenOverlayChat = (activeTab?: ChatTab) => {
 
 const collapseOverlayToBubble = () => {
     if (!mountReady) return;
-    window.dispatchEvent(new CustomEvent('topai:close-chat'));
+    window.dispatchEvent(new CustomEvent('sentropic:close-chat'));
 };
 
 const handleSidePanelState = (state: SidePanelState) => {
@@ -227,8 +227,8 @@ function bootstrap() {
                 module?.mount ??
                 module?.default?.mount ??
                 (globalThis as typeof globalThis & {
-                    __topAiIdeasMountChatWidget?: (target: Element, options?: ChatWidgetMountOptions) => void;
-                }).__topAiIdeasMountChatWidget;
+                    __sentropicMountChatWidget?: (target: Element, options?: ChatWidgetMountOptions) => void;
+                }).__sentropicMountChatWidget;
 
             if (mountFn) {
                 const initialState = await readHandoffState();

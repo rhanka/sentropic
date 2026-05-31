@@ -5,6 +5,10 @@ import {
 } from '../../src/lib/utils/user-ai-settings-events';
 
 describe('user ai settings events', () => {
+  it('uses a Sentropic event namespace', () => {
+    expect(USER_AI_SETTINGS_UPDATED_EVENT).toBe('sentropic:user-ai-settings-updated');
+  });
+
   it('emits a browser event with updated defaults payload', () => {
     let capturedDetail: unknown = null;
     let capturedType = '';

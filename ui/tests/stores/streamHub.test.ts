@@ -538,7 +538,7 @@ describe('streamHub', () => {
       streamHub.setStream('test-key-vscode', 'stream-vscode-sse-1', callback);
       await vi.advanceTimersByTimeAsync(250);
 
-      expect(connectMock).toHaveBeenCalledWith({ name: 'topai-stream-proxy' });
+      expect(connectMock).toHaveBeenCalledWith({ name: 'sentropic-stream-proxy' });
       expect(postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'stream_proxy_start',

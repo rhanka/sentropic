@@ -3,7 +3,7 @@ export type UserAISettingsUpdatedPayload = {
   defaultModel: string;
 };
 
-export const USER_AI_SETTINGS_UPDATED_EVENT = 'topai:user-ai-settings-updated';
+export const USER_AI_SETTINGS_UPDATED_EVENT = 'sentropic:user-ai-settings-updated';
 
 export const emitUserAISettingsUpdated = (
   payload: UserAISettingsUpdatedPayload,
