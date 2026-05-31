@@ -175,15 +175,15 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
 - [ ] Commit policy: `git add <specific-files>` then `make commit MSG="type(BR-39c): description"`; never `git add .` / `git add -A` / direct `git commit`.
 
 - [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read all mandatory files (read order above).
-  - [ ] Confirm worktree `tmp/feat-auth-oidc` is on branch `feat/auth-oidc`, baseline `origin/main` `ff32a06f`.
-  - [ ] Run `make ps-all` and confirm slot-2 ports (9197 / 5397 / 1297) are free or owned by this worktree.
-  - [ ] Confirm BR-39a v0.2.0 and BR-39b v0.2.1 are merged on `main` (already verified at branch creation).
-  - [ ] Confirm scope boundaries (Allowed / Forbidden / Conditional) and declare any `BR39c-EXn` if needed.
-  - [ ] Verify issuer/discovery decision from `BR39c-Q1`: issuer is API origin, discovery is `${issuer}/.well-known/openid-configuration`, OAuth endpoints are `${issuer}/api/v1/auth/oauth/*`.
-  - [ ] Verify KEK/bootstrap decision from `BR39c-Q2`/`D20`: no docker-compose or Makefile edit is needed; dev/test fallback KEK is acceptable; first key is bootstrapped through `make exec-api CMD="npm run oauth:init-keys" ... ENV=<env>` after Lot 4.
-  - [ ] Verify `validate-auth-hono` CI runs `make test-auth-hono` for `packages/auth-hono/**` and API test jobs cover `api/tests/api/auth/oauth-*.test.ts`; if not, raise `BR39c-EX1` before implementation.
-  - [ ] Create initial draft of `spec/SPEC_BR39c_OAUTH_OIDC_IDP.md` (consolidation spec — temp, deleted at Lot N-1). Include: issuer/discovery model, target endpoints, claim shape, JWKS shape, state-store port interface, DPoP binding contract, login/consent continuation contract, mock RP contract.
+  - [x] Read all mandatory files (read order above).
+  - [x] Confirm worktree `tmp/feat-auth-oidc` is on branch `feat/auth-oidc`, baseline `origin/main` `ff32a06f`.
+  - [x] Run `make ps-all` and confirm slot-2 ports (9197 / 5397 / 1297) are free or owned by this worktree.
+  - [x] Confirm BR-39a v0.2.0 and BR-39b v0.2.1 are merged on `main` (already verified at branch creation).
+  - [x] Confirm scope boundaries (Allowed / Forbidden / Conditional) and declare any `BR39c-EXn` if needed.
+  - [x] Verify issuer/discovery decision from `BR39c-Q1`: issuer is API origin, discovery is `${issuer}/.well-known/openid-configuration`, OAuth endpoints are `${issuer}/api/v1/auth/oauth/*`.
+  - [x] Verify KEK/bootstrap decision from `BR39c-Q2`/`D20`: no docker-compose or Makefile edit is needed; dev/test fallback KEK is acceptable; first key is bootstrapped through `make exec-api CMD="npm run oauth:init-keys" ... ENV=<env>` after Lot 4.
+  - [x] Verify `validate-auth-hono` CI runs `make test-auth-hono` for `packages/auth-hono/**` and API test jobs cover `api/tests/api/auth/oauth-*.test.ts`; if not, raise `BR39c-EX1` before implementation.
+  - [x] Create initial draft of `spec/SPEC_BR39c_OAUTH_OIDC_IDP.md` (consolidation spec — temp, deleted at Lot N-1). Include: issuer/discovery model, target endpoints, claim shape, JWKS shape, state-store port interface, DPoP binding contract, login/consent continuation contract, mock RP contract.
   - [ ] Commit: `git add BRANCH.md spec/SPEC_BR39c_OAUTH_OIDC_IDP.md && make commit MSG="chore(BR-39c): Lot 0 baseline + spec draft"`.
 
 - [ ] **Lot 1 — Schemas, ports, JWKS service**
