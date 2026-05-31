@@ -61,6 +61,15 @@ document-generation pattern (DOCX/PPTX queue jobs) rather than inventing a new d
   expression. Reason: this in-repo adapter is the single source of truth that routes a job type to
   the publishing queue class; there is no extension hook. Impact: one SQL CASE branch, mirrors the
   existing `docx_generate` line, no behavior change for other types. Rollback: remove the line.
+- **BR40c-EX2** `acknowledge`: edit `spec/COLLAB.md` (not in Allowed Paths) — add a "Folder XLSX
+  Export (BR-40c)" subsection under Import/Export (Lot N-1 docs consolidation: "update export
+  spec"). Reason: workflow rule requires keeping `spec/*.md` in sync with behavior changes. Impact:
+  documentation only, additive. Rollback: remove the subsection.
+- **BR40c-Sec1** `acknowledge`: `exceljs@4.4.0` pulls transitive MODERATE advisories
+  (`uuid` GHSA-w5hq-g745-h8pq via `exceljs>=3.5.0`, `ws` GHSA-58qx-3vcg-4xpx). The SCA/container
+  compliance parser selects only `high`/`critical` findings, so these do not gate; no
+  `vulnerability-register.yaml` entry required. Fixing would require `exceljs@3.4.0` (a breaking
+  downgrade), not adopted.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism; one success on
