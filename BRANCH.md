@@ -61,6 +61,12 @@ keeps returning ALL sheets, each labelled `Sheet: <name>`.
     changes and ship in the same PR. Listed in Allowed Paths so a scope check does not flag them.
   - Rollback: the UI change is a pure additive accept-list/label entry; reverting `02188f8b`'s UI hunk
     removes it without affecting the query layer.
+- **BR40b-EX2** `attention`: scope exception to update `spec/TOOLS.md` (not in original Allowed Paths).
+  - Reason: the documents-tool action catalog in `spec/TOOLS.md` line 41 listed only
+    `list | get_summary | get_content | analyze`; this branch adds `list_sheets` + `get_sheet_content`,
+    so the spec would otherwise go stale. One-line additive doc edit (+1 action enum line, +1 bullet).
+  - Impact: documentation only; no behavior change. Keeps the canonical tool catalog accurate.
+  - Rollback: revert the two added lines in `spec/TOOLS.md`.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism; one success on
@@ -156,17 +162,18 @@ keeps returning ALL sheets, each labelled `Sheet: <name>`.
     - [ ] Non-reg: single-sheet xlsx still indexes and reads via `get_content`.
     - [ ] Non-reg: a pdf/docx/pptx document still summarizes/reads (officeparser path untouched).
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update the document/RAG spec (if a relevant spec exists) describing the two new sheet actions
-        and the formula+value surfacing principle. No standalone `spec/BRANCH_SPEC_EVOL.md` needed
-        (single backend capability).
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Updated `spec/TOOLS.md` documents-tool entry: added `list_sheets` + `get_sheet_content` to the
+        action enum and a bullet describing per-sheet selection + formula+value surfacing (under
+        BR40b-EX2). No standalone `spec/BRANCH_SPEC_EVOL.md` needed (single backend capability).
 
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint: `make typecheck-api ENV=test-feat-xlsx-multitab-query` +
-        `make lint-api ENV=test-feat-xlsx-multitab-query`.
-  - [ ] Retest API: `make test-api ENV=test-feat-xlsx-multitab-query`.
-  - [ ] Retest UI: `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-xlsx-multitab-query`
-        (absorbed accept-list assertions).
-  - [ ] Retest E2E (doc spec group): `make clean test-e2e API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query E2E_GROUP=<group>`.
-  - [ ] No `packages/<pkg>/src/**` touched → no package bump required (verify).
+- [x] **Lot N — Final validation**
+  - [x] Typecheck & Lint: `make typecheck-api ENV=test-feat-xlsx-multitab-query` (clean) +
+        `make lint-api ENV=test-feat-xlsx-multitab-query` (0 errors).
+  - [x] Retest API: `make test-api ENV=test-feat-xlsx-multitab-query` → 0 FAIL on clean env
+        (aggregate 64 files / 511 passed + 1 skipped; per-suite splits all green).
+  - [x] Retest UI: `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=test-feat-xlsx-multitab-query` → 11 passed.
+  - [x] Retest E2E (doc spec): `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9201 UI_PORT=5401 MAILDEV_UI_PORT=1301 ENV=e2e-feat-xlsx-multitab-query` → 1 passed; `make clean` after.
+  - [x] No `packages/<pkg>/src/**` touched → no package bump required (verified: only api/* + e2e/* + spec doc).
+  - [x] Env cleanup: `make down ENV=test-feat-xlsx-multitab-query`; `make ps-all` shows no remaining branch services.
   - [ ] STOP after local gates: report to conductor for integration. Do NOT push, do NOT open PR.
