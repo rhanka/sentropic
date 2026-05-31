@@ -51,6 +51,17 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - Mirror the same exception in `plan/39a-BRANCH_feat-auth-ui-sdk.md` if this branch plan is later updated by the conductor.
 
 ## Feedback Loop
+- `BR39a-Q3`
+  - Branch: `feat/auth-ui-sdk`
+  - Owner: Conductor
+  - Severity: low
+  - Status: AI flaky accepted (per `rules/testing.md` AI flaky allowlist)
+  - Repro steps: CI run 26705496187 → `test-api-unit-integration (ai, chat-tools,company-enrichment-sync,documents-tool,initiative-gener...)` shard.
+  - Expected: shard green.
+  - Actual: 2/31 tests in `api/tests/ai/chat-tools.test.ts` timed out — `update_initiative_field tool > should call update_initiative_field and update database` (15s timeout), `web_extract tool > should handle web_extract with array of URLs correctly` (30s timeout). Stack trace shows LLM tool-call latency + transient `DrizzleQueryError: Failed query: insert into "chat_stream_events"` (DB race on stream events table). Same path NOT touched by BR-39a (auth-ui changes are scoped to `packages/auth-ui/**`, `ui/src/routes/auth/**`, `ui/src/lib/services/auth-transport.ts`, locale dictionaries).
+  - Evidence: failing tests under `api/tests/ai/**` which is in the AI flaky allowlist; failure signature matches LLM nondeterminism (tool call timeout) + transient PostgreSQL serialization conflict on the stream-events insert. Not systematic.
+  - Resolution: re-trigger via `gh run rerun --failed` after current run completes; if still flaky, accept under allowlist (non-blocking) and proceed to merge.
+
 - `BR39a-Q2`
   - Branch: `feat/auth-ui-sdk`
   - Owner: Conductor
