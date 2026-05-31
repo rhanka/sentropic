@@ -1,31 +1,35 @@
-# Feature: BR-38a Multimodal Image Input
+# Feature: BR-40bc + BR-38a Integrated UAT
 
 ## Objective
-Add first-class image input to Sentropic chat and document context flows: users can paste, drag, upload, or pick images from Google Drive, see them in chat/document surfaces, and have vision-capable models receive structured image parts through `@sentropic/llm-mesh`.
+Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, and BR-40c folder xlsx export into one qualification branch for combined preUAT and UAT.
 
 ## Scope / Guardrails
-- Scope limited to image input, image attachments, image documents, Drive image import, chat UI attachment UX, and llm-mesh/provider vision routing.
-- Image generation is out of scope and owned by BR-38b.
-- RAG/image embeddings are out of scope; BR-17 remains the semantic retrieval branch.
-- One migration max in `api/drizzle/*.sql` if message/document media persistence requires a schema change.
-- Make-only workflow, no direct Docker commands.
-- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/feat-multimodal-image-input`.
-- Automated test campaigns must run on dedicated environments, never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification.
-- In every `make` command, the concrete branch environment value must be passed as the last argument.
-- All new text in English.
-- Package version bumps are mandatory for every non-private package whose `src/**` changes: `packages/llm-mesh`, `packages/chat-core`, `packages/chat-ui`, and `packages/events` if touched.
-- `chat-ui` must stay host-adapter driven and must not import `@sentropic/llm-mesh`.
-- `chat-core` must stay above mesh and must not import API-local provider/runtime modules.
-- Provider fallback must be explicit: unsupported image input models fail before queueing or prompt the user to switch to a vision-capable model.
-- Raw image bytes must be stored through the existing document/storage path or a reviewed media reference path; base64 blobs must not be persisted directly in chat message text.
+- Scope limited to merging already validated branch work from `feat/multimodal-image-input`, `feat/xlsx-multitab-query`, and `feat/folder-xlsx-export`.
+- No new product behavior beyond conflict resolution and integration fixes required to make the combined branch build, test, and run.
+- One existing migration from BR-38a is included: `api/drizzle/0027_chat_message_attachments.sql`.
+- Make-only workflow, no direct Docker or npm commands.
+- Branch development happens in `tmp/feat-40bc-38a`.
+- Automated tests use `ENV=test-feat-40bc-38a` or `ENV=e2e-feat-40bc-38a`; never root `ENV=dev`.
+- Root UAT clone/worktree is `uat/40bc-38a` only after integration gates are coherent.
+- In every `make` command, `ENV=<env>` is passed as the last argument.
+- All new text is English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `PLAN.md`
-  - `plan/38a-BRANCH_feat-multimodal-image-input.md`
+  - `package-lock.json`
+  - `api/package.json`
+  - `api/drizzle/0027_chat_message_attachments.sql`
+  - `api/drizzle/meta/_journal.json`
+  - `api/src/db/schema.ts`
+  - `api/src/routes/api/chat.ts`
+  - `api/src/routes/api/documents.ts`
+  - `api/src/routes/api/google-drive.ts`
+  - `api/src/routes/api/xlsx.ts`
+  - `api/src/routes/api/index.ts`
+  - `api/src/services/**`
+  - `api/tests/**`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/src/**`
   - `packages/llm-mesh/tests/**`
@@ -38,345 +42,125 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - `packages/events/package.json`
   - `packages/events/src/**`
   - `packages/events/tests/**`
-  - `package-lock.json`
-  - `api/src/db/schema.ts`
-  - `api/src/routes/api/chat.ts`
-  - `api/src/routes/api/documents.ts`
-  - `api/src/routes/api/google-drive.ts`
-  - `api/src/services/chat-service.ts`
-  - `api/src/services/llm-runtime/**`
-  - `api/src/services/context-document*.ts`
-  - `api/src/services/document*.ts`
-  - `api/src/services/google-drive-client.ts`
-  - `api/src/services/tool-service.ts`
-  - `api/tests/api/chat.test.ts`
-  - `api/tests/api/chat-message-actions.test.ts`
-  - `api/tests/api/chat-tools.test.ts`
-  - `api/tests/api/documents.test.ts`
-  - `api/tests/api/documents-google-drive.test.ts`
-  - `api/tests/api/google-drive-files.test.ts`
-  - `api/tests/unit/documents-tool-service.test.ts`
-  - `api/tests/unit/google-drive-client.test.ts`
-  - `api/tests/unit/llm-runtime-stream.test.ts`
-  - `api/tests/unit/provider-mesh-contract-proof.test.ts`
-  - `api/tests/ai/documents-tool.test.ts`
-  - `api/tests/ai/chat-tools.test.ts`
-  - `ui/src/lib/components/chat/AppChatPanel.svelte`
-  - `ui/src/lib/components/chat/ChatComposerWrapper.svelte`
-  - `ui/src/lib/components/chat/ChatTimelineWrapper.svelte`
-  - `ui/src/lib/components/DocumentSourceMenu.svelte`
-  - `ui/src/lib/components/DocumentsBlock.svelte`
-  - `ui/src/lib/chat/document-adapter.ts`
-  - `ui/src/lib/chat/session-adapter.ts`
-  - `ui/src/lib/chat/web-host-adapter.ts`
-  - `ui/src/lib/utils/documents.ts`
-  - `ui/src/lib/utils/google-drive.ts`
-  - `ui/src/lib/utils/google-drive-picker.ts`
+  - `ui/src/lib/**`
+  - `ui/src/routes/folders/[id]/+page.svelte`
   - `ui/src/locales/en.json`
   - `ui/src/locales/fr.json`
-  - `ui/tests/chat/document-adapter.test.ts`
-  - `ui/tests/components/chat/AppChatPanel-boundary.test.ts`
-  - `ui/tests/components/chat/ChatComposer-wrapper.test.ts`
-  - `ui/tests/components/chat/ChatTimeline-wrapper.test.ts`
-  - `ui/tests/utils/document-source-menu.test.ts`
-  - `ui/tests/utils/documents.test.ts`
-  - `ui/tests/utils/google-drive.test.ts`
-  - `ui/tests/utils/google-drive-picker.test.ts`
-  - `e2e/tests/03-chat.spec.ts`
-  - `e2e/tests/04-documents-ui-actions.spec.ts`
-  - `e2e/tests/04-google-drive-composer.spec.ts`
-  - `e2e/tests/04-google-drive-settings-documents.spec.ts`
-  - `e2e/tests/08-documents-summary.spec.ts`
+  - `ui/tests/**`
+  - `e2e/tests/**`
+  - `spec/DATA_MODEL.md`
   - `spec/SPEC_CHATBOT.md`
   - `spec/SPEC_EVOL_LLM_MESH.md`
   - `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`
   - `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`
   - `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`
+  - `spec/TOOLS.md`
+  - `spec/COLLAB.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` except this branch file
-  - `plan/38b-BRANCH_feat-image-generation-tool.md`
-  - Image generation provider/tool code outside the explicit fallback checks needed to reject generation requests.
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file, only for persisted media references)
+  - `plan/NN-BRANCH_*.md` except already existing source branch plan files if documentation sync becomes mandatory.
+- **Conditional Paths (allowed only with explicit `BR40bc38a-EXn` exception)**:
   - `.github/workflows/**`
-  - New `api/src/services/media/**` or `ui/src/lib/media/**` modules if existing document/storage modules cannot carry image references without mixing concerns
+  - Additional `api/drizzle/*.sql` files beyond BR-38a `0027_chat_message_attachments.sql`.
 - **Exception process**:
-  - Declare exception ID `BR38a-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop`.
+  - Declare `BR40bc38a-EXn` in `## Feedback Loop` with reason, impact, and rollback.
 
 ## Feedback Loop
-- No open blockers at registration time.
-- Agent allocation 2026-05-24: `38a-mesh-runtime`, `38a-docs-drive`, and `38a-ui-contract` may work in parallel on this branch/worktree while respecting Allowed Paths and committing through the conductor.
-- Architecture notes already verified on main:
-  - `packages/llm-mesh/src/messages.ts` already has `ImageContentPart` and `FileContentPart`.
-  - `packages/llm-mesh/src/capabilities.ts` already has input modalities including `image` and `file`.
-  - Current catalog entries expose text-only modalities.
-  - `api/src/services/llm-runtime/mesh-dispatch.ts` flattens message content through `stringifyContent`.
-  - `api/src/routes/api/chat.ts` accepts string-only message content.
-  - `ui/src/lib/utils/documents.ts` and `ui/src/lib/utils/google-drive-picker.ts` exclude image MIME types today.
-- Audit update 2026-05-24:
-  - `BR38a-EX1`: `api/drizzle/0027_chat_message_attachments.sql` and `api/drizzle/meta/_journal.json` are allowed as the single media-reference migration. Reason: persist nullable `chat_messages.attachments` instead of embedding bytes in message text. Impact: schema adds one JSONB column. Rollback: drop the column and remove the journal entry with the feature commits reverted.
-  - `BR38a-EX2`: `api/src/services/chat/postgres-chat-message-store.ts` is allowed to map the new attachments column through the message-store port. Reason: the runtime cannot hydrate or replay attachments unless persistence reads/writes them. Impact: scoped CRUD mapping only. Rollback: remove the field mapping with the migration revert.
-  - `BR38a-EX3`: `spec/DATA_MODEL.md` is allowed for schema documentation. Reason: the ERD/data model must reflect the new chat message attachment field. Impact: documentation only. Rollback: remove the attachment row/notes.
-  - `BR38a-EX4`: `api/tests/unit/chat-service-tools.test.ts` is allowed for the regression proving persisted image attachments are hydrated into structured vision parts before LLM streaming. Reason: this is the nearest existing mocked `ChatService.runAssistantGeneration` harness. Impact: unit coverage only. Rollback: remove the test with the hydration code.
-  - Follow-up gap closed: previous 38a commits persisted `chat_messages.attachments` and taught the provider runtime to accept image parts, but did not yet bridge persisted attachments into `currentMessages`. The current fix loads authorized image context documents, converts them to `{ type: 'image', mediaType, data }` parts, and keeps text-only flows unchanged.
-  - Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Verification below was rerun on the merged head.
-  - Latest main sync 2026-05-24: merged `origin/main` again after `main` advanced from `146364eb` to `d5e3cddc`; no merge conflicts.
-  - UAT remains pending. This branch must not be undrafted/merged until root UAT runs from a commit-identical root workspace and CI is green on the final pushed head.
-  - `BR38a-FB1` UI/UX anomaly 2026-05-26 (UAT). Owner: 38a-ui. Severity: medium. Status: superseded by `BR38a-FB2` durable redesign (Lot U2).
-    - Repro: paste/upload an image into the chat composer.
-    - Actual: the same image showed twice (a "document summary row" + a "capture" tray box); neither thumbnail was clickable to enlarge.
-    - Root cause: a composer image was added both as a `composerAttachments` draft (bottom tray) and as a chat-session `context_document` (top doc chip via `loadSessionDocs`); two surfaces, two styles, no lightbox.
-    - Lot U1 resolution (shipped): unified band at top + dedup by `documentId` + no summary for images + app-level lightbox. Kept: lightbox, dedup helper, image-not-summarized. Superseded part: the persistent unified band is replaced by the per-message model below.
-  - `BR38a-FB2` vision/attachment durable model 2026-05-30 (UAT). Owner: 38a-ui. Severity: high. Status: fixed in Lot U2 (verified, incl. live E2E vision proof; awaiting root UAT sign-off).
-    - Repro: an image present in the session band but not freshly attached to the sent message; ask the model to analyze it (vision-capable model, e.g. `gpt-5.4-nano`).
-    - Actual: model reports the image is "ready" but unreadable (no OCR/text). It only saw the image via the `documents` tool (text extraction → `tool-service.ts` "No text extracted… image-only"), never as a vision part.
-    - Root cause: `sendMessage` builds vision attachments only from `composerAttachments` (cleared after send); `hydrateVisionAttachmentMessages` injects image parts only for images carried by a message. A session-document image that is not a fresh per-message attachment is never sent as a vision part. Lot U1's persistent band displayed session-doc images as if attached, worsening the mismatch.
-    - Resolution (durable, ChatGPT/Claude/Gemini-aligned): per-message attachment model. Composer band = pending-only, cleared after send; sent attachments render inline in the message bubble (images with lightbox, non-image docs as file cards). Images are sent as vision parts on their message and persist via conversation history; documents stay available via the system-prompt counts + `documents` tool. First-attach injects a per-turn attention cue. Removing a pending attachment deletes its uploaded context document (no orphan). No per-document deletion inside the chat. Frozen in `spec/SPEC_CHATBOT.md` and `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`.
-    - Evidence: `api/src/services/chat-service.ts` `sendMessage` path / `hydrateVisionAttachmentMessages` (1789, called 3327); `ui/src/lib/components/chat/AppChatPanel.svelte` `sendMessage` (sentAttachments from composerAttachments only).
-
-## Verification Ledger
-- 2026-05-24 RED: `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` failed as expected before the fix because `loadContextDocumentContent` was called 0 times.
-- 2026-05-24 RED: `make test-ui SCOPE="tests/components/chat/AppChatPanel-boundary.test.ts" API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` failed as expected before the fix because `AppChatPanel` did not import/wire `chatAttachments`.
-- 2026-05-24 GREEN:
-  - `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
-  - `make typecheck-ui API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` (0 errors, 6 pre-existing warnings)
-  - `make typecheck-chat-ui ENV=test-feat-multimodal-image-input`
-  - `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
-  - `make test-ui SCOPE="tests/components/chat/AppChatPanel-boundary.test.ts" API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
-  - `make test-chat-ui ENV=test-feat-multimodal-image-input`
-  - `make test-pkg-chat-core ENV=test-feat-multimodal-image-input`
-- 2026-05-24 blocked verification:
-  - `make typecheck-chat-core ENV=test-feat-multimodal-image-input` is blocked by pre-existing root-owned `api/node_modules/.vite` permissions (`EACCES: permission denied, rmdir '/workspace/api/node_modules/.vite'`). `make test-pkg-chat-core ENV=test-feat-multimodal-image-input` passed on the same head.
-- 2026-05-24 post-main-merge GREEN:
-  - `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
-  - `make typecheck-ui API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` (0 errors, 6 pre-existing warnings)
-  - `make prepare-node-workspace API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` refreshed the mounted `workspace_node_modules` volume after `@sentropic/skills` landed on main.
-  - `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
-  - `make test-ui SCOPE="tests/components/chat/AppChatPanel-boundary.test.ts" API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
-  - `make typecheck-llm-mesh ENV=test-feat-multimodal-image-input`
-  - `make typecheck-chat-ui ENV=test-feat-multimodal-image-input`
-  - `make test-llm-mesh ENV=test-feat-multimodal-image-input`
-  - `make test-chat-ui ENV=test-feat-multimodal-image-input`
-  - `make test-pkg-chat-core ENV=test-feat-multimodal-image-input`
-  - `make typecheck-chat-core ENV=test-feat-multimodal-image-input`
-- 2026-05-24 local cleanup note:
-  - Initial post-main `test-api-unit` run failed before test collection because the mounted `workspace_node_modules` volume did not yet contain `gray-matter` for the new `@sentropic/skills` workspace; `prepare-node-workspace` fixed it and the same test then passed.
-  - Initial post-main `typecheck-chat-core` reruns hit local generated `node_modules` ownership issues (`api/node_modules/.vite`, `ui/node_modules/.bin`, and root `node_modules`). Generated artifacts were cleaned or ownership-corrected only after the package tests had finished; the same command then passed.
-- 2026-05-24 CI note:
-  - GitHub run `26373930960` on superseded head `8b5005d3` failed only `test-e2e (group-c, 03)`: `tests/03-chat.spec.ts` could not find the `Reasoning/Raisonnement` runtime header after reload, while all compile/package/API/build/security jobs passed. The branch was then merged with the latest `origin/main` head `d5e3cddc` and needs a fresh CI run before UAT/merge.
-- 2026-05-26 GREEN (Lot U1 image attachment UX):
-  - `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input` (18 passed, incl. new `mergeAttachmentBand`/`isImageMimeType`)
-  - `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input` (3 passed)
-  - `make test-ui SCOPE=tests/components/chat/ChatComposer-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
-  - `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
-  - `make typecheck-ui ENV=test-feat-multimodal-image-input` (0 errors, 6 pre-existing warnings)
-  - `make lint-ui ENV=test-feat-multimodal-image-input` (clean)
-  - `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (ok)
-  - `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (3 passed, exit 0)
-  - `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (7 passed, exit 0; 5 flaky passed on retry)
-- 2026-05-26 E2E flaky note (Lot U1): `tests/03-chat.spec.ts` reported 5 first-attempt flakies that passed on retry (exit 0): `:203` reasoning/tools history after reload, `:401` provisional/persistent contexts, `:684` session persists after widget reopen, `:732` list sessions in selector, `:778` delete session. All signatures are `expect(...).toBeVisible` timeouts on assistant bubbles / session lifecycle (AI generation timing), unrelated to the attachment band (empty in these scenarios). `03-chat.spec.ts` is in the E2E flaky allowlist. Explicit user sign-off required before merge.
-- 2026-05-30 GREEN (Lot U2 durable model):
-  - `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input` (17 passed; `composerBandItems`/`isImageMimeType`)
-  - `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input` (3 passed)
-  - `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
-  - `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_TEST_WORKERS=1 API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (16 passed; vision hydration regression intact after the attention-cue change)
-  - `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (29 passed)
-  - `make typecheck-ui` (0 errors, 6 pre-existing warnings); `make typecheck-api` (0 errors); `make lint-ui` (clean) — all `ENV=test-feat-multimodal-image-input`
-  - `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (api:384ce3, ui:179a78)
-  - `make test-e2e E2E_SPEC=tests/03-chat.spec.ts E2E_VERSION=d66824 API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (exit 0; **vision proof** `:860 attache une image et le modèle vision la décrit (BR38a-FB2)` passes: gpt-5.4-nano describes the attached red PNG as red/rouge, and the POST `/chat/messages` body carries the image attachment). 7 flaky passed on retry (AI-timing/shared-account family, `03-chat` allowlist), incl. `:860`.
-- 2026-05-30 environment note: a prior run left a wedged buildkit `RUN` step (e2e image build: `npm install` + `playwright install chromium`, root-owned under runc, ~2h) that deadlocked any new e2e-image build (E2E_VERSION had changed because `E2E_VERSION` hashes `e2e/tests`). Worked around WITHOUT a docker restart by pinning `E2E_VERSION=d66824` (the pre-spec-change tag, image present locally) so `up-e2e` reuses the existing e2e image; the new `03-chat` scenario still runs because specs are volume-mounted (`./e2e/tests:/app/tests`). Final clean E2E pass (full `make clean test-e2e` for 03+04) should run once the wedged build is cleared (docker restart) so the standard `E2E_VERSION` image is rebuilt.
+- **BR40bc38a-M1** `acknowledge`: integration branch created from local `main` `ff32a06f` because BR-40b/40c were based there; remote `origin/main` is currently older in this clone.
+- **BR40bc38a-M2** `acknowledge`: first 38a merge conflict in `packages/llm-mesh/src/catalog.ts` resolved by keeping `main`'s `gemini-3.1-flash-lite` replacement for erroneous `gemini-3.5-thinking`, while preserving BR-38a vision capability on the real Gemini model.
+- **BR40bc38a-M3** `attention`: root currently has a `dev` stack on `8791/5177/1081`; integrated UAT must avoid clobbering it until the requested `uat/40bc-38a` clone/worktree is ready.
 
 ## AI Flaky tests
 - Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+  - Accept only non-systematic provider/network/model nondeterminism.
+  - Non-systematic means at least one success on the same commit and command.
+  - Never add timeouts.
+  - Record exact command, failing file, and signature here.
+  - Capture explicit user sign-off before merge if accepting any AI flaky result.
+- Known allowlist inherited from source branches:
+  - API AI suites under `api/tests/ai/**`.
+  - E2E `03-chat.spec.ts`, `00-ai-generation.spec.ts`, `03-chat-chrome-extension.spec.ts`, `07_comment_assistant.spec.ts`.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: the branch crosses several layers but delivers one wire contract from user image selection to provider vision input. Splitting would create duplicate schema/API contracts.
+- [x] **Mono-branch + cherry-pick/merge integration**.
+- [ ] Multi-branch.
+- Rationale: user requested one combined 40bc+38a qualification branch to simplify preUAT/UAT.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only after API, UI, and provider routing gates pass.
-- Development worktree: `tmp/feat-multimodal-image-input`.
-- Branch ports: `API_PORT=9190`, `UI_PORT=5390`, `MAILDEV_UI_PORT=1290`.
-- Test envs: `ENV=test-feat-multimodal-image-input`, `ENV=e2e-feat-multimodal-image-input`.
-- Root UAT env: `ENV=dev` on `/home/antoinefa/src/sentropic`, same HEAD as the branch under qualification.
+- Integration worktree: `tmp/feat-40bc-38a`.
+- UAT clone/worktree: `uat/40bc-38a` after integration gates.
+- Test envs: `ENV=test-feat-40bc-38a`, `ENV=e2e-feat-40bc-38a`.
+- Proposed UAT ports: `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
+- Root `ENV=dev` must not be used for automated tests.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 - Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file, and the five source specs listed in Allowed Paths.
-  - [x] Create isolated worktree `tmp/feat-multimodal-image-input` from `main`.
-  - [x] Copy `.env` into the worktree only if local service execution is needed; override branch ports and never use root `ENV=dev` for tests.
-  - [x] Capture Makefile targets needed for API, UI, package, and E2E gates.
-  - [x] Confirm command style with `API_PORT=9190`, `UI_PORT=5390`, `MAILDEV_UI_PORT=1290`, and the concrete `ENV=...` value last.
-  - [x] Confirm scope boundaries and declare `BR38a-EXn` before touching conditional paths.
-  - [ ] Add `spec/BRANCH_SPEC_EVOL_IMAGE_INPUT.md` only if the design cannot be integrated cleanly into existing specs in the same branch.
-
-- [ ] **Lot 1 - Mesh and provider vision contract**
-  - [ ] Extend `@sentropic/llm-mesh` message normalization so image and file content parts pass through without stringification.
-  - [ ] Mark model/provider modality capabilities accurately in `packages/llm-mesh/src/catalog.ts`.
-  - [ ] Add capability guards that reject image parts before provider dispatch when the selected model has no `image` input support.
-  - [ ] Convert image parts for OpenAI Responses request input.
-  - [ ] Convert image parts for Gemini `inlineData` or supported file/url parts.
-  - [ ] Convert image parts for Anthropic message content blocks.
-  - [ ] Keep Mistral/Cohere image support disabled unless verified by provider docs and tests.
-  - [ ] Preserve tool-call, structured-output, reasoning, and streaming behavior for text-only requests.
-  - [ ] Lot gate:
-    - [ ] `make test-packages SCOPE=packages/llm-mesh/tests/facade.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/unit/provider-mesh-contract-proof.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/unit/llm-runtime-stream.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-
-- [ ] **Lot 2 - Document and Drive image ingestion**
-  - [ ] Add supported local image MIME types: `image/png`, `image/jpeg`, `image/webp`, and `image/gif`.
-  - [ ] Add supported Google Drive image MIME types to picker and backend validation.
-  - [ ] Store image files using existing document storage conventions and keep download behavior intact.
-  - [ ] For image documents, skip text extraction when no text exists and set a deterministic vision-ready status/metadata state.
-  - [ ] Ensure document summaries do not fail image-only uploads; use metadata-only summaries unless a vision summary is explicitly implemented.
-  - [ ] Enforce workspace/session access checks for image documents exactly like existing documents.
-  - [ ] Lot gate:
-    - [ ] `make test-api SCOPE=tests/api/documents.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/api/google-drive-files.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-
-- [ ] **Lot 3 - Chat API/runtime media attachments**
-  - [ ] Extend chat message creation with explicit image/document attachment references while allowing image-only messages with optional text.
-  - [ ] Persist media references without embedding raw base64 in `chat_messages.content`.
-  - [ ] Include image attachment metadata in message history, bootstrap, retry, edit, runtime-details, and checkpoint flows.
-  - [ ] Build mesh messages with text and image parts only after authorization and media retrieval succeed.
-  - [ ] Preserve local-tool and server-tool loops for text-only chats.
-  - [ ] Add deterministic errors for unsupported provider/model image input.
-  - [ ] Lot gate:
-    - [ ] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/api/chat-message-actions.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/api/chat-tools.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api-ai SCOPE=tests/ai/chat-tools.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-
-- [ ] **Lot 4 - Chat UI and documents UX**
-  - [ ] Add paste, drag/drop, and upload image entry points in the chat composer host wrapper.
-  - [ ] Add image attachment chips with thumbnail, filename, size, upload state, retry, and remove actions.
-  - [ ] Allow send with image-only content when at least one valid image attachment exists.
-  - [ ] Extend `DocumentSourceMenu.svelte` and `DocumentsBlock.svelte` so images are accepted from local upload and Drive.
-  - [ ] Render image attachments in chat timeline without layout shifts or text overlap on mobile and desktop.
-  - [ ] Keep package `@sentropic/chat-ui` generic: expose host adapter types/events rather than app-specific fetches.
-  - [ ] Lot gate:
-    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/components/chat/ChatComposer-wrapper.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/chat/document-adapter.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/utils/google-drive.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/utils/document-source-menu.test.ts ENV=test-feat-multimodal-image-input`
-
-- [x] **Lot U1 - UAT fix: image attachment UX (BR38a-FB1)**
-  - [x] Add a deduplicated attachment-merge helper in `ui/src/lib/utils/documents.ts` (merge session documents + pending composer attachments by `documentId`, classify image vs document).
-  - [x] Unify the composer attachment band at the top of the edit surface: one shared box style (image preview thumbnail vs file-type icon, filename, status, remove); stop rendering the bottom `renderAttachmentTray`.
-  - [x] Remove an item from the band by removing both the pending composer attachment and its session context document when present.
-  - [x] Suppress the summary affordance for image context documents in the band.
-  - [x] Make image thumbnails (band and sent message bubble) clickable with hover affordance, opening an app-level lightbox (full-size preview, download, close via Esc/backdrop/button, keyboard-focusable).
-  - [x] Add i18n keys for the lightbox (open/enlarge, close, download) in `ui/src/locales/en.json` and `ui/src/locales/fr.json`.
-  - [x] Keep `@sentropic/chat-ui` untouched (generic tray slot left unused; no package version bump required).
-  - [x] Lot gate:
-    - [x] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input`
-    - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input`
-    - [x] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input`
-    - [x] `make typecheck-ui ENV=test-feat-multimodal-image-input`
-    - [x] `make lint-ui ENV=test-feat-multimodal-image-input`
-    - [x] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [x] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-
-- [x] **Lot U2 - Durable per-message attachment model (BR38a-FB2)**
-  - [x] Composer band becomes pending-only: render the band from `composerAttachments` only (drop the `sessionDocs` merge); clear after send. Keep rich box + image lightbox + image-not-summarized.
-  - [x] Removing a pending attachment also deletes its uploaded context document (`deleteDocument` by `documentId`) so no orphaned session document remains.
-  - [x] Align documents with images on the `+` menu: a non-image upload becomes a pending composer attachment (kind `file`) sent with the next message, instead of a silent session-only upload.
-  - [x] Persist and send non-image document attachments as message attachments (kind `file`, source `context_document`) without injecting them as runtime content parts (documents stay tool-driven).
-  - [x] Render sent non-image document attachments inline in the user message bubble as file cards (filename, type icon, download/open); keep sent images as inline thumbnails with lightbox.
-  - [x] Inject a per-turn attention cue when a document/image is first attached so the model considers it (server-side, `chat-service`).
-  - [x] Confirm images are sent as vision parts on their message and persist across turns via conversation history (no per-turn re-send of all session images).
-  - [x] No per-document deletion inside the chat after send; document management stays on document pages.
-  - [x] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` for any new attachment/file-card copy (no new keys needed; existing copy reused).
-  - [x] Lot gate:
-    - [x] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input` (17 passed)
-    - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input` (3 passed)
-    - [x] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
-    - [x] `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (16 passed)
-    - [x] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (29 passed)
-    - [x] `make typecheck-ui ENV=test-feat-multimodal-image-input` (0 errors)
-    - [x] `make typecheck-api API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (0 errors)
-    - [x] `make lint-ui ENV=test-feat-multimodal-image-input` (clean)
-    - [x] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (api:384ce3, ui:179a78)
-    - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts E2E_VERSION=d66824 API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (exit 0; vision proof `:860` passes — model describes the attached red image as red)
-    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (deferred: rerun with 03 in the final clean E2E pass)
-
-- [ ] **Lot N-2 - UAT**
-  - [ ] Web app setup:
-    - [ ] Push branch before UAT.
-    - [ ] Confirm root workspace is commit-identical to branch HEAD.
-    - [ ] Run user UAT from root with `API_PORT=8787`, `UI_PORT=5173`, `MAILDEV_UI_PORT=1080`, `ENV=dev`.
-  - [ ] Web app evolution tests:
-    - [ ] Paste a PNG into chat, send image-only, verify assistant can describe the image with a vision-capable model.
-    - [ ] Upload a JPEG through the chat plus/menu flow, add text, send, and verify thumbnail/history/retry behavior.
-    - [ ] Drag/drop a WebP onto chat and cancel before send.
-    - [ ] Attach an image from Documents to a chat session and verify it is visible in the session document list.
-    - [ ] Pick an image from Google Drive and verify the image imports as a document and can be used in chat.
-    - [ ] Select a text-only model with an image attached and verify the pre-dispatch error is clear and recoverable.
-    - [ ] (BR38a-FB2) Paste/upload an image: it shows once as a pending chip; after send it appears inline in the message bubble and the composer clears (no persistent band, no duplicate box).
-    - [ ] (BR38a-FB2) Attach an image and ask the model to describe it: the model actually sees and describes the image (vision part), not "ready but unreadable".
-    - [ ] (BR38a-FB2) Ask about the same image on a later turn without re-attaching: the model still sees it (persisted via history).
-    - [ ] (BR38a-FB2) Attach a non-image document: it shows as an inline file card in the bubble and the model considers it (attention cue) / can read it via the documents tool.
-    - [ ] (BR38a-FB2) Remove a pending attachment before send: it disappears and leaves no orphan session document (model no longer counts it).
-    - [ ] (BR38a-FB2) Click a sent image thumbnail: the lightbox opens, downloads, and closes (Esc/backdrop/button).
-  - [ ] Web app non-regression tests:
-    - [ ] Existing PDF/DOCX/PPTX/text document upload still processes.
-    - [ ] Existing text-only chat send/retry/edit/stop flows still work.
-    - [ ] Existing chat document list/analyze tools still work.
-    - [ ] Existing Google Drive Docs/Sheets/Slides/PDF import still works.
-
-- [ ] **Lot N-1 - Docs consolidation**
-  - [ ] Update `SPEC_EVOL_LLM_MESH.md` with the final multimodal contract.
-  - [ ] Update `SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with host adapter boundaries for image attachments.
-  - [ ] Update `SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` with image picker/import behavior.
-  - [ ] Update `SPEC_CHATBOT.md` with chat message attachment semantics.
-  - [ ] Update `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` only if the package boundaries changed.
-  - [ ] Delete `spec/BRANCH_SPEC_EVOL_IMAGE_INPUT.md` after integration if it was created.
-
-- [ ] **Lot N - Final validation**
-  - [ ] Typecheck and lint:
-    - [ ] `make typecheck-api API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make lint-api API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make typecheck-ui ENV=test-feat-multimodal-image-input`
-    - [ ] `make lint-ui ENV=test-feat-multimodal-image-input`
-  - [ ] Retest packages:
-    - [ ] `make test-packages ENV=test-feat-multimodal-image-input`
-  - [ ] Retest API:
-    - [ ] `make test-api API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-  - [ ] Retest UI:
-    - [ ] `make test-ui ENV=test-feat-multimodal-image-input`
-  - [ ] Retest E2E:
-    - [ ] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/04-google-drive-composer.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/04-google-drive-settings-documents.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/08-documents-summary.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-  - [ ] Retest AI flaky tests under acceptance rule:
-    - [ ] `make test-api-ai SCOPE=tests/ai/chat-tools.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted.
-  - [ ] Bump affected package versions for every touched package `src/**`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+- [x] **Lot 38a-0 - Baseline & constraints**
+  - [x] Imported BR-38a scope, guardrails, migration exception, and UAT notes.
+- [x] **Lot 38a-1 - Mesh and provider vision contract**
+  - [x] Imported llm-mesh image/file content handling and capability guards.
+  - [x] Integration conflict resolved for Gemini model catalog.
+- [x] **Lot 38a-2 - Document and Drive image ingestion**
+  - [x] Imported local and Google Drive image MIME support.
+- [x] **Lot 38a-3 - Chat API/runtime media attachments**
+  - [x] Imported persisted message attachments and vision hydration.
+- [x] **Lot 38a-4 - Chat UI and documents UX**
+  - [x] Imported composer attachments, timeline rendering, lightbox, and host adapter contracts.
+- [x] **Lot 38a-U1 - Image attachment UX feedback**
+  - [x] Imported unified attachment UX fixes and related tests.
+- [x] **Lot 38a-U2 - Durable per-message attachment model**
+  - [x] Imported per-message attachment model, pending-only composer band, and vision proof E2E scenario.
+- [x] **Lot 40b-0 - Baseline & constraints**
+  - [x] Imported BR-40b resolved framing: absorb spreadsheet indexing, add sheet-aware document tools.
+- [x] **Lot 40b-1 - ExcelJS xlsx reader**
+  - [x] Imported xlsx extraction with formulas plus computed values.
+- [x] **Lot 40b-2 - Query-tool sheet awareness**
+  - [x] Imported `list_sheets` and `get_sheet_content` document tool actions.
+- [x] **Lot 40b-3 - E2E coverage**
+  - [x] Imported `08-xlsx-multisheet-query.spec.ts` and formula workbook fixture.
+- [ ] **Lot 40b-N-2 - UAT**
+  - [ ] Upload a multi-sheet xlsx with a cross-sheet formula.
+  - [ ] Ask the agent to list sheets.
+  - [ ] Ask the agent for one sheet's content and verify formula plus computed value.
+  - [ ] Verify full content still labels all sheets.
+  - [ ] Verify single-sheet xlsx and pdf/docx/pptx document reads still work.
+- [ ] **Lot 40c-0 - Baseline, async pattern & chart spike**
+  - [ ] Merge BR-40c into this integration branch.
+- [ ] **Lot 40c-R - Rebase/import validation**
+  - [ ] Preserve BR-40c rebase decisions and lockfile/package changes.
+- [ ] **Lot 40c-1 - XLSX generation service**
+  - [ ] Import folder xlsx generation service and native chart injection.
+- [ ] **Lot 40c-2 - Route and queue wiring**
+  - [ ] Import `/api/xlsx` route and `xlsx_generate` queue handling.
+- [ ] **Lot 40c-3 - UI export entry point**
+  - [ ] Import folder page xlsx export action and i18n.
+- [ ] **Lot 40c-4 - Live cross-sheet formulas**
+  - [ ] Import formula cells for scores/quadrants and read-back tests.
+- [ ] **Lot 40c-5 - E2E**
+  - [ ] Import `07-import-export.spec.ts` xlsx export coverage.
+- [ ] **Lot 40c-N-2 - UAT**
+  - [ ] Export a scored folder as xlsx.
+  - [ ] Verify 3 tabs, live formulas, native editable scatter chart.
+  - [ ] Verify DOCX/PPTX/ZIP exports still work.
+- [ ] **Lot 40bc38a-I - Integration gates**
+  - [ ] Resolve merge conflicts across 38a, 40b, and 40c.
+  - [ ] `make typecheck-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [ ] `make typecheck-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [ ] `make lint-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [ ] `make lint-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [ ] Run focused API/UI/package tests covering 38a, 40b, and 40c changed surfaces.
+  - [ ] Build API/UI images for e2e.
+  - [ ] Run scoped E2E: `03-chat`, `07-import-export`, `08-xlsx-multisheet-query`.
+- [ ] **Lot 40bc38a-UAT - Combined preUAT**
+  - [ ] Prepare `uat/40bc-38a` clone/worktree at the integration HEAD.
+  - [ ] Start stack on `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
+  - [ ] Playwright preUAT: image attachment visible per message and sent to vision-capable model.
+  - [ ] Playwright preUAT: xlsx multi-sheet upload/query workflow.
+  - [ ] Playwright preUAT: folder xlsx export workflow including formula workbook download.
+  - [ ] Manual UAT checklist ready for user.
+- [ ] **Lot 40bc38a-N - Final validation**
+  - [ ] Update this `BRANCH.md` with actual commands and results.
+  - [ ] Verify package version bumps are present for touched package `src/**`.
+  - [ ] Push only after user confirmation.
+  - [ ] Create PR using this `BRANCH.md` as body when ready.

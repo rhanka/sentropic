@@ -3,7 +3,7 @@ import { getApiAuthToken, getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 
 export type DocumentContextType = 'organization' | 'folder' | 'initiative' | 'chat_session';
 export const DOCUMENT_UPLOAD_ACCEPT =
-  'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json,image/png,image/jpeg,image/webp,image/gif,.zip,.tar.gz,.tgz,application/zip,application/x-zip-compressed,application/gzip,application/x-gzip,application/x-tar,application/tar';
+  'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/markdown,text/plain,application/json,image/png,image/jpeg,image/webp,image/gif,.xlsx,.zip,.tar.gz,.tgz,application/zip,application/x-zip-compressed,application/gzip,application/x-gzip,application/x-tar,application/tar';
 
 function getUrlBaseForBrowser(): string {
   // In production Docker UI build, API_BASE_URL is typically "/api/v1" (relative)
@@ -107,6 +107,7 @@ const GOOGLE_WORKSPACE_MIME_LABELS: Record<string, string> = {
   'application/vnd.google-apps.document': 'Google Docs',
   'application/vnd.google-apps.spreadsheet': 'Google Sheets',
   'application/vnd.google-apps.presentation': 'Google Slides',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel workbook',
 };
 
 export function getDocumentMimeLabel(mimeType: string): string {
