@@ -1,8 +1,14 @@
-import { boolean, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Workspace constants (keep stable IDs for migrations/backfills)
 export const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
@@ -224,6 +230,112 @@ export const emailVerificationCodes = pgTable('email_verification_codes', {
   expiresAtIdx: index('email_verification_codes_expires_at_idx').on(table.expiresAt),
   emailIdx: index('email_verification_codes_email_idx').on(table.email),
   verificationTokenIdx: index('email_verification_codes_verification_token_idx').on(table.verificationToken),
+}));
+
+export const oauthClients = pgTable('oauth_clients', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').notNull().unique(),
+  clientSecretHash: text('client_secret_hash'),
+  name: text('name').notNull(),
+  redirectUris: text('redirect_uris').array().notNull(),
+  allowedScopes: text('allowed_scopes').array().notNull(),
+  grantTypes: text('grant_types').array().notNull().default(sql`ARRAY['authorization_code']::text[]`),
+  responseTypes: text('response_types').array().notNull().default(sql`ARRAY['code']::text[]`),
+  tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('client_secret_basic'),
+  dpopBoundAccessTokens: boolean('dpop_bound_access_tokens').notNull().default(false),
+  requirePkce: boolean('require_pkce').notNull().default(true),
+  tenantId: text('tenant_id'),
+  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  clientIdIdx: index('oauth_clients_client_id_idx').on(table.clientId),
+  ownerUserIdIdx: index('oauth_clients_owner_user_id_idx').on(table.ownerUserId),
+  tenantIdIdx: index('oauth_clients_tenant_id_idx').on(table.tenantId),
+}));
+
+export const authorizationCodes = pgTable('authorization_codes', {
+  code: text('code').primaryKey(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id'),
+  redirectUri: text('redirect_uri').notNull(),
+  scope: text('scope').notNull(),
+  codeChallenge: text('code_challenge').notNull(),
+  codeChallengeMethod: text('code_challenge_method').notNull(),
+  dpopJkt: text('dpop_jkt'),
+  nonce: text('nonce'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  clientIdIdx: index('authorization_codes_client_id_idx').on(table.clientId),
+  expiresAtIdx: index('authorization_codes_expires_at_idx').on(table.expiresAt),
+  tenantIdIdx: index('authorization_codes_tenant_id_idx').on(table.tenantId),
+  userIdIdx: index('authorization_codes_user_id_idx').on(table.userId),
+}));
+
+export const oauthTokens = pgTable('oauth_tokens', {
+  jti: text('jti').primaryKey(),
+  tokenType: text('token_type').notNull(),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id'),
+  scope: text('scope').notNull(),
+  audience: text('audience').notNull(),
+  dpopJkt: text('dpop_jkt'),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  clientIdIdx: index('oauth_tokens_client_id_idx').on(table.clientId),
+  expiresAtIdx: index('oauth_tokens_expires_at_idx').on(table.expiresAt),
+  tenantIdIdx: index('oauth_tokens_tenant_id_idx').on(table.tenantId),
+  userIdIdx: index('oauth_tokens_user_id_idx').on(table.userId),
+}));
+
+export const oauthDpopProofs = pgTable('oauth_dpop_proofs', {
+  jti: text('jti').primaryKey(),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  expiresAtIdx: index('oauth_dpop_proofs_expires_at_idx').on(table.expiresAt),
+}));
+
+export const revokedTokens = pgTable('revoked_tokens', {
+  jti: text('jti').primaryKey(),
+  clientId: text('client_id').references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id'),
+  revokedAt: timestamp('revoked_at', { withTimezone: false }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+}, (table) => ({
+  clientIdIdx: index('revoked_tokens_client_id_idx').on(table.clientId),
+  expiresAtIdx: index('revoked_tokens_expires_at_idx').on(table.expiresAt),
+  tenantIdIdx: index('revoked_tokens_tenant_id_idx').on(table.tenantId),
+  userIdIdx: index('revoked_tokens_user_id_idx').on(table.userId),
+}));
+
+export const idTokenSigningKeys = pgTable('id_token_signing_keys', {
+  kid: text('kid').primaryKey(),
+  alg: text('alg').notNull().default('EdDSA'),
+  crv: text('crv').notNull().default('Ed25519'),
+  publicJwk: jsonb('public_jwk').notNull(),
+  privateKeyEncrypted: bytea('private_key_encrypted').notNull(),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  rotatedAt: timestamp('rotated_at', { withTimezone: false }),
+}, (table) => ({
+  activeIdx: index('id_token_signing_keys_active_idx').on(table.active),
+  oneActiveIdx: uniqueIndex('id_token_signing_keys_one_active_idx').on(table.active).where(sql`${table.active} = true`),
 }));
 
 export const documentConnectorAccounts = pgTable('document_connector_accounts', {
@@ -470,6 +582,12 @@ export type UserSessionRow = typeof userSessions.$inferSelect;
 export type WebauthnChallengeRow = typeof webauthnChallenges.$inferSelect;
 export type MagicLinkRow = typeof magicLinks.$inferSelect;
 export type EmailVerificationCodeRow = typeof emailVerificationCodes.$inferSelect;
+export type OauthClientRow = typeof oauthClients.$inferSelect;
+export type AuthorizationCodeRow = typeof authorizationCodes.$inferSelect;
+export type OauthTokenRow = typeof oauthTokens.$inferSelect;
+export type OauthDpopProofRow = typeof oauthDpopProofs.$inferSelect;
+export type RevokedTokenRow = typeof revokedTokens.$inferSelect;
+export type IdTokenSigningKeyRow = typeof idTokenSigningKeys.$inferSelect;
 export type DocumentConnectorAccountRow = typeof documentConnectorAccounts.$inferSelect;
 export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
