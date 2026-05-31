@@ -3,6 +3,8 @@ export * from './credential-route-handlers.js';
 export * from './email-verification.js';
 export * from './magic-link.js';
 export * from './middleware.js';
+export * from './oauth/jwks-service.js';
+export * from './oauth/state-store-types.js';
 export * from './ports.js';
 export * from './route-handlers.js';
 export * from './router.js';
