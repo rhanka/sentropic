@@ -45,7 +45,7 @@
 - [x] Lot 0: sync PLAN.md + plan/14d (record BR-37c/37d realization of transition ops)
 - [x] Lot 0: fold handover finalization scope into plan/14e
 - [x] Lot 0: recover interrupted Claude 14e session and fold verified spec decisions into `BRANCH.md` + `plan/14e`
-- [ ] Lot 1: display-name sweep (`Top AI Ideas` -> `Sentropic`, 44 occurrences / 20 files)
+- [x] Lot 1: display-name sweep (`Top AI Ideas` -> `Sentropic`, 44 occurrences / 20 files)
   - [x] Update tests first where assertions pin the old brand: `api/tests/utils/auth-helper.ts`, focused auth/email/report fixtures if present.
   - [x] Update locales `ui/src/locales/fr.json`, `ui/src/locales/en.json`.
   - [x] Update auth email subjects/signatures: `api/src/services/magic-link.ts`, `api/src/services/email-verification.ts`.
@@ -53,7 +53,7 @@
   - [x] Update DOCX report title: `api/src/services/docx-service.ts`.
   - [x] Update extension display strings and document titles: `ui/vscode-ext/package.json`, `ui/vscode-ext/extension.ts`, `ui/chrome-ext/manifest.json`, `ui/chrome-ext/popup.html`, `ui/chrome-ext/sidepanel.html`, `ui/chrome-ext/content.ts`, `ui/chrome-ext/background.ts`, `ui/chrome-ext/extension-auth.ts`.
   - [x] Update web page titles: `ui/src/routes/+layout.svelte`, `ui/src/routes/dashboard/+page.svelte`.
-  - [ ] Gate: `make typecheck-api typecheck-ui ENV=br14e`; `make lint-api lint-ui ENV=br14e`.
+  - [x] Gate: `make typecheck-api typecheck-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`; `make lint-api lint-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`.
 - [ ] Lot 2: machine identity + slug + dead-host fix (`top-ai-ideas` -> `sentropic`)
   - [ ] Update tests first where URLs/package IDs/source markers are asserted: `api/tests/**`, `ui/tests/**`, `e2e/tests/06-settings.spec.ts`, `e2e/tests/fixtures/README.md`.
   - [ ] Apply BR14e-EX1: rename app package names `top-ai-ideas-api` -> `sentropic-api`, `top-ai-ideas-ui` -> `sentropic-ui`; regenerate lockfiles through make/Docker only.
@@ -104,3 +104,4 @@
 - BR14e-EX3: Source image rename across Makefile/compose/CI. Reason: remove residual `top-ai-ideas-*` source images and retag bridge. Impact: a missed image ref can break build/deploy; build and k8s rollout proof required before merge. Rollback: revert Makefile/compose/CI image-name changes. Status: approved by branch plan.
 - BR14e-EX4: Bucket/secret operator path. Reason: old `top-ai-ideas-docs` bucket may remain in sealed runtime config. Impact: live data move requires SCW/cluster credentials and copy-verify-cutover discipline; no DB migration because DB stores bucket-relative keys. Rollback: keep old bucket readable and revert `DOC_STORAGE_BUCKET`. Status: operator handoff unless credentials are explicitly provided.
 - BR14e-F1: Codex adversarial review during Claude session failed/retried due model/account/API instability. Status: documented in `spec/BRANCH_SPEC_EVOL.md`; continue with verified local evidence and normal gates.
+- BR14e-F2: Lot 1 typecheck/lint gates passed with existing warnings only. Commands: `make typecheck-api typecheck-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`; `make lint-api lint-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`. Status: acknowledge.
