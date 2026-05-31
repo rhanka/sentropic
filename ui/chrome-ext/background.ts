@@ -30,7 +30,7 @@ const toolExecutors = createToolExecutors();
 const ALLOWED_PROXY_HOSTS = new Set([
     'localhost',
     '127.0.0.1',
-    'top-ai-ideas-api.sent-tech.ca',
+    'sentropic.sent-tech.ca',
 ]);
 
 const NON_INJECTABLE_URL_PREFIXES = [
