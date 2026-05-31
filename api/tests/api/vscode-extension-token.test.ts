@@ -18,7 +18,7 @@ describe('VSCode extension bootstrap token API', () => {
   beforeEach(async () => {
     admin = await createAuthenticatedUser('admin_app');
     process.env.VSCODE_EXTENSION_DOWNLOAD_URL =
-      'https://downloads.example.com/top-ai-ideas/vscode-ext.vsix';
+      'https://downloads.example.com/sentropic/vscode-ext.vsix';
 
     await db.run(
       sql`DELETE FROM settings WHERE key = ${VSCODE_EXTENSION_TOKEN_META_KEY} AND user_id IS NULL`,
