@@ -167,6 +167,18 @@ export type ChatStreamPort = {
     userId: string;
     fromSeq?: number;
   }): Promise<ChatServerStreamEvent[]>;
+
+  readStreamEvents?(input: {
+    streamId: string;
+    userId: string;
+    sinceSequence?: number;
+  }): Promise<ChatServerStreamEvent[]>;
+
+  isStreamAllowed?(input: {
+    streamId: string;
+    userId: string;
+    workspaceId?: string | null;
+  }): Promise<boolean>;
 };
 
 export type ChatServerDeps = {
@@ -279,6 +291,33 @@ function sseResponse(events: ChatServerStreamEvent[]): Response {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',
     },
+  });
+}
+
+export async function readAppContractStreamEvents(
+  stream: ChatStreamPort,
+  input: {
+    streamId: string;
+    userId: string;
+    workspaceId?: string | null;
+    sinceSequence?: number;
+  },
+): Promise<ChatServerStreamEvent[]> {
+  const allowed = stream.isStreamAllowed
+    ? await stream.isStreamAllowed({
+        streamId: input.streamId,
+        userId: input.userId,
+        workspaceId: input.workspaceId,
+      })
+    : true;
+  if (!allowed) return [];
+  if (!stream.readStreamEvents) {
+    throw new Error('app-contract stream replay requires readStreamEvents');
+  }
+  return stream.readStreamEvents({
+    streamId: input.streamId,
+    userId: input.userId,
+    sinceSequence: input.sinceSequence,
   });
 }
 
@@ -829,6 +868,14 @@ export function createInMemoryChatServerDeps(
           .flatMap((message) => streamEvents.get(message.id) ?? [])
           .filter((event) => event.sequence > (input.fromSeq ?? 0))
           .sort((a, b) => a.sequence - b.sequence);
+      },
+      async readStreamEvents(input) {
+        return (streamEvents.get(input.streamId) ?? [])
+          .filter((event) => event.sequence > (input.sinceSequence ?? 0))
+          .sort((a, b) => a.sequence - b.sequence);
+      },
+      async isStreamAllowed() {
+        return true;
       },
     },
   };

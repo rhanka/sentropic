@@ -252,7 +252,7 @@ Actions with the following status should be included around tasks only if really
           `GET /chat/sessions/:id/{messages,bootstrap}`) + the turn-control routes; the chat SSE slice is
           exposed as a handler/port the app's `/streams/sse` multiplexer can delegate to (BR42a0-E2).
       - [x] Initial `app-contract` HTTP route shape landed (`POST /chat/messages`, messages/bootstrap, turn-control routes).
-      - [ ] App-contract `/streams/sse` chat-slice delegation handler still pending.
+      - [x] App-contract `/streams/sse` chat-slice delegation handler landed via `readAppContractStreamEvents`.
   - [ ] Provide an in-memory/stub GenerationPort + QueuePort (synchronous pump per BR42a0-Q1) + wire the
         chat-core `InMemory.*` stores so the package is runnable with zero infra (used by BR-42a1's generated app).
       - [x] Deterministic high-level in-memory adapter landed for POST → stream replay → bootstrap.
@@ -274,7 +274,7 @@ Actions with the following status should be included around tasks only if really
       - [x] `tests/ports-contract.spec.ts` — `createChatServer` rejects missing/invalid port deps and an
             unknown `routes` value.
       - [x] Scoped runs: `make test-chat-server` (Vitest, node env, standalone-symlink pattern like cowork-bridge)
-            — PASS (3 files, 8 tests).
+            — PASS (3 files, 9 tests).
     - [x] `make build-chat-server` + `make pack-chat-server` (tarball excludes tests/fixtures).
     - [x] Bump `packages/chat-server/package.json` to `0.1.0`.
 
@@ -290,7 +290,7 @@ Actions with the following status should be included around tasks only if really
     - [x] Initial `api/src/routes/api/chat.ts` mount landed for `POST /messages` +
           `GET /sessions/:id/{messages,bootstrap}` using `chatService` + `queueManager` adapters.
     - [ ] Turn-control routes still use the existing api handlers; migrate them into the chat-server mount.
-  - [ ] `api/src/routes/api/streams.ts`: keep the 10-channel multiplexer + the 9 non-chat channels app-local;
+  - [x] `api/src/routes/api/streams.ts`: keep the 10-channel multiplexer + the 9 non-chat channels app-local;
         delegate ONLY the chat-stream draining slice to the chat-server StreamPort handler (BR42a0-E2). No
         org/folder/initiative/lock/presence/workspace/comment logic moves into the package.
   - [ ] REMOVE the now-duplicated chat WIRE/turn implementation from `api/` (no dual paths, no "keep legacy
