@@ -77,6 +77,11 @@ describe('google drive picker utils', () => {
 
     expect(result).toEqual(['file_1', 'file_2']);
     expect(setMimeTypes).toHaveBeenCalledOnce();
+    const mimeTypes = setMimeTypes.mock.calls[0]?.[0] as string;
+    expect(mimeTypes).toContain('image/png');
+    expect(mimeTypes).toContain('image/jpeg');
+    expect(mimeTypes).toContain('image/webp');
+    expect(mimeTypes).toContain('image/gif');
     expect(setIncludeFolders).toHaveBeenCalledWith(false);
     expect(setSelectFolderEnabled).toHaveBeenCalledWith(false);
     expect(setMode).toHaveBeenCalledWith('LIST');

@@ -17,12 +17,31 @@
  */
 export type ChatMessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
+export type ChatMessageAttachmentKind = 'image' | 'file';
+
+export type ChatMessageAttachmentSource = 'context_document' | 'external_url';
+
+export type ChatMessageAttachment = {
+  readonly id?: string;
+  readonly kind: ChatMessageAttachmentKind;
+  readonly source: ChatMessageAttachmentSource;
+  readonly documentId?: string;
+  readonly fileName?: string;
+  readonly mimeType?: string;
+  readonly sizeBytes?: number;
+  readonly url?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly data?: Record<string, unknown>;
+};
+
 export type ChatMessageRow = {
   readonly id: string;
   readonly sessionId: string;
   readonly role: string;
   readonly content: string | null;
   readonly contexts: unknown;
+  readonly attachments: readonly ChatMessageAttachment[] | null;
   readonly toolCalls: unknown;
   readonly toolCallId: string | null;
   readonly reasoning: string | null;
@@ -50,6 +69,7 @@ export type ChatMessageInsert = {
   readonly role: ChatMessageRole | string;
   readonly content: string | null;
   readonly contexts?: unknown;
+  readonly attachments?: readonly ChatMessageAttachment[] | null;
   readonly toolCalls?: unknown;
   readonly toolCallId?: string | null;
   readonly reasoning?: string | null;

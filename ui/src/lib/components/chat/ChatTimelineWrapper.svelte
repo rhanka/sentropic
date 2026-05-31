@@ -7,6 +7,7 @@
 
   export let items: readonly TimelineItem[] = [];
   export let renderUserMessage: Snippet<[TimelineItem]>;
+  export let renderMessageAttachments: Snippet<[TimelineItem]> | undefined = undefined;
   export let renderAssistantSegment: Snippet<[TimelineItem]>;
   export let renderRuntimeSegment: Snippet<[TimelineItem]>;
 </script>
@@ -14,6 +15,7 @@
 <PackageChatTimeline
   {items}
   {renderUserMessage}
+  {renderMessageAttachments}
   {renderAssistantSegment}
   {renderRuntimeSegment}
 />

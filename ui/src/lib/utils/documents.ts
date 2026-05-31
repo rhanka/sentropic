@@ -3,7 +3,7 @@ import { getApiAuthToken, getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 
 export type DocumentContextType = 'organization' | 'folder' | 'initiative' | 'chat_session';
 export const DOCUMENT_UPLOAD_ACCEPT =
-  'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json,.zip,.tar.gz,.tgz,application/zip,application/x-zip-compressed,application/gzip,application/x-gzip,application/x-tar,application/tar';
+  'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json,image/png,image/jpeg,image/webp,image/gif,.zip,.tar.gz,.tgz,application/zip,application/x-zip-compressed,application/gzip,application/x-gzip,application/x-tar,application/tar';
 
 function getUrlBaseForBrowser(): string {
   // In production Docker UI build, API_BASE_URL is typically "/api/v1" (relative)
@@ -46,6 +46,62 @@ export type ContextDocumentItem = {
   updated_at?: string | null;
   job_id?: string;
 };
+
+export function isImageMimeType(mimeType: string | null | undefined): boolean {
+  return typeof mimeType === 'string' && mimeType.trim().toLowerCase().startsWith('image/');
+}
+
+/**
+ * Minimal structural shape of a pending composer attachment draft.
+ * Kept local so this util does not depend on `@sentropic/chat-ui` types.
+ */
+export type ComposerAttachmentLike = {
+  id: string;
+  kind?: 'image' | 'file';
+  documentId?: string;
+  fileName: string;
+  mimeType: string;
+  state: string;
+  previewUrl?: string;
+};
+
+export type UnifiedAttachmentKind = 'image' | 'document';
+
+export type UnifiedAttachmentItem = {
+  key: string;
+  kind: UnifiedAttachmentKind;
+  fileName: string;
+  mimeType: string;
+  status: string;
+  documentId?: string;
+  composerAttachmentId: string;
+  previewUrl?: string;
+};
+
+/**
+ * Build the composer attachment band for the per-message model: only the
+ * pending attachments being composed (images and files). Sent attachments
+ * move into the message bubble; session documents are not re-listed here.
+ */
+export function composerBandItems(
+  composerAttachments: ComposerAttachmentLike[],
+): UnifiedAttachmentItem[] {
+  return composerAttachments.map((att) => ({
+    key: `att:${att.id}`,
+    kind:
+      att.kind === 'file'
+        ? 'document'
+        : att.kind === 'image' || isImageMimeType(att.mimeType)
+          ? 'image'
+          : 'document',
+    fileName: att.fileName,
+    mimeType: att.mimeType,
+    status: att.state,
+    documentId: att.documentId,
+    composerAttachmentId: att.id,
+    previewUrl: att.previewUrl,
+  }));
+}
 
 const GOOGLE_WORKSPACE_MIME_LABELS: Record<string, string> = {
   'application/vnd.google-apps.document': 'Google Docs',

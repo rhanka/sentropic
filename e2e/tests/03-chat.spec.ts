@@ -857,4 +857,96 @@ test.describe('Chat', () => {
     await ensureSessionMenuOpen(page);
   });
 
+  test('attache une image et le modèle vision la décrit (BR38a-FB2)', async ({ page }) => {
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await chatButton.click();
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+
+    // Start from a fresh session so retries / shared-account state don't leave
+    // an active assistant (which flips the send button to "steer").
+    const { sessionMenuButton } = await ensureSessionMenuOpen(page);
+    await page.getByRole('button', { name: sessionNewLabel }).first().click();
+    await sessionMenuButton.click().catch(() => {});
+    await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+
+    // Default model is text-only (gpt-4.1-nano); switch to a vision-capable one.
+    const modelSelect = page.locator('#chat-model-selection');
+    await expect(
+      modelSelect.locator('option[value="openai::gpt-5.4-nano"]')
+    ).toHaveCount(1, { timeout: 10_000 });
+    await modelSelect.selectOption('openai::gpt-5.4-nano');
+
+    // Generate a solid red PNG in the browser and attach it via the "+" menu.
+    const redPngBytes: number[] = await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return [];
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(0, 0, 128, 128);
+      const blob: Blob = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b as Blob), 'image/png')
+      );
+      const buf = await blob.arrayBuffer();
+      return Array.from(new Uint8Array(buf));
+    });
+    expect(redPngBytes.length).toBeGreaterThan(0);
+
+    const plusButton = page.getByRole('button', { name: /Ouvrir le menu|Open menu/i }).first();
+    await plusButton.click();
+    const fileInput = page.locator('#chat-widget-dialog input[type="file"]').first();
+    const [uploadRes] = await Promise.all([
+      page.waitForResponse(
+        (res: any) => {
+          try {
+            const r = res.request();
+            return r.method() === 'POST' && new URL(res.url()).pathname.endsWith('/documents');
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 30_000 }
+      ),
+      fileInput.setInputFiles({
+        name: 'red-square.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from(redPngBytes),
+      }),
+    ]);
+    expect(uploadRes.ok()).toBeTruthy();
+
+    // Pending attachment chip is shown in the composer band.
+    await expect(page.getByTestId('chat-composer-attachment-band')).toBeVisible({ timeout: 10_000 });
+
+    // Send a question about the image; the request must carry the image attachment.
+    const { requestBody, jobId, streamId } = await sendMessageAndWaitApi(
+      page,
+      composer,
+      'What is the dominant color of the attached image? Answer with a single word.'
+    );
+    const sentAttachments = (requestBody?.attachments ?? []) as any[];
+    expect(
+      sentAttachments.some(
+        (a) => a?.kind === 'image' && typeof a?.documentId === 'string' && a.documentId.length > 0
+      )
+    ).toBeTruthy();
+
+    // The vision model must actually describe the image: a red square → "red".
+    const redResponse = assistantBubble(page).filter({ hasText: /red|rouge/i }).last();
+    try {
+      await expect(redResponse).toBeVisible({ timeout: 60_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
+  });
+
 });

@@ -6,6 +6,7 @@ export type ChatTimelineItem = ChatProjectedTimelineItem<any, any>;
 export type ChatTimelineProps = {
   items: readonly ChatTimelineItem[];
   renderUserMessage: Snippet<[ChatTimelineItem]>;
+  renderMessageAttachments?: Snippet<[ChatTimelineItem]>;
   renderAssistantSegment: Snippet<[ChatTimelineItem]>;
   renderRuntimeSegment: Snippet<[ChatTimelineItem]>;
 };

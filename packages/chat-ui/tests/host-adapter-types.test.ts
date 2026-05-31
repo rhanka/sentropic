@@ -9,6 +9,8 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import type {
   AnyHostAdapter,
+  ChatAttachmentHostAdapter,
+  ChatComposerAttachmentDraft,
   ChromeHostAdapter,
   HostAdapter,
   VsCodeHostAdapter,
@@ -71,5 +73,34 @@ describe('HostAdapter union', () => {
       { kind: 'vscode' },
     ];
     expect(adapters.map((a) => a.kind)).toEqual(['web', 'chrome', 'vscode']);
+  });
+
+  it('describes image attachment host callbacks without transport coupling', async () => {
+    const attachment: ChatComposerAttachmentDraft = {
+      id: 'att_1',
+      kind: 'image',
+      source: 'paste',
+      fileName: 'chart.png',
+      mimeType: 'image/png',
+      sizeBytes: 1234,
+      state: 'pending',
+    };
+    const adapter: ChatAttachmentHostAdapter = {
+      acceptMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+      createPreviewUrl: (file) => `blob:${file.name}`,
+      uploadAttachment: async (draft) => ({
+        ...draft,
+        state: 'ready',
+        documentId: 'doc_1',
+      }),
+      removeAttachment: async (draft) => draft.id,
+    };
+
+    expectTypeOf(adapter).toMatchTypeOf<ChatAttachmentHostAdapter>();
+    await expect(adapter.uploadAttachment(attachment)).resolves.toMatchObject({
+      id: 'att_1',
+      state: 'ready',
+      documentId: 'doc_1',
+    });
   });
 });
