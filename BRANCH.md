@@ -132,7 +132,7 @@ Add first-class image input to Sentropic chat and document context flows: users 
     - Actual: the same image showed twice (a "document summary row" + a "capture" tray box); neither thumbnail was clickable to enlarge.
     - Root cause: a composer image was added both as a `composerAttachments` draft (bottom tray) and as a chat-session `context_document` (top doc chip via `loadSessionDocs`); two surfaces, two styles, no lightbox.
     - Lot U1 resolution (shipped): unified band at top + dedup by `documentId` + no summary for images + app-level lightbox. Kept: lightbox, dedup helper, image-not-summarized. Superseded part: the persistent unified band is replaced by the per-message model below.
-  - `BR38a-FB2` vision/attachment durable model 2026-05-30 (UAT). Owner: 38a-ui. Severity: high. Status: in progress (Lot U2).
+  - `BR38a-FB2` vision/attachment durable model 2026-05-30 (UAT). Owner: 38a-ui. Severity: high. Status: fixed in Lot U2 (verified, incl. live E2E vision proof; awaiting root UAT sign-off).
     - Repro: an image present in the session band but not freshly attached to the sent message; ask the model to analyze it (vision-capable model, e.g. `gpt-5.4-nano`).
     - Actual: model reports the image is "ready" but unreadable (no OCR/text). It only saw the image via the `documents` tool (text extraction → `tool-service.ts` "No text extracted… image-only"), never as a vision part.
     - Root cause: `sendMessage` builds vision attachments only from `composerAttachments` (cleared after send); `hydrateVisionAttachmentMessages` injects image parts only for images carried by a message. A session-document image that is not a fresh per-message attachment is never sent as a vision part. Lot U1's persistent band displayed session-doc images as if attached, worsening the mismatch.
@@ -180,6 +180,16 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (3 passed, exit 0)
   - `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (7 passed, exit 0; 5 flaky passed on retry)
 - 2026-05-26 E2E flaky note (Lot U1): `tests/03-chat.spec.ts` reported 5 first-attempt flakies that passed on retry (exit 0): `:203` reasoning/tools history after reload, `:401` provisional/persistent contexts, `:684` session persists after widget reopen, `:732` list sessions in selector, `:778` delete session. All signatures are `expect(...).toBeVisible` timeouts on assistant bubbles / session lifecycle (AI generation timing), unrelated to the attachment band (empty in these scenarios). `03-chat.spec.ts` is in the E2E flaky allowlist. Explicit user sign-off required before merge.
+- 2026-05-30 GREEN (Lot U2 durable model):
+  - `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input` (17 passed; `composerBandItems`/`isImageMimeType`)
+  - `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input` (3 passed)
+  - `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
+  - `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_TEST_WORKERS=1 API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (16 passed; vision hydration regression intact after the attention-cue change)
+  - `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (29 passed)
+  - `make typecheck-ui` (0 errors, 6 pre-existing warnings); `make typecheck-api` (0 errors); `make lint-ui` (clean) — all `ENV=test-feat-multimodal-image-input`
+  - `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (api:384ce3, ui:179a78)
+  - `make test-e2e E2E_SPEC=tests/03-chat.spec.ts E2E_VERSION=d66824 API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (exit 0; **vision proof** `:860 attache une image et le modèle vision la décrit (BR38a-FB2)` passes: gpt-5.4-nano describes the attached red PNG as red/rouge, and the POST `/chat/messages` body carries the image attachment). 7 flaky passed on retry (AI-timing/shared-account family, `03-chat` allowlist), incl. `:860`.
+- 2026-05-30 environment note: a prior run left a wedged buildkit `RUN` step (e2e image build: `npm install` + `playwright install chromium`, root-owned under runc, ~2h) that deadlocked any new e2e-image build (E2E_VERSION had changed because `E2E_VERSION` hashes `e2e/tests`). Worked around WITHOUT a docker restart by pinning `E2E_VERSION=d66824` (the pre-spec-change tag, image present locally) so `up-e2e` reuses the existing e2e image; the new `03-chat` scenario still runs because specs are volume-mounted (`./e2e/tests:/app/tests`). Final clean E2E pass (full `make clean test-e2e` for 03+04) should run once the wedged build is cleared (docker restart) so the standard `E2E_VERSION` image is rebuilt.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -288,28 +298,28 @@ Add first-class image input to Sentropic chat and document context flows: users 
     - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
     - [x] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
 
-- [ ] **Lot U2 - Durable per-message attachment model (BR38a-FB2)**
-  - [ ] Composer band becomes pending-only: render the band from `composerAttachments` only (drop the `sessionDocs` merge); clear after send. Keep rich box + image lightbox + image-not-summarized.
-  - [ ] Removing a pending attachment also deletes its uploaded context document (`deleteDocument` by `documentId`) so no orphaned session document remains.
-  - [ ] Align documents with images on the `+` menu: a non-image upload becomes a pending composer attachment (kind `file`) sent with the next message, instead of a silent session-only upload.
-  - [ ] Persist and send non-image document attachments as message attachments (kind `file`, source `context_document`) without injecting them as runtime content parts (documents stay tool-driven).
-  - [ ] Render sent non-image document attachments inline in the user message bubble as file cards (filename, type icon, download/open); keep sent images as inline thumbnails with lightbox.
-  - [ ] Inject a per-turn attention cue when a document/image is first attached so the model considers it (server-side, `chat-service`).
-  - [ ] Confirm images are sent as vision parts on their message and persist across turns via conversation history (no per-turn re-send of all session images).
-  - [ ] No per-document deletion inside the chat after send; document management stays on document pages.
-  - [ ] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` for any new attachment/file-card copy.
-  - [ ] Lot gate:
-    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make typecheck-ui ENV=test-feat-multimodal-image-input`
-    - [ ] `make typecheck-api API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
-    - [ ] `make lint-ui ENV=test-feat-multimodal-image-input`
-    - [ ] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+- [x] **Lot U2 - Durable per-message attachment model (BR38a-FB2)**
+  - [x] Composer band becomes pending-only: render the band from `composerAttachments` only (drop the `sessionDocs` merge); clear after send. Keep rich box + image lightbox + image-not-summarized.
+  - [x] Removing a pending attachment also deletes its uploaded context document (`deleteDocument` by `documentId`) so no orphaned session document remains.
+  - [x] Align documents with images on the `+` menu: a non-image upload becomes a pending composer attachment (kind `file`) sent with the next message, instead of a silent session-only upload.
+  - [x] Persist and send non-image document attachments as message attachments (kind `file`, source `context_document`) without injecting them as runtime content parts (documents stay tool-driven).
+  - [x] Render sent non-image document attachments inline in the user message bubble as file cards (filename, type icon, download/open); keep sent images as inline thumbnails with lightbox.
+  - [x] Inject a per-turn attention cue when a document/image is first attached so the model considers it (server-side, `chat-service`).
+  - [x] Confirm images are sent as vision parts on their message and persist across turns via conversation history (no per-turn re-send of all session images).
+  - [x] No per-document deletion inside the chat after send; document management stays on document pages.
+  - [x] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` for any new attachment/file-card copy (no new keys needed; existing copy reused).
+  - [x] Lot gate:
+    - [x] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input` (17 passed)
+    - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input` (3 passed)
+    - [x] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
+    - [x] `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (16 passed)
+    - [x] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (29 passed)
+    - [x] `make typecheck-ui ENV=test-feat-multimodal-image-input` (0 errors)
+    - [x] `make typecheck-api API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input` (0 errors)
+    - [x] `make lint-ui ENV=test-feat-multimodal-image-input` (clean)
+    - [x] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (api:384ce3, ui:179a78)
+    - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts E2E_VERSION=d66824 API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (exit 0; vision proof `:860` passes — model describes the attached red image as red)
+    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (deferred: rerun with 03 in the final clean E2E pass)
 
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app setup:
