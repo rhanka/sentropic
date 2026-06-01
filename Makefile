@@ -2082,6 +2082,11 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	echo "Mail config: host=$${MAIL_HOST:-disabled} port=$$MAIL_PORT secure=$$MAIL_SECURE from=$$MAIL_FROM auth=$$MAIL_AUTH_STATUS" ; \
 	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
 	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
+	COWORK_DESKTOP_DOWNLOAD_URL=$$(get COWORK_DESKTOP_DOWNLOAD_URL) ; \
+	COWORK_DESKTOP_VERSION=$$(get COWORK_DESKTOP_VERSION) ; \
+	COWORK_DESKTOP_SOURCE=$$(get COWORK_DESKTOP_SOURCE) ; \
+	COWORK_DESKTOP_PRERELEASE_URL=$$(get COWORK_DESKTOP_PRERELEASE_URL) ; \
+	COWORK_DESKTOP_PRERELEASE_VERSION=$$(get COWORK_DESKTOP_PRERELEASE_VERSION) ; \
 	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-api \
 	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
@@ -2101,6 +2106,11 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=GOOGLE_DRIVE_CLIENT_SECRET="$$GD_CS" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_API_KEY="$$GD_PK" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
+	  --from-literal=COWORK_DESKTOP_DOWNLOAD_URL="$$COWORK_DESKTOP_DOWNLOAD_URL" \
+	  --from-literal=COWORK_DESKTOP_VERSION="$$COWORK_DESKTOP_VERSION" \
+	  --from-literal=COWORK_DESKTOP_SOURCE="$$COWORK_DESKTOP_SOURCE" \
+	  --from-literal=COWORK_DESKTOP_PRERELEASE_URL="$$COWORK_DESKTOP_PRERELEASE_URL" \
+	  --from-literal=COWORK_DESKTOP_PRERELEASE_VERSION="$$COWORK_DESKTOP_PRERELEASE_VERSION" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
 	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(K8S_NAMESPACE)."
 
