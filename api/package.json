@@ -35,6 +35,7 @@
     "db:seed": "tsx src/scripts/db-seed.ts",
     "db:reset": "tsx src/scripts/db-reset.ts",
     "oauth:init-keys": "tsx src/scripts/oauth-init-keys.ts",
+    "oauth:rotate-keys": "tsx src/scripts/oauth-rotate-keys.ts",
     "oauth:seed-clients": "tsx src/scripts/oauth-seed-clients.ts",
     "db:migrate-data": "tsx src/scripts/migrate-usecases-to-data.ts",
     "db:create-indexes": "tsx src/scripts/db-create-indexes.ts",
