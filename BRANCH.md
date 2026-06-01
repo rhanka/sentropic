@@ -335,7 +335,18 @@ Actions with the following status should be included around tasks only if really
         `packages/chat-server/**` addition).
     - [x] Makefile validation targets landed: `typecheck-chat-server`, `test-chat-server`,
           `build-chat-server`, `pack-chat-server`; `API_VERSION` includes `packages/chat-server/**`.
-    - [ ] Makefile publish targets + `.github/workflows/ci.yml` filters/jobs still pending.
+    - [x] Makefile publish targets landed: `publish-chat-server` (OIDC) and `publish-chat-server-token`
+          (bootstrap).
+    - [x] `.github/workflows/ci.yml` landed: `bootstrap_publish_target=chat-server`, `chat_server` and
+          `chat_server_publish` filters, `packages/chat-server/**` in the `api` filter, `validate-chat-server`,
+          steady-state OIDC `publish-chat-server`, and bootstrap publish step.
+    - [x] Publish-lane local verification:
+          `make -n publish-chat-server ENV=test-feat-chat-server`,
+          `make -n publish-chat-server-token NPM_TOKEN_FILE=/tmp/sentropic-missing-token ENV=test-feat-chat-server`,
+          `make typecheck-chat-server ENV=test-feat-chat-server`,
+          `make test-chat-server ENV=test-feat-chat-server`,
+          `make pack-chat-server ENV=test-feat-chat-server`
+          — PASS (3 files, 9 tests; tarball total files 7).
   - [ ] **E2E + full api matrix**:
     - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-feat-chat-server`
     - [ ] Run the chat-relevant e2e groups (cf. `.github/workflows/ci.yml` e2e split) +
