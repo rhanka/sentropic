@@ -144,6 +144,8 @@ Turn `@sentropic/auth-hono` into a standard OAuth2 + OpenID Connect Identity Pro
 - `BR39c-T4` `noted` (2026-06-01): After production `make build-api`, `make typecheck-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc` ran against the pruned production image and returned `tsc: not found`; recovery through `make up-api-test ... ENV=test-feat-auth-oidc` hit the already documented `packages/auth-hono/node_modules/jose` permission-denied cleanup issue. Earlier `make typecheck-api` and final `make build-api` passed; Lot N still owns the full final API gates.
 - `BR39c-T5` `fixed` (2026-06-01): Root UAT OAuth callback showed `Network request failed` after consent even though the redirect URL contained an authorization code. Root cause: root `/.well-known/openid-configuration` and `/.well-known/jwks.json` forward raw `Response` objects from the well-known router, so actual CORS headers set before `next()` were lost on those final responses. Fix: apply actual-request CORS headers after `await next()` on `c.res.headers`, and add well-known regression coverage for CORS. Verified with `make test-api-unit SCOPE=tests/api/auth/oauth-wellknown.test.ts API_PORT=8797 UI_PORT=5183 MAILDEV_UI_PORT=1093 ENV=test-39c-auth-oidc`, `make test-api-security SCOPE=tests/security/cors-security.test.ts API_PORT=8797 UI_PORT=5183 MAILDEV_UI_PORT=1093 ENV=test-39c-auth-oidc`, and root UAT `/.well-known/*` headers returning `Access-Control-Allow-Origin: http://localhost:5173`.
 - `BR39c-UAT1` `accepted` (2026-06-01): User confirmed root UAT quick path OK after the CORS fix: discovery OK, JWKS OK, passkey login OK, mock RP consent OK, callback token JSON OK with `access_token`, `token_type`, `id_token`, and `scope`. Live `/userinfo`, token revocation, and broader auth non-regression checks remain covered by automated API/E2E gates unless explicitly requested for manual UAT.
+- `BR39c-EX4` `decided` (2026-06-01): Allow minimal addition of `make oauth-init-keys` and `make oauth-rotate-keys` targets to `Makefile`. Reason: Lot N-1 runbook documents `make oauth-rotate-keys` as the canonical ops command for key rotation; without the target the runbook points to a non-existent command. Impact: two new `.PHONY` targets at end of file, each a single one-liner delegating to `docker compose exec api npm run oauth:*`; no existing target modified. Rollback: remove the two target blocks.
+- `BR39c-D34` `decided` (2026-06-01): Operational secrets runbook at `docs/secrets.md`. Documents `OAUTH_SIGNING_KEK` purpose, generation (`openssl rand -base64 32`), KEK rotation cadence (90 days), signing-key rotation cadence (monthly recommended, via `make oauth-rotate-keys`), Kubernetes SealedSecret location (`deploy/k8s/05-sealed-sentropic-api.yaml`), GitHub Actions environment secret, and dev/test fallback policy.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -428,18 +430,20 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - [ ] Existing `/auth/devices` still lists / renames / revokes credentials.
     - [ ] Existing magic-link verify at `/auth/magic-link/verify` still works.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` row 24 (`@sentropic/auth-hono`) to add: "+ OAuth2/OIDC IdP surface (BR-39c): `/oauth/{authorize,token,userinfo,revoke,introspect}` + `/.well-known/openid-configuration` + `/.well-known/jwks.json`; PKCE-only auth-code grant; Ed25519 JWT signing with JWKS rotation; DPoP opt-in per client (RFC 9449); `OauthStateStorePort` + `JwksPort` for storage abstraction; `acr` + `auth_time` claims emitted from passkey login for 39j step-up consumers." Update version reference to 0.3.0.
-  - [ ] Update row 25 (`@sentropic/auth-ui`) to add: "+ `<OAuthConsent />` Svelte component + `oauth-client.ts` RP-side helper with PKCE + optional DPoP keypair management (BR-39c)." Update version to 0.3.0.
-  - [ ] Update `packages/auth-hono/README.md`:
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` row 24 (`@sentropic/auth-hono`) to add: "+ OAuth2/OIDC IdP surface (BR-39c): `/oauth/{authorize,token,userinfo,revoke,introspect}` + `/.well-known/openid-configuration` + `/.well-known/jwks.json`; PKCE-only auth-code grant; Ed25519 JWT signing with JWKS rotation; DPoP opt-in per client (RFC 9449); `OauthStateStorePort` + `JwksPort` for storage abstraction; `acr` + `auth_time` claims emitted from passkey login for 39j step-up consumers." Update version reference to 0.3.0.
+  - [x] Update row 25 (`@sentropic/auth-ui`) to add: "+ `<OAuthConsent />` Svelte component + `oauth-client.ts` RP-side helper with PKCE + optional DPoP keypair management (BR-39c)." Update version to 0.3.0.
+  - [x] Update `packages/auth-hono/README.md`:
     - Add `## OAuth2 / OIDC IdP` section with quick-start recipe, ports diagram, and a worked example mounting the OAuth router + well-known router.
     - Document DPoP opt-in flow and how the host wires the consent URL.
-  - [ ] Update `packages/auth-ui/README.md`:
-    - Add `## <OAuthConsent /> Component` section with props/slots/labels.
-    - Add `## oauth-client.ts Helper` section with API surface and DPoP example.
-  - [ ] Append OAuth2 flow diagram to `spec/WORKFLOW_AUTH.md`.
-  - [ ] Integrate `spec/SPEC_BR39c_OAUTH_OIDC_IDP.md` content into the two specs above (boundaries + workflow), then `git rm spec/SPEC_BR39c_OAUTH_OIDC_IDP.md`.
-  - [ ] Commit: `docs(BR-39c): Lot N-1 spec + readme consolidation`.
+  - [x] Update `packages/auth-ui/README.md`:
+    - Add `## OAuth Consent + RP Client Helper` section with props/slots/labels and `createOAuthClient` API surface and DPoP example.
+  - [x] Append OAuth2 flow diagram to `spec/WORKFLOW_AUTH.md`.
+  - [x] Integrate `spec/SPEC_BR39c_OAUTH_OIDC_IDP.md` content into the two specs above (boundaries + workflow), then `git rm spec/SPEC_BR39c_OAUTH_OIDC_IDP.md`.
+  - [x] Add `docs/secrets.md` with `OAUTH_SIGNING_KEK` runbook (BR39c-D34).
+  - [x] Add `make oauth-init-keys` + `make oauth-rotate-keys` to `Makefile` (BR39c-EX4).
+  - [x] Add `api/src/scripts/oauth-rotate-keys.ts` + `oauth:rotate-keys` script in `api/package.json`.
+  - [x] Commit: `docs(BR-39c): Lot N-1 spec + readme consolidation`.
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint:
