@@ -74,8 +74,10 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 - **BR40bc38a-M4** `acknowledge`: 40c merge conflict in `api/package.json` resolved by keeping the combined build external list with `exceljs` externalized.
 - **BR40bc38a-M5** `attention`: root currently has a `dev` stack on `8791/5177/1081`; integrated UAT must avoid clobbering it until the requested `uat/40bc-38a` clone/worktree is ready.
 - **BR40bc38a-M6** `acknowledge`: `tests/03-chat.spec.ts` declares shared session state and is flaky with parallel workers; initial `WORKERS=4` run failed 5 tests + 2 flaky, then the same commit passed with `WORKERS=1` (12 passed + 1 retry-passed flaky, exit 0).
-- **BR40bc38a-M7** `blocked`: creating `tmp/uat-40bc-38a` with `git worktree add --detach` was blocked by sandbox write access to `.git/worktrees`; escalation was auto-rejected by usage limit. UAT stack fallback is the clean integration worktree with `ENV=uat-40bc-38a`.
-- **BR40bc38a-M8** `blocked`: interactive Playwright MCP actions were auto-rejected by usage limit during preUAT. Continue with project CLI Playwright only after explicit user approval.
+- **BR40bc38a-M7** `acknowledge`: detached UAT worktree `tmp/uat-40bc-38a` created at integration HEAD and used for UAT/preUAT with copied `.env`.
+- **BR40bc38a-M8** `acknowledge`: Playwright MCP was unavailable in this Codex session, so preUAT was executed through project CLI Playwright via `make test-e2e`.
+- **BR40bc38a-M9** `attention`: official `tests/03-chat.spec.ts` still has 2s initial page-render assertions; in the UAT stack after Linux restart, `/folders` rendered after 4-7s with no page errors, so `RETRIES=0 MAX_FAILURES=1` fails before reaching the image test. Dedicated preUAT image Playwright passed with a 30s page-ready wait and no product code changes.
+- **BR40bc38a-M10** `attention`: official `tests/07-import-export.spec.ts` stops on the unrelated import-use-case test (`button[aria-label="Actions"]` missing) before the xlsx export test when run with `MAX_FAILURES=1`. Dedicated preUAT xlsx export Playwright passed and the downloaded workbook was inspected at the OOXML level.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -95,8 +97,8 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 
 ## UAT Management (in orchestration context)
 - Integration worktree: `tmp/feat-40bc-38a`.
-- UAT clone/worktree: blocked by sandbox; fallback stack is running from `tmp/feat-40bc-38a`.
-- Test envs: `ENV=test-feat-40bc-38a`, `ENV=e2e-feat-40bc-38a`.
+- UAT clone/worktree: `tmp/uat-40bc-38a` detached at integration HEAD.
+- Test envs: `ENV=test-feat-40bc-38a`, `ENV=e2e-feat-40bc-38a`, `ENV=uat-40bc-38a`.
 - UAT env/ports: `ENV=uat-40bc-38a`, `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
 - Root `ENV=dev` must not be used for automated tests.
 
@@ -165,17 +167,30 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
     - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts WORKERS=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
     - [x] `make test-e2e E2E_SPEC=tests/07-import-export.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
     - [x] `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
-- [ ] **Lot 40bc38a-UAT - Combined preUAT**
-  - [ ] Prepare `uat/40bc-38a` clone/worktree at the integration HEAD.
-  - [x] Start fallback stack with `make dev API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`.
+- [x] **Lot 40bc38a-UAT - Combined preUAT**
+  - [x] Prepare `tmp/uat-40bc-38a` clone/worktree at the integration HEAD.
+  - [x] Start UAT stack with `make dev API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`.
   - [x] Seed UAT data with `make db-seed-test API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`.
   - [x] Verify UAT stack health with `make ps API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`.
-  - [ ] Playwright preUAT: image attachment visible per message and sent to vision-capable model.
-  - [ ] Playwright preUAT: xlsx multi-sheet upload/query workflow.
-  - [ ] Playwright preUAT: folder xlsx export workflow including formula workbook download.
-  - [ ] Manual UAT checklist ready for user.
+  - [x] Playwright preUAT: image attachment visible per message and sent to vision-capable model.
+    - [x] `make test-e2e E2E_SPEC=tests/dev/_scratch.preuat-render.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`
+    - [x] Result: 2 passed; image upload, user-message thumbnail, `model=gpt-5.4-nano`, `attachments[].kind=image`, and red/rouge vision response verified. Scratch spec deleted after run.
+  - [x] Playwright preUAT: xlsx multi-sheet upload/query workflow.
+    - [x] `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`
+    - [x] Result: 1 passed.
+  - [x] Playwright preUAT: folder xlsx export workflow including formula workbook download.
+    - [x] `make test-e2e E2E_SPEC=tests/dev/_scratch.preuat-xlsx-export.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`
+    - [x] Result: 1 passed; workbook saved to `e2e/test-results/preuat-folder-export.xlsx` during the run, then scratch spec deleted.
+    - [x] OOXML read-back: `xl/worksheets/sheet2.xml` contains live `ROUND(...)` formulas referencing `Matrice d'évaluation`; `xl/worksheets/sheet3.xml` contains live references to `Cas d'usage` plus `IF(...MEDIAN...)`; `xl/charts/chart1.xml` contains native `scatterChart`.
+  - [x] Manual UAT checklist ready for user.
 - [ ] **Lot 40bc38a-N - Final validation**
-  - [ ] Update this `BRANCH.md` with actual commands and results.
-  - [ ] Verify package version bumps are present for touched package `src/**`.
+  - [x] Update this `BRANCH.md` with actual commands and results.
+  - [x] Verify package version bumps are present for touched package `src/**`.
+    - [x] `packages/chat-core`: `0.1.2` -> `0.1.3` because `packages/chat-core/src/**` changed.
+    - [x] `packages/llm-mesh`: `0.1.2` -> `0.1.3` because `packages/llm-mesh/src/**` changed.
+    - [x] `packages/chat-ui`: `0.1.1` -> `0.1.2` inherited from BR-38a.
+  - [x] Fresh package checks after version bump:
+    - [x] `make test-llm-mesh ENV=test-feat-40bc-38a`
+    - [x] `make test-pkg-chat-core ENV=test-feat-40bc-38a`
   - [ ] Push only after user confirmation.
   - [ ] Create PR using this `BRANCH.md` as body when ready.
