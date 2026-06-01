@@ -74,6 +74,8 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 - **BR40bc38a-M4** `acknowledge`: 40c merge conflict in `api/package.json` resolved by keeping the combined build external list with `exceljs` externalized.
 - **BR40bc38a-M5** `attention`: root currently has a `dev` stack on `8791/5177/1081`; integrated UAT must avoid clobbering it until the requested `uat/40bc-38a` clone/worktree is ready.
 - **BR40bc38a-M6** `acknowledge`: `tests/03-chat.spec.ts` declares shared session state and is flaky with parallel workers; initial `WORKERS=4` run failed 5 tests + 2 flaky, then the same commit passed with `WORKERS=1` (12 passed + 1 retry-passed flaky, exit 0).
+- **BR40bc38a-M7** `blocked`: creating `tmp/uat-40bc-38a` with `git worktree add --detach` was blocked by sandbox write access to `.git/worktrees`; escalation was auto-rejected by usage limit. UAT stack fallback is the clean integration worktree with `ENV=uat-40bc-38a`.
+- **BR40bc38a-M8** `blocked`: interactive Playwright MCP actions were auto-rejected by usage limit during preUAT. Continue with project CLI Playwright only after explicit user approval.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -93,9 +95,9 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 
 ## UAT Management (in orchestration context)
 - Integration worktree: `tmp/feat-40bc-38a`.
-- UAT clone/worktree: `uat/40bc-38a` after integration gates.
+- UAT clone/worktree: blocked by sandbox; fallback stack is running from `tmp/feat-40bc-38a`.
 - Test envs: `ENV=test-feat-40bc-38a`, `ENV=e2e-feat-40bc-38a`.
-- Proposed UAT ports: `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
+- UAT env/ports: `ENV=uat-40bc-38a`, `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
 - Root `ENV=dev` must not be used for automated tests.
 
 ## Plan / Todo (lot-based)
@@ -165,7 +167,9 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
     - [x] `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
 - [ ] **Lot 40bc38a-UAT - Combined preUAT**
   - [ ] Prepare `uat/40bc-38a` clone/worktree at the integration HEAD.
-  - [ ] Start stack on `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
+  - [x] Start fallback stack with `make dev API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`.
+  - [x] Seed UAT data with `make db-seed-test API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`.
+  - [x] Verify UAT stack health with `make ps API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=uat-40bc-38a`.
   - [ ] Playwright preUAT: image attachment visible per message and sent to vision-capable model.
   - [ ] Playwright preUAT: xlsx multi-sheet upload/query workflow.
   - [ ] Playwright preUAT: folder xlsx export workflow including formula workbook download.
