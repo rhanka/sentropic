@@ -67,14 +67,14 @@
   - [x] Remove now-unneeded CI retag bridge while keeping k8s image names/tags stable.
   - [x] Verify `deploy/k8s/30-api.yaml` and `deploy/k8s/40-ui.yaml` already reference `sentropic-*`.
   - [x] Gate: `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`.
-- [ ] Lot 4: tests/fixtures + full local gates
+- [x] Lot 4: tests/fixtures + full local gates
   - [x] Update all remaining brand/slug fixtures in `api/tests/**`, `ui/tests/**`, `e2e/tests/**`, including download URL assertions and fixture docs.
   - [x] Verify no `.com` vs `.ca` assertion is accidentally changed without behavior reason.
   - [x] Run `make typecheck-api typecheck-ui ENV=br14e`.
   - [x] Run `make lint-api lint-ui ENV=br14e`.
   - [x] Run `make test-api ENV=test-br14e`.
   - [x] Run `make test-ui ENV=test-br14e`.
-  - [ ] Run `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`.
+  - [x] Run `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`.
 - [x] Lot 5: living docs + generated/historical exclusions
   - [x] Update living docs only: `README.md`, `TODO.md`, non-historical `TRANSITION.md` lines.
   - [x] Exclude historical evidence docs and generated `.graphify/**` from manual rebrand.
@@ -90,7 +90,7 @@
   - [x] `make lint-api lint-ui ENV=br14e`
   - [x] `make test-api ENV=test-br14e`
   - [x] `make test-ui ENV=test-br14e`
-  - [ ] `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`
+  - [x] `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`
   - [ ] `make clean test-e2e API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=e2e-br14e`
   - [ ] UAT web: landing/login titles, magic-link and verification emails, DOCX report title show `Sentropic`.
   - [ ] UAT Chrome: rebuilt extension displays `Sentropic`, config resolves `sentropic.sent-tech.ca`, auth and tab-tool round-trip work after storage-key reset.
@@ -119,3 +119,4 @@
 - BR14e-F14: Lint gate ordering bug fixed. Commands: RED then GREEN `make test-ui SCOPE=tests/utils/sentropic-infra-contract.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; final `make lint-api lint-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e` passed. Status: acknowledge; `lint-api` now depends on `prepare-node-workspace` and runs through `docker-compose.dev.yml`; API lint reports existing warnings only (178 warnings, 0 errors).
 - BR14e-F15: Full API test gate hook-timeout bug fixed. Commands: initial `make test-api API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e` failed only on `tests/api/workspace-types.test.ts` because the `beforeEach` hook exceeded Vitest's 10s hook timeout; targeted `make test-api-unit SCOPE=tests/api/workspace-types.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e` passed after adding `hookTimeout: 60000`; final `make test-api API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e` passed. Status: acknowledge; final sub-suite totals were smoke 2 files / 6 tests, unit 63 files / 505 passed / 1 skipped, endpoints 59 files / 442 tests, queue 4 files / 20 tests, security 6 files / 49 tests, AI 9 files / 30 tests, limit 1 file / 4 tests.
 - BR14e-F16: Full UI test gate passed. Commands: `make down API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e` to free the UI port; `make test-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`. Status: acknowledge; UI Vitest passed 72 files / 430 tests.
+- BR14e-F17: Production build gate passed. Commands: `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`. Status: acknowledge; API and UI production images build as `sentropic-api` and `sentropic-ui`; existing Svelte accessibility/unused-export warnings and Vite chunk-size warnings remain non-blocking.
