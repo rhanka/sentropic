@@ -21,7 +21,6 @@ import {
   oauthDpopProofs,
   oauthTokens,
   revokedTokens,
-  idTokenSigningKeys,
   chatContexts,
   chatMessages,
   chatSessions,
@@ -35,6 +34,7 @@ import {
   viewTemplates,
   ADMIN_WORKSPACE_ID,
 } from '../../src/db/schema.js';
+import { createJwksAdapter } from '../../src/services/auth/jwks-adapter.js';
 import { seedOAuthClients } from '../../src/services/auth/oauth-client-seed.js';
 import { testMatrix } from './test-data.js';
 
@@ -66,7 +66,6 @@ export async function seedTestData() {
     await db.delete(oauthDpopProofs);
     await db.delete(revokedTokens); // Depends on oauth_clients/users
     await db.delete(oauthClients); // May depend on users via owner_user_id
-    await db.delete(idTokenSigningKeys);
     await db.delete(webauthnCredentials); // Depends on users
     await db.delete(webauthnChallenges); // Depends on users
     await db.delete(magicLinks); // Depends on users
@@ -196,6 +195,14 @@ export async function seedTestData() {
 
     const oauthClientsSeeded = await seedOAuthClients();
     console.log(`✅ OAuth clients seeded (${oauthClientsSeeded.map((client) => client.clientId).join(', ')})`);
+    const jwks = createJwksAdapter();
+    const activeSigningKey = await jwks.getActiveKey();
+    if (activeSigningKey) {
+      console.log(`✅ OAuth signing key available (${activeSigningKey.kid})`);
+    } else {
+      const createdSigningKey = await jwks.generateAndStoreNewKey({ kid: 'e2e-oauth-signing-key' });
+      console.log(`✅ OAuth signing key initialized (${createdSigningKey.kid})`);
+    }
 
     await db.insert(workspaceMemberships).values([
       { workspaceId: E2E_WS_ADMIN, userId: E2E_ADMIN_ID, role: 'admin', createdAt: now },

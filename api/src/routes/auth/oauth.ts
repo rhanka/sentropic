@@ -18,7 +18,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { jwtVerify, SignJWT } from 'jose';
 
-import { env } from '../../config/env';
+import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
 import { emailVerificationCodes, magicLinks, userSessions, users } from '../../db/schema';
 import { logger } from '../../logger';
@@ -392,7 +392,7 @@ const toAuthHonoSessionRecord = (row: typeof userSessions.$inferSelect): AuthHon
 
 const resolveOAuthStateSecret = (): string => {
   const secret = env.JWT_SECRET ?? env.OAUTH_SIGNING_KEK;
-  if (!secret && env.NODE_ENV === 'production') {
+  if (!secret && requiresOAuthProductionSecrets()) {
     throw new Error('JWT_SECRET or OAUTH_SIGNING_KEK is required for OAuth state sealing in production.');
   }
   return secret ?? 'dev-secret-key-change-in-production-please';

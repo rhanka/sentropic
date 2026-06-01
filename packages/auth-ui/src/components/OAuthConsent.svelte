@@ -17,7 +17,7 @@
     transport: OAuthConsentTransport;
   }
 
-  let { labels, onError, onRedirect, state, transport }: Props = $props();
+  let { labels, onError, onRedirect, state: consentState, transport }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultOAuthConsentLabels(labels ?? {}));
 
@@ -32,7 +32,7 @@
     loading = true;
     error = '';
     try {
-      details = await transport.getConsent({ state });
+      details = await transport.getConsent({ state: consentState });
     } catch (cause) {
       handleError(createAuthUiError('transport_error', resolvedLabels.errorGeneric, { cause }));
     } finally {
@@ -44,7 +44,7 @@
     submitting = decision;
     error = '';
     try {
-      const result = await transport.submitConsentDecision({ decision, state });
+      const result = await transport.submitConsentDecision({ decision, state: consentState });
       onRedirect?.(result.redirectTo);
     } catch (cause) {
       handleError(createAuthUiError('transport_error', resolvedLabels.errorGeneric, { cause }));
