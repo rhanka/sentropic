@@ -7,6 +7,7 @@ import { runInit, type InitDeps } from '../src/commands/init.js';
 import { parseInitOptions, type InitOptions } from '../src/commands/options.js';
 import type { ProcessCommand, ProcessResult, ProcessRunner } from '../src/commands/process.js';
 import { TINY_FIXTURE_MANIFEST } from './fixtures/tiny-manifest.js';
+import { loadChatAppManifest } from '../src/manifest/chat-app.js';
 
 let dir: string;
 let logs: string[];
@@ -118,6 +119,76 @@ describe('runInit — full materialise', () => {
         await runInit(options({ git: true }), deps({ runner }));
         const gitCmds = calls.filter((c) => c.file === 'git').map((c) => c.args[0]);
         expect(gitCmds).toEqual(['init', 'add', 'commit']);
+    });
+});
+
+describe('runInit — materialise the REAL chat-app template', () => {
+    function realDeps(extra: Partial<InitDeps> = {}): InitDeps {
+        return {
+            manifest: loadChatAppManifest(),
+            log: (l) => logs.push(l),
+            ports: { api: 9211, ui: 5411, maildev: 1311 },
+            ...extra,
+        };
+    }
+
+    it('writes the full app tree (api + ui + tooling)', async () => {
+        const result = await runInit(options(), realDeps());
+        const tree = (await readdir(result.targetDir)).sort();
+        // .gitignore is materialised from the dotfile-safe _gitignore source.
+        expect(tree).toContain('.gitignore');
+        expect(tree).toContain('.env.example');
+        expect(tree).toContain('package.json');
+        expect(tree).toContain('docker-compose.yml');
+        expect(tree).toContain('Makefile');
+        expect(tree).toContain('LICENSE');
+        expect(tree).toContain('api');
+        expect(tree).toContain('ui');
+        expect(existsSync(join(result.targetDir, 'api/src/server.ts'))).toBe(true);
+        expect(existsSync(join(result.targetDir, 'ui/src/App.svelte'))).toBe(true);
+        // The dotfile-safe source name must NOT leak into the scaffold.
+        expect(tree).not.toContain('_gitignore');
+    });
+
+    it('backend mounts @sentropic/chat-server canonical routes', async () => {
+        const result = await runInit(options(), realDeps());
+        const server = await readFile(join(result.targetDir, 'api/src/server.ts'), 'utf8');
+        expect(server).toContain("from '@sentropic/chat-server'");
+        expect(server).toContain('createChatServer(');
+        expect(server).toContain("routes: 'canonical'");
+        expect(server).not.toMatch(/Sec-Sentropic-Wire-Version/i);
+    });
+
+    it('generated .gitignore excludes .env and no .env file is emitted', async () => {
+        const result = await runInit(options(), realDeps());
+        const gitignore = await readFile(join(result.targetDir, '.gitignore'), 'utf8');
+        expect(gitignore.split('\n')).toContain('.env');
+        expect(existsSync(join(result.targetDir, '.env'))).toBe(false);
+    });
+
+    it('pins the published @sentropic/* versions in the generated package.json', async () => {
+        const result = await runInit(options(), realDeps());
+        const pkg = JSON.parse(await readFile(join(result.targetDir, 'package.json'), 'utf8')) as {
+            name: string;
+            dependencies: Record<string, string>;
+        };
+        expect(pkg.name).toBe('demo');
+        expect(pkg.dependencies['@sentropic/chat-server']).toBe('^0.1.0');
+        expect(pkg.dependencies['@sentropic/chat-ui']).toBe('^0.1.1');
+        expect(pkg.dependencies['@sentropic/design-system-svelte']).toBe('^0.10.3');
+    });
+
+    it('bakes the deterministic assistant reply (offline) into the backend', async () => {
+        const result = await runInit(options({ name: 'demo' }), realDeps());
+        const server = await readFile(join(result.targetDir, 'api/src/server.ts'), 'utf8');
+        expect(server).toContain('Hello from demo');
+    });
+
+    it('compose project name is the app slug on non-reserved ports', async () => {
+        const result = await runInit(options(), realDeps());
+        const compose = await readFile(join(result.targetDir, 'docker-compose.yml'), 'utf8');
+        expect(compose).toContain('name: demo');
+        expect(compose).not.toMatch(/\b8787\b|\b5173\b|\b1080\b/);
     });
 });
 
