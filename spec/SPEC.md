@@ -19,6 +19,7 @@
   - 4.2) Agent/prompt architecture
   - 4.3) Prompt and endpoint mapping
   - 4.4) Workspace-type-aware chat tool scoping
+  - 4.5) Reusable chat server boundary
 - [5) SvelteKit UI (static build, i18n FR/EN)](#5-sveltekit-ui-static-build-i18n-fren)
 - [6) DevOps & Tooling (Docker, Make, CI/CD)](#6-devops--tooling-docker-make-cicd)
 
@@ -777,6 +778,20 @@ Tool availability is a function of `(workspace_type, context_type, role)`:
    - `neutral`: cross-workspace tools only (`dispatch_todo`, `workspaces_list`, `initiative_search_cross_workspace`)
 
 Implementation: `workspace_type` parameter added to `buildChatGenerationContext()` tool resolution. Tool definitions in `tools.ts`, selection is workspace-type-aware. Client-side `chat-tool-scope.ts` includes workspace-type filtering.
+
+### 4.5) Reusable chat server boundary
+
+The API chat wire and turn-control implementation is mounted from `@sentropic/chat-server`. The package
+wraps `@sentropic/chat-core` ports behind a Hono route factory:
+
+- `routes: 'app-contract'` preserves the existing Sentropic API shape (`POST /api/v1/chat/messages`,
+  session messages/bootstrap routes, turn controls, and global SSE chat-slice delegation).
+- `routes: 'canonical'` serves the generated-app / `@sentropic/chat-ui` shape (`POST
+  /chat/sessions/:id/messages`, `GET /chat/sessions/:id/stream`, `GET /chat/sessions/:id/bootstrap`).
+- The package owns route bodies and explicit generation/queue/stream ports. The host API owns
+  Drizzle/Postgres/NOTIFY/presence adapters, `/tool-permissions`, and all non-chat SSE channels.
+- First publish uses the package bootstrap path, then npm trusted publishing handles steady-state OIDC
+  releases.
 
 ## 5) SvelteKit UI (static build, i18n FR/EN)
 

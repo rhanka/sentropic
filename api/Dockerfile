@@ -52,6 +52,7 @@ COPY package.json package-lock.json* ./
 COPY api/package.json ./api/package.json
 COPY ui/package.json ./ui/package.json
 COPY packages/auth-hono/package.json ./packages/auth-hono/package.json
+COPY packages/chat-server/package.json ./packages/chat-server/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
 COPY packages/flow/package.json ./packages/flow/package.json
 COPY packages/skills/package.json ./packages/skills/package.json
