@@ -91,7 +91,7 @@ describe('streamHub', () => {
     streamHub.delete('test-key-2');
     streamHub.delete('test-key-3');
     streamHub.delete('test-key-vscode');
-    delete (window as any).__TOPAI_VSCODE_RUNTIME__;
+    delete (window as any).__SENTROPIC_VSCODE_RUNTIME__;
     vi.useRealTimers();
     vi.clearAllTimers();
   });
@@ -490,7 +490,7 @@ describe('streamHub', () => {
   });
 
   it('should use vscode stream proxy port when runtime.connect is available', async () => {
-    (window as any).__TOPAI_VSCODE_RUNTIME__ = {
+    (window as any).__SENTROPIC_VSCODE_RUNTIME__ = {
       apiBaseUrl: 'http://localhost:8787/api/v1',
       sessionToken: 'token-vscode',
     };
@@ -528,7 +528,7 @@ describe('streamHub', () => {
 
     (window as any).chrome = {
       runtime: {
-        id: 'topai.vscode.runtime',
+        id: 'sentropic.vscode.runtime',
         connect: connectMock,
       },
     };
