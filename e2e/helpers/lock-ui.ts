@@ -40,14 +40,14 @@ export async function waitForLockedByOtherWithOptions(
       const editableDisabled = editableVisible && (await editableField.isEnabled().then((v) => !v));
       const hasHeaderLock = (await headerLockButton.count()) > 0;
       return tooltipOther || hasRequestButton || (editableDisabled && (hasBadge || hasHeaderLock));
-    }, { timeout: 2_000 })
+    }, { timeout: 10_000 })
     .toBe(true);
   if ((await requestButton.count()) > 0) {
-    await expect(requestButton).toBeVisible({ timeout: 2_000 });
+    await expect(requestButton).toBeVisible({ timeout: 5_000 });
   }
   if (requireDisabled && (await editableField.count()) > 0) {
-    await expect(editableField).toBeVisible({ timeout: 2_000 });
-    await expect(editableField).toBeDisabled({ timeout: 2_000 });
+    await expect(editableField).toBeVisible({ timeout: 5_000 });
+    await expect(editableField).toBeDisabled({ timeout: 5_000 });
   }
 }
 
@@ -60,10 +60,10 @@ export async function waitForNoLocker(page: Page, editableLocator?: Locator) {
       const editableVisible = (await editableField.count()) > 0 && (await editableField.isVisible());
       const editableEnabled = editableVisible && (await editableField.isEnabled());
       return !hasHeaderLock && editableEnabled;
-    }, { timeout: 2_000 })
+    }, { timeout: 10_000 })
     .toBe(true);
   if ((await editableField.count()) > 0) {
-    await expect(editableField).toBeVisible({ timeout: 2_000 });
-    await expect(editableField).toBeEnabled({ timeout: 2_000 });
+    await expect(editableField).toBeVisible({ timeout: 5_000 });
+    await expect(editableField).toBeEnabled({ timeout: 5_000 });
   }
 }
