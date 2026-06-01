@@ -323,11 +323,12 @@ Actions with the following status should be included around tasks only if really
               the mounted chat-server route — PASS.
         - [x] Turn-control mount oracle landed: unsupported future `Sec-Sentropic-Wire-Version` is rejected
               on a mounted control route — PASS.
-        - [ ] Expand mount test to the full POST → SSE → bootstrap round-trip after stream delegation lands.
+        - [x] Expanded mount test to the full POST → SSE → bootstrap round-trip after stream delegation landed
+              — PASS.
       - [x] All existing `api/tests/api/chat-*` specs + any `streams*` specs pass unchanged (non-chat streams untouched).
             Scoped run PASS:
             `make test-api-endpoints SCOPE='tests/api/chat.test.ts tests/api/chat-bootstrap-contract.test.ts tests/api/chat-characterization.spec.ts tests/api/chat-checkpoint-contract.test.ts tests/api/chat-feedback.test.ts tests/api/chat-history-analyze-tool.test.ts tests/api/chat-message-actions.test.ts tests/api/chat-permissions.test.ts tests/api/chat-server-mount.test.ts tests/api/chat-summary-contract.test.ts tests/api/chat-tools.test.ts tests/api/queue-stream-bootstrap-contract.test.ts tests/api/streams.test.ts' API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`
-            — PASS (13 files, 59 tests).
+            — PASS (13 files, 60 tests).
       - [ ] Sub-lot gate: `make test-api ENV=test-feat-chat-server`.
 
 - [ ] **Lot 4 — Full matrix + publish lane (EX1) + UAT**
