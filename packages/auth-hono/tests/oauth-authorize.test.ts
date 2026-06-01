@@ -30,6 +30,36 @@ describe('OAuth authorize and consent handlers', () => {
     });
   });
 
+  it('resumes a post-login continuation into a consent redirect with the authenticated user', async () => {
+    const { ports, store } = await createOauthPorts();
+    const { router, stateCodec } = createOauthRouterForTest({ ports });
+    const initial = await router.request(authorizePath({ nonce: 'nonce-1' }));
+    const continuation = new URL(initial.headers.get('location') ?? '').searchParams.get('continue') ?? '';
+
+    const { ports: authenticatedPorts } = await createOauthPorts({ authenticated: true, store });
+    const { router: authenticatedRouter } = createOauthRouterForTest({
+      ports: authenticatedPorts,
+      stateCodec,
+    });
+
+    const response = await authenticatedRouter.request(
+      `/oauth/authorize?continue=${encodeURIComponent(continuation)}`
+    );
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(`${location.origin}${location.pathname}`).toBe('http://localhost:5397/auth/oauth/consent');
+    const sealedState = location.searchParams.get('state');
+    const payload = await stateCodec.unseal(sealedState ?? '');
+    expect(payload).toMatchObject({
+      acr: 'urn:sentropic:loa:passkey-fresh',
+      authTime: '2026-01-01T00:00:00.000Z',
+      clientId: 'example-rp',
+      nonce: 'nonce-1',
+      userId: 'user-1',
+    });
+  });
+
   it('redirects prompt=none without a session back to the RP with login_required', async () => {
     const { ports } = await createOauthPorts();
     const { router } = createOauthRouterForTest({ ports });
