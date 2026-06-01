@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { workspaceMemberships } from '../../src/db/schema';
@@ -15,11 +15,14 @@ describe('Locks API', () => {
   let viewer: any;
   let workspaceId: string;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     app = await importApp();
-    userA = await createAuthenticatedUser('editor', 'usera@example.com');
-    userB = await createAuthenticatedUser('editor', 'userb@example.com');
-    viewer = await createAuthenticatedUser('viewer', 'viewer@example.com');
+  }, 60000);
+
+  beforeEach(async () => {
+    userA = await createAuthenticatedUser('editor');
+    userB = await createAuthenticatedUser('editor');
+    viewer = await createAuthenticatedUser('viewer');
     workspaceId = userA.workspaceId;
 
     await db
