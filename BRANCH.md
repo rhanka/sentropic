@@ -78,6 +78,11 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 - **BR40bc38a-M8** `acknowledge`: Playwright MCP was unavailable in this Codex session, so preUAT was executed through project CLI Playwright via `make test-e2e`.
 - **BR40bc38a-M9** `attention`: official `tests/03-chat.spec.ts` still has 2s initial page-render assertions; in the UAT stack after Linux restart, `/folders` rendered after 4-7s with no page errors, so `RETRIES=0 MAX_FAILURES=1` fails before reaching the image test. Dedicated preUAT image Playwright passed with a 30s page-ready wait and no product code changes.
 - **BR40bc38a-M10** `acknowledge`: official `tests/07-import-export.spec.ts` failure root cause was a test race after `domcontentloaded` on the folder detail route. The button kept `aria-label="Actions"`; the test now waits for the folder API response and the detail action surface before opening the menu. Full scoped rerun passed 3/3, including the xlsx export test.
+- **BR40bc38a-M11** `acknowledge`: CI run `26751548313` confirmed `test-e2e (group-e, 05 07)` green after the `07-import-export` action-surface fix; `07` is no longer the blocking lane.
+- **BR40bc38a-M12** `acknowledge`: `04-google-drive-composer` CI failure was a stale expectation plus an integration gap: non-image Google Drive documents were attached server-side but not rendered as composer file chips, and outbound payloads always used `kind: image`. The chat panel now adds Drive files to the composer attachment band as `kind: file` and preserves attachment kind in the send payload. Local rerun passed 2/2.
+- **BR40bc38a-M13** `acknowledge`: `03-chat` CI failures were systematic shared-session/race failures, not a single provider flaky. Fixes applied: serial describe mode, resilient `/folders` readiness with one cold-boot reload, replay-history assertion aligned with `origin/main`, TipTap `contenteditable` targeting, queue-job settle barriers, edit-triggered retry wait, and absolute API polling for session deletion. Local rerun with `WORKERS=4 RETRIES=0 MAX_FAILURES=1` passed 13/13 using one worker.
+- **BR40bc38a-M14** `acknowledge`: `08-chat-heavy` was still asserting the old persistent document-row model for composer attachments. The test now asserts the composer attachment band, send clearing, and chat transcript citation for `README.md`. Local scoped rerun passed 1/1.
+- **BR40bc38a-M15** `attention`: CI run `26751548313` remaining non-branch-green lanes include API AI jobs and document summary flows failing with provider quota signature `You exceeded your current quota...`. `04-documents-ui-actions`, `08-documents-summary`, and `08-xlsx-multisheet-query` depend on document summary readiness in the current app path, so they must be rechecked after quota is available or accepted under the documented AI/provider allowlist with user sign-off.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -195,5 +200,20 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
   - [x] Fix and rerun official import/export E2E after sub-agent diagnosis:
     - [x] `make test-e2e E2E_SPEC=tests/07-import-export.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=9204 UI_PORT=5404 MAILDEV_UI_PORT=1304 ENV=e2e-feat-40bc-38a-07`
     - [x] Result: 3 passed.
-  - [ ] Push only after user confirmation.
-  - [ ] Create PR using this `BRANCH.md` as body when ready.
+  - [x] Fix and rerun Google Drive composer E2E:
+    - [x] `make test-e2e E2E_SPEC=tests/04-google-drive-composer.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=9207 UI_PORT=5407 MAILDEV_UI_PORT=1307 ENV=e2e-feat-40bc-38a-04drive`
+    - [x] Result: 2 passed.
+  - [x] Fix and rerun chat-heavy composer attachment E2E:
+    - [x] `make test-e2e E2E_SPEC=tests/08-chat-heavy.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=9208 UI_PORT=5408 MAILDEV_UI_PORT=1308 ENV=e2e-feat-40bc-38a-08heavy`
+    - [x] Result: 1 passed.
+  - [x] Fix and rerun official chat E2E under CI-like worker request:
+    - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts WORKERS=4 RETRIES=0 MAX_FAILURES=1 API_PORT=9209 UI_PORT=5409 MAILDEV_UI_PORT=1309 ENV=e2e-feat-40bc-38a-03`
+    - [x] Result: 13 passed; Playwright reported `Running 13 tests using 1 worker` because the file is serial.
+  - [x] Focused UI regression and typecheck after Drive composer payload fix:
+    - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-40bc-38a`
+    - [x] Result: 3 passed.
+    - [x] `make typecheck-ui API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-40bc-38a`
+    - [x] Result: 0 errors; 6 existing warnings.
+  - [ ] Push latest CI-fix commit to `origin/feat/40bc-38a`.
+  - [ ] Update PR #203 body from this `BRANCH.md` after the push.
+  - [ ] Monitor GitHub Actions for the pushed commit before UAT handoff.

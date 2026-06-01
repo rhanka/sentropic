@@ -323,10 +323,11 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
       await expect.poll(() => lastAttachContextType).toBe('chat_session');
       await expect.poll(() => (lastAttachContextId ? 'yes' : 'no')).toBe('yes');
 
-      await expect(page.locator('#chat-widget-dialog')).toContainText(pickedFileName, {
+      const attachmentBand = page.getByTestId('chat-composer-attachment-band');
+      await expect(attachmentBand).toContainText(pickedFileName, {
         timeout: 10_000,
       });
-      await expect(page.locator('#chat-widget-dialog')).toContainText(/Summary ready|Résumé prêt/, {
+      await expect(attachmentBand).toContainText('text/markdown', {
         timeout: 10_000,
       });
     } finally {
