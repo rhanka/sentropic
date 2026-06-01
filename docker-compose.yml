@@ -1,6 +1,6 @@
 services:
   api:
-    image: ${REGISTRY}/${API_IMAGE_NAME:-top-ai-ideas-api}:${API_VERSION:-latest}
+    image: ${REGISTRY}/${API_IMAGE_NAME:-sentropic-api}:${API_VERSION:-latest}
     build:
       context: .
       dockerfile: ./api/Dockerfile
@@ -53,7 +53,7 @@ services:
     tty: true
 
   ui:
-    image: ${REGISTRY}/${UI_IMAGE_NAME:-top-ai-ideas-ui}:${UI_VERSION:-latest}
+    image: ${REGISTRY}/${UI_IMAGE_NAME:-sentropic-ui}:${UI_VERSION:-latest}
     build:
       context: .
       dockerfile: ./ui/Dockerfile
