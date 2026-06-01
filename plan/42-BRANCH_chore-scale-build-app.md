@@ -95,6 +95,6 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
 - [x] Module-isolation iteration recorded in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`.
 - [x] Umbrella plan file added (`plan/42-BRANCH_chore-scale-build-app.md`).
 - [x] `PLAN.md` updated (status addendum + pending list).
-- [x] BR-42a0 split recorded and launched (`feat/chat-server`, PR #201, UAT OK; publish pending after merge).
+- [x] BR-42a0 split recorded and launched (`feat/chat-server`, PR #201, UAT OK; merged; `@sentropic/chat-server@0.1.0` bootstrap-published; Trusted Publisher attachment pending).
 - [ ] Per-lot `BRANCH.md` (from `plan/BRANCH_TEMPLATE.md`) created at each future lot launch.
 - [ ] User validation of durable names (CLI binary, package names) before any lot merge.
