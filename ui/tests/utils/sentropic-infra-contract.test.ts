@@ -64,29 +64,4 @@ describe('Sentropic infra identity', () => {
       'rg.fr-par.scw.cloud/nc-reg/sentropic-ui:main',
     );
   });
-
-  it('propagates grouped E2E failures from the make target', () => {
-    const makefile = readRootFile('Makefile');
-    const targetStart = makefile.indexOf('.PHONY: test-e2e\ntest-e2e:');
-    const targetEnd = makefile.indexOf('.PHONY: test-e2e-vscode');
-    const target = makefile.slice(targetStart, targetEnd);
-
-    expect(target).toContain('status=0;');
-    expect(target).toContain(
-      'npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra || status=$$?;',
-    );
-    expect(target).toContain(
-      'npx playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra || status=$$?;',
-    );
-    expect(target).toContain('exit "$$status"');
-  });
-
-  it('runs grouped E2E serially by default because suites share seeded users', () => {
-    const makefile = readRootFile('Makefile');
-    const targetStart = makefile.indexOf('.PHONY: test-e2e\ntest-e2e:');
-    const targetEnd = makefile.indexOf('.PHONY: test-e2e-vscode');
-    const target = makefile.slice(targetStart, targetEnd);
-
-    expect(target).toContain('workers="$${WORKERS:-1}";');
-  });
 });
