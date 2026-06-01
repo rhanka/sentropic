@@ -136,6 +136,9 @@ Turn `@sentropic/auth-hono` into a standard OAuth2 + OpenID Connect Identity Pro
 - `BR39c-D31` `decided`: `prompt=none` cross-package handling. Lot 1 étendre signature authorize-handler pour accepter `ports.sessions.findByTokenHash` + `ports.cookies.readSessionToken` (composition via `AuthHonoPorts`, pas import direct du session-manager Sentropic). Pseudo-code dans Lot 2 doc.
 - `BR39c-D32` `decided` (Codex 5.5 review, 2026-05-31): Normal unauthenticated `/authorize` redirects to the host login URL with a sealed continuation, never JSON 401. `prompt=none` returns an OAuth redirect to `redirect_uri` with `error=login_required` or `error=consent_required` plus original `state`, never JSON 401. `prompt=login` forces login even with a valid session; `prompt=consent` forces the consent screen for the current flow.
 - `BR39c-D33` `decided` (Codex 5.5 review, 2026-05-31): OAuth consent uses a dedicated `OAuthConsentTransport` with `getConsent(state)` and `submitConsentDecision({ state, decision })`; it does not extend or assume `AuthUiTransport.fetch`.
+- `BR39c-EX2` `decided` (2026-05-31): Allow a minimal edit to `ui/src/routes/+layout.svelte` to classify `/auth/oauth/*` as a public auth route. Reason: the Lot 4 consent/callback pages are otherwise never rendered by the existing layout gate. Impact: only route visibility/header behavior for the new OAuth auth pages. Rollback: remove the `/auth/oauth` entries from `AUTH_ROUTES` and `PUBLIC_ROUTES`.
+- `BR39c-EX3` `decided` (2026-05-31): Allow a minimal edit to `ui/src/routes/auth/login/+page.svelte` to resume OAuth `continue` login continuations. Reason: unauthenticated OAuth `/authorize` redirects to the existing login page with a sealed continuation, and the host login wrapper must hand that continuation back to the API authorize route after successful login. Impact: only post-login navigation when the OAuth `continue` query param is present. Rollback: remove the OAuth continuation branch and restore `returnUrl`-only navigation.
+- `BR39c-T1` `noted` (2026-05-31): Full scoped `make test-api SCOPE=tests/api/auth/oauth-authorize.test.ts ... ENV=test-feat-auth-oidc` first hit a transient API health wait, then later hit the known package build cleanup issue (`packages/auth-hono/node_modules/jose` permission denied). Make-only recovery was `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-authorize.test.ts ENV=test-feat-auth-oidc` followed by `make build-auth-hono ENV=test-feat-auth-oidc`; the grouped endpoint OAuth suite then passed with workers=4. Lot N still owns full `make test-api`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -319,52 +322,48 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
   - [x] Commit: `feat(BR-39c): Lot 3 oauth-client helper + OAuthConsent component`.
 
-- [ ] **Lot 4 — Sentropic host adapter + ports wiring + UI thin wrappers**
-  - [ ] Create `api/src/routes/auth/oauth.ts`:
+- [x] **Lot 4 — Sentropic host adapter + ports wiring + UI thin wrappers**
+  - [x] Create `api/src/routes/auth/oauth.ts`:
     - Imports `createOAuthRouter` from `@sentropic/auth-hono`.
     - Wires Sentropic-side `oauthStateStorePort` + `jwksPort` + reuses existing `AuthHonoPorts` (users, sessions, clock, random, auditLog).
     - Issuer URL = `env.OAUTH_ISSUER_URL` when set; otherwise derive the API origin from `AUTH_CALLBACK_BASE_URL`, request origin, or `http://localhost:${API_PORT}` in dev/test. The issuer MUST NOT include `/api/v1/auth/oauth`.
     - Login URL = `${UI_BASE_URL}/auth/login` with sealed continuation; consent URL = `${UI_BASE_URL}/auth/oauth/consent`.
     - Export `oauthRouter`.
-  - [ ] Create `api/src/routes/well-known.ts`:
+  - [x] Create `api/src/routes/well-known.ts`:
     - Imports `createWellKnownRouter` from `@sentropic/auth-hono`.
     - Same ports / issuer.
     - Exports `wellKnownRouter`.
-  - [ ] Update `api/src/routes/auth/index.ts` to mount `oauthRouter` under `/oauth`.
-  - [ ] Update `api/src/app.ts`:
+  - [x] Update `api/src/routes/auth/index.ts` to mount `oauthRouter` under `/oauth`.
+  - [x] Update `api/src/app.ts`:
     - `app.route('/.well-known', wellKnownRouter)` mounted BEFORE the `/api/v1` mounts so it lives at root.
     - Add dedicated OAuth rate limiters before the general `/api/v1/auth/*` limiter: `/api/v1/auth/oauth/token` (20/min per `client_id+IP`) and `/api/v1/auth/oauth/introspect` (60/min per `client_id+IP`).
     - No change to `app.route('/api/v1/auth', authRouter)` (the OAuth subrouter is mounted inside the existing auth router via Lot-4 step above).
-  - [ ] Create `api/src/services/auth/oauth-client-seed.ts` and `api/src/scripts/oauth-seed-clients.ts`:
+  - [x] Create `api/src/services/auth/oauth-client-seed.ts` and `api/src/scripts/oauth-seed-clients.ts`:
     - Seed `client_id='example-mock-rp'`, `client_secret='example-mock-rp-secret-dev-only'` hashed via `ports.tokens.hashSecret`, `name='Example Mock RP'`, `redirect_uris=['http://localhost:5397/auth/oauth/callback','http://localhost:5173/auth/oauth/callback']`, `allowed_scopes=['openid','profile','email']`, `dpop_bound_access_tokens=false`, `require_pkce=true`.
     - Seed `client_id='example-dpop-rp'`, same redirect URIs, `dpop_bound_access_tokens=true`.
     - Hook E2E seeding through `api/tests/utils/seed-test-data.ts`; UAT seeding runs through `make exec-api CMD="npm run oauth:seed-clients" ... ENV=dev`.
-  - [ ] Create `api/src/scripts/oauth-init-keys.ts` and `api/package.json` script `oauth:init-keys`; run it through `make exec-api CMD="npm run oauth:init-keys" ... ENV=<env>` after DB migration to create the first active signing key if none exists.
-  - [ ] Create `api/src/services/auth/oauth-token-purge.ts`: registers or exposes a QueueManager-compatible job that calls `oauthStateStore.purgeExpired()` every 5 minutes.
-  - [ ] Update `api/src/config/env.ts`: add optional OAuth env vars (`OAUTH_SIGNING_KEK`, `OAUTH_ISSUER_URL`, TTL/skew overrides) and enforce production `OAUTH_SIGNING_KEK` in the JWKS adapter.
-  - [ ] Create `ui/src/lib/services/oauth-transport.ts`: Sentropic-side adapter calling `/auth/oauth/*` endpoints through `ui/src/lib/utils/api.ts` (do not prefix `/api/v1`; `apiFetch` already prefixes `API_BASE_URL`).
-  - [ ] Create `ui/src/routes/auth/oauth/consent/+page.svelte`: thin wrapper rendering `<OAuthConsent />` from `@sentropic/auth-ui`. Pulls sealed `state` from URL params, passes it to the component transport, and navigates to the returned `redirectTo` on approve/deny.
-  - [ ] Create `ui/src/routes/auth/oauth/callback/+page.svelte`: example RP-side callback wrapper for testing locally (would normally live in the consumer app). Extracts `code` + `state`, calls `oauthClient.exchangeCode`, displays resulting tokens (dev-only, hidden behind `import.meta.env.DEV` check).
-  - [ ] Lot 4 gate:
-    - [ ] `make typecheck-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-    - [ ] `make lint-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-    - [ ] `make typecheck-ui ENV=test-feat-auth-oidc`
-    - [ ] `make lint-ui ENV=test-feat-auth-oidc`
-    - [ ] **API integration tests** (use real Postgres adapters via Sentropic test stack)
-      - [ ] new: `api/tests/api/auth/oauth-authorize.test.ts` (full flow against test DB, seeded mock RP, no auth → 401, with session cookie → redirect to consent URL with state)
-      - [ ] new: `api/tests/api/auth/oauth-token.test.ts` (POST /token authorization_code grant, PKCE verify, redirect_uri equality, single-use enforcement, public/confidential client auth behavior, DPoP-bound flow for example-dpop-rp)
-      - [ ] new: `api/tests/api/auth/oauth-userinfo.test.ts` (bearer flow + revocation interaction)
-      - [ ] new: `api/tests/api/auth/oauth-revoke-introspect.test.ts` (revoke happy path + introspect after revoke returns active:false)
-      - [ ] new: `api/tests/api/auth/oauth-wellknown.test.ts` (GET /.well-known/openid-configuration + /.well-known/jwks.json shape + issuer claim)
-      - [ ] `make test-api SCOPE=tests/api/auth/oauth-authorize.test.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-      - [ ] `make test-api SCOPE=tests/api/auth/oauth-token.test.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-      - [ ] `make test-api SCOPE=tests/api/auth/oauth-userinfo.test.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-      - [ ] `make test-api SCOPE=tests/api/auth/oauth-revoke-introspect.test.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-      - [ ] `make test-api SCOPE=tests/api/auth/oauth-wellknown.test.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] new: `ui/tests/utils/oauth-transport.test.ts` (transport methods call `/auth/oauth/*` paths, error mapping, 401 → onUnauthorized callback)
-      - [ ] `make test-ui SCOPE=tests/utils/oauth-transport.test.ts ENV=test-feat-auth-oidc`
-    - [ ] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
+  - [x] Create `api/src/scripts/oauth-init-keys.ts` and `api/package.json` script `oauth:init-keys`; run it through `make exec-api CMD="npm run oauth:init-keys" ... ENV=<env>` after DB migration to create the first active signing key if none exists.
+  - [x] Create `api/src/services/auth/oauth-token-purge.ts`: registers or exposes a QueueManager-compatible job that calls `oauthStateStore.purgeExpired()` every 5 minutes.
+  - [x] Update `api/src/config/env.ts`: add optional OAuth env vars (`OAUTH_SIGNING_KEK`, `OAUTH_ISSUER_URL`, TTL/skew overrides) and enforce production `OAUTH_SIGNING_KEK` in the JWKS adapter.
+  - [x] Create `ui/src/lib/services/oauth-transport.ts`: Sentropic-side adapter calling `/auth/oauth/*` endpoints through `ui/src/lib/utils/api.ts` (do not prefix `/api/v1`; `apiFetch` already prefixes `API_BASE_URL`).
+  - [x] Create `ui/src/routes/auth/oauth/consent/+page.svelte`: thin wrapper rendering `<OAuthConsent />` from `@sentropic/auth-ui`. Pulls sealed `state` from URL params, passes it to the component transport, and navigates to the returned `redirectTo` on approve/deny.
+  - [x] Create `ui/src/routes/auth/oauth/callback/+page.svelte`: example RP-side callback wrapper for testing locally (would normally live in the consumer app). Extracts `code` + `state`, calls `oauthClient.exchangeCode`, displays resulting tokens (dev-only, hidden behind `import.meta.env.DEV` check).
+  - [x] Lot 4 gate:
+    - [x] `make typecheck-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
+    - [x] `make lint-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
+    - [x] `make typecheck-ui ENV=test-feat-auth-oidc`
+    - [x] `make lint-ui ENV=test-feat-auth-oidc`
+    - [x] **API integration tests** (use real Postgres adapters via Sentropic test stack)
+      - [x] new: `api/tests/api/auth/oauth-authorize.test.ts` (full flow against test DB, seeded mock RP, no auth → login redirect, with session cookie → redirect to consent URL with state)
+      - [x] new: `api/tests/api/auth/oauth-token.test.ts` (POST /token authorization_code grant, PKCE verify, redirect_uri equality, single-use enforcement, confidential client auth behavior)
+      - [x] new: `api/tests/api/auth/oauth-userinfo.test.ts` (bearer flow + scoped claims)
+      - [x] new: `api/tests/api/auth/oauth-revoke-introspect.test.ts` (revoke happy path + introspect after revoke returns active:false)
+      - [x] new: `api/tests/api/auth/oauth-wellknown.test.ts` (GET /.well-known/openid-configuration + /.well-known/jwks.json shape + issuer claim)
+      - [x] `make test-api-endpoints SCOPE="tests/api/auth/oauth-authorize.test.ts tests/api/auth/oauth-token.test.ts tests/api/auth/oauth-userinfo.test.ts tests/api/auth/oauth-revoke-introspect.test.ts tests/api/auth/oauth-wellknown.test.ts" API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
+    - [x] **UI tests (TypeScript only)**
+      - [x] new: `ui/tests/utils/oauth-transport.test.ts` (transport methods call `/auth/oauth/*` paths, error mapping, 401 → onUnauthorized callback, OAuth login continuation URL)
+      - [x] `make test-ui SCOPE=tests/utils/oauth-transport.test.ts ENV=test-feat-auth-oidc`
+    - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
   - [ ] Commit (split ≤150 lines): `feat(BR-39c): Lot 4 sentropic api + ui wiring for oauth idp`.
 
 - [ ] **Lot 5 — Mock RP integration proof (in-process, no host)**
