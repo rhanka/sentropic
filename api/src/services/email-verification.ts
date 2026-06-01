@@ -52,7 +52,7 @@ function generateCode(): string {
  */
 export async function generateEmailVerificationCode(
   params: GenerateCodeParams
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; expiresAt: Date }> {
   const { email } = params;
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -126,7 +126,7 @@ export async function generateEmailVerificationCode(
     }
   }
 
-  return { success: true };
+  return { success: true, expiresAt };
 }
 
 /**

@@ -1,0 +1,158 @@
+import {
+    CapabilityUnavailableError,
+    type CaptureOptions,
+    type DesktopCapabilityProvider,
+    type MouseButton,
+    type ScreenCapture,
+} from './types.js';
+
+/**
+ * Real Windows capability provider. The native modules are loaded via dynamic
+ * `import()` ONLY inside the methods, so this file imports cleanly on Linux/CI
+ * (where the optionalDependencies are not installed). A missing module surfaces
+ * as a {@link CapabilityUnavailableError}, never a hard crash.
+ *
+ * Capture: `screenshot-desktop` (returns a PNG/JPEG Buffer).
+ * Input:   `@nut-tree-fork/nut-js` (mouse/keyboard via the OS automation API).
+ *
+ * Real eyes/hands behavior is verified on Windows at UAT (BR-41a Lot N-2); on
+ * any non-Windows host the native libs are simply absent.
+ */
+
+type ScreenshotModule = {
+    default?: (opts?: { format?: string; screen?: number }) => Promise<Buffer>;
+    (opts?: { format?: string; screen?: number }): Promise<Buffer>;
+};
+
+// The nut-js surface we actually use, declared structurally so we never need the
+// package's types at build time on Linux.
+type NutModule = {
+    mouse: {
+        setPosition(point: { x: number; y: number }): Promise<unknown>;
+    };
+    Point: new (x: number, y: number) => { x: number; y: number };
+    Button: Record<string, unknown>;
+    keyboard: {
+        type(text: string): Promise<unknown>;
+        pressKey(...keys: unknown[]): Promise<unknown>;
+        releaseKey(...keys: unknown[]): Promise<unknown>;
+    };
+    Key: Record<string, unknown>;
+    straightTo?: unknown;
+    leftClick?: () => Promise<unknown>;
+};
+
+const loadOptional = async <T>(moduleName: string, capability: string): Promise<T> => {
+    try {
+        return (await import(moduleName)) as T;
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new CapabilityUnavailableError(
+            capability,
+            `native module "${moduleName}" could not be loaded (Windows-only). ${detail}`,
+        );
+    }
+};
+
+/** Resolve a `+`-separated combo (e.g. "Ctrl+Shift+S") to nut.js Key constants. */
+const resolveKeyCombo = (combo: string, Key: Record<string, unknown>): unknown[] => {
+    const aliases: Record<string, string> = {
+        ctrl: 'LeftControl',
+        control: 'LeftControl',
+        cmd: 'LeftSuper',
+        command: 'LeftSuper',
+        win: 'LeftSuper',
+        meta: 'LeftSuper',
+        super: 'LeftSuper',
+        alt: 'LeftAlt',
+        option: 'LeftAlt',
+        shift: 'LeftShift',
+        esc: 'Escape',
+        return: 'Enter',
+        del: 'Delete',
+    };
+    const tokens = combo
+        .split('+')
+        .map((t) => t.trim())
+        .filter(Boolean);
+    return tokens.map((token) => {
+        const lower = token.toLowerCase();
+        const nutName = aliases[lower] ?? token.charAt(0).toUpperCase() + token.slice(1);
+        const resolved = Key[nutName];
+        if (resolved === undefined) {
+            throw new CapabilityUnavailableError('input_action.key', `unknown key "${token}"`);
+        }
+        return resolved;
+    });
+};
+
+export const createWindowsCapabilityProvider = (): DesktopCapabilityProvider => {
+    return {
+        name: 'windows',
+
+        async captureScreen(options?: CaptureOptions): Promise<ScreenCapture> {
+            const mod = await loadOptional<ScreenshotModule>(
+                'screenshot-desktop',
+                'screen_capture',
+            );
+            const screenshot = (mod.default ?? mod) as ScreenshotModule;
+            const buffer = await screenshot({ format: 'png', screen: options?.screen });
+            // Region cropping (if requested) is a Windows-side post-process applied
+            // at UAT; the bundled artifact returns the full screen for now.
+            return {
+                base64: Buffer.from(buffer).toString('base64'),
+                mimeType: 'image/png',
+                width: 0,
+                height: 0,
+            };
+        },
+
+        async mouseClick(x: number, y: number, button: MouseButton = 'left'): Promise<void> {
+            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            await nut.mouse.setPosition(new nut.Point(x, y));
+            const buttonName = button === 'left' ? 'LEFT' : button === 'right' ? 'RIGHT' : 'MIDDLE';
+            const nutButton = nut.Button[buttonName];
+            // nut.js exposes click helpers off the default export in some builds;
+            // fall back to press/release semantics through the mouse facade.
+            const mouseFacade = nut.mouse as unknown as {
+                click?: (b: unknown) => Promise<unknown>;
+            };
+            if (typeof mouseFacade.click === 'function') {
+                await mouseFacade.click(nutButton);
+            } else if (typeof nut.leftClick === 'function' && button === 'left') {
+                await nut.leftClick();
+            } else {
+                throw new CapabilityUnavailableError(
+                    'input_action.click',
+                    'no click primitive on the loaded native input module',
+                );
+            }
+        },
+
+        async type(text: string): Promise<void> {
+            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            await nut.keyboard.type(text);
+        },
+
+        async scroll(dx: number, dy: number): Promise<void> {
+            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            const mouseFacade = nut.mouse as unknown as {
+                scrollDown?: (n: number) => Promise<unknown>;
+                scrollUp?: (n: number) => Promise<unknown>;
+                scrollLeft?: (n: number) => Promise<unknown>;
+                scrollRight?: (n: number) => Promise<unknown>;
+            };
+            if (dy > 0 && mouseFacade.scrollDown) await mouseFacade.scrollDown(dy);
+            else if (dy < 0 && mouseFacade.scrollUp) await mouseFacade.scrollUp(-dy);
+            if (dx > 0 && mouseFacade.scrollRight) await mouseFacade.scrollRight(dx);
+            else if (dx < 0 && mouseFacade.scrollLeft) await mouseFacade.scrollLeft(-dx);
+        },
+
+        async key(combo: string): Promise<void> {
+            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            const keys = resolveKeyCombo(combo, nut.Key);
+            await nut.keyboard.pressKey(...keys);
+            await nut.keyboard.releaseKey(...keys.slice().reverse());
+        },
+    };
+};

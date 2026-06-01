@@ -1,7 +1,7 @@
 // Sentropic Extension - Content Script
 // Bootstraps the ChatWidget inside a Shadow DOM to avoid CSS conflicts.
 
-import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
+import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
 import type { ChatWidgetMountOptions } from './chatwidget-entry';
 
 console.log('Sentropic Content Script loading...');

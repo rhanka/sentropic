@@ -29,13 +29,13 @@ let _adapter: NavigationAdapter | null = null;
  * In SvelteKit:
  * ```ts
  * import { goto } from '$app/navigation';
- * import { initNavigation, createSvelteKitNavigation } from '$lib/core/navigation-adapter';
+ * import { initNavigation, createSvelteKitNavigation } from '@sentropic/cowork-bridge/core';
  * initNavigation(createSvelteKitNavigation(goto));
  * ```
  *
  * In Chrome Extension:
  * ```ts
- * import { initNavigation, createExtensionNavigation } from '$lib/core/navigation-adapter';
+ * import { initNavigation, createExtensionNavigation } from '@sentropic/cowork-bridge/core';
  * initNavigation(createExtensionNavigation());
  * ```
  */

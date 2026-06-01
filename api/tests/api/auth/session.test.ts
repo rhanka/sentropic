@@ -94,7 +94,8 @@ describe('Session Management API Routes', () => {
 
       expect(res.status).toBe(401);
       const data = await res.json();
-      expect(data.error).toBe('Invalid or expired refresh token');
+      expect(data.error.code).toBe('invalid_session');
+      expect(data.error.message).toBe('Invalid or expired refresh token.');
     });
   });
 

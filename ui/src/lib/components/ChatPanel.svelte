@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Readable } from 'svelte/store';
-  import type { AppContext } from '$lib/core/context-provider';
+  import type { AppContext } from '@sentropic/cowork-bridge/core';
   import type { CommentContextType } from '$lib/utils/comments';
   import PackageChatPanel from '@sentropic/chat-ui/components/ChatPanel.svelte';
   import AppChatPanel from '$lib/components/chat/AppChatPanel.svelte';

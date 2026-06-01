@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
-import { initNavigation, createSvelteKitNavigation } from '../../src/lib/core/navigation-adapter';
+import { initNavigation, createSvelteKitNavigation } from '@sentropic/cowork-bridge/core';
 
 // Import mocked goto from $app/navigation
 import { goto as mockGoto } from '$app/navigation';

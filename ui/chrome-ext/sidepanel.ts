@@ -1,5 +1,5 @@
-import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
-import { CHATWIDGET_HANDOFF_STORAGE_KEY } from '$lib/core/chatwidget-handoff';
+import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
+import { CHATWIDGET_HANDOFF_STORAGE_KEY } from '@sentropic/cowork-bridge/core';
 import { mount } from './chatwidget-entry';
 
 const HANDOFF_EVENT = 'sentropic:chatwidget-handoff-state';

@@ -49,7 +49,7 @@ import {
 } from './skills/catalog';
 import { executeFoundationSkillTool } from './skills/foundation-executor';
 import { toolService } from './tool-service';
-import { listTabs as listRegisteredTabs } from './tab-registry';
+import { listTabs as listRegisteredTabs, isBrowserSource } from './tab-registry';
 import type { TabEntry } from './tab-registry';
 import { todoOrchestrationService } from './todo-orchestration';
 import { ensureWorkspaceForUser } from './workspace-service';
@@ -2495,9 +2495,14 @@ export class ChatService {
         (t.function?.name === 'tab_read' || t.function?.name === 'tab_action'),
     );
     if (!clientHasTabTools) {
-      const registeredTabs = listRegisteredTabs(options.userId);
-      if (registeredTabs.length > 0) {
-        const serverTabTools = this.buildServerTabToolDefinitions(registeredTabs);
+      // Only browser sources (chrome_plugin/bookmarklet) expose a DOM, so
+      // browser-DOM tools (tab_read/tab_action) must not be offered to
+      // non-browser devices such as desktop_cowork (BR41a-F1).
+      const registeredBrowserTabs = listRegisteredTabs(options.userId).filter((t) =>
+        isBrowserSource(t.source),
+      );
+      if (registeredBrowserTabs.length > 0) {
+        const serverTabTools = this.buildServerTabToolDefinitions(registeredBrowserTabs);
         localTools = [...localTools, ...serverTabTools];
       }
     }

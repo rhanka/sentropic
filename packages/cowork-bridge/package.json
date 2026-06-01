@@ -1,0 +1,63 @@
+{
+  "name": "@sentropic/cowork-bridge",
+  "version": "0.1.0",
+  "description": "Portable client bridge for Sentropic Cowork: shared client core (ApiClient/ContextProvider/NavigationAdapter), transport/storage-agnostic auth (token lifecycle behind a StorageAdapter + injected fetch), and local-tool protocol types + portable permission schema. Reuses @sentropic/chat-ui for SSE.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/cowork-bridge"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./core": {
+      "types": "./src/core/index.ts",
+      "svelte": "./src/core/index.ts",
+      "import": "./src/core/index.ts"
+    },
+    "./auth": {
+      "types": "./src/auth/index.ts",
+      "svelte": "./src/auth/index.ts",
+      "import": "./src/auth/index.ts"
+    },
+    "./tools": {
+      "types": "./src/tools/index.ts",
+      "svelte": "./src/tools/index.ts",
+      "import": "./src/tools/index.ts"
+    },
+    "./permissions": {
+      "types": "./src/permissions/index.ts",
+      "svelte": "./src/permissions/index.ts",
+      "import": "./src/permissions/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "peerDependencies": {
+    "@sentropic/chat-ui": "*",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}

@@ -10,11 +10,11 @@
   import Toast from '$lib/components/Toast.svelte';
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
-  import { createSvelteKitContextProvider } from '$lib/core/context-provider';
+  import { createSvelteKitContextProvider } from '@sentropic/cowork-bridge/core';
   import {
     createSvelteKitNavigation,
     initNavigation,
-  } from '$lib/core/navigation-adapter';
+  } from '@sentropic/cowork-bridge/core';
 
   const contextProvider = createSvelteKitContextProvider(page, browser);
   import '$lib/i18n';

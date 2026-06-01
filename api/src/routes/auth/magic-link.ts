@@ -1,3 +1,7 @@
+import {
+  createAuthMagicLinkRouteHandlers,
+  type AuthHonoMagicLinkService,
+} from '@sentropic/auth-hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { logger } from '../../logger';
@@ -23,51 +27,40 @@ import { ensureWorkspaceForUser } from '../../services/workspace-service';
 export const magicLinkRouter = new Hono();
 
 // Request schemas
-const requestMagicLinkSchema = z.object({
-  email: z.string().email(),
-});
-
 const verifyMagicLinkSchema = z.object({
   token: z.string(),
 });
 
-/**
- * POST /auth/magic-link/request
- * Request a magic link to be sent to email
- */
-magicLinkRouter.post('/request', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { email } = requestMagicLinkSchema.parse(body);
-    
-    const normalizedEmail = email.trim().toLowerCase();
-    
-    // Generate magic link
-    const { token } = await generateMagicLink({ email: normalizedEmail });
-    
-    // Build magic link URL
+const magicLinkRequestService: AuthHonoMagicLinkService = {
+  async requestMagicLink(input) {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const { token, expiresAt } = await generateMagicLink({
+      email: normalizedEmail,
+      userId: input.userId ?? undefined,
+    });
     const baseUrl = env.AUTH_CALLBACK_BASE_URL || 'http://localhost:5173';
     const magicLinkUrl = `${baseUrl}/auth/magic-link/verify?token=${token}`;
-    
-    // Send email (placeholder implementation)
+
     await sendMagicLinkEmail(normalizedEmail, magicLinkUrl);
-    
+
     logger.info({ email: normalizedEmail }, 'Magic link requested');
-    
-    // Don't expose token or expiration to client (security)
-    return c.json({
+
+    return {
+      expiresAt,
       success: true,
-      message: 'Magic link sent to your email',
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    
-    logger.error({ err: error }, 'Error requesting magic link');
-    return c.json({ error: 'Failed to send magic link' }, 500);
-  }
+    };
+  },
+
+  async verifyMagicLink() {
+    throw new Error('Magic-link verification remains app-owned in Sentropic API.');
+  },
+};
+
+const magicLinkRequestHandlers = createAuthMagicLinkRouteHandlers({
+  service: magicLinkRequestService,
 });
+
+magicLinkRouter.post('/request', magicLinkRequestHandlers.requestMagicLink!);
 
 /**
  * POST /auth/magic-link/verify
@@ -251,4 +244,3 @@ magicLinkRouter.post('/verify', async (c) => {
     return c.json({ error: 'Failed to verify magic link' }, 500);
   }
 });
-

@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '$lib/config';
-import { getApiBaseUrl } from '$lib/core/api-client';
+import { getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 import { isAuthenticated } from '$lib/stores/session';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 import { createStreamHub } from '@sentropic/chat-ui/client/streamHub';

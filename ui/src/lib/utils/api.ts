@@ -5,7 +5,7 @@
  */
 
 const _skBrowser = typeof window !== 'undefined';
-import { getApiAuthToken, getApiBaseUrl, getApiBrowserFlag } from '$lib/core/api-client';
+import { getApiAuthToken, getApiBaseUrl, getApiBrowserFlag } from '@sentropic/cowork-bridge/core';
 import { API_BASE_URL } from '$lib/config';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
