@@ -73,6 +73,7 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 - **BR40bc38a-M3** `acknowledge`: 40b merge conflict in `ui/src/lib/utils/documents.ts` resolved by preserving both image upload MIME support from 38a and xlsx upload/label support from 40b.
 - **BR40bc38a-M4** `acknowledge`: 40c merge conflict in `api/package.json` resolved by keeping the combined build external list with `exceljs` externalized.
 - **BR40bc38a-M5** `attention`: root currently has a `dev` stack on `8791/5177/1081`; integrated UAT must avoid clobbering it until the requested `uat/40bc-38a` clone/worktree is ready.
+- **BR40bc38a-M6** `acknowledge`: `tests/03-chat.spec.ts` declares shared session state and is flaky with parallel workers; initial `WORKERS=4` run failed 5 tests + 2 flaky, then the same commit passed with `WORKERS=1` (12 passed + 1 retry-passed flaky, exit 0).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -135,33 +136,33 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
   - [x] Imported formula cells for scores/quadrants and read-back tests.
 - [x] **Lot 40c-5 - E2E**
   - [x] Imported `07-import-export.spec.ts` xlsx export coverage from BR-40c.
-- [ ] **Lot 40bc38a-I - Integration gates**
+- [x] **Lot 40bc38a-I - Integration gates**
   - [x] Resolve merge conflicts across 38a, 40b, and 40c.
-  - [ ] `make typecheck-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-  - [ ] `make typecheck-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-  - [ ] `make lint-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-  - [ ] `make lint-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-  - [ ] Focused API tests:
-    - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_TEST_WORKERS=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-api-unit SCOPE=tests/unit/document-text.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-api-unit SCOPE=tests/unit/xlsx-sheet-query.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/xlsx.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-  - [ ] Focused UI/package tests:
-    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-ui SCOPE=tests/components/chat/ChatComposer-wrapper.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-ui SCOPE=tests/stores/folders.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
-    - [ ] `make test-llm-mesh ENV=test-feat-40bc-38a`
-    - [ ] `make test-chat-ui ENV=test-feat-40bc-38a`
-    - [ ] `make test-pkg-chat-core ENV=test-feat-40bc-38a`
-  - [ ] E2E build:
-    - [ ] `make build-api build-ui-image API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
-  - [ ] Scoped E2E:
-    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
-    - [ ] `make test-e2e E2E_SPEC=tests/07-import-export.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
-    - [ ] `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
+  - [x] `make typecheck-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [x] `make typecheck-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [x] `make lint-api API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [x] `make lint-ui API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [x] Focused API tests:
+    - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_TEST_WORKERS=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-api-unit SCOPE=tests/unit/document-text.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-api-unit SCOPE=tests/unit/xlsx-sheet-query.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-api-endpoints SCOPE=tests/api/xlsx.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+  - [x] Focused UI/package tests:
+    - [x] `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-ui SCOPE=tests/components/chat/ChatComposer-wrapper.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-ui SCOPE=tests/stores/folders.test.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=test-feat-40bc-38a`
+    - [x] `make test-llm-mesh ENV=test-feat-40bc-38a`
+    - [x] `make test-chat-ui ENV=test-feat-40bc-38a`
+    - [x] `make test-pkg-chat-core ENV=test-feat-40bc-38a`
+  - [x] E2E build:
+    - [x] `make build-api build-ui-image API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
+  - [x] Scoped E2E:
+    - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts WORKERS=1 API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
+    - [x] `make test-e2e E2E_SPEC=tests/07-import-export.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
+    - [x] `make test-e2e E2E_SPEC=tests/08-xlsx-multisheet-query.spec.ts API_PORT=9203 UI_PORT=5403 MAILDEV_UI_PORT=1303 ENV=e2e-feat-40bc-38a`
 - [ ] **Lot 40bc38a-UAT - Combined preUAT**
   - [ ] Prepare `uat/40bc-38a` clone/worktree at the integration HEAD.
   - [ ] Start stack on `API_PORT=9203`, `UI_PORT=5403`, `MAILDEV_UI_PORT=1303`.
