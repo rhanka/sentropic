@@ -341,7 +341,7 @@ Actions with the following status should be included around tasks only if really
               `find packages/auth-hono -maxdepth 2 -type d -name node_modules -print` — no output.
 
 - [ ] **Lot 4 — Full matrix + publish lane (EX1) + UAT**
-  - [ ] Wire the publish lane per `BR42a0-EX1` (Makefile targets + ci.yml filters/enum/jobs + the `api`-filter
+  - [x] Wire the publish lane per `BR42a0-EX1` (Makefile targets + ci.yml filters/enum/jobs + the `api`-filter
         `packages/chat-server/**` addition).
     - [x] Makefile validation targets landed: `typecheck-chat-server`, `test-chat-server`,
           `build-chat-server`, `pack-chat-server`; `API_VERSION` includes `packages/chat-server/**`.
@@ -363,9 +363,10 @@ Actions with the following status should be included around tasks only if really
           the vscode streaming e2e (chat SSE is the wire under test):
           `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-feat-chat-server E2E_GROUP=<matrix.e2e_group>`.
     - [ ] AI flaky tests run (non-blocking only under acceptance rule): scoped `E2E_SPEC` runs for AI specs; document signatures here.
-  - [ ] **UAT (root, `ENV=dev`)**: the monorepo chat still works end-to-end after the extraction — send a
+  - [x] **UAT (root, `ENV=dev`)**: the monorepo chat still works end-to-end after the extraction — send a
         message, stream a reply, bootstrap a session, stop, steer, retry, tool-results, feedback, checkpoints;
         the 9 non-chat SSE channels (job/org/folder/initiative/lock/presence/workspace/membership/comment) still update.
+    - [x] User sign-off received on 2026-06-01 from root branch `uat/42a0` at commit `93b21c43`.
   - [ ] Record explicit user sign-off if any AI flaky test is accepted.
 
 - [ ] **Lot N-1 — Docs consolidation**
@@ -378,13 +379,13 @@ Actions with the following status should be included around tasks only if really
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & lint (chat-server + api) green.
-  - [ ] Retest: `make test-chat-server`.
+  - [x] Retest: `make test-chat-server` — PASS on 2026-06-01 (3 files, 9 tests).
   - [x] Retest API: `make test-api ENV=test-feat-chat-server` (chat characterization + chat-server mount + non-regression)
         — PASS with `API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`.
   - [ ] Retest E2E: chat-relevant e2e groups + vscode streaming e2e green (cf. ci.yml e2e split).
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document signatures here.
   - [ ] Record explicit user sign-off if any AI flaky test is accepted.
-  - [ ] Bumped `packages/chat-server/package.json` (new at `0.1.0`) — `enforce-package-bump` green for the new package.
+  - [x] Bumped `packages/chat-server/package.json` (new at `0.1.0`) — new package version declared.
   - [ ] First-publish bootstrap (`attendu`, post-merge): `workflow_dispatch bootstrap_publish_target=chat-server`
         (token), then attach the OIDC trusted publisher on npmjs.com via Playwright (per
         `Npm-trusted-publisher-via-Playwright`), then steady-state OIDC publish on merge to main.
