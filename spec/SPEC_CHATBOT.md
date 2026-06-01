@@ -264,6 +264,40 @@ Rules:
 - Tool calls: `tool_call_start`, then zero or more `tool_call_delta`, then `tool_call_result`.
 - Reasoning/content deltas can alternate; UI aggregates.
 
+## Reusable chat server boundary - delivered by BR-42a0
+
+The chat wire server and turn-control route bodies are provided by the workspace package
+`@sentropic/chat-server`. The current Sentropic API is the first client of the package, and generated
+apps from the BR-42 build-app line consume the same package instead of reimplementing chat routes.
+
+Package contract:
+- `createChatServer(deps, { routes })` returns a mountable Hono router.
+- `routes: 'app-contract'` preserves the existing Sentropic API wire contract:
+  - `POST /api/v1/chat/messages` with `sessionId` in the body.
+  - `GET /api/v1/chat/sessions/:id/messages`.
+  - `GET /api/v1/chat/sessions/:id/bootstrap`.
+  - Turn-control routes for stop, steer, retry, feedback, tool results, checkpoints, edit/history, and
+    runtime details.
+  - Chat stream draining remains reachable through the existing global SSE route
+    `GET /api/v1/streams/sse?streamIds=<assistantMessageId>` by delegating only the chat slice.
+- `routes: 'canonical'` serves the generated-app / `@sentropic/chat-ui` transport shape:
+  - `POST /chat/sessions/:id/messages`.
+  - `GET /chat/sessions/:id/stream` with `fromSeq` replay support.
+  - `GET /chat/sessions/:id/bootstrap`.
+- The dependency set is explicit ports: chat-core stores/runtime ports plus generation, queue, and stream
+  ports. The package imports no Drizzle, Postgres, or presence modules.
+- The current API supplies the Postgres/NOTIFY/presence adapters. Generated apps can use deterministic
+  in-memory adapters over the `@sentropic/chat-core` in-memory stores, including `InMemoryMeshDispatch`.
+
+Boundary rules:
+- `/api/v1/chat/tool-permissions` stays app-local because it owns extension permissions and Drizzle-backed
+  policy data.
+- The non-chat SSE channels (job, organization, folder, initiative, lock, presence, workspace,
+  workspace-membership, comment) stay app-local in `api/src/routes/api/streams.ts`.
+- The package publication lane follows the standard package workflow: first publish uses the token bootstrap
+  workflow dispatch for `bootstrap_publish_target=chat-server`, then npm trusted publishing handles
+  steady-state OIDC publishes.
+
 ## Session history and live update contract — delivered
 
 - Historical session loading uses `GET /api/v1/chat/sessions/:id/history`.
