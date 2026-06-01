@@ -125,6 +125,7 @@ export const createOauthPorts = async (options: {
 
 export const createOauthRouterForTest = (input: {
   ports: AuthHonoPorts;
+  routePrefix?: string;
   stateCodec?: OAuthContinuationCodec;
 }) => {
   const stateCodec = input.stateCodec ?? createOAuthHmacStateCodec({ secret: 'test-oauth-state-secret' });
@@ -134,6 +135,7 @@ export const createOauthRouterForTest = (input: {
       issuer: 'http://localhost:9197',
       loginUrl: 'http://localhost:5397/auth/login',
       ports: input.ports,
+      routePrefix: input.routePrefix,
       stateCodec,
     }),
     stateCodec,
