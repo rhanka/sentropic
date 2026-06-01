@@ -21,6 +21,8 @@ Seven packages under `@sentropic/*`. The original six-package proposal was revis
 | `@sentropic/skills` (BR19, future) | to scope (post BR14b) | skill catalog + sandbox + discovery + reference skills. SKILL.md format with `name`/`description`/`contextFilter`/`sandbox`/`tools`. Owns `SkillsToolRegistry` (implements `ToolRegistry`). | governance/policy/audit (→ `marketplace`); CLI tooling (→ `harness`) |
 | `@sentropic/marketplace` (BR-marketplace, future) | to scope | managed marketplace policy + decision engine + audit. Allows organizations to curate which skills/tools are visible/installable/invokable per role/workspace (see §15). Composes with `skills` via `MarketplaceEngine.evaluate()`. | the catalog itself (→ `skills`); public distribution (npm/mcp.so already cover) |
 | `@sentropic/graphify` (BR-graphify, fusion of `graphifyy@0.7.10`) | to scope | knowledge graph extraction from folders of code / docs / papers / images / audio-video transcripts; CLI binary `graphify`; cross-CLI skill format (Claude Code, Codex, Gemini, Aider, OpenCode, etc.); HTML+JSON+audit publication artifacts | runtime dependency from chat-core/flow (consumed by harness only and standalone CLI) |
+| `@sentropic/auth-hono` (BR-39b) | scaffolded 0.2.1, branch-local | reusable Hono route factories for email-code, magic-link, passkey registration/authentication, sessions, credentials; pure auth services (WebAuthn ceremony, sessions, email/magic-link, account policy) backed by `AuthHonoPorts`; route-handler hooks for app-owned policy (`prepareRegistrationOptions`/`resolveRegistrationUser`/`resolveAuthenticationOptions` short-circuit `{ status, code, message }`; `finalizeRegistration`/`finalizeAuthentication` post-verify response control); structured response contract (`{ delivery, expiresAt, success }` / `{ error: { code, message } }`); `createRequireAuth`/`createOptionalAuth` middleware factories that do not assume host workspace model | persistence (host adapters supply Drizzle/file/memory ports); cookie attribute policy (host decides `Secure`/`Domain` per env); session-creation policy (host owns via `finalize*` — e.g. Sentropic injects workspace bootstrap + first-admin + account-status into the session it issues); product email copy; rate limiting middleware (host-owned) |
+| `@sentropic/auth-ui` (BR-39a) | scaffolded 0.2.0, branch-local | reusable Svelte 5 authentication screens (`AuthLogin`, `AuthRegister`, `AuthMagicLinkVerify`, `AuthDevices`, `AuthDevicePair`) + browser passkey helpers + `AuthUiTransport` (13 methods: email-code/magic-link/passkey-register/passkey-login/session-refresh/logout/credentials list+rename+revoke/device-pair-approve); `createDefaultFetchTransport({baseUrl, fetch?, headers?, onUnauthorized?})` for `@sentropic/auth-hono`-compatible mounts; `createDefaultAuthUiLabels` (EN) + `createFrenchAuthUiLabels` (FR) presets, all overridable via `Partial<AuthUiLabels>`; visual customisation via CSS custom properties + named slots (`no-account`/`register-new-device`/`back-to-login`/`back-to-devices`/`pair-cta`/`add-device`/`login-link`/`cancel`); `AuthRegister.skipEmailVerification` for hosts owning pre-auth (e.g. SSO/admin invite); Sentropic UI rewired to thin wrappers (~25 LOC/route) via `ui/src/lib/services/auth-transport.ts` adapter | server logic (→ `auth-hono`); persistence; host session store + navigation (callbacks); product copy / locale store ownership (labels passed in); rate limiting (host); brand assets (slots + CSS vars) |
 
 **Dependency rules**
 
@@ -468,3 +470,45 @@ Anthropic Agent SDK: <https://github.com/anthropics/claude-agent-sdk-python>, <h
 Codex CLI: <https://developers.openai.com/codex/agent-approvals-security>, <https://developers.openai.com/codex/concepts/sandboxing>
 Claude Code SDK: <https://code.claude.com/docs/en/sub-agents>
 OTel GenAI semantic conventions: <https://opentelemetry.io/docs/specs/semconv/gen-ai/>
+
+## 16. build-app iteration — module-isolation targets + Google Cloud integration (intention, 2026-05-31)
+
+*Intention to validate (study only). Recorded to complete this analysis target, to feed `PLAN.md` and branch definition.*
+
+**Frame**: `build-app` = **a CLI for app construction**, staying **in the sentropic monorepo** (add internal structure, no repo split). MVP = **scaffolder** (bootstrap a runnable `chat-ui`↔backend app + create the GH repo). It composes the cartography (§1) + use cases (§10), and forces the librarisation of templating/doc-gen.
+
+### 16.1 PRINCIPAL intention — verbatim (2026-05-31)
+
+> faudrai aussi identifier les modules à isoler pour compléter le plan.md et définir ls branches. j'imagine par exemple qu'il faut que certains services comme le catalogue skill+tools+agent soit étendu à agents+canevas, et les commentaires aussi soient étendus, et la relation à la db aussi (commenaires, identités, observabilité) et au queuer (streaming chat). j'aimerais pouvoir par exemple pourvoir m'intégrer de façon fluide avec les outils google dans le plan (genre déborter l'exec llm mesh aux llm dans vertex ai, tout en conservant le streaming, tout en permettant de stocker l'observabilité aussibien dans pg que dans bigquery voir pg via bigqury et en utilisan le mcp et les marketplace google via le catalgue.
+
+### 16.2 Module-isolation targets (mapped to existing cartography)
+
+| Intention | Existing anchor | Action | Note |
+|---|---|---|---|
+| Catalogue `skill+tools+agent` → **+ agents + canevas** | §15 marketplace catalog · §14 agent templating · §10.3 canvas (`LiveDocumentStore`) | **EXTEND** | Catalog becomes first-class over **{skills, tools, agents, canevas}**. `SkillSource` → generalised `CatalogSource`; `agents` = first-class catalog entries (cf. §14 `AgentRuntime`); `canevas` = LiveDocument/artifact templates (cf. §10.3). |
+| **Commentaires** extended | — (was no module) | **NEW → `@sentropic/comments`** | **Decided 2026-05-31: dedicated package `@sentropic/comments`** (collaborative annotation over messages / canvas / artifacts); owns `CommentStore` port + wire events; persisted via `persistence-*`. The one genuinely-new module. |
+| **Relation DB**: commentaires, identités, observabilité | §5/§12 `persistence-postgres` · auth (`@sentropic/auth-hono`/`auth-ui`, identités) · §1 `@sentropic/events` (observabilité) | **EXTEND** | Persistence ports for comments + identities + observability; **identités: auth BR-39 in flight via `codex:39-auth`** (`auth-hono`/`auth-ui`); observability ↔ `events` `EventSink`. |
+| **Queuer (streaming chat)** | §10.4 `JobQueue`/`flow` · §4 stream protocol | **EXTEND** | The queue powering streaming chat (today: api custom PG queue → extract to `@sentropic/flow` `JobQueue` port; minimal in-memory adapter for CLI). |
+
+### 16.3 Google Cloud integration (multi-cloud goal, “intégration fluide avec les outils google”)
+
+| Intention | Anchor | Action |
+|---|---|---|
+| `llm-mesh` exec **→ Vertex AI** LLMs, **streaming préservé** | §1 `llm-mesh` provider adapters · `SPEC_EVOL_LLM_MESH.md` · `SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md` | **EXTEND**: Vertex AI provider adapter; provider-level streaming preserved (provider events, not session events — §1 anti-pattern §7). |
+| Observability sink: **PG et/ou BigQuery, voire PG via BigQuery** | §1 `events` `EventSink` · §5 `EventSink` port | **EXTEND**: BigQuery `EventSink` adapter alongside Postgres; option “PG via BigQuery” (federated/external table) as a sink variant. |
+| **MCP + Google marketplaces via le catalogue** | §15 `SkillSource` / `CatalogSource` | **EXTEND**: add `mcp` and `google-marketplace` as `CatalogSource` kinds (composes with §16.2 catalog generalisation). |
+
+### 16.4 To formalise into `PLAN.md` / branches (next)
+
+- These map to **extensions of in-flight/cartographied packages** (`llm-mesh`, `events`, `flow`, `skills`/marketplace, `persistence-*`, `auth-hono`) **+ one new module (`comments`)**.
+- **Resolved 2026-05-31**: `comments` = dedicated package `@sentropic/comments`. **Identities**: auth BR-39 in flight via `codex:39-auth` (`auth-hono`/`auth-ui`).
+- Candidate branches extend the §11 cadence; sequence + bundling to be set when integrating into `PLAN.md`.
+- The catalog generalisation (§16.2 row 1) + Google `CatalogSource` (§16.3 row 3) are the same thread → likely one branch.
+
+### 16.5 Hosting / PaaS substrate — `k8s-ops` contract (2026-05-31)
+
+`scale` **consumes (does not own)** the deploy / hosting / FinOps substrate.
+
+- **`../k8s/` = `../poc-k8s` = `rhanka/k8s-ops`** (confirmed). It evolves from PoC to a **multi-cloud / multi-k8s / multi-client / multi-application-per-client PaaS**; `paas` is a provisional repo name only. The PaaS will itself be **a sentropic service** (likely `paas.sent-tech.ca`).
+- **Required: a clean contract `sentropic` (consumer) ↔ `k8s-ops` (provider of the PaaS app + hosting + FinOps).** This is a value-chain provider→customer boundary (cf. the h2a value chain / EVO-9). It must be **co-designed with the real build-app deploy consumer flow**, not frozen unilaterally.
+- Out of scope for the build-app MVP; surfaces in the multi-cloud GitOps deploy workstream. Coordinate with the live `claude:poc-k8s` session.
