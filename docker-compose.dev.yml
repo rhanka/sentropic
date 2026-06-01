@@ -81,7 +81,7 @@ services:
 
   ui-playwright-dev:
     profiles: ["playwright"]
-    image: ${REGISTRY}/${UI_IMAGE_NAME:-top-ai-ideas-ui}:${UI_VERSION:-latest}
+    image: ${REGISTRY}/${UI_IMAGE_NAME:-sentropic-ui}:${UI_VERSION:-latest}
     build:
       context: .
       dockerfile: ./ui/Dockerfile
@@ -105,7 +105,7 @@ services:
 
   playwright-dev:
     profiles: ["playwright"]
-    image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
+    image: ${REGISTRY}/${E2E_IMAGE_NAME:-sentropic-e2e}:${E2E_VERSION:-latest}
     build:
       context: ./e2e
       dockerfile: Dockerfile
