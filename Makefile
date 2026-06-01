@@ -839,8 +839,8 @@ lint-ui: up-ui ## Run UI linter
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run lint
 
 .PHONY: lint-api
-lint-api: ## Run API linter
-	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run lint
+lint-api: prepare-node-workspace ## Run API linter
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api npm run lint
 
 .PHONY: format
 format:
