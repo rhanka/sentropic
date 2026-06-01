@@ -6,9 +6,9 @@
  * process exit code (never calls `process.exit` itself, so it is unit-testable). All
  * side-effecting dependencies flow through {@link AppCliDeps}.
  *
- * The real `templates/chat-app/**` scaffold manifest is supplied by a later lot; until it
- * lands, an `init` call without an injected `manifestProvider` exits non-zero with a
- * clear, honest message rather than scaffolding an empty app.
+ * The real `templates/chat-app/**` scaffold manifest is loaded by default via
+ * {@link defaultChatAppManifestProvider}; callers may still inject a `manifestProvider`
+ * (tests use a fixture). `init` therefore scaffolds the real app out of the box.
  */
 
 import type { ScaffoldManifest } from './templating/types.js';
@@ -16,9 +16,10 @@ import { runInit, type InitDeps } from './commands/init.js';
 import { parseInitOptions } from './commands/options.js';
 import { formatDoctorReport, runDoctor, type DoctorDeps } from './commands/doctor.js';
 import { validateAppName, validateTargetDir } from './commands/validate.js';
+import { defaultChatAppManifestProvider } from './manifest/chat-app.js';
 
 /** Package version surfaced by `--version` (kept in sync with package.json on bump). */
-export const BUILD_CLI_VERSION = '0.1.0';
+export const BUILD_CLI_VERSION = '0.2.0';
 
 const HELP = `stp app — scaffold a runnable @sentropic chat application
 
@@ -47,7 +48,10 @@ export interface AppCliDeps {
     readonly log?: (line: string) => void;
     /** Error sink (default: console.error). */
     readonly error?: (line: string) => void;
-    /** Supplies the scaffold manifest for `init` (the real subtree lands a later lot). */
+    /**
+     * Supplies the scaffold manifest for `init`. Defaults to the embedded chat-app
+     * subtree ({@link defaultChatAppManifestProvider}); tests inject a fixture.
+     */
     readonly manifestProvider?: () => ScaffoldManifest;
     /** Extra init deps (runner/ports) forwarded to {@link runInit}. */
     readonly initDeps?: Omit<InitDeps, 'manifest' | 'log'>;
@@ -92,15 +96,9 @@ export async function runAppCli(argv: readonly string[], deps: AppCliDeps = {}):
             validateAppName(options.name);
             validateTargetDir(options.dir);
 
-            if (!deps.manifestProvider) {
-                error(
-                    'init: no scaffold template available yet (the chat-app template subtree ' +
-                        'lands in a later lot). Provide a manifest provider to scaffold.',
-                );
-                return 1;
-            }
+            const manifestProvider = deps.manifestProvider ?? defaultChatAppManifestProvider;
             await runInit(options, {
-                manifest: deps.manifestProvider(),
+                manifest: manifestProvider(),
                 log,
                 ...deps.initDeps,
             });
