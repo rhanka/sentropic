@@ -150,7 +150,7 @@ Actions with the following status should be included around tasks only if really
 ## Plan / Todo (lot-based)
 
 - [ ] **Lot 0 — Baseline, scoping & EX1 declaration**
-  - [ ] Verify branch: `git -C tmp/feat-build-app-cli branch --show-current` = `feat/build-app-cli`.
+  - [x] Verify branch: `git -C tmp/feat-build-app-cli branch --show-current` = `feat/build-app-cli`.
   - [ ] Create/confirm isolated worktree `tmp/feat-build-app-cli` from `main`; copy `.env`, override
         `ENV=feat-build-app-cli` + slot-0 ports (9210/5410/1310).
   - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`,
@@ -160,14 +160,14 @@ Actions with the following status should be included around tasks only if really
   - [ ] Validate scope boundaries; record `BR42a-EX1` (Makefile + ci.yml) in `## Feedback Loop`.
   - [ ] Resolve `BR42a-Q1` (dispatch mechanism), `BR42a-Q2` (single-branch a0/a1/a2 confirmation),
         `BR42a-Q3` (plan/PLAN sync owner), `BR42a-E1` (api adopts chat-ui-shaped routes vs additive mount).
-  - [ ] Create the three package skeletons (`packages/cli`, `packages/build-cli`, `packages/chat-server`)
+  - [x] Create the package skeletons (`packages/cli`, `packages/build-cli`)
         each with `package.json` (`license: "MIT"`, `version: "0.1.0"`, `@sentropic/<name>`), `tsconfig.json`,
-        `LICENSE` (MIT), `README.md`. Mark NONE `private`.
+        `LICENSE` (MIT), `README.md`. Mark NONE `private`. (`packages/chat-server` is BR-42a0's, consumed published.)
   - [ ] Confirm chat-core in-memory adapter availability (VERIFIED: `@sentropic/chat-core` exports
         `InMemory.{InMemoryMessageStore, InMemorySessionStore, InMemoryStreamBuffer,
         InMemoryCheckpointStore, InMemoryMeshDispatch, InMemoryStreamSequencer}` + `ChatRuntime`; the
         SPEC §4.1 claim that `InMemoryMeshDispatch` does not exist is WRONG — record the correction).
-  - [ ] Regenerate the root lockfile for the three new workspace packages (`make lock-root`).
+  - [x] Regenerate the root lockfile for the new workspace packages `cli`/`build-cli` (`make lock-root`).
 
 - [ ] **Lot a0 — Extract `@sentropic/chat-server` (the SSE wire server)**
   - [ ] In `packages/chat-server/src/**`, define the port-driven wire surface matching the chat-ui
@@ -208,11 +208,12 @@ Actions with the following status should be included around tasks only if really
           surface changed (it is an app root, not a published package — no bump needed).
 
 - [ ] **Lot a1 — `@sentropic/build-cli` (`stp app`): templating substrate + generator + `init`/`doctor` + app template**
-  - [ ] Templating substrate (`packages/build-cli/src/templating/**`): deterministic `{{token}}`
+  - [x] Templating substrate (`packages/build-cli/src/templating/**`): deterministic `{{token}}`
         substitution over a file tree + a scaffold manifest (template files → output paths + transforms),
         dependency-light, behind an interface designed for later `@sentropic/harness` adoption (R5).
-  - [ ] Generator core (`packages/build-cli/src/generator/**`): resolve scaffold plan from the embedded
-        template subtree + options; deterministic output (R10 invariant — no timestamps/random/env-ordering).
+  - [x] Generator core (`packages/build-cli/src/generator/**`): resolve scaffold plan from a manifest
+        + options; deterministic output (R10 invariant — no timestamps/random/env-ordering). Pure planner
+        (`resolvePlan`) + thin no-partial-write filesystem writer (`writePlan`).
   - [ ] `stp app` verbs (`packages/build-cli/src/commands/**`): `init <name>` (flags `--dir`,
         `--provider stub|openai|gemini|anthropic|mistral|cohere`, `--git/--no-git`,
         `--github/--no-github`, `--github-visibility`, `--github-owner`, `--h2a-register`, `--yes/-y`,
@@ -249,8 +250,9 @@ Actions with the following status should be included around tasks only if really
             (name/ports/provider/repo-URL placeholder), pinned `@sentropic/*` versions, and that the
             generated backend mounts `@sentropic/chat-server` (NOT template-owned routes) and declares
             NO `/sessions/:id/events` replay route / `Sec-Sentropic-Wire-Version` header.
-      - [ ] `tests/templating.spec.ts` — substitution correctness, missing-token failure, no-partial-write
-            on error, idempotent re-render, determinism (R10).
+      - [x] `tests/templating.spec.ts` — substitution correctness, missing-token failure, idempotent
+            re-render, determinism (R10). (no-partial-write covered by `tests/writer.spec.ts`;
+            deterministic plan resolution covered by `tests/generator.spec.ts` golden fixture.)
       - [ ] `tests/doctor.spec.ts` — each pre-flight check (Docker/make/gh-auth/engines/port-availability
             incl. generated-app port-conflict) with mocked env; correct non-zero exit on failure.
       - [ ] `tests/repo-create-safety.spec.ts` — stub `gh`+`git`, force temp `HOME`+`PATH`; run
