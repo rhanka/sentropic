@@ -248,7 +248,7 @@ Actions with the following status should be included around tasks only if really
         `StreamBuffer`/`CheckpointStore`/`StreamSequencer`/`MeshDispatch`) + the generation/queue/stream ports.
     - [x] `routes: 'canonical'` serves `POST /chat/sessions/:id/messages`, `GET /chat/sessions/:id/stream`
           (SSE, `fromSeq` honoured), `GET /chat/sessions/:id/bootstrap` + the turn-control routes.
-    - [ ] `routes: 'app-contract'` serves the current app contract (`POST /chat/messages` sessionId-in-body,
+    - [x] `routes: 'app-contract'` serves the current app contract (`POST /chat/messages` sessionId-in-body,
           `GET /chat/sessions/:id/{messages,bootstrap}`) + the turn-control routes; the chat SSE slice is
           exposed as a handler/port the app's `/streams/sse` multiplexer can delegate to (BR42a0-E2).
       - [x] Initial `app-contract` HTTP route shape landed (`POST /chat/messages`, messages/bootstrap, turn-control routes).
@@ -289,13 +289,14 @@ Actions with the following status should be included around tasks only if really
         turn-control routes (handler BODIES leave `chat.ts`). `/tool-permissions` stays app-local (app-domain).
     - [x] Initial `api/src/routes/api/chat.ts` mount landed for `POST /messages` +
           `GET /sessions/:id/{messages,bootstrap}` using `chatService` + `queueManager` adapters.
-    - [ ] Turn-control routes still use the existing api handlers; migrate them into the chat-server mount.
+    - [x] Turn-control routes (`stop`, `steer`, `feedback`, `retry`, `tool-results`, checkpoints) now route
+          through the chat-server mount with API adapters and authorization hooks.
   - [x] `api/src/routes/api/streams.ts`: keep the 10-channel multiplexer + the 9 non-chat channels app-local;
         delegate ONLY the chat-stream draining slice to the chat-server StreamPort handler (BR42a0-E2). No
         org/folder/initiative/lock/presence/workspace/comment logic moves into the package.
-  - [ ] REMOVE the now-duplicated chat WIRE/turn implementation from `api/` (no dual paths, no "keep legacy
+  - [x] REMOVE the now-duplicated chat WIRE/turn implementation from `api/` (no dual paths, no "keep legacy
         routes" hatch). The PG adapter is the single home of the PG/NOTIFY/presence chat logic.
-  - [ ] No `api/drizzle/*.sql` change.
+  - [x] No `api/drizzle/*.sql` change.
   - [ ] Lot gate:
     - [x] `make typecheck-api` + `make lint-api`
           — PASS (`typecheck-api`; `lint-api` exits 0 with existing console warnings only).
@@ -306,11 +307,13 @@ Actions with the following status should be included around tasks only if really
             adapters in `api/` (a chat round-trip through the api stack: POST → SSE → bootstrap).
         - [x] Initial mount oracle landed: unsupported future `Sec-Sentropic-Wire-Version` is rejected by
               the mounted chat-server route — PASS.
+        - [x] Turn-control mount oracle landed: unsupported future `Sec-Sentropic-Wire-Version` is rejected
+              on a mounted control route — PASS.
         - [ ] Expand mount test to the full POST → SSE → bootstrap round-trip after stream delegation lands.
       - [x] All existing `api/tests/api/chat-*` specs + any `streams*` specs pass unchanged (non-chat streams untouched).
             Scoped run PASS:
             `make test-api-endpoints SCOPE='tests/api/chat.test.ts tests/api/chat-bootstrap-contract.test.ts tests/api/chat-characterization.spec.ts tests/api/chat-checkpoint-contract.test.ts tests/api/chat-feedback.test.ts tests/api/chat-history-analyze-tool.test.ts tests/api/chat-message-actions.test.ts tests/api/chat-permissions.test.ts tests/api/chat-server-mount.test.ts tests/api/chat-summary-contract.test.ts tests/api/chat-tools.test.ts tests/api/queue-stream-bootstrap-contract.test.ts tests/api/streams.test.ts' API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`
-            — PASS (13 files, 58 tests).
+            — PASS (13 files, 59 tests).
       - [ ] Sub-lot gate: `make test-api ENV=test-feat-chat-server`.
 
 - [ ] **Lot 4 — Full matrix + publish lane (EX1) + UAT**

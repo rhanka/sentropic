@@ -3,6 +3,17 @@ import { Hono, type Context } from 'hono';
 
 export type ChatRouteMode = 'app-contract' | 'canonical';
 
+export type ChatControlAction =
+  | 'createMessage'
+  | 'stop'
+  | 'steer'
+  | 'feedback'
+  | 'retry'
+  | 'toolResults'
+  | 'createCheckpoint'
+  | 'listCheckpoints'
+  | 'restoreCheckpoint';
+
 export type ChatServerUser = {
   userId: string;
   workspaceId?: string | null;
@@ -13,6 +24,10 @@ export type ChatServerOptions = {
   routes: ChatRouteMode;
   basePath?: string;
   includeControls?: boolean;
+  authorize?: (input: {
+    user: ChatServerUser;
+    action: ChatControlAction;
+  }) => boolean | Promise<boolean>;
 };
 
 export type CreatedChatMessage = {
@@ -35,6 +50,11 @@ export type ChatServerMessage = {
   feedbackVote?: number | null;
   model?: string | null;
 };
+
+export type ChatServerMessageIdentity = Pick<
+  ChatServerMessage,
+  'id' | 'sessionId' | 'role' | 'sequence'
+>;
 
 export type ChatServerStreamEvent = {
   streamId: string;
@@ -82,7 +102,7 @@ export type ChatMessagePort = {
   getMessageForUser?(input: {
     messageId: string;
     userId: string;
-  }): Promise<ChatServerMessage | null>;
+  }): Promise<ChatServerMessageIdentity | null>;
 
   stopAssistantMessage?(input: {
     assistantMessageId: string;
@@ -258,6 +278,16 @@ function resolveLocale(c: Context): string | undefined {
   return c.req.header('x-app-locale') ?? c.req.header('accept-language') ?? undefined;
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function controlErrorResponse(c: Context, error: unknown, fallback: string): Response {
+  const message = errorMessage(error, fallback);
+  const status = message === 'Message not found' ? 404 : 400;
+  return c.json({ error: message }, status);
+}
+
 function routeParam(c: Context, ...names: string[]): string {
   for (const name of names) {
     const value = c.req.param(name);
@@ -340,8 +370,24 @@ export function createChatServer(
     await next();
   });
 
+  const authorize = async (
+    c: Context,
+    user: ChatServerUser,
+    action: ChatControlAction,
+  ): Promise<Response | null> => {
+    if (!options.authorize) return null;
+    try {
+      const allowed = await options.authorize({ user, action });
+      return allowed ? null : c.json({ error: 'Insufficient permissions' }, 403);
+    } catch {
+      return c.json({ error: 'Insufficient permissions' }, 403);
+    }
+  };
+
   const postMessage = async (c: Context, pathSessionId?: string) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'createMessage');
+    if (denied) return denied;
     const body = await readJson(c);
     const content = stringValue(body.content);
     if (!content) return c.json({ error: 'content is required' }, 400);
@@ -423,18 +469,26 @@ export function createChatServer(
 
   const stop = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'stop');
+    if (denied) return denied;
     const assistantMessageId = routeParam(c, 'messageId', 'id');
-    const result = deps.messages.stopAssistantMessage
-      ? await deps.messages.stopAssistantMessage({
-          assistantMessageId,
-          userId: user.userId,
-        })
-      : { ok: true as const, jobId: null };
-    return c.json(result);
+    try {
+      const result = deps.messages.stopAssistantMessage
+        ? await deps.messages.stopAssistantMessage({
+            assistantMessageId,
+            userId: user.userId,
+          })
+        : { ok: true as const, jobId: null };
+      return c.json(result);
+    } catch (error) {
+      return controlErrorResponse(c, error, 'Unable to stop message');
+    }
   };
 
   const steer = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'steer');
+    if (denied) return denied;
     const assistantMessageId = routeParam(c, 'messageId', 'id');
     const body = await readJson(c);
     const message = stringValue(body.message);
@@ -443,63 +497,90 @@ export function createChatServer(
       body.metadata && typeof body.metadata === 'object'
         ? (body.metadata as Record<string, unknown>)
         : {};
-    const result = deps.messages.steerAssistantMessage
-      ? await deps.messages.steerAssistantMessage({
-          assistantMessageId,
-          userId: user.userId,
-          message,
-          metadata,
-        })
-      : {
-          assistantMessageId,
-          status: 'accepted',
-          action: 'interrupt_relaunch',
-          steer: { messageId: null, message, metadata },
-        };
-    return c.json(result);
+    try {
+      const result = deps.messages.steerAssistantMessage
+        ? await deps.messages.steerAssistantMessage({
+            assistantMessageId,
+            userId: user.userId,
+            message,
+            metadata,
+          })
+        : {
+            assistantMessageId,
+            status: 'accepted',
+            action: 'interrupt_relaunch',
+            steer: { messageId: null, message, metadata },
+          };
+      return c.json(result);
+    } catch (error) {
+      return controlErrorResponse(c, error, 'Unable to steer message');
+    }
   };
 
   const feedback = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'feedback');
+    if (denied) return denied;
     const messageId = routeParam(c, 'messageId', 'id');
     const body = await readJson(c);
-    const vote = body.vote === 'down' || body.vote === 'clear' ? body.vote : 'up';
-    const result = deps.messages.setMessageFeedback
-      ? await deps.messages.setMessageFeedback({ messageId, userId: user.userId, vote })
-      : { messageId, vote: vote === 'up' ? 1 : vote === 'down' ? -1 : null };
-    return c.json(result);
+    const vote = body.vote;
+    if (vote !== 'up' && vote !== 'down' && vote !== 'clear') {
+      return c.json({ error: 'Invalid feedback payload' }, 400);
+    }
+    try {
+      const result = deps.messages.setMessageFeedback
+        ? await deps.messages.setMessageFeedback({ messageId, userId: user.userId, vote })
+        : { messageId, vote: vote === 'up' ? 1 : vote === 'down' ? -1 : null };
+      return c.json(result);
+    } catch (error) {
+      return controlErrorResponse(c, error, 'Unable to set feedback');
+    }
   };
 
   const retry = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'retry');
+    if (denied) return denied;
     const messageId = routeParam(c, 'messageId', 'id');
     const body = await readJson(c);
     if (!deps.messages.retryUserMessage) {
       return c.json({ error: 'retry is not configured' }, 501);
     }
-    const created = await deps.messages.retryUserMessage({
-      messageId,
-      userId: user.userId,
-      providerId: stringValue(body.providerId),
-      model: stringValue(body.model),
-    });
-    const jobId = await deps.queue.enqueueChatMessage(
-      {
+    try {
+      const created = await deps.messages.retryUserMessage({
+        messageId,
         userId: user.userId,
+        providerId: stringValue(body.providerId),
+        model: stringValue(body.model),
+      });
+      const jobId = await deps.queue.enqueueChatMessage(
+        {
+          userId: user.userId,
+          sessionId: created.sessionId,
+          assistantMessageId: created.assistantMessageId,
+          providerId: created.providerId ?? null,
+          model: created.model ?? null,
+          vscodeCodeAgent: body.vscodeCodeAgent,
+          locale: resolveLocale(c),
+        },
+        { workspaceId: user.workspaceId ?? null },
+      );
+      return c.json({
         sessionId: created.sessionId,
+        userMessageId: created.userMessageId,
         assistantMessageId: created.assistantMessageId,
-        providerId: created.providerId ?? null,
-        model: created.model ?? null,
-        vscodeCodeAgent: body.vscodeCodeAgent,
-        locale: resolveLocale(c),
-      },
-      { workspaceId: user.workspaceId ?? null },
-    );
-    return c.json({ ...created, jobId });
+        streamId: created.streamId,
+        jobId,
+      });
+    } catch (error) {
+      return controlErrorResponse(c, error, 'Unable to retry message');
+    }
   };
 
   const toolResults = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'toolResults');
+    if (denied) return denied;
     const assistantMessageId = routeParam(c, 'messageId', 'id');
     const body = await readJson(c);
     const toolCallId = stringValue(body.toolCallId);
@@ -507,44 +588,56 @@ export function createChatServer(
     if (!deps.messages.acceptLocalToolResult) {
       return c.json({ error: 'tool results are not configured' }, 501);
     }
-    const accepted = await deps.messages.acceptLocalToolResult({
-      assistantMessageId,
-      toolCallId,
-      result: body.result,
-    });
-    if (!accepted.readyToResume) {
-      return c.json({
-        ok: true,
-        accepted: true,
-        resumed: false,
-        waitingForToolCallIds: accepted.waitingForToolCallIds,
-      });
-    }
-    const assistant = deps.messages.getMessageForUser
-      ? await deps.messages.getMessageForUser({
-          messageId: assistantMessageId,
-          userId: user.userId,
-        })
-      : null;
-    if (!assistant) return c.json({ error: 'Message not found' }, 404);
+    try {
+      const assistant = deps.messages.getMessageForUser
+        ? await deps.messages.getMessageForUser({
+            messageId: assistantMessageId,
+            userId: user.userId,
+          })
+        : null;
+      if (deps.messages.getMessageForUser) {
+        if (!assistant) return c.json({ error: 'Message not found' }, 404);
+        if (assistant.role !== 'assistant') {
+          return c.json({ error: 'Only assistant messages accept tool results' }, 400);
+        }
+      }
 
-    const jobId = await deps.queue.enqueueChatMessage(
-      {
-        userId: user.userId,
-        sessionId: assistant?.sessionId ?? '',
+      const accepted = await deps.messages.acceptLocalToolResult({
         assistantMessageId,
-        localToolDefinitions: accepted.localToolDefinitions,
-        vscodeCodeAgent: accepted.vscodeCodeAgent ?? body.vscodeCodeAgent,
-        resumeFrom: accepted.resumeFrom,
-        locale: resolveLocale(c),
-      },
-      { workspaceId: user.workspaceId ?? null },
-    );
-    return c.json({ ok: true, accepted: true, resumed: true, jobId });
+        toolCallId,
+        result: body.result,
+      });
+      if (!accepted.readyToResume) {
+        return c.json({
+          ok: true,
+          accepted: true,
+          resumed: false,
+          waitingForToolCallIds: accepted.waitingForToolCallIds,
+        });
+      }
+
+      const jobId = await deps.queue.enqueueChatMessage(
+        {
+          userId: user.userId,
+          sessionId: assistant?.sessionId ?? '',
+          assistantMessageId,
+          localToolDefinitions: accepted.localToolDefinitions,
+          vscodeCodeAgent: accepted.vscodeCodeAgent ?? body.vscodeCodeAgent,
+          resumeFrom: accepted.resumeFrom,
+          locale: resolveLocale(c),
+        },
+        { workspaceId: user.workspaceId ?? null },
+      );
+      return c.json({ ok: true, accepted: true, resumed: true, jobId });
+    } catch (error) {
+      return controlErrorResponse(c, error, 'Unable to accept tool result');
+    }
   };
 
   const createCheckpoint = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'createCheckpoint');
+    if (denied) return denied;
     const sessionId = routeParam(c, 'sessionId', 'id');
     const body = await readJson(c);
     if (!deps.messages.createCheckpoint) {
@@ -561,6 +654,8 @@ export function createChatServer(
 
   const listCheckpoints = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'listCheckpoints');
+    if (denied) return denied;
     const sessionId = routeParam(c, 'sessionId', 'id');
     const limit = Number(c.req.query('limit') ?? 20);
     const checkpoints = deps.messages.listCheckpoints
@@ -575,6 +670,8 @@ export function createChatServer(
 
   const restoreCheckpoint = async (c: Context) => {
     const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'restoreCheckpoint');
+    if (denied) return denied;
     const sessionId = routeParam(c, 'sessionId', 'id');
     const checkpointId = routeParam(c, 'checkpointId');
     if (!deps.messages.restoreCheckpoint) {
