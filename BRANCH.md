@@ -54,14 +54,14 @@
   - [x] Update extension display strings and document titles: `ui/vscode-ext/package.json`, `ui/vscode-ext/extension.ts`, `ui/chrome-ext/manifest.json`, `ui/chrome-ext/popup.html`, `ui/chrome-ext/sidepanel.html`, `ui/chrome-ext/content.ts`, `ui/chrome-ext/background.ts`, `ui/chrome-ext/extension-auth.ts`.
   - [x] Update web page titles: `ui/src/routes/+layout.svelte`, `ui/src/routes/dashboard/+page.svelte`.
   - [x] Gate: `make typecheck-api typecheck-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`; `make lint-api lint-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`.
-- [ ] Lot 2: machine identity + slug + dead-host fix (`top-ai-ideas` -> `sentropic`)
-  - [ ] Update tests first where URLs/package IDs/source markers are asserted: `api/tests/**`, `ui/tests/**`, `e2e/tests/06-settings.spec.ts`, `e2e/tests/fixtures/README.md`.
+- [x] Lot 2: machine identity + slug + dead-host fix (`top-ai-ideas` -> `sentropic`)
+  - [x] Update tests first where URLs/package IDs/source markers are asserted: `api/tests/**`, `ui/tests/**`, `e2e/tests/06-settings.spec.ts`, `e2e/tests/fixtures/README.md`.
   - [x] Apply BR14e-EX1: rename app package names `top-ai-ideas-api` -> `sentropic-api`, `top-ai-ideas-ui` -> `sentropic-ui`; regenerate lockfiles through make/Docker only.
   - [x] Apply BR14e-EX2: rename self-hosted Chrome/VSCode extension IDs, artifact names, storage keys (`topAiIdeas:*` -> `sentropic:*`), DOM host id (`top-ai-ideas-ext` -> `sentropic-ext`), VSCode command/config/runtime prefixes currently using `topai`, and VSCode dev extension id.
   - [x] Fix dead production extension hosts to `https://sentropic.sent-tech.ca` with `/api` where required: `ui/chrome-ext/extension-config.ts`, `ui/chrome-ext/background.ts`, `ui/chrome-ext/content.ts`, `ui/src/lib/components/ChatWidget.svelte`, `ui/chrome-ext/manifest.json`.
   - [x] Update download paths/artifact names: `api/src/routes/api/chrome-extension.ts`, `api/src/routes/api/vscode-extension.ts`, `ui/chrome-ext/package-extension-zip.js`, `ui/vscode-ext/package-vsix.js`.
   - [x] Update import/export `source` marker and locale slug references.
-  - [ ] Gate: `make test-api ENV=test-br14e`; `make test-ui ENV=test-br14e`.
+  - [x] Gate: `make test-api ENV=test-br14e`; `make test-ui ENV=test-br14e`.
 - [x] Lot 3: infrastructure source image rename (BR14e-EX3)
   - [x] Rename build/source image names to `sentropic-*` in `Makefile`, `docker-compose*.yml`, `.github/workflows/ci.yml`.
   - [x] Remove now-unneeded CI retag bridge while keeping k8s image names/tags stable.
@@ -73,7 +73,7 @@
   - [x] Run `make typecheck-api typecheck-ui ENV=br14e`.
   - [x] Run `make lint-api lint-ui ENV=br14e`.
   - [x] Run `make test-api ENV=test-br14e`.
-  - [ ] Run `make test-ui ENV=test-br14e`.
+  - [x] Run `make test-ui ENV=test-br14e`.
   - [ ] Run `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`.
 - [x] Lot 5: living docs + generated/historical exclusions
   - [x] Update living docs only: `README.md`, `TODO.md`, non-historical `TRANSITION.md` lines.
@@ -89,7 +89,7 @@
   - [x] `make typecheck-api typecheck-ui ENV=br14e`
   - [x] `make lint-api lint-ui ENV=br14e`
   - [x] `make test-api ENV=test-br14e`
-  - [ ] `make test-ui ENV=test-br14e`
+  - [x] `make test-ui ENV=test-br14e`
   - [ ] `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`
   - [ ] `make clean test-e2e API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=e2e-br14e`
   - [ ] UAT web: landing/login titles, magic-link and verification emails, DOCX report title show `Sentropic`.
@@ -118,3 +118,4 @@
 - BR14e-F13: Typecheck gate ordering bug fixed. Commands: failing `make typecheck-api typecheck-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e` first returned `tsc: not found` because `typecheck-api` reused the production-tagged API image after `build-api`; RED then GREEN `make test-ui SCOPE=tests/utils/sentropic-infra-contract.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; final `make typecheck-api typecheck-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e` passed. Status: acknowledge; `typecheck-api` now depends on `prepare-node-workspace` and runs through `docker-compose.dev.yml`; UI check still reports the six existing Svelte warnings only.
 - BR14e-F14: Lint gate ordering bug fixed. Commands: RED then GREEN `make test-ui SCOPE=tests/utils/sentropic-infra-contract.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; final `make lint-api lint-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e` passed. Status: acknowledge; `lint-api` now depends on `prepare-node-workspace` and runs through `docker-compose.dev.yml`; API lint reports existing warnings only (178 warnings, 0 errors).
 - BR14e-F15: Full API test gate hook-timeout bug fixed. Commands: initial `make test-api API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e` failed only on `tests/api/workspace-types.test.ts` because the `beforeEach` hook exceeded Vitest's 10s hook timeout; targeted `make test-api-unit SCOPE=tests/api/workspace-types.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e` passed after adding `hookTimeout: 60000`; final `make test-api API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e` passed. Status: acknowledge; final sub-suite totals were smoke 2 files / 6 tests, unit 63 files / 505 passed / 1 skipped, endpoints 59 files / 442 tests, queue 4 files / 20 tests, security 6 files / 49 tests, AI 9 files / 30 tests, limit 1 file / 4 tests.
+- BR14e-F16: Full UI test gate passed. Commands: `make down API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e` to free the UI port; `make test-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`. Status: acknowledge; UI Vitest passed 72 files / 430 tests.
