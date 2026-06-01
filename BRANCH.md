@@ -77,7 +77,7 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 - **BR40bc38a-M7** `acknowledge`: detached UAT worktree `tmp/uat-40bc-38a` created at integration HEAD and used for UAT/preUAT with copied `.env`.
 - **BR40bc38a-M8** `acknowledge`: Playwright MCP was unavailable in this Codex session, so preUAT was executed through project CLI Playwright via `make test-e2e`.
 - **BR40bc38a-M9** `attention`: official `tests/03-chat.spec.ts` still has 2s initial page-render assertions; in the UAT stack after Linux restart, `/folders` rendered after 4-7s with no page errors, so `RETRIES=0 MAX_FAILURES=1` fails before reaching the image test. Dedicated preUAT image Playwright passed with a 30s page-ready wait and no product code changes.
-- **BR40bc38a-M10** `attention`: official `tests/07-import-export.spec.ts` stops on the unrelated import-use-case test (`button[aria-label="Actions"]` missing) before the xlsx export test when run with `MAX_FAILURES=1`. Dedicated preUAT xlsx export Playwright passed and the downloaded workbook was inspected at the OOXML level.
+- **BR40bc38a-M10** `acknowledge`: official `tests/07-import-export.spec.ts` failure root cause was a test race after `domcontentloaded` on the folder detail route. The button kept `aria-label="Actions"`; the test now waits for the folder API response and the detail action surface before opening the menu. Full scoped rerun passed 3/3, including the xlsx export test.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -192,5 +192,8 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
   - [x] Fresh package checks after version bump:
     - [x] `make test-llm-mesh ENV=test-feat-40bc-38a`
     - [x] `make test-pkg-chat-core ENV=test-feat-40bc-38a`
+  - [x] Fix and rerun official import/export E2E after sub-agent diagnosis:
+    - [x] `make test-e2e E2E_SPEC=tests/07-import-export.spec.ts WORKERS=1 RETRIES=0 MAX_FAILURES=1 API_PORT=9204 UI_PORT=5404 MAILDEV_UI_PORT=1304 ENV=e2e-feat-40bc-38a-07`
+    - [x] Result: 3 passed.
   - [ ] Push only after user confirmation.
   - [ ] Create PR using this `BRANCH.md` as body when ready.
