@@ -402,7 +402,7 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - [x] `make test-e2e E2E_SPEC=tests/02-auth-oauth-revoke.spec.ts RETRIES=0 API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
     - [x] `make test-e2e E2E_SPEC=tests/02-auth-oauth-wellknown.spec.ts RETRIES=0 API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
     - [x] `make clean ENV=e2e-feat-auth-oidc`
-  - [ ] Commit: `test(BR-39c): Lot 6 E2E oauth authorization-code + revoke + wellknown`.
+  - [x] Commit: `test(BR-39c): Lot 6 E2E oauth authorization-code + revoke + wellknown`.
 
 - [ ] **Lot N-2 — UAT (web app only; Chrome ext + VSCode ext are out of scope)**
   - [ ] Web app setup:
