@@ -1,0 +1,24 @@
+{
+  "name": "{{slug}}-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend for {{name}}: mounts @sentropic/chat-server canonical routes over an in-memory adapter.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/server.js",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sentropic/chat-server": "^0.1.0",
+    "@hono/node-server": "^2.0.0",
+    "hono": "^4.10.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "^5.4.5"
+  }
+}
