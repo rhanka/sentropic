@@ -75,16 +75,16 @@
   - [ ] Run `make test-api ENV=test-br14e`.
   - [ ] Run `make test-ui ENV=test-br14e`.
   - [ ] Run `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`.
-- [ ] Lot 5: living docs + generated/historical exclusions
-  - [ ] Update living docs only: `README.md`, `TODO.md`, non-historical `TRANSITION.md` lines.
-  - [ ] Exclude historical evidence docs and generated `.graphify/**` from manual rebrand.
-  - [ ] Keep business-case references to Top AI Ideas only where they describe the first application running on Sentropic.
-- [ ] Lot 6: bucket/operator residual handling (BR14e-EX4 if touched)
-  - [ ] Confirm from repo evidence that there is no SQL bucket migration: DB stores bucket-relative `storage_key`; generated job results may persist `storageBucket`.
-  - [ ] Produce operator handoff steps for `DOC_STORAGE_BUCKET`: confirm live value, copy objects to `sentropic-docs`, reseal/cutover, verify pre-existing download/export and new upload, delete old bucket only after verification.
-  - [ ] Do not change sealed secrets or live buckets unless credentials and explicit operator path are available.
-  - [ ] Produce residual-name report for BR-14d including historical docs, in-the-wild export marker compatibility, Google console operator check, old bucket migration, generated `.graphify/**`, and any deferred live ops.
-  - [ ] Delete or consolidate `spec/BRANCH_SPEC_EVOL.md` before final validation.
+- [x] Lot 5: living docs + generated/historical exclusions
+  - [x] Update living docs only: `README.md`, `TODO.md`, non-historical `TRANSITION.md` lines.
+  - [x] Exclude historical evidence docs and generated `.graphify/**` from manual rebrand.
+  - [x] Keep business-case references to Top AI Ideas only where they describe the first application running on Sentropic.
+- [x] Lot 6: bucket/operator residual handling (BR14e-EX4 if touched)
+  - [x] Confirm from repo evidence that there is no SQL bucket migration: DB stores bucket-relative `storage_key`; generated job results may persist `storageBucket`.
+  - [x] Produce operator handoff steps for `DOC_STORAGE_BUCKET`: confirm live value, copy objects to `sentropic-docs`, reseal/cutover, verify pre-existing download/export and new upload, delete old bucket only after verification.
+  - [x] Do not change sealed secrets or live buckets unless credentials and explicit operator path are available.
+  - [x] Produce residual-name report for BR-14d including historical docs, in-the-wild export marker compatibility, Google console operator check, old bucket migration, generated `.graphify/**`, and any deferred live ops.
+  - [x] Delete or consolidate `spec/BRANCH_SPEC_EVOL.md` before final validation.
 - [ ] Lot N: final validation, UAT, PR
   - [ ] `make typecheck-api typecheck-ui ENV=br14e`
   - [ ] `make lint-api lint-ui ENV=br14e`
@@ -103,7 +103,7 @@
 - BR14e-EX2: Self-hosted extension identity/storage rename. Reason: no public store publication exists; distribution is self-hosted download. Impact: existing local extension users re-auth/re-config; this also clears cached dead-host config. Rollback: revert extension metadata, storage keys, and artifact names. Status: approved by branch plan.
 - BR14e-EX3: Source image rename across Makefile/compose/CI. Reason: remove residual `top-ai-ideas-*` source images and retag bridge. Impact: a missed image ref can break build/deploy; build and k8s rollout proof required before merge. Rollback: revert Makefile/compose/CI image-name changes. Status: approved by branch plan.
 - BR14e-EX4: Bucket/secret operator path. Reason: old `top-ai-ideas-docs` bucket may remain in sealed runtime config. Impact: live data move requires SCW/cluster credentials and copy-verify-cutover discipline; no DB migration because DB stores bucket-relative keys. Rollback: keep old bucket readable and revert `DOC_STORAGE_BUCKET`. Status: operator handoff unless credentials are explicitly provided.
-- BR14e-F1: Codex adversarial review during Claude session failed/retried due model/account/API instability. Status: documented in `spec/BRANCH_SPEC_EVOL.md`; continue with verified local evidence and normal gates.
+- BR14e-F1: Codex adversarial review during Claude session failed/retried due model/account/API instability. Status: former `spec/BRANCH_SPEC_EVOL.md` evidence consolidated into `BRANCH.md`, `plan/14e`, and the residual-name report; continue with verified local evidence and normal gates.
 - BR14e-F2: Lot 1 typecheck/lint gates passed with existing warnings only. Commands: `make typecheck-api typecheck-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`; `make lint-api lint-ui API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`. Status: acknowledge.
 - BR14e-F3: Lot 2 API slug/download/export targeted gate passed. Commands: `make test-api-unit SCOPE="tests/api/chrome-extension-download.test.ts tests/api/vscode-extension-download.test.ts tests/api/vscode-extension-token.test.ts tests/unit/google-drive-oauth.test.ts tests/api/google-drive-oauth.test.ts tests/api/import-export.test.ts tests/api/workspaces.test.ts" API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`. Status: acknowledge.
 - BR14e-F4: Lot 2 UI host/artifact targeted gates passed. Commands: `make test-ui SCOPE=tests/utils/sentropic-extension-contract.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; `make test-ui SCOPE=tests/utils/chrome-extension-download.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; `make test-ui SCOPE=tests/utils/extension-auth-ui.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; `make exec-ui CMD="node --check chrome-ext/package-extension-zip.js" API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; `make exec-ui CMD="node --check vscode-ext/package-vsix.js" API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`. Status: acknowledge.
@@ -114,3 +114,4 @@
 - BR14e-F9: VSCode CSS/root residual triage. Status: defer; `topai-vscode-root`, `topai-chat-*`, and `topai-theme-*` are stylesheet/container compatibility identifiers, not command/config/runtime IDs, and will be classified in the Lot 6 residual-name report unless a later lot explicitly broadens CSS renaming.
 - BR14e-F10: Lot 3 infra source image rename gate passed. Commands: `make test-ui SCOPE=tests/utils/sentropic-infra-contract.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; `make build-api build-ui-image API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=br14e`. Status: acknowledge; production image names now build directly as `sentropic-api`, `sentropic-ui`, and `sentropic-e2e`; CI retag bridge removed; `deploy/k8s/30-api.yaml` and `deploy/k8s/40-ui.yaml` already referenced `sentropic-*`; remaining `top-ai-ideas-*` infra matches are bucket/volume defaults deferred to Lot 6/operator residual handling.
 - BR14e-F11: Lot 4 test fixture refresh gate passed. Commands: `make test-api-unit SCOPE="tests/api/chat-permissions.test.ts tests/api/vscode-workspace-mapping.test.ts" API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`; `rg -n "Top AI Ideas|top-ai-ideas|topai|topAiIdeas" e2e/tests/fixtures api/tests ui/tests packages/chat-ui/tests`. Status: acknowledge; E2E fixture docs now use `Sentropic` and `sentropic.sent-tech.ca`; API tests now use `rhanka/sentropic`; the only remaining test matches are negative stale-name guards or `topai-*` CSS/upstream compatibility identifiers classified for Lot 6.
+- BR14e-F12: Lot 6 local bucket defaults and residual report gate passed. Commands: RED then GREEN `make test-ui SCOPE=tests/utils/sentropic-infra-contract.test.ts API_PORT=8714 UI_PORT=5114 MAILDEV_UI_PORT=1014 ENV=test-br14e`. Status: acknowledge; local dev/test document buckets now default to `sentropic-docs-dev` and `sentropic-docs-test`; `clean-db` removes the active compose project volume; live sealed `DOC_STORAGE_BUCKET` was not changed; residual report written to `docs/uat/2026-05-31-br14e-residual-name-report.md`; `spec/BRANCH_SPEC_EVOL.md` deleted after consolidation.

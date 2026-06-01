@@ -15,7 +15,7 @@ services:
       # Document storage (dev): MinIO by default (override DOC_STORAGE_* to use Scaleway S3)
       - DOC_STORAGE_ENDPOINT=${DOC_STORAGE_ENDPOINT:-http://minio:9000}
       - DOC_STORAGE_REGION=${DOC_STORAGE_REGION:-fr-par-1}
-      - DOC_STORAGE_BUCKET=${DOC_STORAGE_BUCKET:-top-ai-ideas-dev}
+      - DOC_STORAGE_BUCKET=${DOC_STORAGE_BUCKET:-sentropic-docs-dev}
       # IMPORTANT: avoid leaking real Scaleway creds from host env into dev MinIO.
       - DOC_STORAGE_ACCESS_KEY=${DOC_STORAGE_ACCESS_KEY:-minioadmin}
       - DOC_STORAGE_SECRET_KEY=${DOC_STORAGE_SECRET_KEY:-minioadmin}
@@ -56,8 +56,8 @@ services:
       until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}; do
         echo "waiting for minio..." && sleep 1;
       done;
-      mc mb --ignore-existing local/${DOC_STORAGE_BUCKET:-top-ai-ideas-dev} || true;
-      mc anonymous set none local/${DOC_STORAGE_BUCKET:-top-ai-ideas-dev} || true;
+      mc mb --ignore-existing local/${DOC_STORAGE_BUCKET:-sentropic-docs-dev} || true;
+      mc anonymous set none local/${DOC_STORAGE_BUCKET:-sentropic-docs-dev} || true;
       exit 0
     restart: "no"
 
