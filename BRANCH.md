@@ -184,51 +184,51 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
   - [x] Verify KEK/bootstrap decision from `BR39c-Q2`/`D20`: no docker-compose or Makefile edit is needed; dev/test fallback KEK is acceptable; first key is bootstrapped through `make exec-api CMD="npm run oauth:init-keys" ... ENV=<env>` after Lot 4.
   - [x] Verify `validate-auth-hono` CI runs `make test-auth-hono` for `packages/auth-hono/**` and API test jobs cover `api/tests/api/auth/oauth-*.test.ts`; if not, raise `BR39c-EX1` before implementation.
   - [x] Create initial draft of `spec/SPEC_BR39c_OAUTH_OIDC_IDP.md` (consolidation spec — temp, deleted at Lot N-1). Include: issuer/discovery model, target endpoints, claim shape, JWKS shape, state-store port interface, DPoP binding contract, login/consent continuation contract, mock RP contract.
-  - [ ] Commit: `git add BRANCH.md spec/SPEC_BR39c_OAUTH_OIDC_IDP.md && make commit MSG="chore(BR-39c): Lot 0 baseline + spec draft"`.
+  - [x] Commit: `e4c83e2d chore(BR-39c): Lot 0 baseline + spec draft`.
 
-- [ ] **Lot 1 — Schemas, ports, JWKS service**
-  - [ ] Extend `packages/auth-hono/src/ports.ts`:
+- [x] **Lot 1 — Schemas, ports, JWKS service**
+  - [x] Extend `packages/auth-hono/src/ports.ts`:
     - Add `OauthClientRecord`, `AuthCodePayload`, `TokenMeta`, `OauthStateStorePort`, and `DpopProofRecord` interfaces.
     - Add `JwksKeyRecord`, `JwksPort` interface (read-only: list + getActive + verify lookup; write/rotation is host-owned).
     - Add `oauthStateStore: OauthStateStorePort` + `jwks: JwksPort` to `AuthHonoPorts`.
-  - [ ] Create `packages/auth-hono/src/oauth/jwks-service.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/jwks-service.ts`:
     - `createJwksService({ jwksPort, clock })` returning `{ getPublicJwks(), signJwt(payload, options), verifyJwt(jwt, options) }` for both access tokens and id tokens.
     - Uses `jose` `SignJWT` with EdDSA / `crypto.KeyObject` from Ed25519 private key.
     - `getPublicJwks()` shape per RFC 7517: `{ keys: [{ kty: 'OKP', crv: 'Ed25519', use: 'sig', alg: 'EdDSA', kid, x, status: 'active'|'rotated' }] }`.
-  - [ ] Create `packages/auth-hono/src/oauth/state-store-types.ts` exporting all type contracts for D6.
-  - [ ] Create `api/src/db/schema.ts` additions for new tables (will materialize via Drizzle generate into `0027_oauth_clients.sql`):
+  - [x] Create `packages/auth-hono/src/oauth/state-store-types.ts` exporting all type contracts for D6.
+  - [x] Create `api/src/db/schema.ts` additions for new tables (materialized in `0027_oauth_clients.sql`):
     - `oauth_clients` (id text PK, client_id text unique, client_secret_hash text nullable for public clients, name text, redirect_uris text[] byte-exact, allowed_scopes text[], grant_types text[] default `["authorization_code"]`, response_types text[] default `["code"]`, token_endpoint_auth_method text default `"client_secret_basic"`, dpop_bound_access_tokens boolean default false, require_pkce boolean default true, tenant_id text nullable + index, created_at, updated_at, owner_user_id text fk users.id nullable `ON DELETE CASCADE`).
     - `authorization_codes` (code text PK, client_id text, user_id text fk users.id `ON DELETE CASCADE`, tenant_id text nullable + index, redirect_uri text, scope text, code_challenge text, code_challenge_method text NOT NULL CHECK `code_challenge_method = 'S256'` and no default, dpop_jkt text nullable, nonce text nullable, payload jsonb, expires_at, used_at nullable, created_at).
     - `oauth_tokens` (jti text PK, token_type text CHECK in `access_token|id_token`, client_id text, user_id text fk users.id `ON DELETE CASCADE`, tenant_id text nullable + index, scope text, audience text, dpop_jkt text nullable, expires_at, created_at).
     - `oauth_dpop_proofs` (jti text PK, expires_at timestamp not null, created_at timestamp default now()).
     - `revoked_tokens` (jti text PK, client_id text, user_id text fk users.id nullable `ON DELETE CASCADE`, tenant_id text nullable + index, revoked_at, expires_at).
     - `id_token_signing_keys` (kid text PK, alg text default `"EdDSA"`, crv text default `"Ed25519"`, public_jwk jsonb, private_key_encrypted bytea, active boolean default true, created_at, rotated_at nullable; enforce one active key with a partial unique index on `active` where true).
-  - [ ] Run `make db-generate ENV=test-feat-auth-oidc` to produce single migration file `api/drizzle/0027_oauth_clients.sql`, then ensure the first SQL statement is `CREATE EXTENSION IF NOT EXISTS pgcrypto;`. If Drizzle generates multiple files, manually consolidate to one before commit (rule: 1 migration max per branch).
-  - [ ] Create `api/src/services/auth/jwks-adapter.ts`:
+  - [x] Create single migration file `api/drizzle/0027_oauth_clients.sql`; first SQL statement is `CREATE EXTENSION IF NOT EXISTS pgcrypto;`. Note: created manually because existing `drizzle/meta` has no 0026 snapshot even though `_journal.json` has idx 26, so `drizzle-kit generate` would not be a safe source of truth.
+  - [x] Create `api/src/services/auth/jwks-adapter.ts`:
     - Implements `JwksPort` against Postgres via Drizzle.
     - Read path: cache active + last-3 rotated keys for 60s in-process to avoid pg hit on every token issue.
     - Write path: `generateAndStoreNewKey()` (operator-callable only, not auto-boot), `rotateActive(newKid)`.
     - Private-key encryption: `pgp_sym_encrypt(privateKeyPem, oauthSigningKek)`, decryption via `pgp_sym_decrypt(private_key_encrypted, oauthSigningKek)`, with production requiring `OAUTH_SIGNING_KEK`.
-  - [ ] Create `api/src/services/auth/oauth-state-adapter.ts`:
+  - [x] Create `api/src/services/auth/oauth-state-adapter.ts`:
     - Postgres impl of `OauthStateStorePort`.
     - `consumeAuthCode(code)` uses `UPDATE authorization_codes SET used_at = now() WHERE code = $1 AND used_at IS NULL RETURNING payload` to guarantee atomic single-use.
     - `recordDpopJti(jti, expiresAt)` inserts into `oauth_dpop_proofs`; duplicate-key conflict returns false.
     - `purgeExpired()` deletes rows where `expires_at < now()` from `authorization_codes`, `oauth_tokens`, `oauth_dpop_proofs`, and `revoked_tokens`.
-  - [ ] Create `packages/auth-hono/tests/__fixtures__/memory-oauth-state-store.ts`: in-memory `OauthStateStorePort` impl for package tests.
-  - [ ] Create `packages/auth-hono/tests/__fixtures__/memory-jwks.ts`: in-memory `JwksPort` impl that pre-generates one Ed25519 keypair.
-  - [ ] Lot 1 gate:
-    - [ ] `make typecheck-auth-hono ENV=test-feat-auth-oidc`
-    - [ ] `make typecheck-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-    - [ ] **API tests**
-      - [ ] new file: `api/tests/unit/auth/jwks-adapter.test.ts` (covers: getActive, list rotated, encrypt/decrypt round-trip, KEK rotation simulation)
-      - [ ] new file: `api/tests/unit/auth/oauth-state-adapter.test.ts` (covers: saveAuthCode TTL, consumeAuthCode atomic single-use under 2 concurrent calls, save/find token metadata, revokeToken, recordDpopJti duplicate rejection, purgeExpired)
-      - [ ] `make test-api SCOPE=tests/unit/auth/jwks-adapter.test.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-      - [ ] `make test-api SCOPE=tests/unit/auth/oauth-state-adapter.test.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
-    - [ ] **Package tests**
-      - [ ] new file: `packages/auth-hono/tests/oauth-jwks-service.test.ts` (covers: sign access/id tokens with Ed25519, verify success, verify with rotated kid succeeds, verify with unknown kid fails, getPublicJwks shape)
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-jwks-service.test.ts ENV=test-feat-auth-oidc`
-    - [ ] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
-  - [ ] Commit (target ≤150 lines/commit; split if needed): `chore(BR-39c): Lot 1 oauth schemas, ports, jwks service`.
+  - [x] Create `packages/auth-hono/tests/__fixtures__/memory-oauth-state-store.ts`: in-memory `OauthStateStorePort` impl for package tests.
+  - [x] Create `packages/auth-hono/tests/__fixtures__/memory-jwks.ts`: in-memory `JwksPort` impl that pre-generates one Ed25519 keypair.
+  - [x] Lot 1 gate:
+    - [x] `make typecheck-auth-hono ENV=test-feat-auth-oidc`
+    - [x] `make typecheck-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
+    - [x] **API tests**
+      - [x] new file: `api/tests/unit/auth/jwks-adapter.test.ts` (covers: getActive, list rotated, encrypt/decrypt round-trip, KEK rotation simulation)
+      - [x] new file: `api/tests/unit/auth/oauth-state-adapter.test.ts` (covers: saveAuthCode TTL, consumeAuthCode atomic single-use under 2 concurrent calls, save/find token metadata, revokeToken, recordDpopJti duplicate rejection, purgeExpired)
+      - [x] `make test-api-unit SCOPE="tests/unit/auth/jwks-adapter.test.ts tests/unit/auth/oauth-state-adapter.test.ts" API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc`
+      - [x] Attempted full `make test-api SCOPE="tests/unit/auth/jwks-adapter.test.ts tests/unit/auth/oauth-state-adapter.test.ts" ... ENV=test-feat-auth-oidc`: scoped tests passed through smoke/unit/endpoints/queue/security/ai phases; command then failed on post-test `up-api` wait while API became healthy immediately after (`make ps` showed healthy).
+    - [x] **Package tests**
+      - [x] new file: `packages/auth-hono/tests/oauth-jwks-service.test.ts` (covers: sign access/id tokens with Ed25519, verify success, verify with rotated kid succeeds, verify with unknown kid fails, getPublicJwks shape)
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-jwks-service.test.ts ENV=test-feat-auth-oidc`
+    - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
+  - [x] Commit (target ≤150 lines/commit; split if needed): split into atomic commits `2d11e202` through `aac4e5aa`.
 
 - [ ] **Lot 2 — OAuth2/OIDC core endpoints**
   - [ ] Implement against `BR39c-Q1`: issuer is API origin; OAuth endpoints are under `/api/v1/auth/oauth/*`; discovery/JWKS are root `/.well-known/*` on the API origin.
