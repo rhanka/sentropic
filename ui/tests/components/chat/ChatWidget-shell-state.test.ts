@@ -16,4 +16,13 @@ describe('ChatWidget shell state extraction', () => {
     expect(source).toContain('panelVisibility.showQueuePanel');
     expect(source).toContain('jobBadgeState.kind');
   });
+
+  it('routes the new-session button through the parent state reset handler', () => {
+    expect(existsSync(widgetPath)).toBe(true);
+    const source = readFileSync(widgetPath, 'utf8');
+    expect(source).toContain('const handleNewSession = () => {');
+    expect(source).toContain('chatSessionId = null;');
+    expect(source).toContain('on:click={handleNewSession}');
+    expect(source).not.toContain('on:click={() => chatPanelRef?.newSession?.()}');
+  });
 });
