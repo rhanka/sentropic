@@ -91,6 +91,7 @@
     "test": "vitest run tests"
   },
   "peerDependencies": {
+    "@sentropic/auth-hono": "^0.3.0",
     "@simplewebauthn/browser": "^13.2.2",
     "svelte": "^5.0.0"
   },
