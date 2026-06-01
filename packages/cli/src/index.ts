@@ -1,10 +1,18 @@
 /**
- * `@sentropic/cli` public entry point (skeleton).
+ * `@sentropic/cli` public entry point — the umbrella CLI binary `stp` (alias `sentropic`).
  *
- * The umbrella CLI binary `stp` (alias `sentropic`) and its subcommand-registration seam
- * land in lot a2. This file is intentionally a placeholder so the package is a valid,
- * type-checkable ESM module; it exports only the package version marker for now.
+ * BR-42a1 (lot a2): the typed subcommand-registration seam ({@link SubcommandRegistry} +
+ * {@link Subcommand}) and the plugin-agnostic dispatcher ({@link runCli}). Per D1, only
+ * `stp app` (backed by `@sentropic/build-cli`) is a real subcommand for the MVP; the
+ * federation points `stp graphify` / `stp h2a` / `stp remote` are reserved (separate repos)
+ * and slot into this same contract later. The `app` subcommand is wired by the `stp` bin
+ * (the composition root), so this core module imports no subcommand package — no cycle.
  */
 
-/** Package version marker (kept in sync with package.json by the a2 lot). */
-export const CLI_VERSION = '0.1.0';
+export { CLI_VERSION, runCli, type CliDeps } from './cli.js';
+export {
+    SubcommandRegistry,
+    DuplicateSubcommandError,
+    InvalidSubcommandError,
+    type Subcommand,
+} from './registry.js';

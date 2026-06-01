@@ -11,6 +11,10 @@
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "bin": {
+    "stp": "./bin/stp.mjs",
+    "sentropic": "./bin/stp.mjs"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -20,6 +24,7 @@
   "files": [
     "dist",
     "src",
+    "bin",
     "README.md",
     "LICENSE"
   ],
@@ -31,6 +36,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@sentropic/build-cli": "file:../build-cli"
   },
   "devDependencies": {
     "typescript": "5.4.5"
