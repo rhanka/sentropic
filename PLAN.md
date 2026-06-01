@@ -8,7 +8,8 @@ Status addendum 2026-05-25: BR-37 (`feat/deploy-poc-k8s`, PR #160) MERGED — Se
 Status addendum 2026-05-25: BR-41a/b registered as the "Sentropic Cowork" pair (sequenced multi-branch) via documentation chore `chore/cowork`. BR-41a (`feat/cowork-desktop-tools`) publishes `@sentropic/cowork-bridge` (shared client core + portable auth behind a StorageAdapter + local-tool protocol types, reusing `@sentropic/chat-ui` for SSE) and refactors the Chrome extension to consume it, adds a backend device-code enrollment flow + non-browser device registry, desktop tools (`screen_capture`=eyes, `input_action`=hands) with per-tool consent, and a portable Windows zip whose chat is driven from the Sentropic web app; it starts with a throwaway proto. BR-41b (`feat/cowork-local-webview`) depends on BR-41a and embeds a third-party webview hosting `@sentropic/chat-ui` locally (mini-browser / workspaces). Study in `spec/SPEC_COWORK.md`; open framing questions tracked in each plan file (BR41a-Q1/Q2, BR41-Q1, BR41b-Q1/Q2).
 Status addendum 2026-05-30: roadmap reconciled with merged PRs — the 2026-05-14 lead status above predates the merges listed here and must be read through this addendum. **Now MERGED/DONE:** BR-14b `refacto/chat-service-core` (PR #158, merged 2026-05-16) — `@sentropic/chat-core` extracted (27 `src/` modules; `ChatRuntime` split into tool-dispatch/finalization/checkpoint/session sub-classes) + chat-service modularization above the mesh runtime, UAT passed; BR-14a `feat/chat-ui-sdk`, relaunched as `feat/chat-ui-sdk-v2` (PR #164, merged 2026-05-23) — `@sentropic/chat-ui` extracted across web/Chrome/VSCode surfaces with publish lane; BR-32 `feat/flow-runtime-extract` (PR #165, merged 2026-05-22) — `@sentropic/flow`; BR-19 `feat/agent-sandbox-skills` (PR #166, merged 2026-05-24); BR-23 `feat/multi-agent-framework-comparison` study (PR #148, merged 2026-05-14, no code); BR-40a `feat/prioritization-matrix-scale` (PR #187, merged 2026-05-30); and the deploy quartet BR-37/37b/37c/37d (`feat/deploy-poc-k8s*`, PRs #160/#176/#186/#191) — Sentropic live on poc-k8s at `sentropic.sent-tech.ca`, legacy `top-ai-ideas` stack decommissioned (per addenda above). GitHub repo rename to `rhanka/sentropic` is effective (remote `origin`). **Still open in the BR-14 chain:** BR-14e (codebase finalization) then BR-14d (transition ops), both `plan`. **Newly unblocked product waves:** BR-33 / BR-35 / BR-36, the BR-38a/b vision pair (BR-38a in progress on `feat/multimodal-image-input`), the BR-39a/b auth pair, and the BR-40b/c sheets remainder. Per-branch status reconciled in §1 and §3 below.
 Status addendum 2026-05-30 (BR-14e/14d): **BR-14d (`chore/sentropic-transition-ops`) is REALIZED by the BR-37 lineage** — BR-37c/37d already executed the operational transition BR-14d planned (DNS + 301 redirect `top-ai-ideas.sent-tech.ca` → `https://sentropic.sent-tech.ca`, decommission of the legacy SCW Serverless Container `top-ai-ideas-api` + managed PostgreSQL `top-ai-ideas-db`, RP-ID/CORS/cookie/`AUTH_CALLBACK_BASE_URL`, registry image + secrets cleanup, repo already `rhanka/sentropic`). No standalone ops branch is required; BR-14d closes once BR-14e delivers the residual-name report. **BR-14e (`chore/sentropic-codebase-finalization`) is ACTIVE** and absorbs the `handover-rebrand-top-ai-ideas-to-sentropic` note (the "rebrand Top AI Ideas → Sentropic" work IS BR-14e, not a new branch). Now that BR-14a/14b are merged, BR-14e performs the FULL sweep — user-facing `Top AI Ideas` display strings AND machine `top-ai-ideas` identifiers (npm names, extension IDs/publisher, storage keys, image/bucket names, OAuth/download paths, fixtures) + living docs — with scope exceptions for Makefile/docker-compose/ci.yml. Detail in `plan/14e-BRANCH_chore-sentropic-codebase-finalization.md`.
-Status addendum 2026-05-31: **BR-42 registered** as the "scale / build-app foundry" family (umbrella chore `chore/scale-build-app`, `plan/42-BRANCH_chore-scale-build-app.md`). Goal: give the ecosystem a **CLI for app construction** (`sentropic-build-app`, **monorepo-resident**, no repo split) and **isolate the modules** needed for multi-client/multi-cloud growth. Lots (number — finalité): **BR-42a** `feat/build-app-cli` (CLI MVP scaffolder: `init` bootstraps a runnable chat-ui↔backend app + creates the GitHub repo; forces templating/doc-gen librarisation); **BR-42b** `feat/catalog-agents-canvas` (generalise the capability catalog skills+tools → **+agents+canvas**, open to `mcp` + `google-marketplace` `CatalogSource`; extends BR-19 + BR-33); **BR-42c** `feat/comments-package` (new `@sentropic/comments`: `CommentStore` + wire events); **BR-42d** `feat/persistence-comments-observability` (persistence ports/adapters for comments + observability; identities via BR-39); **BR-42e** `feat/flow-queue-streaming` (extract api Postgres queue → `@sentropic/flow` `JobQueue` for streaming chat; extends BR-32); **BR-42f** `feat/llm-mesh-vertex-ai` (Vertex AI provider in `@sentropic/llm-mesh`, streaming preserved); **BR-42g** `feat/events-bigquery-sink` (BigQuery `EventSink`; PG and/or BigQuery, incl. PG-via-BigQuery). Module-isolation analysis in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`. **Identities** handled by the in-flight **BR-39** auth pair (`codex:39-auth`). **Deferred (out of BR-42):** the `k8s-ops`→PaaS hosting/FinOps substrate + the clean `sentropic`↔`k8s-ops` contract (coordinate `claude:poc-k8s`, §16.5); the multi-tenant managed h2a MCP service + BYO-h2a; the multi-cloud GitOps deploy substrate. Trust-model concepts (VALEUR/ATTENTION/INTÉRÊT/CONFIANCE/MUTUALISATION) are posed in `rhanka/h2a` (EVO-9, via `claude:a2a-cli`) and consumed here.
+Status addendum 2026-05-31: **BR-42 registered** as the "scale / build-app foundry" family (umbrella chore `chore/scale-build-app`, `plan/42-BRANCH_chore-scale-build-app.md`). Goal: give the ecosystem a **CLI for app construction** (`sentropic-build-app`, **monorepo-resident**, no repo split) and **isolate the modules** needed for multi-client/multi-cloud growth. Lots (number — finalité, updated by the 2026-06-01 split): **BR-42a0** `feat/chat-server` (extract `@sentropic/chat-server` before build-app); **BR-42a1** `feat/build-app-cli` (CLI MVP scaffolder: `init` bootstraps a runnable chat-ui↔backend app + creates the GitHub repo; forces templating/doc-gen librarisation); **BR-42b** `feat/catalog-agents-canvas` (generalise the capability catalog skills+tools → **+agents+canvas**, open to `mcp` + `google-marketplace` `CatalogSource`; extends BR-19 + BR-33); **BR-42c** `feat/comments-package` (new `@sentropic/comments`: `CommentStore` + wire events); **BR-42d** `feat/persistence-comments-observability` (persistence ports/adapters for comments + observability; identities via BR-39); **BR-42e** `feat/flow-queue-streaming` (extract api Postgres queue → `@sentropic/flow` `JobQueue` for streaming chat; extends BR-32); **BR-42f** `feat/llm-mesh-vertex-ai` (Vertex AI provider in `@sentropic/llm-mesh`, streaming preserved); **BR-42g** `feat/events-bigquery-sink` (BigQuery `EventSink`; PG and/or BigQuery, incl. PG-via-BigQuery). Module-isolation analysis in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`. **Identities** handled by the in-flight **BR-39** auth pair (`codex:39-auth`). **Deferred (out of BR-42):** the `k8s-ops`→PaaS hosting/FinOps substrate + the clean `sentropic`↔`k8s-ops` contract (coordinate `claude:poc-k8s`, §16.5); the multi-tenant managed h2a MCP service + BYO-h2a; the multi-cloud GitOps deploy substrate. Trust-model concepts (VALEUR/ATTENTION/INTÉRÊT/CONFIANCE/MUTUALISATION) are posed in `rhanka/h2a` (EVO-9, via `claude:a2a-cli`) and consumed here.
+Status addendum 2026-06-01: **BR-42a split ratified and launched.** BR-42a0 (`feat/chat-server`, PR #201) extracts `@sentropic/chat-server@0.1.0`, migrates the current API onto it in `routes: 'app-contract'` mode, keeps `/tool-permissions` and non-chat SSE channels app-local, and provides the canonical generated-app route shape for BR-42a1. UAT passed on root `uat/42a0`; PR #201 CI is green, first publish still pending until bootstrap on `main` and OIDC/2FA setup. BR-42a1 (`feat/build-app-cli`) must consume the published `@sentropic/chat-server@0.1.x` package before scaffolding generated chat apps.
 
 ## 0) Repo merge policy (effective 2026-05-13)
 
@@ -55,9 +56,11 @@ Every PR going forward must be merged via a merge commit and the source branch l
 **Active execution:**
 - BR-25 `chore/rules-skills-audit` — **study mode**. 17/46 checkboxes; mechanical enforcement design over text rules.
 - BR-38a `feat/multimodal-image-input` — **in progress**. Image upload/paste/attach UX (unified composer attachment band + click-to-enlarge lightbox); first of the vision/image pair, not yet merged.
+- BR-42a0 `feat/chat-server` — **PR #201, UAT OK**. Extracts `@sentropic/chat-server` and migrates the
+  current API onto it; PR CI is green, publish bootstrap pending before BR-42a1 starts.
 
 **Pending branches (unblocked or near-unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-20, BR-21, BR-22, BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38b (image-generation-tool), BR-39a (auth-ui-sdk), BR-39b (auth-hono-kit), BR-40b (xlsx-multitab-query), BR-40c (folder-xlsx-export), BR-41a (cowork-desktop-tools), BR-41b (cowork-local-webview), BR-42a/b/c/d/e/f/g (scale / build-app foundry — see 2026-05-31 addendum + `plan/42-BRANCH_chore-scale-build-app.md`) — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-20, BR-21, BR-22, BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38b (image-generation-tool), BR-39a (auth-ui-sdk), BR-39b (auth-hono-kit), BR-40b (xlsx-multitab-query), BR-40c (folder-xlsx-export), BR-41a (cowork-desktop-tools), BR-41b (cowork-local-webview), BR-42a1/b/c/d/e/f/g (scale / build-app foundry — see 2026-06-01 addendum + `plan/42-BRANCH_chore-scale-build-app.md`) — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Study closed (no code):**
 - BR-31 `chore/make-to-nx-study` — **study closed 2026-05-13**. Recommendation **REJECT** with sub-option (optional power-developer adapt). Deliverable: `spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md`. Commits `681790fa` (BRANCH.md) + `38d8f1d3` (spec). No further lots; PR open for record.
@@ -304,6 +307,31 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-41b | feat/cowork-local-webview                        | Cowork local third-party webview hosting @sentropic/chat-ui| plan                 | BR-41a                         |
 |        |                                                  | (mini-browser / workspaces); chat runs inside the binary.  |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42a0| feat/chat-server                                 | Extract @sentropic/chat-server as the reusable Hono        | PR #201, UAT OK;     | BR-14a, BR-14b, BR-14c        |
+|        |                                                  | wire+turn package over chat-core; migrate current API      | CI green / publish   |                                |
+|        |                                                  | in app-contract mode and expose canonical generated routes.| pending bootstrap    |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42a1| feat/build-app-cli                               | sentropic-build-app CLI MVP: init scaffolds a runnable     | plan after BR-42a0   | BR-42a0                        |
+|        |                                                  | chat-ui + chat-server + backend app and creates GH repo.   |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42b | feat/catalog-agents-canvas                       | Generalise capability catalog from skills+tools to         | plan                 | BR-19, BR-33                   |
+|        |                                                  | skills+tools+agents+canvas; add mcp/google sources.       |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42c | feat/comments-package                            | Extract @sentropic/comments: CommentStore port + wire      | plan                 | none                           |
+|        |                                                  | events for messages, canvas, and artifacts.                |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42d | feat/persistence-comments-observability          | Persistence adapters for comments + observability;         | plan                 | BR-42c, BR-39                  |
+|        |                                                  | identities supplied by the auth package line.              |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42e | feat/flow-queue-streaming                        | Extract the API Postgres chat queue into @sentropic/flow   | plan                 | BR-32                          |
+|        |                                                  | JobQueue for streaming chat and generated apps.            |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42f | feat/llm-mesh-vertex-ai                          | Add Vertex AI provider adapter to @sentropic/llm-mesh      | plan                 | BR-14c                         |
+|        |                                                  | while preserving provider-level streaming.                 |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-42g | feat/events-bigquery-sink                        | Add BigQuery EventSink adapter; support PG and/or          | plan                 | @sentropic/events              |
+|        |                                                  | BigQuery, including PG-via-BigQuery variants.              |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-31  | chore/make-to-nx-study                           | One-branch study assessing nx as a Make replacement.       | study closed         | none (doc-only)                |
 |        |                                                  | Deliverable: spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md       | (recommend REJECT)   |                                |
 |        |                                                  | (status quo + nx simulation + CI before/after + transition |                      |                                |
@@ -361,6 +389,14 @@ graph TD
   BR40a[BR-40a prioritization matrix scale ✓]
   BR40b[BR-40b xlsx multitab query]
   BR40c[BR-40c folder xlsx export]
+  BR42a0[BR-42a0 chat-server]
+  BR42a1[BR-42a1 build-app CLI]
+  BR42b[BR-42b catalog agents canvas]
+  BR42c[BR-42c comments package]
+  BR42d[BR-42d persistence comments observability]
+  BR42e[BR-42e flow queue streaming]
+  BR42f[BR-42f llm-mesh Vertex AI]
+  BR42g[BR-42g events BigQuery sink]
   BR31[BR-31 make to nx study ✗ REJECT]
 
   BR00 --> BR01
@@ -430,6 +466,16 @@ graph TD
   BR14f --> BR39a
   BR39a --> BR39b
   BR16a -.->|xlsx indexing base| BR40b
+  BR14a --> BR42a0
+  BR14b --> BR42a0
+  BR14c --> BR42a0
+  BR42a0 --> BR42a1
+  BR19 --> BR42b
+  BR33 --> BR42b
+  BR42c --> BR42d
+  BR39b --> BR42d
+  BR32 --> BR42e
+  BR14c --> BR42f
 ```
 
 ## 5) Scheduling post-BR-04
@@ -444,6 +490,7 @@ graph TD
 - **Out of waves — vision/image pair (registered 2026-05-24)**: BR-38a (`feat/multimodal-image-input`) then BR-38b (`feat/image-generation-tool`). BR-38a can be pulled forward after BR-14a/BR-14b/BR-14c/BR-14g and BR-16a contracts are stable enough to avoid duplicate chat/document wire changes. BR-38b waits for BR-38a because generated images reuse the media/storage/rendering contracts introduced for image input.
 - **Out of waves — auth module pair (registered 2026-05-24)**: BR-39a (`feat/auth-ui-sdk`) then BR-39b (`feat/auth-hono-kit`). BR-39a can run as soon as package publication capacity is available because it is frontend-only and host-adapter driven. BR-39b waits for BR-39a's transport contract so backend route extraction does not freeze a shape the reusable screens cannot consume.
 - **Out of waves — prioritization & sheets trio (registered 2026-05-25)**: BR-40a (`feat/prioritization-matrix-scale`) ∥ BR-40b (`feat/xlsx-multitab-query`) ∥ BR-40c (`feat/folder-xlsx-export`), one parallel wave of three orthogonal capabilities. BR-40a and BR-40c are independent. BR-40b depends on the disposition of `feat/xlsx-gsheet-indexing` (BR40b-Q1). Documentation registered via `chore/priorization-sheets`; implementation begins after framing questions (BR40a-Q1/Q2/Q3, BR40b-Q1/Q2, BR40c-Q1/Q2) are resolved.
+- **Out of waves — scale / build-app foundry (registered 2026-05-31, split 2026-06-01)**: BR-42a0 (`feat/chat-server`) runs first and must merge plus publish `@sentropic/chat-server@0.1.x` before BR-42a1 (`feat/build-app-cli`) starts. BR-42b..g remain mostly orthogonal package extensions and can be selected in parallel after their direct prerequisites are available.
 - **Out of waves — closed**: BR-31 (`chore/make-to-nx-study`) study closed, recommendation REJECT.
 
 **Wave in progress (2026-04-21)**: this transition branch (README pair, Sentropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
@@ -487,6 +534,12 @@ Registered BR-40 slots:
 - BR-40b slot 1 uses `API_PORT=9201`, `UI_PORT=5401`, `MAILDEV_UI_PORT=1301`, `ENV=test-feat-xlsx-multitab-query` or `ENV=e2e-feat-xlsx-multitab-query`.
 - BR-40c slot 2 uses `API_PORT=9202`, `UI_PORT=5402`, `MAILDEV_UI_PORT=1302`, `ENV=test-feat-folder-xlsx-export` or `ENV=e2e-feat-folder-xlsx-export`.
 
+Registered BR-42 slots:
+- BR-42a0 slot 0 uses `API_PORT=9210`, `UI_PORT=5410`, `MAILDEV_UI_PORT=1310`,
+  `ENV=test-feat-chat-server` or `ENV=e2e-feat-chat-server`. Root UAT branch is `uat/42a0`.
+- BR-42a1 slot 1 uses `API_PORT=9211`, `UI_PORT=5411`, `MAILDEV_UI_PORT=1311`,
+  `ENV=test-feat-build-app-cli` or `ENV=e2e-feat-build-app-cli`.
+
 All active branch plans and new sub-agent launch packets must use this slot convention when multiple agents or OAuth callback registration are involved.
 User UAT on root workspace (`ENV=dev`). Branch development and automated tests run in isolated worktrees only.
 
@@ -514,6 +567,8 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `plan/40a-BRANCH_feat-prioritization-matrix-scale.md` (BR-40a branch pointer)
 - `plan/40b-BRANCH_feat-xlsx-multitab-query.md` (BR-40b branch pointer)
 - `plan/40c-BRANCH_feat-folder-xlsx-export.md` (BR-40c branch pointer)
+- `plan/42-BRANCH_chore-scale-build-app.md` (BR-42 documentation umbrella)
+- `plan/done/42a0-BRANCH_feat-chat-server.md` (BR-42a0 archived branch plan)
 - `plan/31-BRANCH_chore-make-to-nx-study.md` (BR-31 branch pointer — study closed)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)

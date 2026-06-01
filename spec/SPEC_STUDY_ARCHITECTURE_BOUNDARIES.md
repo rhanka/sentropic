@@ -12,7 +12,8 @@ Seven packages under `@sentropic/*`. The original six-package proposal was revis
 |---|---|---|---|
 | `@sentropic/llm-mesh` | published 0.1.0 | provider adapters, model catalog, credentials, low-level provider streaming (provider-level token/delta/tool-call deltas as **provider events**, not session events), retry/fallback policy at provider call level | chat sessions, message lifecycle, persistence, workflow, telemetry sinks. Must NOT expose chat lifecycle types. |
 | `@sentropic/events` (added) | new | `EventEnvelope`, `EventType` taxonomy aligned with OTel GenAI semantic conventions, sequence numbers, redaction primitives, signing hooks | sinks (Postgres/Langfuse/Datadog), business meaning of events |
-| `@sentropic/chat-core` (BR14b) | in scoping | one chat session orchestration: tool loop, reasoning loop, continuation, cancel, retry, checkpoints, message lifecycle. Owns `CheckpointStore<ChatState>` instance (lenient OCC strategy — see §12). Owns `StreamBuffer` port. Owns `LiveDocumentStore` port (canvas, §10.3). Owns wire protocol contract (versioned). | providers (→ mesh), UI (→ chat-ui), multi-step workflow (→ flow), persistence backend (→ adapter), transport implementation (Hono/SSE lives in `chat-core/server` sub-entry, not in mesh nor in adapters) |
+| `@sentropic/chat-core` (BR14b) | published | one chat session orchestration: tool loop, reasoning loop, continuation, cancel, retry, checkpoints, message lifecycle. Owns `CheckpointStore<ChatState>` instance (lenient OCC strategy — see §12). Owns `StreamBuffer` port. Owns `LiveDocumentStore` port (canvas, §10.3). Owns wire/runtime ports and in-memory adapters, including `InMemoryMeshDispatch`. | providers (→ mesh), UI (→ chat-ui), multi-step workflow (→ flow), persistence backend (→ adapter), transport implementation (→ chat-server) |
+| `@sentropic/chat-server` (BR42a0) | branch-local 0.1.0; publication pending after merge | Hono chat route factory over `@sentropic/chat-core`: `createChatServer(deps, { routes })`, app-contract routes for the existing Sentropic API, canonical routes for generated apps / `@sentropic/chat-ui`, turn-control route bodies, stream-drain delegation helpers, deterministic in-memory package tests. | providers (→ mesh), UI (→ chat-ui), Drizzle/Postgres/presence adapters (host-owned), extension tool-permission policy, non-chat SSE channels |
 | `@sentropic/chat-ui` (BR14a) | in scoping | Svelte components, hooks consuming chat-core wire protocol, stream reassembly, optimistic UI, tool result rendering, reconnect/replay client logic | server logic, mesh access, persistence |
 | `@sentropic/flow` (future) | to scope | multi-step DAG (start/normal/conditional/fanout/join/end), durable execution, retries with idempotency keys, human approvals via signals/interrupts, multi-agent handoff with typed I/O contracts. Owns `CheckpointStore<FlowState>` instance (strict OCC strategy — see §12). Owns `JobQueue` port (bridge to background tasks, §10.4). | provider access (→ mesh), single-session chat orchestration (→ chat-core), UI |
 | `@sentropic/persistence-postgres` (future) | to scope | reference impl of `MessageStore`, `SessionStore`, `ChatCheckpointStore`, `FlowCheckpointStore`, `JobQueue`, `EventSink` adapters — Drizzle/Postgres specific | the ports themselves (those live in `chat-core` and `flow`). No domain model ownership. |
@@ -26,7 +27,13 @@ Seven packages under `@sentropic/*`. The original six-package proposal was revis
 
 **Dependency rules**
 
-- `chat-ui` → `chat-core` (HTTP/SSE) → `mesh`.
+- `chat-ui` consumes the canonical HTTP/SSE chat transport. A host may implement that shape directly, but
+  generated BR-42 apps should mount `chat-server` in `routes: 'canonical'` mode.
+- `chat-server` → `chat-core` for runtime ports and orchestration, and `hono` for route mounting. It has no
+  Drizzle, Postgres, or presence dependency.
+- The current Sentropic `api` consumes `chat-server` in `routes: 'app-contract'` mode and supplies the
+  Postgres/NOTIFY/presence adapters. It keeps `/tool-permissions` and the non-chat SSE channels app-local.
+- `chat-core` → `mesh` through the `MeshDispatch` port.
 - `flow` → `chat-core` for chat steps, `mesh` direct for non-chat model calls.
 - `events` is transverse: imported by `mesh`, `chat-core`, `flow`, `persistence-*`. No reverse dependency.
 - `persistence-*` implements ports defined by `chat-core` and `flow`; never the inverse.
@@ -489,6 +496,7 @@ OTel GenAI semantic conventions: <https://opentelemetry.io/docs/specs/semconv/ge
 | **Commentaires** extended | — (was no module) | **NEW → `@sentropic/comments`** | **Decided 2026-05-31: dedicated package `@sentropic/comments`** (collaborative annotation over messages / canvas / artifacts); owns `CommentStore` port + wire events; persisted via `persistence-*`. The one genuinely-new module. |
 | **Relation DB**: commentaires, identités, observabilité | §5/§12 `persistence-postgres` · auth (`@sentropic/auth-hono`/`auth-ui`, identités) · §1 `@sentropic/events` (observabilité) | **EXTEND** | Persistence ports for comments + identities + observability; **identités: auth BR-39 in flight via `codex:39-auth`** (`auth-hono`/`auth-ui`); observability ↔ `events` `EventSink`. |
 | **Queuer (streaming chat)** | §10.4 `JobQueue`/`flow` · §4 stream protocol | **EXTEND** | The queue powering streaming chat (today: api custom PG queue → extract to `@sentropic/flow` `JobQueue` port; minimal in-memory adapter for CLI). |
+| **Chat wire server for generated apps** | §1 `@sentropic/chat-core` + `@sentropic/chat-ui` | **EXTRACTED in BR-42a0 → `@sentropic/chat-server`** | Required before BR-42a1 build-app: one Hono route package exposes both the current app contract and the canonical generated-app route shape, with generation/queue/stream ports and host-supplied adapters. |
 
 ### 16.3 Google Cloud integration (multi-cloud goal, “intégration fluide avec les outils google”)
 
@@ -502,6 +510,9 @@ OTel GenAI semantic conventions: <https://opentelemetry.io/docs/specs/semconv/ge
 
 - These map to **extensions of in-flight/cartographied packages** (`llm-mesh`, `events`, `flow`, `skills`/marketplace, `persistence-*`, `auth-hono`) **+ one new module (`comments`)**.
 - **Resolved 2026-05-31**: `comments` = dedicated package `@sentropic/comments`. **Identities**: auth BR-39 in flight via `codex:39-auth` (`auth-hono`/`auth-ui`).
+- **Resolved 2026-06-01**: The BR-42a family is split. BR-42a0 extracts `@sentropic/chat-server` and migrates the
+  current API onto it before BR-42a1 starts the `sentropic-build-app` CLI. BR-42a1 must consume the
+  published `@sentropic/chat-server@0.1.x` package instead of copying chat wire or turn-control code.
 - Candidate branches extend the §11 cadence; sequence + bundling to be set when integrating into `PLAN.md`.
 - The catalog generalisation (§16.2 row 1) + Google `CatalogSource` (§16.3 row 3) are the same thread → likely one branch.
 
