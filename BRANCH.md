@@ -32,7 +32,7 @@ and ZERO legacy (no dual paths). Prerequisite of BR-42a1 `feat/build-app-cli` (D
   - `api/drizzle/*.sql` (no migration — extraction is schema-neutral)
   - `packages/chat-core/**` (chat-core is consumed as-is; if a missing export surfaces it is a blocker, not an edit here)
   - other `plan/NN-BRANCH_*.md` (except this file)
-  - `plan/42-BRANCH_chore-scale-build-app.md`, `plan/42a-BRANCH_feat-build-app-cli.md`, `PLAN.md`
+  - `plan/42-BRANCH_chore-scale-build-app.md`, future BR-42a1 plan files, `PLAN.md`
     (umbrella status updates land on a docs pass, not here — see BR42a0-Q3)
 - **Conditional Paths (allowed only with explicit exception)**:
   - `api/src/routes/api/chat.ts` — requires `BR42a0-EX2` (chat wire handler bodies leave api → chat-server)
@@ -44,6 +44,9 @@ and ZERO legacy (no dual paths). Prerequisite of BR-42a1 `feat/build-app-cli` (D
   - `api/Dockerfile` — requires `BR42a0-EX3` (copy `packages/chat-server/package.json` before workspace install)
   - `Makefile` — requires `BR42a0-EX1` (publish-lane targets for `chat-server`)
   - `.github/workflows/ci.yml` — requires `BR42a0-EX1` (path filters + bootstrap enum + validate/publish jobs + `api` filter add)
+  - `PLAN.md`, `plan/42-BRANCH_chore-scale-build-app.md`, `plan/done/42a0-BRANCH_feat-chat-server.md`,
+    `spec/SPEC.md`, `spec/SPEC_CHATBOT.md`, `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` — requires
+    `BR42a0-EX4` (final docs consolidation requested during branch finalization)
 - **Exception process**:
   - Declare exception ID `BR42a0-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -104,6 +107,10 @@ Actions with the following status should be included around tasks only if really
   the existing manifest-copy pattern for `auth-hono`, `llm-mesh`, and `flow`. Impact: additive Docker build
   metadata only; no runtime route or schema change. Rollback: remove the Dockerfile copy line and the API
   dependency entry.
+- **BR42a0-EX4** `acknowledge` (docs consolidation scope) — GRANTED by user finalization request on
+  2026-06-01. Reason: move the branch-local SPEC evolution facts into stable specs, update the BR-42 umbrella
+  plan/roadmap, and archive this branch plan snapshot in `plan/done`. Impact: documentation-only changes to
+  stable specs and roadmap files; no code or test behavior. Rollback: revert the docs commit.
 - **BR42a0-E1** `attention` (extraction boundary — THE central risk). VERIFIED FACTS:
   - chat-ui default transport (`packages/chat-ui/src/client/transport.ts`) calls
     `POST /chat/sessions/:id/messages`, `GET /chat/sessions/:id/stream` (SSE, forwards `fromSeq`),
@@ -197,8 +204,8 @@ Actions with the following status should be included around tasks only if really
   - [x] Create/confirm isolated worktree `tmp/feat-chat-server` from `main`; copy `.env`, override
         `ENV=feat-chat-server` + slot-0 ports (9210/5410/1310).
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`,
-        `rules/security.md`, `PLAN.md`, `spec/SPEC_EVOL_BUILD_APP_CLI.md` (esp. §8 RATIFIED + addendum),
-        §6 tests, §7 sequencing, `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`, `plan/BRANCH_TEMPLATE.md`.
+        `rules/security.md`, `PLAN.md`, branch handover notes for the D5 split,
+        `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`, `spec/SPEC_CHATBOT.md`, `plan/BRANCH_TEMPLATE.md`.
   - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [x] Validate scope boundaries; record `BR42a0-EX1` (Makefile + ci.yml) and `BR42a0-EX2` (api migration) in `## Feedback Loop`.
   - [x] Resolve `BR42a0-E1` (per-route app-domain vs chat-server split of `chat.ts`; `/tool-permissions` stays app-local),
@@ -369,13 +376,16 @@ Actions with the following status should be included around tasks only if really
     - [x] User sign-off received on 2026-06-01 from root branch `uat/42a0` at commit `93b21c43`.
   - [ ] Record explicit user sign-off if any AI flaky test is accepted.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Sync `spec/SPEC_EVOL_BUILD_APP_CLI.md`: record that `@sentropic/chat-server` is the wire+turn package
-        (BR-42a0), the D7 configurable route layer, the generation/queue/stream port set, and the verified
-        corrections (the `InMemoryMeshDispatch`-exists correction to §4.1; the app-contract vs canonical
-        routes). If a `spec/BRANCH_SPEC_EVOL.md` was used, integrate then delete it.
-  - [ ] `BR42a0-Q3`: land the `plan/42-BRANCH_chore-scale-build-app.md` + `PLAN.md` umbrella status update
-        (D5 split: BR-42a0 then BR-42a1) on a separate tiny docs commit/branch.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Sync stable specs (`spec/SPEC_CHATBOT.md`, `spec/SPEC.md`,
+        `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`): record that `@sentropic/chat-server` is the
+        wire+turn package (BR-42a0), the D7 configurable route layer, the generation/queue/stream port set,
+        the verified `InMemoryMeshDispatch` correction, and the app-contract vs canonical routes. No tracked
+        `spec/SPEC_EVOL_BUILD_APP_CLI.md` exists in this worktree; branch-local evolution facts were
+        consolidated directly into stable specs.
+  - [x] `BR42a0-Q3`: land the `plan/42-BRANCH_chore-scale-build-app.md` + `PLAN.md` umbrella status update
+        (D5 split: BR-42a0 then BR-42a1) in this branch per finalization request.
+  - [x] Archive this branch plan snapshot under `plan/done/42a0-BRANCH_feat-chat-server.md`.
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & lint (chat-server + api) green.
@@ -403,4 +413,4 @@ Actions with the following status should be included around tasks only if really
 - **Postgres-durable vs in-memory preset packaging** — chat-server ships both adapter families; preset
   selection by consumers (BR-42a1 uses in-memory).
 - **BR-42a1 `feat/build-app-cli`** — the downstream consumer (build-cli + app-template + `@sentropic/cli`
-  umbrella); see `plan/42a-BRANCH_feat-build-app-cli.md`.
+  umbrella); see `plan/42-BRANCH_chore-scale-build-app.md` until the BR-42a1 branch plan is created.
