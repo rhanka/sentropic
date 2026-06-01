@@ -1,8 +1,20 @@
 import type { Context, Next } from 'hono';
-import { validateSession } from '../services/session-manager';
 import { logger } from '../logger';
+import {
+  authHonoCookiePort,
+  authHonoSessionService,
+} from '../services/auth/session-adapter';
 import { ensureWorkspaceForUser } from '../services/workspace-service';
 import { getWorkspaceRole, isWorkspaceDeleted } from '../services/workspace-access';
+
+/**
+ * Session token reading and validation are delegated to the `@sentropic/auth-hono`
+ * Sentropic adapter (`authHonoCookiePort` + `authHonoSessionService`). Workspace
+ * selection, stale-workspace recovery, and hidden-workspace rules remain app-owned.
+ */
+const readSessionToken = (c: Context): string | undefined =>
+  authHonoCookiePort.readSessionToken(c.req.raw) ??
+  c.req.header('authorization')?.replace('Bearer ', '');
 
 /**
  * Authentication Middleware
@@ -42,23 +54,22 @@ export async function requireAuth(c: Context, next: Next) {
     // }, 'Auth middleware debug');
     
     // Extract session token from cookie or Authorization header
-    const sessionToken = 
-      c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
-      c.req.header('authorization')?.replace('Bearer ', '');
-    
+    const sessionToken = readSessionToken(c);
+
     if (!sessionToken) {
       logger.debug({ path: c.req.path }, 'No session token provided');
       return c.json({ error: 'Authentication required' }, 401);
     }
-    
-    // Validate session
-    const session = await validateSession(sessionToken);
-    
-    if (!session) {
+
+    // Validate session via the @sentropic/auth-hono Sentropic adapter
+    const validated = await authHonoSessionService.validateSessionToken(sessionToken);
+
+    if (!validated) {
       logger.debug({ path: c.req.path }, 'Invalid or expired session');
       return c.json({ error: 'Invalid or expired session' }, 401);
     }
-    
+
+    const session = { ...validated.session, role: validated.role };
     const path = c.req.path || '';
     const isWorkspaceBootstrapPath = path.includes('/workspaces') || path.includes('/me');
     const allowHiddenWorkspace = isWorkspaceBootstrapPath || path.includes('/health');
@@ -111,30 +122,28 @@ export async function requireAuth(c: Context, next: Next) {
 export async function optionalAuth(c: Context, next: Next) {
   try {
     // Extract session token
-    const sessionToken = 
-      c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
-      c.req.header('authorization')?.replace('Bearer ', '');
-    
+    const sessionToken = readSessionToken(c);
+
     if (sessionToken) {
-      // Validate session
-      const session = await validateSession(sessionToken);
-      
-      if (session) {
+      // Validate session via the @sentropic/auth-hono Sentropic adapter
+      const validated = await authHonoSessionService.validateSessionToken(sessionToken);
+
+      if (validated) {
         // Attach user info to context
-        const { workspaceId } = await ensureWorkspaceForUser(session.userId, { createIfMissing: false });
+        const { workspaceId } = await ensureWorkspaceForUser(validated.session.userId, { createIfMissing: false });
         if (workspaceId) {
-    c.set('user', {
-      userId: session.userId,
-      sessionId: session.sessionId,
-      role: session.role,
-      workspaceId,
-      email: session.email ?? null,
-      displayName: session.displayName ?? null,
-    });
+          c.set('user', {
+            userId: validated.session.userId,
+            sessionId: validated.session.sessionId,
+            role: validated.role,
+            workspaceId,
+            email: validated.session.email ?? null,
+            displayName: validated.session.displayName ?? null,
+          });
         }
       }
     }
-    
+
     await next();
   } catch (error) {
     logger.error({ err: error, path: c.req.path }, 'Optional auth middleware error');

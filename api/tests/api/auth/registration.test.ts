@@ -48,7 +48,7 @@ describe('Registration API Routes', () => {
 
       expect(res.status).toBe(403);
       const data = await res.json();
-      expect(data.error).toBe('Email verification required');
+      expect(data.error.code).toBe('email_verification_required');
     });
 
     it('should reuse existing verified user identified by email', async () => {
@@ -90,7 +90,7 @@ describe('Registration API Routes', () => {
 
       expect(res.status).toBe(403);
       const data = await res.json();
-      expect(data.error).toBe('Email verification required');
+      expect(data.error.code).toBe('email_verification_required');
     });
 
     it('should reuse legacy user without email when local part matches displayName', async () => {
