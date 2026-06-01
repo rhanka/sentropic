@@ -166,10 +166,15 @@ test.describe('Import / Export', () => {
       storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, targetWorkspaceId, targetFolderId),
     });
     const page = await userAContext.newPage();
+    const folderLoaded = page.waitForResponse(
+      (res) => res.url().includes(`/api/v1/folders/${targetFolderId}`) && res.ok()
+    );
     await page.goto(`/folders/${encodeURIComponent(targetFolderId)}`);
     await page.waitForLoadState('domcontentloaded');
+    await folderLoaded;
 
-    const actionsButton = page.locator('button[aria-label="Actions"]');
+    await expect(page.getByRole('button', { name: 'Exporter Excel (XLSX)' })).toBeVisible();
+    const actionsButton = page.getByRole('button', { name: 'Actions' });
     await expect(actionsButton).toBeVisible();
     await actionsButton.click();
 
