@@ -227,30 +227,32 @@ Actions with the following status should be included around tasks only if really
         existing remote, backfill repo URL before first commit). `--dry-run` prints the exact `gh`
         invocation without running it.
   - [x] `--h2a-register`: emit the minimal local non-protocol descriptor only (BR42a-F); no network call.
-  - [ ] App-template subtree (`packages/build-cli/templates/chat-app/**`, self-contained `package.json`
+  - [x] App-template subtree (`packages/build-cli/templates/chat-app/**`, self-contained `package.json`
         for lift-and-shift to a future `@sentropic/app-template`):
-    - [ ] Backend (`api/` inside the generated app): mounts `@sentropic/chat-server`'s
-          `createChatServer(InMemory.*)` over the in-memory chat-core adapters + a template-owned
-          deterministic `stub` `ProviderAdapter` (offline) registered in the llm-mesh registry. (CORRECTS
-          SPEC §4.1: the backend now CONSUMES `@sentropic/chat-server`, it does NOT own the routes.) No Postgres.
-    - [ ] Web UI (`ui/` inside the generated app): Svelte 5 app embedding `@sentropic/chat-ui`
-          `ChatPanel`/`ChatWidget` via `createDefaultTransport(baseUrl)` (imported from
-          `@sentropic/chat-ui/components/*`), `VITE_API_BASE_URL` aligned to the backend port.
-    - [ ] Design surface: depend on published `@sentropic/design-system-svelte` + `-themes` + `-tokens` (D4).
-    - [ ] Tooling: `Makefile`/make-include (`dev`/`down`/`typecheck`/`build`, Docker-first),
+    - [x] Backend (`api/` inside the generated app): mounts `@sentropic/chat-server`'s
+          `createChatServer(createInMemoryChatServerDeps({ assistantReply }), { routes: 'canonical' })`
+          (offline in-memory adapter; deterministic reply, no provider key) + `@hono/node-server`. (CONSUMES
+          `@sentropic/chat-server`; it does NOT own the routes — supersedes the §4.1 template-owned premise.) No Postgres.
+    - [x] Web UI (`ui/` inside the generated app): Svelte 5 app embedding `@sentropic/chat-ui`
+          `ChatPanel` via `createDefaultTransport(baseUrl)` + `createWebHost`/`createStreamHub` (imported from
+          `@sentropic/chat-ui/components/*` + `/client/*` + `/hosts/*`), `VITE_API_BASE_URL` aligned to the backend port.
+    - [x] Design surface: depend on published `@sentropic/design-system-svelte` + `-themes` + `-tokens` (D4).
+    - [x] Tooling: `Makefile`/make-include (`dev`/`down`/`typecheck`/`build`, Docker-first),
           `docker-compose.yml` (isolated project name = app slug, non-reserved ports), `.env.example`
           (provider-key slots + ports), `package.json` pinned to published `@sentropic/*`
           (chat-ui ^0.1.x, chat-core ^0.1.x, llm-mesh ^0.1.x, chat-server ^0.1.x, design-system-svelte
           ^0.10.x + themes/tokens) + peers (svelte ^5, `@lucide/svelte` ^0.562, `svelte-streamdown` ^3,
           hono), `README.md`, `LICENSE` (MIT), `.gitignore` (MUST exclude `.env`).
   - [ ] Lot gate:
-    - [ ] `make typecheck-build-cli` + `make lint` (build-cli + template subtree typecheck against the published `@sentropic/*`).
+    - [x] `make typecheck-build-cli` (PASS). (`make lint` deferred to final lot; template subtree is a string
+          corpus — not part of build-cli's tsc, validated via golden + init materialise specs + pinned-version asserts.)
     - [ ] **Generator unit tests (golden-file)** (`packages/build-cli/tests/**`):
-      - [ ] `tests/generator-golden.spec.ts` — `init demo --yes --provider stub --dry-run` + full
-            materialise vs committed golden fixtures (byte-for-byte; R10). Cover token substitution
-            (name/ports/provider/repo-URL placeholder), pinned `@sentropic/*` versions, and that the
-            generated backend mounts `@sentropic/chat-server` (NOT template-owned routes) and declares
-            NO `/sessions/:id/events` replay route / `Sec-Sentropic-Wire-Version` header.
+      - [x] `tests/generator-golden.spec.ts` — real chat-app manifest through `resolvePlan` with fixed
+            tokens, byte-for-byte vs committed golden fixture (`fixtures/chat-app-golden.json`; R10). Covers token
+            substitution (name/ports/provider/repo-URL), pinned `@sentropic/*` versions, that the generated
+            backend mounts `@sentropic/chat-server` canonical (NOT template-owned routes), and declares
+            NO `/sessions/:id/events` replay route / `Sec-Sentropic-Wire-Version` header. (`tests/manifest.spec.ts`
+            covers loader determinism + `_gitignore`->`.gitignore`; `init.spec.ts` materialises the real template.)
       - [x] `tests/templating.spec.ts` — substitution correctness, missing-token failure, idempotent
             re-render, determinism (R10). (no-partial-write covered by `tests/writer.spec.ts`;
             deterministic plan resolution covered by `tests/generator.spec.ts` golden fixture.)
@@ -265,9 +267,11 @@ Actions with the following status should be included around tasks only if really
             git repo/remote (refuse), flag errors, `.env` gitignored / never in scaffold. (missing
             Docker/make/gh + port-conflict covered by `tests/doctor.spec.ts`; `init.spec.ts` covers the
             dry-run/materialise + provider-validation + `.gitignore` excludes `.env`.)
-      - [ ] Scoped runs: `make test-build-cli`.
-    - [ ] `make build-build-cli` + `make pack-build-cli` (tarball includes template subtree + bins, excludes tests/fixtures/secrets).
-    - [ ] Bump `packages/build-cli/package.json` to `0.1.0`.
+      - [x] Scoped runs: `make test-build-cli` (114 tests PASS).
+    - [x] `make build-build-cli` + `make pack-build-cli` (tarball includes `templates/**` incl. `_gitignore`,
+          excludes tests/fixtures — 106 files, 52 kB).
+    - [x] Bumped `packages/build-cli/package.json` to `0.2.0` (public surface grew: `./manifest` export +
+          default chat-app scaffolding; `BUILD_CLI_VERSION` synced).
     - [ ] **E2E hermetic smoke** (the headline definition of done):
       - [ ] Prepare: temp working dir + temp `HOME`, no host npm writes, isolated compose project (app
             slug) + pinned non-conflicting ports (this branch slot: API `9211`, UI `5411`, Maildev `1311`).
