@@ -36,6 +36,23 @@ function toPosix(relativePath: string): string {
 }
 
 /**
+ * Translate a dotfile-safe SOURCE path to its real OUTPUT path.
+ *
+ * npm silently strips any file literally named `.gitignore` from a published tarball, so
+ * the template stores it as `_gitignore` and we restore the leading dot here. The
+ * convention is general: a basename whose first character is `_` maps to `.` (the
+ * create-* / Vite scaffolder idiom). Only the basename is rewritten — directories are
+ * untouched — and the mapping is pure, so it preserves the R10 determinism invariant.
+ */
+function outputPathFor(sourcePosixPath: string): string {
+  const slash = sourcePosixPath.lastIndexOf('/');
+  const dir = slash === -1 ? '' : sourcePosixPath.slice(0, slash + 1);
+  const base = slash === -1 ? sourcePosixPath : sourcePosixPath.slice(slash + 1);
+  const rewritten = base.startsWith('_') ? `.${base.slice(1)}` : base;
+  return `${dir}${rewritten}`;
+}
+
+/**
  * Recursively collect every file under `root`, returning POSIX-relative paths sorted
  * deterministically (case-sensitive byte order) so the manifest order is stable.
  */
@@ -72,12 +89,13 @@ export function loadChatAppManifest(templateDir: string = CHAT_APP_TEMPLATE_DIR)
     const abs = join(templateDir, ...relPath.split('/'));
     const content = readFileSync(abs, 'utf8');
     const mode = statSync(abs).mode;
+    const outputPath = outputPathFor(relPath);
     // Only record an executable bit (octal 0o111 any-x) so the plan stays deterministic
     // across umask differences; regular files defer to the writer default.
     const isExecutable = (mode & 0o111) !== 0;
     return isExecutable
-      ? { sourcePath: relPath, outputPath: relPath, content, mode: 0o755 }
-      : { sourcePath: relPath, outputPath: relPath, content };
+      ? { sourcePath: relPath, outputPath, content, mode: 0o755 }
+      : { sourcePath: relPath, outputPath, content };
   });
   return { entries };
 }
