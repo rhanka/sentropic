@@ -85,4 +85,33 @@ describe('Sentropic extension contract', () => {
       expect(source).toContain('sentropic');
     }
   });
+
+  it('uses Sentropic command, bridge, config, and runtime prefixes for VSCode', () => {
+    for (const relativePath of [
+      'vscode-ext/extension.ts',
+      'vscode-ext/local-tools-adapter.ts',
+      'vscode-ext/local-tools.ts',
+      'vscode-ext/package.json',
+      'vscode-ext/package-vsix.js',
+      'vscode-ext/vscode-bridge.ts',
+      'vscode-ext/webview-entry.ts',
+      'src/lib/components/ChatWidget.svelte',
+      'src/lib/components/chat/AppChatPanel.svelte',
+    ]) {
+      const source = readUiFile(relativePath);
+      expect(source).not.toContain('topai.vscode');
+      expect(source).not.toContain('topai.openPanel');
+      expect(source).not.toContain('topai.chatView');
+      expect(source).not.toContain('topai.sessionToken');
+      expect(source).not.toContain('topai.apiBaseUrl');
+      expect(source).not.toContain('topai.appBaseUrl');
+      expect(source).not.toContain('topai.wsBaseUrl');
+      expect(source).not.toContain('topai-vscode-webview');
+      expect(source).not.toContain('topai-vscode-host');
+      expect(source).not.toContain('topai-icon.svg');
+      expect(source).not.toContain('__TOPAI_VSCODE_RUNTIME__');
+      expect(source).not.toContain('__TOPAI_DEFAULT');
+      expect(source).toContain('sentropic');
+    }
+  });
 });

@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const manifestPath = path.resolve(__dirname, 'package.json');
 const extensionEntryPoint = path.resolve(__dirname, 'extension.ts');
-const extensionIconPath = path.resolve(__dirname, 'topai-icon.svg');
+const extensionIconPath = path.resolve(__dirname, 'sentropic-icon.svg');
 const distDir = path.resolve(__dirname, 'dist');
 const distExtensionPath = path.join(distDir, 'extension.cjs');
 const distWebviewPath = path.join(distDir, 'webview-entry.js');
@@ -116,7 +116,7 @@ const packageVsix = () => {
   try {
     fs.mkdirSync(stagedExtensionRoot, { recursive: true });
     fs.cpSync(manifestPath, path.join(stagedExtensionRoot, 'package.json'));
-    fs.cpSync(extensionIconPath, path.join(stagedExtensionRoot, 'topai-icon.svg'));
+    fs.cpSync(extensionIconPath, path.join(stagedExtensionRoot, 'sentropic-icon.svg'));
     fs.cpSync(distDir, path.join(stagedExtensionRoot, 'dist'), { recursive: true });
 
     fs.writeFileSync(path.join(stagedRoot, '[Content_Types].xml'), createContentTypesXml(), 'utf8');
@@ -155,8 +155,8 @@ const buildHostBundle = async () => {
     format: 'cjs',
     external: ['vscode'],
     define: {
-      __TOPAI_DEFAULT_API_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_API_BASE_URL),
-      __TOPAI_DEFAULT_APP_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_APP_BASE_URL),
+      __SENTROPIC_DEFAULT_API_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_API_BASE_URL),
+      __SENTROPIC_DEFAULT_APP_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_APP_BASE_URL),
     },
     outfile: distExtensionPath,
     sourcemap: false,
@@ -199,8 +199,8 @@ const runWatch = async () => {
     format: 'cjs',
     external: ['vscode'],
     define: {
-      __TOPAI_DEFAULT_API_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_API_BASE_URL),
-      __TOPAI_DEFAULT_APP_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_APP_BASE_URL),
+      __SENTROPIC_DEFAULT_API_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_API_BASE_URL),
+      __SENTROPIC_DEFAULT_APP_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_APP_BASE_URL),
     },
     outfile: distExtensionPath,
     sourcemap: false,
