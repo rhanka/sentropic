@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+
 // Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
 test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debugging
 
@@ -18,9 +20,12 @@ test.describe('Chat', () => {
       .locator('div.fixed.shadow-lg, div.absolute.shadow-lg')
       .filter({ hasText: label })
       .first();
+  const runtimeHistoryLabel = /Raisonnement|Reasoning|\d+\s+appel\(s\) outil\(s\)|\d+\s+tool call\(s\)/i;
 
   const sessionHeaderLabel = (page: any) =>
     page.locator('#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate').first();
+  const runtimeHistoryHeader = (page: any) =>
+    page.locator('#chat-widget-dialog').getByText(runtimeHistoryLabel).first();
 
   async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
     const editable = page
@@ -81,7 +86,7 @@ test.describe('Chat', () => {
   async function debugBackendState(page: any, jobId: string, streamId: string) {
     try {
       if (jobId) {
-        const jobRes = await page.request.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+        const jobRes = await page.request.get(`${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
         console.log('[chat.spec] job status:', jobRes.status(), await jobRes.text());
       } else {
         console.log('[chat.spec] no jobId captured from POST /chat/messages');
@@ -125,6 +130,15 @@ test.describe('Chat', () => {
       .poll(async () => (await header.textContent())?.trim() ?? '', { timeout })
       .not.toMatch(sessionNoneLabel);
     return header;
+  }
+
+  async function startFreshChatSession(page: any) {
+    const newSessionAction = page.getByRole('button', { name: sessionNewLabel }).last();
+    if (!(await newSessionAction.isVisible().catch(() => false))) return;
+    await newSessionAction.click();
+    await expect
+      .poll(async () => await page.locator('#chat-widget-dialog .userMarkdown').count(), { timeout: 5_000 })
+      .toBe(0);
   }
 
   async function toggleUsefulFeedback(
@@ -231,22 +245,18 @@ test.describe('Chat', () => {
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
 
     const prompt = [
-      'Avant de répondre, raisonne par étapes et donne un bref état d’avancement.',
-      'Ensuite réponds de façon structurée à cette question:',
-      'quels sont les éléments visibles de la page actuelle et comment les catégoriser ?',
+      'Utilise l’outil folders_list avant de répondre.',
+      'Ensuite donne un bref état d’avancement et résume les dossiers visibles.',
     ].join(' ');
+    await startFreshChatSession(page);
     const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, prompt);
 
-    const runtimeHeader = page
-      .locator('#chat-widget-dialog')
-      .getByText(/Raisonnement|Reasoning/i)
-      .first();
     const retryButton = page
       .getByRole('button', { name: /réessayer|retry/i })
       .last();
 
     try {
-      await expect(runtimeHeader).toBeVisible({ timeout: 45_000 });
+      await expect(runtimeHistoryHeader(page)).toBeVisible({ timeout: 45_000 });
       await expect(retryButton).toBeVisible({ timeout: 60_000 });
     } catch (e) {
       await debugAssistantState(page);
@@ -257,7 +267,7 @@ test.describe('Chat', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(chatButton).toBeVisible({ timeout: 5_000 });
     await chatButton.click();
-    await expect(runtimeHeader).toBeVisible({ timeout: 15_000 });
+    await expect(runtimeHistoryHeader(page)).toBeVisible({ timeout: 15_000 });
 
     const page2 = await page.context().newPage();
     page2.on('request', (request: any) => {
@@ -280,9 +290,7 @@ test.describe('Chat', () => {
     await page2.waitForLoadState('domcontentloaded');
     await expect(page2.locator('button[aria-controls="chat-widget-dialog"]')).toBeVisible({ timeout: 5_000 });
     await page2.locator('button[aria-controls="chat-widget-dialog"]').click();
-    await expect(
-      page2.locator('#chat-widget-dialog').getByText(/Raisonnement|Reasoning/i).first()
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(runtimeHistoryHeader(page2)).toBeVisible({ timeout: 15_000 });
 
     expect(legacyRequests).toEqual([]);
 
@@ -520,6 +528,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Basculer vers Jobs via l'onglet
     const jobsTab = page.locator('button, [role="tab"]').filter({ hasText: /^Jobs(?: IA)?$/i }).first();
@@ -552,6 +561,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un premier message (objectif du test: la conversation est conservée, pas la sémantique exacte)
     const message1 = `Réponds brièvement (test E2E)`;
@@ -600,6 +610,7 @@ test.describe('Chat', () => {
 
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
 
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
@@ -675,6 +686,7 @@ test.describe('Chat', () => {
 
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
 
     await sendMessageAndWaitApi(page, composer, 'Donne un titre court à cette conversation.');
 
@@ -695,6 +707,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un message pour créer une session
     const message = 'Test session conservation';
@@ -743,6 +756,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un message pour créer une session avec une réponse spécifique
     // On demande explicitement de ne PAS utiliser d'outils
@@ -789,6 +803,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un message pour créer une session avec une réponse spécifique
     const expectedResponse = 'OK';
@@ -843,7 +858,7 @@ test.describe('Chat', () => {
     // Vérifier côté API que la session ciblée a bien été supprimée.
     await expect
       .poll(async () => {
-        const sessionsRes = await page.request.get('/api/v1/chat/sessions');
+        const sessionsRes = await page.request.get(`${API_BASE_URL}/api/v1/chat/sessions`);
         if (!sessionsRes.ok()) return null;
         const payload = await sessionsRes.json().catch(() => null);
         const sessions = Array.isArray((payload as any)?.sessions)
