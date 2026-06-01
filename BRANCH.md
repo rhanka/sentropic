@@ -232,13 +232,13 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
 
 - [ ] **Lot 2 — OAuth2/OIDC core endpoints**
   - [ ] Implement against `BR39c-Q1`: issuer is API origin; OAuth endpoints are under `/api/v1/auth/oauth/*`; discovery/JWKS are root `/.well-known/*` on the API origin.
-  - [ ] Create `packages/auth-hono/src/oauth/authorize-handler.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/authorize-handler.ts`:
     - GET handler validates `response_type=code`, `client_id` exists in `oauthStateStore.findClient(clientId)`, `redirect_uri` byte-exact match against `client.redirect_uris`, HTTPS/localhost/fragment/credentials rules from D11, `code_challenge` present + `code_challenge_method=S256`, optional `dpop_jkt` if client opted in, requested scopes are a subset of `client.allowed_scopes` else `invalid_scope`, `scope=offline_access` rejected, `state` passthrough, `nonce` passthrough, `prompt` / `login_hint` honored.
     - If no valid session and `prompt=none`, redirects to `redirect_uri` with `error=login_required` plus original `state`; if consent is required under `prompt=none`, redirects with `error=consent_required`.
     - If no valid session and prompt is normal or `login`, redirects to host-configurable `loginUrl` with a sealed continuation state; no JSON 401 for browser authorize flows.
     - If session is valid and consent is needed, returns 302 redirect to host-configurable consent URL with sealed state token (so consent page can re-validate without trusting query params).
     - Errors per RFC 6749 §4.1.2.1 (`error=invalid_request|unauthorized_client|access_denied|login_required|consent_required|...`), redirecting to `redirect_uri` only after client + redirect URI validation succeeds.
-  - [ ] Create `packages/auth-hono/src/oauth/consent-decision-handler.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/consent-decision-handler.ts`:
     - POST handler validates sealed state, re-checks user session through `ports.cookies` + `ports.sessions`, supports `approve` and `deny`, and emits the authorization code only on approve.
     - On deny, redirects to `redirect_uri` with `error=access_denied` plus original `state`.
   - [ ] Create `packages/auth-hono/src/oauth/token-handler.ts`:
@@ -270,7 +270,7 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
   - [ ] Lot 2 gate:
     - [ ] `make typecheck-auth-hono ENV=test-feat-auth-oidc`
     - [ ] **Package tests**
-      - [ ] new: `packages/auth-hono/tests/oauth-authorize.test.ts` (PKCE present, redirect_uri exact match + negative URI cases, unknown client → 400, invalid scope → redirect/error, normal no session → login redirect, prompt=none no session → redirect `login_required`, valid session → 302 to consent URL with sealed state)
+      - [x] new: `packages/auth-hono/tests/oauth-authorize.test.ts` (PKCE present, redirect_uri exact match + negative URI cases, unknown client → 400, invalid scope → redirect/error, normal no session → login redirect, prompt=none no session → redirect `login_required`, valid session → 302 to consent URL with sealed state)
       - [ ] new: `packages/auth-hono/tests/oauth-token.test.ts` (PKCE verify success, redirect_uri mismatch → invalid_grant, PKCE mismatch → invalid_grant, code reuse → invalid_grant, OAuth-only scope returns no id_token, nonce copied verbatim, wrong client secret → 401, DPoP-bound client without DPoP header → 400, DPoP-bound client with valid DPoP → 200 + cnf on access_token/id_token)
       - [ ] new: `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (htm mismatch, htu mismatch, stale iat, duplicate jti, missing/wrong ath on resource calls)
       - [ ] new: `packages/auth-hono/tests/oauth-userinfo.test.ts` (valid bearer → claims, revoked token → 401, DPoP-bound token requires proof, jkt mismatch → 401, unknown scopes rejected rather than filtered)
@@ -278,7 +278,7 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
       - [ ] new: `packages/auth-hono/tests/oauth-introspect.test.ts` (active token → details, revoked → {active: false}, missing client auth → 401)
       - [ ] new: `packages/auth-hono/tests/oauth-wellknown.test.ts` (openid-configuration shape, jwks.json shape, kid rotation reflected)
       - [ ] new: `packages/auth-hono/tests/oauth-router-factory.test.ts` (router mounts all routes, prefix override works, well-known router separates correctly)
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-authorize.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-authorize.test.ts ENV=test-feat-auth-oidc`
       - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-token.test.ts ENV=test-feat-auth-oidc`
       - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-dpop-proof.test.ts ENV=test-feat-auth-oidc`
       - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-userinfo.test.ts ENV=test-feat-auth-oidc`

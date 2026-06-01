@@ -1,0 +1,157 @@
+import type { Context } from 'hono';
+
+import type { AuthHonoPorts } from '../ports.js';
+import type { OauthClientRecord } from './state-store-types.js';
+import type { OAuthContinuationCodec, OAuthContinuationState } from './state-codec.js';
+import { appendParams, oauthJsonError, redirectWithOAuthError } from './http-utils.js';
+import { resolveOAuthAcr, resolveOAuthSession } from './session-resolver.js';
+
+export interface OAuthAuthorizeHandlerOptions {
+  consentUrl: string;
+  issuer: string;
+  loginUrl: string;
+  ports: AuthHonoPorts;
+  stateCodec: OAuthContinuationCodec;
+  stateTtlSeconds?: number;
+}
+
+interface ValidatedAuthorizeRequest {
+  client: OauthClientRecord;
+  codeChallenge: string;
+  dpopJkt: string | null;
+  nonce: string | null;
+  redirectUri: string;
+  scope: string;
+  state: string | null;
+}
+
+export const createOAuthAuthorizeHandler =
+  (options: OAuthAuthorizeHandlerOptions) =>
+  async (c: Context): Promise<Response> => {
+    const validation = await validateAuthorizeRequest(c, options.ports);
+    if (validation instanceof Response) return validation;
+
+    const prompt = c.req.query('prompt') ?? '';
+    const session = await resolveOAuthSession(c.req.raw, options.ports);
+
+    if (!session || prompt === 'login') {
+      if (prompt === 'none') {
+        return redirectWithOAuthError(validation.redirectUri, 'login_required', validation.state, c.req.url);
+      }
+
+      const continuation = await sealContinuation(c, options, validation);
+      return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
+    }
+
+    if (prompt === 'none') {
+      return redirectWithOAuthError(validation.redirectUri, 'consent_required', validation.state, c.req.url);
+    }
+
+    const sealedState = await sealContinuation(c, options, validation, {
+      acr: resolveOAuthAcr(session.sessionRecord),
+      authTime: session.sessionRecord.createdAt.toISOString(),
+      userId: session.user.id,
+    });
+
+    return c.redirect(appendParams(options.consentUrl, { state: sealedState }, c.req.url), 302);
+  };
+
+const validateAuthorizeRequest = async (
+  c: Context,
+  ports: AuthHonoPorts
+): Promise<ValidatedAuthorizeRequest | Response> => {
+  const clientId = c.req.query('client_id');
+  const client = clientId ? await ports.oauthStateStore.findClient(clientId) : null;
+  if (!client) {
+    return oauthJsonError(c, 400, 'invalid_request', 'Unknown OAuth client.');
+  }
+
+  const redirectUri = c.req.query('redirect_uri') ?? '';
+  const redirectError = validateRedirectUri(client, redirectUri);
+  if (redirectError) {
+    return oauthJsonError(c, 400, 'invalid_request', redirectError);
+  }
+
+  const state = c.req.query('state') ?? null;
+  if (c.req.query('response_type') !== 'code') {
+    return redirectWithOAuthError(redirectUri, 'unsupported_response_type', state, c.req.url);
+  }
+
+  const codeChallenge = c.req.query('code_challenge') ?? '';
+  if (!codeChallenge || c.req.query('code_challenge_method') !== 'S256') {
+    return redirectWithOAuthError(redirectUri, 'invalid_request', state, c.req.url);
+  }
+
+  const scopeResult = validateScope(c.req.query('scope') ?? '', client, redirectUri, state, c.req.url);
+  if (scopeResult instanceof Response) return scopeResult;
+
+  return {
+    client,
+    codeChallenge,
+    dpopJkt: c.req.query('dpop_jkt') ?? null,
+    nonce: c.req.query('nonce') ?? null,
+    redirectUri,
+    scope: scopeResult,
+    state,
+  };
+};
+
+const validateRedirectUri = (client: OauthClientRecord, redirectUri: string): string | null => {
+  if (!client.redirectUris.includes(redirectUri)) return 'redirect_uri is not registered for this client.';
+
+  let parsed: URL;
+  try {
+    parsed = new URL(redirectUri);
+  } catch {
+    return 'redirect_uri must be an absolute URI.';
+  }
+
+  if (parsed.hash) return 'redirect_uri must not contain a fragment.';
+  if (parsed.username || parsed.password) return 'redirect_uri must not contain credentials.';
+  if (parsed.protocol === 'https:') return null;
+  if (parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname)) return null;
+  return 'redirect_uri must use https except for localhost development callbacks.';
+};
+
+const validateScope = (
+  scope: string,
+  client: OauthClientRecord,
+  redirectUri: string,
+  state: string | null,
+  baseUrl: string
+): string | Response => {
+  const requestedScopes = scope.split(/\s+/).filter(Boolean);
+  if (requestedScopes.includes('offline_access')) {
+    return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl);
+  }
+  if (requestedScopes.some((requestedScope) => !client.allowedScopes.includes(requestedScope))) {
+    return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl);
+  }
+  return requestedScopes.join(' ');
+};
+
+const sealContinuation = async (
+  c: Context,
+  options: OAuthAuthorizeHandlerOptions,
+  request: ValidatedAuthorizeRequest,
+  session?: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'>
+): Promise<string> => {
+  const now = options.ports.clock.now();
+  const expiresAt = options.ports.clock.addSeconds(now, options.stateTtlSeconds ?? 10 * 60);
+  return options.stateCodec.seal({
+    acr: session?.acr,
+    authTime: session?.authTime,
+    clientId: request.client.clientId,
+    codeChallenge: request.codeChallenge,
+    codeChallengeMethod: 'S256',
+    createdAt: now.toISOString(),
+    dpopJkt: request.dpopJkt,
+    expiresAt: expiresAt.toISOString(),
+    nonce: request.nonce,
+    redirectUri: request.redirectUri,
+    scope: request.scope,
+    state: request.state,
+    tenantId: request.client.tenantId,
+    userId: session?.userId,
+  });
+};
