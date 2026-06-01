@@ -24,17 +24,28 @@ describe('Sentropic infra identity', () => {
       expect(source, path).not.toContain('top-ai-ideas-e2e');
       expect(source, path).not.toContain('top-ai-ideas-vscode-extension.vsix');
       expect(source, path).not.toContain('top-ai-ideas-fullstack-e2e');
+      expect(source, path).not.toContain('top-ai-ideas-dev');
+      expect(source, path).not.toContain('top-ai-ideas-test');
+      expect(source, path).not.toContain('top-ai-ideas-fullstack_pg_data');
     }
 
     const makefile = readRootFile('Makefile');
     expect(makefile).toContain('export API_IMAGE_NAME ?= sentropic-api');
     expect(makefile).toContain('export UI_IMAGE_NAME  ?= sentropic-ui');
     expect(makefile).toContain('export E2E_IMAGE_NAME ?= sentropic-e2e');
+    expect(makefile).toContain('DOC_BUCKET ?= $(or $(DOC_STORAGE_BUCKET),sentropic-docs-dev)');
 
     const ci = readRootFile('.github/workflows/ci.yml');
     expect(ci).not.toContain('SOURCE_UI_IMAGE_NAME');
     expect(ci).not.toContain('SOURCE_API_IMAGE_NAME');
     expect(ci).toContain('VITE_API_BASE_URL: https://sentropic.sent-tech.ca/api/v1');
+
+    expect(readRootFile('docker-compose.dev.yml')).toContain(
+      'DOC_STORAGE_BUCKET=${DOC_STORAGE_BUCKET:-sentropic-docs-dev}',
+    );
+    expect(readRootFile('docker-compose.test.yml')).toContain(
+      'DOC_STORAGE_BUCKET=${DOC_STORAGE_BUCKET:-sentropic-docs-test}',
+    );
   });
 
   it('keeps deployed k8s images on canonical Sentropic names', () => {

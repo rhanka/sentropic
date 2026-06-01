@@ -1033,7 +1033,7 @@ clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to ski
 	fi
 	@echo "🗑️  Cleaning database..."
 	$(DOCKER_COMPOSE) down
-	@docker volume rm top-ai-ideas-fullstack_pg_data || true
+	@docker volume rm $(COMPOSE_PROJECT_NAME)_pg_data || true
 	@echo "✅ Database cleaned!"
 	@echo "🚀 Restarting services..."
 
@@ -1328,7 +1328,7 @@ db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initiali
 # -----------------------------------------------------------------------------
 # Document storage backup/restore (MinIO / S3)
 
-DOC_BUCKET ?= $(or $(DOC_STORAGE_BUCKET),top-ai-ideas-dev)
+DOC_BUCKET ?= $(or $(DOC_STORAGE_BUCKET),sentropic-docs-dev)
 DOC_SOURCE ?= prod
 
 # Note: mc mirror is not an atomic S3 snapshot — it lists objects at start then copies them.
