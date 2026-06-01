@@ -837,6 +837,80 @@ build-cli: ## Build @sentropic/cli dist package
 pack-cli: build-cli ## Validate @sentropic/cli npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cli $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
+.PHONY: publish-build-cli
+publish-build-cli: build-build-cli ## Publish @sentropic/build-cli from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/build-cli \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/build-cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/build-cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-build-cli-token
+publish-build-cli-token: build-build-cli ## Publish @sentropic/build-cli using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-build-cli in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/build-cli \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/build-cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/build-cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-cli
+publish-cli: build-cli ## Publish @sentropic/cli from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/cli \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-cli-token
+publish-cli-token: build-cli ## Publish @sentropic/cli using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-cli in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/cli \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cli@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cli@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
