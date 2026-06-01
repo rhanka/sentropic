@@ -24,6 +24,13 @@ export const createJwksAdapter = (options: CreateJwksAdapterOptions = {}): JwksA
   const database = options.database ?? db;
   const now = options.now ?? (() => new Date());
   const oauthSigningKek = resolveOauthSigningKek(options);
+  let activeKeyCache: { expiresAt: number; key: JwksKeyRecord | null } | null = null;
+  let publicKeysCache: { expiresAt: number; keys: JwksKeyRecord[] } | null = null;
+  const cacheUntil = (): number => Date.now() + 60_000;
+  const clearCache = (): void => {
+    activeKeyCache = null;
+    publicKeysCache = null;
+  };
 
   const readPrivateKey = async (kid: string) => {
     const rows = await database.all(sql`
@@ -75,6 +82,7 @@ export const createJwksAdapter = (options: CreateJwksAdapterOptions = {}): JwksA
         VALUES
           (${kid}, 'EdDSA', 'Ed25519', ${JSON.stringify(publicJwk)}::jsonb, pgp_sym_encrypt(${privateKeyPem}, ${oauthSigningKek}), true, ${generatedAt}, null)
       `);
+      clearCache();
 
       return {
         active: true,
@@ -89,26 +97,41 @@ export const createJwksAdapter = (options: CreateJwksAdapterOptions = {}): JwksA
     },
 
     async getActiveKey() {
+      if (activeKeyCache && activeKeyCache.expiresAt > Date.now()) {
+        return activeKeyCache.key;
+      }
+
       const [row] = await database
         .select()
         .from(idTokenSigningKeys)
         .where(eq(idTokenSigningKeys.active, true))
         .limit(1);
 
-      if (!row) return null;
-      return {
+      if (!row) {
+        activeKeyCache = { expiresAt: cacheUntil(), key: null };
+        return null;
+      }
+      const key = {
         ...toJwksKeyRecord(row),
         privateKey: await readPrivateKey(row.kid),
       };
+      activeKeyCache = { expiresAt: cacheUntil(), key };
+      return key;
     },
 
     async listPublicKeys() {
+      if (publicKeysCache && publicKeysCache.expiresAt > Date.now()) {
+        return publicKeysCache.keys;
+      }
+
       const rows = await database
         .select()
         .from(idTokenSigningKeys)
         .orderBy(desc(idTokenSigningKeys.active), desc(idTokenSigningKeys.createdAt));
 
-      return rows.map(toJwksKeyRecord);
+      const keys = rows.map(toJwksKeyRecord);
+      publicKeysCache = { expiresAt: cacheUntil(), keys };
+      return keys;
     },
 
     async rotateActive(kid) {
@@ -121,6 +144,7 @@ export const createJwksAdapter = (options: CreateJwksAdapterOptions = {}): JwksA
         .update(idTokenSigningKeys)
         .set({ active: true, rotatedAt: null })
         .where(eq(idTokenSigningKeys.kid, kid));
+      clearCache();
     },
   };
 };
