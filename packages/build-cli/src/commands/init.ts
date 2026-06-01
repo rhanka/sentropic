@@ -68,6 +68,8 @@ export interface InitTokens extends TokenMap {
     readonly maildev_port: string;
     /** Repo URL, backfilled before first commit when `--github`; empty placeholder otherwise. */
     readonly repo_url: string;
+    /** Deterministic offline reply baked into the generated backend's in-memory adapter. */
+    readonly assistant_reply: string;
 }
 
 /** Injectable dependencies for an `init` run. */
@@ -109,6 +111,7 @@ export function buildTokens(options: InitOptions, ports: { api: number; ui: numb
         ui_port: String(ports.ui),
         maildev_port: String(ports.maildev),
         repo_url: '',
+        assistant_reply: `Hello from ${options.name}! This is a deterministic offline reply from @sentropic/chat-server.`,
     };
 }
 
