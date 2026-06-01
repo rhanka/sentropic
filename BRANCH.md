@@ -230,8 +230,8 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
   - [x] Commit (target ≤150 lines/commit; split if needed): split into atomic commits `2d11e202` through `aac4e5aa`.
 
-- [ ] **Lot 2 — OAuth2/OIDC core endpoints**
-  - [ ] Implement against `BR39c-Q1`: issuer is API origin; OAuth endpoints are under `/api/v1/auth/oauth/*`; discovery/JWKS are root `/.well-known/*` on the API origin.
+- [x] **Lot 2 — OAuth2/OIDC core endpoints**
+  - [x] Implement against `BR39c-Q1`: issuer is API origin; OAuth endpoints are under `/api/v1/auth/oauth/*`; discovery/JWKS are root `/.well-known/*` on the API origin.
   - [x] Create `packages/auth-hono/src/oauth/authorize-handler.ts`:
     - GET handler validates `response_type=code`, `client_id` exists in `oauthStateStore.findClient(clientId)`, `redirect_uri` byte-exact match against `client.redirect_uris`, HTTPS/localhost/fragment/credentials rules from D11, `code_challenge` present + `code_challenge_method=S256`, optional `dpop_jkt` if client opted in, requested scopes are a subset of `client.allowed_scopes` else `invalid_scope`, `scope=offline_access` rejected, `state` passthrough, `nonce` passthrough, `prompt` / `login_hint` honored.
     - If no valid session and `prompt=none`, redirects to `redirect_uri` with `error=login_required` plus original `state`; if consent is required under `prompt=none`, redirects with `error=consent_required`.
@@ -251,43 +251,44 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - Issues `access_token` (JWT signed with active Ed25519 key, claims: `iss, sub, aud=${issuer}/api/v1/auth/oauth/userinfo, client_id, exp, iat, jti, scope, cnf?, acr, auth_time`), `token_type: "Bearer"` (or `"DPoP"` if bound), and `expires_in=3600`.
     - Issues `id_token` only if granted scope includes `openid`; claims: `iss, sub, aud=client_id, exp, iat, nonce if present, auth_time, acr, email?, email_verified?, name?, cnf?` based on scope.
     - `saveTokenMeta(jti, { clientId, userId, scope, expiresAt, dpopJkt? })` for later revocation check.
-  - [ ] Create `packages/auth-hono/src/oauth/userinfo-handler.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/userinfo-handler.ts`:
     - GET / POST handler accepts `Authorization: Bearer <jwt>` or `Authorization: DPoP <jwt>` + `DPoP: <proof>`.
     - Verifies JWT signature via JWKS, checks `findTokenMeta(jti)` + `isTokenRevoked(jti)`, verifies DPoP proof for bound tokens including `ath = base64url(SHA-256(access_token))`, and returns claims based on issued scope.
-  - [ ] Create `packages/auth-hono/src/oauth/revoke-handler.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/revoke-handler.ts`:
     - POST per RFC 7009. Accepts `token` + optional `token_type_hint`. Calls `revokeToken(jti)`. Idempotent.
     - If token was DPoP-bound, requires DPoP proof with valid `ath` to revoke (prevents arbitrary revoke by token theft).
-  - [ ] Create `packages/auth-hono/src/oauth/introspect-handler.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/introspect-handler.ts`:
     - POST per RFC 7662. Requires client authentication (Basic auth via `oauth_clients.client_secret_hash`).
     - Returns `{active: true|false, scope, client_id, sub, exp, iat, jti, token_type, cnf?}` for active tokens, `{active: false}` for revoked/expired/unknown.
-  - [ ] Create `packages/auth-hono/src/oauth/wellknown-handler.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/wellknown-handler.ts`:
     - GET `/openid-configuration` returns standard OIDC discovery doc: `issuer`, endpoint URLs under `${issuer}/api/v1/auth/oauth/*`, `jwks_uri=${issuer}/.well-known/jwks.json`, `response_types_supported=["code"]`, `grant_types_supported=["authorization_code"]`, `code_challenge_methods_supported=["S256"]`, `id_token_signing_alg_values_supported=["EdDSA"]`, `scopes_supported=["openid","profile","email"]`, `claims_supported=[...]`, `dpop_signing_alg_values_supported=["EdDSA"]`.
     - GET `/jwks.json` returns `JwksPort.getPublicJwks()` with `Cache-Control: public, max-age=300`.
-  - [ ] Create `packages/auth-hono/src/oauth/router.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/router.ts`:
     - `createOAuthRouter(options: { ports, issuer, loginUrl, consentUrl })` → `Hono` mounting authorize/token/userinfo/revoke/introspect/consent-decision endpoints under a configurable subprefix (default `/oauth`).
     - Separate `createWellKnownRouter(options: { ports, issuer })` for root-mounted discovery + jwks.
-  - [ ] Update `packages/auth-hono/src/index.ts` to re-export the new `oauth` subtree.
-  - [ ] Lot 2 gate:
-    - [ ] `make typecheck-auth-hono ENV=test-feat-auth-oidc`
-    - [ ] **Package tests**
+  - [x] Update `packages/auth-hono/src/index.ts` to re-export the new `oauth` subtree.
+  - [x] Lot 2 gate:
+    - [x] `make typecheck-auth-hono ENV=test-feat-auth-oidc`
+    - [x] **Package tests**
       - [x] new: `packages/auth-hono/tests/oauth-authorize.test.ts` (PKCE present, redirect_uri exact match + negative URI cases, unknown client → 400, invalid scope → redirect/error, normal no session → login redirect, prompt=none no session → redirect `login_required`, valid session → 302 to consent URL with sealed state)
       - [x] new: `packages/auth-hono/tests/oauth-token.test.ts` (PKCE verify success, redirect_uri mismatch → invalid_grant, PKCE mismatch → invalid_grant, code reuse → invalid_grant, OAuth-only scope returns no id_token, nonce copied verbatim, wrong client secret → 401, DPoP-bound client without DPoP header → 400, DPoP-bound client with valid DPoP → 200 + cnf on access_token/id_token)
-      - [ ] new: `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (htm mismatch, htu mismatch, stale iat, duplicate jti, missing/wrong ath on resource calls)
-      - [ ] new: `packages/auth-hono/tests/oauth-userinfo.test.ts` (valid bearer → claims, revoked token → 401, DPoP-bound token requires proof, jkt mismatch → 401, unknown scopes rejected rather than filtered)
-      - [ ] new: `packages/auth-hono/tests/oauth-revoke.test.ts` (idempotent revoke, DPoP-bound token requires DPoP proof to revoke)
-      - [ ] new: `packages/auth-hono/tests/oauth-introspect.test.ts` (active token → details, revoked → {active: false}, missing client auth → 401)
-      - [ ] new: `packages/auth-hono/tests/oauth-wellknown.test.ts` (openid-configuration shape, jwks.json shape, kid rotation reflected)
-      - [ ] new: `packages/auth-hono/tests/oauth-router-factory.test.ts` (router mounts all routes, prefix override works, well-known router separates correctly)
+      - [x] new: `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (htm mismatch, htu mismatch, stale iat, duplicate jti, missing/wrong ath on resource calls)
+      - [x] new: `packages/auth-hono/tests/oauth-userinfo.test.ts` (valid bearer → claims, revoked token → 401, DPoP-bound token requires proof, jkt mismatch → 401, unknown scopes rejected rather than filtered)
+      - [x] new: `packages/auth-hono/tests/oauth-revoke.test.ts` (idempotent revoke, DPoP-bound token requires DPoP proof to revoke)
+      - [x] new: `packages/auth-hono/tests/oauth-introspect.test.ts` (active token → details, revoked → {active: false}, missing client auth → 401)
+      - [x] new: `packages/auth-hono/tests/oauth-wellknown.test.ts` (openid-configuration shape, jwks.json shape, kid rotation reflected)
+      - [x] new: `packages/auth-hono/tests/oauth-router-factory.test.ts` (router mounts all routes, prefix override works, well-known router separates correctly)
       - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-authorize.test.ts ENV=test-feat-auth-oidc`
       - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-token.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-dpop-proof.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-userinfo.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-revoke.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-introspect.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-wellknown.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-router-factory.test.ts ENV=test-feat-auth-oidc`
-    - [ ] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
-  - [ ] Commit (split into 2-3 commits ≤150 lines each): `feat(BR-39c): Lot 2 oauth core endpoints (authorize/token/userinfo/revoke/introspect/wellknown)`.
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-dpop-proof.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-userinfo.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-revoke.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-introspect.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-wellknown.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-router-factory.test.ts ENV=test-feat-auth-oidc`
+      - [x] Full package regression: `make test-auth-hono ENV=test-feat-auth-oidc` (24 files / 77 tests).
+    - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
+  - [x] Commit (split into 2-3 commits ≤150 lines each): split into commits `1e1c1a5c`, `dfad47ef`, and `feat(BR-39c): add OAuth resource discovery endpoints`.
 
 - [ ] **Lot 3 — Consent UI component + RP client helper**
   - [ ] Create `packages/auth-ui/src/oauth-client.ts`:
