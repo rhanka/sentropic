@@ -211,13 +211,10 @@ export async function runInit(options: InitOptions, deps: InitDeps): Promise<Ini
         return { targetDir, plan, written: [], dryRun: true, ghCommand };
     }
 
-    // Empty-dir guard (refuse-with-list unless --force).
-    const empty = await dirIsEmpty(targetDir);
-    if (!empty && !options.force) {
-        throw new TargetNotEmptyError(targetDir, await listDir(targetDir));
-    }
-
-    // 4. GitHub pre-flight: never mutate an existing remote; refuse on collision (BR42a-G).
+    // 4. GitHub pre-flight FIRST: never mutate an existing remote; refuse on collision
+    //    (BR42a-G). These irreversible-side-effect gates run before the empty-dir guard so
+    //    a dir that exists only to carry a remote is refused with the correct, specific
+    //    error (ExistingRemoteError), not a generic not-empty error.
     if (options.github) {
         await assertNoExistingRemote(runner, targetDir, options.git);
         await assertRepoDoesNotExist(runner, options);
@@ -226,6 +223,12 @@ export async function runInit(options: InitOptions, deps: InitDeps): Promise<Ini
         const repoUrl = `https://github.com/${options.githubOwner}/${options.name}`;
         tokens = { ...tokens, repo_url: repoUrl };
         plan = resolvePlan(deps.manifest, { tokens });
+    }
+
+    // Empty-dir guard (refuse-with-list unless --force).
+    const empty = await dirIsEmpty(targetDir);
+    if (!empty && !options.force) {
+        throw new TargetNotEmptyError(targetDir, await listDir(targetDir));
     }
 
     // 5. Materialise the scaffold (scaffold-owned overwrite only under --force).
