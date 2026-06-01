@@ -28,6 +28,11 @@ interface ValidatedAuthorizeRequest {
 export const createOAuthAuthorizeHandler =
   (options: OAuthAuthorizeHandlerOptions) =>
   async (c: Context): Promise<Response> => {
+    const continuation = c.req.query('continue');
+    if (continuation) {
+      return resumeLoginContinuation(c, options, continuation);
+    }
+
     const validation = await validateAuthorizeRequest(c, options.ports);
     if (validation instanceof Response) return validation;
 
@@ -55,6 +60,45 @@ export const createOAuthAuthorizeHandler =
 
     return c.redirect(appendParams(options.consentUrl, { state: sealedState }, c.req.url), 302);
   };
+
+const resumeLoginContinuation = async (
+  c: Context,
+  options: OAuthAuthorizeHandlerOptions,
+  continuation: string
+): Promise<Response> => {
+  const payload = await options.stateCodec.unseal(continuation);
+  const now = options.ports.clock.now();
+  if (!payload || payload.userId || payload.codeChallengeMethod !== 'S256' || new Date(payload.expiresAt) <= now) {
+    return oauthJsonError(c, 400, 'invalid_request', 'OAuth continuation is invalid or expired.');
+  }
+
+  const client = await options.ports.oauthStateStore.findClient(payload.clientId);
+  if (!client) return oauthJsonError(c, 400, 'invalid_request', 'Unknown OAuth client.');
+
+  const redirectError = validateRedirectUri(client, payload.redirectUri);
+  if (redirectError) return oauthJsonError(c, 400, 'invalid_request', redirectError);
+
+  const scopeResult = validateScope(payload.scope, client, payload.redirectUri, payload.state, c.req.url);
+  if (scopeResult instanceof Response) return scopeResult;
+
+  const session = await resolveOAuthSession(c.req.raw, options.ports);
+  if (!session) {
+    return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
+  }
+
+  const expiresAt = options.ports.clock.addSeconds(now, options.stateTtlSeconds ?? 10 * 60);
+  const sealedState = await options.stateCodec.seal({
+    ...payload,
+    acr: resolveOAuthAcr(session.sessionRecord),
+    authTime: session.sessionRecord.createdAt.toISOString(),
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    scope: scopeResult,
+    userId: session.user.id,
+  });
+
+  return c.redirect(appendParams(options.consentUrl, { state: sealedState }, c.req.url), 302);
+};
 
 const validateAuthorizeRequest = async (
   c: Context,
