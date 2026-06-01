@@ -4,7 +4,7 @@ import type { JwksKeyRecord, JwksPort, JwksPublicJwk } from '@sentropic/auth-hon
 import { exportJWK } from 'jose';
 import { desc, eq, sql } from 'drizzle-orm';
 
-import { env } from '../../config/env';
+import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
 import { idTokenSigningKeys } from '../../db/schema';
 
@@ -150,7 +150,7 @@ export const createJwksAdapter = (options: CreateJwksAdapterOptions = {}): JwksA
 };
 
 const resolveOauthSigningKek = (options: CreateJwksAdapterOptions): string => {
-  const isProduction = options.isProduction ?? env.NODE_ENV === 'production';
+  const isProduction = options.isProduction ?? requiresOAuthProductionSecrets();
   const kek =
     options.oauthSigningKek ??
     env.OAUTH_SIGNING_KEK ??
