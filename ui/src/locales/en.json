@@ -44,13 +44,10 @@
     "redirecting": "Redirecting…",
     "user": "User",
     "na": "N/A",
-    "readOnlyDisabled": "Read-only mode: creation/deletion disabled."
-    ,
+    "readOnlyDisabled": "Read-only mode: creation/deletion disabled.",
     "ai": "AI",
-    "references": "References"
-    ,
-    "pointsAbbr": "pts"
-    ,
+    "references": "References",
+    "pointsAbbr": "pts",
     "add": "Add",
     "general": "General",
     "yesterday": "Yesterday",
@@ -59,8 +56,7 @@
     "retry": "Retry",
     "openMenu": "Open menu",
     "saving": "Saving…",
-    "unsavedChanges": "Unsaved changes"
-    ,
+    "unsavedChanges": "Unsaved changes",
     "unspecified": "Unspecified",
     "useMedian": "Use median",
     "actions": "Actions",
@@ -119,97 +115,6 @@
     "notFoundMessage": "The requested page does not exist.",
     "backHome": "Back to home"
   },
-  "auth": {
-    "emailPlaceholder": "you@example.com",
-    "webauthnRegisterNotice": "You are about to register a new WebAuthn device. We will send you a confirmation email.",
-    "devicesTitle": "My devices",
-    "loading": "Loading…",
-    "noDevices": "No registered devices",
-    "addedOn": "Added on {date}",
-    "lastUsed": "Last used: {date}",
-    "verifyInProgress": "Verifying…",
-    "redirectingDashboard": "Redirecting to the dashboard…",
-    "registerDeviceNow": "You are now going to register your WebAuthn device",
-    "devices": {
-      "title": "My devices",
-      "subtitle": "Manage the devices registered for WebAuthn authentication",
-      "empty": "No registered devices",
-      "register": "Register a device",
-      "addNew": "Add a new device",
-      "rename": "Rename",
-      "revoke": "Revoke",
-      "uvEnabled": "UV enabled",
-      "addedOn": "Added on {date}",
-      "lastUsed": "Last used: {date}",
-      "confirmRevoke": "Are you sure you want to revoke the device \"{deviceName}\"? You will no longer be able to sign in with this device.",
-      "errors": {
-        "load": "Error while loading devices",
-        "update": "Error while updating device",
-        "revoke": "Error while revoking device"
-      }
-    },
-    "magicLink": {
-      "title": "Magic link verification",
-      "successTitle": "Signed in successfully!",
-      "errorTitle": "Verification error",
-      "backToLogin": "Back to login",
-      "errors": {
-        "missingToken": "Missing token in URL",
-        "verifyFailed": "Error while verifying magic link"
-      }
-    },
-    "login": {
-      "title": "Sign in",
-      "supportedHint": "Use your passkey or biometrics",
-      "notAvailable": "WebAuthn is not available in this browser",
-      "unsupportedBrowser": "Your browser does not support WebAuthn. Use a modern browser (Chrome, Firefox, Safari, Edge).",
-      "button": "Sign in with WebAuthn",
-      "buttonLoading": "Signing in…",
-      "lostDevice": "I lost my device",
-      "noAccount": "No account yet? Sign up",
-      "lostDeviceTitle": "Lost device",
-      "registerNewDevice": "Register a new device (full workflow)",
-      "backToLogin": "Back to normal login"
-    },
-    "register": {
-      "title": "Create an account",
-      "subtitle": "Secure authentication with WebAuthn",
-      "unsupportedBrowserTitle": "Unsupported browser",
-      "unsupportedBrowser": "Your browser does not support WebAuthn. Use a modern browser (Chrome, Firefox, Safari, Edge).",
-      "emailLabel": "Email",
-      "getCode": "Get a code",
-      "sendingCode": "Sending…",
-      "alreadyHaveAccount": "Already have an account? Sign in",
-      "codeLabel": "6-digit code",
-      "codeHelp": "Enter the code received by email",
-      "verifyCode": "Verify code",
-      "verifyingCode": "Verifying…",
-      "changeEmail": "Change email",
-      "codeVerifiedTitle": "Code verified!",
-      "registerDevice": "Register my WebAuthn device",
-      "registering": "Registering…",
-      "successTitle": "Registration successful!",
-      "success": {
-        "codeSent": "Code sent by email",
-        "redirecting": "Registration successful! Redirecting…"
-      },
-      "errors": {
-        "invalidEmail": "Please enter a valid email address",
-        "sendCode": "Error while sending the code"
-      }
-    }
-    ,
-    "webauthn": {
-      "errors": {
-        "registrationCancelled": "You cancelled the registration",
-        "authenticationCancelled": "You cancelled the authentication",
-        "alreadyRegistered": "This device is already registered",
-        "noMatchingAuthenticator": "No matching device found",
-        "notSupportedAuthenticator": "This authenticator is not supported",
-        "notSupportedBrowser": "Your browser does not support WebAuthn"
-      }
-    }
-  },
   "matrix": {
     "title": "Value/Complexity evaluation configuration",
     "details": {
@@ -254,8 +159,7 @@
     "pleaseSelectFolder": "Please select a folder to view its matrix",
     "folderLoaded": "Folder \"{name}\" evaluation loaded",
     "folderNoMatrix": "Folder \"{name}\" has no matrix configured",
-    "loadError": "Error while loading matrix"
-    ,
+    "loadError": "Error while loading matrix",
     "autoSaveError": "Error while auto-saving configuration",
     "saveSuccess": "Matrix configuration updated",
     "saveError": "Error while saving matrix",
@@ -264,14 +168,14 @@
     "newComplexityAxisName": "New complexity axis",
     "valueAxisAdded": "New value axis added",
     "complexityAxisAdded": "New complexity axis added",
-  "confirmDeleteAxis": "Are you sure you want to delete this axis? This will impact initiative score calculations.",
-  "valueAxisDeleted": "Value axis deleted",
-  "complexityAxisDeleted": "Complexity axis deleted",
-  "weightsRecalcWarning": "Warning: changing weights will automatically recalculate all scores for your existing initiatives.",
-  "levelN": "Level {level}",
-  "selectedFolder": "Selected folder",
-  "createNew": "Create a new matrix",
-  "createDialogBody": "Choose the type of matrix to create:",
+    "confirmDeleteAxis": "Are you sure you want to delete this axis? This will impact initiative score calculations.",
+    "valueAxisDeleted": "Value axis deleted",
+    "complexityAxisDeleted": "Complexity axis deleted",
+    "weightsRecalcWarning": "Warning: changing weights will automatically recalculate all scores for your existing initiatives.",
+    "levelN": "Level {level}",
+    "selectedFolder": "Selected folder",
+    "createNew": "Create a new matrix",
+    "createDialogBody": "Choose the type of matrix to create:",
     "help": {
       "intro": "Adjust value and complexity axis weights to customize initiative evaluation.",
       "details": "The matrix uses 5 levels for each criterion, with specific descriptions for each. Click a criterion to view and edit detailed descriptions for the 5 levels."
@@ -325,14 +229,14 @@
         "readOnlyAction": "Action not allowed (read-only mode)."
       }
     },
-  "new": {
-    "nameLabel": "Folder name",
-    "namePlaceholder": "Enter the folder name (optional)",
-    "orgOptional": "Organization (optional)",
-    "unspecified": "Unspecified",
-    "createOrg": "Create an organization",
-    "context": "Context",
-    "contextPlaceholder": "Describe the business context and objectives…",
+    "new": {
+      "nameLabel": "Folder name",
+      "namePlaceholder": "Enter the folder name (optional)",
+      "orgOptional": "Organization (optional)",
+      "unspecified": "Unspecified",
+      "createOrg": "Create an organization",
+      "context": "Context",
+      "contextPlaceholder": "Describe the business context and objectives…",
       "useCaseCount": "Number of initiatives",
       "modelLabel": "Generation model",
       "modelHint": "Used for initiative and matrix generation for this folder.",
@@ -433,8 +337,7 @@
       "create": "Error while creating organization",
       "load": "Error while loading organization",
       "loadList": "Error while loading organizations"
-    }
-    ,
+    },
     "confirmDelete": "Are you sure you want to delete this organization?"
   },
   "locks": {
@@ -473,19 +376,19 @@
     "execSummaryEmpty": "No executive summary available for this folder",
     "execSummaryGenerate": "Generate executive summary",
     "loadingData": "Loading data…",
-  "useCaseCount": "Initiative count",
-  "quickWins": "Quick wins",
-  "roiQuadrants": {
+    "useCaseCount": "Initiative count",
     "quickWins": "Quick wins",
-    "majorProjects": "Major projects",
-    "wait": "Wait",
-    "dontDo": "Don't do"
-  },
-  "roiQuadrantConfig": "ROI quadrant configuration",
-  "roiStats": {
-    "medianValue": "Median value",
-    "medianComplexity": "Median complexity"
-  },
+    "roiQuadrants": {
+      "quickWins": "Quick wins",
+      "majorProjects": "Major projects",
+      "wait": "Wait",
+      "dontDo": "Don't do"
+    },
+    "roiQuadrantConfig": "ROI quadrant configuration",
+    "roiStats": {
+      "medianValue": "Median value",
+      "medianComplexity": "Median complexity"
+    },
     "roiConfig": {
       "buttonTitle": "ROI quadrant configuration",
       "close": "Close configuration",
@@ -503,8 +406,7 @@
     "annex": "Annex",
     "annexUseCases": "Initiative sheets",
     "subtitle": "Prioritize your innovations by value contribution",
-    "about": "About"
-    ,
+    "about": "About",
     "backCover": {
       "p1": "Sentropic is part of the SENT-tech vision: more than twenty years of expertise in innovation, data, digital and artificial intelligence. Here, AI is never an end in itself, but a lever that has become indispensable for competitiveness.",
       "p2": "Value emerges from a holistic approach, where business opportunities meet technological capabilities. Designed to guide organizations in their choices, Sentropic helps identify the most promising initiatives through a collaborative, rigorous and impact-driven process.",
@@ -648,6 +550,31 @@
         "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/sentropic-chrome-extension.zip, then restart the API."
       }
     },
+    "coworkDesktop": {
+      "title": "Sentropic Cowork (Windows)",
+      "description": "Download the Sentropic Cowork Windows binary (eyes/hands on your workstation) configured for this instance, then pair it with a code.",
+      "experimentalWarning": "(experimental, POC — unsigned binary: SmartScreen may warn)",
+      "loading": "Loading Cowork binary…",
+      "downloadTooltip": "Download Sentropic Cowork (Windows)",
+      "retry": "Retry",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "channel": {
+        "title": "Distribution channel",
+        "description": "Choose which build is exposed to users: Release (official signed build) or Prerelease (branch-built unsigned build for UAT).",
+        "label": "Active channel",
+        "release": "Release",
+        "prerelease": "Prerelease",
+        "updating": "Updating channel…",
+        "errors": {
+          "load": "Unable to load the active channel.",
+          "update": "Unable to update the channel."
+        }
+      },
+      "errors": {
+        "load": "Unable to load the Sentropic Cowork card. Set COWORK_DESKTOP_DOWNLOAD_URL in the API configuration (an http(s) URL served from the Sentropic domain), then restart the API."
+      }
+    },
     "vscodeExtension": {
       "title": "VSCode extension",
       "description": "Download the latest VSCode extension package configured for this instance.",
@@ -702,8 +629,7 @@
     "promptDescription": "Description",
     "detectedVariables": "Detected variables",
     "noVariablesDetected": "No variables detected",
-    "promptContent": "Prompt content"
-    ,
+    "promptContent": "Prompt content",
     "confirmDeactivate": "Deactivate your account? You can request a reactivation.",
     "confirmDeleteAccount": "PERMANENT DELETION: delete your account and all your data immediately?",
     "deactivateAccount": "Deactivate my account",
@@ -1241,14 +1167,30 @@
         "label": "Code: git",
         "description": "Run git actions (status/diff/ls-files/add/commit/push/...) with policy checks"
       },
-      "organizationRead": { "label": "Organization (read)" },
-      "organizationUpdate": { "label": "Organization (edit)" },
-      "folderRead": { "label": "Folder (read)" },
-      "folderUpdate": { "label": "Folder (edit)" },
-      "usecaseRead": { "label": "Initiative (read)" },
-      "usecaseUpdate": { "label": "Initiative (edit)" },
-      "matrix": { "label": "Matrix (read/edit)" },
-      "executiveSummary": { "label": "Executive summary" }
+      "organizationRead": {
+        "label": "Organization (read)"
+      },
+      "organizationUpdate": {
+        "label": "Organization (edit)"
+      },
+      "folderRead": {
+        "label": "Folder (read)"
+      },
+      "folderUpdate": {
+        "label": "Folder (edit)"
+      },
+      "usecaseRead": {
+        "label": "Initiative (read)"
+      },
+      "usecaseUpdate": {
+        "label": "Initiative (edit)"
+      },
+      "matrix": {
+        "label": "Matrix (read/edit)"
+      },
+      "executiveSummary": {
+        "label": "Executive summary"
+      }
     },
     "todoCard": {
       "title": "Plan created from chat",

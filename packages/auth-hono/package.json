@@ -1,0 +1,98 @@
+{
+  "name": "@sentropic/auth-hono",
+  "version": "0.2.1",
+  "description": "Reusable Hono authentication route factories, contracts, and server-side auth helpers for Sentropic-compatible apps.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/auth-hono"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
+    "./credential-route-handlers": {
+      "types": "./dist/credential-route-handlers.d.ts",
+      "import": "./dist/credential-route-handlers.js"
+    },
+    "./email-verification": {
+      "types": "./dist/email-verification.d.ts",
+      "import": "./dist/email-verification.js"
+    },
+    "./magic-link": {
+      "types": "./dist/magic-link.d.ts",
+      "import": "./dist/magic-link.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware.d.ts",
+      "import": "./dist/middleware.js"
+    },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "import": "./dist/ports.js"
+    },
+    "./route-handlers": {
+      "types": "./dist/route-handlers.d.ts",
+      "import": "./dist/route-handlers.js"
+    },
+    "./router": {
+      "types": "./dist/router.d.ts",
+      "import": "./dist/router.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "import": "./dist/session.js"
+    },
+    "./session-route-handlers": {
+      "types": "./dist/session-route-handlers.d.ts",
+      "import": "./dist/session-route-handlers.js"
+    },
+    "./webauthn-authentication": {
+      "types": "./dist/webauthn-authentication.d.ts",
+      "import": "./dist/webauthn-authentication.js"
+    },
+    "./webauthn-authentication-route-handlers": {
+      "types": "./dist/webauthn-authentication-route-handlers.d.ts",
+      "import": "./dist/webauthn-authentication-route-handlers.js"
+    },
+    "./webauthn-registration": {
+      "types": "./dist/webauthn-registration.d.ts",
+      "import": "./dist/webauthn-registration.js"
+    },
+    "./webauthn-registration-route-handlers": {
+      "types": "./dist/webauthn-registration-route-handlers.d.ts",
+      "import": "./dist/webauthn-registration-route-handlers.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "peerDependencies": {
+    "@hono/zod-validator": "^0.7.5",
+    "@simplewebauthn/server": "^13.2.2",
+    "hono": "^4.10.7",
+    "jose": "^5.10.0",
+    "zod": "^3.25.76"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "name": "@sentropic/auth-ui",
+  "version": "0.2.0",
+  "description": "Reusable Svelte authentication UI contracts and browser passkey helpers for Sentropic-compatible apps.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/auth-ui"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./contracts": {
+      "types": "./src/contracts.ts",
+      "svelte": "./src/contracts.ts",
+      "import": "./src/contracts.ts"
+    },
+    "./webauthn": {
+      "types": "./src/webauthn.ts",
+      "svelte": "./src/webauthn.ts",
+      "import": "./src/webauthn.ts"
+    },
+    "./transport-fetch": {
+      "types": "./src/transport-fetch.ts",
+      "svelte": "./src/transport-fetch.ts",
+      "import": "./src/transport-fetch.ts"
+    },
+    "./components/AuthLogin.svelte": {
+      "types": "./src/components/AuthLogin.svelte.d.ts",
+      "svelte": "./src/components/AuthLogin.svelte",
+      "import": "./src/components/AuthLogin.svelte"
+    },
+    "./components/AuthRegister.svelte": {
+      "types": "./src/components/AuthRegister.svelte.d.ts",
+      "svelte": "./src/components/AuthRegister.svelte",
+      "import": "./src/components/AuthRegister.svelte"
+    },
+    "./components/AuthMagicLinkVerify.svelte": {
+      "types": "./src/components/AuthMagicLinkVerify.svelte.d.ts",
+      "svelte": "./src/components/AuthMagicLinkVerify.svelte",
+      "import": "./src/components/AuthMagicLinkVerify.svelte"
+    },
+    "./components/AuthDevices.svelte": {
+      "types": "./src/components/AuthDevices.svelte.d.ts",
+      "svelte": "./src/components/AuthDevices.svelte",
+      "import": "./src/components/AuthDevices.svelte"
+    },
+    "./components/AuthDevicePair.svelte": {
+      "types": "./src/components/AuthDevicePair.svelte.d.ts",
+      "svelte": "./src/components/AuthDevicePair.svelte",
+      "import": "./src/components/AuthDevicePair.svelte"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": [
+    "**/*.svelte"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "peerDependencies": {
+    "@simplewebauthn/browser": "^13.2.2",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@simplewebauthn/browser": "^13.2.2",
+    "typescript": "5.4.5"
+  }
+}

@@ -3,7 +3,7 @@
   import { createEventDispatcher } from 'svelte';
   import { _, locale } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
-  import { getNavigation } from '$lib/core/navigation-adapter';
+  import { getNavigation } from '@sentropic/cowork-bridge/core';
   import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';

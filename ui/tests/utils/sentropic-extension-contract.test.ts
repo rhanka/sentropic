@@ -10,6 +10,14 @@ import {
 const readUiFile = (relativePath: string): string =>
   readFileSync(resolve(__dirname, '..', '..', relativePath), 'utf8');
 
+const readRepoFile = (relativePath: string): string =>
+  readFileSync(resolve(__dirname, '..', '..', '..', relativePath), 'utf8');
+
+const readSourceFile = (relativePath: string): string =>
+  relativePath.startsWith('packages/')
+    ? readRepoFile(relativePath)
+    : readUiFile(relativePath);
+
 describe('Sentropic extension contract', () => {
   it('uses Sentropic production defaults for the Chrome extension', () => {
     expect(EXTENSION_CONFIG_STORAGE_KEY).toBe('sentropic:extensionConfig:v1');
@@ -70,15 +78,15 @@ describe('Sentropic extension contract', () => {
       'chrome-ext/tool-permissions.ts',
       'src/lib/components/ChatWidget.svelte',
       'src/lib/components/Header.svelte',
-      'src/lib/core/chatwidget-handoff.ts',
       'src/lib/stores/streamHub.ts',
       'src/lib/utils/user-ai-settings-events.ts',
       'src/routes/dashboard/+page.svelte',
       'src/routes/folders/[id]/+page.svelte',
       'src/routes/initiative/[id]/+page.svelte',
       'src/routes/organizations/[id]/+page.svelte',
+      'packages/cowork-bridge/src/core/chatwidget-handoff.ts',
     ]) {
-      const source = readUiFile(relativePath);
+      const source = readSourceFile(relativePath);
       expect(source).not.toContain('topAiIdeas');
       expect(source).not.toContain('topai:');
       expect(source).not.toContain('topai-stream-proxy');
