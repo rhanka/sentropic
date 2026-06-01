@@ -290,34 +290,34 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
   - [x] Commit (split into 2-3 commits ≤150 lines each): split into commits `1e1c1a5c`, `dfad47ef`, and `feat(BR-39c): add OAuth resource discovery endpoints`.
 
-- [ ] **Lot 3 — Consent UI component + RP client helper**
-  - [ ] Create `packages/auth-ui/src/oauth-client.ts`:
+- [x] **Lot 3 — Consent UI component + RP client helper**
+  - [x] Create `packages/auth-ui/src/oauth-client.ts`:
     - `createOAuthClient({ issuer, clientId, redirectUri, scopes, dpop?: { generateKeyPair, store } })` → `{ startAuthorization(state?, nonce?, codeChallenge?) → URL, exchangeCode(code, codeVerifier) → tokens, refreshToken (deferred 39d), revoke(token), userInfo(token) }`.
     - DPoP support: when `dpop` option provided, generates Ed25519 keypair on RP side via SubtleCrypto, attaches `DPoP` proof header to token + userinfo + revoke calls. Key stored via injected `store` adapter (browser app picks IndexedDB / localStorage / in-memory).
     - PKCE: generates `code_verifier` (43-128 chars) and `code_challenge = base64url(SHA-256(code_verifier))`.
     - Discovery: on `createOAuthClient` first call, fetches `${issuer}/.well-known/openid-configuration` and caches it.
-  - [ ] Create `packages/auth-ui/src/oauth-consent.ts`:
+  - [x] Create `packages/auth-ui/src/oauth-consent.ts`:
     - Export `OAuthConsentTransport`, `OAuthConsentDetails`, `OAuthConsentDecision`, and `OAuthConsentLabels`.
     - `OAuthConsentTransport` methods: `getConsent(input: { state: string }) → { clientName, scopes, redirectUri }` and `submitConsentDecision(input: { state: string; decision: 'approve' | 'deny' }) → { redirectTo: string }`.
-  - [ ] Create `packages/auth-ui/src/components/OAuthConsent.svelte`:
+  - [x] Create `packages/auth-ui/src/components/OAuthConsent.svelte`:
     - Svelte 5 component. Props: `{ state: string, transport: OAuthConsentTransport, labels?: Partial<OAuthConsentLabels>, onRedirect?: (url: string) => void, onError?: (error) => void }`.
     - Slots: `branding`, `scope-description`, `footer`.
     - Loads details with `transport.getConsent({ state })`, renders "{clientName} requests access to:" + scope list (with human-friendly descriptions from labels), redirect destination preview, Approve / Deny buttons.
     - Calls `transport.submitConsentDecision({ state, decision })`; host navigation happens through `onRedirect(redirectTo)` or a returned URL handled by the wrapper.
-  - [ ] Create `packages/auth-ui/src/components/OAuthConsent.svelte.d.ts`: matching props/slot types.
-  - [ ] Extend `packages/auth-ui/src/labels.ts` with `createDefaultOAuthConsentLabels` (EN) + `createFrenchOAuthConsentLabels` (FR).
-  - [ ] Update `packages/auth-ui/src/index.ts` to re-export `oauth-client`, `oauth-consent`, and component types.
-  - [ ] Update `packages/auth-ui/package.json` `exports` map with `./oauth-client` + `./components/OAuthConsent.svelte`.
-  - [ ] Lot 3 gate:
-    - [ ] `make typecheck-auth-ui ENV=test-feat-auth-oidc`
-    - [ ] **Package tests**
-      - [ ] new: `packages/auth-ui/tests/oauth-client.test.ts` (PKCE generation, discovery fetch + cache, authorize URL shape, exchange code happy path, exchange code error mapping, DPoP keypair generation + proof header attachment)
-      - [ ] new: `packages/auth-ui/tests/oauth-consent.test.ts` (loads details via `OAuthConsentTransport`, renders client name + scopes, approve/deny call `submitConsentDecision`, redirect callback receives returned URL, label override works)
-      - [ ] `make test-packages SCOPE=packages/auth-ui/tests/oauth-client.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-packages SCOPE=packages/auth-ui/tests/oauth-consent.test.ts ENV=test-feat-auth-oidc`
-    - [ ] `make build-auth-ui ENV=test-feat-auth-oidc`
-    - [ ] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
-  - [ ] Commit: `feat(BR-39c): Lot 3 oauth-client helper + OAuthConsent component`.
+  - [x] Create `packages/auth-ui/src/components/OAuthConsent.svelte.d.ts`: matching props/slot types.
+  - [x] Extend `packages/auth-ui/src/labels.ts` with `createDefaultOAuthConsentLabels` (EN) + `createFrenchOAuthConsentLabels` (FR).
+  - [x] Update `packages/auth-ui/src/index.ts` to re-export `oauth-client`, `oauth-consent`, and component types.
+  - [x] Update `packages/auth-ui/package.json` `exports` map with `./oauth-client` + `./components/OAuthConsent.svelte`.
+  - [x] Lot 3 gate:
+    - [x] `make typecheck-auth-ui ENV=test-feat-auth-oidc`
+    - [x] **Package tests**
+      - [x] new: `packages/auth-ui/tests/oauth-client.test.ts` (PKCE generation, discovery fetch + cache, authorize URL shape, exchange code happy path, exchange code error mapping, DPoP keypair generation + proof header attachment)
+      - [x] new: `packages/auth-ui/tests/oauth-consent.test.ts` (covers `OAuthConsentTransport` contract + default/FR labels; Svelte render coverage deferred to Lot 4 UI wrapper because the current `test-auth-ui` Make target does not install a Svelte compiler)
+      - [x] `make test-packages SCOPE=packages/auth-ui/tests/oauth-client.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-packages SCOPE=packages/auth-ui/tests/oauth-consent.test.ts ENV=test-feat-auth-oidc`
+    - [x] `make build-auth-ui ENV=test-feat-auth-oidc`
+    - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
+  - [x] Commit: `feat(BR-39c): Lot 3 oauth-client helper + OAuthConsent component`.
 
 - [ ] **Lot 4 — Sentropic host adapter + ports wiring + UI thin wrappers**
   - [ ] Create `api/src/routes/auth/oauth.ts`:
