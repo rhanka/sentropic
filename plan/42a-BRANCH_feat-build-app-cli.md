@@ -121,6 +121,15 @@ Actions with the following status should be included around tasks only if really
   `@sentropic/build-cli`). Préco: do this on a tiny separate docs commit/branch to keep `plan/**`
   cross-branch churn out of this feature branch (Forbidden Paths above). Confirm owner. (Coordinate with
   BR42a0-Q3 — likely one combined docs pass.)
+- **BR42a1-B1** `acknowledge` (RESOLVED — packaging bug found by the real-binary smoke) — both
+  `@sentropic/cli` and `@sentropic/build-cli` `package.json` had `main`/`types`/`exports.import`
+  pointing at `./src/index.ts` (and the build-cli subpath exports `./templating`/`./generator`/
+  `./manifest` at `src/*.ts`). Node cannot import `.ts` at runtime, so `bin/stp.mjs`'s
+  `import … from '@sentropic/build-cli'` (and any published consumer) would fail with
+  `ERR_MODULE_NOT_FOUND` — diverging from every published sibling (`chat-server` points at
+  `./dist/index.js`). Fix: repoint `main`/`types`/`exports` to `./dist/**` mirroring chat-server,
+  line-for-line (`files` still ships `src` per the documented tarball contents; only resolution
+  changed). Guarded by `packages/build-cli/tests/binary-smoke.spec.ts`. All gates re-green after fix.
 - **BR42a-F** `acknowledge` — `--h2a-register` emits a minimal LOCAL descriptor only (SPEC §5.2-F
   Option 1), explicitly non-protocol; real h2a register deferred upstream (EVO-9).
 - **BR42a-G** `acknowledge` — GitHub policy per SPEC §5.2-G: explicit `--github-owner`, private default,
@@ -168,21 +177,22 @@ Actions with the following status should be included around tasks only if really
 
 ## Plan / Todo (lot-based)
 
-- [ ] **Lot 0 — Baseline, scoping & EX1 declaration**
+- [x] **Lot 0 — Baseline, scoping & EX1 declaration**
   - [x] Verify branch: `git -C tmp/feat-build-app-cli branch --show-current` = `feat/build-app-cli`.
-  - [ ] Create/confirm isolated worktree `tmp/feat-build-app-cli` from `main`; copy `.env`, override
+  - [x] Create/confirm isolated worktree `tmp/feat-build-app-cli` from `main`; copy `.env`, override
         `ENV=feat-build-app-cli` + slot-0 ports (9210/5410/1310).
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`,
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`,
         `rules/security.md`, `PLAN.md`, `spec/SPEC_EVOL_BUILD_APP_CLI.md` (esp. §8 RATIFIED), §6 tests,
         §7 sequencing, `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`, `plan/BRANCH_TEMPLATE.md`.
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [ ] Validate scope boundaries; record `BR42a-EX1` (Makefile + ci.yml) in `## Feedback Loop`.
-  - [ ] Resolve `BR42a-Q1` (dispatch mechanism), `BR42a-Q2` (single-branch a0/a1/a2 confirmation),
-        `BR42a-Q3` (plan/PLAN sync owner), `BR42a-E1` (api adopts chat-ui-shaped routes vs additive mount).
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Validate scope boundaries; record `BR42a-EX1` (Makefile + ci.yml) in `## Feedback Loop`.
+  - [x] Resolve `BR42a-Q1` (dispatch mechanism — option 3 typed `SubcommandRegistry.register()`),
+        `BR42a-Q2` (single-branch a0/a1/a2 confirmation), `BR42a-Q3` (plan/PLAN sync owner —
+        separate docs pass), `BR42a-E1` (api adopts chat-ui-shaped routes vs additive mount).
   - [x] Create the package skeletons (`packages/cli`, `packages/build-cli`)
         each with `package.json` (`license: "MIT"`, `version: "0.1.0"`, `@sentropic/<name>`), `tsconfig.json`,
         `LICENSE` (MIT), `README.md`. Mark NONE `private`. (`packages/chat-server` is BR-42a0's, consumed published.)
-  - [ ] Confirm chat-core in-memory adapter availability (VERIFIED: `@sentropic/chat-core` exports
+  - [x] Confirm chat-core in-memory adapter availability (VERIFIED: `@sentropic/chat-core` exports
         `InMemory.{InMemoryMessageStore, InMemorySessionStore, InMemoryStreamBuffer,
         InMemoryCheckpointStore, InMemoryMeshDispatch, InMemoryStreamSequencer}` + `ChatRuntime`; the
         SPEC §4.1 claim that `InMemoryMeshDispatch` does not exist is WRONG — record the correction).
@@ -226,7 +236,7 @@ Actions with the following status should be included around tasks only if really
     - [ ] Bump `packages/chat-server/package.json` to `0.1.0`; bump `api/` only if its `src/**` public
           surface changed (it is an app root, not a published package — no bump needed).
 
-- [ ] **Lot a1 — `@sentropic/build-cli` (`stp app`): templating substrate + generator + `init`/`doctor` + app template**
+- [x] **Lot a1 — `@sentropic/build-cli` (`stp app`): templating substrate + generator + `init`/`doctor` + app template**
   - [x] Templating substrate (`packages/build-cli/src/templating/**`): deterministic `{{token}}`
         substitution over a file tree + a scaffold manifest (template files → output paths + transforms),
         dependency-light, behind an interface designed for later `@sentropic/harness` adoption (R5).
@@ -262,10 +272,10 @@ Actions with the following status should be included around tasks only if really
           (chat-ui ^0.1.x, chat-core ^0.1.x, llm-mesh ^0.1.x, chat-server ^0.1.x, design-system-svelte
           ^0.10.x + themes/tokens) + peers (svelte ^5, `@lucide/svelte` ^0.562, `svelte-streamdown` ^3,
           hono), `README.md`, `LICENSE` (MIT), `.gitignore` (MUST exclude `.env`).
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-build-cli` (PASS). (`make lint` deferred to final lot; template subtree is a string
           corpus — not part of build-cli's tsc, validated via golden + init materialise specs + pinned-version asserts.)
-    - [ ] **Generator unit tests (golden-file)** (`packages/build-cli/tests/**`):
+    - [x] **Generator unit tests (golden-file)** (`packages/build-cli/tests/**`):
       - [x] `tests/generator-golden.spec.ts` — real chat-app manifest through `resolvePlan` with fixed
             tokens, byte-for-byte vs committed golden fixture (`fixtures/chat-app-golden.json`; R10). Covers token
             substitution (name/ports/provider/repo-URL), pinned `@sentropic/*` versions, that the generated
@@ -291,18 +301,26 @@ Actions with the following status should be included around tasks only if really
           excludes tests/fixtures — 106 files, 52 kB).
     - [x] Bumped `packages/build-cli/package.json` to `0.2.0` (public surface grew: `./manifest` export +
           default chat-app scaffolding; `BUILD_CLI_VERSION` synced).
-    - [ ] **E2E hermetic smoke** (the headline definition of done):
-      - [ ] Prepare: temp working dir + temp `HOME`, no host npm writes, isolated compose project (app
-            slug) + pinned non-conflicting ports (this branch slot: API `9211`, UI `5411`, Maildev `1311`).
-      - [ ] Add `e2e/tests/42-build-app-init-smoke.spec.ts` (or a package-level Docker smoke target):
-            `stp app init demo --yes --provider stub --no-github`; in the generated app run `make build`
-            then bring up `make dev`; assert the UI is served, the `@sentropic/chat-server` wire endpoints
-            respond, and a sent message streams a `stub` assistant reply over `GET /chat/sessions/:id/stream`.
-      - [ ] Teardown: generated app `make down`; assert no leaked containers/volumes/ports.
-      - [ ] Scoped run: the smoke as its own make target (bundle CI/UAT waits into one script per
-            `No-repeated-approvals`); never run on `ENV=dev`.
+    - [x] **Real-binary smoke (no docker)** — the assembled `stp` binary, run end to end:
+      - [x] `packages/build-cli/tests/binary-smoke.spec.ts` spawns the published-shaped binary
+            (`node packages/cli/bin/stp.mjs`), resolving `@sentropic/build-cli` through its
+            `package.json` `exports` map (which now points at `dist/**`, NOT `src/*.ts` — see the
+            exports fix in `## Feedback Loop` / commit `fix(BR-42a1): point cli/build-cli package
+            exports at dist`). Asserts: `--version` (semver), `--help` lists `app`, `app --help`
+            delegates to `runAppCli`, `--dry-run` writes nothing, and `app init demo --yes --provider
+            stub --no-git --no-github` materialises a tree whose backend mounts
+            `createChatServer(createInMemoryChatServerDeps(...), { routes: 'canonical' })`, `.gitignore`
+            excludes `.env`, `package.json` pins `@sentropic/chat-server`/`chat-ui`/`design-system-svelte`,
+            and there is NO leftover `{{token}}` / `/sessions/:id/events` / `Sec-Sentropic-Wire-Version`.
+      - [x] Build-resilient: the spec self-skips when `dist/` is absent (CI `validate-*` jobs run tests
+            before build); it runs the real binary locally after `make build-build-cli && make build-cli`.
+            Verified: `make test-build-cli` → `tests/binary-smoke.spec.ts (5 tests)` PASS (119 total).
+      - [ ] **Docker `make dev` round-trip** `attendu` (UAT, NOT runnable in this lane): the generated
+            app's `make dev` (Docker Compose, app-slug project, ports API `9211`/UI `5411`/Maildev `1311`)
+            served UI + a streamed `stub` reply over `GET /chat/sessions/:id/stream`. Deferred to the UAT
+            checklist below — this lane forbids raw `docker run` and the smoke target/Makefile is frozen.
 
-- [ ] **Lot a2 — `@sentropic/cli` umbrella (`stp`) + `stp app` registration seam**
+- [x] **Lot a2 — `@sentropic/cli` umbrella (`stp`) + `stp app` registration seam**
   - [x] `packages/cli/src/**`: binary `stp` (alias `sentropic`) with the subcommand-registration seam
         decided in BR42a-Q1 (préco option 3: typed `SubcommandRegistry.register()` contract in
         `src/registry.ts`; plugin-agnostic dispatcher in `src/cli.ts`); the `stp` bin (`bin/stp.mjs`,
@@ -311,7 +329,7 @@ Actions with the following status should be included around tasks only if really
         subcommands), per-subcommand help (`stp app --help` delegates to `runAppCli`).
   - [x] Document (in `packages/cli/README.md`) that `stp graphify`/`stp h2a`/`stp remote` are reserved
         federation points OUT of BR-42a scope (separate repos).
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-cli` (PASS). (`make lint` deferred to final lot per plan convention.)
     - [x] **cli unit tests** (`packages/cli/tests/**`):
       - [x] `tests/registry.spec.ts` — `SubcommandRegistry.register()` registers `app`, duplicate-name
@@ -328,6 +346,33 @@ Actions with the following status should be included around tasks only if really
           regenerated root lockfile (`make lock-root`).
 
 - [ ] **Lot N-2 — UAT**
+  - [ ] **Copy-pasteable UAT (run from the worktree; throwaway temp dir; NEVER root `ENV=dev`)**.
+        Pre-publish, wire the assembled binary the way `npm i -g` would (cli's ESM bin resolves
+        `@sentropic/build-cli` from `packages/cli/node_modules`), then run the round-trip:
+        ```sh
+        # 0. Build both dist (binary needs dist/**, not src/*.ts — see BR42a1-B1)
+        make build-build-cli
+        make build-cli
+        # 1. Make the local build-cli resolvable to the stp bin (post-publish this is `npm i`)
+        mkdir -p packages/cli/node_modules/@sentropic
+        ln -sfn "$PWD/packages/build-cli" packages/cli/node_modules/@sentropic/build-cli
+        # 2. Drive the assembled binary in a throwaway dir (deterministic offline stub)
+        SMOKE="$(mktemp -d)"
+        node packages/cli/bin/stp.mjs --version
+        node packages/cli/bin/stp.mjs --help            # lists `app`
+        node packages/cli/bin/stp.mjs app --help
+        node packages/cli/bin/stp.mjs app init demo --yes --provider stub --no-git --no-github --dir "$SMOKE/demo"
+        # 3. Docker `make dev` round-trip (the `attendu` gate): UI served + stub reply streamed
+        ( cd "$SMOKE/demo" && make dev )                # open the UI; send a message → stub reply over /chat/sessions/:id/stream
+        ( cd "$SMOKE/demo" && make down )               # teardown; no leaked containers/volumes/ports
+        # 4. cleanup
+        rm -rf "$SMOKE" packages/cli/node_modules
+        ```
+        Expected: exit 0 throughout; `.gitignore` excludes `.env`; `api/src/server.ts` mounts
+        `createChatServer(createInMemoryChatServerDeps(...), { routes: 'canonical' })`; the UI loads and a
+        sent message streams a `stub` assistant reply; `make down` leaves no residue. (The automated
+        `packages/build-cli/tests/binary-smoke.spec.ts` already asserts steps 1–2 + the generated-tree
+        invariants offline; step 3 is the human docker round-trip.)
   - [ ] Generated app (throwaway temp dir, NEVER root): `stp app init demo --provider stub`
         (interactive) → wizard clear, defaults sane, `.gitignore` excludes `.env`; `cd demo && make dev`
         → UI loads, chat message streams a stub reply over `/chat/sessions/:id/stream`, no runtime errors.
@@ -338,8 +383,11 @@ Actions with the following status should be included around tasks only if really
   - [ ] `stp app init demo --force` over a non-empty dir behaves per defined semantics; without `--force` refuses with list.
   - [ ] Generated-app ports do NOT collide with `8787/5173/1080`; compose project name = app slug.
   - [ ] `--h2a-register` writes the local non-protocol descriptor only; no h2a session.
-  - [ ] **`api/` non-regression UAT (root, `ENV=dev`)**: the monorepo chat still works end-to-end after
-        the `@sentropic/chat-server` extraction (send a message, stream a reply, bootstrap a session).
+  - [ ] **`api/` non-regression UAT (root, `ENV=dev`)** — `attendu`/owned by BR-42a0, not BR-42a1: the
+        `@sentropic/chat-server` extraction + `api/` migration are BR-42a0's scope (proven there;
+        `api/` and `packages/chat-server/**` are Forbidden here). BR-42a1 only CONSUMES the published
+        `@sentropic/chat-server` in the generated app. Re-confirm at merge that the monorepo chat still
+        works end-to-end (send a message, stream a reply, bootstrap a session) — no BR-42a1 change touches it.
   - [ ] Naming sign-off: binary `stp` (+ alias `sentropic`), packages `@sentropic/cli` /
         `@sentropic/build-cli` / `@sentropic/chat-server` (gate before merge — D1 ratified, confirm at UAT).
   - [ ] Licensing sign-off: generated-app `LICENSE` = MIT, `package.json license: "MIT"` (SPEC BR42a-I).
@@ -347,20 +395,30 @@ Actions with the following status should be included around tasks only if really
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Sync `spec/SPEC_EVOL_BUILD_APP_CLI.md` to delivered behaviour (3-package shape; chat-server
         extraction; the verified wire-contract corrections in BR42a-E1; the `InMemoryMeshDispatch`-exists
-        correction to §4.1). If a `spec/BRANCH_SPEC_EVOL.md` was used, integrate then delete it.
+        correction to §4.1; the BR42a1-B1 exports-at-`dist` packaging fix; build-cli `0.2.0`; the offline
+        `assistantReply` path). NOTE `attendu`: `spec/SPEC_EVOL_BUILD_APP_CLI.md` is NOT committed on this
+        branch (it lives untracked on the root checkout's other branch); it must be committed here / synced
+        on the docs pass before this item can close. Cannot be edited from this worktree without touching
+        the root checkout. If a `spec/BRANCH_SPEC_EVOL.md` was used, integrate then delete it.
   - [ ] `BR42a-Q3`: land the `plan/42-BRANCH_chore-scale-build-app.md` + `PLAN.md` umbrella status update
         on a separate tiny docs commit/branch (keep `plan/**` cross-branch churn off this branch).
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & lint (cli + build-cli + chat-server + api) green.
-  - [ ] Retest: `make test-chat-server`, `make test-build-cli`, `make test-cli`.
-  - [ ] Retest API: `make test-api ENV=test-feat-build-app-cli` (chat non-regression).
-  - [ ] Retest E2E: the hermetic `42-build-app-init-smoke` (its own target) + relevant chat e2e groups
-        (cf. `.github/workflows/ci.yml` e2e split) green.
+  - [x] Retest BR-42a1 packages: `make test-build-cli` (119 PASS incl. binary-smoke), `make test-cli`
+        (8 PASS). (`make test-chat-server` is BR-42a0's gate — chat-server is Forbidden here.)
+  - [ ] Retest API: `make test-api ENV=test-feat-build-app-cli` (chat non-regression) — `attendu`, BR-42a0
+        scope (`api/` is Forbidden here).
+  - [x] Real-flow E2E: delivered as the offline real-binary smoke `packages/build-cli/tests/binary-smoke.spec.ts`
+        (no docker; runs the assembled `stp` bin). The Docker `make dev` round-trip is `attendu`/UAT (Lot N-2
+        command block). No `e2e/tests/42-*.spec.ts` / make smoke target added — `Makefile`/`ci.yml`/`e2e/**`
+        are frozen/out of scope for the finalize pass.
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document signatures in this file.
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted.
-  - [ ] Bumped `packages/cli`, `packages/build-cli`, `packages/chat-server` versions (all new at `0.1.0`)
-        — `enforce-package-bump` green for new packages.
+        N/A: the only generated-app reply path is the deterministic offline `stub` — no AI nondeterminism.
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted. N/A (no AI flaky test).
+  - [x] `packages/build-cli` at `0.2.0`, `packages/cli` at `0.1.0` (both new on this branch);
+        `enforce-package-bump` skips new packages (no base version). The BR42a1-B1 exports fix touched
+        only `package.json` (not `src/**`), so the gate is not triggered; it ships with the first publish.
   - [ ] First-publish bootstrap (`attendu`, post-merge per package): `workflow_dispatch
         bootstrap_publish_target=<pkg>` (token), then attach the OIDC trusted publisher on npmjs.com,
         then steady-state OIDC publish on merge to main. Drive the npmjs.com trusted-publisher attach via
