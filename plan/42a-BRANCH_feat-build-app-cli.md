@@ -214,18 +214,19 @@ Actions with the following status should be included around tasks only if really
   - [x] Generator core (`packages/build-cli/src/generator/**`): resolve scaffold plan from a manifest
         + options; deterministic output (R10 invariant — no timestamps/random/env-ordering). Pure planner
         (`resolvePlan`) + thin no-partial-write filesystem writer (`writePlan`).
-  - [ ] `stp app` verbs (`packages/build-cli/src/commands/**`): `init <name>` (flags `--dir`,
+  - [x] `stp app` verbs (`packages/build-cli/src/commands/**`): `init <name>` (flags `--dir`,
         `--provider stub|openai|gemini|anthropic|mistral|cohere`, `--git/--no-git`,
         `--github/--no-github`, `--github-visibility`, `--github-owner`, `--h2a-register`, `--yes/-y`,
         `--force`, `--dry-run`), `doctor` (Docker/make/gh-auth/engines/port-availability incl. generated-app
-        port-conflict detection), `--version`, `--help`. Surfaced as `stp app <verb>` (D1).
-  - [ ] `--force` semantics: without `--force` → refuse-with-list (exit non-zero); with `--force` →
-        overwrite-scaffold-owned-files-only (never blanket-delete). Define + test BEFORE exposure.
-  - [ ] GitHub path (`--github`): shell out to `gh repo create <owner>/<name> --<visibility> --source
+        port-conflict detection), `--version`, `--help`. Exposed via `runAppCli(argv)` (importable, returns
+        an exit code); the umbrella surfaces it as `stp app <verb>` (D1) in lot a2.
+  - [x] `--force` semantics: without `--force` → refuse-with-list (`TargetNotEmptyError`, non-zero); with
+        `--force` → overwrite-scaffold-owned-files-only (writer `overwrite`, never blanket-delete).
+  - [x] GitHub path (`--github`): shell out to `gh repo create <owner>/<name> --<visibility> --source
         <dir> --push`; BR42a-G gating (explicit owner, private default, refuse on collision, never mutate
         existing remote, backfill repo URL before first commit). `--dry-run` prints the exact `gh`
         invocation without running it.
-  - [ ] `--h2a-register`: emit the minimal local non-protocol descriptor only (BR42a-F); no network call.
+  - [x] `--h2a-register`: emit the minimal local non-protocol descriptor only (BR42a-F); no network call.
   - [ ] App-template subtree (`packages/build-cli/templates/chat-app/**`, self-contained `package.json`
         for lift-and-shift to a future `@sentropic/app-template`):
     - [ ] Backend (`api/` inside the generated app): mounts `@sentropic/chat-server`'s
@@ -253,15 +254,17 @@ Actions with the following status should be included around tasks only if really
       - [x] `tests/templating.spec.ts` — substitution correctness, missing-token failure, idempotent
             re-render, determinism (R10). (no-partial-write covered by `tests/writer.spec.ts`;
             deterministic plan resolution covered by `tests/generator.spec.ts` golden fixture.)
-      - [ ] `tests/doctor.spec.ts` — each pre-flight check (Docker/make/gh-auth/engines/port-availability
+      - [x] `tests/doctor.spec.ts` — each pre-flight check (Docker/make/gh-auth/engines/port-availability
             incl. generated-app port-conflict) with mocked env; correct non-zero exit on failure.
-      - [ ] `tests/repo-create-safety.spec.ts` — stub `gh`+`git`, force temp `HOME`+`PATH`; run
+      - [x] `tests/repo-create-safety.spec.ts` — stub `gh`+`git`, force temp `HOME`+`PATH`; run
             `init demo --github --dry-run` AND the real `--github` path against the stubs; assert ZERO
             side effects, the exact `gh repo create ...` command string, collision refusal, existing-remote refusal.
-      - [ ] `tests/h2a-register.spec.ts` — `--h2a-register` emits the local descriptor only; no network call.
-      - [ ] `tests/negative.spec.ts` — invalid/empty/whitespace/non-slug/reserved names, path traversal
+      - [x] `tests/h2a-register.spec.ts` — `--h2a-register` emits the local descriptor only; no network call.
+      - [x] `tests/negative.spec.ts` — invalid/empty/whitespace/non-slug/reserved names, path traversal
             (`../`, absolute) in `--name`/`--dir`, existing non-empty dir (refuse vs `--force`), existing
-            git repo/remote (refuse), missing Docker/make/gh, port conflict, `.env` never in first commit/tree.
+            git repo/remote (refuse), flag errors, `.env` gitignored / never in scaffold. (missing
+            Docker/make/gh + port-conflict covered by `tests/doctor.spec.ts`; `init.spec.ts` covers the
+            dry-run/materialise + provider-validation + `.gitignore` excludes `.env`.)
       - [ ] Scoped runs: `make test-build-cli`.
     - [ ] `make build-build-cli` + `make pack-build-cli` (tarball includes template subtree + bins, excludes tests/fixtures/secrets).
     - [ ] Bump `packages/build-cli/package.json` to `0.1.0`.
