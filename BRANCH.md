@@ -139,6 +139,9 @@ Turn `@sentropic/auth-hono` into a standard OAuth2 + OpenID Connect Identity Pro
 - `BR39c-EX2` `decided` (2026-05-31): Allow a minimal edit to `ui/src/routes/+layout.svelte` to classify `/auth/oauth/*` as a public auth route. Reason: the Lot 4 consent/callback pages are otherwise never rendered by the existing layout gate. Impact: only route visibility/header behavior for the new OAuth auth pages. Rollback: remove the `/auth/oauth` entries from `AUTH_ROUTES` and `PUBLIC_ROUTES`.
 - `BR39c-EX3` `decided` (2026-05-31): Allow a minimal edit to `ui/src/routes/auth/login/+page.svelte` to resume OAuth `continue` login continuations. Reason: unauthenticated OAuth `/authorize` redirects to the existing login page with a sealed continuation, and the host login wrapper must hand that continuation back to the API authorize route after successful login. Impact: only post-login navigation when the OAuth `continue` query param is present. Rollback: remove the OAuth continuation branch and restore `returnUrl`-only navigation.
 - `BR39c-T1` `noted` (2026-05-31): Full scoped `make test-api SCOPE=tests/api/auth/oauth-authorize.test.ts ... ENV=test-feat-auth-oidc` first hit a transient API health wait, then later hit the known package build cleanup issue (`packages/auth-hono/node_modules/jose` permission denied). Make-only recovery was `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-authorize.test.ts ENV=test-feat-auth-oidc` followed by `make build-auth-hono ENV=test-feat-auth-oidc`; the grouped endpoint OAuth suite then passed with workers=4. Lot N still owns full `make test-api`.
+- `BR39c-T2` `noted` (2026-06-01): Lot 6 E2E global setup signs users in with magic-link sessions, not passkey sessions. E2E assertions therefore expect `acr=urn:sentropic:loa:bearer`; package/API tests continue to cover `urn:sentropic:loa:passkey-fresh`.
+- `BR39c-T3` `fixed` (2026-06-01): Repeated E2E seeds initially produced intermittent `/userinfo` 401 immediately after token exchange. Root cause: `seed-test-data` deleted `id_token_signing_keys` while the long-running API process could still cache the old active private key for 60s, so a token could be signed with the old key and verified against a newly seeded public key with the same `kid`. Fix: preserve `id_token_signing_keys` during E2E seed because signing keys are operator configuration, not per-test fixture data. Verified authorization-code twice with `RETRIES=0` on the same API process.
+- `BR39c-T4` `noted` (2026-06-01): After production `make build-api`, `make typecheck-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=test-feat-auth-oidc` ran against the pruned production image and returned `tsc: not found`; recovery through `make up-api-test ... ENV=test-feat-auth-oidc` hit the already documented `packages/auth-hono/node_modules/jose` permission-denied cleanup issue. Earlier `make typecheck-api` and final `make build-api` passed; Lot N still owns the full final API gates.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -379,25 +382,26 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - [x] End-of-lot cleanup: `make down ENV=test-feat-auth-oidc`.
   - [x] Commit: `test(BR-39c): Lot 5 in-process mock RP end-to-end integration test`.
 
-- [ ] **Lot 6 — E2E full stack OAuth flow**
-  - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`.
-  - [ ] new: `e2e/tests/02-auth-oauth-authorization-code.spec.ts`:
-    - Existing user signs in via passkey (reuse BR-39a/b helper).
+- [x] **Lot 6 — E2E full stack OAuth flow**
+  - [x] Prepare E2E build: `make build-api build-ui-image API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`; reran `make build-api API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc` after the E2E seed JWKS fix.
+  - [x] new: `e2e/tests/02-auth-oauth-authorization-code.spec.ts`:
+    - Existing E2E storage state signs in via magic link; passkey freshness remains covered by package/API tests.
     - Browser navigates to `http://localhost:9197/api/v1/auth/oauth/authorize?response_type=code&client_id=example-mock-rp&redirect_uri=http://localhost:5397/auth/oauth/callback&scope=openid+profile+email&code_challenge=...&code_challenge_method=S256&state=test-state&nonce=test-nonce`.
     - Consent screen renders; user clicks Approve.
     - Browser redirected to `/auth/oauth/callback?code=...&state=test-state`.
-    - Callback page exchanges code via `oauthClient.exchangeCode` and verifies received `id_token` contains `iss`, `sub`, `aud`, `nonce=test-nonce`, `acr=urn:sentropic:loa:passkey-fresh`, `auth_time`.
+    - Test exchanges code via the API token endpoint and verifies received `id_token` contains `iss`, `sub`, `aud`, `nonce=test-nonce`, `acr=urn:sentropic:loa:bearer`, `auth_time`.
     - Calls `http://localhost:9197/api/v1/auth/oauth/userinfo` with received bearer; verifies email + profile claims returned.
-  - [ ] new: `e2e/tests/02-auth-oauth-revoke.spec.ts`:
+  - [x] new: `e2e/tests/02-auth-oauth-revoke.spec.ts`:
     - Continues from above (or independent setup): obtains token, calls `http://localhost:9197/api/v1/auth/oauth/revoke` with token, subsequent userinfo call returns 401.
-  - [ ] new: `e2e/tests/02-auth-oauth-wellknown.spec.ts`:
+  - [x] new: `e2e/tests/02-auth-oauth-wellknown.spec.ts`:
     - Unauthenticated GET `http://localhost:9197/.well-known/openid-configuration` → 200 with correct shape, issuer == `http://localhost:9197`.
     - Unauthenticated GET `http://localhost:9197/.well-known/jwks.json` → 200 with EdDSA Ed25519 key listed.
-  - [ ] Lot 6 gate:
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-oauth-authorization-code.spec.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-oauth-revoke.spec.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-oauth-wellknown.spec.ts API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
-    - [ ] `make clean ENV=e2e-feat-auth-oidc`
+  - [x] Lot 6 gate:
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-oauth-authorization-code.spec.ts RETRIES=0 API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
+    - [x] Repeated `make test-e2e E2E_SPEC=tests/02-auth-oauth-authorization-code.spec.ts RETRIES=0 API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc` on the same API process after seed rerun.
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-oauth-revoke.spec.ts RETRIES=0 API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-oauth-wellknown.spec.ts RETRIES=0 API_PORT=9197 UI_PORT=5397 MAILDEV_UI_PORT=1297 ENV=e2e-feat-auth-oidc`
+    - [x] `make clean ENV=e2e-feat-auth-oidc`
   - [ ] Commit: `test(BR-39c): Lot 6 E2E oauth authorization-code + revoke + wellknown`.
 
 - [ ] **Lot N-2 — UAT (web app only; Chrome ext + VSCode ext are out of scope)**

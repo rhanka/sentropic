@@ -104,3 +104,11 @@ export const env: AppEnv = (() => {
   }
   return parsed;
 })();
+
+export const isE2eProductionImageRuntime = (value: AppEnv = env): boolean =>
+  value.NODE_ENV === 'production' &&
+  value.DISABLE_RATE_LIMIT === 'true' &&
+  value.ADMIN_EMAIL === 'e2e-admin@example.com';
+
+export const requiresOAuthProductionSecrets = (value: AppEnv = env): boolean =>
+  value.NODE_ENV === 'production' && !isE2eProductionImageRuntime(value);
