@@ -284,22 +284,29 @@ Actions with the following status should be included around tasks only if really
             `No-repeated-approvals`); never run on `ENV=dev`.
 
 - [ ] **Lot a2 — `@sentropic/cli` umbrella (`stp`) + `stp app` registration seam**
-  - [ ] `packages/cli/src/**`: binary `stp` (alias `sentropic`) with the subcommand-registration seam
-        decided in BR42a-Q1 (préco: typed `registerSubcommand()` contract); register `stp app` from
-        `@sentropic/build-cli`. `--version` (CLI + registered subcommand versions), `--help`,
-        per-subcommand help (`stp app --help`).
-  - [ ] Document (in `packages/cli/README.md`) that `stp graphify`/`stp h2a`/`stp remote` are reserved
+  - [x] `packages/cli/src/**`: binary `stp` (alias `sentropic`) with the subcommand-registration seam
+        decided in BR42a-Q1 (préco option 3: typed `SubcommandRegistry.register()` contract in
+        `src/registry.ts`; plugin-agnostic dispatcher in `src/cli.ts`); the `stp` bin (`bin/stp.mjs`,
+        composition root) imports `@sentropic/build-cli` and registers `stp app` — core never imports
+        build-cli, so no cycle. `--version` (CLI + registered subcommand versions), `--help` (lists
+        subcommands), per-subcommand help (`stp app --help` delegates to `runAppCli`).
+  - [x] Document (in `packages/cli/README.md`) that `stp graphify`/`stp h2a`/`stp remote` are reserved
         federation points OUT of BR-42a scope (separate repos).
   - [ ] Lot gate:
-    - [ ] `make typecheck-cli` + `make lint`.
-    - [ ] **cli unit tests** (`packages/cli/tests/**`):
-      - [ ] `tests/registration.spec.ts` — `registerSubcommand()` registers `stp app`; dispatch routes
-            `stp app init`/`stp app doctor` to `@sentropic/build-cli`; unknown subcommand → clear non-zero error.
-      - [ ] `tests/version-help.spec.ts` — `stp --version` aggregates CLI + subcommand versions;
-            `stp --help` and `stp app --help` render; `sentropic` alias resolves identically.
-      - [ ] Scoped runs: `make test-cli`.
-    - [ ] `make build-cli` + `make pack-cli` (binaries `stp` + `sentropic` in `bin`).
-    - [ ] Bump `packages/cli/package.json` to `0.1.0`.
+    - [x] `make typecheck-cli` (PASS). (`make lint` deferred to final lot per plan convention.)
+    - [x] **cli unit tests** (`packages/cli/tests/**`):
+      - [x] `tests/registry.spec.ts` — `SubcommandRegistry.register()` registers `app`, duplicate-name
+            guard (`DuplicateSubcommandError`), malformed-entry guard (`InvalidSubcommandError`), lookup
+            (`get`/`has`/`list` sorted).
+      - [x] `tests/dispatch.spec.ts` — `stp --version`/`-v` aggregates CLI + subcommand versions;
+            `stp --help`/`-h`/bare lists `app`; unknown subcommand → non-zero + lists available; `app …`
+            delegates to a stubbed `runAppCli` with the remaining argv and propagates its exit code
+            (covers the `registration.spec`/`version-help.spec` assertions).
+      - [x] Scoped runs: `make test-cli` (8 tests PASS).
+    - [x] `make build-cli` + `make pack-cli` (tarball: `bin/stp.mjs` + `dist/**` + `src/**`, excludes
+          tests — 19 files, 7.9 kB; bins `stp` + `sentropic` both point at `bin/stp.mjs`).
+    - [x] `packages/cli/package.json` at `0.1.0` (new package); added `@sentropic/build-cli` dep +
+          regenerated root lockfile (`make lock-root`).
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Generated app (throwaway temp dir, NEVER root): `stp app init demo --provider stub`
