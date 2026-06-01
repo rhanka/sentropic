@@ -329,13 +329,16 @@ Actions with the following status should be included around tasks only if really
             Scoped run PASS:
             `make test-api-endpoints SCOPE='tests/api/chat.test.ts tests/api/chat-bootstrap-contract.test.ts tests/api/chat-characterization.spec.ts tests/api/chat-checkpoint-contract.test.ts tests/api/chat-feedback.test.ts tests/api/chat-history-analyze-tool.test.ts tests/api/chat-message-actions.test.ts tests/api/chat-permissions.test.ts tests/api/chat-server-mount.test.ts tests/api/chat-summary-contract.test.ts tests/api/chat-tools.test.ts tests/api/queue-stream-bootstrap-contract.test.ts tests/api/streams.test.ts' API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`
             — PASS (13 files, 60 tests).
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-chat-server`.
-        - [ ] `make test-api API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`
-              — BLOCKED before Vitest: `build-auth-hono` cannot remove generated
-              `packages/auth-hono/node_modules` owned by `nobody:nogroup` (same local artifact pattern also
-              present under `packages/chat-core/node_modules` and `packages/skills/node_modules`). Cleanup
-              requires explicit approval to remove generated `node_modules` directories; no source-level test
-              failure observed.
+      - [x] Sub-lot gate: `make test-api ENV=test-feat-chat-server`.
+        - [x] `make test-api API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`
+              — PASS (smoke 6 tests; unit 518 passed / 1 skipped; endpoints 64 files / 466 tests; queue
+              4 files / 20 tests; security 6 files / 49 tests; ai 9 files / 30 tests; limit 1 file / 4 tests).
+        - [x] `auth-hono` bind-mount cleanup regression fixed in Makefile: `typecheck-auth-hono`,
+              `build-auth-hono`, and `test-auth-hono` now clean `packages/auth-hono/node_modules` via a root
+              container before/after the package-local standalone symlink run. Verification:
+              `make test-auth-hono API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`
+              — PASS (15 files, 50 tests), then
+              `find packages/auth-hono -maxdepth 2 -type d -name node_modules -print` — no output.
 
 - [ ] **Lot 4 — Full matrix + publish lane (EX1) + UAT**
   - [ ] Wire the publish lane per `BR42a0-EX1` (Makefile targets + ci.yml filters/enum/jobs + the `api`-filter
@@ -376,7 +379,8 @@ Actions with the following status should be included around tasks only if really
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & lint (chat-server + api) green.
   - [ ] Retest: `make test-chat-server`.
-  - [ ] Retest API: `make test-api ENV=test-feat-chat-server` (chat characterization + chat-server mount + non-regression).
+  - [x] Retest API: `make test-api ENV=test-feat-chat-server` (chat characterization + chat-server mount + non-regression)
+        — PASS with `API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`.
   - [ ] Retest E2E: chat-relevant e2e groups + vscode streaming e2e green (cf. ci.yml e2e split).
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document signatures here.
   - [ ] Record explicit user sign-off if any AI flaky test is accepted.
