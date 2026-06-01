@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-core",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Chat orchestration core for @sentropic/* — port interfaces (CheckpointStore, MessageStore, SessionStore, StreamBuffer, LiveDocumentStore, ToolRegistry, EventSink, JobQueue, AgentRuntime). Adapters live in persistence-* / flow.",
   "type": "module",
   "license": "MIT",
