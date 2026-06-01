@@ -83,6 +83,25 @@ Actions with the following status should be included around tasks only if really
   change to other packages' lanes. Rollback: remove the added targets/filters/enum entries/jobs and the
   package dirs. First publish per package needs the documented bootstrap-then-attach flow (token
   `workflow_dispatch` then attach OIDC trusted publisher on npmjs.com) — recorded as `attendu` post-merge.
+  - **BR42a1-EX1 USED (implemented)** `acknowledge` — Makefile: added `publish-build-cli`/
+    `publish-build-cli-token` + `publish-cli`/`publish-cli-token` (OIDC + bootstrap), mirroring
+    `publish-chat-server`/`-token` line-for-line (`typecheck`/`test`/`build`/`pack` already present).
+    ci.yml: added `build_cli`/`build_cli_publish`/`cli`/`cli_publish` `changes` outputs + path filters
+    (mirroring the chat-server filter shape; the `cli` validate filter ALSO watches
+    `packages/build-cli/**` because `@sentropic/cli` depends on `@sentropic/build-cli` — the
+    cowork-desktop→cowork-bridge dependent-package precedent), `validate-build-cli` + `validate-cli`
+    jobs (typecheck+test+build+pack, mirroring `validate-chat-server`), steady-state OIDC
+    `publish-build-cli` + `publish-cli` jobs (`github.ref == main`, gated on `<pkg>_publish`), two
+    enum entries (`build-cli`,`cli`) + two bootstrap dispatch steps. yaml parse OK; `make typecheck-cli`/
+    `typecheck-build-cli` green. No `lint-<pkg>` target added: NO sibling pure-Node package
+    (`chat-server`/`cowork-bridge`/`llm-mesh`/`flow`/…) has a lint target and their `validate-*` jobs do
+    not lint — the gate for pure-Node packages is `tsc` typecheck + vitest; a bespoke lint target would be
+    unvalidated entropy (per `feedback_reuse_ui_no_entropy` / `feedback_no_unvalidated_naming`).
+  - **BR42a1-EX1 first-publish** `attendu` (post-merge, per package) — `enforce-package-bump` skips both
+    (new packages, no base version); first publish is the bootstrap-then-attach flow: `workflow_dispatch
+    bootstrap_publish_target=build-cli` then `=cli` (token, on main), then attach the OIDC trusted publisher
+    on npmjs.com (drive via Playwright per `Npm-trusted-publisher-via-Playwright`), then steady-state OIDC
+    `publish-build-cli`/`publish-cli` on subsequent merges. NOT attempted in this branch.
 - **BR42a1-Q1** `attention` (umbrella dispatch mechanism). D1 leans `plugin discovery` (each
   `@sentropic/*-cli` self-registers, tied to the `CatalogSource` idea). For BR-42a1 only `build-cli` is
   a real plugin. Question: ship the discovery seam as (1) a static registration table in
