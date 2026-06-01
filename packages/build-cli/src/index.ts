@@ -11,4 +11,5 @@
 export * from './templating/index.js';
 export * from './generator/index.js';
 export * from './commands/index.js';
+export * from './manifest/index.js';
 export { runAppCli, BUILD_CLI_VERSION, type AppCliDeps } from './cli.js';
