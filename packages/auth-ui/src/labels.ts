@@ -1,3 +1,4 @@
+import type { OAuthConsentLabels } from './oauth-consent.js';
 import type { AuthUiBranding, AuthUiLabels } from './types.js';
 
 export const createDefaultAuthUiLabels = (overrides: Partial<AuthUiLabels> = {}): AuthUiLabels => ({
@@ -184,3 +185,45 @@ export const createDefaultAuthUiBranding = (overrides: Partial<AuthUiBranding> =
 
   return branding;
 };
+
+export const createDefaultOAuthConsentLabels = (
+  overrides: Partial<OAuthConsentLabels> = {},
+): OAuthConsentLabels => ({
+  approve: 'Approve',
+  approving: 'Approving...',
+  deny: 'Deny',
+  denying: 'Denying...',
+  errorGeneric: 'Unable to load the authorization request.',
+  loading: 'Loading authorization request...',
+  redirectUriLabel: 'Redirect destination',
+  scopeDescriptions: {
+    email: 'Access your email address and email verification status.',
+    openid: 'Confirm your identity with this account.',
+    profile: 'Access your profile name.',
+    ...(overrides.scopeDescriptions ?? {}),
+  },
+  scopesTitle: 'This application requests access to:',
+  title: 'Authorize application',
+  ...overrides,
+});
+
+export const createFrenchOAuthConsentLabels = (
+  overrides: Partial<OAuthConsentLabels> = {},
+): OAuthConsentLabels =>
+  createDefaultOAuthConsentLabels({
+    approve: 'Autoriser',
+    approving: 'Autorisation...',
+    deny: 'Refuser',
+    denying: 'Refus...',
+    errorGeneric: "Impossible de charger la demande d'autorisation.",
+    loading: "Chargement de la demande d'autorisation...",
+    redirectUriLabel: 'Destination de redirection',
+    scopeDescriptions: {
+      email: "Accéder à votre adresse email et à son statut de vérification.",
+      openid: 'Confirmer votre identité avec ce compte.',
+      profile: 'Accéder au nom de votre profil.',
+    },
+    scopesTitle: 'Cette application demande accès à :',
+    title: "Autoriser l'application",
+    ...overrides,
+  });
