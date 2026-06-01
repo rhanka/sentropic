@@ -89,5 +89,5 @@ Baseline measured on `main` 2026-05-30 and rechecked during Claude 14e recovery:
 Before implementation:
 
 - `BRANCH.md` created from `plan/BRANCH_TEMPLATE.md` (done - lots above mirrored there).
-- Temporary design file `spec/BRANCH_SPEC_EVOL.md` records the interrupted Claude 14e adversarial pass; consolidate or delete it before final validation.
+- Temporary design file `spec/BRANCH_SPEC_EVOL.md` recorded the interrupted Claude 14e adversarial pass; it is consolidated into `BRANCH.md` and the BR-14e residual-name report before final validation.
 - Operator follow-up (non-blocking, from BR-37d): delete unused GitHub secrets `DATABASE_URL_PROD`, `DB_SSL_CA_PEM_B64`.
