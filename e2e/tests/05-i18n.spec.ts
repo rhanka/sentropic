@@ -7,6 +7,7 @@ test.describe('Internationalization reliability', () => {
   const WORKSPACE_ID = 'e2e-ws-a';
   const FOLDER_ID = 'e2e-folder-a';
   const FOLDER_NAME = 'Pomerleau — Cas E2E (tenancy A)';
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
 
   const setDashboardScope = async (page: Page) => {
     await page.addInitScript(
@@ -125,11 +126,11 @@ test.describe('Internationalization reliability', () => {
   };
 
   const ensureFolderMatrixConfigured = async (page: Page) => {
-    const defaultMatrixResponse = await page.request.get('/api/v1/folders/matrix/default');
+    const defaultMatrixResponse = await page.request.get(`${API_BASE_URL}/api/v1/folders/matrix/default`);
     expect(defaultMatrixResponse.ok()).toBeTruthy();
     const defaultMatrixConfig = await defaultMatrixResponse.json();
 
-    const matrixUrl = `/api/v1/folders/${FOLDER_ID}/matrix?workspace_id=${WORKSPACE_ID}`;
+    const matrixUrl = `${API_BASE_URL}/api/v1/folders/${FOLDER_ID}/matrix?workspace_id=${WORKSPACE_ID}`;
     const updateMatrixResponse = await page.request.put(matrixUrl, {
       data: defaultMatrixConfig,
     });
