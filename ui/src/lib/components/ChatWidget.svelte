@@ -3207,7 +3207,7 @@
                 </MenuPopover>
                 <button
                   class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                  on:click={() => chatPanelRef?.newSession?.()}
+                  on:click={handleNewSession}
                   title={$_('chat.sessions.new')}
                   aria-label={$_('chat.sessions.new')}
                   type="button"
