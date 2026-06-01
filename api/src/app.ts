@@ -103,13 +103,14 @@ app.use('*', async (c, next) => {
     return c.body(null, 204);
   }
   
-  // Handle actual requests
-  if (origin && isOriginAllowed(origin, allowedOrigins)) {
-    c.header('Access-Control-Allow-Origin', origin);
-    c.header('Access-Control-Allow-Credentials', 'true');
-  }
-  
   await next();
+
+  // Apply CORS headers to the final response. Some routes forward raw Response
+  // objects, so headers set before next() would otherwise be lost.
+  if (origin && isOriginAllowed(origin, allowedOrigins)) {
+    c.res.headers.set('Access-Control-Allow-Origin', origin);
+    c.res.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
 });
 
 // Rate limiting for auth routes
