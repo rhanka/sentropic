@@ -34,6 +34,10 @@ describe('Sentropic infra identity', () => {
     expect(makefile).toContain('export UI_IMAGE_NAME  ?= sentropic-ui');
     expect(makefile).toContain('export E2E_IMAGE_NAME ?= sentropic-e2e');
     expect(makefile).toContain('DOC_BUCKET ?= $(or $(DOC_STORAGE_BUCKET),sentropic-docs-dev)');
+    expect(makefile).toMatch(/typecheck-api:\s+prepare-node-workspace/);
+    expect(makefile).toMatch(
+      /typecheck-api:[\s\S]*docker-compose\.yml -f docker-compose\.dev\.yml run --rm --no-deps api npm run typecheck/,
+    );
 
     const ci = readRootFile('.github/workflows/ci.yml');
     expect(ci).not.toContain('SOURCE_UI_IMAGE_NAME');
