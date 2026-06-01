@@ -521,8 +521,8 @@ typecheck-ui: up-ui ## Run UI type checks
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run check
 
 .PHONY: typecheck-api
-typecheck-api: ## Run API type checks
-	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run typecheck
+typecheck-api: prepare-node-workspace ## Run API type checks
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api npm run typecheck
 
 .PHONY: typecheck-llm-mesh
 typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
