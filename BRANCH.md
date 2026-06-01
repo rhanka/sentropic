@@ -41,6 +41,7 @@ and ZERO legacy (no dual paths). Prerequisite of BR-42a1 `feat/build-app-cli` (D
   - `api/src/services/chat-service.ts` — requires `BR42a0-EX2` (becomes/wraps the PG generation adapter — moved, NOT deleted-as-legacy)
   - `api/src/services/queue-manager.ts` — requires `BR42a0-EX2` (queue port PG adapter; `runAssistantGeneration` call site)
   - `api/src/services/stream-service.ts` — requires `BR42a0-EX2` (StreamBuffer/NOTIFY PG adapter seam)
+  - `api/Dockerfile` — requires `BR42a0-EX3` (copy `packages/chat-server/package.json` before workspace install)
   - `Makefile` — requires `BR42a0-EX1` (publish-lane targets for `chat-server`)
   - `.github/workflows/ci.yml` — requires `BR42a0-EX1` (path filters + bootstrap enum + validate/publish jobs + `api` filter add)
 - **Exception process**:
@@ -97,6 +98,12 @@ Actions with the following status should be included around tasks only if really
   logic is re-homed as the PG adapter (no behavioural change); the 9 non-chat NOTIFY channels stay in
   `streams.ts`. Rollback: revert the api files to baseline (the package becomes an unused workspace dep).
   GATE: the Lot 1 characterization suite must stay green across the whole migration (0-regression contract).
+- **BR42a0-EX3** `acknowledge` (api Dockerfile workspace manifest copy) — GRANTED. Reason: once
+  `api/package.json` declares `@sentropic/chat-server` as a local workspace dependency, the API Docker build
+  must copy `packages/chat-server/package.json` before `npm ci --workspaces --include-workspace-root`, matching
+  the existing manifest-copy pattern for `auth-hono`, `llm-mesh`, and `flow`. Impact: additive Docker build
+  metadata only; no runtime route or schema change. Rollback: remove the Dockerfile copy line and the API
+  dependency entry.
 - **BR42a0-E1** `attention` (extraction boundary — THE central risk). VERIFIED FACTS:
   - chat-ui default transport (`packages/chat-ui/src/client/transport.ts`) calls
     `POST /chat/sessions/:id/messages`, `GET /chat/sessions/:id/stream` (SSE, forwards `fromSeq`),
@@ -297,9 +304,16 @@ Actions with the following status should be included around tasks only if really
   - [x] REMOVE the now-duplicated chat WIRE/turn implementation from `api/` (no dual paths, no "keep legacy
         routes" hatch). The PG adapter is the single home of the PG/NOTIFY/presence chat logic.
   - [x] No `api/drizzle/*.sql` change.
+  - [x] `api/package.json` declares `@sentropic/chat-server` as a workspace dependency; `api/Dockerfile`
+        copies the chat-server package manifest before workspace install.
   - [ ] Lot gate:
     - [x] `make typecheck-api` + `make lint-api`
           — PASS (`typecheck-api`; `lint-api` exits 0 with existing console warnings only).
+    - [x] API dependency declaration gate:
+          `make lock-root ENV=test-feat-chat-server`,
+          `make typecheck-api API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`,
+          `make build-api API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-chat-server`
+          — PASS (production audit reports only moderate vulnerabilities, below the target's high threshold).
     - [ ] **API non-regression tests** (`api/tests/**`):
       - [x] The Lot 1 characterization suite (`chat-characterization.spec.ts`) stays GREEN UNCHANGED —
             proves the existing `api/` wire contract did not regress through the extraction.
