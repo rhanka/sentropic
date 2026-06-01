@@ -400,8 +400,8 @@ Actions with the following status should be included around tasks only if really
         (token), then attach the OIDC trusted publisher on npmjs.com via Playwright (per
         `Npm-trusted-publisher-via-Playwright`), then steady-state OIDC publish on merge to main.
   - [x] Final gate step 1: create/update PR using this file's text as PR body — draft PR #201 created.
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [x] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
   - [ ] UNBLOCKS BR-42a1: `@sentropic/chat-server@0.1.x` published + api 0-regression-proven (D5 prerequisite satisfied).
 
 ## Deferred (recorded, out of BR-42a0)
