@@ -396,13 +396,14 @@ Actions with the following status should be included around tasks only if really
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document signatures here.
   - [ ] Record explicit user sign-off if any AI flaky test is accepted.
   - [x] Bumped `packages/chat-server/package.json` (new at `0.1.0`) — new package version declared.
-  - [ ] First-publish bootstrap (`attendu`, post-merge): `workflow_dispatch bootstrap_publish_target=chat-server`
-        (token), then attach the OIDC trusted publisher on npmjs.com via Playwright (per
-        `Npm-trusted-publisher-via-Playwright`), then steady-state OIDC publish on merge to main.
+  - [x] First-publish bootstrap (`workflow_dispatch bootstrap_publish_target=chat-server`) completed from `main`
+        in CI run `26763089150`; `@sentropic/chat-server@0.1.0` is visible on npm.
+  - [ ] Attach the OIDC Trusted Publisher on npmjs.com for `rhanka/sentropic` workflow `ci.yml`, then rely on
+        steady-state OIDC for the next publish.
   - [x] Final gate step 1: create/update PR using this file's text as PR body — draft PR #201 created.
   - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [x] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
-  - [ ] UNBLOCKS BR-42a1: `@sentropic/chat-server@0.1.x` published + api 0-regression-proven (D5 prerequisite satisfied).
+  - [x] UNBLOCKS BR-42a1: `@sentropic/chat-server@0.1.x` published + api 0-regression-proven (D5 prerequisite satisfied).
 
 ## Deferred (recorded, out of BR-42a0)
 - **Converging the current app's route SHAPES onto canonical** (`/chat/sessions/:id/{messages,stream,bootstrap}`)
