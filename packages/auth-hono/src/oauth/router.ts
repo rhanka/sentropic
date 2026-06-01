@@ -5,6 +5,7 @@ import {
   createOAuthConsentDecisionHandler,
   createOAuthConsentDetailsHandler,
 } from './consent-decision-handler.js';
+import { createOAuthTokenHandler } from './token-handler.js';
 
 export interface CreateOAuthRouterOptions extends OAuthAuthorizeHandlerOptions {
   authorizationCodeTtlSeconds?: number;
@@ -18,6 +19,7 @@ export const createOAuthRouter = (options: CreateOAuthRouterOptions): Hono => {
   router.get(joinRoutePath(prefix, '/authorize'), createOAuthAuthorizeHandler(options));
   router.get(joinRoutePath(prefix, '/consent'), createOAuthConsentDetailsHandler(options));
   router.post(joinRoutePath(prefix, '/consent/decision'), createOAuthConsentDecisionHandler(options));
+  router.post(joinRoutePath(prefix, '/token'), createOAuthTokenHandler(options));
 
   return router;
 };

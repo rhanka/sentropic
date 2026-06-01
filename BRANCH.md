@@ -241,7 +241,7 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
   - [x] Create `packages/auth-hono/src/oauth/consent-decision-handler.ts`:
     - POST handler validates sealed state, re-checks user session through `ports.cookies` + `ports.sessions`, supports `approve` and `deny`, and emits the authorization code only on approve.
     - On deny, redirects to `redirect_uri` with `error=access_denied` plus original `state`.
-  - [ ] Create `packages/auth-hono/src/oauth/token-handler.ts`:
+  - [x] Create `packages/auth-hono/src/oauth/token-handler.ts`:
     - POST handler for `grant_type=authorization_code` only in 39c (refresh-token flow deferred to 39d gate).
     - Validates client authentication according to `token_endpoint_auth_method` (`client_secret_basic` for confidential clients, `none` for public clients); wrong secret returns 401.
     - Validates submitted `redirect_uri` equals the value stored with the consumed authorization code.
@@ -271,7 +271,7 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
     - [ ] `make typecheck-auth-hono ENV=test-feat-auth-oidc`
     - [ ] **Package tests**
       - [x] new: `packages/auth-hono/tests/oauth-authorize.test.ts` (PKCE present, redirect_uri exact match + negative URI cases, unknown client → 400, invalid scope → redirect/error, normal no session → login redirect, prompt=none no session → redirect `login_required`, valid session → 302 to consent URL with sealed state)
-      - [ ] new: `packages/auth-hono/tests/oauth-token.test.ts` (PKCE verify success, redirect_uri mismatch → invalid_grant, PKCE mismatch → invalid_grant, code reuse → invalid_grant, OAuth-only scope returns no id_token, nonce copied verbatim, wrong client secret → 401, DPoP-bound client without DPoP header → 400, DPoP-bound client with valid DPoP → 200 + cnf on access_token/id_token)
+      - [x] new: `packages/auth-hono/tests/oauth-token.test.ts` (PKCE verify success, redirect_uri mismatch → invalid_grant, PKCE mismatch → invalid_grant, code reuse → invalid_grant, OAuth-only scope returns no id_token, nonce copied verbatim, wrong client secret → 401, DPoP-bound client without DPoP header → 400, DPoP-bound client with valid DPoP → 200 + cnf on access_token/id_token)
       - [ ] new: `packages/auth-hono/tests/oauth-dpop-proof.test.ts` (htm mismatch, htu mismatch, stale iat, duplicate jti, missing/wrong ath on resource calls)
       - [ ] new: `packages/auth-hono/tests/oauth-userinfo.test.ts` (valid bearer → claims, revoked token → 401, DPoP-bound token requires proof, jkt mismatch → 401, unknown scopes rejected rather than filtered)
       - [ ] new: `packages/auth-hono/tests/oauth-revoke.test.ts` (idempotent revoke, DPoP-bound token requires DPoP proof to revoke)
@@ -279,7 +279,7 @@ Sub-Agent ready checklist (must be verified by every sub-agent before any code-w
       - [ ] new: `packages/auth-hono/tests/oauth-wellknown.test.ts` (openid-configuration shape, jwks.json shape, kid rotation reflected)
       - [ ] new: `packages/auth-hono/tests/oauth-router-factory.test.ts` (router mounts all routes, prefix override works, well-known router separates correctly)
       - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-authorize.test.ts ENV=test-feat-auth-oidc`
-      - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-token.test.ts ENV=test-feat-auth-oidc`
+      - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-token.test.ts ENV=test-feat-auth-oidc`
       - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-dpop-proof.test.ts ENV=test-feat-auth-oidc`
       - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-userinfo.test.ts ENV=test-feat-auth-oidc`
       - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/oauth-revoke.test.ts ENV=test-feat-auth-oidc`
