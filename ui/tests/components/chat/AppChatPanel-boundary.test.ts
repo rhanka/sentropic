@@ -31,7 +31,9 @@ describe('AppChatPanel boundary', () => {
     expect(source).toContain("@sentropic/chat-ui/state/chatAttachments");
     expect(source).toContain('let composerAttachments');
     expect(source).toContain('handleComposerPaste');
+    expect(source).toContain('addGoogleDriveComposerAttachments');
     expect(source).toContain('payload.attachments');
+    expect(source).toContain('kind: attachment.kind');
     expect(source).toContain('attachments: sentAttachments');
   });
 

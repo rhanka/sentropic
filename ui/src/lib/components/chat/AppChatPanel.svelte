@@ -2748,32 +2748,45 @@
     return true;
   };
 
-  const addGoogleDriveImageAttachments = (items: Array<Record<string, unknown>>) => {
-    const imageAttachments = items
-      .filter((item) => {
+  const addGoogleDriveComposerAttachments = (items: Array<Record<string, unknown>>) => {
+    const nextAttachments = items
+      .map((item): ChatComposerAttachmentDraft | null => {
         const mimeType = typeof item.mime_type === 'string' ? item.mime_type : '';
         const documentId = typeof item.id === 'string' ? item.id.trim() : '';
-        return documentId.length > 0 && isSupportedImageAttachmentMimeType(mimeType);
-      })
-      .map((item) =>
-        createImageAttachmentDraft({
+        if (documentId.length === 0) return null;
+        const fileName =
+          typeof item.filename === 'string' && item.filename.trim().length > 0
+            ? item.filename
+            : 'document';
+        const sizeBytes =
+          typeof item.size_bytes === 'number' && Number.isFinite(item.size_bytes)
+            ? Math.max(0, Math.floor(item.size_bytes))
+            : 0;
+        if (isSupportedImageAttachmentMimeType(mimeType)) {
+          return createImageAttachmentDraft({
+            id: createComposerAttachmentId(),
+            source: 'drive',
+            fileName,
+            mimeType: mimeType || 'image/png',
+            sizeBytes,
+            state: 'ready',
+            documentId,
+          });
+        }
+        return {
           id: createComposerAttachmentId(),
+          kind: 'file',
           source: 'drive',
-          fileName:
-            typeof item.filename === 'string' && item.filename.trim().length > 0
-              ? item.filename
-              : 'image',
-          mimeType: typeof item.mime_type === 'string' ? item.mime_type : 'image/png',
-          sizeBytes:
-            typeof item.size_bytes === 'number' && Number.isFinite(item.size_bytes)
-              ? item.size_bytes
-              : 0,
+          fileName,
+          mimeType: mimeType.trim().toLowerCase() || 'application/octet-stream',
+          sizeBytes,
           state: 'ready',
-          documentId: String(item.id),
-        }),
-      );
-    if (imageAttachments.length > 0) {
-      composerAttachments = [...composerAttachments, ...imageAttachments];
+          documentId,
+        };
+      })
+      .filter((item): item is ChatComposerAttachmentDraft => item !== null);
+    if (nextAttachments.length > 0) {
+      composerAttachments = [...composerAttachments, ...nextAttachments];
     }
   };
 
@@ -2808,7 +2821,7 @@
       const attachedItems = await attachGoogleDriveDocuments(
         createGoogleDriveChatAttachInput(targetSessionId, fileIds),
       );
-      addGoogleDriveImageAttachments(attachedItems);
+      addGoogleDriveComposerAttachments(attachedItems);
       await loadSessionDocs();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -4277,7 +4290,7 @@
         }>;
         workspace_id?: string;
         attachments?: Array<{
-          kind: 'image';
+          kind: 'image' | 'file';
           source: 'context_document';
           documentId: string;
           fileName?: string;
@@ -4313,7 +4326,7 @@
       if (enabledTools.length > 0) payload.tools = enabledTools;
       if (sentAttachments.length > 0) {
         payload.attachments = sentAttachments.map((attachment) => ({
-          kind: 'image',
+          kind: attachment.kind,
           source: 'context_document',
           documentId: attachment.documentId ?? '',
           fileName: attachment.fileName,
