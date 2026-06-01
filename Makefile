@@ -939,8 +939,8 @@ E2E_GROUPS ?= 00 01 02 03 04 05 06 07
 .PHONY: test-e2e
 test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Playwright (scope with E2E_SPEC)
 	# Options:
-	# - WORKERS (default: 4)
-	# - RETRIES (default: 0)        -> force "fail fast" (no retries)
+	# - WORKERS (default: 1)        -> grouped suites share seeded users/workspaces
+	# - RETRIES (default: 2)        -> set RETRIES=0 to force "fail fast"
 	# - MAX_FAILURES (optional)    -> if set, pass --max-failures=<n> (otherwise show all failures)
 	# - QUEUE_CONCURRENCY (default: 30) -> upsert settings.ai_concurrency before running tests
 	# - QUEUE_PROCESSING_INTERVAL (optional) -> upsert settings.queue_processing_interval (ms)
@@ -948,25 +948,27 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps \
 	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
 	  e2e sh -lc ' \
-	    workers="$${WORKERS:-4}"; \
+	    workers="$${WORKERS:-1}"; \
 	    retries="$${RETRIES:-2}"; \
 	    max_fail="$${MAX_FAILURES:-}"; \
+	    status=0; \
 	    extra=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
 	    if [ -n "$$E2E_SPEC" ]; then \
 	      spec_path="$$E2E_SPEC"; \
 	      spec_path="$${spec_path#e2e/}"; \
 	      echo "▶ Running scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	      npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra; \
+	      npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra || status=$$?; \
 	    else \
 	      echo "▶ Running Playwright by groups: $$E2E_GROUPS (workers=$$workers retries=$$retries $${extra:-})"; \
 	      for g in $$E2E_GROUPS; do \
 	        for pattern in "tests/$${g}-.*.spec.ts"; do \
 	          echo "▶ Running group $$g: $$pattern"; \
-	          npx playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra; \
+	          npx playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra || status=$$?; \
 	        done; \
 	      done; \
-	    fi'
+	    fi; \
+	    exit "$$status"'
 	@echo "🛑 Stopping services..."
 	# @$(DOCKER_COMPOSE) down
 
