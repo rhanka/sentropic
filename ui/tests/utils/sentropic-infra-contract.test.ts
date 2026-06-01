@@ -38,6 +38,10 @@ describe('Sentropic infra identity', () => {
     expect(makefile).toMatch(
       /typecheck-api:[\s\S]*docker-compose\.yml -f docker-compose\.dev\.yml run --rm --no-deps api npm run typecheck/,
     );
+    expect(makefile).toMatch(/lint-api:\s+prepare-node-workspace/);
+    expect(makefile).toMatch(
+      /lint-api:[\s\S]*docker-compose\.yml -f docker-compose\.dev\.yml run --rm --no-deps api npm run lint/,
+    );
 
     const ci = readRootFile('.github/workflows/ci.yml');
     expect(ci).not.toContain('SOURCE_UI_IMAGE_NAME');
