@@ -1705,7 +1705,7 @@
     }).chrome?.runtime;
     const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
     if (!runtimeId) return 'none';
-    if (runtimeId === 'topai.vscode.runtime') return 'vscode';
+    if (runtimeId === 'sentropic.vscode.runtime') return 'vscode';
     return 'chrome';
   };
 

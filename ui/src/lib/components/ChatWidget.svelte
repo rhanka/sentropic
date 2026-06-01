@@ -319,7 +319,7 @@
     const runtimeId = String(ext.chrome?.runtime?.id ?? '')
       .trim()
       .toLowerCase();
-    return runtimeId === 'topai.vscode.runtime';
+    return runtimeId === 'sentropic.vscode.runtime';
   };
   const getExtensionPermissionToolOptions = () => {
     return isVsCodeExtensionRuntime()
