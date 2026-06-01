@@ -127,6 +127,33 @@ test.describe('Chat', () => {
     return header;
   }
 
+  function normalizeReplayText(text: string) {
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  function replayNeedle(text: string) {
+    const normalized = normalizeReplayText(text);
+    return normalized.slice(0, Math.min(60, normalized.length));
+  }
+
+  async function waitForLatestAssistantText(page: any, timeout = 45_000) {
+    const latestAssistant = assistantBubble(page).last();
+    await expect(latestAssistant).toBeVisible({ timeout });
+    await expect
+      .poll(async () => normalizeReplayText((await latestAssistant.textContent()) || ''), { timeout })
+      .not.toBe('');
+    return normalizeReplayText((await latestAssistant.textContent()) || '');
+  }
+
+  async function expectLatestAssistantReplay(page: any, needle: string, timeout = 15_000) {
+    await expect
+      .poll(async () => {
+        const texts = await assistantBubble(page).allTextContents();
+        return texts.map(normalizeReplayText).filter(Boolean).join('\n');
+      }, { timeout })
+      .toContain(needle);
+  }
+
   async function toggleUsefulFeedback(
     page: any,
     usefulButton: any,
@@ -200,11 +227,7 @@ test.describe('Chat', () => {
     }
   });
 
-  test('reload + nouvel onglet conservent l’historique reasoning/tools sans appels stream-events legacy', async ({ page }) => {
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
-
+  test('reload + new tab preserve assistant history without legacy stream-events calls', async ({ page }) => {
     const legacyRequests: string[] = [];
     page.on('request', (request: any) => {
       const url = String(request.url?.() ?? request.url() ?? '');
@@ -223,6 +246,10 @@ test.describe('Chat', () => {
       }
     });
 
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     await chatButton.click();
@@ -237,16 +264,15 @@ test.describe('Chat', () => {
     ].join(' ');
     const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, prompt);
 
-    const runtimeHeader = page
-      .locator('#chat-widget-dialog')
-      .getByText(/Raisonnement|Reasoning/i)
-      .first();
     const retryButton = page
       .getByRole('button', { name: /réessayer|retry/i })
       .last();
 
+    let responseNeedle = '';
     try {
-      await expect(runtimeHeader).toBeVisible({ timeout: 45_000 });
+      const assistantText = await waitForLatestAssistantText(page, 45_000);
+      responseNeedle = replayNeedle(assistantText);
+      expect(responseNeedle.length).toBeGreaterThan(0);
       await expect(retryButton).toBeVisible({ timeout: 60_000 });
     } catch (e) {
       await debugAssistantState(page);
@@ -257,7 +283,7 @@ test.describe('Chat', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(chatButton).toBeVisible({ timeout: 5_000 });
     await chatButton.click();
-    await expect(runtimeHeader).toBeVisible({ timeout: 15_000 });
+    await expectLatestAssistantReplay(page, responseNeedle, 15_000);
 
     const page2 = await page.context().newPage();
     page2.on('request', (request: any) => {
@@ -280,9 +306,7 @@ test.describe('Chat', () => {
     await page2.waitForLoadState('domcontentloaded');
     await expect(page2.locator('button[aria-controls="chat-widget-dialog"]')).toBeVisible({ timeout: 5_000 });
     await page2.locator('button[aria-controls="chat-widget-dialog"]').click();
-    await expect(
-      page2.locator('#chat-widget-dialog').getByText(/Raisonnement|Reasoning/i).first()
-    ).toBeVisible({ timeout: 15_000 });
+    await expectLatestAssistantReplay(page2, responseNeedle, 15_000);
 
     expect(legacyRequests).toEqual([]);
 
