@@ -1,7 +1,6 @@
 # Isolated compose project for the generated app.
-# Project name = the app slug so two scaffolded apps (or the monorepo dev stack)
-# never collide. Ports come from .env and are NEVER the monorepo reserved
-# 8787/5173/1080.
+# Project name = the app slug so two scaffolded apps (or another local dev stack)
+# never collide. Ports come from .env (see .env.example) and are isolated per app.
 name: {{slug}}
 
 services:
