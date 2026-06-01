@@ -1,0 +1,350 @@
+# Feature: BR-42a1 Build-App CLI (`@sentropic/cli` umbrella + `@sentropic/build-cli`)
+
+## Dependency (MANDATORY)
+- **DEPENDS ON BR-42a0 `feat/chat-server`** (the D5 SPLIT prerequisite — `plan/42a0-BRANCH_feat-chat-server.md`).
+  BR-42a1 consumes the PUBLISHED, 0-regression-proven `@sentropic/chat-server@^0.1.x` (with its in-memory /
+  synchronous-pump adapter). BR-42a1 does NOT extract or migrate chat-server, and does NOT touch `api/`.
+  Do not start BR-42a1 implementation until BR-42a0 is merged + published.
+
+## Objective
+Deliver the consumer foundry surface of the BR-42 scale program (BR-42a1): the umbrella CLI `@sentropic/cli`
+(binary `stp`, alias `sentropic`) with a subcommand-registration seam, and the `@sentropic/build-cli` package
+owning the `stp app` processes (`stp app init <name>`, `stp app doctor`, …) that scaffold a runnable
+`chat-ui`↔backend app whose generated backend MOUNTS the published `@sentropic/chat-server` canonical routes
+(it does NOT own routes). Bakes in the RATIFIED decisions D1 + D4 of `spec/SPEC_EVOL_BUILD_APP_CLI.md §8`
+(D2/D5/D7 — chat-server extraction — are delivered by BR-42a0).
+
+## Scope / Guardrails
+- Scope limited to: the two new packages (`packages/cli/**`, `packages/build-cli/**` incl. the embedded
+  app-template subtree) and the publish-lane wiring (`Makefile` + `.github/workflows/ci.yml`) under the
+  granted `BR42a1-EX1`. `@sentropic/chat-server` is a CONSUMED published dependency (delivered by BR-42a0),
+  NOT extracted or modified here.
+- No `api/` change and no `api/drizzle/*.sql` migration (the monorepo backend is out of BR-42a1 scope —
+  the `api/` migration onto chat-server is BR-42a0).
+- Make-only workflow, no direct Docker/npm commands.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-build-app-cli`.
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification worktree must be commit-identical to the branch under qualification (same HEAD SHA).
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `packages/cli/**` (new: umbrella `@sentropic/cli`, binary `stp` + alias `sentropic`, subcommand seam)
+  - `packages/build-cli/**` (new: `@sentropic/build-cli`, the `stp app` subtree + embedded app-template subtree)
+  - `package-lock.json` (root lockfile regen for the two new workspace packages)
+  - `spec/SPEC_EVOL_BUILD_APP_CLI.md` (sync delivered behaviour; consolidate `BRANCH_SPEC_EVOL` if used)
+  - `plan/42a-BRANCH_feat-build-app-cli.md` (this file)
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `ui/**` (the monorepo UI is not part of the scaffolder MVP)
+  - `api/**` (the monorepo backend + its chat-server migration are BR-42a0, not BR-42a1)
+  - `packages/chat-server/**` (consumed as a PUBLISHED dependency — delivered by BR-42a0; never edited here)
+  - `api/drizzle/*.sql` (no migration)
+  - other `plan/NN-BRANCH_*.md` (except this file; `plan/42a0-BRANCH_feat-chat-server.md` is the dependency, read-only)
+  - `plan/42-BRANCH_chore-scale-build-app.md` and `PLAN.md` (umbrella status updates land on a docs pass, not here, to avoid `plan/**` cross-branch churn — see BR42a1-Q3)
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `Makefile` — requires `BR42a1-EX1` (publish-lane targets for the 2 new packages)
+  - `.github/workflows/ci.yml` — requires `BR42a1-EX1` (path filters + bootstrap enum + validate/publish jobs)
+- **Exception process**:
+  - Declare exception ID `BR42a1-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+
+## Feedback Loop
+Actions with the following status should be included around tasks only if really required.
+- subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
+- conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
+
+- **D1 (BR42a-A + BR42a-B)** `acknowledge` — RATIFIED. Umbrella `@sentropic/cli` (binary `stp`, alias
+  `sentropic`) federates subcommands; `@sentropic/build-cli` owns `stp app` (`stp app init`,
+  `stp app doctor`). BR-42a1 delivers `@sentropic/build-cli` + the subcommand-registration seam in
+  `@sentropic/cli`. Federation of `graphify`/`h2a`/`remote` (separate repos) is OUT of BR-42a1 scope
+  (deferred — see `## Deferred`).
+- **D2 / D5 / D7 (BR42a-E + plan gate)** `acknowledge` — RATIFIED + SPLIT to **BR-42a0**:
+  `@sentropic/chat-server` is extracted and the `api/` migration is done in the PREREQUISITE branch
+  `feat/chat-server` (`plan/42a0-BRANCH_feat-chat-server.md`). BR-42a1 only CONSUMES the published
+  `@sentropic/chat-server@^0.1.x` (in-memory / synchronous-pump adapter) — it does NOT own/extract routes
+  and does NOT touch `api/`.
+- **D3 (BR42a-H)** `acknowledge` — RATIFIED: `BR42a1-EX1` GRANTED (see exception below). (BR-42a0 carries
+  its own `BR42a0-EX1` for the `chat-server` lane + the `api`-filter addition.)
+- **D4 (BR42a-R7)** `acknowledge` — RATIFIED: the generated app depends on the published
+  `@sentropic/design-system-svelte` + `-themes` + `-tokens` (not an inline theme).
+- **BR42a1-EX1** `acknowledge` (Makefile + `.github/workflows/ci.yml`) — GRANTED (D3). For EACH of
+  `cli`, `build-cli`: add `typecheck-<pkg>`, `test-<pkg>`, `build-<pkg>`, `pack-<pkg>`,
+  `publish-<pkg>` (OIDC), `publish-<pkg>-token` (bootstrap), mirroring the `chat-ui`/`cowork-bridge`
+  targets line-for-line; in `ci.yml` add `<pkg>`/`<pkg>_publish` path filters (mirroring the per-package
+  shapes at lines ~140–203), two entries in the `bootstrap_publish_target` enum (currently
+  `none|contracts|events|chat-core|chat-ui|auth-hono|auth-ui|flow|cowork-bridge|cowork-desktop|all` — note
+  `chat-server` is added by BR-42a0), one `validate-<pkg>` job each, one steady-state OIDC `publish-<pkg>`
+  job each (fires on `github.ref == main`), and two bootstrap steps in the dispatch job. Reason: a
+  publishable package cannot ship without its lane. Impact: additive targets/filters/enum/jobs only; no
+  change to other packages' lanes. Rollback: remove the added targets/filters/enum entries/jobs and the
+  package dirs. First publish per package needs the documented bootstrap-then-attach flow (token
+  `workflow_dispatch` then attach OIDC trusted publisher on npmjs.com) — recorded as `attendu` post-merge.
+- **BR42a1-Q1** `attention` (umbrella dispatch mechanism). D1 leans `plugin discovery` (each
+  `@sentropic/*-cli` self-registers, tied to the `CatalogSource` idea). For BR-42a1 only `build-cli` is
+  a real plugin. Question: ship the discovery seam as (1) a static registration table in
+  `@sentropic/cli` that `build-cli` is added to, or (2) a package-name-convention resolver
+  (`@sentropic/*-cli` discovered from installed deps), or (3) an explicit `register(subcommand)` API
+  `build-cli` calls. Préco: (3) a typed `registerSubcommand()` contract co-designed with `build-cli` as
+  the first real consumer (contract-consumer co-design), with a convention-resolver as a thin layer on
+  top later. Resolve at Lot 0.
+- **BR42a1-Q2** `attention` (chat-server consumption pinning). The generated app's `package.json` pins
+  `@sentropic/chat-server ^0.1.x` and mounts its CANONICAL routes via `createChatServer(InMemory.*, { routes:
+  'canonical' })` + the in-memory/synchronous-pump GenerationPort/QueuePort. During BR-42a1 development,
+  before BR-42a0 is published, the template subtree typecheck/smoke may consume chat-server via the
+  workspace symlink (standalone-symlink pattern like cowork-desktop). Confirm at Lot 0 that BR-42a0 is
+  merged+published (so the golden fixtures pin a real published version, not a workspace path).
+- **BR42a1-Q3** `attention` (plan/PLAN umbrella sync). `plan/42-BRANCH_chore-scale-build-app.md` + `PLAN.md`
+  must record the D5 split (BR-42a0 ships `@sentropic/chat-server`; BR-42a1 ships `@sentropic/cli` +
+  `@sentropic/build-cli`). Préco: do this on a tiny separate docs commit/branch to keep `plan/**`
+  cross-branch churn out of this feature branch (Forbidden Paths above). Confirm owner. (Coordinate with
+  BR42a0-Q3 — likely one combined docs pass.)
+- **BR42a-F** `acknowledge` — `--h2a-register` emits a minimal LOCAL descriptor only (SPEC §5.2-F
+  Option 1), explicitly non-protocol; real h2a register deferred upstream (EVO-9).
+- **BR42a-G** `acknowledge` — GitHub policy per SPEC §5.2-G: explicit `--github-owner`, private default,
+  refuse on name collision, never mutate an existing remote, backfill repo URL before first commit.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in this file; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+- The hermetic `stp app init → make dev` smoke (Lot 3) routes through the deterministic `stub`
+  `ProviderAdapter` (offline) — it must NOT be flaky; any nondeterminism there is a generator bug
+  (R10 invariant), never an allowlisted flake.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (single feature branch `feat/build-app-cli`, internal lots a0/a1/a2; one final test cycle)
+- [ ] **Multi-branch**
+- Rationale: the three deliverables are sequentially coupled (a1's hermetic template smoke depends on
+  a0's `@sentropic/chat-server`; a2's umbrella seam is a thin registration contract over a1). A single
+  branch with internal lots gives one CI cycle and avoids version-sync churn between three packages that
+  land together under one EX1. Sub-agents may take orthogonal lots in slots 0..4, integrated on this branch.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT performed on the integrated branch after the relevant lots (the generated-app
+  smoke + the `api/` non-regression).
+- UAT checkpoints listed as checkboxes inside the relevant lots (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-build-app-cli`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`/home/antoinefa/src/sentropic`, `ENV=dev`) for the `api/`
+    non-regression (chat still works); the generated-app UAT runs in a throwaway temp dir, never on root.
+  - Switch back to `tmp/feat-build-app-cli` after UAT.
+
+## Wave & Port Allocation (branch nn = 42)
+- Slot ports: API `9000 + (42*5) + slot` = `9210..9214`; UI `5200 + (42*5) + slot` = `5410..5414`;
+  Maildev UI `1100 + (42*5) + slot` = `1310..1314`.
+- Slot 0 (default lot owner): `API_PORT=9210`, `UI_PORT=5410`, `MAILDEV_UI_PORT=1310`, `ENV=feat-build-app-cli`.
+- The hermetic generated-app smoke (Lot 3) uses pinned NON-reserved ports drawn from this branch slot
+  range (e.g. API `9211`, UI `5411`) for the scaffolded app's own compose project — NEVER the monorepo
+  reserved `8787/5173/1080`. The generated-app compose project name = the app slug (BR42a-Q9 of SPEC).
+- Before launching any sub-agent: `make ps-all` to verify no port conflict.
+- Root dev/UAT stays on API `8787`, UI `5173`, Maildev `1080` (reserved for user).
+
+## Plan / Todo (lot-based)
+
+- [ ] **Lot 0 — Baseline, scoping & EX1 declaration**
+  - [ ] Verify branch: `git -C tmp/feat-build-app-cli branch --show-current` = `feat/build-app-cli`.
+  - [ ] Create/confirm isolated worktree `tmp/feat-build-app-cli` from `main`; copy `.env`, override
+        `ENV=feat-build-app-cli` + slot-0 ports (9210/5410/1310).
+  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`,
+        `rules/security.md`, `PLAN.md`, `spec/SPEC_EVOL_BUILD_APP_CLI.md` (esp. §8 RATIFIED), §6 tests,
+        §7 sequencing, `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`, `plan/BRANCH_TEMPLATE.md`.
+  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [ ] Validate scope boundaries; record `BR42a-EX1` (Makefile + ci.yml) in `## Feedback Loop`.
+  - [ ] Resolve `BR42a-Q1` (dispatch mechanism), `BR42a-Q2` (single-branch a0/a1/a2 confirmation),
+        `BR42a-Q3` (plan/PLAN sync owner), `BR42a-E1` (api adopts chat-ui-shaped routes vs additive mount).
+  - [ ] Create the three package skeletons (`packages/cli`, `packages/build-cli`, `packages/chat-server`)
+        each with `package.json` (`license: "MIT"`, `version: "0.1.0"`, `@sentropic/<name>`), `tsconfig.json`,
+        `LICENSE` (MIT), `README.md`. Mark NONE `private`.
+  - [ ] Confirm chat-core in-memory adapter availability (VERIFIED: `@sentropic/chat-core` exports
+        `InMemory.{InMemoryMessageStore, InMemorySessionStore, InMemoryStreamBuffer,
+        InMemoryCheckpointStore, InMemoryMeshDispatch, InMemoryStreamSequencer}` + `ChatRuntime`; the
+        SPEC §4.1 claim that `InMemoryMeshDispatch` does not exist is WRONG — record the correction).
+  - [ ] Regenerate the root lockfile for the three new workspace packages (`make lock-root`).
+
+- [ ] **Lot a0 — Extract `@sentropic/chat-server` (the SSE wire server)**
+  - [ ] In `packages/chat-server/src/**`, define the port-driven wire surface matching the chat-ui
+        default transport: `POST /chat/sessions/:id/messages`, `GET /chat/sessions/:id/stream` (SSE,
+        `fromSeq` honoured), `GET /chat/sessions/:id/bootstrap`. Build it over `@sentropic/chat-core`
+        `ChatRuntime` + the chat-core port interfaces — NO Drizzle/PG/presence imports in the package.
+  - [ ] Export a mountable Hono router factory `createChatServer(deps)` where `deps` are the chat-core
+        ports (`MessageStore`/`SessionStore`/`StreamBuffer`/`CheckpointStore`/`StreamSequencer`/
+        `MeshDispatch`) + the llm-mesh dispatch — so the generated app injects `InMemory.*` and `api/`
+        injects its Drizzle/PG-backed adapters (BR42a-E1).
+  - [ ] Migrate `api/` to consume the package WITHOUT regressing the existing wire contract: per
+        BR42a-E1 decision, either (additive, préco) mount `createChatServer(drizzleAdapters)` alongside
+        the existing `chat.ts`/`streams.ts` routes, or re-point the existing handlers. Touch only the
+        Allowed `api/` files; build the Drizzle/PG adapters that satisfy the chat-core ports from
+        `services/chat-service.ts` + `services/stream-service.ts` (seam only, no behavioural change).
+  - [ ] Keep the non-chat `streams.ts` multiplexing (org/folder/initiative/lock/presence/workspace/
+        comment) entirely app-local (BR42a-E2). No `api/drizzle/*.sql` change.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-chat-server` + `make typecheck-api` + `make lint-api`
+    - [ ] **chat-server unit tests** (`packages/chat-server/tests/**`):
+      - [ ] Add `tests/wire-contract.spec.ts` — assert the router serves exactly the three chat-ui
+            transport routes and rejects the unimplemented `/sessions/:id/events?fromSeq=N` replay
+            endpoint + the `Sec-Sentropic-Wire-Version` header (study-spec futures, not shipped).
+      - [ ] Add `tests/in-memory-roundtrip.spec.ts` — `POST messages` → SSE `stream` streams an
+            assistant reply via `InMemoryMeshDispatch` + a deterministic stub adapter; `bootstrap` returns
+            seeded messages. Determinism asserted (no timestamps/random in payload shape).
+      - [ ] Add `tests/ports-contract.spec.ts` — `createChatServer` rejects missing/invalid port deps.
+      - [ ] Scoped runs: `make test-chat-server` (Vitest, node env, standalone symlink pattern like cowork-bridge).
+    - [ ] **API non-regression tests** (`api/tests/**`):
+      - [ ] Add `api/tests/api/chat-server-mount.test.ts` — the package-mounted routes serve over the
+            Drizzle adapters in `api/` (a chat round-trip through the api stack).
+      - [ ] Update/verify `api/tests/api/chat-*.spec.ts` (existing chat endpoint tests) still pass
+            unchanged — proves the existing `api/` wire contract did not regress.
+      - [ ] Verify `api/tests/api/streams*.spec.ts` (if present) still pass — non-chat streams untouched.
+      - [ ] Sub-lot gate: `make test-api ENV=test-feat-build-app-cli`.
+    - [ ] `make build-chat-server` + `make pack-chat-server` (tarball excludes tests/fixtures).
+    - [ ] Bump `packages/chat-server/package.json` to `0.1.0`; bump `api/` only if its `src/**` public
+          surface changed (it is an app root, not a published package — no bump needed).
+
+- [ ] **Lot a1 — `@sentropic/build-cli` (`stp app`): templating substrate + generator + `init`/`doctor` + app template**
+  - [ ] Templating substrate (`packages/build-cli/src/templating/**`): deterministic `{{token}}`
+        substitution over a file tree + a scaffold manifest (template files → output paths + transforms),
+        dependency-light, behind an interface designed for later `@sentropic/harness` adoption (R5).
+  - [ ] Generator core (`packages/build-cli/src/generator/**`): resolve scaffold plan from the embedded
+        template subtree + options; deterministic output (R10 invariant — no timestamps/random/env-ordering).
+  - [ ] `stp app` verbs (`packages/build-cli/src/commands/**`): `init <name>` (flags `--dir`,
+        `--provider stub|openai|gemini|anthropic|mistral|cohere`, `--git/--no-git`,
+        `--github/--no-github`, `--github-visibility`, `--github-owner`, `--h2a-register`, `--yes/-y`,
+        `--force`, `--dry-run`), `doctor` (Docker/make/gh-auth/engines/port-availability incl. generated-app
+        port-conflict detection), `--version`, `--help`. Surfaced as `stp app <verb>` (D1).
+  - [ ] `--force` semantics: without `--force` → refuse-with-list (exit non-zero); with `--force` →
+        overwrite-scaffold-owned-files-only (never blanket-delete). Define + test BEFORE exposure.
+  - [ ] GitHub path (`--github`): shell out to `gh repo create <owner>/<name> --<visibility> --source
+        <dir> --push`; BR42a-G gating (explicit owner, private default, refuse on collision, never mutate
+        existing remote, backfill repo URL before first commit). `--dry-run` prints the exact `gh`
+        invocation without running it.
+  - [ ] `--h2a-register`: emit the minimal local non-protocol descriptor only (BR42a-F); no network call.
+  - [ ] App-template subtree (`packages/build-cli/templates/chat-app/**`, self-contained `package.json`
+        for lift-and-shift to a future `@sentropic/app-template`):
+    - [ ] Backend (`api/` inside the generated app): mounts `@sentropic/chat-server`'s
+          `createChatServer(InMemory.*)` over the in-memory chat-core adapters + a template-owned
+          deterministic `stub` `ProviderAdapter` (offline) registered in the llm-mesh registry. (CORRECTS
+          SPEC §4.1: the backend now CONSUMES `@sentropic/chat-server`, it does NOT own the routes.) No Postgres.
+    - [ ] Web UI (`ui/` inside the generated app): Svelte 5 app embedding `@sentropic/chat-ui`
+          `ChatPanel`/`ChatWidget` via `createDefaultTransport(baseUrl)` (imported from
+          `@sentropic/chat-ui/components/*`), `VITE_API_BASE_URL` aligned to the backend port.
+    - [ ] Design surface: depend on published `@sentropic/design-system-svelte` + `-themes` + `-tokens` (D4).
+    - [ ] Tooling: `Makefile`/make-include (`dev`/`down`/`typecheck`/`build`, Docker-first),
+          `docker-compose.yml` (isolated project name = app slug, non-reserved ports), `.env.example`
+          (provider-key slots + ports), `package.json` pinned to published `@sentropic/*`
+          (chat-ui ^0.1.x, chat-core ^0.1.x, llm-mesh ^0.1.x, chat-server ^0.1.x, design-system-svelte
+          ^0.10.x + themes/tokens) + peers (svelte ^5, `@lucide/svelte` ^0.562, `svelte-streamdown` ^3,
+          hono), `README.md`, `LICENSE` (MIT), `.gitignore` (MUST exclude `.env`).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-build-cli` + `make lint` (build-cli + template subtree typecheck against the published `@sentropic/*`).
+    - [ ] **Generator unit tests (golden-file)** (`packages/build-cli/tests/**`):
+      - [ ] `tests/generator-golden.spec.ts` — `init demo --yes --provider stub --dry-run` + full
+            materialise vs committed golden fixtures (byte-for-byte; R10). Cover token substitution
+            (name/ports/provider/repo-URL placeholder), pinned `@sentropic/*` versions, and that the
+            generated backend mounts `@sentropic/chat-server` (NOT template-owned routes) and declares
+            NO `/sessions/:id/events` replay route / `Sec-Sentropic-Wire-Version` header.
+      - [ ] `tests/templating.spec.ts` — substitution correctness, missing-token failure, no-partial-write
+            on error, idempotent re-render, determinism (R10).
+      - [ ] `tests/doctor.spec.ts` — each pre-flight check (Docker/make/gh-auth/engines/port-availability
+            incl. generated-app port-conflict) with mocked env; correct non-zero exit on failure.
+      - [ ] `tests/repo-create-safety.spec.ts` — stub `gh`+`git`, force temp `HOME`+`PATH`; run
+            `init demo --github --dry-run` AND the real `--github` path against the stubs; assert ZERO
+            side effects, the exact `gh repo create ...` command string, collision refusal, existing-remote refusal.
+      - [ ] `tests/h2a-register.spec.ts` — `--h2a-register` emits the local descriptor only; no network call.
+      - [ ] `tests/negative.spec.ts` — invalid/empty/whitespace/non-slug/reserved names, path traversal
+            (`../`, absolute) in `--name`/`--dir`, existing non-empty dir (refuse vs `--force`), existing
+            git repo/remote (refuse), missing Docker/make/gh, port conflict, `.env` never in first commit/tree.
+      - [ ] Scoped runs: `make test-build-cli`.
+    - [ ] `make build-build-cli` + `make pack-build-cli` (tarball includes template subtree + bins, excludes tests/fixtures/secrets).
+    - [ ] Bump `packages/build-cli/package.json` to `0.1.0`.
+    - [ ] **E2E hermetic smoke** (the headline definition of done):
+      - [ ] Prepare: temp working dir + temp `HOME`, no host npm writes, isolated compose project (app
+            slug) + pinned non-conflicting ports (this branch slot: API `9211`, UI `5411`, Maildev `1311`).
+      - [ ] Add `e2e/tests/42-build-app-init-smoke.spec.ts` (or a package-level Docker smoke target):
+            `stp app init demo --yes --provider stub --no-github`; in the generated app run `make build`
+            then bring up `make dev`; assert the UI is served, the `@sentropic/chat-server` wire endpoints
+            respond, and a sent message streams a `stub` assistant reply over `GET /chat/sessions/:id/stream`.
+      - [ ] Teardown: generated app `make down`; assert no leaked containers/volumes/ports.
+      - [ ] Scoped run: the smoke as its own make target (bundle CI/UAT waits into one script per
+            `No-repeated-approvals`); never run on `ENV=dev`.
+
+- [ ] **Lot a2 — `@sentropic/cli` umbrella (`stp`) + `stp app` registration seam**
+  - [ ] `packages/cli/src/**`: binary `stp` (alias `sentropic`) with the subcommand-registration seam
+        decided in BR42a-Q1 (préco: typed `registerSubcommand()` contract); register `stp app` from
+        `@sentropic/build-cli`. `--version` (CLI + registered subcommand versions), `--help`,
+        per-subcommand help (`stp app --help`).
+  - [ ] Document (in `packages/cli/README.md`) that `stp graphify`/`stp h2a`/`stp remote` are reserved
+        federation points OUT of BR-42a scope (separate repos).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cli` + `make lint`.
+    - [ ] **cli unit tests** (`packages/cli/tests/**`):
+      - [ ] `tests/registration.spec.ts` — `registerSubcommand()` registers `stp app`; dispatch routes
+            `stp app init`/`stp app doctor` to `@sentropic/build-cli`; unknown subcommand → clear non-zero error.
+      - [ ] `tests/version-help.spec.ts` — `stp --version` aggregates CLI + subcommand versions;
+            `stp --help` and `stp app --help` render; `sentropic` alias resolves identically.
+      - [ ] Scoped runs: `make test-cli`.
+    - [ ] `make build-cli` + `make pack-cli` (binaries `stp` + `sentropic` in `bin`).
+    - [ ] Bump `packages/cli/package.json` to `0.1.0`.
+
+- [ ] **Lot N-2 — UAT**
+  - [ ] Generated app (throwaway temp dir, NEVER root): `stp app init demo --provider stub`
+        (interactive) → wizard clear, defaults sane, `.gitignore` excludes `.env`; `cd demo && make dev`
+        → UI loads, chat message streams a stub reply over `/chat/sessions/:id/stream`, no runtime errors.
+  - [ ] `stp app init demo3 --dry-run --github --github-owner <owner>` → prints plan + exact
+        `gh repo create` command, writes nothing, creates no repo.
+  - [ ] `stp app init demo2 --github --github-owner <owner> --github-visibility private` (gh authed) →
+        repo created under explicit owner, first commit pushed, repo URL backfilled, `.env` NOT in pushed tree.
+  - [ ] `stp app init demo --force` over a non-empty dir behaves per defined semantics; without `--force` refuses with list.
+  - [ ] Generated-app ports do NOT collide with `8787/5173/1080`; compose project name = app slug.
+  - [ ] `--h2a-register` writes the local non-protocol descriptor only; no h2a session.
+  - [ ] **`api/` non-regression UAT (root, `ENV=dev`)**: the monorepo chat still works end-to-end after
+        the `@sentropic/chat-server` extraction (send a message, stream a reply, bootstrap a session).
+  - [ ] Naming sign-off: binary `stp` (+ alias `sentropic`), packages `@sentropic/cli` /
+        `@sentropic/build-cli` / `@sentropic/chat-server` (gate before merge — D1 ratified, confirm at UAT).
+  - [ ] Licensing sign-off: generated-app `LICENSE` = MIT, `package.json license: "MIT"` (SPEC BR42a-I).
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Sync `spec/SPEC_EVOL_BUILD_APP_CLI.md` to delivered behaviour (3-package shape; chat-server
+        extraction; the verified wire-contract corrections in BR42a-E1; the `InMemoryMeshDispatch`-exists
+        correction to §4.1). If a `spec/BRANCH_SPEC_EVOL.md` was used, integrate then delete it.
+  - [ ] `BR42a-Q3`: land the `plan/42-BRANCH_chore-scale-build-app.md` + `PLAN.md` umbrella status update
+        on a separate tiny docs commit/branch (keep `plan/**` cross-branch churn off this branch).
+
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & lint (cli + build-cli + chat-server + api) green.
+  - [ ] Retest: `make test-chat-server`, `make test-build-cli`, `make test-cli`.
+  - [ ] Retest API: `make test-api ENV=test-feat-build-app-cli` (chat non-regression).
+  - [ ] Retest E2E: the hermetic `42-build-app-init-smoke` (its own target) + relevant chat e2e groups
+        (cf. `.github/workflows/ci.yml` e2e split) green.
+  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document signatures in this file.
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted.
+  - [ ] Bumped `packages/cli`, `packages/build-cli`, `packages/chat-server` versions (all new at `0.1.0`)
+        — `enforce-package-bump` green for new packages.
+  - [ ] First-publish bootstrap (`attendu`, post-merge per package): `workflow_dispatch
+        bootstrap_publish_target=<pkg>` (token), then attach the OIDC trusted publisher on npmjs.com,
+        then steady-state OIDC publish on merge to main. Drive the npmjs.com trusted-publisher attach via
+        Playwright right after the first publish (per `Npm-trusted-publisher-via-Playwright`).
+  - [ ] Final gate step 1: create/update PR using this file's text as PR body.
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+
+## Deferred (recorded, out of BR-42a)
+- **Umbrella federation of `graphify` / `h2a` / `remote`** (each in its own repo) under `@sentropic/cli`
+  (`stp graphify …`, `stp h2a …`, `stp remote …`) — the seam ships here, the federated subcommands do not.
+- **`@sentropic/app-template` promotion** — the embedded `templates/chat-app/**` subtree is structured
+  for a later lift-and-shift to a separately published package (SPEC §3.3 Option a).
+- **UI-driven evolution loop** (manage spec/evolutions in-app, background branch agents, attention via h2a).
+- **DOCX / business doc-gen extraction** (`@sentropic/doc-gen`) — SPEC R6.
+- **Real h2a register** (vs the MVP local descriptor) — BR42a-F, co-designed upstream when EVO-9 freezes.
+- **`--with-auth` template preset** (wire `@sentropic/auth-ui` + `@sentropic/auth-hono`) once BR-39 merges.
+- **Sibling `add <capability>` capabilities** (BR-42b catalog+agents+canvas, BR-42c comments,
+  BR-42d persistence/observability, BR-42e flow queue streaming, BR-42f Vertex AI, BR-42g BigQuery sink).
+- **Postgres-durable generated-app preset** (MVP ships in-memory adapters only — SPEC R8).
+- **Deploy / GitOps / `k8s-ops`→PaaS** + the `sentropic`↔`k8s-ops` contract — SPEC §1.2 / boundaries §16.5.
+- **Central sentropic instance / multi-tenant managed h2a MCP / BYO-h2a**; **iii integration-parity**; **app relocation**.
