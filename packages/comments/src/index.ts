@@ -41,3 +41,6 @@ export {
 
 export type { CommentStore } from './store.js';
 export { CommentNotFoundError, ThreadNotFoundError } from './store.js';
+
+export type { InMemoryCommentStoreOptions } from './in-memory.js';
+export { InMemoryCommentStore } from './in-memory.js';
