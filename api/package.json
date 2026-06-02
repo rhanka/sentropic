@@ -61,6 +61,7 @@
     "docx": "^9.5.1",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
+    "google-auth-library": "^9.15.0",
     "hono-rate-limiter": "^0.5.3",
     "jose": "^6.1.0",
     "jszip": "^3.10.1",
