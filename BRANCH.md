@@ -188,7 +188,7 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
     - [x] Result: 1 passed; workbook saved to `e2e/test-results/preuat-folder-export.xlsx` during the run, then scratch spec deleted.
     - [x] OOXML read-back: `xl/worksheets/sheet2.xml` contains live `ROUND(...)` formulas referencing `Matrice d'évaluation`; `xl/worksheets/sheet3.xml` contains live references to `Cas d'usage` plus `IF(...MEDIAN...)`; `xl/charts/chart1.xml` contains native `scatterChart`.
   - [x] Manual UAT checklist ready for user.
-- [ ] **Lot 40bc38a-N - Final validation**
+- [x] **Lot 40bc38a-N - Final validation**
   - [x] Update this `BRANCH.md` with actual commands and results.
   - [x] Verify package version bumps are present for touched package `src/**`.
     - [x] `packages/chat-core`: `0.1.2` -> `0.1.3` because `packages/chat-core/src/**` changed.
@@ -214,6 +214,9 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
     - [x] Result: 3 passed.
     - [x] `make typecheck-ui API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=test-feat-40bc-38a`
     - [x] Result: 0 errors; 6 existing warnings.
-  - [ ] Push latest CI-fix commit to `origin/feat/40bc-38a`.
-  - [ ] Update PR #203 body from this `BRANCH.md` after the push.
-  - [ ] Monitor GitHub Actions for the pushed commit before UAT handoff.
+  - [x] Integrate latest `main` into the branch and resolve conflicts:
+    - [x] Merge `main` chat-server (#201/#208): migrated BR-38a vision `attachments` into `packages/chat-server` (zero dual-path); `@sentropic/chat-server` `0.1.0` -> `0.1.1`.
+    - [x] Merge `main` auth-oidc (#209 / BR-39c): resolved Drizzle migration idx collision by keeping `0027_oauth_clients` and renumbering the BR-38a migration to `0028_chat_message_attachments`.
+  - [x] Push integrated commit `823eafc5` to `origin/feat/40bc-38a`.
+  - [x] Update PR #203 body from this `BRANCH.md`.
+  - [x] CI green on `823eafc5` (run `26790796614`): typecheck/lint, builds, all e2e groups (03 chat/vision, 08 xlsx multi-sheet, 05/07 import-export), api unit+integration, security.
