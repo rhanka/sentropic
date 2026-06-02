@@ -1,0 +1,81 @@
+{
+  "name": "@sentropic/chat-ui-core",
+  "version": "0.1.0",
+  "description": "Framework-pure headless core for @sentropic/chat-ui: stream projection, state helpers, renderer registry. Zero Svelte dependency.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/chat-ui-core"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./state/chatAttachments": {
+      "types": "./src/state/chatAttachments.ts",
+      "import": "./src/state/chatAttachments.ts"
+    },
+    "./state/chatDraft": {
+      "types": "./src/state/chatDraft.ts",
+      "import": "./src/state/chatDraft.ts"
+    },
+    "./state/chatProjection": {
+      "types": "./src/state/chatProjection.ts",
+      "import": "./src/state/chatProjection.ts"
+    },
+    "./state/chatWidgetShell": {
+      "types": "./src/state/chatWidgetShell.ts",
+      "import": "./src/state/chatWidgetShell.ts"
+    },
+    "./state/streamMessageProjection": {
+      "types": "./src/state/streamMessageProjection.ts",
+      "import": "./src/state/streamMessageProjection.ts"
+    },
+    "./state/streamMessageSmoothing": {
+      "types": "./src/state/streamMessageSmoothing.ts",
+      "import": "./src/state/streamMessageSmoothing.ts"
+    },
+    "./utils/chat-run-projection": {
+      "types": "./src/utils/chat-run-projection.ts",
+      "import": "./src/utils/chat-run-projection.ts"
+    },
+    "./utils/chat-steer": {
+      "types": "./src/utils/chat-steer.ts",
+      "import": "./src/utils/chat-steer.ts"
+    },
+    "./utils/chat-tool-scope": {
+      "types": "./src/utils/chat-tool-scope.ts",
+      "import": "./src/utils/chat-tool-scope.ts"
+    },
+    "./utils/localToolStreamSync": {
+      "types": "./src/utils/localToolStreamSync.ts",
+      "import": "./src/utils/localToolStreamSync.ts"
+    },
+    "./renderers/registry": {
+      "types": "./src/renderers/registry.ts",
+      "import": "./src/renderers/registry.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}
