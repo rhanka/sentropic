@@ -246,6 +246,39 @@ Constraints that still hold:
 - **Recorded evidence** — for each model tested, record `{project, location, publisher, modelId(catalog key + wire id), pass/fail, finishReason observed}` in the plan/`BRANCH.md`, **WITHOUT committing any credential** (`VERTEX_PROJECT_ID`, SA-JSON, bearer stay in `.env`/local only).
 - **Pass criteria** (the D3 verification): with `VERTEX_PROJECT_ID` + `VERTEX_LOCATION` + ADC available (service-account JSON via `GOOGLE_APPLICATION_CREDENTIALS`) and `VERTEX_LIVE_UAT=1`, `make vertex-live-uat` drives a real `vertex:<catalog-key>` **streaming** call at the api/mesh layer and confirms: tokens stream as `content_delta`, reasoning streams as `reasoning_delta` when requested, a tool call surfaces as `tool_call_start`, the **exact wire model ids are callable** in the chosen region, and a deliberately-wrong region/model surfaces the D-ERR1 `404`/`403` mapping. UAT proves the live call at the **api/mesh layer (not the browser selector)**.
 
+### UAT runbook (step-by-step — the SINGLE deferred user input, BR42f-D3)
+
+1. **Create + download a Vertex service-account key** (gcloud or Cloud Console). The SA needs the **Vertex AI User** role (`roles/aiplatform.user`) on the target project. CLI form:
+   ```
+   gcloud iam service-accounts create vertex-uat --project <PROJECT_ID>
+   gcloud projects add-iam-policy-binding <PROJECT_ID> \
+     --member "serviceAccount:vertex-uat@<PROJECT_ID>.iam.gserviceaccount.com" \
+     --role roles/aiplatform.user
+   gcloud iam service-accounts keys create ./vertex-sa.json \
+     --iam-account vertex-uat@<PROJECT_ID>.iam.gserviceaccount.com
+   ```
+2. **Put the key at the gitignored path.** `vertex-sa*.json` and `.secrets/` are gitignored; the key is NEVER committed. Keep it at the worktree root, e.g. `./vertex-sa.json`.
+3. **Bring up the branch stack** (slot-0 ports; never `ENV=dev`, never root ports):
+   ```
+   make dev API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=feat-llm-mesh-vertex-ai
+   ```
+4. **Run the live UAT** (the target `docker cp`s the key into the running `api` container at `/tmp/vertex-sa.json`, then `docker compose exec` runs the script with `VERTEX_PROJECT_ID`/`VERTEX_LOCATION`/`GOOGLE_APPLICATION_CREDENTIALS=/tmp/vertex-sa.json`/`VERTEX_LIVE_UAT=1` injected INLINE on a fresh process):
+   ```
+   make vertex-live-uat VERTEX_PROJECT_ID=<PROJECT_ID> VERTEX_LOCATION=<REGION> VERTEX_SA_KEY=./vertex-sa.json ENV=feat-llm-mesh-vertex-ai
+   ```
+5. **Expected sanitized PASS output** (project id masked; NO bearer / SA-JSON / `Authorization` ever printed):
+   ```
+   --- Vertex live UAT (sanitized) ---
+   project=abc***xy location=us-central1
+   models=2
+   [PASS] google/gemini-3.5-flash@vertex (publisher=google wire=gemini-3.5-flash) http=200 tokens=<n> finishReason=STOP latencyMs=<ms>
+   [PASS] google/gemini-3.1-flash-lite@vertex (publisher=google wire=gemini-3.1-flash-lite) http=200 tokens=<n> finishReason=STOP latencyMs=<ms>
+   -----------------------------------
+   Result: ALL PASS (2/2 models)
+   ```
+   Record `{project(masked), location, publisher, modelId(catalog key + wire id), pass/fail, finishReason}` per model in this file — WITHOUT committing any credential/token/SA-JSON.
+6. **If the live-callable wire ids differ from the 2 placeholders** (`google/gemini-3.5-flash@vertex` + `google/gemini-3.1-flash-lite@vertex`): the swap is a 1-line catalog change — update the ids in `packages/llm-mesh/src/providers.ts` (`knownModelIds` + `knownModelIdsByProvider.vertex`), `packages/llm-mesh/src/catalog.ts` (`modelProfiles`), and the matching `modelsByProvider('vertex')` assertion in `api/tests/api/models.test.ts`; then re-run `make vertex-live-uat …` and the Lot 4 mocked gates. The `vertex-live-uat.ts` script reads the ids from the package catalog, so it needs NO edit.
+
 Published-package validate lane: `make typecheck-llm-mesh`, `make test-llm-mesh`, `make pack-llm-mesh`, then `make typecheck-api` / `make lint-api` / `make test-api` (the gate sequence recorded in `SPEC_EVOL_LLM_MESH.md`). Version bump enforced by the `enforce-package-bump` CI job (`0.1.3 → 0.2.0`).
 
 ## 6. Pre-test plan (deterministic, no live Vertex, no real credentials in CI)
