@@ -5109,7 +5109,7 @@
                       if (ok) markCopied(item.key);
                     }}
                     onRegenerate={() => void retryFromAssistant(m.id)}
-                    onFeedback={(action) => void setFeedback(m.id, action)}
+                    onFeedback={(action: 'up' | 'down' | 'clear') => void setFeedback(m.id, action)}
                   />
                 </div>
               </div>
@@ -5698,7 +5698,7 @@
             models={modelCatalogModels}
             widthCh={selectedModelWidthCh}
             labels={$_}
-            onChange={({ providerId, modelId }) => {
+            onChange={({ providerId, modelId }: { providerId: ModelProviderId; modelId: string }) => {
               selectedProviderId = providerId;
               selectedModelId = modelId;
             }}
