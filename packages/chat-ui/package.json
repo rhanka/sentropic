@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-ui",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Svelte reference UI package for @sentropic/* chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. Consumes @sentropic/chat-core wire contracts over HTTP/SSE only.",
   "type": "module",
   "license": "MIT",
@@ -141,6 +141,16 @@
       "types": "./src/components/ChatComposer.svelte.d.ts",
       "svelte": "./src/components/ChatComposer.svelte",
       "import": "./src/components/ChatComposer.svelte"
+    },
+    "./components/ModelSelector.svelte": {
+      "types": "./src/components/ModelSelector.svelte.d.ts",
+      "svelte": "./src/components/ModelSelector.svelte",
+      "import": "./src/components/ModelSelector.svelte"
+    },
+    "./utils/model-selection": {
+      "types": "./src/utils/model-selection.ts",
+      "svelte": "./src/utils/model-selection.ts",
+      "import": "./src/utils/model-selection.ts"
     }
   },
   "files": [
