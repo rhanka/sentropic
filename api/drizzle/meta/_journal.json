@@ -194,8 +194,15 @@
     {
       "idx": 27,
       "version": "7",
-      "when": 1779580800000,
-      "tag": "0027_chat_message_attachments",
+      "when": 1780272000000,
+      "tag": "0027_oauth_clients",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1780358400000,
+      "tag": "0028_chat_message_attachments",
       "breakpoints": true
     }
   ]

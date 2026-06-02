@@ -1,3 +1,17 @@
+import type { JwksPort, OauthStateStorePort } from './oauth/state-store-types.js';
+
+export type {
+  AuthCodePayload,
+  DpopProofRecord,
+  JwksKeyRecord,
+  JwksPort,
+  JwksPublicJwk,
+  OauthClientRecord,
+  OauthStateStorePort,
+  OauthTokenType,
+  TokenMeta,
+} from './oauth/state-store-types.js';
+
 export type AuthHonoAccountStatus =
   | 'active'
   | 'pending_admin_approval'
@@ -286,4 +300,6 @@ export interface AuthHonoPorts {
   clock: AuthHonoClockPort;
   random: AuthHonoRandomPort;
   accountPolicy: AuthHonoAccountPolicyPort;
+  oauthStateStore: OauthStateStorePort;
+  jwks: JwksPort;
 }

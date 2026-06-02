@@ -9,6 +9,7 @@
     resolveAuthUiLabels,
     toSentropicUser,
   } from '$lib/services/auth-transport';
+  import { resolveOAuthAuthorizeContinuationUrl } from '$lib/services/oauth-transport';
 
   const transport = createSentropicAuthTransport();
   $: labels = resolveAuthUiLabels($locale);
@@ -21,7 +22,14 @@
     if (session.refreshToken) {
       sessionStorage.setItem('refreshToken', session.refreshToken);
     }
-    const returnUrl = new URLSearchParams(window.location.search).get('returnUrl') || '/neutral';
+    const params = new URLSearchParams(window.location.search);
+    const oauthContinuation = params.get('continue');
+    if (oauthContinuation) {
+      window.location.assign(resolveOAuthAuthorizeContinuationUrl(oauthContinuation));
+      return;
+    }
+
+    const returnUrl = params.get('returnUrl') || '/neutral';
     await goto(returnUrl);
   }
 </script>
