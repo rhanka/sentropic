@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { readAppContractStreamEvents, type ChatStreamPort } from '../../../../packages/chat-server/src/index';
 import { db, pool } from '../../db/client';
 import { listActiveStreamIds } from '../../services/stream-service';
 import { readStreamEvents } from '../../services/stream-service';
@@ -59,6 +60,11 @@ type JobSnapshotRow = {
 };
 
 const PRESENCE_OBJECT_TYPES: LockObjectType[] = ['organization', 'folder', 'initiative'];
+const APP_LOCAL_STREAM_PREFIXES = ['organization_', 'folder_', 'initiative_', 'job_'];
+
+function isChatStreamId(streamId: string): boolean {
+  return !APP_LOCAL_STREAM_PREFIXES.some((prefix) => streamId.startsWith(prefix));
+}
 
 function coercePresenceObjectType(value: string): LockObjectType | null {
   return PRESENCE_OBJECT_TYPES.includes(value as LockObjectType) ? (value as LockObjectType) : null;
@@ -288,6 +294,23 @@ streamsRouter.get('/sse', async (c) => {
         }
       }, 25_000);
 
+      const isChatStreamAllowed = async (streamId: string): Promise<boolean> => {
+        const [r] = await db
+          .select({ id: chatMessages.id })
+          .from(chatMessages)
+          .leftJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+          .where(and(eq(chatMessages.id, streamId), eq(chatSessions.userId, user.userId)))
+          .limit(1);
+        return !!r;
+      };
+
+      const chatStreamPort: ChatStreamPort = {
+        readSessionEvents: async () => [],
+        readStreamEvents: async (input) =>
+          readStreamEvents(input.streamId, input.sinceSequence),
+        isStreamAllowed: async (input) => isChatStreamAllowed(input.streamId),
+      };
+
       const isStreamAllowed = async (streamId: string): Promise<boolean> => {
         const cached = streamAllowedCache.get(streamId);
         if (cached !== undefined) return cached;
@@ -330,13 +353,7 @@ streamsRouter.get('/sse', async (c) => {
             return !!r;
           }
           // Chat stream: streamId == assistantMessageId
-          const [r] = await db
-            .select({ id: chatMessages.id })
-            .from(chatMessages)
-            .leftJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
-            .where(and(eq(chatMessages.id, streamId), eq(chatSessions.userId, user.userId)))
-            .limit(1);
-          return !!r;
+          return isChatStreamAllowed(streamId);
         })();
 
         streamAllowedCache.set(streamId, allowed);
@@ -353,10 +370,18 @@ streamsRouter.get('/sse', async (c) => {
         draining.set(streamId, true);
         try {
           if (closed) return;
-          const allowed = await isStreamAllowed(streamId);
-          if (!allowed) return;
-
-          const events = await readStreamEvents(streamId, lastSeq[streamId] ?? 0);
+          const events = isChatStreamId(streamId)
+            ? await readAppContractStreamEvents(chatStreamPort, {
+                streamId,
+                userId: user.userId,
+                workspaceId: targetWorkspaceId,
+                sinceSequence: lastSeq[streamId] ?? 0,
+              })
+            : await (async () => {
+                const allowed = await isStreamAllowed(streamId);
+                if (!allowed) return [];
+                return readStreamEvents(streamId, lastSeq[streamId] ?? 0);
+              })();
           for (const ev of events) {
             if (closed) return;
             lastSeq[streamId] = ev.sequence;
@@ -636,6 +661,10 @@ streamsRouter.get('/sse', async (c) => {
             const streamId = payload.stream_id;
             if (!streamId || typeof streamId !== 'string') return;
             if (hasStreamFilter && !wanted.has(streamId)) return;
+            if (isChatStreamId(streamId)) {
+              void drainStream(streamId).catch(() => {});
+              return;
+            }
 
             const seq = Number(payload.sequence);
             if (Number.isFinite(seq)) {

@@ -4,7 +4,7 @@
 Register and document the "scale / build-app foundry" effort: give the ecosystem a **CLI for app
 construction** (`sentropic-build-app`, **monorepo-resident** — add internal structure, no repo split)
 and **isolate the modules** needed for multi-client / multi-cloud growth. This branch is
-**documentation-only**: it adds this umbrella plan file, registers the BR-42a..g lots in `PLAN.md`,
+**documentation-only**: it adds this umbrella plan file, registers the BR-42a0..g lots in `PLAN.md`,
 and records the module-isolation iteration in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`. No code.
 
 The trust-model concepts (VALEUR / ATTENTION / INTÉRÊT / CONFIANCE / MUTUALISATION) are posed in
@@ -12,11 +12,16 @@ The trust-model concepts (VALEUR / ATTENTION / INTÉRÊT / CONFIANCE / MUTUALISA
 client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
 
 ## Family scope (numbers + finalités)
-- **BR-42a `feat/build-app-cli`** — *Purpose*: ship the `sentropic-build-app` **CLI MVP (scaffolder)**:
+- **BR-42a0 `feat/chat-server`** — *Purpose*: extract `@sentropic/chat-server` as the reusable
+  wire+turn Hono package over `@sentropic/chat-core`, migrate the current `api/` onto it in
+  `routes: 'app-contract'` mode, and prepare first publish. This is the D5 split prerequisite before the
+  build-app CLI can generate runnable chat backends.
+- **BR-42a1 `feat/build-app-cli`** — *Purpose*: ship the `sentropic-build-app` **CLI MVP (scaffolder)**:
   `init <name>` bootstraps a **runnable chat-ui↔backend app** (consuming `@sentropic/chat-ui` +
-  `chat-core` + `llm-mesh` + `design-system`) and **creates the GitHub repo**. First foundry surface;
-  forces the **librarisation of templating / doc-gen**. Monorepo home (`packages/build-cli` + an app
-  template package). Depends on the merged chat stack.
+  `@sentropic/chat-server` + `chat-core` + `llm-mesh` + `design-system`) and **creates the GitHub repo**.
+  First foundry surface; forces the **librarisation of templating / doc-gen**. Monorepo home
+  (`packages/build-cli` + an app template package). Depends on the merged chat stack and the published
+  `@sentropic/chat-server@0.1.x` package.
 - **BR-42b `feat/catalog-agents-canvas`** — *Purpose*: **generalise the capability catalog** from
   `skills+tools` to **`skills+tools+agents+canvas`**, and open it to external `CatalogSource` kinds
   (**`mcp`**, **`google-marketplace`**). Extends BR-19 (skills) + BR-33 (marketplace); ties §14 agent
@@ -34,11 +39,12 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
   (**PG and/or BigQuery**, incl. **PG-via-BigQuery**) for observability storage.
 
 ## Orchestration Mode
-- [x] **Multi-branch**: BR-42b..g are largely orthogonal package extensions and parallelisable; BR-42a
+- [x] **Multi-branch**: BR-42b..g are largely orthogonal package extensions and parallelisable; BR-42a1
   (the CLI) consumes them as they land.
 - [ ] Mono-branch + cherry-pick
 - Rationale: each lot extends a distinct package boundary (catalog, comments, persistence, flow, mesh,
-  events); the CLI (BR-42a) is the integrator and can start in parallel against the merged chat stack.
+  events); BR-42a0 is the prerequisite chat-server split, and the CLI (BR-42a1) is the integrator after
+  chat-server is merged and published.
 
 ## Wave & Port Allocation (branch nn = 42)
 - Slot ports: API `9000 + (42*5) + slot` = `9210..9214`; UI `5200 + (42*5) + slot` = `5410..5414`;
@@ -48,7 +54,9 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
 
 ## Dependency graph
 - **BR-39** (auth-ui/auth-hono, **in flight via `codex:39-auth`**) → provides **identities**; BR-42d depends on it.
-- **BR-42a** → depends on the merged chat stack (`@sentropic/chat-ui` + `chat-core` + `llm-mesh`) + a template package.
+- **BR-42a0** → depends on the merged chat stack (`@sentropic/chat-ui` + `chat-core` + `llm-mesh`) and
+  publishes `@sentropic/chat-server`.
+- **BR-42a1** → depends on BR-42a0 (`@sentropic/chat-server@0.1.x`) + a template package.
 - **BR-42b** → extends BR-19 (`@sentropic/skills`) + BR-33 (`@sentropic/marketplace`).
 - **BR-42c** → contracts + persistence + events (new package).
 - **BR-42d** → BR-42c (comments) + `@sentropic/events` (observability) + BR-39 (identities).
@@ -72,20 +80,21 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
 - No code, no migration, no test changes in this branch.
 
 ## Feedback Loop (open framing questions — to resolve before/within implementation)
-- **BR42a-Q1** `attention`: CLI home — `packages/build-cli` (default) vs top-level `cli/`; app-template
-  package name. To resolve at BR-42a Lot 0.
-- **BR42a-Q2** `attention`: CLI **binary name** — `sentropic-build-app` vs `sentropic init` vs
+- **BR42a1-Q1** `attention`: CLI home — `packages/build-cli` (default) vs top-level `cli/`; app-template
+  package name. To resolve at BR-42a1 Lot 0.
+- **BR42a1-Q2** `attention`: CLI **binary name** — `sentropic-build-app` vs `sentropic init` vs
   `create-sentropic-app`. Durable name → **user validation required** before merge.
 - **BR42b-Q1** `attention`: catalog generalisation home — extend `@sentropic/skills` catalog (default,
   `SkillSource`→`CatalogSource`) vs a new `@sentropic/catalog`.
 - **BR42d-Q1** `attention`: default observability sink (PG vs BigQuery vs both) per workspace.
 - **BR42f-Q1** `attention`: Vertex AI auth mapping in `llm-mesh` credentials (ADC / service-account /
   workload-identity).
-- **BR42-Q1** `attention`: first wave selection — BR-42a (MVP) + BR-42f/BR-42g (independent) in parallel?
+- **BR42-Q1** `attention`: first wave selection — BR-42a1 (MVP) + BR-42f/BR-42g (independent) in parallel?
 
 ## Closure
 - [x] Module-isolation iteration recorded in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`.
 - [x] Umbrella plan file added (`plan/42-BRANCH_chore-scale-build-app.md`).
 - [x] `PLAN.md` updated (status addendum + pending list).
-- [ ] Per-lot `BRANCH.md` (from `plan/BRANCH_TEMPLATE.md`) created at each lot launch.
+- [x] BR-42a0 split recorded and launched (`feat/chat-server`, PR #201, UAT OK; merged; `@sentropic/chat-server@0.1.0` bootstrap-published; Trusted Publisher attachment pending).
+- [ ] Per-lot `BRANCH.md` (from `plan/BRANCH_TEMPLATE.md`) created at each future lot launch.
 - [ ] User validation of durable names (CLI binary, package names) before any lot merge.

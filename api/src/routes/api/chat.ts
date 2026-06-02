@@ -2,151 +2,27 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
-import { chatService } from '../../services/chat-service';
-import { queueManager } from '../../services/queue-manager';
+import { createChatServer } from '../../../../packages/chat-server/src/index';
+import { chatService, type ChatContextType } from '../../services/chat-service';
+import { queueManager, type ChatMessageJobData } from '../../services/queue-manager';
 import { writeStreamEventWithSequenceRetry } from '../../services/stream-service';
+import type { ProviderId } from '../../services/provider-runtime';
+import { requireWorkspaceAccess, requireWorkspaceEditor } from '../../services/workspace-access';
 import { db } from '../../db/client';
 import { chatMessages, chatSessions, extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { createId } from '../../utils/id';
-import { resolveLocaleFromHeaders } from '../../utils/locale';
 
 export const chatRouter = new Hono();
 
-const chatContextInput = z.object({
-  contextType: z.enum(['organization', 'folder', 'initiative', 'usecase', 'executive_summary']), // TODO Lot 10: remove 'usecase' after full data migration
-  contextId: z.string().min(1)
-});
-
-const localToolDefinitionInput = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(64)
-    .regex(/^[a-zA-Z0-9_-]+$/),
-  description: z.string().min(1).max(1000),
-  parameters: z.record(z.string(), z.unknown())
-});
-
-const vscodeCodeAgentInstructionInput = z.object({
-  path: z.string().min(1).max(512),
-  content: z.string().min(1).max(200_000),
-});
-
-const vscodeCodeAgentSystemContextInput = z.object({
-  workingDirectory: z.string().min(1).max(512).optional(),
-  isGitRepo: z.boolean().optional(),
-  gitBranch: z.string().min(1).max(256).optional(),
-  platform: z.string().min(1).max(64).optional(),
-  osVersion: z.string().min(1).max(256).optional(),
-  shell: z.string().min(1).max(128).optional(),
-  clientDateIso: z.string().min(1).max(128).optional(),
-  clientTimezone: z.string().min(1).max(128).optional(),
-});
-
-const vscodeCodeAgentInput = z.object({
-  source: z.literal('vscode').optional(),
-  workspaceKey: z.string().min(1).max(256).optional(),
-  workspaceLabel: z.string().min(1).max(512).optional(),
-  promptGlobalOverride: z.string().max(200_000).optional(),
-  promptWorkspaceOverride: z.string().max(200_000).optional(),
-  instructionIncludePatterns: z.array(z.string().min(1).max(256)).max(64).optional(),
-  instructionFiles: z.array(vscodeCodeAgentInstructionInput).max(64).optional(),
-  systemContext: vscodeCodeAgentSystemContextInput.optional(),
-});
-
-const createMessageInput = z.object({
-  sessionId: z.string().optional(),
-  content: z.string().max(200_000).optional().default(''),
-  providerId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere']).optional(),
-  providerApiKey: z.string().min(1).optional(),
-  model: z.string().optional(),
-  workspace_id: z.string().optional(),
-  primaryContextType: z.enum(['organization', 'folder', 'initiative', 'usecase', 'executive_summary']).optional(),
-  primaryContextId: z.string().optional(),
-  sessionTitle: z.string().optional(),
-  contexts: z.array(chatContextInput).optional(),
-  attachments: z.array(z.object({
-    kind: z.enum(['image', 'file']),
-    source: z.enum(['context_document', 'external_url']).default('context_document'),
-    documentId: z.string().min(1).max(256).optional(),
-    fileName: z.string().min(1).max(512).optional(),
-    mimeType: z.string().min(1).max(128).optional(),
-    sizeBytes: z.number().int().nonnegative().optional(),
-    url: z.string().url().max(4096).optional(),
-    width: z.number().int().positive().optional(),
-    height: z.number().int().positive().optional(),
-    data: z.record(z.string(), z.unknown()).optional(),
-  }).superRefine((attachment, ctx) => {
-    if (attachment.source === 'context_document' && !attachment.documentId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['documentId'],
-        message: 'documentId is required for context_document attachments',
-      });
-    }
-    if (attachment.source === 'external_url' && !attachment.url) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['url'],
-        message: 'url is required for external_url attachments',
-      });
-    }
-    if (attachment.kind === 'image' && attachment.mimeType && !attachment.mimeType.toLowerCase().startsWith('image/')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['mimeType'],
-        message: 'image attachments require an image/* MIME type',
-      });
-    }
-  })).max(16).optional(),
-  tools: z.array(z.string()).optional(),
-  localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional(),
-  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
-}).superRefine((input, ctx) => {
-  if (input.content.trim().length > 0) return;
-  if ((input.attachments ?? []).length > 0) return;
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    path: ['content'],
-    message: 'content or attachments is required',
-  });
-});
-
-const feedbackInput = z.object({
-  vote: z.enum(['up', 'down', 'clear'])
-});
-
 const editMessageInput = z.object({
   content: z.string().min(1)
-});
-
-const retryMessageInput = z.object({
-  providerId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere']).optional(),
-  model: z.string().min(1).optional(),
-  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });
 
 const createSessionInput = z.object({
   primaryContextType: z.enum(['organization', 'folder', 'initiative', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
-});
-
-const createCheckpointInput = z.object({
-  title: z.string().min(1).max(120).optional(),
-  anchorMessageId: z.string().min(1).optional(),
-});
-
-const toolResultInput = z.object({
-  toolCallId: z.string().min(1),
-  result: z.unknown(),
-  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
-});
-
-const steerInput = z.object({
-  message: z.string().min(1),
-  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const extensionToolPermissionInput = z.object({
@@ -164,6 +40,154 @@ const TOOL_PATTERN_REGEX = /^[a-z0-9:_*-]{1,96}$/i;
 const HOSTNAME_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 const IPV4_REGEX =
   /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+
+const toProviderId = (value: string | null | undefined): ProviderId | undefined =>
+  value ? (value as ProviderId) : undefined;
+
+const toProviderIdOrNull = (value: string | null | undefined): ProviderId | null =>
+  value ? (value as ProviderId) : null;
+
+const toChatContexts = (
+  contexts: Array<{ contextType: string; contextId: string }> | undefined,
+): Array<{ contextType: ChatContextType; contextId: string }> | undefined =>
+  contexts?.map((context) => ({
+    contextType: context.contextType as ChatContextType,
+    contextId: context.contextId,
+  }));
+
+async function stopAssistantMessageForUser(input: {
+  assistantMessageId: string;
+  userId: string;
+}): Promise<{ ok: true; jobId: string | null }> {
+  const msg = await chatService.getMessageForUser(input.assistantMessageId, input.userId);
+  if (!msg) throw new Error('Message not found');
+  if (msg.role !== 'assistant') throw new Error('Only assistant messages can be stopped');
+
+  const rows = (await db.all(sql`
+    SELECT id, status
+    FROM job_queue
+    WHERE type = 'chat_message'
+      AND (data::jsonb->>'assistantMessageId') = ${input.assistantMessageId}
+      AND (data::jsonb->>'userId') = ${input.userId}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `)) as Array<{ id: string; status: string }>;
+
+  const job = rows?.[0];
+  const jobId = job?.id;
+  if (jobId) {
+    await queueManager.cancelJob(jobId, 'user_stop');
+  }
+
+  const shouldFinalize = !job || job.status !== 'processing';
+  if (shouldFinalize) {
+    await chatService.finalizeAssistantMessageFromStream({
+      assistantMessageId: input.assistantMessageId,
+      reason: 'user_stop',
+      fallbackContent: 'Réponse interrompue.',
+    });
+  }
+
+  return { ok: true, jobId: jobId ?? null };
+}
+
+async function steerAssistantMessageForUser(input: {
+  assistantMessageId: string;
+  userId: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+}): Promise<{
+  assistantMessageId: string;
+  status: 'accepted';
+  action: 'interrupt_relaunch';
+  steer: {
+    messageId: string | null;
+    message: string;
+    metadata: Record<string, unknown>;
+  };
+}> {
+  const msg = await chatService.getMessageForUser(input.assistantMessageId, input.userId);
+  if (!msg) throw new Error('Message not found');
+  if (msg.role !== 'assistant') {
+    throw new Error('Only assistant messages can be steered');
+  }
+
+  const metadata = input.metadata ?? {};
+  const streamId = input.assistantMessageId;
+  await writeStreamEventWithSequenceRetry(
+    streamId,
+    'status',
+    {
+      state: 'steer_received',
+      message: input.message,
+      metadata,
+      actor: 'user',
+      actorId: input.userId,
+    },
+    {
+      messageId: streamId,
+    },
+  );
+
+  let steerMessageId: string | null = null;
+  try {
+    await db.transaction(async (tx) => {
+      const insertedSteerMessageId = createId();
+      const insertBeforeSequence = msg.sequence;
+
+      await tx
+        .update(chatMessages)
+        .set({
+          sequence: sql`${chatMessages.sequence} + 1`,
+        })
+        .where(
+          and(
+            eq(chatMessages.sessionId, msg.sessionId),
+            gte(chatMessages.sequence, insertBeforeSequence),
+          ),
+        );
+
+      await tx.insert(chatMessages).values({
+        id: insertedSteerMessageId,
+        sessionId: msg.sessionId,
+        role: 'user',
+        content: input.message,
+        toolCalls: null,
+        toolCallId: null,
+        reasoning: null,
+        model: null,
+        promptId: null,
+        promptVersionId: null,
+        contexts: null,
+        sequence: insertBeforeSequence,
+        createdAt: new Date(),
+      });
+
+      await tx
+        .update(chatSessions)
+        .set({ updatedAt: new Date() })
+        .where(eq(chatSessions.id, msg.sessionId));
+
+      steerMessageId = insertedSteerMessageId;
+    });
+  } catch (error) {
+    console.error('[chat/steer] failed to persist steer message', {
+      assistantMessageId: input.assistantMessageId,
+      error,
+    });
+  }
+
+  return {
+    assistantMessageId: input.assistantMessageId,
+    status: 'accepted',
+    action: 'interrupt_relaunch',
+    steer: {
+      messageId: steerMessageId,
+      message: input.message,
+      metadata,
+    },
+  };
+}
 
 const normalizeToolPattern = (raw: string): string | null => {
   const value = raw.trim().toLowerCase();
@@ -342,6 +366,123 @@ chatRouter.delete(
   },
 );
 
+const chatServerRouter = createChatServer(
+  {
+    getUser: (c) => c.get('user'),
+    messages: {
+      createUserMessageWithAssistantPlaceholder: (input) =>
+        chatService.createUserMessageWithAssistantPlaceholder({
+          userId: input.userId,
+          sessionId: input.sessionId ?? null,
+          content: input.content,
+          providerId: toProviderIdOrNull(input.providerId),
+          providerApiKey: input.providerApiKey ?? null,
+          model: input.model ?? null,
+          workspaceId: input.workspaceId ?? null,
+          primaryContextType: (input.primaryContextType as ChatContextType | undefined) ?? null,
+          primaryContextId: input.primaryContextId ?? null,
+          contexts: toChatContexts(input.contexts),
+          attachments: input.attachments ?? null,
+          sessionTitle: input.sessionTitle ?? null,
+        }),
+      listMessages: (input) =>
+        chatService.listMessages(input.sessionId, input.userId),
+      getSessionBootstrap: (input) =>
+        chatService.getSessionBootstrap({
+          sessionId: input.sessionId,
+          userId: input.userId,
+        }),
+      getMessageForUser: (input) =>
+        chatService.getMessageForUser(input.messageId, input.userId),
+      stopAssistantMessage: (input) =>
+        stopAssistantMessageForUser(input),
+      steerAssistantMessage: (input) =>
+        steerAssistantMessageForUser(input),
+      setMessageFeedback: async (input) => {
+        const result = await chatService.setMessageFeedback({
+          messageId: input.messageId,
+          userId: input.userId,
+          vote: input.vote,
+        });
+        return { messageId: input.messageId, vote: result.vote };
+      },
+      retryUserMessage: (input) =>
+        chatService.retryUserMessage({
+          messageId: input.messageId,
+          userId: input.userId,
+          providerId: toProviderIdOrNull(input.providerId),
+          model: input.model ?? null,
+        }),
+      acceptLocalToolResult: (input) =>
+        chatService.acceptLocalToolResult({
+          assistantMessageId: input.assistantMessageId,
+          toolCallId: input.toolCallId,
+          result: input.result,
+        }),
+      createCheckpoint: (input) =>
+        chatService.createCheckpoint({
+          sessionId: input.sessionId,
+          userId: input.userId,
+          title: input.title ?? null,
+          anchorMessageId: input.anchorMessageId ?? null,
+        }),
+      listCheckpoints: (input) =>
+        chatService.listCheckpoints({
+          sessionId: input.sessionId,
+          userId: input.userId,
+          limit: input.limit,
+        }),
+      restoreCheckpoint: (input) =>
+        chatService.restoreCheckpoint({
+          sessionId: input.sessionId,
+          checkpointId: input.checkpointId,
+          userId: input.userId,
+        }),
+    },
+    queue: {
+      enqueueChatMessage: (input, options) =>
+        queueManager.addJob(
+          'chat_message',
+          {
+            userId: input.userId,
+            sessionId: input.sessionId,
+            assistantMessageId: input.assistantMessageId,
+            providerId: toProviderId(input.providerId),
+            providerApiKey: input.providerApiKey,
+            model: input.model ?? undefined,
+            contexts: toChatContexts(input.contexts),
+            tools: input.tools,
+            localToolDefinitions:
+              input.localToolDefinitions as ChatMessageJobData['localToolDefinitions'],
+            vscodeCodeAgent: input.vscodeCodeAgent as ChatMessageJobData['vscodeCodeAgent'],
+            resumeFrom: input.resumeFrom as ChatMessageJobData['resumeFrom'],
+            locale: input.locale,
+          },
+          { workspaceId: options?.workspaceId ?? undefined },
+        ),
+    },
+    stream: {
+      readSessionEvents: async () => [],
+    },
+  },
+  {
+    routes: 'app-contract',
+    basePath: '',
+    includeControls: true,
+    authorize: async ({ user, action }) => {
+      if (!user.workspaceId) return false;
+      if (action === 'restoreCheckpoint') {
+        await requireWorkspaceEditor(user.userId, user.workspaceId);
+        return true;
+      }
+      await requireWorkspaceAccess(user.userId, user.workspaceId);
+      return true;
+    },
+  },
+);
+
+chatRouter.route('/', chatServerRouter);
+
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
   const sessions = await chatService.listSessions(user.userId, user.workspaceId);
@@ -359,30 +500,6 @@ chatRouter.post('/sessions', requireWorkspaceAccessRole(), zValidator('json', cr
     title: body.sessionTitle ?? null
   });
   return c.json({ sessionId: res.sessionId });
-});
-
-chatRouter.get('/sessions/:id/messages', async (c) => {
-  const user = c.get('user');
-  const sessionId = c.req.param('id')!;
-  const result = await chatService.listMessages(sessionId, user.userId);
-  return c.json({ sessionId, messages: result.messages, todoRuntime: result.todoRuntime });
-});
-
-chatRouter.get('/sessions/:id/bootstrap', async (c) => {
-  const user = c.get('user');
-  const sessionId = c.req.param('id')!;
-  const result = await chatService.getSessionBootstrap({
-    sessionId,
-    userId: user.userId,
-  });
-  return c.json({
-    sessionId,
-    messages: result.messages,
-    todoRuntime: result.todoRuntime,
-    checkpoints: result.checkpoints,
-    documents: result.documents,
-    assistantDetailsByMessageId: result.assistantDetailsByMessageId,
-  });
 });
 
 chatRouter.get('/sessions/:id/history', async (c) => {
@@ -458,54 +575,6 @@ chatRouter.get('/messages/:id/runtime-details', async (c) => {
   return c.json(result);
 });
 
-chatRouter.get('/sessions/:id/checkpoints', requireWorkspaceAccessRole(), async (c) => {
-  const user = c.get('user');
-  const sessionId = c.req.param('id')!;
-  const url = new URL(c.req.url);
-  const limitRaw = Number(url.searchParams.get('limit') ?? '20');
-  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20;
-  const checkpoints = await chatService.listCheckpoints({
-    sessionId,
-    userId: user.userId,
-    limit,
-  });
-  return c.json({ sessionId, checkpoints });
-});
-
-chatRouter.post(
-  '/sessions/:id/checkpoints',
-  requireWorkspaceAccessRole(),
-  zValidator('json', createCheckpointInput),
-  async (c) => {
-    const user = c.get('user');
-    const sessionId = c.req.param('id')!;
-    const body = c.req.valid('json');
-    const checkpoint = await chatService.createCheckpoint({
-      sessionId,
-      userId: user.userId,
-      title: body.title ?? null,
-      anchorMessageId: body.anchorMessageId ?? null,
-    });
-    return c.json({ sessionId, checkpoint });
-  },
-);
-
-chatRouter.post(
-  '/sessions/:id/checkpoints/:checkpointId/restore',
-  requireWorkspaceEditorRole(),
-  async (c) => {
-    const user = c.get('user');
-    const sessionId = c.req.param('id')!;
-    const checkpointId = c.req.param('checkpointId')!;
-    const restored = await chatService.restoreCheckpoint({
-      sessionId,
-      checkpointId,
-      userId: user.userId,
-    });
-    return c.json({ sessionId, ...restored });
-  },
-);
-
 /**
  * DELETE /api/v1/chat/sessions/:id
  * Supprime une session + cascade (messages, contexts, stream events)
@@ -515,161 +584,6 @@ chatRouter.delete('/sessions/:id', async (c) => {
   const sessionId = c.req.param('id')!;
   await chatService.deleteSession(sessionId, user.userId);
   return c.json({ ok: true });
-});
-
-/**
- * POST /api/v1/chat/messages/:id/stop
- * Interrompt la génération en cours (chat_message) et finalise avec le contenu partiel.
- */
-chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) => {
-  const user = c.get('user');
-  const messageId = c.req.param('id')!;
-
-  const msg = await chatService.getMessageForUser(messageId, user.userId);
-  if (!msg) return c.json({ error: 'Message not found' }, 404);
-  if (msg.role !== 'assistant') return c.json({ error: 'Only assistant messages can be stopped' }, 400);
-
-  const rows = (await db.all(sql`
-    SELECT id, status
-    FROM job_queue
-    WHERE type = 'chat_message'
-      AND (data::jsonb->>'assistantMessageId') = ${messageId}
-      AND (data::jsonb->>'userId') = ${user.userId}
-    ORDER BY created_at DESC
-    LIMIT 1
-  `)) as Array<{ id: string; status: string }>;
-
-  const job = rows?.[0];
-  const jobId = job?.id;
-  if (jobId) {
-    await queueManager.cancelJob(jobId, 'user_stop');
-  }
-
-  const shouldFinalize = !job || job.status !== 'processing';
-  if (shouldFinalize) {
-    await chatService.finalizeAssistantMessageFromStream({
-      assistantMessageId: messageId,
-      reason: 'user_stop',
-      fallbackContent: 'Réponse interrompue.'
-    });
-  }
-
-  return c.json({ ok: true, jobId: jobId ?? null });
-});
-
-/**
- * POST /api/v1/chat/messages/:id/steer
- * Push an in-flight steering message to the active assistant stream.
- */
-chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator('json', steerInput), async (c) => {
-  const user = c.get('user');
-  const assistantMessageId = c.req.param('id')!;
-  const body = c.req.valid('json');
-
-  const msg = await chatService.getMessageForUser(assistantMessageId, user.userId);
-  if (!msg) return c.json({ error: 'Message not found' }, 404);
-  if (msg.role !== 'assistant') {
-    return c.json({ error: 'Only assistant messages can be steered' }, 400);
-  }
-
-  const streamId = assistantMessageId;
-  await writeStreamEventWithSequenceRetry(
-    streamId,
-    'status',
-    {
-      state: 'steer_received',
-      message: body.message,
-      metadata: body.metadata ?? {},
-      actor: 'user',
-      actorId: user.userId,
-    },
-    {
-      messageId: streamId,
-    },
-  );
-
-  let steerMessageId: string | null = null;
-  try {
-    await db.transaction(async (tx) => {
-      const insertedSteerMessageId = createId();
-      const insertBeforeSequence = msg.sequence;
-
-      // Keep steer timeline continuity: insert steer right before the steered assistant message.
-      await tx
-        .update(chatMessages)
-        .set({
-          sequence: sql`${chatMessages.sequence} + 1`,
-        })
-        .where(
-          and(
-            eq(chatMessages.sessionId, msg.sessionId),
-            gte(chatMessages.sequence, insertBeforeSequence),
-          ),
-        );
-
-      await tx.insert(chatMessages).values({
-        id: insertedSteerMessageId,
-        sessionId: msg.sessionId,
-        role: 'user',
-        content: body.message,
-        toolCalls: null,
-        toolCallId: null,
-        reasoning: null,
-        model: null,
-        promptId: null,
-        promptVersionId: null,
-        contexts: null,
-        sequence: insertBeforeSequence,
-        createdAt: new Date(),
-      });
-
-      await tx
-        .update(chatSessions)
-        .set({ updatedAt: new Date() })
-        .where(eq(chatSessions.id, msg.sessionId));
-
-      steerMessageId = insertedSteerMessageId;
-    });
-  } catch (error) {
-    console.error('[chat/steer] failed to persist steer message', {
-      assistantMessageId,
-      error,
-    });
-  }
-
-  return c.json({
-    assistantMessageId,
-    status: 'accepted',
-    action: 'interrupt_relaunch',
-    steer: {
-      messageId: steerMessageId,
-      message: body.message,
-      metadata: body.metadata ?? {},
-    },
-  });
-});
-
-/**
- * POST /api/v1/chat/messages/:id/feedback
- * Set user feedback (👍/👎) on an assistant message.
- */
-chatRouter.post('/messages/:id/feedback', requireWorkspaceAccessRole(), zValidator('json', feedbackInput), async (c) => {
-  const user = c.get('user');
-  const messageId = c.req.param('id')!;
-  const body = c.req.valid('json');
-
-  try {
-    const result = await chatService.setMessageFeedback({
-      messageId,
-      userId: user.userId,
-      vote: body.vote
-    });
-    return c.json({ messageId, vote: result.vote });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unable to set feedback';
-    const status = msg === 'Message not found' ? 404 : 400;
-    return c.json({ error: msg }, status);
-  }
 });
 
 /**
@@ -694,182 +608,3 @@ chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json
     return c.json({ error: msg }, status);
   }
 });
-
-/**
- * POST /api/v1/chat/messages/:id/retry
- * Retry a user message (deletes subsequent messages and re-queues assistant).
- */
-chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) => {
-  const user = c.get('user');
-  const messageId = c.req.param('id')!;
-  const payload = retryMessageInput.safeParse(await c.req.json().catch(() => ({})));
-  if (!payload.success) {
-    return c.json(
-      {
-        error: 'Invalid retry payload',
-        details: payload.error.issues,
-      },
-      400
-    );
-  }
-  const requestLocale = resolveLocaleFromHeaders({
-    appLocaleHeader: c.req.header('x-app-locale'),
-    acceptLanguageHeader: c.req.header('accept-language')
-  });
-
-  try {
-    const created = await chatService.retryUserMessage({
-      messageId,
-      userId: user.userId,
-      providerId: payload.data.providerId ?? null,
-      model: payload.data.model ?? null,
-    });
-    const jobId = await queueManager.addJob(
-      'chat_message',
-      {
-        userId: user.userId,
-        sessionId: created.sessionId,
-        assistantMessageId: created.assistantMessageId,
-        providerId: created.providerId,
-        model: created.model,
-        vscodeCodeAgent: payload.data.vscodeCodeAgent ?? undefined,
-        locale: requestLocale
-      },
-      { workspaceId: user.workspaceId }
-    );
-
-    return c.json({
-      sessionId: created.sessionId,
-      userMessageId: created.userMessageId,
-      assistantMessageId: created.assistantMessageId,
-      streamId: created.streamId,
-      jobId
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unable to retry message';
-    const status = msg === 'Message not found' ? 404 : 400;
-    return c.json({ error: msg }, status);
-  }
-});
-
-/**
- * POST /api/v1/chat/messages
- * Crée un message user + un placeholder assistant, puis enfile un job `chat_message`.
- * Le SSE chat est sur streamId == assistantMessageId.
- */
-chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', createMessageInput), async (c) => {
-  const user = c.get('user');
-  const body = c.req.valid('json');
-  const requestLocale = resolveLocaleFromHeaders({
-    appLocaleHeader: c.req.header('x-app-locale'),
-    acceptLanguageHeader: c.req.header('accept-language')
-  });
-
-  // Workspace scope for chat: user.workspaceId is already resolved by requireAuth middleware
-  const targetWorkspaceId = user.workspaceId as string;
-
-  const created = await chatService.createUserMessageWithAssistantPlaceholder({
-    userId: user.userId,
-    sessionId: body.sessionId ?? null,
-    content: body.content,
-    providerId: body.providerId ?? null,
-    providerApiKey: body.providerApiKey ?? null,
-    model: body.model ?? null,
-    workspaceId: targetWorkspaceId,
-    primaryContextType: body.primaryContextType ?? null,
-    primaryContextId: body.primaryContextId ?? null,
-    contexts: body.contexts ?? undefined,
-    attachments: body.attachments ?? null,
-    sessionTitle: body.sessionTitle ?? null
-  });
-
-  const jobId = await queueManager.addJob('chat_message', {
-    userId: user.userId,
-    sessionId: created.sessionId,
-    assistantMessageId: created.assistantMessageId,
-    providerId: created.providerId,
-    providerApiKey: body.providerApiKey ?? undefined,
-    model: created.model,
-    contexts: body.contexts ?? undefined,
-    tools: body.tools ?? undefined,
-    localToolDefinitions: body.localToolDefinitions ?? undefined,
-    vscodeCodeAgent: body.vscodeCodeAgent ?? undefined,
-    locale: requestLocale
-  }, { workspaceId: user.workspaceId });
-
-  return c.json({
-    sessionId: created.sessionId,
-    userMessageId: created.userMessageId,
-    assistantMessageId: created.assistantMessageId,
-    streamId: created.streamId,
-    jobId
-  });
-});
-
-/**
- * POST /api/v1/chat/messages/:id/tool-results
- * Push a local-tool result for an assistant message and resume generation when ready.
- */
-chatRouter.post(
-  '/messages/:id/tool-results',
-  requireWorkspaceAccessRole(),
-  zValidator('json', toolResultInput),
-  async (c) => {
-    const user = c.get('user');
-    const messageId = c.req.param('id')!;
-    const body = c.req.valid('json');
-    const requestLocale = resolveLocaleFromHeaders({
-      appLocaleHeader: c.req.header('x-app-locale'),
-      acceptLanguageHeader: c.req.header('accept-language')
-    });
-
-    const msg = await chatService.getMessageForUser(messageId, user.userId);
-    if (!msg) return c.json({ error: 'Message not found' }, 404);
-    if (msg.role !== 'assistant') {
-      return c.json({ error: 'Only assistant messages accept tool results' }, 400);
-    }
-
-    try {
-      const accepted = await chatService.acceptLocalToolResult({
-        assistantMessageId: messageId,
-        toolCallId: body.toolCallId,
-        result: body.result
-      });
-
-      if (!accepted.readyToResume) {
-        return c.json({
-          ok: true,
-          accepted: true,
-          resumed: false,
-          waitingForToolCallIds: accepted.waitingForToolCallIds
-        });
-      }
-
-      const jobId = await queueManager.addJob(
-        'chat_message',
-        {
-          userId: user.userId,
-          sessionId: msg.sessionId,
-          assistantMessageId: messageId,
-          localToolDefinitions: accepted.localToolDefinitions,
-          vscodeCodeAgent:
-            accepted.vscodeCodeAgent ?? body.vscodeCodeAgent ?? undefined,
-          resumeFrom: accepted.resumeFrom,
-          locale: requestLocale
-        },
-        { workspaceId: user.workspaceId }
-      );
-
-      return c.json({
-        ok: true,
-        accepted: true,
-        resumed: true,
-        jobId
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to accept tool result';
-      return c.json({ error: message }, 400);
-    }
-  }
-);
