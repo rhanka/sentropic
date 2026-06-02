@@ -94,6 +94,8 @@ export const AUTH_HONO_REQUIRED_PORTS = [
   'clock',
   'random',
   'accountPolicy',
+  'oauthStateStore',
+  'jwks',
 ] as const satisfies readonly (keyof AuthHonoPorts)[];
 
 export type AuthHonoRequiredPort = (typeof AUTH_HONO_REQUIRED_PORTS)[number];
