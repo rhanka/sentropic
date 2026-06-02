@@ -5,7 +5,9 @@ import { createJwksService } from './jwks-service.js';
 import { oauthJsonError } from './http-utils.js';
 import { sha256Base64url } from './crypto-utils.js';
 import { OAuthDpopProofError, verifyOAuthDpopProof } from './dpop.js';
-import type { AuthCodePayload, OauthClientRecord, TokenMeta } from './state-store-types.js';
+import type { AuthCodePayload, OauthClientRecord, ServiceClientRecord, TokenMeta } from './state-store-types.js';
+
+const DEFAULT_SERVICE_ACCESS_TOKEN_TTL_SECONDS = 900;
 
 export interface OAuthTokenHandlerOptions {
   accessTokenTtlSeconds?: number;
@@ -13,6 +15,7 @@ export interface OAuthTokenHandlerOptions {
   idTokenTtlSeconds?: number;
   issuer: string;
   ports: AuthHonoPorts;
+  serviceAccessTokenTtlSeconds?: number;
 }
 
 interface ClientAuthentication {
@@ -20,12 +23,26 @@ interface ClientAuthentication {
   secret?: string;
 }
 
+interface ServiceClientAuthentication {
+  client: ServiceClientRecord;
+  secret: string;
+}
+
 export const createOAuthTokenHandler =
   (options: OAuthTokenHandlerOptions) =>
   async (c: Context): Promise<Response> => {
     const form = new URLSearchParams(await c.req.text());
-    if (form.get('grant_type') !== 'authorization_code') {
-      return oauthJsonError(c, 400, 'unsupported_grant_type', 'Only authorization_code grant is supported.');
+    const grantType = form.get('grant_type');
+    if (grantType === 'client_credentials') {
+      return handleClientCredentials(c, form, options);
+    }
+    if (grantType !== 'authorization_code') {
+      return oauthJsonError(
+        c,
+        400,
+        'unsupported_grant_type',
+        'Only authorization_code and client_credentials grants are supported.'
+      );
     }
 
     const auth = await authenticateClient(c, form, options.ports);
@@ -129,6 +146,160 @@ const resolveDpopJkt = async (
     }
     throw error;
   }
+};
+
+const handleClientCredentials = async (
+  c: Context,
+  form: URLSearchParams,
+  options: OAuthTokenHandlerOptions
+): Promise<Response> => {
+  const findServiceClient = options.ports.oauthStateStore.findServiceClient;
+  if (!findServiceClient) {
+    return oauthJsonError(c, 400, 'unsupported_grant_type', 'The client_credentials grant is not supported.');
+  }
+
+  const auth = await authenticateServiceClient(c, form, options.ports, findServiceClient);
+  if (auth instanceof Response) return auth;
+
+  const scope = resolveServiceScope(c, form, auth.client);
+  if (scope instanceof Response) return scope;
+
+  const resource = resolveResourceIndicator(c, form, auth.client);
+  if (resource instanceof Response) return resource;
+
+  const dpopJkt = await resolveServiceDpopJkt(c, options, auth.client);
+  if (dpopJkt instanceof Response) return dpopJkt;
+
+  const tokens = await issueServiceToken(options, auth.client, scope, resource, dpopJkt);
+  return c.json(tokens);
+};
+
+const authenticateServiceClient = async (
+  c: Context,
+  form: URLSearchParams,
+  ports: AuthHonoPorts,
+  findServiceClient: NonNullable<AuthHonoPorts['oauthStateStore']['findServiceClient']>
+): Promise<ServiceClientAuthentication | Response> => {
+  const credentials = parseClientCredentials(c.req.header('authorization'), form);
+  if (!credentials.clientId || !credentials.secret) {
+    return oauthJsonError(c, 401, 'invalid_client', 'Client authentication is required.');
+  }
+
+  const client = await findServiceClient(credentials.clientId);
+  if (!client) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
+
+  const secretHash = await ports.tokens.hashSecret(credentials.secret);
+  if (secretHash !== client.clientSecretHash) {
+    return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
+  }
+
+  return { client, secret: credentials.secret };
+};
+
+const resolveServiceScope = (
+  c: Context,
+  form: URLSearchParams,
+  client: ServiceClientRecord
+): string | Response => {
+  const requested = (form.get('scope') ?? '').split(/\s+/).filter(Boolean);
+  if (requested.length === 0) {
+    return client.allowedScopes.join(' ');
+  }
+  const allowed = new Set(client.allowedScopes);
+  const unauthorized = requested.filter((scope) => !allowed.has(scope));
+  if (unauthorized.length > 0) {
+    return oauthJsonError(c, 400, 'invalid_scope', `Scope not allowed: ${unauthorized.join(' ')}.`);
+  }
+  return requested.join(' ');
+};
+
+const resolveResourceIndicator = (
+  c: Context,
+  form: URLSearchParams,
+  client: ServiceClientRecord
+): string | Response => {
+  const requested = form.get('resource');
+  const indicators = client.resourceIndicators;
+
+  if (requested) {
+    if (!indicators.includes(requested)) {
+      return oauthJsonError(c, 400, 'invalid_target', 'Requested resource is not allowed for this client.');
+    }
+    return requested;
+  }
+
+  if (indicators.length === 1) {
+    return indicators[0];
+  }
+  if (indicators.length === 0) {
+    return oauthJsonError(c, 400, 'invalid_target', 'A resource indicator is required for this client.');
+  }
+  return oauthJsonError(c, 400, 'invalid_target', 'A resource indicator must be specified when multiple are allowed.');
+};
+
+const resolveServiceDpopJkt = async (
+  c: Context,
+  options: OAuthTokenHandlerOptions,
+  client: ServiceClientRecord
+): Promise<string | null | Response> => {
+  if (!client.dpopBoundAccessTokens) return null;
+
+  const proof = c.req.header('dpop');
+  if (!proof) return oauthJsonError(c, 400, 'invalid_dpop_proof', 'DPoP proof is required.');
+
+  try {
+    const verified = await verifyOAuthDpopProof({
+      htm: 'POST',
+      htu: c.req.url,
+      iatSkewSeconds: options.dpopIatSkewSeconds,
+      ports: options.ports,
+      proof,
+    });
+    return verified.jkt;
+  } catch (error) {
+    if (error instanceof OAuthDpopProofError) {
+      return oauthJsonError(c, 400, 'invalid_dpop_proof', error.message);
+    }
+    throw error;
+  }
+};
+
+const issueServiceToken = async (
+  options: OAuthTokenHandlerOptions,
+  client: ServiceClientRecord,
+  scope: string,
+  resource: string,
+  dpopJkt: string | null
+) => {
+  const ttlSeconds = options.serviceAccessTokenTtlSeconds ?? DEFAULT_SERVICE_ACCESS_TOKEN_TTL_SECONDS;
+  const now = options.ports.clock.now();
+  const expiresAt = options.ports.clock.addSeconds(now, ttlSeconds);
+  const cnf = dpopJkt ? { jkt: dpopJkt } : undefined;
+  const jwks = createJwksService({ clock: options.ports.clock, jwksPort: options.ports.jwks });
+  const accessJti = options.ports.random.uuid();
+  const accessToken = await jwks.signJwt(
+    {
+      client_id: client.clientId,
+      ...(cnf ? { cnf } : {}),
+      scope,
+    },
+    {
+      audience: resource,
+      expiresAt,
+      issuer: trimTrailingSlash(options.issuer),
+      jti: accessJti,
+      subject: client.clientId,
+      type: 'JWT',
+    }
+  );
+
+  // Service tokens are stateless (BR39d-D5): no saveTokenMeta, no oauth_tokens row.
+  return {
+    access_token: accessToken,
+    expires_in: ttlSeconds,
+    scope,
+    token_type: dpopJkt ? 'DPoP' : 'Bearer',
+  };
 };
 
 const issueTokens = async (
