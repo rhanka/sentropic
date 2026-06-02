@@ -38,7 +38,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/build-cli": "file:../build-cli"
+    "@sentropic/build-cli": "^0.2.0"
   },
   "devDependencies": {
     "typescript": "5.4.5"
