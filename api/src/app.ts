@@ -3,6 +3,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { rateLimiter } from 'hono-rate-limiter';
 import { apiRouter } from './routes/api';
 import { authRouter } from './routes/auth';
+import { wellKnownRouter } from './routes/well-known';
 import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { logger } from './logger';
@@ -102,13 +103,14 @@ app.use('*', async (c, next) => {
     return c.body(null, 204);
   }
   
-  // Handle actual requests
-  if (origin && isOriginAllowed(origin, allowedOrigins)) {
-    c.header('Access-Control-Allow-Origin', origin);
-    c.header('Access-Control-Allow-Credentials', 'true');
-  }
-  
   await next();
+
+  // Apply CORS headers to the final response. Some routes forward raw Response
+  // objects, so headers set before next() would otherwise be lost.
+  if (origin && isOriginAllowed(origin, allowedOrigins)) {
+    c.res.headers.set('Access-Control-Allow-Origin', origin);
+    c.res.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
 });
 
 // Rate limiting for auth routes
@@ -150,6 +152,26 @@ const magicLinkRateLimiter = rateLimiter({
   },
 });
 
+const oauthTokenRateLimiter = rateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 20,
+  standardHeaders: 'draft-7',
+  keyGenerator: (c) => {
+    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    return `${c.req.query('client_id') || 'unknown-client'}:${ip}`;
+  },
+});
+
+const oauthIntrospectRateLimiter = rateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 60,
+  standardHeaders: 'draft-7',
+  keyGenerator: (c) => {
+    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
+    return `${c.req.query('client_id') || 'unknown-client'}:${ip}`;
+  },
+});
+
 // Apply rate limiters to auth routes (order matters!)
 // Skip rate limiting in test environment
 if (!env.DISABLE_RATE_LIMIT) {
@@ -158,6 +180,8 @@ if (!env.DISABLE_RATE_LIMIT) {
   app.use('/api/v1/auth/login/*', authLoginRateLimiter);
   app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
   app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
+  app.use('/api/v1/auth/oauth/token', oauthTokenRateLimiter);
+  app.use('/api/v1/auth/oauth/introspect', oauthIntrospectRateLimiter);
   // Device-code enrollment is polled at `interval` (default 5s) while pending,
   // so it needs a permissive limiter (the general one is 10/15min). Per-code
   // throttling/single-use/expiry is enforced in the device-code store.
@@ -166,6 +190,7 @@ if (!env.DISABLE_RATE_LIMIT) {
   app.use('/api/v1/auth/*', authRateLimiter);
 }
 
+app.route('/.well-known', wellKnownRouter);
 app.route('/api/v1', apiRouter);
 app.route('/api/v1/auth', authRouter);
 

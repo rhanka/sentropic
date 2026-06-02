@@ -43,7 +43,7 @@
   import { loadModelCatalog } from '$lib/stores/modelCatalog';
 
   // Keep header visible on /auth/devices (required for navigation).
-  const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
+  const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link', '/auth/oauth'];
 
   // Public routes (accessible without authentication)
   const PUBLIC_ROUTES = [
@@ -51,6 +51,7 @@
     '/auth/login',
     '/auth/register',
     '/auth/magic-link',
+    '/auth/oauth',
   ];
 
   // Routes protégées (nécessitent une authentification)
