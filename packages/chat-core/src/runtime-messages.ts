@@ -558,6 +558,7 @@ export class ChatRuntimeMessages {
         sessionId,
         role: 'user',
         content: input.content,
+        attachments: input.attachments ?? null,
         toolCalls: null,
         toolCallId: null,
         reasoning: null,

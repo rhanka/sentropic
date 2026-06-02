@@ -20,7 +20,7 @@ import {
   type ReasoningEffortEvaluation,
   type ReasoningEffortLabel,
 } from '../../../packages/chat-core/src/runtime';
-import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
+import type { ChatMessageAttachment, ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
 import {
   writeContextBudgetStatus as writeContextBudgetStatusPure,
   type ContextBudgetSnapshot as ChatCoreContextBudgetSnapshot,
@@ -62,6 +62,7 @@ import { generateFreeformPptx } from './pptx-generation';
 import { putObject, getDocumentsBucketName } from './storage-s3';
 import type { OrganizationEnrichJobData } from './queue-manager';
 import type { ProviderId } from './provider-runtime';
+import { loadContextDocumentContent } from './context-document-source';
 
 // TODO Lot 10: remove 'usecase' once data migration is complete
 export type ChatContextType = 'organization' | 'folder' | 'initiative' | 'executive_summary' | 'usecase';
@@ -222,6 +223,7 @@ export type CreateChatMessageInput = {
   primaryContextType?: ChatContextType | null;
   primaryContextId?: string | null;
   contexts?: Array<{ contextType: ChatContextType; contextId: string }>;
+  attachments?: ChatMessageAttachment[] | null;
   sessionTitle?: string | null;
 };
 
@@ -352,9 +354,30 @@ type SessionTodoRuntimeSnapshot = {
   tasks: SessionTodoRuntimeTask[];
 };
 
+type ChatRuntimeContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; mediaType?: string; data?: string; url?: string };
+
 type ChatRuntimeMessage =
-  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'system' | 'user' | 'assistant'; content: string | ChatRuntimeContentPart[] }
   | { role: 'tool'; content: string; tool_call_id: string };
+
+const CHAT_ATTACHMENT_IMAGE_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
+
+const normalizeChatAttachmentMimeType = (value: unknown): string | null => {
+  const mimeType = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return mimeType ? mimeType : null;
+};
+
+const isSupportedChatImageMimeType = (value: unknown): boolean => {
+  const mimeType = normalizeChatAttachmentMimeType(value);
+  return Boolean(mimeType && CHAT_ATTACHMENT_IMAGE_MIME_TYPES.has(mimeType));
+};
 
 // BR14b Lot 21a — `ContextBudgetZone` + `ContextBudgetSnapshot` moved to
 // `packages/chat-core/src/context-budget.ts` (consumed by the pure helper
@@ -589,6 +612,26 @@ const normalizeTodoRuntimeToolResult = (
 
 const toBudgetString = (value: unknown): string => {
   if (typeof value === 'string') return value;
+  if (
+    Array.isArray(value) &&
+    value.every((item) => {
+      const record = asRecord(item);
+      const type = record && typeof record.type === 'string' ? record.type : '';
+      return type === 'text' || type === 'image';
+    })
+  ) {
+    return value
+      .map((item) => {
+        const record = asRecord(item) ?? {};
+        if (record.type === 'text') {
+          return typeof record.text === 'string' ? record.text : '';
+        }
+        const mediaType =
+          typeof record.mediaType === 'string' ? record.mediaType : 'image';
+        return `[${mediaType} attachment]`;
+      })
+      .join('\n');
+  }
   try {
     return JSON.stringify(value ?? null);
   } catch {
@@ -799,8 +842,12 @@ const compactConversationContext = async (input: {
   const summary = String(
     summaryResponse.choices?.[0]?.message?.content ?? '',
   ).trim();
+  const safeSystemContent =
+    typeof safeSystemMessage.content === 'string'
+      ? safeSystemMessage.content
+      : toBudgetString(safeSystemMessage.content);
   const nextSystemContent = injectCompactSummaryInSystemPrompt(
-    safeSystemMessage.content,
+    safeSystemContent,
     summary,
   );
   return {
@@ -1737,6 +1784,189 @@ export class ChatService {
       created_at: row.createdAt,
       updated_at: row.updatedAt,
     }));
+  }
+
+  private async hydrateVisionAttachmentMessages(options: {
+    currentMessages: ChatRuntimeMessage[];
+    messages: ReadonlyArray<{
+      role: string;
+      content: string | null;
+      attachments: readonly ChatMessageAttachment[] | null;
+      sequence: number;
+    }>;
+    assistantSequence: number;
+    userId: string;
+    workspaceId: string;
+    allowedDocContexts: ReadonlyArray<{
+      contextType: string;
+      contextId: string;
+    }>;
+  }): Promise<ChatRuntimeMessage[]> {
+    const conversationRows = options.messages
+      .filter((message) => message.sequence < options.assistantSequence)
+      .filter((message) => message.role === 'user' || message.role === 'assistant');
+
+    const userRowsWithVisionAttachments = conversationRows.filter((message) => {
+      if (message.role !== 'user') return false;
+      return (message.attachments ?? []).some(
+        (attachment) =>
+          attachment.kind === 'image' &&
+          (isSupportedChatImageMimeType(attachment.mimeType) ||
+            attachment.source === 'context_document'),
+      );
+    });
+    const hasFileAttachments = conversationRows.some(
+      (message) =>
+        message.role === 'user' &&
+        (message.attachments ?? []).some((attachment) => attachment.kind === 'file'),
+    );
+    if (userRowsWithVisionAttachments.length === 0 && !hasFileAttachments) {
+      return options.currentMessages;
+    }
+
+    const documentIds = Array.from(
+      new Set(
+        userRowsWithVisionAttachments
+          .flatMap((message) => [...(message.attachments ?? [])])
+          .filter(
+            (attachment) =>
+              attachment.kind === 'image' &&
+              attachment.source === 'context_document' &&
+              typeof attachment.documentId === 'string' &&
+              attachment.documentId.trim().length > 0,
+          )
+          .map((attachment) => attachment.documentId!.trim()),
+      ),
+    );
+
+    const documentById = new Map<string, typeof contextDocuments.$inferSelect>();
+    if (documentIds.length > 0) {
+      const documentRows = await db
+        .select()
+        .from(contextDocuments)
+        .where(
+          and(
+            eq(contextDocuments.workspaceId, options.workspaceId),
+            inArray(contextDocuments.id, documentIds),
+          ),
+        );
+      for (const document of documentRows) {
+        documentById.set(document.id, document);
+      }
+    }
+
+    const allowedContextKeys = new Set(
+      options.allowedDocContexts.map(
+        (context) => `${context.contextType}:${context.contextId}`,
+      ),
+    );
+    const nextMessages = [...options.currentMessages];
+    let conversationIndex = 0;
+    let changed = false;
+
+    for (const row of conversationRows) {
+      const messageIndex = conversationIndex + 1;
+      conversationIndex += 1;
+      if (row.role !== 'user') continue;
+
+      const attachmentsList = row.attachments ?? [];
+      const imageAttachments = attachmentsList.filter(
+        (attachment) => attachment.kind === 'image',
+      );
+      const fileNames = attachmentsList
+        .filter((attachment) => attachment.kind === 'file')
+        .map((attachment) =>
+          typeof attachment.fileName === 'string' ? attachment.fileName.trim() : '',
+        )
+        .filter((name) => name.length > 0);
+      if (imageAttachments.length === 0 && fileNames.length === 0) continue;
+
+      // Per-turn attention cue so the model notices documents attached to this
+      // message (it still reads their content on demand via the documents tool).
+      const attentionHint =
+        fileNames.length > 0
+          ? `\n\n[Attached document(s) for this message: ${fileNames.join(', ')}. Read them with the documents tool if relevant.]`
+          : '';
+
+      const parts: ChatRuntimeContentPart[] = [];
+      const text = `${row.content ?? ''}${attentionHint}`.trim();
+      if (text) parts.push({ type: 'text', text });
+
+      for (const attachment of imageAttachments) {
+        if (attachment.source === 'external_url') {
+          const url = typeof attachment.url === 'string' ? attachment.url.trim() : '';
+          if (!url || !isSupportedChatImageMimeType(attachment.mimeType)) continue;
+          parts.push({
+            type: 'image',
+            mediaType: normalizeChatAttachmentMimeType(attachment.mimeType) ?? undefined,
+            url,
+          });
+          continue;
+        }
+
+        if (attachment.source !== 'context_document') continue;
+        const documentId =
+          typeof attachment.documentId === 'string'
+            ? attachment.documentId.trim()
+            : '';
+        if (!documentId) continue;
+
+        const document = documentById.get(documentId);
+        if (!document) {
+          throw new Error(`Image attachment document not found: ${documentId}`);
+        }
+        const contextKey = `${document.contextType}:${document.contextId}`;
+        if (!allowedContextKeys.has(contextKey)) {
+          throw new Error(`Image attachment document is not available in this chat context: ${documentId}`);
+        }
+        if (document.status !== 'ready') {
+          throw new Error(`Image attachment document is not ready: ${documentId}`);
+        }
+        const declaredMimeType =
+          normalizeChatAttachmentMimeType(attachment.mimeType) ??
+          normalizeChatAttachmentMimeType(document.mimeType);
+        if (!isSupportedChatImageMimeType(declaredMimeType)) {
+          throw new Error(`Unsupported image attachment MIME type: ${declaredMimeType ?? 'unknown'}`);
+        }
+
+        const loaded = await loadContextDocumentContent({
+          document,
+          access: {
+            mode: 'user',
+            userId: options.userId,
+            workspaceId: options.workspaceId,
+          },
+          purpose: 'download',
+        });
+        const resolvedMimeType =
+          normalizeChatAttachmentMimeType(loaded.mimeType) ??
+          declaredMimeType;
+        if (!isSupportedChatImageMimeType(resolvedMimeType)) {
+          throw new Error(`Unsupported loaded image MIME type: ${resolvedMimeType ?? 'unknown'}`);
+        }
+        parts.push({
+          type: 'image',
+          mediaType: resolvedMimeType ?? undefined,
+          data: Buffer.from(loaded.bytes).toString('base64'),
+        });
+      }
+
+      if (parts.some((part) => part.type === 'image')) {
+        nextMessages[messageIndex] = {
+          role: 'user',
+          content: parts,
+        };
+        changed = true;
+      } else if (attentionHint) {
+        nextMessages[messageIndex] = {
+          role: 'user',
+          content: text,
+        };
+        changed = true;
+      }
+    }
+
+    return changed ? nextMessages : options.currentMessages;
   }
 
   private async listAssistantDetailsByMessageId(
@@ -3069,16 +3299,10 @@ When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string l
     // `ChatRuntime.consumeAssistantStream` catch path. The inline
     // closure has no other call site so it is deleted here.
     const applySteerInterruptionPrompt = (
-      messages: Array<
-        | { role: 'system' | 'user' | 'assistant'; content: string }
-        | { role: 'tool'; content: string; tool_call_id: string }
-      >,
+      messages: ChatRuntimeMessage[],
       steerMessages: readonly string[],
       reasoningReplay: string,
-    ): Array<
-      | { role: 'system' | 'user' | 'assistant'; content: string }
-      | { role: 'tool'; content: string; tool_call_id: string }
-    > => {
+    ): ChatRuntimeMessage[] => {
       const withoutSystem =
         messages.length > 0 && messages[0]?.role === 'system'
           ? messages.slice(1)
@@ -3130,6 +3354,15 @@ When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string l
     const toolCalls = loopState.toolCalls;
     let currentMessages: ChatRuntimeMessage[] =
       loopState.currentMessages as ChatRuntimeMessage[];
+    currentMessages = await this.hydrateVisionAttachmentMessages({
+      currentMessages,
+      messages: ctx.messages,
+      assistantSequence: assistantRow.sequence,
+      userId: options.userId,
+      workspaceId: sessionWorkspaceId,
+      allowedDocContexts,
+    });
+    loopState.currentMessages = currentMessages;
     let maxIterations = loopState.maxIterations;
     const todoAutonomousExtensionEnabled =
       loopState.todoAutonomousExtensionEnabled;

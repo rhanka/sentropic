@@ -51,12 +51,12 @@ describe('google drive client', () => {
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer access-token');
   });
 
-  it('maps Google Workspace MIME types to text export formats', () => {
+  it('maps Google Workspace MIME types to ingest and download export formats', () => {
     expect(pickGoogleDriveExportMimeType(GOOGLE_WORKSPACE_MIME_TYPES.document)).toBe(
       'text/markdown',
     );
     expect(pickGoogleDriveExportMimeType(GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet)).toBe(
-      'text/csv',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     expect(pickGoogleDriveExportMimeType(GOOGLE_WORKSPACE_MIME_TYPES.presentation)).toBe(
       'text/plain',
@@ -77,6 +77,10 @@ describe('google drive client', () => {
     expect(isSupportedGoogleDriveMimeType(GOOGLE_WORKSPACE_MIME_TYPES.presentation)).toBe(true);
     expect(isSupportedGoogleDriveMimeType('application/pdf')).toBe(true);
     expect(isSupportedGoogleDriveMimeType('text/markdown')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/png')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/jpeg')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/webp')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('image/gif')).toBe(true);
     expect(isSupportedGoogleDriveMimeType('application/vnd.google-apps.folder')).toBe(false);
   });
 
@@ -114,6 +118,49 @@ describe('google drive client', () => {
     expect(content.mimeType).toBe('text/markdown');
     expect(content.exportMimeType).toBe('text/markdown');
     expect(new TextDecoder().decode(content.bytes)).toContain('Milestone');
+  });
+
+  it('exports Google Sheets to XLSX for ingestion so all worksheets can be indexed', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(new Uint8Array([80, 75, 3, 4]), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      }),
+    );
+
+    const content = await loadGoogleDriveFileContent({
+      accessToken: 'access-token',
+      file: {
+        id: 'sheet_1',
+        name: 'Pipeline',
+        mimeType: GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet,
+        webViewLink: null,
+        webContentLink: null,
+        iconLink: null,
+        modifiedTime: null,
+        version: null,
+        size: null,
+        md5Checksum: null,
+        trashed: false,
+        driveId: null,
+      },
+      fetchImpl,
+    });
+
+    const [url] = fetchImpl.mock.calls[0];
+    expect(String(url)).toContain('/drive/v3/files/sheet_1/export?');
+    expect(String(url)).toContain(
+      'mimeType=application%2Fvnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    expect(content.fileName).toBe('Pipeline.xlsx');
+    expect(content.mimeType).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    expect(content.exportMimeType).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
   });
 
   it('exports native Google Workspace files to Office formats for user downloads', async () => {

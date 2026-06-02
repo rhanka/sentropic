@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Configurable Hono chat wire server and in-memory adapter for Sentropic-compatible apps.",
   "type": "module",
   "license": "MIT",

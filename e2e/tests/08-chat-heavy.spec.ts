@@ -10,6 +10,7 @@ test.describe('Chat heavy flows', () => {
   const ADMIN_STATE = './.auth/state.json';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_A_EMAIL = 'e2e-user-a@example.com';
+  const PAGE_READY_TIMEOUT = 15_000;
   const composerMenu = (page: any) =>
     page
       .locator('div.fixed.shadow-lg, div.absolute.shadow-lg')
@@ -82,7 +83,7 @@ test.describe('Chat heavy flows', () => {
     }
   }
 
-  test('devrait permettre upload + résumé + usage tool + suppression en viewer', async ({ browser }) => {
+  test('uploads a composer file attachment and lets chat tools cite it', async ({ browser }) => {
     const adminApi = await request.newContext({ baseURL: API_BASE_URL, storageState: ADMIN_STATE });
     const workspacesRes = await adminApi.get('/api/v1/workspaces');
     expect(workspacesRes.ok()).toBeTruthy();
@@ -104,13 +105,15 @@ test.describe('Chat heavy flows', () => {
 
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1_000 });
+    await expect(page.getByRole('heading', { name: /Dossiers|Folders/i })).toBeVisible({
+      timeout: PAGE_READY_TIMEOUT,
+    });
 
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
-    await expect(chatButton).toBeVisible({ timeout: 1_000 });
+    await expect(chatButton).toBeVisible({ timeout: 5_000 });
     await chatButton.click();
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 1_000 });
+    await expect(composer).toBeVisible({ timeout: 5_000 });
 
     const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
     await menuButton.click();
@@ -122,19 +125,18 @@ test.describe('Chat heavy flows', () => {
       page.locator('div.fixed.shadow-lg, div.absolute.shadow-lg').filter({ hasText: 'Contexte(s)' }),
     ).toHaveCount(0);
 
-    const docRow = page
-      .locator('div', { hasText: 'README.md' })
-      .filter({ has: page.locator('button[aria-label="Supprimer le document"]') })
-      .first();
-    await expect(docRow).toBeVisible({ timeout: 15_000 });
-    await expect(docRow).toContainText(/En attente|Analyse en cours|Résumé en cours|Résumé prêt|Pending|Summarizing|Summary ready/);
-    await expect(docRow).toContainText('Résumé prêt', { timeout: 90_000 });
+    const attachmentBand = page.getByTestId('chat-composer-attachment-band');
+    await expect(attachmentBand).toContainText('README.md', { timeout: 15_000 });
+    await expect(attachmentBand).toContainText('text/markdown');
 
     const { jobId, streamId } = await sendMessageAndWaitApi(
       page,
       composer,
       'Liste les documents de la session et cite leur nom.'
     );
+    await expect(attachmentBand).toHaveCount(0);
+    await expect(page.locator('#chat-widget-dialog')).toContainText('README.md', { timeout: 5_000 });
+
     const assistantResponse = assistantBubble(page).filter({ hasText: 'README.md' }).last();
     try {
       await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
@@ -143,15 +145,6 @@ test.describe('Chat heavy flows', () => {
       await debugBackendState(page, jobId, streamId);
       throw error;
     }
-
-    await Promise.all([
-      page.waitForResponse((res) => {
-        const req = res.request();
-        return req.method() === 'DELETE' && res.url().includes('/api/v1/documents/');
-      }, { timeout: 30_000 }),
-      docRow.locator('button[aria-label="Supprimer le document"]').click(),
-    ]);
-    await expect(docRow).toHaveCount(0);
 
     await userContext.close();
   });

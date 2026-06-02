@@ -23,6 +23,7 @@ export const documentsRouter = new Hono();
 const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'chat_session']); // TODO Lot 10: remove 'usecase'
 
 const DOWNLOAD_ONLY_ARCHIVE_REASON = 'archive_download_only';
+const IMAGE_METADATA_ONLY_REASON = 'image_metadata_only';
 const ZIP_MIME_TYPES = new Set([
   'application/zip',
   'application/x-zip-compressed',
@@ -38,6 +39,10 @@ const TAR_MIME_TYPES = new Set([
   'application/x-gtar',
 ]);
 const MAX_DOCUMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+function isImageMimeType(mimeType: string): boolean {
+  return mimeType.trim().toLowerCase().startsWith('image/');
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -93,6 +98,12 @@ function isDownloadOnlyArchive(fileName: string, mimeType: string): boolean {
   if (GZIP_MIME_TYPES.has(lowerMime)) return true;
   if (TAR_MIME_TYPES.has(lowerMime)) return true;
   return false;
+}
+
+function getIndexingSkipReason(fileName: string, mimeType: string): string | null {
+  if (isImageMimeType(mimeType)) return IMAGE_METADATA_ONLY_REASON;
+  if (isDownloadOnlyArchive(fileName, mimeType)) return DOWNLOAD_ONLY_ARCHIVE_REASON;
+  return null;
 }
 
 function isDownloadOnlyDocument(doc: { filename: string; mimeType: string; data: unknown }): boolean {
@@ -459,9 +470,10 @@ documentsRouter.post('/:id/resync', requireWorkspaceAccessRole(), async (c) => {
     nextFilename = sanitizeDocumentName(file.name);
     nextMimeType = file.mimeType;
     nextSizeBytes = getGoogleDriveFileSize(file);
+    const nextIndexingSkipReason = getIndexingSkipReason(nextFilename, nextMimeType);
     nextData = updateContextDocumentSyncData({
       data: doc.data,
-      syncStatus: 'pending',
+      syncStatus: nextIndexingSkipReason ? 'indexed' : 'pending',
       lastSyncError: null,
       source: buildGoogleDriveSourceData({
         connectorAccountId: account.id,
@@ -469,9 +481,28 @@ documentsRouter.post('/:id/resync', requireWorkspaceAccessRole(), async (c) => {
         exportMimeType,
       }),
     });
+    if (nextIndexingSkipReason) {
+      nextData = {
+        ...nextData,
+        summaryLang: lang,
+        indexingSkipped: true,
+        indexingSkipReason: nextIndexingSkipReason,
+      };
+    }
   }
 
-  const jobId = await queueManager.addJob('document_summary', { documentId: doc.id, lang }, { workspaceId });
+  const indexingSkipReason = getIndexingSkipReason(nextFilename, nextMimeType);
+  if (indexingSkipReason) {
+    nextData = {
+      ...nextData,
+      summaryLang: lang,
+      indexingSkipped: true,
+      indexingSkipReason,
+    };
+  }
+  const jobId = indexingSkipReason
+    ? null
+    : await queueManager.addJob('document_summary', { documentId: doc.id, lang }, { workspaceId });
   const now = new Date();
 
   await db
@@ -480,7 +511,7 @@ documentsRouter.post('/:id/resync', requireWorkspaceAccessRole(), async (c) => {
       filename: nextFilename,
       mimeType: nextMimeType,
       sizeBytes: nextSizeBytes,
-      status: 'uploaded',
+      status: indexingSkipReason ? 'ready' : 'uploaded',
       data: nextData,
       jobId,
       updatedAt: now,
@@ -494,7 +525,7 @@ documentsRouter.post('/:id/resync', requireWorkspaceAccessRole(), async (c) => {
         filename: nextFilename,
         mimeType: nextMimeType,
         sizeBytes: nextSizeBytes,
-        status: 'uploaded',
+        status: indexingSkipReason ? 'ready' : 'uploaded',
         data: nextData,
         jobId,
         updatedAt: now,
@@ -557,7 +588,8 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
     const bucket = getDocumentsBucketName();
     const bytes = new Uint8Array(await file.arrayBuffer());
     const mimeType = normalizeDocumentMimeType(safeName, file.type);
-    const indexingSkipped = isDownloadOnlyArchive(safeName, mimeType);
+    const indexingSkipReason = getIndexingSkipReason(safeName, mimeType);
+    const indexingSkipped = indexingSkipReason !== null;
 
     await putObject({
       bucket,
@@ -581,7 +613,7 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
         ? {
             summaryLang: 'fr',
             indexingSkipped: true,
-            indexingSkipReason: DOWNLOAD_ONLY_ARCHIVE_REASON,
+            indexingSkipReason,
           }
         : { summaryLang: 'fr' },
       createdAt: new Date(),
@@ -697,6 +729,8 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
     const mimeType = file.mimeType;
     const safeName = sanitizeDocumentName(file.name);
     const sizeBytes = getGoogleDriveFileSize(file);
+    const indexingSkipReason = getIndexingSkipReason(safeName, mimeType);
+    const indexingSkipped = indexingSkipReason !== null;
 
     const docId = createId();
     await db.insert(contextDocuments).values({
@@ -709,10 +743,16 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
       sizeBytes,
       sourceType: 'google_drive',
       storageKey: null,
-      status: 'uploaded',
+      status: indexingSkipped ? 'ready' : 'uploaded',
       data: {
         summaryLang: 'fr',
-        syncStatus: 'pending',
+        syncStatus: indexingSkipped ? 'indexed' : 'pending',
+        ...(indexingSkipped
+          ? {
+              indexingSkipped: true,
+              indexingSkipReason,
+            }
+          : {}),
         source: buildGoogleDriveSourceData({
           connectorAccountId: account.id,
           file,
@@ -751,11 +791,14 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
       createdAt: new Date(),
     });
 
-    const jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
-    await db
-      .update(contextDocuments)
-      .set({ jobId, updatedAt: new Date() })
-      .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+    let jobId: string | null = null;
+    if (!indexingSkipped) {
+      jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
+      await db
+        .update(contextDocuments)
+        .set({ jobId, updatedAt: new Date() })
+        .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+    }
 
     created.push({
       id: docId,
@@ -766,8 +809,9 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
       mime_type: mimeType,
       size_bytes: sizeBytes,
       storage_key: null,
-      status: 'uploaded',
-      job_id: jobId,
+      status: indexingSkipped ? 'ready' : 'uploaded',
+      indexing_skipped: indexingSkipped,
+      ...(jobId ? { job_id: jobId } : {}),
     });
   }
 

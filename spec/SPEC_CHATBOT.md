@@ -689,6 +689,16 @@ const replay = await replayChatSession('session-789');
 4. **Notifications** → AI is notified on upload for acknowledgement; any use‑case processing depending on the doc waits for status ready only for explorable documents. Download-only archives do not enter indexing/exploration flows.
 5. **Traceability** → `context_modification_history` events `document_added` / `document_summarized` with `prompt_version_id` and `job_id`
 
+#### Chat attachments and session documents (BR-38a)
+Attachments follow a per-message model aligned with ChatGPT/Claude/Gemini.
+- Per-message attach: files/images added in the composer are sent WITH the next message and then render inline in that user message bubble. The composer shows only pending attachments and is cleared after send; there is no persistent re-listing of session documents in the composer.
+- Capitalization: every attached file/image is stored through the `context_documents` path (chat-session context) so it persists and is re-consultable for the rest of the session.
+- Removal: removing a pending attachment (before send) also deletes its just-uploaded context document, so no orphaned/invisible session document remains. After send, attachments are permanent within the conversation; per-document deletion is not offered inside the chat (document management remains on folder/initiative/organization document pages).
+- Images: an attached image is sent as a vision part on its message and re-injected on every later turn via conversation history, so the model keeps seeing it without re-attachment. Image context documents skip the auto-summary job and carry no `summary` affordance.
+- Non-image documents: the model is aware of session documents through the system-prompt documents block (per-context counts) and pulls content on demand via the `documents` tool (`list`/`get_summary`/`get_content`/`analyze`); content is not auto-embedded per turn.
+- Attention on first attach: when a document is first attached, a per-turn attention cue signals the model to consider it.
+- Rendering: sent images render inline as thumbnails that open a full-size preview (lightbox) on click; sent non-image documents render as inline file cards with download/open.
+
 ## Technical impact study (API/UI/DB/queue anchor)
 
 - [x] **Database**:
