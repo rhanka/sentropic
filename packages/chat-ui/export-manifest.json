@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-02",
-  "_version": "0.1.1",
+  "_version": "0.2.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -424,6 +424,31 @@
       "file": "src/components/ChatComposer.svelte",
       "exists": true,
       "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+    },
+    "./components/ModelSelector.svelte": {
+      "kind": "svelte",
+      "file": "src/components/ModelSelector.svelte",
+      "exists": true,
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+    },
+    "./utils/model-selection": {
+      "kind": "ts",
+      "file": "src/utils/model-selection.ts",
+      "exports": [
+        "ModelProviderId",
+        "ModelCatalogProvider",
+        "ModelCatalogModel",
+        "ModelCatalogGroup",
+        "ParsedModelKey",
+        "parseModelSelectionKey",
+        "formatModelSelectionKey",
+        "groupModelsByProvider",
+        "resolveFallbackModelOption",
+        "coerceSelectionToValidEntry",
+        "getSelectedModelLabel",
+        "computeModelSelectorWidthCh",
+        "providerGroupLabel"
+      ]
     }
   }
 }
