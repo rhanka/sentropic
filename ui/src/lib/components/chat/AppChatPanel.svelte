@@ -112,15 +112,24 @@
     type LocalToolPermissionRequest,
     type LocalToolName,
   } from '@sentropic/chat-ui/stores/localTools';
+  import ModelSelector from '@sentropic/chat-ui/components/ModelSelector.svelte';
+  import MessageActions from '@sentropic/chat-ui/components/MessageActions.svelte';
+  import {
+    groupModelsByProvider,
+    computeModelSelectorWidthCh,
+    coerceSelectionToValidEntry,
+    type ModelProviderId,
+    type ModelCatalogProvider,
+    type ModelCatalogModel,
+    type ModelCatalogGroup,
+  } from '@sentropic/chat-ui/utils/model-selection';
+
   import {
     Send,
-    ThumbsUp,
-    ThumbsDown,
-    Copy,
-    Pencil,
-    RotateCcw,
     UndoDot,
     Check,
+    Copy,
+    Pencil,
     X,
     Plus,
     Download,
@@ -359,18 +368,6 @@
     icon: IconComponent;
   };
 
-  type ModelProviderId = 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
-  type ModelCatalogProvider = {
-    provider_id: ModelProviderId;
-    label: string;
-    status: 'ready' | 'planned';
-  };
-  type ModelCatalogModel = {
-    provider_id: ModelProviderId;
-    model_id: string;
-    label: string;
-    default_contexts: string[];
-  };
   type ModelCatalogPayload = {
     providers: ModelCatalogProvider[];
     models: ModelCatalogModel[];
@@ -378,10 +375,6 @@
       provider_id: ModelProviderId;
       model_id: string;
     };
-  };
-  type ModelCatalogGroup = {
-    provider: ModelCatalogProvider;
-    models: ModelCatalogModel[];
   };
 
   const getContextIcon = (type: ChatContextEntry['contextType']) => {
@@ -4156,91 +4149,35 @@
     }
   };
 
-  const parseModelSelectionKey = (
-    rawValue: string,
-  ): { providerId: ModelProviderId; modelId: string } | null => {
-    const separatorIndex = rawValue.indexOf('::');
-    if (separatorIndex <= 0) return null;
-    const providerId = rawValue.slice(0, separatorIndex) as ModelProviderId;
-    const modelId = rawValue.slice(separatorIndex + 2);
-    if (!modelId) return null;
-    if (providerId !== 'openai' && providerId !== 'gemini' && providerId !== 'anthropic' && providerId !== 'mistral' && providerId !== 'cohere') return null;
-    return { providerId, modelId };
-  };
-
-  const handleModelSelectionChange = (event: Event) => {
-    const target = event.currentTarget as HTMLSelectElement | null;
-    if (!target) return;
-    const parsed = parseModelSelectionKey(target.value);
-    if (!parsed) return;
-    selectedProviderId = parsed.providerId;
-    selectedModelId = parsed.modelId;
-  };
-
-  const providerGroupLabel = (provider: ModelCatalogProvider) =>
-    provider.status === 'ready'
-      ? provider.label
-      : `${provider.label} (${provider.status})`;
-
   const isGeminiModel = (modelId: string | null | undefined): boolean =>
     typeof modelId === 'string' &&
     modelId.trim().toLowerCase().startsWith('gemini');
 
-  const fallbackSelectedModelOption = () =>
-    modelCatalogModels.find(
-      (entry) =>
-        entry.provider_id === selectedProviderId &&
-        entry.model_id === selectedModelId,
-    ) ??
-    modelCatalogModels.find((entry) => entry.model_id === selectedModelId) ??
-    null;
-
-  const getSelectedModelLabel = (): string =>
-    fallbackSelectedModelOption()?.label ?? selectedModelId;
-
-  const getLongestVisibleModelLabelLength = (): number => {
-    const labels = modelCatalogGroups.flatMap((group) =>
-      group.models.map((modelOption) => modelOption.label),
-    );
-
-    if (labels.length === 0) {
-      labels.push(getSelectedModelLabel());
-    }
-
-    return labels.reduce((max, label) => Math.max(max, label.length), 0);
-  };
-
-  $: modelCatalogGroups = modelCatalogProviders
-    .map((provider) => ({
-      provider,
-      models: modelCatalogModels.filter(
-        (entry) => entry.provider_id === provider.provider_id,
-      ),
-    }))
-    .filter((group) => group.models.length > 0);
+  $: modelCatalogGroups = groupModelsByProvider(modelCatalogProviders, modelCatalogModels);
 
   $: {
     if (modelCatalogModels.length > 0) {
-      const exactMatch = modelCatalogModels.some(
-        (entry) =>
-          entry.provider_id === selectedProviderId &&
-          entry.model_id === selectedModelId,
+      const coerced = coerceSelectionToValidEntry(
+        modelCatalogModels,
+        selectedProviderId,
+        selectedModelId,
       );
-      if (!exactMatch) {
-        const providerFallback =
-          modelCatalogModels.find(
-            (entry) => entry.provider_id === selectedProviderId,
-          ) ?? modelCatalogModels[0];
-        selectedProviderId = providerFallback.provider_id;
-        selectedModelId = providerFallback.model_id;
+      if (
+        coerced.providerId !== selectedProviderId ||
+        coerced.modelId !== selectedModelId
+      ) {
+        selectedProviderId = coerced.providerId;
+        selectedModelId = coerced.modelId;
       }
     }
   }
 
   $: selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
-  $: selectedModelWidthCh = Math.max(
-    getLongestVisibleModelLabelLength() + 4,
-    18,
+  $: selectedModelWidthCh = computeModelSelectorWidthCh(
+    modelCatalogGroups,
+    modelCatalogModels,
+    selectedProviderId,
+    selectedModelId,
   );
 
   const sendMessage = async () => {
@@ -5106,35 +5043,18 @@
                       <UndoDot class="w-3.5 h-3.5" />
                     </button>
                   {/if}
-                  <button
-                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    on:click={async () => {
+                  <MessageActions
+                    role="user"
+                    streamStatus="completed"
+                    isCopied={isCopied(m.id)}
+                    labels={$_}
+                    onCopy={async () => {
                       const text = m.content ?? '';
-                      const ok = await copyToClipboard(
-                        text,
-                        renderMarkdownWithRefs(text),
-                      );
+                      const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
                       if (ok) markCopied(m.id);
                     }}
-                    type="button"
-                    aria-label={$_('common.copy')}
-                    title={$_('common.copy')}
-                  >
-                    {#if isCopied(m.id)}
-                      <Check class="w-3.5 h-3.5 text-slate-900" />
-                    {:else}
-                      <Copy class="w-3.5 h-3.5" />
-                    {/if}
-                  </button>
-                  <button
-                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    on:click={() => startEditMessage(m)}
-                    type="button"
-                    aria-label="Modifier"
-                    title="Modifier"
-                  >
-                    <Pencil class="w-3.5 h-3.5" />
-                  </button>
+                    onEdit={() => startEditMessage(m)}
+                  />
                 </div>
               </div>
             {/if}
@@ -5142,8 +5062,6 @@
 
         {#snippet renderTimelineAssistantSegment(item: any)}
               {@const m = item.message}
-              {@const isUp = m.feedbackVote === 1}
-              {@const isDown = m.feedbackVote === -1}
               <div class="flex justify-start group">
                 <div class="max-w-[85%] w-full">
                   <StreamMessage
@@ -5178,71 +5096,21 @@
                       </div>
                     {/each}
                   {/if}
-                  {#if item.isTerminal && item.isLastAssistantSegment}
-                    <div
-                      class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
-                    >
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        on:click={async () => {
-                          const text = m.content ?? '';
-                          const ok = await copyToClipboard(
-                            text,
-                            renderMarkdownWithRefs(text),
-                          );
-                          if (ok) markCopied(item.key);
-                        }}
-                        type="button"
-                        aria-label={$_('common.copy')}
-                        title={$_('common.copy')}
-                      >
-                        {#if isCopied(item.key)}
-                          <Check class="w-3.5 h-3.5 text-slate-900" />
-                        {:else}
-                          <Copy class="w-3.5 h-3.5" />
-                        {/if}
-                      </button>
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        on:click={() => void retryFromAssistant(m.id)}
-                        type="button"
-                        aria-label={$_('common.retry')}
-                        title={$_('common.retry')}
-                      >
-                        <RotateCcw class="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        class:text-slate-900={isUp}
-                        class:chat-message-action-button-active={isUp}
-                        on:click={() =>
-                          void setFeedback(m.id, isUp ? 'clear' : 'up')}
-                        type="button"
-                        aria-label={$_('chat.feedback.useful')}
-                        title={$_('chat.feedback.useful')}
-                      >
-                        <ThumbsUp
-                          class="w-3.5 h-3.5"
-                          fill={isUp ? 'currentColor' : 'none'}
-                        />
-                      </button>
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        class:text-slate-900={isDown}
-                        class:chat-message-action-button-active={isDown}
-                        on:click={() =>
-                          void setFeedback(m.id, isDown ? 'clear' : 'down')}
-                        type="button"
-                        aria-label={$_('chat.feedback.notUseful')}
-                        title={$_('chat.feedback.notUseful')}
-                      >
-                        <ThumbsDown
-                          class="w-3.5 h-3.5"
-                          fill={isDown ? 'currentColor' : 'none'}
-                        />
-                      </button>
-                    </div>
-                  {/if}
+                  <MessageActions
+                    role="assistant"
+                    streamStatus={item.isTerminal ? 'completed' : 'processing'}
+                    isLastAssistantSegment={item.isLastAssistantSegment}
+                    isCopied={isCopied(item.key)}
+                    feedbackVote={m.feedbackVote ?? null}
+                    labels={$_}
+                    onCopy={async () => {
+                      const text = m.content ?? '';
+                      const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
+                      if (ok) markCopied(item.key);
+                    }}
+                    onRegenerate={() => void retryFromAssistant(m.id)}
+                    onFeedback={(action) => void setFeedback(m.id, action)}
+                  />
                 </div>
               </div>
         {/snippet}
@@ -5824,29 +5692,17 @@
 
             </svelte:fragment>
           </MenuPopover>
-          <select
-            id="chat-model-selection"
-            value={selectedModelSelectionKey}
-            on:change={handleModelSelectionChange}
-            class="w-auto px-2 py-0.5 text-[11px] text-slate-700 focus:outline-none"
-            style={`width:${selectedModelWidthCh}ch;min-width:${selectedModelWidthCh}ch;`}
-          >
-            {#if modelCatalogGroups.length === 0 && fallbackSelectedModelOption()}
-              <option value={`${fallbackSelectedModelOption()?.provider_id ?? selectedProviderId}::${fallbackSelectedModelOption()?.model_id ?? selectedModelId}`}>
-                {fallbackSelectedModelOption()?.label ?? selectedModelId}
-              </option>
-            {:else}
-              {#each modelCatalogGroups as group}
-                <optgroup label={providerGroupLabel(group.provider)}>
-                  {#each group.models as modelOption}
-                    <option value={`${modelOption.provider_id}::${modelOption.model_id}`}>
-                      {modelOption.label}
-                    </option>
-                  {/each}
-                </optgroup>
-              {/each}
-            {/if}
-          </select>
+          <ModelSelector
+            bind:value={selectedModelSelectionKey}
+            groups={modelCatalogGroups}
+            models={modelCatalogModels}
+            widthCh={selectedModelWidthCh}
+            labels={$_}
+            onChange={({ providerId, modelId }) => {
+              selectedProviderId = providerId;
+              selectedModelId = modelId;
+            }}
+          />
         {/if}
   {/snippet}
 
