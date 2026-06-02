@@ -183,6 +183,22 @@ export const providerProfiles = {
       structuredOutputLevel: 'tool-input-schema',
     }),
   },
+  // Gemini-on-Vertex: same Google model family as `gemini`, so it MUST mirror the
+  // Gemini provider profile (family `google`, identical capability template:
+  // json-schema-subset, gemini unsupported keywords, stringEnumsOnly). The only
+  // runtime difference (Vertex transport URL + ADC bearer auth) lives in api Lot 3.
+  vertex: {
+    providerId: 'vertex',
+    family: 'google',
+    label: 'Google Vertex AI',
+    status: 'planned',
+    capabilities: capabilities({
+      reasoningTier: 'advanced',
+      structuredOutputLevel: 'json-schema-subset',
+      unsupportedKeywords: geminiUnsupportedJsonSchemaKeywords,
+      stringEnumsOnly: true,
+    }),
+  },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
 
 const modelCapabilities = (
@@ -311,6 +327,27 @@ export const modelProfiles = [
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('cohere', 'advanced'),
+  },
+  // Gemini-on-Vertex models mirror the two `gemini` AI-Studio models (same wire
+  // model family, same capability template) but use globally-unique
+  // `google/<model>@vertex` selection keys (§C uniqueness invariant). They are
+  // OPT-IN only (R2): `defaultTaskHints: []` so adding `vertex` never changes the
+  // existing default task routing.
+  {
+    providerId: 'vertex',
+    modelId: 'google/gemini-3.5-flash@vertex',
+    label: 'Gemini 3.5 Flash (Vertex)',
+    reasoningTier: 'advanced',
+    defaultTaskHints: [],
+    capabilities: modelCapabilities('vertex', 'advanced', { vision: true }),
+  },
+  {
+    providerId: 'vertex',
+    modelId: 'google/gemini-3.1-flash-lite@vertex',
+    label: 'Gemini 3.1 Flash Lite (Vertex)',
+    reasoningTier: 'standard',
+    defaultTaskHints: [],
+    capabilities: modelCapabilities('vertex', 'standard', { vision: true }),
   },
 ] as const satisfies readonly ModelProfile[];
 
