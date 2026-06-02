@@ -1,10 +1,10 @@
 ---
 name: executive_summary
-description: Read and update folder executive summaries in AI-ideas and opportunity workspaces.
+description: Read and update folder executive summaries in AI-priorities and opportunity workspaces.
 version: 0.1.0
 category: analysis
 contextFilter:
-  workspaceTypes: [neutral, ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-priorities, opportunity]
 tools:
   - name: executive_summary_get
     description: Read the executive summary for a folder (stored on folders.executiveSummary).

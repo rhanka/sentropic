@@ -33,7 +33,7 @@ const buildSkill = (
 });
 
 const buildAuthz = (overrides: Partial<AuthzContext> = {}): AuthzContext => ({
-  tenant: { tenantId: 't-1', workspaceType: 'ai-ideas' },
+  tenant: { tenantId: 't-1', workspaceType: 'ai-priorities' },
   roles: ['editor'],
   permissions: [],
   permissionMode: 'open',
@@ -51,12 +51,12 @@ describe('isSkillVisibleTo', () => {
     const meta = buildSkill('docs', {
       contextFilter: { workspaceTypes: ['opportunity'] },
     }).metadata;
-    expect(isSkillVisibleTo(meta, buildAuthz({ tenant: { tenantId: 't', workspaceType: 'ai-ideas' } }))).toBe(false);
+    expect(isSkillVisibleTo(meta, buildAuthz({ tenant: { tenantId: 't', workspaceType: 'ai-priorities' } }))).toBe(false);
   });
 
   it('denies when caller has no workspaceType but skill declares one', () => {
     const meta = buildSkill('docs', {
-      contextFilter: { workspaceTypes: ['ai-ideas'] },
+      contextFilter: { workspaceTypes: ['ai-priorities'] },
     }).metadata;
     expect(isSkillVisibleTo(meta, buildAuthz({ tenant: { tenantId: 't' } }))).toBe(false);
   });
