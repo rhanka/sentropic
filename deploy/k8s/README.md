@@ -61,7 +61,10 @@ Two namespace-scoped Secrets must exist before applying the manifests:
 - `sentropic-postgres` — `POSTGRES_PASSWORD`.
 - `sentropic-api` — `DATABASE_URL`, every `*_API_KEY`, `MAIL_HOST`,
   `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`,
-  `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`.
+  `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`, and optional
+  Cowork desktop download metadata (`COWORK_DESKTOP_DOWNLOAD_URL`,
+  `COWORK_DESKTOP_VERSION`, `COWORK_DESKTOP_SOURCE`,
+  `COWORK_DESKTOP_PRERELEASE_URL`, `COWORK_DESKTOP_PRERELEASE_VERSION`).
 
 Maildev is intentionally not deployed in Kubernetes. The POC uses the checked
 `sent-tech.ca` domain in Scaleway Transactional Email, with SMTP settings read
@@ -84,7 +87,9 @@ floating `main` alias. `imagePullPolicy: Always` plus the `deploy-k8s` CI job ru
 digest without any imperative `kubectl set image`.
 `make k8s-bundle-secret`
 reads `~/src/sentropic/.env` and creates both Secrets in-cluster,
-replacing the previous version. Re-run after rotating a key.
+replacing the previous version. Re-run after rotating a key or updating a
+download URL. Secret changes are picked up by the API only after the pod is
+restarted; run `make k8s-deploy ... ENV=<env>` after updating the bundle.
 
 ## GitHub deploy secret (operator side, once)
 

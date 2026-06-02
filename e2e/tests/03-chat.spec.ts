@@ -316,6 +316,10 @@ test.describe('Chat', () => {
       }
     });
 
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     await chatButton.click();

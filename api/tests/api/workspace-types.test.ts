@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import {
@@ -24,10 +24,13 @@ describe('Workspace type system', () => {
   let viewer: any;
   const createdWorkspaceIds: string[] = [];
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     app = await importApp();
-    editor = await createAuthenticatedUser('editor', `editor-wt-${Date.now()}@example.com`);
-    viewer = await createAuthenticatedUser('guest', `viewer-wt-${Date.now()}@example.com`);
+  }, 60000);
+
+  beforeEach(async () => {
+    editor = await createAuthenticatedUser('editor');
+    viewer = await createAuthenticatedUser('guest');
     if (editor.workspaceId) createdWorkspaceIds.push(editor.workspaceId);
     if (viewer.workspaceId) createdWorkspaceIds.push(viewer.workspaceId);
   });
