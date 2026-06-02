@@ -20,6 +20,7 @@ describe('ChatTimeline app wrapper', () => {
       "import PackageChatTimeline from '@sentropic/chat-ui/components/ChatTimeline.svelte'",
     );
     expect(source).toContain('renderUserMessage');
+    expect(source).toContain('renderMessageAttachments');
     expect(source).toContain('renderAssistantSegment');
     expect(source).toContain('renderRuntimeSegment');
   });

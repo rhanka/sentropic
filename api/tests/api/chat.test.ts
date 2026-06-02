@@ -167,6 +167,43 @@ describe('Chat API Endpoints', () => {
       ]);
     });
 
+    it('should store message attachments and allow attachment-only messages', async () => {
+      const attachments = [
+        {
+          kind: 'image',
+          source: 'context_document',
+          documentId: 'doc_image_1',
+          fileName: 'diagram.png',
+          mimeType: 'image/png',
+          sizeBytes: 4096,
+          width: 640,
+          height: 480,
+        },
+      ];
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+        content: '',
+        attachments,
+      });
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      const sessionId = data.sessionId as string;
+      const userMessageId = data.userMessageId as string;
+
+      const [row] = await db
+        .select()
+        .from(chatMessages)
+        .where(eq(chatMessages.id, userMessageId))
+        .limit(1);
+      expect(row.attachments).toEqual(attachments);
+
+      const list = await authenticatedRequest(app, 'GET', `/api/v1/chat/sessions/${sessionId}/messages`, user.sessionToken!);
+      expect(list.status).toBe(200);
+      const payload = await list.json();
+      const userMsg = (payload.messages || []).find((m: any) => m.id === userMessageId);
+      expect(userMsg.attachments).toEqual(attachments);
+    });
+
     it('should enqueue tools and localToolDefinitions payload in chat_message job data', async () => {
       const response = await authenticatedRequest(
         app,

@@ -1,3 +1,5 @@
+import type { ComposerAttachmentSummary } from './chatAttachments.js';
+
 export type ChatDraftMode = 'ai' | 'comments';
 
 export type ChatDraftState = {
@@ -35,6 +37,7 @@ export type ResolveComposerPrimaryActionInput = {
   composerRunInFlight: boolean;
   composerSteerReady: boolean;
   composerSteerInFlight: boolean;
+  attachments?: ComposerAttachmentSummary;
 };
 
 export type ComposerHeightInput = {
@@ -116,6 +119,7 @@ export const resolveComposerPrimaryAction = ({
   composerRunInFlight,
   composerSteerReady,
   composerSteerInFlight,
+  attachments,
 }: ResolveComposerPrimaryActionInput): ComposerPrimaryActionState => {
   if (mode === 'comments') {
     const disabled =
@@ -143,7 +147,9 @@ export const resolveComposerPrimaryAction = ({
     };
   }
 
-  const disabled = sending || !hasText(input);
+  const attachmentBlocked = Boolean(attachments && (attachments.pending > 0 || attachments.uploading > 0));
+  const hasReadyAttachment = Boolean(attachments && attachments.ready > 0);
+  const disabled = sending || attachmentBlocked || (!hasText(input) && !hasReadyAttachment);
   return {
     action: disabled ? 'disabled' : 'chat_send',
     disabled,

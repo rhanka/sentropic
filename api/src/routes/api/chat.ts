@@ -382,6 +382,7 @@ const chatServerRouter = createChatServer(
           primaryContextType: (input.primaryContextType as ChatContextType | undefined) ?? null,
           primaryContextId: input.primaryContextId ?? null,
           contexts: toChatContexts(input.contexts),
+          attachments: input.attachments ?? null,
           sessionTitle: input.sessionTitle ?? null,
         }),
       listMessages: (input) =>

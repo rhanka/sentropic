@@ -64,6 +64,7 @@
     "import": "Importer",
     "export": "Exporter",
     "downloadDocx": "Télécharger DOCX",
+    "exportXlsx": "Exporter Excel (XLSX)",
     "print": "Imprimer",
     "visibility": "Visibilité",
     "hidden": "Caché",
@@ -203,6 +204,12 @@
         "organization": "Inclure l'organisation",
         "usecases": "Inclure les initiatives",
         "matrix": "Inclure la matrice"
+      },
+      "xlsx": {
+        "label": "Exporter Excel (XLSX)",
+        "generating": "Génération du classeur Excel…",
+        "ready": "Classeur Excel prêt.",
+        "error": "Échec de l'export Excel."
       }
     },
     "actions": "Actions dossier",
@@ -1064,6 +1071,13 @@
       "ariaLabel": "Composer",
       "placeholder": {
         "chat": "Écrire un message…"
+      }
+    },
+    "attachments": {
+      "enlarge": "Agrandir l'image",
+      "lightbox": {
+        "close": "Fermer",
+        "download": "Télécharger"
       }
     },
     "documents": {
