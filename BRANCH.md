@@ -47,6 +47,7 @@ Add OAuth2 `client_credentials` grant to the Sentropic IdP so backend services (
 ## Feedback Loop
 Actions with the following status should be included around tasks only if really required.
 
+- `BR39d-Q1` (infra blocker, OPEN) — Host Docker IPv4 network pool exhausted: every compose-network target (`make typecheck-api`, `make test-api`, dev/e2e stacks) fails with `could not find an available, non-overlapping IPv4 address pool`. Remedy is `docker network prune` but raw `docker` is blocked by the agent sandbox and no `make` target prunes networks. Package-only gates (`make typecheck-auth-hono`, `make test-auth-hono`, `make build-auth-hono`, `make pack-auth-hono`, `make typecheck-auth-client`, `make test-auth-client`) use `docker run` (no network) and PASS. Conductor must `docker network prune -f` on the host (non-destructive, preserves volumes), then re-run the api/e2e gates. All source for api/CI/Make/docs lots is written and committed; only the api-runtime test/typecheck execution is pending.
 - `BR39d-EX1` (Makefile) — `acknowledge`: new npm package requires make wiring per make-only rule. Targets added: `typecheck-auth-client`, `test-auth-client`, `build-auth-client`, `pack-auth-client`, `publish-auth-client`, `publish-auth-client-token`, `oauth-rotate-service-client`. Impact: additive targets only, mirrors `*-auth-hono` exactly. Rollback: delete the added targets.
 - `BR39d-EX2` (.github/workflows/ci.yml) — `acknowledge`: new package needs CI parity. Adds `auth_client` + `auth_client_publish` path filters, `validate-auth-client` job (mirror of `validate-auth-hono`), `publish-auth-client` job (mirror of `publish-auth-hono`), `auth-client` to `bootstrap_publish_target` enum + bootstrap step. Impact: additive jobs, no change to existing lanes. Rollback: revert the additions.
 - `BR39d-EX3` (api/drizzle/0029_service_clients.sql) — `acknowledge`: single migration creating `service_clients` only (no `oauth_tokens` ALTER, per `BR39d-D5`). Within template's one-migration-max. Rollback: drop migration + table.
@@ -85,24 +86,24 @@ Actions with the following status should be included around tasks only if really
 - Push branch before UAT; run UAT from root workspace; switch back to `tmp/feat-auth-s2s` after.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `rules/architecture.md`.
-  - [ ] Read `packages/auth-hono/README.md`, `packages/auth-hono/src/oauth/*`, `packages/auth-hono/src/ports.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/db/schema.ts` (oauth_clients + token tables), `api/drizzle/0027_oauth_clients.sql`.
-  - [ ] Confirm worktree `tmp/feat-auth-s2s` on branch `feat/auth-s2s` (`git branch --show-current`).
-  - [ ] Env/port mapping (BR-39 slot 3): `API_PORT=9198`, `UI_PORT=5398`, `MAILDEV_UI_PORT=1298`; `ENV=test-feat-auth-s2s` and `ENV=e2e-feat-auth-s2s`. `make ps-all` to confirm no conflict.
-  - [ ] Confirm command style `make ... <vars> ENV=<env>` with `ENV` last.
-  - [ ] Validate scope boundaries + decisions `BR39d-D1..D10` + exceptions `BR39d-EX1..EX5` (above).
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/security.md`, `rules/architecture.md`.
+  - [x] Read `packages/auth-hono/README.md`, `packages/auth-hono/src/oauth/*`, `packages/auth-hono/src/ports.ts`, `api/src/services/auth/oauth-state-adapter.ts`, `api/src/db/schema.ts` (oauth_clients + token tables), `api/drizzle/0027_oauth_clients.sql`.
+  - [x] Confirm worktree `tmp/feat-auth-s2s` on branch `feat/auth-s2s` (`git branch --show-current`).
+  - [x] Env/port mapping (BR-39 slot 3): `API_PORT=9198`, `UI_PORT=5398`, `MAILDEV_UI_PORT=1298`; `ENV=test-feat-auth-s2s` and `ENV=e2e-feat-auth-s2s`. `make ps-all` to confirm no conflict.
+  - [x] Confirm command style `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Validate scope boundaries + decisions `BR39d-D1..D10` + exceptions `BR39d-EX1..EX5` (above).
 
-- [ ] **Lot 1 — Schema & port contract (`service_clients`)**
-  - [ ] `api/drizzle/0029_service_clients.sql`: `service_clients` table ONLY — `id text PK`, `client_id text UNIQUE NOT NULL`, `client_secret_hash text NOT NULL`, `display_name text`, `allowed_scopes text[] NOT NULL`, `resource_indicators text[] NOT NULL DEFAULT '{}'`, `dpop_bound_access_tokens boolean NOT NULL DEFAULT false`, `tenant_id text NULL` (hook `BR39c-D18`), `secret_rotated_at timestamp`, `created_at timestamp NOT NULL DEFAULT now()`, `revoked_at timestamp NULL`. No `oauth_tokens` ALTER (`BR39d-D5`).
-  - [ ] `api/src/db/schema.ts`: drizzle `serviceClients` table mirroring the migration.
-  - [ ] `packages/auth-hono/src/oauth/state-store-types.ts`: add `ServiceClientRecord` interface + **optional** `findServiceClient?(clientId): Promise<ServiceClientRecord | null>` on `OauthStateStorePort` (`BR39d-D8`). Export `ServiceClientRecord` from `ports.ts`/`index.ts`.
-  - [ ] `api/src/services/auth/oauth-state-adapter.ts`: implement `findServiceClient` (filter `revoked_at IS NULL`).
-  - [ ] Memory state-store fixture extended with service clients for handler tests.
+- [x] **Lot 1 — Schema & port contract (`service_clients`)**
+  - [x] `api/drizzle/0029_service_clients.sql`: `service_clients` table ONLY — `id text PK`, `client_id text UNIQUE NOT NULL`, `client_secret_hash text NOT NULL`, `display_name text`, `allowed_scopes text[] NOT NULL`, `resource_indicators text[] NOT NULL DEFAULT '{}'`, `dpop_bound_access_tokens boolean NOT NULL DEFAULT false`, `tenant_id text NULL` (hook `BR39c-D18`), `secret_rotated_at timestamp`, `created_at timestamp NOT NULL DEFAULT now()`, `revoked_at timestamp NULL`. No `oauth_tokens` ALTER (`BR39d-D5`). (+ `_journal.json` idx 29 entry so drizzle migrator applies it.)
+  - [x] `api/src/db/schema.ts`: drizzle `serviceClients` table mirroring the migration.
+  - [x] `packages/auth-hono/src/oauth/state-store-types.ts`: add `ServiceClientRecord` interface + **optional** `findServiceClient?(clientId): Promise<ServiceClientRecord | null>` on `OauthStateStorePort` (`BR39d-D8`). Export `ServiceClientRecord` from `ports.ts`/`index.ts`.
+  - [x] `api/src/services/auth/oauth-state-adapter.ts`: implement `findServiceClient` (filter `revoked_at IS NULL`).
+  - [x] Memory state-store fixture extended with service clients for handler tests.
   - [ ] Lot gate:
-    - [ ] `make typecheck-auth-hono` + `make typecheck-api` + `make lint-auth-hono`
-    - [ ] **API tests**: `api/tests/unit/auth/oauth-state-adapter.test.ts` — `findServiceClient` cases (found / revoked / missing). `make test-api SCOPE=tests/unit/auth/oauth-state-adapter.test.ts ENV=test-feat-auth-s2s`.
-    - [ ] Sub-lot gate: `make test-auth-hono` + `make test-api ENV=test-feat-auth-s2s`
+    - [x] `make typecheck-auth-hono` PASS. `make typecheck-api` BLOCKED (`BR39d-Q1` docker net pool). `make lint-auth-hono` n/a (no such target; CI validates auth-hono via typecheck+test+build+pack).
+    - [x] **API tests**: `api/tests/unit/auth/oauth-state-adapter.test.ts` — `findServiceClient` cases (found / revoked / missing) WRITTEN. Execution BLOCKED (`BR39d-Q1`).
+    - [x] Sub-lot gate: `make test-auth-hono` PASS (80 tests). `make test-api ENV=test-feat-auth-s2s` BLOCKED (`BR39d-Q1`).
 
 - [ ] **Lot 2 — `client_credentials` grant on token endpoint (stateless)**
   - [ ] `packages/auth-hono/src/oauth/token-handler.ts`: branch on `grant_type=client_credentials` (keep `authorization_code` path untouched) → authenticate `client_secret_basic`/`client_secret_post` against `findServiceClient` (Argon2id `ports.tokens.hashSecret`); empty/absent `scope` ⇒ full `allowed_scopes`, else intersect (`invalid_scope` on superset); resolve `resource` per `BR39d-D4` (`invalid_target`); DPoP `cnf={jkt}` per `BR39d-D1`; issue a signed **access_token only** (no `id_token`, no `refresh_token`, `aud` = resolved resource, TTL `OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC` default 900); **do NOT call `saveTokenMeta`** (`BR39d-D5`). Use a distinct `aud` (resource), not the userinfo constant at token-handler.ts:150.
