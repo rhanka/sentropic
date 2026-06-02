@@ -1,0 +1,6 @@
+{"eventType":"status","sequence":1,"data":{"state":"started"}}
+{"eventType":"tool_call_start","sequence":2,"data":{"toolCallId":"tc-1","name":"plan","args":{}}}
+{"eventType":"tool_call_delta","sequence":3,"data":{"toolCallId":"tc-1","delta":"{\"operation\":\"create\"}"}}
+{"eventType":"tool_call_result","sequence":4,"data":{"toolCallId":"tc-1","result":{"ok":true,"tasks":[{"id":"t1","title":"Do the thing","status":"todo"}]}}}
+{"eventType":"content_delta","sequence":5,"data":{"delta":"I've created the plan."}}
+{"eventType":"done","sequence":6,"data":{}}
