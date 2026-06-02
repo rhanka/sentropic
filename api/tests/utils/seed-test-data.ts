@@ -35,7 +35,7 @@ import {
   ADMIN_WORKSPACE_ID,
 } from '../../src/db/schema.js';
 import { createJwksAdapter } from '../../src/services/auth/jwks-adapter.js';
-import { seedOAuthClients } from '../../src/services/auth/oauth-client-seed.js';
+import { seedOAuthClients, seedServiceClients } from '../../src/services/auth/oauth-client-seed.js';
 import { testMatrix } from './test-data.js';
 
 export async function seedTestData() {
@@ -195,6 +195,8 @@ export async function seedTestData() {
 
     const oauthClientsSeeded = await seedOAuthClients();
     console.log(`✅ OAuth clients seeded (${oauthClientsSeeded.map((client) => client.clientId).join(', ')})`);
+    const serviceClientsSeeded = await seedServiceClients();
+    console.log(`✅ Service clients seeded (${serviceClientsSeeded.map((client) => client.clientId).join(', ')})`);
     const jwks = createJwksAdapter();
     const activeSigningKey = await jwks.getActiveKey();
     if (activeSigningKey) {
