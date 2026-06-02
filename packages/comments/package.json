@@ -1,0 +1,41 @@
+{
+  "name": "@sentropic/comments",
+  "version": "0.1.0",
+  "description": "Collaborative annotation (comments/threads) over messages, canvas, artifacts, fields and records: CommentStore port + in-memory adapter + transport-agnostic wire events + thread summaries.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/comments"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@sentropic/contracts": "^0.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "5.4.5"
+  }
+}
