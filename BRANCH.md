@@ -122,13 +122,14 @@ Actions with the following status should be included around tasks only if really
     - [x] **auth-hono tests**: `packages/auth-hono/tests/service-auth-middleware.test.ts` (10 tests) — pass (Bearer + DPoP), reject: missing token, bad signature, wrong `aud`, expired, missing required scope (403 insufficient_scope), DPoP proof missing / replayed / `ath` mismatch.
     - [x] Sub-lot gate: `make test-auth-hono` PASS (101 tests).
 
-- [ ] **Lot 4 — New package `@sentropic/auth-client` (Node consumer helper)**
-  - [ ] `packages/auth-client/` scaffold: `package.json` (`@sentropic/auth-client`, `0.1.0`, ESM, `jose` dep, mirror auth-hono build/test config), `README.md`, `src/index.ts`, `tsconfig.json`, `vitest.config.ts`.
-  - [ ] `createAuthClient({issuer, clientId, clientSecret, dpop?, resource?, scope?})` → `getToken({scope?, resource?}) → Promise<{access_token, token_type, expires_at}>` with in-memory cache + auto-refresh (skew ~30s); Ed25519 DPoP keypair generation + per-request proof builder when `dpop:true`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-auth-client` (`BR39d-EX1`) + lint
-    - [ ] **auth-client tests**: `packages/auth-client/tests/auth-client.test.ts` — token fetch + cache reuse, refresh on expiry, scope/resource forwarding, DPoP proof shape; **integration round-trip** against an in-process IdP (auth-hono router + memory state store) — a real client↔IdP exchange, not only mocks.
-    - [ ] Sub-lot gate: `make test-auth-client`
+- [x] **Lot 4 — New package `@sentropic/auth-client` (Node consumer helper)**
+  - [x] `packages/auth-client/` scaffold: `package.json` (`@sentropic/auth-client`, `0.1.0`, ESM, `jose` peer dep, mirrors auth-hono build/test config), `README.md`, `src/index.ts`, `tsconfig.json`, `LICENSE`. (No `vitest.config.ts` — auth-hono pattern runs `vitest run tests` directly.)
+  - [x] `createAuthClient({issuer, clientId, clientSecret, dpop?, resource?, scope?, tokenEndpoint?, refreshSkewSeconds?, fetch?, now?})` → `getToken({scope?, resource?, forceRefresh?}) → Promise<{access_token, token_type, expires_at, scope}>` with in-memory cache (keyed scope+resource) + auto-refresh (skew default 30s); lazy Ed25519 DPoP keypair + `buildDpopProof({htm, htu, accessToken?})` when `dpop:true`; `AuthClientError` carries OAuth code + status.
+  - [x] Workspace registration (`BR39d-EX4`): `packages/*` glob already covers it; `package-lock.json` synced via `make lock-root`; `api/package.json` declares `@sentropic/auth-client`. Dockerfile wiring (`BR39d-EX5`): COPY + `npm --workspace @sentropic/auth-client run build`.
+  - [x] Lot gate:
+    - [x] `make typecheck-auth-client` (`BR39d-EX1`) PASS. (No auth-client lint target; CI parity = typecheck+test+build+pack.)
+    - [x] **auth-client tests**: `packages/auth-client/tests/auth-client.test.ts` (7 tests) — token fetch + cache reuse, refresh on expiry, scope/resource forwarding, DPoP proof shape, **real round-trip** mint→protected-route (Bearer + DPoP w/ ath) against an in-process `@sentropic/auth-hono` IdP, error mapping. Not mocks-only.
+    - [x] Sub-lot gate: `make test-auth-client` PASS (7 tests). `make pack-auth-client` PASS (dist+src+README+LICENSE).
 
 - [ ] **Lot 5 — Host wiring in Sentropic API (real consumer co-design + dogfood)**
   - [ ] Per `feedback_contract_consumer_codesign`: exercise BOTH contracts on the real host.
