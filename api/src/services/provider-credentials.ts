@@ -29,6 +29,11 @@ const getEnvironmentCredential = (providerId: ProviderId): string | null => {
   if (providerId === 'anthropic') return normalizeCredential(env.ANTHROPIC_API_KEY);
   if (providerId === 'mistral') return normalizeCredential(env.MISTRAL_API_KEY);
   if (providerId === 'cohere') return normalizeCredential(env.COHERE_API_KEY);
+  // BR-42f / §B — `vertex` has NO stored string credential: its auth is an
+  // ADC-minted short-lived bearer minted PRE-DISPATCH in mesh-dispatch's
+  // toMeshAuthInput (carried as a `direct-token`). The string credential
+  // resolver is intentionally BYPASSED for vertex, so resolveProviderCredential
+  // ('vertex') legitimately returns source:'none' here without leaking a key.
   return null;
 };
 
