@@ -2,6 +2,7 @@ import type {
   AuthCodePayload,
   OauthClientRecord,
   OauthStateStorePort,
+  ServiceClientRecord,
   TokenMeta,
 } from '@sentropic/auth-hono';
 import { and, eq, gt, isNull, lt } from 'drizzle-orm';
@@ -13,6 +14,7 @@ import {
   oauthDpopProofs,
   oauthTokens,
   revokedTokens,
+  serviceClients,
 } from '../../db/schema';
 
 interface CreateOauthStateStoreAdapterOptions {
@@ -52,6 +54,16 @@ export const createOauthStateStoreAdapter = (
         .limit(1);
 
       return row ? toOauthClientRecord(row) : null;
+    },
+
+    async findServiceClient(clientId) {
+      const [row] = await database
+        .select()
+        .from(serviceClients)
+        .where(and(eq(serviceClients.clientId, clientId), isNull(serviceClients.revokedAt)))
+        .limit(1);
+
+      return row ? toServiceClientRecord(row) : null;
     },
 
     async findTokenMeta(jti) {
@@ -184,6 +196,20 @@ const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClient
   tenantId: row.tenantId,
   tokenEndpointAuthMethod: row.tokenEndpointAuthMethod,
   updatedAt: row.updatedAt ?? row.createdAt,
+});
+
+const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): ServiceClientRecord => ({
+  allowedScopes: row.allowedScopes,
+  clientId: row.clientId,
+  clientSecretHash: row.clientSecretHash,
+  createdAt: row.createdAt,
+  displayName: row.displayName,
+  dpopBoundAccessTokens: row.dpopBoundAccessTokens,
+  id: row.id,
+  resourceIndicators: row.resourceIndicators,
+  revokedAt: row.revokedAt,
+  secretRotatedAt: row.secretRotatedAt,
+  tenantId: row.tenantId,
 });
 
 const toAuthCodePayload = (row: typeof authorizationCodes.$inferSelect): AuthCodePayload => {
