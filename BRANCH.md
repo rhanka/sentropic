@@ -6,7 +6,7 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
 ## Scope / Guardrails
 - Scope limited to merging already validated branch work from `feat/multimodal-image-input`, `feat/xlsx-multitab-query`, and `feat/folder-xlsx-export`.
 - No new product behavior beyond conflict resolution and integration fixes required to make the combined branch build, test, and run.
-- One existing migration from BR-38a is included: `api/drizzle/0027_chat_message_attachments.sql`.
+- One existing migration from BR-38a is included: `api/drizzle/0028_chat_message_attachments.sql`.
 - Make-only workflow, no direct Docker or npm commands.
 - Branch development happens in `tmp/feat-40bc-38a`.
 - Automated tests use `ENV=test-feat-40bc-38a` or `ENV=e2e-feat-40bc-38a`; never root `ENV=dev`.
@@ -20,7 +20,7 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
   - `PLAN.md`
   - `package-lock.json`
   - `api/package.json`
-  - `api/drizzle/0027_chat_message_attachments.sql`
+  - `api/drizzle/0028_chat_message_attachments.sql`
   - `api/drizzle/meta/_journal.json`
   - `api/src/db/schema.ts`
   - `api/src/routes/api/chat.ts`
@@ -63,7 +63,7 @@ Integrate BR-38a multimodal image input, BR-40b xlsx multi-tab document query, a
   - `plan/NN-BRANCH_*.md` except already existing source branch plan files if documentation sync becomes mandatory.
 - **Conditional Paths (allowed only with explicit `BR40bc38a-EXn` exception)**:
   - `.github/workflows/**`
-  - Additional `api/drizzle/*.sql` files beyond BR-38a `0027_chat_message_attachments.sql`.
+  - Additional `api/drizzle/*.sql` files beyond BR-38a `0028_chat_message_attachments.sql`.
 - **Exception process**:
   - Declare `BR40bc38a-EXn` in `## Feedback Loop` with reason, impact, and rollback.
 

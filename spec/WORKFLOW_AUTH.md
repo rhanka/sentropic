@@ -277,3 +277,115 @@ For existing users without `emailVerified`:
 - Default `emailVerified: false`
 - They must redo email verification if needed
 - Or one‑time migration to mark as verified (to decide)
+
+---
+
+## OAuth2 / OpenID Connect Authorization Code Flow (BR-39c)
+
+Sentropic acts as an OAuth2 Authorization Server and OpenID Connect Identity Provider for external Relying Party (RP) apps.
+
+### Security principles
+
+1. **PKCE mandatory** (S256 only, no plain, no default) — prevents auth-code interception.
+2. **DPoP opt-in per client** (`dpop_bound_access_tokens=true`) — sender-constrains tokens to an RP-held Ed25519 keypair (RFC 9449).
+3. **Ed25519 / EdDSA signing only** — no RS256 fallback; JWKS published with `Cache-Control: max-age=300`.
+4. **Atomic authorization code consumption** — `UPDATE ... WHERE used_at IS NULL RETURNING` guarantees single-use.
+5. **Refresh tokens deferred** — BR-39c issues access tokens with 1h TTL only; `offline_access` scope rejected.
+6. **ACR claims from session** — `acr=urn:sentropic:loa:passkey-fresh` for passkey sessions; `urn:sentropic:loa:bearer` for magic-link sessions; step-up enforcement lands in BR-39j.
+7. **Private key encryption at rest** — Postgres `pgcrypto.pgp_sym_encrypt` with operator-supplied `OAUTH_SIGNING_KEK`.
+
+### 6. OAuth2 Authorization Code + PKCE (happy path)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant RP as Relying Party App
+    participant UI as Sentropic UI
+    participant API as Sentropic API (IdP)
+    participant DB as PostgreSQL
+
+    RP->>RP: Generate code_verifier + code_challenge (SHA-256, base64url)
+    RP->>RP: Generate state + nonce
+    RP->>U: Redirect to GET /api/v1/auth/oauth/authorize?response_type=code&client_id=...&redirect_uri=...&scope=openid+profile+email&code_challenge=...&code_challenge_method=S256&state=...&nonce=...
+    U->>API: GET /api/v1/auth/oauth/authorize (browser)
+    API->>API: Validate client_id, redirect_uri (byte-exact), scopes, PKCE, no offline_access
+    alt No valid session
+        API->>UI: 302 to /auth/login?continue=<sealed-state>
+        U->>UI: Log in via passkey (or magic-link in tests)
+        UI->>API: POST /auth/login/verify
+        API->>UI: Set-Cookie(session=...), 200
+        UI->>API: 302 back to GET /authorize?continue=<sealed-state>
+    end
+    API->>API: Consent required?
+    API->>UI: 302 to /auth/oauth/consent?state=<sealed-state>
+    U->>UI: Consent screen loads (OAuthConsent component)
+    UI->>API: GET /api/v1/auth/oauth/consent?state=<sealed-state>
+    API->>UI: { clientName, scopes, redirectUri }
+    U->>UI: Click "Approve"
+    UI->>API: POST /api/v1/auth/oauth/consent/decision { state, decision: "approve" }
+    API->>API: Re-verify session, validate sealed state
+    API->>DB: INSERT authorization_codes (code, client_id, user_id, scope, code_challenge, nonce, expires_at=now()+60s)
+    API->>UI: { redirectTo: "https://rp.example.com/callback?code=...&state=..." }
+    UI->>RP: 302 to redirect_uri?code=...&state=...
+    RP->>API: POST /api/v1/auth/oauth/token { grant_type=authorization_code, code, redirect_uri, code_verifier, client_id, client_secret? }
+    API->>API: Verify client auth, redirect_uri match, PKCE, consume code atomically
+    API->>DB: UPDATE authorization_codes SET used_at=now() WHERE code=? AND used_at IS NULL RETURNING
+    API->>API: Sign access_token (EdDSA, jti stored)
+    API->>API: Sign id_token (if scope includes openid)
+    API->>RP: { access_token, token_type: "Bearer", expires_in: 3600, id_token }
+    RP->>API: GET /api/v1/auth/oauth/userinfo (Authorization: Bearer access_token)
+    API->>API: Verify JWT signature, check jti not revoked
+    API->>RP: { sub, email, email_verified, name, ... }
+```
+
+### 7. OAuth2 token revocation
+
+```mermaid
+sequenceDiagram
+    participant RP as Relying Party App
+    participant API as Sentropic API (IdP)
+    participant DB as PostgreSQL
+
+    RP->>API: POST /api/v1/auth/oauth/revoke { token=<access_token> }
+    API->>API: Decode jti from token (no signature re-check required per RFC 7009)
+    API->>DB: INSERT revoked_tokens (jti, client_id, user_id, expires_at)
+    API->>RP: 200 OK (idempotent)
+    RP->>API: GET /api/v1/auth/oauth/userinfo (Authorization: Bearer access_token)
+    API->>API: isTokenRevoked(jti) → true
+    API->>RP: 401 Unauthorized
+```
+
+### 8. DPoP-bound token flow (opt-in per client)
+
+When `dpop_bound_access_tokens=true` on the OAuth client record, the RP must:
+
+1. Generate an Ed25519 keypair in the browser (SubtleCrypto) and persist it (e.g. IndexedDB).
+2. Add a `DPoP: <proof-jwt>` header to `/token`, `/userinfo`, and `/revoke` calls.
+3. The IdP verifies `htm`, `htu`, `iat` skew (±60s), unique proof `jti`, and `ath` (SHA-256 of access token, base64url) on resource calls.
+4. Access and ID tokens include `cnf.jkt` (JWK thumbprint of the RP public key).
+
+### Environment variables
+
+| Variable | Purpose | Required |
+| --- | --- | --- |
+| `OAUTH_SIGNING_KEK` | KEK for `pgp_sym_encrypt` of Ed25519 private key in Postgres | Production (see `docs/secrets.md`) |
+| `OAUTH_ISSUER_URL` | Issuer claim override | Optional (defaults to API origin) |
+| `OAUTH_ACCESS_TOKEN_TTL_SEC` | Access token lifetime | Optional (default: 3600) |
+| `OAUTH_ID_TOKEN_TTL_SEC` | ID token lifetime | Optional (default: 3600) |
+| `OAUTH_AUTHORIZATION_CODE_TTL_SEC` | Authorization code TTL | Optional (default: 60) |
+| `OAUTH_DPOP_IAT_SKEW_SEC` | DPoP proof `iat` tolerance | Optional (default: 60) |
+
+### Key bootstrap and rotation
+
+```bash
+# First-time: create the first active Ed25519 signing key
+make exec-api CMD="npm run oauth:init-keys" API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 ENV=dev
+
+# Seed dev/test OAuth clients
+make exec-api CMD="npm run oauth:seed-clients" API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 ENV=dev
+
+# Rotate to a new signing key (old key stays in JWKS for ≥65 min)
+make oauth-rotate-keys API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 ENV=dev
+```
+
+See `packages/auth-hono/README.md` for the full key rotation policy and `docs/secrets.md` for KEK generation and rotation cadence.

@@ -60,6 +60,8 @@ describe('@sentropic/auth-hono contracts', () => {
       'clock',
       'random',
       'accountPolicy',
+      'oauthStateStore',
+      'jwks',
     ]);
   });
 
@@ -216,6 +218,22 @@ describe('@sentropic/auth-hono contracts', () => {
         statusForNewUser: () => ({ accountStatus: 'active', approvalDueAt: null }),
         canAuthenticate: () => ({ allowed: true }),
         resolveSessionRole: (record) => record.role,
+      },
+      oauthStateStore: {
+        consumeAuthCode: async () => null,
+        findClient: async () => null,
+        findTokenMeta: async () => null,
+        isTokenRevoked: async () => false,
+        purgeExpired: async () => 0,
+        recordDpopJti: async () => true,
+        revokeToken: async () => true,
+        saveAuthCode: async () => undefined,
+        saveTokenMeta: async () => undefined,
+      },
+      jwks: {
+        findKeyByKid: async () => null,
+        getActiveKey: async () => null,
+        listPublicKeys: async () => [],
       },
     } satisfies AuthHonoPorts;
 
