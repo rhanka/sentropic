@@ -16,6 +16,11 @@ import {
   magicLinks,
   jobQueue,
   emailVerificationCodes,
+  authorizationCodes,
+  oauthClients,
+  oauthDpopProofs,
+  oauthTokens,
+  revokedTokens,
   chatContexts,
   chatMessages,
   chatSessions,
@@ -29,6 +34,8 @@ import {
   viewTemplates,
   ADMIN_WORKSPACE_ID,
 } from '../../src/db/schema.js';
+import { createJwksAdapter } from '../../src/services/auth/jwks-adapter.js';
+import { seedOAuthClients } from '../../src/services/auth/oauth-client-seed.js';
 import { testMatrix } from './test-data.js';
 
 export async function seedTestData() {
@@ -54,6 +61,11 @@ export async function seedTestData() {
     
     // 2. Delete auth-related tables with foreign keys
     await db.delete(userSessions); // Depends on users
+    await db.delete(authorizationCodes); // Depends on oauth_clients/users
+    await db.delete(oauthTokens); // Depends on oauth_clients/users
+    await db.delete(oauthDpopProofs);
+    await db.delete(revokedTokens); // Depends on oauth_clients/users
+    await db.delete(oauthClients); // May depend on users via owner_user_id
     await db.delete(webauthnCredentials); // Depends on users
     await db.delete(webauthnChallenges); // Depends on users
     await db.delete(magicLinks); // Depends on users
@@ -180,6 +192,17 @@ export async function seedTestData() {
     ]);
 
     console.log('✅ Workspaces + users seeded (admin + userA + userB + userVictim + pending)');
+
+    const oauthClientsSeeded = await seedOAuthClients();
+    console.log(`✅ OAuth clients seeded (${oauthClientsSeeded.map((client) => client.clientId).join(', ')})`);
+    const jwks = createJwksAdapter();
+    const activeSigningKey = await jwks.getActiveKey();
+    if (activeSigningKey) {
+      console.log(`✅ OAuth signing key available (${activeSigningKey.kid})`);
+    } else {
+      const createdSigningKey = await jwks.generateAndStoreNewKey({ kid: 'e2e-oauth-signing-key' });
+      console.log(`✅ OAuth signing key initialized (${createdSigningKey.kid})`);
+    }
 
     await db.insert(workspaceMemberships).values([
       { workspaceId: E2E_WS_ADMIN, userId: E2E_ADMIN_ID, role: 'admin', createdAt: now },

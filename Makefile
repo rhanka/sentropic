@@ -2327,3 +2327,15 @@ k8s-dns-smoke: ## Smoke-test the public host: HTTPS 200 + trusted cert on / and 
 	  echo "OK: https://$$host$$path -> 200 (trusted cert)" ; \
 	done ; \
 	echo "==> Public DNS/TLS smoke passed for $$host"
+
+# -----------------------------------------------------------------------------
+# OAuth2 / OIDC IdP key management (BR-39c, BR39c-EX4)
+# Requires a running API container. Always pass API_PORT, UI_PORT, MAILDEV_UI_PORT, ENV.
+# -----------------------------------------------------------------------------
+.PHONY: oauth-init-keys
+oauth-init-keys: ## Bootstrap the first active Ed25519 signing key (idempotent; exits if key already exists)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm run oauth:init-keys"
+
+.PHONY: oauth-rotate-keys
+oauth-rotate-keys: ## Rotate the active Ed25519 signing key; old key stays in JWKS for ≥65 min
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm run oauth:rotate-keys"
