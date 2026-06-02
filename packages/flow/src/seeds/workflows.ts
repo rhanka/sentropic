@@ -148,7 +148,7 @@ const matrixBarrierJoinMetadata = (taskKeys: readonly string[]): Record<string, 
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// ai-ideas workflows (existing, unchanged)
+// ai-priorities workflows (existing, unchanged)
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
@@ -846,7 +846,7 @@ export const CODE_ANALYSIS_WORKFLOW: DefaultWorkflowDefinition = {
 
 export const WORKSPACE_TYPE_WORKFLOW_SEEDS: ReadonlyArray<WorkspaceTypeWorkflowSeed> = [
   {
-    workspaceType: "ai-ideas",
+    workspaceType: "ai-priorities",
     workflows: [DEFAULT_USE_CASE_GENERATION_WORKFLOW],
     defaultWorkflowKey: USE_CASE_GENERATION_WORKFLOW_KEY,
   },
