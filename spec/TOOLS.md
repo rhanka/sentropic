@@ -38,8 +38,9 @@ This document is the single checklist for **chat tools**: what is already implem
 
 ### Documents tool
 - [x] `documents`
-  - `action: "list" | "get_summary" | "get_content" | "analyze"`
+  - `action: "list" | "get_summary" | "get_content" | "analyze" | "list_sheets" | "get_sheet_content"`
   - Reads documents attached to `organization`, `folder`, `initiative`, and `chat_session` contexts.
+  - Multi-sheet xlsx: `list_sheets` returns sheet names + 1-based index + row counts; `get_sheet_content` returns one sheet (by `sheetName` or `sheetIndex`) as tab-separated rows where formula cells surface both the formula and the computed value (`=FORMULA → value`, cross-sheet refs in `Sheet!A1` form). `get_content` still returns all sheets, each labelled `Sheet: <name>`.
   - Download-only archives (`.zip`, `.tar.gz`, `.tgz`) stay listable/downloadable in the product surface.
   - Download-only archives are intentionally non-explorable for the tool: `get_summary`, `get_content`, and `analyze` are blocked when `indexingSkipped=true` / `archive_download_only`.
 

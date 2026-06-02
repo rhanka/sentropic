@@ -13,6 +13,13 @@ const SUPPORTED_BINARY_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
 const SUPPORTED_TEXT_MIME_TYPES = new Set([
   'application/json',
   'application/xml',
@@ -87,7 +94,8 @@ const extensionByExportMimeType: Record<string, string> = {
 
 const ingestExportMimeTypeBySourceMimeType: Record<GoogleWorkspaceMimeType, string> = {
   [GOOGLE_WORKSPACE_MIME_TYPES.document]: 'text/markdown',
-  [GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet]: 'text/csv',
+  [GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet]:
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   [GOOGLE_WORKSPACE_MIME_TYPES.presentation]: 'text/plain',
 };
 
@@ -178,6 +186,7 @@ export const isGoogleWorkspaceMimeType = (mimeType: string): mimeType is GoogleW
 
 export const isSupportedGoogleDriveMimeType = (mimeType: string): boolean =>
   isGoogleWorkspaceMimeType(mimeType) ||
+  SUPPORTED_IMAGE_MIME_TYPES.has(mimeType) ||
   SUPPORTED_BINARY_MIME_TYPES.has(mimeType) ||
   SUPPORTED_TEXT_MIME_TYPES.has(mimeType);
 
