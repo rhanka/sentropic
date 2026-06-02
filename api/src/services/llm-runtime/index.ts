@@ -10,8 +10,10 @@ import {
 } from '../provider-credentials';
 import { getOpenAITransportMode, resolveConnectedCodexTransport } from '../provider-connections';
 import { isProviderId, type ProviderId } from '../provider-runtime';
+import { parseVertexModelId } from '../providers/vertex-provider';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
+import { env } from '../../config/env';
 import {
   createCodexAccountAuthInput,
   dispatchMeshGenerateRaw,
@@ -23,6 +25,32 @@ const pickProviderCapabilities = (providerId: ProviderId) =>
 
 const normalizeProviderError = (providerId: ProviderId, error: unknown) =>
   providerRegistry.requireProvider(providerId).normalizeError(error);
+
+// BR-42f — build the Vertex runtimeRequest for a Gemini-on-Vertex call. The
+// catalog selection key (`{publisher}/{model}@vertex`) is stripped to the URL
+// path segments; project/location travel as plain config (VERTEX_PROJECT_ID /
+// VERTEX_LOCATION), overridable per-request later via providerOptions. The body
+// is the Gemini-shaped payload from buildGeminiRequestBody (BR42f-D4 REUSE).
+const buildVertexRuntimeRequest = (input: {
+  stream: boolean;
+  modelId: string;
+  body: Record<string, unknown>;
+}): Record<string, unknown> & { mode: string } => {
+  const { publisher, model } = parseVertexModelId(input.modelId);
+  const project = (env.VERTEX_PROJECT_ID ?? '').trim();
+  const location = (env.VERTEX_LOCATION ?? '').trim();
+  if (!project || !location) {
+    throw new Error(
+      'Vertex AI is not configured (set VERTEX_PROJECT_ID and VERTEX_LOCATION)',
+    );
+  }
+  return {
+    mode: input.stream
+      ? 'vertex-stream-generate-content'
+      : 'vertex-generate-content',
+    requestOptions: { project, location, publisher, model, body: input.body },
+  };
+};
 
 type RuntimeSelection = {
   providerId: ProviderId;
@@ -886,7 +914,20 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
   }
 
-  if (selection.providerId === 'gemini') {
+  // Gemini-on-AI-Studio (`gemini`) and Gemini-on-Vertex (`vertex`) share the
+  // identical Gemini request body + response shape (BR42f-D4 REUSE). Only the
+  // runtimeRequest transport mode differs (URL+auth, built by the runtime), and
+  // the response attribution prefix is parameterized by the active provider
+  // (M4): `gemini_` for gemini, `vertex_` for vertex.
+  if (selection.providerId === 'gemini' || selection.providerId === 'vertex') {
+    const geminiBody = buildGeminiRequestBody({
+      model: selection.model,
+      messages,
+      tools: filteredTools,
+      toolChoice: normalizedToolChoice,
+      responseFormat,
+      maxOutputTokens,
+    });
     const raw = await dispatchMeshGenerateRaw<unknown>({
       providerId: selection.providerId,
       model: selection.model,
@@ -899,26 +940,26 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
       responseFormat,
       maxOutputTokens,
       signal,
-      runtimeRequest: {
-        mode: 'generate-content',
-        requestOptions: {
-          model: selection.model,
-          body: buildGeminiRequestBody({
-            model: selection.model,
-            messages,
-            tools: filteredTools,
-            toolChoice: normalizedToolChoice,
-            responseFormat,
-            maxOutputTokens,
-          }),
-        },
-      },
+      runtimeRequest:
+        selection.providerId === 'vertex'
+          ? buildVertexRuntimeRequest({
+              stream: false,
+              modelId: selection.model,
+              body: geminiBody,
+            })
+          : {
+              mode: 'generate-content',
+              requestOptions: {
+                model: selection.model,
+                body: geminiBody,
+              },
+            },
     });
 
     const text = extractGeminiText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
     return {
-      id: `gemini_${createId()}`,
+      id: `${selection.providerId}_${createId()}`,
       object: 'chat.completion',
       created: nowSeconds,
       model: selection.model,
@@ -1196,8 +1237,14 @@ export async function* callLLMStream(
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
   }
 
-  if (selection.providerId === 'gemini') {
-    const responseId = previousResponseId || `gemini_${createId()}`;
+  // Gemini-on-AI-Studio (`gemini`) and Gemini-on-Vertex (`vertex`) reuse the
+  // SAME Gemini request body + the SAME SSE→event loop below (BR42f-D4 REUSE).
+  // The response/tool-call ids and the status provider_id are parameterized by
+  // the active provider (M4): `gemini_`/`gemini_call_`/`'gemini'` for gemini,
+  // `vertex_`/`vertex_call_`/`'vertex'` for vertex.
+  if (selection.providerId === 'gemini' || selection.providerId === 'vertex') {
+    const activeProviderId = selection.providerId;
+    const responseId = previousResponseId || `${activeProviderId}_${createId()}`;
     const requestBody = buildGeminiRequestBody({
       model: selectedModel,
       messages,
@@ -1233,13 +1280,20 @@ export async function* callLLMStream(
         maxOutputTokens,
         signal,
         previousResponseId,
-        runtimeRequest: {
-          mode: 'stream-generate-content',
-          requestOptions: {
-            model: selectedModel,
-            body: requestBody,
-          },
-        },
+        runtimeRequest:
+          activeProviderId === 'vertex'
+            ? buildVertexRuntimeRequest({
+                stream: true,
+                modelId: selectedModel,
+                body: requestBody,
+              })
+            : {
+                mode: 'stream-generate-content',
+                requestOptions: {
+                  model: selectedModel,
+                  body: requestBody,
+                },
+              },
       });
 
       let toolCallIndex = 0;
@@ -1278,7 +1332,7 @@ export async function* callLLMStream(
           const functionCall = part.functionCall as Record<string, unknown> | undefined;
           if (functionCall && typeof functionCall.name === 'string') {
             toolCallIndex += 1;
-            const toolCallId = `gemini_call_${toolCallIndex}`;
+            const toolCallId = `${activeProviderId}_call_${toolCallIndex}`;
             yield {
               type: 'tool_call_start',
               data: {
@@ -1302,7 +1356,7 @@ export async function* callLLMStream(
           type: 'status',
           data: {
             state: 'provider_completed_without_content',
-            provider_id: 'gemini',
+            provider_id: activeProviderId,
           },
         };
       }
