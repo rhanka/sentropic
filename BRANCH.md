@@ -1,7 +1,7 @@
-# Feature: Cowork desktop — make the binary usable (BR-41b opening fixes + SSE)
+# Feature: Cowork desktop — recette fixes (BR-41b opening)
 
 ## Objective
-Turn the Cowork desktop binary from a downloadable-but-unusable artifact into a functional one: zero-config API default, a clickable/auto-opened pairing flow, a single-file `.exe` (no zip), and the SSE consume loop so the agent actually drives the desktop tools. Design + decisions: `spec/SPEC_COWORK_41B_FIXES.md` (Codex + Opus 4.8 reviewed).
+Fix the 3 issues found in the BR-41a Windows recette so the binary is downloadable + enrollable without friction: zero-config API default, a clickable/auto-opened pairing flow, and a single-file `.exe` (no zip). Functional tool-driving (server desktop-tool injection + device→stream + SSE) is SPLIT to a dedicated backend branch (user decision after Opus 4.8 peer review; findings recorded in the spec). Design + decisions: `spec/SPEC_COWORK_41B_FIXES.md` (Codex + Opus 4.8 reviewed).
 
 ## Scope / Guardrails
 - Scope limited to `packages/cowork-desktop/**`, the cowork download API route, and the device-pair UI confirmation. No webview (separate later branch).
@@ -59,7 +59,7 @@ Turn the Cowork desktop binary from a downloadable-but-unusable artifact into a 
 - [ ] **Lot 2 — Fix ② pairing URL + safe auto-open + approve confirmation**
   - [ ] Binary: `deriveAppOrigin(apiBaseUrl)` via `URL` (strip configurable API prefix: `/api/v1`, `/api`, trailing slash, subpath); `SENTROPIC_APP_ORIGIN` override (highest precedence); build `…/auth/devices/pair?user_code=…`; hard-validate https + no userinfo + no injected path before use; binary IGNORES server `verification_uri`.
   - [ ] Binary: print the URL+code prominently; auto-open browser via safe argv spawn (`cmd /c start "" "<url>"` discrete arg), best-effort + graceful fail; `--no-open` flag.
-  - [ ] UI: `ui/src/routes/auth/devices/pair/+page.svelte` shows a prominent "you are pairing device «name» — did YOU start this?" confirmation before approve; i18n strings in fr/en.
+  - [ ] UI: add the prominent "you are pairing device «name» — did YOU start this?" confirmation in the pair PAGE wrapper `ui/src/routes/auth/devices/pair/+page.svelte` (NOT inside `AuthDevicePair`/auth-ui — out of scope); i18n strings in fr/en.
   - [ ] Lot gate:
     - [ ] `make typecheck-cowork-desktop` + `make typecheck-ui` + lint
     - [ ] **Unit (binary)**: `packages/cowork-desktop/tests/enroll/derive-app-origin.spec.ts` — edge cases (trailing slash, `/api`, `/api/v1`, subpath, https-reject, userinfo-reject, `SENTROPIC_APP_ORIGIN` override).
@@ -69,21 +69,13 @@ Turn the Cowork desktop binary from a downloadable-but-unusable artifact into a 
 - [ ] **Lot 3 — Fix ③ single-file packaging**
   - [ ] **3a (spike/gate, cross-platform de-risk):** add a native-resolution module that, given a cache dir, extracts the embedded native tree (atomic temp+rename, sha256 manifest verify, purge stale) and returns a `file://` URL to the `@nut-tree-fork/nut-js` entry; `windows-provider.ts` imports THAT (not the bare specifier). Unit-test the extract+resolve+import path on Linux using the linux libnut build (proves the mechanism; Windows dlopen left to UAT).
   - [ ] **3b:** `package-windows.mjs` — embed ONLY win32-x64 native assets (prune linux/darwin/dev) as pkg `assets` incl. libnut `build/Release/` sidecar DLLs; emit the sha256 manifest; stop producing the zip → single `cowork.exe` (+ metadata `exe`).
-  - [ ] **3c:** `api/src/routes/api/cowork-desktop.ts` — serve `cowork.exe` (update `DEFAULT_DESKTOP_ZIP_PATH` + origin-fallback + metadata `zip`→`exe`). UI util unchanged (consumes `downloadUrl`).
+  - [ ] **3c:** `api/src/routes/api/cowork-desktop.ts` — serve `cowork.exe` (rename `DEFAULT_DESKTOP_ZIP_PATH`→`DEFAULT_DESKTOP_EXE_PATH` + origin-fallback + metadata `zip`→`exe`). UI util unchanged (consumes `downloadUrl`). FIRST confirm no e2e/api test asserts the `.zip` filename.
   - [ ] Lot gate:
     - [ ] `make typecheck-cowork-desktop` + `make typecheck-api` + lint
     - [ ] **Unit**: `packages/cowork-desktop/tests/packaging/native-extract.spec.ts` (manifest verify, atomic rename, concurrent-extract, purge).
     - [ ] **API test**: update `api/tests/**` for the cowork-desktop route serving `.exe` (path + metadata).
     - [ ] CI build: `build-ui` step `make package-desktop-windows` produces a single `.exe` (no zip) — verify in CI logs.
     - [ ] (Windows runtime → UAT)
-
-- [ ] **Lot 4 — SSE consume loop (functional binary)**
-  - [ ] Wire the SSE client: connect to the chat stream the registered desktop tab is expected to consume, dispatch `tool_call` events → `cowork-runner` → execute (eyes/hands) → post results via existing `runner/tool-results.ts`; reconnect/backoff; clean disconnect on Ctrl+C.
-  - [ ] `bin/cowork.mjs`/`entry.mjs`: replace the dropped-runner stub with the live consume loop.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cowork-desktop` + lint
-    - [ ] **Unit**: `packages/cowork-desktop/tests/runner/sse-consume.spec.ts` — event → dispatch → tool-result post (mock transport + capability).
-    - [ ] Sub-lot gate: `make test-cowork-desktop`
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Fold behavior changes into `spec/SPEC_COWORK.md`; keep `spec/SPEC_COWORK_41B_FIXES.md` as the design record or fold + delete per convention.
@@ -98,5 +90,5 @@ Turn the Cowork desktop binary from a downloadable-but-unusable artifact into a 
     - [ ] download single `cowork.exe`; double-click (no env) → reaches API.
     - [ ] pairing URL printed + browser auto-opens, code pre-filled; approve in logged-in browser → binary enrolls.
     - [ ] first run extracts native once (instant on second run); two simultaneous runs both work.
-    - [ ] agent drives a desktop tool (screen capture / input) end-to-end via SSE.
+    - [ ] binary registers (presence) — tool EXECUTION is deferred to the backend tool-driving branch (out of scope here).
   - [ ] Remove `BRANCH.md`, push, merge-commit.
