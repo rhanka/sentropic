@@ -19,8 +19,8 @@ const TOGGLES: ChatToolScopeToggle[] = [
 ];
 
 describe('getWorkspaceTypeToolIds', () => {
-  it('returns document_generate for ai-ideas', () => {
-    const tools = getWorkspaceTypeToolIds('ai-ideas');
+  it('returns document_generate for ai-priorities', () => {
+    const tools = getWorkspaceTypeToolIds('ai-priorities');
     expect(tools.size).toBe(1);
     expect(tools.has('document_generate')).toBe(true);
   });
@@ -52,8 +52,8 @@ describe('getWorkspaceTypeToolIds', () => {
 });
 
 describe('filterToolTogglesByWorkspaceType', () => {
-  it('should keep only base tools for ai-ideas workspace', () => {
-    const filtered = filterToolTogglesByWorkspaceType(TOGGLES, 'ai-ideas');
+  it('should keep only base tools for ai-priorities workspace', () => {
+    const filtered = filterToolTogglesByWorkspaceType(TOGGLES, 'ai-priorities');
     const ids = filtered.map((t) => t.id);
     expect(ids).toContain('web');
     expect(ids).toContain('initiative');
