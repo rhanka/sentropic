@@ -3,6 +3,19 @@ import { Hono, type Context } from 'hono';
 
 export type ChatRouteMode = 'app-contract' | 'canonical';
 
+export type ChatMessageAttachmentInput = {
+  kind: 'image' | 'file';
+  source: 'context_document' | 'external_url';
+  documentId?: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  url?: string;
+  width?: number;
+  height?: number;
+  data?: Record<string, unknown>;
+};
+
 export type ChatControlAction =
   | 'createMessage'
   | 'stop'
@@ -77,6 +90,7 @@ export type ChatMessagePort = {
     primaryContextType?: string | null;
     primaryContextId?: string | null;
     contexts?: Array<{ contextType: string; contextId: string }>;
+    attachments?: ChatMessageAttachmentInput[] | null;
     sessionTitle?: string | null;
   }): Promise<CreatedChatMessage>;
 
@@ -274,6 +288,51 @@ function parseStringArray(value: unknown): string[] | undefined {
   return values.length > 0 ? values : undefined;
 }
 
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function parseAttachments(value: unknown): ChatMessageAttachmentInput[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const attachments = value
+    .slice(0, 16)
+    .map((item): ChatMessageAttachmentInput | null => {
+      if (!item || typeof item !== 'object') return null;
+      const record = item as Record<string, unknown>;
+      const kind = record.kind === 'file' ? 'file' : record.kind === 'image' ? 'image' : null;
+      if (!kind) return null;
+      const source = record.source === 'external_url' ? 'external_url' : 'context_document';
+      const documentId = stringValue(record.documentId) ?? undefined;
+      const url = stringValue(record.url) ?? undefined;
+      if (source === 'context_document' && !documentId) return null;
+      if (source === 'external_url' && !url) return null;
+      const mimeType = stringValue(record.mimeType) ?? undefined;
+      if (kind === 'image' && mimeType && !mimeType.toLowerCase().startsWith('image/')) {
+        return null;
+      }
+      const data =
+        record.data && typeof record.data === 'object'
+          ? (record.data as Record<string, unknown>)
+          : undefined;
+      const attachment: ChatMessageAttachmentInput = { kind, source };
+      if (documentId !== undefined) attachment.documentId = documentId;
+      const fileName = stringValue(record.fileName) ?? undefined;
+      if (fileName !== undefined) attachment.fileName = fileName;
+      if (mimeType !== undefined) attachment.mimeType = mimeType;
+      const sizeBytes = numberValue(record.sizeBytes);
+      if (sizeBytes !== undefined) attachment.sizeBytes = sizeBytes;
+      if (url !== undefined) attachment.url = url;
+      const width = numberValue(record.width);
+      if (width !== undefined) attachment.width = width;
+      const height = numberValue(record.height);
+      if (height !== undefined) attachment.height = height;
+      if (data !== undefined) attachment.data = data;
+      return attachment;
+    })
+    .filter((item): item is ChatMessageAttachmentInput => item !== null);
+  return attachments.length > 0 ? attachments : undefined;
+}
+
 function resolveLocale(c: Context): string | undefined {
   return c.req.header('x-app-locale') ?? c.req.header('accept-language') ?? undefined;
 }
@@ -390,12 +449,15 @@ export function createChatServer(
     if (denied) return denied;
     const body = await readJson(c);
     const content = stringValue(body.content);
-    if (!content) return c.json({ error: 'content is required' }, 400);
+    const attachments = parseAttachments(body.attachments);
+    if (!content && !attachments) {
+      return c.json({ error: 'content or attachments is required' }, 400);
+    }
 
     const created = await deps.messages.createUserMessageWithAssistantPlaceholder({
       userId: user.userId,
       sessionId: pathSessionId ?? stringValue(body.sessionId),
-      content,
+      content: content ?? '',
       providerId: stringValue(body.providerId),
       providerApiKey: stringValue(body.providerApiKey),
       model: stringValue(body.model),
@@ -403,6 +465,7 @@ export function createChatServer(
       primaryContextType: stringValue(body.primaryContextType),
       primaryContextId: stringValue(body.primaryContextId),
       contexts: parseContexts(body.contexts),
+      attachments,
       sessionTitle: stringValue(body.sessionTitle),
     });
 

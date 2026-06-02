@@ -15,6 +15,7 @@
  */
 import type {
   AssistantContentUpdate,
+  ChatMessageAttachment,
   ChatMessageIdentity,
   ChatMessageInsert,
   ChatMessageRow,
@@ -29,7 +30,15 @@ type FeedbackKey = string; // `${messageId}::${userId}`
 const feedbackKey = (messageId: string, userId: string): FeedbackKey =>
   `${messageId}::${userId}`;
 
-const cloneRow = (row: ChatMessageRow): ChatMessageRow => ({ ...row });
+const cloneAttachments = (
+  attachments: readonly ChatMessageAttachment[] | null | undefined,
+): readonly ChatMessageAttachment[] | null =>
+  attachments ? attachments.map((attachment) => ({ ...attachment })) : null;
+
+const cloneRow = (row: ChatMessageRow): ChatMessageRow => ({
+  ...row,
+  attachments: cloneAttachments(row.attachments),
+});
 
 const rowFromInsert = (input: ChatMessageInsert): ChatMessageRow => ({
   id: input.id,
@@ -37,6 +46,7 @@ const rowFromInsert = (input: ChatMessageInsert): ChatMessageRow => ({
   role: input.role,
   content: input.content,
   contexts: input.contexts ?? null,
+  attachments: cloneAttachments(input.attachments),
   toolCalls: input.toolCalls ?? null,
   toolCallId: input.toolCallId ?? null,
   reasoning: input.reasoning ?? null,

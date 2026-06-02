@@ -25,4 +25,29 @@ describe('AppChatPanel boundary', () => {
     expect(source).not.toContain("import { apiFetch");
     expect(source).not.toContain('const sendMessage = async');
   });
+
+  it('wires host-managed image attachments from composer to chat message payloads', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
+    expect(source).toContain("@sentropic/chat-ui/state/chatAttachments");
+    expect(source).toContain('let composerAttachments');
+    expect(source).toContain('handleComposerPaste');
+    expect(source).toContain('addGoogleDriveComposerAttachments');
+    expect(source).toContain('payload.attachments');
+    expect(source).toContain('kind: attachment.kind');
+    expect(source).toContain('attachments: sentAttachments');
+  });
+
+  it('renders a pending-only attachment band with click-to-enlarge, not a persistent session-doc band', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
+    expect(source).toContain('composerBandItems');
+    expect(source).toContain('chat-composer-attachment-band');
+    expect(source).toContain('openLightbox');
+    expect(source).toContain('chat-image-lightbox');
+    // Documents follow the same per-message model as images.
+    expect(source).toContain('attachFileToComposer');
+    // The separate bottom attachment tray is removed.
+    expect(source).not.toContain('chat-composer-attachment-tray');
+    // No persistent session-document merge in the composer band.
+    expect(source).not.toContain('mergeAttachmentBand');
+  });
 });
