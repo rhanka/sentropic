@@ -50,6 +50,7 @@
     "@aws-sdk/client-s3": "^3.980.0",
     "@hono/node-server": "^1.19.13",
     "@hono/zod-validator": "^0.7.6",
+    "@sentropic/auth-client": "file:../packages/auth-client",
     "@sentropic/auth-hono": "file:../packages/auth-hono",
     "@sentropic/chat-server": "file:../packages/chat-server",
     "@sentropic/flow": "file:../packages/flow",
