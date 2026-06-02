@@ -1,82 +1,75 @@
-# Feature: chat-ui MessageActions P2 (additive lib export)
+# Feature: chat-ui app retrofit — ModelSelector (P1) + MessageActions (P2)
 
 ## Objective
-Add a reusable `MessageActions` Svelte component and `message-actions` pure-logic util to `@sentropic/chat-ui` as new additive exports. Librarizes the message-action row (copy/edit/regenerate/retry/feedback) currently inline in `AppChatPanel.svelte` (handlers at lines 2884-2911, 2975-3000, 3081-3099, 3101-3108, 4409-4423; markup at lines 5095-5138 [user row] and 5181-5244 [assistant row] on main). Comment copy/edit (`startEditComment`, `editingCommentId`) and checkpoint-restore logic stay app-owned. No app changes, no headless-core, no Makefile changes.
+Retrofit `AppChatPanel.svelte` to consume `@sentropic/chat-ui`'s `ModelSelector` (P1) and `MessageActions` (P2), deleting the now-duplicated inline copies, zero dual-path. Preserve 1:1 UX. Wire the app's existing `chat.*` / `common.*` i18n labels via the label resolver prop. Add two missing i18n keys (`chat.message.edit`, `chat.model.selector.label`) to both locales.
 
 ## Scope / Guardrails
-- Scope limited to `packages/chat-ui/` new files and manifest/package.json additions.
+- Scope limited to `ui/src/lib/components/chat/AppChatPanel.svelte` + `ui/src/locales/en.json` + `ui/src/locales/fr.json` + `BRANCH.md`.
 - Make-only workflow, no direct Docker commands.
 - Root workspace reserved for user dev/UAT (`ENV=dev`) — must remain stable.
-- Branch development in isolated worktree `tmp/feat-chatui-message-actions-p2`.
-- Automated test campaigns on dedicated environments, never root `dev`.
-- `ENV=<env>` as last argument in all `make` commands.
+- No make build/test/dev/compose run (orchestrator runs Tier-1 gate after PR).
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/chat-ui/src/components/MessageActions.svelte` (new)
-  - `packages/chat-ui/src/components/MessageActions.svelte.d.ts` (new)
-  - `packages/chat-ui/src/utils/message-actions.ts` (new)
-  - `packages/chat-ui/package.json` (ADD two new exports subpaths + bump version minor)
-  - `packages/chat-ui/export-manifest.json` (ADD two new subpaths — additive only)
-  - `packages/chat-ui/tests/message-actions.spec.ts` (new)
+  - `ui/src/lib/components/chat/AppChatPanel.svelte`
+  - `ui/src/locales/en.json`
+  - `ui/src/locales/fr.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `ui/src/**` (app retrofit is a separate later branch)
-  - All other packages
+  - `packages/**`
+  - `.github/**`
+  - Anything outside `ui/src/lib/components/chat/AppChatPanel.svelte` and the two locale files (except `BRANCH.md`)
 - **Conditional Paths**: none required
-- **Exception process**: none needed (no conditional paths touched)
+- **Exception process**: none needed
 
 ## Feedback Loop
-- `deferred` (A0b-DOM): DOM/render tests for MessageActions.svelte deferred to `feat/chatui-a0b-dom-visual-harness` (A0b jsdom harness). Component covered by typecheck for now. Owner: Wave A plan.
+- (none)
 
 ## AI Flaky tests
 - N/A (no AI tests in this branch)
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (additive lib-only; single gate cycle)
-- Rationale: single orthogonal additive task, no service stack needed.
+- [x] **Mono-branch + cherry-pick** (single-file app retrofit; single test cycle by orchestrator)
+- Rationale: single orthogonal task; no service stack needed; Tier-1 gate runs externally.
 
 ## UAT Management (in orchestration context)
-- Mono-branch: no UI UAT (lib-only additive; no app changes in this branch).
-- Gates are local `make` commands only (typecheck + build + pack + test).
+- Mono-branch: UAT performed by orchestrator after PR via Tier-1 gate (build + chat e2e + visual).
 
 ## Plan / Todo (lot-based)
 
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read mandatory rules files and spec (workflow, MASTER, subagents, testing, SPEC_EVOL_CHATUI_WAVE_A §4 P2).
-  - [x] Confirm worktree on `feat/chatui-message-actions-p2`.
-  - [x] Confirm export manifest + existing tests (A0a gates must stay green).
-  - [x] Re-derive AppChatPanel.svelte message-action sub-ranges on main: handlers at lines 2884-2911 (startEditMessage/cancelEditMessage/saveEditMessage), 2975-3000 (retryMessage), 3081-3099 (retryFromAssistant), 3101-3108 (markCopied/isCopied), 4409-4423 (setFeedback); markup at lines 5095-5138 (user row) and 5181-5244 (assistant row).
-  - [x] Confirmed excluded: startEditComment/editingCommentId (line 2384+), checkpoint/pendingCheckpoint logic (lines 3002-3079).
-  - [x] Define scope: no dev stack needed (pure lib, node tests only).
+  - [x] Read mandatory rules files (workflow, MASTER, subagents, components, design-system).
+  - [x] Confirm worktree on `feat/chatui-app-retrofit` (off `origin/main` b117de6c).
+  - [x] Re-derive exact line ranges for ModelSelector (P1) and MessageActions (P2) inline code.
+  - [x] Inspect lib component APIs: `ModelSelector.svelte`, `MessageActions.svelte`, `model-selection.ts`, `message-actions.ts`.
+  - [x] Confirm i18n keys needed: `chat.message.edit` (missing), `chat.model.selector.label` (missing).
+  - [x] Confirm excluded: `startEditComment`/`editingCommentId` (comment-owned), checkpoint/restore, P3/ContextProvider.
+  - [x] Confirm icons no longer needed after replacement: `ThumbsUp`, `ThumbsDown`, `RotateCcw`.
 
-- [x] **Lot 1 — Pure logic util + component + exports + tests**
-  - [x] Write `packages/chat-ui/src/utils/message-actions.ts`: types + available-actions resolver, feedback-vote toggle logic, copy-payload helpers.
-  - [x] Write `packages/chat-ui/src/components/MessageActions.svelte`: presentational action row for user/assistant messages, i18n resolver, injected callbacks.
-  - [x] Write `packages/chat-ui/src/components/MessageActions.svelte.d.ts`: props type + default export.
-  - [x] Bump `packages/chat-ui/package.json` version to `0.3.0` (minor — new feature).
-  - [x] Add two export subpaths to `packages/chat-ui/package.json` exports map.
-  - [x] Add two subpath entries to `packages/chat-ui/export-manifest.json` (additive, no existing entries touched).
-  - [x] Write `packages/chat-ui/tests/message-actions.spec.ts`: resolveAvailableActions, toggleFeedbackVote, formatCopyPayload, buildFeedbackNextVote — node env.
-  - [x] Lot gate:
-    - [x] `make typecheck-chat-ui` — PASS
-    - [x] `make build-chat-ui` — PASS
-    - [x] `make pack-chat-ui` — PASS
-    - [x] `make test-chat-ui` — PASS (A0a export-surface + projection-golden + model-selection + new message-actions tests)
+- [x] **Lot 1 — P1: ModelSelector retrofit**
+  - [x] Add imports: `ModelSelector` from `@sentropic/chat-ui/components/ModelSelector.svelte`; `groupModelsByProvider`, `computeModelSelectorWidthCh`, `coerceSelectionToValidEntry`, types from `@sentropic/chat-ui/utils/model-selection`.
+  - [x] Remove local type declarations for `ModelProviderId`, `ModelCatalogProvider`, `ModelCatalogModel`, `ModelCatalogGroup` (now imported from lib).
+  - [x] Remove `parseModelSelectionKey`, `handleModelSelectionChange`, `providerGroupLabel`, `fallbackSelectedModelOption`, `getSelectedModelLabel`, `getLongestVisibleModelLabelLength` functions.
+  - [x] Replace `$: modelCatalogGroups = modelCatalogProviders.map(...).filter(...)` with `groupModelsByProvider(...)`.
+  - [x] Replace inline coercion reactive block with `coerceSelectionToValidEntry(...)`.
+  - [x] Replace `$: selectedModelWidthCh = Math.max(getLongestVisibleModelLabelLength() + 4, 18)` with `computeModelSelectorWidthCh(...)`.
+  - [x] Replace `<select id="chat-model-selection">` markup with `<ModelSelector bind:value ... onChange ... labels={$_} />`.
+  - [x] Add `chat.model.selector.label` to `ui/src/locales/en.json` and `fr.json`.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] No spec EVOL file to integrate (SPEC_EVOL_CHATUI_WAVE_A.md lives in spec/ and is the Wave A master spec — do not delete).
+- [x] **Lot 2 — P2: MessageActions retrofit**
+  - [x] Add import: `MessageActions` from `@sentropic/chat-ui/components/MessageActions.svelte`.
+  - [x] Remove `ThumbsUp`, `ThumbsDown`, `RotateCcw` from lucide imports (no longer used after replacement; `Check`, `Copy`, `Pencil` kept for comment copy/edit).
+  - [x] Remove `{@const isUp = ...}` / `{@const isDown = ...}` from assistant snippet (no longer used).
+  - [x] Replace user action row copy+edit buttons with `<MessageActions role="user" isCopied onCopy onEdit labels={$_} />` inside the existing outer flex div (checkpoint button kept).
+  - [x] Replace assistant action row copy+retry+feedback buttons div with `<MessageActions role="assistant" streamStatus isLastAssistantSegment isCopied feedbackVote onCopy onRegenerate onFeedback labels={$_} />`.
+  - [x] Keep all handler implementations: `startEditMessage`, `cancelEditMessage`, `saveEditMessage`, `retryMessage`, `retryFromAssistant`, `markCopied`, `isCopied`, `setFeedback` (unchanged).
+  - [x] Add `chat.message.edit` to `ui/src/locales/en.json` and `fr.json`.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck: `make typecheck-chat-ui`
-  - [ ] Build: `make build-chat-ui`
-  - [ ] Pack: `make pack-chat-ui`
-  - [ ] Test: `make test-chat-ui`
-  - [ ] Version bumped: `packages/chat-ui/package.json` → `0.3.0` (minor, new exports added).
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: verify branch CI on that PR.
-  - [ ] Final gate step 3: once CI OK, commit removal of `BRANCH.md`, push, merge.
+  - [ ] PR opened (NOT merged), title prefixed `[Tier-1 — orchestrator runs build+e2e+visual gate before merge]`.
+  - [ ] Orchestrator runs Tier-1 gate: build-ui-image + chat e2e + visual.
+  - [ ] Once UAT + CI green: commit removal of `BRANCH.md`, push, merge.
