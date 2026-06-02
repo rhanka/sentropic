@@ -1,2 +1,2 @@
 // Re-export shim: module moved to @sentropic/chat-ui-core (A1a extraction).
-export * from '@sentropic/chat-ui-core/utils/chat-run-projection.js';
+export * from '@sentropic/chat-ui-core/utils/chat-run-projection';
