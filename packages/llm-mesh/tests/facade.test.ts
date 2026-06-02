@@ -186,6 +186,7 @@ describe('createLlmMesh', () => {
     const cohereReasoning = getModelProfile('cohere', 'command-a-reasoning-08-2025');
     const geminiFlash = getModelProfile('gemini', 'gemini-3.5-flash');
     const claudeOpus = getModelProfile('anthropic', 'claude-opus-4-7');
+    const vertexFlash = getModelProfile('vertex', 'google/gemini-3.5-flash@vertex');
 
     expect(cohereReasoning?.reasoningTier).toBe('advanced');
     expect(cohereReasoning?.capabilities.reasoning.support).not.toBe('unsupported');
@@ -193,13 +194,40 @@ describe('createLlmMesh', () => {
     expect(geminiFlash?.capabilities.reasoning.support).not.toBe('unsupported');
     expect(claudeOpus?.label).toBe('Opus 4.7');
     expect(claudeOpus?.reasoningTier).toBe('advanced');
+    expect(vertexFlash?.reasoningTier).toBe('advanced');
+    expect(vertexFlash?.capabilities.reasoning.support).not.toBe('unsupported');
   });
 
   it('advertises image input only for verified vision-capable provider families', () => {
     expect(getModelProfile('openai', 'gpt-5.5')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('anthropic', 'claude-opus-4-7')?.capabilities.modalities.input).toContain('image');
+    expect(getModelProfile('vertex', 'google/gemini-3.5-flash@vertex')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('mistral', 'mistral-small-2603')?.capabilities.modalities.input).not.toContain('image');
     expect(getModelProfile('cohere', 'command-a-03-2025')?.capabilities.modalities.input).not.toContain('image');
+  });
+
+  it('exposes Gemini-on-Vertex as a distinct provider with globally-unique catalog keys', () => {
+    const vertexFlash = getModelProfile('vertex', 'google/gemini-3.5-flash@vertex');
+    const vertexLite = getModelProfile('vertex', 'google/gemini-3.1-flash-lite@vertex');
+
+    expect(vertexFlash?.providerId).toBe('vertex');
+    expect(vertexLite?.providerId).toBe('vertex');
+    // §C global-uniqueness: the Vertex selection keys MUST NOT collide with the
+    // bare AI-Studio `gemini` ids, otherwise inferProviderFromModelId (api) would
+    // silently mis-route them.
+    expect(getModelProfile('gemini', 'google/gemini-3.5-flash@vertex')).toBeNull();
+    expect(getModelProfile('vertex', 'gemini-3.5-flash')).toBeNull();
+    // Vertex = Gemini-on-Vertex: it mirrors the `gemini` provider family + the
+    // json-schema-subset structured-output capability template.
+    expect(getProviderProfile('vertex').family).toBe('google');
+    expect(getProviderProfile('vertex').capabilities.structuredOutput.jsonSchema.level).toBe(
+      getProviderProfile('gemini').capabilities.structuredOutput.jsonSchema.level,
+    );
+  });
+
+  it('keeps Vertex models opt-in (no default task hints) so default routing is unchanged', () => {
+    expect(getModelProfile('vertex', 'google/gemini-3.5-flash@vertex')?.defaultTaskHints).toEqual([]);
+    expect(getModelProfile('vertex', 'google/gemini-3.1-flash-lite@vertex')?.defaultTaskHints).toEqual([]);
   });
 });
