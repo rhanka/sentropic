@@ -47,6 +47,7 @@ Add OAuth2 `client_credentials` grant to the Sentropic IdP so backend services (
 ## Feedback Loop
 Actions with the following status should be included around tasks only if really required.
 
+- `BR39d-Q2` (e2e seed wiring, OPEN, needs micro-EX) — The optional E2E spec `e2e/tests/02-auth-s2s-client-credentials.spec.ts` needs the e2e DB to contain the `example-service-rp` service client. Seeding happens in `api/tests/utils/seed-test-data.ts` (calls `seedOAuthClients()`), which is OUTSIDE this branch's Allowed Paths. To run the E2E lane, add one line `await seedServiceClients();` next to the existing `seedOAuthClients()` call (import from `../../src/services/auth/oauth-client-seed`). Recommendation: conductor approves a 1-line micro-exception (or folds it into `api/tests/utils` allowance) since the seed helper is already implemented and exported. Non-blocking for unit/integration gates; only gates the optional E2E lane.
 - `BR39d-Q1` (infra blocker, OPEN) — Host Docker IPv4 network pool exhausted: every compose-network target (`make typecheck-api`, `make test-api`, dev/e2e stacks) fails with `could not find an available, non-overlapping IPv4 address pool`. Remedy is `docker network prune` but raw `docker` is blocked by the agent sandbox and no `make` target prunes networks. Package-only gates (`make typecheck-auth-hono`, `make test-auth-hono`, `make build-auth-hono`, `make pack-auth-hono`, `make typecheck-auth-client`, `make test-auth-client`) use `docker run` (no network) and PASS. Conductor must `docker network prune -f` on the host (non-destructive, preserves volumes), then re-run the api/e2e gates. All source for api/CI/Make/docs lots is written and committed; only the api-runtime test/typecheck execution is pending.
 - `BR39d-EX1` (Makefile) — `acknowledge`: new npm package requires make wiring per make-only rule. Targets added: `typecheck-auth-client`, `test-auth-client`, `build-auth-client`, `pack-auth-client`, `publish-auth-client`, `publish-auth-client-token`, `oauth-rotate-service-client`. Impact: additive targets only, mirrors `*-auth-hono` exactly. Rollback: delete the added targets.
 - `BR39d-EX2` (.github/workflows/ci.yml) — `acknowledge`: new package needs CI parity. Adds `auth_client` + `auth_client_publish` path filters, `validate-auth-client` job (mirror of `validate-auth-hono`), `publish-auth-client` job (mirror of `publish-auth-hono`), `auth-client` to `bootstrap_publish_target` enum + bootstrap step. Impact: additive jobs, no change to existing lanes. Rollback: revert the additions.
@@ -131,16 +132,16 @@ Actions with the following status should be included around tasks only if really
     - [x] **auth-client tests**: `packages/auth-client/tests/auth-client.test.ts` (7 tests) — token fetch + cache reuse, refresh on expiry, scope/resource forwarding, DPoP proof shape, **real round-trip** mint→protected-route (Bearer + DPoP w/ ath) against an in-process `@sentropic/auth-hono` IdP, error mapping. Not mocks-only.
     - [x] Sub-lot gate: `make test-auth-client` PASS (7 tests). `make pack-auth-client` PASS (dist+src+README+LICENSE).
 
-- [ ] **Lot 5 — Host wiring in Sentropic API (real consumer co-design + dogfood)**
-  - [ ] Per `feedback_contract_consumer_codesign`: exercise BOTH contracts on the real host.
-  - [ ] `api`: mount one `createRequireServiceAuth({requiredScopes:['service:ping'], resource:<api resource uri>})`-protected internal route returning minimal JSON (resource-server side).
-  - [ ] `api` imports `@sentropic/auth-client` (`BR39d-D10`, `EX4`+`EX5`): an internal self-S2S call (mint via `createAuthClient` → call the protected route) wired behind a script/health path — the activation + UAT artifact.
-  - [ ] `api/src/services/auth/oauth-client-seed.ts` (+ `api/src/scripts/oauth-seed-clients.ts`): seed a sample `service_clients` row for dev/test/e2e.
+- [x] **Lot 5 — Host wiring in Sentropic API (real consumer co-design + dogfood)**
+  - [x] Per `feedback_contract_consumer_codesign`: exercise BOTH contracts on the real host.
+  - [x] `api`: mount `createRequireServiceAuth({requiredScopes:['service:ping'], resource:<api resource uri>})`-protected internal route `GET /api/v1/auth/s2s/ping` returning minimal JSON (resource-server side). New file `api/src/routes/auth/service-s2s.ts`; mounted in `api/src/routes/auth/index.ts` under `/s2s`.
+  - [x] `api` imports `@sentropic/auth-client` (`BR39d-D10`, `EX4`+`EX5`): `GET /api/v1/auth/s2s/self-check` mints via `createAuthClient` → calls the protected `/ping` route — the activation + UAT artifact (gated behind `OAUTH_SELF_SERVICE_CLIENT_ID/_SECRET`).
+  - [x] `api/src/services/auth/oauth-client-seed.ts` (+ `api/src/scripts/oauth-seed-clients.ts`): `seedServiceClients()` seeds `example-service-rp` + the self-S2S dogfood client for dev/test/e2e. Env: `OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC`, `OAUTH_SERVICE_RESOURCE_URI`, `OAUTH_SELF_SERVICE_CLIENT_ID/_SECRET`.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api`
-    - [ ] **API tests**: `api/tests/api/auth/service-auth-middleware.test.ts` — full host round-trip: mint via `client_credentials` against mounted IdP, call protected route → 200; negatives: no token → 401, wrong scope → 403, wrong `aud`/`resource` → 401.
-    - [ ] Sub-lot gate: `make test-api ENV=test-feat-auth-s2s`
-    - [ ] **E2E (optional, API-level)**: `e2e/tests/02-auth-s2s-client-credentials.spec.ts` — running stack: token round-trip + protected route. Prepare: `make build-api build-ui-image API_PORT=9198 UI_PORT=5398 MAILDEV_UI_PORT=1298 ENV=e2e-feat-auth-s2s`. Run scoped then group gate per `.github/workflows/ci.yml` split.
+    - [x] `make typecheck-api` BLOCKED (`BR39d-Q1` docker net pool). `make lint-api` BLOCKED (same).
+    - [x] **API tests**: `api/tests/api/auth/service-auth-middleware.test.ts` WRITTEN — full host round-trip (mint via `client_credentials` → protected route 200) + negatives (no token 401, wrong scope 403, wrong `aud`/`resource` 401). Execution BLOCKED (`BR39d-Q1`).
+    - [x] Sub-lot gate: `make test-api ENV=test-feat-auth-s2s` BLOCKED (`BR39d-Q1`).
+    - [x] **E2E (optional, API-level)**: `e2e/tests/02-auth-s2s-client-credentials.spec.ts` WRITTEN. Running it requires `seedServiceClients()` to be wired into `api/tests/utils/seed-test-data.ts` (out of Allowed Paths) — see `BR39d-Q2`. Execution BLOCKED (`BR39d-Q1` + e2e build).
 
 - [ ] **Lot 6 — CI / Make / ops parity**
   - [ ] `Makefile` (`BR39d-EX1`): add `typecheck-auth-client`, `test-auth-client`, `build-auth-client`, `pack-auth-client`, `publish-auth-client`, `publish-auth-client-token`, `oauth-rotate-service-client CLIENT_ID=... ENV=...` (mirror `*-auth-hono`).
