@@ -69,15 +69,24 @@ Decided: (a). The prerelease channel built in 41a stays available for when exter
 - The BR-41b local webview / mini-browser hosting chat-ui (the main 41b feature) — follows these fixes.
 - macOS/Linux desktop builds.
 
-## Sequencing (BR-41b opening lots)
+## Sequencing — this branch ships ONLY the recette fixes (tool-driving SPLIT out, user decision after Opus 4.8 peer review)
 
-- Lot 1 — Fix ① default API base URL (+ help text) in `bin/cowork.mjs`, `packaging/entry.mjs`, launcher `.cmd`.
-- Lot 2 — Fix ② robust pairing-URL derivation + safe auto-open (both `bin` + `entry`) + URL trust-boundary validation; add the "did YOU start this device pairing?" confirmation on the approve page; record issuance rate-limit as a follow-up.
-- Lot 3 — Fix ③: Windows native-resolution **spike (pass/fail gate)** → single-file packaging + download route serves `.exe`.
-- Lot 4 — prerelease/UAT (recommendation (a)).
-- Lot 5 — **SSE consume loop** (IN SCOPE, decided): the binary currently enrolls/registers/advertises tools but NEVER connects the chat stream (`bin/cowork.mjs:109` constructs then drops the runner; code comment says "Lot 5"). Wire the SSE client → `cowork-runner` → execute `tool_call` → post results (the posting path `runner/tool-results.ts` already exists) so the agent actually drives the desktop tools (eyes/hands). This makes the binary end-to-end functional and UAT-able — without it the next recette re-blocks at "the agent drives nothing".
-- (then) Lot 6+ — local webview feature (separate design — the main 41b feature).
+- Lot 1 — Fix ① default API base URL (+ help text) in `bin/cowork.mjs`, `packaging/entry.mjs`, launcher `.cmd`; extract a shared `main()` so the two byte-identical entrypoints can't drift.
+- Lot 2 — Fix ② robust pairing-URL derivation + safe auto-open (shared `main()`) + URL trust-boundary validation; the binary STOPS printing the server's host-less `verification_uri` and prints/opens its own derived absolute URL; the "did YOU start this?" confirmation goes in the pair PAGE wrapper (`ui/src/routes/auth/devices/pair/+page.svelte`, in scope — NOT inside `AuthDevicePair`/auth-ui).
+- Lot 3 — Fix ③: native-resolution module (cross-platform Linux spike = pass/fail gate) → single-file `.exe` packaging + download route serves `.exe` (rename `DEFAULT_DESKTOP_ZIP_PATH` → `DEFAULT_DESKTOP_EXE_PATH`; confirm no e2e/test asserts the `.zip`).
+- Lot N — version bump `@sentropic/cowork-desktop` 0.1.0 → 0.2.0 (minor) → merge to main (option a) → UAT.
 
-## Acceptance summary (UAT-ready definition)
+## Deferred to a dedicated branch — functional tool-driving (Opus 4.8 peer findings, recorded so the design isn't lost)
 
-Single `cowork.exe` downloaded from `sentropic.sent-tech.ca`, double-clicked with no env, prints + opens a full pairing URL with the code pre-filled; approval in the logged-in browser enrolls the device, which then **registers and advertises its desktop tools**; first run self-configures once, subsequent runs are instant. NOTE (Opus MEDIUM-2): actually EXECUTING tool calls requires the SSE consume loop (Lot 5) — it is NOT delivered by Lots 1–4. "Agent drives the desktop tools" is only true once Lot 5 ships.
+Making the agent actually drive the desktop tools is a BACKEND feature, not a client SSE loop. Grounded findings:
+- **No per-device push channel.** `tool_call`s ride the chat client's OWN stream: `GET /streams/sse?streamIds=<assistantMessageId>` (`api/src/routes/api/streams.ts:231`), delivered as a `status` event `{ state:'awaiting_local_tool_results', pending_local_tool_calls:[…] }` (`packages/chat-core/src/runtime-finalization.ts:277`). The Chrome ext works only because it IS the message originator (knows the streamId; `ui/chrome-ext/background.ts:300`).
+- **The headless device has no streamId** (never POSTs a message) and there is NO device-targeted SSE mode (`streams.ts` requires explicit `streamIds`). A device→stream discovery mechanism must be designed (new `streams.ts` filter, or a NOTIFY keyed to the device), with the security model: which device may read which streams (auth already binds SSE to the user via `isChatStreamAllowed`, `streams.ts:297`).
+- **Server never injects desktop tools.** Injection is gated to browser sources (`chat-service.ts:2731` `filter(isBrowserSource)`; `desktop_cowork` excluded `tab-registry.ts:15`). Needs a `buildServerDesktopToolDefinitions` sibling so the model is told `screen_capture`/`input_action` exist.
+- **`tool-results.ts` contract is wrong / never worked.** Server `toolResults` (`packages/chat-server/src/index.ts:643`) wants a SINGLE `{ toolCallId, result }` (camelCase, `result:unknown`) with a 400-race retry (cf `ui/src/lib/components/chat/AppChatPanel.svelte:809`); the binary posts a snake_case batch and `CoworkRunner.handleStatusPayload` posts the whole batch at once (`cowork-runner.ts:77`). Rewrite to one post per call.
+- **SSE parsing**: do NOT reuse `chat-ui` `streamHub`/`transport` (browser `EventSource`); reuse the chrome-ext hand-parser pattern (`background.ts:328` `fetch`+`getReader()`+manual framing, Node-compatible) and `parsePendingLocalToolCallsFromStatusPayload` (already imported by `cowork-runner.ts:1`).
+
+(then) local webview feature — separate design, the main 41b feature.
+
+## Acceptance summary (UAT-ready definition — THIS branch)
+
+Single `cowork.exe` downloaded from `sentropic.sent-tech.ca`, double-clicked with no env, prints + opens a full pairing URL with the code pre-filled; approval in the logged-in browser enrolls + registers the device; first run self-configures once (native extraction), subsequent runs are instant; two simultaneous first runs both succeed. EXECUTING tool calls (the agent driving eyes/hands) is explicitly OUT of this branch — it needs the backend tool-driving feature deferred above.
