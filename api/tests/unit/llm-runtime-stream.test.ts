@@ -32,6 +32,11 @@ vi.mock('../../src/config/env', () => ({
     GEMINI_API_KEY: 'test-gemini-key',
     MISTRAL_API_KEY: 'test-mistral-key',
     COHERE_API_KEY: 'test-cohere-key',
+    // BR-42f — Vertex matrix rows need project/location so the pre-dispatch ADC
+    // mint path runs (toMeshAuthInput) and buildVertexRuntimeRequest can build
+    // the transport request. The actual mint is stubbed below (no live call).
+    VERTEX_PROJECT_ID: 'test-vertex-project',
+    VERTEX_LOCATION: 'us-central1',
   },
 }));
 
@@ -52,6 +57,10 @@ vi.mock('cohere-ai', () => ({
 // ---------------------------------------------------------------------------
 
 import type { StreamEvent } from '../../src/services/llm-runtime';
+import {
+  __setVertexAdcMinter,
+  __resetVertexTokenCache,
+} from '../../src/services/providers/vertex-provider';
 
 async function collectStreamEvents(generator: AsyncGenerator<StreamEvent>): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
@@ -811,6 +820,130 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       },
     ],
   },
+
+  // -----------------------------------------------------------------------
+  // Vertex — Gemini 3.1 Flash Lite on Vertex (BR-42f)
+  // Identical Gemini SSE wire shape (candidates/parts/functionCall/thought) —
+  // the runtime reuses the Gemini SSE→event mapper (BR42f-D4 REUSE). Only the
+  // attribution prefix differs: tool-call ids are `vertex_call_…` (M4).
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'vertex',
+    model: 'google/gemini-3.1-flash-lite@vertex',
+    label: 'Gemini 3.1 Flash Lite on Vertex',
+    chatEvents: [
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'test' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'vertex_call_1',
+      startArgs: '{"query":"test"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'Vertex lite thought', thought: true },
+              { text: 'Vertex lite answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Vertex lite thought'],
+      contentCount: 1,
+      contentDeltas: ['Vertex lite answer'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
+  // Vertex — Gemini 3.5 Flash on Vertex (reasoning model) (BR-42f)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'vertex',
+    model: 'google/gemini-3.5-flash@vertex',
+    label: 'Gemini 3.5 Flash on Vertex',
+    chatEvents: [
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'pro' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'vertex_call_1',
+      startArgs: '{"query":"pro"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'Vertex thought', thought: true },
+              { text: 'Vertex answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Vertex thought'],
+      contentCount: 1,
+      contentDeltas: ['Vertex answer'],
+      hasDone: true,
+    },
+    statusEvents: [
+      {
+        candidates: [{
+          content: { parts: [{ text: 'Answer' }] },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -845,6 +978,15 @@ const COHERE_TOOL_START_NAME_VARIANT = {
 describe('LLM stream event normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // BR-42f — stub the Vertex ADC mint so the pre-dispatch bearer mint in
+    // toMeshAuthInput resolves deterministically (no live ADC call). The Vertex
+    // matrix rows then reach the spied provider.streamGenerate like every other
+    // provider, exercising the shared Gemini SSE→event mapper.
+    __resetVertexTokenCache();
+    __setVertexAdcMinter(async () => ({
+      token: 'stub-vertex-bearer',
+      expiresAtMs: Number.MAX_SAFE_INTEGER,
+    }));
   });
 
   it('has a stream fixture for every advertised model capability', async () => {
