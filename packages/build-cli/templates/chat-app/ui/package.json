@@ -1,0 +1,31 @@
+{
+  "name": "{{slug}}-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web UI for {{name}}: embeds @sentropic/chat-ui ChatPanel over the backend's canonical routes.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@sentropic/chat-ui": "^0.1.1",
+    "@sentropic/chat-core": "^0.1.2",
+    "@sentropic/design-system-svelte": "^0.10.3",
+    "@sentropic/design-system-themes": "^0.10.3",
+    "@sentropic/design-system-tokens": "^0.10.3"
+  },
+  "devDependencies": {
+    "@lucide/svelte": "^0.562.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.1.4",
+    "svelte-streamdown": "^3.0.1",
+    "typescript": "^5.4.5",
+    "vite": "^6.0.7"
+  }
+}
