@@ -68,3 +68,7 @@ graphify-out/
 
 #security tokens
 .auth
+
+# BR-42f Vertex live-UAT service-account key (NEVER commit a GCP SA-key JSON)
+vertex-sa*.json
+.secrets/

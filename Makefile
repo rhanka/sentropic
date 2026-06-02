@@ -2453,3 +2453,46 @@ oauth-init-keys: ## Bootstrap the first active Ed25519 signing key (idempotent; 
 .PHONY: oauth-rotate-keys
 oauth-rotate-keys: ## Rotate the active Ed25519 signing key; old key stays in JWKS for ≥65 min
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm run oauth:rotate-keys"
+
+# -----------------------------------------------------------------------------
+# BR-42f — Vertex AI live UAT (make-only, credential-safe; docker-compose UNTOUCHED).
+# The running server's env can't be changed, so this injects VERTEX_* on a FRESH
+# exec process. Requires the branch stack up first, e.g.:
+#   make dev API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=feat-llm-mesh-vertex-ai
+# Then:
+#   make vertex-live-uat VERTEX_PROJECT_ID=<id> VERTEX_LOCATION=<region> \
+#     VERTEX_SA_KEY=<host-path-to-gitignored-SA-key.json> ENV=feat-llm-mesh-vertex-ai
+# The SA key is `docker cp`-ed into the container at /tmp/vertex-sa.json (gitignored
+# on host). Output is sanitized by the script (no bearer / SA-JSON / full project id).
+# Safe defaults: with no VERTEX_SA_KEY the target reaches the script's clear guard,
+# which exits non-zero WITHOUT a live call (proves the gate; never crashes).
+# -----------------------------------------------------------------------------
+VERTEX_PROJECT_ID ?=
+VERTEX_LOCATION   ?=
+VERTEX_SA_KEY     ?=
+
+.PHONY: vertex-live-uat
+vertex-live-uat: ## Drive a real streaming Vertex call per catalog model (sanitized). Vars: VERTEX_PROJECT_ID, VERTEX_LOCATION, VERTEX_SA_KEY; ENV last.
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -eq 0 ]; then \
+		echo "api container is not running. Start the branch stack first (e.g. make dev API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=$(ENV))."; \
+		exit 1; \
+	fi
+	@if [ -n "$(VERTEX_SA_KEY)" ]; then \
+		if [ ! -f "$(VERTEX_SA_KEY)" ]; then \
+			echo "VERTEX_SA_KEY=$(VERTEX_SA_KEY) does not exist (expected a gitignored Vertex AI User SA-key JSON)."; \
+			exit 1; \
+		fi; \
+		cid="$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api)"; \
+		docker cp "$(VERTEX_SA_KEY)" "$$cid:/tmp/vertex-sa.json" >/dev/null; \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec \
+			-e VERTEX_PROJECT_ID="$(VERTEX_PROJECT_ID)" \
+			-e VERTEX_LOCATION="$(VERTEX_LOCATION)" \
+			-e GOOGLE_APPLICATION_CREDENTIALS=/tmp/vertex-sa.json \
+			-e VERTEX_LIVE_UAT=1 \
+			api sh -lc "npm run vertex:live-uat"; \
+	else \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec \
+			-e VERTEX_PROJECT_ID="$(VERTEX_PROJECT_ID)" \
+			-e VERTEX_LOCATION="$(VERTEX_LOCATION)" \
+			api sh -lc "npm run vertex:live-uat"; \
+	fi
