@@ -77,7 +77,7 @@ All package handlers emit structured responses to keep contracts predictable acr
 | Endpoint | Description |
 | --- | --- |
 | `GET /oauth/authorize` | Authorization Code + PKCE entry point (S256 required) |
-| `POST /oauth/token` | Token issuance (`grant_type=authorization_code` only in 0.3.x) |
+| `POST /oauth/token` | Token issuance (`grant_type=authorization_code` and `client_credentials` since 0.4.0) |
 | `GET\|POST /oauth/userinfo` | Returns claims for a valid access token |
 | `POST /oauth/revoke` | Revokes an access token (RFC 7009) |
 | `POST /oauth/introspect` | Token introspection (RFC 7662, client-auth required) |
@@ -158,6 +158,56 @@ The package never imports Postgres or any persistence library. Sentropic supplie
 
 Set `dpop_bound_access_tokens: true` on the OAuth client record. Bound clients must send a `DPoP: <proof-jwt>` header on `/token`, `/userinfo`, and `/revoke`. The IdP verifies `htm`, `htu`, `iat` skew, unique proof `jti`, and `ath` on resource calls. Access and ID tokens include `cnf.jkt`.
 
+### Service-to-service auth — `client_credentials` (since 0.4.0)
+
+Backend services mint scoped, audience-bound, **stateless** access tokens without
+a human via the `client_credentials` grant.
+
+- **Service clients** are a separate record type, `ServiceClientRecord`, looked up
+  through an **optional** `findServiceClient?(clientId)` method on
+  `OauthStateStorePort`. Existing implementors of the `0.3.0` contract keep
+  compiling; if the method is absent, `client_credentials` returns
+  `unsupported_grant_type`.
+- **Auth methods**: `client_secret_basic` and `client_secret_post`, verified via
+  `ports.tokens.hashSecret`.
+- **Scopes**: empty/absent `scope` grants the client's full `allowed_scopes`;
+  otherwise the request must be a subset (else `invalid_scope`).
+- **RFC 8707 resource indicators**: the issued token `aud` is the resolved
+  `resource`, which must be in the client's `resource_indicators`. Resolution: 1
+  indicator + no `resource` ⇒ use it; >1 + no `resource` ⇒ `invalid_target`; 0
+  indicators ⇒ `resource` required else `invalid_target`; unknown `resource` ⇒
+  `invalid_target`.
+- **Stateless** (no `saveTokenMeta`, no `oauth_tokens` row): security relies on a
+  short TTL (`serviceAccessTokenTtlSeconds`, default `900`) + secret rotation.
+  Service-token revocation/introspection are deferred to BR-39h.
+- **DPoP** is opt-in via `dpop_bound_access_tokens` and strongly recommended for
+  production S2S.
+
+Resource servers verify these tokens with `createRequireServiceAuth`:
+
+```ts
+import { createRequireServiceAuth, type ServiceAuthPorts } from '@sentropic/auth-hono';
+
+const ports: ServiceAuthPorts = {
+  clock,                                   // AuthHonoClockPort
+  jwks,                                    // JwksPort
+  dpopReplay: { recordDpopJti },           // optional, required to enforce DPoP replay
+};
+
+app.get(
+  '/internal/ping',
+  createRequireServiceAuth({ issuer, resource, requiredScopes: ['service:ping'], ports }),
+  (c) => c.json({ ok: true, client: c.get('serviceClient') }),
+);
+```
+
+`ServiceAuthPorts` is a **narrow** port (`Pick<AuthHonoPorts,'jwks'|'clock'> & { dpopReplay? }`):
+resource servers do not construct user/credential/session/email ports just to
+verify a token. The middleware validates `iss`, `aud === resource`, `exp`, and
+`scope ⊇ requiredScopes`; for `cnf.jkt`-bound tokens it requires a DPoP proof,
+enforces `ath` (RFC 9449 §4.3), and records the proof `jti` for replay defense.
+On failure it returns 401/403 with a `WWW-Authenticate` header.
+
 ### Claims and ACR levels
 
 | Claim | Source | Notes |
@@ -176,6 +226,8 @@ Set `dpop_bound_access_tokens: true` on the OAuth client record. Bound clients m
 | `OAUTH_ID_TOKEN_TTL_SEC` | ID token lifetime | `3600` |
 | `OAUTH_AUTHORIZATION_CODE_TTL_SEC` | Authorization code TTL | `60` |
 | `OAUTH_DPOP_IAT_SKEW_SEC` | DPoP proof `iat` tolerance | `60` |
+| `OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC` | Stateless service token TTL (`client_credentials`) | `900` |
+| `OAUTH_SERVICE_RESOURCE_URI` | Service token `aud` this API accepts/advertises | Derived from issuer |
 
 ### End-to-end example
 
@@ -187,8 +239,9 @@ This is a brand-new public package. First publish requires the one-shot bootstra
 
 ## Versioning
 
-This branch ships `0.3.0`:
+This branch ships `0.4.0`:
 
 - `0.2.0` adds `AuthHonoRouteHandlerError` short-circuit on WebAuthn prepare/resolve hooks and the `finalizeRegistration`/`finalizeAuthentication` post-verify hooks. Additive; existing handler signatures stay valid.
 - `0.2.1` patches `extractChallenge` (both WebAuthn handlers) to handle `credential.response === null` defensively (returns 400 `invalid_credential` instead of throwing 500).
 - `0.3.0` adds the OAuth2/OIDC IdP surface: `createOAuthRouter`, `createWellKnownRouter`, `createJwksService`, `OauthStateStorePort`, `JwksPort`, Ed25519 signing, DPoP opt-in, and all six OAuth endpoints. Additive; existing WebAuthn/session handler signatures unchanged.
+- `0.4.0` adds the S2S `client_credentials` grant (stateless service tokens), `createRequireServiceAuth` + `ServiceAuthPorts`, the optional `findServiceClient?` on `OauthStateStorePort`, `ServiceClientRecord`, and RFC 8707 resource indicators. Discovery now advertises `client_credentials` and `client_secret_post`. Additive and non-breaking — existing `0.3.0` implementors keep compiling.
