@@ -84,8 +84,14 @@ export const createSentropicOAuthOptions = (request?: Request) => ({
   issuer: resolveOAuthIssuer(request),
   loginUrl: `${resolveOAuthUiBaseUrl(request)}/auth/login`,
   ports: getSentropicOAuthPorts(),
+  serviceAccessTokenTtlSeconds: env.OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC,
   stateCodec: createOAuthHmacStateCodec({ secret: resolveOAuthStateSecret() }),
 });
+
+export const resolveOAuthServiceResource = (request?: Request): string =>
+  env.OAUTH_SERVICE_RESOURCE_URI
+    ? trimTrailingSlash(env.OAUTH_SERVICE_RESOURCE_URI)
+    : resolveOAuthIssuer(request);
 
 function withOAuthOptions(
   factory: (options: ReturnType<typeof createSentropicOAuthOptions>) => (c: Context) => Promise<Response>,
