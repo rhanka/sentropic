@@ -45,12 +45,13 @@ npm install @sentropic/auth-ui
 
 | Export path | Contents |
 | --- | --- |
-| `@sentropic/auth-ui` | `AuthUiTransport`, `AuthUiSession`, `AuthUiError`, `AuthUiLabels`, `createDefaultAuthUiLabels`, `createFrenchAuthUiLabels`, `createDefaultAuthUiBranding`, `assertAuthUiTransport`, `normalizeAuthEmail`, `createAuthUiError`, `createDefaultFetchTransport`, WebAuthn helpers |
+| `@sentropic/auth-ui` | `AuthUiTransport`, `AuthUiSession`, `AuthUiError`, `AuthUiLabels`, `createDefaultAuthUiLabels`, `createFrenchAuthUiLabels`, `createDefaultAuthUiBranding`, `assertAuthUiTransport`, `normalizeAuthEmail`, `createAuthUiError`, `createDefaultFetchTransport`, WebAuthn helpers; **+ OAuth (0.3.0)**: `createOAuthClient`, `OAuthConsentTransport`, `OAuthConsentDetails`, `OAuthConsentDecision`, `OAuthConsentLabels`, `createDefaultOAuthConsentLabels`, `createFrenchOAuthConsentLabels` |
 | `@sentropic/auth-ui/components/AuthLogin.svelte` | Passkey login screen (discoverable credentials, lost-device path) |
 | `@sentropic/auth-ui/components/AuthRegister.svelte` | Email-code → passkey registration; optional `skipEmailVerification` for hosts that own pre-auth |
 | `@sentropic/auth-ui/components/AuthMagicLinkVerify.svelte` | Verifies a magic-link token from a host-supplied source |
 | `@sentropic/auth-ui/components/AuthDevices.svelte` | Lists / renames / revokes registered passkeys |
 | `@sentropic/auth-ui/components/AuthDevicePair.svelte` | Approves a device-code pairing (`approveDevicePairing` contract) |
+| `@sentropic/auth-ui/components/OAuthConsent.svelte` | OAuth2 consent screen (since 0.3.0) |
 
 All five components accept a `labels?: Partial<AuthUiLabels>` prop so hosts can override copy without forking. Each takes a `transport: AuthUiTransport` and one or more host callbacks (`onLoggedIn`, `onRegistered`, `onVerified`, `onPaired`, `onUnauthorized`, `onError`). Visual customisation flows through CSS custom properties (`--auth-primary`, `--auth-bg`, `--auth-text`, `--auth-radius`, `--auth-font-family`, …) and slots (`no-account`, `register-new-device`, `back-to-login`, `back-to-devices`, `pair-cta`, `add-device`, `login-link`, `cancel`).
 
@@ -142,9 +143,87 @@ See `tests/example-admin-fetch-transport.test.ts` for a full walkthrough.
 - **French labels**: `createFrenchAuthUiLabels(overrides?)` ships a complete FR baseline; partial overrides keep the unchanged keys.
 - **Post-login redirects**: never built into the components — call `goto(returnUrl)` / `location.assign(...)` from `onLoggedIn` / `onRegistered` / `onVerified` / `onRedirect`. `AuthMagicLinkVerify` exposes `redirectDelayMs` (defaults to 1000 ms) so the success screen has time to render before the host redirect fires.
 
-## Backend coupling (BR-39b)
+## OAuth Consent + RP Client Helper (since 0.3.0)
 
-`@sentropic/auth-hono` provides reusable Hono route factories that match this transport shape 1:1. It is **not required** to adopt this UI package — any backend that exposes the routes listed above will work. BR-39b removes the duplicated backend code from Sentropic, but the UI package was usable before that landed.
+### OAuthConsent component
+
+`<OAuthConsent />` renders the consent screen displayed to users when an external RP requests access.
+
+Props:
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `state` | `string` | Sealed OAuth state token from the authorize redirect query param |
+| `transport` | `OAuthConsentTransport` | Calls the IdP to fetch consent details and submit the decision |
+| `labels` | `Partial<OAuthConsentLabels>` | Override EN defaults (or use `createFrenchOAuthConsentLabels()`) |
+| `onRedirect` | `(url: string) => void` | Called with the RP redirect URL after approve or deny |
+| `onError` | `(error: unknown) => void` | Called on transport errors |
+
+Named slots: `branding` (client logo / name override), `scope-description` (per-scope explanations), `footer` (custom legal copy).
+
+```svelte
+<script lang="ts">
+  import { goto } from '$app/navigation';
+  import OAuthConsent from '@sentropic/auth-ui/components/OAuthConsent.svelte';
+  import { createSentropicOAuthConsentTransport } from '$lib/services/oauth-transport';
+  import { page } from '$app/stores';
+
+  const state = $page.url.searchParams.get('state') ?? '';
+  const transport = createSentropicOAuthConsentTransport();
+</script>
+
+<OAuthConsent {state} {transport} onRedirect={(url) => goto(url)} />
+```
+
+### createOAuthClient helper
+
+`createOAuthClient` handles discovery, PKCE generation, code exchange, token revocation, and optional DPoP proof generation for RP-side code in the browser.
+
+```ts
+import { createOAuthClient } from '@sentropic/auth-ui';
+
+const client = createOAuthClient({
+  issuer: 'https://api.example.com',
+  clientId: 'my-rp',
+  redirectUri: 'https://myapp.example.com/auth/callback',
+  scopes: ['openid', 'profile', 'email'],
+  // Optional: enable DPoP (RFC 9449)
+  // dpop: { generateKeyPair: ..., store: ... }
+});
+
+// Build the authorization URL (redirects user to IdP)
+const { url, codeVerifier, state, nonce } = await client.startAuthorization();
+location.assign(url);
+
+// On callback page: exchange code for tokens
+const tokens = await client.exchangeCode(code, codeVerifier);
+
+// Fetch user claims
+const userInfo = await client.userInfo(tokens.access_token);
+
+// Revoke access token when done
+await client.revoke(tokens.access_token);
+```
+
+The client caches the OIDC discovery document on first call. When `dpop` is enabled it generates an Ed25519 keypair via SubtleCrypto, stores it through the injected `store` adapter, and attaches a signed DPoP proof header to every token/userinfo/revoke request.
+
+### Downstream RP example (immo, diag, paas)
+
+```ts
+// In a downstream SvelteKit app that uses Sentropic as its IdP
+import { createOAuthClient } from '@sentropic/auth-ui';
+
+export const oauthClient = createOAuthClient({
+  issuer: import.meta.env.VITE_SENTROPIC_API_URL,   // e.g. https://api.sentropic.io
+  clientId: import.meta.env.VITE_OAUTH_CLIENT_ID,
+  redirectUri: `${location.origin}/auth/callback`,
+  scopes: ['openid', 'profile', 'email'],
+});
+```
+
+## Backend coupling (BR-39b / BR-39c)
+
+`@sentropic/auth-hono` provides reusable Hono route factories that match this transport shape 1:1. It is **not required** to adopt this UI package — any backend that exposes the routes listed above will work. BR-39b removes the duplicated backend code from Sentropic; BR-39c adds the OAuth2/OIDC IdP surface consumed by `<OAuthConsent />` and `createOAuthClient`.
 
 ## Versioning
 
