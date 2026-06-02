@@ -8,7 +8,7 @@
  */
 export interface ContextFilter {
   /**
-   * Workspace types (e.g. 'ai-ideas', 'opportunity') for which the skill is
+   * Workspace types (e.g. 'ai-priorities', 'opportunity') for which the skill is
    * relevant. Empty / omitted = any workspace type.
    */
   readonly workspaceTypes?: ReadonlyArray<string>;
