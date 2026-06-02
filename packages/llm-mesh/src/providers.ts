@@ -1,4 +1,4 @@
-export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere'] as const;
+export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'vertex'] as const;
 
 export type ProviderId = (typeof providerIds)[number];
 
@@ -22,6 +22,17 @@ export const knownModelIds = [
   'magistral-medium-2509',
   'command-a-03-2025',
   'command-a-reasoning-08-2025',
+  // Vertex catalog keys use the `{publisher}/{model}@vertex` scheme so they are
+  // globally unique vs the bare AI-Studio `gemini` ids (HARD invariant — the api
+  // `inferProviderFromModelId` helper returns null on a >1 catalog match, which
+  // would silently mis-route a colliding id to the default provider).
+  // ROUTING CONTRACT FOR api Lot 3: the catalog key is the selection key only.
+  // The api dispatch strips it back to publisher=`google` + wire model
+  // (`gemini-3.5-flash`) when building the Vertex
+  // `publishers/{publisher}/models/{model}` URL path; the `@vertex` qualifier is
+  // what routes the id to provider `vertex`.
+  'google/gemini-3.5-flash@vertex',
+  'google/gemini-3.1-flash-lite@vertex',
 ] as const;
 
 export type KnownModelId = (typeof knownModelIds)[number];
@@ -36,6 +47,7 @@ export const knownModelIdsByProvider = {
   anthropic: ['claude-sonnet-4-6', 'claude-opus-4-7'],
   mistral: ['mistral-small-2603', 'magistral-medium-2509'],
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
+  vertex: ['google/gemini-3.5-flash@vertex', 'google/gemini-3.1-flash-lite@vertex'],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 
 export interface ModelReference {
