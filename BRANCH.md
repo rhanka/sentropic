@@ -47,6 +47,7 @@ Add OAuth2 `client_credentials` grant to the Sentropic IdP so backend services (
 ## Feedback Loop
 Actions with the following status should be included around tasks only if really required.
 
+- `BR39d-Q3` (auth-hono 0.4.0 bump breaks auth-ui peer, OPEN, BLOCKING the lockfile/bump gate) — Bumping `@sentropic/auth-hono` 0.3.0 → 0.4.0 (per Lot N + required by the touched `src/**`) breaks the workspace lockfile: `@sentropic/auth-ui@0.3.0` declares `peerDependencies: { "@sentropic/auth-hono": "^0.3.0" }`, and `^0.3.0` excludes `0.4.0`. `make lock-root` fails with ERESOLVE. `packages/auth-ui/**` is a Forbidden Path and BRANCH.md says "auth-ui unchanged", so I did NOT edit it. Options: **(A, recommended)** widen auth-ui peer to `"^0.3.0 || ^0.4.0"` + patch-bump auth-ui 0.3.0→0.3.1 (additive, reversible; needs a Forbidden-path exception `BR39d-EX6`), then `make lock-root`; **(B)** keep auth-hono at a 0.3.x bump (e.g. 0.3.1) — but a new grant + new middleware is a feature and warrants a minor, so this is wrong semver; **(C)** `--legacy-peer-deps` — rejected, masks a real ERESOLVE that npm consumers of auth-ui@0.3.0 + auth-hono@0.4.0 would also hit. The auth-hono `package.json` is left at `0.4.0` (correct per spec). Conductor must pick A (preferred) and run `make lock-root` to finalize the lockfile, OR direct option B. Until resolved, the lockfile is NOT regenerated for the 0.4.0 bump.
 - `BR39d-Q2` (e2e seed wiring, OPEN, needs micro-EX) — The optional E2E spec `e2e/tests/02-auth-s2s-client-credentials.spec.ts` needs the e2e DB to contain the `example-service-rp` service client. Seeding happens in `api/tests/utils/seed-test-data.ts` (calls `seedOAuthClients()`), which is OUTSIDE this branch's Allowed Paths. To run the E2E lane, add one line `await seedServiceClients();` next to the existing `seedOAuthClients()` call (import from `../../src/services/auth/oauth-client-seed`). Recommendation: conductor approves a 1-line micro-exception (or folds it into `api/tests/utils` allowance) since the seed helper is already implemented and exported. Non-blocking for unit/integration gates; only gates the optional E2E lane.
 - `BR39d-Q1` (infra blocker, OPEN) — Host Docker IPv4 network pool exhausted: every compose-network target (`make typecheck-api`, `make test-api`, dev/e2e stacks) fails with `could not find an available, non-overlapping IPv4 address pool`. Remedy is `docker network prune` but raw `docker` is blocked by the agent sandbox and no `make` target prunes networks. Package-only gates (`make typecheck-auth-hono`, `make test-auth-hono`, `make build-auth-hono`, `make pack-auth-hono`, `make typecheck-auth-client`, `make test-auth-client`) use `docker run` (no network) and PASS. Conductor must `docker network prune -f` on the host (non-destructive, preserves volumes), then re-run the api/e2e gates. All source for api/CI/Make/docs lots is written and committed; only the api-runtime test/typecheck execution is pending.
 - `BR39d-EX1` (Makefile) — `acknowledge`: new npm package requires make wiring per make-only rule. Targets added: `typecheck-auth-client`, `test-auth-client`, `build-auth-client`, `pack-auth-client`, `publish-auth-client`, `publish-auth-client-token`, `oauth-rotate-service-client`. Impact: additive targets only, mirrors `*-auth-hono` exactly. Rollback: delete the added targets.
@@ -143,23 +144,23 @@ Actions with the following status should be included around tasks only if really
     - [x] Sub-lot gate: `make test-api ENV=test-feat-auth-s2s` BLOCKED (`BR39d-Q1`).
     - [x] **E2E (optional, API-level)**: `e2e/tests/02-auth-s2s-client-credentials.spec.ts` WRITTEN. Running it requires `seedServiceClients()` to be wired into `api/tests/utils/seed-test-data.ts` (out of Allowed Paths) — see `BR39d-Q2`. Execution BLOCKED (`BR39d-Q1` + e2e build).
 
-- [ ] **Lot 6 — CI / Make / ops parity**
-  - [ ] `Makefile` (`BR39d-EX1`): add `typecheck-auth-client`, `test-auth-client`, `build-auth-client`, `pack-auth-client`, `publish-auth-client`, `publish-auth-client-token`, `oauth-rotate-service-client CLIENT_ID=... ENV=...` (mirror `*-auth-hono`).
-  - [ ] `.github/workflows/ci.yml` (`BR39d-EX2`): add `auth_client` + `auth_client_publish` filters (`packages/auth-client/**`), `validate-auth-client` job (mirror `validate-auth-hono`), `publish-auth-client` job (mirror `publish-auth-hono`, main-gated), `auth-client` in `bootstrap_publish_target` enum + bootstrap step.
-  - [ ] root `package.json`/`package-lock.json` (`BR39d-EX4`) + `api/Dockerfile` (`BR39d-EX5`): workspace member + COPY/build wiring for auth-client.
-  - [ ] `docs/secrets.md`: S2S env (`OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC` [name to validate at UAT], resource URIs, sample provisioning), `oauth-rotate-service-client` runbook, DPoP recommendation, stateless/no-revoke note (defer 39h).
-  - [ ] Lot gate: `make typecheck` + `make lint` clean.
+- [x] **Lot 6 — CI / Make / ops parity**
+  - [x] `Makefile` (`BR39d-EX1`): added `typecheck-auth-client`, `test-auth-client`, `build-auth-client`, `pack-auth-client`, `publish-auth-client`, `publish-auth-client-token`, `oauth-rotate-service-client CLIENT_ID=... ENV=...` (mirror `*-auth-hono`; `oauth:rotate-service-client` npm script + `api/src/scripts/oauth-rotate-service-client.ts`).
+  - [x] `.github/workflows/ci.yml` (`BR39d-EX2`): added `auth_client` + `auth_client_publish` filters (`packages/auth-client/**`), `validate-auth-client` job (typecheck+test+build+pack), `publish-auth-client` job (main-gated, OIDC id-token), `auth-client` in `bootstrap_publish_target` enum + bootstrap step. YAML validated.
+  - [x] root `package.json`/`package-lock.json` (`BR39d-EX4`) + `api/Dockerfile` (`BR39d-EX5`): workspace member (glob) + lockfile + COPY/build wiring for auth-client (done in Lot 4).
+  - [x] `docs/secrets.md`: S2S inventory rows (`OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC`, `OAUTH_SERVICE_RESOURCE_URI`, `OAUTH_SELF_SERVICE_CLIENT_ID/_SECRET`), provisioning + mint/use + DPoP + `oauth-rotate-service-client` runbook + stateless/no-revoke note (defer 39h).
+  - [x] Lot gate: `make typecheck`/`make lint` are `typecheck-ui+typecheck-api` / `lint-ui+lint-api` — BLOCKED by `BR39d-Q1` (compose network). Package gates (typecheck/test/build/pack auth-hono + auth-client) all PASS.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] `packages/auth-hono/README.md`: `client_credentials` grant, optional `findServiceClient`, `createRequireServiceAuth` + `ServiceAuthPorts`, RFC 8707 resource indicators, DPoP S2S recommendation, stateless service-token note.
-  - [ ] `packages/auth-client/README.md`: Node consumer quickstart, `createAuthClient`/`getToken`, DPoP opt-in.
-  - [ ] If `spec/BRANCH_SPEC_EVOL.md` was created, integrate then delete it.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] `packages/auth-hono/README.md`: `client_credentials` grant, optional `findServiceClient`, `createRequireServiceAuth` + `ServiceAuthPorts`, RFC 8707 resource indicators, DPoP S2S recommendation, stateless service-token note, `0.4.0` version entry + env vars.
+  - [x] `packages/auth-client/README.md`: Node consumer quickstart, `createAuthClient`/`getToken`, DPoP opt-in, config + errors (written in Lot 4).
+  - [x] No `spec/BRANCH_SPEC_EVOL.md` was created for this branch.
 
 - [ ] **Lot N — Final validation**
-  - [ ] `make typecheck` + `make lint` (auth-hono, auth-client, api)
-  - [ ] `make test-auth-hono` + `make test-auth-client` + `make test-api ENV=test-feat-auth-s2s`
-  - [ ] Retest E2E (if added): group gates per `.github/workflows/ci.yml` split, `ENV=e2e-feat-auth-s2s`
-  - [ ] Version bumps (CI `enforce-package-bump`): `packages/auth-hono` `0.3.0 → 0.4.0` (minor); new `packages/auth-client` `0.1.0`. `auth-ui` unchanged.
+  - [x] `make typecheck`/`make lint` for auth-hono + auth-client PASS (typecheck). `make typecheck-api`/`make lint-api` BLOCKED (`BR39d-Q1`).
+  - [x] `make test-auth-hono` (101) + `make test-auth-client` (7) PASS. `make test-api ENV=test-feat-auth-s2s` BLOCKED (`BR39d-Q1`).
+  - [ ] Retest E2E (if added): BLOCKED (`BR39d-Q1` + `BR39d-Q2`).
+  - [x] Version bumps: `packages/auth-hono` `0.3.0 → 0.4.0` (minor) DONE; new `packages/auth-client` `0.1.0` DONE. `auth-ui` unchanged — but the 0.4.0 bump breaks auth-ui's `^0.3.0` peer, see `BR39d-Q3` (lockfile NOT regenerated for the 0.4.0 bump pending conductor decision).
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` as PR body.
   - [ ] Final gate step 2: run/verify branch CI on PR; resolve blockers (`enforce-package-bump`, `validate-auth-client`).
   - [ ] Final gate step 3: once UAT + CI green → commit removal of `BRANCH.md`, push, merge. First publish of `@sentropic/auth-client` via `bootstrap_publish_target=auth-client` then attach OIDC trusted publisher (Playwright, `feedback_npm_trusted_publisher_via_playwright`). `auth-hono` 0.4.0 publish may need the bootstrap fallback (trusted publisher still broken — handover §3). Register `validate-auth-client` as required check (admin).
