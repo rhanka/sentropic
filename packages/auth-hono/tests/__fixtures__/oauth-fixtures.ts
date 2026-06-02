@@ -6,6 +6,7 @@ import {
   type AuthHonoUserRecord,
   type OAuthContinuationCodec,
   type OauthClientRecord,
+  type ServiceClientRecord,
 } from '../../src/index.js';
 import { createJwksKeyRecord, createMemoryJwksPort } from './memory-jwks.js';
 import { createMemoryOauthStateStore, type MemoryOauthStateStorePort } from './memory-oauth-state-store.js';
@@ -43,6 +44,21 @@ export const createOauthClient = (input: Partial<OauthClientRecord> = {}): Oauth
   ...input,
 });
 
+export const createServiceClient = (input: Partial<ServiceClientRecord> = {}): ServiceClientRecord => ({
+  allowedScopes: ['service:ping', 'service:read'],
+  clientId: 'service-rp',
+  clientSecretHash: 'hash:service-secret',
+  createdAt: oauthNow,
+  displayName: 'Service RP',
+  dpopBoundAccessTokens: false,
+  id: 'service-row-1',
+  resourceIndicators: ['https://api.sentropic.test'],
+  revokedAt: null,
+  secretRotatedAt: null,
+  tenantId: null,
+  ...input,
+});
+
 export const createOauthSession = (input: Partial<AuthHonoSessionRecord> = {}): AuthHonoSessionRecord => ({
   createdAt: oauthNow,
   deviceName: null,
@@ -62,9 +78,16 @@ export const createOauthSession = (input: Partial<AuthHonoSessionRecord> = {}): 
 export const createOauthPorts = async (options: {
   authenticated?: boolean;
   clients?: OauthClientRecord[];
+  serviceClients?: ServiceClientRecord[];
   store?: MemoryOauthStateStorePort;
 } = {}): Promise<{ ports: AuthHonoPorts; store: MemoryOauthStateStorePort }> => {
-  const store = options.store ?? createMemoryOauthStateStore({ clients: options.clients ?? [createOauthClient()], now: () => oauthNow });
+  const store =
+    options.store ??
+    createMemoryOauthStateStore({
+      clients: options.clients ?? [createOauthClient()],
+      now: () => oauthNow,
+      serviceClients: options.serviceClients,
+    });
   const jwks = createMemoryJwksPort([await createJwksKeyRecord({ active: true, kid: 'kid-1', now: oauthNow })]);
   let uuidCounter = 0;
   let tokenCounter = 0;
