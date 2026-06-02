@@ -2514,3 +2514,8 @@ oauth-init-keys: ## Bootstrap the first active Ed25519 signing key (idempotent; 
 .PHONY: oauth-rotate-keys
 oauth-rotate-keys: ## Rotate the active Ed25519 signing key; old key stays in JWKS for ≥65 min
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm run oauth:rotate-keys"
+
+.PHONY: oauth-rotate-service-client
+oauth-rotate-service-client: ## Rotate a service client secret (single-secret cutover). Usage: make oauth-rotate-service-client CLIENT_ID=<id> ENV=<env>
+	@test -n "$(CLIENT_ID)" || { echo "ERROR: CLIENT_ID is required: make oauth-rotate-service-client CLIENT_ID=<id> ENV=<env>"; exit 1; }
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -e CLIENT_ID="$(CLIENT_ID)" api sh -lc "npm run oauth:rotate-service-client"
