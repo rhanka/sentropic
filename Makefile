@@ -1280,7 +1280,20 @@ test-llm-mesh: ## Run @sentropic/llm-mesh tests
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
+
+# BR-A0b-EX1 — additive jsdom DOM/ARIA test target for @sentropic/chat-ui Svelte 5 components.
+# Rationale: DOM/ARIA harness requires @sveltejs/vite-plugin-svelte + vite + jsdom +
+#   @testing-library/svelte@5 (Svelte-5-era), none of which are in the existing node-env target.
+#   Scope: additive only — does NOT modify the existing test-chat-ui target.
+# Impact: adds ~8 new npm packages installed at test time in an ephemeral docker container;
+#   no package.json devDependency changes; no version bump required (test-only infra).
+# Rollback: delete this target + tests/spike.dom.spec.ts + tests/model-selector.dom.spec.ts
+#   + tests/message-actions.dom.spec.ts + packages/chat-ui/vitest.config.ts.
+.PHONY: test-chat-ui-dom
+test-chat-ui-dom: ## Run @sentropic/chat-ui DOM/ARIA tests (jsdom, Svelte 5, BR-A0b-EX1)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 vite@8.0.16 @sveltejs/vite-plugin-svelte@7.1.2 @testing-library/svelte@5.3.1 jsdom@29.1.1 "@lucide/svelte@0.562.0" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@testing-library node_modules/@lucide; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/acorn-typescript" node_modules/@sveltejs/acorn-typescript; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte" node_modules/@testing-library/svelte; ln -sfn "$$tool_dir/node_modules/@testing-library/dom" node_modules/@testing-library/dom; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte-core" node_modules/@testing-library/svelte-core; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
 
 .PHONY: test-chat-server
 test-chat-server: ## Run @sentropic/chat-server tests
