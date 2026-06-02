@@ -94,13 +94,12 @@ Extract framework-pure modules (`state/*`, `utils/*`, `renderers/registry`) into
     - [x] Existing: `tests/chat-attachments.test.ts` (3 tests) — passed
     - [x] All 22 test files passed, 174 tests total — identical to baseline
 
-- [ ] **Lot 3 — Docs + commit + PR**
-  - [ ] Commit 1: new `@sentropic/chat-ui-core` package (core package files only, ~50-80 lines)
-  - [ ] Commit 2: `@sentropic/chat-ui` re-export shims + version bump + vitest.config.ts + BRANCH.md
-  - [ ] Commit 3: spec files (`spec/SPEC_EVOL_CHATUI_WAVE_A.md`, `spec/SPEC_EVOL_CHAT_ECOSYSTEM.md`)
-  - [ ] `git push origin feat/chatui-core-extract`
-  - [ ] `gh pr create` with BRANCH.md as body, base `main`, title tagged `[Tier-1 — needs owner gate: app build + chat e2e]`
-  - [ ] Confirm PR NOT merged
+- [x] **Lot 3 — Docs + commit + PR**
+  - [x] Commits (12 total): core package scaffold + all state/utils/renderers modules committed atomically; façade shims + vitest.config.ts + package.json 0.2.0 + BRANCH.md in one refactor commit
+  - [x] Spec files `spec/SPEC_EVOL_CHATUI_WAVE_A.md` + `spec/SPEC_EVOL_CHAT_ECOSYSTEM.md` were already committed in the A0a baseline (b8277393) — no additional commit needed
+  - [x] `git push origin feat/chatui-core-extract` — pushed 12 commits ahead of main
+  - [x] PR #213: https://github.com/rhanka/sentropic/pull/213 — base `main`, title tagged `[Tier-1 — needs owner gate: app build + chat e2e]`
+  - [x] Confirmed PR NOT merged
 
 ## Deferred (out-of-scope for A1a)
 - `stores/localTools` state-machine extraction (A1b) — keep as-is
