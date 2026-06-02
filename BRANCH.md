@@ -114,13 +114,13 @@ Actions with the following status should be included around tasks only if really
     - [x] **auth-hono tests**: `packages/auth-hono/tests/oauth-client-credentials.test.ts` (11 tests) — happy (Basic + POST), DPoP-bound happy (`cnf.jkt`, `token_type=DPoP`), no-`scope` ⇒ all allowed, errors: wrong secret (`invalid_client`), scope superset (`invalid_scope`), revoked client, unknown `resource` (`invalid_target`), missing `resource` with >1 indicator (`invalid_target`), 0 indicators + no resource (`invalid_target`), unsupported when port lacks findServiceClient. Updated `oauth-wellknown` test for new metadata. Asserts NO token-meta row written (`store.tokens.size === 0`).
     - [x] Sub-lot gate: `make test-auth-hono` PASS (91 tests).
 
-- [ ] **Lot 3 — `createRequireServiceAuth` middleware (resource server)**
-  - [ ] `packages/auth-hono/src/oauth/service-auth-middleware.ts`: `createRequireServiceAuth({issuer, requiredScopes, resource, ports})` where `ports: ServiceAuthPorts` (narrow, `BR39d-D6`) → parse `Authorization: Bearer|DPoP <jwt>`; JWKS verify via `JwksPort` (kid lookup + cache); validate `iss`, `aud === resource`, `exp`, `scope ⊇ requiredScopes`; if `cnf.jkt` present require + verify `DPoP` proof passing the access token for `ath` (`BR39d-D7`) + `recordDpopJti` replay; `c.set('serviceClient', {...})`; 401/403 with `WWW-Authenticate`.
-  - [ ] Export `createRequireServiceAuth` + `ServiceAuthPorts` from `packages/auth-hono/src/index.ts`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-auth-hono` + `make lint-auth-hono`
-    - [ ] **auth-hono tests**: `packages/auth-hono/tests/service-auth-middleware.test.ts` — pass (Bearer + DPoP), reject: missing token, bad signature, wrong `aud`, expired, missing required scope, DPoP proof missing / replayed / `ath` mismatch.
-    - [ ] Sub-lot gate: `make test-auth-hono`
+- [x] **Lot 3 — `createRequireServiceAuth` middleware (resource server)**
+  - [x] `packages/auth-hono/src/oauth/service-auth-middleware.ts`: `createRequireServiceAuth({issuer, requiredScopes, resource, ports})` where `ports: ServiceAuthPorts` (narrow, `BR39d-D6`) → parse `Authorization: Bearer|DPoP <jwt>`; JWKS verify via `JwksPort` (kid lookup); validate `iss`, `aud === resource`, `exp`, `scope ⊇ requiredScopes`; if `cnf.jkt` present require + verify `DPoP` proof passing the access token for `ath` (`BR39d-D7`) + `recordDpopJti` replay via `dpopReplay`; `c.set('serviceClient', {...})`; 401/403 with `WWW-Authenticate`.
+  - [x] Export `createRequireServiceAuth` + `ServiceAuthPorts` (+ `ServiceAuthContext`) from `packages/auth-hono/src/index.ts` (root export).
+  - [x] Lot gate:
+    - [x] `make typecheck-auth-hono` PASS. `make lint-auth-hono` n/a.
+    - [x] **auth-hono tests**: `packages/auth-hono/tests/service-auth-middleware.test.ts` (10 tests) — pass (Bearer + DPoP), reject: missing token, bad signature, wrong `aud`, expired, missing required scope (403 insufficient_scope), DPoP proof missing / replayed / `ath` mismatch.
+    - [x] Sub-lot gate: `make test-auth-hono` PASS (101 tests).
 
 - [ ] **Lot 4 — New package `@sentropic/auth-client` (Node consumer helper)**
   - [ ] `packages/auth-client/` scaffold: `package.json` (`@sentropic/auth-client`, `0.1.0`, ESM, `jose` dep, mirror auth-hono build/test config), `README.md`, `src/index.ts`, `tsconfig.json`, `vitest.config.ts`.
