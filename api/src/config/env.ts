@@ -13,6 +13,18 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   MISTRAL_API_KEY: z.string().optional(),
   COHERE_API_KEY: z.string().optional(),
+  // Vertex AI (Gemini-on-Vertex) — config, not secrets. The bearer is minted
+  // server-side from ADC (Application Default Credentials); project/location
+  // travel as plain config. The `vertex` provider is treated as AVAILABLE only
+  // when both VERTEX_PROJECT_ID and VERTEX_LOCATION are present (gated like the
+  // other optional providers); absence never crashes the app.
+  VERTEX_PROJECT_ID: z.string().optional(),
+  VERTEX_LOCATION: z.string().optional(),
+  // ADC source for service-account JSON local-dev / SA-key UAT. Honored by
+  // google-auth-library's GoogleAuth (workload identity needs no value).
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
+  // Opt-in sentinel that gates LIVE Vertex calls during UAT (never set in CI).
+  VERTEX_LIVE_UAT: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
   TAVILY_API_KEY: z.string().optional(),
   // ---------------------------------------------------------------------------
