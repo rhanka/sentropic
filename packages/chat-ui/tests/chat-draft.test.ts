@@ -102,6 +102,54 @@ describe('chat draft and composer state', () => {
         composerSteerInFlight: false,
       }),
     ).toEqual({ action: 'disabled', disabled: true, displayMode: 'send' });
+
+    expect(
+      resolveComposerPrimaryAction({
+        mode: 'ai',
+        input: ' ',
+        commentInput: '',
+        commentContextType: null,
+        commentContextId: null,
+        workspaceCanComment: true,
+        commentThreadResolved: false,
+        sending: false,
+        composerRunInFlight: false,
+        composerSteerReady: false,
+        composerSteerInFlight: false,
+        attachments: {
+          total: 1,
+          ready: 1,
+          pending: 0,
+          uploading: 0,
+          failed: 0,
+          images: 1,
+        },
+      }),
+    ).toEqual({ action: 'chat_send', disabled: false, displayMode: 'send' });
+
+    expect(
+      resolveComposerPrimaryAction({
+        mode: 'ai',
+        input: ' ',
+        commentInput: '',
+        commentContextType: null,
+        commentContextId: null,
+        workspaceCanComment: true,
+        commentThreadResolved: false,
+        sending: false,
+        composerRunInFlight: false,
+        composerSteerReady: false,
+        composerSteerInFlight: false,
+        attachments: {
+          total: 1,
+          ready: 0,
+          pending: 0,
+          uploading: 1,
+          failed: 0,
+          images: 1,
+        },
+      }),
+    ).toEqual({ action: 'disabled', disabled: true, displayMode: 'send' });
   });
 
   it('computes composer height state without reading the DOM', () => {

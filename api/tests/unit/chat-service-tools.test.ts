@@ -4,6 +4,7 @@ import {
   chatMessages,
   chatSessions,
   chatStreamEvents,
+  contextDocuments,
   executionEvents,
   executionRuns,
   folders,
@@ -27,7 +28,12 @@ vi.mock('../../src/services/llm-runtime', () => {
   };
 });
 
+vi.mock('../../src/services/context-document-source', () => ({
+  loadContextDocumentContent: vi.fn(),
+}));
+
 import { callLLMStream } from '../../src/services/llm-runtime';
+import { loadContextDocumentContent } from '../../src/services/context-document-source';
 import { chatService } from '../../src/services/chat-service';
 
 type StreamEvent = { type: string; data: unknown };
@@ -81,6 +87,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
+    await db.delete(contextDocuments).where(eq(contextDocuments.workspaceId, workspaceId));
     await db.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
     await db.delete(executionRuns).where(eq(executionRuns.workspaceId, workspaceId));
     await db.delete(tasks).where(eq(tasks.workspaceId, workspaceId));
@@ -91,6 +98,86 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
     vi.clearAllMocks();
+  });
+
+  it('should hydrate image document attachments into vision message parts before streaming', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    const mockLoadDocumentContent = loadContextDocumentContent as unknown as ReturnType<typeof vi.fn>;
+    const imageBytes = Buffer.from('fake-png');
+    let seenMessages: any[] | undefined;
+
+    mockLoadDocumentContent.mockResolvedValueOnce({
+      bytes: imageBytes,
+      filename: 'sample.png',
+      mimeType: 'image/png',
+      source: { kind: 'local', storageKey: 'documents/test/sample.png' },
+      exportMimeType: null,
+      resolvedMetadata: null,
+    });
+
+    mock.mockImplementation((opts: any) => {
+      seenMessages = opts?.messages;
+      return stream([
+        { type: 'content_delta', data: { delta: 'I can see it.' } },
+        { type: 'done', data: {} },
+      ]);
+    });
+
+    const documentId = createId();
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'What is in this image?',
+      model: 'gpt-4.1-nano',
+      attachments: [
+        {
+          kind: 'image',
+          source: 'context_document',
+          documentId,
+          fileName: 'sample.png',
+          mimeType: 'image/png',
+          sizeBytes: imageBytes.byteLength,
+        },
+      ],
+    });
+
+    await db.insert(contextDocuments).values({
+      id: documentId,
+      workspaceId,
+      contextType: 'chat_session',
+      contextId: msg.sessionId,
+      filename: 'sample.png',
+      mimeType: 'image/png',
+      sizeBytes: imageBytes.byteLength,
+      sourceType: 'local',
+      storageKey: 'documents/test/sample.png',
+      status: 'ready',
+      data: {
+        indexingSkipped: true,
+        indexingSkipReason: 'image_metadata_only',
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+    });
+
+    expect(mockLoadDocumentContent).toHaveBeenCalledOnce();
+    const userMessage = seenMessages?.find((message) => message?.role === 'user');
+    expect(userMessage?.content).toEqual([
+      { type: 'text', text: 'What is in this image?' },
+      {
+        type: 'image',
+        mediaType: 'image/png',
+        data: imageBytes.toString('base64'),
+      },
+    ]);
   });
 
   it('should enable expected tools per primaryContextType and always include web_search/web_extract', async () => {

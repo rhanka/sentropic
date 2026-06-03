@@ -309,6 +309,7 @@ erDiagram
         text role
         text content
         jsonb contexts
+        jsonb attachments
         jsonb tool_calls
         text tool_call_id
         text model
@@ -705,6 +706,7 @@ erDiagram
         text role
         text content
         jsonb contexts
+        jsonb attachments
         jsonb tool_calls
         text tool_call_id
         text model
@@ -1082,6 +1084,7 @@ erDiagram
         text role
         text content
         jsonb contexts
+        jsonb attachments
         jsonb tool_calls
         text tool_call_id
         text model
@@ -1459,6 +1462,7 @@ erDiagram
         text role
         text content
         jsonb contexts
+        jsonb attachments
         jsonb tool_calls
         text tool_call_id
         text model
@@ -1836,6 +1840,7 @@ erDiagram
         text role
         text content
         jsonb contexts
+        jsonb attachments
         jsonb tool_calls
         text tool_call_id
         text model
@@ -2212,6 +2217,7 @@ erDiagram
         text role
         text content
         jsonb contexts
+        jsonb attachments
         jsonb tool_calls
         text tool_call_id
         text model
@@ -2317,4 +2323,3 @@ Notes :
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
 - `context_documents.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases`.
 - `chat_message_feedback` stocke le feedback par utilisateur sur les messages assistant (unique par `message_id` + `user_id`).
-

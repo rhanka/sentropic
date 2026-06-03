@@ -1,0 +1,86 @@
+{
+  "tokens": {
+    "name": "demo",
+    "slug": "demo",
+    "provider": "stub",
+    "api_port": "9211",
+    "ui_port": "5411",
+    "maildev_port": "1311",
+    "repo_url": "https://github.com/acme/demo",
+    "assistant_reply": "Hello from demo (deterministic offline reply)."
+  },
+  "files": [
+    {
+      "outputPath": ".env.example",
+      "content": "# Copy to .env and fill in. NEVER commit .env (see .gitignore).\n\n# --- Ports (isolated; never the monorepo reserved 8787/5173/1080) ---\nAPI_PORT=9211\nUI_PORT=5411\nMAILDEV_UI_PORT=1311\n\n# UI -> backend base URL (keep aligned with API_PORT).\nVITE_API_BASE_URL=http://localhost:9211\n\n# --- Provider ---\n# Default `stub` is a deterministic, offline reply (no key needed).\n# Switch to a real @sentropic/llm-mesh provider by setting PROVIDER + its key.\nPROVIDER=stub\n\n# Provider key slots (only the one matching PROVIDER is read).\nOPENAI_API_KEY=\nGEMINI_API_KEY=\nANTHROPIC_API_KEY=\nMISTRAL_API_KEY=\nCOHERE_API_KEY=\n"
+    },
+    {
+      "outputPath": "LICENSE",
+      "content": "MIT License\n\nCopyright (c) demo contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+    },
+    {
+      "outputPath": "Makefile",
+      "content": "# demo — Docker-first dev tooling (scaffolded by @sentropic/build-cli).\n# Compose project name = the app slug (demo); ports come from .env.\n\nCOMPOSE ?= docker compose\n\n.PHONY: help dev down typecheck build logs\n\nhelp: ## Show this help\n\t@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=\":.*?## \"}{printf \"  %-12s %s\\n\", $$1, $$2}'\n\ndev: ## Build + start the backend and UI (Docker Compose)\n\t$(COMPOSE) up --build\n\ndown: ## Stop and remove the app's containers + volumes\n\t$(COMPOSE) down -v\n\nlogs: ## Tail service logs\n\t$(COMPOSE) logs -f\n\ntypecheck: ## Type-check backend + UI\n\t$(COMPOSE) run --rm --no-deps api sh -lc \"npm install --no-audit --no-fund && npm run typecheck\"\n\t$(COMPOSE) run --rm --no-deps ui sh -lc \"npm install --no-audit --no-fund && npm run check\"\n\nbuild: ## Build backend + UI for production\n\t$(COMPOSE) run --rm --no-deps api sh -lc \"npm install --no-audit --no-fund && npm run build\"\n\t$(COMPOSE) run --rm --no-deps ui sh -lc \"npm install --no-audit --no-fund && npm run build\"\n"
+    },
+    {
+      "outputPath": "README.md",
+      "content": "# demo\n\nA runnable chat application scaffolded with [`@sentropic/build-cli`](https://www.npmjs.com/package/@sentropic/build-cli)\n(`stp app init`). It is a two-tier app:\n\n- **Backend** (`api/`) — a minimal [Hono](https://hono.dev) server that mounts the published\n  [`@sentropic/chat-server`](https://www.npmjs.com/package/@sentropic/chat-server) **canonical**\n  routes (`POST/GET /chat/sessions/:id/{messages,bootstrap}`, `GET /chat/sessions/:id/stream`)\n  over an **in-memory** adapter. No Postgres, no provider key required: it replies with a\n  deterministic offline message out of the box.\n- **Web UI** (`ui/`) — a [Svelte 5](https://svelte.dev) app embedding\n  [`@sentropic/chat-ui`](https://www.npmjs.com/package/@sentropic/chat-ui)'s `ChatPanel`, wired to\n  the backend with `createDefaultTransport(VITE_API_BASE_URL)`, styled with the published\n  [`@sentropic/design-system-svelte`](https://www.npmjs.com/package/@sentropic/design-system-svelte)\n  + themes + tokens.\n\n## Quick start (Docker-first)\n\n```sh\ncp .env.example .env   # ports + provider slots (already filled with sane defaults)\nmake dev               # build + start backend + UI\n```\n\nThen open the UI at <http://localhost:5411>. Send a message — it streams an assistant\nreply from the backend over `GET /chat/sessions/:id/stream`.\n\n| Service | URL |\n|---|---|\n| UI      | http://localhost:5411 |\n| Backend | http://localhost:9211 |\n\nStop everything with `make down`.\n\n## Make targets\n\n| Target | What it does |\n|---|---|\n| `make dev`       | Build + start the backend and UI (Docker Compose). |\n| `make down`      | Stop and remove the app's containers. |\n| `make typecheck` | Type-check the backend and UI. |\n| `make build`     | Build the backend and UI for production. |\n\n## Switching to a real provider\n\nThe default `PROVIDER=stub` is a deterministic, offline reply. To use a real model, set\n`PROVIDER` in `.env` to one of `openai` / `gemini` / `anthropic` / `mistral` / `cohere` and fill\nthe matching key slot, then restart `make dev`.\n\n## License\n\nMIT — see [LICENSE](./LICENSE).\n"
+    },
+    {
+      "outputPath": ".gitignore",
+      "content": "# Dependencies\nnode_modules/\n**/node_modules/\n\n# Secrets — NEVER commit the real env (only .env.example is tracked)\n.env\n.env.*\n!.env.example\n\n# Build output\ndist/\n**/dist/\n.svelte-kit/\nbuild/\n\n# Logs / OS noise\n*.log\n.DS_Store\n"
+    },
+    {
+      "outputPath": "api/package.json",
+      "content": "{\n  \"name\": \"demo-api\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"description\": \"Backend for demo: mounts @sentropic/chat-server canonical routes over an in-memory adapter.\",\n  \"type\": \"module\",\n  \"license\": \"MIT\",\n  \"main\": \"./dist/server.js\",\n  \"scripts\": {\n    \"dev\": \"node --experimental-strip-types src/server.ts\",\n    \"build\": \"tsc -p tsconfig.json\",\n    \"start\": \"node dist/server.js\",\n    \"typecheck\": \"tsc --noEmit -p tsconfig.json\"\n  },\n  \"dependencies\": {\n    \"@sentropic/chat-server\": \"^0.1.0\",\n    \"@hono/node-server\": \"^2.0.0\",\n    \"hono\": \"^4.10.7\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^22.10.10\",\n    \"typescript\": \"^5.4.5\"\n  }\n}\n"
+    },
+    {
+      "outputPath": "api/src/server.ts",
+      "content": "/**\n * demo backend.\n *\n * Mounts the published @sentropic/chat-server CANONICAL routes\n * (POST/GET /chat/sessions/:id/{messages,bootstrap}, GET /chat/sessions/:id/stream)\n * over its OFFLINE in-memory adapter. No Postgres, no provider key required: the\n * in-memory deps reply with a deterministic message so a chat round-trip works out of\n * the box. Switch to a real provider by extending these deps (see README).\n */\n\nimport { serve } from '@hono/node-server';\nimport { Hono } from 'hono';\nimport { createChatServer, createInMemoryChatServerDeps } from '@sentropic/chat-server';\n\nconst PORT = Number(process.env.PORT ?? 9211);\nconst ASSISTANT_REPLY = 'Hello from demo (deterministic offline reply).';\n\n// The chat wire server: canonical routes consumed by @sentropic/chat-ui's\n// createDefaultTransport(baseUrl). Offline in-memory adapter = deterministic reply.\nconst chat = createChatServer(\n  createInMemoryChatServerDeps({ assistantReply: ASSISTANT_REPLY }),\n  { routes: 'canonical' },\n);\n\nconst app = new Hono();\n\n// Allow the UI (served on a different port) to call the chat routes + read SSE.\napp.use('*', async (c, next) => {\n  c.header('access-control-allow-origin', '*');\n  c.header('access-control-allow-headers', 'content-type, x-app-locale');\n  c.header('access-control-allow-methods', 'GET, POST, OPTIONS');\n  if (c.req.method === 'OPTIONS') {\n    return c.body(null, 204);\n  }\n  await next();\n});\n\napp.get('/health', (c) => c.json({ status: 'ok' }));\n\n// Mount the chat-server routes at the root: the transport hits /chat/sessions/:id/*.\napp.route('/', chat);\n\nserve({ fetch: app.fetch, port: PORT }, (info) => {\n  // eslint-disable-next-line no-console\n  console.log(`demo backend listening on http://localhost:${info.port}`);\n});\n"
+    },
+    {
+      "outputPath": "api/tsconfig.json",
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"module\": \"NodeNext\",\n    \"moduleResolution\": \"NodeNext\",\n    \"lib\": [\"ES2022\"],\n    \"rootDir\": \"src\",\n    \"outDir\": \"dist\",\n    \"strict\": true,\n    \"declaration\": false,\n    \"sourceMap\": true,\n    \"skipLibCheck\": true,\n    \"allowImportingTsExtensions\": false,\n    \"verbatimModuleSyntax\": true,\n    \"forceConsistentCasingInFileNames\": true\n  },\n  \"include\": [\"src/**/*.ts\"],\n  \"exclude\": [\"dist/**\", \"node_modules/**\"]\n}\n"
+    },
+    {
+      "outputPath": "docker-compose.yml",
+      "content": "# Isolated compose project for the generated app.\n# Project name = the app slug so two scaffolded apps (or another local dev stack)\n# never collide. Ports come from .env (see .env.example) and are isolated per app.\nname: demo\n\nservices:\n  api:\n    image: node:22-alpine\n    working_dir: /app\n    command: sh -lc \"npm install --no-audit --no-fund && npm run dev\"\n    environment:\n      - PORT=${API_PORT:-9211}\n      - PROVIDER=${PROVIDER:-stub}\n    ports:\n      - \"${API_PORT:-9211}:9211\"\n    volumes:\n      - ./api:/app\n      - api_node_modules:/app/node_modules\n\n  ui:\n    image: node:22-alpine\n    working_dir: /app\n    command: sh -lc \"npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 5411\"\n    environment:\n      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:9211}\n    ports:\n      - \"${UI_PORT:-5411}:5411\"\n    volumes:\n      - ./ui:/app\n      - ui_node_modules:/app/node_modules\n    depends_on:\n      - api\n\nvolumes:\n  api_node_modules:\n  ui_node_modules:\n"
+    },
+    {
+      "outputPath": "package.json",
+      "content": "{\n  \"name\": \"demo\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"description\": \"A runnable @sentropic chat-ui <-> backend app scaffolded by @sentropic/build-cli (stp app init).\",\n  \"type\": \"module\",\n  \"license\": \"MIT\",\n  \"repository\": \"https://github.com/acme/demo\",\n  \"workspaces\": [\n    \"api\",\n    \"ui\"\n  ],\n  \"scripts\": {\n    \"dev\": \"echo 'Run `make dev` (Docker-first) — see README.md'\"\n  },\n  \"dependencies\": {\n    \"@sentropic/chat-server\": \"^0.1.0\",\n    \"@sentropic/chat-ui\": \"^0.1.1\",\n    \"@sentropic/chat-core\": \"^0.1.2\",\n    \"@sentropic/llm-mesh\": \"^0.1.2\",\n    \"@sentropic/design-system-svelte\": \"^0.10.3\",\n    \"@sentropic/design-system-themes\": \"^0.10.3\",\n    \"@sentropic/design-system-tokens\": \"^0.10.3\"\n  }\n}\n"
+    },
+    {
+      "outputPath": "ui/index.html",
+      "content": "<!doctype html>\n<html lang=\"en\" data-theme=\"sent-tech\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>demo</title>\n  </head>\n  <body>\n    <div id=\"app\"></div>\n    <script type=\"module\" src=\"/src/main.ts\"></script>\n  </body>\n</html>\n"
+    },
+    {
+      "outputPath": "ui/package.json",
+      "content": "{\n  \"name\": \"demo-ui\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"description\": \"Web UI for demo: embeds @sentropic/chat-ui ChatPanel over the backend's canonical routes.\",\n  \"type\": \"module\",\n  \"license\": \"MIT\",\n  \"scripts\": {\n    \"dev\": \"vite\",\n    \"build\": \"vite build\",\n    \"preview\": \"vite preview\",\n    \"check\": \"svelte-check --tsconfig ./tsconfig.json\",\n    \"typecheck\": \"svelte-check --tsconfig ./tsconfig.json\"\n  },\n  \"dependencies\": {\n    \"@sentropic/chat-ui\": \"^0.1.1\",\n    \"@sentropic/chat-core\": \"^0.1.2\",\n    \"@sentropic/design-system-svelte\": \"^0.10.3\",\n    \"@sentropic/design-system-themes\": \"^0.10.3\",\n    \"@sentropic/design-system-tokens\": \"^0.10.3\"\n  },\n  \"devDependencies\": {\n    \"@lucide/svelte\": \"^0.562.0\",\n    \"@sveltejs/vite-plugin-svelte\": \"^5.0.3\",\n    \"svelte\": \"^5.0.0\",\n    \"svelte-check\": \"^4.1.4\",\n    \"svelte-streamdown\": \"^3.0.1\",\n    \"typescript\": \"^5.4.5\",\n    \"vite\": \"^6.0.7\"\n  }\n}\n"
+    },
+    {
+      "outputPath": "ui/src/App.svelte",
+      "content": "<script lang=\"ts\">\n  import ChatPanel from '@sentropic/chat-ui/components/ChatPanel.svelte';\n  import { createDefaultTransport } from '@sentropic/chat-ui/client/transport';\n  import { createStreamHub } from '@sentropic/chat-ui/client/streamHub';\n  import { createWebHost } from '@sentropic/chat-ui/hosts/createWebHost';\n\n  // Backend base URL aligned with VITE_API_BASE_URL (.env.example), default 9211.\n  const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:9211';\n\n  // Canonical transport: hits /chat/sessions/:id/{messages,stream,bootstrap}.\n  const transport = createDefaultTransport(baseUrl);\n\n  const streamClient = createStreamHub({\n    getBaseUrl: () => baseUrl,\n    getAuthState: () => true,\n  });\n\n  // Web host wiring the chat-ui ChatPanel to the chat-server backend.\n  const host = createWebHost({ transport, streamClient });\n</script>\n\n<main class=\"app-shell\">\n  <header class=\"app-header\">\n    <h1>demo</h1>\n    <p>Scaffolded with @sentropic/build-cli — chat over @sentropic/chat-server.</p>\n  </header>\n  <section class=\"chat-region\">\n    <ChatPanel {host} />\n  </section>\n</main>\n\n<style>\n  :global(body) {\n    margin: 0;\n    font-family: system-ui, sans-serif;\n    background: var(--cds-background, #f4f4f4);\n    color: var(--cds-text-primary, #161616);\n  }\n  .app-shell {\n    max-width: 880px;\n    margin: 0 auto;\n    padding: 1.5rem;\n    display: flex;\n    flex-direction: column;\n    gap: 1rem;\n    min-height: 100vh;\n  }\n  .app-header h1 {\n    margin: 0;\n    font-size: 1.5rem;\n  }\n  .app-header p {\n    margin: 0.25rem 0 0;\n    opacity: 0.7;\n  }\n  .chat-region {\n    flex: 1;\n    border: 1px solid var(--cds-border-subtle, #e0e0e0);\n    border-radius: 8px;\n    overflow: hidden;\n    background: var(--cds-layer, #fff);\n  }\n</style>\n"
+    },
+    {
+      "outputPath": "ui/src/main.ts",
+      "content": "import { mount } from 'svelte';\n// Published design surface (D4): theme CSS variables + tokens.\nimport '@sentropic/design-system-themes/css/sent-tech.css';\nimport App from './App.svelte';\n\nconst target = document.getElementById('app');\nif (!target) {\n  throw new Error('Missing #app mount target');\n}\n\nexport default mount(App, { target });\n"
+    },
+    {
+      "outputPath": "ui/src/vite-env.d.ts",
+      "content": "/// <reference types=\"svelte\" />\n/// <reference types=\"vite/client\" />\n\ninterface ImportMetaEnv {\n  readonly VITE_API_BASE_URL?: string;\n}\n\ninterface ImportMeta {\n  readonly env: ImportMetaEnv;\n}\n"
+    },
+    {
+      "outputPath": "ui/svelte.config.js",
+      "content": "import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';\n\n/** @type {import('@sveltejs/vite-plugin-svelte').Config} */\nexport default {\n  preprocess: vitePreprocess(),\n};\n"
+    },
+    {
+      "outputPath": "ui/tsconfig.json",
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"Bundler\",\n    \"lib\": [\"ES2022\", \"DOM\", \"DOM.Iterable\"],\n    \"strict\": true,\n    \"skipLibCheck\": true,\n    \"isolatedModules\": true,\n    \"verbatimModuleSyntax\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"resolveJsonModule\": true,\n    \"types\": [\"svelte\", \"vite/client\"]\n  },\n  \"include\": [\"src/**/*.ts\", \"src/**/*.svelte\", \"vite.config.ts\"]\n}\n"
+    },
+    {
+      "outputPath": "ui/vite.config.ts",
+      "content": "import { defineConfig } from 'vite';\nimport { svelte } from '@sveltejs/vite-plugin-svelte';\n\n// The backend base URL is injected at build/dev time via VITE_API_BASE_URL\n// (see .env.example), aligned with the api service port.\nexport default defineConfig({\n  plugins: [svelte()],\n  server: {\n    host: '0.0.0.0',\n    port: 5411,\n  },\n  preview: {\n    host: '0.0.0.0',\n    port: 5411,\n  },\n});\n"
+    }
+  ]
+}

@@ -41,10 +41,13 @@
   import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
+    composerBandItems,
     deleteDocument,
+    getDownloadUrl,
     listDocuments,
     uploadDocument,
     type ContextDocumentItem,
+    type UnifiedAttachmentItem,
   } from '$lib/utils/documents';
   import {
     attachGoogleDriveDocuments,
@@ -81,7 +84,6 @@
     extractGeneratedFileCardsFromEvents,
     extractGeneratedFileCardsFromRuntimeSummary as collectGeneratedFileCardsFromRuntimeSummary,
     getGeneratedFileFormatLabel,
-    getSessionDocumentStatusLabelKey,
     normalizeGeneratedFileCard,
   } from '$lib/chat/document-adapter';
   import {
@@ -110,15 +112,24 @@
     type LocalToolPermissionRequest,
     type LocalToolName,
   } from '@sentropic/chat-ui/stores/localTools';
+  import ModelSelector from '@sentropic/chat-ui/components/ModelSelector.svelte';
+  import MessageActions from '@sentropic/chat-ui/components/MessageActions.svelte';
+  import {
+    groupModelsByProvider,
+    computeModelSelectorWidthCh,
+    coerceSelectionToValidEntry,
+    type ModelProviderId,
+    type ModelCatalogProvider,
+    type ModelCatalogModel,
+    type ModelCatalogGroup,
+  } from '@sentropic/chat-ui/utils/model-selection';
+
   import {
     Send,
-    ThumbsUp,
-    ThumbsDown,
-    Copy,
-    Pencil,
-    RotateCcw,
     UndoDot,
     Check,
+    Copy,
+    Pencil,
     X,
     Plus,
     Download,
@@ -140,6 +151,7 @@
     Eye,
     EyeOff,
     FolderOpen,
+    Image as ImageIcon,
     Trash2,
     ChevronLeft,
     ChevronRight,
@@ -182,8 +194,15 @@
   } from '@sentropic/chat-ui/utils/chat-run-projection';
   import {
     buildProjectedTimeline as buildChatProjectedTimeline,
+    type ChatMessageAttachment,
     type ChatProjectedTimelineItem,
   } from '@sentropic/chat-ui/state/chatProjection';
+  import {
+    createImageAttachmentDraft,
+    isSupportedImageAttachmentMimeType,
+    summarizeComposerAttachments,
+    type ChatComposerAttachmentDraft,
+  } from '@sentropic/chat-ui/state/chatAttachments';
   import {
     createComposerSteerAck,
     createOptimisticSteerMessage,
@@ -229,6 +248,7 @@
     sequence?: number;
     createdAt?: string;
     feedbackVote?: number | null;
+    attachments?: readonly ChatMessageAttachment[];
   };
 
   type LocalMessage = ChatMessage & {
@@ -348,18 +368,6 @@
     icon: IconComponent;
   };
 
-  type ModelProviderId = 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
-  type ModelCatalogProvider = {
-    provider_id: ModelProviderId;
-    label: string;
-    status: 'ready' | 'planned';
-  };
-  type ModelCatalogModel = {
-    provider_id: ModelProviderId;
-    model_id: string;
-    label: string;
-    default_contexts: string[];
-  };
   type ModelCatalogPayload = {
     providers: ModelCatalogProvider[];
     models: ModelCatalogModel[];
@@ -367,10 +375,6 @@
       provider_id: ModelProviderId;
       model_id: string;
     };
-  };
-  type ModelCatalogGroup = {
-    provider: ModelCatalogProvider;
-    models: ModelCatalogModel[];
   };
 
   const getContextIcon = (type: ChatContextEntry['contextType']) => {
@@ -602,6 +606,9 @@
   let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
   let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
+  let composerAttachments: ChatComposerAttachmentDraft[] = [];
+  let composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
+  let lightboxImage: { src: string; alt: string } | null = null;
   let commentInput = '';
   let commentMessages: CommentItem[] = [];
   export let commentLoading = false;
@@ -698,6 +705,8 @@
     typeof composerSteerStreamId === 'string' &&
     composerSteerStreamId.trim().length > 0;
   $: composerRunInFlight = sending || composerSteerReady;
+  $: composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
+  $: attachmentBand = composerBandItems(composerAttachments);
   $: composerPrimaryActionState = resolveComposerPrimaryAction({
     mode,
     input,
@@ -710,6 +719,7 @@
     composerRunInFlight,
     composerSteerReady,
     composerSteerInFlight,
+    attachments: mode === 'ai' ? composerAttachmentSummary : undefined,
   });
   $: composerPrimaryButtonShowsSteer = shouldShowSteerAction({
     composerRunInFlight,
@@ -2522,9 +2532,6 @@
     commentHubKey = '';
   }
 
-  const sessionDocStatusLabel = (s: string) => {
-    return $_(getSessionDocumentStatusLabelKey(s));
-  };
 
   const loadSessionDocs = async () => {
     if (!sessionId) return;
@@ -2583,6 +2590,214 @@
     return res.sessionId;
   };
 
+  const createComposerAttachmentId = () =>
+    `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const createComposerAttachmentPreviewUrl = (file: File): string | undefined => {
+    try {
+      return URL.createObjectURL(file);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const revokeComposerAttachmentPreview = (
+    attachment: Pick<ChatComposerAttachmentDraft, 'previewUrl'>,
+  ) => {
+    if (!attachment.previewUrl?.startsWith('blob:')) return;
+    try {
+      URL.revokeObjectURL(attachment.previewUrl);
+    } catch {
+      // ignore browser cleanup failures
+    }
+  };
+
+  const clearComposerAttachments = () => {
+    for (const attachment of composerAttachments) {
+      revokeComposerAttachmentPreview(attachment);
+    }
+    composerAttachments = [];
+  };
+
+  const removeComposerAttachment = (attachmentId: string) => {
+    const attachment = composerAttachments.find((item) => item.id === attachmentId);
+    if (attachment) revokeComposerAttachmentPreview(attachment);
+    composerAttachments = composerAttachments.filter((item) => item.id !== attachmentId);
+  };
+
+  const updateComposerAttachment = (
+    attachmentId: string,
+    patch: Partial<ChatComposerAttachmentDraft>,
+  ) => {
+    composerAttachments = composerAttachments.map((attachment) =>
+      attachment.id === attachmentId ? { ...attachment, ...patch } : attachment,
+    );
+  };
+
+  const getAttachmentImageSrc = (attachment: ChatMessageAttachment): string => {
+    if (attachment.previewUrl) return attachment.previewUrl;
+    if (attachment.url) return attachment.url;
+    if (attachment.documentId) {
+      return getDownloadUrl({
+        documentId: attachment.documentId,
+        workspaceId: getScopedWorkspaceIdForUser(),
+      });
+    }
+    return '';
+  };
+
+  const getBandItemImageSrc = (item: UnifiedAttachmentItem): string => {
+    if (item.previewUrl) return item.previewUrl;
+    if (item.documentId) {
+      return getDownloadUrl({
+        documentId: item.documentId,
+        workspaceId: getScopedWorkspaceIdForUser(),
+      });
+    }
+    return '';
+  };
+
+  const getBandItemStatusLabel = (item: UnifiedAttachmentItem): string => {
+    if (item.status === 'failed') return $_('common.error');
+    if (item.status === 'ready') return item.mimeType;
+    return $_('common.loading');
+  };
+
+  // Removing a pending attachment also deletes its just-uploaded context
+  // document so no orphaned (model-visible) session document is left behind.
+  const removeBandItem = async (item: UnifiedAttachmentItem) => {
+    removeComposerAttachment(item.composerAttachmentId);
+    const documentId = item.documentId;
+    if (!documentId) return;
+    try {
+      await deleteDocument({
+        documentId,
+        workspaceId: getScopedWorkspaceIdForUser(),
+      });
+      sessionDocs = sessionDocs.filter((d) => d.id !== documentId);
+    } catch (err) {
+      sessionDocsError = err instanceof Error ? err.message : String(err);
+    }
+  };
+
+  const openLightbox = (src: string, alt: string) => {
+    if (!src) return;
+    lightboxImage = { src, alt };
+  };
+
+  const closeLightbox = () => {
+    lightboxImage = null;
+  };
+
+  const handleLightboxKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && lightboxImage) {
+      event.preventDefault();
+      closeLightbox();
+    }
+  };
+
+  const attachImageFileToComposer = async (
+    file: File,
+    source: 'paste' | 'upload',
+  ) => {
+    if (!isSupportedImageAttachmentMimeType(file.type)) return false;
+    showComposerMenu = false;
+    const attachmentId = createComposerAttachmentId();
+    const previewUrl = createComposerAttachmentPreviewUrl(file);
+    composerAttachments = [
+      ...composerAttachments,
+      createImageAttachmentDraft({
+        id: attachmentId,
+        source,
+        fileName: file.name || 'image',
+        mimeType: file.type,
+        sizeBytes: file.size,
+        state: 'uploading',
+        previewUrl,
+      }),
+    ];
+
+    sessionDocsUploading = true;
+    sessionDocsError = null;
+    try {
+      const targetSessionId = await ensureSessionDocumentTarget();
+      const scopedWs = getScopedWorkspaceIdForUser();
+      const uploaded = await uploadDocument({
+        ...createChatSessionDocumentContext(targetSessionId, scopedWs),
+        file,
+      });
+      updateComposerAttachment(attachmentId, {
+        state: 'ready',
+        documentId: uploaded.id,
+      });
+      await loadSessionDocs();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      sessionDocsError = msg;
+      updateComposerAttachment(attachmentId, {
+        state: 'failed',
+        error: msg,
+      });
+    } finally {
+      sessionDocsUploading = false;
+    }
+    return true;
+  };
+
+  const addGoogleDriveComposerAttachments = (items: Array<Record<string, unknown>>) => {
+    const nextAttachments = items
+      .map((item): ChatComposerAttachmentDraft | null => {
+        const mimeType = typeof item.mime_type === 'string' ? item.mime_type : '';
+        const documentId = typeof item.id === 'string' ? item.id.trim() : '';
+        if (documentId.length === 0) return null;
+        const fileName =
+          typeof item.filename === 'string' && item.filename.trim().length > 0
+            ? item.filename
+            : 'document';
+        const sizeBytes =
+          typeof item.size_bytes === 'number' && Number.isFinite(item.size_bytes)
+            ? Math.max(0, Math.floor(item.size_bytes))
+            : 0;
+        if (isSupportedImageAttachmentMimeType(mimeType)) {
+          return createImageAttachmentDraft({
+            id: createComposerAttachmentId(),
+            source: 'drive',
+            fileName,
+            mimeType: mimeType || 'image/png',
+            sizeBytes,
+            state: 'ready',
+            documentId,
+          });
+        }
+        return {
+          id: createComposerAttachmentId(),
+          kind: 'file',
+          source: 'drive',
+          fileName,
+          mimeType: mimeType.trim().toLowerCase() || 'application/octet-stream',
+          sizeBytes,
+          state: 'ready',
+          documentId,
+        };
+      })
+      .filter((item): item is ChatComposerAttachmentDraft => item !== null);
+    if (nextAttachments.length > 0) {
+      composerAttachments = [...composerAttachments, ...nextAttachments];
+    }
+  };
+
+  const handleComposerPaste = (event: ClipboardEvent) => {
+    if (mode !== 'ai') return;
+    const files = Array.from(event.clipboardData?.files ?? []).filter((file) =>
+      isSupportedImageAttachmentMimeType(file.type),
+    );
+    if (files.length === 0) return;
+    event.preventDefault();
+    for (const file of files) {
+      void attachImageFileToComposer(file, 'paste');
+    }
+  };
+
   const importSessionDocsFromGoogleDrive = async () => {
     if (googleDriveActionInFlight) return;
     googleDriveActionInFlight = true;
@@ -2599,9 +2814,10 @@
       if (fileIds.length === 0) return;
 
       await resolveGoogleDrivePickerSelection({ fileIds });
-      await attachGoogleDriveDocuments(
+      const attachedItems = await attachGoogleDriveDocuments(
         createGoogleDriveChatAttachInput(targetSessionId, fileIds),
       );
+      addGoogleDriveComposerAttachments(attachedItems);
       await loadSessionDocs();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -2611,42 +2827,55 @@
     }
   };
 
-  const uploadSessionDoc = async (file: File | null | undefined) => {
-    if (!file) return;
+  // Non-image documents follow the same per-message attachment model as
+  // images: attached as a pending composer chip (kind 'file'), uploaded as a
+  // chat-session context document, and sent with the next message.
+  const attachFileToComposer = async (file: File, source: 'upload' | 'drive') => {
     showComposerMenu = false;
+    const attachmentId = createComposerAttachmentId();
+    const draft: ChatComposerAttachmentDraft = {
+      id: attachmentId,
+      kind: 'file',
+      source,
+      fileName: file.name || 'document',
+      mimeType: file.type || 'application/octet-stream',
+      sizeBytes: file.size,
+      state: 'uploading',
+    };
+    composerAttachments = [...composerAttachments, draft];
 
     sessionDocsUploading = true;
     sessionDocsError = null;
     try {
       const targetSessionId = await ensureSessionDocumentTarget();
       const scopedWs = getScopedWorkspaceIdForUser();
-      await uploadDocument({
+      const uploaded = await uploadDocument({
         ...createChatSessionDocumentContext(targetSessionId, scopedWs),
         file,
+      });
+      updateComposerAttachment(attachmentId, {
+        state: 'ready',
+        documentId: uploaded.id,
       });
       await loadSessionDocs();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       sessionDocsError = msg;
+      updateComposerAttachment(attachmentId, { state: 'failed', error: msg });
     } finally {
       sessionDocsUploading = false;
     }
   };
 
   const onPickSessionDoc = async (event: CustomEvent<{ file: File }>) => {
-    await uploadSessionDoc(event.detail.file);
+    const file = event.detail.file;
+    if (isSupportedImageAttachmentMimeType(file.type)) {
+      await attachImageFileToComposer(file, 'upload');
+      return;
+    }
+    await attachFileToComposer(file, 'upload');
   };
 
-  const removeSessionDoc = async (doc: ContextDocumentItem) => {
-    try {
-      const scopedWs = getScopedWorkspaceIdForUser();
-      await deleteDocument({ documentId: doc.id, workspaceId: scopedWs });
-      sessionDocs = sessionDocs.filter((d) => d.id !== doc.id);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      sessionDocsError = msg;
-    }
-  };
 
   const startEditMessage = (m: ChatMessage) => {
     if (!m.id || m.role !== 'user') return;
@@ -3620,6 +3849,7 @@
       sessionDocs = [];
       sessionDocsError = null;
       suppressSessionAutoSelect = false;
+      clearComposerAttachments();
       sessionId = id;
       historyHydrationSwapPending = true;
       return true;
@@ -3952,96 +4182,57 @@
     }
   };
 
-  const parseModelSelectionKey = (
-    rawValue: string,
-  ): { providerId: ModelProviderId; modelId: string } | null => {
-    const separatorIndex = rawValue.indexOf('::');
-    if (separatorIndex <= 0) return null;
-    const providerId = rawValue.slice(0, separatorIndex) as ModelProviderId;
-    const modelId = rawValue.slice(separatorIndex + 2);
-    if (!modelId) return null;
-    if (providerId !== 'openai' && providerId !== 'gemini' && providerId !== 'anthropic' && providerId !== 'mistral' && providerId !== 'cohere') return null;
-    return { providerId, modelId };
-  };
-
-  const handleModelSelectionChange = (event: Event) => {
-    const target = event.currentTarget as HTMLSelectElement | null;
-    if (!target) return;
-    const parsed = parseModelSelectionKey(target.value);
-    if (!parsed) return;
-    selectedProviderId = parsed.providerId;
-    selectedModelId = parsed.modelId;
-  };
-
-  const providerGroupLabel = (provider: ModelCatalogProvider) =>
-    provider.status === 'ready'
-      ? provider.label
-      : `${provider.label} (${provider.status})`;
-
   const isGeminiModel = (modelId: string | null | undefined): boolean =>
     typeof modelId === 'string' &&
     modelId.trim().toLowerCase().startsWith('gemini');
 
-  const fallbackSelectedModelOption = () =>
-    modelCatalogModels.find(
-      (entry) =>
-        entry.provider_id === selectedProviderId &&
-        entry.model_id === selectedModelId,
-    ) ??
-    modelCatalogModels.find((entry) => entry.model_id === selectedModelId) ??
-    null;
-
-  const getSelectedModelLabel = (): string =>
-    fallbackSelectedModelOption()?.label ?? selectedModelId;
-
-  const getLongestVisibleModelLabelLength = (): number => {
-    const labels = modelCatalogGroups.flatMap((group) =>
-      group.models.map((modelOption) => modelOption.label),
-    );
-
-    if (labels.length === 0) {
-      labels.push(getSelectedModelLabel());
-    }
-
-    return labels.reduce((max, label) => Math.max(max, label.length), 0);
-  };
-
-  $: modelCatalogGroups = modelCatalogProviders
-    .map((provider) => ({
-      provider,
-      models: modelCatalogModels.filter(
-        (entry) => entry.provider_id === provider.provider_id,
-      ),
-    }))
-    .filter((group) => group.models.length > 0);
+  $: modelCatalogGroups = groupModelsByProvider(modelCatalogProviders, modelCatalogModels);
 
   $: {
     if (modelCatalogModels.length > 0) {
-      const exactMatch = modelCatalogModels.some(
-        (entry) =>
-          entry.provider_id === selectedProviderId &&
-          entry.model_id === selectedModelId,
+      const coerced = coerceSelectionToValidEntry(
+        modelCatalogModels,
+        selectedProviderId,
+        selectedModelId,
       );
-      if (!exactMatch) {
-        const providerFallback =
-          modelCatalogModels.find(
-            (entry) => entry.provider_id === selectedProviderId,
-          ) ?? modelCatalogModels[0];
-        selectedProviderId = providerFallback.provider_id;
-        selectedModelId = providerFallback.model_id;
+      if (
+        coerced.providerId !== selectedProviderId ||
+        coerced.modelId !== selectedModelId
+      ) {
+        selectedProviderId = coerced.providerId;
+        selectedModelId = coerced.modelId;
       }
     }
   }
 
   $: selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
-  $: selectedModelWidthCh = Math.max(
-    getLongestVisibleModelLabelLength() + 4,
-    18,
+  $: selectedModelWidthCh = computeModelSelectorWidthCh(
+    modelCatalogGroups,
+    modelCatalogModels,
+    selectedProviderId,
+    selectedModelId,
   );
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || (sending && !composerSteerReady)) return;
+    const sentAttachments: ChatMessageAttachment[] = composerAttachments
+      .filter(
+        (attachment) =>
+          attachment.state === 'ready' &&
+          (attachment.kind === 'image' || attachment.kind === 'file') &&
+          typeof attachment.documentId === 'string' &&
+          attachment.documentId.trim().length > 0,
+      )
+      .map((attachment) => ({
+        kind: attachment.kind,
+        source: 'context_document',
+        documentId: attachment.documentId,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        state: 'ready' as const,
+      }));
+    if ((!text && sentAttachments.length === 0) || (sending && !composerSteerReady)) return;
 
     sending = true;
     errorMsg = null;
@@ -4068,6 +4259,14 @@
           parameters: Record<string, unknown>;
         }>;
         workspace_id?: string;
+        attachments?: Array<{
+          kind: 'image' | 'file';
+          source: 'context_document';
+          documentId: string;
+          fileName?: string;
+          mimeType?: string;
+          sizeBytes?: number;
+        }>;
       } = {
         content: text,
       };
@@ -4095,6 +4294,16 @@
 
       const enabledTools = getEnabledToolIds();
       if (enabledTools.length > 0) payload.tools = enabledTools;
+      if (sentAttachments.length > 0) {
+        payload.attachments = sentAttachments.map((attachment) => ({
+          kind: attachment.kind,
+          source: 'context_document',
+          documentId: attachment.documentId ?? '',
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+        }));
+      }
 
       if (isLocalToolRuntimeAvailable()) {
         const enabledLocalToolIds = new Set(
@@ -4117,6 +4326,7 @@
       }>(chatMessagesUrl(), payload);
 
       input = '';
+      clearComposerAttachments();
       composerIsMultiline = false;
       updateComposerHeight();
       if (res.sessionId && res.sessionId !== sessionId) {
@@ -4133,6 +4343,7 @@
         sessionId: res.sessionId,
         role: 'user',
         content: text,
+        attachments: sentAttachments,
         createdAt: nowIso,
         _localStatus: 'completed',
       };
@@ -4404,6 +4615,7 @@
         handleGoogleDriveConnectionUpdated,
       );
     }
+    clearComposerAttachments();
   });
 </script>
 
@@ -4762,6 +4974,56 @@
           </div>
         {/if}
       {:else}
+        {#snippet renderTimelineMessageAttachments(item: any)}
+          {#if item.kind === 'message' && item.message.role === 'user' && (item.message.attachments?.length ?? 0) > 0}
+            <div class="mt-1 flex justify-end">
+              <div class="grid max-w-[85%] grid-cols-2 gap-1">
+                {#each item.message.attachments as attachment (attachment.id ?? attachment.documentId ?? attachment.url ?? attachment.fileName)}
+                  {#if attachment.kind === 'image'}
+                    {@const imageSrc = getAttachmentImageSrc(attachment)}
+                    <div class="overflow-hidden rounded border border-primary/20 bg-white/10">
+                      {#if imageSrc}
+                        <button
+                          type="button"
+                          class="block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                          aria-label={$_('chat.attachments.enlarge')}
+                          title={$_('chat.attachments.enlarge')}
+                          on:click={() =>
+                            openLightbox(imageSrc, attachment.fileName ?? 'image')}
+                        >
+                          <img
+                            src={imageSrc}
+                            alt={attachment.fileName ?? 'image'}
+                            class="block h-24 w-24 object-cover"
+                            loading="lazy"
+                          />
+                        </button>
+                      {:else}
+                        <div class="flex h-24 w-24 items-center justify-center bg-slate-100 text-slate-500">
+                          <ImageIcon class="h-5 w-5" />
+                        </div>
+                      {/if}
+                    </div>
+                  {:else if attachment.kind === 'file'}
+                    <a
+                      class="col-span-2 flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                      href={getAttachmentImageSrc(attachment)}
+                      download={attachment.fileName ?? 'document'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={attachment.fileName ?? 'document'}
+                    >
+                      <FileText class="h-4 w-4 shrink-0 text-primary" />
+                      <span class="truncate">{attachment.fileName ?? 'document'}</span>
+                      <Download class="ml-auto h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    </a>
+                  {/if}
+                {/each}
+              </div>
+            </div>
+          {/if}
+        {/snippet}
+
         {#snippet renderTimelineUserMessage(item: any)}
             {#if item.kind === 'message' && item.message.role === 'user'}
               {@const m = item.message}
@@ -4796,7 +5058,9 @@
                       </div>
                     </div>
                   {:else}
-                    <Streamdown content={m.content ?? ''} />
+                    {#if (m.content ?? '').trim().length > 0}
+                      <Streamdown content={m.content ?? ''} />
+                    {/if}
                   {/if}
                 </div>
                 <div
@@ -4813,35 +5077,18 @@
                       <UndoDot class="w-3.5 h-3.5" />
                     </button>
                   {/if}
-                  <button
-                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    on:click={async () => {
+                  <MessageActions
+                    role="user"
+                    streamStatus="completed"
+                    isCopied={isCopied(m.id)}
+                    labels={$_}
+                    onCopy={async () => {
                       const text = m.content ?? '';
-                      const ok = await copyToClipboard(
-                        text,
-                        renderMarkdownWithRefs(text),
-                      );
+                      const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
                       if (ok) markCopied(m.id);
                     }}
-                    type="button"
-                    aria-label={$_('common.copy')}
-                    title={$_('common.copy')}
-                  >
-                    {#if isCopied(m.id)}
-                      <Check class="w-3.5 h-3.5 text-slate-900" />
-                    {:else}
-                      <Copy class="w-3.5 h-3.5" />
-                    {/if}
-                  </button>
-                  <button
-                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    on:click={() => startEditMessage(m)}
-                    type="button"
-                    aria-label="Modifier"
-                    title="Modifier"
-                  >
-                    <Pencil class="w-3.5 h-3.5" />
-                  </button>
+                    onEdit={() => startEditMessage(m)}
+                  />
                 </div>
               </div>
             {/if}
@@ -4849,8 +5096,6 @@
 
         {#snippet renderTimelineAssistantSegment(item: any)}
               {@const m = item.message}
-              {@const isUp = m.feedbackVote === 1}
-              {@const isDown = m.feedbackVote === -1}
               <div class="flex justify-start group">
                 <div class="max-w-[85%] w-full">
                   <StreamMessage
@@ -4885,71 +5130,21 @@
                       </div>
                     {/each}
                   {/if}
-                  {#if item.isTerminal && item.isLastAssistantSegment}
-                    <div
-                      class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
-                    >
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        on:click={async () => {
-                          const text = m.content ?? '';
-                          const ok = await copyToClipboard(
-                            text,
-                            renderMarkdownWithRefs(text),
-                          );
-                          if (ok) markCopied(item.key);
-                        }}
-                        type="button"
-                        aria-label={$_('common.copy')}
-                        title={$_('common.copy')}
-                      >
-                        {#if isCopied(item.key)}
-                          <Check class="w-3.5 h-3.5 text-slate-900" />
-                        {:else}
-                          <Copy class="w-3.5 h-3.5" />
-                        {/if}
-                      </button>
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        on:click={() => void retryFromAssistant(m.id)}
-                        type="button"
-                        aria-label={$_('common.retry')}
-                        title={$_('common.retry')}
-                      >
-                        <RotateCcw class="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        class:text-slate-900={isUp}
-                        class:chat-message-action-button-active={isUp}
-                        on:click={() =>
-                          void setFeedback(m.id, isUp ? 'clear' : 'up')}
-                        type="button"
-                        aria-label={$_('chat.feedback.useful')}
-                        title={$_('chat.feedback.useful')}
-                      >
-                        <ThumbsUp
-                          class="w-3.5 h-3.5"
-                          fill={isUp ? 'currentColor' : 'none'}
-                        />
-                      </button>
-                      <button
-                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        class:text-slate-900={isDown}
-                        class:chat-message-action-button-active={isDown}
-                        on:click={() =>
-                          void setFeedback(m.id, isDown ? 'clear' : 'down')}
-                        type="button"
-                        aria-label={$_('chat.feedback.notUseful')}
-                        title={$_('chat.feedback.notUseful')}
-                      >
-                        <ThumbsDown
-                          class="w-3.5 h-3.5"
-                          fill={isDown ? 'currentColor' : 'none'}
-                        />
-                      </button>
-                    </div>
-                  {/if}
+                  <MessageActions
+                    role="assistant"
+                    streamStatus={item.isTerminal ? 'completed' : 'processing'}
+                    isLastAssistantSegment={item.isLastAssistantSegment}
+                    isCopied={isCopied(item.key)}
+                    feedbackVote={m.feedbackVote ?? null}
+                    labels={$_}
+                    onCopy={async () => {
+                      const text = m.content ?? '';
+                      const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
+                      if (ok) markCopied(item.key);
+                    }}
+                    onRegenerate={() => void retryFromAssistant(m.id)}
+                    onFeedback={(action: 'up' | 'down' | 'clear') => void setFeedback(m.id, action)}
+                  />
                 </div>
               </div>
         {/snippet}
@@ -4981,6 +5176,7 @@
           <ChatTimelineWrapper
             {items}
             renderUserMessage={renderTimelineUserMessage}
+            renderMessageAttachments={renderTimelineMessageAttachments}
             renderAssistantSegment={renderTimelineAssistantSegment}
             renderRuntimeSegment={renderTimelineRuntimeSegment}
           />
@@ -5263,22 +5459,54 @@
                 {googleDriveConnectionError}
               </div>
             {/if}
-            {#if sessionDocs.length > 0}
-              <div class="mb-2 flex flex-wrap gap-2">
-                {#each sessionDocs as doc (doc.id)}
+            {#if attachmentBand.length > 0}
+              <div
+                class="mb-2 flex flex-wrap gap-2"
+                data-testid="chat-composer-attachment-band"
+              >
+                {#each attachmentBand as item (item.key)}
+                  {@const imageSrc =
+                    item.kind === 'image' ? getBandItemImageSrc(item) : ''}
                   <div
-                    class="flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700"
+                    class="flex h-14 min-w-0 max-w-[12rem] items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700"
                   >
-                    <div class="max-w-[220px] truncate">{doc.filename}</div>
-                    <span class="text-slate-400"
-                      >· {sessionDocStatusLabel(doc.status)}</span
-                    >
+                    {#if item.kind === 'image' && imageSrc}
+                      <button
+                        type="button"
+                        class="h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        aria-label={$_('chat.attachments.enlarge')}
+                        title={$_('chat.attachments.enlarge')}
+                        on:click={() => openLightbox(imageSrc, item.fileName)}
+                      >
+                        <img
+                          src={imageSrc}
+                          alt={item.fileName}
+                          class="h-10 w-10 object-cover"
+                        />
+                      </button>
+                    {:else}
+                      <div
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500"
+                      >
+                        {#if item.kind === 'image'}
+                          <ImageIcon class="h-4 w-4" />
+                        {:else}
+                          <FileText class="h-4 w-4" />
+                        {/if}
+                      </div>
+                    {/if}
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate font-medium">{item.fileName}</div>
+                      <div class="truncate text-slate-400">
+                        {getBandItemStatusLabel(item)}
+                      </div>
+                    </div>
                     <button
-                      class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-white"
+                      class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                       type="button"
                       aria-label={$_('chat.documents.delete.ariaLabel')}
                       title={$_('common.delete')}
-                      on:click={() => void removeSessionDoc(doc)}
+                      on:click={() => void removeBandItem(item)}
                     >
                       <X class="w-3 h-3" />
                     </button>
@@ -5498,29 +5726,17 @@
 
             </svelte:fragment>
           </MenuPopover>
-          <select
-            id="chat-model-selection"
-            value={selectedModelSelectionKey}
-            on:change={handleModelSelectionChange}
-            class="w-auto px-2 py-0.5 text-[11px] text-slate-700 focus:outline-none"
-            style={`width:${selectedModelWidthCh}ch;min-width:${selectedModelWidthCh}ch;`}
-          >
-            {#if modelCatalogGroups.length === 0 && fallbackSelectedModelOption()}
-              <option value={`${fallbackSelectedModelOption()?.provider_id ?? selectedProviderId}::${fallbackSelectedModelOption()?.model_id ?? selectedModelId}`}>
-                {fallbackSelectedModelOption()?.label ?? selectedModelId}
-              </option>
-            {:else}
-              {#each modelCatalogGroups as group}
-                <optgroup label={providerGroupLabel(group.provider)}>
-                  {#each group.models as modelOption}
-                    <option value={`${modelOption.provider_id}::${modelOption.model_id}`}>
-                      {modelOption.label}
-                    </option>
-                  {/each}
-                </optgroup>
-              {/each}
-            {/if}
-          </select>
+          <ModelSelector
+            bind:value={selectedModelSelectionKey}
+            groups={modelCatalogGroups}
+            models={modelCatalogModels}
+            widthCh={selectedModelWidthCh}
+            labels={$_}
+            onChange={({ providerId, modelId }: { providerId: ModelProviderId; modelId: string }) => {
+              selectedProviderId = providerId;
+              selectedModelId = modelId;
+            }}
+          />
         {/if}
   {/snippet}
 
@@ -5578,12 +5794,58 @@
       : 0}
     bind:composerElement={composerEl}
     onKeyDown={handleKeyDown}
+    onPaste={handleComposerPaste}
     {renderComposerSurface}
     {renderFloatingLayer}
     {renderLeftControls}
     {renderRightActions}
   />
 </div>
+
+<svelte:window on:keydown={handleLightboxKeydown} />
+
+{#if lightboxImage}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+    data-testid="chat-image-lightbox"
+  >
+    <button
+      type="button"
+      class="absolute inset-0 h-full w-full cursor-default"
+      aria-label={$_('chat.attachments.lightbox.close')}
+      on:click={closeLightbox}
+    ></button>
+    <div class="relative z-10 flex max-h-full max-w-full flex-col items-center gap-2">
+      <div class="flex items-center gap-2 self-end">
+        <a
+          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+          href={lightboxImage.src}
+          download={lightboxImage.alt}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={$_('chat.attachments.lightbox.download')}
+          title={$_('chat.attachments.lightbox.download')}
+        >
+          <Download class="h-5 w-5" />
+        </a>
+        <button
+          type="button"
+          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+          aria-label={$_('chat.attachments.lightbox.close')}
+          title={$_('chat.attachments.lightbox.close')}
+          on:click={closeLightbox}
+        >
+          <X class="h-5 w-5" />
+        </button>
+      </div>
+      <img
+        src={lightboxImage.src}
+        alt={lightboxImage.alt}
+        class="max-h-[80vh] max-w-[90vw] rounded object-contain shadow-2xl"
+      />
+    </div>
+  </div>
+{/if}
 
 <style>
   .composer-rich :global(.markdown-input-wrapper),

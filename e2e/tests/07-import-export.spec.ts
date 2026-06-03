@@ -166,10 +166,15 @@ test.describe('Import / Export', () => {
       storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, targetWorkspaceId, targetFolderId),
     });
     const page = await userAContext.newPage();
+    const folderLoaded = page.waitForResponse(
+      (res) => res.url().includes(`/api/v1/folders/${targetFolderId}`) && res.ok()
+    );
     await page.goto(`/folders/${encodeURIComponent(targetFolderId)}`);
     await page.waitForLoadState('domcontentloaded');
+    await folderLoaded;
 
-    const actionsButton = page.locator('button[aria-label="Actions"]');
+    await expect(page.getByRole('button', { name: 'Exporter Excel (XLSX)' })).toBeVisible();
+    const actionsButton = page.getByRole('button', { name: 'Actions' });
     await expect(actionsButton).toBeVisible();
     await actionsButton.click();
 
@@ -204,5 +209,78 @@ test.describe('Import / Export', () => {
 
     await expect(page).toHaveURL(new RegExp(`/folders/${newFolderId}$`));
     await userAContext.close();
+  });
+
+  test('exporte un dossier en xlsx multi-onglets avec graphique natif', async () => {
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
+
+    // Folders created via API get the workspace-type default matrix.
+    const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${sourceWorkspaceId}`, {
+      data: { name: `Dossier XLSX ${Date.now()}`, description: 'Export XLSX e2e' },
+    });
+    expect(folderRes.ok()).toBe(true);
+    const folder = await folderRes.json();
+    const xlsxFolderId = String(folder?.id || '');
+    expect(xlsxFolderId).toBeTruthy();
+
+    // Scored initiative so the prioritization quadrant has a data point.
+    const ucRes = await userAApi.post(`/api/v1/initiatives?workspace_id=${sourceWorkspaceId}`, {
+      data: {
+        folderId: xlsxFolderId,
+        name: 'Cas XLSX',
+        description: 'Cas pour export xlsx',
+        domain: 'Operations',
+        problem: 'Processus lent',
+        solution: 'Automatiser',
+        valueScores: [{ axisId: 'business_value', rating: 89, description: '' }],
+        complexityScores: [{ axisId: 'ai_maturity', rating: 8, description: '' }],
+      },
+    });
+    expect(ucRes.ok()).toBe(true);
+
+    // Enqueue async xlsx generation.
+    const genRes = await userAApi.post(`/api/v1/xlsx/generate?workspace_id=${sourceWorkspaceId}`, {
+      data: { entityType: 'folder', entityId: xlsxFolderId },
+    });
+    expect(genRes.ok()).toBe(true);
+    const gen = await genRes.json();
+    const jobId = String(gen?.jobId || '');
+    expect(jobId).toBeTruthy();
+
+    // Poll the job until completion.
+    let completed = false;
+    for (let attempt = 0; attempt < 40 && !completed; attempt++) {
+      const jobRes = await userAApi.get(`/api/v1/queue/jobs/${jobId}?workspace_id=${sourceWorkspaceId}`);
+      if (jobRes.ok()) {
+        const job = await jobRes.json();
+        if (job?.status === 'completed') completed = true;
+        else if (job?.status === 'failed') throw new Error(`xlsx job failed: ${job?.error}`);
+      }
+      if (!completed) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(completed).toBe(true);
+
+    // Download the workbook and assert it is a valid zip containing the
+    // three worksheets plus the natively injected scatter chart part.
+    const dlRes = await userAApi.get(`/api/v1/xlsx/jobs/${jobId}/download?workspace_id=${sourceWorkspaceId}`);
+    expect(dlRes.ok()).toBe(true);
+    expect(dlRes.headers()['content-type']).toContain(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    const xlsxBuffer = await dlRes.body();
+    // ZIP local-file signature.
+    expect(xlsxBuffer.slice(0, 2).toString('latin1')).toBe('PK');
+    // OOXML part names are stored as plain text in the zip directory.
+    const asText = xlsxBuffer.toString('latin1');
+    expect(asText).toContain('xl/worksheets/sheet1.xml');
+    expect(asText).toContain('xl/worksheets/sheet2.xml');
+    expect(asText).toContain('xl/worksheets/sheet3.xml');
+    expect(asText).toContain('xl/charts/chart1.xml');
+    expect(asText).toContain('xl/drawings/drawing1.xml');
+
+    await userAApi.dispose();
   });
 });

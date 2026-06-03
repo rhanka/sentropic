@@ -8,7 +8,11 @@ test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debuggi
 // Important: ces tests manipulent le même compte + les mêmes sessions.
 // En parallèle (workers>1), ils se marchent dessus (création/suppression sessions) → flaky.
 test.describe('Chat', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const QUICK_UI_TIMEOUT = 2_000;
+  const PAGE_READY_TIMEOUT = 15_000;
   const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
     assistantWrapper(page).locator('div.rounded.bg-white.border.border-slate-200');
@@ -24,29 +28,95 @@ test.describe('Chat', () => {
   const sessionHeaderLabel = (page: any) =>
     page.locator('#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate').first();
 
-  async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
-    const editable = page
-      .locator(
-        '[role="textbox"][aria-label="Composer"][contenteditable="true"]:visible, [role="textbox"][aria-label="Composer"]:visible [contenteditable="true"]:visible'
+  async function gotoFoldersPage(page: any) {
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+    const foldersHeading = page.getByRole('heading', { name: /Dossiers|Folders/i });
+    const firstBootReady = await foldersHeading.isVisible({ timeout: QUICK_UI_TIMEOUT }).catch(() => false);
+    if (!firstBootReady) {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+    }
+    await expect(foldersHeading).toBeVisible({ timeout: PAGE_READY_TIMEOUT });
+  }
+
+  async function waitForComposerIdle(page: any, timeout = 60_000) {
+    let readySince = 0;
+    await expect
+      .poll(
+        async () => {
+          const stopCount = await page.locator('#chat-widget-dialog .chat-composer-stop-button:visible').count();
+          const steerCount = await page.getByTestId('chat-composer-steer-button').count();
+          const ready = stopCount === 0 && steerCount === 0;
+          if (!ready) {
+            readySince = 0;
+            return false;
+          }
+          const now = Date.now();
+          if (readySince === 0) readySince = now;
+          return now - readySince >= 500;
+        },
+        { timeout, intervals: [200, 300, 500, 1_000] },
       )
-      .first();
+      .toBe(true);
+  }
+
+  async function waitForComposerCanSend(page: any, timeout = 60_000) {
+    const sendBtn = page.getByTestId('chat-composer-send-button');
+    let readySince = 0;
+    await expect
+      .poll(
+        async () => {
+          const stopCount = await page.locator('#chat-widget-dialog .chat-composer-stop-button:visible').count();
+          const steerCount = await page.getByTestId('chat-composer-steer-button').count();
+          const sendReady = await sendBtn.isEnabled().catch(() => false);
+          const ready = stopCount === 0 && steerCount === 0 && sendReady;
+          if (!ready) {
+            readySince = 0;
+            return false;
+          }
+          const now = Date.now();
+          if (readySince === 0) readySince = now;
+          return now - readySince >= 500;
+        },
+        { timeout, intervals: [200, 300, 500, 1_000] },
+      )
+      .toBe(true);
+  }
+
+  async function waitForQueueJobSettled(page: any, jobId: string, timeout = 60_000) {
+    if (!jobId) return;
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get(
+            `${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`,
+          );
+          if (!res.ok()) return `http-${res.status()}`;
+          const data = await res.json().catch(() => null);
+          return String(data?.status ?? '');
+        },
+        { timeout, intervals: [500, 1_000, 2_000] },
+      )
+      .toMatch(/^(completed|failed)$/);
+  }
+
+  async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
+    await waitForComposerIdle(page);
+    const editable = composer.locator('[contenteditable="true"]:visible').first();
     await expect(editable).toBeVisible({ timeout: 5_000 });
-    await editable.focus();
+    await editable.click();
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(message);
+    await expect(editable).toContainText(message, { timeout: 5_000 });
     // When a previous assistant response is still streaming, pressing Enter
     // or clicking the action button triggers sendComposerSteer (which posts
     // to /chat/messages/<id>/steer) instead of sendMessage (/chat/messages).
     // Wait for the send button (data-testid="chat-composer-send-button") to
     // appear — its test-id flips to "chat-composer-steer-button" while the
     // assistant is active — then click it so the action fires sendMessage.
+    await waitForComposerCanSend(page);
     const sendBtn = page.getByTestId('chat-composer-send-button');
-    // Single assertion: toBeEnabled waits for both existence and enabled state.
-    // The button's data-testid flips between "chat-composer-send-button" and
-    // "chat-composer-steer-button" depending on assistant state, so we use
-    // a long timeout to wait for the assistant to finish.
-    await expect(sendBtn).toBeEnabled({ timeout: 60_000 });
     // Use pathname.endsWith to avoid capturing /chat/messages/<id>/steer
     // which is also a POST and contains '/chat/messages' in the URL.
     const matchesChatMessages = (url: string) => {
@@ -70,7 +140,7 @@ test.describe('Chat', () => {
       requestBody = null;
     }
     const data = await res.json().catch(() => null);
-    return {
+    const result = {
       requestBody,
       jobId: String((data as any)?.jobId ?? ''),
       streamId: String((data as any)?.streamId ?? ''),
@@ -78,6 +148,8 @@ test.describe('Chat', () => {
       sessionId: String((data as any)?.sessionId ?? ''),
       userMessageId: String((data as any)?.userMessageId ?? '')
     };
+    await waitForQueueJobSettled(page, result.jobId);
+    return result;
   }
 
   async function debugBackendState(page: any, jobId: string, streamId: string) {
@@ -196,11 +268,7 @@ test.describe('Chat', () => {
 
   test('devrait ouvrir le chat, envoyer un message et recevoir une réponse', async ({ page }) => {
     // Aller sur une page simple (pas besoin de contexte spécifique)
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    
-    // Attendre que la page soit chargée (Svelte est réactif, timeout 1s)
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     
     // Ouvrir le ChatWidget (bouton en bas à droite)
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -239,6 +307,8 @@ test.describe('Chat', () => {
   });
 
   test('reload + new tab preserve assistant history without legacy stream-events calls', async ({ page }) => {
+    await gotoFoldersPage(page);
+
     const legacyRequests: string[] = [];
     page.on('request', (request: any) => {
       const url = String(request.url?.() ?? request.url() ?? '');
@@ -313,8 +383,7 @@ test.describe('Chat', () => {
         legacyRequests.push(url);
       }
     });
-    await page2.goto('/folders');
-    await page2.waitForLoadState('domcontentloaded');
+    await gotoFoldersPage(page2);
     await expect(page2.locator('button[aria-controls="chat-widget-dialog"]')).toBeVisible({ timeout: 5_000 });
     await page2.locator('button[aria-controls="chat-widget-dialog"]').click();
     await expectLatestAssistantReplay(page2, responseNeedle, 15_000);
@@ -329,9 +398,7 @@ test.describe('Chat', () => {
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
 
     // 1) /folders → no contextId (expect no primaryContextType)
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
@@ -467,9 +534,7 @@ test.describe('Chat', () => {
     await expect(webSearchIcon).toHaveClass(wasEnabled ? /text-slate-400/ : /text-slate-900/);
 
     // Quitter la vue sans envoyer de message: contexte provisoire supprimé.
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
@@ -494,8 +559,7 @@ test.describe('Chat', () => {
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     await sendMessageAndWaitApi(page, composer, 'Contexte utilisé');
 
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
+    await gotoFoldersPage(page);
     await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
@@ -508,9 +572,7 @@ test.describe('Chat', () => {
   });
 
   test('non-régression app web: menu outils standard sans outils locaux extension', async ({ page }) => {
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 5000 });
+    await gotoFoldersPage(page);
 
     const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
@@ -543,9 +605,7 @@ test.describe('Chat', () => {
 
   test('devrait basculer entre Chat et Jobs IA dans le widget', async ({ page }) => {
     // Aller sur une page simple
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -576,9 +636,7 @@ test.describe('Chat', () => {
 
   test('devrait maintenir la conversation avec plusieurs messages', async ({ page }) => {
     // Aller sur une page simple
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -627,8 +685,7 @@ test.describe('Chat', () => {
   });
 
   test('devrait gérer les actions sur les messages (copier, éditer, retry, feedback)', async ({ page }) => {
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
+    await gotoFoldersPage(page);
     await expect(page).toHaveURL(/\/folders$/);
 
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -668,7 +725,22 @@ test.describe('Chat', () => {
     await page.keyboard.type(updatedMessage);
     const saveButton = userGroup.getByRole('button', { name: /Envoyer|Send/i });
     await expect(saveButton).toBeVisible({ timeout: 5000 });
-    await saveButton.click();
+    const [editResponse, editRetryResponse] = await Promise.all([
+      page.waitForResponse((res) => {
+        const req = res.request();
+        return req.method() === 'PATCH' && res.url().includes('/api/v1/chat/messages/');
+      }, { timeout: 30_000 }),
+      page.waitForResponse((res) => {
+        const req = res.request();
+        return req.method() === 'POST' && res.url().includes('/api/v1/chat/messages/') && res.url().includes('/retry');
+      }, { timeout: 30_000 }),
+      saveButton.click()
+    ]);
+    expect(editResponse.ok()).toBeTruthy();
+    expect(editRetryResponse.ok()).toBeTruthy();
+    const editRetryPayload = await editRetryResponse.json().catch(() => null);
+    await waitForQueueJobSettled(page, String((editRetryPayload as any)?.jobId ?? ''));
+    await waitForComposerIdle(page);
     await expect(page.locator('.userMarkdown').filter({ hasText: updatedMessage }).first()).toBeVisible({ timeout: 5000 });
 
     // Wait for the new assistant response after edit
@@ -699,13 +771,14 @@ test.describe('Chat', () => {
       retryButton.click()
     ]);
     expect(retryResponse.ok()).toBeTruthy();
+    const retryPayload = await retryResponse.json().catch(() => null);
+    await waitForQueueJobSettled(page, String((retryPayload as any)?.jobId ?? ''));
+    await waitForComposerIdle(page);
     await expect(assistantBubble(page).last()).toBeVisible({ timeout: 30_000 });
   });
 
   test('devrait mettre à jour le titre de session via SSE', async ({ page }) => {
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
 
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
@@ -722,9 +795,7 @@ test.describe('Chat', () => {
 
   test('devrait conserver la session après fermeture et réouverture du widget', async ({ page }) => {
     // Aller sur une page simple
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -738,15 +809,18 @@ test.describe('Chat', () => {
     
     // Envoyer un message pour créer une session
     const message = 'Test session conservation';
+    const assistantCountBeforeSend = await assistantWrapper(page).count();
     await sendMessageAndWaitApi(page, composer, message);
     
     // Attendre que le message utilisateur apparaisse
     const userMessage = page.locator('.userMarkdown').filter({ hasText: message }).first();
     await expect(userMessage).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     
-    // Attendre qu'une réponse de l'assistant apparaisse (peu importe le contenu, on teste la conservation de session)
-    // On attend au moins le placeholder assistant (StreamMessage) pour éviter de dépendre du contenu final.
-    await expect.poll(async () => await assistantWrapper(page).count(), { timeout: 30_000 }).toBeGreaterThan(0);
+    // Wait for this send to create its own assistant turn. The session may
+    // already contain older assistant messages from previous scenarios.
+    await expect
+      .poll(async () => await assistantWrapper(page).count(), { timeout: 30_000 })
+      .toBeGreaterThan(assistantCountBeforeSend);
     
     // Fermer le widget (bouton X)
     const closeButton = page
@@ -771,9 +845,7 @@ test.describe('Chat', () => {
 
   test('devrait lister les sessions dans le sélecteur après création', async ({ page }) => {
     // Aller sur une page simple
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -818,9 +890,7 @@ test.describe('Chat', () => {
 
   test('devrait supprimer une session', async ({ page }) => {
     // Aller sur une page simple
-    await page.goto('/folders');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: QUICK_UI_TIMEOUT });
+    await gotoFoldersPage(page);
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -886,7 +956,7 @@ test.describe('Chat', () => {
     await expect
       .poll(async () => {
         const sessionsRes = await page.request.get(`${API_BASE_URL}/api/v1/chat/sessions`);
-        if (!sessionsRes.ok()) return null;
+        if (!sessionsRes.ok()) return true;
         const payload = await sessionsRes.json().catch(() => null);
         const sessions = Array.isArray((payload as any)?.sessions)
           ? (payload as any).sessions
@@ -897,6 +967,96 @@ test.describe('Chat', () => {
 
     // Le menu de sessions doit rester opérable après suppression.
     await ensureSessionMenuOpen(page);
+  });
+
+  test('attache une image et le modèle vision la décrit (BR38a-FB2)', async ({ page }) => {
+    await gotoFoldersPage(page);
+
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await chatButton.click();
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+
+    // Start from a fresh session so retries / shared-account state don't leave
+    // an active assistant (which flips the send button to "steer").
+    const { sessionMenuButton } = await ensureSessionMenuOpen(page);
+    await page.getByRole('button', { name: sessionNewLabel }).first().click();
+    await sessionMenuButton.click().catch(() => {});
+    await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+
+    // Default model is text-only (gpt-4.1-nano); switch to a vision-capable one.
+    const modelSelect = page.locator('#chat-model-selection');
+    await expect(
+      modelSelect.locator('option[value="openai::gpt-5.4-nano"]')
+    ).toHaveCount(1, { timeout: 10_000 });
+    await modelSelect.selectOption('openai::gpt-5.4-nano');
+
+    // Generate a solid red PNG in the browser and attach it via the "+" menu.
+    const redPngBytes: number[] = await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return [];
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(0, 0, 128, 128);
+      const blob: Blob = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b as Blob), 'image/png')
+      );
+      const buf = await blob.arrayBuffer();
+      return Array.from(new Uint8Array(buf));
+    });
+    expect(redPngBytes.length).toBeGreaterThan(0);
+
+    const plusButton = page.getByRole('button', { name: /Ouvrir le menu|Open menu/i }).first();
+    await plusButton.click();
+    const fileInput = page.locator('#chat-widget-dialog input[type="file"]').first();
+    const [uploadRes] = await Promise.all([
+      page.waitForResponse(
+        (res: any) => {
+          try {
+            const r = res.request();
+            return r.method() === 'POST' && new URL(res.url()).pathname.endsWith('/documents');
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 30_000 }
+      ),
+      fileInput.setInputFiles({
+        name: 'red-square.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from(redPngBytes),
+      }),
+    ]);
+    expect(uploadRes.ok()).toBeTruthy();
+
+    // Pending attachment chip is shown in the composer band.
+    await expect(page.getByTestId('chat-composer-attachment-band')).toBeVisible({ timeout: 10_000 });
+
+    // Send a question about the image; the request must carry the image attachment.
+    const { requestBody, jobId, streamId } = await sendMessageAndWaitApi(
+      page,
+      composer,
+      'What is the dominant color of the attached image? Answer with a single word.'
+    );
+    const sentAttachments = (requestBody?.attachments ?? []) as any[];
+    expect(
+      sentAttachments.some(
+        (a) => a?.kind === 'image' && typeof a?.documentId === 'string' && a.documentId.length > 0
+      )
+    ).toBeTruthy();
+
+    // The vision model must actually describe the image: a red square → "red".
+    const redResponse = assistantBubble(page).filter({ hasText: /red|rouge/i }).last();
+    try {
+      await expect(redResponse).toBeVisible({ timeout: 60_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
   });
 
 });

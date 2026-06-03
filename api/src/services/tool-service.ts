@@ -23,7 +23,7 @@ import {
   readContextDocumentSyncData,
   type ContextDocumentSourceKind,
 } from './context-document-source';
-import { extractDocumentInfoFromDocument } from './document-text';
+import { extractDocumentInfoFromDocument, extractXlsxSheets, isXlsxDocument } from './document-text';
 import { callLLM } from './llm-runtime';
 import { SHARED_AGENTS } from '../config/default-agents-shared';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
@@ -2249,6 +2249,132 @@ export class ToolService {
       words,
       contentWords: contentMode === 'detailed_summary' ? this.countWords(content) : undefined,
       summary: this.getDataString(row.data, 'summary')
+    };
+  }
+
+  /**
+   * Shared loader for the xlsx sheet-aware actions: resolves the document, enforces the same
+   * security/context checks as getDocumentContent, asserts the document is an xlsx workbook, and
+   * returns the loaded bytes alongside the row.
+   */
+  private async loadXlsxDocument(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
+    contextId: string;
+    documentId: string;
+    userId?: string | null;
+    action: 'list_sheets' | 'get_sheet_content';
+  }): Promise<{
+    row: typeof contextDocuments.$inferSelect;
+    bytes: Uint8Array;
+  }> {
+    const row = await this.fetchDocumentRow(opts);
+    if (!isXlsxDocument((row.mimeType || '').toLowerCase(), (row.filename || '').toLowerCase())) {
+      throw new Error(
+        `documents.${opts.action}: document "${row.filename}" is not a spreadsheet (xlsx); use get_content instead`,
+      );
+    }
+    const access =
+      typeof opts.userId === 'string' && opts.userId.trim().length > 0
+        ? { mode: 'user' as const, userId: opts.userId, workspaceId: opts.workspaceId }
+        : undefined;
+    const loaded = await loadContextDocumentContent({ document: row, access });
+    return { row, bytes: loaded.bytes };
+  }
+
+  private async fetchDocumentRow(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
+    contextId: string;
+    documentId: string;
+  }): Promise<typeof contextDocuments.$inferSelect> {
+    const [row] = await db
+      .select()
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.id, opts.documentId), eq(contextDocuments.workspaceId, opts.workspaceId)))
+      .limit(1);
+    if (!row) throw new Error('Document not found');
+    if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
+      throw new Error('Security: document does not match context');
+    }
+    this.assertDocumentExplorable(row.data);
+    return row;
+  }
+
+  /** List the worksheets of an xlsx document (names + 1-based index + non-empty row counts). */
+  async listDocumentSheets(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
+    contextId: string;
+    documentId: string;
+    userId?: string | null;
+  }): Promise<{
+    documentId: string;
+    filename: string;
+    mimeType: string;
+    sheetCount: number;
+    sheets: Array<{ name: string; index: number; rowCount: number }>;
+  }> {
+    const { row, bytes } = await this.loadXlsxDocument({ ...opts, action: 'list_sheets' });
+    const sheets = await extractXlsxSheets(bytes);
+    return {
+      documentId: row.id,
+      filename: row.filename,
+      mimeType: row.mimeType,
+      sheetCount: sheets.length,
+      sheets: sheets.map((s) => ({ name: s.name, index: s.index, rowCount: s.rowCount })),
+    };
+  }
+
+  /**
+   * Return one worksheet's content (selected by name or 1-based index). The content is tab-separated
+   * rows where each formula cell surfaces BOTH the formula and its computed value (`=FORMULA → value`),
+   * with cross-sheet references kept in `Sheet!A1` form.
+   */
+  async getDocumentSheetContent(opts: {
+    workspaceId: string;
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
+    contextId: string;
+    documentId: string;
+    sheetName?: string;
+    sheetIndex?: number;
+    userId?: string | null;
+  }): Promise<{
+    documentId: string;
+    filename: string;
+    mimeType: string;
+    sheetName: string;
+    sheetIndex: number;
+    rowCount: number;
+    content: string;
+    availableSheets: Array<{ name: string; index: number }>;
+  }> {
+    const { row, bytes } = await this.loadXlsxDocument({ ...opts, action: 'get_sheet_content' });
+    const sheets = await extractXlsxSheets(bytes);
+    const availableSheets = sheets.map((s) => ({ name: s.name, index: s.index }));
+
+    const wantedName = typeof opts.sheetName === 'string' ? opts.sheetName.trim() : '';
+    const wantedIndex = typeof opts.sheetIndex === 'number' ? opts.sheetIndex : undefined;
+    const match = wantedName
+      ? sheets.find((s) => s.name === wantedName) ??
+        sheets.find((s) => s.name.toLowerCase() === wantedName.toLowerCase())
+      : sheets.find((s) => s.index === wantedIndex);
+
+    if (!match) {
+      const selector = wantedName ? `name="${wantedName}"` : `index=${wantedIndex}`;
+      const names = availableSheets.map((s) => `${s.index}:${s.name}`).join(', ');
+      throw new Error(`documents.get_sheet_content: sheet ${selector} not found. Available: ${names || '(none)'}`);
+    }
+
+    return {
+      documentId: row.id,
+      filename: row.filename,
+      mimeType: row.mimeType,
+      sheetName: match.name,
+      sheetIndex: match.index,
+      rowCount: match.rowCount,
+      content: match.text,
+      availableSheets,
     };
   }
 
