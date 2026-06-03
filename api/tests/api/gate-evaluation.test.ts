@@ -95,8 +95,8 @@ describe('Gate evaluation system', () => {
       expect(config).toBeNull();
     });
 
-    it('returns free mode for ai-ideas', () => {
-      const config = getDefaultGateConfig('ai-ideas');
+    it('returns free mode for ai-priorities', () => {
+      const config = getDefaultGateConfig('ai-priorities');
       expect(config).toBeDefined();
       expect(config!.mode).toBe('free');
       expect(config!.stages).toEqual(['G0', 'G2']);
@@ -129,8 +129,8 @@ describe('Gate evaluation system', () => {
       expect(config.mode).toBe('soft');
     });
 
-    it('seeds gate_config on ai-ideas workspace creation', async () => {
-      const wsId = await createWorkspaceWithType('ai-ideas');
+    it('seeds gate_config on ai-priorities workspace creation', async () => {
+      const wsId = await createWorkspaceWithType('ai-priorities');
       const [ws] = await db.select({ gateConfig: workspaces.gateConfig }).from(workspaces).where(eq(workspaces.id, wsId)).limit(1);
       expect(ws.gateConfig).toBeDefined();
       const config = ws.gateConfig as unknown as GateConfig;
@@ -142,7 +142,7 @@ describe('Gate evaluation system', () => {
 
   describe('free mode gate evaluation', () => {
     it('always passes in free mode', async () => {
-      const wsId = await createWorkspaceWithType('ai-ideas');
+      const wsId = await createWorkspaceWithType('ai-priorities');
       const folderId = await createFolderInWorkspace(wsId);
       const initId = await createInitiativeInFolder(wsId, folderId);
 
@@ -153,7 +153,7 @@ describe('Gate evaluation system', () => {
     });
 
     it('passes even with missing data in free mode', async () => {
-      const wsId = await createWorkspaceWithType('ai-ideas');
+      const wsId = await createWorkspaceWithType('ai-priorities');
       const folderId = await createFolderInWorkspace(wsId);
       const initId = await createInitiativeInFolder(wsId, folderId, {});
 
@@ -261,7 +261,7 @@ describe('Gate evaluation system', () => {
 
   describe('PATCH /api/v1/initiatives/:id maturity_stage transition', () => {
     it('allows maturity_stage transition in free mode', async () => {
-      const wsId = await createWorkspaceWithType('ai-ideas');
+      const wsId = await createWorkspaceWithType('ai-priorities');
       const folderId = await createFolderInWorkspace(wsId);
 
       // Create initiative via API
@@ -291,7 +291,7 @@ describe('Gate evaluation system', () => {
           G2: { required_fields: ['data.description'], guardrail_categories: [] },
         },
       };
-      const wsId = await createWorkspaceWithType('ai-ideas', hardConfig);
+      const wsId = await createWorkspaceWithType('ai-priorities', hardConfig);
       const folderId = await createFolderInWorkspace(wsId);
 
       const createRes = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', editor.sessionToken, {

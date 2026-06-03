@@ -72,8 +72,8 @@ describe('ChatService - document_generate tool (unit, mocked OpenAI)', () => {
 
     ({ workspaceId } = await ensureWorkspaceForUser(userId));
 
-    // Default workspace from ensureWorkspaceForUser is neutral; set to ai-ideas for tests
-    await db.update(workspaces).set({ type: 'ai-ideas' }).where(eq(workspaces.id, workspaceId));
+    // Default workspace from ensureWorkspaceForUser is neutral; set to ai-priorities for tests
+    await db.update(workspaces).set({ type: 'ai-priorities' }).where(eq(workspaces.id, workspaceId));
 
     folderId = createId();
     await db.insert(folders).values({
@@ -100,8 +100,8 @@ describe('ChatService - document_generate tool (unit, mocked OpenAI)', () => {
     vi.clearAllMocks();
   });
 
-  it('should include document_generate in tool list for ai-ideas workspace', async () => {
-    // Default workspace type is ai-ideas
+  it('should include document_generate in tool list for ai-priorities workspace', async () => {
+    // Default workspace type is ai-priorities
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let capturedTools: string[] = [];
 
