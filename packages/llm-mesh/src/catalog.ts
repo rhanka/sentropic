@@ -183,14 +183,16 @@ export const providerProfiles = {
       structuredOutputLevel: 'tool-input-schema',
     }),
   },
-  // Gemini-on-Vertex: same Google model family as `gemini`, so it MUST mirror the
-  // Gemini provider profile (family `google`, identical capability template:
-  // json-schema-subset, gemini unsupported keywords, stringEnumsOnly). The only
-  // runtime difference (Vertex transport URL + ADC bearer auth) lives in api Lot 3.
-  vertex: {
-    providerId: 'vertex',
+  // Gemini-on-GCP (Model Garden): same Google model family as `gemini`, so it
+  // MUST mirror the Gemini provider profile (family `google`, identical capability
+  // template: json-schema-subset, gemini unsupported keywords, stringEnumsOnly).
+  // The only runtime difference (GCP transport URL + ADC bearer auth) lives in api
+  // Lot 3. (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI
+  // brand retired; the endpoint host stays aiplatform.googleapis.com.)
+  gcp: {
+    providerId: 'gcp',
     family: 'google',
-    label: 'Google Vertex AI',
+    label: 'Google Cloud',
     status: 'planned',
     capabilities: capabilities({
       reasoningTier: 'advanced',
@@ -328,26 +330,26 @@ export const modelProfiles = [
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('cohere', 'advanced'),
   },
-  // Gemini-on-Vertex models mirror the two `gemini` AI-Studio models (same wire
-  // model family, same capability template) but use globally-unique
-  // `google/<model>@vertex` selection keys (§C uniqueness invariant). They are
-  // OPT-IN only (R2): `defaultTaskHints: []` so adding `vertex` never changes the
+  // Gemini-on-GCP (Model Garden) models mirror the two `gemini` AI-Studio models
+  // (same wire model family, same capability template) but use globally-unique
+  // `google/<model>@gcp` selection keys (§C uniqueness invariant). They are
+  // OPT-IN only (R2): `defaultTaskHints: []` so adding `gcp` never changes the
   // existing default task routing.
   {
-    providerId: 'vertex',
-    modelId: 'google/gemini-3.5-flash@vertex',
-    label: 'Gemini 3.5 Flash (Vertex)',
+    providerId: 'gcp',
+    modelId: 'google/gemini-3.5-flash@gcp',
+    label: 'Gemini 3.5 Flash (GCP)',
     reasoningTier: 'advanced',
     defaultTaskHints: [],
-    capabilities: modelCapabilities('vertex', 'advanced', { vision: true }),
+    capabilities: modelCapabilities('gcp', 'advanced', { vision: true }),
   },
   {
-    providerId: 'vertex',
-    modelId: 'google/gemini-3.1-flash-lite@vertex',
-    label: 'Gemini 3.1 Flash Lite (Vertex)',
+    providerId: 'gcp',
+    modelId: 'google/gemini-3.1-flash-lite@gcp',
+    label: 'Gemini 3.1 Flash Lite (GCP)',
     reasoningTier: 'standard',
     defaultTaskHints: [],
-    capabilities: modelCapabilities('vertex', 'standard', { vision: true }),
+    capabilities: modelCapabilities('gcp', 'standard', { vision: true }),
   },
 ] as const satisfies readonly ModelProfile[];
 
