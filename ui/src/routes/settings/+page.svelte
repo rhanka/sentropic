@@ -56,13 +56,13 @@
   import { Copy, Download, RefreshCw } from '@lucide/svelte';
 
   interface CatalogProvider {
-    provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
+    provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp';
     label: string;
     status: 'ready' | 'planned';
   }
 
   interface CatalogModel {
-    provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
+    provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp';
     model_id: string;
     label: string;
     default_contexts: string[];
@@ -72,7 +72,7 @@
     providers: CatalogProvider[];
     models: CatalogModel[];
     defaults: {
-      provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
+      provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp';
       model_id: string;
     };
   }
@@ -135,7 +135,7 @@
   let aiSettings = {
     concurrency: 10,
     publishingConcurrency: 5,
-    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
+    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp',
     defaultModel: 'gpt-5.5',
     processingInterval: 1000
   };
@@ -149,7 +149,7 @@
   let isLoadingModelCatalog = false;
   let isSavingAISettings = false;
   let userAISettings = {
-    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
+    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp',
     defaultModel: 'gpt-4.1-nano',
   };
   let isLoadingUserAISettings = false;
@@ -158,7 +158,7 @@
   const modelSelectionKey = (providerId: string, modelId: string) =>
     `${providerId}::${modelId}`;
 
-  const validProviderIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere'] as const;
+  const validProviderIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp'] as const;
   type ProviderIdType = (typeof validProviderIds)[number];
 
   const parseModelSelectionKey = (
@@ -691,7 +691,7 @@
     isLoadingUserAISettings = true;
     try {
       const payload = await apiGet<{
-        defaultProviderId: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
+        defaultProviderId: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp';
         defaultModel: string;
       }>('/me/ai-settings');
       userAISettings.defaultProviderId = payload.defaultProviderId;
