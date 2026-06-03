@@ -268,15 +268,19 @@ commentsRouter.patch('/:id', requireWorkspaceCommenterRole(), zValidator('json',
 
   try {
     if (nextAssigned !== undefined) {
-      // Whole-updates THREAD cascade (content + assignment) via emit-free store
-      // primitives: cascade content per-row over the thread, then cascade assignment.
       if (hasContent) {
-        const threadRows = await commentStore.listThread(tenant, row.threadId);
-        for (const threadRow of threadRows) {
-          await commentStore.edit(tenant, threadRow.id, { body: nextContent });
-        }
+        // COMBINED case: content + assignment cascade thread-wide in ONE atomic
+        // emit-free statement (mirrors the OLD single combined-PATCH UPDATE,
+        // comments.ts@40a23a35^:246-250) — NOT N per-row edits + separate assign,
+        // which is non-atomic and can 404/500 under concurrent deletes.
+        await commentStore.editThread(tenant, row.threadId, {
+          content: nextContent as string,
+          assignedTo: nextAssigned,
+        });
+      } else {
+        // assigned_to-only -> thread-wide assignment cascade (comments.ts:246-250).
+        await commentStore.assign(tenant, row.threadId, nextAssigned);
       }
-      await commentStore.assign(tenant, row.threadId, nextAssigned);
     } else {
       // Content-only edit is per-row (comments.ts:251-252).
       await commentStore.edit(tenant, id, { body: nextContent });
