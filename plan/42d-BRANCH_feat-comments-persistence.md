@@ -134,10 +134,10 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
     - [x] **API tests**: `comment-assistant.test.ts` characterization GREEN (4/4); wire test GREEN (8/8); REST oracle `comments.test.ts` GREEN (19/19); `pg-comment-store` (25/25) + sink (13/13) still green.
     - [x] AI flaky run: the AI characterization (4/4) is deterministic (mocked LLM) and passed first run — no flaky signature to record.
 
-- [ ] **Lot 6 — Observability** (§5, in the sink choke-point)
-  - [ ] Structured log per emitted `CommentEvent` via the api logger: `{event:'comment.<type>', origin, workspaceId, threadId, commentId, contextType, userId}` (single choke-point in the sink, no per-handler sprinkling).
-  - [ ] Provider-neutral in-process counter of emitted comment events by `type` (reuse any existing metric primitive; else a tiny in-memory counter). NO new metrics backend; NO durable provider names.
-  - [ ] Lot gate: `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence`; characterization + wire tests stay GREEN.
+- [x] **Lot 6 — Observability** (§5, in the sink choke-point)
+  - [x] Structured log per emitted `CommentEvent` via the api logger: `{event:'comment.<action>', origin, workspaceId, contextType, commentId?, threadId?}` (single choke-point in the sink, AFTER the NOTIFY succeeds, no per-handler sprinkling). `userId` DEFERRED: the emit descriptor does not carry it this lot (future optional descriptor field; would require threading `tenant.userId` through call sites — out of Lot 6 scope).
+  - [x] Provider-neutral in-process counter of emitted comment events by `action` (no existing metric primitive found → tiny module-level `Map<string,number>` in `comment-metrics.ts` with `incrementCommentEvent(action)` + `getCommentEventCounts()`). NO new metrics backend; NO durable provider names. Log + counter are swallowed on failure — never reject the awaited emit, never perturb the byte-identical wire payload.
+  - [x] Lot gate: `make typecheck-api` clean + `make lint-api ENV=test-feat-comments-persistence` (0 errors, no findings on edited files); sink wire+observability test GREEN (18/18); ALL oracles GREEN — comments.test.ts (19), comments-wire.test.ts (8), comment-assistant.test.ts (4), pg-comment-store.test.ts (30).
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint: `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence`.
