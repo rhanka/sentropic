@@ -11,6 +11,13 @@ const REDIRECT_URIS = [
   'http://localhost:5173/auth/oauth/callback',
 ];
 
+// BR-39m Phase A0: PLACEHOLDER design-system redirect URIs (fork F5 — the
+// design-system origin/port is not yet user-validated). Confirm before merge.
+const DESIGN_SYSTEM_REDIRECT_URIS = [
+  'http://localhost:5399/auth/oauth/callback',
+  'http://localhost:6006/auth/oauth/callback',
+];
+
 export interface SeededOAuthClient {
   clientId: string;
   dpopBoundAccessTokens: boolean;
@@ -25,6 +32,7 @@ export const seedOAuthClients = async (): Promise<SeededOAuthClient[]> => {
       dpopBoundAccessTokens: false,
       id: 'seed-example-mock-rp',
       name: 'Example Mock RP',
+      redirectUris: REDIRECT_URIS,
     },
     {
       clientId: 'example-dpop-rp',
@@ -32,6 +40,19 @@ export const seedOAuthClients = async (): Promise<SeededOAuthClient[]> => {
       dpopBoundAccessTokens: true,
       id: 'seed-example-dpop-rp',
       name: 'Example DPoP RP',
+      redirectUris: REDIRECT_URIS,
+    },
+    // BR-39m Phase A0: the standalone IdP's only client. `design-system` uses
+    // "free auth" (app-side optional login; sub + email is enough), so no token
+    // claim set, no tenant, no membership. PLACEHOLDER redirect URIs (fork F5 /
+    // design-system origin not yet user-validated) — confirm before merge.
+    {
+      clientId: 'design-system',
+      clientSecret: 'design-system-secret-dev-only',
+      dpopBoundAccessTokens: false,
+      id: 'seed-design-system',
+      name: 'Sentropic Design System',
+      redirectUris: DESIGN_SYSTEM_REDIRECT_URIS,
     },
   ];
 
@@ -48,7 +69,7 @@ export const seedOAuthClients = async (): Promise<SeededOAuthClient[]> => {
       grantTypes: ['authorization_code'],
       id: client.id,
       name: client.name,
-      redirectUris: REDIRECT_URIS,
+      redirectUris: client.redirectUris,
       requirePkce: true,
       responseTypes: ['code'],
       tokenEndpointAuthMethod: 'client_secret_basic',
