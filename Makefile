@@ -1631,6 +1631,49 @@ down: ## Stop and remove containers, networks, volumes
 typecheck-idp: ## Typecheck the standalone IdP composition (apps/auth-idp)
 	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps -w /workspace api npx tsc --noEmit --project apps/auth-idp/tsconfig.json
 
+# BR-39m A0-bis — minimal IdP screens front (apps/auth-idp/web). Self-contained
+# sub-project (NOT a root workspace member; same isolation as e2e/). It pulls
+# @sentropic/auth-ui via a relative file: dependency, so the package source is
+# present in the mounted workspace at install time.
+.PHONY: lock-idp-web
+lock-idp-web: ## Update apps/auth-idp/web package-lock.json using a Node container
+	@echo "🔒 Updating apps/auth-idp/web package-lock.json..."
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm install --package-lock-only --ignore-scripts --no-audit --no-fund"
+
+.PHONY: install-idp-web
+install-idp-web: ## Install the IdP screens front deps into the mounted workspace
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; else npm install --ignore-scripts --no-audit --no-fund; fi"
+
+.PHONY: typecheck-idp-web
+typecheck-idp-web: install-idp-web ## Typecheck the IdP screens front
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm run typecheck"
+
+.PHONY: build-idp-web
+build-idp-web: install-idp-web ## Build the IdP screens static front to apps/auth-idp/web/build
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm run build"
+	@test -f apps/auth-idp/web/build/404.html || (echo "❌ IdP front build missing SPA fallback 404.html" && exit 1)
+	@echo "✅ IdP screens front built at apps/auth-idp/web/build (SPA fallback: 404.html)"
+
 .PHONY: dev-idp
 dev-idp: prepare-node-workspace ## Start the standalone IdP on the shared DB (slot 4 ports)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait postgres
