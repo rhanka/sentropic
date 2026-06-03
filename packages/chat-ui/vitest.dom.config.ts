@@ -9,6 +9,10 @@
  * @testing-library/svelte@5 + @lucide/svelte (added as dev-deps
  * in the test-chat-ui-dom Makefile target, NOT in package.json devDependencies).
  *
+ * BR-CONV-EX1: adds svelte-streamdown to ephemeral install and noExternal/inline
+ * so StreamMessage (which imports Streamdown from svelte-streamdown) compiles
+ * correctly in the jsdom environment.
+ *
  * Spike findings (iterative):
  * 1. "rune_outside_svelte": @testing-library/svelte-core/props.svelte.js was not
  *    transformed. Fix: server.deps.inline + ssr.noExternal.
@@ -39,10 +43,12 @@ export default defineConfig({
   ssr: {
     // Force these packages to be bundled through vite (not treated as external),
     // so the Svelte plugin can transform props.svelte.js at test time.
+    // BR-CONV-EX1: svelte-streamdown added — StreamMessage imports Streamdown from it.
     noExternal: [
       '@testing-library/svelte',
       '@testing-library/svelte-core',
       '@lucide/svelte',
+      'svelte-streamdown',
     ],
   },
   test: {
@@ -54,7 +60,8 @@ export default defineConfig({
       deps: {
         // Inline these packages so vitest processes them through vite transforms
         // (the Svelte plugin must compile .svelte and .svelte.js files from these).
-        inline: [/@testing-library\/svelte/, /@lucide\/svelte/],
+        // BR-CONV-EX1: svelte-streamdown inlined so StreamMessage compiles cleanly.
+        inline: [/@testing-library\/svelte/, /@lucide\/svelte/, /svelte-streamdown/],
       },
     },
   },
