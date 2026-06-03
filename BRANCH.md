@@ -93,7 +93,7 @@
   - [x] api/src technical id (workspaces/workflow-config enums, folders/flow-runtime/view-template/todo-orchestration fallbacks, approval-gate map key, chat-service branching, schema default+comments) + CHAT_SYSTEM_PROMPTS map KEY (prose body excluded) + agent-seed registry.
   - [x] object file rename `default-agents-ai-ideas.ts`→`default-agents-ai-priorities.ts`, const `AI_IDEAS_AGENTS`→`AI_PRIORITIES_AGENTS`, all imports.
   - [ ] ui/src technical id (Header/WorkspaceCreateDialog/InitiativeDetail/OrganizationForm/ViewTemplateCatalog/workspaceScope/neutral) + i18n label `aiIdeas`→`aiPriorities` = "AI Priorities"/"Priorités IA" + labelKey refs.
-  - [ ] DB migration `0028_rename_ai_ideas_to_ai_priorities.sql` + journal registration; `schema.ts` default/comments updated.
+  - [x] DB migration `0028_rename_ai_ideas_to_ai_priorities.sql` + journal registration; `schema.ts` default/comments updated.
   - [ ] tests/fixtures + `spec/SPEC_EVOL_WORKSPACE_TYPES.md` sync.
   - [ ] Gates: typecheck/lint api+ui (ENV=br14e); validate-flow/chat-ui/skills; test-api/test-ui (ENV=test-br14e); migration applies on test DB.
 - [ ] Lot N: final validation, UAT, PR
