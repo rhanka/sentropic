@@ -7,7 +7,7 @@ const STORAGE_KEY = 'workspaceScopeId';
 
 export type UserWorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
-export type WorkspaceType = 'neutral' | 'ai-ideas' | 'opportunity' | 'code';
+export type WorkspaceType = 'neutral' | 'ai-priorities' | 'opportunity' | 'code';
 
 export type UserWorkspace = {
   id: string;
