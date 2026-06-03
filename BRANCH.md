@@ -104,17 +104,17 @@ Reapply the repeated-tool-error loop breaker (chat-core dispatch breaker + chat-
     - [x] `make typecheck-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
     - [x] `make test-pkg-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard` (21 files, 248 tests; `runtime-tool-dispatch.test.ts` 22 → 25 tests)
 
-- [ ] **Lot 2 — chat-service outer-loop sync line**
-  - [ ] Read `api/src/services/chat-service.ts` around the post-`consumeToolCalls` "thin invocation + state sync" block (~ L3800-3830 on current main): identify the exact location after `streamSeq`/`contextBudgetReplanAttempts` are synced back.
-  - [ ] Add `continueGenerationLoop = loopState.continueGenerationLoop;` immediately after the existing sync of `streamSeq` and `contextBudgetReplanAttempts` so the outer `while (continueGenerationLoop)` honors the breaker's stop signal.
-  - [ ] Add regression test `should stop repeated identical tool validation errors before the max-iteration fallback` in `api/tests/unit/chat-service-tools.test.ts`:
-    - [ ] Mock `callLLMStream` to always emit a `plan` tool call with invalid `{action:'unknown'}` args when tools are enabled.
-    - [ ] Assert `calls.length === 4` (3 tool-enabled attempts + 1 pass-2 with `toolChoice: 'none'`).
-    - [ ] Confirm the pre-existing `should continue beyond 10 iterations when active TODO can progress without user input` still passes (legitimate progression untouched).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
-    - [ ] `make lint-api API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
-    - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
+- [x] **Lot 2 — chat-service outer-loop sync line**
+  - [x] Read `api/src/services/chat-service.ts` around the post-`consumeToolCalls` "thin invocation + state sync" block (L3887-3893 on current main): identified insertion after `streamSeq`/`contextBudgetReplanAttempts` are synced back.
+  - [x] Add `continueGenerationLoop = loopState.continueGenerationLoop;` immediately after the existing sync of `streamSeq` and `contextBudgetReplanAttempts` so the outer `while (continueGenerationLoop)` honors the breaker's stop signal.
+  - [x] Add regression test `should stop repeated identical tool validation errors before the max-iteration fallback` in `api/tests/unit/chat-service-tools.test.ts`:
+    - [x] Mock `callLLMStream` to always emit a `plan` tool call with invalid `{action:'unknown'}` args when tools are enabled.
+    - [x] Assert `calls.length === 4` (3 tool-enabled attempts + 1 pass-2 with `toolChoice: 'none'`).
+    - [x] Confirm the pre-existing `should continue beyond 10 iterations when active TODO can progress without user input` still passes (legitimate progression untouched).
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
+    - [x] `make lint-api API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
+    - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard` (17 tests, including the new `should stop repeated identical tool validation errors before the max-iteration fallback`)
 
 - [ ] **Lot 3 — chat-ui stream projection compaction** *(deferred)*
   - On-main analysis: `packages/chat-ui/src/utils/chat-run-projection.ts` (200 LOC) already deduplicates by `sequence` in both `appendLiveProjectionEvent` (line 198) and `mergeProjectionHistoryEvents` (Map by sequence). The original PR #183 compaction targeted the live unbounded delta flood. With the Lot 1 backend breaker capping repeated identical tool errors at **3 attempts + 1 pass-2 = 4 LLM calls** per turn, the flood is structurally bounded upstream — the secondary UI compaction is speculative without direct evidence on current main.
