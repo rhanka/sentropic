@@ -52,6 +52,8 @@ COPY package.json package-lock.json* ./
 COPY api/package.json ./api/package.json
 COPY ui/package.json ./ui/package.json
 COPY packages/auth-hono/package.json ./packages/auth-hono/package.json
+COPY packages/contracts/package.json ./packages/contracts/package.json
+COPY packages/comments/package.json ./packages/comments/package.json
 COPY packages/auth-client/package.json ./packages/auth-client/package.json
 COPY packages/chat-server/package.json ./packages/chat-server/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
@@ -66,6 +68,8 @@ RUN npm --workspace @sentropic/auth-hono run build
 RUN npm --workspace @sentropic/auth-client run build
 RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/flow run build
+RUN npm --workspace @sentropic/contracts run build
+RUN npm --workspace @sentropic/comments run build
 
 FROM base AS development
 WORKDIR /workspace/api
