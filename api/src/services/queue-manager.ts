@@ -49,7 +49,6 @@ import type { MatrixConfig } from '../types/matrix';
 import type { InitiativeData, InitiativeDataJson } from '../types/initiative';
 import { validateScores, fixScores } from '../utils/score-validation';
 import {
-  comments,
   folders,
   organizations,
   initiatives,
@@ -1451,12 +1450,11 @@ export class QueueManager {
       });
       // Preserve the live provenance `auto_generation:<comment_id>` — a derived
       // self-reference that the store's `add` cannot mint (the id is generated
-      // inside `add`). This is a provenance-only reconciliation, not a duplicated
-      // comment-creation path: the comment NOTIFY remains the sink's alone.
-      await db
-        .update(comments)
-        .set({ toolCallId: `auto_generation:${created.id}` })
-        .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, created.id)));
+      // inside `add`). Routed through the store's emit-free `setProvenance` so NO
+      // comment write escapes the adapter: this is a provenance-only
+      // reconciliation, not a duplicated comment-creation path: the comment
+      // NOTIFY remains the sink's alone.
+      await commentStore.setProvenance(tenant, created.id, `auto_generation:${created.id}`);
       await commentEventSink.emit({
         workspaceId,
         contextType: opts.contextType,
