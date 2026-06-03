@@ -413,4 +413,80 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
     const [row] = await db.select().from(comments).where(eq(comments.id, created.id));
     expect(row.toolCallId).toBeNull();
   });
+
+  // --- add status arg (Lot 5 #3: trace-note born already-closed) ---
+
+  it('add defaults to status open (live default preserved)', async () => {
+    const created = await store.add(tenant, newComment({ body: 'Default open' }));
+    expect(created.state).toBe('open');
+    const [row] = await db.select().from(comments).where(eq(comments.id, created.id));
+    expect(row.status).toBe('open');
+  });
+
+  it('add with explicit status closed persists the row already-closed (no setState)', async () => {
+    // A trace-note minted onto a thread the same action just resolved: it is born
+    // closed via the status arg, faithfully to the OLD live insert
+    // `status: latestStatus`, without a thread-wide cascade.
+    const root = await store.add(tenant, newComment({ body: 'Root' }));
+    const note = await store.add(
+      tenant,
+      newComment({ body: 'Closed note', threadId: root.threadId }),
+      'closed',
+    );
+    expect(note.state).toBe('resolved'); // live 'closed' -> package 'resolved'
+
+    const [noteRow] = await db.select().from(comments).where(eq(comments.id, note.id));
+    expect(noteRow.status).toBe('closed');
+
+    // ONLY the new note row carries the closed status; the sibling root is
+    // untouched (no thread-wide setState reconcile).
+    const [rootRow] = await db.select().from(comments).where(eq(comments.id, root.id));
+    expect(rootRow.status).toBe('open');
+  });
+
+  // --- setProvenance (Lot 5 #5: queue auto provenance routed through the store) ---
+
+  it('setProvenance updates tool_call_id by id+workspace, bumps updatedAt, returns the row', async () => {
+    const created = await store.add(tenant, newComment({ body: 'Auto seed' }));
+    const [before] = await db
+      .select({ updatedAt: comments.updatedAt, toolCallId: comments.toolCallId })
+      .from(comments)
+      .where(eq(comments.id, created.id));
+    expect(before.toolCallId).toBeNull();
+
+    const provenance = `auto_generation:${created.id}`;
+    const updated = await store.setProvenance(tenant, created.id, provenance);
+    expect(updated.id).toBe(created.id);
+    expect(updated.provenance).toEqual({ toolCallId: provenance });
+
+    const [after] = await db
+      .select({ updatedAt: comments.updatedAt, toolCallId: comments.toolCallId })
+      .from(comments)
+      .where(eq(comments.id, created.id));
+    expect(after.toolCallId).toBe(provenance);
+    expect(after.updatedAt.getTime()).toBeGreaterThanOrEqual(before.updatedAt!.getTime());
+  });
+
+  it('setProvenance throws CommentNotFoundError for a missing id', async () => {
+    await expect(
+      store.setProvenance(tenant, 'missing-id', 'auto_generation:missing-id'),
+    ).rejects.toBeInstanceOf(CommentNotFoundError);
+  });
+
+  it('setProvenance throws CommentNotFoundError for a cross-workspace id', async () => {
+    const created = await store.add(tenant, newComment({ body: 'In owner ws' }));
+    const otherTenant: TenantContext = {
+      tenantId: other.workspaceId!,
+      workspaceId: other.workspaceId!,
+      userId: other.id,
+    };
+    // The row exists, but not in `other`'s workspace -> not found in scope.
+    await expect(
+      store.setProvenance(otherTenant, created.id, 'auto_generation:x'),
+    ).rejects.toBeInstanceOf(CommentNotFoundError);
+
+    // The owner row is untouched.
+    const [row] = await db.select().from(comments).where(eq(comments.id, created.id));
+    expect(row.toolCallId).toBeNull();
+  });
 });
