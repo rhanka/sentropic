@@ -1,7 +1,7 @@
 /**
  * Neutral default matrix for opportunity workspaces (§8.5).
  *
- * Differences from ai-ideas default matrix:
+ * Differences from ai-priorities default matrix:
  * - NO ai_maturity axis (removed entirely)
  * - data_compliance → regulatory_compliance (general regulatory, not data/AI-specific)
  * - data_availability → resource_availability (team/budget/tools, not data pipeline)
