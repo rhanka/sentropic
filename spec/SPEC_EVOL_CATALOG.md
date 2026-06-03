@@ -105,14 +105,20 @@ A tagged union discriminated by `kind`, with shared metadata + a per-kind payloa
 ```ts
 type CatalogEntryKind = 'skill' | 'tool' | 'agent' | 'workflow' | 'canvas';
 
-interface CatalogEntryMetadata {            // superset of today's SkillMetadata (metadata.ts:22-45)
+// Shared metadata = the INTERSECTION of the 5 kinds' common fields, NOT a superset of SkillMetadata.
+// Skill-specific fields (`sandbox` metadata.ts:37, `toolNames` metadata.ts:44) are NOT shared — they
+// live in the SkillEntry PAYLOAD (the full `Skill`, which already carries them), not in this metadata.
+interface CatalogEntryMetadata {            // genuinely-shared fields across skill|tool|agent|workflow|canvas
   readonly name: string;                     // public, provider-safe id (see §3.3 naming)
   readonly description: string;
-  readonly version?: string;
-  readonly category?: string;
-  readonly contextFilter?: ContextFilter;
-  readonly authzRequirements?: SkillAuthzRequirements;
+  readonly version?: string;                 // optional: not every kind is semver'd
+  readonly category?: string;                // optional: free taxonomy where present
+  readonly contextFilter?: ContextFilter;    // optional: availability gating where applicable
+  readonly authzRequirements?: SkillAuthzRequirements; // optional: authz where applicable
 }
+// Rule (Codex MF1): shared metadata = the intersection of all kinds; anything kind-specific (a skill's
+// `sandbox`/`toolNames`, a tool's `rawName`, an agent's `config`, a workflow's `tasks`/`transitions`, a
+// canvas template's `mimeType`/`initialContent`) belongs to that kind's PAYLOAD below, never to shared metadata.
 
 interface CatalogEntryBase {
   readonly kind: CatalogEntryKind;
@@ -192,7 +198,7 @@ Per the user's 5-kind clarification, every prior fork is resolved. Surface, then
 - **D-WORKFLOW-SCOPE** → catalog `workflow` = **flow seed orchestration templates** (`@sentropic/flow` `WORKSPACE_TYPE_WORKFLOW_SEEDS`, §2.3), NOT per-workspace `workflow_definitions` DB rows. **The one item to double-check at impl**: the template source is `@sentropic/flow` (import the seeds from the package, not from `api/`); runtime stays in flow. No user-blocker after grounding.
 - **D-TOOL-RECONCILE** → `tool` is first-class for **standalone/MCP** tools; skill-owned tools stay owned by their `skill` entry (NOT duplicated as `tool` entries) (§2.1). Requires the §3.4 execution seam.
 - **D-SEARCH** → keep `search_skills` skill-only; add additive `search_catalog` for cross-kind discovery (§3.5). No rename.
-- **D-PKG (where the abstraction lives)** → `CatalogEntry` + `CatalogSource` + composite registry land **inside `@sentropic/skills`** (additive public surface; the package becomes `@sentropic/catalog` in role). NO new package in v1 (architecture rule: a package must be activated by real app consumption; this one already is). Per-kind payload **types** are imported from their owning packages — `Skill`/`SkillTool` from `@sentropic/skills`, `DefaultWorkflowDefinition` from `@sentropic/flow`, agent template from `api/config` — so `@sentropic/skills` gains a `@sentropic/flow` dep for the `workflow` payload type. Marketplace *gating* (`@sentropic/marketplace`, §15) stays a separate future package. Flag: if the `workflow` payload import creates an unwanted skills→flow coupling, an alternative is a thin `@sentropic/catalog` package depending on both — defer this call to the seam lot.
+- **D-PKG (where the abstraction lives)** → **RESOLVED (Codex MF6): the unified catalog lives APP-LOCAL in `api/` for v1** (e.g. `api/src/services/catalog/**`). The kind-agnostic machinery — the `CatalogEntry` union, the `CatalogSource` interface, `CompositeCatalogRegistry`, the execution seam (§3.4) and `search_catalog` (§3.5) — is **api-local**, because the catalog must compose the **api-local** agent template type (`api/src/config/default-agents-types.ts:5`) and a package CANNOT import from `api/` (architecture module-isolation, study §16). The catalog **COMPOSES** kind payloads from their homes: `Skill`/`SkillTool` from `@sentropic/skills`, `DefaultWorkflowDefinition` from `@sentropic/flow`, the agent template from `api/config`, the canvas template from the canvas package/api. **No `@sentropic/skills → @sentropic/flow` dep is added** (the workflow payload is imported api-side, not into the skills package). The foundation skill bundle stays in `@sentropic/skills`; the catalog composes it api-side via a `StaticCatalogSource`. A **reusable `@sentropic/catalog` package extraction is DEFERRED** to a follow-up (per `architecture.md` "activate by real consumption" — extract once the app proves the abstraction). Marketplace *gating* (`@sentropic/marketplace`, §15) likewise stays a separate future package.
 - **D-MIGRATION** → **none required in v1**. All catalogued kinds are templates (code/in-memory). `agent_definitions` (`schema.ts:840`) and `workflow_definitions` (`schema.ts:868`) are untouched. A migration is only needed if catalog scope later expands to DB-backed entries or MCP-source persistence — out of v1.
 - **D-NO-HTTP** → keep the catalog server-side via the chat tool loop (§1.4); no public catalog HTTP endpoint in v1 unless the build-app CLI needs it (then a follow-up).
 - **D-RETIRE-19B** → retire `feat/mcp-tool-catalog-br19b`; its scope is absorbed by §3.6. No-op cleanup (no code/PR/plan on origin).
@@ -207,17 +213,18 @@ No user-blocking decision remains. The workflow grounding produced no new fork (
 **Characterization-first**: the foundation-bundle → `StaticCatalogSource` refactor touches live tool resolution (`adapter.ts`, `catalog.ts`, the chat loop). It MUST be covered by a characterization test that pins today's resolved tool set (16 foundation skills + `search_skills`, per authz) BEFORE refactoring — no behaviour change in the composite refactor. **Gate after the seam lot (Lot 1).**
 
 **Allowed paths (for the IMPLEMENTATION branch, NOT this scoping branch):**
-- `packages/skills/src/**`, `packages/skills/tests/**` (`CatalogEntry`/`CatalogSource`/composite registry; `tool` kind; `search_catalog`; `McpCatalogSource`; execution-seam types).
-- `packages/skills/package.json` + `packages/flow/package.json` — **version bump** per touched package (Codex MF7 / D-VERSION-BUMP).
+- `api/src/services/catalog/**` (NEW — the app-local kind-agnostic machinery: `CatalogEntry` union, `CatalogSource` interface, `CompositeCatalogRegistry`, `StaticCatalogSource`, the execution seam §3.4, `search_catalog` §3.5, `McpCatalogSource`; per Codex MF6 / D-PKG this is api-local, NOT a package).
 - `api/src/services/skills/catalog.ts`, `api/src/services/skills/foundation-executor.ts` (wire composite + execution seam + MCP config; consult catalog dispatch for non-hardcoded names).
-- `api/src/config/default-agents.ts` (read-only import for the `agent` template source — Codex MF5: agent lot is not `packages/skills`-only).
+- `api/src/config/default-agents.ts` (read-only import for the `agent` template source — Codex MF5: agent lot touches `api/`).
+- `packages/skills/src/**`, `packages/skills/tests/**` — ONLY if the `StaticCatalogSource` adapter or a genuinely-shared type needs a small additive change in the skills package (the foundation bundle stays here; the catalog composes it api-side). If `packages/skills/src/**` changes, bump `packages/skills/package.json` `version` (Codex MF7 / D-VERSION-BUMP).
 - `api/package.json` (add `@modelcontextprotocol/sdk` via `make install-api`).
+- Read-only imports for kind payload TYPES: `@sentropic/flow` (`DefaultWorkflowDefinition`) and the canvas package/api — composed api-side, so NO `packages/flow/src/**` edit and NO `@sentropic/skills → @sentropic/flow` dep is added (Codex MF6).
 
 **Forbidden / out of scope**: canvas runtime (`SPEC_EVOL_CHAT_CANVAS` — LiveDocumentStore/CRDT/editor), marketplace gating engine (`@sentropic/marketplace` §15), per-workspace DB-agent/DB-workflow projection, public HTTP catalog endpoint, any `Makefile`/`docker-compose*` change, BR-43 Google provider, renaming `search_skills`.
 
 **Lots outline (mono-branch + cherry-pick; gate after Lot 1):**
 - **Lot 0 — Characterization** (tests only): pin current resolved-tool behaviour of `SkillsToolRegistry` + `resolveFoundationChatTools` (16 skills + `search_skills`, per authz). Pin `search_skills` output shape.
-- **Lot 1 — `CatalogSource` seam (no behaviour change)** [GATE]: introduce `CatalogEntry`/`CatalogSource` (sync `snapshot()` + optional async `refresh()`, §3.2), wrap foundation bundle as `StaticCatalogSource` (`skill` entries), `CompositeCatalogRegistry`; keep `search_skills`-first contract. Green char tests = gate. (Resolve the D-PKG skills→flow coupling question here.)
+- **Lot 1 — `CatalogSource` seam (no behaviour change)** [GATE]: introduce `CatalogEntry`/`CatalogSource` (sync `snapshot()` + optional async `refresh()`, §3.2) **app-local in `api/src/services/catalog/**`** (Codex MF6 / D-PKG), wrap foundation bundle as `StaticCatalogSource` (`skill` entries), `CompositeCatalogRegistry`; keep `search_skills`-first contract. Green char tests = gate.
 - **Lot 2 — `tool` kind + execution seam** (Codex MF1): make standalone tools first-class `CatalogEntry`s; add the **generic catalog execution seam** (§3.4) so non-hardcoded tool names dispatch; reconcile skill-owned vs standalone (§2.1, D-TOOL-RECONCILE). Prerequisite for MCP.
 - **Lot 3 — `agent` template kind**: `agent`-kind entries over `default-agents.ts` templates (§2.2); `list/search/get` parity; preserve §14 invariant. Touches `api/` for the template source (Codex MF5).
 - **Lot 4 — `workflow` kind** (NEW): `workflow`-kind entries over `@sentropic/flow` `WORKSPACE_TYPE_WORKFLOW_SEEDS` (§2.3); `list/search/get` parity. Double-check the template source import is from `@sentropic/flow` (D-WORKFLOW-SCOPE).
@@ -234,7 +241,7 @@ Reorder note: Lot 2 (execution seam) MUST precede Lot 5 (MCP) — MCP tools are 
 **None user-blocking.** All decisions in §4 are conductor-resolvable after the user's 5-kind clarification and the canvas resolution. Items to surface (proceed unless the user objects):
 
 1. **D-SRC** (MCP v1, marketplace deferred v2) and **D-AGENT-SCOPE / D-WORKFLOW-SCOPE** (templates, not DB rows) — preconised, proceed.
-2. **D-PKG coupling** — the `workflow` payload type couples `@sentropic/skills` → `@sentropic/flow`. Default: add the dep (additive). Alternative (thin `@sentropic/catalog` package) deferred to the Lot 1 seam; flag at impl if the coupling is unwanted.
+2. **D-PKG** — **RESOLVED (Codex MF6)**: the catalog is **app-local in `api/`**, composing kind payloads from their homes; no `@sentropic/skills → @sentropic/flow` coupling is introduced (the `workflow` payload type is imported api-side). The reusable `@sentropic/catalog` package extraction is **DEFERRED** to a follow-up (activate-by-real-consumption). No open question remains here.
 
 The one impl-time double-check (not a blocker): the `workflow` template source is `@sentropic/flow` seeds (§2.3 / D-WORKFLOW-SCOPE). Lots 0-6 can be planned now; Lot 7 is deferred design.
 
@@ -252,3 +259,4 @@ The one impl-time double-check (not a blocker): the `workflow` template source i
   - **MF6** (canvas): C1/C3 framing right; `SPEC_EVOL_CHAT_CANVAS` is a named carve-out only (`SPEC_EVOL_CHAT_ECOSYSTEM.md:52`), not a file; align `canvas|artifact` vocab (`comments/src/types.ts:11`) → §2.4 + Lot 6.
   - **MF7** (version bump): `packages/<pkg>/src/**` edits require a `package.json` version bump (`rules/workflow.md`) → §4 D-VERSION-BUMP + §5 allowed paths.
 - The v1 current-catalog model (§1) was judged "mostly accurate" and `+AGENTS`/`+CANEVAS` "grounded"; this revision keeps §1, corrects the sync + execution + naming + search facts, and extends to 5 kinds.
+- **Codex re-check 2 (5-kind)** — MF1 metadata-shared-not-superset (`CatalogEntryMetadata` = intersection of the 5 kinds; skill `sandbox`/`toolNames` move to the SkillEntry payload — §3.1) + MF6 catalog app-local in `api/` (kind-agnostic machinery in `api/src/services/catalog/**`; composes payloads from `@sentropic/skills`/`@sentropic/flow`/`api/config`/canvas; `@sentropic/catalog` package extraction deferred — §4 D-PKG, §5, §6); circular-dep cleared, workflow grounding (`DefaultWorkflowDefinition` from `@sentropic/flow`) + lot order (Lot 2 execution seam before Lot 5 MCP) confirmed.
