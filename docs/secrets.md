@@ -13,6 +13,10 @@ Operational reference for all environment secrets used by the Sentropic API.
 | `OAUTH_DPOP_IAT_SKEW_SEC` | Allowed clock skew for DPoP proof `iat` claim (seconds). | N/A. | ConfigMap or `.env`. | Optional. Default: `60`. |
 | `OAUTH_ISSUER_URL` | Override issuer claim (e.g. `https://api.sentropic.io`). Defaults to the API origin derived from `AUTH_CALLBACK_BASE_URL`. | N/A. | ConfigMap or `.env`. | Optional. |
 | `PUBLIC_BASE_URL` | Public API base URL used for OAuth discovery and callback construction. | N/A. | ConfigMap or `.env`. | Required when `AUTH_CALLBACK_BASE_URL` is not set. |
+| `OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC` | Lifetime (seconds) of stateless service access tokens issued by the `client_credentials` grant. Short TTL is the primary security control (service tokens are NOT revocable in 39d — see below). | N/A (tuning knob). | ConfigMap or `.env`. | Optional. Default: `900`. |
+| `OAUTH_SERVICE_RESOURCE_URI` | Resource indicator (RFC 8707 `aud`) this API accepts on S2S tokens and advertises to clients. Defaults to the resolved issuer origin. | N/A. | ConfigMap or `.env`. | Optional. |
+| `OAUTH_SELF_SERVICE_CLIENT_ID` | Client id of the self-S2S dogfood client used by `GET /api/v1/auth/s2s/self-check`. | Together with its secret. | ConfigMap (id is not sensitive). | Optional (dev/test/e2e). Seeded as `sentropic-self-s2s`. |
+| `OAUTH_SELF_SERVICE_CLIENT_SECRET` | Secret for the self-S2S dogfood client. Dev/test seed value is well-known; set a real value for any reachable env or leave unset to disable `self-check`. | Rotate via `make oauth-rotate-service-client`. | GitHub Actions environment secret + Kubernetes SealedSecret. | Optional. Required only to enable the `self-check` activation probe. |
 
 ## OAUTH_SIGNING_KEK — detailed procedure
 
@@ -94,3 +98,73 @@ To enforce production-like behaviour locally:
 ```bash
 echo 'OAUTH_SIGNING_KEK=<your-local-kek>' >> .env
 ```
+
+## Service-to-service (S2S) auth — `client_credentials` (BR-39d)
+
+Backend services obtain scoped, audience-bound access tokens from the IdP using
+the OAuth2 `client_credentials` grant. Clients live in the `service_clients`
+table (created by migration `0029_service_clients.sql`), separate from the
+human-facing `oauth_clients` table.
+
+### Provisioning a service client
+
+A service client has: `client_id`, `client_secret_hash` (sha256 of the secret),
+`allowed_scopes`, `resource_indicators` (RFC 8707 audiences), and an opt-in
+`dpop_bound_access_tokens` flag. Sample rows for dev/test/e2e are seeded by:
+
+```bash
+make exec-api CMD="npm run oauth:seed-clients" ENV=<env>
+```
+
+This seeds `example-service-rp` and the self-S2S dogfood client
+(`sentropic-self-s2s`). The dev/test/e2e secrets are well-known and MUST NOT be
+used in production — provision production clients out-of-band and store the
+secret in the SealedSecret + GitHub Actions environment secrets.
+
+### Minting and using a token
+
+```bash
+# Basic auth (client_secret_basic) — also supports client_secret_post.
+curl -s -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -d grant_type=client_credentials \
+  -d 'scope=service:ping' \
+  -d "resource=$RESOURCE_URI" \
+  "$ISSUER/api/v1/auth/oauth/token"
+
+# Call a protected resource-server route:
+curl -s -H "authorization: Bearer $ACCESS_TOKEN" "$ISSUER/api/v1/auth/s2s/ping"
+```
+
+`resource` selects the token `aud`; it must be one of the client's
+`resource_indicators`. Empty/absent `scope` grants the client's full
+`allowed_scopes`.
+
+### DPoP (recommended for production S2S)
+
+Set `dpop_bound_access_tokens = true` on the service client and use
+`@sentropic/auth-client` with `dpop: true`. The client sends a DPoP proof on the
+token request and binds each resource call with an `ath` claim (RFC 9449). The
+resource server enforces `ath` and replays via the DPoP jti store. DPoP is
+opt-in in 39d but strongly recommended for any externally reachable S2S path.
+
+### Secret rotation
+
+```bash
+make oauth-rotate-service-client CLIENT_ID=<client-id> ENV=<env>
+```
+
+This generates a new secret, prints it once, replaces `client_secret_hash`, and
+stamps `secret_rotated_at`. Rotation is **single-secret immediate cutover**
+(BR39d-D2): coordinate the consumer redeploy with the new secret. A
+zero-downtime dual-secret grace window and an admin UI are deferred to BR-39g/39h.
+
+### Stateless tokens — no revocation in 39d
+
+Service tokens are **stateless** (BR39d-D5): the grant issues a signed Ed25519
+JWT and writes **no** `oauth_tokens` row. There is no per-token revocation or
+introspection for service tokens in 39d. The security controls are the short TTL
+(`OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC`, default 900s) and secret rotation (which
+stops new tokens but does not invalidate already-issued ones before expiry).
+Service-token revocation + introspection are deferred to BR-39h, which reworks
+the token tables under the unified identities model. Resource servers verify
+statelessly via JWKS, so they have no DB dependency on the IdP.
