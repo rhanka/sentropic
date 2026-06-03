@@ -38,6 +38,7 @@
     "oauth:rotate-keys": "tsx src/scripts/oauth-rotate-keys.ts",
     "oauth:rotate-service-client": "tsx src/scripts/oauth-rotate-service-client.ts",
     "oauth:seed-clients": "tsx src/scripts/oauth-seed-clients.ts",
+    "oauth:register-client": "tsx src/scripts/oauth-register-client.ts",
     "db:migrate-data": "tsx src/scripts/migrate-usecases-to-data.ts",
     "db:create-indexes": "tsx src/scripts/db-create-indexes.ts",
     "queue:clear": "tsx src/scripts/queue-clear.ts",
