@@ -1558,7 +1558,7 @@ export class ChatService {
 
   private getPromptTemplate(id: string): string {
     const chatSystemMap: Record<string, string> = {
-      'chat_system_base': CHAT_SYSTEM_PROMPTS['ai-ideas'],
+      'chat_system_base': CHAT_SYSTEM_PROMPTS['ai-priorities'],
       'chat_code_agent': CHAT_SYSTEM_PROMPTS['code'],
     };
     const chatCommonMap: Record<string, string> = {
@@ -2435,7 +2435,7 @@ export class ChatService {
         'document_generate',
         'batch_create_organizations'
       ]);
-    } else if (wsType === 'ai-ideas') {
+    } else if (wsType === 'ai-priorities') {
       addToolNames([
         'solutions_list',
         'solution_get',
