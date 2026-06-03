@@ -9,6 +9,7 @@ export type {
   OauthClientRecord,
   OauthStateStorePort,
   OauthTokenType,
+  ServiceClientRecord,
   TokenMeta,
 } from './oauth/state-store-types.js';
 
