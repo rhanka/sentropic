@@ -1,0 +1,94 @@
+# BR-39m Phase A0 — Standalone IdP overlay (additive; exception BR39m-EX1).
+#
+# Adds a single `auth-idp` service that REUSES the existing `api` image and the
+# dev workspace volume mount to run the thin IdP composition entrypoint
+# (`apps/auth-idp/index.ts`) against the SHARED `postgres` service. It does NOT
+# modify any existing service definition, introduces NO new image build, NO new
+# database, and NO migration. Deleting this file fully reverts the wiring.
+#
+# Usage (slot 4): make dev-idp API_PORT=9199 UI_PORT=5399 MAILDEV_UI_PORT=1299 ENV=test-feat-auth-idp
+#
+# Compose with: -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml
+services:
+  auth-idp:
+    image: ${REGISTRY}/${API_IMAGE_NAME:-top-ai-ideas-api}:${API_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: ./api/Dockerfile
+      target: ${TARGET:-development}
+    working_dir: /workspace
+    # Reuse the dev workspace mount so apps/auth-idp source + node_modules (incl.
+    # tsx) are available without a separate build pipeline.
+    volumes:
+      - ./:/workspace
+      - workspace_node_modules:/workspace/node_modules
+    # IDP_PORT pins the in-container listener to 8787 regardless of the published
+    # host port (API_PORT), so the port mapping below is always valid.
+    command: sh -c "npx tsx watch apps/auth-idp/index.ts"
+    environment:
+      - NODE_ENV=development
+      - IDP_PORT=8787
+      - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
+      - OAUTH_ISSUER_URL=${OAUTH_ISSUER_URL:-http://localhost:${API_PORT:-8787}}
+      # Dev/test-only well-known secrets. An UNSET host var would interpolate to
+      # an empty string, which is a valid (truthy-for-??) but blank value that
+      # defeats env.ts's dev fallback and trips the production-secrets guard; the
+      # explicit dev default keeps local boot deterministic. Prod injects real
+      # values via the deploy environment (k8s-ops), never these.
+      - OAUTH_SIGNING_KEK=${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production}
+      - JWT_SECRET=${JWT_SECRET:-dev-idp-jwt-secret-change-in-production}
+      # BR-39m A0-bis: the IdP serves its OWN login/register/consent screens
+      # same-origin. The authorize handler's UI base (loginUrl/consentUrl) and the
+      # callback base MUST resolve to the IdP's OWN published origin, NOT the
+      # product UI. NOTE: the Makefile exports `UI_BASE_URL`/`AUTH_CALLBACK_BASE_URL`
+      # (pointing at the product UI port), which would shadow a `${UI_BASE_URL:-…}`
+      # default — so we pin to the IdP origin via a dedicated `IDP_ORIGIN` knob
+      # (defaults to the IdP's published port) instead of deferring to those vars.
+      - AUTH_CALLBACK_BASE_URL=${IDP_ORIGIN:-http://localhost:${API_PORT:-8787}}
+      - UI_BASE_URL=${IDP_ORIGIN:-http://localhost:${API_PORT:-8787}}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:${API_PORT:-8787},http://127.0.0.1:${API_PORT:-8787},http://localhost:${UI_PORT:-5173},http://127.0.0.1:${UI_PORT:-5173},http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*}
+      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+      # The shared env schema (api/src/config/env.ts) requires SCW_TEM_SECRET_KEY
+      # even though the IdP never sends mail in A0; mirror the api service mock.
+      - SCW_TEM_API_BASE_URL=${SCW_TEM_API_BASE_URL:-http://scw-tem-mock:7700}
+      - SCW_TEM_REGION=${SCW_TEM_REGION:-fr-par}
+      - SCW_TEM_PROJECT_ID=${SCW_TEM_PROJECT_ID:-dev-mock-project}
+      - SCW_TEM_SECRET_KEY=${SCW_TEM_SECRET_KEY:-dev-mock-token}
+      - SCW_TEM_FROM_EMAIL=${SCW_TEM_FROM_EMAIL:-no-reply@sent-tech.ca}
+      - SCW_TEM_FROM_NAME=${SCW_TEM_FROM_NAME:-Sentropic}
+    ports:
+      - "${API_PORT:-8787}:8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8787/.well-known/openid-configuration >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    tty: true
+
+  # BR-39m A0-bis — screen-driven SSO smoke runner. Reuses the e2e image (it has
+  # Playwright + chromium installed) and runs `apps/auth-idp/screen-smoke.ts`
+  # directly via Node 24 native TypeScript stripping (no tsx, no extra deps).
+  # `playwright` resolves from the e2e image's /app/node_modules via NODE_PATH.
+  # Run on-demand via `make smoke-idp-screens` (profile keeps it out of `up`).
+  idp-screen-smoke:
+    profiles: ["idp-smoke"]
+    image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
+    build:
+      context: ./e2e
+      dockerfile: ./Dockerfile
+    # ESM resolves bare imports from the IMPORTING FILE's directory upward, so
+    # the smoke must live next to the e2e image's node_modules (/app) to find
+    # `playwright`. We copy it from the mounted workspace into /app and run it
+    # there; Node 24 strips its TypeScript types natively (no tsx needed).
+    working_dir: /app
+    volumes:
+      - ./:/workspace:ro
+    environment:
+      - IDP_BASE_URL=${IDP_BASE_URL:-http://auth-idp:8787}
+      - USER_ID=${USER_ID:-}
+      - SESSION_TOKEN=${SESSION_TOKEN:-}
+      - SCREEN_SMOKE_REDIRECT_URI=${SCREEN_SMOKE_REDIRECT_URI:-http://localhost:5399/auth/oauth/callback}
+    command: ["sh", "-lc", "cp /workspace/apps/auth-idp/screen-smoke.ts /app/idp-screen-smoke.ts && node /app/idp-screen-smoke.ts"]

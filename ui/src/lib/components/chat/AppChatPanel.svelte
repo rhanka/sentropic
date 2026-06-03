@@ -114,6 +114,8 @@
   } from '@sentropic/chat-ui/stores/localTools';
   import ModelSelector from '@sentropic/chat-ui/components/ModelSelector.svelte';
   import MessageActions from '@sentropic/chat-ui/components/MessageActions.svelte';
+  import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
+  import type { ChatContextEntry as NeutralContextEntry } from '@sentropic/chat-ui/state/chat-context';
   import {
     groupModelsByProvider,
     computeModelSelectorWidthCh,
@@ -2012,6 +2014,25 @@
   };
 
   $: sortedContexts = [...contextEntries];
+
+  /**
+   * adaptToNeutral — converts an app ChatContextEntry to the library-neutral shape.
+   * lastUsedAt is a number (epoch ms) in the app; we convert to ISO-8601 for the package.
+   */
+  const adaptToNeutral = (c: ChatContextEntry): NeutralContextEntry => ({
+    type: c.contextType,
+    id: c.contextId,
+    label: c.label,
+    active: c.active,
+    used: c.used,
+    lastUsedAt: c.lastUsedAt > 0 ? new Date(c.lastUsedAt).toISOString() : undefined,
+  });
+
+  /**
+   * findAppEntry — maps a neutral entry back to the app entry for toggleContextActive.
+   */
+  const findAppEntry = (e: NeutralContextEntry): ChatContextEntry =>
+    contextEntries.find((c) => c.contextType === e.type && c.contextId === e.id)!;
 
   const getActiveContexts = () => selectActiveChatContexts(contextEntries);
 
@@ -5647,40 +5668,32 @@
                   {$_('chat.contexts.none')}
                 </div>
               {:else}
-                <div class="space-y-1 overflow-auto slim-scroll" style={composerMenuContextsMaxH || 'max-height:10rem'}>
-                  {#if extensionActiveTabContext}
-                    <div
-                      class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 bg-slate-50"
-                      title={extensionActiveTabContext.url}
-                    >
-                      <Globe class="w-4 h-4 text-slate-500" />
-                      <span class="truncate max-w-[220px]">
-                        {$_('chat.context.activeTabPrefix', {
-                          values: {
-                            title:
-                              extensionActiveTabContext.title ||
-                              extensionActiveTabContext.origin,
-                          },
-                        })}
-                      </span>
-                    </div>
-                  {/if}
-                  {#each sortedContexts as c (c.contextType + ':' + c.contextId)}
-                    <button
-                      class={`flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] hover:bg-slate-50 ${
-                        c.active ? 'text-slate-900' : 'text-slate-400'
-                      }`}
-                      type="button"
-                      on:click={() => toggleContextActive(c)}
-                    >
-                      <svelte:component
-                        this={getContextIcon(c.contextType)}
-                        class="w-4 h-4"
-                      />
-                      <span class="truncate max-w-[220px]">{c.label}</span>
-                    </button>
-                  {/each}
-                </div>
+                <ChatContextPicker
+                  entries={sortedContexts.map(adaptToNeutral)}
+                  iconFor={(e: NeutralContextEntry) => getContextIcon(e.type as ChatContextEntry['contextType'])}
+                  onToggle={(e: NeutralContextEntry) => toggleContextActive(findAppEntry(e))}
+                  maxHeightStyle={composerMenuContextsMaxH || 'max-height:10rem'}
+                >
+                  <svelte:fragment slot="leading">
+                    {#if extensionActiveTabContext}
+                      <div
+                        class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 bg-slate-50"
+                        title={extensionActiveTabContext.url}
+                      >
+                        <Globe class="w-4 h-4 text-slate-500" />
+                        <span class="truncate max-w-[220px]">
+                          {$_('chat.context.activeTabPrefix', {
+                            values: {
+                              title:
+                                extensionActiveTabContext.title ||
+                                extensionActiveTabContext.origin,
+                            },
+                          })}
+                        </span>
+                      </div>
+                    {/if}
+                  </svelte:fragment>
+                </ChatContextPicker>
               {/if}
 
               <div class="border-t border-slate-100 pt-2">
