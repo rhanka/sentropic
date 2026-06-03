@@ -65,16 +65,16 @@ Fix the 3 issues found in the BR-41a Windows recette so the binary is downloadab
     - [x] **Unit (binary)**: `tests/app-origin.spec.ts` (flat) — 7 edge cases (trailing slash, `/api`, `/api/v1`, subpath, https-reject, userinfo-reject, override). `make test-cowork-desktop` → 47 passed.
     - [x] UI: i18n fr/en key parity verified; static notice (no logic) → full `make test-ui` covered by CI `typecheck-lint-ui`/UI test job. No dedicated notice test (trivial static text).
 
-- [ ] **Lot 3 — Fix ③ single-file packaging**
-  - [ ] **3a (spike/gate, cross-platform de-risk):** add a native-resolution module that, given a cache dir, extracts the embedded native tree (atomic temp+rename, sha256 manifest verify, purge stale) and returns a `file://` URL to the `@nut-tree-fork/nut-js` entry; `windows-provider.ts` imports THAT (not the bare specifier). Unit-test the extract+resolve+import path on Linux using the linux libnut build (proves the mechanism; Windows dlopen left to UAT).
-  - [ ] **3b:** `package-windows.mjs` — embed ONLY win32-x64 native assets (prune linux/darwin/dev) as pkg `assets` incl. libnut `build/Release/` sidecar DLLs; emit the sha256 manifest; stop producing the zip → single `cowork.exe` (+ metadata `exe`).
-  - [ ] **3c:** `api/src/routes/api/cowork-desktop.ts` — serve `cowork.exe` (rename `DEFAULT_DESKTOP_ZIP_PATH`→`DEFAULT_DESKTOP_EXE_PATH` + origin-fallback + metadata `zip`→`exe`). UI util unchanged (consumes `downloadUrl`). FIRST confirm no e2e/api test asserts the `.zip` filename.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cowork-desktop` + `make typecheck-api` + lint
-    - [ ] **Unit**: `packages/cowork-desktop/tests/packaging/native-extract.spec.ts` (manifest verify, atomic rename, concurrent-extract, purge).
-    - [ ] **API test**: update `api/tests/**` for the cowork-desktop route serving `.exe` (path + metadata).
-    - [ ] CI build: `build-ui` step `make package-desktop-windows` produces a single `.exe` (no zip) — verify in CI logs.
-    - [ ] (Windows runtime → UAT)
+- [x] **Lot 3 — Fix ③ single-file packaging** (mechanism: **embedded gzip+base64 payload**, not pkg `assets` — avoids the peer's CRITICAL snapshot-fs read; fully Linux-testable)
+  - [x] **3a (runtime core, Linux-tested):** `src/native/native-runtime.ts` — `prepareNativeModules()` extracts the embedded payload to `${cacheRoot}/native/<payloadHash>/` (atomic temp+rename, per-file sha256 verify; hash key auto-handles ABI change) and returns a resolver → absolute `file://` URL of each native entry. `windows-provider.ts` `loadOptional` now imports `resolveNative(name)` (identity from npm; file:// from the exe). `runCli` wires it.
+  - [x] **3b:** `package-windows.mjs` rewritten — fetch win32 prebuilds → **prune** non-win32 libnut + `.map`/`.d.ts` → emit `build/native-payload.generated.mjs` (gzip+base64 archive incl. libnut `build/Release/` sidecar DLLs + a `native-manifest.json` of entries) → esbuild bundles it → pkg → **single `cowork.exe`, NO zip**. `esbuild.config.mjs` adds the `__COWORK_DEFAULT_API_BASE_URL__` define.
+  - [x] **3c:** `api/src/routes/api/cowork-desktop.ts` — serve `cowork.exe` (`DEFAULT_DESKTOP_ZIP_PATH`→`DEFAULT_DESKTOP_EXE_PATH`, metadata `exe`-only, default version 0.2.0). UI util unchanged. Confirmed: no e2e/api test asserts the `.zip` filename (download tests use explicit env URLs).
+  - [x] Lot gate:
+    - [x] `make typecheck-cowork-desktop` (0) + `make typecheck-api` (0).
+    - [x] **Unit**: `tests/native-runtime.spec.ts` — extract→file:// resolve, intact bytes, idempotent warm cache, sha256-tamper reject, registerNativePayload. `make test-cowork-desktop` → 52 passed.
+    - [x] **API test**: `api/tests/api/cowork-desktop-download.test.ts` still green (scoped run).
+    - [ ] CI build: `build-ui` step `make package-desktop-windows` produces a single `.exe` (no zip) — verify in CI logs (the build-time gate).
+    - [ ] (Windows RUNTIME extraction/dlopen → UAT, per the user's "all together" decision)
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Fold behavior changes into `spec/SPEC_COWORK.md`; keep `spec/SPEC_COWORK_41B_FIXES.md` as the design record or fold + delete per convention.
