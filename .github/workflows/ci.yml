@@ -139,6 +139,9 @@ jobs:
               - 'packages/llm-mesh/**'
               - 'packages/flow/**'
               - 'packages/chat-server/**'
+              - 'packages/chat-core/**'
+              - 'packages/events/**'
+              - 'packages/contracts/**'
             ui:
               - 'ui/**'
             llm_mesh:
