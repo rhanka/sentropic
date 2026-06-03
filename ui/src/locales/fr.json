@@ -64,6 +64,7 @@
     "import": "Importer",
     "export": "Exporter",
     "downloadDocx": "Télécharger DOCX",
+    "exportXlsx": "Exporter Excel (XLSX)",
     "print": "Imprimer",
     "visibility": "Visibilité",
     "hidden": "Caché",
@@ -203,6 +204,12 @@
         "organization": "Inclure l'organisation",
         "usecases": "Inclure les initiatives",
         "matrix": "Inclure la matrice"
+      },
+      "xlsx": {
+        "label": "Exporter Excel (XLSX)",
+        "generating": "Génération du classeur Excel…",
+        "ready": "Classeur Excel prêt.",
+        "error": "Échec de l'export Excel."
       }
     },
     "actions": "Actions dossier",
@@ -1066,6 +1073,13 @@
         "chat": "Écrire un message…"
       }
     },
+    "attachments": {
+      "enlarge": "Agrandir l'image",
+      "lightbox": {
+        "close": "Fermer",
+        "download": "Télécharger"
+      }
+    },
     "documents": {
       "addFile": "Ajouter un fichier",
       "googleDrive": {
@@ -1266,6 +1280,14 @@
     "feedback": {
       "useful": "Utile",
       "notUseful": "Pas utile"
+    },
+    "message": {
+      "edit": "Modifier"
+    },
+    "model": {
+      "selector": {
+        "label": "Sélectionner le modèle"
+      }
     },
     "errors": {
       "copy": "Impossible de copier le message",

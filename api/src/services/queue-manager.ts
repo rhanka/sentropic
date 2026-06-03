@@ -85,6 +85,7 @@ import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { DocxEntityType, DocxTemplateId } from './docx-service';
 import { runDocxGenerationInWorker } from './docx-render-worker';
 import { generateFreeformDocx } from './docx-generation';
+import { generateFolderXlsx } from './xlsx-generation';
 import type { CommentContextType } from './context-comments';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 import type { ProviderId } from './provider-runtime';
@@ -318,7 +319,8 @@ export type JobType =
   | 'executive_summary'
   | 'chat_message'
   | 'document_summary'
-  | 'docx_generate';
+  | 'docx_generate'
+  | 'xlsx_generate';
 
 export type MatrixMode = 'organization' | 'generate' | 'default';
 
@@ -444,6 +446,14 @@ export interface DocxGenerateJobData {
   code?: string;
 }
 
+export interface XlsxGenerateJobData {
+  entityType: 'folder';
+  entityId: string;
+  locale?: string;
+  requestId?: string;
+  sourceHash?: string;
+}
+
 export type JobData =
   | OrganizationEnrichJobData
   | OrganizationBatchCreateJobData
@@ -454,7 +464,8 @@ export type JobData =
   | ExecutiveSummaryJobData
   | ChatMessageJobData
   | DocumentSummaryJobData
-  | DocxGenerateJobData;
+  | DocxGenerateJobData
+  | XlsxGenerateJobData;
 
 export interface Job {
   id: string;
@@ -1127,6 +1138,8 @@ export class QueueManager {
           this.processDocumentSummary(data as DocumentSummaryJobData, context.jobId, signal),
         docx_generate: (data, signal, context) =>
           this.processDocxGenerate(data as DocxGenerateJobData, context.jobId, signal),
+        xlsx_generate: (data, signal, context) =>
+          this.processXlsxGenerate(data as XlsxGenerateJobData, context.jobId, signal),
         executive_summary: (data, signal) =>
           this.processExecutiveSummary(data as ExecutiveSummaryJobData, signal),
         initiative_detail: (data, signal) =>
@@ -2950,6 +2963,137 @@ export class QueueManager {
   }
 
   /**
+   * Worker: generate the folder XLSX workbook asynchronously in the publishing queue.
+   * The binary is stored in S3 and referenced by the job result for the download route.
+   */
+  private async processXlsxGenerate(
+    data: XlsxGenerateJobData,
+    jobId: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const streamId = `job_${jobId}`;
+    let emitStatusChain: Promise<void> = Promise.resolve();
+
+    const emitStatus = async (
+      state: string,
+      progress: number,
+      extra: Record<string, unknown> = {}
+    ) => {
+      emitStatusChain = emitStatusChain
+        .catch(() => {
+          // Keep the chain alive even if a previous status emission failed.
+        })
+        .then(async () => {
+          const payload = {
+            state,
+            progress,
+            ...extra,
+            updatedAt: new Date().toISOString(),
+          };
+          await db.run(sql`
+            UPDATE job_queue
+            SET result = ${JSON.stringify(payload)}
+            WHERE id = ${jobId}
+          `);
+          await this.notifyJobEvent(jobId);
+          const seq = await getNextSequence(streamId);
+          await writeStreamEvent(streamId, 'status', payload, seq);
+        });
+
+      await emitStatusChain;
+    };
+
+    const isAbort = (error: unknown): boolean => {
+      if (!error) return false;
+      if (error instanceof DOMException && error.name === 'AbortError') return true;
+      if (error instanceof Error && error.name === 'AbortError') return true;
+      const message = error instanceof Error ? error.message : String(error);
+      return message.includes('AbortError') || message.includes('aborted');
+    };
+
+    const [jobRow] = await db
+      .select({ workspaceId: jobQueue.workspaceId })
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+    if (!jobRow?.workspaceId) {
+      throw new Error('Xlsx job workspace not found');
+    }
+
+    await emitStatus('queued', 0, {
+      entityType: data.entityType,
+      entityId: data.entityId,
+      queueClass: 'publishing',
+    });
+
+    try {
+      if (signal?.aborted) {
+        throw new DOMException('Xlsx generation cancelled', 'AbortError');
+      }
+
+      await emitStatus('loading_data', 10);
+
+      const result = await generateFolderXlsx({
+        entityId: data.entityId,
+        workspaceId: jobRow.workspaceId,
+        locale: data.locale,
+      });
+
+      if (signal?.aborted) {
+        throw new DOMException('Xlsx generation cancelled', 'AbortError');
+      }
+
+      await emitStatus('packaging', 98, {
+        fileName: result.fileName,
+        mimeType: result.mimeType,
+      });
+
+      const bucket = getDocumentsBucketName();
+      const objectKey = `xlsx-cache/${jobRow.workspaceId}/${data.entityType}/${data.entityId}/${jobId}.xlsx`;
+      await putObject({
+        bucket,
+        key: objectKey,
+        body: result.buffer,
+        contentType: result.mimeType,
+      });
+
+      const finalPayload = {
+        state: 'done',
+        progress: 100,
+        fileName: result.fileName,
+        mimeType: result.mimeType,
+        byteLength: result.buffer.byteLength,
+        storageBucket: bucket,
+        storageKey: objectKey,
+        sourceHash: typeof data.sourceHash === 'string' ? data.sourceHash : null,
+        queueClass: 'publishing',
+        completedAt: new Date().toISOString(),
+      };
+
+      await db.run(sql`
+        UPDATE job_queue
+        SET result = ${JSON.stringify(finalPayload)}
+        WHERE id = ${jobId}
+      `);
+      await this.notifyJobEvent(jobId);
+
+      const seq = await getNextSequence(streamId);
+      await writeStreamEvent(streamId, 'done', finalPayload, seq);
+    } catch (error) {
+      if (isAbort(error)) {
+        await emitStatus('cancelled', 0, {
+          message: error instanceof Error ? error.message : 'Xlsx generation cancelled',
+        });
+      } else {
+        await emitStatus('failed', 0, {
+          message: error instanceof Error ? error.message : 'Xlsx generation failed',
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Worker pour la génération de liste de cas d'usage
    */
   private async processInitiativeList(
@@ -3699,6 +3843,125 @@ export class QueueManager {
         data.entityType === params.entityType &&
         data.entityId === params.entityId
       );
+    });
+
+    return matches.map((row) => ({
+      id: row.id,
+      type: row.type as JobType,
+      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      streamId: getPublicJobStreamId({
+        id: row.id,
+        type: row.type as JobType,
+        data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      }),
+      result: parseJsonField(row.result),
+      status: row.status as Job['status'],
+      workspaceId: row.workspaceId,
+      createdAt: row.createdAt.toISOString(),
+      startedAt: row.startedAt || undefined,
+      completedAt: row.completedAt || undefined,
+      error: row.error || undefined,
+    }));
+  }
+
+  async findLatestXlsxJobBySource(params: {
+    workspaceId: string;
+    entityId: string;
+    sourceHash: string;
+  }): Promise<Job | null> {
+    const jobs = await this.listXlsxJobsForEntity(params);
+    for (const job of jobs) {
+      const data = (job.data ?? {}) as unknown as Record<string, unknown>;
+      const result = (job.result ?? {}) as Record<string, unknown>;
+      const sourceHash =
+        typeof result.sourceHash === 'string'
+          ? result.sourceHash
+          : typeof data.sourceHash === 'string'
+            ? data.sourceHash
+            : '';
+      if (sourceHash !== params.sourceHash) continue;
+
+      if (job.status === 'completed') {
+        const storageKey = typeof result.storageKey === 'string' ? result.storageKey : '';
+        const storageBucket =
+          typeof result.storageBucket === 'string' && result.storageBucket.trim().length > 0
+            ? result.storageBucket
+            : getDocumentsBucketName();
+        if (!storageKey) continue;
+        try {
+          await headObject({ bucket: storageBucket, key: storageKey });
+        } catch {
+          continue;
+        }
+      }
+      return job;
+    }
+    return null;
+  }
+
+  async invalidateXlsxCacheForEntity(params: {
+    workspaceId: string;
+    entityId: string;
+    keepSourceHash?: string;
+  }): Promise<number> {
+    const jobs = await this.listXlsxJobsForEntity(params);
+    let purged = 0;
+
+    for (const job of jobs) {
+      const data = (job.data ?? {}) as unknown as Record<string, unknown>;
+      const result = (job.result ?? {}) as Record<string, unknown>;
+      const sourceHash =
+        typeof result.sourceHash === 'string'
+          ? result.sourceHash
+          : typeof data.sourceHash === 'string'
+            ? data.sourceHash
+            : null;
+      if (params.keepSourceHash && sourceHash === params.keepSourceHash) {
+        continue;
+      }
+
+      if (job.status === 'processing' || job.status === 'pending') {
+        try {
+          await this.cancelJob(job.id, 'xlsx-cache-invalidated');
+        } catch {
+          // ignore
+        }
+      }
+
+      const storageKey = typeof result.storageKey === 'string' ? result.storageKey : '';
+      if (storageKey) {
+        const storageBucket =
+          typeof result.storageBucket === 'string' && result.storageBucket.trim().length > 0
+            ? result.storageBucket
+            : getDocumentsBucketName();
+        try {
+          await deleteObject({ bucket: storageBucket, key: storageKey });
+        } catch {
+          // ignore: object may already be missing
+        }
+      }
+
+      await db.delete(jobQueue).where(eq(jobQueue.id, job.id));
+      purged += 1;
+    }
+
+    return purged;
+  }
+
+  private async listXlsxJobsForEntity(params: {
+    workspaceId: string;
+    entityId: string;
+  }): Promise<Job[]> {
+    const rows = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.workspaceId, params.workspaceId), eq(jobQueue.type, 'xlsx_generate')))
+      .orderBy(desc(jobQueue.createdAt))
+      .limit(200);
+
+    const matches = rows.filter((row) => {
+      const data = (parseJsonField<XlsxGenerateJobData>(row.data) ?? {}) as XlsxGenerateJobData;
+      return data.entityType === 'folder' && data.entityId === params.entityId;
     });
 
     return matches.map((row) => ({

@@ -193,6 +193,126 @@ const stringifyContent = (value: unknown): string => {
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+type NormalizedContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; mediaType?: string; data?: string; url?: string };
+
+const parseDataUrl = (url: string): { mediaType: string; data: string } | null => {
+  const match = /^data:([^;,]+);base64,(.*)$/i.exec(url.trim());
+  if (!match) return null;
+  return { mediaType: match[1] || 'application/octet-stream', data: match[2] || '' };
+};
+
+const imageDataUrl = (part: Extract<NormalizedContentPart, { type: 'image' }>): string | null => {
+  if (part.url) return part.url;
+  if (part.data) return `data:${part.mediaType || 'application/octet-stream'};base64,${part.data}`;
+  return null;
+};
+
+const normalizeContentParts = (value: unknown): NormalizedContentPart[] | null => {
+  if (!Array.isArray(value)) return null;
+  const out: NormalizedContentPart[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const type = typeof item.type === 'string' ? item.type : '';
+    if (type === 'text' || type === 'input_text') {
+      const text = typeof item.text === 'string' ? item.text : '';
+      if (text) out.push({ type: 'text', text });
+      continue;
+    }
+    if (type === 'image_url') {
+      const imageUrl = item.image_url;
+      const url =
+        typeof imageUrl === 'string'
+          ? imageUrl
+          : isRecord(imageUrl) && typeof imageUrl.url === 'string'
+            ? imageUrl.url
+            : '';
+      if (url) out.push({ type: 'image', url });
+      continue;
+    }
+    if (type === 'input_image') {
+      const url = typeof item.image_url === 'string' ? item.image_url : '';
+      if (url) out.push({ type: 'image', url });
+      continue;
+    }
+    if (type === 'image') {
+      const url = typeof item.url === 'string' ? item.url : undefined;
+      const data = typeof item.data === 'string' ? item.data : undefined;
+      const mediaType = typeof item.mediaType === 'string' ? item.mediaType : undefined;
+      if (url || data) out.push({ type: 'image', ...(url ? { url } : {}), ...(data ? { data } : {}), ...(mediaType ? { mediaType } : {}) });
+    }
+  }
+  return out.length > 0 ? out : null;
+};
+
+const buildOpenAIResponsesContent = (
+  value: unknown
+): string | OpenAI.Responses.ResponseInputMessageContentList => {
+  const parts = normalizeContentParts(value);
+  if (!parts) return stringifyContent(value);
+  const out: OpenAI.Responses.ResponseInputMessageContentList = [];
+  for (const part of parts) {
+    if (part.type === 'text') {
+      out.push({ type: 'input_text', text: part.text });
+      continue;
+    }
+    const imageUrl = imageDataUrl(part);
+    if (imageUrl) out.push({ type: 'input_image', image_url: imageUrl, detail: 'auto' });
+  }
+  return out;
+};
+
+const buildGeminiParts = (value: unknown): Array<Record<string, unknown>> => {
+  const parts = normalizeContentParts(value);
+  if (!parts) return [{ text: stringifyContent(value) }];
+  const out: Array<Record<string, unknown>> = [];
+  for (const part of parts) {
+    if (part.type === 'text') {
+      out.push({ text: part.text });
+      continue;
+    }
+    const parsed = part.url ? parseDataUrl(part.url) : null;
+    const mediaType = part.mediaType ?? parsed?.mediaType;
+    const data = part.data ?? parsed?.data;
+    if (mediaType && data) {
+      out.push({ inlineData: { mimeType: mediaType, data } });
+      continue;
+    }
+    if (part.url) {
+      out.push({ fileData: { mimeType: mediaType ?? 'application/octet-stream', fileUri: part.url } });
+    }
+  }
+  return out;
+};
+
+const buildClaudeContent = (value: unknown): string | Array<Record<string, unknown>> => {
+  const parts = normalizeContentParts(value);
+  if (!parts) return stringifyContent(value);
+  const out: Array<Record<string, unknown>> = [];
+  for (const part of parts) {
+    if (part.type === 'text') {
+      out.push({ type: 'text', text: part.text });
+      continue;
+    }
+    const parsed = part.url ? parseDataUrl(part.url) : null;
+    const mediaType = part.mediaType ?? parsed?.mediaType;
+    const data = part.data ?? parsed?.data;
+    if (mediaType && data) {
+      out.push({
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType, data },
+      });
+      continue;
+    }
+    if (part.url) out.push({ type: 'image', source: { type: 'url', url: part.url } });
+  }
+  return out;
+};
+
 const isFunctionTool = (
   tool: OpenAI.Chat.Completions.ChatCompletionTool
 ): tool is OpenAI.Chat.Completions.ChatCompletionFunctionTool => {
@@ -299,9 +419,8 @@ export const buildGeminiRequestBody = (
 
   for (const message of options.messages) {
     const role = message.role;
-    const content = stringifyContent(
-      (message as unknown as { content?: unknown }).content
-    );
+    const contentRaw = (message as unknown as { content?: unknown }).content;
+    const content = stringifyContent(contentRaw);
 
     if (role === 'system' || role === 'developer') {
       if (content.trim()) systemParts.push(content);
@@ -321,7 +440,7 @@ export const buildGeminiRequestBody = (
 
     contents.push({
       role: role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: content }],
+      parts: role === 'assistant' ? [{ text: content }] : buildGeminiParts(contentRaw),
     });
   }
 
@@ -449,9 +568,8 @@ const buildClaudeMessages = (
 
   for (const message of messages) {
     const role = message.role;
-    const content = stringifyContent(
-      (message as unknown as { content?: unknown }).content
-    );
+    const contentRaw = (message as unknown as { content?: unknown }).content;
+    const content = stringifyContent(contentRaw);
 
     if (role === 'system' || role === 'developer') {
       if (content.trim()) systemParts.push(content);
@@ -500,7 +618,7 @@ const buildClaudeMessages = (
       continue;
     }
 
-    claudeMessages.push({ role: 'user', content });
+    claudeMessages.push({ role: 'user', content: buildClaudeContent(contentRaw) });
   }
 
   return {
@@ -1737,20 +1855,21 @@ export async function* callLLMStream(
   // - Le SDK définit `EasyInputMessage` (role user|assistant|system|developer) avec `content` string.
   // - Si on envoie `role:"assistant"` avec des content parts `type:"input_text"`, l'API renvoie:
   //   "Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
-  // => On utilise donc `content` en string pour tous les rôles.
+  // => On limite les content parts multimodales au rôle user.
   const codexInstructions: string[] = [];
-  const messageInput = messages
-    .map((m) => {
-      const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
-      const contentRaw = (m as unknown as { content?: unknown }).content;
-      const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
-      if (useCodexTransport && (role === 'system' || role === 'developer')) {
-        if (content.trim()) codexInstructions.push(content);
-        return null;
-      }
-      return { type: 'message' as const, role, content };
-    })
-    .filter((item): item is { type: 'message'; role: 'user' | 'assistant'; content: string } => item !== null);
+  const messageInput: OpenAI.Responses.ResponseInput = [];
+  for (const m of messages) {
+    const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
+    const contentRaw = (m as unknown as { content?: unknown }).content;
+    const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
+    if (useCodexTransport && (role === 'system' || role === 'developer')) {
+      if (content.trim()) codexInstructions.push(content);
+      continue;
+    }
+    const responseContent =
+      role === 'user' ? buildOpenAIResponsesContent(contentRaw) : content;
+    messageInput.push({ type: 'message', role, content: responseContent });
+  }
   const input: OpenAI.Responses.ResponseCreateParamsStreaming['input'] =
     rawInput && rawInput.length > 0
       ? useCodexTransport && !previousResponseId

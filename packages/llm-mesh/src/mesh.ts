@@ -72,6 +72,18 @@ const validateFeatures = (
   if (request.reasoning && request.reasoning.effort !== 'none' && profile.capabilities.reasoning.support === 'unsupported') {
     throw new Error(`Reasoning is unsupported for ${profile.providerId}:${profile.modelId}`);
   }
+  const inputModalities = new Set(profile.capabilities.modalities.input);
+  for (const message of request.messages) {
+    if (!Array.isArray(message.content)) continue;
+    for (const part of message.content) {
+      if (part.type === 'image' && !inputModalities.has('image')) {
+        throw new Error(`Image input is unsupported for ${profile.providerId}:${profile.modelId}`);
+      }
+      if (part.type === 'file' && !inputModalities.has('file')) {
+        throw new Error(`File input is unsupported for ${profile.providerId}:${profile.modelId}`);
+      }
+    }
+  }
 };
 
 const resolveAuth = async (
