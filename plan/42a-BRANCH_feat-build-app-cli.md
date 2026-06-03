@@ -437,7 +437,9 @@ Actions with the following status should be included around tasks only if really
 - **Real h2a register** (vs the MVP local descriptor) — BR42a-F, co-designed upstream when EVO-9 freezes.
 - **`--with-auth` template preset** (wire `@sentropic/auth-ui` + `@sentropic/auth-hono`) once BR-39 merges.
 - **Sibling `add <capability>` capabilities** (BR-42b catalog+agents+canvas, BR-42c comments,
-  BR-42d persistence/observability, BR-42e flow queue streaming, BR-42f Vertex AI, BR-42g BigQuery sink).
+  BR-42d persistence/observability, BR-42e flow queue streaming, BR-42g BigQuery sink). The single GCP
+  provider moved to **BR-43** (`feat/llm-mesh-gcp`) — out of BR-42 scale; the scale-relevant Google piece
+  is the native multi-cloud secrets contract + observability + MCP/marketplace catalog (SPEC §7.2).
 - **Postgres-durable generated-app preset** (MVP ships in-memory adapters only — SPEC R8).
 - **Deploy / GitOps / `k8s-ops`→PaaS** + the `sentropic`↔`k8s-ops` contract — SPEC §1.2 / boundaries §16.5.
 - **Central sentropic instance / multi-tenant managed h2a MCP / BYO-h2a**; **iii integration-parity**; **app relocation**.
