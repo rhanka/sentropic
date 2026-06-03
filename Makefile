@@ -1713,6 +1713,27 @@ smoke-idp: ## Run the deterministic SSO authorization_code smoke against the liv
 		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
 		-w /workspace api npx tsx apps/auth-idp/sso-smoke.ts
 
+.PHONY: smoke-idp-screens
+smoke-idp-screens: ## Screen-driven SSO smoke: drives the IdP-SERVED login+consent screens (needs make dev-idp)
+	@echo "▶ Pinning the IdP UI origin to the in-network name (auth-idp:8787) so the browser can follow login/consent redirects..."
+	@IDP_ORIGIN=http://auth-idp:8787 DISABLE_RATE_LIMIT=true \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml up -d auth-idp --wait auth-idp
+	@echo "▶ Seeding verified user + session on the shared DB..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
+		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
+		-w /workspace api npx tsx apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
+	USER_ID=$$(grep '^USER_ID=' .tmp-idp-seed.env | cut -d= -f2-); \
+	SESSION_TOKEN=$$(grep '^SESSION_TOKEN=' .tmp-idp-seed.env | cut -d= -f2-); \
+	rm -f .tmp-idp-seed.env; \
+	if [ -z "$$USER_ID" ] || [ -z "$$SESSION_TOKEN" ]; then echo "❌ seed step did not produce USER_ID/SESSION_TOKEN"; exit 1; fi; \
+	echo "▶ Driving the IdP-served screens in headless Chromium..."; \
+	USER_ID="$$USER_ID" SESSION_TOKEN="$$SESSION_TOKEN" \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml --profile idp-smoke run --rm --no-deps \
+		-e IDP_BASE_URL=http://auth-idp:8787 \
+		-e USER_ID="$$USER_ID" \
+		-e SESSION_TOKEN="$$SESSION_TOKEN" \
+		idp-screen-smoke
+
 
 # -----------------------------------------------------------------------------
 # Logs

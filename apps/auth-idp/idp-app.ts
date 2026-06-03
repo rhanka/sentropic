@@ -72,23 +72,33 @@ export const createIdpApp = (): Hono => {
   // Security headers: same posture as the product API. CORP/COEP stay off so
   // legitimate cross-origin RP requests (design-system origin -> IdP origin)
   // are not blocked; CORS below restricts credentials to allowed origins.
+  //
+  // The IdP now serves its OWN HTML + /_app assets (A0-bis). `upgrade-insecure-
+  // requests` and HSTS are HTTPS-only hardening: over a plain-HTTP dev/test
+  // origin `upgrade-insecure-requests` rewrites every subresource to https://
+  // and breaks the served screens. So we emit BOTH only in production (the
+  // public IdP at https://auth.sent-tech.ca stays fully hardened, unchanged).
+  const isProduction = env.NODE_ENV === 'production';
+  const contentSecurityPolicy = {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"],
+    connectSrc: ["'self'", 'https://*.sent-tech.ca'],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", 'data:', 'https:'],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+    ...(isProduction ? { upgradeInsecureRequests: [] } : {}),
+  };
   app.use(
     '*',
     secureHeaders({
-      contentSecurityPolicy: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        connectSrc: ["'self'", 'https://*.sent-tech.ca'],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        frameAncestors: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-      strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
+      contentSecurityPolicy,
+      ...(isProduction
+        ? { strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload' }
+        : {}),
       crossOriginOpenerPolicy: 'same-origin',
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: false,
