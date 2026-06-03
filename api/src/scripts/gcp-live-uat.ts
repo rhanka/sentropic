@@ -1,14 +1,18 @@
 #!/usr/bin/env tsx
 
 // ---------------------------------------------------------------------------
-// BR-42f — Vertex AI live UAT script (make-only, credential-safe).
+// BR-42f — GCP (Google Cloud Model Garden, formerly Vertex AI) live UAT script
+// (make-only, credential-safe).
 //
-// Drives ONE real `streamGenerateContent` call per Vertex catalog model at the
+// (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI brand
+// retired; the endpoint host stays aiplatform.googleapis.com.)
+//
+// Drives ONE real `streamGenerateContent` call per GCP catalog model at the
 // api/mesh layer, reusing the PRODUCTION code path verbatim:
 //   - `buildGeminiRequestBody`  (the shared Gemini body builder — BR42f-D4)
-//   - `mintVertexAccessToken`   (the ADC bearer minter — D-ADC1)
-//   - `VertexProviderRuntime`   (the URL/auth/SSE transport)
-//   - `parseVertexModelId`      (the `{publisher}/{model}@vertex` parser — §C)
+//   - `mintGcpAccessToken`      (the ADC bearer minter — D-ADC1)
+//   - `GcpProviderRuntime`      (the URL/auth/SSE transport)
+//   - `parseGcpModelId`         (the `{publisher}/{model}@gcp` parser — §C)
 // Nothing is duplicated; this is the same wire path the runtime uses.
 //
 // SANITIZATION (critical, spec §F / D-ADC1): this script NEVER prints the
@@ -17,9 +21,9 @@
 // streamed-token-count, latency, and (on failure) the normalized provider
 // error message. A leaked secret in UAT output is a FAIL of this lot.
 //
-// GATING (spec §F): live calls are gated by the explicit `VERTEX_LIVE_UAT=1`
-// sentinel AND the presence of VERTEX_PROJECT_ID / VERTEX_LOCATION / ADC
-// credentials. Absent any of these, the script prints a CLEAR actionable
+// GATING (spec §F): live calls are gated by the explicit `GCP_LIVE_UAT=1`
+// sentinel AND the presence of GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION /
+// ADC credentials. Absent any of these, the script prints a CLEAR actionable
 // message and exits non-zero WITHOUT attempting a call — so CI (which never
 // sets the sentinel) can never trigger a live call.
 // ---------------------------------------------------------------------------
@@ -29,17 +33,17 @@ import { knownModelIdsByProvider } from '@sentropic/llm-mesh';
 import { env } from '../config/env';
 import { buildGeminiRequestBody } from '../services/llm-runtime/index';
 import {
-  VertexProviderRuntime,
-  mintVertexAccessToken,
-  parseVertexModelId,
-  type VertexStreamGenerateRequest,
-} from '../services/providers/vertex-provider';
+  GcpProviderRuntime,
+  mintGcpAccessToken,
+  parseGcpModelId,
+  type GcpStreamGenerateRequest,
+} from '../services/providers/gcp-provider';
 
-// The Vertex catalog selection keys come straight from the published package
+// The GCP catalog selection keys come straight from the published package
 // catalog. Swapping the live-callable ids is therefore a 1-line catalog change
 // (`packages/llm-mesh/src/providers.ts` / `catalog.ts`) — this script needs no
 // edit when the ids change.
-const VERTEX_MODEL_IDS = knownModelIdsByProvider.vertex;
+const GCP_MODEL_IDS = knownModelIdsByProvider.gcp;
 
 // Mask the project id so the full identifier never reaches the log. Keeps a
 // short prefix + suffix for human correlation without leaking the whole value.
@@ -50,14 +54,14 @@ const maskProjectId = (project: string): string => {
 };
 
 const printUsageAndExit = (reason: string): never => {
-  console.error(`vertex-live-uat: ${reason}`);
+  console.error(`gcp-live-uat: ${reason}`);
   console.error(
-    'To run a live Vertex UAT call, set ALL of:\n' +
-      '  - VERTEX_PROJECT_ID=<your-gcp-project-id>\n' +
-      '  - VERTEX_LOCATION=<region, e.g. us-central1>\n' +
+    'To run a live GCP UAT call, set ALL of:\n' +
+      '  - GOOGLE_CLOUD_PROJECT=<your-gcp-project-id>\n' +
+      '  - GOOGLE_CLOUD_LOCATION=<region, e.g. us-central1>\n' +
       '  - GOOGLE_APPLICATION_CREDENTIALS=<path to a Vertex AI User SA-key JSON>\n' +
-      '  - VERTEX_LIVE_UAT=1\n' +
-      'and invoke `make vertex-live-uat VERTEX_PROJECT_ID=... VERTEX_LOCATION=... VERTEX_SA_KEY=... ENV=<branch-env>`.',
+      '  - GCP_LIVE_UAT=1\n' +
+      'and invoke `make gcp-live-uat GOOGLE_CLOUD_PROJECT=... GOOGLE_CLOUD_LOCATION=... GCP_SA_KEY=... ENV=<branch-env>`.',
   );
   process.exit(1);
 };
@@ -77,7 +81,7 @@ type ModelResult = {
 // Count the streamed Gemini text-part chunks (the `content_delta` source) and
 // capture the terminal finishReason. The chunk shape is the Gemini JSON
 // envelope `{ candidates: [{ content: { parts: [{ text }] }, finishReason? }] }`
-// — identical on Vertex (BR42f-D4).
+// — identical on GCP (BR42f-D4).
 const countStreamedTokens = (
   chunk: unknown,
 ): { textParts: number; finishReason: string | null } => {
@@ -101,16 +105,16 @@ const countStreamedTokens = (
 };
 
 const runModel = async (modelId: string): Promise<ModelResult> => {
-  const project = (env.VERTEX_PROJECT_ID ?? '').trim();
-  const location = (env.VERTEX_LOCATION ?? '').trim();
-  const { publisher, model: wireModel } = parseVertexModelId(modelId);
+  const project = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
+  const location = (env.GOOGLE_CLOUD_LOCATION ?? '').trim();
+  const { publisher, model: wireModel } = parseGcpModelId(modelId);
   const startedAt = Date.now();
 
   try {
     // Mint the ADC bearer PRE-DISPATCH (the production mesh-dispatch posture,
     // §B/M2) and forward it as the runtime credential. The bearer is held only
     // in memory and is NEVER logged.
-    const bearer = await mintVertexAccessToken({ project, location });
+    const bearer = await mintGcpAccessToken({ project, location });
 
     // Reuse the production Gemini body builder verbatim with a trivial prompt.
     const body = buildGeminiRequestBody({
@@ -119,9 +123,9 @@ const runModel = async (modelId: string): Promise<ModelResult> => {
       maxOutputTokens: 16,
     });
 
-    const runtime = new VertexProviderRuntime();
-    const request: VertexStreamGenerateRequest = {
-      mode: 'vertex-stream-generate-content',
+    const runtime = new GcpProviderRuntime();
+    const request: GcpStreamGenerateRequest = {
+      mode: 'gcp-stream-generate-content',
       requestOptions: { project, location, publisher, model: wireModel, body },
       credential: bearer,
     };
@@ -152,7 +156,7 @@ const runModel = async (modelId: string): Promise<ModelResult> => {
     };
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
-    const runtime = new VertexProviderRuntime();
+    const runtime = new GcpProviderRuntime();
     const normalized = runtime.normalizeError(error);
     const httpStatus =
       typeof (error as { status?: unknown })?.status === 'number'
@@ -175,28 +179,28 @@ const runModel = async (modelId: string): Promise<ModelResult> => {
 };
 
 const main = async (): Promise<void> => {
-  if ((env.VERTEX_LIVE_UAT ?? '').trim() !== '1') {
-    printUsageAndExit('VERTEX_LIVE_UAT is not set to "1" — refusing to call live Vertex.');
+  if ((env.GCP_LIVE_UAT ?? '').trim() !== '1') {
+    printUsageAndExit('GCP_LIVE_UAT is not set to "1" — refusing to call live GCP.');
   }
 
-  const project = (env.VERTEX_PROJECT_ID ?? '').trim();
-  const location = (env.VERTEX_LOCATION ?? '').trim();
+  const project = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
+  const location = (env.GOOGLE_CLOUD_LOCATION ?? '').trim();
   const credentials = (env.GOOGLE_APPLICATION_CREDENTIALS ?? '').trim();
 
-  if (!project) printUsageAndExit('VERTEX_PROJECT_ID is missing.');
-  if (!location) printUsageAndExit('VERTEX_LOCATION is missing.');
+  if (!project) printUsageAndExit('GOOGLE_CLOUD_PROJECT is missing.');
+  if (!location) printUsageAndExit('GOOGLE_CLOUD_LOCATION is missing.');
   if (!credentials) {
     printUsageAndExit(
       'GOOGLE_APPLICATION_CREDENTIALS is missing (path to the Vertex AI User SA-key JSON).',
     );
   }
 
-  console.log('--- Vertex live UAT (sanitized) ---');
+  console.log('--- GCP live UAT (sanitized) ---');
   console.log(`project=${maskProjectId(project)} location=${location}`);
-  console.log(`models=${VERTEX_MODEL_IDS.length}`);
+  console.log(`models=${GCP_MODEL_IDS.length}`);
 
   const results: ModelResult[] = [];
-  for (const modelId of VERTEX_MODEL_IDS) {
+  for (const modelId of GCP_MODEL_IDS) {
     // eslint-disable-next-line no-await-in-loop
     const result = await runModel(modelId);
     results.push(result);
@@ -223,6 +227,6 @@ main().catch((error) => {
   // Defensive: any unexpected throw is sanitized to the message only (never the
   // raw error object, which could embed config/credential context).
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`vertex-live-uat: unexpected failure: ${message}`);
+  console.error(`gcp-live-uat: unexpected failure: ${message}`);
   process.exit(1);
 });
