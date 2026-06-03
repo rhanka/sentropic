@@ -33,7 +33,7 @@
 
   const WORKSPACE_TYPE_ICONS: Record<WorkspaceType, { icon: any; colorClass: string; borderClass: string; bgClass: string; textClass: string; hoverTextClass: string }> = {
     neutral: { icon: Home, colorClass: 'bg-slate-100 text-slate-500', borderClass: 'border-slate-200', bgClass: 'bg-slate-50', textClass: 'text-slate-800', hoverTextClass: 'group-hover:text-slate-900' },
-    'ai-ideas': { icon: Lightbulb, colorClass: 'bg-amber-50 text-amber-600', borderClass: 'border-amber-200', bgClass: 'bg-amber-50', textClass: 'text-amber-800', hoverTextClass: 'group-hover:text-amber-900' },
+    'ai-priorities': { icon: Lightbulb, colorClass: 'bg-amber-50 text-amber-600', borderClass: 'border-amber-200', bgClass: 'bg-amber-50', textClass: 'text-amber-800', hoverTextClass: 'group-hover:text-amber-900' },
     opportunity: { icon: Target, colorClass: 'bg-blue-50 text-blue-600', borderClass: 'border-blue-200', bgClass: 'bg-blue-50', textClass: 'text-blue-800', hoverTextClass: 'group-hover:text-blue-900' },
     code: { icon: Code2, colorClass: 'bg-emerald-50 text-emerald-600', borderClass: 'border-emerald-200', bgClass: 'bg-emerald-50', textClass: 'text-emerald-800', hoverTextClass: 'group-hover:text-emerald-900' },
   };
@@ -127,7 +127,7 @@
     <!-- Workspace cards — folder-style layout (Bug 9 harmonization) -->
     <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {#each dashboardWorkspaces as ws}
-        {@const cfg = WORKSPACE_TYPE_ICONS[ws.type] ?? WORKSPACE_TYPE_ICONS['ai-ideas']}
+        {@const cfg = WORKSPACE_TYPE_ICONS[ws.type] ?? WORKSPACE_TYPE_ICONS['ai-priorities']}
         <article
           class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full hover:shadow-md cursor-pointer"
           role="button"
