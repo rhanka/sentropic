@@ -8,6 +8,7 @@ import {
   oauthDpopProofs,
   oauthTokens,
   revokedTokens,
+  serviceClients,
   users,
 } from '../../../src/db/schema';
 import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
@@ -51,6 +52,7 @@ const createTokenMeta = (jti = 'jti-1', expiresAt = future) => ({
 
 describe('createOauthStateStoreAdapter', () => {
   beforeEach(async () => {
+    await db.delete(serviceClients);
     await db.delete(revokedTokens);
     await db.delete(oauthDpopProofs);
     await db.delete(oauthTokens);
@@ -79,6 +81,7 @@ describe('createOauthStateStoreAdapter', () => {
   });
 
   afterEach(async () => {
+    await db.delete(serviceClients);
     await db.delete(revokedTokens);
     await db.delete(oauthDpopProofs);
     await db.delete(oauthTokens);
@@ -140,5 +143,42 @@ describe('createOauthStateStoreAdapter', () => {
     await expect(adapter.purgeExpired()).resolves.toBeGreaterThanOrEqual(4);
     await expect(adapter.consumeAuthCode('expired-code')).resolves.toBeNull();
     await expect(adapter.findTokenMeta('expired-jti')).resolves.toBeNull();
+  });
+
+  it('finds active service clients and ignores revoked or missing ones', async () => {
+    const adapter = createAdapter();
+
+    await db.insert(serviceClients).values({
+      allowedScopes: ['service:ping', 'service:read'],
+      clientId: 'service-active',
+      clientSecretHash: 'hash:service-secret',
+      createdAt: now,
+      displayName: 'Active Service',
+      dpopBoundAccessTokens: false,
+      id: 'service-active-row',
+      resourceIndicators: ['https://api.sentropic.test'],
+      tenantId: null,
+    });
+    await db.insert(serviceClients).values({
+      allowedScopes: ['service:ping'],
+      clientId: 'service-revoked',
+      clientSecretHash: 'hash:service-secret',
+      createdAt: now,
+      displayName: 'Revoked Service',
+      dpopBoundAccessTokens: false,
+      id: 'service-revoked-row',
+      resourceIndicators: [],
+      revokedAt: now,
+      tenantId: null,
+    });
+
+    await expect(adapter.findServiceClient?.('service-active')).resolves.toMatchObject({
+      allowedScopes: ['service:ping', 'service:read'],
+      clientId: 'service-active',
+      dpopBoundAccessTokens: false,
+      resourceIndicators: ['https://api.sentropic.test'],
+    });
+    await expect(adapter.findServiceClient?.('service-revoked')).resolves.toBeNull();
+    await expect(adapter.findServiceClient?.('service-missing')).resolves.toBeNull();
   });
 });
