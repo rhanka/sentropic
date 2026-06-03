@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 
 import { pool as defaultPool } from '../../db/client';
 import { logger } from '../../logger';
+import { incrementCommentEvent } from './comment-metrics';
 
 /**
  * BR-42d Lot 3 — origin-aware, HOST-CONTROLLED comment event sink.
@@ -114,6 +115,33 @@ export class PgNotifyCommentEventSink {
     const client = await this.pool.connect();
     try {
       await client.query(`NOTIFY comment_events, '${escapeNotifyPayload(payload)}'`);
+      // Observability choke-point (SPEC §5): AFTER the NOTIFY round-trip
+      // succeeds, emit ONE structured log line + bump the in-process counter.
+      // This is observability-ONLY: it MUST NOT alter the wire payload and MUST
+      // NEVER throw into the awaited caller — both are swallowed. (`userId` is
+      // intentionally NOT logged here: the emit descriptor does not carry it
+      // this lot; adding it is a future optional descriptor field.)
+      try {
+        incrementCommentEvent(emission.action);
+        logger.info(
+          {
+            event: `comment.${emission.action}`,
+            origin: emission.origin,
+            workspaceId: emission.workspaceId,
+            contextType: emission.contextType,
+            ...(emission.commentId ? { commentId: emission.commentId } : {}),
+            ...(emission.threadId ? { threadId: emission.threadId } : {}),
+          },
+          'comment event emitted',
+        );
+      } catch (observabilityError) {
+        // Observability failures are swallowed — they must never perturb the
+        // already-flushed NOTIFY nor reject the awaited emit.
+        logger.error(
+          { event: 'comment.observability_failed', err: observabilityError },
+          'comment event observability failed (swallowed)',
+        );
+      }
     } catch (error) {
       // Observability choke-point: log, then re-throw so the awaited emit
       // rejects exactly as the live awaited NOTIFY does (SPEC §4 must-fix #6).
