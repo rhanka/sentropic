@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { renderMarkdownWithRefs as libRenderMarkdownWithRefs } from '@sentropic/chat-ui/utils/markdown-refs';
 
 const BULLET_PATTERN = /(^|\n)[ \t]*[•▪‣●◦]/g;
 const SINGLE_NEWLINE_PATTERN = /([^\n\r])\r?\n(?!\r?\n|\s*[-*•]|\s*$)/g;
@@ -192,10 +193,10 @@ export function parseReferencesInMarkdown(html: string, references: Reference[] 
 /**
  * Rend du markdown en HTML avec parsing des références et options de styling
  * 
- * @param text - Le texte markdown à rendre
- * @param references - Les références pour parser les patterns [1], [2], etc.
- * @param options - Options pour le post-traitement CSS (listes, titres)
- * @returns Le HTML rendu avec références parsées
+ * @param text - Markdown source text
+ * @param references - Reference list for [N] citation tokens
+ * @param options - CSS class injection options (lists, headings)
+ * @returns Rendered HTML with citation links, sanitized via DOMPurify
  */
 export function renderMarkdownWithRefs(
   text: string | null | undefined,
@@ -204,66 +205,26 @@ export function renderMarkdownWithRefs(
 ): string {
   if (!text) return '';
 
-  // Normaliser le markdown (puces unicode, sauts de ligne, etc.)
-  let normalized = normalizeUseCaseMarkdown(text);
+  // Inject the app's marked-based markdown→HTML pipeline into the library.
+  // The library owns: normalize, [N] placeholder substitution, CSS class injection.
+  // The app owns: the markdown renderer (marked) and HTML sanitization (DOMPurify).
+  const markdownToHtml = (src: string): string => {
+    const result = marked(src);
+    return typeof result === 'string' ? result : String(result);
+  };
 
-  // Strip pre-existing markdown reference links that were baked into the data
-  // during AI generation.  These have the form:
-  //   [\[N\]](#ref-N "title")  or  [[N]](#ref-N "title")
-  // We collapse them back to plain [N] so the placeholder logic below can
-  // handle them uniformly.
-  normalized = normalized.replace(
-    /\[\\?\[(\d+)\\?\]\]\(#ref-\d+(?:\s+"[^"]*")?\)/g,
-    (_match, num) => `[${num}]`
+  // Delegate all ref-substitution and CSS-injection logic to the library,
+  // passing the app's createReferenceLink as renderRef to guarantee identical anchors.
+  const rawHtml = libRenderMarkdownWithRefs(
+    text,
+    references,
+    options,
+    createReferenceLink,
+    markdownToHtml,
   );
 
-  // Replace [1], [2], etc. with placeholders BEFORE marked() to prevent
-  // marked from interpreting them as markdown link references (which would
-  // leak the title into visible text).
-  const placeholderMap = new Map<string, string>();
-  if (references && references.length > 0) {
-    normalized = normalized.replace(/\[(\d+)\]/g, (match, num) => {
-      const index = parseInt(num) - 1;
-      if (index >= 0 && index < references.length) {
-        const placeholder = `XREFX${num}XREFX`;
-        placeholderMap.set(placeholder, createReferenceLink(num, references[index]));
-        return placeholder;
-      }
-      return match;
-    });
-  }
-
-  // Convertir markdown en HTML
-  const markedResult = marked(normalized);
-  let html = typeof markedResult === 'string' ? markedResult : String(markedResult);
-
-  // Post-traitement optionnel pour les styles CSS
-  const {
-    addListStyles = false,
-    addHeadingStyles = false,
-    listPadding = 1.5
-  } = options;
-
-  if (addListStyles) {
-    html = html.replace(/<ul>/g, `<ul class="list-disc space-y-2 mb-4" style="padding-left:${listPadding}rem;">`);
-    html = html.replace(/<ol>/g, `<ol class="list-decimal space-y-2 mb-4" style="padding-left:${listPadding}rem;">`);
-    html = html.replace(/<li>/g, '<li class="mb-1">');
-  }
-
-  if (addHeadingStyles) {
-    html = html.replace(/<h2>/g, '<h2 class="text-xl font-semibold text-slate-900 mt-6 mb-4">');
-    html = html.replace(/<h3>/g, '<h3 class="text-lg font-semibold text-slate-800 mt-4 mb-3">');
-  }
-
-  // Sanitizer le HTML avant de le retourner (protection XSS)
-  html = sanitizeHtml(html);
-
-  // Restore placeholders with actual reference links AFTER sanitization
-  for (const [placeholder, link] of placeholderMap) {
-    html = html.split(placeholder).join(link);
-  }
-
-  return html;
+  // DOMPurify sanitization stays app-owned (requires window; no-op in SSR).
+  return sanitizeHtml(rawHtml);
 }
 
 /**
