@@ -1600,5 +1600,9 @@
     "colLastActivity": "Dernière activité",
     "emptyWorkspaces": "Aucun workspace. Créez votre premier workspace depuis les Paramètres.",
     "newWorkspace": "Nouveau workspace"
+  },
+  "coworkPairing": {
+    "confirmTitle": "Êtes-vous à l'origine de cet appairage ?",
+    "confirmBody": "En approuvant ce code, vous autorisez un appareil à agir en votre nom dans Sentropic. Ne continuez que si vous venez de lancer l'application Sentropic Cowork et que ce code y est affiché."
   }
 }
