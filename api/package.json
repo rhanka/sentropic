@@ -42,7 +42,6 @@
     "queue:clear": "tsx src/scripts/queue-clear.ts",
     "queue:status": "tsx src/scripts/queue-status.ts",
     "queue:reset": "tsx src/scripts/queue-reset.ts",
-    "gcp:live-uat": "tsx src/scripts/gcp-live-uat.ts",
     "openapi:json": "tsx src/openapi/export.ts",
     "openapi:html": "tsx src/openapi/html.ts"
   },
