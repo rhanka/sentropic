@@ -1281,6 +1281,14 @@
       "useful": "Utile",
       "notUseful": "Pas utile"
     },
+    "message": {
+      "edit": "Modifier"
+    },
+    "model": {
+      "selector": {
+        "label": "Sélectionner le modèle"
+      }
+    },
     "errors": {
       "copy": "Impossible de copier le message",
       "editMessage": "Erreur lors de la modification du message",

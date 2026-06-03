@@ -1,0 +1,5 @@
+{"eventType":"status","sequence":1,"data":{"state":"started"}}
+{"eventType":"content_delta","sequence":2,"data":{"delta":"Hello"}}
+{"eventType":"content_delta","sequence":3,"data":{"delta":", world"}}
+{"eventType":"content_delta","sequence":4,"data":{"delta":"!"}}
+{"eventType":"done","sequence":5,"data":{}}

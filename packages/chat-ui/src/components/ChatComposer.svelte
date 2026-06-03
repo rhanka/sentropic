@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { computeAutosizeResult } from '../utils/composer-autosize.js';
 
   export let mode: 'ai' | 'comments' = 'ai';
   export let value = '';
@@ -18,6 +20,94 @@
   export let renderAttachmentTray: Snippet<[]> | undefined = undefined;
   export let renderLeftControls: Snippet<[]>;
   export let renderRightActions: Snippet<[]>;
+
+  // ---------------------------------------------------------------------------
+  // P6 — opt-in auto-grow props (defaults preserve existing behavior).
+  // ---------------------------------------------------------------------------
+
+  /**
+   * When true, the composer surface grows with content (auto-grow).
+   * Default false = existing behavior (static maxHeight prop drives height).
+   */
+  export let autoGrow = false;
+
+  /**
+   * Single-line (base) height in px used for auto-grow calculations.
+   * Only relevant when autoGrow=true. Defaults to 40 (matches app constant).
+   */
+  export let baseHeight = 40;
+
+  /**
+   * Height of the outer scroll container in px used to cap auto-grow.
+   * 0 = unconstrained. Only relevant when autoGrow=true.
+   */
+  export let containerHeight = 0;
+
+  // ---------------------------------------------------------------------------
+  // Auto-grow internal state (no-op when autoGrow=false).
+  // ---------------------------------------------------------------------------
+
+  let autoGrowMaxHeight = maxHeight; // starts equal to maxHeight prop
+  let wasMultiline = false;
+  let observer: ResizeObserver | null = null;
+
+  // Derived surface max-height: use autoGrowMaxHeight when auto-grow is on,
+  // fall back to the maxHeight prop otherwise.
+  $: surfaceMaxHeight = autoGrow ? autoGrowMaxHeight : maxHeight;
+
+  function measureAndUpdate() {
+    if (!composerElement) return;
+    const result = computeAutosizeResult({
+      baseHeight,
+      containerHeight,
+      contentHeight: composerElement.scrollHeight || baseHeight,
+      wasMultiline,
+    });
+    autoGrowMaxHeight = result.maxHeight;
+    isMultiline = result.isMultiline;
+    wasMultiline = result.isMultiline;
+    if (result.shouldRemeasure) {
+      requestAnimationFrame(measureAndUpdate);
+    }
+  }
+
+  function attachObserver(el: HTMLDivElement | null) {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    if (!el || !autoGrow) return;
+    // ResizeObserver may be unavailable in SSR or test environments — guard safely.
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => measureAndUpdate());
+      observer.observe(el);
+    }
+    measureAndUpdate();
+  }
+
+  // Re-attach observer whenever composerElement or autoGrow changes.
+  $: if (autoGrow) {
+    attachObserver(composerElement);
+  } else if (observer) {
+    observer.disconnect();
+    observer = null;
+  }
+
+  // Re-measure when value changes (content typed by user).
+  $: if (autoGrow && value !== undefined) {
+    measureAndUpdate();
+  }
+
+  onMount(() => {
+    if (autoGrow) attachObserver(composerElement);
+  });
+
+  onDestroy(() => {
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+  });
 </script>
 
 <div class="chat-composer-footer p-2 border-t border-slate-200" data-mode={mode}>
@@ -29,7 +119,8 @@
         class:bg-white={surfaceEnabled}
         class:bg-slate-50={surfaceDisabled}
         data-empty-value={!value.trim()}
-        style={`max-height: ${maxHeight}px;`}
+        data-auto-grow={autoGrow}
+        style={`max-height: ${surfaceMaxHeight}px;`}
         bind:this={composerElement}
         role="textbox"
         aria-label={ariaLabel}

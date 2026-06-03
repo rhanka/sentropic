@@ -1,0 +1,6 @@
+{"eventType":"status","sequence":1,"data":{"state":"started"}}
+{"eventType":"reasoning_delta","sequence":2,"data":{"delta":"Let me think about this."}}
+{"eventType":"reasoning_delta","sequence":3,"data":{"delta":" Step one: analyze."}}
+{"eventType":"content_delta","sequence":4,"data":{"delta":"The answer is 42."}}
+{"eventType":"content_delta","sequence":5,"data":{"delta":" Here is the explanation."}}
+{"eventType":"done","sequence":6,"data":{}}
