@@ -2391,19 +2391,25 @@ k8s-deploy: ## Apply tenant manifests on the poc cluster (K8S_INGRESS=1 includes
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/15-networkpolicy.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/20-postgres.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/30-api.yaml
+	# BR-39 deploy — the standalone IdP (auth.sent-tech.ca) runs from the SAME api
+	# image (D4-a). Applied after 30-api.yaml so the api (which owns migrations on
+	# the shared DB) rolls first; the IdP runs no migration of its own.
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/35-auth-idp.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/40-ui.yaml
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
 	@if [ "$(K8S_INGRESS)" = "1" ]; then \
 	  KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/60-ingress.yaml; \
 	fi
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/ui
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api --timeout=300s
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui  --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/auth-idp deployment/ui
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api      --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui       --timeout=300s
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/60-ingress.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/40-ui.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/35-auth-idp.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/30-api.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/20-postgres.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/15-networkpolicy.yaml --ignore-not-found
