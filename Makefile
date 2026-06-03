@@ -1640,6 +1640,7 @@ lock-idp-web: ## Update apps/auth-idp/web package-lock.json using a Node contain
 	@echo "🔒 Updating apps/auth-idp/web package-lock.json..."
 	docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
 		-v "$$(pwd):/workspace" \
 		-w /workspace/apps/auth-idp/web \
 		node:24-alpine \
@@ -1649,6 +1650,7 @@ lock-idp-web: ## Update apps/auth-idp/web package-lock.json using a Node contain
 install-idp-web: ## Install the IdP screens front deps into the mounted workspace
 	docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
 		-v "$$(pwd):/workspace" \
 		-w /workspace/apps/auth-idp/web \
 		node:24-alpine \
@@ -1658,6 +1660,7 @@ install-idp-web: ## Install the IdP screens front deps into the mounted workspac
 typecheck-idp-web: install-idp-web ## Typecheck the IdP screens front
 	docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
 		-v "$$(pwd):/workspace" \
 		-w /workspace/apps/auth-idp/web \
 		node:24-alpine \
@@ -1667,6 +1670,7 @@ typecheck-idp-web: install-idp-web ## Typecheck the IdP screens front
 build-idp-web: install-idp-web ## Build the IdP screens static front to apps/auth-idp/web/build
 	docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
 		-v "$$(pwd):/workspace" \
 		-w /workspace/apps/auth-idp/web \
 		node:24-alpine \
