@@ -209,7 +209,14 @@
       "idx": 29,
       "version": "7",
       "when": 1780444800000,
-      "tag": "0029_rename_ai_ideas_to_ai_priorities",
+      "tag": "0029_service_clients",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1780531200000,
+      "tag": "0030_rename_ai_ideas_to_ai_priorities",
       "breakpoints": true
     }
   ]
