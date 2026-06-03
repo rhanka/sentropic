@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import {
   chatMessages,
@@ -18,6 +18,8 @@ import {
   workspaceMemberships
 } from '../db/schema';
 import { createId } from '../utils/id';
+import type { TenantContext } from '@sentropic/contracts';
+import { targetFromLive, type Comment } from '@sentropic/comments';
 import {
   loadContextDocumentContent,
   readContextDocumentSyncData,
@@ -27,6 +29,8 @@ import { extractDocumentInfoFromDocument, extractXlsxSheets, isXlsxDocument } fr
 import { callLLM } from './llm-runtime';
 import { SHARED_AGENTS } from '../config/default-agents-shared';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
+import { commentStore, commentEventSink } from './comments/instance';
+import { buildThreadSummariesFromComments } from './comments/comment-summary-mapper';
 import { hasWorkspaceRole } from './workspace-access';
 import { evaluateGate } from './gate-service';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
@@ -1206,67 +1210,56 @@ export class ToolService {
       return { threads: [], users: [] };
     }
 
-    const contextConditions = opts.contexts.map((c) =>
-      and(eq(comments.contextType, c.contextType), eq(comments.contextId, c.contextId))
-    );
-    const conditions = [eq(comments.workspaceId, workspaceId), or(...contextConditions)];
-    if (opts.status) conditions.push(eq(comments.status, opts.status));
-    if (opts.sectionKey) conditions.push(eq(comments.sectionKey, opts.sectionKey));
-    if (opts.threadId) conditions.push(eq(comments.threadId, opts.threadId));
+    // BR-42d Lot 5 (M-AI-READ): re-route the grouping onto the shared
+    // `commentStore.listByTarget` (SPEC §1bis / DEC-2). The port is
+    // context_id-scoped (it ignores the live `contextType` — every record
+    // context collapses to `kind:'record'`), so the host loops per context,
+    // re-applies the `(contextType, contextId)` pair filter, re-sorts globally
+    // by `createdAt ASC, id ASC` (mirrors the live single `or(...)` query
+    // `orderBy asc(createdAt)`), applies the host-side status/sectionKey/threadId
+    // filters, groups via the host mapper, and slices by `limit ?? 200`
+    // (must-fix #1: no `TargetQuery` widening). The package summary OMITS
+    // `createdBy/createdAt/updatedAt`, so the mapper groups the full `Comment`
+    // rows directly to reproduce the live shape (must-fix #2).
+    const tenant: TenantContext = { tenantId: workspaceId, workspaceId, userId: '' };
 
-    const rows = await db
-      .select({
-        id: comments.id,
-        threadId: comments.threadId,
-        contextType: comments.contextType,
-        contextId: comments.contextId,
-        sectionKey: comments.sectionKey,
-        createdBy: comments.createdBy,
-        assignedTo: comments.assignedTo,
-        status: comments.status,
-        content: comments.content,
-        createdAt: comments.createdAt,
-        updatedAt: comments.updatedAt,
-      })
-      .from(comments)
-      .where(and(...conditions))
-      .orderBy(asc(comments.createdAt));
-
-    const byThread = new Map<string, CommentThreadSummary>();
-    const userIds = new Set<string>();
-
-    for (const row of rows) {
-      if (row.createdBy) userIds.add(row.createdBy);
-      if (row.assignedTo) userIds.add(row.assignedTo);
-      const key = row.threadId;
-      const createdAt = row.createdAt?.toISOString() ?? new Date().toISOString();
-      const updatedAt = row.updatedAt ? row.updatedAt.toISOString() : null;
-      if (!byThread.has(key)) {
-        byThread.set(key, {
-          threadId: row.threadId,
-          contextType: row.contextType as CommentContextType,
-          contextId: row.contextId,
-          sectionKey: row.sectionKey ?? null,
-          status: row.status === 'closed' ? 'closed' : 'open',
-          assignedTo: row.assignedTo ?? null,
-          createdBy: row.createdBy,
-          createdAt,
-          updatedAt,
-          messageCount: 1,
-          rootMessage: row.content,
-          rootMessageAt: createdAt,
-          lastMessage: row.content,
-          lastMessageAt: createdAt
-        });
-      } else {
-        const current = byThread.get(key)!;
-        current.messageCount += 1;
-        current.lastMessage = row.content;
-        current.lastMessageAt = createdAt;
-        current.updatedAt = updatedAt ?? current.updatedAt;
-        current.status = row.status === 'closed' ? 'closed' : current.status;
-        if (!current.assignedTo && row.assignedTo) current.assignedTo = row.assignedTo;
+    const collected: Comment[] = [];
+    for (const ctx of opts.contexts) {
+      const target = targetFromLive({ contextType: ctx.contextType, contextId: ctx.contextId, sectionKey: null });
+      const rows = await commentStore.listByTarget(tenant, {
+        kind: target.kind,
+        id: target.id,
+        ...(opts.sectionKey ? { sectionKey: opts.sectionKey } : {}),
+        ...(opts.status ? { status: opts.status === 'closed' ? 'resolved' : 'open' } : {}),
+      });
+      // Re-apply the live `(contextType, contextId)` pair filter host-side: the
+      // port matches on `context_id` only, so a same-id record of a different
+      // contextType must be dropped (faithful to the live `and(eq(contextType),
+      // eq(contextId))` pair).
+      for (const row of rows) {
+        if ((row.target.recordType ?? row.target.kind) !== ctx.contextType) continue;
+        if (opts.threadId && row.threadId !== opts.threadId) continue;
+        collected.push(row);
       }
+    }
+
+    // Global ordering `createdAt ASC, id ASC` across all contexts (mirrors the
+    // live single-query `orderBy asc(createdAt)`; id tiebreaker is deterministic).
+    collected.sort((a, b) => {
+      if (a.createdAt < b.createdAt) return -1;
+      if (a.createdAt > b.createdAt) return 1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+
+    const summaries = buildThreadSummariesFromComments(collected);
+
+    // App-local `users` label join (kept host-side, SPEC §1bis / M-AI-READ):
+    // collect every involved user from the filtered rows, exactly as the live
+    // per-row collection (`tool-service.ts:1239-1240`).
+    const userIds = new Set<string>();
+    for (const row of collected) {
+      if (row.author.id) userIds.add(row.author.id);
+      if (row.assignedTo) userIds.add(row.assignedTo);
     }
 
     const usersRows =
@@ -1278,7 +1271,7 @@ export class ToolService {
         : [];
 
     return {
-      threads: Array.from(byThread.values()).slice(0, opts.limit ?? 200),
+      threads: summaries.slice(0, opts.limit ?? 200),
       users: usersRows.map((u) => ({ id: u.id, email: u.email, displayName: u.displayName }))
     };
   }
@@ -1346,7 +1339,18 @@ export class ToolService {
       }
       const isCreator = row.createdBy === userId;
 
-      const now = new Date();
+      // BR-42d Lot 5 (M-AI-WRITE): re-route close/reassign/trace-note onto the
+      // shared emit-free store, host-emit via the shared sink per the SPEC §4
+      // matrix (AI close/reassign keyed `thread_id`, trace-note keyed
+      // `comment_id`). The AI gating (`hasWorkspaceRole`/`ensureWorkspaceMember`/
+      // allowed-context) stays app-local; the `[row]` lookup is kept (it feeds
+      // the gating + the note's target/contextType).
+      const tenant: TenantContext = { tenantId: workspaceId, workspaceId, userId };
+      const noteTarget = targetFromLive({
+        contextType: row.contextType,
+        contextId: row.contextId,
+        sectionKey: row.sectionKey,
+      });
       let latestAssigned = row.assignedTo ?? null;
       let latestStatus: 'open' | 'closed' = row.status === 'closed' ? 'closed' : 'open';
       let resolutionMessage: string | null = null;
@@ -1357,11 +1361,16 @@ export class ToolService {
           if (!isAdmin && !isCreator) {
             throw new Error('Only the thread creator or admin can resolve this thread');
           }
-          await db
-            .update(comments)
-            .set({ status: 'closed', updatedAt: now })
-            .where(and(eq(comments.workspaceId, workspaceId), eq(comments.threadId, threadId)));
-          await this.notifyCommentEvent(workspaceId, row.contextType, row.contextId, { action: 'closed', thread_id: threadId });
+          await commentStore.setState(tenant, threadId, 'resolved'); // THREAD cascade, emit-free
+          await commentEventSink.emit({
+            workspaceId,
+            contextType: row.contextType,
+            contextId: row.contextId,
+            action: 'closed',
+            key: 'thread_id',
+            threadId,
+            origin: 'ai',
+          });
           applied.push({ thread_id: threadId, action: 'close', status: 'closed' });
           resolutionMessage = 'Clôture automatique.';
           latestStatus = 'closed';
@@ -1374,11 +1383,16 @@ export class ToolService {
           if (!(await this.ensureWorkspaceMember(target, workspaceId))) {
             throw new Error('Assigned user not in workspace');
           }
-          await db
-            .update(comments)
-            .set({ assignedTo: target, updatedAt: now })
-            .where(and(eq(comments.workspaceId, workspaceId), eq(comments.threadId, threadId)));
-          await this.notifyCommentEvent(workspaceId, row.contextType, row.contextId, { action: 'reassigned', thread_id: threadId });
+          await commentStore.assign(tenant, threadId, target); // THREAD cascade, emit-free
+          await commentEventSink.emit({
+            workspaceId,
+            contextType: row.contextType,
+            contextId: row.contextId,
+            action: 'reassigned',
+            key: 'thread_id',
+            threadId,
+            origin: 'ai',
+          });
           applied.push({ thread_id: threadId, action: 'reassign', status: 'updated' });
           latestAssigned = target;
           resolutionMessage = `Réassignation automatique à @${target}.`;
@@ -1392,24 +1406,33 @@ export class ToolService {
       const traceNote = explicitNote || resolutionMessage;
 
       if (traceNote) {
-        const noteId = createId();
-        await db.insert(comments).values({
-          id: noteId,
+        // Mint the trace-note as a reply via the emit-free store. It inherits the
+        // post-cascade assignee directly; `add` always persists `status:'open'`,
+        // so when the thread ended up closed we re-run the emit-free thread
+        // cascade to fold the note into the live `latestStatus` (mirrors the live
+        // insert `status: latestStatus`). Provenance carries the `toolCallId`.
+        const created = await commentStore.add(tenant, {
+          tenant,
+          target: noteTarget,
+          author: { id: userId },
+          body: traceNote,
+          threadId,
+          assignedTo: latestAssigned ?? userId,
+          ...(opts.toolCallId ? { provenance: { toolCallId: opts.toolCallId } } : {}),
+        });
+        if (latestStatus === 'closed') {
+          await commentStore.setState(tenant, threadId, 'resolved'); // emit-free reconcile
+        }
+        await commentEventSink.emit({
           workspaceId,
           contextType: row.contextType,
           contextId: row.contextId,
-          sectionKey: row.sectionKey,
-          createdBy: userId,
-          assignedTo: latestAssigned ?? userId,
-          status: latestStatus,
-          threadId: threadId,
-          content: traceNote,
-          toolCallId: opts.toolCallId ?? null,
-          createdAt: now,
-          updatedAt: now
+          action: 'created',
+          key: 'comment_id',
+          commentId: created.id,
+          origin: 'ai',
         });
-        await this.notifyCommentEvent(workspaceId, row.contextType, row.contextId, { action: 'created', comment_id: noteId });
-        notes.push({ thread_id: threadId, note_id: noteId });
+        notes.push({ thread_id: threadId, note_id: created.id });
       }
     }
 
@@ -1444,21 +1467,6 @@ export class ToolService {
     const client = await pool.connect();
     try {
       await client.query(`NOTIFY folder_events, '${notifyPayload.replace(/'/g, "''")}'`);
-    } finally {
-      client.release();
-    }
-  }
-
-  private async notifyCommentEvent(
-    workspaceId: string,
-    contextType: string,
-    contextId: string,
-    data: Record<string, unknown> = {}
-  ): Promise<void> {
-    const payload = JSON.stringify({ workspace_id: workspaceId, context_type: contextType, context_id: contextId, data });
-    const client = await pool.connect();
-    try {
-      await client.query(`NOTIFY comment_events, '${payload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }
@@ -1581,25 +1589,30 @@ export class ToolService {
           .filter(Boolean)
       )
     );
+    // BR-42d Lot 5 (M-AUTO): re-route the auto-field seeding onto the shared
+    // emit-free store (`add` mints a fresh thread + `status:'open'`, identical to
+    // the live insert), host-emit `{created, comment_id}` (origin `auto`) via the
+    // shared sink (SPEC §4 matrix; DEC-4 shared instance reused out-of-request).
+    const tenant: TenantContext = { tenantId: workspaceId, workspaceId, userId: createdBy };
     for (const sectionKey of uniqueSectionKeys) {
-      const now = new Date();
-      const commentId = createId();
-      await db.insert(comments).values({
-        id: commentId,
+      const target = targetFromLive({ contextType: opts.contextType, contextId, sectionKey });
+      const created = await commentStore.add(tenant, {
+        tenant,
+        target,
+        author: { id: createdBy },
+        body: this.formatAutoFieldComment(opts.contextType, sectionKey, locale),
+        assignedTo,
+        ...(opts.toolCallId ? { provenance: { toolCallId: opts.toolCallId } } : {}),
+      });
+      await commentEventSink.emit({
         workspaceId,
         contextType: opts.contextType,
         contextId,
-        sectionKey,
-        createdBy,
-        assignedTo,
-        status: 'open',
-        threadId: createId(),
-        content: this.formatAutoFieldComment(opts.contextType, sectionKey, locale),
-        toolCallId: opts.toolCallId ?? null,
-        createdAt: now,
-        updatedAt: now
+        action: 'created',
+        key: 'comment_id',
+        commentId: created.id,
+        origin: 'auto',
       });
-      await this.notifyCommentEvent(workspaceId, opts.contextType, contextId, { action: 'created', comment_id: commentId });
     }
   }
 
