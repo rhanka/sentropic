@@ -18,6 +18,10 @@ export type ChatComposerProps = {
   renderAttachmentTray?: Snippet<[]>;
   renderLeftControls: Snippet<[]>;
   renderRightActions: Snippet<[]>;
+  // P6 opt-in auto-grow props (defaults preserve existing behavior)
+  autoGrow?: boolean;
+  baseHeight?: number;
+  containerHeight?: number;
 };
 
 declare const ChatComposer: Component<ChatComposerProps>;
