@@ -133,6 +133,7 @@ jobs:
               - 'e2e/**'
             api:
               - 'api/**'
+              - 'apps/auth-idp/**'
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
@@ -340,6 +341,9 @@ jobs:
       - name: Typecheck API
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make typecheck-api
+      - name: Typecheck IdP
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make typecheck-idp
       - name: Lint API
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make lint-api
