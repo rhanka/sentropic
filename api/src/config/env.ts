@@ -13,6 +13,21 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   MISTRAL_API_KEY: z.string().optional(),
   COHERE_API_KEY: z.string().optional(),
+  // GCP (Gemini-on-GCP / Model Garden, formerly Vertex AI) — config, not secrets.
+  // The bearer is minted server-side from ADC (Application Default Credentials);
+  // project/location travel as plain config. The `gcp` provider is treated as
+  // AVAILABLE only when both GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION are
+  // present (gated like the other optional providers); absence never crashes the
+  // app. (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI
+  // brand retired; the endpoint host stays aiplatform.googleapis.com.)
+  GOOGLE_CLOUD_PROJECT: z.string().optional(),
+  GOOGLE_CLOUD_LOCATION: z.string().optional(),
+  // ADC source for service-account JSON local-dev / SA-key UAT. Honored by
+  // google-auth-library's GoogleAuth (workload identity needs no value).
+  // Delivered natively via the docker-compose api-service env passthrough; in
+  // dev/UAT point it at the gitignored SA key under the workspace bind-mount,
+  // e.g. GOOGLE_APPLICATION_CREDENTIALS=/workspace/.secrets/gcp-sa.json.
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
   TAVILY_API_KEY: z.string().optional(),
   // ---------------------------------------------------------------------------
