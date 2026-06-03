@@ -229,6 +229,51 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
     );
   });
 
+  // --- Combined thread edit (editThread: content + assignment in ONE atomic statement) ---
+
+  it('editThread sets the SAME content + assignee on ALL rows thread-wide and bumps updatedAt', async () => {
+    const root = await store.add(tenant, newComment({ body: 'Original root' }));
+    await store.add(tenant, newComment({ body: 'Original mid', threadId: root.threadId }));
+    await store.add(tenant, newComment({ body: 'Original last', threadId: root.threadId }));
+
+    const result = await store.editThread(tenant, root.threadId, {
+      content: 'Combined edit',
+      assignedTo: other.id,
+    });
+    expect(result).toHaveLength(3);
+    expect(result.every((c) => c.body === 'Combined edit')).toBe(true); // content cascaded
+    expect(result.every((c) => c.assignedTo === other.id)).toBe(true); // assignee cascaded
+    expect(result.every((c) => c.updatedAt)).toBe(true); // updatedAt bumped
+
+    // The single atomic UPDATE landed on every row of the thread.
+    const rows = await db
+      .select({ content: comments.content, assignedTo: comments.assignedTo })
+      .from(comments)
+      .where(and(eq(comments.workspaceId, owner.workspaceId!), eq(comments.threadId, root.threadId)));
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.content === 'Combined edit')).toBe(true);
+    expect(rows.every((r) => r.assignedTo === other.id)).toBe(true);
+  });
+
+  it('editThread accepts a null assignee (unassign) while cascading content', async () => {
+    const root = await store.add(tenant, newComment({ body: 'Root', assignedTo: other.id }));
+    await store.add(tenant, newComment({ body: 'Reply', threadId: root.threadId, assignedTo: other.id }));
+
+    const result = await store.editThread(tenant, root.threadId, {
+      content: 'New body',
+      assignedTo: null,
+    });
+    expect(result).toHaveLength(2);
+    expect(result.every((c) => c.body === 'New body')).toBe(true);
+    expect(result.every((c) => c.assignedTo === undefined)).toBe(true);
+  });
+
+  it('editThread on an empty/unknown thread throws ThreadNotFoundError', async () => {
+    await expect(
+      store.editThread(tenant, 'ghost-thread', { content: 'x', assignedTo: other.id }),
+    ).rejects.toBeInstanceOf(ThreadNotFoundError);
+  });
+
   // --- Listing / ordering ---
 
   it('listByTarget filters by target and status, ordered createdAt ASC then id ASC', async () => {
