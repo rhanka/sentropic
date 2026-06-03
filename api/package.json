@@ -51,6 +51,7 @@
     "@hono/node-server": "^1.19.13",
     "@hono/zod-validator": "^0.7.6",
     "@sentropic/auth-hono": "file:../packages/auth-hono",
+    "@sentropic/comments": "file:../packages/comments",
     "@sentropic/chat-server": "file:../packages/chat-server",
     "@sentropic/flow": "file:../packages/flow",
     "@sentropic/llm-mesh": "file:../packages/llm-mesh",
