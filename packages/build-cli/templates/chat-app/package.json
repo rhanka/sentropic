@@ -1,0 +1,25 @@
+{
+  "name": "{{slug}}",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A runnable @sentropic chat-ui <-> backend app scaffolded by @sentropic/build-cli (stp app init).",
+  "type": "module",
+  "license": "MIT",
+  "repository": "{{repo_url}}",
+  "workspaces": [
+    "api",
+    "ui"
+  ],
+  "scripts": {
+    "dev": "echo 'Run `make dev` (Docker-first) — see README.md'"
+  },
+  "dependencies": {
+    "@sentropic/chat-server": "^0.1.0",
+    "@sentropic/chat-ui": "^0.1.1",
+    "@sentropic/chat-core": "^0.1.2",
+    "@sentropic/llm-mesh": "^0.1.2",
+    "@sentropic/design-system-svelte": "^0.10.3",
+    "@sentropic/design-system-themes": "^0.10.3",
+    "@sentropic/design-system-tokens": "^0.10.3"
+  }
+}

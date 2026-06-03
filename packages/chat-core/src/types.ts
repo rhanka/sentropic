@@ -11,6 +11,7 @@ export type ChatStateSnapshotMessage = {
   readonly role: string;
   readonly content: unknown;
   readonly contexts: unknown;
+  readonly attachments: unknown;
   readonly toolCalls: unknown;
   readonly toolCallId: unknown;
   readonly reasoning: unknown;
