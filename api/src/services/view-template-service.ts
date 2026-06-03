@@ -18,7 +18,7 @@ import type { ViewTemplateRow } from '../db/schema';
 // Types
 // ---------------------------------------------------------------------------
 
-export type WorkspaceType = 'neutral' | 'ai-ideas' | 'opportunity' | 'code';
+export type WorkspaceType = 'neutral' | 'ai-priorities' | 'opportunity' | 'code';
 export type ObjectType =
   | 'container'
   | 'initiative'
@@ -55,7 +55,7 @@ export const viewTemplateService = {
    * that were created before new templates were added).
    */
   async list(workspaceId: string, workspaceType?: string): Promise<ViewTemplateRow[]> {
-    const wt = workspaceType ?? 'ai-ideas';
+    const wt = workspaceType ?? 'ai-priorities';
 
     // 1. Get existing DB rows for this workspace
     const conditions = [eq(viewTemplates.workspaceId, workspaceId)];
@@ -179,7 +179,7 @@ export const viewTemplateService = {
     // 2. Always use code-level defaults — they are the source of truth.
     const codeFallback = getDefaultViewTemplates(workspaceType)
       .find((s) => s.objectType === objectType && (!maturityStage || !s.maturityStage))
-      ?? getDefaultViewTemplates('ai-ideas')
+      ?? getDefaultViewTemplates('ai-priorities')
         .find((s) => s.objectType === objectType && (!maturityStage || !s.maturityStage));
     if (codeFallback) {
       return {
@@ -390,7 +390,7 @@ interface ViewTemplateSeed {
 
 function getDefaultViewTemplates(workspaceType: string): ViewTemplateSeed[] {
   switch (workspaceType) {
-    case 'ai-ideas':
+    case 'ai-priorities':
     case 'opportunity':
       return [...getCommonTemplates(workspaceType), ...getTypeSpecificTemplates(workspaceType)];
     case 'code':
@@ -403,7 +403,7 @@ function getDefaultViewTemplates(workspaceType: string): ViewTemplateSeed[] {
 }
 
 // ---------------------------------------------------------------------------
-// Common templates — identical across ai-ideas, opportunity, code
+// Common templates — identical across ai-priorities, opportunity, code
 // ---------------------------------------------------------------------------
 
 function getCommonTemplates(workspaceType: string): ViewTemplateSeed[] {
@@ -497,8 +497,8 @@ function getCommonTemplates(workspaceType: string): ViewTemplateSeed[] {
 
 function getTypeSpecificTemplates(workspaceType: string): ViewTemplateSeed[] {
   switch (workspaceType) {
-    case 'ai-ideas':
-      return [getAiIdeasInitiative()];
+    case 'ai-priorities':
+      return [getAiPrioritiesInitiative()];
     case 'opportunity':
       return [getOpportunityInitiative()];
     default:
@@ -506,9 +506,9 @@ function getTypeSpecificTemplates(workspaceType: string): ViewTemplateSeed[] {
   }
 }
 
-function getAiIdeasInitiative(): ViewTemplateSeed {
+function getAiPrioritiesInitiative(): ViewTemplateSeed {
   return {
-    workspaceType: 'ai-ideas',
+    workspaceType: 'ai-priorities',
     objectType: 'initiative',
     descriptor: {
       tabs: [{

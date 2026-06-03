@@ -73,12 +73,12 @@ workspacesRouter.get('/', async (c) => {
   return c.json({ items });
 });
 
-const workspaceTypeSchema = z.enum(['neutral', 'ai-ideas', 'opportunity', 'code']);
+const workspaceTypeSchema = z.enum(['neutral', 'ai-priorities', 'opportunity', 'code']);
 export type WorkspaceType = z.infer<typeof workspaceTypeSchema>;
 
 const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(128),
-  type: workspaceTypeSchema.default('ai-ideas'),
+  type: workspaceTypeSchema.default('ai-priorities'),
 });
 
 // Create workspace: creator becomes admin member
