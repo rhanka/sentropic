@@ -87,9 +87,9 @@
   - [x] Delete or consolidate `spec/BRANCH_SPEC_EVOL.md` before final validation.
 - [ ] Lot 7 — workflow ai-ideas → ai-priorities rename (workspace-type id + display label, repo-wide; chat-prompt prose excluded; BR14e-EX6)
   - [x] Tests-first: chat-ui tool-scope exhaustive record (`ui/tests/chat-tool-scope-workspace-type.test.ts`), workspace-type enum acceptance/default (`api/tests/api/workspace-types.test.ts`), view-template fallback (`api/tests/api/view-templates.test.ts`), skills context-filter/registry (`packages/skills/tests/**`), UI label test.
-  - [ ] `@sentropic/flow` seed `WORKSPACE_TYPE_WORKFLOW_SEEDS` key + section comment + version bump (0.1.1→0.1.2).
-  - [ ] `@sentropic/chat-ui` `WorkspaceType` union + `WORKSPACE_TYPE_TOOL_IDS` exhaustive record + version bump (0.1.2→0.1.3).
-  - [ ] `@sentropic/skills` src (authz/context-filter comments) + 9 bundle `SKILL.md` `workspaceTypes` + version bump (0.1.1→0.1.2).
+  - [x] `@sentropic/flow` seed `WORKSPACE_TYPE_WORKFLOW_SEEDS` key + section comment + version bump (0.1.1→0.1.2).
+  - [x] `@sentropic/chat-ui` `WorkspaceType` union + `WORKSPACE_TYPE_TOOL_IDS` exhaustive record + version bump (0.1.2→0.1.3).
+  - [x] `@sentropic/skills` src (authz/context-filter comments) + 9 bundle `SKILL.md` `workspaceTypes` + version bump (0.1.1→0.1.2).
   - [x] api/src technical id (workspaces/workflow-config enums, folders/flow-runtime/view-template/todo-orchestration fallbacks, approval-gate map key, chat-service branching, schema default+comments) + CHAT_SYSTEM_PROMPTS map KEY (prose body excluded) + agent-seed registry.
   - [x] object file rename `default-agents-ai-ideas.ts`→`default-agents-ai-priorities.ts`, const `AI_IDEAS_AGENTS`→`AI_PRIORITIES_AGENTS`, all imports.
   - [x] ui/src technical id (Header/WorkspaceCreateDialog/InitiativeDetail/OrganizationForm/ViewTemplateCatalog/workspaceScope/neutral) + i18n label `aiIdeas`→`aiPriorities` = "AI Priorities"/"Priorités IA" + labelKey refs.
