@@ -1634,7 +1634,9 @@ typecheck-idp: ## Typecheck the standalone IdP composition (apps/auth-idp)
 .PHONY: dev-idp
 dev-idp: prepare-node-workspace ## Start the standalone IdP on the shared DB (slot 4 ports)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait postgres
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'cd /workspace/api && npm run db:migrate && npm run oauth:seed-clients'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps \
+		-e OAUTH_SIGNING_KEK=$${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production} \
+		api sh -lc 'cd /workspace/api && npm run db:migrate && npm run oauth:seed-clients && npm run oauth:init-keys'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml up -d auth-idp --wait auth-idp
 
 .PHONY: seed-idp-clients
@@ -1649,9 +1651,24 @@ down-idp: ## Stop and remove the standalone IdP overlay (+ shared dev/test stack
 logs-idp: ## Stream standalone IdP logs
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml logs -f auth-idp
 
+.PHONY: logs-idp-once
+logs-idp-once: ## Print standalone IdP logs (no follow)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml logs --no-color auth-idp
+
+.PHONY: exec-idp
+exec-idp: ## Exec a command in the running auth-idp container: make exec-idp CMD="node -v"
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml exec auth-idp sh -lc "$$CMD"
+
 .PHONY: ps-idp
 ps-idp: ## Show standalone IdP service status
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml ps
+
+.PHONY: smoke-idp
+smoke-idp: ## Run the deterministic SSO authorization_code smoke against the live IdP (needs make dev-idp)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
+		-e IDP_BASE_URL=http://auth-idp:8787 \
+		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
+		-w /workspace api npx tsx apps/auth-idp/sso-smoke.ts
 
 
 # -----------------------------------------------------------------------------
