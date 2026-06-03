@@ -29,19 +29,19 @@ Eliminate the deterministic-under-load FK race where `chat_stream_events.message
   - `api/drizzle/*.sql` (max 1, only if a constraint-ordering migration is unavoidable; FIXRACE-EX2)
 
 ## Feedback Loop
-- FIXRACE-EX1: bump `@sentropic/chat-core` version (patch) since `src/**` changes — enforce-package-bump gate. Approved by plan.
-- FIXRACE-Q1: confirm root path — suspected `runtime-checkpoint.ts:223` `deleteAfterSequence` truncation racing with in-flight `streamBuffer.append(messageId)` / `chat-trace` insert; OR `insertMany` sequence-conflict swallow leaving message absent. Status: open until the repro pins it.
+- FIXRACE-EX1: NOT APPLICABLE / WITHDRAWN. The minimal fix lives entirely in the API adapter layer (`api/src/services/chat/postgres-stream-buffer.ts` + `api/src/services/chat-trace.ts`); `packages/chat-core/src/**` was NOT modified. The `enforce-package-bump` gate triggers only on `packages/<pkg>/src/**` changes, so no chat-core version bump is required (public surface unchanged). The orphan-reference handling belongs at the Postgres adapter boundary that actually owns the FK, keeping chat-core transport/DB-agnostic.
+- FIXRACE-Q1: RESOLVED. Root cause = orphaned-reference INSERT, not truncation orphaning. The FKs `chat_stream_events.message_id`, `chat_generation_traces.{session_id,assistant_message_id}` are all `ON DELETE CASCADE` (schema lines 462/498/501), so `deleteAfterSequence` (checkpoint) cannot orphan — Postgres cascades the children. The real race: a parent `chat_messages`/`chat_sessions` row is deleted while the generation job is still flushing stream events / traces (in the AI shard, `cleanupAuthData` afterEach does `db.delete(users)` → cascade session→messages→events/traces while an in-flight or leftover job keeps appending). The post-cascade `postgresStreamBuffer.append(...,messageId)` / `writeChatGenerationTrace(...)` then throw an UNHANDLED FK `23503` (`chat_stream_events_message_id_chat_messages_id_fk` / `chat_generation_traces_session_id_chat_sessions_id_fk`), crashing the job → tool-call assertions fail + 30s timeout. Reproduced deterministically 2/2 in `api/tests/api/chat-persistence-write-order.test.ts` (real Postgres FK, no LLM). Suspect `runtime-checkpoint.ts:223` (truncation) DISPROVEN by the cascade declaration.
 
 ## Mode
 - Mono-branch.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline**: worktree off `origin/main` (`f1c2807e`, post-#240 trigger fix). Forensics: `docs/uat/2026-06-03-chat-tools-fk-forensics.md` (on BR-14e worktree) — FK race reproduced 5/5 locally, intermittent in CI; pre-existing (exists on main), exposed by chat-ui path-filter change.
-- [ ] **Lot 1 — Deterministic repro (systematic-debugging)**
-  - [ ] Add/scope a failing test proving the FK violation deterministically (chat message lifecycle: insert assistant → append stream events → checkpoint truncate; assert no orphan event/trace). Run on `ENV=test-fixrace`.
-- [ ] **Lot 2 — Minimal fix**
-  - [ ] Enforce ordering/atomicity: the assistant `chat_messages` row (and session) is committed before any `chat_stream_events`/`chat_generation_traces` insert that references it; and `deleteAfterSequence` truncation does not orphan in-flight events. Prefer code-level ordering (await commit boundary, or transactional insert+events) over schema change.
-  - [ ] Re-run the repro green; run `make test-api ENV=test-fixrace` (esp. AI shard) + `make test-chat-core`.
+- [x] **Lot 1 — Deterministic repro (systematic-debugging)**
+  - [x] Added `api/tests/api/chat-persistence-write-order.test.ts`: real-Postgres FK repro (no LLM). Asserts a stream event / generation trace referencing an already-cascade-deleted parent must NOT crash the write. RED 2/2 with `chat_stream_events_message_id_chat_messages_id_fk` + `chat_generation_traces_session_id_chat_sessions_id_fk` (code `23503`). In-memory store cannot model the FK, so this is correctly an `api/tests/**` integration test on `ENV=test-fixrace`.
+- [x] **Lot 2 — Minimal fix**
+  - [x] Treat the specific parent-FK `23503` as a benign no-op (the `ON DELETE CASCADE` parent — and thus the child — is gone; nothing to keep) in `postgres-stream-buffer.ts` (`append` + `appendAtomically`) and `chat-trace.ts` (`writeChatGenerationTrace`). Constraint-name matched so only the message/session parent FKs are swallowed; all other errors still throw. Public contract preserved (methods still return normally). No schema change (FKs already cascade).
+  - [x] Re-run the repro green; ran the chat-tools AI shard ≥3× consecutively + `make test-pkg-chat-core` + `make test-api-endpoints` regressions.
 - [ ] **Lot N — Validate + PR**
   - [ ] Full gates; bump `@sentropic/chat-core`; PR with BRANCH.md body; merge-commit; remove BRANCH.md.
 
