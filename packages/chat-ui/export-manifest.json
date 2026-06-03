@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-02",
-  "_version": "0.7.0",
+  "_version": "0.8.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -519,6 +519,26 @@
       "file": "src/components/ChatConversation.svelte",
       "exists": true,
       "_propSnapshot": "Props: host (ChatUiWebHost), sessionId? (string), layout? ('inline'|'docked'|'floating'), labels? (ChatUiLabelResolver), features? (ChatConversationFeatures), renderers? (RendererRegistry), models? (ModelCatalogModel[]), modelGroups? (ModelCatalogGroup[]), selectedModel? (string), contextProvider? (ChatContextProvider)"
+    },
+    "./components/SessionList.svelte": {
+      "kind": "svelte",
+      "file": "src/components/SessionList.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: sessions? (SessionListEntry[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn: sessionId → void), onDelete? (fn: sessionId → void)"
+    },
+    "./state/sessionList": {
+      "kind": "ts",
+      "file": "src/state/sessionList.ts",
+      "exports": [
+        "SessionRow",
+        "SessionListEntry",
+        "projectSessionList",
+        "HistoryMessage",
+        "RestoredTimelineItem",
+        "HistoryEventRaw",
+        "HistoryPayload",
+        "projectRestoredTimeline"
+      ]
     }
   }
 }
