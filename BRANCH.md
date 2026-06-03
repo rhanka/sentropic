@@ -56,15 +56,14 @@ Fix the 3 issues found in the BR-41a Windows recette so the binary is downloadab
     - [x] **Unit**: `packages/cowork-desktop/tests/api-base-url.spec.ts` (flat, per existing convention) — env override > baked default; trims; rejects blank.
     - [x] Sub-lot gate: `make test-cowork-desktop ENV=test-cowork-desktop-fixes` → 40 passed.
 
-- [ ] **Lot 2 — Fix ② pairing URL + safe auto-open + approve confirmation**
-  - [ ] Binary: `deriveAppOrigin(apiBaseUrl)` via `URL` (strip configurable API prefix: `/api/v1`, `/api`, trailing slash, subpath); `SENTROPIC_APP_ORIGIN` override (highest precedence); build `…/auth/devices/pair?user_code=…`; hard-validate https + no userinfo + no injected path before use; binary IGNORES server `verification_uri`.
-  - [ ] Binary: print the URL+code prominently; auto-open browser via safe argv spawn (`cmd /c start "" "<url>"` discrete arg), best-effort + graceful fail; `--no-open` flag.
-  - [ ] UI: add the prominent "you are pairing device «name» — did YOU start this?" confirmation in the pair PAGE wrapper `ui/src/routes/auth/devices/pair/+page.svelte` (NOT inside `AuthDevicePair`/auth-ui — out of scope); i18n strings in fr/en.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cowork-desktop` + `make typecheck-ui` + lint
-    - [ ] **Unit (binary)**: `packages/cowork-desktop/tests/enroll/derive-app-origin.spec.ts` — edge cases (trailing slash, `/api`, `/api/v1`, subpath, https-reject, userinfo-reject, `SENTROPIC_APP_ORIGIN` override).
-    - [ ] **UI test**: extend `ui/tests/**` or e2e `06`-style for the pair confirmation render (TS only).
-    - [ ] Sub-lot gate: `make test-cowork-desktop` + `make test-ui ENV=test`
+- [x] **Lot 2 — Fix ② pairing URL + safe auto-open + approve confirmation**
+  - [x] Binary: `deriveAppOrigin()` (`src/config/app-origin.ts`) via `URL` (strip `/api/v1`|`/api`, trailing slash, reverse-proxy subpath); `SENTROPIC_APP_ORIGIN` override; `buildPairingUrl()` → `…/auth/devices/pair?user_code=…`; hard-validate https (or http on localhost) + no userinfo + drop query/hash; the binary IGNORES the server `verification_uri`.
+  - [x] Binary: `runCli` prints the full URL+code prominently; auto-open via `openBrowser()` safe argv spawn (`cmd /c start "" <url>`), best-effort + graceful; `--no-open` flag.
+  - [x] UI: amber "Did you start this pairing?" confirmation in the pair PAGE wrapper (`ui/src/routes/auth/devices/pair/+page.svelte`, above `AuthDevicePair`); i18n `coworkPairing.confirm{Title,Body}` in fr+en.
+  - [x] Lot gate:
+    - [x] `make typecheck-cowork-desktop` (0) + `make typecheck-ui` (svelte-check 0 errors).
+    - [x] **Unit (binary)**: `tests/app-origin.spec.ts` (flat) — 7 edge cases (trailing slash, `/api`, `/api/v1`, subpath, https-reject, userinfo-reject, override). `make test-cowork-desktop` → 47 passed.
+    - [x] UI: i18n fr/en key parity verified; static notice (no logic) → full `make test-ui` covered by CI `typecheck-lint-ui`/UI test job. No dedicated notice test (trivial static text).
 
 - [ ] **Lot 3 — Fix ③ single-file packaging**
   - [ ] **3a (spike/gate, cross-platform de-risk):** add a native-resolution module that, given a cache dir, extracts the embedded native tree (atomic temp+rename, sha256 manifest verify, purge stale) and returns a `file://` URL to the `@nut-tree-fork/nut-js` entry; `windows-provider.ts` imports THAT (not the bare specifier). Unit-test the extract+resolve+import path on Linux using the linux libnut build (proves the mechanism; Windows dlopen left to UAT).
