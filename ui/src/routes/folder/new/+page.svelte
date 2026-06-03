@@ -15,7 +15,7 @@
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import type { Organization } from '$lib/stores/organizations';
 
-  type ModelProviderId = 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
+  type ModelProviderId = 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp';
   interface ModelCatalogProvider {
     provider_id: ModelProviderId;
     label: string;
@@ -119,7 +119,7 @@
     const providerId = rawValue.slice(0, separatorIndex) as ModelProviderId;
     const modelId = rawValue.slice(separatorIndex + 2);
     if (!modelId) return null;
-    if (providerId !== 'openai' && providerId !== 'gemini' && providerId !== 'anthropic' && providerId !== 'mistral' && providerId !== 'cohere') return null;
+    if (providerId !== 'openai' && providerId !== 'gemini' && providerId !== 'anthropic' && providerId !== 'mistral' && providerId !== 'cohere' && providerId !== 'gcp') return null;
     return { providerId, modelId };
   };
 
