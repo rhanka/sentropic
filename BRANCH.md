@@ -48,13 +48,13 @@ Fix the 3 issues found in the BR-41a Windows recette so the binary is downloadab
   - [ ] Peer review of THIS plan's implementation options with Opus 4.8 max (esp. Lot 3 resolution mechanism + Lot 4 SSE wiring); fold reversible improvements, batch irreversible/naming decisions.
   - [ ] Confirm durable names (env `SENTROPIC_APP_ORIGIN`, cache dir `%LOCALAPPDATA%\Sentropic\Cowork\`, any new make/CLI flags) — validate before merge (no-unvalidated-naming).
 
-- [ ] **Lot 1 — Fix ① default API base URL**
-  - [ ] Add a single resolver: `apiBaseUrl = env.SENTROPIC_API_BASE_URL ?? BAKED_DEFAULT`, where `BAKED_DEFAULT` = `https://sentropic.sent-tech.ca/api/v1` injected via esbuild `define` (JSON-quoted, https-validated at build). Default constant lives in one place (packaging config).
-  - [ ] Apply to `bin/cowork.mjs` AND `packaging/entry.mjs` (dedupe into a shared lib `main()` if cheap); fix help text (3 occurrences incl. the generated `.cmd` in `package-windows.mjs`).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cowork-desktop` + lint
-    - [ ] **Unit**: add `packages/cowork-desktop/tests/config/api-base-url.spec.ts` — env override > baked default; rejects empty/invalid.
-    - [ ] Sub-lot gate: `make test-cowork-desktop`
+- [x] **Lot 1 — Fix ① default API base URL**
+  - [x] Single resolver `resolveApiBaseUrl()` (`src/config/api-base-url.ts`): env `SENTROPIC_API_BASE_URL` (trimmed) wins, else baked `DEFAULT_API_BASE_URL` = `https://sentropic.sent-tech.ca/api/v1` (overridable at packaging via esbuild `define __COWORK_DEFAULT_API_BASE_URL__`, `typeof`-guarded for the dist build). One obvious place.
+  - [x] Extracted shared `runCli()` (`src/cli/run.ts`); `bin/cowork.mjs` + `packaging/entry.mjs` are now thin wrappers → cannot drift. Help text fixed in `usage()` (dropped `api.sentropic.app`, dropped "required"). NOTE: the generated launcher `.cmd` help is fixed in Lot 3 (it lives in `package-windows.mjs`).
+  - [x] Lot gate:
+    - [x] `make typecheck-cowork-desktop` (exit 0) — no per-package lint target (CI `validate-cowork-desktop` = typecheck+test+build+pack).
+    - [x] **Unit**: `packages/cowork-desktop/tests/api-base-url.spec.ts` (flat, per existing convention) — env override > baked default; trims; rejects blank.
+    - [x] Sub-lot gate: `make test-cowork-desktop ENV=test-cowork-desktop-fixes` → 40 passed.
 
 - [ ] **Lot 2 — Fix ② pairing URL + safe auto-open + approve confirmation**
   - [ ] Binary: `deriveAppOrigin(apiBaseUrl)` via `URL` (strip configurable API prefix: `/api/v1`, `/api`, trailing slash, subpath); `SENTROPIC_APP_ORIGIN` override (highest precedence); build `…/auth/devices/pair?user_code=…`; hard-validate https + no userinfo + no injected path before use; binary IGNORES server `verification_uri`.
