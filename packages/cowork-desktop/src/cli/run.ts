@@ -15,6 +15,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { resolveApiBaseUrl } from '../config/api-base-url.js';
+import { buildPairingUrl } from '../config/app-origin.js';
+import { openBrowser } from './open-browser.js';
 import { createFileStore } from '../storage/index.js';
 import { createWindowsCapabilityProvider } from '../capability/index.js';
 import { DeviceCodeClient } from '../enroll/index.js';
@@ -65,13 +67,21 @@ export async function runCli(): Promise<void> {
         deviceName: DEVICE_NAME,
     });
 
+    const noOpen = process.argv.includes('--no-open');
     const existing = await store.readSession();
     if (!existing) {
         const outcome = await enroller.enroll((start) => {
+            // Build a full, clickable pairing URL ourselves — the server's
+            // `verification_uri` is host-less for headless callers, so we ignore it.
+            const pairingUrl = buildPairingUrl(start.userCode);
             process.stdout.write(
-                `\nPair this device: open ${start.verificationUri}\n` +
-                    `and enter code: ${start.userCode}\n\n`,
+                '\n  Pair this device — open this URL in the browser where you are logged in:\n' +
+                    `    ${pairingUrl}\n` +
+                    `  (verification code: ${start.userCode})\n\n`,
             );
+            if (!noOpen && openBrowser(pairingUrl)) {
+                process.stdout.write('  Opening your browser…\n\n');
+            }
         });
         if (outcome.status !== 'approved') {
             process.stderr.write(`enrollment failed: ${outcome.status}\n`);
