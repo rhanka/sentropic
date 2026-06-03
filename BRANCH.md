@@ -56,7 +56,12 @@ Status legend: `blocked` / `deferred` / `cancelled` / `attention` (agent) ; `cla
   - Constraint: mirror existing `api`/compose patterns line-by-line; no new image build pipeline unless necessary.
 
 ### Open blockers / escalations
-- (none new beyond F5 attention + EX1/EX2 declarations) — see Stopped-at in report.
+- **BR39m-Q1** (`blocked`, escalated to user) — Apply EX1/EX2 (compose service + make target + CI lane) for the standalone IdP?
+  - Decision needed: confirm the DURABLE service name/alias/domain/topology (fork F5) BEFORE wiring run/compose/CI, OR authorize wiring under an explicit provisional name with a rename pass before merge.
+  - Why blocked: run/compose/CI wiring bakes the placeholder (`apps/auth-idp/`, service alias `auth-idp`, domain `auth.sent-tech.ca`) into durable infra names. This hits two HARD STOPs in the launch packet: (1) freezing the durable service name/domain (F5 needs the user); (2) touching forbidden paths (Makefile/compose) — EX1/EX2 declared but conservative "reversible-only, escalate before freezing" mandate applies.
+  - Options: (A) user validates final name/domain now → apply EX1/EX2 with final names; (B) user authorizes a provisional alias + explicit pre-merge rename; (C) keep Phase A0 to the shell+seed+recipe (current state) and defer all infra wiring to a follow-up once F5 is decided.
+  - Recommendation: (A) if the user can validate the name; else (C) — Lots 1-3 already prove the composition + client + glue with zero irreversible steps.
+  - Impact: Lot 4 (live boot + SSO/login UAT smoke) is gated on this; the service shell, design-system client, and RP recipe are complete and reversible regardless.
 
 ## AI Flaky tests
 - Standard acceptance rule applies (non-systematic provider/network/model nondeterminism only). No AI tests expected in Phase A0.
@@ -82,24 +87,25 @@ Status legend: `blocked` / `deferred` / `cancelled` / `attention` (agent) ; `cla
   - [x] Validate scope boundaries; declare `BR39m-EX1` / `BR39m-EX2` for conditional paths.
   - [x] Record fork defaults (F1..F9) as decisions in `## Feedback Loop`.
 
-- [ ] **Lot 1 — Standalone IdP service shell (reversible composition)**
-  - [ ] Add `apps/auth-idp/` (PLACEHOLDER for F5): a thin Hono composition module that reuses the EXISTING `authRouter` + `wellKnownRouter` (which already compose `@sentropic/auth-hono` + shared-DB adapters + JWKS), mounted at the IdP-shaped paths against the SHARED DB. No new auth code, no new DB.
-  - [ ] Add `apps/auth-idp/README.md` documenting: composition, shared-DB reuse, PLACEHOLDER status, env reuse (`OAUTH_ISSUER_URL`, `OAUTH_SIGNING_KEK`, DB env).
-  - [ ] Lot gate: `make typecheck-api ENV=test-feat-auth-idp` (composition module compiles).
+- [x] **Lot 1 — Standalone IdP service shell (reversible composition)**
+  - [x] Add `apps/auth-idp/` (PLACEHOLDER for F5): a thin Hono composition module (`idp-app.ts`) that reuses the EXISTING `authRouter` + `wellKnownRouter` (which already compose `@sentropic/auth-hono` + shared-DB adapters + JWKS), mounted at the IdP-shaped paths against the SHARED DB. No new auth code, no new DB. Server entry `index.ts` + local `tsconfig.json`.
+  - [x] Add `apps/auth-idp/README.md` documenting: composition, shared-DB reuse, PLACEHOLDER status, env reuse (`OAUTH_ISSUER_URL`, `OAUTH_SIGNING_KEK`, DB env).
+  - [x] Lot gate: import paths/exports statically verified against source; containerized typecheck of `apps/` deferred to Lot 4 (needs EX1 build wiring — api tsconfig includes only `src`).
 
-- [ ] **Lot 2 — `design-system` client seed (free auth)**
-  - [ ] Extend `api/src/services/auth/oauth-client-seed.ts` with a `design-system` `oauth_clients` row (scopes `openid profile email`, PKCE, code grant, design-system redirect URIs).
-  - [ ] Lot gate: `make typecheck-api ENV=test-feat-auth-idp`; verify seed row via `make db-query`.
+- [x] **Lot 2 — `design-system` client seed (free auth)**
+  - [x] Extend `api/src/services/auth/oauth-client-seed.ts` with a `design-system` `oauth_clients` row (scopes `openid profile email`, PKCE, code grant, PLACEHOLDER design-system redirect URIs).
+  - [x] Lot gate: `make typecheck-api ENV=test-feat-auth-idp` PASS + `make lint-api ENV=test-feat-auth-idp` 0 errors (no issues in seed file).
 
-- [ ] **Lot 3 — RP session-glue recipe**
-  - [ ] Add `apps/auth-idp/RP_SESSION_GLUE.md`: documented callback→verify(id_token via JWKS)→set-RP-cookie recipe (since `oauth-client.ts` stops at `exchangeCode`). Reference `createOAuthClient` + discovery + userinfo.
-  - [ ] No new package code in Phase A0 (recipe only; a `@sentropic/auth-client` helper is a later phase per spec R3).
+- [x] **Lot 3 — RP session-glue recipe**
+  - [x] Add `apps/auth-idp/RP_SESSION_GLUE.md`: documented callback→verify(id_token via JWKS)→set-RP-cookie recipe (since `oauth-client.ts` stops at `exchangeCode` and `@sentropic/auth-client` is S2S-only). References `createOAuthClient` + discovery + userinfo; claims verified against `token-handler.ts` (sub/name/email/nonce/aud=client_id/iss).
+  - [x] No new package code in Phase A0 (recipe only; a `@sentropic/auth-client` browser helper is a later phase per spec R3).
 
-- [ ] **Lot 4 — Service run / compose / CI wiring (requires BR39m-EX1/EX2)**
+- [ ] **Lot 4 — Service run / compose / CI wiring (requires BR39m-EX1/EX2)** — `blocked` (HARD STOP, escalated)
   - [ ] After EX approval: add ADDITIVE compose service + make `dev-idp`/`run-idp` target reusing the existing `api` image with the IdP composition entrypoint.
   - [ ] After EX2 approval: add CI lane for the new service (mirror existing api lane).
   - [ ] Lot gate: `make typecheck-api lint-api ENV=test-feat-auth-idp`; service boots and serves `/.well-known/openid-configuration` + `/oauth/authorize`.
   - [ ] UAT: live login at the IdP origin → design-system receives a token → RP session via the glue recipe.
+    - `blocked` (BR39m-Q1): wiring the compose service / make target / CI lane bakes the PLACEHOLDER service name + alias + domain (F5) into DURABLE infra names. Per HARD STOP (freeze durable name) + `feedback_no_unvalidated_naming`, STOP and escalate to user before applying EX1/EX2. See `## Feedback Loop → BR39m-Q1`.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Fold the A0 outcome (defaults confirmed, placeholder status) back into `spec/SPEC_EVOL_AUTH_IDP_STANDALONE.md` §4/§6 if needed.
