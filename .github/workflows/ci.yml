@@ -133,11 +133,15 @@ jobs:
               - 'e2e/**'
             api:
               - 'api/**'
+              - 'apps/auth-idp/**'
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
               - 'packages/flow/**'
               - 'packages/chat-server/**'
+              - 'packages/chat-core/**'
+              - 'packages/events/**'
+              - 'packages/contracts/**'
             ui:
               - 'ui/**'
             llm_mesh:
@@ -340,6 +344,15 @@ jobs:
       - name: Typecheck API
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make typecheck-api
+      - name: Typecheck IdP
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make typecheck-idp
+      - name: Typecheck IdP screens front
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make typecheck-idp-web
+      - name: Build IdP screens front
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make build-idp-web
       - name: Lint API
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make lint-api
