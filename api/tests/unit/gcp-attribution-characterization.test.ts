@@ -1,14 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// BR-42f Lot 4 — Vertex SSE provider-attribution test (sibling to
+// BR-42f Lot 4 — GCP SSE provider-attribution test (sibling to
 // gemini-attribution-characterization.test.ts). Proves that the SHARED Gemini
 // SSE→event runtime loop, once parameterized by the active provider (M4),
-// attributes a Vertex stream/response to `vertex` — NOT `gemini`:
-//   - generate response id  -> `vertex_…`   (index.ts:962, activeProviderId)
-//   - stream response_id     -> `vertex_…`   (index.ts:1247)
-//   - stream tool-call id    -> `vertex_call_…` (index.ts:1335)
-//   - no-content status      -> provider_id: 'vertex' (index.ts:1359)
+// attributes a GCP stream/response to `gcp` — NOT `gemini`:
+//   - generate response id  -> `gcp_…`   (index.ts:962, activeProviderId)
+//   - stream response_id     -> `gcp_…`   (index.ts:1247)
+//   - stream tool-call id    -> `gcp_call_…` (index.ts:1335)
+//   - no-content status      -> provider_id: 'gcp' (index.ts:1359)
 //
 // AND the bearer-never-logged proof (D-ADC1): the ADC bearer is minted
 // PRE-DISPATCH (toMeshAuthInput) and DOES reach the runtime as the dispatch
@@ -16,10 +16,12 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 // appear in any yielded StreamEvent NOR in any console log line.
 //
 // Setup mirrors gemini-attribution-characterization.test.ts: NO live calls. The
-// Vertex ADC minter is stubbed (`__setVertexAdcMinter`), env carries
-// VERTEX_PROJECT_ID/VERTEX_LOCATION so the mint path runs, and the `vertex`
+// GCP ADC minter is stubbed (`__setGcpAdcMinter`), env carries
+// GOOGLE_CLOUD_PROJECT/GOOGLE_CLOUD_LOCATION so the mint path runs, and the `gcp`
 // provider runtime's generate/streamGenerate are spied to yield raw
-// Gemini-shaped payloads (the Vertex wire shape == Gemini wire shape).
+// Gemini-shaped payloads (the GCP wire shape == Gemini wire shape).
+// (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI brand
+// retired; the endpoint host stays aiplatform.googleapis.com.)
 // ---------------------------------------------------------------------------
 
 vi.mock('../../src/services/settings', () => ({
@@ -35,11 +37,11 @@ vi.mock('../../src/services/settings', () => ({
   },
 }));
 
-// Vertex auth is ADC-minted (source:'none' from the string resolver); the mint
-// happens in toMeshAuthInput. This mock keeps the resolver honest for vertex.
+// GCP auth is ADC-minted (source:'none' from the string resolver); the mint
+// happens in toMeshAuthInput. This mock keeps the resolver honest for gcp.
 vi.mock('../../src/services/provider-credentials', () => ({
   resolveProviderCredential: vi.fn().mockResolvedValue({
-    providerId: 'vertex',
+    providerId: 'gcp',
     credential: null,
     source: 'none',
   }),
@@ -52,8 +54,8 @@ vi.mock('../../src/config/env', () => ({
     GEMINI_API_KEY: 'test-gemini-key',
     MISTRAL_API_KEY: 'test-mistral-key',
     COHERE_API_KEY: 'test-cohere-key',
-    VERTEX_PROJECT_ID: 'test-vertex-project',
-    VERTEX_LOCATION: 'us-central1',
+    GOOGLE_CLOUD_PROJECT: 'test-gcp-project',
+    GOOGLE_CLOUD_LOCATION: 'us-central1',
   },
 }));
 
@@ -71,13 +73,13 @@ vi.mock('cohere-ai', () => ({
 
 import type { StreamEvent } from '../../src/services/llm-runtime';
 import {
-  __setVertexAdcMinter,
-  __resetVertexTokenCache,
-} from '../../src/services/providers/vertex-provider';
+  __setGcpAdcMinter,
+  __resetGcpTokenCache,
+} from '../../src/services/providers/gcp-provider';
 
 // A unique sentinel value that could ONLY originate from the stubbed ADC mint.
-const SECRET_BEARER = 'vertex-secret-bearer-DO-NOT-LOG-3f9c2e';
-const VERTEX_MODEL = 'google/gemini-3.5-flash@vertex';
+const SECRET_BEARER = 'gcp-secret-bearer-DO-NOT-LOG-3f9c2e';
+const GCP_MODEL = 'google/gemini-3.5-flash@gcp';
 
 async function collectStreamEvents(
   generator: AsyncGenerator<StreamEvent>,
@@ -89,23 +91,23 @@ async function collectStreamEvents(
   return events;
 }
 
-describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
+describe('GCP provider-attribution characterization (BR-42f Lot 4)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    __resetVertexTokenCache();
-    __setVertexAdcMinter(async () => ({
+    __resetGcpTokenCache();
+    __setGcpAdcMinter(async () => ({
       token: SECRET_BEARER,
       expiresAtMs: Number.MAX_SAFE_INTEGER,
     }));
   });
 
   afterEach(() => {
-    __resetVertexTokenCache();
+    __resetGcpTokenCache();
   });
 
-  it('attributes the generate response id with the `vertex_` prefix (not `gemini_`)', async () => {
+  it('attributes the generate response id with the `gcp_` prefix (not `gemini_`)', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
-    const provider = providerRegistry.requireProvider('vertex');
+    const provider = providerRegistry.requireProvider('gcp');
     // Raw Gemini-shaped generateContent payload (single text part).
     vi.spyOn(provider, 'generate').mockResolvedValue({
       candidates: [{ content: { parts: [{ text: 'Hello world' }] } }],
@@ -114,18 +116,18 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
     const { callLLM } = await import('../../src/services/llm-runtime');
     const completion = await callLLM({
       messages: [{ role: 'user', content: 'Hi' }],
-      providerId: 'vertex',
-      model: VERTEX_MODEL,
+      providerId: 'gcp',
+      model: GCP_MODEL,
     });
 
-    expect(completion.id.startsWith('vertex_')).toBe(true);
+    expect(completion.id.startsWith('gcp_')).toBe(true);
     expect(completion.id.startsWith('gemini_')).toBe(false);
     expect(completion.choices[0]?.message.content).toBe('Hello world');
   });
 
-  it('attributes the stream response_id with the `vertex_` prefix (not `gemini_`)', async () => {
+  it('attributes the stream response_id with the `gcp_` prefix (not `gemini_`)', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
-    const provider = providerRegistry.requireProvider('vertex');
+    const provider = providerRegistry.requireProvider('gcp');
     vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
       (async function* () {
         yield { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] };
@@ -137,8 +139,8 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
     const events = await collectStreamEvents(
       callLLMStream({
         messages: [{ role: 'user', content: 'Hi' }],
-        providerId: 'vertex',
-        model: VERTEX_MODEL,
+        providerId: 'gcp',
+        model: GCP_MODEL,
       }),
     );
 
@@ -149,13 +151,13 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
     );
     expect(responseCreated).toBeDefined();
     const responseId = (responseCreated!.data as { response_id: string }).response_id;
-    expect(responseId.startsWith('vertex_')).toBe(true);
+    expect(responseId.startsWith('gcp_')).toBe(true);
     expect(responseId.startsWith('gemini_')).toBe(false);
   });
 
-  it('attributes stream tool-call ids with the `vertex_call_` prefix (not `gemini_call_`)', async () => {
+  it('attributes stream tool-call ids with the `gcp_call_` prefix (not `gemini_call_`)', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
-    const provider = providerRegistry.requireProvider('vertex');
+    const provider = providerRegistry.requireProvider('gcp');
     vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
       (async function* () {
         yield {
@@ -175,8 +177,8 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
     const events = await collectStreamEvents(
       callLLMStream({
         messages: [{ role: 'user', content: 'Search please' }],
-        providerId: 'vertex',
-        model: VERTEX_MODEL,
+        providerId: 'gcp',
+        model: GCP_MODEL,
         tools: [
           {
             type: 'function',
@@ -190,14 +192,14 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
     const toolStart = events.find((e) => e.type === 'tool_call_start');
     expect(toolStart).toBeDefined();
     const toolCallId = (toolStart!.data as { tool_call_id: string }).tool_call_id;
-    expect(toolCallId).toBe('vertex_call_1');
-    expect(toolCallId.startsWith('vertex_call_')).toBe(true);
+    expect(toolCallId).toBe('gcp_call_1');
+    expect(toolCallId.startsWith('gcp_call_')).toBe(true);
     expect(toolCallId.startsWith('gemini_call_')).toBe(false);
   });
 
-  it('attributes the no-content status event with provider_id `vertex`', async () => {
+  it('attributes the no-content status event with provider_id `gcp`', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
-    const provider = providerRegistry.requireProvider('vertex');
+    const provider = providerRegistry.requireProvider('gcp');
     vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
       (async function* () {
         yield { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] };
@@ -208,8 +210,8 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
     const events = await collectStreamEvents(
       callLLMStream({
         messages: [{ role: 'user', content: 'Use a tool' }],
-        providerId: 'vertex',
-        model: VERTEX_MODEL,
+        providerId: 'gcp',
+        model: GCP_MODEL,
         tools: [
           {
             type: 'function',
@@ -226,12 +228,12 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
         (e.data as { state?: string }).state === 'provider_completed_without_content',
     );
     expect(noContentStatus).toBeDefined();
-    expect((noContentStatus!.data as { provider_id: string }).provider_id).toBe('vertex');
+    expect((noContentStatus!.data as { provider_id: string }).provider_id).toBe('gcp');
   });
 
   it('mints the ADC bearer pre-dispatch and forwards it to the runtime, but NEVER logs/leaks it', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
-    const provider = providerRegistry.requireProvider('vertex');
+    const provider = providerRegistry.requireProvider('gcp');
 
     // Capture the runtime request handed to the spied streamGenerate so we can
     // prove the minted bearer ACTUALLY reached the runtime (the call can be
@@ -254,8 +256,8 @@ describe('Vertex provider-attribution characterization (BR-42f Lot 4)', () => {
       const events = await collectStreamEvents(
         callLLMStream({
           messages: [{ role: 'user', content: 'Hi' }],
-          providerId: 'vertex',
-          model: VERTEX_MODEL,
+          providerId: 'gcp',
+          model: GCP_MODEL,
         }),
       );
 
