@@ -14,9 +14,12 @@ import {
 } from '../provider-runtime';
 
 // ---------------------------------------------------------------------------
-// BR-42f — Vertex AI (Gemini-on-Vertex) provider runtime.
+// BR-42f — GCP (Google Cloud Model Garden, formerly Vertex AI) provider runtime.
 //
-// Vertex serves the SAME Gemini request/response payload shape as AI Studio;
+// (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI brand
+// retired; the endpoint host stays aiplatform.googleapis.com.)
+//
+// GCP serves the SAME Gemini request/response payload shape as AI Studio;
 // only the transport envelope differs:
 //   - URL: {location}-aiplatform.googleapis.com/v1/projects/{project}/
 //          locations/{location}/publishers/{publisher}/models/{model}:{action}
@@ -25,20 +28,20 @@ import {
 // The Gemini request-body builder and the SSE→event loop in
 // `llm-runtime/index.ts` are REUSED verbatim (BR42f-D4). This runtime owns only
 // the URL construction, the bearer header, ADC minting/caching, the sync
-// `validateCredential`, and the Vertex `google.rpc.Status` error mapping.
+// `validateCredential`, and the GCP `google.rpc.Status` error mapping.
 //
-// The catalog id is the globally-unique `{publisher}/{model}@vertex` selection
-// key (§C). The runtime strips the `@vertex` qualifier back to `{publisher}` +
+// The catalog id is the globally-unique `{publisher}/{model}@gcp` selection
+// key (§C). The runtime strips the `@gcp` qualifier back to `{publisher}` +
 // wire `{model}` for the URL path.
 // ---------------------------------------------------------------------------
 
-export const VERTEX_AUTH_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
+export const GCP_AUTH_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
 // Refresh skew aligned with OAUTH_DPOP_IAT_SKEW_SEC default (D-ADC1): never
 // serve a token within SKEW seconds of its expiry.
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 
-type VertexRequestOptions = {
+type GcpRequestOptions = {
   project: string;
   location: string;
   publisher: string;
@@ -46,16 +49,16 @@ type VertexRequestOptions = {
   body: Record<string, unknown>;
 };
 
-export type VertexGenerateRequest = {
-  mode: 'vertex-generate-content';
-  requestOptions: VertexRequestOptions;
+export type GcpGenerateRequest = {
+  mode: 'gcp-generate-content';
+  requestOptions: GcpRequestOptions;
   credential?: string;
   signal?: AbortSignal;
 };
 
-export type VertexStreamGenerateRequest = {
-  mode: 'vertex-stream-generate-content';
-  requestOptions: VertexRequestOptions;
+export type GcpStreamGenerateRequest = {
+  mode: 'gcp-stream-generate-content';
+  requestOptions: GcpRequestOptions;
   credential?: string;
   signal?: AbortSignal;
 };
@@ -66,20 +69,20 @@ type CachedToken = {
   expiresAtMs: number;
 };
 
-// Parse a globally-unique catalog selection key `{publisher}/{model}@vertex`
-// into the URL path segments `{publisher}` + wire `{model}`. The `@vertex`
+// Parse a globally-unique catalog selection key `{publisher}/{model}@gcp`
+// into the URL path segments `{publisher}` + wire `{model}`. The `@gcp`
 // qualifier exists only to keep the catalog id unique vs AI-Studio Gemini ids
 // (§C) and is stripped here.
-export const parseVertexModelId = (
+export const parseGcpModelId = (
   modelId: string,
 ): { publisher: string; model: string } => {
-  const withoutQualifier = modelId.endsWith('@vertex')
-    ? modelId.slice(0, -'@vertex'.length)
+  const withoutQualifier = modelId.endsWith('@gcp')
+    ? modelId.slice(0, -'@gcp'.length)
     : modelId;
   const slash = withoutQualifier.indexOf('/');
   if (slash <= 0 || slash >= withoutQualifier.length - 1) {
     throw new Error(
-      `Invalid Vertex model id "${modelId}" — expected "{publisher}/{model}@vertex"`,
+      `Invalid GCP model id "${modelId}" — expected "{publisher}/{model}@gcp"`,
     );
   }
   return {
@@ -98,7 +101,7 @@ const tokenCache = new Map<string, CachedToken>();
 const inFlightMints = new Map<string, Promise<string>>();
 
 const cacheKey = (project: string, location: string): string =>
-  `${project}+${location}+${VERTEX_AUTH_SCOPE}`;
+  `${project}+${location}+${GCP_AUTH_SCOPE}`;
 
 // Injectable ADC accessor for tests (a stub mint). Production uses
 // google-auth-library's GoogleAuth which honors GOOGLE_APPLICATION_CREDENTIALS
@@ -111,7 +114,7 @@ let adcMinter: AdcTokenMinter = async (scope) => {
   const client = await auth.getClient();
   const accessToken = await client.getAccessToken();
   if (!accessToken.token) {
-    throw new Error('Vertex ADC token mint returned no token');
+    throw new Error('GCP ADC token mint returned no token');
   }
   // google-auth-library caches and refreshes internally; expiry is best-effort
   // exposed on the client credentials. Default to a short TTL when absent so we
@@ -125,7 +128,7 @@ let adcMinter: AdcTokenMinter = async (scope) => {
 
 // Test seam: override the ADC minter (e.g. a stub with a fake clock). Returns a
 // restore function.
-export const __setVertexAdcMinter = (minter: AdcTokenMinter): (() => void) => {
+export const __setGcpAdcMinter = (minter: AdcTokenMinter): (() => void) => {
   const previous = adcMinter;
   adcMinter = minter;
   return () => {
@@ -133,7 +136,7 @@ export const __setVertexAdcMinter = (minter: AdcTokenMinter): (() => void) => {
   };
 };
 
-export const __resetVertexTokenCache = (): void => {
+export const __resetGcpTokenCache = (): void => {
   tokenCache.clear();
   inFlightMints.clear();
 };
@@ -141,7 +144,7 @@ export const __resetVertexTokenCache = (): void => {
 // Mint (or reuse a cached) short-lived ADC bearer for {project, location}.
 // Single-flight: concurrent callers for the same key share ONE in-flight mint.
 // The returned bearer MUST NOT be logged by any caller.
-export const mintVertexAccessToken = async (input: {
+export const mintGcpAccessToken = async (input: {
   project: string;
   location: string;
   now?: number;
@@ -159,7 +162,7 @@ export const mintVertexAccessToken = async (input: {
 
   const mint = (async () => {
     try {
-      const result = await adcMinter(VERTEX_AUTH_SCOPE);
+      const result = await adcMinter(GCP_AUTH_SCOPE);
       tokenCache.set(key, { token: result.token, expiresAtMs: result.expiresAtMs });
       return result.token;
     } finally {
@@ -173,37 +176,38 @@ export const mintVertexAccessToken = async (input: {
   return mint;
 };
 
-export class VertexProviderRuntime implements ProviderRuntime {
+export class GcpProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
 
   constructor() {
     this.provider = buildRuntimeProviderDescriptor({
-      providerId: 'vertex',
+      providerId: 'gcp',
       ready: this.validateCredential().ok,
     });
   }
 
   listModels(): ModelCatalogEntry[] {
-    return listRuntimeModelsByProvider('vertex');
+    return listRuntimeModelsByProvider('gcp');
   }
 
-  // D-ADC2: SYNC validation derived statically from config presence. Vertex is
-  // AVAILABLE only when both VERTEX_PROJECT_ID and VERTEX_LOCATION are set; the
-  // first live ADC mint happens lazily on the first generate/streamGenerate.
+  // D-ADC2: SYNC validation derived statically from config presence. GCP is
+  // AVAILABLE only when both GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION are
+  // set; the first live ADC mint happens lazily on the first
+  // generate/streamGenerate.
   validateCredential(_credential?: string): CredentialValidationResult {
-    const project = env.VERTEX_PROJECT_ID?.trim();
-    const location = env.VERTEX_LOCATION?.trim();
+    const project = env.GOOGLE_CLOUD_PROJECT?.trim();
+    const location = env.GOOGLE_CLOUD_LOCATION?.trim();
     if (!project || !location) {
       return {
         ok: false,
         message:
-          'Vertex AI is not configured (set VERTEX_PROJECT_ID and VERTEX_LOCATION)',
+          'GCP is not configured (set GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION)',
       };
     }
     return { ok: true };
   }
 
-  // D-ERR1: map the Vertex `google.rpc.Status` shape by HTTP status. Only 429
+  // D-ERR1: map the GCP `google.rpc.Status` shape by HTTP status. Only 429
   // and 5xx are retryable (mirrors gemini-provider.ts). The `google.rpc.Status`
   // enum string (RESOURCE_EXHAUSTED / PERMISSION_DENIED / NOT_FOUND /
   // UNAUTHENTICATED …) is surfaced as the normalized `code`.
@@ -212,7 +216,7 @@ export class VertexProviderRuntime implements ProviderRuntime {
     const message =
       (record && typeof record.message === 'string' && record.message) ||
       (error instanceof Error && error.message) ||
-      'Vertex request failed';
+      'GCP request failed';
 
     const code =
       (record && typeof record.code === 'string' && record.code) || undefined;
@@ -224,7 +228,7 @@ export class VertexProviderRuntime implements ProviderRuntime {
       status === 429 || (typeof status === 'number' && status >= 500);
 
     return {
-      providerId: 'vertex',
+      providerId: 'gcp',
       message,
       ...(code ? { code } : {}),
       retryable,
@@ -232,9 +236,9 @@ export class VertexProviderRuntime implements ProviderRuntime {
   }
 
   async generate(request: unknown): Promise<unknown> {
-    const payload = request as VertexGenerateRequest;
-    if (payload.mode !== 'vertex-generate-content') {
-      throw new Error('VertexProviderRuntime.generate: unsupported mode');
+    const payload = request as GcpGenerateRequest;
+    if (payload.mode !== 'gcp-generate-content') {
+      throw new Error('GcpProviderRuntime.generate: unsupported mode');
     }
     return await this.requestJson(
       payload.requestOptions,
@@ -244,9 +248,9 @@ export class VertexProviderRuntime implements ProviderRuntime {
   }
 
   async streamGenerate(request: unknown): Promise<AsyncIterable<unknown>> {
-    const payload = request as VertexStreamGenerateRequest;
-    if (payload.mode !== 'vertex-stream-generate-content') {
-      throw new Error('VertexProviderRuntime.streamGenerate: unsupported mode');
+    const payload = request as GcpStreamGenerateRequest;
+    if (payload.mode !== 'gcp-stream-generate-content') {
+      throw new Error('GcpProviderRuntime.streamGenerate: unsupported mode');
     }
     return await this.requestSse(
       payload.requestOptions,
@@ -279,19 +283,19 @@ export class VertexProviderRuntime implements ProviderRuntime {
   // (e.g. a runtime invoked directly), mint lazily here. The bearer is NEVER
   // logged.
   private async resolveBearer(
-    requestOptions: VertexRequestOptions,
+    requestOptions: GcpRequestOptions,
     override?: string,
   ): Promise<string> {
     const trimmed = override?.trim();
     if (trimmed) return trimmed;
-    return await mintVertexAccessToken({
+    return await mintGcpAccessToken({
       project: requestOptions.project,
       location: requestOptions.location,
     });
   }
 
   private async requestJson(
-    requestOptions: VertexRequestOptions,
+    requestOptions: GcpRequestOptions,
     credential?: string,
     signal?: AbortSignal,
   ): Promise<unknown> {
@@ -323,7 +327,7 @@ export class VertexProviderRuntime implements ProviderRuntime {
   }
 
   private async requestSse(
-    requestOptions: VertexRequestOptions,
+    requestOptions: GcpRequestOptions,
     credential?: string,
     signal?: AbortSignal,
   ): Promise<AsyncIterable<unknown>> {
@@ -357,12 +361,12 @@ export class VertexProviderRuntime implements ProviderRuntime {
     return this.readSse(response.body);
   }
 
-  // Vertex returns the `google.rpc.Status` shape:
+  // GCP returns the `google.rpc.Status` shape:
   // `{ error: { code, status, message, details[] } }`. Surface `status` (enum
   // string) as the normalized code and the HTTP status for retryability.
   private async toProviderError(response: Response): Promise<Error> {
     const raw = await response.text().catch(() => '');
-    let message = `Vertex request failed (${response.status})`;
+    let message = `GCP request failed (${response.status})`;
     let code: string | undefined;
 
     try {
@@ -395,7 +399,7 @@ export class VertexProviderRuntime implements ProviderRuntime {
     return;
   }
 
-  // SSE byte-parsing semantics reused from gemini-provider.ts: Vertex
+  // SSE byte-parsing semantics reused from gemini-provider.ts: GCP
   // streamGenerateContent?alt=sse emits the identical SSE-of-Gemini-JSON
   // envelope.
   private async *readSse(
