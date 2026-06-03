@@ -53,8 +53,8 @@ describe("Generic dispatch and backward compat", () => {
   });
 
   describe("seedWorkflowsForType", () => {
-    it("seeds ai-ideas workflows and agents on workspace creation", async () => {
-      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-ideas");
+    it("seeds ai-priorities workflows and agents on workspace creation", async () => {
+      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-priorities");
 
       // Check workflow definition exists
       const [wfDef] = await db
@@ -80,7 +80,7 @@ describe("Generic dispatch and backward compat", () => {
             eq(workflowDefinitionTasks.workflowDefinitionId, wfDef.id),
           ),
         );
-      expect(wfTasks.length).toBe(9); // 9 tasks in ai-ideas workflow including org fanout/join runtime tasks
+      expect(wfTasks.length).toBe(9); // 9 tasks in ai-priorities workflow including org fanout/join runtime tasks
 
       const transitions = await db
         .select()
@@ -106,7 +106,7 @@ describe("Generic dispatch and backward compat", () => {
         .from(workspaceTypeWorkflows)
         .where(
           and(
-            eq(workspaceTypeWorkflows.workspaceType, "ai-ideas"),
+            eq(workspaceTypeWorkflows.workspaceType, "ai-priorities"),
             eq(workspaceTypeWorkflows.workflowDefinitionId, wfDef.id),
           ),
         )
@@ -191,8 +191,8 @@ describe("Generic dispatch and backward compat", () => {
     });
 
     it("is idempotent — re-seeding does not duplicate", async () => {
-      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-ideas");
-      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-ideas");
+      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-priorities");
+      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-priorities");
 
       const wfDefs = await db
         .select()
@@ -210,7 +210,7 @@ describe("Generic dispatch and backward compat", () => {
   describe("startWorkflow (generic dispatch)", () => {
     it("starts a workflow generically by key", async () => {
       // Seed first
-      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-ideas");
+      await todoOrchestrationService.seedWorkflowsForType(actor, "ai-priorities");
 
       const result = await todoOrchestrationService.startWorkflow(
         actor,
@@ -370,7 +370,7 @@ describe("Generic dispatch and backward compat", () => {
   });
 
   describe("backward compat — startInitiativeGenerationWorkflow", () => {
-    it("still works with existing ai-ideas workflow via legacy method", async () => {
+    it("still works with existing ai-priorities workflow via legacy method", async () => {
       const result = await todoOrchestrationService.startInitiativeGenerationWorkflow(actor, {
         folderId: "test-folder-id",
         matrixMode: "default",
