@@ -1490,7 +1490,7 @@
     },
     "types": {
       "neutral": "Personal (neutral)",
-      "aiIdeas": "AI Ideas",
+      "aiPriorities": "AI Priorities",
       "opportunity": "Opportunity",
       "code": "Code"
     },
