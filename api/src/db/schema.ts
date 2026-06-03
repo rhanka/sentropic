@@ -338,6 +338,23 @@ export const idTokenSigningKeys = pgTable('id_token_signing_keys', {
   oneActiveIdx: uniqueIndex('id_token_signing_keys_one_active_idx').on(table.active).where(sql`${table.active} = true`),
 }));
 
+export const serviceClients = pgTable('service_clients', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').notNull().unique(),
+  clientSecretHash: text('client_secret_hash').notNull(),
+  displayName: text('display_name'),
+  allowedScopes: text('allowed_scopes').array().notNull(),
+  resourceIndicators: text('resource_indicators').array().notNull().default(sql`'{}'`),
+  dpopBoundAccessTokens: boolean('dpop_bound_access_tokens').notNull().default(false),
+  tenantId: text('tenant_id'),
+  secretRotatedAt: timestamp('secret_rotated_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: false }),
+}, (table) => ({
+  clientIdIdx: index('service_clients_client_id_idx').on(table.clientId),
+  tenantIdIdx: index('service_clients_tenant_id_idx').on(table.tenantId),
+}));
+
 export const documentConnectorAccounts = pgTable('document_connector_accounts', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id')
@@ -589,6 +606,7 @@ export type OauthTokenRow = typeof oauthTokens.$inferSelect;
 export type OauthDpopProofRow = typeof oauthDpopProofs.$inferSelect;
 export type RevokedTokenRow = typeof revokedTokens.$inferSelect;
 export type IdTokenSigningKeyRow = typeof idTokenSigningKeys.$inferSelect;
+export type ServiceClientRow = typeof serviceClients.$inferSelect;
 export type DocumentConnectorAccountRow = typeof documentConnectorAccounts.$inferSelect;
 export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
