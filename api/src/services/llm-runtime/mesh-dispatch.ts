@@ -22,6 +22,8 @@ import type OpenAI from 'openai';
 import { providerRegistry } from '../provider-registry';
 import type { ProviderId } from '../provider-runtime';
 import type { ResolvedProviderCredential } from '../provider-credentials';
+import { mintGcpAccessToken } from '../providers/gcp-provider';
+import { env } from '../../config/env';
 import { createId } from '../../utils/id';
 
 type RuntimeRequest = Record<string, unknown> & { mode: string };
@@ -204,17 +206,47 @@ const getEnvironmentVariableName = (providerId: ProviderId): string => {
   if (providerId === 'gemini') return 'GEMINI_API_KEY';
   if (providerId === 'anthropic') return 'ANTHROPIC_API_KEY';
   if (providerId === 'mistral') return 'MISTRAL_API_KEY';
-  return 'COHERE_API_KEY';
+  if (providerId === 'cohere') return 'COHERE_API_KEY';
+  // GCP auth is ADC-minted, not an API-key env var; this descriptor exists
+  // only for symmetry. The bearer is carried as a `direct-token` (see
+  // toMeshAuthInput), never read from this env var.
+  if (providerId === 'gcp') return 'GCP_ADC';
+  // Explicit, safe fallthrough: never silently mis-name an unknown provider's
+  // env var as Cohere's (the prior implicit default).
+  return `${String(providerId).toUpperCase()}_API_KEY`;
 };
 
-const toMeshAuthInput = (
+const toMeshAuthInput = async (
   options: Pick<MeshDispatchOptions, 'providerId' | 'credentialResolution' | 'userId' | 'workspaceId' | 'authOverride'>,
-): AuthInput => {
+): Promise<AuthInput> => {
   if (options.authOverride) return options.authOverride;
 
   const credential = options.credentialResolution.credential ?? undefined;
   if (options.credentialResolution.source === 'request_override' && credential) {
     return { type: 'direct-token', token: credential, label: 'request override' };
+  }
+
+  // BR-43 / §B / M2 — GCP auth ordering fix. The mesh validates auth BEFORE
+  // the runtime runs (mesh.ts prepare() throws on `!ok` pre-dispatch), and the
+  // string credential resolver is BYPASSED for `gcp` (no stored API key —
+  // resolveProviderCredential('gcp') legitimately returns source:'none').
+  // So the ADC bearer is MINTED HERE, PRE-DISPATCH, and carried as a
+  // `direct-token`: this single shape (a) passes adapter.validateAuth
+  // (hasText(token)) AND (b) flows through extractCredential's actual-token
+  // forward path into GcpProviderRuntime. An envVar-only `environment-token`
+  // is explicitly NOT used (it passes validation but forwards no bearer). A
+  // request-override bearer already took precedence above. The minted bearer
+  // MUST NOT be logged anywhere.
+  if (options.providerId === 'gcp') {
+    const project = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
+    const location = (env.GOOGLE_CLOUD_LOCATION ?? '').trim();
+    if (project && location) {
+      const bearer = await mintGcpAccessToken({ project, location });
+      return { type: 'direct-token', token: bearer, label: 'gcp adc' };
+    }
+    // Unconfigured: fall through to `none` so the mesh validateAuth gate
+    // surfaces a clear "auth not configured" error rather than minting.
+    return { type: 'none' };
   }
 
   if (options.credentialResolution.source === 'user_byok' && credential && options.userId) {
@@ -311,6 +343,7 @@ const applicationLlmMesh = createLlmMesh({
       anthropic: applicationProviderClient,
       mistral: applicationProviderClient,
       cohere: applicationProviderClient,
+      gcp: applicationProviderClient,
     }),
   ),
 });
@@ -332,8 +365,8 @@ const toMeshReasoning = (
   };
 };
 
-const buildMeshRequest = (options: MeshDispatchOptions): StreamRequest => {
-  const auth = toMeshAuthInput(options);
+const buildMeshRequest = async (options: MeshDispatchOptions): Promise<StreamRequest> => {
+  const auth = await toMeshAuthInput(options);
   return {
     providerId: options.providerId,
     modelId: options.model,
@@ -359,14 +392,14 @@ const buildMeshRequest = (options: MeshDispatchOptions): StreamRequest => {
 export const dispatchMeshGenerateRaw = async <Raw = unknown>(
   options: MeshDispatchOptions,
 ): Promise<Raw> => {
-  const response = await applicationLlmMesh.generate(buildMeshRequest(options));
+  const response = await applicationLlmMesh.generate(await buildMeshRequest(options));
   return response.providerMetadata?.raw as Raw;
 };
 
 export const dispatchMeshStreamRaw = async (
   options: MeshDispatchOptions,
 ): Promise<AsyncIterable<unknown>> => {
-  return await applicationLlmMesh.stream(buildMeshRequest(options)) as AsyncIterable<unknown>;
+  return await applicationLlmMesh.stream(await buildMeshRequest(options)) as AsyncIterable<unknown>;
 };
 
 export const createCodexAccountAuthInput = (
