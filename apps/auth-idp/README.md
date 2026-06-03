@@ -28,10 +28,23 @@ It is Phase A0 of `spec/SPEC_EVOL_AUTH_IDP_STANDALONE.md`:
 | `/api/v1/auth/oauth/*` | `api/src/routes/auth/index.ts` → `oauth.ts` (`oauthRouter`) | `createOAuth*Handler` factories + Postgres state-store + JWKS adapters |
 | `/api/v1/auth/{register,login,session,credentials,magic-link,email,device}/*` | `authRouter` sub-routers | existing handlers + session/cookie adapters |
 
-The login / register / consent **screens** are SvelteKit routes in `ui/`
-(`ui/src/routes/auth/**`) and are served by the UI build at the IdP origin; the
-IdP service hosts only the API/OAuth/well-known surface. (Co-locating the UI
-build with the IdP origin is a deploy-topology concern under F5 / `k8s-ops`.)
+The login / register / magic-link / consent **screens** (Phase A0-bis) are a
+**minimal SvelteKit static front** under `apps/auth-idp/web/` that mounts the
+published `@sentropic/auth-ui` components, wired **same-origin** to the IdP API
+(`/api/v1/auth`) via `createDefaultFetchTransport` (EN+FR labels). The
+`auth-idp` Hono service serves the built bundle (`web/build`, SPA fallback
+`404.html`) alongside `/api/v1/auth/*` + `/.well-known/*`, so `auth.sent-tech.ca`
+shows a real login page whose session cookie is first-party at the IdP origin.
+
+The front is a self-contained sub-project (own `package.json` + lock, NOT a
+root workspace member — same isolation pattern as `e2e/`); it consumes
+`@sentropic/auth-ui` via a relative `file:` dependency. The integration is a
+line-by-line copy of the product `ui/` `/auth/*` route pattern, with the
+transport baseUrl pointed at the same-origin `/api/v1/auth` mount. For the
+authorize flow to land on these screens, the IdP runs with `UI_BASE_URL` /
+`AUTH_CALLBACK_BASE_URL` set to its OWN origin (see `docker-compose.idp.yml`).
+
+Build + serve locally: `make build-idp-web` then `make dev-idp` (slot 4 ports).
 
 ## Shared physical DB (fork F1+F3 default)
 
