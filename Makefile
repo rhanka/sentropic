@@ -1564,7 +1564,8 @@ clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to ski
 .PHONY: prepare-node-workspace
 prepare-node-workspace: build-llm-mesh build-flow build-auth-hono build-auth-client ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
 
 .PHONY: dev
 dev: prepare-node-workspace ## Start UI and API in watch mode
@@ -1612,7 +1613,8 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 
 .PHONY: up-api-test-ci
 up-api-test-ci: build-llm-mesh build-flow build-auth-hono build-auth-client ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
 
 .PHONY: up-ui
