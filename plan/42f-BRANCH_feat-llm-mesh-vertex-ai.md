@@ -1,14 +1,16 @@
 # Feature: BR-42f LLM-Mesh Vertex AI Provider (`@sentropic/llm-mesh@0.2.0` + `api/` Vertex runtime)
 
 ## Objective
-Add a `vertex` provider so the Sentropic runtime calls Gemini models served by Google Vertex AI
-(`{region}-aiplatform.googleapis.com`, OAuth/ADC bearer) IN ADDITION to the existing AI-Studio `gemini`
+> **Provider id renamed `vertex` → `gcp` (user decision 2026-06-02, "Vertex AI" brand retired May 2026; `gcp` is brand-resilient + covers Model Garden's multi-publisher endpoint). Endpoint host stays `aiplatform.googleapis.com`.** Operative references below (provider id `gcp`, catalog ids `@gcp`, env vars `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/`GCP_LIVE_UAT`, make target `gcp-live-uat`, files `gcp-provider.ts`/`gcp-live-uat.ts`) reflect the rename; the deeper rationale prose still says "Vertex" and is kept for the record. The branch label and this plan filename keep `vertex-ai`.
+
+Add a `gcp` provider so the Sentropic runtime calls Gemini models served by Google Cloud (Vertex AI / Model
+Garden, `{region}-aiplatform.googleapis.com`, OAuth/ADC bearer) IN ADDITION to the existing AI-Studio `gemini`
 provider, with ZERO regression on the 5 existing providers and ZERO legacy (no dual path). Provider-level
 streaming is preserved as provider events (`content_delta`/`reasoning_delta`/`tool_call_start`), never
 session/chat-lifecycle events. RESOLVED decisions are baked in (see `## Feedback Loop`): provider id
-`vertex`; ADC bearer minted server-side in `api/` BEFORE mesh dispatch and forwarded as a non-`none` auth
+`gcp`; ADC bearer minted server-side in `api/` BEFORE mesh dispatch and forwarded as a non-`none` auth
 material that passes the mesh `validateAuth` gate; reuse the Gemini body-builder + SSE→event mapper;
-catalog ids are globally-unique vertex-qualified `{publisher}/{model}@vertex` keys.
+catalog ids are globally-unique gcp-qualified `{publisher}/{model}@gcp` keys.
 
 ## Scope / Guardrails
 - Scope limited to: the `packages/llm-mesh/src/**` contract change (provider id + catalog + adapter + version
@@ -370,13 +372,13 @@ Actions with the following status should be included around tasks only if really
           api/mesh layer, NO browser selector (M3 + M5)**, on a branch stack from root
           (`ENV=feat-llm-mesh-vertex-ai`, ports 9210/5410/1310), NEVER `ENV=dev`:
       - [ ] Place a **gitignored** service-account key file at the path declared in `.gitignore` (M3); set
-            `.env` (local only, NEVER committed): `VERTEX_PROJECT_ID`, `VERTEX_LOCATION` (ADC = the SA-JSON
-            key file; `GOOGLE_APPLICATION_CREDENTIALS` is injected inline by the target, not via compose).
-      - [ ] Run **`make vertex-live-uat ENV=feat-llm-mesh-vertex-ai`** (M3 — `docker cp`s the SA key into the
+            `.env` (local only, NEVER committed): `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (ADC = the
+            SA-JSON key file; `GOOGLE_APPLICATION_CREDENTIALS` is injected inline by the target, not via compose).
+      - [ ] Run **`make gcp-live-uat ENV=feat-llm-mesh-vertex-ai`** (M3 — `docker cp`s the SA key into the
             running `api` container at a tmp path, then `docker compose exec api` of `api/src/scripts/
-            vertex-live-uat.ts` with `VERTEX_PROJECT_ID`/`VERTEX_LOCATION`/`GOOGLE_APPLICATION_CREDENTIALS`/
-            `VERTEX_LIVE_UAT=1` injected INLINE on that exec — a fresh process the env reaches, unlike the
-            already-running server). The script drives a real `vertex:<catalog-key>` STREAMING call at the
+            gcp-live-uat.ts` with `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/`GOOGLE_APPLICATION_CREDENTIALS`/
+            `GCP_LIVE_UAT=1` injected INLINE on that exec — a fresh process the env reaches, unlike the
+            already-running server). The script drives a real `gcp:<catalog-key>` STREAMING call at the
             api/mesh layer (NOT the browser selector — `ui/**` is FORBIDDEN, M5).
       - [ ] Confirm tokens stream as `content_delta`, reasoning as `reasoning_delta` when requested, a tool
             call as `tool_call_start`, and the EXACT wire model ids are callable in the chosen region.
@@ -397,11 +399,11 @@ Actions with the following status should be included around tasks only if really
         bump (Lot 2) is what publishes. (The publish LANE needs NO Makefile/ci.yml edit; the ONLY Makefile
         edit in this branch is the new `vertex-live-uat` target — M3, next item — which is unrelated to the
         publish lane.)
-  - [ ] **M3 — author the `make vertex-live-uat` target** (Makefile, under BR42f-EX1): `docker cp`s the
+  - [ ] **M3 — author the `make gcp-live-uat` target** (Makefile, under BR42f-EX1): `docker cp`s the
         gitignored SA key into the running `api` container at a tmp path, then `docker compose exec api sh -lc`
-        of `api/src/scripts/vertex-live-uat.ts` (the `make exec-api` pattern `Makefile:1567-1575`; script-run +
-        inline-env pattern per `oauth-rotate-keys` `Makefile:2455`) with `VERTEX_PROJECT_ID`/`VERTEX_LOCATION`/
-        `GOOGLE_APPLICATION_CREDENTIALS`/`VERTEX_LIVE_UAT=1` injected INLINE on that exec; output sanitized
+        of `api/src/scripts/gcp-live-uat.ts` (the `make exec-api` pattern `Makefile:1567-1575`; script-run +
+        inline-env pattern per `oauth-rotate-keys` `Makefile:2455`) with `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/
+        `GOOGLE_APPLICATION_CREDENTIALS`/`GCP_LIVE_UAT=1` injected INLINE on that exec; output sanitized
         (no bearer / SA-JSON / full project cred). Add the SA-key path to `.gitignore` in the SAME commit.
   - [ ] Author the UAT packet doc (the credential-safe live protocol) — consolidate into
         `spec/SPEC_EVOL_LLM_MESH_VERTEX.md §F`: the make-only `vertex-live-uat` path (compose UNTOUCHED — M3),
@@ -487,11 +489,11 @@ characterization-first Lot 1 is unchanged.
   `package-lock.json` to EX1; the dep-add step runs `make lock-api`/`make lock-root` (`Makefile:420`/`:425`)
   and commits the lock(s) with `api/package.json`. Encoded in Lot 3 + EX1; spec §7 aligned.
 
-**Final EX1 file list (re-verified complete + internally consistent):** `api/src/services/providers/vertex-provider.ts`
+**Final EX1 file list (re-verified complete + internally consistent):** `api/src/services/providers/gcp-provider.ts`
 (new) · `api/src/services/provider-registry.ts` · `api/src/services/llm-runtime/index.ts` ·
 `api/src/services/llm-runtime/mesh-dispatch.ts` · `api/src/services/provider-credentials.ts` ·
 `api/src/services/model-catalog.ts` · `api/src/config/env.ts` · `api/src/routes/api/me.ts` ·
 `api/src/routes/api/ai-settings.ts` · `api/tests/unit/**` · `api/tests/api/models.test.ts` (M1) ·
-`api/src/scripts/vertex-live-uat.ts` (new, M3) · `Makefile` (`vertex-live-uat` target, M3) · `.gitignore`
+`api/src/scripts/gcp-live-uat.ts` (new, M3) · `Makefile` (`gcp-live-uat` target, M3) · `.gitignore`
 (SA-key entry, M3) · `api/package.json` + `api/package-lock.json` + root `package-lock.json` (M6, only if a
 dep is added). **NOT in EX1:** `docker-compose*.yml` (M3 — make-only UAT) · `ui/**` (M5 — deferred).
