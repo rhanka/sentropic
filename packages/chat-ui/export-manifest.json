@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
-  "_generated": "2026-06-02",
-  "_version": "0.8.0",
+  "_generated": "2026-06-03",
+  "_version": "0.9.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -518,7 +518,7 @@
       "kind": "svelte",
       "file": "src/components/ChatConversation.svelte",
       "exists": true,
-      "_propSnapshot": "Props: host (ChatUiWebHost), sessionId? (string), layout? ('inline'|'docked'|'floating'), labels? (ChatUiLabelResolver), features? (ChatConversationFeatures), renderers? (RendererRegistry), models? (ModelCatalogModel[]), modelGroups? (ModelCatalogGroup[]), selectedModel? (string), contextProvider? (ChatContextProvider)"
+      "_propSnapshot": "Props: host (ChatUiWebHost), sessionId? (string), layout? ('inline'|'docked'|'floating'), labels? (ChatUiLabelResolver), features? (ChatConversationFeatures), renderers? (RendererRegistry), models? (ModelCatalogModel[]), modelGroups? (ModelCatalogGroup[]), selectedModel? (string), contextProvider? (ChatContextProvider). StreamMessage wired for runtime/assistant segments when host.streamClient present (v0.9.0, BR-CONV)."
     },
     "./components/SessionList.svelte": {
       "kind": "svelte",
