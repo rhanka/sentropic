@@ -1,5 +1,5 @@
 export type UserAISettingsUpdatedPayload = {
-  defaultProviderId: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'gcp';
+  defaultProviderId: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
   defaultModel: string;
 };
 
