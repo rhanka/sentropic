@@ -309,6 +309,44 @@ export class PgCommentStore implements CommentStore {
     return this.listThread(tenant, threadId);
   }
 
+  /**
+   * THREAD-WIDE combined content + assignment edit in ONE atomic statement
+   * (mirrors the OLD live combined-PATCH `UPDATE comments SET content=?,
+   * assigned_to=?, updated_at=? WHERE workspace_id AND thread_id`,
+   * `comments.ts@40a23a35^:246-250`). App-local adapter primitive (NOT a
+   * package-port method): the REST PATCH combined case needs ONE statement so
+   * content + assignment land atomically thread-wide — composing N per-row
+   * `edit()` then a separate `assign()` is non-atomic and, with the re-read
+   * pattern, can yield new 404/500 under concurrent deletes where the single
+   * UPDATE would 200. Same WHERE shape + emit-free posture as `setState`/`assign`
+   * (host owns the single `updated` emit, §2/§4); empty thread ->
+   * `ThreadNotFoundError`. `assignedTo:null -> createdBy` is computed HOST-SIDE
+   * before calling (the route passes the resolved assignee).
+   */
+  async editThread(
+    tenant: TenantContext,
+    threadId: string,
+    patch: { content: string; assignedTo: string | null },
+  ): Promise<Comment[]> {
+    const workspaceId = tenant.workspaceId;
+    const existing = await this.listThread(tenant, threadId);
+    if (existing.length === 0) {
+      throw new ThreadNotFoundError(threadId);
+    }
+    // ONE atomic THREAD CASCADE: content + assignment + updatedAt in a single
+    // UPDATE (mirrors the OLD combined-PATCH single statement).
+    await this.db
+      .update(comments)
+      .set({ content: patch.content, assignedTo: patch.assignedTo, updatedAt: new Date() })
+      .where(
+        and(
+          eq(comments.workspaceId, workspaceId),
+          eq(comments.threadId, threadId),
+        ),
+      );
+    return this.listThread(tenant, threadId);
+  }
+
   private async selectRow(
     workspaceId: string,
     id: string,
