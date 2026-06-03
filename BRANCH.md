@@ -91,7 +91,7 @@
   - [ ] `@sentropic/chat-ui` `WorkspaceType` union + `WORKSPACE_TYPE_TOOL_IDS` exhaustive record + version bump (0.1.2→0.1.3).
   - [ ] `@sentropic/skills` src (authz/context-filter comments) + 9 bundle `SKILL.md` `workspaceTypes` + version bump (0.1.1→0.1.2).
   - [ ] api/src technical id (workspaces/workflow-config enums, folders/flow-runtime/view-template/todo-orchestration fallbacks, approval-gate map key, chat-service branching, schema default+comments) + CHAT_SYSTEM_PROMPTS map KEY (prose body excluded) + agent-seed registry.
-  - [ ] object file rename `default-agents-ai-ideas.ts`→`default-agents-ai-priorities.ts`, const `AI_IDEAS_AGENTS`→`AI_PRIORITIES_AGENTS`, all imports.
+  - [x] object file rename `default-agents-ai-ideas.ts`→`default-agents-ai-priorities.ts`, const `AI_IDEAS_AGENTS`→`AI_PRIORITIES_AGENTS`, all imports.
   - [ ] ui/src technical id (Header/WorkspaceCreateDialog/InitiativeDetail/OrganizationForm/ViewTemplateCatalog/workspaceScope/neutral) + i18n label `aiIdeas`→`aiPriorities` = "AI Priorities"/"Priorités IA" + labelKey refs.
   - [ ] DB migration `0028_rename_ai_ideas_to_ai_priorities.sql` + journal registration; `schema.ts` default/comments updated.
   - [ ] tests/fixtures + `spec/SPEC_EVOL_WORKSPACE_TYPES.md` sync.
