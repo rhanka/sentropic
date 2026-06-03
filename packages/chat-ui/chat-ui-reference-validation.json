@@ -1,0 +1,53 @@
+{
+  "components": {
+    "ChatPanel.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/ChatPanel.svelte"]
+    },
+    "ChatWidget.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/ChatWidget.svelte"]
+    },
+    "StreamMessage.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/StreamMessage.svelte"]
+    },
+    "ChatTimeline.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/ChatTimelineWrapper.svelte"]
+    },
+    "ChatComposer.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/ChatComposerWrapper.svelte"]
+    },
+    "ModelSelector.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+    },
+    "MessageActions.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+    },
+    "ContextChips.svelte": {
+      "class": "legacy",
+      "deprecation": {
+        "owner": "sentropic-chat",
+        "note": "Replaced by ChatContextPicker (canonical, Wave 2). Retire after radar+immo migrate."
+      }
+    },
+    "SessionList.svelte": {
+      "class": "legacy",
+      "deprecation": {
+        "owner": "sentropic-chat",
+        "note": "Re-extract from sentropic or retire. Sentropic session UX is a compact header menu, not a standalone list."
+      }
+    },
+    "ChatConversation.svelte": {
+      "class": "legacy",
+      "deprecation": {
+        "owner": "sentropic-chat",
+        "note": "Rebuild on validated primitives + parity harness (Wave 3). Currently imports legacy ContextChips — cannot be promoted to assembly until ContextChips is replaced by ChatContextPicker."
+      }
+    }
+  }
+}
