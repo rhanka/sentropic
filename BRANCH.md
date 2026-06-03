@@ -57,26 +57,26 @@ Give the standalone IdP (`apps/auth-idp`) its OWN human-facing login / register 
   - [x] Confirm ports slot 4 + `ENV=test-feat-auth-idp-screens`.
   - [x] Confirm scope boundaries + declare exceptions (D1/EX2/EX3/D2).
 
-- [ ] **Lot 1 — Minimal static front (`apps/auth-idp/web/`)**
-  - [ ] Scaffold SvelteKit static app (package.json, svelte.config.js, vite.config.ts, tsconfig, app.html) mirroring `ui/`.
-  - [ ] Same-origin transport service (`createDefaultFetchTransport({ baseUrl: '/api/v1/auth' })`) + EN/FR label resolver + OAuth consent transport (copy `ui/` pattern).
-  - [ ] Routes `/auth/login`, `/auth/register`, `/auth/magic-link/verify`, `/auth/oauth/consent` mounting auth-ui components with the exact `continue`/`state`/returnUrl wiring.
-  - [ ] Add `apps/auth-idp/web` to root workspaces (`BR39m-EX3`).
-  - [ ] Lot gate: front typecheck + build green.
+- [x] **Lot 1 — Minimal static front (`apps/auth-idp/web/`)**
+  - [x] Scaffold SvelteKit static app (package.json, svelte.config.js, vite.config.ts, tsconfig, app.html) mirroring `ui/`.
+  - [x] Same-origin transport service (`createDefaultFetchTransport({ baseUrl: '/api/v1/auth' })`) + EN/FR label resolver + OAuth consent transport (copy `ui/` pattern).
+  - [x] Routes `/auth/login`, `/auth/register`, `/auth/magic-link/verify`, `/auth/oauth/consent` mounting auth-ui components with the exact `continue`/`state`/returnUrl wiring.
+  - [x] `web/` is a self-contained sub-project (`BR39m-D3`), NOT a root workspace member (no root `package.json`/lock change).
+  - [x] Lot gate: `make typecheck-idp-web` (0 errors) + `make build-idp-web` (green) — see Checks.
 
-- [ ] **Lot 2 — IdP service static-serve + wiring**
-  - [ ] `idp-app.ts`: serve `web/build` via `@hono/node-server/serve-static` with SPA fallback; keep `/api/v1/auth/*` + `/.well-known/*`.
-  - [ ] Makefile: `build-idp-web` + serve wiring; compose: same-origin `UI_BASE_URL`/`AUTH_CALLBACK_BASE_URL` so authorize redirects to the IdP-served screens (`BR39m-EX2`).
-  - [ ] CI: typecheck + build the front on `apps/auth-idp/**` changes (`BR39m-EX2`).
-  - [ ] Update `apps/auth-idp/README.md` (screens now served at IdP origin).
-  - [ ] Lot gate: `make typecheck-idp`, `make typecheck-api`, `make lint-api`, front typecheck/build.
+- [x] **Lot 2 — IdP service static-serve + wiring**
+  - [x] `idp-app.ts`: serve `web/build` via `@hono/node-server/serve-static` with SPA fallback (`404.html`); keep `/api/v1/auth/*` + `/.well-known/*`.
+  - [x] Makefile: `build-idp-web` + `dev-idp` builds it; compose: same-origin `UI_BASE_URL`/`AUTH_CALLBACK_BASE_URL` via `IDP_ORIGIN` so authorize redirects to the IdP-served screens (`BR39m-EX2`).
+  - [x] CI: typecheck + build the front on `apps/auth-idp/**` changes (`BR39m-EX2`).
+  - [x] Update `apps/auth-idp/README.md` (screens now served at IdP origin).
+  - [x] Lot gate: `make typecheck-idp` (0), `make typecheck-api` (0), `make lint-api` (0 errors), front typecheck/build green.
 
-- [ ] **Lot 3 — Screen-driven smoke**
-  - [ ] `apps/auth-idp/screen-smoke.ts`: Playwright headless flow against the live IdP-served screens (`BR39m-D2`).
-  - [ ] Make target `smoke-idp-screens`.
-  - [ ] Lot gate: `make dev-idp` + `make smoke-idp-screens` green; `make down ENV=test-feat-auth-idp-screens`; `make ps-all` clean.
+- [x] **Lot 3 — Screen-driven smoke**
+  - [x] `apps/auth-idp/screen-smoke.ts` (Playwright headless) + `screen-smoke-seed.ts` (DB seed): drive the live IdP-served login+consent screens (`BR39m-D2`).
+  - [x] Make target `smoke-idp-screens` + `idp-screen-smoke` runner service (e2e image, Node 24 native TS).
+  - [x] Lot gate: `make dev-idp` + `make smoke-idp-screens` GREEN (login+consent screens mounted, Approve clicked, code→token→userinfo verified); bare-API `make smoke-idp` GREEN (non-reg).
 
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & lint (idp + api + front).
-  - [ ] Screen-driven smoke + bare-API smoke green.
-  - [ ] PR with `BRANCH.md` body; CI green; remove `BRANCH.md`; merge (NOT in this subagent run).
+- [x] **Lot N — Final validation**
+  - [x] Typecheck & lint (idp + api + front) all green.
+  - [x] Screen-driven smoke + bare-API smoke green; `make down ENV=test-feat-auth-idp-screens`; `make ps-all` clean.
+  - [ ] PR with `BRANCH.md` body; CI green; remove `BRANCH.md`; merge — DEFERRED (not in this subagent run, per launch packet HARD STOP: no PR/merge).
