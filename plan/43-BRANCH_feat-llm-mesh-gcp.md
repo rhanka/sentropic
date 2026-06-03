@@ -134,6 +134,26 @@ Actions with the following status should be included around tasks only if really
   and **`ui/**` is NOT in EX1** (M5 — UI exposure deferred). Rollback: revert the registry registration +
   dispatch branch + catalog rows → `vertex` becomes undeclared, 5 existing providers unchanged
   (characterization-proved, Lot 1).
+- **BR43-EX1 (native-credential rework extension)** `acknowledge` — **GRANTED + APPLIED** (native-creds
+  direction). The DEFAULT-FORBIDDEN `docker-compose.yml` and `ui/**` are edited under this exception (they
+  MOVED from Forbidden into scope, reversing the old M3/M5 postures). Concretely: (1) `docker-compose.yml`
+  api-service `environment:` now passes through `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` /
+  `GOOGLE_APPLICATION_CREDENTIALS` exactly like `GEMINI_API_KEY` (`${VAR:-}` defaults; absence keeps the
+  provider unavailable, never crashes startup). The SA key is dropped at the gitignored repo path
+  `.secrets/gcp-sa.json` (already covered by `.gitignore` `gcp-sa*.json` + `.secrets/`), visible inside the
+  api container at `/workspace/.secrets/gcp-sa.json` via the EXISTING `./:/workspace` bind-mount in
+  `docker-compose.dev.yml` (no new mount needed); the user points `GOOGLE_APPLICATION_CREDENTIALS` at that
+  in-container path in `.env`. (2) `ui/**` — `gcp` added to the three model selectors
+  (`settings/+page.svelte`, `AppChatPanel.svelte`, `folder/new/+page.svelte`) by extending the hardcoded
+  provider-id unions/guards that previously rejected unknown providers (the provider list + labels/icons are
+  already data-driven from `/models/catalog`, which returns the `gcp` rows; only the closed TS unions/guards
+  needed `gcp`). Also `ui/src/lib/utils/user-ai-settings-events.ts` `defaultProviderId` union extended for
+  type-consistency. The BYOK admin `provider-connections-api.ts` union is left untouched (BR43-D5: `gcp` is
+  ADC/config-driven, not a stored key). REMOVED (obsoleted by native creds + chat UAT): the bespoke
+  `Makefile` `gcp-live-uat` target, `api/src/scripts/gcp-live-uat.ts`, the `api/package.json` `gcp:live-uat`
+  npm-script, and the orphaned `GCP_LIVE_UAT` env-schema entry in `api/src/config/env.ts`. Rollback: revert
+  the compose passthrough + the UI union edits + restore nothing else (the gcp runtime is untouched). UAT is
+  now: **pick a `gcp` model in the chat and send a message**.
 - **BR43-D5 (provider-connections.ts)** `acknowledge` — `provider-connections.ts` (admin BYOK panel) is OUT
   of BR-43 (Vertex is ADC/config-driven, not an admin-entered key). Recorded in `## Deferred`.
 - **D-ADC1 (token cache)** `acknowledge` — cache key `{project}+{location}+{scope=cloud-platform}`; refresh at
@@ -374,10 +394,11 @@ Actions with the following status should be included around tasks only if really
           `## UAT & Credentials` / spec §F):** GCP creds are now handled NATIVELY (like `GEMINI_API_KEY`) via the
           docker-compose api-service env passthrough (`GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` /
           `GOOGLE_APPLICATION_CREDENTIALS`, the SA-key a gitignored bind-mount), and `gcp` is made selectable in
-          the UI model selector ⇒ **UAT = pick a gcp model in the chat and send a message**. The bespoke
-          `make gcp-live-uat` target + `api/src/scripts/gcp-live-uat.ts` are TO REMOVE in the implementation
-          rework. The make-only steps below are SUPERSEDED and kept only for historical context until that rework
-          (on a branch stack `ENV=feat-llm-mesh-gcp`, ports 9210/5410/1310, NEVER `ENV=dev`):
+          the UI model selector ⇒ **UAT = pick a gcp model in the chat and send a message**. [DONE in the
+          native-creds rework] The bespoke `make gcp-live-uat` target + `api/src/scripts/gcp-live-uat.ts` +
+          `gcp:live-uat` npm-script + the `GCP_LIVE_UAT` env-schema entry are REMOVED. The make-only steps below
+          are SUPERSEDED and kept only for historical context (the rework is now applied; see the BR43-EX1
+          native-credential rework entry in `## Feedback Loop`):
       - [ ] Place a **gitignored** service-account key file at the path declared in `.gitignore` (M3); set
             `.env` (local only, NEVER committed): `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (ADC = the
             SA-JSON key file; `GOOGLE_APPLICATION_CREDENTIALS` is injected inline by the target, not via compose).
@@ -406,7 +427,13 @@ Actions with the following status should be included around tasks only if really
         bump (Lot 2) is what publishes. (The publish LANE needs NO Makefile/ci.yml edit; the ONLY Makefile
         edit in this branch is the new `vertex-live-uat` target — M3, next item — which is unrelated to the
         publish lane.)
-  - [ ] **M3 — author the `make gcp-live-uat` target** (Makefile, under BR43-EX1): `docker cp`s the
+  - [x] **M3 — REVERSED (native creds).** The `make gcp-live-uat` target, `api/src/scripts/gcp-live-uat.ts`,
+        the `gcp:live-uat` npm-script and the `GCP_LIVE_UAT` sentinel are REMOVED; GCP creds are delivered
+        natively via the `docker-compose.yml` api-service env passthrough (`GOOGLE_CLOUD_PROJECT` /
+        `GOOGLE_CLOUD_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS`, mirroring `GEMINI_API_KEY`) with the SA key
+        at gitignored `.secrets/gcp-sa.json` reachable in-container at `/workspace/.secrets/gcp-sa.json`. The
+        historical make-only target description is retained below for the record only:
+  - [ ] ~~**M3 — author the `make gcp-live-uat` target** (Makefile, under BR43-EX1): `docker cp`s the~~
         gitignored SA key into the running `api` container at a tmp path, then `docker compose exec api sh -lc`
         of `api/src/scripts/gcp-live-uat.ts` (the `make exec-api` pattern `Makefile:1567-1575`; script-run +
         inline-env pattern per `oauth-rotate-keys` `Makefile:2455`) with `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/
