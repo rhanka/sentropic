@@ -38,11 +38,14 @@ services:
       - OAUTH_SIGNING_KEK=${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production}
       - JWT_SECRET=${JWT_SECRET:-dev-idp-jwt-secret-change-in-production}
       # BR-39m A0-bis: the IdP serves its OWN login/register/consent screens
-      # same-origin. So the authorize handler's UI base (loginUrl/consentUrl) and
-      # the callback base resolve to the IdP's OWN published origin, NOT the
-      # product UI. The browser reaches the IdP at http://localhost:${API_PORT}.
-      - AUTH_CALLBACK_BASE_URL=${AUTH_CALLBACK_BASE_URL:-http://localhost:${API_PORT:-8787}}
-      - UI_BASE_URL=${UI_BASE_URL:-http://localhost:${API_PORT:-8787}}
+      # same-origin. The authorize handler's UI base (loginUrl/consentUrl) and the
+      # callback base MUST resolve to the IdP's OWN published origin, NOT the
+      # product UI. NOTE: the Makefile exports `UI_BASE_URL`/`AUTH_CALLBACK_BASE_URL`
+      # (pointing at the product UI port), which would shadow a `${UI_BASE_URL:-…}`
+      # default — so we pin to the IdP origin via a dedicated `IDP_ORIGIN` knob
+      # (defaults to the IdP's published port) instead of deferring to those vars.
+      - AUTH_CALLBACK_BASE_URL=${IDP_ORIGIN:-http://localhost:${API_PORT:-8787}}
+      - UI_BASE_URL=${IDP_ORIGIN:-http://localhost:${API_PORT:-8787}}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:${API_PORT:-8787},http://127.0.0.1:${API_PORT:-8787},http://localhost:${UI_PORT:-5173},http://127.0.0.1:${UI_PORT:-5173},http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*}
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
       # The shared env schema (api/src/config/env.ts) requires SCW_TEM_SECRET_KEY
