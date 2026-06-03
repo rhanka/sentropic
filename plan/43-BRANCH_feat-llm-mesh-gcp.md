@@ -1,7 +1,9 @@
-# Feature: BR-42f LLM-Mesh Vertex AI Provider (`@sentropic/llm-mesh@0.2.0` + `api/` Vertex runtime)
+# Feature: BR-43 LLM-Mesh GCP (Google Cloud) Provider (`@sentropic/llm-mesh@0.2.0` + `api/` GCP runtime)
+
+> **BR-43 — standalone `@sentropic/llm-mesh` GCP provider feature (renumbered out of BR-42 "scale" per user 2026-06-03; the scale-relevant piece is the separate native multi-cloud secrets contract, not this provider).**
 
 ## Objective
-> **Provider id renamed `vertex` → `gcp` (user decision 2026-06-02, "Vertex AI" brand retired May 2026; `gcp` is brand-resilient + covers Model Garden's multi-publisher endpoint). Endpoint host stays `aiplatform.googleapis.com`.** Operative references below (provider id `gcp`, catalog ids `@gcp`, env vars `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/`GCP_LIVE_UAT`, make target `gcp-live-uat`, files `gcp-provider.ts`/`gcp-live-uat.ts`) reflect the rename; the deeper rationale prose still says "Vertex" and is kept for the record. The branch label and this plan filename keep `vertex-ai`.
+> **Provider id renamed `vertex` → `gcp` (user decision 2026-06-02, "Vertex AI" brand retired May 2026; `gcp` is brand-resilient + covers Model Garden's multi-publisher endpoint). Endpoint host stays `aiplatform.googleapis.com`.** Operative references below (provider id `gcp`, catalog ids `@gcp`, env vars `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/`GCP_LIVE_UAT`, make target `gcp-live-uat`, files `gcp-provider.ts`/`gcp-live-uat.ts`) reflect the rename; the deeper rationale prose still says "Vertex" and is kept for the record. The branch is `feat/llm-mesh-gcp` (the worktree directory keeps its old name `tmp/feat-llm-mesh-vertex-ai`).
 
 Add a `gcp` provider so the Sentropic runtime calls Gemini models served by Google Cloud (Vertex AI / Model
 Garden, `{region}-aiplatform.googleapis.com`, OAuth/ADC bearer) IN ADDITION to the existing AI-Studio `gemini`
@@ -14,7 +16,7 @@ catalog ids are globally-unique gcp-qualified `{publisher}/{model}@gcp` keys.
 
 ## Scope / Guardrails
 - Scope limited to: the `packages/llm-mesh/src/**` contract change (provider id + catalog + adapter + version
-  bump), and the `api/**` Vertex runtime + registry + dispatch + env wiring under the granted `BR42f-EX1`.
+  bump), and the `api/**` Vertex runtime + registry + dispatch + env wiring under the granted `BR43-EX1`.
 - No `api/drizzle/*.sql` migration (the Vertex provider adds no DB schema; auth is ADC, not a stored key).
 - Make-only workflow, no direct Docker/npm commands.
 - Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -35,9 +37,9 @@ catalog ids are globally-unique gcp-qualified `{publisher}/{model}@gcp` keys.
   - `packages/llm-mesh/src/adapters.ts` (add `VertexAdapter` + `VertexAdapterClient` + the `vertex` wiring row)
   - `packages/llm-mesh/package.json` (version bump `0.1.3 → 0.2.0`)
   - `packages/llm-mesh/tests/**` (facade/catalog vertex assertions)
-  - `spec/SPEC_EVOL_LLM_MESH_VERTEX.md` (this branch's spec, docs consolidation)
-  - `plan/42f-BRANCH_feat-llm-mesh-vertex-ai.md` (this file)
-- **Conditional Paths (allowed ONLY under `BR42f-EX1`, GRANTED — see `## Feedback Loop`)**:
+  - `spec/SPEC_EVOL_LLM_MESH_GCP.md` (this branch's spec, docs consolidation)
+  - `plan/43-BRANCH_feat-llm-mesh-gcp.md` (this file)
+- **Conditional Paths (allowed ONLY under `BR43-EX1`, GRANTED — see `## Feedback Loop`)**:
   - `api/src/services/providers/vertex-provider.ts` — NEW `VertexProviderRuntime`
   - `api/src/services/provider-registry.ts` — register `['vertex', new VertexProviderRuntime()]` (5 → 6)
   - `api/src/services/llm-runtime/index.ts` — add `selection.providerId === 'vertex'` branch in BOTH `generate`
@@ -71,15 +73,14 @@ catalog ids are globally-unique gcp-qualified `{publisher}/{model}@gcp` keys.
     `llm-mesh` publish lane already exists, so no publish-lane Makefile edit; see Lot 5)
   - `.github/workflows/ci.yml` — ONLY if a filter/enum change proves necessary (lane + api filter already
     cover `packages/llm-mesh/**`; see Lot 5)
+- **REVERSED for BR-43 (native-credential direction — see `## UAT & Credentials` / spec §F):** the original
+  M3 ("don't touch compose → make-only `gcp-live-uat`") and M5 ("don't touch `ui/**`") postures are now
+  REVERSED. `docker-compose*.yml` and `ui/**` MOVE from Forbidden into the implementation scope: GCP creds are
+  handled NATIVELY (like `GEMINI_API_KEY`) via the compose api-service env passthrough, and `gcp` is made
+  selectable in the UI model selector. The bespoke `make gcp-live-uat` target + `api/src/scripts/gcp-live-uat.ts`
+  are TO REMOVE in the implementation rework (UAT becomes "pick a gcp model in the chat and send a message").
 - **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml` (M3 — explicitly NOT in EX1; arbitrary `.env` keys do not reach the running API
-    container — verified `docker-compose.yml:9-38` whitelist — so UAT is the make-only `vertex-live-uat`
-    path, NOT a compose env edit)
   - `.cursor/rules/**`
-  - `ui/**` (M5 — Vertex is intentionally NOT browser-selectable in this lot; three selectors hardcode-reject
-    `vertex`: `ui/src/routes/settings/+page.svelte:161`, `ui/src/lib/components/chat/AppChatPanel.svelte:4167`,
-    `ui/src/routes/folder/new/+page.svelte:122`; UI exposure DEFERRED to BR-42b/later; UAT proves the live
-    call at the api/mesh layer, not the browser selector)
   - `api/drizzle/*.sql` (no migration)
   - `api/src/services/provider-connections.ts` (admin BYOK connections panel — Vertex is ADC/config-driven,
     NOT an admin-entered key; explicitly DEFERRED, see `## Deferred`)
@@ -88,19 +89,19 @@ catalog ids are globally-unique gcp-qualified `{publisher}/{model}@gcp` keys.
     resolved Option A; touching them is out of scope)
   - other `plan/NN-BRANCH_*.md` (except this file)
 - **Exception process**:
-  - `BR42f-EX1` declared in `## Feedback Loop` (GRANTED by user) covers every `api/**` Conditional path above.
-  - Any further conditional/forbidden touch needs a new `BR42f-EXn` with reason + impact + rollback.
+  - `BR43-EX1` declared in `## Feedback Loop` (GRANTED by user) covers every `api/**` Conditional path above.
+  - Any further conditional/forbidden touch needs a new `BR43-EXn` with reason + impact + rollback.
 
 ## Feedback Loop
 Actions with the following status should be included around tasks only if really required.
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
-- **BR42f-D1 (provider identity)** `acknowledge` — RESOLVED Option A: durable provider id = **`vertex`**
+- **BR43-D1 (provider identity)** `acknowledge` — RESOLVED Option A: durable provider id = **`vertex`**
   (top-level, single-token, mirrors `openai/gemini/...`). `ProviderFamily` stays `'google'` (already present).
   Do NOT reopen. Leaks into env vars, `ProviderId` union (`providers.ts:1` → `provider-runtime.ts` re-export),
   catalog, `api/` registry, the two route zod enums (`me.ts:80`, `ai-settings.ts:25`), UI selectors.
-- **BR42f-D2 (auth model + §B ordering + M2 forward-path)** `acknowledge` — RESOLVED Option A now / Option B
+- **BR43-D2 (auth model + §B ordering + M2 forward-path)** `acknowledge` — RESOLVED Option A now / Option B
   (`gcp-adc` material) DEFERRED. The ADC bearer is **minted PRE-DISPATCH** (in `toMeshAuthInput`, via the
   `VertexProviderRuntime` ADC helper + D-ADC1 cache/single-flight) and carried as a **`direct-token`** holding
   the concrete short-lived bearer. This single shape (a) passes `mesh.ts prepare()` → `adapter.validateAuth`
@@ -112,17 +113,17 @@ Actions with the following status should be included around tasks only if really
   returns `undefined` for an envVar-only descriptor (verified `mesh-dispatch.ts:250`), so the bearer would
   never reach `VertexProviderRuntime`. The minted bearer MUST NOT be logged (D-ADC1). The string credential
   resolver is BYPASSED for `vertex` (`resolveProviderCredential('vertex')` legitimately returns `none`).
-- **BR42f-D3 (initial catalog + GCP project/region)** `acknowledge`/`attendu` — RESOLVED shape: minimal
+- **BR43-D3 (initial catalog + GCP project/region)** `acknowledge`/`attendu` — RESOLVED shape: minimal
   Gemini-on-Vertex pair (`*-flash` + `*-flash-lite` class), one user-chosen region, opt-in only (no
   `defaultTaskHints`/default-routing change), expressed as globally-unique `google/<model>@vertex` catalog
   keys. The concrete `VERTEX_PROJECT_ID` + `VERTEX_LOCATION` + exact live-callable wire ids are the SINGLE
   deferred user input — `attendu` at UAT (the catalog ships configurable/placeholder vertex-qualified ids +
   env-driven project/location; live confirmation is a UAT step before merge).
-- **BR42f-D4 (code reuse)** `acknowledge` — RESOLVED REUSE: `buildGeminiRequestBody` (index.ts:414) + the
+- **BR43-D4 (code reuse)** `acknowledge` — RESOLVED REUSE: `buildGeminiRequestBody` (index.ts:414) + the
   Gemini SSE→event loop (index.ts ~1199-1322) are 100% reusable (identical Gemini payload; only URL + auth
   header differ). A shared SSE-loop helper may be extracted, but ONLY inside `api/src/services/llm-runtime`
   (never moved into the package).
-- **BR42f-EX1 (cross-package scope exception)** `acknowledge` — **GRANTED** (user authorized BR-42f). The
+- **BR43-EX1 (cross-package scope exception)** `acknowledge` — **GRANTED** (user authorized BR-43). The
   `api/**` file list under Conditional Paths is authorized; the branch is infeasible without it (the package
   is transport-less — verified zero `fetch`/`https`/`googleapis`/SSE in `packages/llm-mesh/src/**`). Impact:
   1 new `api/` runtime file (`vertex-provider.ts`) + ~8 edited `api/` service/route files + 1 env triple +
@@ -133,8 +134,8 @@ Actions with the following status should be included around tasks only if really
   and **`ui/**` is NOT in EX1** (M5 — UI exposure deferred). Rollback: revert the registry registration +
   dispatch branch + catalog rows → `vertex` becomes undeclared, 5 existing providers unchanged
   (characterization-proved, Lot 1).
-- **BR42f-D5 (provider-connections.ts)** `acknowledge` — `provider-connections.ts` (admin BYOK panel) is OUT
-  of BR-42f (Vertex is ADC/config-driven, not an admin-entered key). Recorded in `## Deferred`.
+- **BR43-D5 (provider-connections.ts)** `acknowledge` — `provider-connections.ts` (admin BYOK panel) is OUT
+  of BR-43 (Vertex is ADC/config-driven, not an admin-entered key). Recorded in `## Deferred`.
 - **D-ADC1 (token cache)** `acknowledge` — cache key `{project}+{location}+{scope=cloud-platform}`; refresh at
   `now >= expiry - 60s`; single-flight per-key promise; mint failure NOT cached and surfaced via D-ERR1;
   NO token/SA-JSON logging (log `{project,location}` only).
@@ -160,7 +161,7 @@ Actions with the following status should be included around tasks only if really
   any nondeterminism there is a bug, never an allowlisted flake. Live Vertex calls are UAT-only, sentinel-gated.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single feature branch `feat/llm-mesh-vertex-ai`, internal lots 0..5;
+- [x] **Mono-branch + cherry-pick** (single feature branch `feat/llm-mesh-gcp`, internal lots 0..5;
       one final test cycle)
 - [ ] **Multi-branch**
 - Rationale: the lots are sequentially coupled — characterization (Lot 1) must lock the 5 providers' behaviour
@@ -171,7 +172,7 @@ Actions with the following status should be included around tasks only if really
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT performed on the integrated branch after Lot 4, gated by the `VERTEX_LIVE_UAT=1`
-  sentinel (BR42f-D3 live-id confirmation — the single deferred user input).
+  sentinel (BR43-D3 live-id confirmation — the single deferred user input).
 - UAT checkpoints listed as checkboxes inside Lot 4 (no separate UAT section).
 - Execution flow (mandatory):
   - Develop and run mocked/stubbed tests in `tmp/feat-llm-mesh-vertex-ai`.
@@ -181,26 +182,27 @@ Actions with the following status should be included around tasks only if really
     in `.env`), NEVER `ENV=dev`, NEVER the root ports 8787/5173/1080.
   - Switch back to `tmp/feat-llm-mesh-vertex-ai` after UAT.
 
-## Wave & Port Allocation (branch nn = 42, slot 0)
-- Slot ports: API `9000 + (42*5) + slot` = `9210..9214`; UI `5200 + (42*5) + slot` = `5410..5414`;
-  Maildev UI `1100 + (42*5) + slot` = `1310..1314`.
-- Slot 0 (default lot owner): `API_PORT=9210`, `UI_PORT=5410`, `MAILDEV_UI_PORT=1310`, `ENV=feat-llm-mesh-vertex-ai`.
+## Wave & Port Allocation (slot 0)
+- The concrete slot-0 ports below were ALLOCATED under the original `nn = 42` numbering (`9000 + 42*5`, etc.)
+  and are kept as-is to avoid churn on the live worktree `.env`; the renumber to BR-43 does NOT re-derive them.
+- Slot ports: API `9210..9214`; UI `5410..5414`; Maildev UI `1310..1314`.
+- Slot 0 (default lot owner): `API_PORT=9210`, `UI_PORT=5410`, `MAILDEV_UI_PORT=1310`, `ENV=feat-llm-mesh-gcp`.
 - Before launching any sub-agent: `make ps-all` to verify no port conflict.
 - Root dev/UAT stays on API `8787`, UI `5173`, Maildev `1080` (reserved for user).
 
 ## Plan / Todo (lot-based)
 
 - [ ] **Lot 0 — Baseline, scoping, EX1 declaration & skeleton (confirm the 5-provider baseline)**
-  - [ ] Verify branch: `git -C tmp/feat-llm-mesh-vertex-ai branch --show-current` = `feat/llm-mesh-vertex-ai`.
+  - [ ] Verify branch: `git -C tmp/feat-llm-mesh-vertex-ai branch --show-current` = `feat/llm-mesh-gcp`.
   - [ ] Create/confirm isolated worktree `tmp/feat-llm-mesh-vertex-ai` from `main`; copy `.env`, override
-        `ENV=feat-llm-mesh-vertex-ai` + slot-0 ports (9210/5410/1310).
+        `ENV=feat-llm-mesh-gcp` + slot-0 ports (9210/5410/1310).
   - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`,
-        `rules/security.md`, `PLAN.md`, `spec/SPEC_EVOL_LLM_MESH_VERTEX.md` (FULLY), sibling
+        `rules/security.md`, `PLAN.md`, `spec/SPEC_EVOL_LLM_MESH_GCP.md` (FULLY), sibling
         `spec/SPEC_EVOL_LLM_MESH.md`/`SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`/`SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`,
         `plan/BRANCH_TEMPLATE.md`, and `plan/42a0-BRANCH_feat-chat-server.md` (the characterization-discipline
         reference).
   - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [ ] Validate scope boundaries; record `BR42f-EX1` (GRANTED) in `## Feedback Loop`.
+  - [ ] Validate scope boundaries; record `BR43-EX1` (GRANTED) in `## Feedback Loop`.
   - [ ] Confirm the resolved decisions are baked (D1 `vertex`, D2 ADC mint-before-dispatch, D3 vertex-qualified
         ids + env-driven project/location, D4 REUSE, §C uniqueness, D-ADC1/2, D-ERR1) — do NOT reopen.
   - [ ] Confirm the 5-provider baseline: `providers.ts:1` = `['openai','gemini','anthropic','mistral','cohere']`;
@@ -220,8 +222,8 @@ Actions with the following status should be included around tasks only if really
         gate at line 857), `gemini-provider-sse.test.ts`, `provider-credentials.test.ts`, and the package
         `facade.test.ts`/`auth.test.ts`/`tools.test.ts` — record exact file list as the gate set.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-llm-mesh-vertex-ai` + `make lint-api ENV=test-llm-mesh-vertex-ai`
-    - [ ] Sub-lot gate: `make test-api SCOPE=tests/unit/provider-characterization.test.ts ENV=test-llm-mesh-vertex-ai`
+    - [ ] `make typecheck-api ENV=test-llm-mesh-gcp` + `make lint-api ENV=test-llm-mesh-gcp`
+    - [ ] Sub-lot gate: `make test-api SCOPE=tests/unit/provider-characterization.test.ts ENV=test-llm-mesh-gcp`
           (characterization green on baseline; this is the rollback-property oracle for EX1).
 
 - [ ] **Lot 2 — Package edits (`@sentropic/llm-mesh@0.2.0`: unions + VertexAdapter + version bump)**
@@ -242,15 +244,15 @@ Actions with the following status should be included around tasks only if really
   - [ ] `packages/llm-mesh/package.json`: bump `version` `0.1.3 → 0.2.0` (additive provider id + catalog =
         minor).
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-vertex-ai`
+    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-gcp`
     - [ ] **Package tests** (`packages/llm-mesh/tests/`):
       - [ ] `facade.test.ts` — extend provider/model listing assertions to include `vertex`; assert
             `getModelProfile('vertex', '<google/...@vertex>')` resolves and vertex reasoning-capable models are
             not `unsupported`. (inject a fake `ProviderAdapter`/client — no network.)
       - [ ] `auth.test.ts` — UNCHANGED (Option B `gcp-adc` material is DEFERRED; no new auth union member).
       - [ ] `tools.test.ts` — UNCHANGED unless a tool assertion enumerates providers.
-      - [ ] Sub-lot gate: `make test-llm-mesh ENV=test-llm-mesh-vertex-ai`.
-    - [ ] `make build-llm-mesh ENV=test-llm-mesh-vertex-ai` + `make pack-llm-mesh ENV=test-llm-mesh-vertex-ai`.
+      - [ ] Sub-lot gate: `make test-llm-mesh ENV=test-llm-mesh-gcp`.
+    - [ ] `make build-llm-mesh ENV=test-llm-mesh-gcp` + `make pack-llm-mesh ENV=test-llm-mesh-gcp`.
 
 - [ ] **Lot 3 — `api/` Vertex runtime (reuse Gemini body+SSE; registry + dispatch + env + ADC mint)**
   - [ ] NEW `api/src/services/providers/vertex-provider.ts` (`VertexProviderRuntime`): URL builder
@@ -263,7 +265,7 @@ Actions with the following status should be included around tasks only if really
         for k8s/workload-identity + a small SA-JSON path; add `google-auth-library` as an api-only dep
         (`make install-api google-auth-library`) ONLY if SA-JSON/local-dev ergonomics require it.
   - [ ] **M6 — lockfile step (only if a dep is added):** after `make install-api google-auth-library`, run
-        `make lock-api ENV=test-llm-mesh-vertex-ai` (and `make lock-root ENV=test-llm-mesh-vertex-ai` if the
+        `make lock-api ENV=test-llm-mesh-gcp` (and `make lock-root ENV=test-llm-mesh-gcp` if the
         workspace-root install touches it — verified targets `Makefile:420`/`Makefile:425`), then commit the
         regenerated `api/package-lock.json` (+ root `package-lock.json`) ALONGSIDE `api/package.json` in the
         SAME commit. Both locks feed the `API_VERSION` content hash (`Makefile:34`) — a stale lock breaks the
@@ -311,7 +313,7 @@ Actions with the following status should be included around tasks only if really
         to the `defaultProviderId` `z.enum(['openai','gemini','anthropic','mistral','cohere'])` so selecting/
         persisting `vertex` as default is coherent (the inference path can produce `provider_id:'vertex'`).
   - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-llm-mesh-vertex-ai` + `make lint-api ENV=test-llm-mesh-vertex-ai`
+    - [ ] `make typecheck-api ENV=test-llm-mesh-gcp` + `make lint-api ENV=test-llm-mesh-gcp`
     - [ ] (tests added in Lot 4; Lot 3 ends on typecheck/lint green only — no live calls.)
 
 - [ ] **Lot 4 — Tests (mocked Vertex + stubbed ADC) + the BREAKING non-reg edits**
@@ -366,15 +368,20 @@ Actions with the following status should be included around tasks only if really
         assert the 5 existing providers' outputs are byte-identical (no label/tier/capability/dispatch drift)
         — this PROVES the EX1 rollback property.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-llm-mesh-vertex-ai` + `make lint-api ENV=test-llm-mesh-vertex-ai`
-    - [ ] Sub-lot gate: `make test-api ENV=test-llm-mesh-vertex-ai` (all API unit/integration green, mocked).
-    - [ ] **UAT (BR42f-D3 live-id confirmation — the SINGLE deferred user input, `attendu`) — make-only,
-          api/mesh layer, NO browser selector (M3 + M5)**, on a branch stack from root
-          (`ENV=feat-llm-mesh-vertex-ai`, ports 9210/5410/1310), NEVER `ENV=dev`:
+    - [ ] `make typecheck-api ENV=test-llm-mesh-gcp` + `make lint-api ENV=test-llm-mesh-gcp`
+    - [ ] Sub-lot gate: `make test-api ENV=test-llm-mesh-gcp` (all API unit/integration green, mocked).
+    - [ ] **UAT (BR43-D3 live-id confirmation, `attendu`).** **DIRECTION REVERSED for BR-43 (native creds — see
+          `## UAT & Credentials` / spec §F):** GCP creds are now handled NATIVELY (like `GEMINI_API_KEY`) via the
+          docker-compose api-service env passthrough (`GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` /
+          `GOOGLE_APPLICATION_CREDENTIALS`, the SA-key a gitignored bind-mount), and `gcp` is made selectable in
+          the UI model selector ⇒ **UAT = pick a gcp model in the chat and send a message**. The bespoke
+          `make gcp-live-uat` target + `api/src/scripts/gcp-live-uat.ts` are TO REMOVE in the implementation
+          rework. The make-only steps below are SUPERSEDED and kept only for historical context until that rework
+          (on a branch stack `ENV=feat-llm-mesh-gcp`, ports 9210/5410/1310, NEVER `ENV=dev`):
       - [ ] Place a **gitignored** service-account key file at the path declared in `.gitignore` (M3); set
             `.env` (local only, NEVER committed): `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (ADC = the
             SA-JSON key file; `GOOGLE_APPLICATION_CREDENTIALS` is injected inline by the target, not via compose).
-      - [ ] Run **`make gcp-live-uat ENV=feat-llm-mesh-vertex-ai`** (M3 — `docker cp`s the SA key into the
+      - [ ] Run **`make gcp-live-uat ENV=feat-llm-mesh-gcp`** (M3 — `docker cp`s the SA key into the
             running `api` container at a tmp path, then `docker compose exec api` of `api/src/scripts/
             gcp-live-uat.ts` with `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/`GOOGLE_APPLICATION_CREDENTIALS`/
             `GCP_LIVE_UAT=1` injected INLINE on that exec — a fresh process the env reaches, unlike the
@@ -399,22 +406,24 @@ Actions with the following status should be included around tasks only if really
         bump (Lot 2) is what publishes. (The publish LANE needs NO Makefile/ci.yml edit; the ONLY Makefile
         edit in this branch is the new `vertex-live-uat` target — M3, next item — which is unrelated to the
         publish lane.)
-  - [ ] **M3 — author the `make gcp-live-uat` target** (Makefile, under BR42f-EX1): `docker cp`s the
+  - [ ] **M3 — author the `make gcp-live-uat` target** (Makefile, under BR43-EX1): `docker cp`s the
         gitignored SA key into the running `api` container at a tmp path, then `docker compose exec api sh -lc`
         of `api/src/scripts/gcp-live-uat.ts` (the `make exec-api` pattern `Makefile:1567-1575`; script-run +
         inline-env pattern per `oauth-rotate-keys` `Makefile:2455`) with `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/
         `GOOGLE_APPLICATION_CREDENTIALS`/`GCP_LIVE_UAT=1` injected INLINE on that exec; output sanitized
         (no bearer / SA-JSON / full project cred). Add the SA-key path to `.gitignore` in the SAME commit.
-  - [ ] Author the UAT packet doc (the credential-safe live protocol) — consolidate into
-        `spec/SPEC_EVOL_LLM_MESH_VERTEX.md §F`: the make-only `vertex-live-uat` path (compose UNTOUCHED — M3),
-        `VERTEX_LIVE_UAT` sentinel (CI never sets it ⇒ live calls gated out structurally), `ENV=test-*`/
-        `ENV=e2e-*` isolation + branch slot ports, sanitized logs (no bearer/SA-JSON/full project cred),
-        recorded evidence `{project, location, publisher, modelId, pass/fail, finishReason}` with NO committed
-        credential, and the note that UAT is api/mesh-only (UI selector exposure deferred — M5).
+  - [ ] **(REVERSED for BR-43)** Author the UAT doc per the NATIVE-credential direction — consolidate into
+        `spec/SPEC_EVOL_LLM_MESH_GCP.md §F`: GCP creds via the docker-compose api-service env passthrough
+        (`GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS`, SA-key a gitignored
+        bind-mount), `gcp` selectable in the UI model selector, so UAT = pick a gcp model in the chat and send a
+        message; `ENV=test-*`/`ENV=e2e-*` isolation + branch slot ports; sanitized logs (no bearer/SA-JSON/full
+        project cred); NO committed credential. The bespoke `make gcp-live-uat` + `api/src/scripts/gcp-live-uat.ts`
+        are TO REMOVE. The k8s secret-mount + the CI secret belong to the SEPARATE native multi-cloud secrets
+        contract (deferred to the k8s-ops link), not to this provider.
   - [ ] `enforce-package-bump` (pull_request) green for `packages/llm-mesh` (`0.1.3 → 0.2.0`).
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Sync `spec/SPEC_EVOL_LLM_MESH_VERTEX.md` to as-built: provider id `vertex`, ADC mint-before-dispatch +
+  - [ ] Sync `spec/SPEC_EVOL_LLM_MESH_GCP.md` to as-built: provider id `vertex`, ADC mint-before-dispatch +
         the §B ordering fix, the catalog `{publisher}/{model}@vertex` key form, the UAT-confirmed live ids
         (recorded WITHOUT credentials), and the confirmation that the publish lane pre-existed. If a
         `spec/BRANCH_SPEC_EVOL.md` was used, integrate then delete it.
@@ -423,35 +432,35 @@ Actions with the following status should be included around tasks only if really
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & lint (llm-mesh + api) green.
-  - [ ] Retest package: `make test-llm-mesh ENV=test-llm-mesh-vertex-ai`.
-  - [ ] Retest API: `make test-api ENV=test-llm-mesh-vertex-ai` (characterization + vertex-provider + breaking
+  - [ ] Retest package: `make test-llm-mesh ENV=test-llm-mesh-gcp`.
+  - [ ] Retest API: `make test-api ENV=test-llm-mesh-gcp` (characterization + vertex-provider + breaking
         edits + all gates).
   - [ ] Retest E2E: chat-relevant e2e groups (cf. ci.yml e2e split) — provider runtime is the wire under test;
-        `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-llm-mesh-vertex-ai
+        `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-llm-mesh-gcp
         E2E_GROUP=<matrix.e2e_group>` (matrix groups per `.github/workflows/ci.yml`).
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document signatures here.
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted, AND the BR42f-D3 UAT live-id sign-off.
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted, AND the BR43-D3 UAT live-id sign-off.
   - [ ] Bumped `packages/llm-mesh/package.json` `0.1.3 → 0.2.0` — `enforce-package-bump` green.
   - [ ] Final gate step 1: create/update PR using this file's text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
 
-## Deferred (recorded, out of BR-42f)
-- **`gcp-adc` / `service-account` first-class auth material in the package** (BR42f-D2 Option B) — deferred to
+## Deferred (recorded, out of BR-43)
+- **`gcp-adc` / `service-account` first-class auth material in the package** (BR43-D2 Option B) — deferred to
   a later identity lot (e.g. BR-39h identity unification incl. NHI). The resolved Option A carries Vertex
   through the mesh gate via `environment-token`/`direct-token` without widening the package auth union.
 - **Claude-on-Vertex / Llama-on-Vertex** (R4) — different `publishers/{anthropic|meta}` namespace + different
   request/response body = a separate mapping = out of the "reuse the Gemini mapping" scope; additive later
   branch once Gemini-on-Vertex is proven.
-- **`api/src/services/provider-connections.ts` (admin BYOK connections panel)** (BR42f-D5) — Vertex auth is
+- **`api/src/services/provider-connections.ts` (admin BYOK connections panel)** (BR43-D5) — Vertex auth is
   ADC/config-driven (no stored API key), so it does not fit the BYOK connection model; revisit if/when the UI
   must surface Vertex connection state.
-- **`ui/**` Vertex selector surfacing (M5 — Deferred to BR-42b/later)** — Vertex is opt-in (R2, no
-  default-routing change) and intentionally NOT browser-selectable in BR-42f. Three selectors hardcode-reject
-  `vertex` (verified `ui/src/routes/settings/+page.svelte:161` `validProviderIds`;
-  `ui/src/lib/components/chat/AppChatPanel.svelte:4167` 5-way guard; `ui/src/routes/folder/new/+page.svelte:122`
-  5-way guard). `ui/**` stays FORBIDDEN; UAT proves the live call at the api/mesh layer, not the browser
-  selector. UI provider-selector exposure of `vertex` is deferred to BR-42b/later.
+- **`ui/**` `gcp` selector surfacing — NO LONGER DEFERRED (M5 REVERSED for BR-43).** The earlier posture
+  (defer to BR-42b, `ui/**` Forbidden) is reversed: making `gcp` selectable in the UI model selector is now
+  IN-SCOPE for the BR-43 implementation rework, because native-credential UAT = pick a gcp model in the chat
+  and send a message. The three selectors that hardcode-reject `gcp`
+  (`ui/src/routes/settings/+page.svelte`, `ui/src/lib/components/chat/AppChatPanel.svelte`,
+  `ui/src/routes/folder/new/+page.svelte`) must gain `gcp`.
 
 ## Plan Review Log
 Second-pass adversarial plan review by Codex 5.5-xhigh (verdict: "Revise plan first; not ready to implement")
@@ -459,7 +468,7 @@ reconciled by the Opus 4.8 conductor + Codex 5.5-xhigh. Each must-fix was re-ver
 source before encoding (anchors cited). All six are now folded into the lots/scope above; the
 characterization-first Lot 1 is unchanged.
 - **M1 — missing exact-count API test.** `api/tests/api/models.test.ts:47-52` asserts exact per-provider model
-  arrays AND `data.models` total `toHaveLength(11)` (verified). RESOLUTION: added to `BR42f-EX1` (Conditional
+  arrays AND `data.models` total `toHaveLength(11)` (verified). RESOLUTION: added to `BR43-EX1` (Conditional
   Paths) AND to the Lot 4 breaking-count edits — total → `11 + N` (N = Vertex catalog entries) + a new
   `modelsByProvider('vertex')` exact-array assertion. The only other API `toHaveLength(5)` is
   `generic-dispatch.test.ts:288` = unrelated TASK cardinality (verified, NOT touched).
@@ -469,20 +478,21 @@ characterization-first Lot 1 is unchanged.
   flows through the `extractCredential`→`buildProviderRuntimeRequest` actual-token path (mesh-dispatch.ts:248,
   263-270); the envVar-only descriptor is REJECTED as carrier; bearer NOT logged. Encoded in D2 + Lot 3
   `mesh-dispatch.ts` + Lot 4 mesh-gate proof; spec §2/§B/R5/§5 D2 aligned.
-- **M3 — UAT env wiring.** `docker-compose.yml:9-38` forwards only a whitelist; arbitrary `.env` keys never
-  reach the running API (verified). RESOLUTION: `docker-compose.yml` stays UNTOUCHED (NOT in EX1); UAT is a
-  make-only `make vertex-live-uat` target (`docker cp` gitignored SA key + `docker compose exec api` of a new
-  `api/src/scripts/vertex-live-uat.ts` with env injected INLINE on a fresh process), sanitized output. Added
-  `Makefile` + `api/src/scripts/vertex-live-uat.ts` + `.gitignore` to EX1; encoded in Lot 4 UAT + Lot 5; spec
-  §F/§7 aligned.
+- **M3 — UAT env wiring. (SUPERSEDED for BR-43 — see `## UAT & Credentials` / spec §F.)** The original
+  resolution (compose UNTOUCHED, make-only `make gcp-live-uat` target + `api/src/scripts/gcp-live-uat.ts`) is
+  REVERSED: GCP creds are now handled NATIVELY via the docker-compose api-service env passthrough
+  (`GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS`, SA-key a gitignored
+  bind-mount); the bespoke target + script are TO REMOVE. (Original note kept for context: compose
+  `9-38` forwards only a whitelist, which is why the native fix adds the GCP keys to that passthrough.)
 - **M4 — Gemini SSE literals to parameterize.** `index.ts:921/1200/1281/1305` hardcode `gemini_` /
   `gemini_call_` / `provider_id:'gemini'` in the shared loop the Vertex runtime reuses (verified). RESOLUTION:
   parameterize prefixes + `provider_id` by active provider; encoded in Lot 3 (index.ts edit) + Lot 4
   (attribution test); spec reuse-analysis aligned.
-- **M5 — UI hardcodes.** `settings/+page.svelte:161`, `AppChatPanel.svelte:4167`, `folder/new/+page.svelte:122`
-  reject `vertex` (verified). RESOLUTION: UAT is API/mesh-only; `ui/**` stays FORBIDDEN; UI provider-selector
-  exposure DEFERRED to BR-42b/later (recorded in `## Deferred`); encoded in Forbidden Paths + Lot 4 UAT note;
-  spec §F/§7 aligned.
+- **M5 — UI hardcodes. (SUPERSEDED for BR-43.)** The original resolution (UAT API/mesh-only, `ui/**`
+  FORBIDDEN, UI exposure deferred to BR-42b) is REVERSED: making `gcp` selectable in the UI model selector is
+  now IN-SCOPE for the BR-43 rework (native-credential UAT = pick a gcp model in the chat and send a message).
+  The three selectors that reject `gcp` (`settings/+page.svelte`, `AppChatPanel.svelte`,
+  `folder/new/+page.svelte`) must gain `gcp`.
 - **M6 — lockfile scope.** Adding `google-auth-library` to `api/package.json` requires the lock(s) in scope;
   `google-auth-library` absent from both `api/package-lock.json` and root `package-lock.json` today, and both
   feed the `API_VERSION` hash (`Makefile:34`) (verified). RESOLUTION: added `api/package-lock.json` + root
