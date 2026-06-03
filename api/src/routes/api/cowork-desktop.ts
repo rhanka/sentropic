@@ -4,18 +4,20 @@ import { requireAdmin } from '../../middleware/rbac';
 import { settingsService } from '../../services/settings';
 
 // Mirrors api/src/routes/api/chrome-extension.ts download endpoint for the
-// Sentropic Cowork desktop binary (BR-41a Lot 5). The artifact (cowork.exe +
-// the win-x64 zip) is produced by `make package-desktop-windows` and lands under
-// ui/static/cowork-desktop/ (gitignored, same as the chrome-ext zip).
+// Sentropic Cowork desktop binary. The artifact is a single self-contained
+// `cowork.exe` (the native payload is embedded + extracted at first run, no zip),
+// produced by `make package-desktop-windows` into ui/static/cowork-desktop/
+// (gitignored, same place as the chrome-ext artifact).
 //
 // BR-41a Lot 5C adds an admin-selectable channel: RELEASE (the official signed
 // build, COWORK_DESKTOP_DOWNLOAD_URL) vs PRERELEASE (the branch-built unsigned
 // build served for UAT, COWORK_DESKTOP_PRERELEASE_URL). The active channel is a
 // GLOBAL settings row (key cowork_desktop.channel), default 'release'.
 
-const DEFAULT_DESKTOP_VERSION = '0.1.0';
+const DEFAULT_DESKTOP_VERSION = '0.2.0';
 const DEFAULT_DESKTOP_SOURCE = 'packages/cowork-desktop';
-const DEFAULT_DESKTOP_ZIP_PATH = '/cowork-desktop/sentropic-cowork-windows-x64.zip';
+// Single self-contained exe (no zip): the native payload is embedded + extracted at first run.
+const DEFAULT_DESKTOP_EXE_PATH = '/cowork-desktop/cowork.exe';
 
 export const COWORK_DESKTOP_CHANNEL_KEY = 'cowork_desktop.channel';
 const VALID_CHANNELS = ['release', 'prerelease'] as const;
@@ -73,7 +75,7 @@ const buildFallbackDownloadUrlFromOrigin = (originHeader: string | undefined): s
   const normalizedOrigin = normalizeHttpUrl(origin);
   if (!normalizedOrigin) return null;
 
-  return new URL(DEFAULT_DESKTOP_ZIP_PATH, normalizedOrigin).toString();
+  return new URL(DEFAULT_DESKTOP_EXE_PATH, normalizedOrigin).toString();
 };
 
 const unavailableMessage = (channel: CoworkDesktopChannel, reason: 'missing' | 'invalid'): string => {

@@ -76,6 +76,21 @@ describe('provider credential resolution', () => {
     expect(['environment', 'none']).toContain(resolved.source);
   });
 
+  it('resolves gcp credential as none (ADC-minted, no stored string key)', async () => {
+    // BR-43 / §B / D2 — GCP auth is an ADC-minted short-lived bearer, not a
+    // stored API key. The string credential resolver is intentionally BYPASSED
+    // for `gcp`, so it legitimately resolves to source:'none' and leaks no
+    // credential string (the bearer is minted later, pre-dispatch, in
+    // toMeshAuthInput).
+    const resolved = await resolveProviderCredential({
+      providerId: 'gcp',
+    });
+
+    expect(resolved.providerId).toBe('gcp');
+    expect(resolved.source).toBe('none');
+    expect(resolved.credential ?? null).toBeNull();
+  });
+
   it('builds correct credential setting key for new providers', () => {
     expect(buildUserProviderCredentialSettingKey('anthropic', 'user1')).toBe(
       'ai_provider_key_user:anthropic:user1',

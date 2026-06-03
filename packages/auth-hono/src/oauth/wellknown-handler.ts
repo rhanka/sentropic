@@ -20,7 +20,7 @@ export const createWellKnownRouter = (options: CreateWellKnownRouterOptions): Ho
       claims_supported: ['sub', 'aud', 'iss', 'exp', 'iat', 'nonce', 'auth_time', 'acr', 'email', 'email_verified', 'name'],
       code_challenge_methods_supported: ['S256'],
       dpop_signing_alg_values_supported: ['EdDSA'],
-      grant_types_supported: ['authorization_code'],
+      grant_types_supported: ['authorization_code', 'client_credentials'],
       id_token_signing_alg_values_supported: ['EdDSA'],
       introspection_endpoint: `${issuer}${oauthPrefix}/introspect`,
       issuer,
@@ -30,7 +30,7 @@ export const createWellKnownRouter = (options: CreateWellKnownRouterOptions): Ho
       scopes_supported: ['openid', 'profile', 'email'],
       subject_types_supported: ['public'],
       token_endpoint: `${issuer}${oauthPrefix}/token`,
-      token_endpoint_auth_methods_supported: ['client_secret_basic', 'none'],
+      token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
       userinfo_endpoint: `${issuer}${oauthPrefix}/userinfo`,
     })
   );
