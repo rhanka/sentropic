@@ -55,8 +55,23 @@ export interface DpopProofRecord {
   createdAt: Date;
 }
 
+export interface ServiceClientRecord {
+  id: string;
+  clientId: string;
+  clientSecretHash: string;
+  displayName: string | null;
+  allowedScopes: string[];
+  resourceIndicators: string[];
+  dpopBoundAccessTokens: boolean;
+  tenantId: string | null;
+  secretRotatedAt: Date | null;
+  createdAt: Date;
+  revokedAt: Date | null;
+}
+
 export interface OauthStateStorePort {
   findClient(clientId: string): Promise<OauthClientRecord | null>;
+  findServiceClient?(clientId: string): Promise<ServiceClientRecord | null>;
   saveAuthCode(code: string, payload: AuthCodePayload, ttlSec: number): Promise<void>;
   consumeAuthCode(code: string): Promise<AuthCodePayload | null>;
   saveTokenMeta(jti: string, meta: TokenMeta, ttlSec: number): Promise<void>;
