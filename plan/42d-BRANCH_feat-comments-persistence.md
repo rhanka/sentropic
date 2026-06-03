@@ -114,13 +114,14 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
   - [x] Wire-test the sink against the Lot 0 matrix (incl. AI trace-note `created`=`comment_id`, auto `created`=`comment_id`) + awaitable flush.
   - [x] Lot gate: `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence`; sink wire-test GREEN (13/13); Lot 0 characterization stays GREEN (comments.test.ts 19 + comments-wire.test.ts 8).
 
-- [ ] **Lot 4 — REST migration** (M-REST, `api/src/routes/api/comments.ts`)
-  - [ ] Rewrite the 6 handlers onto the store's EMIT-FREE persistence: POST = `add` + host-local SILENT thread-assignee cascade (no second event); PATCH = host-local REST PATCH helper performing the whole-`updates` thread cascade (content + `assigned_to:null→createdBy`) exactly as `comments.ts:235-254`; close/reopen = `setState`; delete = `delete`; list = `listByTarget` + keep the app-local `users` label join.
-  - [ ] Emit EXACTLY ONE route-owned event per handler via the sink with the explicit `{action, key}` (origin `rest`, all keys `comment_id`), AWAITING the flush.
-  - [ ] DELETE the REST `notifyCommentEvent` + `escapeNotifyPayload` copy (`comments.ts:16-28`) IN THIS SAME lot (no dual path). KEEP `ensureContextExists`/`ensureWorkspaceMember`/role gates app-local.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence`.
-    - [ ] **API tests**: `api/tests/api/comments.test.ts` characterization stays GREEN unchanged (`make test-api-comments SCOPE=tests/api/comments.test.ts ENV=test-feat-comments-persistence`); wire-payload test stays GREEN.
+- [x] **Lot 4 — REST migration** (M-REST, `api/src/routes/api/comments.ts`)
+  - [x] Rewrite the 6 handlers onto the store's EMIT-FREE persistence: POST = `add` + host-local SILENT thread-assignee cascade (no second event); PATCH = host-local REST PATCH helper performing the whole-`updates` thread cascade (content + `assigned_to:null→createdBy`) exactly as `comments.ts:235-254`; close/reopen = `setState`; delete = `delete`; list = `listByTarget` + keep the app-local `users` label join.
+  - [x] Emit EXACTLY ONE route-owned event per handler via the sink with the explicit `{action, key}` (origin `rest`, all keys `comment_id`), AWAITING the flush.
+  - [x] DELETE the REST `notifyCommentEvent` + `escapeNotifyPayload` copy (`comments.ts:16-28`) IN THIS SAME lot (no dual path). KEEP `ensureContextExists`/`ensureWorkspaceMember`/role gates app-local.
+  - [x] Shared instance: single `PgCommentStore`+`PgNotifyCommentEventSink` over the shared `db`/`pool` in `api/src/services/comments/instance.ts` (SPEC DEC-4; exported for Lot 5 reuse).
+  - [x] Lot gate:
+    - [x] `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence` (typecheck clean; lint 0 errors, no NEW errors).
+    - [x] **API tests**: `api/tests/api/comments.test.ts` characterization stays GREEN unchanged (19 passed); wire-payload test stays GREEN (8 passed); pg-comment-store parity (22) + sink wire-test (13) still green.
 
 - [ ] **Lot 5 — AI re-route** (M-AI-READ / M-AI-WRITE / M-AUTO)
   - [ ] `api/src/services/tool-service.ts` read path: re-route `listCommentThreadsForContexts` grouping to `store.listThreadSummaries` (per-context loop; host applies threadId/limit/global-ordering; host summary mapper `assignee→assignedTo`, `resolved→closed`, derive `createdBy/createdAt/updatedAt` from thread rows); KEEP the `users` join app-local.
