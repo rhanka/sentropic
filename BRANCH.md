@@ -94,7 +94,7 @@
   - [x] object file rename `default-agents-ai-ideas.ts`→`default-agents-ai-priorities.ts`, const `AI_IDEAS_AGENTS`→`AI_PRIORITIES_AGENTS`, all imports.
   - [x] ui/src technical id (Header/WorkspaceCreateDialog/InitiativeDetail/OrganizationForm/ViewTemplateCatalog/workspaceScope/neutral) + i18n label `aiIdeas`→`aiPriorities` = "AI Priorities"/"Priorités IA" + labelKey refs.
   - [x] DB migration `0028_rename_ai_ideas_to_ai_priorities.sql` + journal registration; `schema.ts` default/comments updated.
-  - [ ] tests/fixtures + `spec/SPEC_EVOL_WORKSPACE_TYPES.md` sync.
+  - [x] tests/fixtures + `spec/SPEC_EVOL_WORKSPACE_TYPES.md` sync.
   - [ ] Gates: typecheck/lint api+ui (ENV=br14e); validate-flow/chat-ui/skills; test-api/test-ui (ENV=test-br14e); migration applies on test DB.
 - [ ] Lot N: final validation, UAT, PR
   - [x] `make typecheck-api typecheck-ui ENV=br14e`
