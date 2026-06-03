@@ -42,26 +42,27 @@ Status legend: `blocked` / `deferred` / `cancelled` / `attention` (agent) ; `cla
 - **F1+F3 (COUPLED) — data model + main-app cutover** — DECISION (Phase A0): IdP runs on the SHARED physical DB (IdP = logical owner). The physical `users`/`user_sessions` extraction AND the main-app OIDC-client cutover are DEFERRED together to **Phase D** (one branch, no dual-write bridge). `acknowledge` — recommended default per spec §5.2; IRREVERSIBLE, NOT in this branch.
 - **F2 — identity model** — DECISION: global identity + `tenant_memberships`. Phase A0 has NO membership yet (design-system is free-auth, sub+email is enough). `acknowledge`.
 - **F4 — openerp sub-tenancy** — DECISION: federated / app-managed default. Out of Phase A0 scope. `acknowledge`.
-- **F5 — standalone IdP service name + topology** — `attention`: the service name/location/domain is a **PLACEHOLDER pending user validation at merge** (`feedback_no_unvalidated_naming`). Current placeholder: dir `apps/auth-idp/`, service alias `auth-idp`, domain `auth.sent-tech.ca`. Do NOT treat as final. **HARD STOP before freezing.**
+- **F5 — standalone IdP service name + topology** — DECISION (user-confirmed at launch, validated-at-merge): dir `apps/auth-idp/`, service alias `auth-idp`, domain `auth.sent-tech.ca`, centralized topology. BR39m-Q1 RESOLVED → EX1/EX2 authorized for Lot 4 wiring. `acknowledge`.
 - **F6 — token claim set** — DECISION: deferred to Phase A1 (BR-39n / first tenant-scoped client `diag`). Phase A0 emits only the existing `sub`/`name`/`email`. `deferred`.
 - **F7 — logout scope** — DECISION: RP-initiated logout + `end_session_endpoint` first; back-channel SLO later. `acknowledge`.
 - **F8 — RP session lifetime** — DECISION: silent renew via `prompt=none` as default; no OAuth refresh tokens (offline_access stays rejected). `acknowledge`.
 - **F9 — GDPR per-tenant data residency / scoped deletion** — DECISION: deferred (named, not implemented). `deferred`.
 
 ### Exceptions
-- **BR39m-EX1** (`attention`, declared, NOT yet applied) — touch `Makefile`, `docker-compose*.yml`, `api/Dockerfile` to wire the standalone IdP run target/service.
+- **BR39m-EX1** (`acknowledge`, APPLIED Lot 4) — touch `Makefile`, `docker-compose*.yml` (new additive overlay `docker-compose.idp.yml`) to wire the standalone IdP run target/service.
   - Reason: a standalone service needs a run/compose entry; default-forbidden paths.
-  - Impact: ADDITIVE ONLY — new compose service + new make target reusing the EXISTING `api` image/entrypoint with an IdP composition module; no change to existing services.
-  - Rollback: delete the added compose service block + make target; no migration, no data, fully reversible.
-  - Constraint: mirror existing `api`/compose patterns line-by-line; no new image build pipeline unless necessary.
+  - Impact: ADDITIVE ONLY — new `docker-compose.idp.yml` overlay with an `auth-idp` service reusing the EXISTING `api` image + dev volume mount + shared `postgres`; new `make dev-idp`/`down-idp`/`logs-idp`/`typecheck-idp` targets; one new path-filter (`apps/auth-idp/**`) added to the `api` filter. No change to existing service definitions; `api/Dockerfile` NOT modified (apps/ source reached via dev volume mount).
+  - Rollback: delete `docker-compose.idp.yml`, the added make targets, the path-filter line; no migration, no data, fully reversible.
+  - Constraint: mirror existing `api`/compose patterns line-by-line; no new image build pipeline.
+- **BR39m-EX2** (`acknowledge`, APPLIED Lot 4) — add a CI typecheck step for `apps/auth-idp` in `.github/workflows/ci.yml`.
+  - Reason: the new service source must be typechecked in CI; `.github/workflows/**` is a conditional path.
+  - Impact: ADDITIVE ONLY — one `Typecheck IdP` step in the existing `typecheck-lint-api` job (runs `make typecheck-idp`) plus `apps/auth-idp/**` added to the `api` paths-filter so the job triggers on IdP changes.
+  - Rollback: remove the step + filter entry; reversible.
 
 ### Open blockers / escalations
-- **BR39m-Q1** (`blocked`, escalated to user) — Apply EX1/EX2 (compose service + make target + CI lane) for the standalone IdP?
-  - Decision needed: confirm the DURABLE service name/alias/domain/topology (fork F5) BEFORE wiring run/compose/CI, OR authorize wiring under an explicit provisional name with a rename pass before merge.
-  - Why blocked: run/compose/CI wiring bakes the placeholder (`apps/auth-idp/`, service alias `auth-idp`, domain `auth.sent-tech.ca`) into durable infra names. This hits two HARD STOPs in the launch packet: (1) freezing the durable service name/domain (F5 needs the user); (2) touching forbidden paths (Makefile/compose) — EX1/EX2 declared but conservative "reversible-only, escalate before freezing" mandate applies.
-  - Options: (A) user validates final name/domain now → apply EX1/EX2 with final names; (B) user authorizes a provisional alias + explicit pre-merge rename; (C) keep Phase A0 to the shell+seed+recipe (current state) and defer all infra wiring to a follow-up once F5 is decided.
-  - Recommendation: (A) if the user can validate the name; else (C) — Lots 1-3 already prove the composition + client + glue with zero irreversible steps.
-  - Impact: Lot 4 (live boot + SSO/login UAT smoke) is gated on this; the service shell, design-system client, and RP recipe are complete and reversible regardless.
+- **BR39m-Q1** (`acknowledge`, RESOLVED 2026-06-03) — Apply EX1/EX2 for the standalone IdP.
+  - Resolution: user confirmed F5 at launch (dir `apps/auth-idp/`, alias `auth-idp`, domain `auth.sent-tech.ca`, centralized; validated-at-merge). EX1/EX2 authorized; Option (A) taken with final names.
+  - Outcome: Lot 4 wiring applied (compose overlay + make targets + CI typecheck step), live boot + SSO smoke executed.
 
 ## AI Flaky tests
 - Standard acceptance rule applies (non-systematic provider/network/model nondeterminism only). No AI tests expected in Phase A0.
@@ -100,12 +101,12 @@ Status legend: `blocked` / `deferred` / `cancelled` / `attention` (agent) ; `cla
   - [x] Add `apps/auth-idp/RP_SESSION_GLUE.md`: documented callback→verify(id_token via JWKS)→set-RP-cookie recipe (since `oauth-client.ts` stops at `exchangeCode` and `@sentropic/auth-client` is S2S-only). References `createOAuthClient` + discovery + userinfo; claims verified against `token-handler.ts` (sub/name/email/nonce/aud=client_id/iss).
   - [x] No new package code in Phase A0 (recipe only; a `@sentropic/auth-client` browser helper is a later phase per spec R3).
 
-- [ ] **Lot 4 — Service run / compose / CI wiring (requires BR39m-EX1/EX2)** — `blocked` (HARD STOP, escalated)
-  - [ ] After EX approval: add ADDITIVE compose service + make `dev-idp`/`run-idp` target reusing the existing `api` image with the IdP composition entrypoint.
-  - [ ] After EX2 approval: add CI lane for the new service (mirror existing api lane).
-  - [ ] Lot gate: `make typecheck-api lint-api ENV=test-feat-auth-idp`; service boots and serves `/.well-known/openid-configuration` + `/oauth/authorize`.
-  - [ ] UAT: live login at the IdP origin → design-system receives a token → RP session via the glue recipe.
-    - `blocked` (BR39m-Q1): wiring the compose service / make target / CI lane bakes the PLACEHOLDER service name + alias + domain (F5) into DURABLE infra names. Per HARD STOP (freeze durable name) + `feedback_no_unvalidated_naming`, STOP and escalate to user before applying EX1/EX2. See `## Feedback Loop → BR39m-Q1`.
+- [ ] **Lot 4 — Service run / compose / CI wiring (BR39m-EX1/EX2 APPLIED; F5 confirmed)**
+  - [x] Add ADDITIVE compose overlay `docker-compose.idp.yml` (`auth-idp` service reusing the existing `api` image + dev volume mount + shared `postgres`) + make `dev-idp`/`down-idp`/`logs-idp`/`ps-idp`/`seed-idp-clients`/`typecheck-idp` targets running the IdP composition entrypoint.
+  - [x] Add CI typecheck step (`make typecheck-idp`) in the existing `typecheck-lint-api` job + `apps/auth-idp/**` in the `api` paths-filter (EX2).
+  - [x] Lot gate (static): `make typecheck-idp` PASS (verified: catches injected error, clean source green); `make typecheck-api` PASS; `make lint-api` 0 errors.
+  - [ ] Boot live on `ENV=test-feat-auth-idp`; curl `/.well-known/openid-configuration` + `/.well-known/jwks.json`; seed `design-system` client.
+  - [ ] SSO smoke: deterministic authorization_code round-trip for `design-system` (authorize→login→consent→code→token→userinfo).
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Fold the A0 outcome (defaults confirmed, placeholder status) back into `spec/SPEC_EVOL_AUTH_IDP_STANDALONE.md` §4/§6 if needed.
