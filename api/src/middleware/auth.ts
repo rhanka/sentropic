@@ -37,6 +37,8 @@ export interface AuthUser {
 declare module 'hono' {
   interface ContextVariableMap {
     user: AuthUser;
+    // Set by `createRequireServiceAuth` (@sentropic/auth-hono) on S2S routes (BR-39d).
+    serviceClient: { clientId: string; scopes: string[]; jkt: string | null };
   }
 }
 
