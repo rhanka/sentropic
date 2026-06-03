@@ -19,6 +19,7 @@ import { buildPairingUrl } from '../config/app-origin.js';
 import { openBrowser } from './open-browser.js';
 import { createFileStore } from '../storage/index.js';
 import { createWindowsCapabilityProvider } from '../capability/index.js';
+import { prepareNativeModules } from '../native/index.js';
 import { DeviceCodeClient } from '../enroll/index.js';
 import { RegistryClient } from '../registry/index.js';
 import { ConsentManager } from '../consent/index.js';
@@ -58,7 +59,13 @@ export async function runCli(): Promise<void> {
     }
 
     const store = createFileStore(APP_DIR);
-    const provider = createWindowsCapabilityProvider();
+    // In the single-file exe the native deps are extracted from the embedded
+    // payload to a cache and resolved by absolute file:// URL; from npm they
+    // resolve from node_modules (identity).
+    const nativeResolver = await prepareNativeModules({ cacheRoot: APP_DIR });
+    const provider = createWindowsCapabilityProvider({
+        resolveNativeModule: (name) => nativeResolver.resolve(name),
+    });
 
     const enroller = new DeviceCodeClient({
         fetch: globalThis.fetch,
