@@ -30,12 +30,25 @@ services:
       - IDP_PORT=8787
       - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
       - OAUTH_ISSUER_URL=${OAUTH_ISSUER_URL:-http://localhost:${API_PORT:-8787}}
-      - OAUTH_SIGNING_KEK=${OAUTH_SIGNING_KEK}
-      - JWT_SECRET=${JWT_SECRET}
+      # Dev/test-only well-known secrets. An UNSET host var would interpolate to
+      # an empty string, which is a valid (truthy-for-??) but blank value that
+      # defeats env.ts's dev fallback and trips the production-secrets guard; the
+      # explicit dev default keeps local boot deterministic. Prod injects real
+      # values via the deploy environment (k8s-ops), never these.
+      - OAUTH_SIGNING_KEK=${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production}
+      - JWT_SECRET=${JWT_SECRET:-dev-idp-jwt-secret-change-in-production}
       - AUTH_CALLBACK_BASE_URL=${AUTH_CALLBACK_BASE_URL:-http://localhost:${UI_PORT:-5173}}
       - UI_BASE_URL=${UI_BASE_URL:-http://localhost:${UI_PORT:-5173}}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:${UI_PORT:-5173},http://127.0.0.1:${UI_PORT:-5173},http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*}
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+      # The shared env schema (api/src/config/env.ts) requires SCW_TEM_SECRET_KEY
+      # even though the IdP never sends mail in A0; mirror the api service mock.
+      - SCW_TEM_API_BASE_URL=${SCW_TEM_API_BASE_URL:-http://scw-tem-mock:7700}
+      - SCW_TEM_REGION=${SCW_TEM_REGION:-fr-par}
+      - SCW_TEM_PROJECT_ID=${SCW_TEM_PROJECT_ID:-dev-mock-project}
+      - SCW_TEM_SECRET_KEY=${SCW_TEM_SECRET_KEY:-dev-mock-token}
+      - SCW_TEM_FROM_EMAIL=${SCW_TEM_FROM_EMAIL:-no-reply@sent-tech.ca}
+      - SCW_TEM_FROM_NAME=${SCW_TEM_FROM_NAME:-Sentropic}
     ports:
       - "${API_PORT:-8787}:8787"
     depends_on:
