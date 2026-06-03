@@ -218,3 +218,198 @@ describe('AI - comment_assistant permissions', () => {
     expect(adminResult.applied.some((item) => item.action === 'close')).toBe(true);
   });
 });
+
+// --- BR-42d Lot 0 characterization: AI read (summaries) + write (resolveCommentActions) ---
+
+describe('AI - comment_assistant Lot 0 characterization', () => {
+  const now = new Date();
+  const contextId = `uc_${createId()}`;
+  let workspaceId = '';
+  let creatorUser: any;
+  let assigneeUser: any;
+
+  beforeEach(async () => {
+    await cleanupAuthData();
+    workspaceId = createId();
+    creatorUser = await createTestUser({ email: `creator-${createTestId()}@example.com`, role: 'editor', withWorkspace: false });
+    assigneeUser = await createTestUser({ email: `assignee-${createTestId()}@example.com`, role: 'editor', withWorkspace: false });
+
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      ownerUserId: creatorUser.id,
+      name: `Test Workspace ${createTestId()}`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(workspaceMemberships).values([
+      { workspaceId, userId: creatorUser.id, role: 'admin', createdAt: now },
+      { workspaceId, userId: assigneeUser.id, role: 'editor', createdAt: now },
+    ]);
+  });
+
+  afterEach(async () => {
+    await db.delete(comments).where(eq(comments.workspaceId, workspaceId));
+    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    await db.delete(users).where(inArray(users.id, [creatorUser.id, assigneeUser.id]));
+    await cleanupAuthData();
+  });
+
+  it('pins the live CommentThreadSummary field set and thread grouping (tool-service.ts:1244-1268)', async () => {
+    const threadId = createId();
+    const rootAt = new Date(now.getTime());
+    const midAt = new Date(now.getTime() + 1000);
+    const lastAt = new Date(now.getTime() + 2000);
+
+    // Root (earliest): no assignee, open. Reply 1: assigned, closed. Reply 2 (latest): open.
+    await db.insert(comments).values([
+      {
+        id: createId(),
+        workspaceId,
+        contextType: 'initiative',
+        contextId,
+        sectionKey: 'description',
+        createdBy: creatorUser.id,
+        assignedTo: null,
+        status: 'open',
+        threadId,
+        content: 'Root message',
+        createdAt: rootAt,
+        updatedAt: rootAt,
+      },
+      {
+        id: createId(),
+        workspaceId,
+        contextType: 'initiative',
+        contextId,
+        sectionKey: 'description',
+        createdBy: creatorUser.id,
+        assignedTo: assigneeUser.id,
+        status: 'closed',
+        threadId,
+        content: 'Middle message',
+        createdAt: midAt,
+        updatedAt: midAt,
+      },
+      {
+        id: createId(),
+        workspaceId,
+        contextType: 'initiative',
+        contextId,
+        sectionKey: 'description',
+        createdBy: creatorUser.id,
+        assignedTo: null,
+        status: 'open',
+        threadId,
+        content: 'Last message',
+        createdAt: lastAt,
+        updatedAt: lastAt,
+      },
+    ]);
+
+    const result = await toolService.listCommentThreadsForContexts({
+      workspaceId,
+      contexts: [{ contextType: 'initiative', contextId }],
+    });
+
+    expect(result.threads.length).toBe(1);
+    const summary = result.threads[0];
+    // Exact CommentThreadSummary key set (context-comments.ts:6-21)
+    expect(Object.keys(summary).sort()).toEqual(
+      [
+        'assignedTo',
+        'contextId',
+        'contextType',
+        'createdAt',
+        'createdBy',
+        'lastMessage',
+        'lastMessageAt',
+        'messageCount',
+        'rootMessage',
+        'rootMessageAt',
+        'sectionKey',
+        'status',
+        'threadId',
+        'updatedAt',
+      ].sort()
+    );
+    expect(summary.threadId).toBe(threadId);
+    expect(summary.contextType).toBe('initiative');
+    expect(summary.contextId).toBe(contextId);
+    expect(summary.sectionKey).toBe('description');
+    expect(summary.createdBy).toBe(creatorUser.id);
+    // root = earliest row content + its createdAt
+    expect(summary.rootMessage).toBe('Root message');
+    expect(summary.rootMessageAt).toBe(rootAt.toISOString());
+    expect(summary.createdAt).toBe(rootAt.toISOString());
+    // last = latest row processed (createdAt ASC -> last row)
+    expect(summary.lastMessage).toBe('Last message');
+    expect(summary.lastMessageAt).toBe(lastAt.toISOString());
+    // count = number of rows in the thread
+    expect(summary.messageCount).toBe(3);
+    // status = closed if ANY row is closed (tool-service.ts:1267)
+    expect(summary.status).toBe('closed');
+    // assignedTo = FIRST non-null assignee encountered (tool-service.ts:1268)
+    expect(summary.assignedTo).toBe(assigneeUser.id);
+    // users label list includes both involved users
+    const userIds = result.users.map((u) => u.id).sort();
+    expect(userIds).toEqual([creatorUser.id, assigneeUser.id].sort());
+    expect(Object.keys(result.users[0]).sort()).toEqual(['displayName', 'email', 'id']);
+  });
+
+  it('resolveCommentActions close + reassign + note apply, with note provenance toolCallId (tool-service.ts:1360-1412)', async () => {
+    const threadId = createId();
+    await db.insert(comments).values({
+      id: createId(),
+      workspaceId,
+      contextType: 'initiative',
+      contextId,
+      sectionKey: 'description',
+      createdBy: creatorUser.id,
+      assignedTo: creatorUser.id,
+      status: 'open',
+      threadId,
+      content: 'Root to resolve',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const toolCallId = createId();
+    const result = await toolService.resolveCommentActions({
+      workspaceId,
+      userId: creatorUser.id,
+      allowedContexts: [{ contextType: 'initiative', contextId }],
+      actions: [
+        { thread_id: threadId, action: 'reassign', reassign_to: assigneeUser.id },
+        { thread_id: threadId, action: 'note', note: 'Explicit trace note' },
+        { thread_id: threadId, action: 'close' },
+      ],
+      toolCallId,
+    });
+
+    // applied carries close + reassign with their statuses
+    expect(result.applied).toEqual(
+      expect.arrayContaining([
+        { thread_id: threadId, action: 'reassign', status: 'updated' },
+        { thread_id: threadId, action: 'close', status: 'closed' },
+      ])
+    );
+    // exactly one trace-note created for the thread
+    expect(result.notes.length).toBe(1);
+    expect(result.notes[0].thread_id).toBe(threadId);
+
+    // thread cascade: every row closed + reassigned
+    const rows = await db
+      .select({ id: comments.id, status: comments.status, assignedTo: comments.assignedTo, content: comments.content, toolCallId: comments.toolCallId })
+      .from(comments)
+      .where(eq(comments.threadId, threadId));
+    expect(rows.every((r) => r.status === 'closed')).toBe(true);
+    expect(rows.every((r) => r.assignedTo === assigneeUser.id)).toBe(true);
+
+    // the trace note row carries the explicit note + toolCallId provenance (tool-service.ts:1396-1410)
+    const noteRow = rows.find((r) => r.id === result.notes[0].note_id);
+    expect(noteRow).toBeTruthy();
+    expect(noteRow!.content).toBe('Explicit trace note');
+    expect(noteRow!.toolCallId).toBe(toolCallId);
+  });
+});
