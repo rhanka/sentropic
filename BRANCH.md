@@ -1,82 +1,101 @@
-# Feature: BR-39m A0-bis — Serve IdP login/register/consent screens at the IdP origin
+# Feature: Standalone IdP deploy artifacts (auth.sent-tech.ca)
 
 ## Objective
-Give the standalone IdP (`apps/auth-idp`) its OWN human-facing login / register / magic-link / consent screens, served same-origin with its OIDC API, so `auth.sent-tech.ca` can show a real login page with clean (same-origin) cookies. Reuse the published `@sentropic/auth-ui` components; no new auth code, no parallel UI.
+Author the deploy artifacts (api-image extension, k8s manifests, prod OIDC client registration script) for the standalone IdP `auth.sent-tech.ca`, PR-validated and ready, with the actual deploy gated on external items (poc-k8s quota, DNS, prod KEK).
 
 ## Scope / Guardrails
-- Scope limited to a NEW minimal static front under `apps/auth-idp/web/`, the IdP Hono service static-serving (`apps/auth-idp/idp-app.ts`), IdP docs, and the IdP wiring (Makefile/compose/CI under exception).
-- No migration, no `users`/prod-data change, no main-app cutover.
+- Scope limited to: `api/Dockerfile` (additive build/prod-stage IdP build), `deploy/k8s/**` (new `35-auth-idp.yaml`, extend `15-networkpolicy.yaml` + `60-ingress.yaml`), `Makefile` (build IdP web into the api image + register IdP manifest), `.github/workflows/ci.yml` (auth-idp rollout-status), `api/src/scripts/oauth-register-client.ts` (new prod-safe script) + its `api/package.json` script entry.
+- NO deploy, NO kubectl, NO prod touch. PREPARE only.
+- One migration max in `api/drizzle/*.sql` — N/A (zero schema change).
 - Make-only workflow, no direct Docker commands.
-- Root workspace `/home/antoinefa/src/sentropic` reserved for user dev/UAT (`ENV=dev`); must remain stable.
-- Branch development in isolated worktree `tmp/feat-auth-idp-screens`.
-- Automated runs on dedicated env `ENV=test-feat-auth-idp-screens`, never on root `dev`.
-- In every `make` command, `ENV=<env>` passed as the last argument.
+- Root workspace reserved for user dev/UAT (`ENV=dev`); branch work in `tmp/feat-auth-idp-deploy`.
+- In every `make` command, `ENV=<env>` last.
 - All new text in English.
-- Ports (BR-39 slot 4): `API_PORT=9199 UI_PORT=5399 MAILDEV_UI_PORT=1299`, `ENV=test-feat-auth-idp-screens`.
+- F5 is USER-VALIDATED FINAL: dir `apps/auth-idp`, service `auth-idp`, domain `auth.sent-tech.ca`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `apps/auth-idp/web/**`
-  - `apps/auth-idp/idp-app.ts`
-  - `apps/auth-idp/index.ts`
-  - `apps/auth-idp/sso-smoke.ts`
-  - `apps/auth-idp/screen-smoke.ts`
-  - `apps/auth-idp/README.md`
-  - `apps/auth-idp/RP_SESSION_GLUE.md`
-  - `apps/auth-idp/tsconfig.json`
-  - `apps/auth-idp/package.json`
+  - `deploy/k8s/35-auth-idp.yaml`
+  - `api/src/scripts/oauth-register-client.ts`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `api/src/**` (product API source)
-  - `packages/auth-*/**` (published package src)
-  - `api/drizzle/*.sql`
-  - `ui/**`
+  - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md`
+  - `api/drizzle/**`
+  - `packages/auth-*/**` (src)
+  - `api/src/routes/auth/**`
 - **Conditional Paths (allowed only with explicit exception)**:
-  - `Makefile` — `BR39m-EX2`
-  - `docker-compose.idp.yml` — `BR39m-EX2`
-  - `.github/workflows/ci.yml` — `BR39m-EX2`
-- **Exception process**: declare `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path, with reason, impact, rollback.
+  - `api/Dockerfile` — `BR39deploy-EX1`
+  - `deploy/k8s/15-networkpolicy.yaml` — `BR39deploy-EX2`
+  - `deploy/k8s/60-ingress.yaml` — `BR39deploy-EX2`
+  - `Makefile` — `BR39deploy-EX3`
+  - `.github/workflows/ci.yml` — `BR39deploy-EX4`
+  - `api/package.json` — `BR39deploy-EX5`
+- **Exception process**: declare `BRxx-EXn` in `## Feedback Loop` before touching any conditional path (done below).
 
 ## Feedback Loop
-- `BR39m-D1` (decision, reversible default — flag for merge-time validation): **how to serve the screens.** Chosen approach = a minimal **SvelteKit static** front under `apps/auth-idp/web/` (exact `ui/` adapter-static pattern, `paths.relative=false`) that mounts the existing `@sentropic/auth-ui` components for login / register / magic-link / consent, wired **same-origin** to `/api/v1/auth` via `createDefaultFetchTransport`, EN+FR labels, reusing the `ui/` integration pattern line-by-line. The `auth-idp` Hono service static-serves the built `web/build` bundle (SPA fallback) alongside `/api/v1/auth/*` + `/.well-known/*`. Rationale: SvelteKit adapter-static produces exactly the path-based routes (`/auth/login`, `/auth/oauth/consent`) the `@sentropic/auth-hono` authorize handler redirects to (`loginUrl`/`consentUrl` + `continue`/`state`); a hand-rolled router would risk path mismatch. Reversible: deleting `apps/auth-idp/web/` + the static-serve block reverts to API-only IdP.
-- `BR39m-D3` (decision): **`web/` is a self-contained sub-project, NOT a root workspace member** (same pattern as `e2e/`: own `package.json` + `package-lock.json`, `@sentropic/auth-ui` via `file:../../../packages/auth-ui`). Avoids changing the root `package-lock.json` and `api/Dockerfile`/`ui/Dockerfile` COPY lists. Verified: `@sentropic/auth-ui` components have ZERO runtime `@sentropic/auth-hono` imports (peerDep is type-only), so a standalone install (svelte + simplewebauthn + auth-ui) is sufficient. Reversible.
-- `BR39m-EX2` (exception): touch `Makefile`, `docker-compose.idp.yml`, `.github/workflows/ci.yml` to build the static front + serve it + CI typecheck/build it. Impact: additive IdP-only targets/overlay/CI steps; no existing service/target modified. Rollback: revert the additive blocks.
-- `BR39m-D2` (decision): **screen-driven smoke.** New `apps/auth-idp/screen-smoke.ts` drives a real headless Chromium (reusing the e2e Playwright image) against the live `auth-idp` origin: navigate the IdP-served `/auth/login`, authenticate, follow authorize→consent on the served `/auth/oauth/consent` screen, reach the code, exchange the token. Deterministic (DB-seeded user, fixed PKCE). The original headless `sso-smoke.ts` stays as the bare-API parity smoke.
-- F5 PLACEHOLDER (carried from main): service name `auth-idp`, dir `apps/auth-idp/`, domain `auth.sent-tech.ca` remain user-validation-pending (`feedback_no_unvalidated_naming`). This branch adds no NEW durable name beyond `apps/auth-idp/web/` (provisional, under the same F5 umbrella).
+- `BR39deploy-EX1` (`api/Dockerfile`): extend the build + production stages so the SAME api image also compiles `apps/auth-idp/index.ts` -> `apps/auth-idp/dist/index.js` (esbuild, same externals as the api build) and bundles `apps/auth-idp/web/build`. Reason: D4-a one-image strategy, lowest entropy. Impact: api default CMD unchanged (`node dist/index.js` from `/workspace/api`); additive COPY + one esbuild call. Rollback: revert the added lines; api runtime identical.
+- `BR39deploy-EX2` (`deploy/k8s/15-networkpolicy.yaml`, `deploy/k8s/60-ingress.yaml`): extend NetworkPolicies (auth-idp->postgres egress source, traefik->auth-idp ingress) and add the `auth.sent-tech.ca` Ingress host. Reason: required for the new public IdP service under `default-deny-ingress`. Impact: additive resources only; existing api/ui policies/ingress untouched. Rollback: delete the appended NetworkPolicy docs + Ingress doc.
+- `BR39deploy-EX3` (`Makefile`): register `35-auth-idp.yaml` + the auth-idp rollout (restart + status) in `k8s-deploy` (after `30-api.yaml` so the api rolls first), and its delete in `k8s-undeploy`. Reason: the manifest must be applied + rolled out by `k8s-deploy`. NOTE: the IdP screens are built INSIDE `api/Dockerfile` (self-contained `idp-web-build` stage), so NO `build-idp-web` prerequisite is needed — the api image stays self-contained for CI (`publish-api-image`). Impact: additive apply/rollout/delete lines; api/ui order unchanged. Rollback: revert the added lines.
+- `BR39deploy-EX4` (`.github/workflows/ci.yml`): add `rollout status deployment/auth-idp` to the `deploy-k8s` job. Reason: assert IdP rollout post-apply, mirroring api/ui. Impact: one additive line (fires only on a real deploy). Rollback: remove the line.
+- `BR39deploy-EX5` (`api/package.json`): add an `oauth:register-client` script entry pointing to the new prod-safe script. Reason: runnable as a one-off Job/`npm run`. Impact: one script line. Rollback: remove the line.
+
+## Decisions (from spec/SPEC_EVOL_AUTH_IDP_DEPLOY.md §7)
+- D4-a (image strategy): extend the existing api image; api vs IdP selected by k8s `command:`. One image, one publish pipeline.
+- F1 / D8 (prod DB): SHARED main-api Postgres. No new DB, no new migration, no `users` move. Physical split deferred to Phase D.
+- D6 (KEK): `auth-idp` reuses the existing `sentropic-api` Secret via `envFrom` -> shares `DATABASE_URL` + `OAUTH_SIGNING_KEK` + `SCW_TEM_SECRET_KEY`. The KEK MUST be identical for api + idp (shared JWKS rows). Confirming the live Secret carries `OAUTH_SIGNING_KEK` is an execution-gate.
+- D7-a (prod OIDC client): prod-safe idempotent `oauth-register-client.ts` (env-driven upsert keyed on `client_id`), NOT the dev seed.
+- D11: design-system onboards first (A0).
+- F5: FINAL (user-validated) — `apps/auth-idp`, `auth-idp`, `auth.sent-tech.ca`.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single workstream, one final test cycle)
-- [ ] Multi-branch
-- Rationale: one orthogonal capability (serve screens at IdP origin); no independent sub-workstreams.
+- [x] **Mono-branch + cherry-pick** (single artifact stream; no independent CI needed)
+- [ ] **Multi-branch**
+- Rationale: One coherent deploy-artifact deliverable; no orthogonal sub-streams.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `apps/auth-idp/*`, `packages/auth-ui/**`, `ui/` auth routes + integration services, spec Phase A0/A0-bis, rules.
-  - [x] Confirm worktree `tmp/feat-auth-idp-screens` on branch `feat/auth-idp-screens`.
-  - [x] Confirm ports slot 4 + `ENV=test-feat-auth-idp-screens`.
-  - [x] Confirm scope boundaries + declare exceptions (D1/EX2/EX3/D2).
+  - [x] Read deploy spec, `api/Dockerfile`, `apps/auth-idp/*`, `apps/auth-idp/web`, `docker-compose.idp.yml`.
+  - [x] Read `deploy/k8s/*` (30-api, 40-ui, 15-networkpolicy, 60-ingress, 10-rbac), `make k8s-deploy`, `deploy-k8s` CI job.
+  - [x] Read `api/src/config/env.ts`, `oauth-init-keys.ts`, `oauth-seed-clients.ts`, `oauth-client-seed.ts` service, `oauthClients` schema.
+  - [x] Confirm isolated worktree `tmp/feat-auth-idp-deploy`, branch `feat/auth-idp-deploy`.
+  - [x] Confirm scope, declare EX1–EX5.
 
-- [x] **Lot 1 — Minimal static front (`apps/auth-idp/web/`)**
-  - [x] Scaffold SvelteKit static app (package.json, svelte.config.js, vite.config.ts, tsconfig, app.html) mirroring `ui/`.
-  - [x] Same-origin transport service (`createDefaultFetchTransport({ baseUrl: '/api/v1/auth' })`) + EN/FR label resolver + OAuth consent transport (copy `ui/` pattern).
-  - [x] Routes `/auth/login`, `/auth/register`, `/auth/magic-link/verify`, `/auth/oauth/consent` mounting auth-ui components with the exact `continue`/`state`/returnUrl wiring.
-  - [x] `web/` is a self-contained sub-project (`BR39m-D3`), NOT a root workspace member (no root `package.json`/lock change).
-  - [x] Lot gate: `make typecheck-idp-web` (0 errors) + `make build-idp-web` (green) — see Checks.
+- [x] **Lot 1 — D4-a image (api/Dockerfile)**
+  - [x] In the `build` stage: esbuild `apps/auth-idp/index.ts` -> `apps/auth-idp/dist/index.js` (same externals as the api build).
+  - [x] In the `production` stage: `COPY --from=build /workspace/apps/auth-idp/dist` + `COPY --from=idp-web-build` the `apps/auth-idp/web/build` screens (self-contained `idp-web-build` stage mirrors `apps/auth-idp/web/Dockerfile`); `404.html` asserted inside that stage.
+  - [x] api default CMD unchanged (`node dist/index.js` from `/workspace/api`).
+  - [x] Lot gate: `make build-api-image` builds (exit 0, after one transient ETXTBSY flake on the unmodified `npm ci` step, green on clean retry); `make typecheck-api` (exit 0) + `make lint-api` (0 errors) green.
 
-- [x] **Lot 2 — IdP service static-serve + wiring**
-  - [x] `idp-app.ts`: serve `web/build` via `@hono/node-server/serve-static` with SPA fallback (`404.html`); keep `/api/v1/auth/*` + `/.well-known/*`.
-  - [x] Makefile: `build-idp-web` + `dev-idp` builds it; compose: same-origin `UI_BASE_URL`/`AUTH_CALLBACK_BASE_URL` via `IDP_ORIGIN` so authorize redirects to the IdP-served screens (`BR39m-EX2`).
-  - [x] CI: typecheck + build the front on `apps/auth-idp/**` changes (`BR39m-EX2`).
-  - [x] Update `apps/auth-idp/README.md` (screens now served at IdP origin).
-  - [x] Lot gate: `make typecheck-idp` (0), `make typecheck-api` (0), `make lint-api` (0 errors), front typecheck/build green.
+- [x] **Lot 2 — k8s manifests**
+  - [x] `deploy/k8s/35-auth-idp.yaml`: ConfigMap + Service + Deployment for `auth-idp` (api image, `command:` runs IdP from `/workspace`, port 8787, probes on `/healthz`, env per spec §2.1, reuse `sentropic-api` Secret).
+  - [x] Extend `deploy/k8s/15-networkpolicy.yaml`: `allow-auth-idp-to-postgres`, `allow-traefik-to-auth-idp`.
+  - [x] Extend `deploy/k8s/60-ingress.yaml`: host `auth.sent-tech.ca` -> `auth-idp:8787`, `letsencrypt-prod`, tls `auth-idp-tls`.
+  - [x] Register `35-auth-idp.yaml` + auth-idp rollout in `make k8s-deploy` (+ delete in `k8s-undeploy`). Screens built inside the Dockerfile (self-contained), no build-idp-web prerequisite.
+  - [x] Add `rollout status deployment/auth-idp` to the `deploy-k8s` CI job.
+  - [x] Lot gate: YAML well-formed (pyyaml safe_load_all on all manifests + ci.yml OK).
 
-- [x] **Lot 3 — Screen-driven smoke**
-  - [x] `apps/auth-idp/screen-smoke.ts` (Playwright headless) + `screen-smoke-seed.ts` (DB seed): drive the live IdP-served login+consent screens (`BR39m-D2`).
-  - [x] Make target `smoke-idp-screens` + `idp-screen-smoke` runner service (e2e image, Node 24 native TS).
-  - [x] Lot gate: `make dev-idp` + `make smoke-idp-screens` GREEN (login+consent screens mounted, Approve clicked, code→token→userinfo verified); bare-API `make smoke-idp` GREEN (non-reg).
+- [x] **Lot 3 — Prod OIDC client registration (D7-a)**
+  - [x] `api/src/scripts/oauth-register-client.ts`: idempotent env-driven upsert of ONE client keyed on `client_id`, prod URIs only (rejects http/localhost + dev-only secrets), strong external secret (sha256 hash only stored), no dev secrets.
+  - [x] `api/package.json` `oauth:register-client` script entry.
+  - [x] Lot gate: `make typecheck-api` (exit 0) + `make lint-api` (0 errors) green.
 
 - [x] **Lot N — Final validation**
-  - [x] Typecheck & lint (idp + api + front) all green.
-  - [x] Screen-driven smoke + bare-API smoke green; `make down ENV=test-feat-auth-idp-screens`; `make ps-all` clean.
-  - [ ] PR with `BRANCH.md` body; CI green; remove `BRANCH.md`; merge — DEFERRED (not in this subagent run, per launch packet HARD STOP: no PR/merge).
+  - [x] `make build-api-image` (extended image builds, exit 0).
+  - [x] `make typecheck-api` + `make lint-api` green (0 errors).
+  - [x] YAML manifests well-formed.
+  - [x] `make down ENV=test-feat-auth-idp-deploy` + `make ps-all` clean; no services left up.
+  - [ ] Create/update PR using `BRANCH.md` (DEFERRED — not requested; PREPARE only).
+  - [ ] Merge (DEFERRED — execution-gated).
+
+## Deferred / execution-gates
+Deploy EXECUTION (out of this branch — PREPARE only) is gated on:
+- **poc-k8s ResourceQuota bump** (G3): the `sentropic` namespace quota (`requests.cpu 300m`, `requests.memory 768Mi`) has no headroom for an api-sized `auth-idp` pod. `claude:poc-k8s` must bump `tenants/sentropic/00-namespace.yaml` (or the IdP is sized down to 75m/192Mi). BLOCKING for apply.
+- **Cloudflare DNS A record** `auth.sent-tech.ca` -> Traefik LoadBalancer public IP (same LB as `sentropic.sent-tech.ca`). User / zone holder. cert-manager DNS-01 token already covers the zone.
+- **Prod `OAUTH_SIGNING_KEK` secret** in the live `sentropic-api` Secret (D6) — confirm present and IDENTICAL for api + idp (shared JWKS). If absent, seal/add it. Plus confirm a JWKS active key exists (`oauth:init-keys` has run in prod); if not, run a one-time init-keys Job before first IdP traffic.
+- **D5**: design-system prod redirect URI (`https://design-system.sent-tech.ca/auth/oauth/callback`) + generated client secret + its hosting — user/design-system.
+- **D9**: DNS/cert ownership (covered by the DNS A record gate above).
+- **D10**: poc-k8s owns Traefik / cert-manager / ClusterIssuer / namespace baseline; this branch only references them.
+- **D12**: public-IdP abuse posture (trusted-proxy/XFF + tighter rate limits) — confirm harden-at-A0 vs defer.
+- **User greenlight** for the actual deploy + `make k8s-deploy K8S_INGRESS=1` run (api first so migrations apply, then auth-idp), then `oauth:register-client`, then `make k8s-dns-smoke K8S_HOST=auth.sent-tech.ca` + real-flow UAT (spec §8).
