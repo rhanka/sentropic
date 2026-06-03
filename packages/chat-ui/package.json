@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-ui",
-  "version": "0.3.0",
+  "version": "0.10.0",
   "description": "Svelte reference UI package for @sentropic/* chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. Consumes @sentropic/chat-core wire contracts over HTTP/SSE only.",
   "type": "module",
   "license": "MIT",
@@ -152,6 +152,16 @@
       "svelte": "./src/components/MessageActions.svelte",
       "import": "./src/components/MessageActions.svelte"
     },
+    "./components/ChatContextPicker.svelte": {
+      "types": "./src/components/ChatContextPicker.svelte.d.ts",
+      "svelte": "./src/components/ChatContextPicker.svelte",
+      "import": "./src/components/ChatContextPicker.svelte"
+    },
+    "./utils/markdown-refs": {
+      "types": "./src/utils/markdown-refs.ts",
+      "svelte": "./src/utils/markdown-refs.ts",
+      "import": "./src/utils/markdown-refs.ts"
+    },
     "./utils/model-selection": {
       "types": "./src/utils/model-selection.ts",
       "svelte": "./src/utils/model-selection.ts",
@@ -161,6 +171,36 @@
       "types": "./src/utils/message-actions.ts",
       "svelte": "./src/utils/message-actions.ts",
       "import": "./src/utils/message-actions.ts"
+    },
+    "./utils/composer-autosize": {
+      "types": "./src/utils/composer-autosize.ts",
+      "svelte": "./src/utils/composer-autosize.ts",
+      "import": "./src/utils/composer-autosize.ts"
+    },
+    "./state/chat-context": {
+      "types": "./src/state/chat-context.ts",
+      "svelte": "./src/state/chat-context.ts",
+      "import": "./src/state/chat-context.ts"
+    },
+    "./components/ContextChips.svelte": {
+      "types": "./src/components/ContextChips.svelte.d.ts",
+      "svelte": "./src/components/ContextChips.svelte",
+      "import": "./src/components/ContextChips.svelte"
+    },
+    "./components/ChatConversation.svelte": {
+      "types": "./src/components/ChatConversation.svelte.d.ts",
+      "svelte": "./src/components/ChatConversation.svelte",
+      "import": "./src/components/ChatConversation.svelte"
+    },
+    "./components/SessionList.svelte": {
+      "types": "./src/components/SessionList.svelte.d.ts",
+      "svelte": "./src/components/SessionList.svelte",
+      "import": "./src/components/SessionList.svelte"
+    },
+    "./state/sessionList": {
+      "types": "./src/state/sessionList.ts",
+      "svelte": "./src/state/sessionList.ts",
+      "import": "./src/state/sessionList.ts"
     }
   },
   "files": [

@@ -32,6 +32,11 @@ vi.mock('../../src/config/env', () => ({
     GEMINI_API_KEY: 'test-gemini-key',
     MISTRAL_API_KEY: 'test-mistral-key',
     COHERE_API_KEY: 'test-cohere-key',
+    // BR-43 — GCP matrix rows need project/location so the pre-dispatch ADC
+    // mint path runs (toMeshAuthInput) and buildGcpRuntimeRequest can build
+    // the transport request. The actual mint is stubbed below (no live call).
+    GOOGLE_CLOUD_PROJECT: 'test-gcp-project',
+    GOOGLE_CLOUD_LOCATION: 'us-central1',
   },
 }));
 
@@ -52,6 +57,10 @@ vi.mock('cohere-ai', () => ({
 // ---------------------------------------------------------------------------
 
 import type { StreamEvent } from '../../src/services/llm-runtime';
+import {
+  __setGcpAdcMinter,
+  __resetGcpTokenCache,
+} from '../../src/services/providers/gcp-provider';
 
 async function collectStreamEvents(generator: AsyncGenerator<StreamEvent>): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
@@ -811,6 +820,130 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       },
     ],
   },
+
+  // -----------------------------------------------------------------------
+  // GCP — Gemini 3.1 Flash Lite on GCP (BR-43)
+  // Identical Gemini SSE wire shape (candidates/parts/functionCall/thought) —
+  // the runtime reuses the Gemini SSE→event mapper (BR43-D4 REUSE). Only the
+  // attribution prefix differs: tool-call ids are `gcp_call_…` (M4).
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'gcp',
+    model: 'google/gemini-3.1-flash-lite@gcp',
+    label: 'Gemini 3.1 Flash Lite on GCP',
+    chatEvents: [
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'test' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'gcp_call_1',
+      startArgs: '{"query":"test"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'GCP lite thought', thought: true },
+              { text: 'GCP lite answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['GCP lite thought'],
+      contentCount: 1,
+      contentDeltas: ['GCP lite answer'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
+  // GCP — Gemini 3.5 Flash on GCP (reasoning model) (BR-43)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'gcp',
+    model: 'google/gemini-3.5-flash@gcp',
+    label: 'Gemini 3.5 Flash on GCP',
+    chatEvents: [
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'pro' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'gcp_call_1',
+      startArgs: '{"query":"pro"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'GCP thought', thought: true },
+              { text: 'GCP answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['GCP thought'],
+      contentCount: 1,
+      contentDeltas: ['GCP answer'],
+      hasDone: true,
+    },
+    statusEvents: [
+      {
+        candidates: [{
+          content: { parts: [{ text: 'Answer' }] },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -845,6 +978,15 @@ const COHERE_TOOL_START_NAME_VARIANT = {
 describe('LLM stream event normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // BR-43 — stub the GCP ADC mint so the pre-dispatch bearer mint in
+    // toMeshAuthInput resolves deterministically (no live ADC call). The GCP
+    // matrix rows then reach the spied provider.streamGenerate like every other
+    // provider, exercising the shared Gemini SSE→event mapper.
+    __resetGcpTokenCache();
+    __setGcpAdcMinter(async () => ({
+      token: 'stub-gcp-bearer',
+      expiresAtMs: Number.MAX_SAFE_INTEGER,
+    }));
   });
 
   it('has a stream fixture for every advertised model capability', async () => {
