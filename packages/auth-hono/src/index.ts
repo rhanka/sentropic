@@ -12,6 +12,7 @@ export * from './oauth/introspect-handler.js';
 export * from './oauth/jwks-service.js';
 export * from './oauth/router.js';
 export * from './oauth/revoke-handler.js';
+export * from './oauth/service-auth-middleware.js';
 export * from './oauth/session-resolver.js';
 export * from './oauth/state-store-types.js';
 export * from './oauth/state-codec.js';
