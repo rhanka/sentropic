@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 // ---------------------------------------------------------------------------
-// BR-42f — GCP (Google Cloud Model Garden, formerly Vertex AI) live UAT script
+// BR-43 — GCP (Google Cloud Model Garden, formerly Vertex AI) live UAT script
 // (make-only, credential-safe).
 //
 // (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI brand
@@ -9,7 +9,7 @@
 //
 // Drives ONE real `streamGenerateContent` call per GCP catalog model at the
 // api/mesh layer, reusing the PRODUCTION code path verbatim:
-//   - `buildGeminiRequestBody`  (the shared Gemini body builder — BR42f-D4)
+//   - `buildGeminiRequestBody`  (the shared Gemini body builder — BR43-D4)
 //   - `mintGcpAccessToken`      (the ADC bearer minter — D-ADC1)
 //   - `GcpProviderRuntime`      (the URL/auth/SSE transport)
 //   - `parseGcpModelId`         (the `{publisher}/{model}@gcp` parser — §C)
@@ -81,7 +81,7 @@ type ModelResult = {
 // Count the streamed Gemini text-part chunks (the `content_delta` source) and
 // capture the terminal finishReason. The chunk shape is the Gemini JSON
 // envelope `{ candidates: [{ content: { parts: [{ text }] }, finishReason? }] }`
-// — identical on GCP (BR42f-D4).
+// — identical on GCP (BR43-D4).
 const countStreamedTokens = (
   chunk: unknown,
 ): { textParts: number; finishReason: string | null } => {

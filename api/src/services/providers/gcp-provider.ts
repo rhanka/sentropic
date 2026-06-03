@@ -14,7 +14,7 @@ import {
 } from '../provider-runtime';
 
 // ---------------------------------------------------------------------------
-// BR-42f — GCP (Google Cloud Model Garden, formerly Vertex AI) provider runtime.
+// BR-43 — GCP (Google Cloud Model Garden, formerly Vertex AI) provider runtime.
 //
 // (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI brand
 // retired; the endpoint host stays aiplatform.googleapis.com.)
@@ -26,7 +26,7 @@ import {
 //   - Auth: `Authorization: Bearer <ADC bearer>` (NO `?key=` query param).
 //
 // The Gemini request-body builder and the SSE→event loop in
-// `llm-runtime/index.ts` are REUSED verbatim (BR42f-D4). This runtime owns only
+// `llm-runtime/index.ts` are REUSED verbatim (BR43-D4). This runtime owns only
 // the URL construction, the bearer header, ADC minting/caching, the sync
 // `validateCredential`, and the GCP `google.rpc.Status` error mapping.
 //

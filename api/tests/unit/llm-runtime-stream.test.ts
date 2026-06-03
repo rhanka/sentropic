@@ -32,7 +32,7 @@ vi.mock('../../src/config/env', () => ({
     GEMINI_API_KEY: 'test-gemini-key',
     MISTRAL_API_KEY: 'test-mistral-key',
     COHERE_API_KEY: 'test-cohere-key',
-    // BR-42f — GCP matrix rows need project/location so the pre-dispatch ADC
+    // BR-43 — GCP matrix rows need project/location so the pre-dispatch ADC
     // mint path runs (toMeshAuthInput) and buildGcpRuntimeRequest can build
     // the transport request. The actual mint is stubbed below (no live call).
     GOOGLE_CLOUD_PROJECT: 'test-gcp-project',
@@ -822,9 +822,9 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // GCP — Gemini 3.1 Flash Lite on GCP (BR-42f)
+  // GCP — Gemini 3.1 Flash Lite on GCP (BR-43)
   // Identical Gemini SSE wire shape (candidates/parts/functionCall/thought) —
-  // the runtime reuses the Gemini SSE→event mapper (BR42f-D4 REUSE). Only the
+  // the runtime reuses the Gemini SSE→event mapper (BR43-D4 REUSE). Only the
   // attribution prefix differs: tool-call ids are `gcp_call_…` (M4).
   // -----------------------------------------------------------------------
   {
@@ -883,7 +883,7 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // GCP — Gemini 3.5 Flash on GCP (reasoning model) (BR-42f)
+  // GCP — Gemini 3.5 Flash on GCP (reasoning model) (BR-43)
   // -----------------------------------------------------------------------
   {
     providerId: 'gcp',
@@ -978,7 +978,7 @@ const COHERE_TOOL_START_NAME_VARIANT = {
 describe('LLM stream event normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // BR-42f — stub the GCP ADC mint so the pre-dispatch bearer mint in
+    // BR-43 — stub the GCP ADC mint so the pre-dispatch bearer mint in
     // toMeshAuthInput resolves deterministically (no live ADC call). The GCP
     // matrix rows then reach the spied provider.streamGenerate like every other
     // provider, exercising the shared Gemini SSE→event mapper.
