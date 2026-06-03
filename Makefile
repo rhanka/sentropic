@@ -1623,6 +1623,121 @@ up-ui: ## Start the ui stack in detached mode
 down: ## Stop and remove containers, networks, volumes
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
 
+# -----------------------------------------------------------------------------
+# Standalone IdP (BR-39m Phase A0 — exception BR39m-EX1)
+# Reuses the api image + shared postgres; no new DB, no migration ownership.
+# -----------------------------------------------------------------------------
+.PHONY: typecheck-idp
+typecheck-idp: ## Typecheck the standalone IdP composition (apps/auth-idp)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps -w /workspace api npx tsc --noEmit --project apps/auth-idp/tsconfig.json
+
+# BR-39m A0-bis — minimal IdP screens front (apps/auth-idp/web). Self-contained
+# sub-project (NOT a root workspace member; same isolation as e2e/). It pulls
+# @sentropic/auth-ui via a relative file: dependency, so the package source is
+# present in the mounted workspace at install time.
+.PHONY: lock-idp-web
+lock-idp-web: ## Update apps/auth-idp/web package-lock.json using a Node container
+	@echo "🔒 Updating apps/auth-idp/web package-lock.json..."
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm install --package-lock-only --ignore-scripts --no-audit --no-fund"
+
+.PHONY: install-idp-web
+install-idp-web: ## Install the IdP screens front deps into the mounted workspace
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; else npm install --ignore-scripts --no-audit --no-fund; fi"
+
+.PHONY: typecheck-idp-web
+typecheck-idp-web: install-idp-web ## Typecheck the IdP screens front
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm run typecheck"
+
+.PHONY: build-idp-web
+build-idp-web: install-idp-web ## Build the IdP screens static front to apps/auth-idp/web/build
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm run build"
+	@test -f apps/auth-idp/web/build/404.html || (echo "❌ IdP front build missing SPA fallback 404.html" && exit 1)
+	@echo "✅ IdP screens front built at apps/auth-idp/web/build (SPA fallback: 404.html)"
+
+.PHONY: dev-idp
+dev-idp: prepare-node-workspace build-idp-web ## Start the standalone IdP (screens + API) on the shared DB (slot 4 ports)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait postgres
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps \
+		-e OAUTH_SIGNING_KEK=$${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production} \
+		api sh -lc 'cd /workspace/api && npm run db:migrate && npm run oauth:seed-clients && npm run oauth:init-keys'
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml up -d auth-idp --wait auth-idp
+
+.PHONY: seed-idp-clients
+seed-idp-clients: ## Seed the design-system oauth client on the shared DB
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'cd /workspace/api && npm run oauth:seed-clients'
+
+.PHONY: down-idp
+down-idp: ## Stop and remove the standalone IdP overlay (+ shared dev/test stack)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml -f docker-compose.idp.yml down
+
+.PHONY: logs-idp
+logs-idp: ## Stream standalone IdP logs
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml logs -f auth-idp
+
+.PHONY: logs-idp-once
+logs-idp-once: ## Print standalone IdP logs (no follow)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml logs --no-color auth-idp
+
+.PHONY: exec-idp
+exec-idp: ## Exec a command in the running auth-idp container: make exec-idp CMD="node -v"
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml exec auth-idp sh -lc "$$CMD"
+
+.PHONY: ps-idp
+ps-idp: ## Show standalone IdP service status
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml ps
+
+.PHONY: smoke-idp
+smoke-idp: ## Run the deterministic SSO authorization_code smoke against the live IdP (needs make dev-idp)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
+		-e IDP_BASE_URL=http://auth-idp:8787 \
+		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
+		-w /workspace api npx tsx apps/auth-idp/sso-smoke.ts
+
+.PHONY: smoke-idp-screens
+smoke-idp-screens: ## Screen-driven SSO smoke: drives the IdP-SERVED login+consent screens (needs make dev-idp)
+	@echo "▶ Pinning the IdP UI origin to the in-network name (auth-idp:8787) so the browser can follow login/consent redirects..."
+	@IDP_ORIGIN=http://auth-idp:8787 DISABLE_RATE_LIMIT=true \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml up -d auth-idp --wait auth-idp
+	@echo "▶ Seeding verified user + session on the shared DB..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
+		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
+		-w /workspace api npx tsx apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
+	USER_ID=$$(grep '^USER_ID=' .tmp-idp-seed.env | cut -d= -f2-); \
+	SESSION_TOKEN=$$(grep '^SESSION_TOKEN=' .tmp-idp-seed.env | cut -d= -f2-); \
+	rm -f .tmp-idp-seed.env; \
+	if [ -z "$$USER_ID" ] || [ -z "$$SESSION_TOKEN" ]; then echo "❌ seed step did not produce USER_ID/SESSION_TOKEN"; exit 1; fi; \
+	echo "▶ Driving the IdP-served screens in headless Chromium..."; \
+	USER_ID="$$USER_ID" SESSION_TOKEN="$$SESSION_TOKEN" \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml --profile idp-smoke run --rm --no-deps \
+		-e IDP_BASE_URL=http://auth-idp:8787 \
+		-e USER_ID="$$USER_ID" \
+		-e SESSION_TOKEN="$$SESSION_TOKEN" \
+		idp-screen-smoke
+
 
 # -----------------------------------------------------------------------------
 # Logs

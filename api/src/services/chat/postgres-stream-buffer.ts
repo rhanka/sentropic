@@ -26,6 +26,25 @@ const isStreamSequenceConflictError = (error: unknown): boolean => {
 };
 
 /**
+ * The parent `chat_messages` row referenced by `message_id` was deleted
+ * (e.g. session cascade) while a stream event for it was still being flushed.
+ * The FK declares `ON DELETE CASCADE`, so the parent's removal is meant to take
+ * these events with it — inserting a now-orphaned event is therefore a no-op,
+ * not a fatal error for the generation job. We only swallow the specific
+ * message-FK violation; any other FK error still propagates.
+ */
+const isOrphanMessageFkError = (error: unknown): boolean => {
+  const pgError = findPgError(error, '23503');
+  if (!pgError) return false;
+  return (
+    (pgError.constraint?.includes('chat_stream_events_message_id_chat_messages_id_fk') ??
+      false) ||
+    (pgError.message?.includes('chat_stream_events_message_id_chat_messages_id_fk') ??
+      false)
+  );
+};
+
+/**
  * Per SPEC §4 (Stream protocol) + §5 (Ports list).
  * PostgresStreamBuffer implements StreamBuffer over Drizzle + `chat_stream_events`.
  *
@@ -112,6 +131,12 @@ export class PostgresStreamBuffer implements StreamBuffer {
           nextSequence = await this.getNextSequence(streamId);
           continue;
         }
+        if (isOrphanMessageFkError(error)) {
+          // Parent chat_messages row was deleted (cascade) mid-flight. The
+          // ON DELETE CASCADE FK means this event would be removed anyway, so
+          // dropping it is the correct no-op rather than crashing the job.
+          return nextSequence;
+        }
         throw error;
       }
     }
@@ -137,30 +162,44 @@ export class PostgresStreamBuffer implements StreamBuffer {
   ): Promise<number> {
     const eventId = createId();
     let insertedSequence = 1;
+    let orphaned = false;
 
-    await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${STREAM_SEQUENCE_LOCK_NAMESPACE}), hashtext(${streamId}))`,
-      );
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${STREAM_SEQUENCE_LOCK_NAMESPACE}), hashtext(${streamId}))`,
+        );
 
-      const result = await tx
-        .select({
-          maxSequence: sql<number>`COALESCE(MAX(${chatStreamEvents.sequence}), 0)`,
-        })
-        .from(chatStreamEvents)
-        .where(eq(chatStreamEvents.streamId, streamId));
+        const result = await tx
+          .select({
+            maxSequence: sql<number>`COALESCE(MAX(${chatStreamEvents.sequence}), 0)`,
+          })
+          .from(chatStreamEvents)
+          .where(eq(chatStreamEvents.streamId, streamId));
 
-      insertedSequence = Number(result[0]?.maxSequence ?? 0) + 1;
+        insertedSequence = Number(result[0]?.maxSequence ?? 0) + 1;
 
-      await tx.insert(chatStreamEvents).values({
-        id: eventId,
-        messageId: messageId || null,
-        streamId,
-        eventType,
-        data,
-        sequence: insertedSequence,
+        await tx.insert(chatStreamEvents).values({
+          id: eventId,
+          messageId: messageId || null,
+          streamId,
+          eventType,
+          data,
+          sequence: insertedSequence,
+        });
       });
-    });
+    } catch (error) {
+      if (isOrphanMessageFkError(error)) {
+        // Parent chat_messages row was deleted (cascade) mid-flight. The
+        // ON DELETE CASCADE FK means this event would be removed anyway, so
+        // dropping it is the correct no-op rather than crashing the job.
+        orphaned = true;
+      } else {
+        throw error;
+      }
+    }
+
+    if (orphaned) return insertedSequence;
 
     await this.notifyStreamEvent(streamId, eventType, insertedSequence);
     return insertedSequence;
