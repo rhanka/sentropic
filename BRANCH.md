@@ -79,7 +79,12 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
 - [x] Lockfile review: `package-lock.json` also normalizes the existing `packages/skills` workspace snapshot while syncing `@sentropic/chat-core` and `@sentropic/chat-ui` versions; no `packages/skills/**` files changed on this branch. Retained because no-cache API/UI builds and package/UI test installs passed with this lockfile.
 
 ## AI Flaky tests
-- [x] No AI flaky accepted. `CLG-EX1` is a test contract alignment validated by the full AI suite, not an accepted flaky waiver.
+- [x] Accepted AI flaky (user sign-off 2026-05-26): CI shard `test-api-unit-integration (ai, chat-sync,executive-summary-auto,comment-assistant)`, file `api/tests/ai/chat-sync.test.ts`.
+  - Failing cases on run #875 (`26384425263`): `should generate assistant response with AI` (timed out at 15000ms; trivial "Say hello" prompt with no tool call, so unrelated to the loop guard) and `should generate response with tool calls` (`jobCompleted` false at 30000ms).
+  - Failure signature: provider/network latency under CI parallel load, not a code regression.
+  - Evidence: same-commit rerun of run `26384425263` re-ran the shard to `success`; local reproduction `make test-api-ai SCOPE=tests/ai/chat-sync.test.ts API_TEST_WORKERS=1 API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` passed all 4 tests (the two failing cases completed in 2997ms and 4005ms).
+  - Non-blocking per `rules/testing.md` AI flaky allowlist (`api/tests/ai/**`).
+- [x] `CLG-EX1` is a test contract alignment validated by the full AI suite, not an accepted flaky waiver.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
