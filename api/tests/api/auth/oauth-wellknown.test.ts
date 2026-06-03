@@ -21,7 +21,7 @@ describe('OAuth well-known routes', () => {
     );
     expect(payload.token_endpoint).toBe('http://localhost:9197/api/v1/auth/oauth/token');
     expect(payload.jwks_uri).toBe('http://localhost:9197/.well-known/jwks.json');
-    expect(payload.grant_types_supported).toEqual(['authorization_code']);
+    expect(payload.grant_types_supported).toEqual(['authorization_code', 'client_credentials']);
     expect(payload.code_challenge_methods_supported).toEqual(['S256']);
   });
 
