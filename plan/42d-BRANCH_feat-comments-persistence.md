@@ -22,9 +22,12 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
   - `api/src/services/queue-manager.ts` (auto-comment region only)
   - `api/src/services/context-comments.ts` (summary INPUT wiring only)
   - `api/tests/api/comments.test.ts`
+  - `api/tests/api/comments-wire.test.ts` (new — Lot 0 wire-payload characterization)
+  - `api/tests/api/pg-comment-store.test.ts` (new — Lot 2 adapter-parity)
   - `api/tests/ai/comment-assistant.test.ts`
   - `e2e/tests/07_comment_assistant.spec.ts`
   - `plan/42d-BRANCH_feat-comments-persistence.md` (this file)
+  - NOTE: ALL new specs MUST live under `api/tests/**`, NEVER under `api/src/**` — `api/tsconfig.json:16` sets `"include": ["src"]`, so a test placed under `src` would pollute `make typecheck-api`.
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `api/src/routes/api/streams.ts` (NOTIFY/SSE transport — unchanged)
@@ -49,6 +52,7 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
   - Impact: at most ONE additive nullable column in ONE migration file (`rules/data.md` single-migration rule), and/or one additive-optional package field (`enforce-package-bump` CI already covers `comments`).
   - Rollback: drop the migration file + target; revert the package field + bump.
 - Activation note (`acknowledge`): BR-42d is the activation half of the BR-42c→BR-42d sequenced two-branch plan. This branch forked OFF `feat/comments-package`, so the `packages/comments@0.1.0` commits are included here; BR-42c merges TOGETHER with BR-42d.
+- Accuracy note (`acknowledge`, Codex review): zero-migration holds for ALL persisted port fields (every one maps to a live `comments` column), and `author.kind`/`author.displayLabel` are HOST-ONLY (derived via the app-local `users` label join, NOT persisted) — confirms BR42d-EX2 stays un-triggered. No action; recorded for implementer accuracy.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -74,8 +78,9 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
   - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `rules/architecture.md`, `spec/SPEC_EVOL_COMMENTS_PERSISTENCE.md`, `plan/BRANCH_TEMPLATE.md`.
   - [ ] Confirm worktree/branch (`git -C tmp/feat-comments-persistence branch --show-current` == `feat/comments-persistence`).
   - [ ] Extend `api/tests/api/comments.test.ts` to PIN live REST behavior: list filtering + user-label join shape (`created_by_user`/`assigned_to_user`); thread mint/reply + `404 'Thread not found'`; per-row content edit; **combined-PATCH cascading the WHOLE `updates` (content + assignment) thread-wide when `assigned_to` present**; **`assigned_to:null → row.createdBy` (NOT unassign)**; **POST-with-assignee emits EXACTLY ONE `created`**; close/reopen thread cascade; per-row hard delete (replies survive); assignee-not-member `400`; creator/admin gates `403`. Capture EXACT JSON shapes (`id`, `thread_id`, `items[].*`, `success`).
+  - [ ] PIN the live POST default-assignee chain `assigned_to ?? existingThreadAssignee ?? userId` (`comments.ts:176`): (a) a ROOT comment posted with NO `assigned_to` defaults its assignee to the creator (`user.userId`); (b) a REPLY posted with NO `assigned_to` defaults to the EXISTING thread assignee (`existingThreadAssignee`, read from the parent thread row).
   - [ ] Extend `api/tests/ai/comment-assistant.test.ts` to PIN the live `CommentThreadSummary` field set (`createdBy/createdAt/updatedAt/assignedTo`, `status open|closed`) + grouping (root=earliest, last=latest, count, closed-if-any, first non-null assignee) and `resolveCommentActions` (close/reassign/trace-note + `toolCallId` provenance).
-  - [ ] Add a wire-payload characterization test (new, driven via the SSE `comment_update` frame or a NOTIFY spy) pinning the FULL per-(origin,event) wire-key matrix byte-for-byte:
+  - [ ] Add a wire-payload characterization test in a NEW spec `api/tests/api/comments-wire.test.ts` (under `api/tests/**`, NOT `api/src/**`), driven via the SSE `comment_update` frame or a NOTIFY spy, pinning the FULL per-(origin,event) wire-key matrix byte-for-byte:
     - REST created/updated/closed/reopened/deleted → `comment_id` (`comments.ts:205,254,283,312,337`).
     - AI close → `closed`/`thread_id` (`tool-service.ts:1364`); AI reassign → `reassigned`/`thread_id` (`tool-service.ts:1381`); AI trace-note created → `created`/`comment_id` (`tool-service.ts:1411`).
     - auto created → `created`/`comment_id` (`tool-service.ts:1602` + `queue-manager.ts:1466`).
@@ -85,8 +90,8 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
 
 - [ ] **Lot 1 — Workspace + BUILD activation FIRST** (BR42d-EX1)
   - [ ] `api/package.json`: add `"@sentropic/comments": "file:../packages/comments"` (mirror auth-hono/chat-server/flow/llm-mesh).
-  - [ ] Regenerate `api/package-lock.json` (link the new dep) + root `package-lock.json` (`make lock-*`).
-  - [ ] `api/Dockerfile`: `COPY packages/comments/package.json` (mirror) AND `RUN npm --workspace @sentropic/comments run build`.
+  - [ ] Regenerate `api/package-lock.json` (link the new dep) with `make lock-api`, then root `package-lock.json` with `make lock-root` (`make lock-*` is NOT a target; the real targets are `make lock-api` (Makefile:420) and `make lock-root` (Makefile:425)).
+  - [ ] `api/Dockerfile`: `COPY packages/contracts/package.json` AND `COPY packages/comments/package.json` (mirror the existing `COPY packages/<pkg>/package.json` block, Dockerfile:54-58). Then add the per-package build RUN steps in DEPENDENCY ORDER: `RUN npm --workspace @sentropic/contracts run build` BEFORE `RUN npm --workspace @sentropic/comments run build` (`@sentropic/comments` depends on `@sentropic/contracts` — `packages/comments/package.json:35`, and `build-comments: build-contracts`, Makefile:1024; contracts is NOT currently copied/built in the Dockerfile so BOTH the contracts COPY and the contracts build RUN must be added, placed before the comments build, mirroring the existing `RUN npm --workspace ... run build` block at Dockerfile:64-66).
   - [ ] `Makefile`: add `build-comments` to `prepare-node-workspace` + `up-api-test-ci`; add `packages/comments/{src,package.json,tsconfig.json}` to the `API_VERSION` glob.
   - [ ] Lot gate:
     - [ ] `make build-api ENV=test-feat-comments-persistence` — api image builds with `comments` built into dist.
@@ -98,7 +103,7 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
   - [ ] Map `tenant.workspaceId → comments.workspace_id`, ignore `tenant.tenantId` (live convention `tenantId := workspaceId`); inject `createId` (`api/src/utils/id.ts`).
   - [ ] DROP `provenance.runId` (no column); persist `provenance.toolCallId ↔ comments.toolCallId` only.
   - [ ] CONFIRM ZERO migration (every port field has a column); if a column is missing, escalate BR42d-EX2 (single additive migration). NOT anticipated.
-  - [ ] Adapter-parity tests: reuse the in-memory adapter scenarios against a real test DB (new spec under `api/tests/api/` or `api/src/services/comments/**` test) — CRUD, threading, thread cascade, ordering tiebreaker, tenant-scoping, `runId`-drop.
+  - [ ] Adapter-parity tests: reuse the in-memory adapter scenarios against a real test DB in a NEW spec `api/tests/api/pg-comment-store.test.ts` (MUST live under `api/tests/**`, NEVER under `api/src/**` per `api/tsconfig.json:16` `"include": ["src"]`) — CRUD, threading, thread cascade, ordering tiebreaker, tenant-scoping, `runId`-drop.
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence`.
     - [ ] **API tests**: adapter-parity spec GREEN; Lot 0 characterization stays GREEN (`make test-api-comments SCOPE=tests/api/comments.test.ts ENV=test-feat-comments-persistence`).
@@ -136,7 +141,7 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint: `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence`.
   - [ ] Retest API: `make test-api ENV=test-feat-comments-persistence` (full suite GREEN, incl. `comments.test.ts` + `comment-assistant.test.ts` + the new wire-payload + pg-comment-store parity tests).
-  - [ ] Package validation: `make validate-comments` (in-memory adapter) stays GREEN.
+  - [ ] Package validation (`validate-comments` is a CI job, ci.yml:512, NOT a Makefile target — run the real package gates instead): `make typecheck-comments`, `make test-comments` (in-memory adapter), `make build-comments`, `make pack-comments` all GREEN (targets at Makefile:1045/1340/1024/1065).
   - [ ] Retest E2E: prepare build `make build-api build-ui-image API_PORT=9212 UI_PORT=5412 MAILDEV_UI_PORT=1312 ENV=e2e-feat-comments-persistence`, then `make clean test-e2e E2E_SPEC=tests/07_comment_assistant.spec.ts API_PORT=9212 UI_PORT=5412 MAILDEV_UI_PORT=1312 ENV=e2e-feat-comments-persistence`.
   - [ ] AI flaky: document pass/fail signatures + record explicit user sign-off if any accepted.
   - [ ] Package bump: ONLY if a real `packages/comments/src/**` edit happened (per spec DEC-1, NONE anticipated → no bump; `enforce-package-bump` CI covers `comments`).
