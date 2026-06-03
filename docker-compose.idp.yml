@@ -1,0 +1,49 @@
+# BR-39m Phase A0 — Standalone IdP overlay (additive; exception BR39m-EX1).
+#
+# Adds a single `auth-idp` service that REUSES the existing `api` image and the
+# dev workspace volume mount to run the thin IdP composition entrypoint
+# (`apps/auth-idp/index.ts`) against the SHARED `postgres` service. It does NOT
+# modify any existing service definition, introduces NO new image build, NO new
+# database, and NO migration. Deleting this file fully reverts the wiring.
+#
+# Usage (slot 4): make dev-idp API_PORT=9199 UI_PORT=5399 MAILDEV_UI_PORT=1299 ENV=test-feat-auth-idp
+#
+# Compose with: -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml
+services:
+  auth-idp:
+    image: ${REGISTRY}/${API_IMAGE_NAME:-top-ai-ideas-api}:${API_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: ./api/Dockerfile
+      target: ${TARGET:-development}
+    working_dir: /workspace
+    # Reuse the dev workspace mount so apps/auth-idp source + node_modules (incl.
+    # tsx) are available without a separate build pipeline.
+    volumes:
+      - ./:/workspace
+      - workspace_node_modules:/workspace/node_modules
+    # IDP_PORT pins the in-container listener to 8787 regardless of the published
+    # host port (API_PORT), so the port mapping below is always valid.
+    command: sh -c "npx tsx watch apps/auth-idp/index.ts"
+    environment:
+      - NODE_ENV=development
+      - IDP_PORT=8787
+      - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
+      - OAUTH_ISSUER_URL=${OAUTH_ISSUER_URL:-http://localhost:${API_PORT:-8787}}
+      - OAUTH_SIGNING_KEK=${OAUTH_SIGNING_KEK}
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_CALLBACK_BASE_URL=${AUTH_CALLBACK_BASE_URL:-http://localhost:${UI_PORT:-5173}}
+      - UI_BASE_URL=${UI_BASE_URL:-http://localhost:${UI_PORT:-5173}}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:${UI_PORT:-5173},http://127.0.0.1:${UI_PORT:-5173},http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*}
+      - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
+    ports:
+      - "${API_PORT:-8787}:8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8787/.well-known/openid-configuration >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    tty: true
