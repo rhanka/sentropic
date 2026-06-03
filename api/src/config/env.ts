@@ -24,9 +24,10 @@ const envSchema = z.object({
   GOOGLE_CLOUD_LOCATION: z.string().optional(),
   // ADC source for service-account JSON local-dev / SA-key UAT. Honored by
   // google-auth-library's GoogleAuth (workload identity needs no value).
+  // Delivered natively via the docker-compose api-service env passthrough; in
+  // dev/UAT point it at the gitignored SA key under the workspace bind-mount,
+  // e.g. GOOGLE_APPLICATION_CREDENTIALS=/workspace/.secrets/gcp-sa.json.
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
-  // Opt-in sentinel that gates LIVE GCP calls during UAT (never set in CI).
-  GCP_LIVE_UAT: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-nano'),
   TAVILY_API_KEY: z.string().optional(),
   // ---------------------------------------------------------------------------
