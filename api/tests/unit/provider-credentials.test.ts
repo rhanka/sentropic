@@ -76,17 +76,17 @@ describe('provider credential resolution', () => {
     expect(['environment', 'none']).toContain(resolved.source);
   });
 
-  it('resolves vertex credential as none (ADC-minted, no stored string key)', async () => {
-    // BR-42f / §B / D2 — Vertex auth is an ADC-minted short-lived bearer, not a
+  it('resolves gcp credential as none (ADC-minted, no stored string key)', async () => {
+    // BR-42f / §B / D2 — GCP auth is an ADC-minted short-lived bearer, not a
     // stored API key. The string credential resolver is intentionally BYPASSED
-    // for `vertex`, so it legitimately resolves to source:'none' and leaks no
+    // for `gcp`, so it legitimately resolves to source:'none' and leaks no
     // credential string (the bearer is minted later, pre-dispatch, in
     // toMeshAuthInput).
     const resolved = await resolveProviderCredential({
-      providerId: 'vertex',
+      providerId: 'gcp',
     });
 
-    expect(resolved.providerId).toBe('vertex');
+    expect(resolved.providerId).toBe('gcp');
     expect(resolved.source).toBe('none');
     expect(resolved.credential ?? null).toBeNull();
   });

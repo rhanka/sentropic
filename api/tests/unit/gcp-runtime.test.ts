@@ -1,28 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// BR-42f Lot 3 — focused VertexProviderRuntime unit test (mocked fetch + stubbed
+// BR-42f Lot 3 — focused GcpProviderRuntime unit test (mocked fetch + stubbed
 // ADC mint). Proves the transport envelope (URL + `Authorization: Bearer`, NO
 // `?key=`), the SSE reuse, the ADC token cache/single-flight/skew (D-ADC1), and
-// the D-ERR1 error mapping. NO live Vertex call. The broader catalog/stream-
+// the D-ERR1 error mapping. NO live GCP call. The broader catalog/stream-
 // matrix non-regression edits are Lot 4.
+// (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI brand
+// retired; the endpoint host stays aiplatform.googleapis.com.)
 // ---------------------------------------------------------------------------
 
 vi.mock('../../src/config/env', () => ({
   env: {
-    VERTEX_PROJECT_ID: 'my-project',
-    VERTEX_LOCATION: 'us-central1',
+    GOOGLE_CLOUD_PROJECT: 'my-project',
+    GOOGLE_CLOUD_LOCATION: 'us-central1',
   },
 }));
 
 import {
-  VertexProviderRuntime,
-  parseVertexModelId,
-  mintVertexAccessToken,
-  __setVertexAdcMinter,
-  __resetVertexTokenCache,
-  type VertexStreamGenerateRequest,
-} from '../../src/services/providers/vertex-provider';
+  GcpProviderRuntime,
+  parseGcpModelId,
+  mintGcpAccessToken,
+  __setGcpAdcMinter,
+  __resetGcpTokenCache,
+  type GcpStreamGenerateRequest,
+} from '../../src/services/providers/gcp-provider';
 
 function makeReadableStream(payload: string): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -42,36 +44,36 @@ async function collectEvents(iterable: AsyncIterable<unknown>): Promise<unknown[
   return events;
 }
 
-describe('parseVertexModelId', () => {
-  it('strips the @vertex qualifier into publisher + wire model', () => {
-    expect(parseVertexModelId('google/gemini-3.5-flash@vertex')).toEqual({
+describe('parseGcpModelId', () => {
+  it('strips the @gcp qualifier into publisher + wire model', () => {
+    expect(parseGcpModelId('google/gemini-3.5-flash@gcp')).toEqual({
       publisher: 'google',
       model: 'gemini-3.5-flash',
     });
   });
 
   it('throws on a malformed key', () => {
-    expect(() => parseVertexModelId('gemini-3.5-flash')).toThrow();
+    expect(() => parseGcpModelId('gemini-3.5-flash')).toThrow();
   });
 });
 
-describe('VertexProviderRuntime.validateCredential (D-ADC2 sync)', () => {
+describe('GcpProviderRuntime.validateCredential (D-ADC2 sync)', () => {
   it('is ready when project + location are configured', () => {
-    const runtime = new VertexProviderRuntime();
+    const runtime = new GcpProviderRuntime();
     expect(runtime.validateCredential().ok).toBe(true);
     expect(runtime.provider.status).toBe('ready');
   });
 });
 
-describe('VertexProviderRuntime transport envelope', () => {
+describe('GcpProviderRuntime transport envelope', () => {
   beforeEach(() => {
-    __resetVertexTokenCache();
+    __resetGcpTokenCache();
   });
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('builds the Vertex URL with a Bearer header and NO ?key=', async () => {
+  it('builds the GCP URL with a Bearer header and NO ?key=', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(makeReadableStream('data: {"candidates":[]}\n\n'), {
         status: 200,
@@ -80,9 +82,9 @@ describe('VertexProviderRuntime transport envelope', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const runtime = new VertexProviderRuntime();
-    const request: VertexStreamGenerateRequest = {
-      mode: 'vertex-stream-generate-content',
+    const runtime = new GcpProviderRuntime();
+    const request: GcpStreamGenerateRequest = {
+      mode: 'gcp-stream-generate-content',
       requestOptions: {
         project: 'my-project',
         location: 'us-central1',
@@ -120,9 +122,9 @@ describe('VertexProviderRuntime transport envelope', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const runtime = new VertexProviderRuntime();
+    const runtime = new GcpProviderRuntime();
     const stream = await runtime.streamGenerate({
-      mode: 'vertex-stream-generate-content',
+      mode: 'gcp-stream-generate-content',
       requestOptions: {
         project: 'my-project',
         location: 'us-central1',
@@ -131,7 +133,7 @@ describe('VertexProviderRuntime transport envelope', () => {
         body: { contents: [] },
       },
       credential: 'stub-bearer-token',
-    } satisfies VertexStreamGenerateRequest);
+    } satisfies GcpStreamGenerateRequest);
 
     const events = await collectEvents(stream);
     expect(events).toEqual([
@@ -141,8 +143,8 @@ describe('VertexProviderRuntime transport envelope', () => {
   });
 });
 
-describe('VertexProviderRuntime.normalizeError (D-ERR1)', () => {
-  const runtime = new VertexProviderRuntime();
+describe('GcpProviderRuntime.normalizeError (D-ERR1)', () => {
+  const runtime = new GcpProviderRuntime();
 
   it.each([
     [401, false],
@@ -157,18 +159,18 @@ describe('VertexProviderRuntime.normalizeError (D-ERR1)', () => {
       status,
       code: 'PERMISSION_DENIED',
     });
-    expect(normalized.providerId).toBe('vertex');
+    expect(normalized.providerId).toBe('gcp');
     expect(normalized.retryable).toBe(retryable);
     expect(normalized.code).toBe('PERMISSION_DENIED');
   });
 });
 
-describe('mintVertexAccessToken (D-ADC1 cache/single-flight/skew)', () => {
+describe('mintGcpAccessToken (D-ADC1 cache/single-flight/skew)', () => {
   beforeEach(() => {
-    __resetVertexTokenCache();
+    __resetGcpTokenCache();
   });
   afterEach(() => {
-    __resetVertexTokenCache();
+    __resetGcpTokenCache();
   });
 
   it('caches the minted token and reuses it before the skew window', async () => {
@@ -176,14 +178,14 @@ describe('mintVertexAccessToken (D-ADC1 cache/single-flight/skew)', () => {
       token: 'token-1',
       expiresAtMs: 10_000_000,
     });
-    const restore = __setVertexAdcMinter(minter);
+    const restore = __setGcpAdcMinter(minter);
 
-    const t1 = await mintVertexAccessToken({
+    const t1 = await mintGcpAccessToken({
       project: 'p',
       location: 'l',
       now: 1_000,
     });
-    const t2 = await mintVertexAccessToken({
+    const t2 = await mintGcpAccessToken({
       project: 'p',
       location: 'l',
       now: 2_000,
@@ -200,11 +202,11 @@ describe('mintVertexAccessToken (D-ADC1 cache/single-flight/skew)', () => {
       .fn()
       .mockResolvedValueOnce({ token: 'token-1', expiresAtMs: 100_000 })
       .mockResolvedValueOnce({ token: 'token-2', expiresAtMs: 200_000 });
-    const restore = __setVertexAdcMinter(minter);
+    const restore = __setGcpAdcMinter(minter);
 
-    const t1 = await mintVertexAccessToken({ project: 'p', location: 'l', now: 1_000 });
+    const t1 = await mintGcpAccessToken({ project: 'p', location: 'l', now: 1_000 });
     // now within 60s of expiry (100_000 - 60_000 = 40_000) -> re-mint
-    const t2 = await mintVertexAccessToken({ project: 'p', location: 'l', now: 50_000 });
+    const t2 = await mintGcpAccessToken({ project: 'p', location: 'l', now: 50_000 });
 
     expect(t1).toBe('token-1');
     expect(t2).toBe('token-2');
@@ -220,10 +222,10 @@ describe('mintVertexAccessToken (D-ADC1 cache/single-flight/skew)', () => {
           resolveMint = resolve;
         }),
     );
-    const restore = __setVertexAdcMinter(minter);
+    const restore = __setGcpAdcMinter(minter);
 
-    const p1 = mintVertexAccessToken({ project: 'p', location: 'l', now: 1_000 });
-    const p2 = mintVertexAccessToken({ project: 'p', location: 'l', now: 1_000 });
+    const p1 = mintGcpAccessToken({ project: 'p', location: 'l', now: 1_000 });
+    const p2 = mintGcpAccessToken({ project: 'p', location: 'l', now: 1_000 });
     resolveMint({ token: 'token-shared', expiresAtMs: 10_000_000 });
 
     const [t1, t2] = await Promise.all([p1, p2]);
@@ -238,12 +240,12 @@ describe('mintVertexAccessToken (D-ADC1 cache/single-flight/skew)', () => {
       .fn()
       .mockRejectedValueOnce(new Error('mint failed'))
       .mockResolvedValueOnce({ token: 'token-ok', expiresAtMs: 10_000_000 });
-    const restore = __setVertexAdcMinter(minter);
+    const restore = __setGcpAdcMinter(minter);
 
     await expect(
-      mintVertexAccessToken({ project: 'p', location: 'l', now: 1_000 }),
+      mintGcpAccessToken({ project: 'p', location: 'l', now: 1_000 }),
     ).rejects.toThrow('mint failed');
-    const t2 = await mintVertexAccessToken({ project: 'p', location: 'l', now: 2_000 });
+    const t2 = await mintGcpAccessToken({ project: 'p', location: 'l', now: 2_000 });
 
     expect(t2).toBe('token-ok');
     expect(minter).toHaveBeenCalledTimes(2);

@@ -8,7 +8,7 @@ describe('API LLM mesh contract proof', () => {
     const proof = createApiMeshContractProof();
 
     expect(proof.providers).toEqual(
-      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'vertex']),
+      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp']),
     );
     expect(proof.providers).toHaveLength(6);
     expect(proof.modelCount).toBeGreaterThanOrEqual(10);

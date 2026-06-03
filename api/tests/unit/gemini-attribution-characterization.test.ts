@@ -4,10 +4,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // BR-42f Lot 1 — CHARACTERIZATION oracle for the Gemini SSE provider-attribution
 // literals that Lot 3/M4 will parameterize by provider in the SHARED runtime loop.
 //
-// This file LOCKS the CURRENT (pre-vertex) attribution so that, after Lot 3
+// This file LOCKS the CURRENT (pre-gcp) attribution so that, after Lot 3
 // parameterizes the prefixes/provider_id by the active provider, Gemini output
 // stays byte-identical (`gemini_…` / `gemini_call_…` / provider_id `'gemini'`)
-// while Vertex later receives its own `vertex_…` / `vertex_call_…` / `'vertex'`.
+// while GCP later receives its own `gcp_…` / `gcp_call_…` / `'gcp'`.
+// (Provider id renamed vertex→gcp — user decision 2026-06-02, Vertex AI brand
+// retired; the endpoint host stays aiplatform.googleapis.com.)
 //
 // Verified anchors in api/src/services/llm-runtime/index.ts (current HEAD):
 //   - :921  generate branch  -> response id  `gemini_${createId()}`
@@ -99,7 +101,7 @@ describe('Gemini provider-attribution characterization (BR-42f Lot 1 oracle)', (
     });
 
     expect(completion.id.startsWith('gemini_')).toBe(true);
-    expect(completion.id.startsWith('vertex_')).toBe(false);
+    expect(completion.id.startsWith('gcp_')).toBe(false);
     expect(completion.choices[0]?.message.content).toBe('Hello world');
   });
 
@@ -130,7 +132,7 @@ describe('Gemini provider-attribution characterization (BR-42f Lot 1 oracle)', (
     expect(responseCreated).toBeDefined();
     const responseId = (responseCreated!.data as { response_id: string }).response_id;
     expect(responseId.startsWith('gemini_')).toBe(true);
-    expect(responseId.startsWith('vertex_')).toBe(false);
+    expect(responseId.startsWith('gcp_')).toBe(false);
   });
 
   it('attributes stream tool-call ids with the `gemini_call_` prefix (index.ts:1281)', async () => {
@@ -172,7 +174,7 @@ describe('Gemini provider-attribution characterization (BR-42f Lot 1 oracle)', (
     const toolCallId = (toolStart!.data as { tool_call_id: string }).tool_call_id;
     expect(toolCallId).toBe('gemini_call_1');
     expect(toolCallId.startsWith('gemini_call_')).toBe(true);
-    expect(toolCallId.startsWith('vertex_call_')).toBe(false);
+    expect(toolCallId.startsWith('gcp_call_')).toBe(false);
   });
 
   it('attributes the no-content status event with provider_id `gemini` (index.ts:1305)', async () => {

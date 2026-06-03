@@ -13,13 +13,13 @@ describe('ProviderRegistry expansion', () => {
     expect(ids).toContain('anthropic');
     expect(ids).toContain('mistral');
     expect(ids).toContain('cohere');
-    expect(ids).toContain('vertex');
+    expect(ids).toContain('gcp');
     expect(ids).toHaveLength(6);
   });
 
   it('should have all provider IDs in the providerIds constant', () => {
     expect(providerIds).toEqual(
-      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'vertex']),
+      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp']),
     );
     expect(providerIds).toHaveLength(6);
   });
@@ -53,7 +53,7 @@ describe('ProviderRegistry expansion', () => {
     expect(providerIdsInModels).toContain('anthropic');
     expect(providerIdsInModels).toContain('mistral');
     expect(providerIdsInModels).toContain('cohere');
-    expect(providerIdsInModels).toContain('vertex');
+    expect(providerIdsInModels).toContain('gcp');
   });
 
   it('should have correct capabilities per provider', () => {
