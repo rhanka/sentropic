@@ -32,11 +32,11 @@ vi.mock('../../src/config/env', () => ({
     GEMINI_API_KEY: 'test-gemini-key',
     MISTRAL_API_KEY: 'test-mistral-key',
     COHERE_API_KEY: 'test-cohere-key',
-    // BR-42f — Vertex matrix rows need project/location so the pre-dispatch ADC
-    // mint path runs (toMeshAuthInput) and buildVertexRuntimeRequest can build
+    // BR-42f — GCP matrix rows need project/location so the pre-dispatch ADC
+    // mint path runs (toMeshAuthInput) and buildGcpRuntimeRequest can build
     // the transport request. The actual mint is stubbed below (no live call).
-    VERTEX_PROJECT_ID: 'test-vertex-project',
-    VERTEX_LOCATION: 'us-central1',
+    GOOGLE_CLOUD_PROJECT: 'test-gcp-project',
+    GOOGLE_CLOUD_LOCATION: 'us-central1',
   },
 }));
 
@@ -58,9 +58,9 @@ vi.mock('cohere-ai', () => ({
 
 import type { StreamEvent } from '../../src/services/llm-runtime';
 import {
-  __setVertexAdcMinter,
-  __resetVertexTokenCache,
-} from '../../src/services/providers/vertex-provider';
+  __setGcpAdcMinter,
+  __resetGcpTokenCache,
+} from '../../src/services/providers/gcp-provider';
 
 async function collectStreamEvents(generator: AsyncGenerator<StreamEvent>): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
@@ -822,15 +822,15 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // Vertex — Gemini 3.1 Flash Lite on Vertex (BR-42f)
+  // GCP — Gemini 3.1 Flash Lite on GCP (BR-42f)
   // Identical Gemini SSE wire shape (candidates/parts/functionCall/thought) —
   // the runtime reuses the Gemini SSE→event mapper (BR42f-D4 REUSE). Only the
-  // attribution prefix differs: tool-call ids are `vertex_call_…` (M4).
+  // attribution prefix differs: tool-call ids are `gcp_call_…` (M4).
   // -----------------------------------------------------------------------
   {
-    providerId: 'vertex',
-    model: 'google/gemini-3.1-flash-lite@vertex',
-    label: 'Gemini 3.1 Flash Lite on Vertex',
+    providerId: 'gcp',
+    model: 'google/gemini-3.1-flash-lite@gcp',
+    label: 'Gemini 3.1 Flash Lite on GCP',
     chatEvents: [
       { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
       { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
@@ -853,7 +853,7 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     expectedTools: {
       startCount: 1,
       startName: 'search',
-      startToolCallId: 'vertex_call_1',
+      startToolCallId: 'gcp_call_1',
       startArgs: '{"query":"test"}',
       deltaCount: 0,
     },
@@ -862,8 +862,8 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
         candidates: [{
           content: {
             parts: [
-              { text: 'Vertex lite thought', thought: true },
-              { text: 'Vertex lite answer' },
+              { text: 'GCP lite thought', thought: true },
+              { text: 'GCP lite answer' },
             ],
           },
           finishReason: 'STOP',
@@ -872,9 +872,9 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     ],
     expectedReasoning: {
       count: 1,
-      deltas: ['Vertex lite thought'],
+      deltas: ['GCP lite thought'],
       contentCount: 1,
-      contentDeltas: ['Vertex lite answer'],
+      contentDeltas: ['GCP lite answer'],
       hasDone: true,
     },
     statusEvents: [
@@ -883,12 +883,12 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // Vertex — Gemini 3.5 Flash on Vertex (reasoning model) (BR-42f)
+  // GCP — Gemini 3.5 Flash on GCP (reasoning model) (BR-42f)
   // -----------------------------------------------------------------------
   {
-    providerId: 'vertex',
-    model: 'google/gemini-3.5-flash@vertex',
-    label: 'Gemini 3.5 Flash on Vertex',
+    providerId: 'gcp',
+    model: 'google/gemini-3.5-flash@gcp',
+    label: 'Gemini 3.5 Flash on GCP',
     chatEvents: [
       { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
       { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
@@ -911,7 +911,7 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     expectedTools: {
       startCount: 1,
       startName: 'search',
-      startToolCallId: 'vertex_call_1',
+      startToolCallId: 'gcp_call_1',
       startArgs: '{"query":"pro"}',
       deltaCount: 0,
     },
@@ -920,8 +920,8 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
         candidates: [{
           content: {
             parts: [
-              { text: 'Vertex thought', thought: true },
-              { text: 'Vertex answer' },
+              { text: 'GCP thought', thought: true },
+              { text: 'GCP answer' },
             ],
           },
           finishReason: 'STOP',
@@ -930,9 +930,9 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     ],
     expectedReasoning: {
       count: 1,
-      deltas: ['Vertex thought'],
+      deltas: ['GCP thought'],
       contentCount: 1,
-      contentDeltas: ['Vertex answer'],
+      contentDeltas: ['GCP answer'],
       hasDone: true,
     },
     statusEvents: [
@@ -978,13 +978,13 @@ const COHERE_TOOL_START_NAME_VARIANT = {
 describe('LLM stream event normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // BR-42f — stub the Vertex ADC mint so the pre-dispatch bearer mint in
-    // toMeshAuthInput resolves deterministically (no live ADC call). The Vertex
+    // BR-42f — stub the GCP ADC mint so the pre-dispatch bearer mint in
+    // toMeshAuthInput resolves deterministically (no live ADC call). The GCP
     // matrix rows then reach the spied provider.streamGenerate like every other
     // provider, exercising the shared Gemini SSE→event mapper.
-    __resetVertexTokenCache();
-    __setVertexAdcMinter(async () => ({
-      token: 'stub-vertex-bearer',
+    __resetGcpTokenCache();
+    __setGcpAdcMinter(async () => ({
+      token: 'stub-gcp-bearer',
       expiresAtMs: Number.MAX_SAFE_INTEGER,
     }));
   });
