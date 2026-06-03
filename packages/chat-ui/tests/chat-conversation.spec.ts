@@ -209,12 +209,12 @@ describe('ChatConversation — export surface registration', () => {
     expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
   });
 
-  it('should have version 0.9.0 in package.json (minor bump — BR-CONV StreamMessage wiring)', () => {
-    expect(pkgJson.version).toBe('0.9.0');
+  it('should have version 0.10.0 in package.json (minor bump — BR-FID2 ChatContextPicker extraction)', () => {
+    expect(pkgJson.version).toBe('0.10.0');
   });
 
-  it('should have _version 0.9.0 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.9.0');
+  it('should have _version 0.10.0 in export-manifest.json', () => {
+    expect(manifest._version).toBe('0.10.0');
   });
 
   it('should resolve the ChatConversation svelte file to an existing path', () => {
