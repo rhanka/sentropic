@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-02",
-  "_version": "0.5.0",
+  "_version": "0.6.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -504,6 +504,12 @@
       "file": "src/components/ContextChips.svelte",
       "exists": true,
       "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+    },
+    "./components/ChatConversation.svelte": {
+      "kind": "svelte",
+      "file": "src/components/ChatConversation.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: host (ChatUiWebHost), sessionId? (string), layout? ('inline'|'docked'|'floating'), labels? (ChatUiLabelResolver), features? (ChatConversationFeatures), renderers? (RendererRegistry), models? (ModelCatalogModel[]), modelGroups? (ModelCatalogGroup[]), selectedModel? (string), contextProvider? (ChatContextProvider)"
     }
   }
 }
