@@ -30,7 +30,10 @@ import {
   type WorkflowTaskExecutionDefinition,
   type WorkflowTransitionDefinition,
 } from '@sentropic/flow';
+import type { TenantContext } from '@sentropic/contracts';
+import { targetFromLive } from '@sentropic/comments';
 import { createId } from '../utils/id';
+import { commentStore, commentEventSink } from './comments/instance';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
   generateInitiativeList,
@@ -571,21 +574,6 @@ export class QueueManager {
     const client = await pool.connect();
     try {
       await client.query(`NOTIFY initiative_events, '${notifyPayload.replace(/'/g, "''")}'`);
-    } finally {
-      client.release();
-    }
-  }
-
-  private async notifyCommentEvent(
-    workspaceId: string,
-    contextType: string,
-    contextId: string,
-    data: Record<string, unknown> = {}
-  ): Promise<void> {
-    const payload = JSON.stringify({ workspace_id: workspaceId, context_type: contextType, context_id: contextId, data });
-    const client = await pool.connect();
-    try {
-      await client.query(`NOTIFY comment_events, '${payload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }
@@ -1445,25 +1433,39 @@ export class QueueManager {
     const locale = normalizeLocale(opts.locale) ?? 'fr';
 
     const uniqueSectionKeys = normalizeAutoGenerationSectionKeys(opts.contextType, opts.sectionKeys);
+    // BR-42d Lot 5 (M-AUTO): re-route the out-of-request auto-generation seeding
+    // onto the SAME shared emit-free store + sink instance as the in-request
+    // paths (SPEC DEC-4). `add` mints a fresh thread + `status:'open'` exactly as
+    // the live insert; the live `toolCallId: 'auto_generation:<id>'` is preserved
+    // by deriving it from the minted comment id post-add. Host-emit
+    // `{created, comment_id}` (origin `auto`) per the SPEC §4 matrix.
+    const tenant: TenantContext = { tenantId: workspaceId, workspaceId, userId: createdBy };
     for (const sectionKey of uniqueSectionKeys) {
-      const now = new Date();
-      const commentId = createId();
-      await db.insert(comments).values({
-        id: commentId,
+      const target = targetFromLive({ contextType: opts.contextType, contextId, sectionKey });
+      const created = await commentStore.add(tenant, {
+        tenant,
+        target,
+        author: { id: createdBy },
+        body: this.formatAutoGenerationFieldComment(opts.contextType, sectionKey, locale),
+        assignedTo: createdBy,
+      });
+      // Preserve the live provenance `auto_generation:<comment_id>` — a derived
+      // self-reference that the store's `add` cannot mint (the id is generated
+      // inside `add`). This is a provenance-only reconciliation, not a duplicated
+      // comment-creation path: the comment NOTIFY remains the sink's alone.
+      await db
+        .update(comments)
+        .set({ toolCallId: `auto_generation:${created.id}` })
+        .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, created.id)));
+      await commentEventSink.emit({
         workspaceId,
         contextType: opts.contextType,
         contextId,
-        sectionKey,
-        createdBy,
-        assignedTo: createdBy,
-        status: 'open',
-        threadId: createId(),
-        content: this.formatAutoGenerationFieldComment(opts.contextType, sectionKey, locale),
-        toolCallId: `auto_generation:${commentId}`,
-        createdAt: now,
-        updatedAt: now
+        action: 'created',
+        key: 'comment_id',
+        commentId: created.id,
+        origin: 'auto',
       });
-      await this.notifyCommentEvent(workspaceId, opts.contextType, contextId, { action: 'created', comment_id: commentId });
     }
   }
 
