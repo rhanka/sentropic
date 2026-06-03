@@ -73,6 +73,12 @@ const envSchema = z.object({
   OAUTH_ID_TOKEN_TTL_SEC: z.coerce.number().default(3600),
   OAUTH_AUTHORIZATION_CODE_TTL_SEC: z.coerce.number().default(60),
   OAUTH_DPOP_IAT_SKEW_SEC: z.coerce.number().default(60),
+  // Service-to-service (client_credentials) — stateless tokens (BR39d-D5)
+  OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC: z.coerce.number().default(900),
+  OAUTH_SERVICE_RESOURCE_URI: z.string().optional(),
+  // Dev/test self-S2S dogfood client (BR39d-D10)
+  OAUTH_SELF_SERVICE_CLIENT_ID: z.string().optional(),
+  OAUTH_SELF_SERVICE_CLIENT_SECRET: z.string().optional(),
   // Admin Configuration
   ADMIN_EMAIL: z.string().email().optional(),
   // Test Configuration

@@ -2,6 +2,7 @@ import type {
   AuthCodePayload,
   OauthClientRecord,
   OauthStateStorePort,
+  ServiceClientRecord,
   TokenMeta,
 } from '../../src/index.js';
 
@@ -10,13 +11,16 @@ export interface MemoryOauthStateStorePort extends OauthStateStorePort {
   clients: Map<string, OauthClientRecord>;
   dpopProofs: Map<string, Date>;
   revokedTokens: Map<string, Date>;
+  serviceClients: Map<string, ServiceClientRecord>;
   tokens: Map<string, { expiresAt: Date; meta: TokenMeta }>;
   upsertClient(client: OauthClientRecord): void;
+  upsertServiceClient(client: ServiceClientRecord): void;
 }
 
 export const createMemoryOauthStateStore = (options: {
   clients?: OauthClientRecord[];
   now?: () => Date;
+  serviceClients?: ServiceClientRecord[];
 } = {}): MemoryOauthStateStorePort => {
   const now = options.now ?? (() => new Date());
   const store: MemoryOauthStateStorePort = {
@@ -24,6 +28,7 @@ export const createMemoryOauthStateStore = (options: {
     clients: new Map(options.clients?.map((client) => [client.clientId, client]) ?? []),
     dpopProofs: new Map(),
     revokedTokens: new Map(),
+    serviceClients: new Map(options.serviceClients?.map((client) => [client.clientId, client]) ?? []),
     tokens: new Map(),
 
     async consumeAuthCode(code) {
@@ -35,6 +40,12 @@ export const createMemoryOauthStateStore = (options: {
 
     async findClient(clientId) {
       return store.clients.get(clientId) ?? null;
+    },
+
+    async findServiceClient(clientId) {
+      const client = store.serviceClients.get(clientId);
+      if (!client || client.revokedAt) return null;
+      return client;
     },
 
     async findTokenMeta(jti) {
@@ -105,6 +116,10 @@ export const createMemoryOauthStateStore = (options: {
 
     upsertClient(client) {
       store.clients.set(client.clientId, client);
+    },
+
+    upsertServiceClient(client) {
+      store.serviceClients.set(client.clientId, client);
     },
   };
 
