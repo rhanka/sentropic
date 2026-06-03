@@ -347,6 +347,12 @@ jobs:
       - name: Typecheck IdP
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make typecheck-idp
+      - name: Typecheck IdP screens front
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make typecheck-idp-web
+      - name: Build IdP screens front
+        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make build-idp-web
       - name: Lint API
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make lint-api

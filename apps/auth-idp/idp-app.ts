@@ -21,6 +21,10 @@
 // schema/data side effects. The product API (`api/src/app.ts`) is untouched and
 // keeps serving the same auth surface in-app.
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 
@@ -28,6 +32,22 @@ import { env } from '../../api/src/config/env';
 import { authRouter } from '../../api/src/routes/auth';
 import { wellKnownRouter } from '../../api/src/routes/well-known';
 import { isOriginAllowed, parseAllowedOrigins } from '../../api/src/utils/cors';
+
+// BR-39m A0-bis — the human-facing login/register/magic-link/consent screens are
+// a minimal SvelteKit static front (apps/auth-idp/web) built to `web/build` with
+// the SPA fallback `404.html`. The IdP serves that bundle SAME-ORIGIN with its
+// OIDC API so the session cookie is first-party at the IdP origin. Path resolved
+// from cwd (`/workspace` in the dev image; configurable via IDP_WEB_BUILD_DIR).
+const IDP_WEB_BUILD_DIR = process.env.IDP_WEB_BUILD_DIR ?? 'apps/auth-idp/web/build';
+const SPA_FALLBACK_FILE = '404.html';
+
+const readSpaFallback = (): string | null => {
+  try {
+    return readFileSync(join(process.cwd(), IDP_WEB_BUILD_DIR, SPA_FALLBACK_FILE), 'utf8');
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Build the standalone IdP Hono application.
@@ -52,23 +72,33 @@ export const createIdpApp = (): Hono => {
   // Security headers: same posture as the product API. CORP/COEP stay off so
   // legitimate cross-origin RP requests (design-system origin -> IdP origin)
   // are not blocked; CORS below restricts credentials to allowed origins.
+  //
+  // The IdP now serves its OWN HTML + /_app assets (A0-bis). `upgrade-insecure-
+  // requests` and HSTS are HTTPS-only hardening: over a plain-HTTP dev/test
+  // origin `upgrade-insecure-requests` rewrites every subresource to https://
+  // and breaks the served screens. So we emit BOTH only in production (the
+  // public IdP at https://auth.sent-tech.ca stays fully hardened, unchanged).
+  const isProduction = env.NODE_ENV === 'production';
+  const contentSecurityPolicy = {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"],
+    connectSrc: ["'self'", 'https://*.sent-tech.ca'],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", 'data:', 'https:'],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+    ...(isProduction ? { upgradeInsecureRequests: [] } : {}),
+  };
   app.use(
     '*',
     secureHeaders({
-      contentSecurityPolicy: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        connectSrc: ["'self'", 'https://*.sent-tech.ca'],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        frameAncestors: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-      strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
+      contentSecurityPolicy,
+      ...(isProduction
+        ? { strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload' }
+        : {}),
       crossOriginOpenerPolicy: 'same-origin',
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: false,
@@ -113,12 +143,33 @@ export const createIdpApp = (): Hono => {
   });
 
   // Reuse the EXISTING routers — no new auth code, no forked handlers.
+  // Mounted BEFORE the static front so the API/discovery surface always wins.
   app.route('/.well-known', wellKnownRouter);
   app.route('/api/v1/auth', authRouter);
 
-  app.get('/', (c) =>
-    c.json({ name: 'Sentropic IdP (PLACEHOLDER auth-idp)', phase: 'A0', version: '0.0.0' }),
+  // Lightweight liveness/identity endpoint (kept off the SPA root path).
+  app.get('/healthz', (c) =>
+    c.json({ name: 'Sentropic IdP (PLACEHOLDER auth-idp)', phase: 'A0-bis', version: '0.0.0' }),
   );
+
+  // Serve the built static front (login/register/magic-link/consent screens)
+  // same-origin with the OIDC API. Hashed assets under /_app are immutable.
+  app.use('/_app/*', serveStatic({ root: IDP_WEB_BUILD_DIR }));
+  app.use('/favicon.ico', serveStatic({ path: join(IDP_WEB_BUILD_DIR, 'favicon.ico') }));
+
+  // SPA fallback: any other GET (e.g. /auth/login, /auth/oauth/consent) returns
+  // the static `404.html` entry so client-side routing can take over. API and
+  // well-known routes are already matched above, so they never reach this.
+  const spaFallback = readSpaFallback();
+  app.get('*', (c) => {
+    if (!spaFallback) {
+      return c.json(
+        { name: 'Sentropic IdP (PLACEHOLDER auth-idp)', phase: 'A0-bis', screens: 'not_built' },
+        200,
+      );
+    }
+    return c.html(spaFallback);
+  });
 
   return app;
 };
