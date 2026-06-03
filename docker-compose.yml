@@ -11,6 +11,14 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # GCP (Gemini-on-GCP / Model Garden) — native passthrough like GEMINI_API_KEY.
+      # project/location are plain config; the bearer is minted server-side from ADC.
+      # GOOGLE_APPLICATION_CREDENTIALS points at the gitignored SA-key file mounted
+      # via the workspace bind-mount in docker-compose.dev.yml (default below). Absent
+      # any of these the `gcp` provider stays unavailable and never crashes startup.
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
       - COHERE_API_KEY=${COHERE_API_KEY}

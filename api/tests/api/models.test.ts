@@ -37,6 +37,7 @@ describe('Models API', () => {
     expect(providerIds).toContain('anthropic');
     expect(providerIds).toContain('mistral');
     expect(providerIds).toContain('cohere');
+    expect(providerIds).toContain('gcp');
 
     const modelsByProvider = (pid: string) =>
       data.models
@@ -49,7 +50,11 @@ describe('Models API', () => {
     expect(modelsByProvider('anthropic')).toEqual(['claude-opus-4-7', 'claude-sonnet-4-6']);
     expect(modelsByProvider('mistral')).toEqual(['magistral-medium-2509', 'mistral-small-2603']);
     expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-08-2025']);
-    expect(data.models).toHaveLength(11);
+    expect(modelsByProvider('gcp')).toEqual([
+      'google/gemini-3.1-flash-lite@gcp',
+      'google/gemini-3.5-flash@gcp',
+    ]);
+    expect(data.models).toHaveLength(13);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
