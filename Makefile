@@ -1675,7 +1675,7 @@ build-idp-web: install-idp-web ## Build the IdP screens static front to apps/aut
 	@echo "✅ IdP screens front built at apps/auth-idp/web/build (SPA fallback: 404.html)"
 
 .PHONY: dev-idp
-dev-idp: prepare-node-workspace ## Start the standalone IdP on the shared DB (slot 4 ports)
+dev-idp: prepare-node-workspace build-idp-web ## Start the standalone IdP (screens + API) on the shared DB (slot 4 ports)
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait postgres
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps \
 		-e OAUTH_SIGNING_KEK=$${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production} \
