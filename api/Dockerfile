@@ -52,6 +52,7 @@ COPY package.json package-lock.json* ./
 COPY api/package.json ./api/package.json
 COPY ui/package.json ./ui/package.json
 COPY packages/auth-hono/package.json ./packages/auth-hono/package.json
+COPY packages/auth-client/package.json ./packages/auth-client/package.json
 COPY packages/chat-server/package.json ./packages/chat-server/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
 COPY packages/flow/package.json ./packages/flow/package.json
@@ -62,6 +63,7 @@ RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-ro
 RUN npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root
 COPY . .
 RUN npm --workspace @sentropic/auth-hono run build
+RUN npm --workspace @sentropic/auth-client run build
 RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/flow run build
 
