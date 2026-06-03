@@ -10,7 +10,7 @@ import {
 } from '../provider-credentials';
 import { getOpenAITransportMode, resolveConnectedCodexTransport } from '../provider-connections';
 import { isProviderId, type ProviderId } from '../provider-runtime';
-import { parseVertexModelId } from '../providers/vertex-provider';
+import { parseGcpModelId } from '../providers/gcp-provider';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
 import { env } from '../../config/env';
@@ -26,28 +26,28 @@ const pickProviderCapabilities = (providerId: ProviderId) =>
 const normalizeProviderError = (providerId: ProviderId, error: unknown) =>
   providerRegistry.requireProvider(providerId).normalizeError(error);
 
-// BR-42f — build the Vertex runtimeRequest for a Gemini-on-Vertex call. The
-// catalog selection key (`{publisher}/{model}@vertex`) is stripped to the URL
-// path segments; project/location travel as plain config (VERTEX_PROJECT_ID /
-// VERTEX_LOCATION), overridable per-request later via providerOptions. The body
-// is the Gemini-shaped payload from buildGeminiRequestBody (BR42f-D4 REUSE).
-const buildVertexRuntimeRequest = (input: {
+// BR-42f — build the GCP runtimeRequest for a Gemini-on-GCP (Model Garden) call.
+// The catalog selection key (`{publisher}/{model}@gcp`) is stripped to the URL
+// path segments; project/location travel as plain config (GOOGLE_CLOUD_PROJECT /
+// GOOGLE_CLOUD_LOCATION), overridable per-request later via providerOptions. The
+// body is the Gemini-shaped payload from buildGeminiRequestBody (BR42f-D4 REUSE).
+const buildGcpRuntimeRequest = (input: {
   stream: boolean;
   modelId: string;
   body: Record<string, unknown>;
 }): Record<string, unknown> & { mode: string } => {
-  const { publisher, model } = parseVertexModelId(input.modelId);
-  const project = (env.VERTEX_PROJECT_ID ?? '').trim();
-  const location = (env.VERTEX_LOCATION ?? '').trim();
+  const { publisher, model } = parseGcpModelId(input.modelId);
+  const project = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
+  const location = (env.GOOGLE_CLOUD_LOCATION ?? '').trim();
   if (!project || !location) {
     throw new Error(
-      'Vertex AI is not configured (set VERTEX_PROJECT_ID and VERTEX_LOCATION)',
+      'GCP is not configured (set GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION)',
     );
   }
   return {
     mode: input.stream
-      ? 'vertex-stream-generate-content'
-      : 'vertex-generate-content',
+      ? 'gcp-stream-generate-content'
+      : 'gcp-generate-content',
     requestOptions: { project, location, publisher, model, body: input.body },
   };
 };
@@ -914,12 +914,12 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
   }
 
-  // Gemini-on-AI-Studio (`gemini`) and Gemini-on-Vertex (`vertex`) share the
+  // Gemini-on-AI-Studio (`gemini`) and Gemini-on-GCP (`gcp`) share the
   // identical Gemini request body + response shape (BR42f-D4 REUSE). Only the
   // runtimeRequest transport mode differs (URL+auth, built by the runtime), and
   // the response attribution prefix is parameterized by the active provider
-  // (M4): `gemini_` for gemini, `vertex_` for vertex.
-  if (selection.providerId === 'gemini' || selection.providerId === 'vertex') {
+  // (M4): `gemini_` for gemini, `gcp_` for gcp.
+  if (selection.providerId === 'gemini' || selection.providerId === 'gcp') {
     const geminiBody = buildGeminiRequestBody({
       model: selection.model,
       messages,
@@ -941,8 +941,8 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
       maxOutputTokens,
       signal,
       runtimeRequest:
-        selection.providerId === 'vertex'
-          ? buildVertexRuntimeRequest({
+        selection.providerId === 'gcp'
+          ? buildGcpRuntimeRequest({
               stream: false,
               modelId: selection.model,
               body: geminiBody,
@@ -1237,12 +1237,12 @@ export async function* callLLMStream(
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
   }
 
-  // Gemini-on-AI-Studio (`gemini`) and Gemini-on-Vertex (`vertex`) reuse the
+  // Gemini-on-AI-Studio (`gemini`) and Gemini-on-GCP (`gcp`) reuse the
   // SAME Gemini request body + the SAME SSE→event loop below (BR42f-D4 REUSE).
   // The response/tool-call ids and the status provider_id are parameterized by
   // the active provider (M4): `gemini_`/`gemini_call_`/`'gemini'` for gemini,
-  // `vertex_`/`vertex_call_`/`'vertex'` for vertex.
-  if (selection.providerId === 'gemini' || selection.providerId === 'vertex') {
+  // `gcp_`/`gcp_call_`/`'gcp'` for gcp.
+  if (selection.providerId === 'gemini' || selection.providerId === 'gcp') {
     const activeProviderId = selection.providerId;
     const responseId = previousResponseId || `${activeProviderId}_${createId()}`;
     const requestBody = buildGeminiRequestBody({
@@ -1281,8 +1281,8 @@ export async function* callLLMStream(
         signal,
         previousResponseId,
         runtimeRequest:
-          activeProviderId === 'vertex'
-            ? buildVertexRuntimeRequest({
+          activeProviderId === 'gcp'
+            ? buildGcpRuntimeRequest({
                 stream: true,
                 modelId: selectedModel,
                 body: requestBody,

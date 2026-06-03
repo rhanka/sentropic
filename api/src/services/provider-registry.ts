@@ -4,7 +4,7 @@ import { CohereProviderRuntime } from './providers/cohere-provider';
 import { GeminiProviderRuntime } from './providers/gemini-provider';
 import { MistralProviderRuntime } from './providers/mistral-provider';
 import { OpenAIProviderRuntime } from './providers/openai-provider';
-import { VertexProviderRuntime } from './providers/vertex-provider';
+import { GcpProviderRuntime } from './providers/gcp-provider';
 
 class ProviderRegistry {
   private readonly providers: Map<ProviderId, ProviderRuntime>;
@@ -15,7 +15,7 @@ class ProviderRegistry {
     const claude = new ClaudeProviderRuntime();
     const mistral = new MistralProviderRuntime();
     const cohere = new CohereProviderRuntime();
-    const vertex = new VertexProviderRuntime();
+    const gcp = new GcpProviderRuntime();
 
     this.providers = new Map<ProviderId, ProviderRuntime>([
       ['openai', openai],
@@ -23,7 +23,7 @@ class ProviderRegistry {
       ['anthropic', claude],
       ['mistral', mistral],
       ['cohere', cohere],
-      ['vertex', vertex],
+      ['gcp', gcp],
     ]);
   }
 

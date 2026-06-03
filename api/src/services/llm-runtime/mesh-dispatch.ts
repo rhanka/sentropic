@@ -22,7 +22,7 @@ import type OpenAI from 'openai';
 import { providerRegistry } from '../provider-registry';
 import type { ProviderId } from '../provider-runtime';
 import type { ResolvedProviderCredential } from '../provider-credentials';
-import { mintVertexAccessToken } from '../providers/vertex-provider';
+import { mintGcpAccessToken } from '../providers/gcp-provider';
 import { env } from '../../config/env';
 import { createId } from '../../utils/id';
 
@@ -207,10 +207,10 @@ const getEnvironmentVariableName = (providerId: ProviderId): string => {
   if (providerId === 'anthropic') return 'ANTHROPIC_API_KEY';
   if (providerId === 'mistral') return 'MISTRAL_API_KEY';
   if (providerId === 'cohere') return 'COHERE_API_KEY';
-  // Vertex auth is ADC-minted, not an API-key env var; this descriptor exists
+  // GCP auth is ADC-minted, not an API-key env var; this descriptor exists
   // only for symmetry. The bearer is carried as a `direct-token` (see
   // toMeshAuthInput), never read from this env var.
-  if (providerId === 'vertex') return 'VERTEX_ADC';
+  if (providerId === 'gcp') return 'GCP_ADC';
   // Explicit, safe fallthrough: never silently mis-name an unknown provider's
   // env var as Cohere's (the prior implicit default).
   return `${String(providerId).toUpperCase()}_API_KEY`;
@@ -226,23 +226,23 @@ const toMeshAuthInput = async (
     return { type: 'direct-token', token: credential, label: 'request override' };
   }
 
-  // BR-42f / §B / M2 — Vertex auth ordering fix. The mesh validates auth BEFORE
+  // BR-42f / §B / M2 — GCP auth ordering fix. The mesh validates auth BEFORE
   // the runtime runs (mesh.ts prepare() throws on `!ok` pre-dispatch), and the
-  // string credential resolver is BYPASSED for `vertex` (no stored API key —
-  // resolveProviderCredential('vertex') legitimately returns source:'none').
+  // string credential resolver is BYPASSED for `gcp` (no stored API key —
+  // resolveProviderCredential('gcp') legitimately returns source:'none').
   // So the ADC bearer is MINTED HERE, PRE-DISPATCH, and carried as a
   // `direct-token`: this single shape (a) passes adapter.validateAuth
   // (hasText(token)) AND (b) flows through extractCredential's actual-token
-  // forward path into VertexProviderRuntime. An envVar-only `environment-token`
+  // forward path into GcpProviderRuntime. An envVar-only `environment-token`
   // is explicitly NOT used (it passes validation but forwards no bearer). A
   // request-override bearer already took precedence above. The minted bearer
   // MUST NOT be logged anywhere.
-  if (options.providerId === 'vertex') {
-    const project = (env.VERTEX_PROJECT_ID ?? '').trim();
-    const location = (env.VERTEX_LOCATION ?? '').trim();
+  if (options.providerId === 'gcp') {
+    const project = (env.GOOGLE_CLOUD_PROJECT ?? '').trim();
+    const location = (env.GOOGLE_CLOUD_LOCATION ?? '').trim();
     if (project && location) {
-      const bearer = await mintVertexAccessToken({ project, location });
-      return { type: 'direct-token', token: bearer, label: 'vertex adc' };
+      const bearer = await mintGcpAccessToken({ project, location });
+      return { type: 'direct-token', token: bearer, label: 'gcp adc' };
     }
     // Unconfigured: fall through to `none` so the mesh validateAuth gate
     // surfaces a clear "auth not configured" error rather than minting.
@@ -343,7 +343,7 @@ const applicationLlmMesh = createLlmMesh({
       anthropic: applicationProviderClient,
       mistral: applicationProviderClient,
       cohere: applicationProviderClient,
-      vertex: applicationProviderClient,
+      gcp: applicationProviderClient,
     }),
   ),
 });
