@@ -135,25 +135,28 @@ Actions with the following status should be included around tasks only if really
   dispatch branch + catalog rows → `vertex` becomes undeclared, 5 existing providers unchanged
   (characterization-proved, Lot 1).
 - **BR43-EX1 (native-credential rework extension)** `acknowledge` — **GRANTED + APPLIED** (native-creds
-  direction). The DEFAULT-FORBIDDEN `docker-compose.yml` and `ui/**` are edited under this exception (they
-  MOVED from Forbidden into scope, reversing the old M3/M5 postures). Concretely: (1) `docker-compose.yml`
+  direction, BACKEND ONLY after the origin/main integration). The DEFAULT-FORBIDDEN `docker-compose.yml` is
+  edited under this exception (compose moved from Forbidden into scope; the `ui/**` posture is RE-DEFERRED —
+  see below). Concretely: (1) `docker-compose.yml`
   api-service `environment:` now passes through `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` /
   `GOOGLE_APPLICATION_CREDENTIALS` exactly like `GEMINI_API_KEY` (`${VAR:-}` defaults; absence keeps the
   provider unavailable, never crashes startup). The SA key is dropped at the gitignored repo path
   `.secrets/gcp-sa.json` (already covered by `.gitignore` `gcp-sa*.json` + `.secrets/`), visible inside the
   api container at `/workspace/.secrets/gcp-sa.json` via the EXISTING `./:/workspace` bind-mount in
   `docker-compose.dev.yml` (no new mount needed); the user points `GOOGLE_APPLICATION_CREDENTIALS` at that
-  in-container path in `.env`. (2) `ui/**` — `gcp` added to the three model selectors
-  (`settings/+page.svelte`, `AppChatPanel.svelte`, `folder/new/+page.svelte`) by extending the hardcoded
-  provider-id unions/guards that previously rejected unknown providers (the provider list + labels/icons are
-  already data-driven from `/models/catalog`, which returns the `gcp` rows; only the closed TS unions/guards
-  needed `gcp`). Also `ui/src/lib/utils/user-ai-settings-events.ts` `defaultProviderId` union extended for
-  type-consistency. The BYOK admin `provider-connections-api.ts` union is left untouched (BR43-D5: `gcp` is
-  ADC/config-driven, not a stored key). REMOVED (obsoleted by native creds + chat UAT): the bespoke
-  `Makefile` `gcp-live-uat` target, `api/src/scripts/gcp-live-uat.ts`, the `api/package.json` `gcp:live-uat`
-  npm-script, and the orphaned `GCP_LIVE_UAT` env-schema entry in `api/src/config/env.ts`. Rollback: revert
-  the compose passthrough + the UI union edits + restore nothing else (the gcp runtime is untouched). UAT is
-  now: **pick a `gcp` model in the chat and send a message**.
+  in-container path in `.env`. (2) `ui/**` — **UI-selectability is now DEFERRED** (was applied on this branch
+  via the three app model selectors, but `origin/main` has since refactored the model selector into
+  `@sentropic/chat-ui`, removing the per-app hardcoded provider-id unions). The obsolete app-svelte edits
+  (commit `2af99a61`) were **REVERTED** during the origin/main integration (PR #235), so #235 carries NO
+  app-svelte UI change. Making `gcp` chat-selectable is deferred to a coordinated `@sentropic/chat-ui`
+  PROVIDER-AGNOSTIC fix (remove `KNOWN_PROVIDER_IDS` → data-driven from the API `/models/catalog`), tracked
+  via h2a with the `sentropic-chat` agent. The BYOK admin `provider-connections-api.ts` union is left
+  untouched (BR43-D5: `gcp` is ADC/config-driven, not a stored key). REMOVED (obsoleted by native creds): the
+  bespoke `Makefile` `gcp-live-uat` target, `api/src/scripts/gcp-live-uat.ts`, the `api/package.json`
+  `gcp:live-uat` npm-script, and the orphaned `GCP_LIVE_UAT` env-schema entry in `api/src/config/env.ts`.
+  Rollback: revert the compose passthrough — restore nothing else (the gcp runtime is untouched). UAT for
+  PR #235 (backend-only) is now: **the `gcp` models appear in the API `/models/catalog` (11→13 ids)** once
+  `GOOGLE_CLOUD_PROJECT` + `GOOGLE_CLOUD_LOCATION` are set; full chat-selectability lands with the chat-ui fix.
 - **BR43-D5 (provider-connections.ts)** `acknowledge` — `provider-connections.ts` (admin BYOK panel) is OUT
   of BR-43 (Vertex is ADC/config-driven, not an admin-entered key). Recorded in `## Deferred`.
 - **D-ADC1 (token cache)** `acknowledge` — cache key `{project}+{location}+{scope=cloud-platform}`; refresh at
@@ -393,9 +396,13 @@ Actions with the following status should be included around tasks only if really
     - [ ] **UAT (BR43-D3 live-id confirmation, `attendu`).** **DIRECTION REVERSED for BR-43 (native creds — see
           `## UAT & Credentials` / spec §F):** GCP creds are now handled NATIVELY (like `GEMINI_API_KEY`) via the
           docker-compose api-service env passthrough (`GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION` /
-          `GOOGLE_APPLICATION_CREDENTIALS`, the SA-key a gitignored bind-mount), and `gcp` is made selectable in
-          the UI model selector ⇒ **UAT = pick a gcp model in the chat and send a message**. [DONE in the
-          native-creds rework] The bespoke `make gcp-live-uat` target + `api/src/scripts/gcp-live-uat.ts` +
+          `GOOGLE_APPLICATION_CREDENTIALS`, the SA-key a gitignored bind-mount). **PR #235 ships the gcp
+          BACKEND only** — the origin/main integration reverted the obsolete app-svelte UI edits (main
+          refactored the model selector into `@sentropic/chat-ui`). **UAT for #235 = the `gcp` models appear
+          in the API `/models/catalog` (11→13 ids) once `GOOGLE_CLOUD_PROJECT` + `GOOGLE_CLOUD_LOCATION` are
+          set**; full chat-selectability (pick a gcp model and send a message) is DEFERRED to a coordinated
+          `@sentropic/chat-ui` provider-agnostic fix (remove `KNOWN_PROVIDER_IDS` → data-driven from the API
+          catalog), tracked via h2a with the `sentropic-chat` agent. The bespoke `make gcp-live-uat` target + `api/src/scripts/gcp-live-uat.ts` +
           `gcp:live-uat` npm-script + the `GCP_LIVE_UAT` env-schema entry are REMOVED. The make-only steps below
           are SUPERSEDED and kept only for historical context (the rework is now applied; see the BR43-EX1
           native-credential rework entry in `## Feedback Loop`):
@@ -482,12 +489,15 @@ Actions with the following status should be included around tasks only if really
 - **`api/src/services/provider-connections.ts` (admin BYOK connections panel)** (BR43-D5) — Vertex auth is
   ADC/config-driven (no stored API key), so it does not fit the BYOK connection model; revisit if/when the UI
   must surface Vertex connection state.
-- **`ui/**` `gcp` selector surfacing — NO LONGER DEFERRED (M5 REVERSED for BR-43).** The earlier posture
-  (defer to BR-42b, `ui/**` Forbidden) is reversed: making `gcp` selectable in the UI model selector is now
-  IN-SCOPE for the BR-43 implementation rework, because native-credential UAT = pick a gcp model in the chat
-  and send a message. The three selectors that hardcode-reject `gcp`
-  (`ui/src/routes/settings/+page.svelte`, `ui/src/lib/components/chat/AppChatPanel.svelte`,
-  `ui/src/routes/folder/new/+page.svelte`) must gain `gcp`.
+- **`ui/**` `gcp` selector surfacing — RE-DEFERRED (after origin/main integration, PR #235 backend-only).**
+  History: M5 was first deferred (BR-42b), then REVERSED to add `gcp` to the three app model selectors. But
+  `origin/main` has since refactored the model selector out of the app and into `@sentropic/chat-ui` (which
+  gates providers via a hardcoded `KNOWN_PROVIDER_IDS`), so the per-app hardcoded edits became obsolete and
+  were REVERTED (commit `2af99a61`) during the integration merge. #235 therefore carries NO app-svelte UI
+  change. Making `gcp` chat-selectable is DEFERRED to a coordinated `@sentropic/chat-ui` PROVIDER-AGNOSTIC
+  fix (replace `KNOWN_PROVIDER_IDS` with data-driven provider ids from the API `/models/catalog`), tracked
+  via h2a with the `sentropic-chat` agent. #235 ships the gcp BACKEND only (API advertises gcp models in
+  `/models/catalog` when `GOOGLE_CLOUD_PROJECT` + `GOOGLE_CLOUD_LOCATION` are configured).
 
 ## Plan Review Log
 Second-pass adversarial plan review by Codex 5.5-xhigh (verdict: "Revise plan first; not ready to implement")
