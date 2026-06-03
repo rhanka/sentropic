@@ -2455,44 +2455,47 @@ oauth-rotate-keys: ## Rotate the active Ed25519 signing key; old key stays in JW
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm run oauth:rotate-keys"
 
 # -----------------------------------------------------------------------------
-# BR-42f — Vertex AI live UAT (make-only, credential-safe; docker-compose UNTOUCHED).
-# The running server's env can't be changed, so this injects VERTEX_* on a FRESH
-# exec process. Requires the branch stack up first, e.g.:
+# BR-42f — GCP (Google Cloud, formerly Vertex AI) live UAT (make-only,
+# credential-safe; docker-compose UNTOUCHED). Provider id renamed vertex→gcp
+# (user decision 2026-06-02, Vertex AI brand retired); endpoint host stays
+# aiplatform.googleapis.com. The running server's env can't be changed, so this
+# injects GOOGLE_CLOUD_* on a FRESH exec process. Requires the branch stack up
+# first, e.g.:
 #   make dev API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=feat-llm-mesh-vertex-ai
 # Then:
-#   make vertex-live-uat VERTEX_PROJECT_ID=<id> VERTEX_LOCATION=<region> \
-#     VERTEX_SA_KEY=<host-path-to-gitignored-SA-key.json> ENV=feat-llm-mesh-vertex-ai
-# The SA key is `docker cp`-ed into the container at /tmp/vertex-sa.json (gitignored
+#   make gcp-live-uat GOOGLE_CLOUD_PROJECT=<id> GOOGLE_CLOUD_LOCATION=<region> \
+#     GCP_SA_KEY=<host-path-to-gitignored-SA-key.json> ENV=feat-llm-mesh-vertex-ai
+# The SA key is `docker cp`-ed into the container at /tmp/gcp-sa.json (gitignored
 # on host). Output is sanitized by the script (no bearer / SA-JSON / full project id).
-# Safe defaults: with no VERTEX_SA_KEY the target reaches the script's clear guard,
+# Safe defaults: with no GCP_SA_KEY the target reaches the script's clear guard,
 # which exits non-zero WITHOUT a live call (proves the gate; never crashes).
 # -----------------------------------------------------------------------------
-VERTEX_PROJECT_ID ?=
-VERTEX_LOCATION   ?=
-VERTEX_SA_KEY     ?=
+GOOGLE_CLOUD_PROJECT  ?=
+GOOGLE_CLOUD_LOCATION ?=
+GCP_SA_KEY            ?=
 
-.PHONY: vertex-live-uat
-vertex-live-uat: ## Drive a real streaming Vertex call per catalog model (sanitized). Vars: VERTEX_PROJECT_ID, VERTEX_LOCATION, VERTEX_SA_KEY; ENV last.
+.PHONY: gcp-live-uat
+gcp-live-uat: ## Drive a real streaming GCP call per catalog model (sanitized). Vars: GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, GCP_SA_KEY; ENV last.
 	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -eq 0 ]; then \
 		echo "api container is not running. Start the branch stack first (e.g. make dev API_PORT=9210 UI_PORT=5410 MAILDEV_UI_PORT=1310 ENV=$(ENV))."; \
 		exit 1; \
 	fi
-	@if [ -n "$(VERTEX_SA_KEY)" ]; then \
-		if [ ! -f "$(VERTEX_SA_KEY)" ]; then \
-			echo "VERTEX_SA_KEY=$(VERTEX_SA_KEY) does not exist (expected a gitignored Vertex AI User SA-key JSON)."; \
+	@if [ -n "$(GCP_SA_KEY)" ]; then \
+		if [ ! -f "$(GCP_SA_KEY)" ]; then \
+			echo "GCP_SA_KEY=$(GCP_SA_KEY) does not exist (expected a gitignored Vertex AI User SA-key JSON)."; \
 			exit 1; \
 		fi; \
 		cid="$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api)"; \
-		docker cp "$(VERTEX_SA_KEY)" "$$cid:/tmp/vertex-sa.json" >/dev/null; \
+		docker cp "$(GCP_SA_KEY)" "$$cid:/tmp/gcp-sa.json" >/dev/null; \
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec \
-			-e VERTEX_PROJECT_ID="$(VERTEX_PROJECT_ID)" \
-			-e VERTEX_LOCATION="$(VERTEX_LOCATION)" \
-			-e GOOGLE_APPLICATION_CREDENTIALS=/tmp/vertex-sa.json \
-			-e VERTEX_LIVE_UAT=1 \
-			api sh -lc "npm run vertex:live-uat"; \
+			-e GOOGLE_CLOUD_PROJECT="$(GOOGLE_CLOUD_PROJECT)" \
+			-e GOOGLE_CLOUD_LOCATION="$(GOOGLE_CLOUD_LOCATION)" \
+			-e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-sa.json \
+			-e GCP_LIVE_UAT=1 \
+			api sh -lc "npm run gcp:live-uat"; \
 	else \
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec \
-			-e VERTEX_PROJECT_ID="$(VERTEX_PROJECT_ID)" \
-			-e VERTEX_LOCATION="$(VERTEX_LOCATION)" \
-			api sh -lc "npm run vertex:live-uat"; \
+			-e GOOGLE_CLOUD_PROJECT="$(GOOGLE_CLOUD_PROJECT)" \
+			-e GOOGLE_CLOUD_LOCATION="$(GOOGLE_CLOUD_LOCATION)" \
+			api sh -lc "npm run gcp:live-uat"; \
 	fi
