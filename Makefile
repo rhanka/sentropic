@@ -1530,7 +1530,7 @@ clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to ski
 
 .PHONY: clean-node-modules
 clean-node-modules: ## Remove workspace node_modules (root-owned cruft from containerized runs); next stack bringup reinstalls
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf api/node_modules ui/node_modules packages/*/node_modules'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules api/node_modules ui/node_modules packages/*/node_modules'
 
 # -----------------------------------------------------------------------------
 # Development environment
