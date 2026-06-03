@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-02",
-  "_version": "0.6.0",
+  "_version": "0.7.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -423,7 +423,7 @@
       "kind": "svelte",
       "file": "src/components/ChatComposer.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "Props: mode? ('ai'|'comments'), value? (string), disabled? (boolean), isMultiline? (boolean), maxHeight? (number), surfaceEnabled? (boolean), surfaceDisabled? (boolean), ariaLabel? (string), tabIndex? (number), composerElement? (HTMLDivElement|null), onKeyDown? (fn), onPaste? (fn), renderComposerSurface (Snippet), renderFloatingLayer (Snippet), renderAttachmentTray? (Snippet), renderLeftControls (Snippet), renderRightActions (Snippet), autoGrow? (boolean, default false — P6 opt-in), baseHeight? (number, default 40), containerHeight? (number, default 0)"
     },
     "./components/ModelSelector.svelte": {
       "kind": "svelte",
@@ -487,6 +487,15 @@
         "buildFeedbackNextVote",
         "applyFeedbackAction",
         "formatCopyPayload"
+      ]
+    },
+    "./utils/composer-autosize": {
+      "kind": "ts",
+      "file": "src/utils/composer-autosize.ts",
+      "exports": [
+        "AutosizeInput",
+        "AutosizeResult",
+        "computeAutosizeResult"
       ]
     },
     "./state/chat-context": {
