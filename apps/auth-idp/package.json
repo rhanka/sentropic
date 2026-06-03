@@ -1,0 +1,8 @@
+{
+  "name": "@sentropic/auth-idp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BR-39m Phase A0 standalone IdP composition shell (PLACEHOLDER, not a workspace member, not published). Declares ESM module type so the thin entry loads the ESM-only @sentropic/auth-hono surface via the existing api routers.",
+  "license": "MIT"
+}
