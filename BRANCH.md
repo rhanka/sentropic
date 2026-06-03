@@ -86,7 +86,7 @@
   - [x] Produce residual-name report for BR-14d including historical docs, in-the-wild export marker compatibility, Google console operator check, old bucket migration, generated `.graphify/**`, and any deferred live ops.
   - [x] Delete or consolidate `spec/BRANCH_SPEC_EVOL.md` before final validation.
 - [ ] Lot 7 — workflow ai-ideas → ai-priorities rename (workspace-type id + display label, repo-wide; chat-prompt prose excluded; BR14e-EX6)
-  - [ ] Tests-first: chat-ui tool-scope exhaustive record (`ui/tests/chat-tool-scope-workspace-type.test.ts`), workspace-type enum acceptance/default (`api/tests/api/workspace-types.test.ts`), view-template fallback (`api/tests/api/view-templates.test.ts`), skills context-filter/registry (`packages/skills/tests/**`), UI label test.
+  - [x] Tests-first: chat-ui tool-scope exhaustive record (`ui/tests/chat-tool-scope-workspace-type.test.ts`), workspace-type enum acceptance/default (`api/tests/api/workspace-types.test.ts`), view-template fallback (`api/tests/api/view-templates.test.ts`), skills context-filter/registry (`packages/skills/tests/**`), UI label test.
   - [ ] `@sentropic/flow` seed `WORKSPACE_TYPE_WORKFLOW_SEEDS` key + section comment + version bump (0.1.1→0.1.2).
   - [ ] `@sentropic/chat-ui` `WorkspaceType` union + `WORKSPACE_TYPE_TOOL_IDS` exhaustive record + version bump (0.1.2→0.1.3).
   - [ ] `@sentropic/skills` src (authz/context-filter comments) + 9 bundle `SKILL.md` `workspaceTypes` + version bump (0.1.1→0.1.2).
