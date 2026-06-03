@@ -26,11 +26,11 @@ const pickProviderCapabilities = (providerId: ProviderId) =>
 const normalizeProviderError = (providerId: ProviderId, error: unknown) =>
   providerRegistry.requireProvider(providerId).normalizeError(error);
 
-// BR-42f — build the GCP runtimeRequest for a Gemini-on-GCP (Model Garden) call.
+// BR-43 — build the GCP runtimeRequest for a Gemini-on-GCP (Model Garden) call.
 // The catalog selection key (`{publisher}/{model}@gcp`) is stripped to the URL
 // path segments; project/location travel as plain config (GOOGLE_CLOUD_PROJECT /
 // GOOGLE_CLOUD_LOCATION), overridable per-request later via providerOptions. The
-// body is the Gemini-shaped payload from buildGeminiRequestBody (BR42f-D4 REUSE).
+// body is the Gemini-shaped payload from buildGeminiRequestBody (BR43-D4 REUSE).
 const buildGcpRuntimeRequest = (input: {
   stream: boolean;
   modelId: string;
@@ -915,7 +915,7 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   }
 
   // Gemini-on-AI-Studio (`gemini`) and Gemini-on-GCP (`gcp`) share the
-  // identical Gemini request body + response shape (BR42f-D4 REUSE). Only the
+  // identical Gemini request body + response shape (BR43-D4 REUSE). Only the
   // runtimeRequest transport mode differs (URL+auth, built by the runtime), and
   // the response attribution prefix is parameterized by the active provider
   // (M4): `gemini_` for gemini, `gcp_` for gcp.
@@ -1238,7 +1238,7 @@ export async function* callLLMStream(
   }
 
   // Gemini-on-AI-Studio (`gemini`) and Gemini-on-GCP (`gcp`) reuse the
-  // SAME Gemini request body + the SAME SSE→event loop below (BR42f-D4 REUSE).
+  // SAME Gemini request body + the SAME SSE→event loop below (BR43-D4 REUSE).
   // The response/tool-call ids and the status provider_id are parameterized by
   // the active provider (M4): `gemini_`/`gemini_call_`/`'gemini'` for gemini,
   // `gcp_`/`gcp_call_`/`'gcp'` for gcp.
