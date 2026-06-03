@@ -37,7 +37,7 @@ describe("Workspace type workflow registry API", () => {
   });
 
   it("lists registered workflows for a workspace type (empty initially)", async () => {
-    const res = await authenticatedRequest(app, "GET", "/api/v1/workspace-types/ai-ideas/workflows", admin.sessionToken);
+    const res = await authenticatedRequest(app, "GET", "/api/v1/workspace-types/ai-priorities/workflows", admin.sessionToken);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.items).toBeInstanceOf(Array);
@@ -61,11 +61,11 @@ describe("Workspace type workflow registry API", () => {
     const putBody = await putRes.json();
     const workflowDefId = putBody.items[0].id;
 
-    // Register it for ai-ideas type (requires admin)
+    // Register it for ai-priorities type (requires admin)
     const registerRes = await authenticatedRequest(
       app,
       "POST",
-      "/api/v1/workspace-types/ai-ideas/workflows",
+      "/api/v1/workspace-types/ai-priorities/workflows",
       admin.sessionToken,
       {
         workflowDefinitionId: workflowDefId,
@@ -74,12 +74,12 @@ describe("Workspace type workflow registry API", () => {
     );
     expect(registerRes.status).toBe(201);
     const registerBody = await registerRes.json();
-    expect(registerBody.item.workspaceType).toBe("ai-ideas");
+    expect(registerBody.item.workspaceType).toBe("ai-priorities");
     expect(registerBody.item.isDefault).toBe(true);
     const registrationId = registerBody.item.id;
 
     // List should now include it
-    const listRes = await authenticatedRequest(app, "GET", "/api/v1/workspace-types/ai-ideas/workflows", admin.sessionToken);
+    const listRes = await authenticatedRequest(app, "GET", "/api/v1/workspace-types/ai-priorities/workflows", admin.sessionToken);
     expect(listRes.status).toBe(200);
     const listBody = await listRes.json();
     expect(listBody.items.length).toBeGreaterThanOrEqual(1);
@@ -91,13 +91,13 @@ describe("Workspace type workflow registry API", () => {
     const deleteRes = await authenticatedRequest(
       app,
       "DELETE",
-      `/api/v1/workspace-types/ai-ideas/workflows/${registrationId}`,
+      `/api/v1/workspace-types/ai-priorities/workflows/${registrationId}`,
       admin.sessionToken,
     );
     expect(deleteRes.status).toBe(200);
 
     // List should be empty again (for this workflow)
-    const listRes2 = await authenticatedRequest(app, "GET", "/api/v1/workspace-types/ai-ideas/workflows", admin.sessionToken);
+    const listRes2 = await authenticatedRequest(app, "GET", "/api/v1/workspace-types/ai-priorities/workflows", admin.sessionToken);
     const listBody2 = await listRes2.json();
     const found2 = listBody2.items.find((item: any) => item.id === registrationId);
     expect(found2).toBeUndefined();
