@@ -274,7 +274,7 @@ Keep the CLI and template thin: Node built-ins + a minimal arg/prompt approach +
 #### **BR42a-D — Wave selection / sequencing (delivery decision)**
 
 - **Question:** Does BR-42a start *now* against the merged chat stack, or wait for sibling lots?
-- **Context/stakes:** `plan/42` BR42-Q1 proposes wave-1 = BR-42a + BR-42f + BR-42g in parallel.
+- **Context/stakes:** `plan/42` BR42-Q1 proposes wave-1 = BR-42a + BR-42g in parallel. (The former BR-42f GCP provider is **moved to BR-43**, `feat/llm-mesh-gcp` — no longer a BR-42 wave lot.)
 - **Options:** (1) BR-42a now (consumes published `chat-ui`/`chat-core`/`llm-mesh` 0.1.x — all merged/published, verified). (2) Wait for catalog/comments/persistence lots.
 - **Préconisation:** **Option 1 — start now.** The chat stack BR-42a needs is already published; sibling lots are additive and the CLI consumes them as `add <capability>` later (§7). Low risk; unblocks the foundry surface earliest. (Caveat: the backend wire seam BR42a-E is template-owned regardless — it is not unblocked by waiting.)
 
@@ -379,7 +379,7 @@ Test-first, Docker-first, no E2E-timeout inflation (`rules/testing.md`). Per `ru
 
 BR-42a is the **integrator**, not the owner of sibling lots. They are largely orthogonal package extensions (catalog/comments/persistence/flow/mesh/events) that the CLI **consumes as they land** via the deferred `add <capability>` verb (§2.1). None of them block the MVP scaffolder. Notably:
 
-- **BR-42b** (catalog +agents+canvas), **BR-42c/d** (comments + persistence), **BR-42e** (flow queue streaming), **BR-42f** (Vertex AI provider — note: Vertex AI is **not** in llm-mesh today; provider ids are `openai`/`gemini`/`anthropic`/`mistral`/`cohere`), **BR-42g** (BigQuery sink): all *additive* to a future generated app, surfaced later as `add` capabilities / template presets. Not MVP.
+- **BR-42b** (catalog +agents+canvas), **BR-42c/d** (comments + persistence), **BR-42e** (flow queue streaming), **BR-42g** (BigQuery sink): all *additive* to a future generated app, surfaced later as `add` capabilities / template presets. Not MVP. The former **BR-42f** (single GCP/`gcp` provider in `@sentropic/llm-mesh`) is **moved to BR-43** (`feat/llm-mesh-gcp`; provider ids today are `openai`/`gemini`/`anthropic`/`mistral`/`cohere`) — a single provider is not app-foundry/scale work. The genuinely scale-relevant Google piece is the **native multi-cloud secrets contract** (make/compose/CI/k8s ↔ `k8s-ops`) + **observability** + the **MCP/marketplace catalog** (BR-42b/BR-42g + boundaries §16), not the individual provider.
 - **BR-39** (auth-ui/auth-hono, in flight via `codex:39-auth`): provides identities. The MVP chat-app can scaffold **without** auth (stub provider, in-memory); an `--with-auth` template preset wiring `@sentropic/auth-ui` + `@sentropic/auth-hono` is a fast follow-up once BR-39 is merged. Not a hard MVP blocker.
 
 ### 7.3 Recommended sequencing
