@@ -1,0 +1,139 @@
+# BR-39 deploy (F5 final) — standalone IdP `auth.sent-tech.ca`.
+#
+# Runs from the SAME `sentropic-api` image (D4-a): the image bundles the IdP
+# entrypoint (`apps/auth-idp/dist/index.js`) and its login/consent screens
+# (`apps/auth-idp/web/build`). The api default CMD is unchanged; this Deployment
+# selects the IdP via the `command:` override below, run from /workspace so the
+# IdP's IDP_WEB_BUILD_DIR (apps/auth-idp/web/build) resolves relative to cwd.
+#
+# Shared physical DB (F1/D8 default): points DATABASE_URL at the existing
+# `postgres` StatefulSet via the reused `sentropic-api` Secret. It runs NO
+# migration (the api pod owns migrations) and shares the JWKS rows with the api,
+# so OAUTH_SIGNING_KEK MUST be identical (delivered by the same Secret).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-idp
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: auth-idp
+data:
+  NODE_ENV: "production"
+  # The IdP entrypoint reads IDP_PORT (falls back to API_PORT/PORT). Pin it so the
+  # container always listens on 8787 (mirrors the api Service targetPort).
+  IDP_PORT: "8787"
+  NODE_OPTIONS: "--dns-result-order=ipv4first"
+  # Pin the discovery `issuer` deterministically (otherwise resolveOAuthIssuer
+  # derives it per-request, fragile behind a proxy).
+  OAUTH_ISSUER_URL: "https://auth.sent-tech.ca"
+  # The authorize handler's loginUrl/consentUrl + magic-link callback base must
+  # resolve to the IdP's OWN origin (the screens it serves same-origin), NOT the
+  # product UI. Mirrors the IDP_ORIGIN pinning done in docker-compose.idp.yml.
+  UI_BASE_URL: "https://auth.sent-tech.ca"
+  AUTH_CALLBACK_BASE_URL: "https://auth.sent-tech.ca"
+  # RP origins allowed to call the IdP cross-subdomain with credentials. The env
+  # default already includes the https://*.sent-tech.ca wildcard; the explicit
+  # design-system origin is listed for clarity (A0 first onboarded RP, D11).
+  CORS_ALLOWED_ORIGINS: "https://auth.sent-tech.ca,https://design-system.sent-tech.ca,https://*.sent-tech.ca"
+  # Outbound email via Scaleway TEM HTTP API (SMTP egress blocked at platform
+  # level). Used by magic-link recovery mail. SCW_TEM_SECRET_KEY comes from the
+  # reused sentropic-api Secret; these are non-secret config (mirror 30-api.yaml).
+  SCW_TEM_API_BASE_URL: "https://api.scaleway.com"
+  SCW_TEM_REGION: "fr-par"
+  SCW_TEM_PROJECT_ID: "09ac728a-e3b9-4a5b-9749-664b0f147c70"
+  SCW_TEM_FROM_EMAIL: "no-reply@sent-tech.ca"
+  SCW_TEM_FROM_NAME: "Sentropic"
+  # WebAuthn/passkey: RP ID is the PARENT registrable domain (same value as the
+  # api ConfigMap) so passkeys stay portable across every *.sent-tech.ca origin.
+  # ORIGIN is the EXACT IdP serving URL — this is the one WebAuthn value that
+  # DIFFERS from the api ConfigMap (whose origin is sentropic.sent-tech.ca).
+  WEBAUTHN_RP_ID: "sent-tech.ca"
+  WEBAUTHN_RP_NAME: "Sentropic"
+  WEBAUTHN_ORIGIN: "https://auth.sent-tech.ca"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-idp
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: auth-idp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: auth-idp
+  ports:
+    - name: http
+      port: 8787
+      targetPort: 8787
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-idp
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: auth-idp
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: auth-idp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentropic
+        app.kubernetes.io/component: auth-idp
+    spec:
+      serviceAccountName: sentropic-app
+      containers:
+        - name: auth-idp
+          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          imagePullPolicy: Always
+          # D4-a: the SAME api image, run as the IdP. cwd is /workspace so the
+          # IdP resolves apps/auth-idp/web/build (its screens) relative to cwd.
+          workingDir: /workspace
+          command: ["node", "apps/auth-idp/dist/index.js"]
+          envFrom:
+            - configMapRef:
+                name: auth-idp
+            - secretRef:
+                name: sentropic-api
+          ports:
+            - name: http
+              containerPort: 8787
+          # The IdP has NO /api/v1/health route — it exposes /healthz (cheap, no
+          # DB). Do NOT copy the api probe path verbatim.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
