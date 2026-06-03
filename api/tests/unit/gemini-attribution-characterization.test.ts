@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// BR-42f Lot 1 — CHARACTERIZATION oracle for the Gemini SSE provider-attribution
+// BR-43 Lot 1 — CHARACTERIZATION oracle for the Gemini SSE provider-attribution
 // literals that Lot 3/M4 will parameterize by provider in the SHARED runtime loop.
 //
 // This file LOCKS the CURRENT (pre-gcp) attribution so that, after Lot 3
@@ -80,7 +80,7 @@ async function collectStreamEvents(
   return events;
 }
 
-describe('Gemini provider-attribution characterization (BR-42f Lot 1 oracle)', () => {
+describe('Gemini provider-attribution characterization (BR-43 Lot 1 oracle)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

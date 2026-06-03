@@ -2455,7 +2455,7 @@ oauth-rotate-keys: ## Rotate the active Ed25519 signing key; old key stays in JW
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm run oauth:rotate-keys"
 
 # -----------------------------------------------------------------------------
-# BR-42f — GCP (Google Cloud, formerly Vertex AI) live UAT (make-only,
+# BR-43 — GCP (Google Cloud, formerly Vertex AI) live UAT (make-only,
 # credential-safe; docker-compose UNTOUCHED). Provider id renamed vertex→gcp
 # (user decision 2026-06-02, Vertex AI brand retired); endpoint host stays
 # aiplatform.googleapis.com. The running server's env can't be changed, so this
