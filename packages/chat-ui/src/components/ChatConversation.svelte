@@ -34,11 +34,7 @@
   import ModelSelector from './ModelSelector.svelte';
   import MessageActions from './MessageActions.svelte';
   import ContextChips from './ContextChips.svelte';
-  // StreamMessage intentionally NOT statically imported — it depends on the
-  // `svelte-streamdown` peer dep, which may not be available in all test
-  // environments.  Live stream rendering via StreamMessage is a follow-up
-  // wiring step (see BRANCH.md Feedback Loop).  Runtime segments are
-  // represented by a placeholder in this first version.
+  import StreamMessage from './StreamMessage.svelte';
 
   import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
   import { buildProjectedTimeline } from '../state/chatProjection.js';
@@ -380,9 +376,27 @@
             {#snippet renderAssistantSegment(item)}
               {#if item.kind === 'assistant-segment'}
                 <div class="chat-conversation-assistant-segment px-4 py-2">
-                  <div class="text-sm text-slate-900">
-                    {item.segment.content ?? ''}
-                  </div>
+                  {#if host?.streamClient && item.message._streamId}
+                    <!--
+                      Live assistant-segment streaming via StreamMessage.
+                      Uses variant="chat" for markdown rendering via svelte-streamdown.
+                      Only active when the message carries a _streamId and host.streamClient
+                      is available — otherwise falls back to static text rendering below.
+                    -->
+                    <StreamMessage
+                      streamClient={host.streamClient}
+                      streamId={item.message._streamId}
+                      status={item.isTerminal ? 'completed' : 'processing'}
+                      labels={effectiveLabels}
+                      variant="chat"
+                      subscriptionMode={item.isTerminal ? 'passive' : 'live'}
+                      finalContent={item.isTerminal ? (item.segment.content ?? null) : undefined}
+                    />
+                  {:else}
+                    <div class="text-sm text-slate-900">
+                      {item.segment.content ?? ''}
+                    </div>
+                  {/if}
                   {#if item.isLastAssistantSegment && resolvedFeatures.retry}
                     <MessageActions
                       role="assistant"
@@ -399,22 +413,42 @@
 
             {#snippet renderRuntimeSegment(item)}
               {#if item.kind === 'runtime-segment'}
-                <!--
-                  Runtime-segment placeholder.
-                  Full StreamMessage wiring (svelte-streamdown peer-dep) is a
-                  follow-up step — see BRANCH.md Feedback Loop.
-                  The `data-stream-id` and `data-active` attributes are present
-                  for host-side progressive enhancement / testing.
-                -->
-                <div
-                  class="chat-conversation-runtime-segment px-4 py-2 text-xs text-slate-400"
-                  data-stream-id={item.streamId}
-                  data-active={item.isActiveRuntimeSegment}
-                >
-                  {item.isActiveRuntimeSegment
-                    ? resolveLabel('chat.stream.processing')
-                    : resolveLabel('chat.stream.completed')}
-                </div>
+                {#if host?.streamClient}
+                  <!--
+                    Live streaming via StreamMessage (svelte-streamdown markdown).
+                    Only rendered when host.streamClient is available — consumers
+                    without a streamClient fall back to the static placeholder below.
+                  -->
+                  <div
+                    class="chat-conversation-runtime-segment px-4 py-2"
+                    data-stream-id={item.streamId}
+                    data-active={item.isActiveRuntimeSegment}
+                  >
+                    <StreamMessage
+                      streamClient={host.streamClient}
+                      streamId={item.streamId}
+                      status={item.isActiveRuntimeSegment ? 'processing' : 'completed'}
+                      labels={effectiveLabels}
+                      variant="chat"
+                      subscriptionMode={item.isActiveRuntimeSegment ? 'live' : 'passive'}
+                    />
+                  </div>
+                {:else}
+                  <!--
+                    Static placeholder — used when host.streamClient is not supplied.
+                    The `data-stream-id` and `data-active` attributes allow host-side
+                    progressive enhancement and testing.
+                  -->
+                  <div
+                    class="chat-conversation-runtime-segment px-4 py-2 text-xs text-slate-400"
+                    data-stream-id={item.streamId}
+                    data-active={item.isActiveRuntimeSegment}
+                  >
+                    {item.isActiveRuntimeSegment
+                      ? resolveLabel('chat.stream.processing')
+                      : resolveLabel('chat.stream.completed')}
+                  </div>
+                {/if}
               {/if}
             {/snippet}
           </ChatTimeline>
