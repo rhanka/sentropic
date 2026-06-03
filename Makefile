@@ -654,6 +654,60 @@ publish-auth-hono-token: build-auth-hono ## Publish @sentropic/auth-hono using N
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/auth-hono \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-hono@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-hono@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: typecheck-auth-client
+typecheck-auth-client: ## Run @sentropic/auth-client type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node jose@5.10.0 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: build-auth-client
+build-auth-client: ## Build @sentropic/auth-client dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node jose@5.10.0 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: pack-auth-client
+pack-auth-client: build-auth-client ## Validate @sentropic/auth-client npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: publish-auth-client
+publish-auth-client: build-auth-client ## Publish @sentropic/auth-client from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/auth-client \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-client@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-client@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-auth-client-token
+publish-auth-client-token: build-auth-client ## Publish @sentropic/auth-client using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-auth-client in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/auth-client \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-client@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-client@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
 .PHONY: typecheck-auth-ui
 typecheck-auth-ui: ## Run @sentropic/auth-ui type checks
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @simplewebauthn/browser@13.2.2 svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@simplewebauthn" node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
@@ -1329,7 +1383,30 @@ test-llm-mesh: ## Run @sentropic/llm-mesh tests
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
+
+# BR-A0b-EX1 — additive jsdom DOM/ARIA test target for @sentropic/chat-ui Svelte 5 components.
+# Rationale: DOM/ARIA harness requires @sveltejs/vite-plugin-svelte + vite + jsdom +
+#   @testing-library/svelte@5 (Svelte-5-era), none of which are in the existing node-env target.
+#   Scope: additive only — does NOT modify the existing test-chat-ui target.
+# Impact: adds ~8 new npm packages installed at test time in an ephemeral docker container;
+#   no package.json devDependency changes; no version bump required (test-only infra).
+# Rollback: delete this target + tests/spike.dom.spec.ts + tests/model-selector.dom.spec.ts
+#   + tests/message-actions.dom.spec.ts + packages/chat-ui/vitest.config.ts.
+# BR-CONV-EX1 — add svelte-streamdown@3.0.1 to ephemeral npm install.
+# Rationale: StreamMessage.svelte (now statically imported by ChatConversation.svelte) imports
+#   Streamdown from svelte-streamdown at the top level. Without svelte-streamdown in the jsdom
+#   test environment, any test that mounts ChatConversation (which now statically imports
+#   StreamMessage) would fail with a module-not-found error. This mirrors the existing pattern
+#   used for @lucide/svelte (same category: Svelte component peer dep).
+# Impact: adds svelte-streamdown to the ephemeral Docker npm install; no other target affected;
+#   no package.json devDependency or peerDependency change.
+# Rollback: remove "svelte-streamdown@3.0.1" from the npm install line and the ln -sfn line
+#   below, and remove the chat-conversation.dom.spec.ts StreamMessage wiring test block.
+.PHONY: test-chat-ui-dom
+test-chat-ui-dom: ## Run @sentropic/chat-ui DOM/ARIA tests (jsdom, Svelte 5, BR-A0b-EX1 + BR-CONV-EX1)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 vite@8.0.16 @sveltejs/vite-plugin-svelte@7.1.2 @testing-library/svelte@5.3.1 jsdom@29.1.1 "@lucide/svelte@0.562.0" "svelte-streamdown@3.0.1" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@testing-library node_modules/@lucide; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/acorn-typescript" node_modules/@sveltejs/acorn-typescript; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte" node_modules/@testing-library/svelte; ln -sfn "$$tool_dir/node_modules/@testing-library/dom" node_modules/@testing-library/dom; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte-core" node_modules/@testing-library/svelte-core; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; ln -sfn "$$tool_dir/node_modules/svelte-streamdown" node_modules/svelte-streamdown; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
 
 .PHONY: test-chat-server
 test-chat-server: ## Run @sentropic/chat-server tests
@@ -1346,6 +1423,13 @@ test-auth-hono: ## Run @sentropic/auth-hono tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-hono/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@3.25.76 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: test-auth-client
+test-auth-client: build-auth-hono ## Run @sentropic/auth-client tests (needs auth-hono dist for the in-process IdP round-trip)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules ../auth-hono/node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-client/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node jose@5.10.0 hono@4.10.7 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic ../auth-hono/node_modules/@hono ../auth-hono/node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/auth-hono node_modules/@sentropic/auth-hono; ln -sfn "$$tool_dir/node_modules/hono" ../auth-hono/node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" ../auth-hono/node_modules/jose; ln -sfn "$$tool_dir/node_modules/zod" ../auth-hono/node_modules/zod; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" ../auth-hono/node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" ../auth-hono/node_modules/@simplewebauthn/server; trap "rm -rf node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules ../auth-hono/node_modules'
+
 .PHONY: test-auth-ui
 test-auth-ui: ## Run @sentropic/auth-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
@@ -1536,9 +1620,10 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # Development environment
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
-prepare-node-workspace: build-llm-mesh build-flow build-auth-hono build-comments ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+prepare-node-workspace: build-llm-mesh build-flow build-auth-hono build-auth-client build-comments ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
 
 .PHONY: dev
 dev: prepare-node-workspace ## Start UI and API in watch mode
@@ -1585,8 +1670,9 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test-ci
-up-api-test-ci: build-llm-mesh build-flow build-auth-hono build-comments ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
+up-api-test-ci: build-llm-mesh build-flow build-auth-hono build-auth-client build-comments ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
 
 .PHONY: up-ui
@@ -1596,6 +1682,121 @@ up-ui: ## Start the ui stack in detached mode
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+
+# -----------------------------------------------------------------------------
+# Standalone IdP (BR-39m Phase A0 — exception BR39m-EX1)
+# Reuses the api image + shared postgres; no new DB, no migration ownership.
+# -----------------------------------------------------------------------------
+.PHONY: typecheck-idp
+typecheck-idp: ## Typecheck the standalone IdP composition (apps/auth-idp)
+	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps -w /workspace api npx tsc --noEmit --project apps/auth-idp/tsconfig.json
+
+# BR-39m A0-bis — minimal IdP screens front (apps/auth-idp/web). Self-contained
+# sub-project (NOT a root workspace member; same isolation as e2e/). It pulls
+# @sentropic/auth-ui via a relative file: dependency, so the package source is
+# present in the mounted workspace at install time.
+.PHONY: lock-idp-web
+lock-idp-web: ## Update apps/auth-idp/web package-lock.json using a Node container
+	@echo "🔒 Updating apps/auth-idp/web package-lock.json..."
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm install --package-lock-only --ignore-scripts --no-audit --no-fund"
+
+.PHONY: install-idp-web
+install-idp-web: ## Install the IdP screens front deps into the mounted workspace
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; else npm install --ignore-scripts --no-audit --no-fund; fi"
+
+.PHONY: typecheck-idp-web
+typecheck-idp-web: install-idp-web ## Typecheck the IdP screens front
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm run typecheck"
+
+.PHONY: build-idp-web
+build-idp-web: install-idp-web ## Build the IdP screens static front to apps/auth-idp/web/build
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/apps/auth-idp/web \
+		node:24-alpine \
+		sh -lc "npm run build"
+	@test -f apps/auth-idp/web/build/404.html || (echo "❌ IdP front build missing SPA fallback 404.html" && exit 1)
+	@echo "✅ IdP screens front built at apps/auth-idp/web/build (SPA fallback: 404.html)"
+
+.PHONY: dev-idp
+dev-idp: prepare-node-workspace build-idp-web ## Start the standalone IdP (screens + API) on the shared DB (slot 4 ports)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d postgres --wait postgres
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps \
+		-e OAUTH_SIGNING_KEK=$${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production} \
+		api sh -lc 'cd /workspace/api && npm run db:migrate && npm run oauth:seed-clients && npm run oauth:init-keys'
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml up -d auth-idp --wait auth-idp
+
+.PHONY: seed-idp-clients
+seed-idp-clients: ## Seed the design-system oauth client on the shared DB
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'cd /workspace/api && npm run oauth:seed-clients'
+
+.PHONY: down-idp
+down-idp: ## Stop and remove the standalone IdP overlay (+ shared dev/test stack)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml -f docker-compose.idp.yml down
+
+.PHONY: logs-idp
+logs-idp: ## Stream standalone IdP logs
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml logs -f auth-idp
+
+.PHONY: logs-idp-once
+logs-idp-once: ## Print standalone IdP logs (no follow)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml logs --no-color auth-idp
+
+.PHONY: exec-idp
+exec-idp: ## Exec a command in the running auth-idp container: make exec-idp CMD="node -v"
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml exec auth-idp sh -lc "$$CMD"
+
+.PHONY: ps-idp
+ps-idp: ## Show standalone IdP service status
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml ps
+
+.PHONY: smoke-idp
+smoke-idp: ## Run the deterministic SSO authorization_code smoke against the live IdP (needs make dev-idp)
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
+		-e IDP_BASE_URL=http://auth-idp:8787 \
+		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
+		-w /workspace api npx tsx apps/auth-idp/sso-smoke.ts
+
+.PHONY: smoke-idp-screens
+smoke-idp-screens: ## Screen-driven SSO smoke: drives the IdP-SERVED login+consent screens (needs make dev-idp)
+	@echo "▶ Pinning the IdP UI origin to the in-network name (auth-idp:8787) so the browser can follow login/consent redirects..."
+	@IDP_ORIGIN=http://auth-idp:8787 DISABLE_RATE_LIMIT=true \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml up -d auth-idp --wait auth-idp
+	@echo "▶ Seeding verified user + session on the shared DB..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
+		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
+		-w /workspace api npx tsx apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
+	USER_ID=$$(grep '^USER_ID=' .tmp-idp-seed.env | cut -d= -f2-); \
+	SESSION_TOKEN=$$(grep '^SESSION_TOKEN=' .tmp-idp-seed.env | cut -d= -f2-); \
+	rm -f .tmp-idp-seed.env; \
+	if [ -z "$$USER_ID" ] || [ -z "$$SESSION_TOKEN" ]; then echo "❌ seed step did not produce USER_ID/SESSION_TOKEN"; exit 1; fi; \
+	echo "▶ Driving the IdP-served screens in headless Chromium..."; \
+	USER_ID="$$USER_ID" SESSION_TOKEN="$$SESSION_TOKEN" \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml --profile idp-smoke run --rm --no-deps \
+		-e IDP_BASE_URL=http://auth-idp:8787 \
+		-e USER_ID="$$USER_ID" \
+		-e SESSION_TOKEN="$$SESSION_TOKEN" \
+		idp-screen-smoke
 
 
 # -----------------------------------------------------------------------------
@@ -2511,3 +2712,8 @@ oauth-init-keys: ## Bootstrap the first active Ed25519 signing key (idempotent; 
 .PHONY: oauth-rotate-keys
 oauth-rotate-keys: ## Rotate the active Ed25519 signing key; old key stays in JWKS for ≥65 min
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm run oauth:rotate-keys"
+
+.PHONY: oauth-rotate-service-client
+oauth-rotate-service-client: ## Rotate a service client secret (single-secret cutover). Usage: make oauth-rotate-service-client CLIENT_ID=<id> ENV=<env>
+	@test -n "$(CLIENT_ID)" || { echo "ERROR: CLIENT_ID is required: make oauth-rotate-service-client CLIENT_ID=<id> ENV=<env>"; exit 1; }
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -e CLIENT_ID="$(CLIENT_ID)" api sh -lc "npm run oauth:rotate-service-client"

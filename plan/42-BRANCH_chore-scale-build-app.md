@@ -33,8 +33,11 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
   for **comments + observability** (DB relation, §5/§12). Identities provided by BR-39.
 - **BR-42e `feat/flow-queue-streaming`** — *Purpose*: extract the api Postgres queue into
   **`@sentropic/flow` `JobQueue`** for **streaming chat** (background tasks §10.4). Extends BR-32 (flow).
-- **BR-42f `feat/llm-mesh-vertex-ai`** — *Purpose*: add a **Vertex AI provider adapter** to
-  `@sentropic/llm-mesh`, **streaming preserved** (provider events, not session events — §7 anti-pattern).
+- **BR-43 `feat/llm-mesh-gcp`** (was BR-42f) — **moved to BR-43**: standalone `@sentropic/llm-mesh`
+  **GCP provider** (`gcp` id; endpoint host `aiplatform.googleapis.com`), **streaming preserved**.
+  **Renumbered OUT of BR-42 scale 2026-06-03** — a single LLM provider is not app-foundry work, so it is
+  no longer a BR-42 lot. The scale-relevant Google piece stays here as the native multi-cloud secrets
+  contract + observability + MCP/marketplace catalog (see §16 / BR-42b / BR-42g).
 - **BR-42g `feat/events-bigquery-sink`** — *Purpose*: add a **BigQuery `EventSink`** adapter
   (**PG and/or BigQuery**, incl. **PG-via-BigQuery**) for observability storage.
 
@@ -61,7 +64,8 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
 - **BR-42c** → contracts + persistence + events (new package).
 - **BR-42d** → BR-42c (comments) + `@sentropic/events` (observability) + BR-39 (identities).
 - **BR-42e** → extends BR-32 (`@sentropic/flow`).
-- **BR-42f**, **BR-42g** → independent additive provider/sink (llm-mesh / events).
+- **BR-42g** → independent additive `EventSink` (events). (BR-42f's GCP provider **moved to BR-43**,
+  `feat/llm-mesh-gcp` — no longer a BR-42 scale lot.)
 
 ## Deferred (out of BR-42)
 - **`k8s-ops` → PaaS** hosting/FinOps substrate (multi-cloud / multi-k8s / multi-client / multi-app),
@@ -87,9 +91,9 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
 - **BR42b-Q1** `attention`: catalog generalisation home — extend `@sentropic/skills` catalog (default,
   `SkillSource`→`CatalogSource`) vs a new `@sentropic/catalog`.
 - **BR42d-Q1** `attention`: default observability sink (PG vs BigQuery vs both) per workspace.
-- **BR42f-Q1** `attention`: Vertex AI auth mapping in `llm-mesh` credentials (ADC / service-account /
-  workload-identity).
-- **BR42-Q1** `attention`: first wave selection — BR-42a1 (MVP) + BR-42f/BR-42g (independent) in parallel?
+- **BR42-Q1** `attention`: first wave selection — BR-42a1 (MVP) + BR-42g (independent) in parallel?
+  (The GCP provider question — `gcp` auth mapping in `llm-mesh` credentials: ADC / service-account /
+  workload-identity — **moved to BR-43**, `feat/llm-mesh-gcp`; no longer a BR-42 lot.)
 
 ## Closure
 - [x] Module-isolation iteration recorded in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §16`.

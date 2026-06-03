@@ -77,6 +77,12 @@ const findProviderDefaultModel = (
   );
 };
 
+// BR-43 / §C HARD INVARIANT — catalog model ids MUST be globally unique across
+// providers. This returns `null` on >1 match, which would silently mis-route to
+// the default provider. GCP catalog keys are therefore gcp-qualified
+// (`{publisher}/{model}@gcp`, e.g. `google/gemini-3.5-flash@gcp`) so they
+// never collide with a bare AI-Studio Gemini id (`gemini-3.5-flash`) and resolve
+// unambiguously to provider `gcp`.
 export const inferProviderFromModelId = (
   models: CatalogModel[],
   modelId: string | null | undefined
