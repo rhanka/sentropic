@@ -1407,22 +1407,24 @@ export class ToolService {
 
       if (traceNote) {
         // Mint the trace-note as a reply via the emit-free store. It inherits the
-        // post-cascade assignee directly; `add` always persists `status:'open'`,
-        // so when the thread ended up closed we re-run the emit-free thread
-        // cascade to fold the note into the live `latestStatus` (mirrors the live
-        // insert `status: latestStatus`). Provenance carries the `toolCallId`.
-        const created = await commentStore.add(tenant, {
+        // post-cascade assignee directly and is born with the live `latestStatus`
+        // (the `add` status arg), so ONLY this new note row carries the closed
+        // status — byte-faithful to the OLD live insert `status: latestStatus`
+        // (995d788f^) with NO thread-wide `setState` reconcile that would re-bump
+        // every sibling's `updatedAt`. Provenance carries the `toolCallId`.
+        const created = await commentStore.add(
           tenant,
-          target: noteTarget,
-          author: { id: userId },
-          body: traceNote,
-          threadId,
-          assignedTo: latestAssigned ?? userId,
-          ...(opts.toolCallId ? { provenance: { toolCallId: opts.toolCallId } } : {}),
-        });
-        if (latestStatus === 'closed') {
-          await commentStore.setState(tenant, threadId, 'resolved'); // emit-free reconcile
-        }
+          {
+            tenant,
+            target: noteTarget,
+            author: { id: userId },
+            body: traceNote,
+            threadId,
+            assignedTo: latestAssigned ?? userId,
+            ...(opts.toolCallId ? { provenance: { toolCallId: opts.toolCallId } } : {}),
+          },
+          latestStatus,
+        );
         await commentEventSink.emit({
           workspaceId,
           contextType: row.contextType,

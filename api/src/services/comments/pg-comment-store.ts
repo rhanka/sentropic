@@ -57,7 +57,19 @@ export class PgCommentStore implements CommentStore {
     this.createId = options.createId ?? defaultCreateId;
   }
 
-  async add(tenant: TenantContext, input: NewComment): Promise<Comment> {
+  /**
+   * Create a comment. The optional `status` (default `'open'`) lets a host
+   * persist a row that is born already-closed (e.g. an AI trace-note minted onto
+   * a thread the same action just resolved), faithfully to the OLD live insert
+   * `status: latestStatus` — without a thread-wide `setState` reconcile that
+   * would bump `updatedAt` on every sibling row. All existing callers (and the
+   * `CommentStore` port) omit it and keep the live default `'open'`.
+   */
+  async add(
+    tenant: TenantContext,
+    input: NewComment,
+    status: 'open' | 'closed' = 'open',
+  ): Promise<Comment> {
     const workspaceId = tenant.workspaceId;
     const live = targetToLive(input.target);
 
@@ -94,7 +106,7 @@ export class PgCommentStore implements CommentStore {
       sectionKey: live.sectionKey,
       createdBy: input.author.id,
       assignedTo: input.assignedTo ?? null,
-      status: 'open',
+      status,
       threadId,
       content: input.body,
       // DROP provenance.runId (no column); persist toolCallId only.
@@ -345,6 +357,33 @@ export class PgCommentStore implements CommentStore {
         ),
       );
     return this.listThread(tenant, threadId);
+  }
+
+  /**
+   * Set the `tool_call_id` provenance on a SINGLE row (emit-free), returning the
+   * mapped row. App-local adapter primitive (NOT a package-port method): the
+   * queue auto-generation path needs to stamp the self-referential
+   * `auto_generation:<id>` provenance AFTER `add` mints the id, and must do so
+   * through the store so NO comment write escapes the adapter. Workspace-scoped;
+   * `CommentNotFoundError` when the id is missing / cross-workspace.
+   */
+  async setProvenance(
+    tenant: TenantContext,
+    id: string,
+    toolCallId: string,
+  ): Promise<Comment> {
+    const workspaceId = tenant.workspaceId;
+    const existing = await this.selectRow(workspaceId, id);
+    if (!existing) {
+      throw new CommentNotFoundError(id);
+    }
+    await this.db
+      .update(comments)
+      .set({ toolCallId, updatedAt: new Date() })
+      .where(and(eq(comments.id, id), eq(comments.workspaceId, workspaceId)));
+
+    const row = await this.requireRow(workspaceId, id);
+    return this.toComment(tenant, row);
   }
 
   private async selectRow(
