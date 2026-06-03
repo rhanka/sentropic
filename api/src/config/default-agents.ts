@@ -5,7 +5,7 @@
  * Legacy type imports kept as string aliases for backward compatibility.
  */
 
-import { AI_IDEAS_AGENTS } from './default-agents-ai-ideas';
+import { AI_PRIORITIES_AGENTS } from './default-agents-ai-priorities';
 import { OPPORTUNITY_AGENTS } from './default-agents-opportunity';
 import { CODE_AGENTS } from './default-agents-code';
 import { SHARED_AGENTS } from './default-agents-shared';
@@ -14,13 +14,13 @@ export type { DefaultGenerationAgentDefinition } from './default-agents-types';
 import type { DefaultGenerationAgentDefinition } from './default-agents-types';
 
 // ---------------------------------------------------------------------------
-// Backward-compat: keep DEFAULT_GENERATION_AGENTS pointing to AI-Ideas agents
+// Backward-compat: keep DEFAULT_GENERATION_AGENTS pointing to AI-Priorities agents
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_GENERATION_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = AI_IDEAS_AGENTS;
+export const DEFAULT_GENERATION_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = AI_PRIORITIES_AGENTS;
 
 // Re-export split catalogs for direct consumers
-export { AI_IDEAS_AGENTS } from './default-agents-ai-ideas';
+export { AI_PRIORITIES_AGENTS } from './default-agents-ai-priorities';
 export { OPPORTUNITY_AGENTS } from './default-agents-opportunity';
 export { CODE_AGENTS } from './default-agents-code';
 export { SHARED_AGENTS } from './default-agents-shared';
@@ -35,7 +35,7 @@ export type WorkspaceTypeAgentSeed = {
 };
 
 export const WORKSPACE_TYPE_AGENT_SEEDS: ReadonlyArray<WorkspaceTypeAgentSeed> = [
-  { workspaceType: "ai-ideas", agents: [...AI_IDEAS_AGENTS, ...SHARED_AGENTS] },
+  { workspaceType: "ai-priorities", agents: [...AI_PRIORITIES_AGENTS, ...SHARED_AGENTS] },
   { workspaceType: "opportunity", agents: [...OPPORTUNITY_AGENTS, ...SHARED_AGENTS] },
   { workspaceType: "code", agents: [...CODE_AGENTS, ...SHARED_AGENTS] },
   // neutral: no generation agents (orchestrator tools only, §8.2)
@@ -56,7 +56,7 @@ export const DEFAULT_GENERATION_AGENT_BY_KEY = new Map<
 >(DEFAULT_GENERATION_AGENTS.map((item) => [item.key, item]));
 
 /**
- * Legacy task-key → agent-key mapping for ai-ideas workflow.
+ * Legacy task-key → agent-key mapping for ai-priorities workflow.
  * @deprecated Use runtime lookup from workflow_definition_tasks.agentDefinitionId instead (§7.3).
  */
 export const DEFAULT_GENERATION_AGENT_KEY_BY_TASK: Record<string, string> = {
