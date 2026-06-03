@@ -202,7 +202,14 @@
       "idx": 28,
       "version": "7",
       "when": 1780358400000,
-      "tag": "0028_rename_ai_ideas_to_ai_priorities",
+      "tag": "0028_chat_message_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1780444800000,
+      "tag": "0029_rename_ai_ideas_to_ai_priorities",
       "breakpoints": true
     }
   ]

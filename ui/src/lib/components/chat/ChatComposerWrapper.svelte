@@ -13,8 +13,10 @@
   export let tabIndex = 0;
   export let composerElement: HTMLDivElement | null = null;
   export let onKeyDown: ((event: KeyboardEvent) => void) | undefined = undefined;
+  export let onPaste: ((event: ClipboardEvent) => void) | undefined = undefined;
   export let renderComposerSurface: Snippet<[]>;
   export let renderFloatingLayer: Snippet<[]>;
+  export let renderAttachmentTray: Snippet<[]> | undefined = undefined;
   export let renderLeftControls: Snippet<[]>;
   export let renderRightActions: Snippet<[]>;
 </script>
@@ -31,8 +33,10 @@
   {tabIndex}
   bind:composerElement
   {onKeyDown}
+  {onPaste}
   {renderComposerSurface}
   {renderFloatingLayer}
+  {renderAttachmentTray}
   {renderLeftControls}
   {renderRightActions}
 />

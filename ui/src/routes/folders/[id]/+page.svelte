@@ -12,9 +12,10 @@
     openFolderExport,
     closeFolderExport,
     folderExportState,
+    generateFolderXlsxAndDownload,
   } from '$lib/stores/folders';
   import { initiativesStore, fetchInitiatives, deleteInitiative } from '$lib/stores/initiatives';
-  import { addToast } from '$lib/stores/toast';
+  import { addToast, removeToast } from '$lib/stores/toast';
   import { apiDelete, apiGet } from '$lib/utils/api';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
@@ -35,7 +36,7 @@
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
-  import { Trash2, Star, X, Minus, Loader2, Lock } from '@lucide/svelte';
+  import { Trash2, Star, X, Minus, Loader2, Lock, FileSpreadsheet } from '@lucide/svelte';
   import { listComments } from '$lib/utils/comments';
 
   let isLoading = false;
@@ -56,6 +57,7 @@
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   let showImportDialog = false;
+  let isExportingXlsx = false;
   const HUB_KEY = 'folderDetailUseCases';
   let isReadOnly = false;
   let commentCounts: Record<string, number> = {};
@@ -243,6 +245,25 @@
       } else {
         addToast({ type: 'error', message: get(_)('folders.deleteError') });
       }
+    }
+  };
+
+  const handleExportXlsx = async () => {
+    if (!currentFolder || isExportingXlsx) return;
+    isExportingXlsx = true;
+    const pendingToastId = addToast({
+      type: 'info',
+      message: get(_)('folders.export.xlsx.generating'),
+    });
+    try {
+      await generateFolderXlsxAndDownload(currentFolder.id, `${currentFolder.name || 'folder'}.xlsx`);
+      addToast({ type: 'success', message: get(_)('folders.export.xlsx.ready') });
+    } catch (error) {
+      console.error('Failed to export folder XLSX:', error);
+      addToast({ type: 'error', message: get(_)('folders.export.xlsx.error') });
+    } finally {
+      removeToast(pendingToastId);
+      isExportingXlsx = false;
     }
   };
 
@@ -563,6 +584,20 @@
           on:forceUnlock={handleForceUnlock}
           on:releaseLock={handleReleaseLock}
         />
+        <button
+          type="button"
+          class="rounded p-2 transition text-primary hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          title={$_('folders.export.xlsx.label')}
+          aria-label={$_('folders.export.xlsx.label')}
+          on:click={handleExportXlsx}
+          disabled={isExportingXlsx}
+        >
+          {#if isExportingXlsx}
+            <Loader2 class="w-5 h-5 animate-spin" />
+          {:else}
+            <FileSpreadsheet class="w-5 h-5" />
+          {/if}
+        </button>
         <FileMenu
           showNew={false}
           showImport={true}

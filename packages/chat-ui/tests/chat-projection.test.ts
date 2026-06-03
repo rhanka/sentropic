@@ -3,6 +3,7 @@ import type { ProjectedRunSegment } from '../src/utils/chat-run-projection.js';
 import {
   buildFallbackProjectedSegments,
   buildProjectedTimeline,
+  type ChatMessageAttachment,
   type ChatProjectionComputation,
   type ChatProjectionMessage,
 } from '../src/state/chatProjection.js';
@@ -58,6 +59,37 @@ const computation = (
 });
 
 describe('chat projection timeline', () => {
+  it('keeps typed message attachments on projected user messages', () => {
+    const attachments: ChatMessageAttachment[] = [
+      {
+        id: 'att_1',
+        kind: 'image',
+        fileName: 'diagram.png',
+        mimeType: 'image/png',
+        sizeBytes: 12_345,
+        state: 'ready',
+        previewUrl: 'blob:diagram',
+      },
+    ];
+    const message: ChatProjectionMessage = {
+      id: 'u1',
+      role: 'user',
+      content: '',
+      attachments,
+    };
+
+    const projected = buildProjectedTimeline({
+      timeline: [message],
+      getAssistantComputation: () => computation([]),
+    });
+
+    expect(projected[0]).toMatchObject({
+      kind: 'message',
+      key: 'message:u1',
+      message: { attachments },
+    });
+  });
+
   it('builds fallback assistant content and processing runtime segments', () => {
     expect(buildFallbackProjectedSegments(assistant('a1', { content: 'Final' }))).toEqual([
       {

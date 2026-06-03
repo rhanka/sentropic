@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Secrets — NEVER commit the real env (only .env.example is tracked)
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+**/dist/
+.svelte-kit/
+build/
+
+# Logs / OS noise
+*.log
+.DS_Store
