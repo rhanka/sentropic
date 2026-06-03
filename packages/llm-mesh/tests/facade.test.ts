@@ -186,6 +186,7 @@ describe('createLlmMesh', () => {
     const cohereReasoning = getModelProfile('cohere', 'command-a-reasoning-08-2025');
     const geminiFlash = getModelProfile('gemini', 'gemini-3.5-flash');
     const claudeOpus = getModelProfile('anthropic', 'claude-opus-4-7');
+    const gcpFlash = getModelProfile('gcp', 'google/gemini-3.5-flash@gcp');
 
     expect(cohereReasoning?.reasoningTier).toBe('advanced');
     expect(cohereReasoning?.capabilities.reasoning.support).not.toBe('unsupported');
@@ -193,13 +194,40 @@ describe('createLlmMesh', () => {
     expect(geminiFlash?.capabilities.reasoning.support).not.toBe('unsupported');
     expect(claudeOpus?.label).toBe('Opus 4.7');
     expect(claudeOpus?.reasoningTier).toBe('advanced');
+    expect(gcpFlash?.reasoningTier).toBe('advanced');
+    expect(gcpFlash?.capabilities.reasoning.support).not.toBe('unsupported');
   });
 
   it('advertises image input only for verified vision-capable provider families', () => {
     expect(getModelProfile('openai', 'gpt-5.5')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('anthropic', 'claude-opus-4-7')?.capabilities.modalities.input).toContain('image');
+    expect(getModelProfile('gcp', 'google/gemini-3.5-flash@gcp')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('mistral', 'mistral-small-2603')?.capabilities.modalities.input).not.toContain('image');
     expect(getModelProfile('cohere', 'command-a-03-2025')?.capabilities.modalities.input).not.toContain('image');
+  });
+
+  it('exposes Gemini-on-GCP as a distinct provider with globally-unique catalog keys', () => {
+    const gcpFlash = getModelProfile('gcp', 'google/gemini-3.5-flash@gcp');
+    const gcpLite = getModelProfile('gcp', 'google/gemini-3.1-flash-lite@gcp');
+
+    expect(gcpFlash?.providerId).toBe('gcp');
+    expect(gcpLite?.providerId).toBe('gcp');
+    // §C global-uniqueness: the GCP selection keys MUST NOT collide with the
+    // bare AI-Studio `gemini` ids, otherwise inferProviderFromModelId (api) would
+    // silently mis-route them.
+    expect(getModelProfile('gemini', 'google/gemini-3.5-flash@gcp')).toBeNull();
+    expect(getModelProfile('gcp', 'gemini-3.5-flash')).toBeNull();
+    // GCP = Gemini-on-GCP: it mirrors the `gemini` provider family + the
+    // json-schema-subset structured-output capability template.
+    expect(getProviderProfile('gcp').family).toBe('google');
+    expect(getProviderProfile('gcp').capabilities.structuredOutput.jsonSchema.level).toBe(
+      getProviderProfile('gemini').capabilities.structuredOutput.jsonSchema.level,
+    );
+  });
+
+  it('keeps GCP models opt-in (no default task hints) so default routing is unchanged', () => {
+    expect(getModelProfile('gcp', 'google/gemini-3.5-flash@gcp')?.defaultTaskHints).toEqual([]);
+    expect(getModelProfile('gcp', 'google/gemini-3.1-flash-lite@gcp')?.defaultTaskHints).toEqual([]);
   });
 });
