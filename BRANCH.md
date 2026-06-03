@@ -86,23 +86,23 @@ Reapply the repeated-tool-error loop breaker (chat-core dispatch breaker + chat-
   - [x] Confirm command style: `make ... API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=<env>` with `ENV` last.
   - [x] Confirm scope and guardrails.
 
-- [ ] **Lot 1 — chat-core repeated-tool-error breaker (post-Lot-21e refactor)**
-  - [ ] Read `packages/chat-core/src/runtime-tool-dispatch.ts` on current main; locate the per-tool dispatch body and the catch path (`{status:'error'}` envelope returns and thrown errors).
-  - [ ] Add `toolErrorSignatureCounts?: Record<string, number>` to `AssistantRunLoopState` in `packages/chat-core/src/runtime.ts`.
-  - [ ] Initialize `toolErrorSignatureCounts: {}` in `packages/chat-core/src/runtime-run-prepare.ts` next to `continueGenerationLoop`.
-  - [ ] In `runtime-tool-dispatch.ts`:
-    - [ ] Add signature helpers: `normalizeLoopGuardText`, `normalizeLoopGuardArgs` (strip request_id/trace_id/timestamps/UUIDs/numeric IDs), `buildToolLoopSignature(toolName, args, errorMessage)`.
-    - [ ] Add `incrementToolLoopErrorCount(loopState, toolName, args, errorMessage)` and `getReturnedToolErrorMessage(result)` (detects `{status:'error', code?, error?|message?}` returns that do not throw).
-    - [ ] On the 3rd identical normalized signature (threshold = 2 → trip on count > 2), set `loopState.continueGenerationLoop = false`, emit a `tool_call_result` carrying `{status:'error', code:'tool_loop_repeated_error', error:..., repeat_count, tool_name}`, return `shouldBreakLoop: true` and exit the per-tool loop early.
-    - [ ] Refactor success/error accumulator pushes into a single `pushToolAccumulator` helper to avoid double-tracking the signature.
-  - [ ] Add `packages/chat-core/tests/runtime-tool-dispatch.test.ts`:
-    - [ ] `trips a terminal loop breaker after repeated identical returned tool errors in one assistant turn`
-    - [ ] `normalizes noisy thrown tool errors before tripping the loop breaker`
-    - [ ] `does not trip the repeated-error breaker when tool arguments change meaningfully`
-  - [ ] Bump `packages/chat-core/package.json` (minor — new public state field on `AssistantRunLoopState`).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
-    - [ ] `make test-pkg-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
+- [x] **Lot 1 — chat-core repeated-tool-error breaker (post-Lot-21e refactor)**
+  - [x] Read `packages/chat-core/src/runtime-tool-dispatch.ts` on current main; locate the per-tool dispatch body and the catch path (`{status:'error'}` envelope returns and thrown errors).
+  - [x] Add `toolErrorSignatureCounts?: Record<string, number>` to `AssistantRunLoopState` in `packages/chat-core/src/runtime.ts`.
+  - [x] Initialize `toolErrorSignatureCounts: {}` in `packages/chat-core/src/runtime-run-prepare.ts` next to `continueGenerationLoop`.
+  - [x] In `runtime-tool-dispatch.ts`:
+    - [x] Add signature helpers: `normalizeLoopGuardText`, `normalizeLoopGuardArgs` (strip request_id/trace_id/timestamps/UUIDs/numeric IDs), `buildToolLoopSignature(toolName, args, errorMessage)`.
+    - [x] Add `incrementToolLoopErrorCount(loopState, toolName, args, errorMessage)` and `getReturnedToolErrorMessage(result)` (detects `{status:'error', code?, error?|message?}` returns that do not throw).
+    - [x] On the 3rd identical normalized signature (threshold = 2 → trip on count > 2), set `loopState.continueGenerationLoop = false`, emit a `tool_call_result` carrying `{status:'error', code:'tool_loop_repeated_error', error:..., repeat_count, tool_name}`, return `shouldBreakLoop: true` and exit the per-tool loop early.
+    - [x] Refactor success/error accumulator pushes into a single `pushToolAccumulator` helper to avoid double-tracking the signature.
+  - [x] Add `packages/chat-core/tests/runtime-tool-dispatch.test.ts`:
+    - [x] `trips a terminal loop breaker after repeated identical returned tool errors in one assistant turn`
+    - [x] `normalizes noisy thrown tool errors before tripping the loop breaker`
+    - [x] `does not trip the repeated-error breaker when tool arguments change meaningfully`
+  - [x] Bump `packages/chat-core/package.json` (patch 0.1.3 → 0.1.4 — new optional state field on `AssistantRunLoopState`, additive, stays within consumers' `^0.1.2` range; aligned `package-lock.json` chat-core entry).
+  - [x] Lot gate:
+    - [x] `make typecheck-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
+    - [x] `make test-pkg-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard` (21 files, 248 tests; `runtime-tool-dispatch.test.ts` 22 → 25 tests)
 
 - [ ] **Lot 2 — chat-service outer-loop sync line**
   - [ ] Read `api/src/services/chat-service.ts` around the post-`consumeToolCalls` "thin invocation + state sync" block (~ L3800-3830 on current main): identify the exact location after `streamSeq`/`contextBudgetReplanAttempts` are synced back.
@@ -116,19 +116,9 @@ Reapply the repeated-tool-error loop breaker (chat-core dispatch breaker + chat-
     - [ ] `make lint-api API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
     - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
 
-- [ ] **Lot 3 — chat-ui stream projection compaction**
-  - [ ] Read `packages/chat-ui/src/utils/chat-run-projection.ts` on current main; verify the projection model has not converged with the closed PR #183 approach (BR-38a may have added attachment-related projection paths).
-  - [ ] Compact/bound repeated transient status/tool-call deltas for the same `tool_call_id` within one assistant turn (dedupe consecutive identical `tool_call_args` deltas; clamp per-turn projection length without dropping the final transcript or tool error visibility).
-  - [ ] Update `packages/chat-ui/src/client/streamHistory.ts` if the projection contract changes (otherwise leave untouched).
-  - [ ] Add `packages/chat-ui/tests/stream-throughput.test.ts`:
-    - [ ] Asserts the projection length stays bounded under a synthetic flood of identical status/tool-call deltas.
-  - [ ] Update `packages/chat-ui/tests/chat-run-projection.test.ts` to cover the dedupe-but-preserve-final-error contract.
-  - [ ] Update `ui/tests/utils/chat-run-projection.test.ts` to assert UI-side wrapper behavior remains stable.
-  - [ ] Bump `packages/chat-ui/package.json` (minor — new projection compaction contract).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-chat-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
-    - [ ] `make test-chat-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
-    - [ ] `make test-ui SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard`
+- [ ] **Lot 3 — chat-ui stream projection compaction** *(deferred)*
+  - On-main analysis: `packages/chat-ui/src/utils/chat-run-projection.ts` (200 LOC) already deduplicates by `sequence` in both `appendLiveProjectionEvent` (line 198) and `mergeProjectionHistoryEvents` (Map by sequence). The original PR #183 compaction targeted the live unbounded delta flood. With the Lot 1 backend breaker capping repeated identical tool errors at **3 attempts + 1 pass-2 = 4 LLM calls** per turn, the flood is structurally bounded upstream — the secondary UI compaction is speculative without direct evidence on current main.
+  - Decision: defer chat-ui projection compaction. Reopen only if the UAT in Lot N-2 surfaces residual tab saturation after the backend breaker. If reopened, do so on a dedicated `fix/chat-ui-projection-compaction` branch with concrete reproduction (failing `stream-throughput.test.ts` asserting unbounded growth on a synthetic flood) before code changes.
 
 - [ ] **Lot N-2 — UAT (root workspace, `ENV=dev`)**
   - [ ] Web app: repeated identical tool-error loop terminates cleanly without freezing the browser tab.
