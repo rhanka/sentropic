@@ -226,7 +226,7 @@ const toMeshAuthInput = async (
     return { type: 'direct-token', token: credential, label: 'request override' };
   }
 
-  // BR-42f / §B / M2 — GCP auth ordering fix. The mesh validates auth BEFORE
+  // BR-43 / §B / M2 — GCP auth ordering fix. The mesh validates auth BEFORE
   // the runtime runs (mesh.ts prepare() throws on `!ok` pre-dispatch), and the
   // string credential resolver is BYPASSED for `gcp` (no stored API key —
   // resolveProviderCredential('gcp') legitimately returns source:'none').

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// BR-42f Lot 4 — GCP SSE provider-attribution test (sibling to
+// BR-43 Lot 4 — GCP SSE provider-attribution test (sibling to
 // gemini-attribution-characterization.test.ts). Proves that the SHARED Gemini
 // SSE→event runtime loop, once parameterized by the active provider (M4),
 // attributes a GCP stream/response to `gcp` — NOT `gemini`:
@@ -91,7 +91,7 @@ async function collectStreamEvents(
   return events;
 }
 
-describe('GCP provider-attribution characterization (BR-42f Lot 4)', () => {
+describe('GCP provider-attribution characterization (BR-43 Lot 4)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __resetGcpTokenCache();

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// BR-42f Lot 3 — focused GcpProviderRuntime unit test (mocked fetch + stubbed
+// BR-43 Lot 3 — focused GcpProviderRuntime unit test (mocked fetch + stubbed
 // ADC mint). Proves the transport envelope (URL + `Authorization: Bearer`, NO
 // `?key=`), the SSE reuse, the ADC token cache/single-flight/skew (D-ADC1), and
 // the D-ERR1 error mapping. NO live GCP call. The broader catalog/stream-
