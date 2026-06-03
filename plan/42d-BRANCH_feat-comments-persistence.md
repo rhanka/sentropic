@@ -109,8 +109,8 @@ Activate `@sentropic/comments@0.1.0` by REAL app consumption (`rules/architectur
     - [ ] **API tests**: adapter-parity spec GREEN; Lot 0 characterization stays GREEN (`make test-api-comments SCOPE=tests/api/comments.test.ts ENV=test-feat-comments-persistence`).
 
 - [ ] **Lot 3 — `PgNotifyCommentEventSink`** (`api/src/services/comments/pg-notify-comment-event-sink.ts`, origin-aware)
-  - [ ] Implement `CommentEventSink` consuming the EXPLICIT `{action, key}` descriptor (key ∈ `{comment_id, thread_id}`); build `{workspace_id, context_type, context_id, data:{action, ...key}}` (matches `streams.ts:747-755`); `NOTIFY comment_events` via `pool.connect()` reusing `escapeNotifyPayload`.
-  - [ ] Expose an AWAITABLE flush so the host path can await the NOTIFY round-trip (match live awaited back-pressure; errors not silently swallowed). Built but NOT yet the sole emitter (the 3 live `notifyCommentEvent` copies still stand — NO deletion this lot, so no emit gap).
+  - [x] Implement `CommentEventSink` consuming the EXPLICIT `{action, key}` descriptor (key ∈ `{comment_id, thread_id}`); build `{workspace_id, context_type, context_id, data:{action, ...key}}` (matches `streams.ts:747-755`); `NOTIFY comment_events` via `pool.connect()` reusing `escapeNotifyPayload`.
+  - [x] Expose an AWAITABLE flush so the host path can await the NOTIFY round-trip (match live awaited back-pressure; errors not silently swallowed). Built but NOT yet the sole emitter (the 3 live `notifyCommentEvent` copies still stand — NO deletion this lot, so no emit gap).
   - [ ] Wire-test the sink against the Lot 0 matrix (incl. AI trace-note `created`=`comment_id`, auto `created`=`comment_id`) + awaitable flush.
   - [ ] Lot gate: `make typecheck-api` + `make lint-api ENV=test-feat-comments-persistence`; sink wire-test GREEN; Lot 0 characterization stays GREEN.
 
