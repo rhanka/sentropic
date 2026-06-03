@@ -42,18 +42,6 @@ type NutModule = {
     leftClick?: () => Promise<unknown>;
 };
 
-const loadOptional = async <T>(moduleName: string, capability: string): Promise<T> => {
-    try {
-        return (await import(moduleName)) as T;
-    } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw new CapabilityUnavailableError(
-            capability,
-            `native module "${moduleName}" could not be loaded (Windows-only). ${detail}`,
-        );
-    }
-};
-
 /** Resolve a `+`-separated combo (e.g. "Ctrl+Shift+S") to nut.js Key constants. */
 const resolveKeyCombo = (combo: string, Key: Record<string, unknown>): unknown[] => {
     const aliases: Record<string, string> = {
@@ -86,7 +74,32 @@ const resolveKeyCombo = (combo: string, Key: Record<string, unknown>): unknown[]
     });
 };
 
-export const createWindowsCapabilityProvider = (): DesktopCapabilityProvider => {
+export interface WindowsProviderOptions {
+    /**
+     * Maps a bare native specifier to its import target. Default: identity (bare
+     * name, resolved from `node_modules`). The single-file exe injects a resolver
+     * that returns an absolute `file://` URL under the extracted native cache.
+     */
+    resolveNativeModule?: (bareSpecifier: string) => string;
+}
+
+export const createWindowsCapabilityProvider = (
+    options: WindowsProviderOptions = {},
+): DesktopCapabilityProvider => {
+    const resolveNative = options.resolveNativeModule ?? ((name: string) => name);
+
+    const loadOptional = async <T>(moduleName: string, capability: string): Promise<T> => {
+        try {
+            return (await import(resolveNative(moduleName))) as T;
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            throw new CapabilityUnavailableError(
+                capability,
+                `native module "${moduleName}" could not be loaded (Windows-only). ${detail}`,
+            );
+        }
+    };
+
     return {
         name: 'windows',
 
