@@ -28,6 +28,10 @@
       "class": "primitive",
       "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
     },
+    "ChatContextPicker.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+    },
     "ContextChips.svelte": {
       "class": "legacy",
       "deprecation": {
