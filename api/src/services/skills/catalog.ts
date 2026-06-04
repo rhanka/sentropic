@@ -1,11 +1,13 @@
 /**
- * App-local catalog façade (BR-42b Lot 3 — agent template source added)
+ * App-local catalog façade (BR-42b Lot 4 — workflow seed source added)
  *
- * Foundation skills + agent templates now flow through the CompositeCatalogRegistry:
+ * Foundation skills + agent templates + workflow seeds now flow through the
+ * CompositeCatalogRegistry:
  *
  *   StaticCatalogSource ('foundation')       ← Lot 1 (skill entries)
  *   StandaloneToolSource ('standalone')      ← Lot 2 (tool entries, empty by default)
  *   AgentTemplateSource ('agent-templates')  ← Lot 3 (agent entries, code-level seeds)
+ *   WorkflowSeedSource ('workflow-seeds')    ← Lot 4 (workflow entries, flow seeds)
  *     → CompositeCatalogRegistry
  *       → SkillsToolRegistry adapter (unchanged)
  *         → resolveFoundationChatTools() [sync, search_skills first]
@@ -15,17 +17,20 @@
  *     → foundation-executor.ts falls through to here for non-hardcoded names
  *       → StandaloneToolSource.getHandler() → handler invocation
  *
- * The wire contract is BYTE-IDENTICAL to the pre-Lot-3 baseline:
+ * The wire contract is BYTE-IDENTICAL to the pre-Lot-4 baseline:
  *   - `resolveFoundationChatTools` returns the same synchronous OpenAI tool
  *     array with `search_skills` first and the 28 foundation tools in the
- *     same insertion order. Agent entries are NOT projected into the tool set.
+ *     same insertion order. Agent and workflow entries are NOT projected into
+ *     the tool set.
  *   - `executeFoundationSearchSkills` delegates identically to the adapter.
  *   - `foundationSkillsToolRegistry` is still a `SkillsToolRegistry` instance.
- *   - Agent entries are visible via `compositeCatalogRegistry.list/get/search`
- *     for discovery, but the SkillsToolRegistry loop filters to `skill`-kind only.
+ *   - Agent and workflow entries are visible via
+ *     `compositeCatalogRegistry.list/get/search` for discovery, but the
+ *     SkillsToolRegistry loop filters to `skill`-kind only.
  *
  * `packages/skills/src/**` remains READ-ONLY — no source changes.
  * `packages/chat-core/src/ports.ts` AgentRuntime is UNTOUCHED.
+ * `packages/flow/src/**` is consumed READ-ONLY — no source changes.
  */
 
 import type OpenAI from 'openai';
@@ -42,6 +47,7 @@ import { CatalogExecutionSeam } from '../catalog/execution-seam.js';
 import { agentTemplateSource } from '../catalog/sources/agent-template-source.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
 import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
+import { workflowSeedSource } from '../catalog/sources/workflow-seed-source.js';
 
 // ---------------------------------------------------------------------------
 // Build the composite registry with all registered sources
@@ -52,11 +58,12 @@ import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.
  * - Lot 1: static foundation source (`skill`-kind entries, 16 skills).
  * - Lot 2: standalone tool source (`tool`-kind entries, empty by default).
  * - Lot 3: agent template source (`agent`-kind entries, code-level seeds).
- * Later lots will add workflow-seed, canvas, and MCP sources.
+ * - Lot 4: workflow seed source (`workflow`-kind entries, flow seeds).
+ * Later lots will add canvas and MCP sources.
  *
- * 0-regression note: `agent`-kind entries are for discovery only. The
- * `SkillsToolRegistry` loop below filters to `kind === 'skill'`, so agent
- * entries never reach the OpenAI tool set.
+ * 0-regression note: `agent`- and `workflow`-kind entries are for discovery
+ * only. The `SkillsToolRegistry` loop below filters to `kind === 'skill'`,
+ * so agent and workflow entries never reach the OpenAI tool set.
  */
 export const compositeCatalogRegistry = new CompositeCatalogRegistry();
 compositeCatalogRegistry.addSource(foundationCatalogSource);
@@ -64,6 +71,8 @@ compositeCatalogRegistry.addSource(foundationCatalogSource);
 compositeCatalogRegistry.addSource(standaloneToolSource);
 // Lot 3: wire agent template source (code-level seeds; DB rows are NOT here).
 compositeCatalogRegistry.addSource(agentTemplateSource);
+// Lot 4: wire workflow seed source (code-level seeds from @sentropic/flow; DB rows are NOT here).
+compositeCatalogRegistry.addSource(workflowSeedSource);
 
 // ---------------------------------------------------------------------------
 // Catalog execution seam (Lot 2) — dispatches non-hardcoded tool calls
