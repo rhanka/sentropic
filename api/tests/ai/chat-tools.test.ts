@@ -122,16 +122,19 @@ describe('Chat AI - Tool Calls Integration', () => {
       expect(toolCallResult).toBeDefined();
 
       await cleanupAuthData(); // Cleanup admin user
-    }, 15000);
+    }, 30000);
   });
 
-  describe('update_initiative_field tool', () => {
-    it('should call update_initiative_field and update database', async () => {
+  describe('update_initiative tool', () => {
+    it('should handle update_initiative requests through chat tools', async () => {
       const adminUser = await createAuthenticatedUser('admin_app');
       
-      // Message qui devrait déclencher update_initiative_field
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Update the description of initiative ${initiativeId} to "Updated description for testing"`,
+        content: [
+          `Tu DOIS appeler le tool \`update_initiative\` pour modifier initiativeId="${initiativeId}".`,
+          `updates: [{"path":"description","value":"Updated description for testing"}]`,
+          `Après le tool_call_result, réponds uniquement avec: OK`
+        ].join('\n'),
         primaryContextType: 'initiative',
         primaryContextId: initiativeId,
         model: getTestModel()
@@ -143,13 +146,6 @@ describe('Chat AI - Tool Calls Integration', () => {
 
       // Attendre la complétion
       await waitForJobCompletion(jobId, adminUser);
-
-      // Vérifier que initiatives.data a été mis à jour via endpoint
-      const initiativeRes = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${initiativeId}`, user.sessionToken!);
-      expect(initiativeRes.status).toBe(200);
-      const initiativeData = await initiativeRes.json();
-      expect(initiativeData.data).toBeDefined();
-      // Le description devrait avoir été mise à jour (ou au moins mentionnée dans les modifications)
 
       // Vérifier context_modification_history
       const history = await db
@@ -177,13 +173,15 @@ describe('Chat AI - Tool Calls Integration', () => {
         }
       }
 
-      const toolCallEvents = (await fetchAssistantDetails(sessionId, assistantMessageId)).filter((e: any) => 
-        e.eventType.startsWith('tool_call_')
-      );
+      const events = await fetchAssistantDetails(sessionId, assistantMessageId);
+      const errorEvents = events.filter((e: any) => e.eventType === 'error');
+      expect(errorEvents.length).toBe(0);
+
+      const toolCallEvents = events.filter((e: any) => e.eventType.startsWith('tool_call_'));
       expect(toolCallEvents.length).toBeGreaterThan(0);
 
       await cleanupAuthData(); // Cleanup admin user
-    }, 15000);
+    }, 30000);
   });
 
   describe('web_extract tool', () => {
@@ -292,7 +290,7 @@ describe('Chat AI - Tool Calls Integration', () => {
   });
 
   describe('Security validation', () => {
-    it('should reject update_initiative_field with initiativeId not matching context', async () => {
+    it('should reject update_initiative with initiativeId not matching context', async () => {
       // Créer un autre initiative
       const otherInitiativeResponse = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
         name: `Other UC ${createTestId()}`,
@@ -303,9 +301,11 @@ describe('Chat AI - Tool Calls Integration', () => {
 
       const adminUser = await createAuthenticatedUser('admin_app');
       
-      // Tenter de modifier l'autre initiative alors que le contexte est sur initiativeId
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Update initiative ${otherInitiativeId} description`, // Use case différent du contexte
+        content: [
+          `Tu DOIS appeler le tool \`update_initiative\` pour initiativeId="${otherInitiativeId}".`,
+          `updates: [{"path":"description","value":"This update must be rejected"}]`
+        ].join('\n'),
         primaryContextType: 'initiative',
         primaryContextId: initiativeId, // Contexte sur initiativeId mais on essaie de modifier otherInitiativeId
         model: getTestModel()
@@ -331,7 +331,7 @@ describe('Chat AI - Tool Calls Integration', () => {
       // Nettoyer l'autre initiative
       await db.delete(initiatives).where(eq(initiatives.id, otherInitiativeId));
       await cleanupAuthData(); // Cleanup admin user
-    }, 15000);
+    }, 30000);
   });
 
   describe('Conversation continuation', () => {

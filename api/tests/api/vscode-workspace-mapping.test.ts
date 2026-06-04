@@ -178,7 +178,7 @@ describe('VSCode project/workspace mapping API', () => {
       editor.sessionToken!,
       {
         projectFingerprint: 'repo.main.004b',
-        repositoryName: 'top-ai-ideas-fullstack',
+        repositoryName: 'sentropic',
       },
     );
 
@@ -186,7 +186,7 @@ describe('VSCode project/workspace mapping API', () => {
     const payload = (await response.json()) as {
       mappedWorkspaceName: string | null;
     };
-    expect(payload.mappedWorkspaceName).toBe('top-ai-ideas-fullstack');
+    expect(payload.mappedWorkspaceName).toBe('sentropic');
   });
 
   it('supports not-now fallback to last registered code workspace', async () => {

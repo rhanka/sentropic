@@ -4,6 +4,8 @@ This branch records the Sentropic transition at repository level: public README 
 
 External state changes such as GitHub repository rename, DNS records, redirects, and Scaleway object renames are not fully represented by git commits. They must be executed against the corresponding providers, but they should follow this plan so the transition remains auditable. They are transition work, not optional future cleanup.
 
+Status update 2026-05-31: the repository rename, canonical public host, redirects, legacy serverless/API teardown, and k8s migration were realized through BR-37c/BR-37d. BR-14e finalizes codebase names and emits the remaining residual-name report for BR-14d closure; live document-bucket cutover remains an operator handoff because it requires SCW and cluster credentials.
+
 ## Canonical Targets
 
 - Repository target: `rhanka/sentropic`.
@@ -16,13 +18,13 @@ External state changes such as GitHub repository rename, DNS records, redirects,
 
 Before PR-117 is merged or explicitly handed off to BR-14d, record the decision for each item:
 
-- [ ] Rename GitHub repository `rhanka/top-ai-ideas-fullstack` -> `rhanka/sentropic`.
-- [ ] Confirm GitHub automatic redirects and update local remotes for active worktrees.
-- [ ] Configure `sentropic.sent-tech.ca` as the canonical public UI hostname.
-- [ ] Configure redirects or aliases from existing `top-ai-ideas` public hostnames.
-- [ ] Verify GitHub Pages custom domain, API hostname, CORS origins, cookie domain, and OAuth callback URLs.
-- [ ] Decide whether Scaleway object rename is executed immediately or in BR-14d.
-- [ ] If deferred, open BR-14d as a real transition branch with a deployment window and rollback plan.
+- [x] Rename GitHub repository `rhanka/top-ai-ideas-fullstack` -> `rhanka/sentropic`.
+- [x] Confirm GitHub automatic redirects and update local remotes for active worktrees.
+- [x] Configure `sentropic.sent-tech.ca` as the canonical public UI hostname.
+- [x] Configure redirects or aliases from existing `top-ai-ideas` public hostnames.
+- [x] Verify GitHub Pages custom domain, API hostname, CORS origins, cookie domain, and OAuth callback URLs.
+- [x] Decide whether Scaleway object rename is executed immediately or in BR-14d.
+- [x] If deferred, open BR-14d as a real transition branch with a deployment window and rollback plan.
 
 ## Transition Principles
 

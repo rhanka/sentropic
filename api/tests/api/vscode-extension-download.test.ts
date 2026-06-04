@@ -54,7 +54,7 @@ describe('VSCode extension download metadata API', () => {
   });
 
   it('returns extension download metadata when configured', async () => {
-    process.env.VSCODE_EXTENSION_DOWNLOAD_URL = 'https://downloads.example.com/top-ai-ideas/vscode-ext.vsix';
+    process.env.VSCODE_EXTENSION_DOWNLOAD_URL = 'https://downloads.example.com/sentropic/vscode-ext.vsix';
     process.env.VSCODE_EXTENSION_VERSION = '1.4.2';
     process.env.VSCODE_EXTENSION_SOURCE = 'ci:vscode-ext';
 
@@ -69,7 +69,7 @@ describe('VSCode extension download metadata API', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      downloadUrl: 'https://downloads.example.com/top-ai-ideas/vscode-ext.vsix',
+      downloadUrl: 'https://downloads.example.com/sentropic/vscode-ext.vsix',
       version: '1.4.2',
       source: 'ci:vscode-ext',
     });
@@ -87,7 +87,7 @@ describe('VSCode extension download metadata API', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      downloadUrl: 'https://dev.example.local:5173/vscode-extension/top-ai-ideas-vscode-extension.vsix',
+      downloadUrl: 'https://dev.example.local:5173/vscode-extension/sentropic-vscode-extension.vsix',
       version: '0.1.0',
       source: 'ui/vscode-ext',
     });

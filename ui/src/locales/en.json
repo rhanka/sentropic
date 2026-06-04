@@ -106,7 +106,7 @@
     "admin": "Admin"
   },
   "home": {
-    "welcomeTitle": "Welcome to Top AI Ideas",
+    "welcomeTitle": "Welcome to Sentropic",
     "tagline": "Describe your business context and discover AI initiatives prioritized by value and complexity.",
     "getStarted": "Get started",
     "redirectingTo": "Redirecting to {path}…"
@@ -376,7 +376,7 @@
     }
   },
   "dashboard": {
-    "reportTitle": "Top AI Ideas report",
+    "reportTitle": "Sentropic report",
     "execSummary": "Executive summary",
     "execSummaryGenerating": "Generating executive summary…",
     "execSummaryGeneratingHint": "This may take a few moments",
@@ -415,9 +415,9 @@
     "subtitle": "Prioritize your innovations by value contribution",
     "about": "About",
     "backCover": {
-      "p1": "Top AI Ideas is part of the SENT-tech vision: more than twenty years of expertise in innovation, data, digital and artificial intelligence. Here, AI is never an end in itself, but a lever that has become indispensable for competitiveness.",
-      "p2": "Value emerges from a holistic approach, where business opportunities meet technological capabilities. Designed to guide organizations in their choices, Top AI Ideas helps identify the most promising initiatives through a collaborative, rigorous and impact-driven process.",
-      "p3": "This sample is fully generated for demonstration purposes. Top AI Ideas enables collaborative editing to validate its content while delivering a final professional document."
+      "p1": "Sentropic is part of the SENT-tech vision: more than twenty years of expertise in innovation, data, digital and artificial intelligence. Here, AI is never an end in itself, but a lever that has become indispensable for competitiveness.",
+      "p2": "Value emerges from a holistic approach, where business opportunities meet technological capabilities. Designed to guide organizations in their choices, Sentropic helps identify the most promising initiatives through a collaborative, rigorous and impact-driven process.",
+      "p3": "This sample is fully generated for demonstration purposes. Sentropic enables collaborative editing to validate its content while delivering a final professional document."
     },
     "readOnlyGenerationDisabled": "Read-only mode: generation disabled.",
     "docx": {
@@ -554,7 +554,7 @@
       "versionLabel": "Version",
       "sourceLabel": "Source",
       "errors": {
-        "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/top-ai-ideas-chrome-extension.zip, then restart the API."
+        "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/sentropic-chrome-extension.zip, then restart the API."
       }
     },
     "coworkDesktop": {
@@ -593,7 +593,7 @@
       "versionLabel": "Version",
       "sourceLabel": "Source",
       "errors": {
-        "load": "Unable to load the Settings VSCode Plugin card. Set VSCODE_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /vscode-extension/top-ai-ideas-vscode-extension.vsix, then restart the API."
+        "load": "Unable to load the Settings VSCode Plugin card. Set VSCODE_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /vscode-extension/sentropic-vscode-extension.vsix, then restart the API."
       },
       "token": {
         "title": "Extension bootstrap token",
@@ -1512,7 +1512,7 @@
     },
     "types": {
       "neutral": "Personal (neutral)",
-      "aiIdeas": "AI Ideas",
+      "aiPriorities": "AI Priorities",
       "opportunity": "Opportunity",
       "code": "Code"
     },

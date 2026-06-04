@@ -545,7 +545,7 @@
 
   const openCommentsFor = (sectionKey: string) => {
     const detail = { contextType: 'initiative', contextId: useCaseId, sectionKey };
-    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+    window.dispatchEvent(new CustomEvent('sentropic:open-comments', { detail }));
   };
 
   // startAutoRefresh supprimé (SSE)

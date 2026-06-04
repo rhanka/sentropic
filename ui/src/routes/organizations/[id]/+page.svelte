@@ -68,7 +68,7 @@
   $: showPresenceBadge = lockLoading || lockError || !!lock || presenceUsers.length > 0 || presenceTotal > 0;
   let lastReadOnlyRole = isReadOnlyRole;
   const LOCK_REFRESH_MS = 10 * 1000;
-  const ORGA_DEBUG_STORAGE_KEY = 'topai:debug:orga-loop';
+  const ORGA_DEBUG_STORAGE_KEY = 'sentropic:debug:orga-loop';
 
   const ORG_FIELDS: OrgField[] = [
     'name',
@@ -397,7 +397,7 @@
 
   const openCommentsFor = (sectionKey: string) => {
     const detail = { contextType: 'organization', contextId: organizationId, sectionKey };
-    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+    window.dispatchEvent(new CustomEvent('sentropic:open-comments', { detail }));
   };
 
   const syncLock = async () => {

@@ -1,19 +1,19 @@
-// Top AI Ideas Extension - Content Script
+// Sentropic Extension - Content Script
 // Bootstraps the ChatWidget inside a Shadow DOM to avoid CSS conflicts.
 
 import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
 import type { ChatWidgetMountOptions } from './chatwidget-entry';
 
-console.log('Top AI Ideas Content Script loading...');
+console.log('Sentropic Content Script loading...');
 
-const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
-const CHATWIDGET_HANDOFF_STORAGE_KEY = 'topAiIdeas:chatWidgetHandoff:v1';
-const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
-const OPEN_CHAT_EVENT = 'topai:open-chat';
+const HANDOFF_EVENT = 'sentropic:chatwidget-handoff-state';
+const CHATWIDGET_HANDOFF_STORAGE_KEY = 'sentropic:chatWidgetHandoff:v1';
+const OPEN_SIDEPANEL_EVENT = 'sentropic:open-sidepanel';
+const OPEN_CHAT_EVENT = 'sentropic:open-chat';
 const BLOCKED_HOSTNAMES = new Set([
     'localhost',
     '127.0.0.1',
-    'top-ai-ideas.sent-tech.ca',
+    'sentropic.sent-tech.ca',
     'app.sent-tech.ca',
 ]);
 type ChatTab = 'chat' | 'queue' | 'comments';
@@ -118,7 +118,7 @@ const requestOpenOverlayChat = (activeTab?: ChatTab) => {
 
 const collapseOverlayToBubble = () => {
     if (!mountReady) return;
-    window.dispatchEvent(new CustomEvent('topai:close-chat'));
+    window.dispatchEvent(new CustomEvent('sentropic:close-chat'));
 };
 
 const handleSidePanelState = (state: SidePanelState) => {
@@ -171,14 +171,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 function bootstrap() {
     if (isBlockedHost()) {
-        console.log('Top AI Ideas extension skipped for blocked host:', window.location.hostname);
+        console.log('Sentropic extension skipped for blocked host:', window.location.hostname);
         return;
     }
-    if (document.getElementById('top-ai-ideas-ext')) return;
+    if (document.getElementById('sentropic-ext')) return;
 
     // Create Shadow DOM container
     const host = document.createElement('div');
-    host.id = 'top-ai-ideas-ext';
+    host.id = 'sentropic-ext';
     host.style.cssText = 'all: initial; position: fixed; z-index: 2147483647; top: 0; left: 0;';
     document.body.appendChild(host);
     hostContainer = host;
@@ -227,8 +227,8 @@ function bootstrap() {
                 module?.mount ??
                 module?.default?.mount ??
                 (globalThis as typeof globalThis & {
-                    __topAiIdeasMountChatWidget?: (target: Element, options?: ChatWidgetMountOptions) => void;
-                }).__topAiIdeasMountChatWidget;
+                    __sentropicMountChatWidget?: (target: Element, options?: ChatWidgetMountOptions) => void;
+                }).__sentropicMountChatWidget;
 
             if (mountFn) {
                 const initialState = await readHandoffState();

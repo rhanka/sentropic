@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+
 // Timeout pour génération IA (gpt-4.1-nano = réponses rapides)
 test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debugging
 
@@ -199,6 +201,15 @@ test.describe('Chat', () => {
     return header;
   }
 
+  async function startFreshChatSession(page: any) {
+    const newSessionAction = page.getByRole('button', { name: sessionNewLabel }).last();
+    if (!(await newSessionAction.isVisible().catch(() => false))) return;
+    await newSessionAction.click();
+    await expect
+      .poll(async () => await page.locator('#chat-widget-dialog .userMarkdown').count(), { timeout: 5_000 })
+      .toBe(0);
+  }
+
   function normalizeReplayText(text: string) {
     return text.replace(/\s+/g, ' ').trim();
   }
@@ -222,7 +233,7 @@ test.describe('Chat', () => {
       .poll(async () => {
         const texts = await assistantBubble(page).allTextContents();
         return texts.map(normalizeReplayText).filter(Boolean).join('\n');
-      }, { timeout })
+       }, { timeout })
       .toContain(needle);
   }
 
@@ -328,10 +339,10 @@ test.describe('Chat', () => {
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
 
     const prompt = [
-      'Avant de répondre, raisonne par étapes et donne un bref état d’avancement.',
-      'Ensuite réponds de façon structurée à cette question:',
-      'quels sont les éléments visibles de la page actuelle et comment les catégoriser ?',
+      'Utilise l’outil folders_list avant de répondre.',
+      'Ensuite donne un bref état d’avancement et résume les dossiers visibles.',
     ].join(' ');
+    await startFreshChatSession(page);
     const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, prompt);
 
     const retryButton = page
@@ -604,6 +615,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Basculer vers Jobs via l'onglet
     const jobsTab = page.locator('button, [role="tab"]').filter({ hasText: /^Jobs(?: IA)?$/i }).first();
@@ -634,6 +646,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un premier message (objectif du test: la conversation est conservée, pas la sémantique exacte)
     const message1 = `Réponds brièvement (test E2E)`;
@@ -681,6 +694,7 @@ test.describe('Chat', () => {
 
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
 
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
@@ -772,6 +786,7 @@ test.describe('Chat', () => {
 
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
 
     await sendMessageAndWaitApi(page, composer, 'Donne un titre court à cette conversation.');
 
@@ -790,6 +805,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un message pour créer une session
     const message = 'Test session conservation';
@@ -839,6 +855,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un message pour créer une session avec une réponse spécifique
     // On demande explicitement de ne PAS utiliser d'outils
@@ -883,6 +900,7 @@ test.describe('Chat', () => {
     // Attendre que le panneau chat soit visible
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
+    await startFreshChatSession(page);
     
     // Envoyer un message pour créer une session avec une réponse spécifique
     const expectedResponse = 'OK';

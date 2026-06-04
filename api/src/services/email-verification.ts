@@ -94,13 +94,13 @@ export async function generateEmailVerificationCode(
   try {
     await sendTransactionalEmail({
       to: normalizedEmail,
-      subject: 'Votre code de vérification Top AI Ideas',
-      text: `Bonjour,\n\nVotre code de vérification est : ${code}\n\nCe code est valide pendant 10 minutes.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL'équipe Top AI Ideas`,
+      subject: 'Votre code de vérification Sentropic',
+      text: `Bonjour,\n\nVotre code de vérification est : ${code}\n\nCe code est valide pendant 10 minutes.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL'équipe Sentropic`,
       html: `<p>Bonjour,</p>
         <p>Votre code de vérification est : <strong style="font-size: 24px; letter-spacing: 4px; font-family: monospace;">${code}</strong></p>
         <p>Ce code est valide pendant 10 minutes.</p>
         <p>Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.</p>
-        <p style="margin-top:24px;">L'équipe Top AI Ideas</p>`,
+        <p style="margin-top:24px;">L'équipe Sentropic</p>`,
     });
 
     logger.info({ email: normalizedEmail }, 'Email verification code sent');
@@ -248,4 +248,3 @@ export async function verifyValidationToken(
     return { valid: false };
   }
 }
-

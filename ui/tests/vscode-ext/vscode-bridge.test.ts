@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  TOPAI_HOST_SOURCE,
-  TOPAI_WEBVIEW_SOURCE,
+  SENTROPIC_HOST_SOURCE,
+  SENTROPIC_WEBVIEW_SOURCE,
   createVsCodeBridge,
   type VsCodeBridge,
   type VsCodeBridgeTransport,
@@ -48,13 +48,13 @@ describe('vscode bridge', () => {
       requestId: string;
     };
 
-    expect(request.source).toBe(TOPAI_WEBVIEW_SOURCE);
+    expect(request.source).toBe(SENTROPIC_WEBVIEW_SOURCE);
     expect(request.type).toBe('request');
     expect(request.command).toBe('tools.execute');
     expect(typeof request.requestId).toBe('string');
 
     listener?.({
-      source: TOPAI_HOST_SOURCE,
+      source: SENTROPIC_HOST_SOURCE,
       type: 'response',
       command: 'tools.execute',
       requestId: request.requestId,
@@ -71,7 +71,7 @@ describe('vscode bridge', () => {
     const request = sentMessages[0] as { requestId: string };
 
     listener?.({
-      source: TOPAI_HOST_SOURCE,
+      source: SENTROPIC_HOST_SOURCE,
       type: 'response',
       command: 'auth.codex.signIn',
       requestId: request.requestId,
@@ -87,7 +87,7 @@ describe('vscode bridge', () => {
     const stop = bridge.onEvent('checkpoint.created', onCheckpoint);
 
     listener?.({
-      source: TOPAI_HOST_SOURCE,
+      source: SENTROPIC_HOST_SOURCE,
       type: 'event',
       command: 'checkpoint.created',
       payload: { id: 'cp_1' },
@@ -98,7 +98,7 @@ describe('vscode bridge', () => {
     stop();
 
     listener?.({
-      source: TOPAI_HOST_SOURCE,
+      source: SENTROPIC_HOST_SOURCE,
       type: 'event',
       command: 'checkpoint.created',
       payload: { id: 'cp_2' },

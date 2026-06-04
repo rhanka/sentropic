@@ -245,13 +245,13 @@ export async function sendMagicLinkEmail(
   try {
     await sendTransactionalEmail({
       to: email,
-      subject: 'Votre lien de connexion Top AI Ideas',
-      text: `Bonjour,\n\nVoici votre lien de connexion sécurisé. Il expirera dans 10 minutes et ne peut être utilisé qu'une seule fois.\n\n${magicLink}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL’équipe Top AI Ideas`,
+      subject: 'Votre lien de connexion Sentropic',
+      text: `Bonjour,\n\nVoici votre lien de connexion sécurisé. Il expirera dans 10 minutes et ne peut être utilisé qu'une seule fois.\n\n${magicLink}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL’équipe Sentropic`,
       html: `<p>Bonjour,</p>
         <p>Voici votre lien de connexion sécurisé. Il expirera dans 10 minutes et ne peut être utilisé qu'une seule fois.</p>
         <p><a href="${magicLink}" style="display:inline-block;padding:10px 16px;border-radius:6px;background:#4f46e5;color:#fff;text-decoration:none;font-weight:600;">Se connecter</a></p>
         <p>Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :<br/><code>${magicLink}</code></p>
-        <p style="margin-top:24px;">L’équipe Top AI Ideas</p>`,
+        <p style="margin-top:24px;">L’équipe Sentropic</p>`,
     });
 
     logger.info({ email }, 'Magic link email sent');
@@ -262,4 +262,3 @@ export async function sendMagicLinkEmail(
     }
   }
 }
-

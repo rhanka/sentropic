@@ -57,7 +57,7 @@ async function buildImportZip(): Promise<Uint8Array> {
   zip.file('manifest.json', new TextEncoder().encode(stableStringify({ ...manifestCore, manifest_hash: manifestHash })));
   zip.file(
     'meta.json',
-    new TextEncoder().encode(stableStringify({ title: 'Exported workspace data', notes: 'Test', source: 'top-ai-ideas' }))
+    new TextEncoder().encode(stableStringify({ title: 'Exported workspace data', notes: 'Test', source: 'sentropic' }))
   );
   return zip.generateAsync({ type: 'uint8array' });
 }

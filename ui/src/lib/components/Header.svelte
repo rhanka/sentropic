@@ -100,7 +100,7 @@
     const isMobileFullScreenDock =
       $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen && $chatWidgetLayout.dockWidthCss === '100vw';
     if (!isMobileFullScreenDock) return;
-    window.dispatchEvent(new CustomEvent('topai:close-chat'));
+    window.dispatchEvent(new CustomEvent('sentropic:close-chat'));
   };
 
   const onLocaleChange = (event: Event) => {
@@ -111,7 +111,7 @@
 
   const WORKSPACE_TYPE_CONFIG: Record<WorkspaceType, { icon: typeof Lightbulb; colorClass: string; labelKey: string }> = {
     'neutral': { icon: Home, colorClass: 'text-slate-500 bg-slate-100', labelKey: 'workspaceSettings.types.neutral' },
-    'ai-ideas': { icon: Lightbulb, colorClass: 'text-amber-600 bg-amber-50', labelKey: 'workspaceSettings.types.aiIdeas' },
+    'ai-priorities': { icon: Lightbulb, colorClass: 'text-amber-600 bg-amber-50', labelKey: 'workspaceSettings.types.aiPriorities' },
     'opportunity': { icon: Target, colorClass: 'text-blue-600 bg-blue-50', labelKey: 'workspaceSettings.types.opportunity' },
     'code': { icon: Code2, colorClass: 'text-emerald-600 bg-emerald-50', labelKey: 'workspaceSettings.types.code' },
   };
@@ -140,7 +140,7 @@
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     (belowLgMql as any).addListener?.(belowLgHandler);
     window.addEventListener('keydown', onGlobalKeyDown);
-    window.addEventListener('topai:toggle-burger-menu', onExternalToggleBurgerMenu as any);
+    window.addEventListener('sentropic:toggle-burger-menu', onExternalToggleBurgerMenu as any);
   });
 
   onDestroy(() => {
@@ -152,7 +152,7 @@
       // ignore
     }
     if (typeof window !== 'undefined') window.removeEventListener('keydown', onGlobalKeyDown);
-    if (typeof window !== 'undefined') window.removeEventListener('topai:toggle-burger-menu', onExternalToggleBurgerMenu as any);
+    if (typeof window !== 'undefined') window.removeEventListener('sentropic:toggle-burger-menu', onExternalToggleBurgerMenu as any);
   });
 </script>
 
