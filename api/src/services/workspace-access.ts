@@ -2,7 +2,7 @@ import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { workspaceMemberships, workspaces } from '../db/schema';
 
-export type WorkspaceType = 'neutral' | 'ai-ideas' | 'opportunity' | 'code';
+export type WorkspaceType = 'neutral' | 'ai-priorities' | 'opportunity' | 'code';
 
 export type WorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 

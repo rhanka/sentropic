@@ -44,7 +44,7 @@ describe('localTools store', () => {
   it('exposes VSCode code tool definitions in vscode runtime host', () => {
     (globalThis as any).chrome = {
       runtime: {
-        id: 'topai.vscode.runtime',
+        id: 'sentropic.vscode.runtime',
         sendMessage: vi.fn(),
       },
     };
@@ -203,7 +203,7 @@ describe('localTools store', () => {
   it('enables local tool runtime in VSCode runtime host', () => {
     (globalThis as any).chrome = {
       runtime: {
-        id: 'topai.vscode.runtime',
+        id: 'sentropic.vscode.runtime',
         sendMessage: vi.fn(),
       },
     };

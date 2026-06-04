@@ -19,22 +19,22 @@ import {
 } from '../src/lib/vscode/code-agent-profile';
 import { resolvePersistedVsCodeSessionToken } from './session-token-persistence';
 
-const COMMAND_OPEN_PANEL = 'topai.openPanel';
-const VIEW_ID = 'topai.chatView';
-const VIEW_CONTAINER_ID = 'topai';
-const SECRET_SESSION_TOKEN_KEY = 'topai.sessionToken';
-const STATE_KEY_RUNTIME_CONFIG = 'topai.runtimeConfig';
-const STATE_KEY_WORKSPACE_PROMPT_OVERRIDES = 'topai.workspacePromptOverrides';
-const STATE_KEY_PROJECT_WORKSPACE_MAPPINGS = 'topai.projectWorkspaceMappings';
+const COMMAND_OPEN_PANEL = 'sentropic.openPanel';
+const VIEW_ID = 'sentropic.chatView';
+const VIEW_CONTAINER_ID = 'sentropic';
+const SECRET_SESSION_TOKEN_KEY = 'sentropic.sessionToken';
+const STATE_KEY_RUNTIME_CONFIG = 'sentropic.runtimeConfig';
+const STATE_KEY_WORKSPACE_PROMPT_OVERRIDES = 'sentropic.workspacePromptOverrides';
+const STATE_KEY_PROJECT_WORKSPACE_MAPPINGS = 'sentropic.projectWorkspaceMappings';
 const PROJECT_WORKSPACE_MAPPING_SYNC_TTL_MS = 60_000;
 
-declare const __TOPAI_DEFAULT_API_BASE_URL__: string | undefined;
-declare const __TOPAI_DEFAULT_APP_BASE_URL__: string | undefined;
+declare const __SENTROPIC_DEFAULT_API_BASE_URL__: string | undefined;
+declare const __SENTROPIC_DEFAULT_APP_BASE_URL__: string | undefined;
 
 const DEFAULT_API_BASE_URL =
-  __TOPAI_DEFAULT_API_BASE_URL__ || 'http://localhost:8787/api/v1';
+  __SENTROPIC_DEFAULT_API_BASE_URL__ || 'http://localhost:8787/api/v1';
 const DEFAULT_APP_BASE_URL =
-  __TOPAI_DEFAULT_APP_BASE_URL__ || 'http://localhost:5173';
+  __SENTROPIC_DEFAULT_APP_BASE_URL__ || 'http://localhost:5173';
 const DEFAULT_INSTRUCTION_INCLUDE_PATTERNS = [
   'AGENTS.md',
   'CLAUDE.md',
@@ -616,7 +616,7 @@ const fetchCodeAgentPromptDefault = async (params: {
 const readRuntimeConfig = async (
   context: vscode.ExtensionContext,
 ): Promise<TopAiRuntimeConfig> => {
-  const config = vscode.workspace.getConfiguration('topai');
+  const config = vscode.workspace.getConfiguration('sentropic');
   const persisted = context.globalState.get<RuntimeConfigPatchPayload>(
     STATE_KEY_RUNTIME_CONFIG,
     {},
@@ -1111,12 +1111,12 @@ const createWebviewHtml = (
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource} https: http: wss: ws:;" />
-    <title>Top AI Ideas</title>
+    <title>Sentropic</title>
   </head>
   <body style="margin: 0; padding: 0; overflow: hidden;">
     <div id="topai-vscode-root" style="height: 100vh;"></div>
     <script nonce="${nonce}">
-      window.__TOPAI_VSCODE_RUNTIME__ = ${runtimeConfigJson};
+      window.__SENTROPIC_VSCODE_RUNTIME__ = ${runtimeConfigJson};
     </script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
   </body>
@@ -1189,7 +1189,7 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
   private emitHostEvent(command: string, payload: unknown): void {
     this.view?.webview.postMessage({
-      source: 'topai-vscode-host',
+      source: 'sentropic-vscode-host',
       type: 'event',
       command,
       payload,
@@ -1278,7 +1278,7 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
     if (!this.view || !rawMessage || typeof rawMessage !== 'object') return;
 
     const payload = rawMessage as Record<string, unknown>;
-    if (payload.source !== 'topai-vscode-webview') return;
+    if (payload.source !== 'sentropic-vscode-webview') return;
     if (payload.type !== 'request') return;
 
     const requestId =
@@ -1289,7 +1289,7 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
     const respond = (ok: boolean, resultPayload?: unknown, error?: string): void => {
       this.view?.webview.postMessage({
-        source: 'topai-vscode-host',
+        source: 'sentropic-vscode-host',
         type: 'response',
         command,
         requestId,
@@ -1644,7 +1644,7 @@ export const activate = (context: vscode.ExtensionContext): void => {
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (!event.affectsConfiguration('topai')) return;
+      if (!event.affectsConfiguration('sentropic')) return;
       void provider.refresh();
     }),
   );

@@ -9,13 +9,13 @@ services:
       # Document storage (CI/E2E): MinIO
       - DOC_STORAGE_ENDPOINT=${DOC_STORAGE_ENDPOINT:-http://minio:9000}
       - DOC_STORAGE_REGION=${DOC_STORAGE_REGION:-fr-par-1}
-      - DOC_STORAGE_BUCKET=${DOC_STORAGE_BUCKET:-top-ai-ideas-test}
+      - DOC_STORAGE_BUCKET=${DOC_STORAGE_BUCKET:-sentropic-docs-test}
       # IMPORTANT: avoid leaking real Scaleway creds from host env into test MinIO.
       - DOC_STORAGE_ACCESS_KEY=${DOC_STORAGE_ACCESS_KEY:-minioadmin}
       - DOC_STORAGE_SECRET_KEY=${DOC_STORAGE_SECRET_KEY:-minioadmin}
   e2e:
     network_mode: host
-    image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
+    image: ${REGISTRY}/${E2E_IMAGE_NAME:-sentropic-e2e}:${E2E_VERSION:-latest}
     build:
       context: ./e2e
       dockerfile: Dockerfile
@@ -57,7 +57,7 @@ services:
       until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}; do
         echo "waiting for minio..." && sleep 1;
       done;
-      mc mb --ignore-existing local/${DOC_STORAGE_BUCKET:-top-ai-ideas-test} || true;
-      mc anonymous set none local/${DOC_STORAGE_BUCKET:-top-ai-ideas-test} || true;
+      mc mb --ignore-existing local/${DOC_STORAGE_BUCKET:-sentropic-docs-test} || true;
+      mc anonymous set none local/${DOC_STORAGE_BUCKET:-sentropic-docs-test} || true;
       exit 0
     restart: "no"

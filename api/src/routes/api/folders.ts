@@ -109,7 +109,7 @@ function getDefaultMatrixForWorkspaceType(workspaceType: string | null | undefin
   switch (workspaceType) {
     case 'opportunity':
       return opportunityMatrixConfig;
-    case 'ai-ideas':
+    case 'ai-priorities':
     case 'code':
     default:
       return defaultMatrixConfig;
@@ -123,7 +123,7 @@ async function resolveWorkspaceType(workspaceId: string): Promise<string> {
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId))
     .limit(1);
-  return ws?.type ?? 'ai-ideas';
+  return ws?.type ?? 'ai-priorities';
 }
 
 const parseExecutiveSummary = (value: string | null) => {
