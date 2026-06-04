@@ -159,7 +159,7 @@ describe('Google Drive OAuth API router', () => {
         headers: {
           Cookie: `session=${user.sessionToken}`,
           'Content-Type': 'application/json',
-          'x-forwarded-host': 'top-ai-ideas-api.sent-tech.ca',
+          'x-forwarded-host': 'sentropic.sent-tech.ca',
           'x-forwarded-proto': 'https',
         },
         body: JSON.stringify({ returnPath: '/settings/connectors' }),
@@ -169,7 +169,7 @@ describe('Google Drive OAuth API router', () => {
       const payload = await res.json();
       const url = new URL(payload.authorizationUrl);
       expect(url.searchParams.get('redirect_uri')).toBe(
-        'https://top-ai-ideas-api.sent-tech.ca/api/v1/google-drive/oauth/callback',
+        'https://sentropic.sent-tech.ca/api/v1/google-drive/oauth/callback',
       );
     } finally {
       if (previousNodeEnv === undefined) {

@@ -28,7 +28,7 @@ describe('Chat tool permissions API', () => {
       user.sessionToken!,
       {
         toolName: 'tab_read:dom',
-        origin: 'https://github.com/rhanka/top-ai-ideas-fullstack',
+        origin: 'https://github.com/rhanka/sentropic',
         policy: 'allow',
       },
     );

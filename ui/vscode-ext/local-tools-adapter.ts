@@ -17,7 +17,7 @@ import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
 
 import type { VsCodeBridge } from './vscode-bridge';
 
-const RUNTIME_ID = 'topai.vscode.runtime';
+const RUNTIME_ID = 'sentropic.vscode.runtime';
 
 type ExtensionMessage = {
   type?: unknown;

@@ -3,7 +3,7 @@ import { initiatives, folders, organizations, contextDocuments } from '../db/sch
 import { and, eq, inArray } from 'drizzle-orm';
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
-import { AI_IDEAS_AGENTS } from '../config/default-agents-ai-ideas';
+import { AI_PRIORITIES_AGENTS } from '../config/default-agents-ai-priorities';
 import { settingsService } from './settings';
 import { hydrateInitiatives } from '../routes/api/initiatives';
 
@@ -417,7 +417,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     (typeof options.promptTemplate === 'string' &&
     options.promptTemplate.trim().length > 0
       ? options.promptTemplate
-      : AI_IDEAS_AGENTS.find(a => a.config.promptId === 'executive_summary')?.config.promptTemplate as string) || '';
+      : AI_PRIORITIES_AGENTS.find(a => a.config.promptId === 'executive_summary')?.config.promptTemplate as string) || '';
   if (!executiveSummaryPrompt) {
     throw new Error('Executive summary prompt not found');
   }

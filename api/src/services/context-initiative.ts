@@ -1,10 +1,10 @@
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
-import { AI_IDEAS_AGENTS } from '../config/default-agents-ai-ideas';
+import { AI_PRIORITIES_AGENTS } from '../config/default-agents-ai-priorities';
 import type { MatrixConfig } from '../types/matrix';
 
 const getAgentPromptTemplate = (promptId: string): string => {
-  for (const agent of AI_IDEAS_AGENTS) {
+  for (const agent of AI_PRIORITIES_AGENTS) {
     if (agent.config.promptId === promptId) {
       return typeof agent.config.promptTemplate === 'string' ? agent.config.promptTemplate : '';
     }

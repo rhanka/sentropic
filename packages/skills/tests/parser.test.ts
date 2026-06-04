@@ -13,7 +13,7 @@ description: Generate DOCX/PPTX documents from sandbox-executed code.
 version: 1.0.0
 category: document
 contextFilter:
-  workspaceTypes: [ai-ideas, opportunity]
+  workspaceTypes: [ai-priorities, opportunity]
   roles: [editor, admin]
   requiresOnline: false
 sandbox:

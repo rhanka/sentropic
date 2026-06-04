@@ -74,7 +74,7 @@
   // View template resolution
   let viewTemplate: any = null;
   $: currentWorkspace = ($workspaceScope.items || []).find((w) => w.id === $workspaceScope.selectedId);
-  $: workspaceType = currentWorkspace?.type || 'ai-ideas';
+  $: workspaceType = currentWorkspace?.type || 'ai-priorities';
   $: wsId = $workspaceScope.selectedId ?? '';
 
   let lastTemplateFetchKey = '';

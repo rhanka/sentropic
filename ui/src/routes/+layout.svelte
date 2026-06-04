@@ -357,7 +357,7 @@
 </script>
 
 <svelte:head>
-  <title>Top AI Ideas</title>
+  <title>Sentropic</title>
 </svelte:head>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">

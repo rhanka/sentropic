@@ -42,7 +42,7 @@ describe('vscode extension tool permissions bridge', () => {
 
     (globalThis as any).chrome = {
       runtime: {
-        id: 'topai.vscode.runtime',
+        id: 'sentropic.vscode.runtime',
         sendMessage,
       },
     };
@@ -117,7 +117,7 @@ describe('vscode extension tool permissions bridge', () => {
 
     (globalThis as any).chrome = {
       runtime: {
-        id: 'topai.vscode.runtime',
+        id: 'sentropic.vscode.runtime',
         sendMessage,
       },
     };

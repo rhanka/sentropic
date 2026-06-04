@@ -4,7 +4,7 @@ description: Read solution records attached to opportunity workspaces and initia
 version: 0.1.0
 category: object
 contextFilter:
-  workspaceTypes: [neutral, ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-priorities, opportunity]
 tools:
   - name: solutions_list
     description: List solutions in the current workspace.

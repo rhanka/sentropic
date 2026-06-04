@@ -5,17 +5,38 @@ import { debug, setupDebugBuffer } from '../helpers/debug';
 // Setup debug buffer to display on test failure
 setupDebugBuffer();
 
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
+
 // Ces flows dépendent de l'IA + jobs async; ça peut être lent.
 test.setTimeout(8 * 60_000);
 
 test.describe('Génération IA', () => {
   // Ces tests sont coûteux (jobs async, appels externes mockés/ratelimités). Les retries globales (retries: 2)
   // triplent inutilement la durée et masquent les flakys. On les désactive pour ce fichier.
-  test.describe.configure({ retries: 0 });
+  test.describe.configure({ mode: 'serial', retries: 0 });
 
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
 
   test.beforeEach(async ({ page }) => {
+    page.on('console', (message) => {
+      const text = message.text();
+      if (message.type() === 'error' || message.type() === 'warning' || /failed|error/i.test(text)) {
+        debug(`[console:${message.type()}] ${text}`);
+      }
+    });
+    page.on('pageerror', (error) => {
+      debug(`[pageerror] ${error.stack ?? error.message}`);
+    });
+    page.on('requestfailed', (request) => {
+      debug(`[requestfailed] ${request.method()} ${request.url()} ${request.failure()?.errorText ?? 'unknown'}`);
+    });
+    page.on('response', (response) => {
+      const url = response.url();
+      if (response.status() >= 400 && (url.includes('localhost:5114') || url.includes('/@fs/'))) {
+        debug(`[response:${response.status()}] ${url}`);
+      }
+    });
+
     // Stabiliser: éviter que d'autres specs laissent l'admin en scope "lecture seule"
     await page.addInitScript((id: string) => {
       try {
@@ -36,7 +57,7 @@ test.describe('Génération IA', () => {
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < timeoutMs) {
-      const res = await page.request.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+      const res = await page.request.get(`${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
       if (!res.ok()) {
         await page.waitForTimeout(intervalMs);
         continue;
@@ -61,7 +82,7 @@ test.describe('Génération IA', () => {
   const waitForAnyUseCaseCompleted = async (page: any, folderId: string, timeoutMs = 6 * 60_000) => {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
-      const res = await page.request.get(`/api/v1/use-cases?folder_id=${encodeURIComponent(folderId)}`);
+      const res = await page.request.get(`${API_BASE_URL}/api/v1/initiatives?folder_id=${encodeURIComponent(folderId)}`);
       if (res.ok()) {
         const body = await res.json().catch(() => null);
         const items: any[] = (body as any)?.items ?? [];
@@ -79,22 +100,13 @@ test.describe('Génération IA', () => {
 
   // 1) Génération d'entreprise (enrichissement IA) via l'UI
   test('devrait générer une organisation via IA (enrichissement) et l\'enregistrer', async ({ page }) => {
-    await page.goto('/organizations');
-    await page.waitForLoadState('domcontentloaded');
-
-    // Aller à la page de création via le menu d'actions
-    const actionsButton = page.locator('button[aria-label="Actions organisation"]');
-    await expect(actionsButton).toBeVisible();
-    await actionsButton.click();
-    const newAction = page.locator('button:has-text("Nouveau")');
-    await expect(newAction).toBeVisible();
-    await newAction.click();
+    await page.goto('/organizations/new');
     await page.waitForURL('/organizations/new', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Remplir le nom de l'entreprise (EditableInput)
-    const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
-    await expect(nameInput).toBeVisible();
+    const nameInput = page.getByRole('textbox', { name: "Nom de l'organisation" });
+    await expect(nameInput).toBeVisible({ timeout: 30_000 });
     await nameInput.fill('BRP (Bombardier)');
     
     // Attendre que la valeur soit propagée (réactivité Svelte)
@@ -156,30 +168,27 @@ test.describe('Génération IA', () => {
   test('devrait générer des cas d\'usage depuis l\'accueil et vérifier les références', async ({ page }) => {
     debug(`Début du test - URL initiale: ${page.url()}`);
     
-    // Aller à l'accueil
-    await page.goto('/');
-    debug(`Après goto / - URL: ${page.url()}`);
+    await page.goto('/home');
+    debug(`Après goto /home - URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
     const pageTitle = await page.title();
     debug(`Page chargée, titre: ${pageTitle}`);
     
     // Vérifier si on est redirigé vers login (session révoquée)
     const currentUrl = page.url();
-    debug(`URL actuelle avant clic Commencer: ${currentUrl}`);
+    debug(`URL actuelle après navigation /home: ${currentUrl}`);
     if (currentUrl.includes('/auth/login')) {
       debug('ERROR: Session révoquée - redirigé vers login');
       throw new Error('Session révoquée - utilisateur non authentifié');
     }
     
-    // Cliquer sur "Commencer" (lien vers /home)
-    debug('Recherche du lien Commencer...');
-    const commencerLink = page.getByRole('link', { name: 'Commencer' });
-    await expect(commencerLink).toBeVisible({ timeout: 30_000 });
-    debug('Lien Commencer trouvé, clic...');
-    await commencerLink.click();
-    // /home redirige désormais vers /folder/new
+    // /home lands on the neutral workspace dashboard, then this generation scenario starts from /folder/new.
+    await page.waitForURL(/\/neutral$/, { timeout: 30_000 });
+    debug(`Après redirection neutral - URL: ${page.url()}`);
+
+    await page.goto('/folder/new');
     await page.waitForURL(/\/folder\/new$/, { timeout: 30_000 });
-    debug(`Après clic + redirection - URL: ${page.url()}`);
+    debug(`Après navigation /folder/new - URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
     debug('Page /folder/new chargée');
     
@@ -193,8 +202,7 @@ test.describe('Génération IA', () => {
     
     // Attendre que les organisations soient chargées (le select n'est visible que quand isLoading = false)
     debug('Recherche de l’éditeur Contexte (TipTap / ProseMirror)...');
-    const contextSection = page.locator('div.space-y-2').filter({ hasText: 'Contexte' }).first();
-    const proseMirror = contextSection.locator('.ProseMirror').first();
+    const proseMirror = page.locator('.markdown-input-wrapper [contenteditable="true"]').first();
     await expect(proseMirror).toBeVisible({ timeout: 30_000 });
     debug('Éditeur trouvé, remplissage...');
     await proseMirror.click();
@@ -203,49 +211,19 @@ test.describe('Génération IA', () => {
     await page.keyboard.type("Génère 3 cas d'usage pour l'extension de l'usine de Boucherville");
     debug('Contexte rempli');
     
-    // Sélectionner l'organisation contenant Delpharm
-    // Le select n'est visible que quand isLoading = false, donc attendre qu'il soit visible
-    debug('Recherche du select organisation...');
-    // /folder/new: label visuel (div) + select dans le même bloc
-    const organizationSelect = page
-      .locator('div.space-y-2')
-      .filter({ hasText: 'Organisation (optionnel)' })
-      .locator('select')
-      .first();
-    await expect(organizationSelect).toBeVisible({ timeout: 15000 }); // CI can be slower when loading organizations
-    debug('Select trouvé');
-    
-    // Afficher toutes les options disponibles pour debug
-    const allOptions = await organizationSelect.locator('option').all();
-    debug(`Nombre d'options trouvées: ${allOptions.length}`);
-    for (let i = 0; i < allOptions.length; i++) {
-      const optionText = await allOptions[i].textContent();
-      const optionValue = await allOptions[i].getAttribute('value');
-      debug(`Option ${i}: text="${optionText}", value="${optionValue}"`);
-    }
-    
-    // Trouver l'option contenant Delpharm
+    debug('Recherche du menu organisations ciblées...');
+    const organizationsTrigger = page.getByRole('button', {
+      name: 'Organisations ciblées (optionnel)',
+    });
+    await expect(organizationsTrigger).toBeVisible({ timeout: 15_000 });
+    await organizationsTrigger.click();
+
     debug('Recherche de l\'option Delpharm...');
-    const orgOptionCount = await organizationSelect.locator('option').filter({ hasText: 'Delpharm' }).count();
-    debug(`Nombre d'options contenant "Delpharm": ${orgOptionCount}`);
-    
-    if (orgOptionCount === 0) {
-      debug('ERROR: Aucune option contenant "Delpharm" trouvée');
-      const allOptionsText = await organizationSelect.locator('option').allTextContents();
-      debug(`ERROR: Options disponibles: ${JSON.stringify(allOptionsText)}`);
-      throw new Error('Entreprise Delpharm non trouvée dans la liste');
-    }
-    
-    const orgOption = organizationSelect.locator('option').filter({ hasText: 'Delpharm' }).first();
-    const optionValue = await orgOption.getAttribute('value');
-    debug(`Option Delpharm trouvée, value: ${optionValue}`);
-    if (optionValue) {
-      await organizationSelect.selectOption(optionValue);
-      debug('Organisation Delpharm sélectionnée');
-    } else {
-      debug('ERROR: Option Delpharm trouvée mais pas de valeur');
-      throw new Error('Option Delpharm trouvée mais sans valeur');
-    }
+    const delpharmOption = page.getByRole('menuitemcheckbox', { name: /Delpharm/ });
+    await expect(delpharmOption).toBeVisible({ timeout: 15_000 });
+    await delpharmOption.click();
+    await expect(organizationsTrigger).toContainText('Delpharm', { timeout: 10_000 });
+    debug('Organisation Delpharm sélectionnée');
     
     // Démarrer la génération via le bouton IA (icône)
     debug('Recherche du bouton "IA"...');
@@ -256,7 +234,7 @@ test.describe('Génération IA', () => {
 
     const generateResPromise = page.waitForResponse((res) => {
       const req = res.request();
-      return req.method() === 'POST' && res.url().includes('/api/v1/use-cases/generate');
+      return req.method() === 'POST' && res.url().includes('/api/v1/initiatives/generate');
     }, { timeout: 60_000 });
 
     debug('Bouton trouvé, clic...');
@@ -292,7 +270,7 @@ test.describe('Génération IA', () => {
     const firstUseCaseCard = page.locator('.grid.gap-4 > article').filter({ hasText: 'Valeur:' }).first();
     await expect(firstUseCaseCard).toBeVisible({ timeout: 60_000 });
     await firstUseCaseCard.click();
-    await page.waitForURL(/\/usecase\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
+    await page.waitForURL(/\/initiative\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier la section Références

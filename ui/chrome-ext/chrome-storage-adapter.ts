@@ -7,11 +7,10 @@ import { normalizeUser } from '@sentropic/cowork-bridge/auth';
 
 /**
  * Chrome-specific {@link StorageAdapter}: persistent state lives in
- * `chrome.storage.local`, session state in `chrome.storage.session`. Keys and
- * read/normalize behavior are preserved from the original `extension-auth.ts`.
+ * `chrome.storage.local`, session state in `chrome.storage.session`.
  */
-const EXTENSION_AUTH_PERSISTENT_KEY = 'topAiIdeas:extensionAuth:v1';
-const EXTENSION_AUTH_SESSION_KEY = 'topAiIdeas:extensionAuthSession:v1';
+const EXTENSION_AUTH_PERSISTENT_KEY = 'sentropic:extensionAuth:v1';
+const EXTENSION_AUTH_SESSION_KEY = 'sentropic:extensionAuthSession:v1';
 
 export const createChromeStorageAdapter = (): StorageAdapter => ({
     async readPersistent(): Promise<AuthPersistentState | null> {

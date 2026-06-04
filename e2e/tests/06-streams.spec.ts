@@ -67,10 +67,12 @@ test.describe('Streams — SSE scoping', () => {
     const initSse = async (page: typeof pageA, workspaceId: string) => {
       await page.goto('/dashboard');
       await page.waitForLoadState('domcontentloaded');
-      await page.evaluate((id) => {
+      await page.evaluate(({ apiBaseUrl, id }) => {
         (window as any).__events = [];
         (window as any).__sseReady = false;
-        const es = new EventSource(`/api/v1/streams/sse?workspace_id=${id}`);
+        const es = new EventSource(`${apiBaseUrl}/api/v1/streams/sse?workspace_id=${id}`, {
+          withCredentials: true,
+        });
         es.addEventListener('open', () => {
           (window as any).__sseReady = true;
         });
@@ -78,7 +80,7 @@ test.describe('Streams — SSE scoping', () => {
           (window as any).__events.push({ type: 'organization_update', data: (evt as MessageEvent).data });
         });
         (window as any).__eventSource = es;
-      }, workspaceId);
+      }, { apiBaseUrl: API_BASE_URL, id: workspaceId });
       await page.waitForFunction(() => (window as any).__sseReady === true, { timeout: 10_000 });
     };
 

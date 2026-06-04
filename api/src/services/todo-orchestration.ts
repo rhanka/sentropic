@@ -1788,7 +1788,7 @@ export class TodoOrchestrationService {
 
   /**
    * Seed agents for a given workspace type (§8.1).
-   * For backward compat, calling with no agentSeeds defaults to ai-ideas agents.
+   * For backward compat, calling with no agentSeeds defaults to ai-priorities agents.
    */
   async seedAgentsForType(
     actor: TodoActor,
@@ -2343,7 +2343,7 @@ export class TodoOrchestrationService {
       .from(workspaces)
       .where(eq(workspaces.id, actor.workspaceId))
       .limit(1);
-    const wsType = ws?.type ?? 'ai-ideas';
+    const wsType = ws?.type ?? 'ai-priorities';
     const typeSeed = getWorkflowSeedsForType(wsType);
     const workflowSeed = typeSeed?.workflows[0] ?? DEFAULT_USE_CASE_GENERATION_WORKFLOW;
 

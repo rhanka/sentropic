@@ -17,7 +17,7 @@ import { todoOrchestrationService, type TodoActor } from '../todo-orchestration'
 // here).
 
 const DEFAULT_GATE_CONFIGS: Record<Exclude<WorkspaceType, 'neutral'>, GateConfig> = {
-  'ai-ideas': {
+  'ai-priorities': {
     mode: 'free',
     stages: ['G0', 'G2'],
   },
