@@ -1,24 +1,27 @@
 /**
- * App-local catalog façade (BR-42b Lot 1 — post-refactor)
+ * App-local catalog façade (BR-42b Lot 2 — execution seam added)
  *
  * Foundation skills now flow through the CompositeCatalogRegistry seam:
  *
  *   StaticCatalogSource ('foundation')
+ *   StandaloneToolSource ('standalone')   ← NEW in Lot 2 (empty by default)
  *     → CompositeCatalogRegistry
  *       → SkillsToolRegistry adapter (unchanged)
  *         → resolveFoundationChatTools() [sync, search_skills first]
  *           → chat-service.ts:2749 (unchanged)
  *
- * The wire contract is BYTE-IDENTICAL to the pre-Lot-1 baseline:
+ *   CatalogExecutionSeam                  ← NEW in Lot 2
+ *     → foundation-executor.ts falls through to here for non-hardcoded names
+ *       → StandaloneToolSource.getHandler() → handler invocation
+ *
+ * The wire contract is BYTE-IDENTICAL to the pre-Lot-1/Lot-2 baseline:
  *   - `resolveFoundationChatTools` returns the same synchronous OpenAI tool
  *     array with `search_skills` first and the 28 foundation tools in the
  *     same insertion order.
  *   - `executeFoundationSearchSkills` delegates identically to the adapter.
  *   - `foundationSkillsToolRegistry` is still a `SkillsToolRegistry` instance.
- *
- * The only difference from Lot 0 is that the `InMemorySkillRegistry` is now
- * populated by reading from the `CompositeCatalogRegistry`'s snapshot rather
- * than directly from `FOUNDATION_SKILLS`. This is transparent to all callers.
+ *   - The standalone source is EMPTY by default, so no new tools appear in
+ *     the resolved set and no existing tool loses its dispatch path.
  *
  * `packages/skills/src/**` remains READ-ONLY — no source changes.
  */
@@ -33,19 +36,45 @@ import {
   type SkillSearchHit,
 } from '../../../../packages/skills/src/index.js';
 import { CompositeCatalogRegistry } from '../catalog/composite-registry.js';
+import { CatalogExecutionSeam } from '../catalog/execution-seam.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
+import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
 
 // ---------------------------------------------------------------------------
-// Build the composite registry with the foundation source
+// Build the composite registry with all registered sources
 // ---------------------------------------------------------------------------
 
 /**
  * The composite catalog registry that fans across all registered sources.
- * In Lot 1, only the static foundation source is registered.
- * Later lots will add MCP, agent-template, workflow-seed, and canvas sources.
+ * - Lot 1: static foundation source (`skill`-kind entries, 16 skills).
+ * - Lot 2: standalone tool source (`tool`-kind entries, empty by default).
+ * Later lots will add agent-template, workflow-seed, canvas, and MCP sources.
  */
 export const compositeCatalogRegistry = new CompositeCatalogRegistry();
 compositeCatalogRegistry.addSource(foundationCatalogSource);
+// Lot 2: wire standalone-tool source (empty; Lot 5 MCP will populate it).
+compositeCatalogRegistry.addSource(standaloneToolSource);
+
+// ---------------------------------------------------------------------------
+// Catalog execution seam (Lot 2) — dispatches non-hardcoded tool calls
+// ---------------------------------------------------------------------------
+
+/**
+ * The singleton catalog execution seam.
+ *
+ * `foundation-executor.ts` consults this seam for any tool name that its
+ * hardcoded `if` branches do NOT match, before returning `{ handled: false }`.
+ *
+ * The seam looks up the composite registry, finds `tool`-kind entries, and
+ * invokes the handler registered in the corresponding source.
+ *
+ * D-TOOL-RECONCILE: `skill`-kind entries are NOT dispatched through this seam.
+ * Skill tools remain in foundation-executor's hardcoded branches.
+ */
+export const catalogExecutionSeam = new CatalogExecutionSeam(
+  compositeCatalogRegistry,
+  [standaloneToolSource],
+);
 
 // ---------------------------------------------------------------------------
 // Populate InMemorySkillRegistry from the composite snapshot

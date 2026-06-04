@@ -106,19 +106,19 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - [x] GATE: characterization GREEN through composite = proceed; otherwise STOP and fix before any kind lot.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
-- [ ] **Lot 2 — `tool` kind + generic execution seam**
-  - [ ] Add `api/src/services/catalog/sources/standalone-tool-source.ts`: standalone `tool`-kind entries (`SkillTool` payload + optional `rawName`).
-  - [ ] Add `api/src/services/catalog/execution-seam.ts`: kind-agnostic `CatalogEntry`-keyed dispatch (entry carries/returns its handler) for any tool name not hardcoded.
-  - [ ] Wire `api/src/services/skills/foundation-executor.ts` to consult the execution seam before returning `unhandled` (precedes MCP).
-  - [ ] Reconcile skill-owned vs standalone tools (D-TOOL-RECONCILE): skill tools stay owned by their `skill` entry, NOT duplicated as `tool` entries.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **API tests**
-      - [ ] Add `api/tests/services/catalog/standalone-tool-source.spec.ts` (standalone tool entry shape + no skill-tool duplication).
-      - [ ] Add `api/tests/services/catalog/execution-seam.spec.ts` (non-hardcoded tool name dispatches through the seam; unknown still `unhandled`).
-      - [ ] Update `api/tests/services/catalog-characterization.spec.ts` to assert hardcoded foundation tools still dispatch unchanged.
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
-  - [ ] `make down ENV=test-feat-catalog-evolution-42b`
+- [x] **Lot 2 — `tool` kind + generic execution seam**
+  - [x] Add `api/src/services/catalog/sources/standalone-tool-source.ts`: standalone `tool`-kind entries (`SkillTool` payload + optional `rawName`).
+  - [x] Add `api/src/services/catalog/execution-seam.ts`: kind-agnostic `CatalogEntry`-keyed dispatch (entry carries/returns its handler) for any tool name not hardcoded.
+  - [x] Wire `api/src/services/skills/foundation-executor.ts` to consult the execution seam before returning `unhandled` (precedes MCP).
+  - [x] Reconcile skill-owned vs standalone tools (D-TOOL-RECONCILE): skill tools stay owned by their `skill` entry, NOT duplicated as `tool` entries.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
+    - [x] **API tests**
+      - [x] Add `api/tests/services/catalog/standalone-tool-source.spec.ts` (standalone tool entry shape + no skill-tool duplication).
+      - [x] Add `api/tests/services/catalog/execution-seam.spec.ts` (non-hardcoded tool name dispatches through the seam; unknown still `unhandled`).
+      - [x] Update `api/tests/services/catalog-characterization.spec.ts` to assert hardcoded foundation tools still dispatch unchanged.
+      - [x] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b` (characterization 41/41 byte-identical + catalog specs 114/114 GREEN; typecheck/lint clean)
+  - [x] `make down ENV=test-feat-catalog-evolution-42b`
 
 - [ ] **Lot 3 — `agent` template kind**
   - [ ] Add `api/src/services/catalog/sources/agent-template-source.ts`: `agent`-kind entries over `WORKSPACE_TYPE_AGENT_SEEDS` (`api/src/config/default-agents.ts:37`, `DefaultGenerationAgentDefinition`).
