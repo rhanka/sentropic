@@ -1,29 +1,31 @@
 /**
- * App-local catalog façade (BR-42b Lot 2 — execution seam added)
+ * App-local catalog façade (BR-42b Lot 3 — agent template source added)
  *
- * Foundation skills now flow through the CompositeCatalogRegistry seam:
+ * Foundation skills + agent templates now flow through the CompositeCatalogRegistry:
  *
- *   StaticCatalogSource ('foundation')
- *   StandaloneToolSource ('standalone')   ← NEW in Lot 2 (empty by default)
+ *   StaticCatalogSource ('foundation')       ← Lot 1 (skill entries)
+ *   StandaloneToolSource ('standalone')      ← Lot 2 (tool entries, empty by default)
+ *   AgentTemplateSource ('agent-templates')  ← Lot 3 (agent entries, code-level seeds)
  *     → CompositeCatalogRegistry
  *       → SkillsToolRegistry adapter (unchanged)
  *         → resolveFoundationChatTools() [sync, search_skills first]
  *           → chat-service.ts:2749 (unchanged)
  *
- *   CatalogExecutionSeam                  ← NEW in Lot 2
+ *   CatalogExecutionSeam                  ← Lot 2
  *     → foundation-executor.ts falls through to here for non-hardcoded names
  *       → StandaloneToolSource.getHandler() → handler invocation
  *
- * The wire contract is BYTE-IDENTICAL to the pre-Lot-1/Lot-2 baseline:
+ * The wire contract is BYTE-IDENTICAL to the pre-Lot-3 baseline:
  *   - `resolveFoundationChatTools` returns the same synchronous OpenAI tool
  *     array with `search_skills` first and the 28 foundation tools in the
- *     same insertion order.
+ *     same insertion order. Agent entries are NOT projected into the tool set.
  *   - `executeFoundationSearchSkills` delegates identically to the adapter.
  *   - `foundationSkillsToolRegistry` is still a `SkillsToolRegistry` instance.
- *   - The standalone source is EMPTY by default, so no new tools appear in
- *     the resolved set and no existing tool loses its dispatch path.
+ *   - Agent entries are visible via `compositeCatalogRegistry.list/get/search`
+ *     for discovery, but the SkillsToolRegistry loop filters to `skill`-kind only.
  *
  * `packages/skills/src/**` remains READ-ONLY — no source changes.
+ * `packages/chat-core/src/ports.ts` AgentRuntime is UNTOUCHED.
  */
 
 import type OpenAI from 'openai';
@@ -37,6 +39,7 @@ import {
 } from '../../../../packages/skills/src/index.js';
 import { CompositeCatalogRegistry } from '../catalog/composite-registry.js';
 import { CatalogExecutionSeam } from '../catalog/execution-seam.js';
+import { agentTemplateSource } from '../catalog/sources/agent-template-source.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
 import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
 
@@ -48,12 +51,19 @@ import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.
  * The composite catalog registry that fans across all registered sources.
  * - Lot 1: static foundation source (`skill`-kind entries, 16 skills).
  * - Lot 2: standalone tool source (`tool`-kind entries, empty by default).
- * Later lots will add agent-template, workflow-seed, canvas, and MCP sources.
+ * - Lot 3: agent template source (`agent`-kind entries, code-level seeds).
+ * Later lots will add workflow-seed, canvas, and MCP sources.
+ *
+ * 0-regression note: `agent`-kind entries are for discovery only. The
+ * `SkillsToolRegistry` loop below filters to `kind === 'skill'`, so agent
+ * entries never reach the OpenAI tool set.
  */
 export const compositeCatalogRegistry = new CompositeCatalogRegistry();
 compositeCatalogRegistry.addSource(foundationCatalogSource);
 // Lot 2: wire standalone-tool source (empty; Lot 5 MCP will populate it).
 compositeCatalogRegistry.addSource(standaloneToolSource);
+// Lot 3: wire agent template source (code-level seeds; DB rows are NOT here).
+compositeCatalogRegistry.addSource(agentTemplateSource);
 
 // ---------------------------------------------------------------------------
 // Catalog execution seam (Lot 2) — dispatches non-hardcoded tool calls
