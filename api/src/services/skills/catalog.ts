@@ -1,13 +1,14 @@
 /**
- * App-local catalog façade (BR-42b Lot 5 — MCP source wiring added, default-off)
+ * App-local catalog façade (BR-42b Lot 6 — canvas template source wired)
  *
- * Foundation skills + agent templates + workflow seeds + MCP tools (opt-in) now
- * flow through the CompositeCatalogRegistry:
+ * Foundation skills + agent templates + workflow seeds + canvas templates +
+ * MCP tools (opt-in) now flow through the CompositeCatalogRegistry:
  *
  *   StaticCatalogSource ('foundation')       ← Lot 1 (skill entries)
  *   StandaloneToolSource ('standalone')      ← Lot 2 (tool entries, empty by default)
  *   AgentTemplateSource ('agent-templates')  ← Lot 3 (agent entries, code-level seeds)
  *   WorkflowSeedSource ('workflow-seeds')    ← Lot 4 (workflow entries, flow seeds)
+ *   CanvasTemplateSource ('canvas-templates')← Lot 6 (canvas entries, static starters)
  *   McpCatalogSource ('mcp:<name>') [OPT-IN] ← Lot 5 (tool entries from MCP server)
  *     → CompositeCatalogRegistry
  *       → SkillsToolRegistry adapter (unchanged)
@@ -52,6 +53,7 @@ import {
 import { CompositeCatalogRegistry } from '../catalog/composite-registry.js';
 import { CatalogExecutionSeam } from '../catalog/execution-seam.js';
 import { agentTemplateSource } from '../catalog/sources/agent-template-source.js';
+import { canvasTemplateSource } from '../catalog/sources/canvas-template-source.js';
 import type { McpCatalogSource } from '../catalog/sources/mcp-source.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
 import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
@@ -67,11 +69,11 @@ import { workflowSeedSource } from '../catalog/sources/workflow-seed-source.js';
  * - Lot 2: standalone tool source (`tool`-kind entries, empty by default).
  * - Lot 3: agent template source (`agent`-kind entries, code-level seeds).
  * - Lot 4: workflow seed source (`workflow`-kind entries, flow seeds).
- * Later lots will add canvas and MCP sources.
+ * - Lot 6: canvas template source (`canvas`-kind entries, static starters).
  *
- * 0-regression note: `agent`- and `workflow`-kind entries are for discovery
- * only. The `SkillsToolRegistry` loop below filters to `kind === 'skill'`,
- * so agent and workflow entries never reach the OpenAI tool set.
+ * 0-regression note: `agent`-, `workflow`-, and `canvas`-kind entries are for
+ * discovery only. The `SkillsToolRegistry` loop below filters to
+ * `kind === 'skill'`, so none of these entries ever reach the OpenAI tool set.
  */
 export const compositeCatalogRegistry = new CompositeCatalogRegistry();
 compositeCatalogRegistry.addSource(foundationCatalogSource);
@@ -81,6 +83,9 @@ compositeCatalogRegistry.addSource(standaloneToolSource);
 compositeCatalogRegistry.addSource(agentTemplateSource);
 // Lot 4: wire workflow seed source (code-level seeds from @sentropic/flow; DB rows are NOT here).
 compositeCatalogRegistry.addSource(workflowSeedSource);
+// Lot 6: wire canvas template source (static starters; D-CANVAS — kind/template only, no runtime).
+// Vocabulary: kind='canvas' aligns with CommentTargetKind 'canvas' (packages/comments/src/types.ts:13).
+compositeCatalogRegistry.addSource(canvasTemplateSource);
 
 // ---------------------------------------------------------------------------
 // Catalog execution seam (Lot 2 / Lot 5) — dispatches non-hardcoded tool calls
