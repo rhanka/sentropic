@@ -1,5 +1,5 @@
 /**
- * App-local catalog façade (BR-42b Lot 6 — canvas template source wired)
+ * App-local catalog façade (BR-42b Lot 7 — search_catalog meta-tool added)
  *
  * Foundation skills + agent templates + workflow seeds + canvas templates +
  * MCP tools (opt-in) now flow through the CompositeCatalogRegistry:
@@ -12,7 +12,7 @@
  *   McpCatalogSource ('mcp:<name>') [OPT-IN] ← Lot 5 (tool entries from MCP server)
  *     → CompositeCatalogRegistry
  *       → SkillsToolRegistry adapter (unchanged)
- *         → resolveFoundationChatTools() [sync, search_skills first]
+ *         → resolveFoundationChatTools() [sync, search_skills first, search_catalog second]
  *           → chat-service.ts:2749 (unchanged)
  *
  *   CatalogExecutionSeam                  ← Lot 2
@@ -20,21 +20,14 @@
  *       → StandaloneToolSource.getHandler() → handler invocation
  *       → McpCatalogSource.getHandler()    → MCP call dispatch [if wired]
  *
- * The wire contract is BYTE-IDENTICAL to the pre-Lot-5 baseline when no MCP
- * server is configured (DEFAULT-OFF):
- *   - `resolveFoundationChatTools` returns the same synchronous OpenAI tool
- *     array with `search_skills` first and the 28 foundation tools in the
- *     same insertion order. Agent and workflow entries are NOT projected into
- *     the tool set. MCP tool entries are NOT present unless a server is wired.
- *   - `executeFoundationSearchSkills` delegates identically to the adapter.
- *   - `foundationSkillsToolRegistry` is still a `SkillsToolRegistry` instance.
- *   - Agent and workflow entries are visible via
- *     `compositeCatalogRegistry.list/get/search` for discovery, but the
- *     SkillsToolRegistry loop filters to `skill`-kind only.
- *
- * To wire an MCP server: call `registerMcpSource(source)` BEFORE the first
- * call to `resolveFoundationChatTools` (or any time before the next turn),
- * then call `source.refresh()` to populate the snapshot out-of-band.
+ * Lot 7 adds `search_catalog` as an ADDITIVE sibling to `search_skills`
+ * (SPEC_EVOL_CATALOG §3.5):
+ *   - `search_skills` stays FIRST, skill-only, byte-identical (no rename).
+ *   - `search_catalog` is injected at position 1 (immediately after
+ *     `search_skills`) in `resolveFoundationChatTools()`.
+ *   - `search_catalog` spans ALL 5 entry kinds in `compositeCatalogRegistry`.
+ *   - `executeFoundationSearchCatalog` is the new dispatch function.
+ *   - The 29-entry resolved tool array oracle (characterization §7) is updated.
  *
  * `packages/skills/src/**` remains READ-ONLY — no source changes.
  * `packages/chat-core/src/ports.ts` AgentRuntime is UNTOUCHED.
@@ -50,8 +43,14 @@ import {
   type SearchSkillsInput,
   type SkillSearchHit,
 } from '../../../../packages/skills/src/index.js';
-import { CompositeCatalogRegistry } from '../catalog/composite-registry.js';
+import { CompositeCatalogRegistry, type CatalogSearchOptions } from '../catalog/composite-registry.js';
 import { CatalogExecutionSeam } from '../catalog/execution-seam.js';
+import {
+  SEARCH_CATALOG_RESOLVED_TOOL,
+  type SearchCatalogInput,
+  type CatalogHit,
+  type SearchCatalogResult,
+} from '../catalog/search-catalog-tool.js';
 import { agentTemplateSource } from '../catalog/sources/agent-template-source.js';
 import { canvasTemplateSource } from '../catalog/sources/canvas-template-source.js';
 import type { McpCatalogSource } from '../catalog/sources/mcp-source.js';
@@ -206,9 +205,23 @@ export function resolveFoundationChatTools(
   input: ResolveFoundationChatToolsInput,
 ): OpenAI.Chat.Completions.ChatCompletionTool[] {
   const authz = buildFoundationSkillsAuthz(input);
-  return foundationSkillsToolRegistry
+  const tools = foundationSkillsToolRegistry
     .resolveTools(authz)
     .map((tool) => resolvedToolToOpenAIChatTool(tool));
+
+  // Lot 7 (SPEC_EVOL_CATALOG §3.5): inject `search_catalog` as the ADDITIVE
+  // sibling at position 1 (immediately after `search_skills`).
+  // `search_skills` is always first (injected by SkillsToolRegistry adapter
+  // at tools[0]). `search_catalog` is a cross-kind meta-tool spanning ALL 5
+  // catalog entry kinds; it does NOT replace or rename `search_skills`.
+  const searchCatalogTool = resolvedToolToOpenAIChatTool(SEARCH_CATALOG_RESOLVED_TOOL);
+  const [searchSkillsEntry, ...rest] = tools;
+  if (searchSkillsEntry === undefined) {
+    // Defensive: should never happen (adapter always prepends search_skills),
+    // but if it does, just prepend search_catalog first.
+    return [searchCatalogTool];
+  }
+  return [searchSkillsEntry, searchCatalogTool, ...rest];
 }
 
 export function executeFoundationSearchSkills(input: {
@@ -219,4 +232,48 @@ export function executeFoundationSearchSkills(input: {
     buildFoundationSkillsAuthz(input.authz),
     input.payload,
   );
+}
+
+/**
+ * Execute the `search_catalog` meta-tool.
+ *
+ * Queries the `compositeCatalogRegistry` across ALL 5 entry kinds using the
+ * token-frequency ranker from Lot 1 (`CompositeCatalogRegistry.search()`).
+ * Returns a flat array of `CatalogHit` objects — one per matching entry —
+ * each carrying its `kind`, metadata projection, score, and matched fields.
+ *
+ * Called by `foundation-executor.ts` when `toolCall.name === 'search_catalog'`.
+ * Uses the Lot 1 `CatalogSearchOptions` shape (kindHint + categoryHint).
+ */
+export function executeFoundationSearchCatalog(
+  payload: SearchCatalogInput,
+): SearchCatalogResult {
+  const query = typeof payload.query === 'string' ? payload.query : '';
+  if (query.trim().length === 0) {
+    return { status: 'completed', hits: [] };
+  }
+
+  const limit = payload.limit;
+  const kindHint = payload.filter?.kind;
+  const categoryHint = payload.filter?.category;
+
+  const searchOptions: CatalogSearchOptions = {
+    ...(limit !== undefined ? { topK: limit } : {}),
+    ...(kindHint !== undefined ? { kindHint } : {}),
+    ...(categoryHint !== undefined ? { categoryHint } : {}),
+  };
+
+  const rawHits = compositeCatalogRegistry.search(query, searchOptions);
+
+  const hits: CatalogHit[] = rawHits.map((h) => ({
+    kind: h.entry.kind,
+    name: h.entry.metadata.name,
+    description: h.entry.metadata.description,
+    ...(h.entry.metadata.category !== undefined ? { category: h.entry.metadata.category } : {}),
+    ...(h.entry.metadata.version !== undefined ? { version: h.entry.metadata.version } : {}),
+    score: h.score,
+    matchedFields: h.matchedFields,
+  }));
+
+  return { status: 'completed', hits };
 }
