@@ -26,13 +26,31 @@ function resolveEntryFile(entry: PkgExportEntry | string): string | undefined {
   return entry['import'] ?? entry['svelte'] ?? entry['types'];
 }
 
-describe('export-surface (a): every subpath resolves to an existing file', () => {
+/**
+ * Map a dist/ export path back to the corresponding src/ source file for existence checks.
+ * dist/foo/bar.js  -> src/foo/bar.ts
+ * dist/foo/Bar.svelte -> src/foo/Bar.svelte
+ * dist/index.js -> src/index.ts
+ */
+function distToSrcFile(distFile: string): string {
+  // Swap dist/ prefix for src/
+  const srcFile = distFile.replace(/^\.\/dist\//, './src/');
+  // .js compiled output came from .ts source
+  if (srcFile.endsWith('.js')) return srcFile.slice(0, -3) + '.ts';
+  // .svelte stays .svelte (same filename, different dir)
+  return srcFile;
+}
+
+describe('export-surface (a): every subpath resolves to an existing source file', () => {
   for (const [subpath, entry] of Object.entries(pkg.exports)) {
-    it(`subpath "${subpath}" resolves to an existing file`, () => {
+    it(`subpath "${subpath}" resolves to an existing source file`, () => {
       const file = resolveEntryFile(entry);
       expect(file, `subpath "${subpath}" has no resolvable file field`).toBeTruthy();
-      const abs = path.resolve(PACKAGE_ROOT, file as string);
-      expect(fs.existsSync(abs), `"${subpath}" -> "${file}" does not exist`).toBe(true);
+      // Exports point to dist/ (built artifact). Verify the corresponding src/ file exists
+      // so the dist can always be (re)built. dist/ is a build output, not source-controlled.
+      const srcFile = distToSrcFile(file as string);
+      const abs = path.resolve(PACKAGE_ROOT, srcFile);
+      expect(fs.existsSync(abs), `"${subpath}" -> dist file built from "${srcFile}" does not exist in src`).toBe(true);
     });
   }
 });
@@ -44,9 +62,11 @@ describe('export-surface (b): no removed or renamed TS exports', () => {
 
     it(`subpath "${subpath}" — all manifest exports still present in source`, () => {
       const pkgEntry = pkg.exports[subpath];
-      const file = pkgEntry ? resolveEntryFile(pkgEntry) : undefined;
-      expect(file, `package.json missing subpath "${subpath}"`).toBeTruthy();
-      const source = fs.readFileSync(path.resolve(PACKAGE_ROOT, file as string), 'utf8');
+      const distFile = pkgEntry ? resolveEntryFile(pkgEntry) : undefined;
+      expect(distFile, `package.json missing subpath "${subpath}"`).toBeTruthy();
+      // Read from the src/ equivalent — dist/ is a build artifact
+      const srcFile = distToSrcFile(distFile as string);
+      const source = fs.readFileSync(path.resolve(PACKAGE_ROOT, srcFile), 'utf8');
 
       for (const name of mEntry.exports!) {
         // For barrel re-exports (export * from '...'), a name may not appear
