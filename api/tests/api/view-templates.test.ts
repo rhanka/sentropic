@@ -57,11 +57,11 @@ describe('View Templates API', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should resolve a code-level default template for ai-ideas initiative', async () => {
+    it('should resolve a code-level default template for ai-priorities initiative', async () => {
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-ideas&objectType=initiative`,
+        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-priorities&objectType=initiative`,
         user.sessionToken!,
       );
       expect(response.status).toBe(200);
@@ -69,7 +69,7 @@ describe('View Templates API', () => {
       expect(data).toHaveProperty('descriptor');
       expect(data.descriptor).toHaveProperty('tabs');
       expect(Array.isArray(data.descriptor.tabs)).toBe(true);
-      expect(data.workspaceType).toBe('ai-ideas');
+      expect(data.workspaceType).toBe('ai-priorities');
       expect(data.objectType).toBe('initiative');
     });
 
@@ -77,7 +77,7 @@ describe('View Templates API', () => {
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-ideas&objectType=organization`,
+        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-priorities&objectType=organization`,
         user.sessionToken!,
       );
       expect(response.status).toBe(200);
@@ -90,7 +90,7 @@ describe('View Templates API', () => {
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-ideas&objectType=dashboard`,
+        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-priorities&objectType=dashboard`,
         user.sessionToken!,
       );
       expect(response.status).toBe(200);
@@ -116,7 +116,7 @@ describe('View Templates API', () => {
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-ideas&objectType=nonexistent`,
+        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-priorities&objectType=nonexistent`,
         user.sessionToken!,
       );
       expect(response.status).toBe(404);
@@ -129,7 +129,7 @@ describe('View Templates API', () => {
       };
       await viewTemplateService.create({
         workspaceId: user.workspaceId!,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: userDescriptor,
         sourceLevel: 'user',
@@ -138,7 +138,7 @@ describe('View Templates API', () => {
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-ideas&objectType=initiative`,
+        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-priorities&objectType=initiative`,
         user.sessionToken!,
       );
       expect(response.status).toBe(200);
@@ -161,7 +161,7 @@ describe('View Templates API', () => {
 
     it('should list view templates for a workspace', async () => {
       // Seed templates first
-      await viewTemplateService.seedForWorkspace(user.workspaceId!, 'ai-ideas');
+      await viewTemplateService.seedForWorkspace(user.workspaceId!, 'ai-priorities');
 
       const response = await authenticatedRequest(
         app,
@@ -177,19 +177,19 @@ describe('View Templates API', () => {
     });
 
     it('should filter templates by workspaceType', async () => {
-      await viewTemplateService.seedForWorkspace(user.workspaceId!, 'ai-ideas');
+      await viewTemplateService.seedForWorkspace(user.workspaceId!, 'ai-priorities');
 
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates?workspaceId=${user.workspaceId}&workspaceType=ai-ideas`,
+        `/api/v1/view-templates?workspaceId=${user.workspaceId}&workspaceType=ai-priorities`,
         user.sessionToken!,
       );
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.items.length).toBeGreaterThan(0);
       for (const item of data.items) {
-        expect(item.workspaceType).toBe('ai-ideas');
+        expect(item.workspaceType).toBe('ai-priorities');
       }
     });
 
@@ -220,7 +220,7 @@ describe('View Templates API', () => {
     it('should return a template by id', async () => {
       const created = await viewTemplateService.create({
         workspaceId: user.workspaceId!,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'test', label: 'Test', always: true, rows: [{ columns: 1, fields: [{ key: 'name', type: 'text' }] }] }] },
       });
@@ -234,24 +234,24 @@ describe('View Templates API', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.id).toBe(created.id);
-      expect(data.workspaceType).toBe('ai-ideas');
+      expect(data.workspaceType).toBe('ai-priorities');
       expect(data.objectType).toBe('initiative');
     });
   });
 
   describe('Service: seedForWorkspace', () => {
-    it('should seed ai-ideas templates on workspace creation', async () => {
-      await viewTemplateService.seedForWorkspace(user.workspaceId!, 'ai-ideas');
+    it('should seed ai-priorities templates on workspace creation', async () => {
+      await viewTemplateService.seedForWorkspace(user.workspaceId!, 'ai-priorities');
 
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates?workspaceId=${user.workspaceId}&workspaceType=ai-ideas`,
+        `/api/v1/view-templates?workspaceId=${user.workspaceId}&workspaceType=ai-priorities`,
         user.sessionToken!,
       );
       expect(response.status).toBe(200);
       const data = await response.json();
-      // ai-ideas should have initiative, organization, dashboard templates
+      // ai-priorities should have initiative, organization, dashboard templates
       const objectTypes = data.items.map((i: any) => i.objectType);
       expect(objectTypes).toContain('initiative');
       expect(objectTypes).toContain('organization');
@@ -311,14 +311,14 @@ describe('View Templates API', () => {
 
       const created = await viewTemplateService.create({
         workspaceId: user.workspaceId!,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor,
         sourceLevel: 'user',
       });
 
       expect(created.id).toBeDefined();
-      expect(created.workspaceType).toBe('ai-ideas');
+      expect(created.workspaceType).toBe('ai-priorities');
       expect(created.objectType).toBe('initiative');
       expect(created.sourceLevel).toBe('user');
       expect(created.version).toBe(1);
@@ -331,7 +331,7 @@ describe('View Templates API', () => {
     it('should update a view template descriptor', async () => {
       const created = await viewTemplateService.create({
         workspaceId: user.workspaceId!,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'v1', label: 'V1', always: true, rows: [{ columns: 1, fields: [] }] }] },
       });
@@ -352,7 +352,7 @@ describe('View Templates API', () => {
     it('should fork a template', async () => {
       const source = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'source', label: 'Source', always: true, rows: [{ columns: 1, fields: [] }] }] },
         sourceLevel: 'code',
@@ -370,7 +370,7 @@ describe('View Templates API', () => {
     it('should detach a forked template', async () => {
       const source = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'src', label: 'Src', always: true, rows: [{ columns: 1, fields: [] }] }] },
         sourceLevel: 'code',
@@ -387,7 +387,7 @@ describe('View Templates API', () => {
     it('should remove a user-created workspace template', async () => {
       const created = await viewTemplateService.create({
         workspaceId: user.workspaceId!,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [] },
         sourceLevel: 'user',
@@ -403,7 +403,7 @@ describe('View Templates API', () => {
     it('should not remove system templates (workspaceId is null)', async () => {
       const created = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [] },
         sourceLevel: 'code',
@@ -427,7 +427,7 @@ describe('View Templates API', () => {
       // Create a system-level template (workspaceId=null)
       const system = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'sys', label: 'System', always: true, rows: [{ columns: 1, fields: [] }] }] },
         sourceLevel: 'code',
@@ -454,7 +454,7 @@ describe('View Templates API', () => {
     it('should return 409 when copy already exists', async () => {
       const system = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'dup', label: 'Dup', always: true, rows: [{ columns: 1, fields: [] }] }] },
         sourceLevel: 'code',
@@ -492,7 +492,7 @@ describe('View Templates API', () => {
     it('should delete the copy and return the system parent', async () => {
       const system = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'parent', label: 'Parent', always: true, rows: [{ columns: 1, fields: [] }] }] },
         sourceLevel: 'code',
@@ -521,7 +521,7 @@ describe('View Templates API', () => {
     it('should return 400 when resetting a template without a parent', async () => {
       const created = await viewTemplateService.create({
         workspaceId: user.workspaceId!,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [] },
         sourceLevel: 'user',
@@ -542,7 +542,7 @@ describe('View Templates API', () => {
     it('should delete a user-created template with no parent', async () => {
       const created = await viewTemplateService.create({
         workspaceId: user.workspaceId!,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [] },
         sourceLevel: 'user',
@@ -560,7 +560,7 @@ describe('View Templates API', () => {
     it('should return 403 when deleting a system template', async () => {
       const system = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [] },
         sourceLevel: 'code',
@@ -580,7 +580,7 @@ describe('View Templates API', () => {
     it('should return 403 when deleting a copied template (has parentId)', async () => {
       const system = await viewTemplateService.create({
         workspaceId: null,
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
         objectType: 'initiative',
         descriptor: { tabs: [{ key: 'x', label: 'X', always: true, rows: [{ columns: 1, fields: [] }] }] },
         sourceLevel: 'code',
@@ -630,7 +630,7 @@ describe('View Templates API', () => {
       const response = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-ideas&objectType=initiative`,
+        `/api/v1/view-templates/resolve?workspaceId=${user.workspaceId}&workspaceType=ai-priorities&objectType=initiative`,
         viewer.sessionToken!,
       );
       expect(response.status).toBe(200);

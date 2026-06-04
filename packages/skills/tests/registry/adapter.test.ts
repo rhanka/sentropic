@@ -33,7 +33,7 @@ const buildSkill = (name: string, toolNames: ReadonlyArray<string>): Skill => ({
 });
 
 const buildAuthz = (overrides: Partial<AuthzContext> = {}): AuthzContext => ({
-  tenant: { tenantId: 't-1', workspaceType: 'ai-ideas' },
+  tenant: { tenantId: 't-1', workspaceType: 'ai-priorities' },
   roles: ['editor'],
   permissions: [],
   permissionMode: 'open',

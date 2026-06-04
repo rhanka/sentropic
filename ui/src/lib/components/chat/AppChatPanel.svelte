@@ -481,6 +481,8 @@
   export let draft = '';
   export let loadingSessions = false;
   export let mode: 'ai' | 'comments' = 'ai';
+  let suppressSessionAutoSelect = false;
+  let sessionHydrationGeneration = 0;
   export let commentContextType: CommentContextType | null = null;
   export let commentContextId: string | null = null;
   export let commentSectionKey: string | null = null;
@@ -1717,7 +1719,7 @@
     }).chrome?.runtime;
     const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
     if (!runtimeId) return 'none';
-    if (runtimeId === 'topai.vscode.runtime') return 'vscode';
+    if (runtimeId === 'sentropic.vscode.runtime') return 'vscode';
     return 'chrome';
   };
 
@@ -2602,6 +2604,7 @@
       chatSessionsUrl(),
       createChatSessionCreatePayload(context),
     );
+    suppressSessionAutoSelect = false;
     sessionId = res.sessionId;
     await loadSessions();
     await loadMessages(res.sessionId, { scrollToBottom: true });
@@ -3680,7 +3683,7 @@
         sessionId = null;
         messages = [];
       }
-      if (!sessionId && sessions.length > 0) {
+      if (!suppressSessionAutoSelect && !sessionId && sessions.length > 0) {
         void selectSession(sessions[0].id);
       }
     } catch (e) {
@@ -3694,6 +3697,9 @@
     id: string,
     opts?: { scrollToBottom?: boolean; silent?: boolean },
   ) => {
+    const hydrationGeneration = sessionHydrationGeneration;
+    const isCurrentHydration = () =>
+      hydrationGeneration === sessionHydrationGeneration;
     const shouldShowLoader = !opts?.silent;
     const serverMessageIds = new Set<string>();
     const serverTimelineKeys = new Set<string>();
@@ -3742,6 +3748,7 @@
       const processLine = async (rawLine: string) => {
         const line = rawLine.trim();
         if (!line) return;
+        if (!isCurrentHydration()) return;
         const payload = JSON.parse(line) as
           | SessionHistoryMetaLine
           | SessionHistoryTimelineLine;
@@ -3783,6 +3790,7 @@
       if (buffer.trim().length > 0) {
         await processLine(buffer);
       }
+      if (!isCurrentHydration()) return;
       if (stagedHistoryTimelineItems.length > 0) {
         await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
       }
@@ -3815,17 +3823,24 @@
       }
       // Le scroll est exécuté via afterUpdate (une fois le DOM réellement rendu).
     } catch (e) {
-      historyHydrationInFlight = false;
-      historyHydrationSwapPending = false;
-      historyHydrationStickBottom = false;
-      errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
+      if (isCurrentHydration()) {
+        historyHydrationInFlight = false;
+        historyHydrationSwapPending = false;
+        historyHydrationStickBottom = false;
+        errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
+      }
     } finally {
-      if (!historyHydrationInFlight) historyHydrationStickBottom = false;
-      if (shouldShowLoader) loadingMessages = false;
+      if (isCurrentHydration()) {
+        if (!historyHydrationInFlight) historyHydrationStickBottom = false;
+        if (shouldShowLoader) loadingMessages = false;
+      }
     }
   };
 
   export const selectSession = async (id: string) => {
+    const hydrationGeneration = ++sessionHydrationGeneration;
+    const isCurrentHydration = () =>
+      hydrationGeneration === sessionHydrationGeneration;
     // Keep current session visible until the first staged batch is ready.
     // Anti-flash (BUG-L6-44) preserved via deferred clear + revealAtBottom on first batch.
     // Progressive lazy-load (NDJSON line-by-line, end-of-conversation first) restored.
@@ -3840,6 +3855,7 @@
     let pendingDeferredClear = true;
 
     const performDeferredClear = () => {
+      if (!isCurrentHydration()) return false;
       optimisticSteerMessages = [];
       projectedStreamEventsById = new Map();
       projectedAssistantComputationByMessageId = new Map();
@@ -3853,9 +3869,11 @@
       runtimeSummaryByMessageId = new Map();
       sessionDocs = [];
       sessionDocsError = null;
+      suppressSessionAutoSelect = false;
       clearComposerAttachments();
       sessionId = id;
       historyHydrationSwapPending = true;
+      return true;
     };
 
     try {
@@ -3877,6 +3895,7 @@
       const processLine = async (rawLine: string) => {
         const line = rawLine.trim();
         if (!line) return;
+        if (!isCurrentHydration()) return;
         const payload = JSON.parse(line) as
           | SessionHistoryMetaLine
           | SessionHistoryTimelineLine;
@@ -3896,11 +3915,12 @@
             serverEventMessageIds.add(String(payload.item.message.id ?? '').trim());
           }
           await stageHistoryTimelineItem(payload.item);
+          if (!isCurrentHydration()) return;
           if (shouldFlushHistoryStage()) {
             if (pendingDeferredClear) {
               // First viewport-sized batch ready: atomically clear previous
               // session state and reveal the new one at the bottom.
-              performDeferredClear();
+              if (!performDeferredClear()) return;
               pendingDeferredClear = false;
               await applyHistoryTimelineBlock(stagedHistoryTimelineItems, {
                 revealAtBottom: true,
@@ -3928,10 +3948,11 @@
       if (buffer.trim().length > 0) {
         await processLine(buffer);
       }
+      if (!isCurrentHydration()) return;
 
       // Final flush: empty session, or last partial batch under viewport size.
       if (pendingDeferredClear) {
-        performDeferredClear();
+        if (!performDeferredClear()) return;
         pendingDeferredClear = false;
       }
       if (stagedHistoryTimelineItems.length > 0) {
@@ -3966,13 +3987,17 @@
       // On failure, ensure the previous session stays visible (no half-applied swap)
       // and surface the error to the user. If the deferred clear already happened,
       // we leave the partial state in place — same behavior as the old code path.
-      historyHydrationSwapPending = false;
-      errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
+      if (isCurrentHydration()) {
+        historyHydrationSwapPending = false;
+        errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
+      }
     } finally {
-      historyHydrationStickBottom = false;
-      historyHydrationInFlight = false;
-      historyHydrationSwapPending = false;
-      loadingMessages = false;
+      if (isCurrentHydration()) {
+        historyHydrationStickBottom = false;
+        historyHydrationInFlight = false;
+        historyHydrationSwapPending = false;
+        loadingMessages = false;
+      }
     }
   };
 
@@ -3984,6 +4009,8 @@
   };
 
   export const newSession = () => {
+    sessionHydrationGeneration += 1;
+    suppressSessionAutoSelect = true;
     sessionId = null;
     messages = [];
     historyTimelineItems = [];
@@ -3996,6 +4023,10 @@
     runtimeSummaryByMessageId = new Map();
     loadedRuntimeDetailsMessageIds.clear();
     loadingRuntimeDetailsMessageIds.clear();
+    historyHydrationInFlight = false;
+    historyHydrationStickBottom = false;
+    historyHydrationSwapPending = false;
+    loadingMessages = false;
     projectedAssistantComputationByMessageId = new Map();
     optimisticSteerMessages = [];
     resetTodoRuntimePanel();
@@ -4023,6 +4054,8 @@
     errorMsg = null;
     try {
       await apiDelete(chatSessionUrl(sessionId));
+      sessionHydrationGeneration += 1;
+      suppressSessionAutoSelect = false;
       sessionId = null;
       messages = [];
       historyTimelineItems = [];
@@ -4318,6 +4351,7 @@
       composerIsMultiline = false;
       updateComposerHeight();
       if (res.sessionId && res.sessionId !== sessionId) {
+        suppressSessionAutoSelect = false;
         sessionId = res.sessionId;
         if (!sessions.some((s) => s.id === res.sessionId)) {
           sessions = [{ id: res.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];

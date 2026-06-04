@@ -1938,7 +1938,7 @@ const replay = await replayChatSession('session-789');
 - [ ] Feedback utilisateur (👍/👎) sur les suggestions
 - [ ] Retry automatique avec correction pour erreurs récupérables
 - [ ] Extension voix : stub `audio_chunk` (type d'événement) côté SSE
-- [ ] Tests : Unit/int/E2E couvrant un flux complet (chat + structured + tool-calls + rollback)# SPÉCIFICATION TECHNIQUE - Top AI Ideas
+- [ ] Tests : Unit/int/E2E couvrant un flux complet (chat + structured + tool-calls + rollback)# SPÉCIFICATION TECHNIQUE - Sentropic
 
 ## 1) Cartographie fonctionnelle et écrans
 
@@ -2700,7 +2700,7 @@ Ce document doit servir de référence pour les phases suivantes (listes, justif
 
 ## Vélocité (base commits Git)
 
-Périmètre : dépôt `/home/antoinefa/src/top-ai-ideas-fullstack`, fenêtre glissante 8 semaines.
+Périmètre : dépôt `/home/antoinefa/src/sentropic`, fenêtre glissante 8 semaines.
 
 ### Commandes reproductibles
 ```bash

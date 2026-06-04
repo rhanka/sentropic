@@ -15,6 +15,7 @@ export default defineConfig({
     },
     // Increase timeout for database operations and AI API calls
     testTimeout: 60000,
+    hookTimeout: 60000,
     // Setup files
     setupFiles: [],
   },

@@ -58,7 +58,7 @@ describe('AppFlowRuntime', () => {
   });
 
   it('starts generic workflows without delegating back to todoOrchestrationService.startWorkflow', async () => {
-    await todoOrchestrationService.seedWorkflowsForType(actor, 'ai-ideas');
+    await todoOrchestrationService.seedWorkflowsForType(actor, 'ai-priorities');
     const legacyStartWorkflow = vi
       .spyOn(todoOrchestrationService, 'startWorkflow')
       .mockRejectedValue(new Error('legacy startWorkflow delegate should not be called'));

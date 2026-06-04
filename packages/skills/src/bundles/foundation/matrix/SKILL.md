@@ -1,10 +1,10 @@
 ---
 name: matrix
-description: Read and update folder matrix configurations in AI-ideas and opportunity workspaces.
+description: Read and update folder matrix configurations in AI-priorities and opportunity workspaces.
 version: 0.1.0
 category: analysis
 contextFilter:
-  workspaceTypes: [neutral, ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-priorities, opportunity]
 tools:
   - name: matrix_get
     description: Read the matrix configuration (folders.matrixConfig) for a folder.

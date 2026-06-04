@@ -96,7 +96,7 @@ async function buildImportZip(opts: {
   zip.file('manifest.json', new TextEncoder().encode(stableStringify({ ...manifestCore, manifest_hash: manifestHash })));
   zip.file(
     'meta.json',
-    new TextEncoder().encode(stableStringify({ title: 'Exported workspace data', notes: 'Test', source: 'top-ai-ideas' }))
+    new TextEncoder().encode(stableStringify({ title: 'Exported workspace data', notes: 'Test', source: 'sentropic' }))
   );
 
   return zip.generateAsync({ type: 'uint8array' });
@@ -166,7 +166,7 @@ async function buildObjectExportZip(opts: {
   zip.file('manifest.json', new TextEncoder().encode(stableStringify({ ...manifestCore, manifest_hash: manifestHash })));
   zip.file(
     'meta.json',
-    new TextEncoder().encode(stableStringify({ title: 'Exported workspace data', notes: 'Test', source: 'top-ai-ideas' }))
+    new TextEncoder().encode(stableStringify({ title: 'Exported workspace data', notes: 'Test', source: 'sentropic' }))
   );
   return zip.generateAsync({ type: 'uint8array' });
 }
@@ -269,6 +269,11 @@ describe('Import/Export API', () => {
     const manifestText = await manifest!.async('string');
     const parsed = JSON.parse(manifestText) as { scope?: string };
     expect(parsed.scope).toBe('workspace');
+    const meta = zip.file('meta.json');
+    expect(meta).toBeTruthy();
+    const metaText = await meta!.async('string');
+    const parsedMeta = JSON.parse(metaText) as { source?: string };
+    expect(parsedMeta.source).toBe('sentropic');
     expect(zip.file('workspaces.json')).toBeTruthy();
   });
 

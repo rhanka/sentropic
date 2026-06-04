@@ -59,7 +59,7 @@ export interface TenantContext extends Partial<ContractTenantContext> {
   /** Tenant / workspace id. Required for audit; not used for authz directly. */
   readonly tenantId: string;
   /**
-   * Workspace type (e.g. 'ai-ideas', 'opportunity'). Drives
+   * Workspace type (e.g. 'ai-priorities', 'opportunity'). Drives
    * `ContextFilter.workspaceTypes` matching.
    */
   readonly workspaceType?: string;

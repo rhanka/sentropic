@@ -31,9 +31,9 @@ const isVsCodeWebviewRuntime = (): boolean => {
   if (typeof window === 'undefined') return false;
   const runtime = (
     globalThis as typeof globalThis & {
-      __TOPAI_VSCODE_RUNTIME__?: Record<string, unknown>;
+      __SENTROPIC_VSCODE_RUNTIME__?: Record<string, unknown>;
     }
-  ).__TOPAI_VSCODE_RUNTIME__;
+  ).__SENTROPIC_VSCODE_RUNTIME__;
   return Boolean(runtime && typeof runtime === 'object');
 };
 
@@ -48,7 +48,7 @@ const createExtensionStreamPort = (): RuntimePortLike | null => {
   }).chrome?.runtime;
   if (!runtime?.connect) return null;
   try {
-    return runtime.connect({ name: 'topai-stream-proxy' });
+    return runtime.connect({ name: 'sentropic-stream-proxy' });
   } catch {
     return null;
   }

@@ -165,7 +165,7 @@ workflowConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c)
 // Workspace type workflow registry endpoints (§11.5)
 // ---------------------------------------------------------------------------
 
-const workspaceTypeParam = z.enum(["ai-ideas", "opportunity", "code"]);
+const workspaceTypeParam = z.enum(["ai-priorities", "opportunity", "code"]);
 
 const registerWorkspaceTypeWorkflowSchema = z.object({
   workflowDefinitionId: z.string().min(1),
