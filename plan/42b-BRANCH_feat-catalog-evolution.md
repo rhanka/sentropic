@@ -4,8 +4,8 @@
 Build an app-local unified capability catalog of five entry kinds (skill, tool, agent, workflow, canvas) fed by pluggable `CatalogSource` plugins, refactoring the current skill-only registry behind a `CompositeCatalogRegistry` with zero regression, and retiring the dormant `feat/mcp-tool-catalog-br19b` MCP stub.
 
 ## Scope / Guardrails
-- Scope limited to the app-local catalog machinery in `api/`, the consuming chat tool wiring, the agent template source, the optional `StaticCatalogSource` adapter in `@sentropic/skills`, and tests.
-- Catalog is APP-LOCAL in `api/src/services/catalog/**` (Codex MF6): a package CANNOT import the api-local agent template type; the `@sentropic/catalog` package extraction is DEFERRED.
+- Scope limited to the app-local catalog machinery in `api/`, the consuming chat tool wiring, the agent template source, and tests. `@sentropic/skills` is consumed READ-ONLY (its `FOUNDATION_SKILLS` bundle is imported into `api/`); this branch does NOT modify `packages/skills/src/**`.
+- Catalog is APP-LOCAL in `api/src/services/catalog/**` (Codex MF6 + plan-review MF3): `CatalogEntry`, `CatalogSource`, `CompositeCatalogRegistry`, `StaticCatalogSource`, the execution-dispatch seam, and `search_catalog` ALL live in `api/`. A package CANNOT import the api-local agent template type, so no shared catalog type is added to `@sentropic/skills`; the `@sentropic/catalog` package extraction is DEFERRED.
 - No DB migration required in v1 (all kinds are code/in-memory templates; `agent_definitions` and `workflow_definitions` untouched).
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -25,9 +25,9 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - `api/src/services/skills/foundation-executor.ts` (consult catalog dispatch for non-hardcoded names)
   - `api/src/config/default-agents.ts` (read-only import for the `agent` template source)
   - `api/tests/**` (characterization + per-kind + MCP integration tests)
-  - `packages/skills/src/**`, `packages/skills/tests/**` (ONLY the `StaticCatalogSource` adapter or a genuinely-shared type; foundation bundle stays here)
-  - `packages/skills/package.json` (version bump iff `packages/skills/src/**` changes — `enforce-package-bump`)
+  - `@sentropic/skills` is consumed READ-ONLY (`FOUNDATION_SKILLS` imported into `api/src/services/catalog/sources/static-source.ts`); `packages/skills/src/**` is NOT in implementation scope — no adapter, no shared catalog type is added there (plan-review MF3)
 - **Forbidden Paths (must not change in this branch)**:
+  - `packages/skills/src/**` (consumed read-only; `StaticCatalogSource` + all catalog machinery live app-local in `api/`)
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -36,8 +36,7 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - canvas runtime sub-program (`SPEC_EVOL_CHAT_CANVAS` — `LiveDocumentStore`/CRDT/editor)
   - other packages' `src/**` beyond a read-only kind-payload type import (`packages/flow/src/**`, canvas package src)
 - **Conditional Paths (allowed only with explicit exception)**:
-  - `api/package.json` + lockfile (add `@modelcontextprotocol/sdk` for Lot 5) → `BR42b-EX1`
-  - `packages/skills/package.json` version bump (if its `src/**` changes) → `BR42b-EX1`
+  - `api/package.json` + `api/package-lock.json` + root `package-lock.json` (add `@modelcontextprotocol/sdk` for Lot 5; the API image build runs `npm ci --workspaces` against the ROOT lock per `api/Dockerfile:51`, so BOTH locks must be updated for CI/image parity) → `BR42b-EX1`
   - `.github/workflows/**`
   - `api/drizzle/*.sql` (max 1 file — only if v1 scope unexpectedly needs DB persistence; default none)
 - **Exception process**:
@@ -46,10 +45,10 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- `BR42b-EX1` (`deferred` until Lot 5): touch `api/package.json` + lockfile to add `@modelcontextprotocol/sdk` via `make install-api`, and bump `packages/skills/package.json` `version` if `packages/skills/src/**` is touched.
-  - Reason: MCP `CatalogSource` (Lot 5) needs the official SDK; `enforce-package-bump` CI gate requires a version bump for any touched non-private package `src/**`.
-  - Impact: one new runtime dependency in `api/`; one semver bump (minor) for `@sentropic/skills` if its src changes.
-  - Rollback: remove the dependency line + lockfile entry; revert the version bump; MCP source falls back to deferred.
+- `BR42b-EX1` (`deferred` until Lot 5): touch `api/package.json` + BOTH `api/package-lock.json` and root `package-lock.json` to add `@modelcontextprotocol/sdk` via `make install-api NPM_LIB=@modelcontextprotocol/sdk ENV=test-feat-catalog-evolution-42b`.
+  - Reason: MCP `CatalogSource` (Lot 5) needs the official SDK. The API image build runs `npm ci --workspaces --include-workspace-root` against the ROOT `package-lock.json` (`api/Dockerfile:51`), so updating only `api/package-lock.json` breaks CI/image parity — both locks must carry the new dependency.
+  - Impact: one new runtime dependency in `api/`; two lockfiles updated (api + root). No `@sentropic/skills` change (catalog is fully app-local; the foundation bundle is consumed read-only), so no skills version bump.
+  - Rollback: remove the dependency line + both lockfile entries; MCP source falls back to deferred.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -80,8 +79,9 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - [ ] Confirm scope boundaries and declare `BR42b-EX1` posture (deferred until Lot 5).
   - [ ] Pin CURRENT catalog behaviour GREEN on current code (0-regression baseline):
     - [ ] Add `api/tests/services/catalog-characterization.spec.ts`: assert `resolveFoundationChatTools(input)` returns the 16-skill foundation bundle projection + the `search_skills` meta-tool, per authz allowlist (`buildFoundationSkillsAuthz`).
+    - [ ] **Live-chat oracle (plan-review MF1)**: pin the ACTUAL per-turn OpenAI tool array as consumed by `chat-service.ts:2749` — assert `search_skills` is FIRST, the exact 16 foundation skill names are present, the exact resolved tool descriptors (name/description/parameters) and their ORDER, and that consumption is synchronous. This is the live 0-regression oracle (not just the facade); it must stay byte-identical through Lot 1 BEFORE any new kind is added.
     - [ ] Add coverage pinning `SkillsToolRegistry.resolveTools` prepends `SEARCH_SKILLS_RESOLVED_TOOL` (skill-only) and stays synchronous.
-    - [ ] Add coverage pinning `executeFoundationSearchSkills` output shape (`SkillSearchHit[]` metadata, not SKILL.md bodies).
+    - [ ] **`search_skills` SEMANTICS (plan-review MF2)**, not just shape: add exact `SkillSearchHit[]` fixtures for representative queries (multi-hit, single-hit), proving ranking/order, the result `limit`, empty-query behaviour, and category/role/authz filtering — `executeFoundationSearchSkills` returns metadata hits (not SKILL.md bodies). Same fixtures re-asserted through Lot 1 and after Lot 7 (`search_catalog`).
     - [ ] Add coverage pinning `foundation-executor` dispatch by hardcoded name + `unhandled` for unknown names (`chat-service.ts:4119` surface).
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
@@ -94,11 +94,11 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - [ ] Add `api/src/services/catalog/composite-registry.ts`: `CompositeCatalogRegistry` fanning `list/get/search` across source snapshots with foundation-precedence collision policy.
   - [ ] Add `api/src/services/catalog/sources/static-source.ts`: `StaticCatalogSource` (id `foundation`) wrapping `FOUNDATION_SKILLS` → `skill`-kind entries.
   - [ ] Wire `api/src/services/skills/catalog.ts` to compose foundation via the composite registry; keep `search_skills`-first contract byte-identical; chat tool contract unchanged.
-  - [ ] Keep `packages/skills/src/**` untouched unless a small shared-type/adapter change is strictly needed (bump `packages/skills/package.json` if so — `BR42b-EX1`).
+  - [ ] Keep `packages/skills/src/**` UNTOUCHED — `StaticCatalogSource` lives app-local in `api/src/services/catalog/sources/static-source.ts` and imports `FOUNDATION_SKILLS` read-only (plan-review MF3); no shared catalog type or adapter is added to the package.
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
     - [ ] **API tests**
-      - [ ] Update `api/tests/services/catalog-characterization.spec.ts` to run through the composite path and prove byte-identical resolved tool set (GATE = 0-regression).
+      - [ ] Update `api/tests/services/catalog-characterization.spec.ts` to run through the composite path and prove byte-identical resolved tool set INCLUDING the live-chat oracle (MF1 per-turn OpenAI tool array) + the `search_skills` semantic fixtures (MF2) — GATE = 0-regression. Any byte difference STOPS the lot.
       - [ ] Add `api/tests/services/catalog/composite-registry.spec.ts` (list/get/search fan-out + collision precedence).
       - [ ] Add `api/tests/services/catalog/static-source.spec.ts` (foundation → `skill` entries, snapshot is sync + always-fresh).
       - [ ] Scoped runs while evolving: `make test-api-services SCOPE=tests/services/catalog ENV=test-feat-catalog-evolution-42b`
@@ -143,7 +143,7 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
 
 - [ ] **Lot 5 — MCP `CatalogSource` (absorbs br19b)**
   - [ ] Declare/confirm `BR42b-EX1` before touching `api/package.json`.
-  - [ ] `make install-api @modelcontextprotocol/sdk ENV=test-feat-catalog-evolution-42b`
+  - [ ] `make install-api NPM_LIB=@modelcontextprotocol/sdk ENV=test-feat-catalog-evolution-42b` (positional package arg is NOT supported — the target reads `${NPM_LIB}`); verify BOTH `api/package-lock.json` and root `package-lock.json` are updated for CI/image parity.
   - [ ] Add `api/src/services/catalog/sources/mcp-source.ts`: `McpCatalogSource` (`kind: 'mcp'`) — connect (stdio/HTTP-SSE), `tools/list` → `tool`-kind entries, sanitized provider-safe public name + `rawName` (§3.3), async `refresh()`.
   - [ ] Wire MCP `call` through the Lot-2 execution seam; per-source config (URL/command, auth token/headers, allow/deny filter) carried out-of-band (env/workspace config), NOT in the entry.
   - [ ] Retire `feat/mcp-tool-catalog-br19b` (no-op cleanup; no code/PR on origin).
@@ -177,7 +177,7 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
     - [ ] **E2E tests**
       - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 ENV=e2e-feat-catalog-evolution-42b`
       - [ ] Add/extend `e2e/tests/03-chat.spec.ts` coverage: a chat turn that surfaces a catalog tool via `search_catalog` resolves + executes (non-regression of `search_skills` flow).
-      - [ ] Sub-lot gate: `make clean test-e2e API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 ENV=e2e-feat-catalog-evolution-42b E2E_GROUP=<matrix.e2e_group>` (groups per `.github/workflows/ci.yml`)
+      - [ ] Sub-lot gate: `make clean test-e2e API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 E2E_GROUP=<matrix.e2e_group> ENV=e2e-feat-catalog-evolution-42b` (groups per `.github/workflows/ci.yml`; `ENV=` is the LAST argument)
     - [ ] non mandatory UAT (only if a behaviour-visible chat change needs human confirmation)
       - [ ] Web app: chat panel — confirm `search_skills`-first behaviour unchanged; `search_catalog` returns cross-kind hits.
   - [ ] `make down ENV=e2e-feat-catalog-evolution-42b`
@@ -189,10 +189,10 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint (api): `make typecheck-api lint-api ENV=test-feat-catalog-evolution-42b`
   - [ ] Retest API (cf Lot 1): `make test-api ENV=test-feat-catalog-evolution-42b`
-  - [ ] Retest E2E (cf Lot 7 groups): `make clean test-e2e API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 ENV=e2e-feat-catalog-evolution-42b E2E_GROUP=<matrix.e2e_group>`
+  - [ ] Retest E2E (cf Lot 7 groups): `make clean test-e2e API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 E2E_GROUP=<matrix.e2e_group> ENV=e2e-feat-catalog-evolution-42b`
   - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures here.
   - [ ] Record explicit user sign-off if any AI flaky test is accepted.
-  - [ ] Bump affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed — enforced by CI `enforce-package-bump` (only `@sentropic/skills` if its src was touched; catalog is api-local so usually none).
+  - [ ] Bump affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed — enforced by CI `enforce-package-bump`. NONE expected: the catalog is fully app-local in `api/` and `@sentropic/skills` is consumed read-only (plan-review MF3), so no package `src/**` is touched.
   - [ ] Final gate step 1: create/update PR using this file's text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of this file, push, and merge.
