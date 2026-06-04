@@ -29,7 +29,7 @@ const withoutMeta = (tools: ReadonlyArray<ResolvedTool>): ResolvedTool[] =>
   tools.filter((t) => t.name !== SEARCH_SKILLS_TOOL_NAME);
 
 const buildAuthz = (overrides: Partial<AuthzContext> = {}): AuthzContext => ({
-  tenant: { tenantId: 't-1', workspaceType: 'ai-ideas' },
+  tenant: { tenantId: 't-1', workspaceType: 'ai-priorities' },
   roles: ['editor'],
   permissions: [],
   permissionMode: 'open',
@@ -86,7 +86,7 @@ const WAVE_C_SKILLS = [
     name: 'executive_summary',
     tools: ['executive_summary_get', 'executive_summary_update'],
     bodyTitle: 'Executive summary skill',
-    workspaceTypes: ['neutral', 'ai-ideas', 'opportunity'],
+    workspaceTypes: ['neutral', 'ai-priorities', 'opportunity'],
     updateTool: 'executive_summary_update',
   },
   {
@@ -94,7 +94,7 @@ const WAVE_C_SKILLS = [
     name: 'matrix',
     tools: ['matrix_get', 'matrix_update'],
     bodyTitle: 'Matrix skill',
-    workspaceTypes: ['neutral', 'ai-ideas', 'opportunity'],
+    workspaceTypes: ['neutral', 'ai-priorities', 'opportunity'],
     updateTool: 'matrix_update',
   },
   {
@@ -108,7 +108,7 @@ const WAVE_C_SKILLS = [
     name: 'gate_review',
     tools: ['gate_review'],
     bodyTitle: 'Gate review skill',
-    workspaceTypes: ['neutral', 'ai-ideas', 'opportunity'],
+    workspaceTypes: ['neutral', 'ai-priorities', 'opportunity'],
   },
 ] as const;
 
@@ -314,7 +314,7 @@ describe('foundation bundle — Wave B object skills', () => {
       expect(skill.metadata.category).toBe('object');
       expect(skill.metadata.contextFilter?.workspaceTypes).toEqual([
         'neutral',
-        'ai-ideas',
+        'ai-priorities',
         'opportunity',
       ]);
       expect(skill.metadata.toolNames).toEqual(tools);

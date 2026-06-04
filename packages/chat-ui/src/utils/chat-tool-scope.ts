@@ -1,4 +1,4 @@
-export type WorkspaceType = 'neutral' | 'ai-ideas' | 'opportunity' | 'code';
+export type WorkspaceType = 'neutral' | 'ai-priorities' | 'opportunity' | 'code';
 
 export type ChatToolScopeToggle = {
   id: string;
@@ -16,12 +16,12 @@ const CROSS_WORKSPACE_TOOL_IDS = new Set<string>([
   'workspace_list', 'initiative_search', 'task_dispatch',
 ]);
 
-const AI_IDEAS_TOOL_IDS = new Set<string>([
+const AI_PRIORITIES_TOOL_IDS = new Set<string>([
   'document_generate',
 ]);
 
 const WORKSPACE_TYPE_TOOL_IDS: Record<WorkspaceType, ReadonlySet<string>> = {
-  'ai-ideas': AI_IDEAS_TOOL_IDS,
+  'ai-priorities': AI_PRIORITIES_TOOL_IDS,
   opportunity: EXTENDED_OBJECT_TOOL_IDS,
   code: new Set<string>(), // no extra tools
   neutral: CROSS_WORKSPACE_TOOL_IDS,
@@ -35,7 +35,7 @@ export const getWorkspaceTypeToolIds = (wsType: WorkspaceType | null): ReadonlyS
 const ALL_WORKSPACE_TYPE_SPECIFIC_TOOL_IDS = new Set<string>([
   ...EXTENDED_OBJECT_TOOL_IDS,
   ...CROSS_WORKSPACE_TOOL_IDS,
-  ...AI_IDEAS_TOOL_IDS,
+  ...AI_PRIORITIES_TOOL_IDS,
 ]);
 
 /**
