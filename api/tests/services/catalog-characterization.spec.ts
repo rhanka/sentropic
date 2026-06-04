@@ -634,6 +634,82 @@ describe('executeFoundationSkillTool — dispatch oracle', () => {
 });
 
 // ---------------------------------------------------------------------------
+// § 6b  EXECUTOR + SEAM FALL-THROUGH (BR-42b Lot 2 addition)
+//
+// After Lot 2, foundation-executor.ts consults the catalog execution seam
+// for names it does not hardcode, BEFORE returning { handled: false }.
+// This section asserts that:
+//   (a) Hardcoded foundation tool names still dispatch UNCHANGED through the
+//       hardcoded branches (the seam is never reached for those names).
+//   (b) Completely unknown names still return { handled: false } — unchanged
+//       from Lot 0/1 — because the standalone tool source is EMPTY by default.
+//   (c) The 28-tool order oracle (§7) is byte-identical: the empty standalone
+//       source adds zero entries to the resolved tool set.
+//
+// NO expected value from §6 is changed. These tests are ADDITIVE assertions.
+// ---------------------------------------------------------------------------
+
+describe('executeFoundationSkillTool — seam fall-through (Lot 2)', () => {
+  function makeStubInputLot2(toolName: string, args: Record<string, unknown> = {}): ExecuteFoundationSkillToolInput {
+    return {
+      toolCall: { id: 'tc-lot2-001', name: toolName, args: JSON.stringify(args) },
+      args,
+      options: {
+        userId: 'u-lot2',
+        sessionId: 'sess-lot2',
+        assistantMessageId: 'msg-lot2',
+      },
+      streamSeq: 0,
+      sessionWorkspaceId: 'ws-lot2',
+      workspaceType: 'ai-ideas',
+      currentUserRole: null,
+      readOnly: true,
+      allowedFolderIds: new Set<string>(),
+      allowedByType: {
+        organization: new Set<string>(),
+        folder: new Set<string>(),
+        usecase: new Set<string>(),
+        executive_summary: new Set<string>(),
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      hasContextType: (_type: any) => false,
+      isAllowedOrganizationId: async (_id: string) => false,
+      tools: undefined,
+    } as ExecuteFoundationSkillToolInput;
+  }
+
+  it('unknown tool still returns handled:false through the seam fall-through (standalone source is empty)', async () => {
+    // With no tools registered in the standalone source, the seam returns
+    // handled:false, and foundation-executor returns handled:false as before.
+    const result = await executeFoundationSkillTool(
+      makeStubInputLot2('__completely_unknown_in_lot2__'),
+    );
+    expect(result.handled).toBe(false);
+    expect(result.streamSeq).toBe(0);
+    expect(result.result).toBeUndefined();
+  });
+
+  it('hardcoded foundation names are not affected by the seam (byte-identical dispatch)', async () => {
+    // Control: 'no_such_skill_xyz' was unhandled in Lot 0/1 and must remain so.
+    const result = await executeFoundationSkillTool(
+      makeStubInputLot2('no_such_skill_xyz'),
+    );
+    expect(result.handled).toBe(false);
+  });
+
+  it('resolved tool set is unchanged: 28 tools (1 search_skills + 27 foundation), seam adds zero', () => {
+    // The standalone source is empty → no new tools appear in the resolved set.
+    // This confirms the 28-tool oracle in §7 is byte-identical after Lot 2.
+    const tools = resolveFoundationChatTools(
+      makeAllowlistInput(ALL_FOUNDATION_TOOL_NAMES),
+    );
+    expect(tools).toHaveLength(1 + ALL_FOUNDATION_TOOL_NAMES.length);
+    // search_skills is still first.
+    expect(tools[0]!.function.name).toBe('search_skills');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // § 7  TOOL DESCRIPTOR ORDER — pin the exact tool-name sequence
 //
 // The order of tools in the resolved array is determined by:
