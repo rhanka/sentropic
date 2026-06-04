@@ -2,6 +2,7 @@ import type OpenAI from 'openai';
 import { writeStreamEvent } from '../stream-service';
 import { toolService } from '../tool-service';
 import {
+  catalogExecutionSeam,
   executeFoundationSearchSkills,
   type ResolveFoundationChatToolsInput,
 } from './catalog';
@@ -523,6 +524,31 @@ export async function executeFoundationSkillTool(
       },
     );
     return handledFinalResult(input, { status: 'completed', ...searchResult });
+  }
+
+  // -------------------------------------------------------------------------
+  // Catalog execution seam (BR-42b Lot 2)
+  //
+  // All hardcoded foundation tool names have been checked above and did NOT
+  // match. Before returning unhandled, consult the catalog execution seam so
+  // that standalone `tool`-kind entries (e.g. future MCP tools from Lot 5)
+  // can dispatch their handlers.
+  //
+  // Foundation tools (hardcoded above) ALWAYS dispatch FIRST and never reach
+  // this point — the seam is a pure fall-through for non-hardcoded names.
+  // -------------------------------------------------------------------------
+  const seamResult = await catalogExecutionSeam.execute(toolCall.name, args);
+  if (seamResult.handled) {
+    return {
+      handled: true,
+      result: seamResult.result,
+      streamSeq: await writeCompletedToolResult({
+        assistantMessageId: options.assistantMessageId,
+        toolCallId: toolCall.id,
+        result: normalizedCompletedResult(seamResult.result),
+        streamSeq: input.streamSeq,
+      }),
+    };
   }
 
   return { handled: false, streamSeq: input.streamSeq };
