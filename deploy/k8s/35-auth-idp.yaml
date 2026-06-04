@@ -131,9 +131,13 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 15
           resources:
+            # Sized to fit the live sentropic ResourceQuota headroom WITHOUT a quota
+            # bump (poc-k8s 2026-06-04: req headroom 70m CPU / 320Mi mem; limit
+            # headroom 400m CPU / 348Mi mem). Thin IdP (auth routes + static screens,
+            # no AI/queue). Revisit upward if a quota bump lands or login load grows.
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 60m
+              memory: 192Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 300m
+              memory: 320Mi
