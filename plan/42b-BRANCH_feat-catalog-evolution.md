@@ -156,14 +156,14 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
       - [x] Sub-lot gate: catalog 207/207 (characterization 41/41 byte-identical + mcp-source 28/28); unit 70 files/572 tests GREEN.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
-- [ ] **Lot 6 — `canvas` template kind (kind-only, no runtime)**
-  - [ ] Add `api/src/services/catalog/sources/canvas-template-source.ts`: `canvas`-kind entries (`CanvasTemplate` = `LiveDocumentRef`-shaped starter `{ id, title, mimeType, initialContent, schema? }`, §2.4).
-  - [ ] Align `canvas|artifact` vocabulary with `packages/comments/src/types.ts` (`CommentTargetKind`); NO `LiveDocumentStore`/CRDT/editor runtime (carved out to `SPEC_EVOL_CHAT_CANVAS`).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **API tests**
-      - [ ] Add `api/tests/services/catalog/canvas-template-source.spec.ts` (canvas template entry shape; list/search/get parity; no runtime pulled in).
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
+- [x] **Lot 6 — `canvas` template kind (kind-only, no runtime)**
+  - [x] Add `api/src/services/catalog/sources/canvas-template-source.ts`: `canvas`-kind entries (`CanvasTemplate` = `LiveDocumentRef`-shaped starter `{ id, title, mimeType, initialContent, schema? }`, §2.4). Canvas source: no existing repo seeds found; new minimal static seed (blank-markdown + structured-plan).
+  - [x] Align `canvas|artifact` vocabulary with `packages/comments/src/types.ts` (`CommentTargetKind`); NO `LiveDocumentStore`/CRDT/editor runtime (carved out to `SPEC_EVOL_CHAT_CANVAS`).
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b` — CLEAN (0 errors, 197 pre-existing warnings)
+    - [x] **API tests**
+      - [x] Add `api/tests/services/catalog/canvas-template-source.spec.ts` (35 tests: canvas template entry shape; list/search/get parity; D-CANVAS no runtime; vocabulary alignment; 0-regression 28-tool order byte-identical; no canvas id leaked into chat tool set).
+      - [x] Sub-lot gate: characterization 41/41 byte-identical; catalog 242/242 GREEN (35 new canvas); unit 70 files/572 tests GREEN.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
 - [ ] **Lot 7 — `search_catalog` cross-kind discovery + integration**

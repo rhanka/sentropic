@@ -143,7 +143,13 @@ export type { DefaultWorkflowDefinition as WorkflowEntryTemplate };
  * starters. The `LiveDocumentStore`/CRDT/editor runtime is carved out to
  * `SPEC_EVOL_CHAT_CANVAS` and NOT included here.
  *
- * Type-only placeholder in Lot 1; populated in Lot 6.
+ * Populated in Lot 6 via `CanvasTemplateSource`.
+ *
+ * Vocabulary alignment (SPEC_EVOL_CATALOG §2.4 / Codex MF6):
+ *   The `canvas` kind term aligns with `packages/comments/src/types.ts`
+ *   `CommentTargetKind` which uses the literal `'canvas'` (line 13) as one of
+ *   the three new annotation target kinds (`message | canvas | artifact`).
+ *   We use that same term here — no parallel naming invented.
  */
 export type CanvasEntry = CatalogEntryBase & {
   readonly kind: 'canvas';
@@ -152,14 +158,38 @@ export type CanvasEntry = CatalogEntryBase & {
 };
 
 /**
- * Minimal placeholder for a canvas/live-document artifact template.
- * Mirrors §10.3 `LiveDocumentRef` from `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`.
+ * A canvas / live-document artifact template starter.
+ *
+ * Mirrors §10.3 `LiveDocumentRef` from `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`:
+ *   `{ id, initialContent, mimeType }` — the shape a tool returns when opening
+ *   a canvas session. We extend it with `title` (catalog-display name) and
+ *   an optional `schema` (JSON Schema for structured documents).
+ *
+ * NO runtime storage (LiveDocumentStore/CRDT/editor) is included here — that
+ * is carved out to `SPEC_EVOL_CHAT_CANVAS`. This is a KIND/TEMPLATE ONLY.
+ *
+ * Vocabulary alignment: `kind: 'canvas'` in `CatalogEntryBase` matches
+ * `CommentTargetKind` `'canvas'` from `packages/comments/src/types.ts:13`.
  */
 export interface CanvasTemplate {
+  /** Stable kebab-case id for the template (e.g. `blank-markdown`). */
   readonly id: string;
+  /** Human-readable display title (e.g. "Blank Markdown Document"). */
   readonly title: string;
+  /**
+   * MIME type of the document content.
+   * Examples: `'text/markdown'`, `'application/json'`, `'text/plain'`.
+   */
   readonly mimeType: string;
+  /**
+   * Starter content body — the initial text or JSON that populates the
+   * live document when the canvas session is opened. Optional (may be empty).
+   */
   readonly initialContent?: string;
+  /**
+   * Optional JSON Schema for structured document kinds (e.g. a table or form).
+   * Absent for free-form text/markdown templates.
+   */
   readonly schema?: Record<string, unknown>;
 }
 
