@@ -36,7 +36,7 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - canvas runtime sub-program (`SPEC_EVOL_CHAT_CANVAS` — `LiveDocumentStore`/CRDT/editor)
   - other packages' `src/**` beyond a read-only kind-payload type import (`packages/flow/src/**`, canvas package src)
 - **Conditional Paths (allowed only with explicit exception)**:
-  - `api/package.json` + `api/package-lock.json` + root `package-lock.json` (add `@modelcontextprotocol/sdk` for Lot 5; the API image build runs `npm ci --workspaces` against the ROOT lock per `api/Dockerfile:51`, so BOTH locks must be updated for CI/image parity) → `BR42b-EX1`
+  - `api/package.json` + root `package-lock.json` (add `@modelcontextprotocol/sdk` for Lot 5). Only the ROOT lock is authoritative + build-consumed: `api/Dockerfile:62-63` runs `npm ci --workspaces --include-workspace-root` against the ROOT `package-lock.json` (copied at `:51`), and npm-workspaces maintains only the root lock — `make install-api` updates root only. The tracked `api/package-lock.json` is a vestigial, unmaintained file NOT used by the build (and the API_VERSION cache-key already invalidates via the changed root lock) → `BR42b-EX1`
   - `.github/workflows/**`
   - `api/drizzle/*.sql` (max 1 file — only if v1 scope unexpectedly needs DB persistence; default none)
 - **Exception process**:
@@ -45,10 +45,11 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- `BR42b-EX1` (`deferred` until Lot 5): touch `api/package.json` + BOTH `api/package-lock.json` and root `package-lock.json` to add `@modelcontextprotocol/sdk` via `make install-api NPM_LIB=@modelcontextprotocol/sdk ENV=test-feat-catalog-evolution-42b`.
-  - Reason: MCP `CatalogSource` (Lot 5) needs the official SDK. The API image build runs `npm ci --workspaces --include-workspace-root` against the ROOT `package-lock.json` (`api/Dockerfile:51`), so updating only `api/package-lock.json` breaks CI/image parity — both locks must carry the new dependency.
-  - Impact: one new runtime dependency in `api/`; two lockfiles updated (api + root). No `@sentropic/skills` change (catalog is fully app-local; the foundation bundle is consumed read-only), so no skills version bump.
-  - Rollback: remove the dependency line + both lockfile entries; MCP source falls back to deferred.
+- `BR42b-EX1` (`RESOLVED` Lot 5): added `@modelcontextprotocol/sdk@^1.29.0` to `api/package.json` + the ROOT `package-lock.json` via `make install-api NPM_LIB=@modelcontextprotocol/sdk ENV=test-feat-catalog-evolution-42b` (commit `ead3e025`).
+  - Reason: MCP `CatalogSource` (Lot 5) needs the official SDK. The API image build runs `npm ci --workspaces --include-workspace-root` against the ROOT `package-lock.json` (copied at `api/Dockerfile:51`, executed `:62-63`).
+  - Resolution detail (verified): npm-workspaces maintains only the ROOT lock, so `make install-api` updated `package-lock.json` (root) only — `api/package-lock.json` is a tracked-but-vestigial file npm no longer maintains and the build never consumes; the API_VERSION cache-key invalidates via the changed root lock, so the image rebuilds. (This corrects the earlier plan-review MF4 assumption that both locks needed updating — only root is authoritative here.)
+  - Impact: one new runtime dependency in `api/`; root lockfile updated (+846 lines, SDK + transitive). No `@sentropic/skills` change (catalog fully app-local; foundation consumed read-only), so no skills version bump.
+  - Rollback: remove the dependency line + the root lockfile entries; MCP source falls back to deferred.
 
 ## AI Flaky tests
 - Acceptance rule:
