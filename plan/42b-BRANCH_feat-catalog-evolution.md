@@ -88,22 +88,22 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
     - [x] Sub-lot gate: `make test-api-smoke SCOPE=tests/services/catalog-characterization.spec.ts` + `make test-api-unit SCOPE=tests/services/catalog-characterization.spec.ts` — 38/38 GREEN on unchanged code. Full `make test-api` has pre-existing EACCES/OOM issues in parallel workers (not caused by this lot); characterization spec passes in isolation.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
-- [ ] **Lot 1 — `CatalogSource` seam [GATE, no behaviour change]**
-  - [ ] Add `api/src/services/catalog/types.ts`: `CatalogEntryKind`, `CatalogEntryMetadata` (shared = intersection, §3.1), `CatalogEntryBase`, the 5 per-kind payload entries, `CatalogEntry` union.
-  - [ ] Add `api/src/services/catalog/source.ts`: `CatalogSource` interface (sync `snapshot()` + optional async `refresh()` + optional `health()`).
-  - [ ] Add `api/src/services/catalog/composite-registry.ts`: `CompositeCatalogRegistry` fanning `list/get/search` across source snapshots with foundation-precedence collision policy.
-  - [ ] Add `api/src/services/catalog/sources/static-source.ts`: `StaticCatalogSource` (id `foundation`) wrapping `FOUNDATION_SKILLS` → `skill`-kind entries.
-  - [ ] Wire `api/src/services/skills/catalog.ts` to compose foundation via the composite registry; keep `search_skills`-first contract byte-identical; chat tool contract unchanged.
-  - [ ] Keep `packages/skills/src/**` UNTOUCHED — `StaticCatalogSource` lives app-local in `api/src/services/catalog/sources/static-source.ts` and imports `FOUNDATION_SKILLS` read-only (plan-review MF3); no shared catalog type or adapter is added to the package.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **API tests**
-      - [ ] Update `api/tests/services/catalog-characterization.spec.ts` to run through the composite path and prove byte-identical resolved tool set INCLUDING the live-chat oracle (MF1 per-turn OpenAI tool array) + the `search_skills` semantic fixtures (MF2) — GATE = 0-regression. Any byte difference STOPS the lot.
-      - [ ] Add `api/tests/services/catalog/composite-registry.spec.ts` (list/get/search fan-out + collision precedence).
-      - [ ] Add `api/tests/services/catalog/static-source.spec.ts` (foundation → `skill` entries, snapshot is sync + always-fresh).
-      - [ ] Scoped runs while evolving: `make test-api-services SCOPE=tests/services/catalog ENV=test-feat-catalog-evolution-42b`
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
-  - [ ] GATE: characterization GREEN through composite = proceed; otherwise STOP and fix before any kind lot.
+- [x] **Lot 1 — `CatalogSource` seam [GATE, no behaviour change]**
+  - [x] Add `api/src/services/catalog/types.ts`: `CatalogEntryKind`, `CatalogEntryMetadata` (shared = intersection, §3.1), `CatalogEntryBase`, the 5 per-kind payload entries, `CatalogEntry` union.
+  - [x] Add `api/src/services/catalog/source.ts`: `CatalogSource` interface (sync `snapshot()` + optional async `refresh()` + optional `health()`).
+  - [x] Add `api/src/services/catalog/composite-registry.ts`: `CompositeCatalogRegistry` fanning `list/get/search` across source snapshots with foundation-precedence collision policy.
+  - [x] Add `api/src/services/catalog/sources/static-source.ts`: `StaticCatalogSource` (id `foundation`) wrapping `FOUNDATION_SKILLS` → `skill`-kind entries.
+  - [x] Wire `api/src/services/skills/catalog.ts` to compose foundation via the composite registry; keep `search_skills`-first contract byte-identical; chat tool contract unchanged.
+  - [x] Keep `packages/skills/src/**` UNTOUCHED — `StaticCatalogSource` lives app-local in `api/src/services/catalog/sources/static-source.ts` and imports `FOUNDATION_SKILLS` read-only (plan-review MF3); no shared catalog type or adapter is added to the package.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
+    - [x] **API tests**
+      - [x] Update `api/tests/services/catalog-characterization.spec.ts` to run through the composite path and prove byte-identical resolved tool set INCLUDING the live-chat oracle (MF1 per-turn OpenAI tool array) + the `search_skills` semantic fixtures (MF2) — GATE = 0-regression. Any byte difference STOPS the lot.
+      - [x] Add `api/tests/services/catalog/composite-registry.spec.ts` (list/get/search fan-out + collision precedence).
+      - [x] Add `api/tests/services/catalog/static-source.spec.ts` (foundation → `skill` entries, snapshot is sync + always-fresh).
+      - [x] Scoped runs while evolving: `make test-api-services SCOPE=tests/services/catalog ENV=test-feat-catalog-evolution-42b`
+      - [x] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
+  - [x] GATE: characterization GREEN through composite = proceed; otherwise STOP and fix before any kind lot.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
 - [ ] **Lot 2 — `tool` kind + generic execution seam**
