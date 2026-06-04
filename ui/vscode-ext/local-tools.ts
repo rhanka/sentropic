@@ -91,7 +91,7 @@ type PermissionPathInfo = {
   outsideWorkspace: boolean;
 };
 
-const STORAGE_KEY_POLICIES = 'topai.vscode.localToolPolicies.v1';
+const STORAGE_KEY_POLICIES = 'sentropic.vscode.localToolPolicies.v1';
 const ORIGIN_VSCODE_WORKSPACE = 'vscode://workspace';
 const TOOL_NAME_REGEX = /^[a-z0-9:_* -]{1,96}$/i;
 const MAX_OUTPUT_CHARS = 12_000;
@@ -887,7 +887,7 @@ export class VsCodeLocalToolsRuntime {
       }
       const tempPatchPath = path.join(
         workspaceRoot,
-        `.topai_patch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.diff`,
+        `.sentropic_patch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.diff`,
       );
       await fs.writeFile(tempPatchPath, patchText, 'utf8');
       try {

@@ -14,7 +14,7 @@ export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
   ownerUserId: text('owner_user_id'), // nullable; UNIQUE constraint removed to allow multiple workspaces per user
   name: text('name').notNull(),
-  type: text('type').notNull().default('ai-ideas'), // 'neutral' | 'ai-ideas' | 'opportunity' | 'code'
+  type: text('type').notNull().default('ai-priorities'), // 'neutral' | 'ai-priorities' | 'opportunity' | 'code'
   gateConfig: jsonb('gate_config'), // nullable; gate sequence config per workspace. null = free gates (backward-compatible)
   hiddenAt: timestamp('hidden_at', { withTimezone: false }), // nullable; timestamp when workspace was hidden
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
@@ -1162,7 +1162,7 @@ export const bidProducts = pgTable('bid_products', {
 
 export const workspaceTypeWorkflows = pgTable('workspace_type_workflows', {
   id: text('id').primaryKey(),
-  workspaceType: text('workspace_type').notNull(), // 'ai-ideas' | 'opportunity' | 'code'
+  workspaceType: text('workspace_type').notNull(), // 'ai-priorities' | 'opportunity' | 'code'
   workflowDefinitionId: text('workflow_definition_id')
     .notNull()
     .references(() => workflowDefinitions.id),

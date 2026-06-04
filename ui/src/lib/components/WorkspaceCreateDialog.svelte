@@ -8,16 +8,16 @@
 
   export let open = false;
 
-  type WorkspaceType = 'ai-ideas' | 'opportunity' | 'code';
+  type WorkspaceType = 'ai-priorities' | 'opportunity' | 'code';
   const WORKSPACE_TYPES: { value: WorkspaceType; labelKey: string }[] = [
-    { value: 'ai-ideas', labelKey: 'workspaceSettings.types.aiIdeas' },
+    { value: 'ai-priorities', labelKey: 'workspaceSettings.types.aiPriorities' },
     { value: 'opportunity', labelKey: 'workspaceSettings.types.opportunity' },
     { value: 'code', labelKey: 'workspaceSettings.types.code' },
   ];
 
   let creating = false;
   let name = '';
-  let type: WorkspaceType = 'ai-ideas';
+  let type: WorkspaceType = 'ai-priorities';
   let inputRef: HTMLInputElement | null = null;
 
   const dispatch = createEventDispatcher<{ created: { id: string }; close: void }>();
@@ -35,7 +35,7 @@
       const res = await apiPost<{ id: string }>('/workspaces', { name: trimmed, type });
       addToast({ type: 'success', message: $_('workspaceSettings.toasts.created') });
       name = '';
-      type = 'ai-ideas';
+      type = 'ai-priorities';
       await loadUserWorkspaces();
       if (res?.id) setWorkspaceScope(res.id);
       open = false;

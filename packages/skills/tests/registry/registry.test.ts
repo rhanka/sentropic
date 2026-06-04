@@ -83,7 +83,7 @@ describe('InMemorySkillRegistry.list', () => {
     reg.register(
       buildSkill({
         name: 'documents',
-        contextFilter: { workspaceTypes: ['ai-ideas'] },
+        contextFilter: { workspaceTypes: ['ai-priorities'] },
       }),
     );
     reg.register(
@@ -92,7 +92,7 @@ describe('InMemorySkillRegistry.list', () => {
         contextFilter: { workspaceTypes: ['opportunity'] },
       }),
     );
-    const out = reg.list({ workspaceType: 'ai-ideas' }).map((m) => m.name).sort();
+    const out = reg.list({ workspaceType: 'ai-priorities' }).map((m) => m.name).sort();
     expect(out).toEqual(['documents', 'web']);
   });
 

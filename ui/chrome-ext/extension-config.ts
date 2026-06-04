@@ -8,7 +8,7 @@ export interface ExtensionRuntimeConfig {
     updatedAt: number;
 }
 
-export const EXTENSION_CONFIG_STORAGE_KEY = 'topAiIdeas:extensionConfig:v1';
+export const EXTENSION_CONFIG_STORAGE_KEY = 'sentropic:extensionConfig:v1';
 
 const BASE_DEFAULT_CONFIGS: Record<
     ExtensionProfile,
@@ -20,8 +20,8 @@ const BASE_DEFAULT_CONFIGS: Record<
         wsBaseUrl: '',
     },
     prod: {
-        apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
-        appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
+        apiBaseUrl: 'https://sentropic.sent-tech.ca/api/v1',
+        appBaseUrl: 'https://sentropic.sent-tech.ca',
         wsBaseUrl: '',
     },
 };

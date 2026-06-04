@@ -59,9 +59,9 @@ describe('@sentropic/chat-ui local tools store', () => {
     expect(isLocalToolRuntimeAvailable()).toBe(false);
   });
 
-  it('switches to VSCode tool catalog when adapter id is topai.vscode.runtime', () => {
+  it('switches to VSCode tool catalog when adapter id is sentropic.vscode.runtime', () => {
     useAdapter({
-      id: 'topai.vscode.runtime',
+      id: 'sentropic.vscode.runtime',
       sendMessage: vi.fn(),
     });
 
@@ -191,7 +191,7 @@ describe('@sentropic/chat-ui local tools store', () => {
         },
       })
       .mockResolvedValueOnce({ ok: true });
-    useAdapter({ id: 'topai.vscode.runtime', sendMessage });
+    useAdapter({ id: 'sentropic.vscode.runtime', sendMessage });
 
     const items = await listLocalToolPermissionPolicies();
     expect(items).toHaveLength(1);

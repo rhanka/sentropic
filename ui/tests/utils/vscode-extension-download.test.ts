@@ -10,13 +10,13 @@ describe('vscode extension download utils', () => {
     const data = await fetchVsCodeExtensionDownloadMetadata(async () => ({
       version: ' 0.1.0 ',
       source: ' ui/vscode-ext ',
-      downloadUrl: ' https://downloads.example.com/top-ai-ideas/vscode-ext.vsix ',
+      downloadUrl: ' https://downloads.example.com/sentropic/vscode-ext.vsix ',
     }));
 
     expect(data).toEqual({
       version: '0.1.0',
       source: 'ui/vscode-ext',
-      downloadUrl: 'https://downloads.example.com/top-ai-ideas/vscode-ext.vsix',
+      downloadUrl: 'https://downloads.example.com/sentropic/vscode-ext.vsix',
     });
   });
 
@@ -25,7 +25,7 @@ describe('vscode extension download utils', () => {
       fetchVsCodeExtensionDownloadMetadata(async () => ({
         version: '0.1.0',
         source: '',
-        downloadUrl: 'https://downloads.example.com/top-ai-ideas/vscode-ext.vsix',
+        downloadUrl: 'https://downloads.example.com/sentropic/vscode-ext.vsix',
       }))
     ).rejects.toThrow('Invalid VSCode extension download metadata response.');
   });

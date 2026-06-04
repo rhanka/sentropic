@@ -19,7 +19,7 @@ const contractAuthz = (
 describe('authz contract adapter', () => {
   it('adapts @sentropic/contracts authz into the existing skills authz API', () => {
     const authz = authzContextFromContract(contractAuthz(), {
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       roles: ['editor'],
       permissions: ['workspace.read'],
     });
@@ -29,7 +29,7 @@ describe('authz contract adapter', () => {
         tenantId: 'tenant-1',
         workspaceId: 'workspace-1',
         userId: 'user-1',
-        workspaceType: 'ai-ideas',
+        workspaceType: 'ai-priorities',
       },
       roles: ['editor'],
       permissions: ['workspace.read'],

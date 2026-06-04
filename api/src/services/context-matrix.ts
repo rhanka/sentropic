@@ -1,6 +1,6 @@
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
-import { AI_IDEAS_AGENTS } from '../config/default-agents-ai-ideas';
+import { AI_PRIORITIES_AGENTS } from '../config/default-agents-ai-priorities';
 import type { MatrixConfig } from '../types/matrix';
 
 export type MatrixLevelDescription = {
@@ -116,7 +116,7 @@ export async function generateOrganizationMatrixTemplate(
     (typeof runtimePrompt?.promptTemplate === 'string' &&
     runtimePrompt.promptTemplate.trim().length > 0
       ? runtimePrompt.promptTemplate
-      : AI_IDEAS_AGENTS.find(a => a.config.promptId === 'organization_matrix_template')?.config.promptTemplate as string) || '';
+      : AI_PRIORITIES_AGENTS.find(a => a.config.promptId === 'organization_matrix_template')?.config.promptTemplate as string) || '';
   if (!promptTemplate) {
     throw new Error('Prompt de génération de matrice non trouvé');
   }

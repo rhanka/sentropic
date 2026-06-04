@@ -15,4 +15,4 @@ export type ChatWidgetHandoffState = {
 };
 
 export const CHATWIDGET_HANDOFF_STORAGE_KEY =
-  'topAiIdeas:chatWidgetHandoff:v1';
+  'sentropic:chatWidgetHandoff:v1';

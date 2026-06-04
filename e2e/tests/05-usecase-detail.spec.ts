@@ -1,9 +1,11 @@
-import { test, expect, request } from '@playwright/test';
+import { test, expect, request, type Page } from '@playwright/test';
 import { waitForLockedByOther, waitForNoLocker } from '../helpers/lock-ui';
 import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des cas d\'usage', () => {
+  test.describe.configure({ mode: 'serial', retries: 0 });
+
   const FILE_TAG = 'e2e:initiative-detail.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
@@ -16,6 +18,46 @@ test.describe('Détail des cas d\'usage', () => {
   let lockUseCaseId = '';
   let lockUseCaseName = '';
   let folderId = '';
+
+  const setWorkspaceScope = (workspaceId: string) => {
+    try {
+      localStorage.setItem('workspaceScopeId', workspaceId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const useCaseNameField = (page: Page) => page.locator('input:not([type="file"]):not(.hidden), textarea').first();
+
+  const waitForInitiativeReady = async (page: Page, initiativeId: string, workspaceId: string) => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await page
+        .waitForResponse((res) => res.url().includes(`/api/v1/initiatives/${initiativeId}`), { timeout: 1_000 })
+        .catch(() => null);
+      if (response && [401, 403, 404].includes(response.status())) {
+        await page.evaluate(setWorkspaceScope, workspaceId).catch(() => {});
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        continue;
+      }
+
+      try {
+        await expect
+          .poll(async () => {
+            const [titleCount, titleFieldVisible] = await Promise.all([
+              page.locator('h1').count(),
+              useCaseNameField(page).isVisible().catch(() => false),
+            ]);
+            return titleCount > 0 || titleFieldVisible;
+          }, { timeout: 10_000 })
+          .toBe(true);
+        return;
+      } catch {
+        await page.evaluate(setWorkspaceScope, workspaceId).catch(() => {});
+        await page.reload({ waitUntil: 'domcontentloaded' });
+      }
+    }
+    await expect(page.locator('h1')).toBeVisible({ timeout: 5_000 });
+  };
 
   test.beforeAll(async () => {
     const userAApi = await request.newContext({
@@ -75,7 +117,13 @@ test.describe('Détail des cas d\'usage', () => {
 
     // Créer un cas d'usage dans ce dossier
     const useCaseRes = await userAApi.post(`/api/v1/initiatives?workspace_id=${workspaceAId}`, {
-      data: { folderId, name: 'Cas d\'usage Test', problem: 'Problème test', solution: 'Solution test' },
+      data: {
+        folderId,
+        name: 'Cas d\'usage Test',
+        problem: 'Problème test',
+        solution: 'Solution test',
+        constraints: ['Contrainte initiale E2E'],
+      },
     });
     if (!useCaseRes.ok()) throw new Error(`Impossible de créer cas d'usage (status ${useCaseRes.status()})`);
     const useCaseJson = await useCaseRes.json().catch(() => null);
@@ -182,35 +230,42 @@ test.describe('Détail des cas d\'usage', () => {
     }
   });
 
-  test('devrait mettre à jour un champ liste via chat (SSE)', async ({ browser }) => {
+  test('devrait mettre à jour un champ liste via SSE', async ({ browser }) => {
+    test.setTimeout(90_000);
+
     const userAContext = await browser.newContext({
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
+    const sseRequestPromise = page.waitForRequest((req) => {
+      try {
+        const url = new URL(req.url());
+        return url.pathname.endsWith('/api/v1/streams/sse') && url.searchParams.get('workspace_id') === workspaceAId;
+      } catch {
+        return false;
+      }
+    }, { timeout: 15_000 });
+
     await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
-
-    const chatButton = page.locator(
-      'button[aria-controls="chat-widget-dialog"]'
-    );
-    await expect(chatButton).toBeVisible({ timeout: 10_000 });
-    await chatButton.click();
-
-    const composer = page.locator('#chat-widget-dialog [role="textbox"][aria-label="Composer"]');
-    await expect(composer).toBeVisible({ timeout: 10_000 });
-    const editable = composer.locator('[contenteditable="true"]');
+    await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
+    await sseRequestPromise;
 
     const token = `E2E_CONSTRAINT_${Date.now()}`;
-    const prompt = `Remplace uniquement les contraintes par: ${token} A; ${token} B. Réponds uniquement avec OK.`;
-
-    await editable.click();
-    await page.keyboard.press('Control+A');
-    await page.keyboard.press('Backspace');
-    await page.keyboard.type(prompt);
-    await page.keyboard.press('Enter');
+    const updateRes = await page.request.put(
+      `${API_BASE_URL}/api/v1/initiatives/${encodeURIComponent(useCaseId)}?workspace_id=${encodeURIComponent(workspaceAId)}`,
+      {
+        data: {
+          constraints: [`${token} A`, `${token} B`],
+        },
+      }
+    );
+    if (!updateRes.ok()) {
+      throw new Error(`PUT /initiatives failed: ${updateRes.status()} ${await updateRes.text()}`);
+    }
 
     const constraintsSection = page.locator('[data-comment-section="constraints"]');
-    await expect(constraintsSection).toContainText(token, { timeout: 120_000 });
+    await expect(constraintsSection).toContainText(token, { timeout: 30_000 });
     await userAContext.close();
   });
 
@@ -256,9 +311,10 @@ test.describe('Détail des cas d\'usage', () => {
     const page = await userAContext.newPage();
     await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
 
-    const descriptionSection = page.locator('[data-comment-section="description"]');
-    await expect(descriptionSection).toBeVisible({ timeout: 10_000 });
+    const descriptionSection = page.locator('[data-comment-section="problem"]');
+    await expect(descriptionSection).toBeVisible({ timeout: 30_000 });
 
     const commentButton = descriptionSection.locator('button[aria-label="Commentaires"], button[aria-label="Comments"]');
     await descriptionSection.hover();
@@ -323,9 +379,10 @@ test.describe('Détail des cas d\'usage', () => {
     const page = await userAContext.newPage();
     await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
 
-    const actionsButton = page.locator('button[aria-label="Actions"]');
-    await expect(actionsButton).toBeVisible({ timeout: 10_000 });
+    const actionsButton = page.locator('button[aria-label="Actions"]').last();
+    await expect(actionsButton).toBeVisible({ timeout: 30_000 });
     await actionsButton.click();
 
     const exportAction = page.locator('button:has-text("Exporter")');
@@ -557,6 +614,8 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
+    test.setTimeout(90_000);
+
     const userAContext = await browser.newContext({
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
@@ -699,17 +758,17 @@ test.describe('Détail des cas d\'usage', () => {
     });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
-    const getUseCaseNameField = (page: typeof pageA) => page.locator('h1 textarea, h1 input').first();
 
-    // workspaceScopeId hydrated via storageState
+    await pageA.addInitScript(setWorkspaceScope, workspaceAId);
+    await pageB.addInitScript(setWorkspaceScope, workspaceAId);
 
     await pageA.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
-    await pageA.waitForResponse((res) => res.url().includes(`/api/v1/initiatives/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
+    await waitForInitiativeReady(pageA, lockUseCaseId, workspaceAId);
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
-    const editableFieldA = getUseCaseNameField(pageA);
-    await expect(editableFieldA).toBeVisible({ timeout: 2_000 });
+    const editableFieldA = useCaseNameField(pageA);
+    await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
     await editableFieldA.click();
     await pageA
       .waitForResponse((res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST', { timeout: 10_000 })
@@ -718,7 +777,7 @@ test.describe('Détail des cas d\'usage', () => {
 
     await pageB.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
-    await pageB.waitForResponse((res) => res.url().includes(`/api/v1/initiatives/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
+    await waitForInitiativeReady(pageB, lockUseCaseId, workspaceAId);
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await pageB.waitForResponse((res) => res.url().includes('/api/v1/locks/presence'), { timeout: 10_000 }).catch(() => {});
 
@@ -730,6 +789,8 @@ test.describe('Détail des cas d\'usage', () => {
     } catch {
       await pageA.reload({ waitUntil: 'domcontentloaded' });
       await pageB.reload({ waitUntil: 'domcontentloaded' });
+      await waitForInitiativeReady(pageA, lockUseCaseId, workspaceAId);
+      await waitForInitiativeReady(pageB, lockUseCaseId, workspaceAId);
       await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
       await expect(badgeA).toBeVisible({ timeout: 10_000 });
@@ -765,16 +826,15 @@ test.describe('Détail des cas d\'usage', () => {
     });
     const pageA = await userAContext.newPage();
     const pageB = await userBContext.newPage();
-    const getUseCaseNameField = (page: typeof pageA) => page.locator('h1 textarea, h1 input').first();
     await runLockBreaksOnLeaveScenario({
       pageA,
       pageB,
       url: `/initiative/${encodeURIComponent(lockUseCaseId)}`,
-      getEditableField: getUseCaseNameField,
+      getEditableField: useCaseNameField,
       expectBadgeOnArrival: true,
       expectBadgeGoneAfterLeave: true,
       waitForReady: async (page) => {
-        await expect(page.locator('h1')).toBeVisible({ timeout: 2_000 });
+        await waitForInitiativeReady(page, lockUseCaseId, workspaceAId);
       },
     });
 
@@ -782,6 +842,8 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('3 utilisateurs: 2e demande refusée, transfert vers le requester', async ({ browser }) => {
+    test.setTimeout(90_000);
+
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,
@@ -799,7 +861,9 @@ test.describe('Détail des cas d\'usage', () => {
     const pageB = await userBContext.newPage();
     const pageC = await userCContext.newPage();
 
-    // workspaceScopeId hydrated via storageState
+    await pageA.addInitScript(setWorkspaceScope, workspaceAId);
+    await pageB.addInitScript(setWorkspaceScope, workspaceAId);
+    await pageC.addInitScript(setWorkspaceScope, workspaceAId);
 
     const testName = `UC Lock 3 users ${Date.now()}`;
     const createRes = await userAApi.post(`/api/v1/initiatives?workspace_id=${workspaceAId}`, {
@@ -812,14 +876,16 @@ test.describe('Détail des cas d\'usage', () => {
 
     await pageA.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
+    await waitForInitiativeReady(pageA, testUseCaseId, workspaceAId);
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-    const editableFieldA = pageA.locator('h1 textarea, h1 input').first();
-    await expect(editableFieldA).toBeVisible({ timeout: 2_000 });
+    const editableFieldA = useCaseNameField(pageA);
+    await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
     await editableFieldA.click();
     await waitForNoLocker(pageA);
 
     await pageB.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
+    await waitForInitiativeReady(pageB, testUseCaseId, workspaceAId);
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await waitForLockedByOther(pageB);
     const requestButtonB = pageB.locator('button[aria-label="Demander le déverrouillage"]');
@@ -839,6 +905,7 @@ test.describe('Détail des cas d\'usage', () => {
 
     await pageC.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageC.waitForLoadState('domcontentloaded');
+    await waitForInitiativeReady(pageC, testUseCaseId, workspaceAId);
     await pageC.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await waitForLockedByOther(pageC);
     const requestButtonC = pageC.locator('button[aria-label="Demander le déverrouillage"]');

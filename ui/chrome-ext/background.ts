@@ -1,4 +1,4 @@
-// Service Worker for Top AI Ideas Extension
+// Service Worker for Sentropic Extension
 import {
     loadExtensionConfig,
     saveExtensionConfig,
@@ -30,7 +30,7 @@ const toolExecutors = createToolExecutors();
 const ALLOWED_PROXY_HOSTS = new Set([
     'localhost',
     '127.0.0.1',
-    'top-ai-ideas-api.sent-tech.ca',
+    'sentropic.sent-tech.ca',
 ]);
 
 const NON_INJECTABLE_URL_PREFIXES = [
@@ -209,7 +209,7 @@ type StreamProxyStartPayload = {
     streamIds: string[];
 };
 
-const STREAM_PROXY_PORT_NAME = 'topai-stream-proxy';
+const STREAM_PROXY_PORT_NAME = 'sentropic-stream-proxy';
 
 const normalizeStreamProxyPayload = (
     raw: any,
