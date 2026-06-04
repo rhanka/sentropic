@@ -1,4 +1,4 @@
-# TODO - Top AI Ideas
+# TODO - Sentropic
 
 ## Sentropic transition — PR-117
 

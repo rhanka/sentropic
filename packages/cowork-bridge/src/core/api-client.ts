@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 
 export interface ApiClientConfig {
-    /** Base URL for the API (e.g. "https://top-ai-ideas-api.sent-tech.ca/api/v1") */
+    /** Base URL for the API (e.g. "https://sentropic.sent-tech.ca/api/v1") */
     baseUrl: string;
     /** Whether we're in a browser environment (always true in extension) */
     isBrowser?: boolean;

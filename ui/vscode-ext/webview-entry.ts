@@ -75,11 +75,11 @@ type PersistedRuntimeConfig = {
 
 declare global {
   interface Window {
-    __TOPAI_VSCODE_RUNTIME__?: TopAiRuntimeConfig;
+    __SENTROPIC_VSCODE_RUNTIME__?: TopAiRuntimeConfig;
   }
 }
 
-const RUNTIME_CONFIG_STORAGE_KEY = 'topai.vscode.runtime.config';
+const RUNTIME_CONFIG_STORAGE_KEY = 'sentropic.vscode.runtime.config';
 const WORKSPACE_SCOPE_STORAGE_KEY = 'workspaceScopeId';
 const buildEnv = (import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
@@ -1175,7 +1175,7 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
     ...existing,
     runtime: {
       ...(existing.runtime ?? {}),
-      id: 'topai.vscode.runtime',
+      id: 'sentropic.vscode.runtime',
       sendMessage,
       connect: () => createRuntimePort(),
     },
@@ -1184,7 +1184,7 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
 
 const bootstrapRuntimeState = async (): Promise<RuntimeState> => {
   const bridge = createBridge();
-  const hostRuntime = window.__TOPAI_VSCODE_RUNTIME__ ?? {};
+  const hostRuntime = window.__SENTROPIC_VSCODE_RUNTIME__ ?? {};
   let hostConfig: Partial<TopAiRuntimeConfig> = hostRuntime;
   if (bridge) {
     try {
@@ -1223,7 +1223,7 @@ const bootstrapRuntimeState = async (): Promise<RuntimeState> => {
 const contextProvider = createExtensionContextProvider({
   route: { id: '/vscode' },
   params: {},
-  url: new URL('https://top-ai-ideas.local/vscode'),
+  url: new URL('https://sentropic.local/vscode'),
 });
 
 const initialState: ChatWidgetHandoffState = {

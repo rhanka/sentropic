@@ -1,8 +1,8 @@
-export const TOPAI_WEBVIEW_SOURCE = 'topai-vscode-webview';
-export const TOPAI_HOST_SOURCE = 'topai-vscode-host';
+export const SENTROPIC_WEBVIEW_SOURCE = 'sentropic-vscode-webview';
+export const SENTROPIC_HOST_SOURCE = 'sentropic-vscode-host';
 
 export type VsCodeBridgeRequestEnvelope = {
-  source: typeof TOPAI_WEBVIEW_SOURCE;
+  source: typeof SENTROPIC_WEBVIEW_SOURCE;
   type: 'request';
   command: string;
   requestId: string;
@@ -10,7 +10,7 @@ export type VsCodeBridgeRequestEnvelope = {
 };
 
 export type VsCodeBridgeEventEnvelope = {
-  source: typeof TOPAI_WEBVIEW_SOURCE;
+  source: typeof SENTROPIC_WEBVIEW_SOURCE;
   type: 'event';
   command: string;
   payload?: unknown;
@@ -21,7 +21,7 @@ export type VsCodeBridgeOutgoingEnvelope =
   | VsCodeBridgeEventEnvelope;
 
 export type VsCodeBridgeIncomingEnvelope = {
-  source: typeof TOPAI_HOST_SOURCE;
+  source: typeof SENTROPIC_HOST_SOURCE;
   type: 'response' | 'event';
   command: string;
   requestId?: string;
@@ -59,7 +59,7 @@ type VsCodeApiLike = {
 const isHostEnvelope = (value: unknown): value is VsCodeBridgeIncomingEnvelope => {
   if (!value || typeof value !== 'object') return false;
   const envelope = value as Record<string, unknown>;
-  if (envelope.source !== TOPAI_HOST_SOURCE) return false;
+  if (envelope.source !== SENTROPIC_HOST_SOURCE) return false;
   if (typeof envelope.command !== 'string') return false;
   return envelope.type === 'response' || envelope.type === 'event';
 };
@@ -170,7 +170,7 @@ export function createVsCodeBridge(
         });
 
         transport.postMessage({
-          source: TOPAI_WEBVIEW_SOURCE,
+          source: SENTROPIC_WEBVIEW_SOURCE,
           type: 'request',
           command,
           requestId,
@@ -181,7 +181,7 @@ export function createVsCodeBridge(
 
     notify(command: string, payload?: unknown): void {
       transport.postMessage({
-        source: TOPAI_WEBVIEW_SOURCE,
+        source: SENTROPIC_WEBVIEW_SOURCE,
         type: 'event',
         command,
         payload,
