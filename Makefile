@@ -18,8 +18,8 @@ export VITE_EXTENSION_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
 export VITE_EXTENSION_APP_BASE_URL ?= http://localhost:$(UI_PORT)
 export VITE_EXTENSION_WS_BASE_URL ?=
 export VITE_EXTENSION_PROFILE_BUILD ?= prod
-export VITE_EXTENSION_API_BASE_URL_BUILD ?= https://top-ai-ideas-api.sent-tech.ca/api/v1
-export VITE_EXTENSION_APP_BASE_URL_BUILD ?= https://top-ai-ideas.sent-tech.ca
+export VITE_EXTENSION_API_BASE_URL_BUILD ?= https://sentropic.sent-tech.ca/api/v1
+export VITE_EXTENSION_APP_BASE_URL_BUILD ?= https://sentropic.sent-tech.ca
 export VITE_EXTENSION_WS_BASE_URL_BUILD ?=
 export API_BASE_URL ?= http://localhost:$(API_PORT)
 export UI_BASE_URL ?= http://localhost:$(UI_PORT)
@@ -34,9 +34,9 @@ export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI
 export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json packages/chat-server/src packages/chat-server/package.json packages/chat-server/tsconfig.json packages/comments/src packages/comments/package.json packages/comments/tsconfig.json api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export API_IMAGE_NAME ?= top-ai-ideas-api
-export UI_IMAGE_NAME  ?= top-ai-ideas-ui
-export E2E_IMAGE_NAME ?= top-ai-ideas-e2e
+export API_IMAGE_NAME ?= sentropic-api
+export UI_IMAGE_NAME  ?= sentropic-ui
+export E2E_IMAGE_NAME ?= sentropic-e2e
 export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
 export FLOW_NODE_IMAGE ?= node:24-bookworm-slim
 # Skills package needs build tools for isolated-vm (native addon).
@@ -290,7 +290,7 @@ build-ext-vscode: ## Build VSCode extension package to ui/static/vscode-extensio
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npm exec svelte-kit sync && npm run build:vscode-ext'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/static/vscode-extension/top-ai-ideas-vscode-extension.vsix && test -f /workspace/ui/vscode-ext/dist/extension.cjs'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/static/vscode-extension/sentropic-vscode-extension.vsix && test -f /workspace/ui/vscode-ext/dist/extension.cjs'
 	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
 
 .PHONY: dev-ext-vscode
@@ -521,8 +521,8 @@ typecheck-ui: up-ui ## Run UI type checks
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run check
 
 .PHONY: typecheck-api
-typecheck-api: ## Run API type checks
-	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run typecheck
+typecheck-api: prepare-node-workspace ## Run API type checks
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api npm run typecheck
 
 .PHONY: typecheck-llm-mesh
 typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
@@ -1353,8 +1353,8 @@ lint-ui: up-ui ## Run UI linter
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run lint
 
 .PHONY: lint-api
-lint-api: ## Run API linter
-	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run lint
+lint-api: prepare-node-workspace ## Run API linter
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api npm run lint
 
 .PHONY: format
 format:
@@ -1495,7 +1495,7 @@ build-e2e:
 .PHONY: save-e2e
 save-e2e:
 	@echo "💾 Saving E2E image as artifact..."
-	@docker save top-ai-ideas-fullstack-e2e:latest -o e2e-image.tar
+	@docker save $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) -o e2e-image.tar
 
 .PHONY: load-e2e
 load-e2e:
@@ -1608,7 +1608,7 @@ clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to ski
 	fi
 	@echo "🗑️  Cleaning database..."
 	$(DOCKER_COMPOSE) down
-	@docker volume rm top-ai-ideas-fullstack_pg_data || true
+	@docker volume rm $(COMPOSE_PROJECT_NAME)_pg_data || true
 	@echo "✅ Database cleaned!"
 	@echo "🚀 Restarting services..."
 
@@ -2024,7 +2024,7 @@ db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initiali
 # -----------------------------------------------------------------------------
 # Document storage backup/restore (MinIO / S3)
 
-DOC_BUCKET ?= $(or $(DOC_STORAGE_BUCKET),top-ai-ideas-dev)
+DOC_BUCKET ?= $(or $(DOC_STORAGE_BUCKET),sentropic-docs-dev)
 DOC_SOURCE ?= prod
 
 # Note: mc mirror is not an atomic S3 snapshot — it lists objects at start then copies them.
@@ -2240,7 +2240,7 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
 	else \
-		IMAGE_NAME="top-ai-ideas-$*:latest"; \
+		IMAGE_NAME="sentropic-$*:latest"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
 	fi; \

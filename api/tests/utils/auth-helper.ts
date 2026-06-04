@@ -234,7 +234,7 @@ export function createMockRegistrationOptions() {
     challenge: 'mock-challenge-base64',
     rp: {
       id: 'localhost',
-      name: 'Top AI Ideas',
+      name: 'Sentropic',
     },
     user: {
       id: 'mock-user-id',

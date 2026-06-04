@@ -27,9 +27,7 @@ describe('WebAuthn Configuration Service', () => {
     it('should have valid RP name', () => {
       const config = getWebAuthnConfig();
       
-      expect(config.rpName).toBeDefined();
-      expect(config.rpName.length).toBeGreaterThan(0);
-      expect(typeof config.rpName).toBe('string');
+      expect(config.rpName).toBe('Sentropic');
     });
 
     it('should have valid origin configuration', () => {
