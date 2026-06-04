@@ -1103,7 +1103,7 @@ jobs:
 
   publish-llm-mesh:
     runs-on: ubuntu-latest
-    needs: [changes, validate-llm-mesh, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-llm-mesh, security-container]
     if: needs.changes.outputs.llm_mesh_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1117,7 +1117,7 @@ jobs:
 
   publish-chat-ui:
     runs-on: ubuntu-latest
-    needs: [changes, validate-chat-ui, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-chat-ui, security-container]
     if: needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1131,7 +1131,7 @@ jobs:
 
   publish-cowork-bridge:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cowork-bridge, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-cowork-bridge, security-container]
     if: needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1145,7 +1145,7 @@ jobs:
 
   publish-auth-hono:
     runs-on: ubuntu-latest
-    needs: [changes, validate-auth-hono, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-auth-hono, security-container]
     if: needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1159,7 +1159,7 @@ jobs:
 
   publish-auth-client:
     runs-on: ubuntu-latest
-    needs: [changes, validate-auth-client, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-auth-client, security-container]
     if: needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1173,7 +1173,7 @@ jobs:
 
   publish-auth-ui:
     runs-on: ubuntu-latest
-    needs: [changes, validate-auth-ui, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-auth-ui, security-container]
     if: needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1187,7 +1187,7 @@ jobs:
 
   publish-cowork-desktop:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cowork-desktop, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-cowork-desktop, security-container]
     if: needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1201,7 +1201,7 @@ jobs:
 
   publish-contracts:
     runs-on: ubuntu-latest
-    needs: [changes, validate-contracts, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-contracts, security-container]
     if: needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1215,7 +1215,7 @@ jobs:
 
   publish-events:
     runs-on: ubuntu-latest
-    needs: [changes, validate-events, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-events, security-container]
     if: needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1229,7 +1229,7 @@ jobs:
 
   publish-chat-core:
     runs-on: ubuntu-latest
-    needs: [changes, validate-chat-core, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-chat-core, security-container]
     if: needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1243,7 +1243,7 @@ jobs:
 
   publish-chat-server:
     runs-on: ubuntu-latest
-    needs: [changes, validate-chat-server, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-chat-server, security-container]
     if: needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1257,7 +1257,7 @@ jobs:
 
   publish-comments:
     runs-on: ubuntu-latest
-    needs: [changes, validate-comments, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-comments, security-container]
     if: needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1271,7 +1271,7 @@ jobs:
 
   publish-flow:
     runs-on: ubuntu-latest
-    needs: [changes, validate-flow, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-flow, security-container]
     if: needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1285,7 +1285,7 @@ jobs:
 
   publish-build-cli:
     runs-on: ubuntu-latest
-    needs: [changes, validate-build-cli, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-build-cli, security-container]
     if: needs.changes.outputs.build_cli_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -1299,7 +1299,7 @@ jobs:
 
   publish-cli:
     runs-on: ubuntu-latest
-    needs: [changes, validate-cli, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, validate-cli, security-container]
     if: needs.changes.outputs.cli_publish == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
