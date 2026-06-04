@@ -3,6 +3,7 @@ import { writeStreamEvent } from '../stream-service';
 import { toolService } from '../tool-service';
 import {
   catalogExecutionSeam,
+  executeFoundationSearchCatalog,
   executeFoundationSearchSkills,
   type ResolveFoundationChatToolsInput,
 } from './catalog';
@@ -161,6 +162,25 @@ export async function executeFoundationSkillTool(
       payload: args as { query: string; limit?: number },
     });
     const result = { status: 'completed', hits };
+    return {
+      handled: true,
+      result,
+      streamSeq: await writeCompletedToolResult({
+        assistantMessageId: options.assistantMessageId,
+        toolCallId: toolCall.id,
+        result,
+        streamSeq: input.streamSeq,
+      }),
+    };
+  }
+
+  // BR-42b Lot 7: search_catalog — additive cross-kind meta-tool (§3.5).
+  // Dispatched immediately after search_skills. Uses compositeCatalogRegistry
+  // to search across ALL 5 entry kinds. search_skills is NOT changed.
+  if (toolCall.name === 'search_catalog') {
+    const result = executeFoundationSearchCatalog(
+      args as { query: string; limit?: number; filter?: { kind?: string; category?: string } },
+    );
     return {
       handled: true,
       result,

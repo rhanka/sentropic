@@ -166,19 +166,19 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
       - [x] Sub-lot gate: characterization 41/41 byte-identical; catalog 242/242 GREEN (35 new canvas); unit 70 files/572 tests GREEN.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
-- [ ] **Lot 7 — `search_catalog` cross-kind discovery + integration**
-  - [ ] Add `api/src/services/catalog/search-catalog-tool.ts`: additive `search_catalog` meta-tool returning `CatalogEntry` hits across all 5 kinds (kind in each hit); keep `search_skills` skill-only + unchanged (no rename, §3.5).
-  - [ ] Wire `search_catalog` into the chat tool set alongside `search_skills`; dispatch through the execution seam.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **API tests**
-      - [ ] Add `api/tests/services/catalog/search-catalog-tool.spec.ts` (cross-kind hits with kind tag; `search_skills` contract byte-identical).
-      - [ ] Update `api/tests/services/catalog-characterization.spec.ts` to assert `search_skills` is still present + skill-only.
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **E2E tests**
-      - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 ENV=e2e-feat-catalog-evolution-42b`
-      - [ ] Add/extend `e2e/tests/03-chat.spec.ts` coverage: a chat turn that surfaces a catalog tool via `search_catalog` resolves + executes (non-regression of `search_skills` flow).
-      - [ ] Sub-lot gate: `make clean test-e2e API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 E2E_GROUP=<matrix.e2e_group> ENV=e2e-feat-catalog-evolution-42b` (groups per `.github/workflows/ci.yml`; `ENV=` is the LAST argument)
+- [x] **Lot 7 — `search_catalog` cross-kind discovery + integration**
+  - [x] Add `api/src/services/catalog/search-catalog-tool.ts`: additive `search_catalog` meta-tool returning `CatalogEntry` hits across all 5 kinds (kind in each hit); keep `search_skills` skill-only + unchanged (no rename, §3.5).
+  - [x] Wire `search_catalog` into the chat tool set alongside `search_skills`; dispatch through the execution seam.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b` — CLEAN (0 errors, 197 pre-existing warnings)
+    - [x] **API tests**
+      - [x] Add `api/tests/services/catalog/search-catalog-tool.spec.ts` (39 tests: cross-kind hits with kind tag; `search_skills` contract byte-identical; 31-entry resolved array oracle; dispatch path).
+      - [x] Update `api/tests/services/catalog-characterization.spec.ts` to assert `search_skills` still present + skill-only + byte-identical; assert `search_catalog` at index 1; update oracle to 31-entry (was 30; Lot 7 adds search_catalog); 41/41 GREEN.
+      - [x] Update `api/tests/services/catalog/agent-template-source.spec.ts`, `canvas-template-source.spec.ts`, `workflow-seed-source.spec.ts` — update oracle from 30→31 (search_catalog at index 1).
+      - [x] Sub-lot gate: `make test-api-smoke SCOPE=tests/services/catalog ENV=...` 281/281 GREEN; `make test-api-unit ENV=...` 572/572 GREEN (70 files); characterization 41/41 byte-identical; search-catalog spec 39/39.
+    - [ ] **E2E tests** (conductor runs authoritative full E2E)
+      - [x] Add `e2e/tests/03-chat.spec.ts` coverage: `BR-42b Lot 7: search_catalog tool is wired and produces a response (non-regression search_skills)` — verifies catalog query + search_skills non-regression. AI flaky allowlist.
+      - [ ] Sub-lot gate: `make clean test-e2e API_PORT=9213 UI_PORT=5413 MAILDEV_UI_PORT=1313 E2E_GROUP=<matrix.e2e_group> ENV=e2e-feat-catalog-evolution-42b` (conductor runs)
     - [ ] non mandatory UAT (only if a behaviour-visible chat change needs human confirmation)
       - [ ] Web app: chat panel — confirm `search_skills`-first behaviour unchanged; `search_catalog` returns cross-kind hits.
   - [ ] `make down ENV=e2e-feat-catalog-evolution-42b`
