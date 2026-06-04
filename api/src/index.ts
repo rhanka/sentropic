@@ -8,6 +8,7 @@ import { purgeExpiredAuthData } from './services/challenge-purge';
 import { ensureAdminWorkspaceExists, claimAdminWorkspaceOwner } from './services/workspace-service';
 import { runAdminApprovalSweep } from './services/admin-approval-sweep';
 import { runChatTracePurge } from './services/chat-trace-sweep';
+import { createJwksAdapter } from './services/auth/jwks-adapter';
 import { lt } from 'drizzle-orm';
 
 const port = env.PORT;
@@ -82,6 +83,30 @@ try {
 } catch (error) {
   logger.error({ err: error }, 'Database index creation failed at startup');
   process.exit(1);
+}
+
+// Ensure an OAuth/OIDC signing key exists at boot (idempotent; mirrors the migration
+// pattern above). The api owns shared-DB initialization; the standalone IdP reads the
+// same JWKS rows. The prod image prunes devDependencies (no `tsx`), so the dev-only
+// `oauth:init-keys` script cannot run in-cluster — boot-time init is the prod path.
+// Guarded by the KEK: signing keys are encrypted at rest with OAUTH_SIGNING_KEK, so
+// when it is absent we skip (OAuth/OIDC simply has no active key) instead of crashing —
+// every non-OAuth route stays up. A failure here is logged but never fatal.
+if (env.OAUTH_SIGNING_KEK) {
+  try {
+    const jwks = createJwksAdapter();
+    const active = await jwks.getActiveKey();
+    if (active) {
+      logger.info({ kid: active.kid }, 'OAuth signing key already present.');
+    } else {
+      const created = await jwks.generateAndStoreNewKey();
+      logger.info({ kid: created.kid }, 'OAuth signing key initialized at startup.');
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'OAuth signing key init failed at startup (OAuth/OIDC unavailable until resolved).');
+  }
+} else {
+  logger.warn('OAUTH_SIGNING_KEK not set — skipping OAuth signing key init (OAuth/OIDC has no active signing key).');
 }
 
 // Purge expired authentication data (challenges, magic links)
