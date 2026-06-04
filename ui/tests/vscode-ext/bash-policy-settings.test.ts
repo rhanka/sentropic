@@ -31,7 +31,7 @@ describe('vscode bash policy settings', () => {
   let workspaceRoot = '';
 
   beforeEach(async () => {
-    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'topai-vscode-policy-'));
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sentropic-vscode-policy-'));
     await fs.mkdir(path.join(workspaceRoot, 'src', 'public'), { recursive: true });
     await fs.mkdir(path.join(workspaceRoot, 'src', 'private'), { recursive: true });
     await fs.writeFile(path.join(workspaceRoot, 'src', 'public', 'a.txt'), 'hello', 'utf8');

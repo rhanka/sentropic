@@ -70,7 +70,7 @@ describe('Workspace type system', () => {
     expect(ws.type).toBe('opportunity');
   });
 
-  it('defaults type to ai-ideas when not specified', async () => {
+  it('defaults type to ai-priorities when not specified', async () => {
     const res = await authenticatedRequest(app, 'POST', '/api/v1/workspaces', editor.sessionToken, {
       name: 'Default Type WS',
     });
@@ -79,7 +79,7 @@ describe('Workspace type system', () => {
     createdWorkspaceIds.push(json.id);
 
     const [ws] = await db.select({ type: workspaces.type }).from(workspaces).where(eq(workspaces.id, json.id)).limit(1);
-    expect(ws.type).toBe('ai-ideas');
+    expect(ws.type).toBe('ai-priorities');
   });
 
   it('rejects neutral type on manual creation', async () => {
@@ -170,7 +170,7 @@ describe('Workspace type system', () => {
   it('rejects type change on workspace update', async () => {
     const createRes = await authenticatedRequest(app, 'POST', '/api/v1/workspaces', editor.sessionToken, {
       name: 'Immutable Type WS',
-      type: 'ai-ideas',
+      type: 'ai-priorities',
     });
     expect(createRes.status).toBe(201);
     const { id } = await createRes.json();
@@ -188,7 +188,7 @@ describe('Workspace type system', () => {
   it('allows renaming without type field', async () => {
     const createRes = await authenticatedRequest(app, 'POST', '/api/v1/workspaces', editor.sessionToken, {
       name: 'Rename OK WS',
-      type: 'ai-ideas',
+      type: 'ai-priorities',
     });
     expect(createRes.status).toBe(201);
     const { id } = await createRes.json();
