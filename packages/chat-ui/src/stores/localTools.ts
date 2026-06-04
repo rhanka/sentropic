@@ -351,7 +351,7 @@ const getRuntime = (): LocalToolsAdapter | null => {
 
 const isVsCodeRuntime = (runtime: LocalToolsAdapter | null): boolean => {
   const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
-  return runtimeId === 'topai.vscode.runtime';
+  return runtimeId === 'sentropic.vscode.runtime';
 };
 
 const hasExtensionRuntimeMessaging = (): boolean => {

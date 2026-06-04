@@ -26,7 +26,7 @@ describe('createVsCodeLocalToolsAdapter', () => {
       args: { command: 'echo hi' },
     });
 
-    expect(adapter.id).toBe('topai.vscode.runtime');
+    expect(adapter.id).toBe('sentropic.vscode.runtime');
     expect(request).toHaveBeenCalledWith('runtime.local_tools.execute', {
       toolCallId: 'tc-1',
       name: 'bash',

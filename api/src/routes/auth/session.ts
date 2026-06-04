@@ -119,7 +119,7 @@ sessionRouter.post('/extension-token', async (c) => {
       .limit(1);
 
     const issued = await createSession(currentSession.userId, currentSession.role, {
-      name: deviceName || 'Top AI Ideas Extension',
+      name: deviceName || 'Sentropic Extension',
       ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || undefined,
       userAgent: c.req.header('user-agent') || undefined,
     });

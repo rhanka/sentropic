@@ -2356,8 +2356,8 @@ function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Rec
         typeof providedReportTitle === 'string' && providedReportTitle.trim()
           ? providedReportTitle
           : locale === 'en'
-            ? 'Top AI Ideas Report'
-            : 'Rapport Top AI Ideas',
+            ? 'Sentropic Report'
+            : 'Rapport Sentropic',
     },
     folder: {
       name: safeText(input.folderName),

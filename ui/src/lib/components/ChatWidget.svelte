@@ -163,12 +163,12 @@
     accountLabel?: string | null;
   };
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
-  const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
-  const HANDOFF_STORAGE_KEY = 'topai:chatwidget-handoff-state';
-  const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
-  const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
-  const OPEN_CHAT_EVENT = 'topai:open-chat';
-  const EXTENSION_CONFIG_UPDATED_EVENT = 'topai:extension-config-updated';
+  const HANDOFF_EVENT = 'sentropic:chatwidget-handoff-state';
+  const HANDOFF_STORAGE_KEY = 'sentropic:chatwidget-handoff-state';
+  const OPEN_SIDEPANEL_EVENT = 'sentropic:open-sidepanel';
+  const OPEN_OVERLAY_EVENT = 'sentropic:open-overlay';
+  const OPEN_CHAT_EVENT = 'sentropic:open-chat';
+  const EXTENSION_CONFIG_UPDATED_EVENT = 'sentropic:extension-config-updated';
   const DEFAULT_EXTENSION_CONFIGS: Record<
     ExtensionProfile,
     Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt' | 'workspaceScopeKey' | 'workspaceScopeLabel'>
@@ -190,8 +190,8 @@
       codeWorkspaces: [],
     },
     prod: {
-      apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
-      appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
+      apiBaseUrl: 'https://sentropic.sent-tech.ca/api/v1',
+      appBaseUrl: 'https://sentropic.sent-tech.ca',
       wsBaseUrl: '',
       sessionToken: '',
       codeAgentPromptDefault: '',
@@ -319,7 +319,7 @@
     const runtimeId = String(ext.chrome?.runtime?.id ?? '')
       .trim()
       .toLowerCase();
-    return runtimeId === 'topai.vscode.runtime';
+    return runtimeId === 'sentropic.vscode.runtime';
   };
   const getExtensionPermissionToolOptions = () => {
     return isVsCodeExtensionRuntime()
@@ -1935,7 +1935,7 @@
     };
     window.addEventListener('resize', resizeHandler);
     window.addEventListener('keydown', globalShortcutHandler);
-    window.addEventListener('topai:close-chat', onExternalCloseChat as any);
+    window.addEventListener('sentropic:close-chat', onExternalCloseChat as any);
     window.addEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     handleCommentSectionClick = (event: MouseEvent) => {
       if (!commentContext?.id || !commentContext?.type) return;
@@ -1971,7 +1971,7 @@
       pendingCommentAutoSelectReady = false;
       void openWidget();
     };
-    window.addEventListener('topai:open-comments', handleOpenComments as any);
+    window.addEventListener('sentropic:open-comments', handleOpenComments as any);
     syncScrollLock();
     if ($isAuthenticated) await loadJobs();
   });
@@ -2100,13 +2100,13 @@
     }
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
-    window.removeEventListener('topai:close-chat', onExternalCloseChat as any);
+    window.removeEventListener('sentropic:close-chat', onExternalCloseChat as any);
     window.removeEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     if (handleCommentSectionClick)
       document.removeEventListener('click', handleCommentSectionClick, true);
     if (handleOpenComments)
       window.removeEventListener(
-        'topai:open-comments',
+        'sentropic:open-comments',
         handleOpenComments as any,
       );
     setBodyScrollLocked(false);
@@ -2216,7 +2216,7 @@
                 class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
                 on:click={() =>
                   window.dispatchEvent(
-                    new CustomEvent('topai:toggle-burger-menu'),
+                    new CustomEvent('sentropic:toggle-burger-menu'),
                   )}
                 aria-label={$_('common.menu')}
                 type="button"
@@ -3207,7 +3207,7 @@
                 </MenuPopover>
                 <button
                   class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                  on:click={() => chatPanelRef?.newSession?.()}
+                  on:click={handleNewSession}
                   title={$_('chat.sessions.new')}
                   aria-label={$_('chat.sessions.new')}
                   type="button"

@@ -49,7 +49,7 @@ export type AnyHostAdapter =
  * that do not pollute `globalThis`).
  */
 export interface LocalToolsAdapter {
-  /** Stable runtime identifier (`'topai.vscode.runtime'` selects VSCode tool catalog). */
+  /** Stable runtime identifier (`'sentropic.vscode.runtime'` selects VSCode tool catalog). */
   id?: string;
   /**
    * Send a typed message to the host runtime. The package only relies

@@ -18,7 +18,7 @@
   let editingId: string | null = null;
   let editDescriptor: string = '';
 
-  $: workspaceType = $selectedWorkspace?.type ?? 'ai-ideas';
+  $: workspaceType = $selectedWorkspace?.type ?? 'ai-priorities';
 
   const OBJECT_TYPE_LABELS: Record<string, string> = {
     container: 'Container views',

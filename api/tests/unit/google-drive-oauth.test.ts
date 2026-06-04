@@ -34,9 +34,9 @@ describe('Google Drive OAuth helpers', () => {
     try {
       expect(
         resolveGoogleDriveAppReturnBaseUrl({
-          requestApiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca',
+          requestApiBaseUrl: 'https://sentropic.sent-tech.ca',
         }),
-      ).toBe('https://top-ai-ideas.sent-tech.ca');
+      ).toBe('https://sentropic.sent-tech.ca');
     } finally {
       if (previous === undefined) {
         delete process.env.AUTH_CALLBACK_BASE_URL;
@@ -52,9 +52,9 @@ describe('Google Drive OAuth helpers', () => {
     try {
       expect(
         resolveGoogleDriveAppReturnBaseUrl({
-          requestApiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca',
+          requestApiBaseUrl: 'https://sentropic.sent-tech.ca',
         }),
-      ).toBe('https://top-ai-ideas.sent-tech.ca');
+      ).toBe('https://sentropic.sent-tech.ca');
     } finally {
       if (previous === undefined) {
         delete process.env.AUTH_CALLBACK_BASE_URL;
@@ -100,11 +100,11 @@ describe('Google Drive OAuth helpers', () => {
 
     try {
       const resolved = await resolveGoogleDriveOAuthConfig({
-        requestApiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca',
+        requestApiBaseUrl: 'https://sentropic.sent-tech.ca',
       });
 
       expect(resolved?.redirectUri).toBe(
-        'https://top-ai-ideas-api.sent-tech.ca/api/v1/google-drive/oauth/callback',
+        'https://sentropic.sent-tech.ca/api/v1/google-drive/oauth/callback',
       );
     } finally {
       for (const [key, value] of Object.entries(previousEnv)) {
