@@ -120,15 +120,15 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
       - [x] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b` (characterization 41/41 byte-identical + catalog specs 114/114 GREEN; typecheck/lint clean)
   - [x] `make down ENV=test-feat-catalog-evolution-42b`
 
-- [ ] **Lot 3 — `agent` template kind**
-  - [ ] Add `api/src/services/catalog/sources/agent-template-source.ts`: `agent`-kind entries over `WORKSPACE_TYPE_AGENT_SEEDS` (`api/src/config/default-agents.ts:37`, `DefaultGenerationAgentDefinition`).
-  - [ ] `list/search/get` parity with skills; per-workspace `agent_definitions` DB rows NOT catalogued; flow `AgentTemplate` runtime untouched (§14 invariant preserved).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **API tests**
-      - [ ] Add `api/tests/services/catalog/agent-template-source.spec.ts` (seeds → `agent` entries; list/search/get parity; no DB-row leakage).
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
-  - [ ] `make down ENV=test-feat-catalog-evolution-42b`
+- [x] **Lot 3 — `agent` template kind**
+  - [x] Add `api/src/services/catalog/sources/agent-template-source.ts`: `agent`-kind entries over `WORKSPACE_TYPE_AGENT_SEEDS` (`api/src/config/default-agents.ts:37`, `DefaultGenerationAgentDefinition`).
+  - [x] `list/search/get` parity with skills; per-workspace `agent_definitions` DB rows NOT catalogued; flow `AgentTemplate` runtime untouched (§14 invariant preserved).
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
+    - [x] **API tests**
+      - [x] Add `api/tests/services/catalog/agent-template-source.spec.ts` (seeds → `agent` entries; list/search/get parity; no DB-row leakage).
+      - [x] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b` — 75 files/567 tests GREEN (pre-existing OOM on queue tests, Erreur 137, unrelated); characterization 41/41 byte-identical; agent spec 31/31; catalog 145/145.
+  - [x] `make down ENV=test-feat-catalog-evolution-42b`
 
 - [ ] **Lot 4 — `workflow` kind**
   - [ ] Add `api/src/services/catalog/sources/workflow-seed-source.ts`: `workflow`-kind entries over `@sentropic/flow` `WORKSPACE_TYPE_WORKFLOW_SEEDS` (`DefaultWorkflowDefinition` payload).

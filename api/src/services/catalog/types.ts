@@ -12,6 +12,7 @@
  */
 
 import type { ContextFilter, Skill, SkillAuthzRequirements, SkillTool } from '../../../../packages/skills/src/index.js';
+import type { DefaultGenerationAgentDefinition } from '../../config/default-agents-types.js';
 
 // ---------------------------------------------------------------------------
 // Discriminant
@@ -93,27 +94,25 @@ export type ToolEntry = CatalogEntryBase & {
 /**
  * Agent template entry — catalogs code-level agent templates from
  * `api/src/config/default-agents.ts` (`DefaultGenerationAgentDefinition`).
- * Per-workspace DB `agent_definitions` rows are NOT catalogued.
+ * Per-workspace DB `agent_definitions` rows are NOT catalogued (§14 invariant).
  *
- * Type-only placeholder in Lot 1; populated in Lot 3.
+ * Populated in Lot 3 via `AgentTemplateSource`.
  */
 export type AgentEntry = CatalogEntryBase & {
   readonly kind: 'agent';
-  /** Agent template payload — type will be `DefaultGenerationAgentDefinition` in Lot 3. */
-  readonly template: AgentEntryTemplate;
+  /**
+   * The code-level agent template definition from `default-agents.ts`.
+   * Per-workspace DB `agent_definitions` rows are NOT carried here.
+   */
+  readonly template: DefaultGenerationAgentDefinition;
 };
 
 /**
- * Minimal placeholder type for the agent template payload.
- * Will be replaced by `DefaultGenerationAgentDefinition` when Lot 3 wires the
- * agent-template source.
+ * Re-export for consumers that only need the agent template payload type.
+ * The canonical type is `DefaultGenerationAgentDefinition` from
+ * `api/src/config/default-agents-types.ts`.
  */
-export interface AgentEntryTemplate {
-  readonly key: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly [k: string]: unknown;
-}
+export type { DefaultGenerationAgentDefinition as AgentEntryTemplate };
 
 /**
  * Workflow entry — catalogs code-level workflow seed orchestration templates
