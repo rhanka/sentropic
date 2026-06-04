@@ -1,30 +1,27 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { and, asc, eq, inArray } from 'drizzle-orm';
-import { db, pool } from '../../db/client';
-import { comments, folders, organizations, initiatives, users, workspaceMemberships } from '../../db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
+import type { TenantContext } from '@sentropic/contracts';
+import {
+  CommentNotFoundError,
+  ThreadNotFoundError,
+  targetFromLive,
+} from '@sentropic/comments';
+import { db } from '../../db/client';
+import { folders, organizations, initiatives, users, workspaceMemberships } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceCommenterRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceAdmin } from '../../services/workspace-access';
-import { createId } from '../../utils/id';
+import { commentStore, commentEventSink } from '../../services/comments/instance';
 
 export const commentsRouter = new Hono();
 
 const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'matrix', 'executive_summary']); // TODO Lot 10: remove 'usecase'
 const statusSchema = z.enum(['open', 'closed']);
 
-function escapeNotifyPayload(payload: Record<string, unknown>): string {
-  return JSON.stringify(payload).replace(/'/g, "''");
-}
-
-async function notifyCommentEvent(workspaceId: string, contextType: string, contextId: string, data: Record<string, unknown> = {}) {
-  const client = await pool.connect();
-  try {
-    const payload = { workspace_id: workspaceId, context_type: contextType, context_id: contextId, data };
-    await client.query(`NOTIFY comment_events, '${escapeNotifyPayload(payload)}'`);
-  } finally {
-    client.release();
-  }
+/** Build a tenant context from the live session (tenantId := workspaceId). */
+function tenantOf(user: { workspaceId: string; userId: string }): TenantContext {
+  return { tenantId: user.workspaceId, workspaceId: user.workspaceId, userId: user.userId };
 }
 
 async function ensureContextExists(contextType: string, contextId: string, workspaceId: string): Promise<boolean> {
@@ -85,19 +82,37 @@ commentsRouter.get('/', requireWorkspaceAccessRole(), async (c) => {
   const ok = await ensureContextExists(context_type, context_id, user.workspaceId);
   if (!ok) return c.json({ message: 'Not found' }, 404);
 
-  const conditions = [
-    eq(comments.workspaceId, user.workspaceId),
-    eq(comments.contextType, context_type),
-    eq(comments.contextId, context_id),
-  ];
-  if (section_key) conditions.push(eq(comments.sectionKey, section_key));
-  if (status) conditions.push(eq(comments.status, status));
+  const tenant = tenantOf(user);
+  // The port is context_id-scoped (it ignores the live context_type — every live
+  // record context collapses to kind:'record'); filter context_type host-side to
+  // preserve the live (workspaceId, contextType, contextId[, sectionKey][, status])
+  // query exactly (comments.ts:88-100).
+  const target = targetFromLive({ contextType: context_type, contextId: context_id, sectionKey: section_key ?? null });
+  const list = await commentStore.listByTarget(tenant, {
+    kind: target.kind,
+    id: target.id,
+    ...(section_key ? { sectionKey: section_key } : {}),
+    ...(status ? { status: status === 'closed' ? 'resolved' : 'open' } : {}),
+  });
 
-  const rows = await db
-    .select()
-    .from(comments)
-    .where(and(...conditions))
-    .orderBy(asc(comments.createdAt));
+  // Map the package Comment shape back to the live row projection and re-apply
+  // the host-only context_type filter (the port matches on context_id only).
+  const rows = list
+    .filter((comment) => (comment.target.recordType ?? comment.target.kind) === context_type)
+    .map((comment) => ({
+      id: comment.id,
+      contextType: comment.target.recordType ?? comment.target.kind,
+      contextId: comment.target.id,
+      sectionKey: comment.target.sectionKey ?? null,
+      createdBy: comment.author.id,
+      assignedTo: comment.assignedTo ?? null,
+      status: comment.state === 'resolved' ? 'closed' : 'open',
+      threadId: comment.threadId,
+      content: comment.body,
+      toolCallId: comment.provenance?.toolCallId ?? null,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt ?? comment.createdAt,
+    }));
 
   const userIds = new Set<string>();
   for (const row of rows) {
@@ -152,58 +167,66 @@ commentsRouter.post('/', requireWorkspaceCommenterRole(), zValidator('json', cre
   const ok = await ensureContextExists(body.context_type, body.context_id, user.workspaceId);
   if (!ok) return c.json({ message: 'Not found' }, 404);
 
-  let threadId = body.thread_id?.trim() || null;
-  let existingAssignedTo: string | null = null;
-  if (threadId) {
-    const [threadRow] = await db
-      .select({ id: comments.id, assignedTo: comments.assignedTo })
-      .from(comments)
-      .where(
-        and(
-          eq(comments.workspaceId, user.workspaceId),
-          eq(comments.contextType, body.context_type),
-          eq(comments.contextId, body.context_id),
-          eq(comments.threadId, threadId),
-        )
-      )
-      .limit(1);
-    if (!threadRow) return c.json({ message: 'Thread not found' }, 404);
-    existingAssignedTo = threadRow.assignedTo ?? null;
-  } else {
-    threadId = createId();
+  const tenant = tenantOf(user);
+
+  // Resolve the existing thread assignee host-side (the live default chain needs
+  // the parent thread's assignee, comments.ts:158-176). The port's add() throws
+  // ThreadNotFoundError for a bad reply, but the live default chain must read the
+  // existing assignee BEFORE add(), so a single host lookup is kept here.
+  let existingThreadAssignee: string | null = null;
+  if (body.thread_id?.trim()) {
+    const threadRows = await commentStore.listThread(tenant, body.thread_id.trim());
+    const threadInTarget = threadRows.filter(
+      (row) => (row.target.recordType ?? row.target.kind) === body.context_type && row.target.id === body.context_id,
+    );
+    if (threadInTarget.length === 0) return c.json({ message: 'Thread not found' }, 404);
+    existingThreadAssignee = threadInTarget.find((row) => row.assignedTo)?.assignedTo ?? null;
   }
 
-  const assignedTo = body.assigned_to ?? existingAssignedTo ?? user.userId;
+  const assignedTo = body.assigned_to ?? existingThreadAssignee ?? user.userId;
   if (!(await ensureWorkspaceMember(assignedTo, user.workspaceId))) {
     return c.json({ message: 'Assigned user not in workspace' }, 400);
   }
 
-  const id = createId();
-  const now = new Date();
-  await db.insert(comments).values({
-    id,
+  const threadId = body.thread_id?.trim() || undefined;
+  const target = targetFromLive({
+    contextType: body.context_type,
+    contextId: body.context_id,
+    sectionKey: body.section_key ?? null,
+  });
+
+  let created;
+  try {
+    created = await commentStore.add(tenant, {
+      tenant,
+      target,
+      author: { id: user.userId },
+      body: body.content.trim(),
+      ...(threadId ? { threadId } : {}),
+      assignedTo,
+    });
+  } catch (error) {
+    if (error instanceof ThreadNotFoundError) return c.json({ message: 'Thread not found' }, 404);
+    throw error;
+  }
+
+  // POST-with-assignee cascades the assignee across the WHOLE thread (root+replies,
+  // comments.ts:198-203). This is a SILENT host-local cascade (no second event) via
+  // the emit-free store primitive; the single created event is emitted below.
+  if (body.assigned_to) {
+    await commentStore.assign(tenant, created.threadId, assignedTo);
+  }
+
+  await commentEventSink.emit({
     workspaceId: user.workspaceId,
     contextType: body.context_type,
     contextId: body.context_id,
-    sectionKey: body.section_key,
-    createdBy: user.userId,
-    assignedTo,
-    status: 'open',
-    threadId,
-    content: body.content.trim(),
-    createdAt: now,
-    updatedAt: now,
+    action: 'created',
+    key: 'comment_id',
+    commentId: created.id,
+    origin: 'rest',
   });
-
-  if (body.assigned_to && threadId) {
-    await db
-      .update(comments)
-      .set({ assignedTo, updatedAt: now })
-      .where(and(eq(comments.workspaceId, user.workspaceId), eq(comments.threadId, threadId)));
-  }
-
-  await notifyCommentEvent(user.workspaceId, body.context_type, body.context_id, { action: 'created', comment_id: id });
-  return c.json({ id, thread_id: threadId }, 201);
+  return c.json({ id: created.id, thread_id: created.threadId }, 201);
 });
 
 const updateSchema = z.object({
@@ -216,14 +239,11 @@ commentsRouter.patch('/:id', requireWorkspaceCommenterRole(), zValidator('json',
   const id = c.req.param('id')!;
   const body = c.req.valid('json');
 
-  const [row] = await db
-    .select()
-    .from(comments)
-    .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)))
-    .limit(1);
+  const tenant = tenantOf(user);
+  const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
 
-  const isCreator = row.createdBy === user.userId;
+  const isCreator = row.author.id === user.userId;
   if (!isCreator) {
     try {
       await requireWorkspaceAdmin(user.userId, user.workspaceId);
@@ -232,26 +252,55 @@ commentsRouter.patch('/:id', requireWorkspaceCommenterRole(), zValidator('json',
     }
   }
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
-  if (typeof body.content === 'string') updates.content = body.content.trim();
+  // Reproduce the live combined-updates semantics (comments.ts:235-254): build a
+  // single updates descriptor; when assigned_to is present the WHOLE update
+  // (content + assignment) cascades thread-wide, else content is per-row.
+  const hasContent = typeof body.content === 'string';
+  const nextContent = hasContent ? (body.content as string).trim() : undefined;
+  let nextAssigned: string | undefined;
   if (body.assigned_to !== undefined) {
-    const nextAssigned = body.assigned_to ?? row.createdBy;
+    nextAssigned = body.assigned_to ?? row.author.id; // assigned_to:null -> createdBy (NOT unassign)
     if (!(await ensureWorkspaceMember(nextAssigned, user.workspaceId))) {
       return c.json({ message: 'Assigned user not in workspace' }, 400);
     }
-    updates.assignedTo = nextAssigned;
   }
-  if (Object.keys(updates).length === 1) return c.json({ message: 'No updates' }, 400);
+  if (!hasContent && nextAssigned === undefined) return c.json({ message: 'No updates' }, 400);
 
-  if (updates.assignedTo) {
-    await db
-      .update(comments)
-      .set(updates)
-      .where(and(eq(comments.threadId, row.threadId), eq(comments.workspaceId, user.workspaceId)));
-  } else {
-    await db.update(comments).set(updates).where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)));
+  try {
+    if (nextAssigned !== undefined) {
+      if (hasContent) {
+        // COMBINED case: content + assignment cascade thread-wide in ONE atomic
+        // emit-free statement (mirrors the OLD single combined-PATCH UPDATE,
+        // comments.ts@40a23a35^:246-250) — NOT N per-row edits + separate assign,
+        // which is non-atomic and can 404/500 under concurrent deletes.
+        await commentStore.editThread(tenant, row.threadId, {
+          content: nextContent as string,
+          assignedTo: nextAssigned,
+        });
+      } else {
+        // assigned_to-only -> thread-wide assignment cascade (comments.ts:246-250).
+        await commentStore.assign(tenant, row.threadId, nextAssigned);
+      }
+    } else {
+      // Content-only edit is per-row (comments.ts:251-252).
+      await commentStore.edit(tenant, id, { body: nextContent });
+    }
+  } catch (error) {
+    if (error instanceof CommentNotFoundError || error instanceof ThreadNotFoundError) {
+      return c.json({ message: 'Not found' }, 404);
+    }
+    throw error;
   }
-  await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'updated', comment_id: id });
+
+  await commentEventSink.emit({
+    workspaceId: user.workspaceId,
+    contextType: row.target.recordType ?? row.target.kind,
+    contextId: row.target.id,
+    action: 'updated',
+    key: 'comment_id',
+    commentId: id,
+    origin: 'rest',
+  });
   return c.json({ success: true });
 });
 
@@ -259,13 +308,10 @@ commentsRouter.post('/:id/close', requireWorkspaceCommenterRole(), async (c) => 
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
 
-  const [row] = await db
-    .select()
-    .from(comments)
-    .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)))
-    .limit(1);
+  const tenant = tenantOf(user);
+  const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
-  const isCreator = row.createdBy === user.userId;
+  const isCreator = row.author.id === user.userId;
   if (!isCreator) {
     try {
       await requireWorkspaceAdmin(user.userId, user.workspaceId);
@@ -274,13 +320,17 @@ commentsRouter.post('/:id/close', requireWorkspaceCommenterRole(), async (c) => 
     }
   }
 
-  const now = new Date();
-  await db
-    .update(comments)
-    .set({ status: 'closed', updatedAt: now })
-    .where(and(eq(comments.threadId, row.threadId), eq(comments.workspaceId, user.workspaceId)));
+  await commentStore.setState(tenant, row.threadId, 'resolved'); // THREAD cascade
 
-  await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'closed', comment_id: id });
+  await commentEventSink.emit({
+    workspaceId: user.workspaceId,
+    contextType: row.target.recordType ?? row.target.kind,
+    contextId: row.target.id,
+    action: 'closed',
+    key: 'comment_id',
+    commentId: id,
+    origin: 'rest',
+  });
   return c.json({ success: true });
 });
 
@@ -288,13 +338,10 @@ commentsRouter.post('/:id/reopen', requireWorkspaceCommenterRole(), async (c) =>
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
 
-  const [row] = await db
-    .select()
-    .from(comments)
-    .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)))
-    .limit(1);
+  const tenant = tenantOf(user);
+  const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
-  const isCreator = row.createdBy === user.userId;
+  const isCreator = row.author.id === user.userId;
   if (!isCreator) {
     try {
       await requireWorkspaceAdmin(user.userId, user.workspaceId);
@@ -303,13 +350,17 @@ commentsRouter.post('/:id/reopen', requireWorkspaceCommenterRole(), async (c) =>
     }
   }
 
-  const now = new Date();
-  await db
-    .update(comments)
-    .set({ status: 'open', updatedAt: now })
-    .where(and(eq(comments.threadId, row.threadId), eq(comments.workspaceId, user.workspaceId)));
+  await commentStore.setState(tenant, row.threadId, 'open'); // THREAD cascade
 
-  await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'reopened', comment_id: id });
+  await commentEventSink.emit({
+    workspaceId: user.workspaceId,
+    contextType: row.target.recordType ?? row.target.kind,
+    contextId: row.target.id,
+    action: 'reopened',
+    key: 'comment_id',
+    commentId: id,
+    origin: 'rest',
+  });
   return c.json({ success: true });
 });
 
@@ -317,14 +368,11 @@ commentsRouter.delete('/:id', requireWorkspaceCommenterRole(), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
 
-  const [row] = await db
-    .select()
-    .from(comments)
-    .where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)))
-    .limit(1);
+  const tenant = tenantOf(user);
+  const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
 
-  const isCreator = row.createdBy === user.userId;
+  const isCreator = row.author.id === user.userId;
   if (!isCreator) {
     try {
       await requireWorkspaceAdmin(user.userId, user.workspaceId);
@@ -333,7 +381,16 @@ commentsRouter.delete('/:id', requireWorkspaceCommenterRole(), async (c) => {
     }
   }
 
-  await db.delete(comments).where(and(eq(comments.id, id), eq(comments.workspaceId, user.workspaceId)));
-  await notifyCommentEvent(user.workspaceId, row.contextType, row.contextId, { action: 'deleted', comment_id: id });
+  await commentStore.delete(tenant, id); // PER-ROW HARD delete (replies survive)
+
+  await commentEventSink.emit({
+    workspaceId: user.workspaceId,
+    contextType: row.target.recordType ?? row.target.kind,
+    contextId: row.target.id,
+    action: 'deleted',
+    key: 'comment_id',
+    commentId: id,
+    origin: 'rest',
+  });
   return c.json({ success: true });
 });
