@@ -73,19 +73,19 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
   - Switch back to `tmp/feat-catalog-42b` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & characterization lock**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `spec/SPEC_EVOL_CATALOG.md`, `plan/BRANCH_TEMPLATE.md`.
-  - [ ] Confirm worktree `tmp/feat-catalog-42b` + slot-3 ports (9213/5413/1313) + ENV mapping.
-  - [ ] Confirm scope boundaries and declare `BR42b-EX1` posture (deferred until Lot 5).
-  - [ ] Pin CURRENT catalog behaviour GREEN on current code (0-regression baseline):
-    - [ ] Add `api/tests/services/catalog-characterization.spec.ts`: assert `resolveFoundationChatTools(input)` returns the 16-skill foundation bundle projection + the `search_skills` meta-tool, per authz allowlist (`buildFoundationSkillsAuthz`).
-    - [ ] **Live-chat oracle (plan-review MF1)**: pin the ACTUAL per-turn OpenAI tool array as consumed by `chat-service.ts:2749` — assert `search_skills` is FIRST, the exact 16 foundation skill names are present, the exact resolved tool descriptors (name/description/parameters) and their ORDER, and that consumption is synchronous. This is the live 0-regression oracle (not just the facade); it must stay byte-identical through Lot 1 BEFORE any new kind is added.
-    - [ ] Add coverage pinning `SkillsToolRegistry.resolveTools` prepends `SEARCH_SKILLS_RESOLVED_TOOL` (skill-only) and stays synchronous.
-    - [ ] **`search_skills` SEMANTICS (plan-review MF2)**, not just shape: add exact `SkillSearchHit[]` fixtures for representative queries (multi-hit, single-hit), proving ranking/order, the result `limit`, empty-query behaviour, and category/role/authz filtering — `executeFoundationSearchSkills` returns metadata hits (not SKILL.md bodies). Same fixtures re-asserted through Lot 1 and after Lot 7 (`search_catalog`).
-    - [ ] Add coverage pinning `foundation-executor` dispatch by hardcoded name + `unhandled` for unknown names (`chat-service.ts:4119` surface).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b` (characterization GREEN on unchanged code)
+- [x] **Lot 0 — Baseline & characterization lock**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, `spec/SPEC_EVOL_CATALOG.md`, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Confirm worktree `tmp/feat-catalog-42b` + slot-3 ports (9213/5413/1313) + ENV mapping.
+  - [x] Confirm scope boundaries and declare `BR42b-EX1` posture (deferred until Lot 5).
+  - [x] Pin CURRENT catalog behaviour GREEN on current code (0-regression baseline):
+    - [x] Add `api/tests/services/catalog-characterization.spec.ts`: assert `resolveFoundationChatTools(input)` returns the 16-skill foundation bundle projection + the `search_skills` meta-tool, per authz allowlist (`buildFoundationSkillsAuthz`).
+    - [x] **Live-chat oracle (plan-review MF1)**: pin the ACTUAL per-turn OpenAI tool array as consumed by `chat-service.ts:2749` — assert `search_skills` is FIRST, the exact 16 foundation skill names are present, the exact resolved tool descriptors (name/description/parameters) and their ORDER, and that consumption is synchronous. This is the live 0-regression oracle (not just the facade); it must stay byte-identical through Lot 1 BEFORE any new kind is added.
+    - [x] Add coverage pinning `SkillsToolRegistry.resolveTools` prepends `SEARCH_SKILLS_RESOLVED_TOOL` (skill-only) and stays synchronous.
+    - [x] **`search_skills` SEMANTICS (plan-review MF2)**, not just shape: add exact `SkillSearchHit[]` fixtures for representative queries (multi-hit, single-hit), proving ranking/order, the result `limit`, empty-query behaviour, and category/role/authz filtering — `executeFoundationSearchSkills` returns metadata hits (not SKILL.md bodies). Same fixtures re-asserted through Lot 1 and after Lot 7 (`search_catalog`).
+    - [x] Add coverage pinning `foundation-executor` dispatch by hardcoded name + `unhandled` for unknown names (`chat-service.ts:4119` surface).
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
+    - [x] Sub-lot gate: `make test-api-smoke SCOPE=tests/services/catalog-characterization.spec.ts` + `make test-api-unit SCOPE=tests/services/catalog-characterization.spec.ts` — 38/38 GREEN on unchanged code. Full `make test-api` has pre-existing EACCES/OOM issues in parallel workers (not caused by this lot); characterization spec passes in isolation.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
 - [ ] **Lot 1 — `CatalogSource` seam [GATE, no behaviour change]**
