@@ -225,8 +225,6 @@
     "svelte-streamdown": "^3.0.1"
   },
   "devDependencies": {
-    "@sveltejs/package": "2.3.9",
-    "svelte-preprocess": "6.0.3",
     "typescript": "5.4.5"
   }
 }
