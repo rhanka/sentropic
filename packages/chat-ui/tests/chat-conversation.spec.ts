@@ -209,27 +209,31 @@ describe('ChatConversation — export surface registration', () => {
     expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
   });
 
-  it('should have version 0.10.0 in package.json (minor bump — BR-FID2 ChatContextPicker extraction)', () => {
-    expect(pkgJson.version).toBe('0.10.0');
+  it('should have version 0.11.0 in package.json (minor bump — feat/chatui-package-dist preprocessed dist)', () => {
+    expect(pkgJson.version).toBe('0.11.0');
   });
 
-  it('should have _version 0.10.0 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.10.0');
+  it('should have _version 0.11.0 in export-manifest.json', () => {
+    expect(manifest._version).toBe('0.11.0');
   });
 
-  it('should resolve the ChatConversation svelte file to an existing path', () => {
+  it('should resolve the ChatConversation svelte source file to an existing path', () => {
     const entry = pkgJson.exports[SUBPATH] as Record<string, string>;
     const file = entry['svelte'] ?? entry['import'];
     expect(file).toBeTruthy();
-    const abs = path.resolve(PACKAGE_ROOT, file as string);
+    // Exports point to dist/. Verify the src/ counterpart exists (dist is a build artifact).
+    const srcFile = (file as string).replace(/^\.\/dist\//, './src/');
+    const abs = path.resolve(PACKAGE_ROOT, srcFile);
     expect(fs.existsSync(abs)).toBe(true);
   });
 
-  it('should resolve the ChatConversation .d.ts file to an existing path', () => {
+  it('should resolve the ChatConversation .svelte.d.ts source file to an existing path', () => {
     const entry = pkgJson.exports[SUBPATH] as Record<string, string>;
     const file = entry['types'];
     expect(file).toBeTruthy();
-    const abs = path.resolve(PACKAGE_ROOT, file as string);
+    // dist/*.svelte.d.ts is generated from src/*.svelte.d.ts (hand-written stub).
+    const srcFile = (file as string).replace(/^\.\/dist\//, './src/');
+    const abs = path.resolve(PACKAGE_ROOT, srcFile);
     expect(fs.existsSync(abs)).toBe(true);
   });
 });

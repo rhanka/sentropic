@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-ui",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Svelte reference UI package for @sentropic/* chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. Consumes @sentropic/chat-core wire contracts over HTTP/SSE only.",
   "type": "module",
   "license": "MIT",
@@ -9,203 +9,202 @@
     "url": "git+https://github.com/rhanka/sentropic.git",
     "directory": "packages/chat-ui"
   },
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "svelte": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "import": "./dist/index.js"
     },
     "./client/transport": {
-      "types": "./src/client/transport.ts",
-      "svelte": "./src/client/transport.ts",
-      "import": "./src/client/transport.ts"
+      "types": "./dist/client/transport.d.ts",
+      "svelte": "./dist/client/transport.js",
+      "import": "./dist/client/transport.js"
     },
     "./client/replay": {
-      "types": "./src/client/replay.ts",
-      "svelte": "./src/client/replay.ts",
-      "import": "./src/client/replay.ts"
+      "types": "./dist/client/replay.d.ts",
+      "svelte": "./dist/client/replay.js",
+      "import": "./dist/client/replay.js"
     },
     "./client/streamTypes": {
-      "types": "./src/client/streamTypes.ts",
-      "svelte": "./src/client/streamTypes.ts",
-      "import": "./src/client/streamTypes.ts"
+      "types": "./dist/client/streamTypes.d.ts",
+      "svelte": "./dist/client/streamTypes.js",
+      "import": "./dist/client/streamTypes.js"
     },
     "./client/streamHistory": {
-      "types": "./src/client/streamHistory.ts",
-      "svelte": "./src/client/streamHistory.ts",
-      "import": "./src/client/streamHistory.ts"
+      "types": "./dist/client/streamHistory.d.ts",
+      "svelte": "./dist/client/streamHistory.js",
+      "import": "./dist/client/streamHistory.js"
     },
     "./client/streamHub": {
-      "types": "./src/client/streamHub.ts",
-      "svelte": "./src/client/streamHub.ts",
-      "import": "./src/client/streamHub.ts"
+      "types": "./dist/client/streamHub.d.ts",
+      "svelte": "./dist/client/streamHub.js",
+      "import": "./dist/client/streamHub.js"
     },
     "./state/chatDraft": {
-      "types": "./src/state/chatDraft.ts",
-      "svelte": "./src/state/chatDraft.ts",
-      "import": "./src/state/chatDraft.ts"
+      "types": "./dist/state/chatDraft.d.ts",
+      "svelte": "./dist/state/chatDraft.js",
+      "import": "./dist/state/chatDraft.js"
     },
     "./state/chatAttachments": {
-      "types": "./src/state/chatAttachments.ts",
-      "svelte": "./src/state/chatAttachments.ts",
-      "import": "./src/state/chatAttachments.ts"
+      "types": "./dist/state/chatAttachments.d.ts",
+      "svelte": "./dist/state/chatAttachments.js",
+      "import": "./dist/state/chatAttachments.js"
     },
     "./state/chatProjection": {
-      "types": "./src/state/chatProjection.ts",
-      "svelte": "./src/state/chatProjection.ts",
-      "import": "./src/state/chatProjection.ts"
+      "types": "./dist/state/chatProjection.d.ts",
+      "svelte": "./dist/state/chatProjection.js",
+      "import": "./dist/state/chatProjection.js"
     },
     "./state/chatWidgetShell": {
-      "types": "./src/state/chatWidgetShell.ts",
-      "svelte": "./src/state/chatWidgetShell.ts",
-      "import": "./src/state/chatWidgetShell.ts"
+      "types": "./dist/state/chatWidgetShell.d.ts",
+      "svelte": "./dist/state/chatWidgetShell.js",
+      "import": "./dist/state/chatWidgetShell.js"
     },
     "./state/streamMessageProjection": {
-      "types": "./src/state/streamMessageProjection.ts",
-      "svelte": "./src/state/streamMessageProjection.ts",
-      "import": "./src/state/streamMessageProjection.ts"
+      "types": "./dist/state/streamMessageProjection.d.ts",
+      "svelte": "./dist/state/streamMessageProjection.js",
+      "import": "./dist/state/streamMessageProjection.js"
     },
     "./state/streamMessageSmoothing": {
-      "types": "./src/state/streamMessageSmoothing.ts",
-      "svelte": "./src/state/streamMessageSmoothing.ts",
-      "import": "./src/state/streamMessageSmoothing.ts"
+      "types": "./dist/state/streamMessageSmoothing.d.ts",
+      "svelte": "./dist/state/streamMessageSmoothing.js",
+      "import": "./dist/state/streamMessageSmoothing.js"
     },
     "./renderers/registry": {
-      "types": "./src/renderers/registry.ts",
-      "svelte": "./src/renderers/registry.ts",
-      "import": "./src/renderers/registry.ts"
+      "types": "./dist/renderers/registry.d.ts",
+      "svelte": "./dist/renderers/registry.js",
+      "import": "./dist/renderers/registry.js"
     },
     "./hosts/types": {
-      "types": "./src/hosts/types.ts",
-      "svelte": "./src/hosts/types.ts",
-      "import": "./src/hosts/types.ts"
+      "types": "./dist/hosts/types.d.ts",
+      "svelte": "./dist/hosts/types.js",
+      "import": "./dist/hosts/types.js"
     },
     "./hosts/createWebHost": {
-      "types": "./src/hosts/createWebHost.ts",
-      "svelte": "./src/hosts/createWebHost.ts",
-      "import": "./src/hosts/createWebHost.ts"
+      "types": "./dist/hosts/createWebHost.d.ts",
+      "svelte": "./dist/hosts/createWebHost.js",
+      "import": "./dist/hosts/createWebHost.js"
     },
     "./stores/chatWidgetLayout": {
-      "types": "./src/stores/chatWidgetLayout.ts",
-      "svelte": "./src/stores/chatWidgetLayout.ts",
-      "import": "./src/stores/chatWidgetLayout.ts"
+      "types": "./dist/stores/chatWidgetLayout.d.ts",
+      "svelte": "./dist/stores/chatWidgetLayout.js",
+      "import": "./dist/stores/chatWidgetLayout.js"
     },
     "./stores/localTools": {
-      "types": "./src/stores/localTools.ts",
-      "svelte": "./src/stores/localTools.ts",
-      "import": "./src/stores/localTools.ts"
+      "types": "./dist/stores/localTools.d.ts",
+      "svelte": "./dist/stores/localTools.js",
+      "import": "./dist/stores/localTools.js"
     },
     "./utils/chat-run-projection": {
-      "types": "./src/utils/chat-run-projection.ts",
-      "svelte": "./src/utils/chat-run-projection.ts",
-      "import": "./src/utils/chat-run-projection.ts"
+      "types": "./dist/utils/chat-run-projection.d.ts",
+      "svelte": "./dist/utils/chat-run-projection.js",
+      "import": "./dist/utils/chat-run-projection.js"
     },
     "./utils/chat-steer": {
-      "types": "./src/utils/chat-steer.ts",
-      "svelte": "./src/utils/chat-steer.ts",
-      "import": "./src/utils/chat-steer.ts"
+      "types": "./dist/utils/chat-steer.d.ts",
+      "svelte": "./dist/utils/chat-steer.js",
+      "import": "./dist/utils/chat-steer.js"
     },
     "./utils/chat-tool-scope": {
-      "types": "./src/utils/chat-tool-scope.ts",
-      "svelte": "./src/utils/chat-tool-scope.ts",
-      "import": "./src/utils/chat-tool-scope.ts"
+      "types": "./dist/utils/chat-tool-scope.d.ts",
+      "svelte": "./dist/utils/chat-tool-scope.js",
+      "import": "./dist/utils/chat-tool-scope.js"
     },
     "./utils/localToolStreamSync": {
-      "types": "./src/utils/localToolStreamSync.ts",
-      "svelte": "./src/utils/localToolStreamSync.ts",
-      "import": "./src/utils/localToolStreamSync.ts"
+      "types": "./dist/utils/localToolStreamSync.d.ts",
+      "svelte": "./dist/utils/localToolStreamSync.js",
+      "import": "./dist/utils/localToolStreamSync.js"
     },
     "./components/ChatPanel.svelte": {
-      "types": "./src/components/ChatPanel.svelte.d.ts",
-      "svelte": "./src/components/ChatPanel.svelte",
-      "import": "./src/components/ChatPanel.svelte"
+      "types": "./dist/components/ChatPanel.svelte.d.ts",
+      "svelte": "./dist/components/ChatPanel.svelte",
+      "import": "./dist/components/ChatPanel.svelte"
     },
     "./components/ChatWidget.svelte": {
-      "types": "./src/components/ChatWidget.svelte.d.ts",
-      "svelte": "./src/components/ChatWidget.svelte",
-      "import": "./src/components/ChatWidget.svelte"
+      "types": "./dist/components/ChatWidget.svelte.d.ts",
+      "svelte": "./dist/components/ChatWidget.svelte",
+      "import": "./dist/components/ChatWidget.svelte"
     },
     "./components/StreamMessage.svelte": {
-      "types": "./src/components/StreamMessage.svelte.d.ts",
-      "svelte": "./src/components/StreamMessage.svelte",
-      "import": "./src/components/StreamMessage.svelte"
+      "types": "./dist/components/StreamMessage.svelte.d.ts",
+      "svelte": "./dist/components/StreamMessage.svelte",
+      "import": "./dist/components/StreamMessage.svelte"
     },
     "./components/ChatTimeline.svelte": {
-      "types": "./src/components/ChatTimeline.svelte.d.ts",
-      "svelte": "./src/components/ChatTimeline.svelte",
-      "import": "./src/components/ChatTimeline.svelte"
+      "types": "./dist/components/ChatTimeline.svelte.d.ts",
+      "svelte": "./dist/components/ChatTimeline.svelte",
+      "import": "./dist/components/ChatTimeline.svelte"
     },
     "./components/ChatComposer.svelte": {
-      "types": "./src/components/ChatComposer.svelte.d.ts",
-      "svelte": "./src/components/ChatComposer.svelte",
-      "import": "./src/components/ChatComposer.svelte"
+      "types": "./dist/components/ChatComposer.svelte.d.ts",
+      "svelte": "./dist/components/ChatComposer.svelte",
+      "import": "./dist/components/ChatComposer.svelte"
     },
     "./components/ModelSelector.svelte": {
-      "types": "./src/components/ModelSelector.svelte.d.ts",
-      "svelte": "./src/components/ModelSelector.svelte",
-      "import": "./src/components/ModelSelector.svelte"
+      "types": "./dist/components/ModelSelector.svelte.d.ts",
+      "svelte": "./dist/components/ModelSelector.svelte",
+      "import": "./dist/components/ModelSelector.svelte"
     },
     "./components/MessageActions.svelte": {
-      "types": "./src/components/MessageActions.svelte.d.ts",
-      "svelte": "./src/components/MessageActions.svelte",
-      "import": "./src/components/MessageActions.svelte"
+      "types": "./dist/components/MessageActions.svelte.d.ts",
+      "svelte": "./dist/components/MessageActions.svelte",
+      "import": "./dist/components/MessageActions.svelte"
     },
     "./components/ChatContextPicker.svelte": {
-      "types": "./src/components/ChatContextPicker.svelte.d.ts",
-      "svelte": "./src/components/ChatContextPicker.svelte",
-      "import": "./src/components/ChatContextPicker.svelte"
+      "types": "./dist/components/ChatContextPicker.svelte.d.ts",
+      "svelte": "./dist/components/ChatContextPicker.svelte",
+      "import": "./dist/components/ChatContextPicker.svelte"
     },
     "./utils/markdown-refs": {
-      "types": "./src/utils/markdown-refs.ts",
-      "svelte": "./src/utils/markdown-refs.ts",
-      "import": "./src/utils/markdown-refs.ts"
+      "types": "./dist/utils/markdown-refs.d.ts",
+      "svelte": "./dist/utils/markdown-refs.js",
+      "import": "./dist/utils/markdown-refs.js"
     },
     "./utils/model-selection": {
-      "types": "./src/utils/model-selection.ts",
-      "svelte": "./src/utils/model-selection.ts",
-      "import": "./src/utils/model-selection.ts"
+      "types": "./dist/utils/model-selection.d.ts",
+      "svelte": "./dist/utils/model-selection.js",
+      "import": "./dist/utils/model-selection.js"
     },
     "./utils/message-actions": {
-      "types": "./src/utils/message-actions.ts",
-      "svelte": "./src/utils/message-actions.ts",
-      "import": "./src/utils/message-actions.ts"
+      "types": "./dist/utils/message-actions.d.ts",
+      "svelte": "./dist/utils/message-actions.js",
+      "import": "./dist/utils/message-actions.js"
     },
     "./utils/composer-autosize": {
-      "types": "./src/utils/composer-autosize.ts",
-      "svelte": "./src/utils/composer-autosize.ts",
-      "import": "./src/utils/composer-autosize.ts"
+      "types": "./dist/utils/composer-autosize.d.ts",
+      "svelte": "./dist/utils/composer-autosize.js",
+      "import": "./dist/utils/composer-autosize.js"
     },
     "./state/chat-context": {
-      "types": "./src/state/chat-context.ts",
-      "svelte": "./src/state/chat-context.ts",
-      "import": "./src/state/chat-context.ts"
+      "types": "./dist/state/chat-context.d.ts",
+      "svelte": "./dist/state/chat-context.js",
+      "import": "./dist/state/chat-context.js"
     },
     "./components/ContextChips.svelte": {
-      "types": "./src/components/ContextChips.svelte.d.ts",
-      "svelte": "./src/components/ContextChips.svelte",
-      "import": "./src/components/ContextChips.svelte"
+      "types": "./dist/components/ContextChips.svelte.d.ts",
+      "svelte": "./dist/components/ContextChips.svelte",
+      "import": "./dist/components/ContextChips.svelte"
     },
     "./components/ChatConversation.svelte": {
-      "types": "./src/components/ChatConversation.svelte.d.ts",
-      "svelte": "./src/components/ChatConversation.svelte",
-      "import": "./src/components/ChatConversation.svelte"
+      "types": "./dist/components/ChatConversation.svelte.d.ts",
+      "svelte": "./dist/components/ChatConversation.svelte",
+      "import": "./dist/components/ChatConversation.svelte"
     },
     "./components/SessionList.svelte": {
-      "types": "./src/components/SessionList.svelte.d.ts",
-      "svelte": "./src/components/SessionList.svelte",
-      "import": "./src/components/SessionList.svelte"
+      "types": "./dist/components/SessionList.svelte.d.ts",
+      "svelte": "./dist/components/SessionList.svelte",
+      "import": "./dist/components/SessionList.svelte"
     },
     "./state/sessionList": {
-      "types": "./src/state/sessionList.ts",
-      "svelte": "./src/state/sessionList.ts",
-      "import": "./src/state/sessionList.ts"
+      "types": "./dist/state/sessionList.d.ts",
+      "svelte": "./dist/state/sessionList.js",
+      "import": "./dist/state/sessionList.js"
     }
   },
   "files": [
     "dist",
-    "src",
     "README.md",
     "LICENSE"
   ],
@@ -216,7 +215,7 @@
     "**/*.svelte"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "svelte-package -i src -o dist",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests"
   },
@@ -226,6 +225,8 @@
     "svelte-streamdown": "^3.0.1"
   },
   "devDependencies": {
+    "@sveltejs/package": "2.3.9",
+    "svelte-preprocess": "6.0.3",
     "typescript": "5.4.5"
   }
 }
