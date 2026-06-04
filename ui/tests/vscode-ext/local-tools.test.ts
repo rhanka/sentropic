@@ -33,7 +33,7 @@ describe('vscode local tools runtime', () => {
   let outsideRepoPath = '';
 
   beforeEach(async () => {
-    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'topai-vscode-tools-'));
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sentropic-vscode-tools-'));
     await fs.writeFile(path.join(workspaceRoot, '.env'), 'OPENAI_API_KEY=secret\n', 'utf8');
     await fs.writeFile(path.join(workspaceRoot, 'notes.txt'), 'line1\nline2\nline3\nline4', 'utf8');
     await fs.writeFile(

@@ -1,10 +1,10 @@
-# Top AI Ideas
+# Sentropic
 
 MANDATORY: va lire .cursor/rules/MASTER.mdc et suis les instructions avant tout
 
 **Un assistant à génération et évaluation de cas d'usage d'intelligence artificielle**
 
-Top AI Ideas est une application web qui aide les organisations à identifier, générer et évaluer des cas d'usage d'IA pertinents pour leur activité. L'application utilise l'intelligence artificielle (OpenAI) pour générer automatiquement des propositions de cas d'usage détaillés, puis les évalue selon des critères de valeur métier et de complexité d'implémentation.
+Sentropic est une application web qui aide les organisations à identifier, générer et évaluer des cas d'usage d'IA pertinents pour leur activité. L'application utilise l'intelligence artificielle (OpenAI) pour générer automatiquement des propositions de cas d'usage détaillés, puis les évalue selon des critères de valeur métier et de complexité d'implémentation.
 
 ## Fonctionnalités principales
 
@@ -87,7 +87,7 @@ API backend base URL. The UI will make all API calls to this URL.
 **Values by environment:**
 - **Local development**: `http://localhost:8787/api/v1` (default fallback)
 - **Docker Compose**: `http://api:8787/api/v1` (set in `docker-compose.yml`)
-- **Production**: `https://top-ai-ideas-api.sent-tech.ca/api/v1` (set in GitHub Actions CI)
+- **Production**: `https://sentropic.sent-tech.ca/api/v1` (set in GitHub Actions CI)
 
 **Usage:**
 ```typescript
@@ -113,7 +113,7 @@ http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.c
 **Production override:**
 Set this environment variable in your deployment environment (e.g., Scaleway Container) to restrict CORS to production domains only:
 ```bash
-CORS_ALLOWED_ORIGINS=https://*.sent-tech.ca,https://top-ai-ideas.sent-tech.ca
+CORS_ALLOWED_ORIGINS=https://*.sent-tech.ca,https://sentropic.sent-tech.ca
 ```
 
 ### Local Development
@@ -171,7 +171,7 @@ Pour plus de détails sur les workflows d'authentification, voir [spec/WORKFLOW_
 
 **Configuration WebAuthn :**
 - `WEBAUTHN_RP_ID` : Domaine Relying Party (ex: `sent-tech.com`)
-- `WEBAUTHN_ORIGIN` : Origines autorisées (ex: `https://top-ai-ideas.sent-tech.com,https://top-ai-ideas-api.sent-tech.com`)
+- `WEBAUTHN_ORIGIN` : Origines autorisées (ex: `https://sentropic.sent-tech.ca`)
 
 ⚠️ **Important** : Ne jamais commiter ces variables dans le code source. Utiliser les secrets du gestionnaire de secrets (GitHub Secrets, Scaleway Secrets, etc.).
 
@@ -247,5 +247,4 @@ Tous les endpoints d'authentification sont protégés par rate limiting pour pr�
 **⏳ Étape 5 – Fonctionnalités manquantes**
 - **À implémenter**: Pages `/configuration-metier` et `/donnees`.
 - **À implémenter**: Backups automatisés PostgreSQL (partiellement fait via `make db-backup-prod`).
-
 

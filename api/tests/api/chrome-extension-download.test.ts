@@ -54,7 +54,7 @@ describe('Chrome extension download metadata API', () => {
   });
 
   it('returns extension download metadata when configured', async () => {
-    process.env.CHROME_EXTENSION_DOWNLOAD_URL = 'https://downloads.example.com/top-ai-ideas/chrome-ext.zip';
+    process.env.CHROME_EXTENSION_DOWNLOAD_URL = 'https://downloads.example.com/sentropic/chrome-ext.zip';
     process.env.CHROME_EXTENSION_VERSION = '1.4.2';
     process.env.CHROME_EXTENSION_SOURCE = 'ci:build-ext';
 
@@ -69,7 +69,7 @@ describe('Chrome extension download metadata API', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      downloadUrl: 'https://downloads.example.com/top-ai-ideas/chrome-ext.zip',
+      downloadUrl: 'https://downloads.example.com/sentropic/chrome-ext.zip',
       version: '1.4.2',
       source: 'ci:build-ext',
     });
@@ -87,7 +87,7 @@ describe('Chrome extension download metadata API', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      downloadUrl: 'https://dev.example.local:5173/chrome-extension/top-ai-ideas-chrome-extension.zip',
+      downloadUrl: 'https://dev.example.local:5173/chrome-extension/sentropic-chrome-extension.zip',
       version: '0.1.0',
       source: 'ui/chrome-ext',
     });

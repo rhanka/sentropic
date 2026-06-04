@@ -11,7 +11,7 @@ import { requireEditor } from '../../middleware/rbac';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/vscode-ext';
-const DEFAULT_EXTENSION_VSIX_PATH = '/vscode-extension/top-ai-ideas-vscode-extension.vsix';
+const DEFAULT_EXTENSION_VSIX_PATH = '/vscode-extension/sentropic-vscode-extension.vsix';
 const VSCODE_PROJECT_WORKSPACE_STATE_KEY = 'vscode_project_workspace_state_v1';
 
 const readConfig = () => {

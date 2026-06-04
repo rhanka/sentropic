@@ -2,6 +2,8 @@
 
 Status: Draft (BR-04 Lot 0) — 2026-03-12
 
+> BR-14e rename (2026-06-02): the workspace-type technical id originally introduced as `ai-ideas` (the historical §1 migration steps below describe the original `0024` data definition) was renamed to `ai-priorities` everywhere (cross-package string contract, UI/API/packages) and its display label set to "AI Priorities" / "Priorités IA". Existing data is migrated by `api/drizzle/0028_rename_ai_ideas_to_ai_priorities.sql` (updates `workspaces.type`, `workspace_type_workflows.workspace_type`, `view_templates.workspace_type`). All id references in this spec now read `ai-priorities`; the French chat-prompt PROSE body (§8 "Assistant IA pour application B2B d'idées d'IA") was intentionally kept unchanged.
+
 ## 0) Fusion trajectory
 
 Each section below is tagged with its canonical spec target for post-implementation consolidation (Lot N-1).
@@ -42,7 +44,7 @@ Each section below is tagged with its canonical spec target for post-implementat
 ### 1.1 Modified tables
 
 **`workspaces`** — add columns:
-- `type text NOT NULL DEFAULT 'ai-ideas'` — workspace type taxonomy: `neutral`, `ai-ideas`, `opportunity`, `code`.
+- `type text NOT NULL DEFAULT 'ai-priorities'` — workspace type taxonomy: `neutral`, `ai-priorities`, `opportunity`, `code`.
 - `gate_config jsonb` — nullable. Gate sequence configuration per workspace. `null` = free gates (backward-compatible).
 
 **`use_cases` → renamed `initiatives`** — add columns:
@@ -91,7 +93,7 @@ Each section below is tagged with its canonical spec target for post-implementat
 
 **`workspace_type_workflows`** (multi-workflow registry)
 - `id text PK`
-- `workspace_type text NOT NULL` — `ai-ideas | opportunity | code`
+- `workspace_type text NOT NULL` — `ai-priorities | opportunity | code`
 - `workflow_definition_id text FK workflow_definitions.id NOT NULL`
 - `is_default boolean NOT NULL DEFAULT false` — default workflow for this type
 - `trigger_stage text` — maturity stage that triggers this workflow (nullable)
@@ -122,7 +124,7 @@ erDiagram
         text id PK
         text owner_user_id FK
         text name
-        text type "NEW ai-ideas|opportunity|code|neutral"
+        text type "NEW ai-priorities|opportunity|code|neutral"
         jsonb gate_config "NEW nullable"
         timestamp hidden_at
         timestamp created_at
@@ -216,7 +218,7 @@ erDiagram
 ### 1.4 Backward compatibility
 
 - `use_cases` → `initiatives`: `ALTER TABLE RENAME`. All Drizzle refs, API routes (`/api/v1/use-cases` → `/api/v1/initiatives`), UI stores updated. Legacy API routes kept as aliases during transition if needed.
-- `workspaces.type` defaults to `'ai-ideas'` → existing workspaces auto-typed, zero breakage.
+- `workspaces.type` defaults to `'ai-priorities'` → existing workspaces auto-typed, zero breakage.
 - Neutral workspace auto-created per user on first login (or migration backfill for existing users).
 - Existing `workflow_definitions` / `agent_definitions` / `workflow_definition_tasks` unchanged — `workspace_type_workflows` adds registry on top.
 - `gate_config` nullable → null = free gates = current behavior preserved.
@@ -231,7 +233,7 @@ One file in `api/drizzle/` (BR04-EX1):
 3. `ALTER TABLE initiatives ADD COLUMN maturity_stage text`
 4. `ALTER TABLE initiatives ADD COLUMN gate_status text`
 5. `ALTER TABLE initiatives ADD COLUMN template_snapshot_id text`
-6. `ALTER TABLE workspaces ADD COLUMN type text NOT NULL DEFAULT 'ai-ideas'`
+6. `ALTER TABLE workspaces ADD COLUMN type text NOT NULL DEFAULT 'ai-priorities'`
 7. `ALTER TABLE workspaces ADD COLUMN gate_config jsonb`
 8. `CREATE TABLE solutions (...)`
 9. `CREATE TABLE products (...)`
@@ -240,7 +242,7 @@ One file in `api/drizzle/` (BR04-EX1):
 12. `CREATE TABLE workspace_type_workflows (...)`
 13. `CREATE TABLE view_templates (...)`
 14. Indexes + FK constraints
-15. `UPDATE workspaces SET type = 'ai-ideas' WHERE type = 'ai-ideas'` (no-op, ensures default applied)
+15. `UPDATE workspaces SET type = 'ai-priorities' WHERE type = 'ai-priorities'` (no-op, ensures default applied)
 16. Backfill: create one neutral workspace per existing user who doesn't have one
 17. Backfill: seed default view_templates per workspace type
 
@@ -255,18 +257,18 @@ One file in `api/drizzle/` (BR04-EX1):
 | Type | Purpose | Default workflow family | Delegable | Auto-created |
 |---|---|---|---|---|
 | `neutral` | Orchestrator dashboard, cross-workspace tools, task dispatch | None (orchestrator only) | No (non-delegable) | Yes (one per user) |
-| `ai-ideas` | AI use case ideation and qualification | `ai_usecase_generation` | Yes | No (user-created) |
+| `ai-priorities` | AI use case ideation and qualification | `ai_usecase_generation` | Yes | No (user-created) |
 | `opportunity` | Commercial opportunity management (demand → bid → contract → delivery) | `opportunity_qualification` (to spec) | Yes | No (user-created) |
 | `code` | Developer/code project workspace (VSCode integration) | `code_analysis` (to spec) | Yes | No (user-created) |
 
 ### 2.2 Type immutability
 
-A workspace type is set at creation and cannot be changed. This avoids data model conflicts (an `ai-ideas` initiative has different semantics than an `opportunity` initiative in the same workspace).
+A workspace type is set at creation and cannot be changed. This avoids data model conflicts (an `ai-priorities` initiative has different semantics than an `opportunity` initiative in the same workspace).
 
 ### 2.3 Workspace creation rules
 
 - **Neutral**: auto-created on user registration or first login. One per user. Cannot be created manually. Cannot be hidden/deleted.
-- **ai-ideas / opportunity / code**: user-created via existing workspace creation flow. Type specified at creation.
+- **ai-priorities / opportunity / code**: user-created via existing workspace creation flow. Type specified at creation.
 
 ---
 
@@ -320,7 +322,7 @@ Mechanism: event listener on `execution_events` + comment assignment. Creates no
 ### 4.1 Universal initiative
 
 "Initiative" is the universal business object replacing "use case". An initiative can be:
-- An AI use case idea (workspace type `ai-ideas`)
+- An AI use case idea (workspace type `ai-priorities`)
 - A commercial opportunity / client demand (workspace type `opportunity`)
 - A code project / technical initiative (workspace type `code`)
 
@@ -347,7 +349,7 @@ Gate criteria are evaluated via existing `guardrails` table (category = `approva
 ### 4.3 Lineage
 
 `antecedent_id` creates a directed graph of initiative derivation:
-- An opportunity can spawn from an AI idea (initiative in `ai-ideas` workspace → fork as initiative in `opportunity` workspace, `antecedent_id` = original).
+- An opportunity can spawn from an AI idea (initiative in `ai-priorities` workspace → fork as initiative in `opportunity` workspace, `antecedent_id` = original).
 - A bid can reference a solution which references an initiative.
 
 Lineage is informational (traceability), not structural (no cascade delete).
@@ -448,7 +450,7 @@ On `PATCH /api/v1/initiatives/:id` with `maturity_stage` change:
 
 ### 6.3 Default gate configs per workspace type
 
-- `ai-ideas`: `{ "mode": "free", "stages": ["G0", "G2"] }` — lightweight, ideation-focused.
+- `ai-priorities`: `{ "mode": "free", "stages": ["G0", "G2"] }` — lightweight, ideation-focused.
 - `opportunity`: `{ "mode": "soft", "stages": ["G0", "G2", "G5", "G7"] }` — full lifecycle with soft gates.
 - `code`: `{ "mode": "free", "stages": ["G0", "G2", "G5"] }` — dev lifecycle, free by default.
 - `neutral`: no gate config (no initiatives).
@@ -493,7 +495,7 @@ type UseCaseGenerationWorkflowTaskKey = 'context_prepare' | 'matrix_prepare' | .
 - `workflow_definition_tasks.task_key` is a free `text` field (already the case in DB schema).
 - Agent resolution: `task_key` → lookup `agentDefinitionId` on the `workflow_definition_tasks` row (already the FK).
 - Compile-time types replaced by runtime lookup. Type safety at service boundaries via Zod validation of workflow structure.
-- `default-workflows.ts` and `default-agents.ts` become seed data for `ai-ideas` type. Other types get their own seed data.
+- `default-workflows.ts` and `default-agents.ts` become seed data for `ai-priorities` type. Other types get their own seed data.
 
 ### 7.4 Generic dispatch
 
@@ -726,7 +728,7 @@ Workflow keys are logical identifiers (e.g. `ai_usecase_generation`, not `ai_use
 
 | Workspace type | Default workflow key | Seed tasks |
 |---|---|---|
-| `ai-ideas` | `ai_usecase_generation` | context_prepare, matrix_prepare, usecase_list, todo_sync, usecase_detail, executive_summary |
+| `ai-priorities` | `ai_usecase_generation` | context_prepare, matrix_prepare, usecase_list, todo_sync, usecase_detail, executive_summary |
 | `opportunity` | `opportunity_identification` | context_prepare, matrix_prepare, opportunity_list, todo_sync, opportunity_detail, executive_summary |
 | `opportunity` | `opportunity_qualification` | context_prepare, demand_analysis, solution_draft, bid_preparation, gate_review |
 | `code` | `code_analysis` | context_prepare, codebase_scan, issue_triage, implementation_plan |
@@ -767,7 +769,7 @@ BR-15 (agent/workflow config robustness) must be re-scoped after BR-04 to cover:
 ### 8.1 Agent provisioning
 
 Each workspace type gets its own set of seed agents (via `default-agents.ts` extension):
-- `ai-ideas`: existing 6 agents (unchanged).
+- `ai-priorities`: existing 6 agents (unchanged).
 - `opportunity`: new agents — demand_analyst, solution_architect, bid_writer, gate_reviewer, etc.
 - `code`: new agents — codebase_analyst, issue_triager, implementation_planner, etc.
 
@@ -795,7 +797,7 @@ These are chat tools (§3.3), not workflow agents.
 | Target file | Content |
 |---|---|
 | `default-chat-system.ts` | Chat system prompt per workspace type (cadrage AI / opportunity / code) + chat-level prompts common to all types (reasoning eval, session title, conversation auto) |
-| `default-agents-ai-ideas.ts` | AI-specific agents with prompts: `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` |
+| `default-agents-ai-priorities.ts` | AI-specific agents with prompts: `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` |
 | `default-agents-opportunity.ts` | Opportunity-specific agents with prompts: `opportunity_orchestrator`, opportunity-domain matrix agent, `opportunity_list_agent`, `opportunity_list_with_orgs_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` |
 | `default-agents-code.ts` | Code-specific agents with prompts: `codebase_analyst`, `issue_triager`, `implementation_planner` |
 | `default-agents-shared.ts` | Agents available on ALL workspace types: shared organization generation agent, `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` — each with its prompt |
@@ -810,7 +812,7 @@ Each agent definition carries its prompt in `config.promptTemplate` (string). No
 
 | Workspace type | Specific agents | Shared agents (all types) |
 |---|---|---|
-| ai-ideas | `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` | shared organization generation agent, `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` |
+| ai-priorities | `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` | shared organization generation agent, `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` |
 | opportunity | `opportunity_orchestrator`, opportunity-domain matrix agent, `opportunity_list_agent`, `opportunity_list_with_orgs_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` | same shared agents |
 | code | `codebase_analyst`, `issue_triager`, `implementation_planner` | same shared agents |
 
@@ -820,7 +822,7 @@ Moved from `default-prompts.ts` (`chat_system_base`, `chat_code_agent`) to `defa
 
 | Workspace type | Chat cadrage |
 |---|---|
-| ai-ideas | "Assistant IA pour application B2B d'idées d'IA" (existing) |
+| ai-priorities | "Assistant IA pour application B2B d'idées d'IA" (existing) |
 | opportunity | "Assistant pour la gestion d'opportunités commerciales" (new, neutral) |
 | code | "Assistant pour l'analyse et le développement de code" (existing `chat_code_agent`) |
 | neutral | "Assistant de coordination multi-workspace" (new) |
@@ -856,7 +858,7 @@ The initiative `data` JSONB schema for opportunity type:
 
 ### 8.5 Neutral default matrix for opportunity (E)
 
-The default matrix for `opportunity` workspaces differs from `ai-ideas`:
+The default matrix for `opportunity` workspaces differs from `ai-priorities`:
 
 **Value axes** (unchanged IDs, neutralized descriptions):
 - `business_value` — descriptions neutralized (no AI references, focus on business impact).
@@ -932,11 +934,11 @@ Implementation note (BR-04B): freeform execution is synchronous inside the chat 
 ### 10.4 View template catalog — mutualized across workspace types (BR-04B)
 
 - Common templates (organization, dashboard, solution, product, proposal) shared across all workspace types.
-- Initiative template differs between ai-ideas and opportunity (different fields/tabs).
+- Initiative template differs between ai-priorities and opportunity (different fields/tabs).
 - DB is source of truth (aligned with agent/workflow pattern). Lazy-seed on `list()` ensures old workspaces get new templates.
 - Config UX: shared `ConfigItemCard.svelte` for all 3 surfaces (agents, workflows, templates). See `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md`.
 
-### 10.5 Chat tools — same tools for ai-ideas and opportunity (BR-04B)
+### 10.5 Chat tools — same tools for ai-priorities and opportunity (BR-04B)
 
 Both workspace types now share the same tool set: `solutions_list`, `solution_get`, `proposals_list`, `proposal_get`, `products_list`, `product_get`, `gate_review`, `document_generate`, `batch_create_organizations`.
 
@@ -1013,7 +1015,7 @@ These endpoints are library-neutral equivalents of LangGraph resume/interrupt in
 
 ### 12.1 Problem
 
-Current UI has hardcoded views per object type (UseCase detail, Organization detail, Folder detail, Dashboard). With workspace types introducing different object personalities (an ai-ideas initiative ≠ an opportunity initiative) and new objects (solution, bid, product), hardcoded views don't scale. Each workspace type needs contextual rendering: different fields, different layouts, different actions, different dashboard visualizations.
+Current UI has hardcoded views per object type (UseCase detail, Organization detail, Folder detail, Dashboard). With workspace types introducing different object personalities (an ai-priorities initiative ≠ an opportunity initiative) and new objects (solution, bid, product), hardcoded views don't scale. Each workspace type needs contextual rendering: different fields, different layouts, different actions, different dashboard visualizations.
 
 ### 12.2 View template model
 
@@ -1155,7 +1157,7 @@ The `entity-loop` field references `collection: "initiatives"` which maps to `co
 
 ### 12.5 View templates per workspace type
 
-**`ai-ideas` initiative** (close to current UseCase detail):
+**`ai-priorities` initiative** (close to current UseCase detail):
 - Layout: vertical sections (no tabs needed for simple ideation)
 - Sections: description, problem, solution, benefits, metrics, risks, scores, references
 - Actions: generate detail, export DOCX
@@ -1196,7 +1198,7 @@ The `entity-loop` field references `collection: "initiatives"` which maps to `co
 - Actions: mark delivered, archive
 
 **`dashboard`** (per workspace type):
-- `ai-ideas`: scatter Value vs Ease (existing) + maturity distribution
+- `ai-priorities`: scatter Value vs Ease (existing) + maturity distribution
 - `opportunity`: pipeline funnel (G0→G2→G5→G7) + value pipeline chart + bid conversion rate
 - `code`: progress by stage + velocity metrics
 - `neutral`: workspace cards + cross-workspace activity feed + pending gates
@@ -1302,12 +1304,12 @@ Each level resolves its view template with `object_type: "container"` and its `w
 2. Selected workflow → view template `(workspace_type, "workflow_launch")` for the form
 3. Form fields are driven by the descriptor, not hardcoded
 
-**Workflow launch DSL example** (`ai-ideas` type):
+**Workflow launch DSL example** (`ai-priorities` type):
 
 ```json
 {
   "object_type": "workflow_launch",
-  "workspace_type": "ai-ideas",
+  "workspace_type": "ai-priorities",
   "layout": "vertical",
   "sections": [
     {
@@ -1345,13 +1347,13 @@ Each level resolves its view template with `object_type: "container"` and its `w
 **Refactoring impact on existing `/home`**:
 - Current `/home` component (hardcoded AI generation form) → replaced by `ViewTemplateRenderer` with `object_type: "workflow_launch"` resolved for the current workspace type.
 - The `/home` route remains but renders dynamically based on workspace type context.
-- Existing AI generation logic (organization picker, prompt, count) is preserved as the `ai-ideas` workflow launch template — zero functional regression.
+- Existing AI generation logic (organization picker, prompt, count) is preserved as the `ai-priorities` workflow launch template — zero functional regression.
 
 ### 12.10 Complete workspace type template mapping
 
 Each workspace type defines a complete set of view templates. The mapping is the workspace type's UI personality:
 
-| object_type | `neutral` | `ai-ideas` | `opportunity` | `code` |
+| object_type | `neutral` | `ai-priorities` | `opportunity` | `code` |
 |---|---|---|---|---|
 | `container` | workspace cards | folder → initiatives | folder → initiatives | folder → initiatives |
 | `initiative` | — | vertical (ideation) | tabs (overview/pipeline/lineage) | tabs (overview/implementation/lineage) |
@@ -1416,7 +1418,7 @@ Each workspace type defines a complete set of view templates. The mapping is the
 
 ### 14.1 Problem
 
-Current tool scoping in chat depends only on `contextType` (organization, folder, usecase, executive_summary) and workspace role (viewer/editor/admin). With workspace types, the same `contextType=initiative` in an `opportunity` workspace needs bid/solution/product tools, while in an `ai-ideas` workspace it needs generation tools only. The tool registry is workspace-type-blind.
+Current tool scoping in chat depends only on `contextType` (organization, folder, usecase, executive_summary) and workspace role (viewer/editor/admin). With workspace types, the same `contextType=initiative` in an `opportunity` workspace needs bid/solution/product tools, while in an `ai-priorities` workspace it needs generation tools only. The tool registry is workspace-type-blind.
 
 Key files impacted:
 - `api/src/services/tools.ts` — tool definitions (hardcoded set)
@@ -1432,8 +1434,8 @@ Tool availability becomes a function of `(workspace_type, context_type, role)` i
 1. Base tools always available: `web_search`, `web_extract`, `documents`, `history_analyze`
 2. Context-type tools (existing): `organizations_list`, `folders_list`, `usecases_list` → renamed to `initiatives_list`
 3. **Workspace-type tools** (new layer):
-   - `ai-ideas`: `read_initiative`, `update_initiative_field`, `comment_assistant` (existing, renamed)
-   - `opportunity`: all of `ai-ideas` + `solutions_list`, `solution_get`, `bids_list`, `bid_get`, `products_list`, `product_get`, `gate_review`
+   - `ai-priorities`: `read_initiative`, `update_initiative_field`, `comment_assistant` (existing, renamed)
+   - `opportunity`: all of `ai-priorities` + `solutions_list`, `solution_get`, `bids_list`, `bid_get`, `products_list`, `product_get`, `gate_review`
    - `code`: `read_initiative`, `update_initiative_field` + code-specific tools (TBD, depends on BR-10 VSCode v2)
    - `neutral`: cross-workspace tools only (`dispatch_todo`, `workspaces_list`, `initiative_search_cross_workspace`)
 

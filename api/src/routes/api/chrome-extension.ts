@@ -5,7 +5,7 @@ import type { TabSource } from '../../services/tab-registry';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/chrome-ext';
-const DEFAULT_EXTENSION_ZIP_PATH = '/chrome-extension/top-ai-ideas-chrome-extension.zip';
+const DEFAULT_EXTENSION_ZIP_PATH = '/chrome-extension/sentropic-chrome-extension.zip';
 
 const readConfig = () => {
   const downloadUrl = (process.env.CHROME_EXTENSION_DOWNLOAD_URL ?? env.CHROME_EXTENSION_DOWNLOAD_URL ?? '').trim();

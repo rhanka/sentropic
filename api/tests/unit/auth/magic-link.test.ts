@@ -1,13 +1,25 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import {
   generateMagicLink,
+  sendMagicLinkEmail,
   verifyMagicLink,
 } from '../../../src/services/magic-link';
 import { db } from '../../../src/db/client';
 import { magicLinks, users } from '../../../src/db/schema';
 import { eq } from 'drizzle-orm';
 
+const sendTransactionalEmailMock = vi.hoisted(() => vi.fn());
+
+vi.mock('../../../src/services/scw-tem-client', () => ({
+  sendTransactionalEmail: sendTransactionalEmailMock,
+}));
+
 describe('Magic Link Service', () => {
+  beforeEach(() => {
+    sendTransactionalEmailMock.mockReset();
+    sendTransactionalEmailMock.mockResolvedValue(undefined);
+  });
+
   afterEach(async () => {
     await db.delete(magicLinks);
     await db.delete(users);
@@ -40,6 +52,20 @@ describe('Magic Link Service', () => {
       expect(record.tokenHash).not.toBe(token);
       expect(record.email).toBe('test@example.com');
       expect(record.used).toBe(false);
+    });
+  });
+
+  describe('sendMagicLinkEmail', () => {
+    it('should brand the magic-link email as Sentropic', async () => {
+      await sendMagicLinkEmail('test@example.com', 'https://sentropic.sent-tech.ca/auth/magic-link/verify?token=abc');
+
+      expect(sendTransactionalEmailMock).toHaveBeenCalledWith(expect.objectContaining({
+        to: 'test@example.com',
+        subject: 'Votre lien de connexion Sentropic',
+        text: expect.stringContaining('L’équipe Sentropic'),
+        html: expect.stringContaining('L’équipe Sentropic'),
+      }));
+      expect(JSON.stringify(sendTransactionalEmailMock.mock.calls[0]?.[0])).not.toContain('Top AI Ideas');
     });
   });
 
@@ -114,4 +140,3 @@ describe('Magic Link Service', () => {
     });
   });
 });
-

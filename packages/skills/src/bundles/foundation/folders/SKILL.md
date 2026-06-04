@@ -4,7 +4,7 @@ description: Read and update folders that group initiatives and workspace materi
 version: 0.1.0
 category: object
 contextFilter:
-  workspaceTypes: [neutral, ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-priorities, opportunity]
 tools:
   - name: folders_list
     description: List folders in the current workspace with organization and initiative counts.

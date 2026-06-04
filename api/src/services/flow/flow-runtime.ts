@@ -300,7 +300,7 @@ export class AppFlowRuntime
       .from(workspaces)
       .where(eq(workspaces.id, actor.workspaceId))
       .limit(1);
-    const workspaceType = workspace?.type ?? 'ai-ideas';
+    const workspaceType = workspace?.type ?? 'ai-priorities';
     const typeSeed = getWorkflowSeedsForType(workspaceType);
     const workflowSeed = typeSeed?.workflows[0] ?? DEFAULT_USE_CASE_GENERATION_WORKFLOW;
 
@@ -311,7 +311,7 @@ export class AppFlowRuntime
 
     await this.ports.workflowStore.seedForWorkspaceType(
       actor,
-      typeSeed ? workspaceType : 'ai-ideas',
+      typeSeed ? workspaceType : 'ai-priorities',
     );
 
     const [workflowDefinition] = await db
