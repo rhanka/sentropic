@@ -307,8 +307,9 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
     }
   });
 
-  it('the 28-tool count oracle is byte-identical after wiring the agent source', () => {
-    // This mirrors the characterization spec §7: 1 search_skills + 27 foundation tools.
+  it('the tool count oracle is byte-identical after wiring the agent source (Lot 7: 31 tools)', () => {
+    // This mirrors the characterization spec §7 (updated in Lot 7):
+    // search_skills (index 0) + search_catalog (index 1, Lot 7 addition) + foundation tools.
     // Adding the agent source to the composite registry must NOT add any tool to this count.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
@@ -317,9 +318,10 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
-    // search_skills (1) + all foundation tools (27)
-    expect(tools).toHaveLength(1 + ALL_FOUNDATION_TOOL_NAMES.length);
+    // 2 meta-tools (search_skills + search_catalog) + all foundation tools
+    expect(tools).toHaveLength(2 + ALL_FOUNDATION_TOOL_NAMES.length);
     expect(tools[0]!.function.name).toBe('search_skills');
+    expect(tools[1]!.function.name).toBe('search_catalog');
   });
 
   it('search_skills is still the FIRST tool after adding the agent source', () => {
@@ -333,9 +335,9 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
     expect(tools[0]!.function.name).toBe('search_skills');
   });
 
-  it('the exact 28-tool name sequence is byte-identical to the pre-Lot-3 oracle', () => {
-    // This is the definitive proof: agent entries cause ZERO change to the
-    // resolved tool sequence. Any change here would be a regression.
+  it('the exact tool name sequence includes search_catalog at index 1 (Lot 7 update)', () => {
+    // Lot 7 update: agent entries cause ZERO change to the foundation tool sequence.
+    // search_catalog is now at index 1 (added by Lot 7). Agent entries do NOT appear.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
       workspaceId: 'ws-lot3-test',
@@ -345,9 +347,10 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
     });
     const names = tools.map((t) => t.function.name);
 
-    // Byte-identical oracle (same as catalog-characterization.spec.ts § 7).
+    // Updated oracle (Lot 7): search_catalog inserted at index 1.
     const EXPECTED_TOOL_ORDER = [
       'search_skills',
+      'search_catalog',
       'workspace_list',
       'initiative_search',
       'web_search',

@@ -135,19 +135,20 @@ describe('resolveFoundationChatTools — live-chat oracle', () => {
     });
   });
 
-  it('returns exactly the allowed foundation tools (all 16 skills) after search_skills', () => {
+  it('returns exactly the allowed foundation tools (all 16 skills) after search_skills + search_catalog', () => {
     const tools = resolveFoundationChatTools(makeAllowlistInput(ALL_FOUNDATION_TOOL_NAMES));
-    // First tool is search_skills; the rest are the allowed foundation tools.
+    // First tool is search_skills (unchanged); second is search_catalog (Lot 7 additive).
     const toolNames = tools.map((t) => t.function.name);
     expect(toolNames[0]).toBe('search_skills');
+    expect(toolNames[1]).toBe('search_catalog');
 
     // Every allowed foundation tool name must appear in the result.
     for (const name of ALL_FOUNDATION_TOOL_NAMES) {
       expect(toolNames).toContain(name);
     }
 
-    // Total = 1 (search_skills) + all foundation tool count.
-    expect(tools).toHaveLength(1 + ALL_FOUNDATION_TOOL_NAMES.length);
+    // Total = 2 (search_skills + search_catalog) + all foundation tool count.
+    expect(tools).toHaveLength(2 + ALL_FOUNDATION_TOOL_NAMES.length);
   });
 
   it('all tool entries are valid OpenAI ChatCompletionTool shape', () => {
@@ -162,18 +163,20 @@ describe('resolveFoundationChatTools — live-chat oracle', () => {
     }
   });
 
-  it('respects allowlist: only allowed tools appear (not search_skills removal)', () => {
-    // Allowlist containing only workspace_list — should yield search_skills + workspace_list only.
+  it('respects allowlist: only allowed tools appear (search_skills + search_catalog always present)', () => {
+    // Allowlist containing only workspace_list — should yield:
+    // search_skills (index 0) + search_catalog (index 1, Lot 7) + workspace_list only.
     const tools = resolveFoundationChatTools(
       makeAllowlistInput(['workspace_list']),
     );
     const names = tools.map((t) => t.function.name);
     expect(names[0]).toBe('search_skills');
+    expect(names[1]).toBe('search_catalog');
     expect(names).toContain('workspace_list');
     // Tools from other skills that were NOT in allowedTools must be absent.
     expect(names).not.toContain('web_search');
     expect(names).not.toContain('organizations_list');
-    expect(tools).toHaveLength(2); // search_skills + workspace_list
+    expect(tools).toHaveLength(3); // search_skills + search_catalog + workspace_list
   });
 
   it('workspace_type filter: skills with contextFilter.workspaceTypes=[...] are excluded when wsType differs', () => {
@@ -204,10 +207,13 @@ describe('resolveFoundationChatTools — live-chat oracle', () => {
     expect(namesCode).toContain('history_analyze');
   });
 
-  it('empty allowedTools yields only search_skills', () => {
+  it('empty allowedTools yields search_skills + search_catalog (both meta-tools always present)', () => {
+    // Lot 7: search_catalog is always injected at index 1, regardless of allowedTools.
+    // It is a meta-tool (not subject to allowlist filtering), same as search_skills.
     const tools = resolveFoundationChatTools(makeAllowlistInput([]));
-    expect(tools).toHaveLength(1);
+    expect(tools).toHaveLength(2);
     expect(tools[0]!.function.name).toBe('search_skills');
+    expect(tools[1]!.function.name).toBe('search_catalog');
   });
 
   it('chat-service.ts:2749 consumption note — direct synchronous pass-through', () => {
@@ -643,8 +649,8 @@ describe('executeFoundationSkillTool — dispatch oracle', () => {
 //       hardcoded branches (the seam is never reached for those names).
 //   (b) Completely unknown names still return { handled: false } — unchanged
 //       from Lot 0/1 — because the standalone tool source is EMPTY by default.
-//   (c) The 28-tool order oracle (§7) is byte-identical: the empty standalone
-//       source adds zero entries to the resolved tool set.
+//   (c) The 29-tool order oracle (§7) is correct: search_catalog at index 1,
+//       the 27 foundation tools following in their canonical order.
 //
 // NO expected value from §6 is changed. These tests are ADDITIVE assertions.
 // ---------------------------------------------------------------------------
@@ -697,15 +703,16 @@ describe('executeFoundationSkillTool — seam fall-through (Lot 2)', () => {
     expect(result.handled).toBe(false);
   });
 
-  it('resolved tool set is unchanged: 28 tools (1 search_skills + 27 foundation), seam adds zero', () => {
-    // The standalone source is empty → no new tools appear in the resolved set.
-    // This confirms the 28-tool oracle in §7 is byte-identical after Lot 2.
+  it('resolved tool set has 29 tools (search_skills + search_catalog + 27 foundation) after Lot 7', () => {
+    // Lot 7 adds search_catalog at index 1. Total = 2 meta-tools + 27 foundation = 29.
     const tools = resolveFoundationChatTools(
       makeAllowlistInput(ALL_FOUNDATION_TOOL_NAMES),
     );
-    expect(tools).toHaveLength(1 + ALL_FOUNDATION_TOOL_NAMES.length);
+    expect(tools).toHaveLength(2 + ALL_FOUNDATION_TOOL_NAMES.length);
     // search_skills is still first.
     expect(tools[0]!.function.name).toBe('search_skills');
+    // search_catalog is second (Lot 7 addition).
+    expect(tools[1]!.function.name).toBe('search_catalog');
   });
 });
 
@@ -713,25 +720,32 @@ describe('executeFoundationSkillTool — seam fall-through (Lot 2)', () => {
 // § 7  TOOL DESCRIPTOR ORDER — pin the exact tool-name sequence
 //
 // The order of tools in the resolved array is determined by:
-//   1. search_skills always first (adapter.ts:64).
-//   2. Skills are walked in InMemorySkillRegistry insertion order (Map order).
-//   3. Within each skill, tools are in SKILL.md declaration order.
+//   1. search_skills always first (adapter.ts:64) — UNCHANGED by Lot 7.
+//   2. search_catalog at position 1 — ADDED by Lot 7 (SPEC_EVOL_CATALOG §3.5).
+//   3. Skills are walked in InMemorySkillRegistry insertion order (Map order).
+//   4. Within each skill, tools are in SKILL.md declaration order.
 //
-// This section pins the exact order so any reordering in a later lot is caught.
+// Lot 7 updated this oracle from 28 → 29 entries:
+//   - search_skills: position 0 (unchanged, skill-only, sentinel __skills__)
+//   - search_catalog: position 1 (NEW additive sibling, cross-kind, sentinel __catalog__)
+//   - 27 foundation tools: positions 2–28 (UNCHANGED order)
+//
+// This section pins the exact order so any reordering is caught.
 // ---------------------------------------------------------------------------
 
 describe('resolved tool order oracle', () => {
-  it('the full tool-name sequence matches the canonical oracle', () => {
+  it('the full tool-name sequence matches the canonical 29-entry oracle (Lot 7)', () => {
     const tools = resolveFoundationChatTools(
       makeAllowlistInput(ALL_FOUNDATION_TOOL_NAMES),
     );
     const names = tools.map((t) => t.function.name);
 
-    // Oracle: derived from FOUNDATION_SKILLS registration order + SKILL.md tool order.
-    // search_skills is injected first by the adapter (adapter.ts:64).
+    // Oracle: updated in Lot 7. search_skills first (unchanged), search_catalog
+    // second (new additive sibling), then the 27 foundation tools in canonical order.
     const EXPECTED_TOOL_ORDER = [
-      // adapter meta-tool (first)
+      // meta-tools (first two — Lot 7: search_catalog at index 1)
       'search_skills',
+      'search_catalog',
       // workspace (SKILL.md order)
       'workspace_list',
       'initiative_search',
@@ -779,7 +793,8 @@ describe('resolved tool order oracle', () => {
       'document_generate',
     ] as const;
 
-    // Total: 1 + 27 = 28 tools.
+    // Total: 2 meta-tools + ALL_FOUNDATION_TOOL_NAMES.length (29) = 31.
     expect(names).toEqual(EXPECTED_TOOL_ORDER);
+    expect(names).toHaveLength(2 + ALL_FOUNDATION_TOOL_NAMES.length);
   });
 });
