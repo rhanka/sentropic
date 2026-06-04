@@ -1,13 +1,14 @@
 /**
- * App-local catalog façade (BR-42b Lot 4 — workflow seed source added)
+ * App-local catalog façade (BR-42b Lot 5 — MCP source wiring added, default-off)
  *
- * Foundation skills + agent templates + workflow seeds now flow through the
- * CompositeCatalogRegistry:
+ * Foundation skills + agent templates + workflow seeds + MCP tools (opt-in) now
+ * flow through the CompositeCatalogRegistry:
  *
  *   StaticCatalogSource ('foundation')       ← Lot 1 (skill entries)
  *   StandaloneToolSource ('standalone')      ← Lot 2 (tool entries, empty by default)
  *   AgentTemplateSource ('agent-templates')  ← Lot 3 (agent entries, code-level seeds)
  *   WorkflowSeedSource ('workflow-seeds')    ← Lot 4 (workflow entries, flow seeds)
+ *   McpCatalogSource ('mcp:<name>') [OPT-IN] ← Lot 5 (tool entries from MCP server)
  *     → CompositeCatalogRegistry
  *       → SkillsToolRegistry adapter (unchanged)
  *         → resolveFoundationChatTools() [sync, search_skills first]
@@ -16,17 +17,23 @@
  *   CatalogExecutionSeam                  ← Lot 2
  *     → foundation-executor.ts falls through to here for non-hardcoded names
  *       → StandaloneToolSource.getHandler() → handler invocation
+ *       → McpCatalogSource.getHandler()    → MCP call dispatch [if wired]
  *
- * The wire contract is BYTE-IDENTICAL to the pre-Lot-4 baseline:
+ * The wire contract is BYTE-IDENTICAL to the pre-Lot-5 baseline when no MCP
+ * server is configured (DEFAULT-OFF):
  *   - `resolveFoundationChatTools` returns the same synchronous OpenAI tool
  *     array with `search_skills` first and the 28 foundation tools in the
  *     same insertion order. Agent and workflow entries are NOT projected into
- *     the tool set.
+ *     the tool set. MCP tool entries are NOT present unless a server is wired.
  *   - `executeFoundationSearchSkills` delegates identically to the adapter.
  *   - `foundationSkillsToolRegistry` is still a `SkillsToolRegistry` instance.
  *   - Agent and workflow entries are visible via
  *     `compositeCatalogRegistry.list/get/search` for discovery, but the
  *     SkillsToolRegistry loop filters to `skill`-kind only.
+ *
+ * To wire an MCP server: call `registerMcpSource(source)` BEFORE the first
+ * call to `resolveFoundationChatTools` (or any time before the next turn),
+ * then call `source.refresh()` to populate the snapshot out-of-band.
  *
  * `packages/skills/src/**` remains READ-ONLY — no source changes.
  * `packages/chat-core/src/ports.ts` AgentRuntime is UNTOUCHED.
@@ -45,6 +52,7 @@ import {
 import { CompositeCatalogRegistry } from '../catalog/composite-registry.js';
 import { CatalogExecutionSeam } from '../catalog/execution-seam.js';
 import { agentTemplateSource } from '../catalog/sources/agent-template-source.js';
+import type { McpCatalogSource } from '../catalog/sources/mcp-source.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
 import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
 import { workflowSeedSource } from '../catalog/sources/workflow-seed-source.js';
@@ -75,7 +83,7 @@ compositeCatalogRegistry.addSource(agentTemplateSource);
 compositeCatalogRegistry.addSource(workflowSeedSource);
 
 // ---------------------------------------------------------------------------
-// Catalog execution seam (Lot 2) — dispatches non-hardcoded tool calls
+// Catalog execution seam (Lot 2 / Lot 5) — dispatches non-hardcoded tool calls
 // ---------------------------------------------------------------------------
 
 /**
@@ -89,11 +97,35 @@ compositeCatalogRegistry.addSource(workflowSeedSource);
  *
  * D-TOOL-RECONCILE: `skill`-kind entries are NOT dispatched through this seam.
  * Skill tools remain in foundation-executor's hardcoded branches.
+ *
+ * MCP sources (Lot 5 — default-off): additional handler sources are added via
+ * `registerMcpSource()` which calls `seam.addHandlerSource(source)`. The seam
+ * holds a mutable list of handler sources so new MCP sources become visible
+ * immediately without rebuilding the seam instance.
  */
 export const catalogExecutionSeam = new CatalogExecutionSeam(
   compositeCatalogRegistry,
   [standaloneToolSource],
 );
+
+/**
+ * Register an MCP catalog source into the composite registry and the execution
+ * seam. This is the OPT-IN entry point for MCP tools (Lot 5).
+ *
+ * Default-off: no MCP source is registered at startup. Calling this function
+ * is the only way to introduce MCP tools into the catalog. Call `source.refresh()`
+ * separately (out-of-band) to populate the snapshot from the MCP server.
+ *
+ * 0-regression: until `registerMcpSource` is called, the composite registry
+ * and the execution seam behave byte-identically to the pre-Lot-5 baseline.
+ * The characterization oracle (41 tests) and the 28-tool order are unaffected.
+ */
+export function registerMcpSource(source: McpCatalogSource): void {
+  // Wire into composite registry for list/get/search discovery.
+  compositeCatalogRegistry.addSource(source);
+  // Wire into execution seam for `call` dispatch.
+  catalogExecutionSeam.addHandlerSource(source);
+}
 
 // ---------------------------------------------------------------------------
 // Populate InMemorySkillRegistry from the composite snapshot

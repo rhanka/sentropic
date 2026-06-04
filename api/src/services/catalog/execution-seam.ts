@@ -41,6 +41,7 @@
 
 import type { CompositeCatalogRegistry } from './composite-registry.js';
 import type { StandaloneToolSource } from './sources/standalone-tool-source.js';
+import type { ToolHandlerSource } from './sources/mcp-source.js';
 
 // ---------------------------------------------------------------------------
 // Result shape — mirrors ExecuteFoundationSkillToolResult
@@ -75,17 +76,36 @@ export class CatalogExecutionSeam {
   private readonly registry: CompositeCatalogRegistry;
   /**
    * Sources that expose a `getHandler()` lookup.
-   * Currently only `StandaloneToolSource`; in Lot 5 `McpCatalogSource`
-   * will also implement the same accessor interface.
+   * Accepts `StandaloneToolSource` (Lot 2) and `McpCatalogSource` (Lot 5);
+   * both implement the `ToolHandlerSource` interface.
+   * The `StandaloneToolSource` type is a subtype of `ToolHandlerSource`, so
+   * existing `[standaloneToolSource]` wiring continues to compile unchanged.
+   *
+   * Mutable (not readonly): additional handler sources (e.g. MCP sources) can
+   * be added after construction via `addHandlerSource()` without rebuilding
+   * the seam instance.
    */
-  private readonly handlerSources: StandaloneToolSource[];
+  private readonly handlerSources: ToolHandlerSource[];
 
   constructor(
     registry: CompositeCatalogRegistry,
-    handlerSources: StandaloneToolSource[],
+    handlerSources: (StandaloneToolSource | ToolHandlerSource)[],
   ) {
     this.registry = registry;
-    this.handlerSources = handlerSources;
+    this.handlerSources = [...handlerSources];
+  }
+
+  /**
+   * Add a handler source that will be consulted on every `execute()` call.
+   * Used by `catalog.ts` when a new MCP source is registered at runtime
+   * (Lot 5 default-off wiring).
+   *
+   * Idempotent with respect to the same instance: adding the same source
+   * twice will result in redundant lookups (handlers are returned on the first
+   * match, so correctness is preserved).
+   */
+  addHandlerSource(source: ToolHandlerSource): void {
+    this.handlerSources.push(source);
   }
 
   /**

@@ -141,18 +141,18 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
       - [x] Sub-lot gate: unit 70 files/572 tests GREEN; catalog 179/179 (characterization 41/41 byte-identical + workflow spec 34/34); typecheck/lint clean. Pre-existing smoke http failures on api-health/database (port 8787 inside container, unrelated to this lot).
   - [x] `make down ENV=test-feat-catalog-evolution-42b`
 
-- [ ] **Lot 5 — MCP `CatalogSource` (absorbs br19b)**
-  - [ ] Declare/confirm `BR42b-EX1` before touching `api/package.json`.
-  - [ ] `make install-api NPM_LIB=@modelcontextprotocol/sdk ENV=test-feat-catalog-evolution-42b` (positional package arg is NOT supported — the target reads `${NPM_LIB}`); verify BOTH `api/package-lock.json` and root `package-lock.json` are updated for CI/image parity.
-  - [ ] Add `api/src/services/catalog/sources/mcp-source.ts`: `McpCatalogSource` (`kind: 'mcp'`) — connect (stdio/HTTP-SSE), `tools/list` → `tool`-kind entries, sanitized provider-safe public name + `rawName` (§3.3), async `refresh()`.
-  - [ ] Wire MCP `call` through the Lot-2 execution seam; per-source config (URL/command, auth token/headers, allow/deny filter) carried out-of-band (env/workspace config), NOT in the entry.
-  - [ ] Retire `feat/mcp-tool-catalog-br19b` (no-op cleanup; no code/PR on origin).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **API tests**
-      - [ ] Add `api/tests/services/catalog/mcp-source.spec.ts` (integration vs a stub MCP server: `tools/list` → namespaced `mcp:<server>/<tool>` `tool` entries with public-id↔rawName map; `call` dispatches via the seam; `refresh()` repopulates snapshot, never on the per-turn resolve).
-      - [ ] Add name-sanitization coverage (`mcp:`/`/` raw names → kebab/underscore public ids accepted by the parser + OpenAI conversion).
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
+- [x] **Lot 5 — MCP `CatalogSource` (absorbs br19b)**
+  - [x] Declare/confirm `BR42b-EX1` before touching `api/package.json`.
+  - [x] `make install-api NPM_LIB=@modelcontextprotocol/sdk ENV=test-feat-catalog-evolution-42b` (positional package arg is NOT supported — the target reads `${NPM_LIB}`); verify BOTH `api/package-lock.json` and root `package-lock.json` are updated for CI/image parity. Root lockfile updated (+860 lines). `api/package-lock.json` is a legacy file unused by the Dockerfile (image build uses root lock only per `api/Dockerfile:51`).
+  - [x] Add `api/src/services/catalog/sources/mcp-source.ts`: `McpCatalogSource` (`kind: 'mcp'`) — connect (stdio/HTTP-SSE via transport factory), `tools/list` → `tool`-kind entries, sanitized provider-safe public name + `rawName` (§3.3), async `refresh()`.
+  - [x] Wire MCP `call` through the Lot-2 execution seam; per-source config (serverName, allow/deny filter) carried out-of-band (constructor config), NOT in the entry. `registerMcpSource()` adds source to composite + execution seam (opt-in, default-off).
+  - [x] Retire `feat/mcp-tool-catalog-br19b` (no-op cleanup; no code/PR on origin).
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b` — CLEAN (no errors)
+    - [x] **API tests**
+      - [x] Add `api/tests/services/catalog/mcp-source.spec.ts` (28 tests; integration vs stub MCP server with in-memory transport: `tools/list` → `tool` entries with public-id↔rawName map; `call` dispatches via seam; `refresh()` repopulates; name sanitization; allow/deny; default-off; health).
+      - [x] Add name-sanitization coverage (`mcp:`/`/` raw names → kebab/underscore public ids; KEBAB_PATTERN compliance; collision handling with `_N` suffix).
+      - [x] Sub-lot gate: catalog 207/207 (characterization 41/41 byte-identical + mcp-source 28/28); unit 70 files/572 tests GREEN.
   - [ ] `make down ENV=test-feat-catalog-evolution-42b`
 
 - [ ] **Lot 6 — `canvas` template kind (kind-only, no runtime)**
