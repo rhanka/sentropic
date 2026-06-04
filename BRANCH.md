@@ -32,6 +32,7 @@ Author the deploy artifacts (api-image extension, k8s manifests, prod OIDC clien
   - `Makefile` — `BR39deploy-EX3`
   - `.github/workflows/ci.yml` — `BR39deploy-EX4`
   - `api/package.json` — `BR39deploy-EX5`
+  - `api/src/index.ts` — `BR39deploy-EX6`
 - **Exception process**: declare `BRxx-EXn` in `## Feedback Loop` before touching any conditional path (done below).
 
 ## Feedback Loop
@@ -40,6 +41,7 @@ Author the deploy artifacts (api-image extension, k8s manifests, prod OIDC clien
 - `BR39deploy-EX3` (`Makefile`): register `35-auth-idp.yaml` + the auth-idp rollout (restart + status) in `k8s-deploy` (after `30-api.yaml` so the api rolls first), and its delete in `k8s-undeploy`. Reason: the manifest must be applied + rolled out by `k8s-deploy`. NOTE: the IdP screens are built INSIDE `api/Dockerfile` (self-contained `idp-web-build` stage), so NO `build-idp-web` prerequisite is needed — the api image stays self-contained for CI (`publish-api-image`). Impact: additive apply/rollout/delete lines; api/ui order unchanged. Rollback: revert the added lines.
 - `BR39deploy-EX4` (`.github/workflows/ci.yml`): add `rollout status deployment/auth-idp` to the `deploy-k8s` job. Reason: assert IdP rollout post-apply, mirroring api/ui. Impact: one additive line (fires only on a real deploy). Rollback: remove the line.
 - `BR39deploy-EX5` (`api/package.json`): add an `oauth:register-client` script entry pointing to the new prod-safe script. Reason: runnable as a one-off Job/`npm run`. Impact: one script line. Rollback: remove the line.
+- `BR39deploy-EX6` (`api/src/index.ts`): add a guarded, idempotent OAuth/OIDC signing-key init at boot, right after `runMigrations()`/`ensureIndexes()`. Reason: the prod image prunes devDependencies (no `tsx`), so the dev-only `oauth:init-keys` script (and the `make oauth-init-keys` compose-exec target) cannot run in-cluster — there was NO prod path to materialize the JWKS from `OAUTH_SIGNING_KEK`. Boot-time init mirrors the existing 5 idempotent boot steps and is the house pattern; the api owns shared-DB init, the IdP reads the same rows. Impact: ~20 lines guarded by `env.OAUTH_SIGNING_KEK` — when the KEK is absent it logs a warn and skips (no behavior change to the currently-live api, which has no KEK yet); when present it creates the key once (idempotent via `getActiveKey()`), never fatal. Once the KEK is added to the `sentropic-api` Secret, the next api rollout materializes the active key automatically — no Job, no exec. Rollback: remove the block + the `createJwksAdapter` import; api runtime identical.
 
 ## Decisions (from spec/SPEC_EVOL_AUTH_IDP_DEPLOY.md §7)
 - D4-a (image strategy): extend the existing api image; api vs IdP selected by k8s `command:`. One image, one publish pipeline.
