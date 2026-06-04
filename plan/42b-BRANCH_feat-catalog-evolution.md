@@ -130,16 +130,16 @@ Build an app-local unified capability catalog of five entry kinds (skill, tool, 
       - [x] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b` — 75 files/567 tests GREEN (pre-existing OOM on queue tests, Erreur 137, unrelated); characterization 41/41 byte-identical; agent spec 31/31; catalog 145/145.
   - [x] `make down ENV=test-feat-catalog-evolution-42b`
 
-- [ ] **Lot 4 — `workflow` kind**
-  - [ ] Add `api/src/services/catalog/sources/workflow-seed-source.ts`: `workflow`-kind entries over `@sentropic/flow` `WORKSPACE_TYPE_WORKFLOW_SEEDS` (`DefaultWorkflowDefinition` payload).
-  - [ ] Import the seeds from `@sentropic/flow` (NOT from `api/`); runtime stays in flow (`FlowRuntime`/`processing-loop`); no `packages/flow/src/**` edit, no skills→flow dep.
-  - [ ] `list/search/get` parity with skills.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
-    - [ ] **API tests**
-      - [ ] Add `api/tests/services/catalog/workflow-seed-source.spec.ts` (flow seeds → `workflow` entries; source import is `@sentropic/flow`; no DB-row leakage).
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-catalog-evolution-42b`
-  - [ ] `make down ENV=test-feat-catalog-evolution-42b`
+- [x] **Lot 4 — `workflow` kind**
+  - [x] Add `api/src/services/catalog/sources/workflow-seed-source.ts`: `workflow`-kind entries over `@sentropic/flow` `WORKSPACE_TYPE_WORKFLOW_SEEDS` (`DefaultWorkflowDefinition` payload).
+  - [x] Import the seeds from `@sentropic/flow` (NOT from `api/`); runtime stays in flow (`FlowRuntime`/`processing-loop`); no `packages/flow/src/**` edit, no skills→flow dep.
+  - [x] `list/search/get` parity with skills.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-catalog-evolution-42b` + `make lint-api ENV=test-feat-catalog-evolution-42b`
+    - [x] **API tests**
+      - [x] Add `api/tests/services/catalog/workflow-seed-source.spec.ts` (flow seeds → `workflow` entries; source import is `@sentropic/flow`; no DB-row leakage).
+      - [x] Sub-lot gate: unit 70 files/572 tests GREEN; catalog 179/179 (characterization 41/41 byte-identical + workflow spec 34/34); typecheck/lint clean. Pre-existing smoke http failures on api-health/database (port 8787 inside container, unrelated to this lot).
+  - [x] `make down ENV=test-feat-catalog-evolution-42b`
 
 - [ ] **Lot 5 — MCP `CatalogSource` (absorbs br19b)**
   - [ ] Declare/confirm `BR42b-EX1` before touching `api/package.json`.

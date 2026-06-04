@@ -13,6 +13,7 @@
 
 import type { ContextFilter, Skill, SkillAuthzRequirements, SkillTool } from '../../../../packages/skills/src/index.js';
 import type { DefaultGenerationAgentDefinition } from '../../config/default-agents-types.js';
+import type { DefaultWorkflowDefinition } from '@sentropic/flow';
 
 // ---------------------------------------------------------------------------
 // Discriminant
@@ -118,27 +119,24 @@ export type { DefaultGenerationAgentDefinition as AgentEntryTemplate };
  * Workflow entry — catalogs code-level workflow seed orchestration templates
  * from `@sentropic/flow` `WORKSPACE_TYPE_WORKFLOW_SEEDS`
  * (`DefaultWorkflowDefinition`). Per-workspace DB `workflow_definitions` rows
- * are NOT catalogued.
+ * are NOT catalogued (D-WORKFLOW-SCOPE invariant).
  *
- * Type-only placeholder in Lot 1; populated in Lot 4.
+ * Populated in Lot 4 via `WorkflowSeedSource`.
  */
 export type WorkflowEntry = CatalogEntryBase & {
   readonly kind: 'workflow';
-  /** Workflow template payload — type will be `DefaultWorkflowDefinition` in Lot 4. */
-  readonly workflow: WorkflowEntryTemplate;
+  /**
+   * The code-level workflow seed template from `@sentropic/flow`.
+   * Per-workspace DB `workflow_definitions` rows are NOT carried here.
+   */
+  readonly workflow: DefaultWorkflowDefinition;
 };
 
 /**
- * Minimal placeholder type for the workflow template payload.
- * Will be replaced by `DefaultWorkflowDefinition` when Lot 4 wires the
- * workflow-seed source.
+ * Re-export for consumers that only need the workflow template payload type.
+ * The canonical type is `DefaultWorkflowDefinition` from `@sentropic/flow`.
  */
-export interface WorkflowEntryTemplate {
-  readonly key: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly [k: string]: unknown;
-}
+export type { DefaultWorkflowDefinition as WorkflowEntryTemplate };
 
 /**
  * Canvas template entry — catalogs `LiveDocumentRef`-shaped artifact template
