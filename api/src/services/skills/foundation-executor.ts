@@ -2,6 +2,8 @@ import type OpenAI from 'openai';
 import { writeStreamEvent } from '../stream-service';
 import { toolService } from '../tool-service';
 import {
+  catalogExecutionSeam,
+  executeFoundationSearchCatalog,
   executeFoundationSearchSkills,
   type ResolveFoundationChatToolsInput,
 } from './catalog';
@@ -160,6 +162,25 @@ export async function executeFoundationSkillTool(
       payload: args as { query: string; limit?: number },
     });
     const result = { status: 'completed', hits };
+    return {
+      handled: true,
+      result,
+      streamSeq: await writeCompletedToolResult({
+        assistantMessageId: options.assistantMessageId,
+        toolCallId: toolCall.id,
+        result,
+        streamSeq: input.streamSeq,
+      }),
+    };
+  }
+
+  // BR-42b Lot 7: search_catalog — additive cross-kind meta-tool (§3.5).
+  // Dispatched immediately after search_skills. Uses compositeCatalogRegistry
+  // to search across ALL 5 entry kinds. search_skills is NOT changed.
+  if (toolCall.name === 'search_catalog') {
+    const result = executeFoundationSearchCatalog(
+      args as { query: string; limit?: number; filter?: { kind?: string; category?: string } },
+    );
     return {
       handled: true,
       result,
@@ -523,6 +544,31 @@ export async function executeFoundationSkillTool(
       },
     );
     return handledFinalResult(input, { status: 'completed', ...searchResult });
+  }
+
+  // -------------------------------------------------------------------------
+  // Catalog execution seam (BR-42b Lot 2)
+  //
+  // All hardcoded foundation tool names have been checked above and did NOT
+  // match. Before returning unhandled, consult the catalog execution seam so
+  // that standalone `tool`-kind entries (e.g. future MCP tools from Lot 5)
+  // can dispatch their handlers.
+  //
+  // Foundation tools (hardcoded above) ALWAYS dispatch FIRST and never reach
+  // this point — the seam is a pure fall-through for non-hardcoded names.
+  // -------------------------------------------------------------------------
+  const seamResult = await catalogExecutionSeam.execute(toolCall.name, args);
+  if (seamResult.handled) {
+    return {
+      handled: true,
+      result: seamResult.result,
+      streamSeq: await writeCompletedToolResult({
+        assistantMessageId: options.assistantMessageId,
+        toolCallId: toolCall.id,
+        result: normalizedCompletedResult(seamResult.result),
+        streamSeq: input.streamSeq,
+      }),
+    };
   }
 
   return { handled: false, streamSeq: input.streamSeq };
