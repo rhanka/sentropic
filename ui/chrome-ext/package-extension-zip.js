@@ -11,8 +11,8 @@ const rootDir = path.resolve(__dirname, '..');
 const distDir = path.resolve(__dirname, 'dist');
 const staticChromeExtensionDir = path.resolve(rootDir, 'static', 'chrome-extension');
 
-const zipName = 'top-ai-ideas-chrome-extension.zip';
-const zipRootDirectory = 'top-ai-ideas-chrome-extension';
+const zipName = 'sentropic-chrome-extension.zip';
+const zipRootDirectory = 'sentropic-chrome-extension';
 const zipOutputPath = path.join(staticChromeExtensionDir, zipName);
 
 const run = () => {
@@ -28,7 +28,7 @@ const run = () => {
     fs.mkdirSync(staticChromeExtensionDir, { recursive: true });
     fs.rmSync(zipOutputPath, { force: true });
 
-    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'top-ai-ideas-ext-zip-'));
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sentropic-ext-zip-'));
     const stagedRoot = path.join(tmpRoot, zipRootDirectory);
 
     try {

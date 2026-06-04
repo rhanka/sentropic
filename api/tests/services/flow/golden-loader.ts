@@ -37,7 +37,7 @@ export interface GoldenInputLine {
   kind: 'input';
   fixtureId: string;
   scenario: string;
-  workspaceType: 'opportunity' | 'ai-ideas' | 'code' | 'neutral';
+  workspaceType: 'opportunity' | 'ai-priorities' | 'code' | 'neutral';
   seed: Record<string, unknown>;
   expectations: Record<string, unknown>;
 }

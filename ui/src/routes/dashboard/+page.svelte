@@ -374,13 +374,13 @@
   const openExecutiveSummaryComments = (sectionKey: ExecutiveSummaryField | 'references') => {
     if (!selectedFolderId) return;
     const detail = { contextType: 'executive_summary', contextId: selectedFolderId, sectionKey };
-    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+    window.dispatchEvent(new CustomEvent('sentropic:open-comments', { detail }));
   };
 
   const openFolderComments = (sectionKey: 'name') => {
     if (!selectedFolderId) return;
     const detail = { contextType: 'folder', contextId: selectedFolderId, sectionKey };
-    window.dispatchEvent(new CustomEvent('topai:open-comments', { detail }));
+    window.dispatchEvent(new CustomEvent('sentropic:open-comments', { detail }));
   };
 
   const canLoadCommentCounts = () =>
@@ -1401,7 +1401,7 @@
 <!-- Back cover -->
 <div class="report-cover-page">
   <div class="report-cover-header">
-    <h1 class="report-cover-title">Top AI Ideas</h1>
+    <h1 class="report-cover-title">Sentropic</h1>
     <h2 class="report-cover-subtitle">{$_('dashboard.subtitle')}</h2>
   </div>
   <div class="report-cover-summary">

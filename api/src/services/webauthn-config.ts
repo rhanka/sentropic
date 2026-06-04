@@ -32,11 +32,11 @@ export interface WebAuthnConfig {
  */
 export function getWebAuthnConfig(): WebAuthnConfig {
   return {
-    // RP ID: domain without protocol/port (e.g., "top-ai-ideas.sent-tech.ca" or "localhost")
+    // RP ID: domain without protocol/port (e.g., "sentropic.sent-tech.ca" or "localhost")
     rpID: env.WEBAUTHN_RP_ID || 'localhost',
     
     // RP Name: Human-readable name displayed to users
-    rpName: env.WEBAUTHN_RP_NAME || 'Top AI Ideas',
+    rpName: env.WEBAUTHN_RP_NAME || 'Sentropic',
     
     // Origin(s): Full URL(s) for validation (must match browser origin)
     origin: env.WEBAUTHN_ORIGIN 
@@ -81,4 +81,3 @@ export function getUserVerificationRequirement(
   
   return config.userVerification.guest;
 }
-

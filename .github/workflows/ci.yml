@@ -747,7 +747,7 @@ jobs:
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make build-ui
         env:
-          VITE_API_BASE_URL: https://top-ai-ideas-api.sent-tech.ca/api/v1
+          VITE_API_BASE_URL: https://sentropic.sent-tech.ca/api/v1
       - name: Upload static files as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         id: deployment
@@ -1036,14 +1036,6 @@ jobs:
       - name: Load UI image from artifact
         if: steps.image-check.outcome == 'failure'
         run: make load-ui
-      - name: Retag UI image for Sentropic publish
-        if: steps.image-check.outcome == 'failure'
-        env:
-          SOURCE_UI_IMAGE_NAME: top-ai-ideas-ui
-        run: |
-          set -eu
-          UI_VERSION="$(make -s version | awk '/^UI_VERSION:/ {print $2}')"
-          docker tag "${REGISTRY}/${SOURCE_UI_IMAGE_NAME}:${UI_VERSION}" "${REGISTRY}/${UI_IMAGE_NAME}:${UI_VERSION}"
       - name: Publish UI image
         if: steps.image-check.outcome == 'failure'
         run: make publish-ui-image
@@ -1080,14 +1072,6 @@ jobs:
       - name: Load API image from artifact
         if: steps.image-check.outcome == 'failure'
         run: make load-api
-      - name: Retag API image for Sentropic publish
-        if: steps.image-check.outcome == 'failure'
-        env:
-          SOURCE_API_IMAGE_NAME: top-ai-ideas-api
-        run: |
-          set -eu
-          API_VERSION="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
-          docker tag "${REGISTRY}/${SOURCE_API_IMAGE_NAME}:${API_VERSION}" "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
       - name: Publish API image
         if: steps.image-check.outcome == 'failure'
         run: make publish-api-image

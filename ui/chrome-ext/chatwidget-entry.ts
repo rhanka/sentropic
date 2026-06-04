@@ -33,7 +33,7 @@ export type ChatWidgetMountOptions = {
     initialState?: ChatWidgetHandoffState | null;
 };
 
-const EXTENSION_CONFIG_UPDATED_EVENT = 'topai:extension-config-updated';
+const EXTENSION_CONFIG_UPDATED_EVENT = 'sentropic:extension-config-updated';
 
 /**
  * Mounts the ChatWidget into the target element.
@@ -84,7 +84,7 @@ export function mount(target: Element, options: ChatWidgetMountOptions = {}) {
 }
 
 // Keep a global fallback to tolerate bundlers that drop entry exports.
-const globalMountKey = '__topAiIdeasMountChatWidget';
+const globalMountKey = '__sentropicMountChatWidget';
 (globalThis as typeof globalThis & { [key: string]: unknown })[globalMountKey] = mount;
 
 export default { mount };

@@ -1,5 +1,5 @@
 /**
- * AI-Ideas workspace agents (existing 6 agents with embedded prompts).
+ * AI-Priorities workspace agents (existing 6 agents with embedded prompts).
  */
 import type { DefaultGenerationAgentDefinition } from './default-agents-types';
 import {
@@ -7,7 +7,7 @@ import {
   ORG_AWARE_LIST_OUTPUT_SCHEMA,
 } from './default-org-aware-prompts';
 
-export const AI_IDEAS_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
+export const AI_PRIORITIES_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
   {
     key: "generation_orchestrator",
     name: "Generation orchestrator",

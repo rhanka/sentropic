@@ -13,7 +13,7 @@ export type ExtensionAuthUser = AuthUser;
 export type ExtensionAuthStatus = AuthStatus;
 export type ExtensionAuthConnectResult = AuthConnectResult;
 
-const EXTENSION_DEVICE_NAME = 'Top AI Ideas Extension';
+const EXTENSION_DEVICE_NAME = 'Sentropic Extension';
 
 const sharedStorageAdapter = createChromeStorageAdapter();
 

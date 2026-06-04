@@ -3,7 +3,7 @@
  */
 
 export const CHAT_SYSTEM_PROMPTS: Record<string, string> = {
-  'ai-ideas': `Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.
+  'ai-priorities': `Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.
 
 {{CONTEXT_BLOCK}}
 
@@ -196,7 +196,7 @@ export const LEGACY_PROMPT_CATALOG = [
     id: 'chat_system_base',
     name: 'Chat \u2014 System prompt (base)',
     description: 'Base prompt for the chat assistant with injected context/documents blocks',
-    content: CHAT_SYSTEM_PROMPTS['ai-ideas'],
+    content: CHAT_SYSTEM_PROMPTS['ai-priorities'],
     variables: ['CONTEXT_BLOCK', 'DOCUMENTS_BLOCK', 'AUTOMATION_BLOCK'],
   },
   {

@@ -30,7 +30,7 @@ describe('vscode bash policy banner bridge', () => {
 
     (globalThis as any).chrome = {
       runtime: {
-        id: 'topai.vscode.runtime',
+        id: 'sentropic.vscode.runtime',
         sendMessage,
       },
     };

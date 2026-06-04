@@ -1,10 +1,10 @@
 ---
 name: organizations
-description: Read and update organization records in AI-ideas and opportunity workspaces.
+description: Read and update organization records in AI-priorities and opportunity workspaces.
 version: 0.1.0
 category: object
 contextFilter:
-  workspaceTypes: [neutral, ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-priorities, opportunity]
 tools:
   - name: organizations_list
     description: List organizations visible in the current workspace with summary metadata.
