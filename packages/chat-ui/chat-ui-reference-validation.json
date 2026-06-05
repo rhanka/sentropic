@@ -1,5 +1,9 @@
 {
   "components": {
+    "ChatDock.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/ChatWidget.svelte"]
+    },
     "ChatPanel.svelte": {
       "class": "primitive",
       "dogfoodedBy": ["ui/src/lib/components/ChatPanel.svelte"]
