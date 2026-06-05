@@ -12,11 +12,7 @@
     "sourceMap": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "paths": {
-      "@sentropic/chat-ui": ["../chat-ui/src/index.ts"],
-      "@sentropic/chat-ui/*": ["../chat-ui/src/*"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["tests/**", "dist/**", "bin/**"]
