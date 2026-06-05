@@ -53,6 +53,7 @@
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
+  import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -2040,7 +2041,7 @@
   </button>
 {/snippet}
 
-{#snippet renderAppDockContent(_dockParams: { isDocked: boolean; isMobileViewport: boolean })}
+{#snippet renderAppChatWidgetShell()}
       <!-- Dialog body: header + content area (backdrop and dialog container are in ChatDock) -->
       <!-- Header commun (tabs) -->
       <div class="px-4 h-14 border-b border-gray-200 flex items-center">
@@ -3104,6 +3105,17 @@
           </div>
         {/if}
       </div>
+{/snippet}
+
+{#snippet renderAppDockContent(_dockParams: { isDocked: boolean; isMobileViewport: boolean })}
+  <PackageChatWidget
+    activeTab={activeTab}
+    activeJobsCount={activeJobsCount}
+    failedJobsCount={failedJobsCount}
+    queueTabLabel={$_('chat.tabs.jobs')}
+    onPurgeJobs={handlePurgeMyJobs}
+    renderShell={renderAppChatWidgetShell}
+  />
 {/snippet}
 
 <ChatDock
