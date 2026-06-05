@@ -209,12 +209,12 @@ describe('ChatConversation — export surface registration', () => {
     expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
   });
 
-  it('should have version 0.11.0 in package.json (minor bump — feat/chatui-package-dist publish-only preprocessed dist)', () => {
-    expect(pkgJson.version).toBe('0.11.0');
+  it('should have version 0.12.0 in package.json (minor bump — feat/chatui-conversation-wiring real stream + local-tool dispatch)', () => {
+    expect(pkgJson.version).toBe('0.12.0');
   });
 
-  it('should have _version 0.11.0 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.11.0');
+  it('should have _version 0.12.0 in export-manifest.json', () => {
+    expect(manifest._version).toBe('0.12.0');
   });
 
   it('should resolve the ChatConversation svelte file to an existing path', () => {
