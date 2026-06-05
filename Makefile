@@ -2449,29 +2449,12 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	OPENAI=$$(get OPENAI_API_KEY) ; ANTHROPIC=$$(get ANTHROPIC_API_KEY) ; GEMINI=$$(get GEMINI_API_KEY) ; \
 	MISTRAL=$$(get MISTRAL_API_KEY) ; COHERE=$$(get COHERE_API_KEY) ; TAVILY=$$(get TAVILY_API_KEY) ; \
-	MAIL_HOST=$$(get MAIL_HOST) ; MAIL_PORT=$$(get MAIL_PORT) ; MAIL_SECURE=$$(get MAIL_SECURE) ; \
-	MAIL_USERNAME=$$(get MAIL_USERNAME) ; MAIL_PASSWORD=$$(get MAIL_PASSWORD) ; MAIL_FROM=$$(get MAIL_FROM) ; \
-	[ -n "$$MAIL_USERNAME" ] || MAIL_USERNAME=$$(get_poc_export MAIL_USERNAME) ; \
-	[ -n "$$MAIL_PASSWORD" ] || MAIL_PASSWORD=$$(get_poc_export MAIL_PASSWORD) ; \
-	if [ -z "$$MAIL_HOST" ] && [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then \
-	  MAIL_HOST=smtp.tem.scaleway.com ; MAIL_PORT=465 ; MAIL_SECURE=true ; \
-	fi ; \
-	[ -n "$$MAIL_HOST" ] || MAIL_HOST="" ; [ -n "$$MAIL_PORT" ] || MAIL_PORT=587 ; \
-	[ -n "$$MAIL_SECURE" ] || MAIL_SECURE=false ; [ -n "$$MAIL_FROM" ] || MAIL_FROM=no-reply@sent-tech.ca ; \
-	if [ -n "$$MAIL_HOST" ] && { [ -z "$$MAIL_USERNAME" ] || [ -z "$$MAIL_PASSWORD" ]; }; then \
-	  echo "ERROR: MAIL_USERNAME and MAIL_PASSWORD are required when MAIL_HOST is set in $(K8S_ENV_FILE)" >&2; exit 1; \
-	fi ; \
-	MAIL_AUTH_STATUS=disabled ; \
-	if [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then MAIL_AUTH_STATUS=configured ; fi ; \
-	echo "Mail config: host=$${MAIL_HOST:-disabled} port=$$MAIL_PORT secure=$$MAIL_SECURE from=$$MAIL_FROM auth=$$MAIL_AUTH_STATUS" ; \
-	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
-	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
-	COWORK_DESKTOP_DOWNLOAD_URL=$$(get COWORK_DESKTOP_DOWNLOAD_URL) ; \
-	COWORK_DESKTOP_VERSION=$$(get COWORK_DESKTOP_VERSION) ; \
-	COWORK_DESKTOP_SOURCE=$$(get COWORK_DESKTOP_SOURCE) ; \
-	COWORK_DESKTOP_PRERELEASE_URL=$$(get COWORK_DESKTOP_PRERELEASE_URL) ; \
-	COWORK_DESKTOP_PRERELEASE_VERSION=$$(get COWORK_DESKTOP_PRERELEASE_VERSION) ; \
-	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
+	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; \
+	GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
+	DS_AK=$$(get DOC_STORAGE_ACCESS_KEY) ; DS_SK=$$(get DOC_STORAGE_SECRET_KEY) ; DS_BK=$$(get DOC_STORAGE_BUCKET) ; \
+	DS_EP=$$(get DOC_STORAGE_ENDPOINT) ; DS_RG=$$(get DOC_STORAGE_REGION) ; \
+	SCW_TEM=$$(get SCW_TEM_SECRET_KEY) ; OAUTH_KEK=$$(get OAUTH_SIGNING_KEK) ; \
+	DATABASE_URL=$$(get DATABASE_URL) ; [ -n "$$DATABASE_URL" ] || DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-api \
 	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
 	  --from-literal=OPENAI_API_KEY="$$OPENAI" \
@@ -2480,23 +2463,28 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=MISTRAL_API_KEY="$$MISTRAL" \
 	  --from-literal=COHERE_API_KEY="$$COHERE" \
 	  --from-literal=TAVILY_API_KEY="$$TAVILY" \
-	  --from-literal=MAIL_HOST="$$MAIL_HOST" \
-	  --from-literal=MAIL_PORT="$$MAIL_PORT" \
-	  --from-literal=MAIL_SECURE="$$MAIL_SECURE" \
-	  --from-literal=MAIL_USERNAME="$$MAIL_USERNAME" \
-	  --from-literal=MAIL_PASSWORD="$$MAIL_PASSWORD" \
-	  --from-literal=MAIL_FROM="$$MAIL_FROM" \
+	  --from-literal=DOC_STORAGE_ACCESS_KEY="$$DS_AK" \
+	  --from-literal=DOC_STORAGE_SECRET_KEY="$$DS_SK" \
+	  --from-literal=DOC_STORAGE_BUCKET="$$DS_BK" \
+	  --from-literal=DOC_STORAGE_ENDPOINT="$$DS_EP" \
+	  --from-literal=DOC_STORAGE_REGION="$$DS_RG" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_ID="$$GD_CID" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_SECRET="$$GD_CS" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_API_KEY="$$GD_PK" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
-	  --from-literal=COWORK_DESKTOP_DOWNLOAD_URL="$$COWORK_DESKTOP_DOWNLOAD_URL" \
-	  --from-literal=COWORK_DESKTOP_VERSION="$$COWORK_DESKTOP_VERSION" \
-	  --from-literal=COWORK_DESKTOP_SOURCE="$$COWORK_DESKTOP_SOURCE" \
-	  --from-literal=COWORK_DESKTOP_PRERELEASE_URL="$$COWORK_DESKTOP_PRERELEASE_URL" \
-	  --from-literal=COWORK_DESKTOP_PRERELEASE_VERSION="$$COWORK_DESKTOP_PRERELEASE_VERSION" \
+	  --from-literal=SCW_TEM_SECRET_KEY="$$SCW_TEM" \
+	  --from-literal=OAUTH_SIGNING_KEK="$$OAUTH_KEK" \
+	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
+	S3_AK=$$(get S3_ACCESS_KEY) ; S3_SK=$$(get S3_SECRET_KEY) ; S3_BK=$$(get S3_BUCKET) ; \
+	S3_EP=$$(get S3_ENDPOINT) ; S3_RG=$$(get S3_REGION) ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-pgbackup \
+	  --from-literal=S3_ACCESS_KEY="$$S3_AK" \
+	  --from-literal=S3_SECRET_KEY="$$S3_SK" \
+	  --from-literal=S3_BUCKET="$$S3_BK" \
+	  --from-literal=S3_ENDPOINT="$$S3_EP" \
+	  --from-literal=S3_REGION="$$S3_RG" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
-	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(K8S_NAMESPACE)."
+	@echo "==> Secrets sentropic-postgres + sentropic-api + sentropic-pgbackup ready in $(K8S_NAMESPACE)."
 
 k8s-registry-secret: ## Create/update the SCW Registry pull secret from $(K8S_ENV_FILE)
 	@test -f $(K8S_ENV_FILE) || { echo "missing $(K8S_ENV_FILE)" >&2; exit 1; }
