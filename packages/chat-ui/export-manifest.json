@@ -315,7 +315,11 @@
         "chatWidgetLayout"
       ],
       "storeShape": {
-        "chatWidgetLayout": ["subscribe", "set", "update"]
+        "chatWidgetLayout": [
+          "subscribe",
+          "set",
+          "update"
+        ]
       }
     },
     "./stores/localTools": {
@@ -343,7 +347,11 @@
         "deleteLocalToolPermissionPolicy"
       ],
       "storeShape": {
-        "localToolsStore": ["subscribe", "set", "update"]
+        "localToolsStore": [
+          "subscribe",
+          "set",
+          "update"
+        ]
       }
     },
     "./utils/chat-run-projection": {
