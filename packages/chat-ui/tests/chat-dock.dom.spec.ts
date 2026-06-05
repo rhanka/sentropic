@@ -12,9 +12,17 @@
  *
  * Environment: jsdom via vitest.dom.config.ts (target: test-chat-ui-dom).
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { cleanup, render } from '@testing-library/svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import ChatDock from '../src/components/ChatDock.svelte';
+
+const chatDockSourcePath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../src/components/ChatDock.svelte',
+);
 
 // jsdom does not implement window.matchMedia — provide a minimal stub so
 // ChatDock's MQL guard does not throw during SSR-less component mounting.
@@ -214,5 +222,20 @@ describe('ChatDock — sidepanel mode', () => {
 describe('ChatDock — default slot', () => {
   it('should not crash when no renderContent or slot provided', () => {
     expect(() => renderDock({ hostMode: 'sidepanel' })).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Effective-mode ownership (faithful dogfooding moved from gold ui ChatWidget)
+// ---------------------------------------------------------------------------
+
+describe('ChatDock — effective-mode resolution ownership', () => {
+  it('resolves docked/floating mode via resolveEffectiveChatWidgetMode', () => {
+    const source = readFileSync(chatDockSourcePath, 'utf8');
+    // ChatDock owns docked/floating effective-mode resolution (moved here from
+    // the gold ui ChatWidget when the dock chrome was extracted). It must import
+    // and call the shared resolveEffectiveChatWidgetMode helper.
+    expect(source).toContain('resolveEffectiveChatWidgetMode');
+    expect(source).toContain("from '../state/chatWidgetShell");
   });
 });
