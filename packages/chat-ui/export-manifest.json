@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
-  "_generated": "2026-06-03",
-  "_version": "0.12.1",
+  "_generated": "2026-06-05",
+  "_version": "0.13.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -402,6 +402,12 @@
         "shouldResetLocalToolStateForFreshRound",
         "filterPermissionPromptsForPendingStream"
       ]
+    },
+    "./components/ChatDock.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatDock.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
     },
     "./components/ChatPanel.svelte": {
       "kind": "svelte",
