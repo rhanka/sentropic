@@ -218,22 +218,26 @@ describe('ChatConversation — ContextChips conditional', () => {
     expect(container.querySelector('[aria-label="chat.context.chips.label"]')).toBeNull();
   });
 
-  it('should render ContextChips region when contextProvider supplies entries', () => {
+  it('should render ChatContextPicker region when contextProvider supplies entries', () => {
     const { container } = render(ChatConversation, {
       props: {
         host: makeMockHost(),
         contextProvider: {
           context: {
-            subscribe(run: (value: { type: string; id?: string; label: string }[]) => void) {
-              run([{ type: 'folder', id: 'f1', label: 'My Folder' }]);
+            subscribe(run: (value: { type: string; id?: string; label: string; active?: boolean; used?: boolean; lastUsedAt?: string }[]) => void) {
+              run([{ type: 'folder', id: 'f1', label: 'My Folder', active: true, used: true, lastUsedAt: '2026-01-01T00:00:00.000Z' }]);
               return () => undefined;
             },
           },
         },
       },
     });
-    // ContextChips renders role=list when entries.length > 0
-    expect(container.querySelector('[role="list"]')).not.toBeNull();
+    // ChatContextPicker renders a button per entry (replaces ContextChips role=list)
+    const pickerContainer = container.querySelector('.chat-conversation-header');
+    expect(pickerContainer).not.toBeNull();
+    // At least one button should appear for the folder entry
+    const entryButtons = pickerContainer?.querySelectorAll('button');
+    expect(entryButtons?.length).toBeGreaterThan(0);
   });
 });
 

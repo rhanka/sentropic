@@ -47,11 +47,9 @@
       }
     },
     "ChatConversation.svelte": {
-      "class": "legacy",
-      "deprecation": {
-        "owner": "sentropic-chat",
-        "note": "Rebuild on validated primitives + parity harness (Wave 3). Currently imports legacy ContextChips — cannot be promoted to assembly until ContextChips is replaced by ChatContextPicker."
-      }
+      "class": "assembly",
+      "assemblyValidatedBy": ["tests/chat-conversation-functional.dom.spec.ts"],
+      "composes": ["ChatPanel.svelte", "ChatTimeline.svelte", "ChatComposer.svelte", "ModelSelector.svelte", "MessageActions.svelte", "StreamMessage.svelte", "ChatContextPicker.svelte"]
     }
   }
 }
