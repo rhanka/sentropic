@@ -27,10 +27,7 @@
     List,
     Settings,
   } from '@lucide/svelte';
-  import {
-    chatWidgetLayout,
-    type ChatWidgetDisplayMode,
-  } from '@sentropic/chat-ui/stores/chatWidgetLayout';
+  import type { ChatWidgetDisplayMode } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
   import {
     deleteLocalToolPermissionPolicy,
@@ -48,16 +45,14 @@
   } from '$lib/utils/extension-auth-ui';
   import {
     coerceChatWidgetTab,
-    computeChatWidgetDockWidthCss,
     resolveChatWidgetJobBadge,
     resolveChatWidgetPanelVisibility,
-    resolveEffectiveChatWidgetMode,
     shouldAutoCloseChatWidget,
     type ChatWidgetJobBadge,
     type ChatWidgetPanelVisibility,
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
-  import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
+  import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -65,8 +60,8 @@
 
   type Tab = ChatWidgetTab;
   let activeTab: Tab = 'chat';
+  // isVisible mirrors ChatDock's isOpen via bind:isOpen
   let isVisible = false;
-  let hasOpenedOnce = false;
   let chatDraft = '';
 
   // Header Chat (sessions) piloté par ChatPanel via bindings
@@ -207,6 +202,9 @@
     },
   };
   let displayMode: DisplayMode = 'floating';
+  // ChatDock manages the dock chrome; ChatWidget binds to its derived state
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let chatDockRef: any = null;
   let isSidePanelHost = false;
   let isExtensionOverlayHost = false;
   let showExtensionConfigMenu = false;
@@ -387,46 +385,13 @@
     const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
     if (saved === 'docked' && !isExtensionOverlayHost) displayMode = 'docked';
   }
-  let dockWidthCss = '0px';
-
-  let bubbleButtonEl: HTMLButtonElement | null = null;
+  // Bound from ChatDock (read-only mirrors of ChatDock internal state)
   let dialogEl: HTMLDivElement | null = null;
-  let lastActiveElement: HTMLElement | null = null;
-  let resizeHandler: (() => void) | null = null;
-  let closeButtonEl: HTMLButtonElement | null = null;
-  let isMobileViewport = false;
-  let effectiveMode: DisplayMode = 'floating';
+  let bubbleButtonEl: HTMLButtonElement | null = null;
   let isDocked = false;
-  // eslint-disable-next-line no-unused-vars
-  let mobileMqlChangeHandler: ((ev: MediaQueryListEvent) => void) | null = null;
-
-  // Mobile UX: prevent "scroll bleed" when the bottom-sheet is open
-  let mobileMql: MediaQueryList | null = null;
+  let isMobileViewport = false;
+  let closeButtonEl: HTMLButtonElement | null = null;
   let isBrowserReady = false;
-  let bodyScrollLocked = false;
-
-  const setBodyScrollLocked = (locked: boolean) => {
-    if (typeof document === 'undefined') return;
-    if (locked === bodyScrollLocked) return;
-    bodyScrollLocked = locked;
-    document.body.style.overflow = locked ? 'hidden' : '';
-    // iOS: avoid elastic scrolling on background
-    document.body.style.touchAction = locked ? 'none' : '';
-  };
-
-  const syncScrollLock = () => {
-    if (!isBrowserReady) return;
-    const isMobile = isMobileViewport;
-    setBodyScrollLocked(Boolean(isVisible && isMobile));
-  };
-
-  $: effectiveMode = resolveEffectiveChatWidgetMode({
-    hostMode,
-    isExtensionOverlayHost,
-    isMobileViewport,
-    displayMode,
-  });
-  $: isDocked = effectiveMode === 'docked';
 
   const updateExtensionConfigMenuMaxHeight = () => {
     if (typeof window === 'undefined') return;
@@ -469,33 +434,10 @@
     });
   }
 
-  const computeDockWidthCss = (): string => {
-    return computeChatWidgetDockWidthCss({
-      isBrowser,
-      viewportWidth: typeof window === 'undefined' ? 0 : window.innerWidth,
-    });
-  };
-
-  const publishLayout = () => {
-    // Important: compute from current state, do not rely on reactive $: order.
-    // Otherwise switching modes can publish the previous value and invert the padding logic.
-    const modeNow = resolveEffectiveChatWidgetMode({
-      hostMode,
-      isExtensionOverlayHost,
-      isMobileViewport,
-      displayMode,
-    });
-    chatWidgetLayout.set({
-      mode: modeNow,
-      isOpen: isVisible,
-      dockWidthCss,
-    });
-  };
-
   const setDisplayMode = (next: DisplayMode) => {
     displayMode = next;
     if (isBrowser) localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, next);
-    publishLayout();
+    // ChatDock will re-publish layout when displayMode prop changes
   };
 
   const buildHandoffState = (
@@ -1906,35 +1848,19 @@
   onMount(async () => {
     isBrowserReady = true;
     applyInitialState(initialState ?? readPersistedHandoffState());
+    // displayMode initial state handled in ChatDock via its initialOpen / isSidePanelHost logic;
+    // We still set displayMode here so ChatDock picks it up via prop reactivity.
     if (isExtensionOverlayHost) {
       displayMode = 'floating';
     }
     if (isSidePanelHost) {
       displayMode = 'docked';
-      isVisible = true;
-      hasOpenedOnce = true;
+      // ChatDock opens automatically via initialOpen=true for sidepanel
     }
-    if (typeof window !== 'undefined' && 'matchMedia' in window) {
-      mobileMql = window.matchMedia('(max-width: 639px)');
-      isMobileViewport = mobileMql.matches;
-      mobileMqlChangeHandler = (e: MediaQueryListEvent) => {
-        isMobileViewport = e.matches;
-        syncScrollLock();
-        publishLayout();
-      };
-      mobileMql.addEventListener?.('change', mobileMqlChangeHandler);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      (mobileMql as any).addListener?.(mobileMqlChangeHandler);
-    }
-    dockWidthCss = computeDockWidthCss();
-    publishLayout();
-    resizeHandler = () => {
-      dockWidthCss = computeDockWidthCss();
-      publishLayout();
+    // App-specific resize side-effect: update extension config menu height
+    window.addEventListener('resize', () => {
       if (showExtensionConfigMenu) updateExtensionConfigMenuMaxHeight();
-    };
-    window.addEventListener('resize', resizeHandler);
-    window.addEventListener('keydown', globalShortcutHandler);
+    });
     window.addEventListener('sentropic:close-chat', onExternalCloseChat as any);
     window.addEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     handleCommentSectionClick = (event: MouseEvent) => {
@@ -1972,7 +1898,6 @@
       void openWidget();
     };
     window.addEventListener('sentropic:open-comments', handleOpenComments as any);
-    syncScrollLock();
     if ($isAuthenticated) await loadJobs();
   });
 
@@ -1982,28 +1907,6 @@
       e.preventDefault();
       void toggle();
     }
-  };
-
-  const globalShortcutHandler = (e: KeyboardEvent) => {
-    // Ctrl+Shift+K toggles the widget (avoid triggering while typing)
-    if (!e.ctrlKey || !e.shiftKey || (e.key !== 'K' && e.key !== 'k')) return;
-    // If open, always allow closing (even while typing)
-    if (isVisible) {
-      e.preventDefault();
-      close();
-      return;
-    }
-    const target = e.target as HTMLElement | null;
-    const tag = target?.tagName?.toLowerCase();
-    if (
-      tag === 'input' ||
-      tag === 'textarea' ||
-      tag === 'select' ||
-      (target as any)?.isContentEditable
-    )
-      return;
-    e.preventDefault();
-    void toggle();
   };
 
   const onExternalCloseChat = () => {
@@ -2033,46 +1936,32 @@
   };
 
   const toggle = async () => {
-    if (isBrowser)
-      lastActiveElement =
-        (document.activeElement as HTMLElement | null) ?? null;
-    isVisible = !isVisible;
-    if (isVisible) hasOpenedOnce = true;
-    syncScrollLock();
-    publishLayout();
-    if (isVisible) void focusFirstFocusable();
+    await chatDockRef?.toggle();
+    // ChatDock focuses the first element. Override for chat tab: focus composer.
+    if (isVisible && activeTab === 'chat') void focusFirstFocusable();
   };
 
   const openWidget = async () => {
     if (isVisible) return;
-    if (isBrowser)
-      lastActiveElement =
-        (document.activeElement as HTMLElement | null) ?? null;
-    isVisible = true;
-    hasOpenedOnce = true;
-    syncScrollLock();
-    publishLayout();
-    await focusFirstFocusable();
+    await chatDockRef?.open();
+    // ChatDock focuses the first element. Override for chat tab: focus composer.
+    if (activeTab === 'chat') void focusFirstFocusable();
   };
 
+  // close() is called by ChatDock via onClose for the sidepanel case,
+  // and directly for the normal case — we just delegate.
   const close = () => {
+    chatDockRef?.close();
+  };
+
+  // Sidepanel-specific close override: called via ChatDock's onClose prop
+  const handleDockClose = () => {
     if (isSidePanelHost) {
       publishHandoffStateIfChanged();
       window.close();
       return;
     }
-    isVisible = false;
-    syncScrollLock();
-    publishLayout();
-    if (isBrowser) {
-      void tick().then(() => {
-        if (bubbleButtonEl) {
-          bubbleButtonEl.focus();
-          return;
-        }
-        lastActiveElement?.focus?.();
-      });
-    }
+    // Default: ChatDock already handles focus restoration
   };
 
   const handlePurgeMyJobs = async () => {
@@ -2090,16 +1979,6 @@
   };
 
   onDestroy(() => {
-    try {
-      if (mobileMqlChangeHandler)
-        mobileMql?.removeEventListener?.('change', mobileMqlChangeHandler);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      (mobileMql as any)?.removeListener?.(mobileMqlChangeHandler);
-    } catch {
-      // ignore
-    }
-    if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-    window.removeEventListener('keydown', globalShortcutHandler);
     window.removeEventListener('sentropic:close-chat', onExternalCloseChat as any);
     window.removeEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     if (handleCommentSectionClick)
@@ -2109,37 +1988,28 @@
         'sentropic:open-comments',
         handleOpenComments as any,
       );
-    setBodyScrollLocked(false);
-    publishLayout();
+    // Dock cleanup (scroll lock, layout, MQL, resize) handled by ChatDock itself
     streamHub.delete('chatWidgetJobs');
   });
 </script>
 
-{#snippet renderAppChatWidgetShell()}
-<div
-  class={isSidePanelHost
-    ? 'queue-monitor h-full min-h-0 flex flex-col'
-    : 'queue-monitor fixed bottom-4 right-4 z-50'}
-  style="font-family: var(--chat-font-family, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);"
->
-  <!-- Bulle unique (commune Chat/Queue) -->
-  {#if !isSidePanelHost}
-    <button
-      class="relative bg-primary hover:bg-primary/90 text-white rounded-full p-3 shadow-lg transition-colors"
-      class:opacity-0={isVisible}
-      class:pointer-events-none={isVisible}
-      on:click={toggle}
-      on:keydown={onBubbleKeyDown}
-      title={$_('chat.widget.bubbleLabel')}
-      aria-label={$_('chat.widget.bubbleLabel')}
-      aria-haspopup="dialog"
-      aria-expanded={isVisible}
-      aria-controls="chat-widget-dialog"
-      bind:this={bubbleButtonEl}
-      type="button"
-    >
-      <!-- Icône principale: chat (toujours visible) -->
-      <MessageCircle class="w-6 h-6" aria-hidden="true" />
+{#snippet renderAppBubble({ toggle: dockToggle, isOpen: dockIsOpen }: { toggle: () => void; isOpen: boolean })}
+  <button
+    class="relative bg-primary hover:bg-primary/90 text-white rounded-full p-3 shadow-lg transition-colors"
+    class:opacity-0={dockIsOpen}
+    class:pointer-events-none={dockIsOpen}
+    on:click={dockToggle}
+    on:keydown={onBubbleKeyDown}
+    title={$_('chat.widget.bubbleLabel')}
+    aria-label={$_('chat.widget.bubbleLabel')}
+    aria-haspopup="dialog"
+    aria-expanded={dockIsOpen}
+    aria-controls="chat-widget-dialog"
+    bind:this={bubbleButtonEl}
+    type="button"
+  >
+    <!-- Icône principale: chat (toujours visible) -->
+    <MessageCircle class="w-6 h-6" aria-hidden="true" />
 
       <!-- Badge: loading (petit spinner) -->
       {#if jobBadgeState.kind === 'loading'}
@@ -2167,46 +2037,11 @@
           <X class="w-3 h-3" aria-hidden="true" />
         </span>
       {/if}
-    </button>
-  {/if}
+  </button>
+{/snippet}
 
-  {#if hasOpenedOnce}
-    {#if !isDocked}
-      <div
-        class="fixed inset-0 z-40 sm:hidden"
-        class:hidden={!isVisible}
-        aria-hidden="true"
-      >
-        <!-- Mobile backdrop (click to close) -->
-        <button
-          type="button"
-          class="absolute inset-0 h-full w-full bg-black bg-opacity-40"
-          on:click={close}
-          tabindex="-1"
-          aria-hidden="true"
-        ></button>
-      </div>
-    {/if}
-
-    <!-- Window mounted once, then hide/show to avoid remount + API calls -->
-    <div
-      id="chat-widget-dialog"
-      role="dialog"
-      aria-label={$_('chat.widget.bubbleLabel')}
-      aria-modal={isDocked ? 'false' : 'true'}
-      tabindex="-1"
-      bind:this={dialogEl}
-      on:keydown={onDialogKeyDown}
-      class={isSidePanelHost
-        ? 'topai-chat-widget-shell h-full w-full bg-white flex flex-col'
-        : isDocked
-        ? 'topai-chat-widget-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col'
-        : 'topai-chat-widget-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
-      style={isSidePanelHost ? '' : isDocked ? `width: ${dockWidthCss};` : ''}
-      class:hidden={!isVisible}
-      class:overflow-hidden={!showExtensionConfigMenu}
-      class:overflow-visible={showExtensionConfigMenu}
-    >
+{#snippet renderAppDockContent(_dockParams: { isDocked: boolean; isMobileViewport: boolean })}
+      <!-- Dialog body: header + content area (backdrop and dialog container are in ChatDock) -->
       <!-- Header commun (tabs) -->
       <div class="px-4 h-14 border-b border-gray-200 flex items-center">
         <div class="flex w-full items-center justify-between gap-2">
@@ -3269,16 +3104,28 @@
           </div>
         {/if}
       </div>
-    </div>
-  {/if}
-</div>
 {/snippet}
 
-<PackageChatWidget
-  activeTab={activeTab}
-  activeJobsCount={activeJobsCount}
-  failedJobsCount={failedJobsCount}
-  queueTabLabel={$_('chat.tabs.jobs')}
-  onPurgeJobs={handlePurgeMyJobs}
-  renderShell={renderAppChatWidgetShell}
+<ChatDock
+  bind:this={chatDockRef}
+  {displayMode}
+  {hostMode}
+  {isExtensionOverlayHost}
+  {isBrowser}
+  initialOpen={isSidePanelHost}
+  contentOverflowVisible={showExtensionConfigMenu}
+  containerClass="queue-monitor"
+  containerStyle="font-family: var(--chat-font-family, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);"
+  dialogClass="topai-chat-widget-shell"
+  dialogId="chat-widget-dialog"
+  dialogAriaLabel={$_('chat.widget.bubbleLabel')}
+  onClose={handleDockClose}
+  onDialogKeyDown={onDialogKeyDown}
+  renderBubble={renderAppBubble}
+  renderContent={renderAppDockContent}
+  bind:isOpen={isVisible}
+  bind:isDocked={isDocked}
+  bind:isMobileViewportBound={isMobileViewport}
+  bind:dialogEl={dialogEl}
+  bind:bubbleButtonEl={bubbleButtonEl}
 />
