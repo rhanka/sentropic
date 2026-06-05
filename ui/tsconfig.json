@@ -9,7 +9,13 @@
     "checkJs": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "strict": true
+    "strict": true,
+    "paths": {
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"],
+      "@sentropic/chat-ui": ["../packages/chat-ui/src/index.ts"],
+      "@sentropic/chat-ui/*": ["../packages/chat-ui/src/*"]
+    }
   },
   "include": [
     "src/**/*",
