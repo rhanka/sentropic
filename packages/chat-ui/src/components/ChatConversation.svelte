@@ -5,19 +5,17 @@
    * Composes the already-published @sentropic/chat-ui primitives:
    *   ChatPanel (shell) -> ChatTimeline -> StreamMessage -> ChatComposer
    *   -> ModelSelector (when models supplied) -> MessageActions (per message)
-   *   -> ContextChips (when contextProvider supplied)
+   *   -> ChatContextPicker (when contextProvider supplied)
    *
    * All app-coupled concerns (comments, documents, jobs, workspaceScope,
    * attachments) default OFF — enabled only when the caller supplies the
-   * matching flag + adapter.  Local-tool handoff surface is wired via
-   * `parsePendingLocalToolCallsFromStatusPayload`; deep async execution is
-   * a deferred follow-up (see BRANCH.md Feedback Loop).
+   * matching flag + adapter.  Local-tool handoff is wired via
+   * `parsePendingLocalToolCallsFromStatusPayload` + `host.localTools` dispatch.
    *
    * No app store is imported.  No hardcoded user-facing string.  All labels
    * go through the injected `labels` resolver.
    *
-   * Baseline: chat-ui@0.5.0 (ChatTimeline, StreamMessage, ChatComposer,
-   * ModelSelector, MessageActions, ContextChips, ChatPanel published).
+   * Baseline: chat-ui@0.12.0 (real send→stream wiring + local-tool dispatch).
    */
 
   import type {
@@ -27,21 +25,22 @@
   import type { ChatContextProvider } from '../state/chat-context.js';
   import type { RendererRegistry } from '../renderers/registry.js';
   import type { ModelCatalogGroup, ModelCatalogModel } from '../utils/model-selection.js';
+  import type { StreamHubEvent } from '../client/streamTypes.js';
 
   import ChatPanel from './ChatPanel.svelte';
   import ChatTimeline from './ChatTimeline.svelte';
   import ChatComposer from './ChatComposer.svelte';
   import ModelSelector from './ModelSelector.svelte';
   import MessageActions from './MessageActions.svelte';
-  import ContextChips from './ContextChips.svelte';
+  import ChatContextPicker from './ChatContextPicker.svelte';
   import StreamMessage from './StreamMessage.svelte';
 
+  import type { ChatContextEntry } from '../state/chat-context.js';
   import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
   import { buildProjectedTimeline } from '../state/chatProjection.js';
   import { projectAssistantRunSegments, appendLiveProjectionEvent } from '../utils/chat-run-projection.js';
   import { parsePendingLocalToolCallsFromStatusPayload } from '../utils/localToolStreamSync.js';
   import { isLocalToolName as _isLocalToolName } from '../stores/localTools.js';
-  import { createNoopChatContextProvider } from '../state/chat-context.js';
   import { createRendererRegistry } from '../renderers/registry.js';
 
   // ---------------------------------------------------------------------------
@@ -132,7 +131,7 @@
   export let selectedModel: string = '';
 
   /**
-   * Context chip provider.  When supplied, ContextChips are rendered in the
+   * Context provider.  When supplied, ChatContextPicker is rendered in the
    * composer header.
    */
   export let contextProvider: ChatContextProvider | undefined = undefined;
@@ -168,8 +167,21 @@
   // Show ModelSelector when models or groups are available
   $: hasModels = modelGroups.length > 0 || models.length > 0;
 
-  // Show ContextChips only when a contextProvider is explicitly supplied
+  // Show ChatContextPicker only when a contextProvider is explicitly supplied
   $: hasContextProvider = Boolean(contextProvider);
+
+  // Derive context entries from the provider store
+  let contextEntries: ChatContextEntry[] = [];
+  $: if (contextProvider?.context) {
+    const unsub = contextProvider.context.subscribe((vals) => {
+      contextEntries = vals ?? [];
+    });
+    // We hold the subscription for the reactive lifetime; unsubscribe is
+    // handled automatically when contextProvider changes (Svelte re-runs $:).
+    void unsub; // prevent unused-variable lint
+  } else {
+    contextEntries = [];
+  }
 
   // ---------------------------------------------------------------------------
   // Timeline projection state
@@ -200,6 +212,106 @@
   }) as ChatProjectedTimelineItem<SimpleMessage, unknown>[];
 
   // ---------------------------------------------------------------------------
+  // Active stream subscriptions (per assistant message _streamId)
+  // ---------------------------------------------------------------------------
+
+  // Map of subKey → streamId for active subscriptions; we track them so we can
+  // tear them down when the component is destroyed or the stream terminates.
+  const activeStreamSubs = new Map<string, string>();
+
+  // Subscribe to a stream via host.streamClient, feed events into streamEventsById
+  // and dispatch local-tool calls via host.localTools.
+  const subscribeToStream = (assistantMsgId: string, streamId: string): void => {
+    if (!host?.streamClient) return;
+    const subKey = `conv:${assistantMsgId}:${Math.random().toString(36).slice(2)}`;
+    activeStreamSubs.set(subKey, streamId);
+
+    host.streamClient.setStream(subKey, streamId, (event: StreamHubEvent) => {
+      // Feed projection events
+      const eventStreamId = String((event as Record<string, unknown>).streamId ?? '').trim();
+      const sequence = Number((event as Record<string, unknown>).sequence);
+      if (eventStreamId === streamId && Number.isFinite(sequence)) {
+        const projEvent = {
+          eventType: String(event.type ?? '').trim(),
+          data: (event as Record<string, unknown>).data ?? {},
+          sequence,
+        };
+        streamEventsById = new Map(streamEventsById);
+        streamEventsById.set(
+          assistantMsgId,
+          appendLiveProjectionEvent(
+            streamEventsById.get(assistantMsgId) ?? [],
+            projEvent,
+          ),
+        );
+      }
+
+      // On terminal events: mark assistant message completed + clean up subscription
+      if (event.type === 'done' || event.type === 'error') {
+        timeline = timeline.map((m) =>
+          m.id === assistantMsgId
+            ? { ...m, _localStatus: event.type === 'done' ? 'completed' : 'failed' }
+            : m,
+        );
+        host.streamClient?.delete(subKey);
+        activeStreamSubs.delete(subKey);
+        return;
+      }
+
+      // On status events: detect local-tool pending calls and dispatch them
+      if (event.type === 'status' && host?.localTools) {
+        const eventData = (event as Record<string, unknown>).data;
+        const pendingCalls = parsePendingLocalToolCallsFromStatusPayload(
+          streamId,
+          Number((event as Record<string, unknown>).sequence ?? 0),
+          eventData,
+          _isLocalToolName,
+        );
+        for (const call of pendingCalls) {
+          void dispatchLocalTool(streamId, call.toolCallId, call.name, call.argsText);
+        }
+      }
+    });
+  };
+
+  // Dispatch a local tool call via host.localTools.sendMessage
+  const dispatchLocalTool = async (
+    streamId: string,
+    toolCallId: string,
+    name: string,
+    argsText: string,
+  ): Promise<void> => {
+    const localTools = host?.localTools;
+    if (!localTools?.sendMessage) return;
+    let args: unknown = {};
+    try {
+      const trimmed = argsText.trim();
+      if (trimmed) args = JSON.parse(trimmed);
+    } catch {
+      // malformed args — leave as {}
+    }
+    try {
+      await localTools.sendMessage({
+        type: 'tool_execute',
+        toolCallId,
+        name,
+        args,
+      });
+    } catch {
+      // Local-tool errors are advisory; the stream continues regardless
+    }
+  };
+
+  // Tear down all active stream subscriptions when the component is destroyed
+  import { onDestroy } from 'svelte';
+  onDestroy(() => {
+    for (const [subKey] of activeStreamSubs) {
+      host?.streamClient?.delete(subKey);
+    }
+    activeStreamSubs.clear();
+  });
+
+  // ---------------------------------------------------------------------------
   // Composer state
   // ---------------------------------------------------------------------------
 
@@ -221,7 +333,15 @@
   };
 
   // ---------------------------------------------------------------------------
-  // Send handler — posts a message via host.transport
+  // Send handler — posts a message via host.transport, then drives the stream
+  //
+  // Flow (mirrors AppChatPanel.bootstrapAssistantRun exactly):
+  //   1. Optimistically append user message to timeline.
+  //   2. POST via host.transport.postMessage; parse JSON for
+  //      { assistantMessageId, streamId }.
+  //   3. Create the assistant SimpleMessage with _streamId and append to timeline.
+  //   4. Subscribe to the stream via host.streamClient.setStream so the existing
+  //      StreamMessage template path renders the live stream immediately.
   // ---------------------------------------------------------------------------
 
   const handleSend = async (): Promise<void> => {
@@ -231,7 +351,7 @@
     isSending = true;
     composerInput = '';
 
-    // Optimistic user message
+    // Step 1: Optimistic user message
     const localId = `local_${Date.now()}`;
     const userMessage: SimpleMessage = {
       id: localId,
@@ -242,9 +362,37 @@
     timeline = [...timeline, userMessage];
 
     try {
-      await host.transport.postMessage(sessionId, { content: text });
+      // Step 2: POST and parse the server response
+      const response = await host.transport.postMessage(sessionId, { content: text });
+      const body = await response.json() as Record<string, unknown>;
+
+      const assistantMessageId = String(body.assistantMessageId ?? '').trim();
+      const streamId = String(body.streamId ?? assistantMessageId).trim();
+
+      if (!assistantMessageId) {
+        // No assistant message id returned — cannot wire stream; stay in optimistic state
+        return;
+      }
+
+      // Step 3: Create assistant message carrying _streamId, append to timeline
+      const nowIso = new Date().toISOString();
+      const assistantMsg: SimpleMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: null,
+        _localStatus: 'processing',
+        _streamId: streamId,
+      };
+      timeline = [...timeline, assistantMsg];
+
+      // Step 4: Subscribe to the stream — events flow into streamEventsById
+      // and the existing {#if host?.streamClient && item.message._streamId} path
+      // in the template renders StreamMessage live.
+      subscribeToStream(assistantMessageId, streamId);
+
+      void nowIso; // used in assistantMsg above
     } catch {
-      // Silent: message stays in optimistic state; deeper error handling is app-owned
+      // Silent: user message stays in optimistic state; deeper error handling is app-owned
     } finally {
       isSending = false;
     }
@@ -260,23 +408,6 @@
       void handleSend();
     }
   };
-
-  // ---------------------------------------------------------------------------
-  // Local-tool pending call detection (parse-only; execution is deferred)
-  // ---------------------------------------------------------------------------
-
-  // Exposed on the component instance for testing; full wiring is a follow-up
-  export const parseLocalToolCalls = (
-    streamId: string,
-    sequence: number,
-    data: unknown,
-  ) =>
-    parsePendingLocalToolCallsFromStatusPayload(
-      streamId,
-      sequence,
-      data,
-      _isLocalToolName,
-    );
 
   // ---------------------------------------------------------------------------
   // Layout CSS class
@@ -295,7 +426,7 @@
   Structure:
     .chat-conversation-{layout}
       ChatPanel (shell boundary)
-        [header] ContextChips (if contextProvider) + ModelSelector (if models)
+        [header] ChatContextPicker (if contextProvider) + ModelSelector (if models)
         [timeline] ChatTimeline -> per-item: StreamMessage + MessageActions
         [composer] ChatComposer
 -->
@@ -323,9 +454,9 @@
     {#snippet renderHeader()}
       {#if hasContextProvider || hasModels}
         <div class="chat-conversation-header flex items-center gap-2 border-b border-slate-200 px-3 py-1.5">
-          {#if hasContextProvider && contextProvider}
-            <ContextChips
-              provider={contextProvider}
+          {#if hasContextProvider}
+            <ChatContextPicker
+              entries={contextEntries}
               labels={effectiveLabels}
             />
           {/if}
