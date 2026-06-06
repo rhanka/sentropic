@@ -165,13 +165,15 @@
   // filterPermissionPromptsForPendingStream / parsePendingLocalToolCallsFromStatusPayload /
   // shouldResetLocalToolStateForFreshRound removed in slice 1E — logic inlined in the controller.
   import {
-    EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
-    VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
     computeEnabledToolIds,
     computeToolToggleDefaults,
     computeVisibleToolToggleIds,
     isExtensionRestrictedToolsetMode as computeIsExtensionRestrictedToolsetMode,
   } from '@sentropic/chat-ui/utils/chat-tool-scope';
+  import {
+    EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+    VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
+  } from '$lib/chat/tool-scope-adapter';
   import {
     USER_AI_SETTINGS_UPDATED_EVENT,
     type UserAISettingsUpdatedPayload,
