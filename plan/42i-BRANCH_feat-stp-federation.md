@@ -102,26 +102,27 @@ Extend `@sentropic/cli` with a `VerbRegistry` + optional `deps.verbRegistry` fie
     - [x] CLI tests — existing + new: `make test-cli ENV=test-feat-stp-federation-42i` — 31 passed (8 characterization + 4 registry + 10 dispatch + 9 verb-registry)
     - [x] Confirm: `dispatch.spec.ts` (10 tests: 4 existing + 6 new) + `registry.spec.ts` (4 cases) pass unchanged; `verb-registry.spec.ts` (9 cases) pass; characterization 8/8 byte-identical
 
-- [ ] **Lot 2 — Federation manifest + discovery loader**
-  - [ ] Add `packages/cli/src/federation.ts`:
-    - [ ] `FederationEntry` interface: `{ name: string; summary: string; importSpecifier: string }` (specifier taken verbatim from manifest, e.g. `@sentropic/track/cli`)
-    - [ ] `FEDERATION_MANIFEST: readonly FederationEntry[]` — 7 cross-repo entries (all but `app` and `harness` which are in-repo): `h2a` (`@sentropic/h2a/cli`), `knowledge` (`@sentropic/graphify/cli`), `remote` (`sentropic-remote/cli`), `track` (`@sentropic/track/cli`), `design` (`@sentropic/design-system-skills/cli`), `agent-stats` (`@sentropic/agent-stats/cli`), plus `harness` entry with note GATED_D7 (NOT wired in Lot 3 — present for documentation, skipped in loader)
-    - [ ] `loadFederatedSubcommands(registry: SubcommandRegistry): Promise<void>` — discovery loader that iterates FEDERATION_MANIFEST (cross-repo entries only, not harness), for each: dynamic `import(entry.importSpecifier)`, validates `{ run, version }` shape, calls `registry.register(...)`:
-      - True absence (ERR_MODULE_NOT_FOUND / ERR_PACKAGE_PATH_NOT_EXPORTED on an uninstalled package) → **silently skip** (do not add to registry)
-      - Installed-but-broken (any other import error, missing `run`/`version`, `InvalidSubcommandError` from registration) → **fail loudly**: write offending package + error to `deps.error`, return non-zero (surface immediately, not silent)
-    - [ ] Error-code detection: inspect `(err as NodeJS.ErrnoException).code` to distinguish `ERR_MODULE_NOT_FOUND` / `ERR_PACKAGE_PATH_NOT_EXPORTED` (absence) from all other errors (broken)
-  - [ ] Export `FederationEntry`, `FEDERATION_MANIFEST`, `loadFederatedSubcommands` from `packages/cli/src/index.ts`
-  - [ ] Add tests `packages/cli/tests/federation.spec.ts` (stub modules with vi.mock / unstable_mockModule):
-    - [ ] Installed package with valid `{ run, version }` → resolves and registers correctly
-    - [ ] Missing package (`ERR_MODULE_NOT_FOUND`) → silently skipped, no throw, not in registry
-    - [ ] Missing subpath export (`ERR_PACKAGE_PATH_NOT_EXPORTED`) → silently skipped
-    - [ ] Installed package with missing `run` field → `InvalidSubcommandError` thrown / fail-loud path (error written to stderr sink, not silent)
-    - [ ] Installed package with import throwing non-absence error (e.g. `SyntaxError`) → fail-loud path
-  - [ ] Lot gate:
-    - [ ] `make typecheck ENV=test-feat-stp-federation-42i`
-    - [ ] `make lint ENV=test-feat-stp-federation-42i`
-    - [ ] CLI tests — all: `make test SCOPE=packages/cli/tests ENV=test-feat-stp-federation-42i`
-    - [ ] Confirm: `federation.spec.ts` (new 5+ cases) pass; prior lots' tests still pass
+- [x] **Lot 2 — Federation manifest + discovery loader**
+  - [x] Add `packages/cli/src/federation.ts`:
+    - [x] `FederationEntry` interface: `{ name: string; summary: string; importSpecifier: string }` (specifier taken verbatim from manifest, e.g. `@sentropic/track/cli`)
+    - [x] `FEDERATION_MANIFEST: readonly FederationEntry[]` — 6 cross-repo entries (all but `app` in-repo and `harness` GATED_D7): `h2a` (`@sentropic/h2a/cli`), `knowledge` (`@sentropic/graphify/cli`), `remote` (`sentropic-remote/cli`), `track` (`@sentropic/track/cli`), `design` (`@sentropic/design-system-skills/cli`), `agent-stats` (`@sentropic/agent-stats/cli`). `harness` documented as GATED_D7 code comment, NOT a manifest entry.
+    - [x] `loadFederatedSubcommands(registry: SubcommandRegistry, deps?: LoadFederationDeps): Promise<void>` — discovery loader. `LoadFederationDeps` adds injectable `importer` (default: `import(spec)`) for test isolation without vitest mock-hoisting.
+      - True absence (ERR_MODULE_NOT_FOUND / ERR_PACKAGE_PATH_NOT_EXPORTED) → **silently skip**
+      - Installed-but-broken (any other import error, missing `run`/`version`, `InvalidSubcommandError` from registration) → **fail loudly**: write offending package + error to `deps.error` and rethrow
+    - [x] Error-code detection: inspect `(err as NodeJS.ErrnoException).code` to distinguish absence from broken
+  - [x] Export `FederationEntry`, `FEDERATION_MANIFEST`, `loadFederatedSubcommands`, `LoadFederationDeps` from `packages/cli/src/index.ts`
+  - [x] Add tests `packages/cli/tests/federation.spec.ts` (injectable importer — no vi.unstable_mockModule, removed in vitest 2+):
+    - [x] Installed package with valid `{ run, version }` → resolves and registers correctly
+    - [x] Missing package (`ERR_MODULE_NOT_FOUND`) → silently skipped, no throw, not in registry
+    - [x] Missing subpath export (`ERR_PACKAGE_PATH_NOT_EXPORTED`) → silently skipped
+    - [x] Installed package with missing `run` field → fail-loud path (error written to sink, throws)
+    - [x] Installed package with import throwing non-absence error (SyntaxError/TypeError/Error) → fail-loud
+    - [x] Registry registration failure (InvalidSubcommandError) → fail-loud
+    - [x] FEDERATION_MANIFEST content/shape assertions (6 entries, correct specifiers, sorted, no app/harness)
+  - [x] Lot gate:
+    - [x] `make typecheck-cli ENV=test-feat-stp-federation-42i` PASS
+    - [x] N/A `make lint-cli` — no lint-cli target (per Feedback Loop Lot0-D1)
+    - [x] `make test-cli ENV=test-feat-stp-federation-42i` — 47 passed (8 characterization + 4 registry + 10 dispatch + 9 verb-registry + 16 federation); all files PASS
 
 - [ ] **Lot 3 — Wire the bin + ship the `report` alias**
   - [ ] Extend `packages/cli/bin/stp.mjs`:
