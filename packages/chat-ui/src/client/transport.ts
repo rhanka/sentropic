@@ -50,11 +50,17 @@ export const createDefaultTransport: ChatCoreTransportFactory = (
 
   return {
     openStream(sessionId, fromSeq) {
-      const url = new URL(joinUrl(baseUrl, `/chat/sessions/${sessionId}/stream`));
+      // Build the target as a plain string. Native EventSource resolves a
+      // relative URL against the document base, whereas `new URL(path)` (no
+      // base) THROWS when baseUrl is relative or '' (e.g. same-origin hosts).
+      // Staying string-based keeps openStream relative-safe like postMessage's
+      // fetch(), which tolerates relative URLs.
+      let target = joinUrl(baseUrl, `/chat/sessions/${sessionId}/stream`);
       if (typeof fromSeq === 'number') {
-        url.searchParams.set('fromSeq', String(fromSeq));
+        const separator = target.includes('?') ? '&' : '?';
+        target = `${target}${separator}fromSeq=${encodeURIComponent(String(fromSeq))}`;
       }
-      return new EventSource(url.toString());
+      return new EventSource(target);
     },
     async postMessage(sessionId, body) {
       return fetch(joinUrl(baseUrl, `/chat/sessions/${sessionId}/messages`), {
