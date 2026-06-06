@@ -2455,29 +2455,12 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	OPENAI=$$(get OPENAI_API_KEY) ; ANTHROPIC=$$(get ANTHROPIC_API_KEY) ; GEMINI=$$(get GEMINI_API_KEY) ; \
 	MISTRAL=$$(get MISTRAL_API_KEY) ; COHERE=$$(get COHERE_API_KEY) ; TAVILY=$$(get TAVILY_API_KEY) ; \
-	MAIL_HOST=$$(get MAIL_HOST) ; MAIL_PORT=$$(get MAIL_PORT) ; MAIL_SECURE=$$(get MAIL_SECURE) ; \
-	MAIL_USERNAME=$$(get MAIL_USERNAME) ; MAIL_PASSWORD=$$(get MAIL_PASSWORD) ; MAIL_FROM=$$(get MAIL_FROM) ; \
-	[ -n "$$MAIL_USERNAME" ] || MAIL_USERNAME=$$(get_poc_export MAIL_USERNAME) ; \
-	[ -n "$$MAIL_PASSWORD" ] || MAIL_PASSWORD=$$(get_poc_export MAIL_PASSWORD) ; \
-	if [ -z "$$MAIL_HOST" ] && [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then \
-	  MAIL_HOST=smtp.tem.scaleway.com ; MAIL_PORT=465 ; MAIL_SECURE=true ; \
-	fi ; \
-	[ -n "$$MAIL_HOST" ] || MAIL_HOST="" ; [ -n "$$MAIL_PORT" ] || MAIL_PORT=587 ; \
-	[ -n "$$MAIL_SECURE" ] || MAIL_SECURE=false ; [ -n "$$MAIL_FROM" ] || MAIL_FROM=no-reply@sent-tech.ca ; \
-	if [ -n "$$MAIL_HOST" ] && { [ -z "$$MAIL_USERNAME" ] || [ -z "$$MAIL_PASSWORD" ]; }; then \
-	  echo "ERROR: MAIL_USERNAME and MAIL_PASSWORD are required when MAIL_HOST is set in $(K8S_ENV_FILE)" >&2; exit 1; \
-	fi ; \
-	MAIL_AUTH_STATUS=disabled ; \
-	if [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then MAIL_AUTH_STATUS=configured ; fi ; \
-	echo "Mail config: host=$${MAIL_HOST:-disabled} port=$$MAIL_PORT secure=$$MAIL_SECURE from=$$MAIL_FROM auth=$$MAIL_AUTH_STATUS" ; \
-	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
-	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
-	COWORK_DESKTOP_DOWNLOAD_URL=$$(get COWORK_DESKTOP_DOWNLOAD_URL) ; \
-	COWORK_DESKTOP_VERSION=$$(get COWORK_DESKTOP_VERSION) ; \
-	COWORK_DESKTOP_SOURCE=$$(get COWORK_DESKTOP_SOURCE) ; \
-	COWORK_DESKTOP_PRERELEASE_URL=$$(get COWORK_DESKTOP_PRERELEASE_URL) ; \
-	COWORK_DESKTOP_PRERELEASE_VERSION=$$(get COWORK_DESKTOP_PRERELEASE_VERSION) ; \
-	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
+	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; \
+	GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
+	DS_AK=$$(get DOC_STORAGE_ACCESS_KEY) ; DS_SK=$$(get DOC_STORAGE_SECRET_KEY) ; DS_BK=$$(get DOC_STORAGE_BUCKET) ; \
+	DS_EP=$$(get DOC_STORAGE_ENDPOINT) ; DS_RG=$$(get DOC_STORAGE_REGION) ; \
+	SCW_TEM=$$(get SCW_TEM_SECRET_KEY) ; OAUTH_KEK=$$(get OAUTH_SIGNING_KEK) ; \
+	DATABASE_URL=$$(get DATABASE_URL) ; [ -n "$$DATABASE_URL" ] || DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-api \
 	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
 	  --from-literal=OPENAI_API_KEY="$$OPENAI" \
@@ -2486,23 +2469,28 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=MISTRAL_API_KEY="$$MISTRAL" \
 	  --from-literal=COHERE_API_KEY="$$COHERE" \
 	  --from-literal=TAVILY_API_KEY="$$TAVILY" \
-	  --from-literal=MAIL_HOST="$$MAIL_HOST" \
-	  --from-literal=MAIL_PORT="$$MAIL_PORT" \
-	  --from-literal=MAIL_SECURE="$$MAIL_SECURE" \
-	  --from-literal=MAIL_USERNAME="$$MAIL_USERNAME" \
-	  --from-literal=MAIL_PASSWORD="$$MAIL_PASSWORD" \
-	  --from-literal=MAIL_FROM="$$MAIL_FROM" \
+	  --from-literal=DOC_STORAGE_ACCESS_KEY="$$DS_AK" \
+	  --from-literal=DOC_STORAGE_SECRET_KEY="$$DS_SK" \
+	  --from-literal=DOC_STORAGE_BUCKET="$$DS_BK" \
+	  --from-literal=DOC_STORAGE_ENDPOINT="$$DS_EP" \
+	  --from-literal=DOC_STORAGE_REGION="$$DS_RG" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_ID="$$GD_CID" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_SECRET="$$GD_CS" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_API_KEY="$$GD_PK" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
-	  --from-literal=COWORK_DESKTOP_DOWNLOAD_URL="$$COWORK_DESKTOP_DOWNLOAD_URL" \
-	  --from-literal=COWORK_DESKTOP_VERSION="$$COWORK_DESKTOP_VERSION" \
-	  --from-literal=COWORK_DESKTOP_SOURCE="$$COWORK_DESKTOP_SOURCE" \
-	  --from-literal=COWORK_DESKTOP_PRERELEASE_URL="$$COWORK_DESKTOP_PRERELEASE_URL" \
-	  --from-literal=COWORK_DESKTOP_PRERELEASE_VERSION="$$COWORK_DESKTOP_PRERELEASE_VERSION" \
+	  --from-literal=SCW_TEM_SECRET_KEY="$$SCW_TEM" \
+	  --from-literal=OAUTH_SIGNING_KEK="$$OAUTH_KEK" \
+	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
+	S3_AK=$$(get S3_ACCESS_KEY) ; S3_SK=$$(get S3_SECRET_KEY) ; S3_BK=$$(get S3_BUCKET) ; \
+	S3_EP=$$(get S3_ENDPOINT) ; S3_RG=$$(get S3_REGION) ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-pgbackup \
+	  --from-literal=S3_ACCESS_KEY="$$S3_AK" \
+	  --from-literal=S3_SECRET_KEY="$$S3_SK" \
+	  --from-literal=S3_BUCKET="$$S3_BK" \
+	  --from-literal=S3_ENDPOINT="$$S3_EP" \
+	  --from-literal=S3_REGION="$$S3_RG" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
-	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(K8S_NAMESPACE)."
+	@echo "==> Secrets sentropic-postgres + sentropic-api + sentropic-pgbackup ready in $(K8S_NAMESPACE)."
 
 k8s-registry-secret: ## Create/update the SCW Registry pull secret from $(K8S_ENV_FILE)
 	@test -f $(K8S_ENV_FILE) || { echo "missing $(K8S_ENV_FILE)" >&2; exit 1; }
@@ -2615,53 +2603,12 @@ gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_R
 	@test -n "$(GH_DEPLOY_RUN_ID)" || (echo "ERROR: GH_DEPLOY_RUN_ID is required, for example GH_DEPLOY_RUN_ID=26159456218" >&2; exit 1)
 	gh run watch "$(GH_DEPLOY_RUN_ID)" --repo "$(GH_REPO)" --interval 30 --exit-status
 
-# --- Sealed Secrets (BR37b-EX1, append-only; operator-side, live cluster) -----
-# Bitnami Sealed Secrets controller install + sealing helpers. The controller
-# manifest is deploy/k8s/01-sealed-secrets-controller.yaml (pinned v0.37.0,
-# namespace `sealed-secrets`). kubeseal is run from the pinned official image
-# docker.io/bitnami/sealed-secrets-kubeseal:0.37.0 (kubeseal is its entrypoint),
-# so no host install of kubeseal is required. kubeseal fetches the controller's
-# public cert from the live kube API using the mounted $(KUBECONFIG); no secret
-# value is ever hardcoded in a target — `k8s-seal-secret` only transforms
-# SEAL_SRC (plaintext Secret yaml) into SEAL_OUT (SealedSecret yaml).
-SEALED_SECRETS_NAMESPACE  ?= sealed-secrets
-SEALED_SECRETS_CONTROLLER ?= sealed-secrets-controller
-SEALED_SECRETS_MANIFEST   ?= deploy/k8s/01-sealed-secrets-controller.yaml
-KUBESEAL_IMAGE            ?= docker.io/bitnami/sealed-secrets-kubeseal:0.37.0
-SEAL_SRC ?=
-SEAL_OUT ?=
-SEAL_KEY_OUT ?=
-
-.PHONY: k8s-sealed-secrets-install k8s-seal-secret k8s-sealed-secrets-backup-key
-
-k8s-sealed-secrets-install: ## Install the Sealed Secrets controller (v0.37.0) and wait for rollout
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f $(SEALED_SECRETS_MANIFEST)
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) rollout status deploy/$(SEALED_SECRETS_CONTROLLER) --timeout=120s
-	@echo "==> Sealed Secrets controller $(SEALED_SECRETS_CONTROLLER) ready in namespace $(SEALED_SECRETS_NAMESPACE)."
-
-k8s-seal-secret: ## Seal a plaintext Secret yaml into a SealedSecret yaml (SEAL_SRC=... SEAL_OUT=...)
-	@test -n "$(SEAL_SRC)" || { echo "ERROR: set SEAL_SRC=<path to plaintext Secret yaml>" >&2; exit 1; }
-	@test -n "$(SEAL_OUT)" || { echo "ERROR: set SEAL_OUT=<path to write the SealedSecret yaml>" >&2; exit 1; }
-	@test -f "$(SEAL_SRC)" || { echo "ERROR: SEAL_SRC=$(SEAL_SRC) not found" >&2; exit 1; }
-	@test -s "$(KUBECONFIG)" || { echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1; }
-	@command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required to run $(KUBESEAL_IMAGE)" >&2; exit 1; }
-	@docker run --rm -i \
-	  -v "$(KUBECONFIG)":/tmp/kubeconfig:ro \
-	  -e KUBECONFIG=/tmp/kubeconfig \
-	  $(KUBESEAL_IMAGE) \
-	  --controller-name=$(SEALED_SECRETS_CONTROLLER) \
-	  --controller-namespace=$(SEALED_SECRETS_NAMESPACE) \
-	  --format=yaml \
-	  < "$(SEAL_SRC)" > "$(SEAL_OUT)"
-	@echo "==> Sealed $(SEAL_SRC) -> $(SEAL_OUT) (controller $(SEALED_SECRETS_CONTROLLER)/$(SEALED_SECRETS_NAMESPACE))."
-
-k8s-sealed-secrets-backup-key: ## Export the controller sealing key for DR (SEAL_KEY_OUT=...). HIGHLY SENSITIVE.
-	@test -n "$(SEAL_KEY_OUT)" || { echo "ERROR: set SEAL_KEY_OUT=<path to write the sealing key backup>" >&2; exit 1; }
-	@test -s "$(KUBECONFIG)" || { echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1; }
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) get secret \
-	  -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > "$(SEAL_KEY_OUT)"
-	@echo "WARNING: $(SEAL_KEY_OUT) contains the controller master sealing key."
-	@echo "WARNING: store it out-of-band (offline/secret manager), NEVER commit it, and restrict file permissions."
+# --- Secrets provisioning: cluster-only (mode 2) -----------------------------
+# Secrets are provisioned DIRECTLY into the live cluster from a gitignored env
+# file via `make k8s-bundle-secret K8S_ENV_FILE=.env.prod` (target above). No
+# SealedSecrets, no controller, no secret material in git. The prod .env holds
+# 24 keys (api 17 + OAUTH_SIGNING_KEK, postgres POSTGRES_PASSWORD, pgbackup S3_*)
+# and lives ONLY on the operator machine + the live cluster.
 
 # --- Postgres backup (BR37c-EX1, append-only; operator-side, live cluster) ----
 # Manual trigger / restore helpers around deploy/k8s/70-pgbackup-cronjob.yaml.
