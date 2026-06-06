@@ -16,3 +16,4 @@ export {
     InvalidSubcommandError,
     type Subcommand,
 } from './registry.js';
+export { VerbRegistry, DuplicateVerbError, type VerbBinding } from './verb-registry.js';
