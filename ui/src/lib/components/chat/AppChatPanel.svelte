@@ -117,11 +117,8 @@
   import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
   import type { ChatContextEntry as NeutralContextEntry } from '@sentropic/chat-ui/state/chat-context';
   import {
-    groupModelsByProvider,
     computeModelSelectorWidthCh,
-    coerceSelectionToValidEntry,
     type ModelProviderId,
-    type ModelCatalogProvider,
     type ModelCatalogModel,
     type ModelCatalogGroup,
   } from '@sentropic/chat-ui/utils/model-selection';
@@ -198,11 +195,8 @@
     type ChatComposerAttachmentDraft,
   } from '@sentropic/chat-ui/state/chatAttachments';
   import {
-    createComposerSteerAck,
-    createOptimisticSteerMessage,
     resolveComposerHeightState,
     resolveComposerPrimaryAction,
-    shouldClearComposerSteerAck,
     shouldShowSteerAction,
     syncDraftFromInput as syncChatDraftFromInput,
     type ComposerPrimaryActionState,
@@ -349,14 +343,7 @@
     icon: IconComponent;
   };
 
-  type ModelCatalogPayload = {
-    providers: ModelCatalogProvider[];
-    models: ModelCatalogModel[];
-    defaults: {
-      provider_id: ModelProviderId;
-      model_id: string;
-    };
-  };
+  // ModelCatalogPayload type removed in slice 1F — controller owns catalog fetch.
 
   // ---------------------------------------------------------------------------
   // Headless projection controller (slice 1B).
@@ -594,13 +581,9 @@
   let stoppingMessageId: string | null = null;
   let errorMsg: string | null = null;
   let lastShownErrorMsg: string | null = null;
-  let modelCatalogProviders: ModelCatalogProvider[] = [];
-  let modelCatalogModels: ModelCatalogModel[] = [];
-  let modelCatalogGroups: ModelCatalogGroup[] = [];
-  let selectedProviderId: ModelProviderId = 'openai';
-  let selectedModelId = 'gpt-4.1-nano';
-  let defaultProviderIdForNewSession: ModelProviderId = 'openai';
-  let defaultModelIdForNewSession = 'gpt-4.1-nano';
+  // modelCatalogProviders/modelCatalogModels/modelCatalogGroups/selectedProviderId/selectedModelId
+  // defaultProviderIdForNewSession/defaultModelIdForNewSession moved to controller (slice 1F).
+  // Access via $ctrl.modelCatalog*, $ctrl.selectedProviderId, $ctrl.selectedModelId etc.
   let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
   let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
@@ -665,7 +648,7 @@
   let historyHydrationInFlight = false;
   let historyHydrationSwapPending = false;
   let historyHydrationStickBottom = false;
-  let optimisticSteerMessages: LocalMessage[] = [];
+  // optimisticSteerMessages moved to controller (slice 1F); access via $ctrl.optimisticSteerMessages.
   let generatedFileCardsByMessageId = new Map<string, GeneratedFileCard[]>();
   let previousAiWorkspaceId: string | null | undefined = undefined;
   let workspaceSessionRescopeInFlight = false;
@@ -691,16 +674,16 @@
   $: activeAssistantMessage =
     [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
   // projectedTimelineItems is driven by the controller's subscribe() callback
-  // (via $ctrl auto-subscription). The steer-ack and optimistic-steer inputs
-  // are slices 1D/1E concerns — they will fold into the controller then.
-  // For now, rebuild the timeline when those local inputs change.
+  // (via $ctrl auto-subscription). Steer-ack + optimistic-steer now controller-owned (slice 1F).
+  // Rebuild the timeline when controller steer state or runtime summaries change.
   $: {
-    composerSteerAck;
-    optimisticSteerMessages;
+    $ctrl.composerSteerAck;
+    $ctrl.optimisticSteerMessages;
+    runtimeSummaryByMessageId;
     projectedTimelineItems = ctrl.buildTimeline({
-      optimisticSteerMessages,
+      optimisticSteerMessages: $ctrl.optimisticSteerMessages as LocalMessage[],
       runtimeSummariesByMessageId: runtimeSummaryByMessageId,
-      composerSteerAck,
+      composerSteerAck: $ctrl.composerSteerAck,
     }) as ProjectedTimelineItem[];
   }
   $: composerSteerStreamId = activeAssistantMessage
@@ -900,7 +883,7 @@
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
   let composerSteerInFlight = false;
-  let composerSteerAck: ComposerSteerAck | null = null;
+  // composerSteerAck moved to controller (slice 1F); access via $ctrl.composerSteerAck.
   // jobPollInFlight removed in slice 1C — tracking moved to the controller.
   let localToolsHubKey = '';
   // localToolStatesById, localToolInFlight, localToolExecutionTimersById,
@@ -2444,9 +2427,9 @@
 
       // Delegate host call + message list mutation + job-poll to the controller.
       await ctrl.retry(messageId, {
-        providerId: selectedProviderId,
-        model: selectedModelId,
-        buildAssistantMessage: makeAssistantMsgFactory(selectedModelId),
+        providerId: $ctrl.selectedProviderId,
+        model: $ctrl.selectedModelId,
+        buildAssistantMessage: makeAssistantMsgFactory($ctrl.selectedModelId),
         pollTimeoutMs: 90_000,
       });
 
@@ -2704,7 +2687,7 @@
   const resetTodoRuntimePanel = () => {
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
-    composerSteerAck = null;
+    // composerSteerAck moved to controller (slice 1F); cleared by ack timer or sendSteer rollback.
     pendingTodoRuntimeDeleteConfirm = false;
   };
 
@@ -2754,22 +2737,8 @@
 
     composerSteerInFlight = true;
     errorMsg = null;
-    const createdAtMs = Date.now();
-    composerSteerAck = createComposerSteerAck({
-      streamId: targetStreamId,
-      message: $_('chat.steer.acknowledgement'),
-      createdAtMs,
-    });
 
-    const localSteerMessage: LocalMessage = createOptimisticSteerMessage({
-      sessionId: sessionId ?? '',
-      content: steerText,
-      targetAssistantMessageId: activeAssistantMessage?.id,
-      targetStreamId,
-      nowMs: createdAtMs,
-      nowIso: new Date(createdAtMs).toISOString(),
-    });
-    optimisticSteerMessages = [...optimisticSteerMessages, localSteerMessage];
+    // App-side: clear input + scroll before the async call (DOM concerns)
     followBottom = true;
     scheduleScrollToBottom({ force: true });
     input = '';
@@ -2777,20 +2746,17 @@
     updateComposerHeight();
 
     try {
-      await chatCoreHost.postSteer(targetStreamId, steerText);
+      // Controller owns: optimistic steer message, composerSteerAck, host.postSteer, rollback
+      await ctrl.sendSteer(steerText, targetStreamId, {
+        sessionId: sessionId ?? '',
+        targetAssistantMessageId: activeAssistantMessage?.id,
+        ackMessage: $_('chat.steer.acknowledgement'),
+        ackTimeoutMs: 5000,
+      });
     } catch (e) {
-      optimisticSteerMessages = optimisticSteerMessages.filter(
-        (message) => message.id !== localSteerMessage.id,
-      );
       errorMsg = formatApiError(e, $_('chat.steer.error'));
     } finally {
       composerSteerInFlight = false;
-      const expectedAck = composerSteerAck?.createdAtMs;
-      setTimeout(() => {
-        if (shouldClearComposerSteerAck(composerSteerAck, expectedAck)) {
-          composerSteerAck = null;
-        }
-      }, 5000);
     }
   };
 
@@ -3152,7 +3118,7 @@
         historyHydrationInFlight = true;
         historyHydrationSwapPending = false;
         historyHydrationStickBottom = true;
-        optimisticSteerMessages = [];
+        ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on session load
         historyTimelineItems = [];
         stagedHistoryTimelineItems = [];
         historyTimelineSessionId = null;
@@ -3239,12 +3205,11 @@
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
-        const fromCatalog = modelCatalogModels.find(
+        const fromCatalog = $ctrl.modelCatalogModels.find(
           (entry) => entry.model_id === lastAssistantModel,
         );
         if (fromCatalog) {
-          selectedProviderId = fromCatalog.provider_id;
-          selectedModelId = fromCatalog.model_id;
+          ctrl.setModelSelection(fromCatalog.provider_id, fromCatalog.model_id);
         }
       }
       if (opts?.scrollToBottom !== false) {
@@ -3285,7 +3250,7 @@
 
     const performDeferredClear = () => {
       if (!isCurrentHydration()) return false;
-      optimisticSteerMessages = [];
+      ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on deferred session swap
       loadedRuntimeDetailsMessageIds.clear();
       loadingRuntimeDetailsMessageIds.clear();
       ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
@@ -3392,12 +3357,11 @@
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
-        const fromCatalog = modelCatalogModels.find(
+        const fromCatalog = $ctrl.modelCatalogModels.find(
           (entry) => entry.model_id === lastAssistantModel,
         );
         if (fromCatalog) {
-          selectedProviderId = fromCatalog.provider_id;
-          selectedModelId = fromCatalog.model_id;
+          ctrl.setModelSelection(fromCatalog.provider_id, fromCatalog.model_id);
         }
       }
     } catch (e) {
@@ -3442,14 +3406,13 @@
     historyHydrationStickBottom = false;
     historyHydrationSwapPending = false;
     loadingMessages = false;
-    optimisticSteerMessages = [];
+    ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on new session
     resetTodoRuntimePanel();
     ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
     // Reset controller state: clears messages + projection events (slice 1B).
     ctrl.setMessages([]);
     ctrl.resetProjectionState();
-    selectedProviderId = defaultProviderIdForNewSession;
-    selectedModelId = defaultModelIdForNewSession;
+    ctrl.resetModelSelectionToDefaults(); // slice 1F: restore default provider/model
     errorMsg = null;
     scheduleScrollToBottom({ force: true });
   };
@@ -3479,7 +3442,7 @@
       historyTimelineSessionId = null;
       sessionDocs = [];
       sessionDocsError = null;
-      optimisticSteerMessages = [];
+      ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on session delete
       resetTodoRuntimePanel();
       ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
       // Reset controller state: clears messages + projection events (slice 1B).
@@ -3501,27 +3464,9 @@
 
   const loadModelCatalog = async () => {
     try {
-      const payload = await chatCoreHost.fetchModelCatalog();
-      modelCatalogProviders = (Array.isArray(payload.providers)
-        ? payload.providers
-        : []) as ModelCatalogProvider[];
-      modelCatalogModels = (Array.isArray(payload.models) ? payload.models : []) as ModelCatalogModel[];
-      const initialProviderId = (
-        payload.defaults?.provider_id ??
-        modelCatalogProviders[0]?.provider_id ??
-        'openai'
-      ) as ModelProviderId;
-      const initialModelId =
-        payload.defaults?.model_id ??
-        modelCatalogModels.find((entry) => entry.provider_id === initialProviderId)
-          ?.model_id ??
-        modelCatalogModels[0]?.model_id ??
-        selectedModelId;
-      defaultProviderIdForNewSession = initialProviderId;
-      defaultModelIdForNewSession = initialModelId;
-      selectedProviderId = initialProviderId;
-      selectedModelId = initialModelId;
-      selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+      // Controller owns: catalog fetch, providers/models/groups, selection, defaults (slice 1F).
+      await ctrl.loadModelCatalog(() => chatCoreHost.fetchModelCatalog());
+      selectedModelSelectionKey = `${$ctrl.selectedProviderId}::${$ctrl.selectedModelId}`;
     } catch (error) {
       console.error('Failed to load model catalog for chat:', error);
     }
@@ -3531,70 +3476,22 @@
     providerId: ModelProviderId,
     modelId: string,
   ) => {
-    if (!modelId) return;
-    let nextProviderId: ModelProviderId = providerId;
-    let nextModelId = modelId;
-
-    if (modelCatalogModels.length > 0) {
-      const exactMatch = modelCatalogModels.find(
-        (entry) =>
-          entry.provider_id === providerId && entry.model_id === modelId,
-      );
-      if (!exactMatch) {
-        const modelMatch = modelCatalogModels.find(
-          (entry) => entry.model_id === modelId,
-        );
-        if (modelMatch) {
-          nextProviderId = modelMatch.provider_id;
-          nextModelId = modelMatch.model_id;
-        } else {
-          const providerFallback =
-            modelCatalogModels.find(
-              (entry) => entry.provider_id === providerId,
-            ) ?? modelCatalogModels[0];
-          nextProviderId = providerFallback.provider_id;
-          nextModelId = providerFallback.model_id;
-        }
-      }
-    }
-
-    defaultProviderIdForNewSession = nextProviderId;
-    defaultModelIdForNewSession = nextModelId;
-    if (!sessionId) {
-      selectedProviderId = nextProviderId;
-      selectedModelId = nextModelId;
-    }
+    // Controller owns: catalog resolution + default/current selection update (slice 1F).
+    ctrl.applyUserDefaults(providerId, modelId, { sessionId: sessionId ?? null });
   };
 
   const isGeminiModel = (modelId: string | null | undefined): boolean =>
     typeof modelId === 'string' &&
     modelId.trim().toLowerCase().startsWith('gemini');
 
-  $: modelCatalogGroups = groupModelsByProvider(modelCatalogProviders, modelCatalogModels);
-
-  $: {
-    if (modelCatalogModels.length > 0) {
-      const coerced = coerceSelectionToValidEntry(
-        modelCatalogModels,
-        selectedProviderId,
-        selectedModelId,
-      );
-      if (
-        coerced.providerId !== selectedProviderId ||
-        coerced.modelId !== selectedModelId
-      ) {
-        selectedProviderId = coerced.providerId;
-        selectedModelId = coerced.modelId;
-      }
-    }
-  }
-
-  $: selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+  // modelCatalogGroups, coerceSelectionToValidEntry reactive, selectedProviderId/selectedModelId
+  // are now owned by the controller (slice 1F). Derive locals from $ctrl for template use.
+  $: selectedModelSelectionKey = `${$ctrl.selectedProviderId}::${$ctrl.selectedModelId}`;
   $: selectedModelWidthCh = computeModelSelectorWidthCh(
-    modelCatalogGroups,
-    modelCatalogModels,
-    selectedProviderId,
-    selectedModelId,
+    $ctrl.modelCatalogGroups as ModelCatalogGroup[],
+    $ctrl.modelCatalogModels as ModelCatalogModel[],
+    $ctrl.selectedProviderId,
+    $ctrl.selectedModelId,
   );
 
   const sendMessage = async () => {
@@ -3655,8 +3552,8 @@
         content: text,
       };
 
-      if (selectedProviderId) payload.providerId = selectedProviderId;
-      if (selectedModelId) payload.model = selectedModelId;
+      if ($ctrl.selectedProviderId) payload.providerId = $ctrl.selectedProviderId;
+      if ($ctrl.selectedModelId) payload.model = $ctrl.selectedModelId;
 
       if (sessionId) {
         payload.sessionId = sessionId;
@@ -3705,7 +3602,7 @@
       // App-side: captures text + sentAttachments + model in factories for the controller.
       const capturedText = text;
       const capturedAttachments = sentAttachments;
-      const capturedModel = selectedModelId;
+      const capturedModel = $ctrl.selectedModelId;
 
       const { handle } = await ctrl.send(payload, {
         buildUserMessage: (runHandle) => {
@@ -5125,13 +5022,13 @@
           </MenuPopover>
           <ModelSelector
             bind:value={selectedModelSelectionKey}
-            groups={modelCatalogGroups}
-            models={modelCatalogModels}
+            groups={$ctrl.modelCatalogGroups as ModelCatalogGroup[]}
+            models={$ctrl.modelCatalogModels as ModelCatalogModel[]}
             widthCh={selectedModelWidthCh}
             labels={$_}
             onChange={({ providerId, modelId }: { providerId: ModelProviderId; modelId: string }) => {
-              selectedProviderId = providerId;
-              selectedModelId = modelId;
+              ctrl.setModelSelection(providerId, modelId);
+              selectedModelSelectionKey = `${providerId}::${modelId}`;
             }}
           />
         {/if}
