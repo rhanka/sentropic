@@ -75,10 +75,11 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
   - [x] `tests/artifacts/verification-run.spec.ts` — golden shape; superset of track `TestRun{commit,env,runner,result,at}`.
   - [x] Gate: `make test-harness ENV=test-feat-harness-core` (25 tests green) + `make typecheck-harness`.
 
-- [ ] **Lot 5a — bin + make passthrough (BR42h-EX1)**
-  - [ ] `src/bin/harness.ts` + declare `bin: { harness: "./dist/bin/harness.js" }` (now the file exists). `harness check scope|branch`.
-  - [ ] `Makefile`: `scope-check`/`branch-check` → `make → harness bin (node, Docker-first) → lib`. (`stp harness` parity = D7 follow-on.)
-  - [ ] Gate: `make build-harness pack-harness`.
+- [x] **Lot 5a — pure bin (BR42h-EX1; make passthrough split out & deferred)**
+  - [x] `src/cli/run.ts` (pure `runHarnessCli`, arg-based, no git / no `process.exit`) + `src/bin/harness.ts` (thin entry, shebang); `bin: { harness: "./dist/bin/harness.js" }` declared. `harness check scope|branch` advisory (exit 0; usage error → 2).
+  - [x] `tests/bin/cli-smoke.spec.ts` (usage / unknown-cmd / C1 FAIL / C2 FAIL / `--json` VerificationRun).
+  - [ ] **DEFERRED → Lot 5d**: `make scope-check/branch-check` passthroughs — git-state acquisition (current branch + staged files) under Docker-first/no-host-command is a design fork → DOUBLE-REVIEW before impl.
+  - [x] Gate: `make typecheck-harness` + `make test-harness ENV=test-feat-harness-core` (30 tests) + `make pack-harness` (bin in tarball).
 - [ ] **Lot 5b — CI job (BR42h-EX2)**: `validate-harness` (typecheck/test/build/pack) + filter, mirror `validate-build-cli`.
 - [ ] **Lot 5c — skill wrapper (BR42h-EX3)**: `.claude/skills/scope-check` → thin wrapper over `make scope-check` (advisory).
 

@@ -35,3 +35,6 @@ export { checkScope } from './checks/scope-check.js';
 export type { ScopeCheckInput } from './checks/scope-check.js';
 export { toVerificationRun } from './run/emit.js';
 export type { NamedCheck, VerificationContext } from './run/emit.js';
+
+// Pure, arg-based CLI driver (the `harness` bin is a thin wrapper over this).
+export { runHarnessCli } from './cli/run.js';
