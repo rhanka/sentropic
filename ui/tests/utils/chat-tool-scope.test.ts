@@ -3,10 +3,13 @@ import {
   computeEnabledToolIds,
   computeToolToggleDefaults,
   computeVisibleToolToggleIds,
-  VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
   isExtensionRestrictedToolsetMode,
   type ChatToolScopeToggle,
 } from '@sentropic/chat-ui/utils/chat-tool-scope';
+import {
+  EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+  VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
+} from '$lib/chat/tool-scope-adapter';
 
 const TOGGLES: ChatToolScopeToggle[] = [
   { id: 'documents', toolIds: ['documents'] },
@@ -30,6 +33,7 @@ describe('chat-tool-scope', () => {
     const visibleIds = computeVisibleToolToggleIds({
       toolToggles: TOGGLES,
       restrictedMode: restricted,
+      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     });
     expect(visibleIds).toEqual([
       'web_search',
@@ -41,6 +45,7 @@ describe('chat-tool-scope', () => {
     const enabledIds = computeEnabledToolIds({
       toolToggles: TOGGLES,
       restrictedMode: restricted,
+      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
       toolEnabledById: {
         documents: true,
         web_search: true,
@@ -62,6 +67,7 @@ describe('chat-tool-scope', () => {
     const defaults = computeToolToggleDefaults({
       toolToggles: TOGGLES,
       restrictedMode: true,
+      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     });
 
     expect(defaults.documents).toBe(false);
@@ -99,6 +105,7 @@ describe('chat-tool-scope', () => {
     const enabledIds = computeEnabledToolIds({
       toolToggles: TOGGLES,
       restrictedMode: true,
+      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
       toolEnabledById: {
         documents: false,
         web_search: true,
