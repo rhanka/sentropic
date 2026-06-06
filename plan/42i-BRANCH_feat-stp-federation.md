@@ -77,30 +77,30 @@ Extend `@sentropic/cli` with a `VerbRegistry` + optional `deps.verbRegistry` fie
     - [x] `make lint ENV=test-feat-stp-federation-42i` — N/A for CLI-only: no `lint-cli` target; `typecheck-cli` is the applicable quality gate (DISCOVERY: see Feedback Loop)
     - [x] CLI tests pass: `make test-cli ENV=test-feat-stp-federation-42i` — 16 passed (8 existing + 8 new characterization)
 
-- [ ] **Lot 1 — `VerbRegistry` + `runCli` extension (0-regression GATE)**
-  - [ ] Add `packages/cli/src/verb-registry.ts`:
-    - [ ] `VerbBinding` interface (`verb`, `ownerCli`, `ownerArgv`, optional `note`)
-    - [ ] `DuplicateVerbError extends Error` (parallel to `DuplicateSubcommandError`)
-    - [ ] `VerbRegistry` class: `.register(binding): this`, `.get(verb): VerbBinding | undefined`, `.list(): readonly VerbBinding[]` (sorted)
-  - [ ] Extend `packages/cli/src/cli.ts`:
-    - [ ] Add `verbRegistry?: VerbRegistry` as OPTIONAL field on `CliDeps` interface (NOT a new positional param — `runCli(argv, registry, deps)` signature UNCHANGED)
-    - [ ] After subcommand lookup fails AND before `formatUnknown`, check `deps.verbRegistry?.get(first)`: if match found, look up `ownerCli` in `registry`, call `subcommand.run([...ownerArgv, ...rest])`, return its exit code; if `ownerCli` not registered in `registry`, fall through to `formatUnknown` (not a crash)
-    - [ ] No change to `formatHelp`, `formatVersion`, `formatUnknown` — additive only
-  - [ ] Export `VerbRegistry`, `VerbBinding`, `DuplicateVerbError` from `packages/cli/src/index.ts`
-  - [ ] Add tests `packages/cli/tests/verb-registry.spec.ts`:
-    - [ ] `.register()` stores and `.get()` retrieves a binding
-    - [ ] `DuplicateVerbError` thrown on duplicate verb
-    - [ ] `.list()` returns sorted, stable output
-  - [ ] Extend `packages/cli/tests/dispatch.spec.ts` (verb-dispatch cases):
-    - [ ] `stp report` with `verbRegistry` mapping `report`→`{ownerCli:'track', ownerArgv:['report']}` and `track` in registry → dispatches to `registry.get('track').run(['report'])`, returns its code
-    - [ ] `stp report` with `verbRegistry` mapping `report`→`track` but `track` NOT in `registry` → falls through to `formatUnknown` (not a crash, exit 1)
-    - [ ] `stp app --help` with `verbRegistry` present → unchanged (0-regression)
-    - [ ] Existing dispatch tests (no `verbRegistry`) → still pass byte-identical (0-regression)
-  - [ ] Lot gate:
-    - [ ] `make typecheck ENV=test-feat-stp-federation-42i`
-    - [ ] `make lint ENV=test-feat-stp-federation-42i`
-    - [ ] CLI tests — existing + new: `make test SCOPE=packages/cli/tests ENV=test-feat-stp-federation-42i`
-    - [ ] Confirm: `dispatch.spec.ts` (existing 4 cases) + `registry.spec.ts` (existing 4 cases) pass unchanged; `verb-registry.spec.ts` (new 3+ cases) pass; new verb-dispatch cases pass
+- [x] **Lot 1 — `VerbRegistry` + `runCli` extension (0-regression GATE)**
+  - [x] Add `packages/cli/src/verb-registry.ts`:
+    - [x] `VerbBinding` interface (`verb`, `ownerCli`, `ownerArgv`, optional `note`)
+    - [x] `DuplicateVerbError extends Error` (parallel to `DuplicateSubcommandError`)
+    - [x] `VerbRegistry` class: `.register(binding): this`, `.get(verb): VerbBinding | undefined`, `.list(): readonly VerbBinding[]` (sorted)
+  - [x] Extend `packages/cli/src/cli.ts`:
+    - [x] Add `verbRegistry?: VerbRegistry` as OPTIONAL field on `CliDeps` interface (NOT a new positional param — `runCli(argv, registry, deps)` signature UNCHANGED)
+    - [x] After subcommand lookup fails AND before `formatUnknown`, check `deps.verbRegistry?.get(first)`: if match found, look up `ownerCli` in `registry`, call `subcommand.run([...ownerArgv, ...rest])`, return its exit code; if `ownerCli` not registered in `registry`, fall through to `formatUnknown` (not a crash)
+    - [x] No change to `formatHelp`, `formatVersion`, `formatUnknown` — additive only
+  - [x] Export `VerbRegistry`, `VerbBinding`, `DuplicateVerbError` from `packages/cli/src/index.ts`
+  - [x] Add tests `packages/cli/tests/verb-registry.spec.ts`:
+    - [x] `.register()` stores and `.get()` retrieves a binding
+    - [x] `DuplicateVerbError` thrown on duplicate verb
+    - [x] `.list()` returns sorted, stable output
+  - [x] Extend `packages/cli/tests/dispatch.spec.ts` (verb-dispatch cases):
+    - [x] `stp report` with `verbRegistry` mapping `report`→`{ownerCli:'track', ownerArgv:['report']}` and `track` in registry → dispatches to `registry.get('track').run(['report'])`, returns its code
+    - [x] `stp report` with `verbRegistry` mapping `report`→`track` but `track` NOT in `registry` → falls through to `formatUnknown` (not a crash, exit 1)
+    - [x] `stp app --help` with `verbRegistry` present → unchanged (0-regression)
+    - [x] Existing dispatch tests (no `verbRegistry`) → still pass byte-identical (0-regression)
+  - [x] Lot gate:
+    - [x] `make typecheck-cli ENV=test-feat-stp-federation-42i` PASS
+    - [x] `make lint ENV=test-feat-stp-federation-42i` — N/A (no lint-cli; typecheck-cli is the gate per Feedback Loop Lot0-D1)
+    - [x] CLI tests — existing + new: `make test-cli ENV=test-feat-stp-federation-42i` — 31 passed (8 characterization + 4 registry + 10 dispatch + 9 verb-registry)
+    - [x] Confirm: `dispatch.spec.ts` (10 tests: 4 existing + 6 new) + `registry.spec.ts` (4 cases) pass unchanged; `verb-registry.spec.ts` (9 cases) pass; characterization 8/8 byte-identical
 
 - [ ] **Lot 2 — Federation manifest + discovery loader**
   - [ ] Add `packages/cli/src/federation.ts`:
