@@ -60,15 +60,17 @@ The recommended minimum, applicable inside and outside Entropiq, is:
 - `DECISION_<TOPIC>.md`: high-cost decision with rationale and rollback.
 - `REPORT_<TOPIC>.md`: audit or publication artifact.
 
-## Decisions (pending human approval)
+## Decisions — ALL APPROVED 2026-06-04 (user sign-off)
 
-- D1: Adopt the review-state ladder above as the canonical lifecycle for specs and study artifacts.
-- D2: Adopt the capture/plan/act/observe/decide/verify/publish loop as the named loop for `rules/workflow.md` and the conductor report.
-- D3: Adopt the verification taxonomy (none/static/unit/integration/e2e/ci/uat) and require category declaration in handoff reports.
-- D4: Adopt the merge-readiness UAT state requirement (`uat_passed`/`uat_waived`/`uat_not_applicable`) for any branch changing user-visible behavior.
-- D5: Adopt the Lot 4 enforcement candidates as advisory (Layer A) for one release cycle before any blocking promotion.
-- D6: Publish portable templates (BRANCH.md, SPEC_VOL/EVOL/STUDY skeletons, subagent launch packet, decision record, report) before any CLI/plugin packaging.
-- D7: Defer public CLI/npm packaging until after Layer A hooks prove useful inside Entropiq.
+- D1: **APPROVED** — Adopt the review-state ladder above as the canonical lifecycle for specs and study artifacts.
+- D2: **APPROVED** — Adopt the capture/plan/act/observe/decide/verify/publish loop as the named loop for `rules/workflow.md` and the conductor report.
+- D3: **APPROVED** — Adopt the verification taxonomy (none/static/unit/integration/e2e/ci/uat) and require category declaration in handoff reports. (= the `VerificationRun.category` field of `@sentropic/harness`.)
+- D4: **APPROVED** — Adopt the merge-readiness UAT state requirement (`uat_passed`/`uat_waived`/`uat_not_applicable`) for any branch changing user-visible behavior. (track `acceptance`/`waived` aligns.)
+- D5: **APPROVED** — Adopt the Lot 4 enforcement candidates as advisory (Layer A: **C1/C2/C5/C7/C10**) for one release cycle before any blocking promotion; **EXCEPTION: C8 (`ENV=dev` test guard) blocking immediately** (destructive incident 2026-03-14).
+- D6: **APPROVED** — Templates-first; the `@sentropic/harness` lib (BR-42h) is built **in-repo in parallel**, npm publish deferred (D7).
+- D7: **APPROVED (deferred)** — Defer public CLI/npm packaging until after Layer A hooks prove useful in-repo.
+
+→ Unblocks **`feat/harness-core`** (BR-42h core-lib). Articulation: `SPEC_STUDY_HARNESS_WORKFLOW_ARTICULATION.md` + `SPEC_STUDY_CLI_ECOSYSTEM_GAPS.md`.
 
 ## Boundaries
 
