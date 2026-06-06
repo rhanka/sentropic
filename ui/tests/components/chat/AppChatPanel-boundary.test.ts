@@ -42,8 +42,11 @@ describe('AppChatPanel boundary', () => {
 
   it('renders a pending-only attachment band with click-to-enlarge, not a persistent session-doc band', () => {
     const source = readFileSync(appPanelPath, 'utf8');
-    expect(source).toContain('composerBandItems');
-    expect(source).toContain('chat-composer-attachment-band');
+    // Band items are now built via the @sentropic/chat-ui/documents helper and
+    // rendered by the <AttachmentBand> module component (the data-testid
+    // `chat-composer-attachment-band` now lives inside that component).
+    expect(source).toContain('buildAttachmentBandItems');
+    expect(source).toContain('<AttachmentBand');
     expect(source).toContain('openLightbox');
     expect(source).toContain('chat-image-lightbox');
     // Documents follow the same per-message model as images.
