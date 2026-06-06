@@ -1,13 +1,21 @@
+/**
+ * context-provider.test.ts — migrated from context-provider.ts (Lot 3)
+ *
+ * Tests the new context-adapter (app-side) + package helpers (neutral).
+ * Old imports from $lib/chat/context-provider are replaced by:
+ *   - detectChatRouteContext → $lib/chat/context-adapter
+ *   - upsertRouteContextEntry, toChatRouteContextKey, selectActiveChatContexts → @sentropic/chat-ui/context
+ */
 import { describe, expect, it } from 'vitest';
+import { detectChatRouteContext } from '$lib/chat/context-adapter';
 import {
-  detectChatRouteContext,
-  selectActiveChatContexts,
   toChatRouteContextKey,
   upsertRouteContextEntry,
+  selectActiveChatContexts,
   type ChatContextEntry,
-} from '$lib/chat/context-provider';
+} from '@sentropic/chat-ui/context';
 
-describe('chat context provider', () => {
+describe('chat context provider (migrated)', () => {
   it('detects route-backed chat context without reading Svelte stores', () => {
     expect(
       detectChatRouteContext({
@@ -42,32 +50,34 @@ describe('chat context provider', () => {
     ).toBeNull();
   });
 
-  it('upserts route entries and removes stale unused route context', () => {
+  it('upserts route entries and removes stale unused route context (neutral shape)', () => {
+    const nowIso = new Date(30).toISOString();
     const entries: ChatContextEntry[] = [
       {
-        contextType: 'folder',
-        contextId: 'fld_old',
+        type: 'folder',
+        id: 'fld_old',
         label: 'Old folder',
         active: true,
         used: false,
-        lastUsedAt: 10,
+        lastUsedAt: new Date(10).toISOString(),
       },
       {
-        contextType: 'organization',
-        contextId: 'org_used',
+        type: 'organization',
+        id: 'org_used',
         label: 'Used org',
         active: true,
         used: true,
-        lastUsedAt: 20,
+        lastUsedAt: new Date(20).toISOString(),
       },
     ];
 
     const result = upsertRouteContextEntry({
       entries,
-      context: { primaryContextType: 'initiative', primaryContextId: 'uc_1' },
+      contextType: 'initiative',
+      contextId: 'uc_1',
       label: 'Use case',
       previousRouteKey: 'folder:fld_old',
-      now: 30,
+      nowIso,
       used: false,
     });
 
@@ -75,24 +85,28 @@ describe('chat context provider', () => {
     expect(result.shouldLoadName).toBe(false);
     expect(result.entries).toEqual([
       {
-        contextType: 'initiative',
-        contextId: 'uc_1',
+        type: 'initiative',
+        id: 'uc_1',
         label: 'Use case',
         active: true,
         used: false,
-        lastUsedAt: 30,
+        lastUsedAt: undefined,
       },
       entries[1],
     ]);
   });
 
   it('marks active contexts as used and keeps them sorted by recent usage', () => {
+    const now1 = new Date(100).toISOString();
+    const now2 = new Date(200).toISOString();
+
     const entries = upsertRouteContextEntry({
       entries: [],
-      context: { primaryContextType: 'folder', primaryContextId: 'fld_1' },
+      contextType: 'folder',
+      contextId: 'fld_1',
       label: 'fld_1',
       previousRouteKey: null,
-      now: 100,
+      nowIso: now1,
       used: true,
     }).entries;
 
@@ -100,46 +114,47 @@ describe('chat context provider', () => {
     expect(
       upsertRouteContextEntry({
         entries,
-        context: { primaryContextType: 'folder', primaryContextId: 'fld_1' },
+        contextType: 'folder',
+        contextId: 'fld_1',
         label: 'Folder one',
         previousRouteKey: 'folder:fld_1',
-        now: 200,
+        nowIso: now2,
         used: true,
       }),
     ).toMatchObject({
       shouldLoadName: false,
       entries: [
         {
-          contextType: 'folder',
-          contextId: 'fld_1',
+          type: 'folder',
+          id: 'fld_1',
           label: 'Folder one',
           active: true,
           used: true,
-          lastUsedAt: 200,
+          lastUsedAt: now2,
         },
       ],
     });
 
     expect(
       selectActiveChatContexts([
-        { ...entries[0], active: true, used: true, lastUsedAt: 10 },
+        { ...entries[0], active: true, used: true, lastUsedAt: new Date(10).toISOString() },
         {
-          contextType: 'initiative',
-          contextId: 'uc_2',
+          type: 'initiative',
+          id: 'uc_2',
           label: 'Second',
           active: true,
           used: true,
-          lastUsedAt: 30,
+          lastUsedAt: new Date(30).toISOString(),
         },
         {
-          contextType: 'organization',
-          contextId: 'org_inactive',
+          type: 'organization',
+          id: 'org_inactive',
           label: 'Inactive',
           active: false,
           used: true,
-          lastUsedAt: 40,
+          lastUsedAt: new Date(40).toISOString(),
         },
-      ]).map((entry) => entry.contextId),
+      ]).map((entry) => entry.id),
     ).toEqual(['uc_2', 'fld_1']);
   });
 });
