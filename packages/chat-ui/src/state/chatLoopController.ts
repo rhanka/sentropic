@@ -52,7 +52,24 @@
  *     - extensionActiveTabContext (browser-specific, drives context labels)
  *     - the LocalToolPermissionRequiredError class import (app-level error types)
  *
- * Later slices add: steer (1F).
+ * Slice 1F adds: steer + model-catalog/selection.
+ *   - sendSteer(steerText, targetStreamId, opts): optimistic steer message insert +
+ *     ack management + host.postSteer + error rollback.
+ *   - loadModelCatalog(fetchFn): calls fetchFn, stores providers/models/defaults,
+ *     computes groups, coerces selection to a valid entry.
+ *   - setModelSelection(providerId, modelId): explicit selection update (from UI).
+ *   - applyUserDefaults(providerId, modelId): apply user-preference defaults
+ *     (called from app-side USER_AI_SETTINGS_UPDATED_EVENT listener).
+ *   - Snapshot gains: optimisticSteerMessages, composerSteerAck,
+ *     modelCatalogProviders, modelCatalogModels, modelCatalogGroups,
+ *     selectedProviderId, selectedModelId.
+ *
+ *   App-side concerns kept in AppChatPanel (NOT moved here):
+ *     - composerSteerInFlight flag (button-disabled UI concern)
+ *     - errorMsg display (formatApiError — Svelte i18n concern)
+ *     - input clearing / scroll scheduling (DOM concerns)
+ *     - USER_AI_SETTINGS_UPDATED_EVENT listener + removeEventListener teardown
+ *     - applyUserDefaultsForNewSessions (calls ctrl.applyUserDefaults)
  *
  * Design constraints (SPEC_EVOL_CHATUI_MODULARIZATION §3, R3):
  *   - Plain TypeScript — zero Svelte/framework imports.
@@ -84,6 +101,12 @@
  *     and callbacks (executeLocalTool, decideLocalToolPermission, postLocalToolResult).
  *     The LocalToolPermissionRequiredError class is identified by a caller-supplied
  *     predicate (isLocalToolPermissionRequired) so the controller does not import it.
+ *   - Steer (slice 1F): sendSteer is async — caller wraps in try/catch for errorMsg.
+ *     composerSteerInFlight stays app-side (button-disabled concern).
+ *     ackTimeoutMs is configurable (default 5000ms) for testability.
+ *   - Model catalog (slice 1F): loadModelCatalog takes a plain fetchFn so the
+ *     controller stays transport-agnostic. coerceSelectionToValidEntry is called
+ *     internally whenever catalog or selection changes.
  *
  * FLAG: reactivity bridge is the key architectural choice for later slices.
  *   The controller deliberately does NOT carry a Svelte store itself — it is a plain
@@ -106,6 +129,22 @@ import {
   type ChatProjectedTimelineItem,
   type ChatProjectionSteerAck,
 } from './chatProjection.js';
+
+import {
+  type ComposerSteerAck,
+  createComposerSteerAck,
+  createOptimisticSteerMessage,
+  shouldClearComposerSteerAck,
+} from './chatDraft.js';
+
+import {
+  coerceSelectionToValidEntry,
+  groupModelsByProvider,
+  type ModelCatalogGroup,
+  type ModelCatalogModel,
+  type ModelCatalogProvider,
+  type ModelProviderId,
+} from '../utils/model-selection.js';
 
 // ---------------------------------------------------------------------------
 // Opaque stream event — matches AppChatPanel's internal StreamEvent shape.
@@ -224,6 +263,11 @@ export type ControllerHostTransport = {
   stopMessage(messageId: string): Promise<void>;
   editMessage(messageId: string, content: string): Promise<void>;
   setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+  /**
+   * Post a steer message to a running assistant stream (slice 1F).
+   * Structurally compatible with ChatCoreHost.postSteer.
+   */
+  postSteer(streamId: string, message: string): Promise<void>;
 };
 
 /**
@@ -395,6 +439,60 @@ export type AttachLocalToolMachineOptions = {
 };
 
 // ---------------------------------------------------------------------------
+// Steer types — slice 1F (re-exported for app-side use)
+// ---------------------------------------------------------------------------
+
+/** Re-export so AppChatPanel imports the type from a single location. */
+export type { ComposerSteerAck };
+
+/**
+ * An optimistic steer message inserted into the timeline while the steer
+ * request is in-flight. Matches the shape produced by createOptimisticSteerMessage.
+ */
+export type ControllerOptimisticSteerMessage = {
+  id: string;
+  sessionId: string;
+  role: 'user';
+  content: string;
+  createdAt: string;
+  _localStatus: 'completed';
+  _optimisticSteerTargetAssistantId: string;
+  _optimisticSteerSubmittedAtMs: number;
+};
+
+/**
+ * Options for sendSteer (slice 1F).
+ *
+ * - sessionId: the current session (for the optimistic message factory)
+ * - targetAssistantMessageId: the id of the assistant message being steered
+ * - ackMessage: human-readable ack text (i18n — supplied by the app)
+ * - ackTimeoutMs: ms before ack is cleared (default 5000)
+ */
+export type SendSteerOptions = {
+  sessionId: string;
+  targetAssistantMessageId?: string | null;
+  ackMessage: string;
+  ackTimeoutMs?: number;
+};
+
+// ---------------------------------------------------------------------------
+// Model catalog types — slice 1F (re-exported for app-side use)
+// ---------------------------------------------------------------------------
+
+/** Re-export catalog types so AppChatPanel keeps a single import. */
+export type { ModelCatalogProvider, ModelCatalogModel, ModelCatalogGroup, ModelProviderId };
+
+/**
+ * Minimal fetch function for the model catalog — structurally compatible with
+ * ChatCoreHost.fetchModelCatalog. The controller does not import the concrete host.
+ */
+export type ControllerModelCatalogFetchFn = () => Promise<{
+  providers: Array<{ provider_id: string; label: string; status: 'ready' | 'planned' }>;
+  models: Array<{ provider_id: string; model_id: string; label: string; default_contexts: string[] }>;
+  defaults?: { provider_id?: string; model_id?: string };
+}>;
+
+// ---------------------------------------------------------------------------
 // Public state snapshot exposed to the bridge layer
 // ---------------------------------------------------------------------------
 export type ChatLoopProjectionState<
@@ -423,6 +521,44 @@ export type ChatLoopProjectionState<
    * App renders these as permission UI; decisions go through ctrl.decideLocalToolPermission.
    */
   readonly pendingLocalToolPermissionPrompts: readonly ControllerLocalToolPermissionPrompt[];
+
+  // -- Steer state (slice 1F) ------------------------------------------------
+
+  /**
+   * Optimistic steer messages in the timeline (while steer is in-flight).
+   * App clears these on session change; controller removes them on successful
+   * post + on error rollback.
+   */
+  readonly optimisticSteerMessages: readonly ControllerOptimisticSteerMessage[];
+
+  /**
+   * Current steer ACK displayed while the steer is being processed.
+   * Cleared automatically after ackTimeoutMs.
+   */
+  readonly composerSteerAck: ComposerSteerAck | null;
+
+  // -- Model catalog state (slice 1F) ----------------------------------------
+
+  /** Raw provider list from the catalog API. */
+  readonly modelCatalogProviders: readonly ModelCatalogProvider[];
+
+  /** Raw model list from the catalog API. */
+  readonly modelCatalogModels: readonly ModelCatalogModel[];
+
+  /** Grouped view (derived from providers + models). */
+  readonly modelCatalogGroups: readonly ModelCatalogGroup[];
+
+  /** Currently selected provider id. */
+  readonly selectedProviderId: ModelProviderId;
+
+  /** Currently selected model id. */
+  readonly selectedModelId: string;
+
+  /** Default provider for new sessions (from catalog defaults or user prefs). */
+  readonly defaultProviderIdForNewSession: ModelProviderId;
+
+  /** Default model for new sessions (from catalog defaults or user prefs). */
+  readonly defaultModelIdForNewSession: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -770,6 +906,82 @@ export type ChatLoopController<
     prompt: ControllerLocalToolPermissionPrompt,
     decision: string,
   ): Promise<void>;
+
+  // -- Steer (slice 1F) -------------------------------------------------------
+
+  /**
+   * Send a steer message via the host transport (slice 1F).
+   *
+   * Orchestration:
+   *   1. Builds an optimistic steer message and appends to optimisticSteerMessages.
+   *   2. Creates a composerSteerAck (shown while server processes the steer).
+   *   3. Calls host.postSteer(targetStreamId, steerText).
+   *   4. On success: removes the optimistic message. ACK clears after ackTimeoutMs.
+   *   5. On error: rolls back the optimistic message; clears ACK; re-throws so
+   *      the caller (AppChatPanel) can display an errorMsg.
+   *
+   * App-side responsibilities after this call:
+   *   - Input clearing / scroll scheduling (DOM concerns)
+   *   - composerSteerInFlight flag management (button-disabled UI concern)
+   *   - errorMsg display on catch
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  sendSteer(steerText: string, targetStreamId: string, opts: SendSteerOptions): Promise<void>;
+
+  /**
+   * Clear all optimistic steer messages (slice 1F).
+   * Call on session change, session deletion, or loadMessages.
+   */
+  clearOptimisticSteerMessages(): void;
+
+  // -- Model catalog (slice 1F) -----------------------------------------------
+
+  /**
+   * Load the model catalog via the injected fetch function (slice 1F).
+   *
+   * Orchestration:
+   *   1. Calls fetchFn() (structurally compatible with ChatCoreHost.fetchModelCatalog).
+   *   2. Stores providers + models + default selection.
+   *   3. Derives groups via groupModelsByProvider.
+   *   4. Coerces current selection to a valid entry.
+   *   5. Notifies subscribers.
+   *
+   * Throws on fetch failure — caller wraps in try/catch.
+   */
+  loadModelCatalog(fetchFn: ControllerModelCatalogFetchFn): Promise<void>;
+
+  /**
+   * Explicitly set the model selection from the UI (slice 1F).
+   * Coerces the pair to a valid catalog entry if the catalog is loaded.
+   * Does NOT update defaultProviderIdForNewSession / defaultModelIdForNewSession —
+   * those are only changed by loadModelCatalog + applyUserDefaults.
+   */
+  setModelSelection(providerId: ModelProviderId, modelId: string): void;
+
+  /**
+   * Apply user preference defaults for new sessions (slice 1F).
+   * Called from the app-side USER_AI_SETTINGS_UPDATED_EVENT listener.
+   *
+   * Mirrors AppChatPanel's applyUserDefaultsForNewSessions:
+   *   - Resolves the best matching entry in the catalog.
+   *   - Updates defaultProviderIdForNewSession + defaultModelIdForNewSession.
+   *   - If no session is active, also updates the current selection.
+   *
+   * @param sessionId — pass `null` when there is no active session (controls
+   *   whether the current selection is also updated).
+   */
+  applyUserDefaults(
+    providerId: ModelProviderId,
+    modelId: string,
+    opts: { sessionId: string | null },
+  ): void;
+
+  /**
+   * Reset model selection to the stored session defaults (slice 1F).
+   * Call on new-session creation or session deletion.
+   */
+  resetModelSelectionToDefaults(): void;
 };
 
 // ---------------------------------------------------------------------------
@@ -840,6 +1052,24 @@ export function createChatLoopController<
   const ltLocalToolPermissionRetriesInFlight = new Set<string>();
 
   // -------------------------------------------------------------------------
+  // Steer state (slice 1F)
+  // -------------------------------------------------------------------------
+  let steerOptimisticMessages: ControllerOptimisticSteerMessage[] = [];
+  let steerComposerAck: ComposerSteerAck | null = null;
+  let steerAckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // -------------------------------------------------------------------------
+  // Model catalog state (slice 1F)
+  // -------------------------------------------------------------------------
+  let mcProviders: ModelCatalogProvider[] = [];
+  let mcModels: ModelCatalogModel[] = [];
+  let mcGroups: ModelCatalogGroup[] = [];
+  let mcSelectedProviderId: ModelProviderId = 'openai';
+  let mcSelectedModelId = 'gpt-4.1-nano';
+  let mcDefaultProviderId: ModelProviderId = 'openai';
+  let mcDefaultModelId = 'gpt-4.1-nano';
+
+  // -------------------------------------------------------------------------
   // Snapshot construction — always returns a new object reference
   // -------------------------------------------------------------------------
   const buildSnapshot = (): ChatLoopProjectionState<Message, RuntimeSummary> => ({
@@ -850,6 +1080,17 @@ export function createChatLoopController<
     projectedTimelineItems,
     localToolStatesById: ltLocalToolStatesById,
     pendingLocalToolPermissionPrompts: ltPendingLocalToolPermissionPrompts,
+    // Steer (slice 1F)
+    optimisticSteerMessages: steerOptimisticMessages,
+    composerSteerAck: steerComposerAck,
+    // Model catalog (slice 1F)
+    modelCatalogProviders: mcProviders,
+    modelCatalogModels: mcModels,
+    modelCatalogGroups: mcGroups,
+    selectedProviderId: mcSelectedProviderId,
+    selectedModelId: mcSelectedModelId,
+    defaultProviderIdForNewSession: mcDefaultProviderId,
+    defaultModelIdForNewSession: mcDefaultModelId,
   });
 
   let currentSnapshot = buildSnapshot();
@@ -1996,6 +2237,181 @@ export function createChatLoopController<
   };
 
   // -------------------------------------------------------------------------
+  // Steer public API (slice 1F)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Internal: schedule clearing the steer ack after ackTimeoutMs.
+   * Mirrors AppChatPanel's setTimeout(() => { if (shouldClearComposerSteerAck...) }, 5000).
+   */
+  const steerScheduleAckClear = (expectedCreatedAtMs: number, timeoutMs: number): void => {
+    if (steerAckTimer) clearTimeout(steerAckTimer);
+    steerAckTimer = setTimeout(() => {
+      steerAckTimer = null;
+      if (shouldClearComposerSteerAck(steerComposerAck, expectedCreatedAtMs)) {
+        steerComposerAck = null;
+        notify();
+      }
+    }, timeoutMs);
+  };
+
+  const sendSteer = async (
+    steerText: string,
+    targetStreamId: string,
+    opts: SendSteerOptions,
+  ): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+
+    const createdAtMs = Date.now();
+
+    // 1. Create and set the steer ACK
+    steerComposerAck = createComposerSteerAck({
+      streamId: targetStreamId,
+      message: opts.ackMessage,
+      createdAtMs,
+    });
+
+    // 2. Build + append optimistic steer message
+    const optimistic = createOptimisticSteerMessage({
+      sessionId: opts.sessionId,
+      content: steerText,
+      targetAssistantMessageId: opts.targetAssistantMessageId ?? null,
+      targetStreamId,
+      nowMs: createdAtMs,
+      nowIso: new Date(createdAtMs).toISOString(),
+    }) as ControllerOptimisticSteerMessage;
+
+    steerOptimisticMessages = [...steerOptimisticMessages, optimistic];
+    notify();
+
+    try {
+      // 3. Call host
+      await transport.postSteer(targetStreamId, steerText);
+
+      // 4. On success: remove optimistic message
+      steerOptimisticMessages = steerOptimisticMessages.filter(
+        (m) => m.id !== optimistic.id,
+      );
+      notify();
+    } catch (error) {
+      // 5. On error: rollback optimistic message, clear ACK, re-throw
+      steerOptimisticMessages = steerOptimisticMessages.filter(
+        (m) => m.id !== optimistic.id,
+      );
+      steerComposerAck = null;
+      if (steerAckTimer) {
+        clearTimeout(steerAckTimer);
+        steerAckTimer = null;
+      }
+      notify();
+      throw error;
+    }
+
+    // Schedule ACK clear (only runs on success path)
+    steerScheduleAckClear(createdAtMs, opts.ackTimeoutMs ?? 5000);
+  };
+
+  const clearOptimisticSteerMessages = (): void => {
+    if (steerOptimisticMessages.length === 0) return;
+    steerOptimisticMessages = [];
+    notify();
+  };
+
+  // -------------------------------------------------------------------------
+  // Model catalog public API (slice 1F)
+  // -------------------------------------------------------------------------
+
+  /** Internal: coerce + apply selection; notify. */
+  const mcCoerceAndApply = (providerId: ModelProviderId, modelId: string): void => {
+    if (mcModels.length === 0) {
+      mcSelectedProviderId = providerId;
+      mcSelectedModelId = modelId;
+      return;
+    }
+    const coerced = coerceSelectionToValidEntry(mcModels, providerId, modelId);
+    mcSelectedProviderId = coerced.providerId;
+    mcSelectedModelId = coerced.modelId;
+  };
+
+  const loadModelCatalog = async (fetchFn: ControllerModelCatalogFetchFn): Promise<void> => {
+    const payload = await fetchFn();
+
+    mcProviders = (Array.isArray(payload.providers) ? payload.providers : []) as ModelCatalogProvider[];
+    mcModels = (Array.isArray(payload.models) ? payload.models : []) as ModelCatalogModel[];
+    mcGroups = groupModelsByProvider(mcProviders, mcModels);
+
+    // Resolve initial selection from catalog defaults
+    const initialProviderId = (
+      payload.defaults?.provider_id ??
+      mcProviders[0]?.provider_id ??
+      'openai'
+    ) as ModelProviderId;
+    const initialModelId =
+      payload.defaults?.model_id ??
+      mcModels.find((entry) => entry.provider_id === initialProviderId)?.model_id ??
+      mcModels[0]?.model_id ??
+      mcSelectedModelId;
+
+    mcDefaultProviderId = initialProviderId;
+    mcDefaultModelId = initialModelId;
+    mcCoerceAndApply(initialProviderId, initialModelId);
+    notify();
+  };
+
+  const setModelSelection = (providerId: ModelProviderId, modelId: string): void => {
+    mcCoerceAndApply(providerId, modelId);
+    notify();
+  };
+
+  const applyUserDefaults = (
+    providerId: ModelProviderId,
+    modelId: string,
+    opts: { sessionId: string | null },
+  ): void => {
+    if (!modelId) return;
+
+    let nextProviderId: ModelProviderId = providerId;
+    let nextModelId = modelId;
+
+    if (mcModels.length > 0) {
+      const exactMatch = mcModels.find(
+        (entry) => entry.provider_id === providerId && entry.model_id === modelId,
+      );
+      if (!exactMatch) {
+        const modelMatch = mcModels.find((entry) => entry.model_id === modelId);
+        if (modelMatch) {
+          nextProviderId = modelMatch.provider_id;
+          nextModelId = modelMatch.model_id;
+        } else {
+          const providerFallback =
+            mcModels.find((entry) => entry.provider_id === providerId) ?? mcModels[0];
+          if (providerFallback) {
+            nextProviderId = providerFallback.provider_id;
+            nextModelId = providerFallback.model_id;
+          }
+        }
+      }
+    }
+
+    mcDefaultProviderId = nextProviderId;
+    mcDefaultModelId = nextModelId;
+
+    // Only update current selection when no active session
+    if (!opts.sessionId) {
+      mcSelectedProviderId = nextProviderId;
+      mcSelectedModelId = nextModelId;
+    }
+    notify();
+  };
+
+  const resetModelSelectionToDefaults = (): void => {
+    mcSelectedProviderId = mcDefaultProviderId;
+    mcSelectedModelId = mcDefaultModelId;
+    notify();
+  };
+
+  // -------------------------------------------------------------------------
   // Initial timeline build (empty state)
   // -------------------------------------------------------------------------
   recomputeTimeline();
@@ -2034,5 +2450,13 @@ export function createChatLoopController<
     detachLocalToolMachine,
     handleLocalToolStreamEvent,
     decideLocalToolPermission,
+    // Steer (slice 1F)
+    sendSteer,
+    clearOptimisticSteerMessages,
+    // Model catalog (slice 1F)
+    loadModelCatalog,
+    setModelSelection,
+    applyUserDefaults,
+    resetModelSelectionToDefaults,
   };
 }

@@ -80,6 +80,20 @@ Ratify the `ChatCoreHost` typed contract (transport + streaming + local-tool + s
   - [x] Extend `packages/chat-ui/tests/chat-loop-controller.spec.ts`: add describe block "host lifecycle (slice 1D)" — 17 deterministic tests: send golden, optimistic insert, handle return, bootstrapRun paths (userMsg/truncate/append), retry args+truncation+status, stop, edit, setFeedback (up/down/clear), no-transport throws, assistantMessage result exposed, buildAssistantMessage receives correct sessionId.
   - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors; `make test-chat-ui` → 509/509 pass (52 in chat-loop-controller.spec); `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker flake, stash-verified identical at HEAD)
 
+- [x] **Lot 1 Slice 1E — local-tool state machine → controller (ZERO-DOM)**
+  - [x] Extend `ChatLoopController` with local-tool state machine: permission request lifecycle (`requestLocalToolPermission`, `acknowledgeLocalToolPermission`), retry logic, timer management, `postLocalToolResultWithRetry` orchestration.
+  - [x] AppChatPanel delegates all local-tool state to controller; keeps UI callbacks (permission dialog, scroll).
+  - [x] Extend `packages/chat-ui/tests/chat-loop-controller.spec.ts`: add describe block "local-tool state machine (slice 1E)".
+  - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors; `make test-chat-ui` → 525/525 pass; `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker flake, stash-verified)
+
+- [x] **Lot 1 Slice 1F — steer + model-catalog/selection → controller (ZERO-DOM)**
+  - [x] Extend `ChatLoopController` with steer orchestration: `sendSteer(text, targetStreamId, opts)`, `clearOptimisticSteerMessages()`. Controller owns: optimistic steer message insert, ACK lifecycle (`ComposerSteerAck`, ACK timer), `host.postSteer` call. AppChatPanel keeps: composer input clearing, scroll, `composerSteerInFlight`, `errorMsg`.
+  - [x] Extend `ChatLoopController` with model-catalog/selection: `loadModelCatalog(fetchFn)`, `setModelSelection(providerId, modelId)`, `applyUserDefaults(providerId, modelId, opts)`, `resetModelSelectionToDefaults()`. Controller owns: `modelCatalogProviders/Models/Groups`, `selectedProviderId/ModelId`, `defaultProviderId/ModelId`, `coerceSelectionToValidEntry` reactive. AppChatPanel keeps: `USER_AI_SETTINGS_UPDATED_EVENT` listener, `applyUserDefaultsForNewSessions` (feeds defaults into controller).
+  - [x] Export new types: `ComposerSteerAck`, `ControllerOptimisticSteerMessage`, `SendSteerOptions`, `ControllerModelCatalogFetchFn`, `ModelCatalogProvider`, `ModelCatalogModel`, `ModelCatalogGroup`, `ModelProviderId`.
+  - [x] Surface all new state fields on `ChatLoopProjectionState` snapshot.
+  - [x] Extend `packages/chat-ui/tests/chat-loop-controller.spec.ts`: add describe blocks 12 "steer (slice 1F)" (7 tests) + 13 "model catalog (slice 1F)" (11 tests). Total: 543/543 pass.
+  - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors (6 pre-existing warnings); `make test-chat-ui` → 543/543 pass; `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker flake, stash-verified)
+
 ## Feedback Loop
 - None.
 
