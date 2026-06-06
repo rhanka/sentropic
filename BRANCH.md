@@ -70,10 +70,10 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
   - [x] Tests `tests/checks/scope-check.spec.ts` — matrix: in-scope ✓ / forbidden ✗ / allowed-beats-forbidden / conditional−exception ✗ / conditional+grammar-exception ✓ / wrong-grammar-exception ✗ / unknown ✗. `tests/checks/branch-check.spec.ts` — match/mismatch/bypass/prefix + `toVerificationRun` golden.
   - [x] Gate: `make test-harness ENV=test-feat-harness-core` (21 tests green) + `make typecheck-harness`.
 
-- [ ] **Lot 4 — Genericity proof (2nd profile asserts DIVERGENCE)**
-  - [ ] `tests/profile/genericity.spec.ts` — same input to C2 under `sentropic` vs `stub`; **assert divergent classification/exception outcomes** (not both-pass).
-  - [ ] `tests/artifacts/verification-run.spec.ts` — golden shape; superset of track `TestRun{commit,env,runner,result,at}`.
-  - [ ] Gate: `make test-harness` + `make typecheck-harness`.
+- [x] **Lot 4 — Genericity proof (2nd profile asserts DIVERGENCE)**
+  - [x] `tests/profile/genericity.spec.ts` — same input under `sentropic` vs `stub` asserts DIVERGENT outcomes on 3 profile-read dimensions (conditionalRequiresException, forbiddenPathDefaults, branchMatch). Not both-pass.
+  - [x] `tests/artifacts/verification-run.spec.ts` — golden shape; superset of track `TestRun{commit,env,runner,result,at}`.
+  - [x] Gate: `make test-harness ENV=test-feat-harness-core` (25 tests green) + `make typecheck-harness`.
 
 - [ ] **Lot 5a — bin + make passthrough (BR42h-EX1)**
   - [ ] `src/bin/harness.ts` + declare `bin: { harness: "./dist/bin/harness.js" }` (now the file exists). `harness check scope|branch`.
