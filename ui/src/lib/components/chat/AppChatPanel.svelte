@@ -71,11 +71,16 @@
   import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
-    detectChatRouteContext,
-    selectActiveChatContexts,
-    upsertRouteContextEntry,
-    type ChatContextEntry,
-  } from '$lib/chat/context-provider';
+    createContextModule,
+    type ContextModule,
+  } from '@sentropic/chat-ui/context';
+  import type { ChatContextEntry } from '@sentropic/chat-ui/state/chat-context';
+  import {
+    createContextHost,
+    buildStoreLookup,
+    contextTypeIconKey,
+    type ChatContextType,
+  } from '$lib/chat/context-adapter';
   import {
     buildCommentThreads as buildChatCommentThreads,
     findAssignedMentionFromText,
@@ -115,7 +120,7 @@
   import ModelSelector from '@sentropic/chat-ui/components/ModelSelector.svelte';
   import MessageActions from '@sentropic/chat-ui/components/MessageActions.svelte';
   import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
-  import type { ChatContextEntry as NeutralContextEntry } from '@sentropic/chat-ui/state/chat-context';
+  // ChatContextEntry from @sentropic/chat-ui/state/chat-context imported above via context-adapter chain.
   import {
     computeModelSelectorWidthCh,
     type ModelProviderId,
@@ -363,101 +368,37 @@
   // retryMessage, stopMessage, editMessage, setFeedback without knowing the host.
   ctrl.attachHost({ transport: chatCoreHost });
 
-  const getContextIcon = (type: ChatContextEntry['contextType']) => {
-    if (type === 'organization') return Building2;
-    if (type === 'folder') return Folder;
-    if (type === 'initiative') return Lightbulb;
-    if (type === 'executive_summary') return ScrollText;
+  const getContextIcon = (type: string) => {
+    const key = contextTypeIconKey(type);
+    if (key === 'organization') return Building2;
+    if (key === 'folder') return Folder;
+    if (key === 'initiative') return Lightbulb;
+    if (key === 'executive_summary') return ScrollText;
     return FileText;
   };
 
-  const contextNameByKey = new Map<string, string>();
-  const contextNameLoading = new Set<string>();
-
-  const getContextLabelFromStores = (
-    type: ChatContextEntry['contextType'],
-    contextId: string,
-  ) => {
-    if (!contextId) return '';
-    if (type === 'organization') {
-      const org = $organizationsStore.find((o) => o.id === contextId);
-      return org?.name || '';
-    }
-    if (type === 'folder') {
-      const folder = $foldersStore.find((f) => f.id === contextId);
-      return folder?.name || '';
-    }
-    if (type === 'initiative') {
-      const useCase = $initiativesStore.find((u) => u.id === contextId);
-      return useCase?.data?.name || useCase?.name || '';
-    }
-    if (type === 'executive_summary') {
-      const folder = $foldersStore.find((f) => f.id === contextId);
-      return folder?.name
-        ? $_('chat.context.executiveSummaryPrefix', {
-            values: { name: folder.name },
-          })
-        : '';
-    }
-    return '';
-  };
-
-  const loadContextName = async (
-    type: ChatContextEntry['contextType'],
-    contextId: string,
-  ) => {
-    const key = `${type}:${contextId}`;
-    if (!contextId || contextNameByKey.has(key) || contextNameLoading.has(key))
-      return;
-    contextNameLoading.add(key);
-    try {
-      if (type === 'organization') {
-        const org = await apiGet<{ name?: string }>(
-          `/organizations/${contextId}`,
-        );
-        if (org?.name) contextNameByKey.set(key, org.name);
-      } else if (type === 'folder' || type === 'executive_summary') {
-        const folder = await apiGet<{ name?: string }>(`/folders/${contextId}`);
-        if (folder?.name) {
-          contextNameByKey.set(
-            key,
-            type === 'executive_summary'
-              ? $_('chat.context.executiveSummaryPrefix', {
-                  values: { name: folder.name },
-                })
-              : folder.name,
-          );
-        }
-      } else if (type === 'initiative') {
-        const useCase = await apiGet<{
-          data?: { name?: string };
-          name?: string;
-        }>(`/initiatives/${contextId}`);
-        const name = useCase?.data?.name || useCase?.name;
-        if (name) contextNameByKey.set(key, name);
-      }
-    } catch {
-      // ignore
-    } finally {
-      contextNameLoading.delete(key);
-    }
-  };
-
-  const refreshContextLabels = () => {
-    contextEntries = contextEntries.map((c) => {
-      const key = `${c.contextType}:${c.contextId}`;
-      const fromStore = getContextLabelFromStores(
-        c.contextType,
-        c.contextId || '',
-      );
-      const cached = contextNameByKey.get(key) || '';
-      const nextLabel = fromStore || cached || c.label;
-      if (!nextLabel || nextLabel === c.contextId) {
-        void loadContextName(c.contextType, c.contextId || '');
-      }
-      return { ...c, label: nextLabel };
-    });
-  };
+  // Context module (D3) — replaces contextEntries / lastRouteContextKey / contextNameByKey.
+  // Instantiated with the sentropic ContextHost (context-adapter.ts).
+  // The host callbacks read reactive Svelte store values via closures.
+  const contextHost = createContextHost(
+    () => ({
+      routeId: $contextStore.route.id,
+      params: $contextStore.params,
+      currentFolderId: $currentFolderId,
+    }),
+    (type: string, id: string) =>
+      buildStoreLookup(
+        $organizationsStore,
+        $foldersStore,
+        $initiativesStore,
+        $_,
+      )(type, id),
+    $_,
+  );
+  const contextModule: ContextModule = createContextModule(contextHost);
+  // Subscribe to the module entries store; keeps contextEntries reactive.
+  let contextEntries: ChatContextEntry[] = [];
+  contextModule.entries.subscribe((v) => { contextEntries = v; });
 
   export let sessions: ChatSession[] = [];
   export let contextStore: Readable<AppContext>;
@@ -868,12 +809,11 @@
   // eslint-disable-next-line no-unused-vars
   let handleUserAISettingsUpdated: ((_: Event) => void) | null = null;
   let handleGoogleDriveConnectionUpdated: ((_: Event) => void) | null = null;
-  let contextEntries: ChatContextEntry[] = [];
+  // contextEntries declared above via contextModule subscription.
   let sortedContexts: ChatContextEntry[] = [];
   let toolEnabledById: Record<string, boolean> = {};
   let extensionRestrictedToolset = false;
-  let prefsKey = '';
-  let lastRouteContextKey: string | null = null;
+  // prefsKey / lastRouteContextKey now managed by contextModule.
 
   // Projection/history state (slice 1B) is owned by the controller.
   // Aliases below make existing references compile without edits to every site.
@@ -1018,11 +958,12 @@
     syncDraftFromInput();
   }
 
+  // detectContextFromRoute — delegates to contextHost.detectContext (context-adapter).
   const detectContextFromRoute = () =>
-    detectChatRouteContext({
+    contextHost.detectContext({
       routeId: $contextStore.route.id,
       params: $contextStore.params,
-      currentFolderId: $currentFolderId,
+      folderId: $currentFolderId,
     });
 
   const TOOL_TOGGLES: ToolToggle[] = [
@@ -1210,67 +1151,28 @@
       : EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
   };
 
-  const getPrefsKey = (id: string | null) =>
-    `chat_session_prefs:${id || 'new'}`;
-
   const loadPrefs = (id: string | null) => {
-    if (typeof localStorage === 'undefined') return;
-    const key = getPrefsKey(id);
-    prefsKey = key;
     const hasExtensionRuntime = isLocalToolRuntimeAvailable();
     extensionRestrictedToolset = mode === 'ai' && hasExtensionRuntime;
-    try {
-      if (id && !localStorage.getItem(key)) {
-        const draft = localStorage.getItem(getPrefsKey(null));
-        if (draft) {
-          localStorage.setItem(key, draft);
-        }
+    // Delegate context prefs loading to the context module (handles legacy migration).
+    const raw = contextModule.loadPrefs(id) as Record<string, unknown> | null;
+    if (raw) {
+      if (raw['toolEnabledById'] && typeof raw['toolEnabledById'] === 'object') {
+        toolEnabledById = raw['toolEnabledById'] as Record<string, boolean>;
       }
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        contexts?: ChatContextEntry[];
-        toolEnabledById?: Record<string, boolean>;
-        extensionRestrictedToolset?: boolean;
-      };
-      if (Array.isArray(parsed.contexts)) {
-        contextEntries = parsed.contexts
-          .filter((c) => !!c.contextType)
-          .map((c) => ({
-            ...c,
-            // Migrate stale "usecase" context type to "initiative"
-            contextType: c.contextType === ('usecase' as any) ? 'initiative' : c.contextType,
-            used: typeof c.used === 'boolean' ? c.used : true,
-          }));
-      }
-      if (
-        parsed.toolEnabledById &&
-        typeof parsed.toolEnabledById === 'object'
-      ) {
-        toolEnabledById = parsed.toolEnabledById;
-      }
-      if (typeof parsed.extensionRestrictedToolset === 'boolean') {
+      if (typeof raw['extensionRestrictedToolset'] === 'boolean') {
         extensionRestrictedToolset = hasExtensionRuntime
           ? true
-          : parsed.extensionRestrictedToolset;
+          : (raw['extensionRestrictedToolset'] as boolean);
       }
-    } catch {
-      // ignore
     }
   };
 
-  const savePrefs = () => {
-    if (!prefsKey || typeof localStorage === 'undefined') return;
-    const payload = {
-      contexts: contextEntries,
+  const savePrefs = (sessionId: string | null = null) => {
+    contextModule.savePrefs(sessionId, {
       toolEnabledById,
       extensionRestrictedToolset,
-    };
-    try {
-      localStorage.setItem(prefsKey, JSON.stringify(payload));
-    } catch {
-      // ignore
-    }
+    });
   };
 
   const isExtensionNewSessionMode = () =>
@@ -1405,7 +1307,7 @@
     const defaults = getToolToggleDefaults();
     if (Object.keys(toolEnabledById).length === 0) {
       toolEnabledById = defaults;
-      savePrefs();
+      savePrefs(sessionId);
       return;
     }
     const next = { ...toolEnabledById };
@@ -1426,83 +1328,34 @@
     }
     if (changed) {
       toolEnabledById = next;
-      savePrefs();
+      savePrefs(sessionId);
     }
   };
 
+  // updateContextFromRoute / markCurrentContextUsed / toggleContextActive
+  // now delegate to the context module (D3). No more local contextEntries mutation.
+
   const updateContextFromRoute = () => {
-    const context = detectContextFromRoute();
-    const contextType = context?.primaryContextType ?? null;
-    const contextId = context?.primaryContextId ?? '';
-    const label =
-      contextType && contextId
-        ? getContextLabelFromStores(contextType, contextId) ||
-          contextNameByKey.get(`${contextType}:${contextId}`) ||
-          contextId
-        : '';
-    const result = upsertRouteContextEntry({
-      entries: contextEntries,
-      context,
-      label,
-      previousRouteKey: lastRouteContextKey,
-      now: Date.now(),
-      used: false,
+    contextModule.updateFromRoute({
+      routeId: $contextStore.route.id,
+      params: $contextStore.params,
+      folderId: $currentFolderId,
     });
-    contextEntries = result.entries;
-    lastRouteContextKey = result.nextRouteKey;
-    if (result.shouldLoadName && contextType && contextId) {
-      void loadContextName(contextType, contextId);
-    }
-    savePrefs();
+    savePrefs(sessionId);
   };
 
   const markCurrentContextUsed = () => {
-    const context = detectContextFromRoute();
-    if (!context?.primaryContextType || !context.primaryContextId) return;
-    const contextType = context.primaryContextType;
-    const contextId = context.primaryContextId;
-    const label =
-      getContextLabelFromStores(contextType, contextId) ||
-      contextNameByKey.get(`${contextType}:${contextId}`) ||
-      contextId;
-    const result = upsertRouteContextEntry({
-      entries: contextEntries,
-      context,
-      label,
-      previousRouteKey: lastRouteContextKey,
-      now: Date.now(),
-      used: true,
+    contextModule.markUsed({
+      routeId: $contextStore.route.id,
+      params: $contextStore.params,
+      folderId: $currentFolderId,
     });
-    contextEntries = result.entries;
-    lastRouteContextKey = result.nextRouteKey;
-    if (result.shouldLoadName) {
-      void loadContextName(contextType, contextId);
-    }
-    savePrefs();
+    savePrefs(sessionId);
   };
 
   $: sortedContexts = [...contextEntries];
 
-  /**
-   * adaptToNeutral — converts an app ChatContextEntry to the library-neutral shape.
-   * lastUsedAt is a number (epoch ms) in the app; we convert to ISO-8601 for the package.
-   */
-  const adaptToNeutral = (c: ChatContextEntry): NeutralContextEntry => ({
-    type: c.contextType,
-    id: c.contextId,
-    label: c.label,
-    active: c.active,
-    used: c.used,
-    lastUsedAt: c.lastUsedAt > 0 ? new Date(c.lastUsedAt).toISOString() : undefined,
-  });
-
-  /**
-   * findAppEntry — maps a neutral entry back to the app entry for toggleContextActive.
-   */
-  const findAppEntry = (e: NeutralContextEntry): ChatContextEntry =>
-    contextEntries.find((c) => c.contextType === e.type && c.contextId === e.id)!;
-
-  const getActiveContexts = () => selectActiveChatContexts(contextEntries);
+  const getActiveContexts = () => contextModule.getActiveContexts();
 
   const getEnabledToolIds = () => {
     return computeEnabledToolIds({
@@ -1514,23 +1367,14 @@
   };
 
   const toggleContextActive = (entry: ChatContextEntry) => {
-    const now = Date.now();
-    contextEntries = contextEntries.map((c) =>
-      c.contextType === entry.contextType && c.contextId === entry.contextId
-        ? {
-            ...c,
-            active: !c.active,
-            lastUsedAt: !c.active ? now : c.lastUsedAt,
-          }
-        : c,
-    );
-    savePrefs();
+    contextModule.toggleActive(entry.type, entry.id);
+    savePrefs(sessionId);
   };
 
   const toggleTool = (id: string) => {
     const isEnabled = toolEnabledById[id] !== false;
     toolEnabledById = { ...toolEnabledById, [id]: !isEnabled };
-    savePrefs();
+    savePrefs(sessionId);
   };
 
   const isNearBottom = (): boolean => {
@@ -3553,17 +3397,17 @@
         payload.sessionId = sessionId;
       }
 
-      if (focusContext?.contextType && focusContext.contextId) {
-        payload.primaryContextType = focusContext.contextType;
-        payload.primaryContextId = focusContext.contextId;
+      if (focusContext?.type && focusContext.id) {
+        payload.primaryContextType = focusContext.type;
+        payload.primaryContextId = focusContext.id;
       }
 
       if (activeContexts.length > 0) {
         payload.contexts = activeContexts
-          .filter((c) => c.contextType && c.contextId)
+          .filter((c) => c.type && c.id)
           .map((c) => ({
-            contextType: c.contextType,
-            contextId: c.contextId ?? '',
+            contextType: c.type,
+            contextId: c.id ?? '',
           }));
       }
 
@@ -3812,16 +3656,14 @@
     });
   });
 
-  $: if (mode === 'ai' && sessionId && prefsKey !== getPrefsKey(sessionId)) {
+  // Track last loaded prefs session to avoid re-loading on every reactive tick.
+  let lastLoadedPrefsSession: string | null | undefined = undefined;
+
+  $: if (mode === 'ai' && sessionId !== undefined && sessionId !== lastLoadedPrefsSession) {
+    lastLoadedPrefsSession = sessionId;
     loadPrefs(sessionId);
     ensureDefaultToolToggles();
-    refreshContextLabels();
-  }
-
-  $: if (mode === 'ai' && !sessionId && prefsKey !== getPrefsKey(null)) {
-    loadPrefs(null);
-    ensureDefaultToolToggles();
-    refreshContextLabels();
+    void contextModule.refreshLabels();
   }
 
   $: if (mode === 'ai' && showComposerMenu) {
@@ -3871,7 +3713,8 @@
     mode === 'ai' &&
     ($organizationsStore || $foldersStore || $initiativesStore)
   ) {
-    refreshContextLabels();
+    // Refresh labels when Svelte stores hydrate (module owns label cache + store patches).
+    void contextModule.refreshLabels();
   }
 
   onDestroy(() => {
@@ -4944,9 +4787,9 @@
                 </div>
               {:else}
                 <ChatContextPicker
-                  entries={sortedContexts.map(adaptToNeutral)}
-                  iconFor={(e: NeutralContextEntry) => getContextIcon(e.type as ChatContextEntry['contextType'])}
-                  onToggle={(e: NeutralContextEntry) => toggleContextActive(findAppEntry(e))}
+                  entries={sortedContexts}
+                  iconFor={(e: ChatContextEntry) => getContextIcon(e.type)}
+                  onToggle={(e: ChatContextEntry) => toggleContextActive(e)}
                   maxHeightStyle={composerMenuContextsMaxH || 'max-height:10rem'}
                 >
                   <svelte:fragment slot="leading">
