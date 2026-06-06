@@ -53,14 +53,22 @@
   import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
-    composerBandItems,
-    deleteDocument,
     getDownloadUrl,
     listDocuments,
     uploadDocument,
     type ContextDocumentItem,
-    type UnifiedAttachmentItem,
   } from '$lib/utils/documents';
+  import AttachmentBand from '@sentropic/chat-ui/documents/AttachmentBand.svelte';
+  import GeneratedFileCardTray from '@sentropic/chat-ui/documents/GeneratedFileCardTray.svelte';
+  import {
+    createComposerAttachmentId,
+    buildAttachmentBandItems,
+    buildSentAttachments,
+    handleComposerPasteImages,
+    composerAttachmentListReducer,
+  } from '@sentropic/chat-ui/documents';
+  import type { UnifiedAttachmentItem } from '@sentropic/chat-ui/documents';
+  import { createDocumentHostAdapter } from '$lib/chat/documentHostAdapter';
   import {
     attachGoogleDriveDocuments,
     fetchGoogleDrivePickerConfig,
@@ -100,7 +108,6 @@
     createGoogleDriveChatAttachInput,
     extractGeneratedFileCardsFromEvents,
     extractGeneratedFileCardsFromRuntimeSummary as collectGeneratedFileCardsFromRuntimeSummary,
-    getGeneratedFileFormatLabel,
     normalizeGeneratedFileCard,
   } from '$lib/chat/document-adapter';
   import {
@@ -645,7 +652,7 @@
     composerSteerStreamId.trim().length > 0;
   $: composerRunInFlight = sending || composerSteerReady;
   $: composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
-  $: attachmentBand = composerBandItems(composerAttachments);
+  $: attachmentBand = buildAttachmentBandItems(composerAttachments);
   $: composerPrimaryActionState = resolveComposerPrimaryAction({
     mode,
     input,
@@ -1928,8 +1935,12 @@
     return res.sessionId;
   };
 
-  const createComposerAttachmentId = () =>
-    `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Document host adapter — wraps REST upload/delete and docx download.
+  // Drive picking stays in AppChatPanel (heavier orchestration).
+  const documentHost = createDocumentHostAdapter({
+    getSessionId: () => sessionId,
+    ensureSessionTarget: ensureSessionDocumentTarget,
+  });
 
   const createComposerAttachmentPreviewUrl = (file: File): string | undefined => {
     try {
@@ -1950,26 +1961,37 @@
     }
   };
 
+  // Attachment list mutations — all routed through composerAttachmentListReducer
+  // from @sentropic/chat-ui/documents. Preview URL lifecycle (blob: revocation)
+  // stays app-side because it touches browser APIs outside the reducer's scope.
+
   const clearComposerAttachments = () => {
     for (const attachment of composerAttachments) {
       revokeComposerAttachmentPreview(attachment);
     }
-    composerAttachments = [];
+    const [next] = composerAttachmentListReducer(composerAttachments, { type: 'clear' });
+    composerAttachments = next as ChatComposerAttachmentDraft[];
   };
 
   const removeComposerAttachment = (attachmentId: string) => {
-    const attachment = composerAttachments.find((item) => item.id === attachmentId);
-    if (attachment) revokeComposerAttachmentPreview(attachment);
-    composerAttachments = composerAttachments.filter((item) => item.id !== attachmentId);
+    const [next, removed] = composerAttachmentListReducer(composerAttachments, {
+      type: 'remove',
+      id: attachmentId,
+    });
+    if (removed) revokeComposerAttachmentPreview(removed);
+    composerAttachments = next as ChatComposerAttachmentDraft[];
   };
 
   const updateComposerAttachment = (
     attachmentId: string,
     patch: Partial<ChatComposerAttachmentDraft>,
   ) => {
-    composerAttachments = composerAttachments.map((attachment) =>
-      attachment.id === attachmentId ? { ...attachment, ...patch } : attachment,
-    );
+    const [next] = composerAttachmentListReducer(composerAttachments, {
+      type: 'update',
+      id: attachmentId,
+      patch,
+    });
+    composerAttachments = next as ChatComposerAttachmentDraft[];
   };
 
   const getAttachmentImageSrc = (attachment: ChatMessageAttachment): string => {
@@ -1984,22 +2006,9 @@
     return '';
   };
 
-  const getBandItemImageSrc = (item: UnifiedAttachmentItem): string => {
-    if (item.previewUrl) return item.previewUrl;
-    if (item.documentId) {
-      return getDownloadUrl({
-        documentId: item.documentId,
-        workspaceId: getScopedWorkspaceIdForUser(),
-      });
-    }
-    return '';
-  };
-
-  const getBandItemStatusLabel = (item: UnifiedAttachmentItem): string => {
-    if (item.status === 'failed') return $_('common.error');
-    if (item.status === 'ready') return item.mimeType;
-    return $_('common.loading');
-  };
+  // Resolve image URL for band item — delegates to documentHost adapter.
+  const getBandItemImageSrc = (item: UnifiedAttachmentItem): string =>
+    documentHost.resolveAttachmentSrc(item) as string;
 
   // Removing a pending attachment also deletes its just-uploaded context
   // document so no orphaned (model-visible) session document is left behind.
@@ -2008,10 +2017,7 @@
     const documentId = item.documentId;
     if (!documentId) return;
     try {
-      await deleteDocument({
-        documentId,
-        workspaceId: getScopedWorkspaceIdForUser(),
-      });
+      await documentHost.deleteUploadedFile(documentId);
       sessionDocs = sessionDocs.filter((d) => d.id !== documentId);
     } catch (err) {
       sessionDocsError = err instanceof Error ? err.message : String(err);
@@ -2126,10 +2132,8 @@
 
   const handleComposerPaste = (event: ClipboardEvent) => {
     if (mode !== 'ai') return;
-    const files = Array.from(event.clipboardData?.files ?? []).filter((file) =>
-      isSupportedImageAttachmentMimeType(file.type),
-    );
-    if (files.length === 0) return;
+    const { handled, files } = handleComposerPasteImages(event);
+    if (!handled) return;
     event.preventDefault();
     for (const file of files) {
       void attachImageFileToComposer(file, 'paste');
@@ -3339,23 +3343,7 @@
 
   const sendMessage = async () => {
     const text = input.trim();
-    const sentAttachments: ChatMessageAttachment[] = composerAttachments
-      .filter(
-        (attachment) =>
-          attachment.state === 'ready' &&
-          (attachment.kind === 'image' || attachment.kind === 'file') &&
-          typeof attachment.documentId === 'string' &&
-          attachment.documentId.trim().length > 0,
-      )
-      .map((attachment) => ({
-        kind: attachment.kind,
-        source: 'context_document',
-        documentId: attachment.documentId,
-        fileName: attachment.fileName,
-        mimeType: attachment.mimeType,
-        sizeBytes: attachment.sizeBytes,
-        state: 'ready' as const,
-      }));
+    const sentAttachments = buildSentAttachments(composerAttachments);
     if ((!text && sentAttachments.length === 0) || (sending && !composerSteerReady)) return;
 
     sending = true;
@@ -4255,24 +4243,11 @@
                     onGeneratedFile={(card) => handleGeneratedFileCard(m.id, card)}
                   />
                   {#if item.isTerminal && item.isLastAssistantSegment}
-                    {@const generatedFileCards = generatedFileCardsByMessageId.get(m.id) ?? []}
-                    {#each generatedFileCards as card (card.jobId)}
-                      <div class="rounded border border-slate-200 bg-white px-2 py-1.5 flex items-center gap-2 max-w-[14rem] mt-1">
-                        <FileText class="w-4 h-4 text-primary shrink-0" />
-                        <div class="min-w-0 flex-1">
-                          <div class="text-xs font-medium text-slate-900 truncate">{card.fileName}</div>
-                          <div class="text-[10px] text-slate-500">{getGeneratedFileFormatLabel(card.format)}</div>
-                        </div>
-                        <button
-                          class="ml-auto text-primary hover:bg-slate-100 rounded p-1"
-                          type="button"
-                          aria-label={$_('common.download')}
-                          on:click={() => downloadGeneratedFile(card)}
-                        >
-                          <Download class="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    {/each}
+                    <GeneratedFileCardTray
+                      cards={generatedFileCardsByMessageId.get(m.id) ?? []}
+                      onDownload={(card) => void downloadGeneratedFile(card)}
+                      downloadLabel={$_('common.download')}
+                    />
                   {/if}
                   <MessageActions
                     role="assistant"
@@ -4603,61 +4578,16 @@
                 {googleDriveConnectionError}
               </div>
             {/if}
-            {#if attachmentBand.length > 0}
-              <div
-                class="mb-2 flex flex-wrap gap-2"
-                data-testid="chat-composer-attachment-band"
-              >
-                {#each attachmentBand as item (item.key)}
-                  {@const imageSrc =
-                    item.kind === 'image' ? getBandItemImageSrc(item) : ''}
-                  <div
-                    class="flex h-14 min-w-0 max-w-[12rem] items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700"
-                  >
-                    {#if item.kind === 'image' && imageSrc}
-                      <button
-                        type="button"
-                        class="h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                        aria-label={$_('chat.attachments.enlarge')}
-                        title={$_('chat.attachments.enlarge')}
-                        on:click={() => openLightbox(imageSrc, item.fileName)}
-                      >
-                        <img
-                          src={imageSrc}
-                          alt={item.fileName}
-                          class="h-10 w-10 object-cover"
-                        />
-                      </button>
-                    {:else}
-                      <div
-                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500"
-                      >
-                        {#if item.kind === 'image'}
-                          <ImageIcon class="h-4 w-4" />
-                        {:else}
-                          <FileText class="h-4 w-4" />
-                        {/if}
-                      </div>
-                    {/if}
-                    <div class="min-w-0 flex-1">
-                      <div class="truncate font-medium">{item.fileName}</div>
-                      <div class="truncate text-slate-400">
-                        {getBandItemStatusLabel(item)}
-                      </div>
-                    </div>
-                    <button
-                      class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      type="button"
-                      aria-label={$_('chat.documents.delete.ariaLabel')}
-                      title={$_('common.delete')}
-                      on:click={() => void removeBandItem(item)}
-                    >
-                      <X class="w-3 h-3" />
-                    </button>
-                  </div>
-                {/each}
-              </div>
-            {/if}
+            <AttachmentBand
+              items={attachmentBand}
+              onResolveSrc={getBandItemImageSrc}
+              onEnlarge={(item, src) => openLightbox(src, item.fileName)}
+              onRemove={(item) => void removeBandItem(item)}
+              removeLabel={$_('chat.documents.delete.ariaLabel')}
+              enlargeLabel={$_('chat.attachments.enlarge')}
+              loadingLabel={$_('common.loading')}
+              errorLabel={$_('common.error')}
+            />
             <EditableInput
               markdown={true}
               bind:value={input}
