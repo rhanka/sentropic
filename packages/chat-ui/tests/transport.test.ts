@@ -64,6 +64,19 @@ describe('createDefaultTransport', () => {
     expect(source.url).not.toContain('fromSeq=');
   });
 
+  it('openStream is relative-safe when baseUrl is empty (no URL() throw)', () => {
+    const transport = createDefaultTransport('');
+    expect(() => transport.openStream('session-1', 7)).not.toThrow();
+    const source = transport.openStream('session-1', 7) as unknown as FakeEventSource;
+    expect(source.url).toBe('/chat/sessions/session-1/stream?fromSeq=7');
+  });
+
+  it('openStream supports a relative baseUrl prefix', () => {
+    const transport = createDefaultTransport('/api/v1');
+    const source = transport.openStream('s2') as unknown as FakeEventSource;
+    expect(source.url).toBe('/api/v1/chat/sessions/s2/stream');
+  });
+
   it('postMessage returns a Promise that resolves to a Response', async () => {
     const transport = createDefaultTransport('https://api.example.com/api/v1');
     const result = transport.postMessage('session-1', { content: 'hello' });
