@@ -12,6 +12,15 @@
     apiDelete,
     ApiError,
   } from '$lib/utils/api';
+  import { createSentropicChatCoreHost } from '$lib/chat/chat-core-host-adapter';
+  import {
+    createChatLoopController,
+    type ControllerLocalToolPermissionPrompt,
+  } from '@sentropic/chat-ui/state/chatLoopController';
+
+  // ChatCoreHost instance — wraps the existing API utils (auth-aware) with the
+  // ChatCoreHost contract. Zero behavior change: same requests, same error shapes.
+  const chatCoreHost = createSentropicChatCoreHost();
   import { session } from '$lib/stores/session';
   import {
     listComments,
@@ -87,17 +96,9 @@
     normalizeGeneratedFileCard,
   } from '$lib/chat/document-adapter';
   import {
-    chatMessageFeedbackUrl,
-    chatMessageRetryUrl,
-    chatMessageStopUrl,
-    chatMessageToolResultsUrl,
-    chatMessageUrl,
-    chatMessagesUrl,
     chatSessionCheckpointCreateUrl,
     chatSessionCheckpointRestoreUrl,
     chatSessionCheckpointsUrl,
-    chatSessionHistoryUrl,
-    chatSessionUrl,
     chatSessionsUrl,
     formatChatApiError,
   } from '$lib/chat/session-adapter';
@@ -109,7 +110,6 @@
     isLocalToolRuntimeAvailable,
     LocalToolPermissionRequiredError,
     type LocalToolPermissionDecision,
-    type LocalToolPermissionRequest,
     type LocalToolName,
   } from '@sentropic/chat-ui/stores/localTools';
   import ModelSelector from '@sentropic/chat-ui/components/ModelSelector.svelte';
@@ -117,11 +117,8 @@
   import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
   import type { ChatContextEntry as NeutralContextEntry } from '@sentropic/chat-ui/state/chat-context';
   import {
-    groupModelsByProvider,
     computeModelSelectorWidthCh,
-    coerceSelectionToValidEntry,
     type ModelProviderId,
-    type ModelCatalogProvider,
     type ModelCatalogModel,
     type ModelCatalogGroup,
   } from '@sentropic/chat-ui/utils/model-selection';
@@ -165,12 +162,8 @@
   import { downloadGeneratedFile, type GeneratedFileCard } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { generateInjectedScript } from '$lib/upstream/injected-script';
-  import { postChatSteer } from '@sentropic/chat-ui/utils/chat-steer';
-  import {
-    filterPermissionPromptsForPendingStream,
-    parsePendingLocalToolCallsFromStatusPayload,
-    shouldResetLocalToolStateForFreshRound,
-  } from '@sentropic/chat-ui/utils/localToolStreamSync';
+  // filterPermissionPromptsForPendingStream / parsePendingLocalToolCallsFromStatusPayload /
+  // shouldResetLocalToolStateForFreshRound removed in slice 1E — logic inlined in the controller.
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
@@ -188,16 +181,12 @@
     hasCheckpointMutationDelta,
   } from '$lib/utils/checkpointDelta';
   import {
-    appendLiveProjectionEvent,
-    countLinkedSteerMessages,
     mergeProjectionHistoryEvents,
-    projectAssistantRunSegments,
     type ProjectedRunSegment,
   } from '@sentropic/chat-ui/utils/chat-run-projection';
-  import {
-    buildProjectedTimeline as buildChatProjectedTimeline,
-    type ChatMessageAttachment,
-    type ChatProjectedTimelineItem,
+  import type {
+    ChatMessageAttachment,
+    ChatProjectedTimelineItem,
   } from '@sentropic/chat-ui/state/chatProjection';
   import {
     createImageAttachmentDraft,
@@ -206,11 +195,8 @@
     type ChatComposerAttachmentDraft,
   } from '@sentropic/chat-ui/state/chatAttachments';
   import {
-    createComposerSteerAck,
-    createOptimisticSteerMessage,
     resolveComposerHeightState,
     resolveComposerPrimaryAction,
-    shouldClearComposerSteerAck,
     shouldShowSteerAction,
     syncDraftFromInput as syncChatDraftFromInput,
     type ComposerPrimaryActionState,
@@ -339,27 +325,14 @@
     message: string;
     createdAtMs: number;
   };
-  type ProjectedAssistantComputation = {
-    signature: string;
-    segments: ProjectedRunSegment[];
-    linkedSteerCount: number;
-  };
-  type LocalToolStreamState = {
-    streamId: string;
-    name: LocalToolName;
-    argsText: string;
-    lastSequence: number;
-    firstSeenAt: number;
-    executed: boolean;
-  };
-  type LocalToolPermissionPrompt = {
-    toolCallId: string;
-    streamId: string;
-    name: LocalToolName;
-    args: unknown;
-    request: LocalToolPermissionRequest;
-    createdAt: number;
-  };
+  // ProjectedAssistantComputation (with signature cache) was removed in slice 1B.
+  // The controller owns the cache internally via ChatProjectionComputation.
+  // LocalToolStreamState and LocalToolPermissionPrompt removed in slice 1E —
+  // replaced by ControllerLocalToolStreamState / ControllerLocalToolPermissionPrompt
+  // from the controller (imported above). AppChatPanel uses the controller's types
+  // so the template remains compatible with $ctrl.pendingLocalToolPermissionPrompts.
+  // LocalToolPermissionPrompt alias kept for template compatibility:
+  type LocalToolPermissionPrompt = ControllerLocalToolPermissionPrompt;
   type IconComponent = typeof FileText;
 
   type ToolToggle = {
@@ -370,14 +343,20 @@
     icon: IconComponent;
   };
 
-  type ModelCatalogPayload = {
-    providers: ModelCatalogProvider[];
-    models: ModelCatalogModel[];
-    defaults: {
-      provider_id: ModelProviderId;
-      model_id: string;
-    };
-  };
+  // ModelCatalogPayload type removed in slice 1F — controller owns catalog fetch.
+
+  // ---------------------------------------------------------------------------
+  // Headless projection controller (slice 1B).
+  // Owns: messages, initialEventsByMessageId, projectedStreamEventsById,
+  //       projection signature cache, projectedTimelineItems.
+  // Implements the Svelte store protocol (subscribe) so $ctrl auto-subscribes.
+  // AppChatPanel reads state from $ctrl and routes all mutations through ctrl.*
+  // methods — the template renders identically from controller-backed fields.
+  // ---------------------------------------------------------------------------
+  const ctrl = createChatLoopController<LocalMessage, RuntimeSegmentSummary>();
+  // Slice 1D: inject the host transport so the controller can call sendMessage,
+  // retryMessage, stopMessage, editMessage, setFeedback without knowing the host.
+  ctrl.attachHost({ transport: chatCoreHost });
 
   const getContextIcon = (type: ChatContextEntry['contextType']) => {
     if (type === 'organization') return Building2;
@@ -592,19 +571,19 @@
   const buildCommentThreads = (items: CommentItem[]) =>
     buildChatCommentThreads(items);
 
-  let messages: LocalMessage[] = [];
+  // messages is now controller-backed (slice 1B). Mutations go through ctrl.*
+  // The $ctrl auto-subscription fires on every controller notify().
+  $: messages = $ctrl.messages as LocalMessage[];
+  // pendingLocalToolPermissionPrompts is now controller-backed (slice 1E).
+  $: pendingLocalToolPermissionPrompts = $ctrl.pendingLocalToolPermissionPrompts as LocalToolPermissionPrompt[];
   let loadingMessages = false;
   let sending = false;
   let stoppingMessageId: string | null = null;
   let errorMsg: string | null = null;
   let lastShownErrorMsg: string | null = null;
-  let modelCatalogProviders: ModelCatalogProvider[] = [];
-  let modelCatalogModels: ModelCatalogModel[] = [];
-  let modelCatalogGroups: ModelCatalogGroup[] = [];
-  let selectedProviderId: ModelProviderId = 'openai';
-  let selectedModelId = 'gpt-4.1-nano';
-  let defaultProviderIdForNewSession: ModelProviderId = 'openai';
-  let defaultModelIdForNewSession = 'gpt-4.1-nano';
+  // modelCatalogProviders/modelCatalogModels/modelCatalogGroups/selectedProviderId/selectedModelId
+  // defaultProviderIdForNewSession/defaultModelIdForNewSession moved to controller (slice 1F).
+  // Access via $ctrl.modelCatalog*, $ctrl.selectedProviderId, $ctrl.selectedModelId etc.
   let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
   let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
@@ -662,13 +641,14 @@
   let commentThreadIndex = -1;
   let hasPreviousThread = false;
   let hasNextThread = false;
-  let projectedTimelineItems: ProjectedTimelineItem[] = [];
+  // projectedTimelineItems is now controller-owned (slice 1B).
+  $: projectedTimelineItems = $ctrl.projectedTimelineItems as ProjectedTimelineItem[];
   let historyTimelineItems: ProjectedTimelineItem[] = [];
   let stagedHistoryTimelineItems: ProjectedTimelineItem[] = [];
   let historyHydrationInFlight = false;
   let historyHydrationSwapPending = false;
   let historyHydrationStickBottom = false;
-  let optimisticSteerMessages: LocalMessage[] = [];
+  // optimisticSteerMessages moved to controller (slice 1F); access via $ctrl.optimisticSteerMessages.
   let generatedFileCardsByMessageId = new Map<string, GeneratedFileCard[]>();
   let previousAiWorkspaceId: string | null | undefined = undefined;
   let workspaceSessionRescopeInFlight = false;
@@ -693,12 +673,18 @@
   };
   $: activeAssistantMessage =
     [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
+  // projectedTimelineItems is driven by the controller's subscribe() callback
+  // (via $ctrl auto-subscription). Steer-ack + optimistic-steer now controller-owned (slice 1F).
+  // Rebuild the timeline when controller steer state or runtime summaries change.
   $: {
-    projectionEventsVersion;
-    initialEventsByMessageId;
-    composerSteerAck;
-    optimisticSteerMessages;
-    projectedTimelineItems = buildProjectedTimeline(messages);
+    $ctrl.composerSteerAck;
+    $ctrl.optimisticSteerMessages;
+    runtimeSummaryByMessageId;
+    projectedTimelineItems = ctrl.buildTimeline({
+      optimisticSteerMessages: $ctrl.optimisticSteerMessages as LocalMessage[],
+      runtimeSummariesByMessageId: runtimeSummaryByMessageId,
+      composerSteerAck: $ctrl.composerSteerAck,
+    }) as ProjectedTimelineItem[];
   }
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
@@ -727,72 +713,21 @@
     composerRunInFlight,
   });
 
-  const hasAssistantContent = (message: LocalMessage): boolean =>
-    typeof message.content === 'string' && message.content.trim().length > 0;
+  // hasAssistantContent, getLocalToolEligibleStreamIds and isKnownAssistantStream removed in slice 1E —
+  // all three are now owned by the controller's local-tool machine (reads from controller messages).
 
-  const getLocalToolEligibleStreamIds = () =>
-    new Set(
-      messages
-        .filter((message) => {
-          if (message.role !== 'assistant') return false;
-          const status = getMessageStatus(message);
-          if (status === 'failed') return false;
-          if (status === 'processing') return true;
-          return !hasAssistantContent(message);
-        })
-        .map((message) => message._streamId ?? message.id),
-    );
+  // ---------------------------------------------------------------------------
+  // Local-tool machine helpers — kept app-side (slice 1E)
+  // These functions bridge the app-specific ApiError retry and i18n label
+  // resolution with the controller's generic local-tool machine.
+  // ---------------------------------------------------------------------------
 
-  const isKnownAssistantStream = (streamId: string): boolean =>
-    messages.some(
-      (message) =>
-        message.role === 'assistant' &&
-        (message._streamId ?? message.id) === streamId &&
-        getMessageStatus(message) !== 'failed',
-    );
-
-  const clearLocalToolStateForStream = (streamId: string) => {
-    for (const [toolCallId, state] of localToolStatesById.entries()) {
-      if (state.streamId !== streamId) continue;
-      const timerId = localToolExecutionTimersById.get(toolCallId);
-      if (timerId) clearTimeout(timerId);
-      localToolExecutionTimersById.delete(toolCallId);
-      localToolStatesById.delete(toolCallId);
-      localToolInFlight.delete(toolCallId);
-      localToolPermissionRetriesInFlight.delete(toolCallId);
-    }
-    pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-      (prompt) => prompt.streamId !== streamId,
-    );
-  };
-
-  const resetLocalToolInterceptionState = () => {
-    localToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
-    localToolExecutionTimersById.clear();
-    localToolStatesById.clear();
-    localToolInFlight.clear();
-    localToolPermissionRetriesInFlight.clear();
-    pendingLocalToolPermissionPrompts = [];
-  };
-
-  const parseBufferedToolArgs = (
-    rawArgs: string,
-  ): { ready: boolean; value: unknown } => {
-    const trimmed = rawArgs.trim();
-    if (!trimmed) return { ready: true, value: {} };
-    try {
-      return {
-        ready: true,
-        value: JSON.parse(trimmed),
-      };
-    } catch {
-      return {
-        ready: false,
-        value: null,
-      };
-    }
-  };
-
+  /**
+   * App-side result poster: wraps chatCoreHost.postLocalToolResult with
+   * the 12-attempt retry on retryable race conditions (ApiError 400 "not pending").
+   * Injected into the controller via attachLocalToolMachine so the controller
+   * stays transport-agnostic (no ApiError import in the package).
+   */
   const postLocalToolResultWithRetry = async (
     streamId: string,
     toolCallId: string,
@@ -803,10 +738,7 @@
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        await apiPost(chatMessageToolResultsUrl(streamId), {
-          toolCallId,
-          result,
-        });
+        await chatCoreHost.postLocalToolResult(streamId, toolCallId, result);
         return;
       } catch (error) {
         lastError = error;
@@ -826,220 +758,21 @@
       : new Error('Unknown local tool result forwarding error');
   };
 
-  const hasPendingPermissionPromptForStream = (
-    streamId: string,
-    exceptToolCallId?: string,
-  ): boolean =>
-    pendingLocalToolPermissionPrompts.some(
-      (item) =>
-        item.streamId === streamId &&
-        (!exceptToolCallId || item.toolCallId !== exceptToolCallId),
-    );
-
-  const hasInFlightToolForStream = (
-    streamId: string,
-    exceptToolCallId?: string,
-  ): boolean => {
-    for (const inFlightToolCallId of localToolInFlight) {
-      if (exceptToolCallId && inFlightToolCallId === exceptToolCallId) continue;
-      const state = localToolStatesById.get(inFlightToolCallId);
-      if (!state) continue;
-      if (state.streamId === streamId) return true;
-    }
-    return false;
-  };
-
-  const getNextPendingToolCallIdForStream = (
-    streamId: string,
-  ): string | null => {
-    const pending = Array.from(localToolStatesById.entries())
-      .filter(([_, state]) => state.streamId === streamId && !state.executed)
-      .sort(([, a], [, b]) => {
-        if (a.firstSeenAt !== b.firstSeenAt) {
-          return a.firstSeenAt - b.firstSeenAt;
-        }
-        return a.lastSequence - b.lastSequence;
-      });
-    return pending[0]?.[0] ?? null;
-  };
-
-  const scheduleNextToolForStream = (streamId: string, delayMs = 80) => {
-    const nextToolCallId = getNextPendingToolCallIdForStream(streamId);
-    if (!nextToolCallId) return;
-    scheduleBufferedLocalToolExecution(nextToolCallId, delayMs);
-  };
-
-  const tryExecuteBufferedLocalTool = async (toolCallId: string) => {
-    const localToolState = localToolStatesById.get(toolCallId);
-    if (!localToolState || localToolState.executed) return;
-    if (localToolInFlight.has(toolCallId)) return;
-    if (!isLocalToolRuntimeAvailable()) return;
-    const firstPendingToolCallId = getNextPendingToolCallIdForStream(
-      localToolState.streamId,
-    );
-    if (firstPendingToolCallId && firstPendingToolCallId !== toolCallId) return;
-    if (hasPendingPermissionPromptForStream(localToolState.streamId, toolCallId))
-      return;
-    if (hasInFlightToolForStream(localToolState.streamId, toolCallId)) return;
-
-    if (!localToolState.argsText.trim() && localToolState.name === 'tab_type') {
-      const elapsed = Date.now() - localToolState.firstSeenAt;
-      if (elapsed < 1500) {
-        scheduleBufferedLocalToolExecution(toolCallId, 200);
-        return;
-      }
-      localToolState.executed = true;
-      localToolStatesById.set(toolCallId, localToolState);
-      try {
-        await postLocalToolResultWithRetry(localToolState.streamId, toolCallId, {
-          status: 'error',
-          error:
-            'tab_type arguments are missing (expected at least text, and optionally selector/x/y).',
-        });
-      } catch (forwardError) {
-        const reason =
-          forwardError instanceof Error
-            ? forwardError.message
-            : String(forwardError);
-        console.warn(
-          `Failed to forward missing-args error for ${localToolState.name} (${toolCallId}): ${reason}`,
-        );
-      }
-      scheduleNextToolForStream(localToolState.streamId);
-      return;
-    }
-
-    const parsed = parseBufferedToolArgs(localToolState.argsText);
-    if (!parsed.ready) {
-      scheduleBufferedLocalToolExecution(toolCallId, 120);
-      return;
-    }
-
-    localToolState.executed = true;
-    localToolStatesById.set(toolCallId, localToolState);
-    localToolInFlight.add(toolCallId);
-
-    try {
-      const localResult = await executeLocalTool(
-        toolCallId,
-        localToolState.name,
-        parsed.value,
-        { streamId: localToolState.streamId },
-      );
-      await postLocalToolResultWithRetry(
-        localToolState.streamId,
-        toolCallId,
-        localResult,
-      );
-    } catch (error) {
-      if (error instanceof LocalToolPermissionRequiredError) {
-        const prompt: LocalToolPermissionPrompt = {
-          toolCallId,
-          streamId: localToolState.streamId,
-          name: localToolState.name,
-          args: parsed.value,
-          request: error.request,
-          createdAt: Date.now(),
-        };
-        const next = pendingLocalToolPermissionPrompts.filter(
-          (item) => item.toolCallId !== toolCallId,
-        );
-        pendingLocalToolPermissionPrompts = [...next, prompt];
-        return;
-      }
-
-      const reason = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `Failed to execute local tool ${localToolState.name} (${toolCallId}): ${reason}`,
-      );
-      try {
-        await postLocalToolResultWithRetry(
-          localToolState.streamId,
-          toolCallId,
-          { status: 'error', error: reason },
-        );
-      } catch (forwardError) {
-        const forwardReason =
-          forwardError instanceof Error
-            ? forwardError.message
-            : String(forwardError);
-        console.warn(
-          `Failed to forward local tool error for ${localToolState.name} (${toolCallId}): ${forwardReason}`,
-        );
-      }
-    } finally {
-      localToolInFlight.delete(toolCallId);
-      scheduleNextToolForStream(localToolState.streamId);
-    }
-  };
-
+  /**
+   * Thin wrapper so the template can still call handleLocalToolPermissionDecision(prompt, decision).
+   * Delegates to ctrl.decideLocalToolPermission (slice 1E).
+   * Kept app-side because the template imports are Svelte-specific.
+   */
   const handleLocalToolPermissionDecision = async (
     prompt: LocalToolPermissionPrompt,
     decision: LocalToolPermissionDecision,
   ) => {
-    if (localToolPermissionRetriesInFlight.has(prompt.toolCallId)) return;
-    localToolPermissionRetriesInFlight.add(prompt.toolCallId);
-    try {
-      await decideLocalToolPermission(prompt.request.requestId, decision);
-      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-        (item) => item.toolCallId !== prompt.toolCallId,
-      );
-
-      if (decision === 'deny_once' || decision === 'deny_always') {
-        await postLocalToolResultWithRetry(prompt.streamId, prompt.toolCallId, {
-          status: 'error',
-          error: `Permission denied for ${prompt.request.toolName} on ${prompt.request.origin}.`,
-        });
-        return;
-      }
-
-      const localResult = await executeLocalTool(
-        prompt.toolCallId,
-        prompt.name,
-        prompt.args,
-        { streamId: prompt.streamId },
-      );
-      await postLocalToolResultWithRetry(
-        prompt.streamId,
-        prompt.toolCallId,
-        localResult,
-      );
-    } catch (error) {
-      if (error instanceof LocalToolPermissionRequiredError) {
-        const nextPrompt: LocalToolPermissionPrompt = {
-          ...prompt,
-          request: error.request,
-          createdAt: Date.now(),
-        };
-        pendingLocalToolPermissionPrompts = [
-          ...pendingLocalToolPermissionPrompts.filter(
-            (item) => item.toolCallId !== prompt.toolCallId,
-          ),
-          nextPrompt,
-        ];
-        return;
-      }
-      const reason = error instanceof Error ? error.message : String(error);
-      try {
-        await postLocalToolResultWithRetry(prompt.streamId, prompt.toolCallId, {
-          status: 'error',
-          error: reason,
-        });
-      } catch (forwardError) {
-        const forwardReason =
-          forwardError instanceof Error
-            ? forwardError.message
-            : String(forwardError);
-        console.warn(
-          `Failed to forward permission decision error for ${prompt.name} (${prompt.toolCallId}): ${forwardReason}`,
-        );
-      }
-    } finally {
-      localToolPermissionRetriesInFlight.delete(prompt.toolCallId);
-      scheduleNextToolForStream(prompt.streamId);
-    }
+    void ctrl.decideLocalToolPermission(prompt, decision);
   };
 
+  /**
+   * Resolve i18n details for a permission prompt (app-side — uses $_ which is Svelte-only).
+   */
   const resolvePermissionPromptDetails = (
     prompt: LocalToolPermissionPrompt,
   ): Array<{ label: string; value: string }> => {
@@ -1076,191 +809,16 @@
     return rows;
   };
 
-  const scheduleBufferedLocalToolExecution = (
-    toolCallId: string,
-    delayMs = 120,
-  ) => {
-    const existingTimer = localToolExecutionTimersById.get(toolCallId);
-    if (existingTimer) clearTimeout(existingTimer);
-    const timerId = setTimeout(() => {
-      localToolExecutionTimersById.delete(toolCallId);
-      void tryExecuteBufferedLocalTool(toolCallId);
-    }, delayMs);
-    localToolExecutionTimersById.set(toolCallId, timerId);
-  };
-
-  const handleLocalToolCallStart = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    const toolCallId = String((event as any)?.data?.tool_call_id ?? '').trim();
-    const toolNameRaw = String((event as any)?.data?.name ?? '').trim();
-    const argsChunk =
-      typeof (event as any)?.data?.args === 'string'
-        ? (event as any).data.args
-        : '';
-    const sequenceRaw = Number((event as any)?.sequence);
-    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
-
-    if (!streamId || !toolCallId || !isLocalToolName(toolNameRaw)) return;
-
-    const previous = localToolStatesById.get(toolCallId);
-    if (previous && sequence <= previous.lastSequence) return;
-    const isFreshRound = shouldResetLocalToolStateForFreshRound(
-      previous,
-      sequence,
-    );
-
-    localToolStatesById.set(toolCallId, {
-      streamId,
-      name: toolNameRaw,
-      argsText:
-        previous && !isFreshRound
-          ? `${previous.argsText}${argsChunk}`
-          : argsChunk,
-      lastSequence: sequence,
-      firstSeenAt: previous?.firstSeenAt ?? Date.now(),
-      executed: isFreshRound ? false : (previous?.executed ?? false),
-    });
-    scheduleBufferedLocalToolExecution(toolCallId);
-  };
-
-  const handleLocalToolCallDelta = (event: StreamHubEvent) => {
-    const toolCallId = String((event as any)?.data?.tool_call_id ?? '').trim();
-    if (!toolCallId) return;
-    const previous = localToolStatesById.get(toolCallId);
-    if (!previous) return;
-
-    const sequenceRaw = Number((event as any)?.sequence);
-    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : previous.lastSequence;
-    if (sequence <= previous.lastSequence) return;
-
-    const deltaChunk =
-      typeof (event as any)?.data?.delta === 'string'
-        ? (event as any).data.delta
-        : '';
-    localToolStatesById.set(toolCallId, {
-      ...previous,
-      argsText: `${previous.argsText}${deltaChunk}`,
-      lastSequence: sequence,
-    });
-    scheduleBufferedLocalToolExecution(toolCallId);
-  };
-
-  const handleLocalToolStatusEvent = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId || !isKnownAssistantStream(streamId)) return;
-
-    const data = (event as any)?.data;
-    const state = String(data?.state ?? '').trim();
-    const sequenceRaw = Number((event as any)?.sequence);
-    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
-
-    if (state === 'awaiting_local_tool_results') {
-      const pendingCalls = parsePendingLocalToolCallsFromStatusPayload(
-        streamId,
-        sequence,
-        data,
-        isLocalToolName,
-      );
-      const pendingToolCallIds = new Set(
-        pendingCalls.map((call) => call.toolCallId),
-      );
-      pendingLocalToolPermissionPrompts = filterPermissionPromptsForPendingStream(
-        pendingLocalToolPermissionPrompts,
-        streamId,
-        pendingToolCallIds,
-      );
-
-      for (const call of pendingCalls) {
-        const previous = localToolStatesById.get(call.toolCallId);
-        const isFreshRound = shouldResetLocalToolStateForFreshRound(
-          previous,
-          sequence,
-        );
-        localToolStatesById.set(call.toolCallId, {
-          streamId,
-          name: call.name as LocalToolName,
-          argsText:
-            previous &&
-            !isFreshRound &&
-            previous.argsText.trim().length > 0
-              ? previous.argsText
-              : call.argsText,
-          lastSequence: Math.max(previous?.lastSequence ?? 0, call.sequence),
-          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
-          executed: isFreshRound ? false : (previous?.executed ?? false),
-        });
-      }
-
-      scheduleNextToolForStream(streamId, 0);
-      return;
-    }
-
-    if (state === 'local_tool_result_received') {
-      const toolCallId = String(data?.tool_call_id ?? '').trim();
-      if (!toolCallId) return;
-      const timerId = localToolExecutionTimersById.get(toolCallId);
-      if (timerId) clearTimeout(timerId);
-      localToolExecutionTimersById.delete(toolCallId);
-      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-        (prompt) => prompt.toolCallId !== toolCallId,
-      );
-      localToolStatesById.delete(toolCallId);
-      localToolInFlight.delete(toolCallId);
-      localToolPermissionRetriesInFlight.delete(toolCallId);
-      return;
-    }
-
-    if (state === 'response_created') {
-      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-        (prompt) => prompt.streamId !== streamId,
-      );
-    }
-  };
-
-  const handleLocalToolStreamEvent = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId) return;
-
-    if (event.type === 'status') {
-      handleLocalToolStatusEvent(event);
-      return;
-    }
-
-    if (event.type === 'done' || event.type === 'error') {
-      clearLocalToolStateForStream(streamId);
-      return;
-    }
-
-    if (event.type !== 'tool_call_start' && event.type !== 'tool_call_delta')
-      return;
-    if (!isLocalToolRuntimeAvailable()) return;
-
-    const localToolEligibleStreamIds = getLocalToolEligibleStreamIds();
-    if (!localToolEligibleStreamIds.has(streamId)) return;
-
-    if (event.type === 'tool_call_start') {
-      handleLocalToolCallStart(event);
-      return;
-    }
-    handleLocalToolCallDelta(event);
-  };
-
-  const handleProjectionStreamEvent = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId || !isTrackedAssistantStreamId(streamId)) return;
-    const sequence = Number((event as any)?.sequence);
-    if (!Number.isFinite(sequence)) return;
-    appendProjectedLiveEvent(streamId, {
-      eventType: String((event as any)?.type ?? '').trim(),
-      data: (event as any)?.data ?? {},
-      sequence,
-      createdAt: undefined,
-    });
-    if (event.type === 'done' || event.type === 'error') {
-      void handleAssistantTerminal(streamId, event.type);
-    }
-    scheduleScrollToBottom();
-  };
+  // handleProjectionStreamEvent removed in slice 1C — logic moved to
+  // ctrl.attachStream({ onProjectionEvent, onTerminal }). The controller now
+  // owns the event routing and message terminal-patching; AppChatPanel only
+  // provides the scroll callbacks via the optional hooks.
+  // handleLocalToolStreamEvent / clearLocalToolStateForStream / resetLocalToolInterceptionState
+  // / parseBufferedToolArgs / hasPendingPermissionPromptForStream / hasInFlightToolForStream
+  // / getNextPendingToolCallIdForStream / scheduleNextToolForStream / tryExecuteBufferedLocalTool
+  // / scheduleBufferedLocalToolExecution / handleLocalToolCallStart / handleLocalToolCallDelta
+  // / handleLocalToolStatusEvent removed in slice 1E — logic moved to the controller.
+  // AppChatPanel now calls ctrl.handleLocalToolStreamEvent(event) from the streamHub handler.
 
   $: commentPlaceholder = !$workspaceCanComment
     ? $_('chat.comments.placeholder.disabledViewer')
@@ -1312,15 +870,12 @@
   let prefsKey = '';
   let lastRouteContextKey: string | null = null;
 
-  // Historique batch (Option C): messageId -> events
-  let initialEventsByMessageId = new Map<string, StreamEvent[]>();
+  // Projection/history state (slice 1B) is owned by the controller.
+  // Aliases below make existing references compile without edits to every site.
+  // These getters read from the controller snapshot; mutations use ctrl.* methods.
+  $: initialEventsByMessageId = $ctrl.initialEventsByMessageId as Map<string, StreamEvent[]>;
   let runtimeSummaryByMessageId = new Map<string, RuntimeSegmentSummary>();
-  let projectedStreamEventsById = new Map<string, StreamEvent[]>();
-  let projectedAssistantComputationByMessageId = new Map<
-    string,
-    ProjectedAssistantComputation
-  >();
-  let projectionEventsVersion = 0;
+  $: projectedStreamEventsById = $ctrl.projectedStreamEventsById as Map<string, StreamEvent[]>;
   const loadedRuntimeDetailsMessageIds = new Set<string>();
   const loadingRuntimeDetailsMessageIds = new Set<string>();
   let historyTimelineSessionId: string | null = null;
@@ -1328,107 +883,43 @@
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
   let composerSteerInFlight = false;
-  let composerSteerAck: ComposerSteerAck | null = null;
-  const jobPollInFlight = new Set<string>();
+  // composerSteerAck moved to controller (slice 1F); access via $ctrl.composerSteerAck.
+  // jobPollInFlight removed in slice 1C — tracking moved to the controller.
   let localToolsHubKey = '';
-  const localToolStatesById = new Map<string, LocalToolStreamState>();
-  const localToolInFlight = new Set<string>();
-  const localToolExecutionTimersById = new Map<
-    string,
-    ReturnType<typeof setTimeout>
-  >();
-  let pendingLocalToolPermissionPrompts: LocalToolPermissionPrompt[] = [];
-  const localToolPermissionRetriesInFlight = new Set<string>();
+  // localToolStatesById, localToolInFlight, localToolExecutionTimersById,
+  // pendingLocalToolPermissionPrompts, localToolPermissionRetriesInFlight
+  // removed in slice 1E — local-tool machine moved to the controller.
+  // Access via $ctrl.localToolStatesById / $ctrl.pendingLocalToolPermissionPrompts.
   let extensionActiveTabContext: {
     tabId: number;
     url: string;
     origin: string;
     title: string | null;
   } | null = null;
-  let projectionHubKey = '';
+  // projectionHubKey removed in slice 1C — ctrl.attachStream/detachStream
+  // manages the subscription key internally.
+
+  // ---------------------------------------------------------------------------
+  // Projection functions (slice 1B) — delegate to the controller.
+  // These thin wrappers keep all call-sites unchanged while routing through ctrl.
+  // ---------------------------------------------------------------------------
 
   const isTrackedAssistantStreamId = (streamId: string): boolean =>
-    messages.some(
-      (message) =>
-        message.role === 'assistant' && (message._streamId ?? message.id) === streamId,
-    );
+    ctrl.isTrackedAssistantStreamId(streamId);
 
   const mergeProjectedHistoryForStream = (
     streamId: string,
     events: readonly StreamEvent[],
-  ) => {
-    if (!streamId) return;
-    projectedStreamEventsById = new Map(projectedStreamEventsById);
-    projectedStreamEventsById.set(
-      streamId,
-      mergeProjectionHistoryEvents(
-        projectedStreamEventsById.get(streamId) ?? [],
-        events,
-      ),
-    );
-    projectionEventsVersion += 1;
-  };
+  ) => ctrl.mergeProjectedHistoryForStream(streamId, events as StreamEvent[]);
 
-  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) => {
-    if (!streamId) return;
-    projectedStreamEventsById = new Map(projectedStreamEventsById);
-    projectedStreamEventsById.set(
-      streamId,
-      appendLiveProjectionEvent(
-        projectedStreamEventsById.get(streamId) ?? [],
-        event,
-      ),
-    );
-    projectionEventsVersion += 1;
-  };
+  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) =>
+    ctrl.appendProjectedLiveEvent(streamId, event);
 
-  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] => {
-    const streamId = message._streamId ?? message.id;
-    const projected = projectedStreamEventsById.get(streamId);
-    if (projected && projected.length > 0) return projected;
-    const hydrated = initialEventsByMessageId.get(streamId);
-    if (hydrated && hydrated.length > 0) return hydrated;
-    return [];
-  };
+  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] =>
+    ctrl.getProjectionEventsForMessage(message) as StreamEvent[];
 
-  const buildProjectedAssistantSignature = (
-    message: LocalMessage,
-    events: readonly StreamEvent[],
-  ): string => {
-    const lastSequence =
-      events.length > 0
-        ? Number(events[events.length - 1]?.sequence ?? 0)
-        : 0;
-    return [
-      message._streamId ?? message.id,
-      message._localStatus ?? '',
-      message.content ? message.content.length : 0,
-      events.length,
-      Number.isFinite(lastSequence) ? lastSequence : 0,
-    ].join(':');
-  };
-
-  const getProjectedAssistantComputation = (
-    message: LocalMessage,
-  ): ProjectedAssistantComputation => {
-    const messageId = String(message.id ?? '').trim();
-    const projectionEvents = getProjectionEventsForMessage(message);
-    const signature = buildProjectedAssistantSignature(message, projectionEvents);
-    const cached = projectedAssistantComputationByMessageId.get(messageId);
-    if (cached?.signature === signature) return cached;
-
-    const segments = projectAssistantRunSegments(projectionEvents);
-    const next = {
-      signature,
-      segments,
-      linkedSteerCount: countLinkedSteerMessages(projectionEvents),
-    };
-    projectedAssistantComputationByMessageId = new Map(
-      projectedAssistantComputationByMessageId,
-    );
-    projectedAssistantComputationByMessageId.set(messageId, next);
-    return next;
-  };
+  // getProjectedAssistantComputation is used only by buildTimeline, which is
+  // now routed through ctrl.buildTimeline() (slice 1B). No local wrapper needed.
 
   const loadRuntimeDetailsForMessage = async (
     targetSessionId: string,
@@ -1438,13 +929,7 @@
     if (loadingRuntimeDetailsMessageIds.has(messageId)) return;
     loadingRuntimeDetailsMessageIds.add(messageId);
     try {
-      const response = await apiFetch(
-        chatSessionHistoryUrl(targetSessionId, 'full'),
-        {
-          method: 'GET',
-          headers: { Accept: 'application/x-ndjson' },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(targetSessionId, 'full');
       if (!response.body) return;
       const decoder = new TextDecoder();
       const reader = response.body.getReader();
@@ -1485,37 +970,15 @@
       buffer += decoder.decode();
       if (buffer.trim().length > 0) processLine(buffer);
       if (collectedEvents.length > 0) {
-        initialEventsByMessageId = new Map(initialEventsByMessageId);
-        initialEventsByMessageId.set(
-          messageId,
-          mergeProjectionHistoryEvents(
-            initialEventsByMessageId.get(messageId) ?? [],
-            collectedEvents,
-          ),
-        );
+        // Route through controller (slice 1B): mergeHistoryEvents invalidates cache + notifies.
+        ctrl.mergeHistoryEvents(messageId, collectedEvents);
         scanEventsForGeneratedFileCards(messageId, collectedEvents);
-        projectedAssistantComputationByMessageId = new Map(
-          projectedAssistantComputationByMessageId,
-        );
-        projectedAssistantComputationByMessageId.delete(messageId);
-        projectionEventsVersion += 1;
       }
       loadedRuntimeDetailsMessageIds.add(messageId);
     } finally {
       loadingRuntimeDetailsMessageIds.delete(messageId);
     }
   };
-
-  const buildProjectedTimeline = (
-    timeline: readonly LocalMessage[],
-  ): ProjectedTimelineItem[] =>
-    buildChatProjectedTimeline<LocalMessage, RuntimeSegmentSummary>({
-      timeline,
-      optimisticSteerMessages,
-      runtimeSummariesByMessageId: runtimeSummaryByMessageId,
-      composerSteerAck,
-      getAssistantComputation: getProjectedAssistantComputation,
-    });
 
   let lastDraftApplied = draft;
   $: {
@@ -2914,12 +2377,8 @@
     if (!next) return;
     errorMsg = null;
     try {
-      await apiPatch(chatMessageUrl(messageId), {
-        content: next,
-      });
-      messages = messages.map((m) =>
-        m.id === messageId ? { ...m, content: next } : m,
-      );
+      // Delegate host call + content patch to the controller (slice 1D).
+      await ctrl.edit(messageId, next);
       cancelEditMessage();
       await retryMessage(messageId);
     } catch (e) {
@@ -2927,90 +2386,56 @@
     }
   };
 
-  const bootstrapAssistantRun = (input: {
-    sessionId: string;
-    assistantMessageId: string;
-    streamId: string;
-    jobId: string;
-    model: string;
-    userMessage?: LocalMessage;
-    truncateAfterMessageId?: string;
-    checkpointUserMessageId?: string;
-  }) => {
-    const nowIso = new Date().toISOString();
-    const assistantMsg: LocalMessage = {
-      id: input.assistantMessageId,
-      sessionId: input.sessionId,
-      role: 'assistant',
-      content: null,
-      model: input.model,
-      createdAt: nowIso,
-      _localStatus: 'processing',
-      _streamId: input.streamId,
-    };
-    if (input.userMessage) {
-      messages = [...messages, input.userMessage, assistantMsg];
-    } else if (input.truncateAfterMessageId) {
-      const userIndex = messages.findIndex(
-        (m) => m.id === input.truncateAfterMessageId,
-      );
-      messages =
-        userIndex >= 0
-          ? [...messages.slice(0, userIndex + 1), assistantMsg]
-          : [...messages, assistantMsg];
-      const truncatedHistory: ProjectedTimelineItem[] = [];
-      const keptHistoryMessageIds = new Set<string>();
-      for (const item of historyTimelineItems) {
-        truncatedHistory.push(item);
-        keptHistoryMessageIds.add(String(item.message.id ?? '').trim());
-        if (
-          item.kind === 'message' &&
-          String(item.message.id ?? '').trim() === input.truncateAfterMessageId
-        ) {
-          break;
-        }
-      }
-      historyTimelineItems = truncatedHistory;
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          keptHistoryMessageIds.has(messageId),
-        ),
-      );
-    } else {
-      messages = [...messages, assistantMsg];
-    }
-    followBottom = true;
-    scheduleScrollToBottom({ force: true });
-    if (input.checkpointUserMessageId) {
-      void createTurnCheckpoint(input.sessionId, input.checkpointUserMessageId);
-    }
-    void pollJobUntilTerminal(input.jobId, assistantMsg._streamId ?? assistantMsg.id, {
-      timeoutMs: 90_000,
+  /**
+   * Build the standard LocalMessage factory for the assistant slot.
+   * Passed as buildAssistantMessage to ctrl.bootstrapRun / ctrl.send / ctrl.retry.
+   * Stamps model from the closed-over scope; sessionId comes from the base
+   * (the controller passes input.sessionId as base.sessionId in slice 1D).
+   */
+  const makeAssistantMsgFactory =
+    (model: string) =>
+    (base: {
+      id: string;
+      sessionId: string;
+      _streamId: string;
+      _localStatus: 'processing';
+      role: 'assistant';
+      content: null;
+      createdAt: string;
+    }): LocalMessage => ({
+      ...base,
+      model,
     });
-  };
 
   const retryMessage = async (messageId: string) => {
     if (!sessionId) return;
     errorMsg = null;
     try {
-      const res = await apiPost<{
-        sessionId: string;
-        userMessageId: string;
-        assistantMessageId: string;
-        streamId: string;
-        jobId: string;
-      }>(chatMessageRetryUrl(messageId), {
-        providerId: selectedProviderId,
-        model: selectedModelId,
+      // App-side: truncate historyTimelineItems before the controller truncates
+      // the message list (bootstrapRun inside ctrl.retry does that).
+      const truncatedHistory: ProjectedTimelineItem[] = [];
+      for (const item of historyTimelineItems) {
+        truncatedHistory.push(item);
+        if (
+          item.kind === 'message' &&
+          String(item.message.id ?? '').trim() === messageId
+        ) {
+          break;
+        }
+      }
+      historyTimelineItems = truncatedHistory;
+
+      // Delegate host call + message list mutation + job-poll to the controller.
+      await ctrl.retry(messageId, {
+        providerId: $ctrl.selectedProviderId,
+        model: $ctrl.selectedModelId,
+        buildAssistantMessage: makeAssistantMsgFactory($ctrl.selectedModelId),
+        pollTimeoutMs: 90_000,
       });
-      bootstrapAssistantRun({
-        sessionId: res.sessionId,
-        assistantMessageId: res.assistantMessageId,
-        streamId: res.streamId,
-        jobId: res.jobId,
-        model: selectedModelId,
-        truncateAfterMessageId: messageId,
-      });
+
+      // App-side scroll side-effect.
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.retry'));
     }
@@ -3262,7 +2687,7 @@
   const resetTodoRuntimePanel = () => {
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
-    composerSteerAck = null;
+    // composerSteerAck moved to controller (slice 1F); cleared by ack timer or sendSteer rollback.
     pendingTodoRuntimeDeleteConfirm = false;
   };
 
@@ -3312,22 +2737,8 @@
 
     composerSteerInFlight = true;
     errorMsg = null;
-    const createdAtMs = Date.now();
-    composerSteerAck = createComposerSteerAck({
-      streamId: targetStreamId,
-      message: $_('chat.steer.acknowledgement'),
-      createdAtMs,
-    });
 
-    const localSteerMessage: LocalMessage = createOptimisticSteerMessage({
-      sessionId: sessionId ?? '',
-      content: steerText,
-      targetAssistantMessageId: activeAssistantMessage?.id,
-      targetStreamId,
-      nowMs: createdAtMs,
-      nowIso: new Date(createdAtMs).toISOString(),
-    });
-    optimisticSteerMessages = [...optimisticSteerMessages, localSteerMessage];
+    // App-side: clear input + scroll before the async call (DOM concerns)
     followBottom = true;
     scheduleScrollToBottom({ force: true });
     input = '';
@@ -3335,20 +2746,17 @@
     updateComposerHeight();
 
     try {
-      await postChatSteer(apiPost, targetStreamId, steerText);
+      // Controller owns: optimistic steer message, composerSteerAck, host.postSteer, rollback
+      await ctrl.sendSteer(steerText, targetStreamId, {
+        sessionId: sessionId ?? '',
+        targetAssistantMessageId: activeAssistantMessage?.id,
+        ackMessage: $_('chat.steer.acknowledgement'),
+        ackTimeoutMs: 5000,
+      });
     } catch (e) {
-      optimisticSteerMessages = optimisticSteerMessages.filter(
-        (message) => message.id !== localSteerMessage.id,
-      );
       errorMsg = formatApiError(e, $_('chat.steer.error'));
     } finally {
       composerSteerInFlight = false;
-      const expectedAck = composerSteerAck?.createdAtMs;
-      setTimeout(() => {
-        if (shouldClearComposerSteerAck(composerSteerAck, expectedAck)) {
-          composerSteerAck = null;
-        }
-      }, 5000);
     }
   };
 
@@ -3482,12 +2890,8 @@
   ) => {
     const normalizedId = String(messageId ?? '').trim();
     if (!normalizedId || events.length === 0) return;
-    const next = new Map(initialEventsByMessageId);
-    next.set(
-      normalizedId,
-      mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
-    );
-    initialEventsByMessageId = next;
+    // Route through controller (slice 1B): mergeHistoryEvents handles dedup + notify.
+    ctrl.mergeHistoryEvents(normalizedId, events as StreamEvent[]);
     scanEventsForGeneratedFileCards(normalizedId, events);
   };
 
@@ -3547,9 +2951,12 @@
     const shouldRevealAtBottom =
       opts?.revealAtBottom === true && previousScrollHeight <= 0;
 
+    // Build next messages + history lists locally, then commit to controller atomically.
     const nextMessages = [...messages];
-    const nextInitialEvents = new Map(initialEventsByMessageId);
     const nextHistory = [...historyTimelineItems];
+    // Accumulate history events per message id to batch-merge into the controller.
+    const accumulatedHistoryEvents = new Map<string, StreamEvent[]>();
+
     for (const item of chronologicalBlock) {
       const normalizedMessage: LocalMessage = {
         ...item.message,
@@ -3580,13 +2987,11 @@
       }
 
       if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
-        nextInitialEvents.set(
-          item.message.id,
-          mergeProjectionHistoryEvents(
-            nextInitialEvents.get(item.message.id) ?? [],
-            item.segment.events,
-          ),
-        );
+        const msgId = item.message.id;
+        const existing = accumulatedHistoryEvents.get(msgId) ?? [];
+        // Merge segment events into accumulator (deduplicate by sequence)
+        const merged = mergeProjectionHistoryEvents(existing, item.segment.events);
+        accumulatedHistoryEvents.set(msgId, merged);
       }
       if (
         item.kind === 'runtime-segment' &&
@@ -3613,9 +3018,11 @@
 
     historyHydrationSwapPending = shouldRevealAtBottom;
 
-    messages = nextMessages;
-    initialEventsByMessageId = nextInitialEvents;
-    for (const [msgId, events] of nextInitialEvents) {
+    // Commit messages to controller (single notify per block).
+    ctrl.setMessages(nextMessages);
+    // Merge all accumulated history events into the controller.
+    for (const [msgId, events] of accumulatedHistoryEvents) {
+      ctrl.mergeHistoryEvents(msgId, events);
       scanEventsForGeneratedFileCards(msgId, events);
     }
     historyTimelineItems = nextHistory;
@@ -3676,12 +3083,12 @@
     loadingSessions = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{ sessions: ChatSession[] }>(chatSessionsUrl());
-      sessions = res.sessions ?? [];
+      const res = await chatCoreHost.fetchSessions();
+      sessions = (res.sessions ?? []) as ChatSession[];
       // If the current sessionId is stale (e.g. from a different workspace), clear it
       if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {
         sessionId = null;
-        messages = [];
+        ctrl.setMessages([]);
       }
       if (!suppressSessionAutoSelect && !sessionId && sessions.length > 0) {
         void selectSession(sessions[0].id);
@@ -3711,32 +3118,22 @@
         historyHydrationInFlight = true;
         historyHydrationSwapPending = false;
         historyHydrationStickBottom = true;
-        messages = [];
-        optimisticSteerMessages = [];
+        ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on session load
         historyTimelineItems = [];
         stagedHistoryTimelineItems = [];
         historyTimelineSessionId = null;
-        projectedStreamEventsById = new Map();
-        projectedAssistantComputationByMessageId = new Map();
-        projectionEventsVersion += 1;
-        initialEventsByMessageId = new Map();
         runtimeSummaryByMessageId = new Map();
         loadedRuntimeDetailsMessageIds.clear();
         loadingRuntimeDetailsMessageIds.clear();
+        // Reset controller state: clears messages + projection events (slice 1B).
+        ctrl.setMessages([]);
+        ctrl.resetProjectionState();
         applySessionCheckpoints([]);
         sessionDocs = [];
         sessionDocsError = null;
         resetTodoRuntimePanel();
       }
-      const response = await apiFetch(
-        chatSessionHistoryUrl(id, 'summary'),
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/x-ndjson',
-          },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(id, 'summary');
       if (!response.body) {
         throw new Error('Session history stream returned an empty body');
       }
@@ -3794,15 +3191,13 @@
       if (stagedHistoryTimelineItems.length > 0) {
         await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
       }
-      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      ctrl.filterMessages(serverMessageIds);
       historyTimelineItems = historyTimelineItems.filter((item) =>
         serverTimelineKeys.has(item.key),
       );
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          serverEventMessageIds.has(messageId),
-        ),
-      );
+      // Stale entries in initialEventsByMessageId are harmless (unreachable by
+      // getProjectionEventsForMessage since those message ids are no longer in
+      // the message list). They will be cleared on next resetProjectionState.
       historyHydrationStickBottom = false;
       historyHydrationInFlight = false;
 
@@ -3810,12 +3205,11 @@
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
-        const fromCatalog = modelCatalogModels.find(
+        const fromCatalog = $ctrl.modelCatalogModels.find(
           (entry) => entry.model_id === lastAssistantModel,
         );
         if (fromCatalog) {
-          selectedProviderId = fromCatalog.provider_id;
-          selectedModelId = fromCatalog.model_id;
+          ctrl.setModelSelection(fromCatalog.provider_id, fromCatalog.model_id);
         }
       }
       if (opts?.scrollToBottom !== false) {
@@ -3856,34 +3250,26 @@
 
     const performDeferredClear = () => {
       if (!isCurrentHydration()) return false;
-      optimisticSteerMessages = [];
-      projectedStreamEventsById = new Map();
-      projectedAssistantComputationByMessageId = new Map();
-      projectionEventsVersion += 1;
+      ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on deferred session swap
       loadedRuntimeDetailsMessageIds.clear();
       loadingRuntimeDetailsMessageIds.clear();
-      resetLocalToolInterceptionState();
-      messages = [];
+      ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
       historyTimelineItems = [];
-      initialEventsByMessageId = new Map();
       runtimeSummaryByMessageId = new Map();
       sessionDocs = [];
       sessionDocsError = null;
       suppressSessionAutoSelect = false;
       clearComposerAttachments();
       sessionId = id;
+      // Reset controller state: clears messages + projection events (slice 1B).
+      ctrl.setMessages([]);
+      ctrl.resetProjectionState();
       historyHydrationSwapPending = true;
       return true;
     };
 
     try {
-      const response = await apiFetch(
-        chatSessionHistoryUrl(id, 'summary'),
-        {
-          method: 'GET',
-          headers: { Accept: 'application/x-ndjson' },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(id, 'summary');
       if (!response.body) {
         throw new Error('Session history stream returned an empty body');
       }
@@ -3961,26 +3347,21 @@
         });
       }
 
-      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      ctrl.filterMessages(serverMessageIds);
       historyTimelineItems = historyTimelineItems.filter((item) =>
         serverTimelineKeys.has(item.key),
       );
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          serverEventMessageIds.has(messageId),
-        ),
-      );
+      // Stale entries in initialEventsByMessageId are harmless — see loadMessages comment.
 
       const lastAssistantModel = [...messages]
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
-        const fromCatalog = modelCatalogModels.find(
+        const fromCatalog = $ctrl.modelCatalogModels.find(
           (entry) => entry.model_id === lastAssistantModel,
         );
         if (fromCatalog) {
-          selectedProviderId = fromCatalog.provider_id;
-          selectedModelId = fromCatalog.model_id;
+          ctrl.setModelSelection(fromCatalog.provider_id, fromCatalog.model_id);
         }
       }
     } catch (e) {
@@ -4012,14 +3393,12 @@
     sessionHydrationGeneration += 1;
     suppressSessionAutoSelect = true;
     sessionId = null;
-    messages = [];
     historyTimelineItems = [];
     stagedHistoryTimelineItems = [];
     historyTimelineSessionId = null;
     sessionCheckpoints = [];
     sessionDocs = [];
     sessionDocsError = null;
-    initialEventsByMessageId = new Map();
     runtimeSummaryByMessageId = new Map();
     loadedRuntimeDetailsMessageIds.clear();
     loadingRuntimeDetailsMessageIds.clear();
@@ -4027,12 +3406,13 @@
     historyHydrationStickBottom = false;
     historyHydrationSwapPending = false;
     loadingMessages = false;
-    projectedAssistantComputationByMessageId = new Map();
-    optimisticSteerMessages = [];
+    ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on new session
     resetTodoRuntimePanel();
-    resetLocalToolInterceptionState();
-    selectedProviderId = defaultProviderIdForNewSession;
-    selectedModelId = defaultModelIdForNewSession;
+    ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
+    // Reset controller state: clears messages + projection events (slice 1B).
+    ctrl.setMessages([]);
+    ctrl.resetProjectionState();
+    ctrl.resetModelSelectionToDefaults(); // slice 1F: restore default provider/model
     errorMsg = null;
     scheduleScrollToBottom({ force: true });
   };
@@ -4053,112 +3433,40 @@
     if (!sessionId) return;
     errorMsg = null;
     try {
-      await apiDelete(chatSessionUrl(sessionId));
+      await chatCoreHost.deleteSession(sessionId);
       sessionHydrationGeneration += 1;
       suppressSessionAutoSelect = false;
       sessionId = null;
-      messages = [];
       historyTimelineItems = [];
       stagedHistoryTimelineItems = [];
       historyTimelineSessionId = null;
       sessionDocs = [];
       sessionDocsError = null;
-      initialEventsByMessageId = new Map();
-      projectedAssistantComputationByMessageId = new Map();
-      optimisticSteerMessages = [];
+      ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on session delete
       resetTodoRuntimePanel();
-      resetLocalToolInterceptionState();
+      ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
+      // Reset controller state: clears messages + projection events (slice 1B).
+      ctrl.setMessages([]);
+      ctrl.resetProjectionState();
       await loadSessions();
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.deleteSession'));
     }
   };
 
-  const handleAssistantTerminal = (
-    streamId: string,
-    t: 'done' | 'error',
-  ) => {
-    messages = messages.map((m) =>
-      (m._streamId ?? m.id) === streamId
-        ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' }
-        : m,
-    );
-    scheduleScrollToBottom({ force: true });
-  };
+  // handleAssistantTerminal removed in slice 1C — moved to the controller.
+  // ctrl.attachStream injects onTerminal: (streamId, outcome) =>
+  //   scheduleScrollToBottom({ force: true }) so the DOM scroll still fires.
 
-  const pollJobUntilTerminal = async (
-    jobId: string,
-    streamId: string,
-    opts?: { timeoutMs?: number },
-  ) => {
-    if (!jobId || !streamId) return;
-    if (jobPollInFlight.has(jobId)) return;
-    jobPollInFlight.add(jobId);
-    const timeoutMs = opts?.timeoutMs ?? 60_000;
-    const startedAt = Date.now();
-    try {
-      // Petit délai: si SSE marche, on évite de poller tout de suite
-      await new Promise((r) => setTimeout(r, 750));
-
-      while (Date.now() - startedAt < timeoutMs) {
-        // Si entre-temps le message a été hydraté (contenu final) ou marqué terminal, on stop
-        const current = messages.find(
-          (m) => (m._streamId ?? m.id) === streamId,
-        );
-        if (!current) return;
-        if (current.content && current.content.trim().length > 0) return;
-        if (
-          current._localStatus === 'completed' ||
-          current._localStatus === 'failed'
-        )
-          return;
-
-        // Queue: endpoint user-scopé
-        const job = await apiGet<{ status?: string }>(
-          `/queue/jobs/${encodeURIComponent(jobId)}`,
-        );
-        const status = String((job as any)?.status ?? 'unknown');
-
-        if (status === 'completed') {
-          handleAssistantTerminal(streamId, 'done');
-          return;
-        }
-        if (status === 'failed') {
-          handleAssistantTerminal(streamId, 'error');
-          return;
-        }
-        // pending/processing
-        await new Promise((r) => setTimeout(r, 800));
-      }
-    } catch {
-      // ignore (fallback best-effort)
-    } finally {
-      jobPollInFlight.delete(jobId);
-    }
-  };
+  // pollJobUntilTerminal removed in slice 1C — moved to the controller.
+  // Call ctrl.startJobPoll(jobId, streamId, opts) at each run bootstrap.
+  // jobPollInFlight tracking is now owned by the controller.
 
   const loadModelCatalog = async () => {
     try {
-      const payload = await apiGet<ModelCatalogPayload>('/models/catalog');
-      modelCatalogProviders = Array.isArray(payload.providers)
-        ? payload.providers
-        : [];
-      modelCatalogModels = Array.isArray(payload.models) ? payload.models : [];
-      const initialProviderId =
-        payload.defaults?.provider_id ??
-        modelCatalogProviders[0]?.provider_id ??
-        'openai';
-      const initialModelId =
-        payload.defaults?.model_id ??
-        modelCatalogModels.find((entry) => entry.provider_id === initialProviderId)
-          ?.model_id ??
-        modelCatalogModels[0]?.model_id ??
-        selectedModelId;
-      defaultProviderIdForNewSession = initialProviderId;
-      defaultModelIdForNewSession = initialModelId;
-      selectedProviderId = initialProviderId;
-      selectedModelId = initialModelId;
-      selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+      // Controller owns: catalog fetch, providers/models/groups, selection, defaults (slice 1F).
+      await ctrl.loadModelCatalog(() => chatCoreHost.fetchModelCatalog());
+      selectedModelSelectionKey = `${$ctrl.selectedProviderId}::${$ctrl.selectedModelId}`;
     } catch (error) {
       console.error('Failed to load model catalog for chat:', error);
     }
@@ -4168,70 +3476,22 @@
     providerId: ModelProviderId,
     modelId: string,
   ) => {
-    if (!modelId) return;
-    let nextProviderId: ModelProviderId = providerId;
-    let nextModelId = modelId;
-
-    if (modelCatalogModels.length > 0) {
-      const exactMatch = modelCatalogModels.find(
-        (entry) =>
-          entry.provider_id === providerId && entry.model_id === modelId,
-      );
-      if (!exactMatch) {
-        const modelMatch = modelCatalogModels.find(
-          (entry) => entry.model_id === modelId,
-        );
-        if (modelMatch) {
-          nextProviderId = modelMatch.provider_id;
-          nextModelId = modelMatch.model_id;
-        } else {
-          const providerFallback =
-            modelCatalogModels.find(
-              (entry) => entry.provider_id === providerId,
-            ) ?? modelCatalogModels[0];
-          nextProviderId = providerFallback.provider_id;
-          nextModelId = providerFallback.model_id;
-        }
-      }
-    }
-
-    defaultProviderIdForNewSession = nextProviderId;
-    defaultModelIdForNewSession = nextModelId;
-    if (!sessionId) {
-      selectedProviderId = nextProviderId;
-      selectedModelId = nextModelId;
-    }
+    // Controller owns: catalog resolution + default/current selection update (slice 1F).
+    ctrl.applyUserDefaults(providerId, modelId, { sessionId: sessionId ?? null });
   };
 
   const isGeminiModel = (modelId: string | null | undefined): boolean =>
     typeof modelId === 'string' &&
     modelId.trim().toLowerCase().startsWith('gemini');
 
-  $: modelCatalogGroups = groupModelsByProvider(modelCatalogProviders, modelCatalogModels);
-
-  $: {
-    if (modelCatalogModels.length > 0) {
-      const coerced = coerceSelectionToValidEntry(
-        modelCatalogModels,
-        selectedProviderId,
-        selectedModelId,
-      );
-      if (
-        coerced.providerId !== selectedProviderId ||
-        coerced.modelId !== selectedModelId
-      ) {
-        selectedProviderId = coerced.providerId;
-        selectedModelId = coerced.modelId;
-      }
-    }
-  }
-
-  $: selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+  // modelCatalogGroups, coerceSelectionToValidEntry reactive, selectedProviderId/selectedModelId
+  // are now owned by the controller (slice 1F). Derive locals from $ctrl for template use.
+  $: selectedModelSelectionKey = `${$ctrl.selectedProviderId}::${$ctrl.selectedModelId}`;
   $: selectedModelWidthCh = computeModelSelectorWidthCh(
-    modelCatalogGroups,
-    modelCatalogModels,
-    selectedProviderId,
-    selectedModelId,
+    $ctrl.modelCatalogGroups as ModelCatalogGroup[],
+    $ctrl.modelCatalogModels as ModelCatalogModel[],
+    $ctrl.selectedProviderId,
+    $ctrl.selectedModelId,
   );
 
   const sendMessage = async () => {
@@ -4292,8 +3552,8 @@
         content: text,
       };
 
-      if (selectedProviderId) payload.providerId = selectedProviderId;
-      if (selectedModelId) payload.model = selectedModelId;
+      if ($ctrl.selectedProviderId) payload.providerId = $ctrl.selectedProviderId;
+      if ($ctrl.selectedModelId) payload.model = $ctrl.selectedModelId;
 
       if (sessionId) {
         payload.sessionId = sessionId;
@@ -4338,45 +3598,49 @@
         }
       }
 
-      const res = await apiPost<{
-        sessionId: string;
-        userMessageId: string;
-        assistantMessageId: string;
-        streamId: string;
-        jobId: string;
-      }>(chatMessagesUrl(), payload);
+      // Delegate host call + optimistic message insertion + job-poll to the controller.
+      // App-side: captures text + sentAttachments + model in factories for the controller.
+      const capturedText = text;
+      const capturedAttachments = sentAttachments;
+      const capturedModel = $ctrl.selectedModelId;
 
+      const { handle } = await ctrl.send(payload, {
+        buildUserMessage: (runHandle) => {
+          const nowIso = new Date().toISOString();
+          return {
+            id: runHandle.userMessageId,
+            sessionId: runHandle.sessionId,
+            role: 'user',
+            content: capturedText,
+            attachments: capturedAttachments,
+            createdAt: nowIso,
+            _localStatus: 'completed',
+          } as LocalMessage;
+        },
+        // base.sessionId = handle.sessionId (post-host-call, guaranteed real sessionId).
+        buildAssistantMessage: makeAssistantMsgFactory(capturedModel),
+        pollTimeoutMs: 90_000,
+      });
+
+      // App-side scroll + checkpoint (bootstrapRun inside ctrl.send already did message mutations)
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
+      if (handle.userMessageId) {
+        void createTurnCheckpoint(handle.sessionId, handle.userMessageId);
+      }
+
+      // App-side: clear composer + update session state.
       input = '';
       clearComposerAttachments();
       composerIsMultiline = false;
       updateComposerHeight();
-      if (res.sessionId && res.sessionId !== sessionId) {
+      if (handle.sessionId && handle.sessionId !== sessionId) {
         suppressSessionAutoSelect = false;
-        sessionId = res.sessionId;
-        if (!sessions.some((s) => s.id === res.sessionId)) {
-          sessions = [{ id: res.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
+        sessionId = handle.sessionId;
+        if (!sessions.some((s) => s.id === handle.sessionId)) {
+          sessions = [{ id: handle.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
         }
       }
-
-      const nowIso = new Date().toISOString();
-      const userMsg: LocalMessage = {
-        id: res.userMessageId,
-        sessionId: res.sessionId,
-        role: 'user',
-        content: text,
-        attachments: sentAttachments,
-        createdAt: nowIso,
-        _localStatus: 'completed',
-      };
-      bootstrapAssistantRun({
-        sessionId: res.sessionId,
-        assistantMessageId: res.assistantMessageId,
-        streamId: res.streamId,
-        jobId: res.jobId,
-        model: selectedModelId,
-        userMessage: userMsg,
-        checkpointUserMessageId: userMsg.id,
-      });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.send'));
     } finally {
@@ -4390,7 +3654,8 @@
     stoppingMessageId = activeAssistantMessage.id;
     errorMsg = null;
     try {
-      await apiPost(chatMessageStopUrl(activeAssistantMessage.id));
+      // Delegate host call to the controller (slice 1D).
+      await ctrl.stop(activeAssistantMessage.id);
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.stop'));
     } finally {
@@ -4404,11 +3669,8 @@
   ) => {
     errorMsg = null;
     try {
-      await apiPost(chatMessageFeedbackUrl(messageId), { vote: next });
-      const voteValue = next === 'clear' ? null : next === 'up' ? 1 : -1;
-      messages = messages.map((m) =>
-        m.id === messageId ? { ...m, feedbackVote: voteValue } : m,
-      );
+      // Delegate host call + feedbackVote patch to the controller (slice 1D).
+      await ctrl.setFeedback(messageId, next);
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.feedback'));
     }
@@ -4497,13 +3759,33 @@
         handleMentionRefresh,
       );
     }
-    localToolsHubKey = `chat-local-tools:${Math.random().toString(36).slice(2)}`;
-    streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
-      handleLocalToolStreamEvent(event);
+    // Slice 1E: inject the local-tool machine into the controller.
+    // The controller owns state + sequencing; the app supplies extension-specific
+    // executor, decider, and result poster (ApiError retry stays app-side).
+    ctrl.attachLocalToolMachine({
+      executeLocalTool: (toolCallId, name, args, opts) =>
+        executeLocalTool(toolCallId, name as LocalToolName, args, opts),
+      decideLocalToolPermission: (requestId, decision) =>
+        decideLocalToolPermission(requestId, decision as LocalToolPermissionDecision),
+      postLocalToolResult: postLocalToolResultWithRetry,
+      isLocalToolName: (name: string) => isLocalToolName(name),
+      isLocalToolRuntimeAvailable: () => isLocalToolRuntimeAvailable(),
+      isLocalToolPermissionRequired: (error: unknown) =>
+        error instanceof LocalToolPermissionRequiredError,
+      getPermissionRequest: (error: unknown) =>
+        (error as LocalToolPermissionRequiredError).request,
     });
-    projectionHubKey = `chat-projection:${Math.random().toString(36).slice(2)}`;
-    streamHub.set(projectionHubKey, (event: StreamHubEvent) => {
-      handleProjectionStreamEvent(event);
+    localToolsHubKey = `chat-local-tools:${Math.random().toString(36).slice(2)}`;
+    // Route all streamHub local-tool events through the controller (slice 1E).
+    streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
+      ctrl.handleLocalToolStreamEvent(event);
+    });
+    // Slice 1C: controller owns the projection stream subscription.
+    ctrl.attachStream({
+      streamClient: chatCoreHost.streamClient,
+      pollJob: (jobId) => chatCoreHost.pollJob(jobId),
+      onProjectionEvent: () => scheduleScrollToBottom(),
+      onTerminal: () => scheduleScrollToBottom({ force: true }),
     });
     if (mode !== 'ai') return;
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
@@ -4612,9 +3894,8 @@
     commentHubKey = '';
     if (localToolsHubKey) streamHub.delete(localToolsHubKey);
     localToolsHubKey = '';
-    if (projectionHubKey) streamHub.delete(projectionHubKey);
-    projectionHubKey = '';
-    resetLocalToolInterceptionState();
+    ctrl.detachStream(); // slice 1C: controller owns projection subscription teardown
+    ctrl.detachLocalToolMachine(); // slice 1E: controller owns local-tool teardown
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
     }
@@ -5741,13 +5022,13 @@
           </MenuPopover>
           <ModelSelector
             bind:value={selectedModelSelectionKey}
-            groups={modelCatalogGroups}
-            models={modelCatalogModels}
+            groups={$ctrl.modelCatalogGroups as ModelCatalogGroup[]}
+            models={$ctrl.modelCatalogModels as ModelCatalogModel[]}
             widthCh={selectedModelWidthCh}
             labels={$_}
             onChange={({ providerId, modelId }: { providerId: ModelProviderId; modelId: string }) => {
-              selectedProviderId = providerId;
-              selectedModelId = modelId;
+              ctrl.setModelSelection(providerId, modelId);
+              selectedModelSelectionKey = `${providerId}::${modelId}`;
             }}
           />
         {/if}
