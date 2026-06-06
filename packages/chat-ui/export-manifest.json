@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
-  "_generated": "2026-06-05",
-  "_version": "0.13.1",
+  "_generated": "2026-06-06",
+  "_version": "0.14.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -140,6 +140,17 @@
         "PermissionPromptShape",
         "shouldResetLocalToolStateForFreshRound",
         "filterPermissionPromptsForPendingStream"
+      ]
+    },
+    "./client/chat-core-host": {
+      "kind": "ts",
+      "file": "dist/client/chat-core-host.js",
+      "exports": [
+        "SessionSummary",
+        "SendMessagePayload",
+        "RunHandle",
+        "ModelCatalog",
+        "ChatCoreHost"
       ]
     },
     "./client/transport": {
