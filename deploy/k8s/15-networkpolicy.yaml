@@ -102,3 +102,59 @@ spec:
       ports:
         - protocol: TCP
           port: 5173
+---
+# BR-39 deploy — the standalone IdP (auth-idp) shares the main api's Postgres
+# (F1/D8 default). The baseline is default-deny-ingress, and allow-api-to-postgres
+# only admits the api pod, so a separate policy admits the auth-idp pod to 5432.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-auth-idp-to-postgres
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: auth-idp
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# BR-39 deploy — the IdP is public (auth.sent-tech.ca), so the cluster-wide
+# Traefik ingress controller (ns `traefik`) hits the auth-idp pod DIRECTLY on
+# 8787 (unlike the ui, which proxies /api internally). Without this the
+# default-deny-ingress baseline drops the connection after the TLS handshake.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-to-auth-idp
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: auth-idp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: auth-idp
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - protocol: TCP
+          port: 8787
