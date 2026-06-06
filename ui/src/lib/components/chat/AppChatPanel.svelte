@@ -67,7 +67,7 @@
     handleComposerPasteImages,
     composerAttachmentListReducer,
   } from '@sentropic/chat-ui/documents';
-  import type { UnifiedAttachmentItem } from '@sentropic/chat-ui/documents';
+  import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
   import { createDocumentHostAdapter } from '$lib/chat/documentHostAdapter';
   import {
     attachGoogleDriveDocuments,
@@ -4245,7 +4245,7 @@
                   {#if item.isTerminal && item.isLastAssistantSegment}
                     <GeneratedFileCardTray
                       cards={generatedFileCardsByMessageId.get(m.id) ?? []}
-                      onDownload={(card) => void downloadGeneratedFile(card)}
+                      onDownload={(card: ChatGeneratedFileCard) => void downloadGeneratedFile(card)}
                       downloadLabel={$_('common.download')}
                     />
                   {/if}
@@ -4581,8 +4581,8 @@
             <AttachmentBand
               items={attachmentBand}
               onResolveSrc={getBandItemImageSrc}
-              onEnlarge={(item, src) => openLightbox(src, item.fileName)}
-              onRemove={(item) => void removeBandItem(item)}
+              onEnlarge={(item: UnifiedAttachmentItem, src: string) => openLightbox(src, item.fileName)}
+              onRemove={(item: UnifiedAttachmentItem) => void removeBandItem(item)}
               removeLabel={$_('chat.documents.delete.ariaLabel')}
               enlargeLabel={$_('chat.attachments.enlarge')}
               loadingLabel={$_('common.loading')}
