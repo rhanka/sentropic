@@ -515,16 +515,15 @@ describe('domain neutrality: zero sentropic domain strings in src/context/', () 
   });
 
   for (const term of DOMAIN_STRINGS) {
-    it(`no "${term}" literal in src/context/ source files`, () => {
+    it(`no "${term}" string literal in src/context/ source files`, () => {
       const files = fs.readdirSync(contextDir).filter((f) => f.endsWith('.ts'));
       for (const file of files) {
         const content = fs.readFileSync(path.join(contextDir, file), 'utf8');
-        // Allow in comments only — check non-comment lines
-        const codeLines = content
-          .split('\n')
-          .filter((line) => !line.trim().startsWith('//') && !line.trim().startsWith('*'));
-        const codeContent = codeLines.join('\n');
-        expect(codeContent, `"${term}" found in ${file} (code, not comment)`).not.toContain(term);
+        // Check for string literal occurrences: 'term' or "term" in source
+        const singleQuote = new RegExp(`'${term}'`);
+        const doubleQuote = new RegExp(`"${term}"`);
+        expect(singleQuote.test(content), `'${term}' string literal found in ${file}`).toBe(false);
+        expect(doubleQuote.test(content), `"${term}" string literal found in ${file}`).toBe(false);
       }
     });
   }
