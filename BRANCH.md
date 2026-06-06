@@ -78,7 +78,7 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
 - [x] **Lot 5a — pure bin (BR42h-EX1; make passthrough split out & deferred)**
   - [x] `src/cli/run.ts` (pure `runHarnessCli`, arg-based, no git / no `process.exit`) + `src/bin/harness.ts` (thin entry, shebang); `bin: { harness: "./dist/bin/harness.js" }` declared. `harness check scope|branch` advisory (exit 0; usage error → 2).
   - [x] `tests/bin/cli-smoke.spec.ts` (usage / unknown-cmd / C1 FAIL / C2 FAIL / `--json` VerificationRun).
-  - [ ] **DEFERRED → Lot 5d**: `make scope-check/branch-check` passthroughs — git-state acquisition (current branch + staged files) under Docker-first/no-host-command is a design fork → DOUBLE-REVIEW before impl.
+  - [x] **Lot 5d (make scope-check)** — double-reviewed (Opus+Codex, CONVERGED): `make scope-check` = host `git diff --cached/--name-only` (staged+unstaged, deduped) → docker-over-dist → `harness check scope` (advisory, no `|| true`; `build-harness` dep; `$(LLM_MESH_NODE_IMAGE)`). Verified PASS on the live worktree. `make branch-check` DEFERRED (needs `--expected-branch` source = the deferred C1 branch-identity work).
   - [x] Gate: `make typecheck-harness` + `make test-harness ENV=test-feat-harness-core` (30 tests) + `make pack-harness` (bin in tarball).
 - [ ] **Lot 5b — CI job (BR42h-EX2)**: `validate-harness` (typecheck/test/build/pack) + filter, mirror `validate-build-cli`.
 - [ ] **Lot 5c — skill wrapper (BR42h-EX3)**: `.claude/skills/scope-check` → thin wrapper over `make scope-check` (advisory).
