@@ -3132,40 +3132,7 @@
       sectionLabel={commentSectionLabel}
       bind:commentThreadId
       bind:commentLoading
-      labels={{
-        loading: $_('common.loading'),
-        none: $_('chat.comments.none'),
-        emptyHint: $_('chat.comments.emptyHint'),
-        selectThreadHint: $_('chat.comments.selectThreadHint'),
-        noMessagesThread: $_('chat.comments.noMessagesThread'),
-        updating: $_('chat.comments.updating'),
-        chooseThread: $_('chat.comments.chooseThread'),
-        newThread: $_('chat.comments.newThread'),
-        resolve: $_('chat.comments.resolve'),
-        reopen: $_('chat.comments.reopen'),
-        previous: $_('chat.comments.previous'),
-        next: $_('chat.comments.next'),
-        deleteThread: $_('chat.comments.deleteThread'),
-        resolvedAt: (at: string) => $_('chat.comments.resolvedAt', { values: { at } }),
-        assignedTo: (label: string) => $_('chat.comments.assignedTo', { values: { label } }),
-        assignedToMe: $_('chat.comments.assignedToMe'),
-        hideResolved: $_('chat.comments.hideResolved'),
-        showResolved: $_('chat.comments.showResolved'),
-        confirmDeleteThread: $_('chat.comments.confirmDeleteThread'),
-        general: $_('common.general'),
-        cancel: $_('common.cancel'),
-        send: $_('common.send'),
-        copy: $_('common.copy'),
-        mentionLoading: $_('common.loading'),
-        mentionLoadError: $_('chat.comments.mention.loadError'),
-        mentionNone: $_('chat.comments.mention.none'),
-        placeholderWrite: $_('chat.comments.placeholder.write'),
-        placeholderResolved: $_('chat.comments.placeholder.resolved'),
-        placeholderDisabled: $_('chat.comments.placeholder.disabledViewer'),
-        unassign: $_('chat.comments.unassign'),
-        assistantLabel: ', Assistant IA',
-        edit: 'Modifier',
-      }}
+      labels={(key: string, opts?: Record<string, unknown>) => $_(key, opts as Parameters<typeof $_>[1])}
     />
   {:else}
     <!-- AI mode: full chat panel with timeline, composer, etc. -->
