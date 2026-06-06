@@ -57,6 +57,13 @@ Ratify the `ChatCoreHost` typed contract (transport + streaming + local-tool + s
   - [x] Fix `ModelProviderId` cast for `initialProviderId` from `ModelCatalog.defaults?.provider_id` (string) to `ModelProviderId`
   - [x] Gate: `make typecheck-ui` → 0 errors; `make typecheck-chat-ui` → exit 0; `make test-chat-ui` → 455/455; `make test-ui` → 445/447 pass (2 pre-existing `google-drive-picker` failures, confirmed on Step-1A.0 baseline)
 
+- [x] **Lot 1 Slice 1B — Projection/history state → controller (ZERO-DOM)**
+  - [x] Create `packages/chat-ui/src/state/chatLoopController.ts`: `createChatLoopController<Message, RuntimeSummary>()` plain TS, zero Svelte, zero sentropic domain strings. Owns: messages, initialEventsByMessageId, projectedStreamEventsById, signature cache, projectedTimelineItems. Implements Svelte store protocol (`subscribe` returning unsubscribe).
+  - [x] Export `./state/chatLoopController` in `packages/chat-ui/package.json`.
+  - [x] Refactor `AppChatPanel.svelte`: instantiate `ctrl`, bind `messages`/`initialEventsByMessageId`/`projectedStreamEventsById`/`projectedTimelineItems` from `$ctrl` (reactive aliases). Route all message mutations through `ctrl.setMessages/appendMessage/patchMessage/filterMessages/resetProjectionState/mergeHistoryEvents/mergeProjectedHistoryForStream/appendProjectedLiveEvent`. Replace local projection functions with controller delegates. Remove `projectedAssistantComputationByMessageId` + `projectionEventsVersion` local vars. Zero DOM change.
+  - [x] Create `packages/chat-ui/tests/chat-loop-controller.spec.ts` (25 tests): projection parity golden (vs pure helpers), signature cache effectiveness, subscribe() store contract, event accumulation, message mutations, isTrackedAssistantStreamId, getProjectionEventsForMessage priority, sentropic-string scan.
+  - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors; `make test-chat-ui` → 482/482 pass; `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker failures only)
+
 ## Feedback Loop
 - None.
 
