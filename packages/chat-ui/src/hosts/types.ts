@@ -67,18 +67,14 @@ export interface LocalToolsAdapter {
   }>;
 }
 
-export type ChatComposerAttachmentDraft = {
-  id: string;
-  kind: 'image' | 'file';
-  source: 'paste' | 'upload' | 'drive' | 'context_document' | 'external_url';
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  state: 'pending' | 'uploading' | 'ready' | 'failed';
-  documentId?: string;
-  previewUrl?: string;
-  error?: string;
-};
+/**
+ * ChatComposerAttachmentDraft — re-exported from canonical location.
+ * Canonical definition lives in documents/types.ts (D7 dedup).
+ * This re-export keeps existing imports from ./hosts/types resolving.
+ */
+export type { ChatComposerAttachmentDraft } from '../documents/types.js';
+
+import type { ChatComposerAttachmentDraft } from '../documents/types.js';
 
 export interface ChatAttachmentHostAdapter {
   acceptMimeTypes: readonly string[];

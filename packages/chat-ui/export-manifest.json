@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-06",
-  "_version": "0.16.0",
+  "_version": "0.17.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -594,6 +594,44 @@
         "ContextHost",
         "ContextModule"
       ]
+    },
+    "./documents": {
+      "kind": "ts",
+      "file": "dist/documents/index.js",
+      "exports": [
+        "ChatAttachmentKind",
+        "ChatAttachmentSource",
+        "ChatAttachmentState",
+        "ChatComposerAttachmentDraft",
+        "ChatGeneratedFileCard",
+        "ChatRuntimeSummaryWithGeneratedFiles",
+        "UnifiedAttachmentKind",
+        "UnifiedAttachmentItem",
+        "DocumentHost",
+        "createComposerAttachmentId",
+        "composerAttachmentListReducer",
+        "buildSentAttachments",
+        "handleComposerPasteImages",
+        "buildAttachmentBandItems",
+        "ComposerAttachmentAction",
+        "ComposerAttachmentLike",
+        "normalizeGeneratedFileCard",
+        "extractGeneratedFileCardsFromEvents",
+        "extractGeneratedFileCardsFromRuntimeSummary",
+        "getGeneratedFileFormatLabel"
+      ]
+    },
+    "./documents/AttachmentBand.svelte": {
+      "kind": "svelte",
+      "file": "dist/documents/AttachmentBand.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: items (UnifiedAttachmentItem[]), onResolveSrc? (fn: item→string), onEnlarge? (fn: item,src→void), onRemove? (fn: item→void), removeLabel? (string), enlargeLabel? (string), loadingLabel? (string), errorLabel? (string)"
+    },
+    "./documents/GeneratedFileCardTray.svelte": {
+      "kind": "svelte",
+      "file": "dist/documents/GeneratedFileCardTray.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: cards (ChatGeneratedFileCard[]), onDownload? (fn: card→void), downloadLabel? (string)"
     }
   }
 }
