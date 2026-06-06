@@ -83,10 +83,10 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
 - [x] **Lot 5b — CI job (BR42h-EX2)**: `validate-harness` job (typecheck/test/build/pack, **no ENV**) + `harness:` `changes` filter (Makefile/package.json/package-lock.json/packages/harness/**/ci.yml) + output declaration, mirroring `validate-build-cli` exactly. Bootstrap/publish enum DEFERRED (private, D7). YAML indentation matches siblings.
 - [x] **Lot 5c — skill wrapper (BR42h-EX3)**: `.claude/skills/scope-check` → thin wrapper over `make scope-check`; deleted the contradictory "Forbidden takes precedence" line; canonicalised **allowed-wins** + documented unknown-as-advisory-violation. Advisory (D5).
 
-- [ ] **Lot N — Final**
-  - [ ] Review `packages/harness/**`: zero product-runtime imports; zero track import; advisory-only.
-  - [ ] PR; CI green (`validate-harness`); enforce-package-bump auto-skip confirmed (new/private).
-  - [ ] On CI OK: remove `BRANCH.md`, push, merge.
+- [x] **Lot N — Final (verified; PR/push = user gate)**
+  - [x] Reviewed `packages/harness/**`: **zero product-runtime imports, zero `@sentropic/*`/track import** (only `node:fs` in the bin) — neutral tooling lib confirmed; advisory-only (D5; C8 blocking deferred).
+  - [x] Full gate green: `make typecheck-harness` + `make test-harness ENV=test-feat-harness-core` (30 tests, 7 files) + `make pack-harness` (51 files, `dist/bin/harness.js` in tarball).
+  - [ ] **PR / push / merge — ESCALATED to user** (irreversible outward action; not done autonomously). `enforce-package-bump` auto-skips (private/new); publish deferred D7; CI `validate-harness` runs on push.
 
 ## Test plan (file granularity)
 - **Unit (`make test-harness`)** new: `tests/branch-md/parse.spec.ts`, `tests/scope/scope-boundary.spec.ts`, `tests/checks/scope-check.spec.ts`, `tests/checks/branch-check.spec.ts`, `tests/profile/genericity.spec.ts`, `tests/artifacts/verification-run.spec.ts`.
