@@ -12,9 +12,10 @@
  */
 
 import type { SubcommandRegistry } from './registry.js';
+import type { VerbRegistry } from './verb-registry.js';
 
 /** CLI version surfaced by `stp --version` (kept in sync with package.json on bump). */
-export const CLI_VERSION = '0.1.0';
+export const CLI_VERSION = '0.2.0';
 
 /** Injectable IO sinks so the dispatcher stays pure and unit-testable. */
 export interface CliDeps {
@@ -22,6 +23,12 @@ export interface CliDeps {
     readonly log?: (line: string) => void;
     /** Error output sink (default: console.error). */
     readonly error?: (line: string) => void;
+    /**
+     * Optional bare-verb alias registry (BR-42i). When provided, an unrecognised first
+     * token is checked here before falling through to {@link formatUnknown}. The
+     * `runCli(argv, registry, deps)` signature is unchanged — this field is purely additive.
+     */
+    readonly verbRegistry?: VerbRegistry;
 }
 
 function formatHelp(registry: SubcommandRegistry): string {
@@ -88,6 +95,16 @@ export async function runCli(
 
     const subcommand = registry.get(first);
     if (subcommand === undefined) {
+        // BR-42i: before falling through to formatUnknown, check the optional verb registry.
+        // If a binding exists and its ownerCli is registered, delegate to ownerSubcommand.run.
+        // If the binding's ownerCli is NOT in the registry, fall through to formatUnknown (not a crash).
+        const binding = deps.verbRegistry?.get(first);
+        if (binding !== undefined) {
+            const owner = registry.get(binding.ownerCli);
+            if (owner !== undefined) {
+                return owner.run([...binding.ownerArgv, ...rest]);
+            }
+        }
         error(formatUnknown(first, registry));
         return 1;
     }
