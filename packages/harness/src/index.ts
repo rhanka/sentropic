@@ -11,3 +11,16 @@
 // `@sentropic/*` deps, and NO track import — harness only EMITS neutral artifacts.
 
 export const HARNESS_PACKAGE = '@sentropic/harness' as const;
+
+export type {
+  VerificationRun,
+  VerificationCheck,
+  VerificationCategory,
+  Violation,
+  ViolationSeverity,
+  CheckResult,
+} from './artifacts/verification-run.js';
+
+export type { HarnessProfile } from './profile/profile.js';
+export { sentropicProfile } from './profile/sentropic.js';
+export { stubProfile } from './profile/stub.js';
