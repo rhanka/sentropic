@@ -124,7 +124,7 @@ describe('Lot 0 characterization — stp output oracle', () => {
         expect(err).toHaveLength(0);
     });
 
-    it('CLI_VERSION is the pre-bump baseline 0.1.0', () => {
-        expect(CLI_VERSION).toBe('0.1.0');
+    it('CLI_VERSION is the post-bump baseline 0.2.0 (version bump, not a regression)', () => {
+        expect(CLI_VERSION).toBe('0.2.0');
     });
 });
