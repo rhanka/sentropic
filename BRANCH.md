@@ -80,7 +80,7 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
   - [x] `tests/bin/cli-smoke.spec.ts` (usage / unknown-cmd / C1 FAIL / C2 FAIL / `--json` VerificationRun).
   - [x] **Lot 5d (make scope-check)** — double-reviewed (Opus+Codex, CONVERGED): `make scope-check` = host `git diff --cached/--name-only` (staged+unstaged, deduped) → docker-over-dist → `harness check scope` (advisory, no `|| true`; `build-harness` dep; `$(LLM_MESH_NODE_IMAGE)`). Verified PASS on the live worktree. `make branch-check` DEFERRED (needs `--expected-branch` source = the deferred C1 branch-identity work).
   - [x] Gate: `make typecheck-harness` + `make test-harness ENV=test-feat-harness-core` (30 tests) + `make pack-harness` (bin in tarball).
-- [ ] **Lot 5b — CI job (BR42h-EX2)**: `validate-harness` (typecheck/test/build/pack) + filter, mirror `validate-build-cli`.
+- [x] **Lot 5b — CI job (BR42h-EX2)**: `validate-harness` job (typecheck/test/build/pack, **no ENV**) + `harness:` `changes` filter (Makefile/package.json/package-lock.json/packages/harness/**/ci.yml) + output declaration, mirroring `validate-build-cli` exactly. Bootstrap/publish enum DEFERRED (private, D7). YAML indentation matches siblings.
 - [x] **Lot 5c — skill wrapper (BR42h-EX3)**: `.claude/skills/scope-check` → thin wrapper over `make scope-check`; deleted the contradictory "Forbidden takes precedence" line; canonicalised **allowed-wins** + documented unknown-as-advisory-violation. Advisory (D5).
 
 - [ ] **Lot N — Final**
