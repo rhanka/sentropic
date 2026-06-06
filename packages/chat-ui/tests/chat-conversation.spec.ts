@@ -209,12 +209,12 @@ describe('ChatConversation — export surface registration', () => {
     expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
   });
 
-  it('should have version 0.14.0 in package.json (minor — ChatCoreHost contract)', () => {
-    expect(pkgJson.version).toBe('0.14.0');
+  it('should have version 0.15.0 in package.json (minor — checkpoints module)', () => {
+    expect(pkgJson.version).toBe('0.15.0');
   });
 
-  it('should have _version 0.14.0 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.14.0');
+  it('should have _version 0.15.0 in export-manifest.json', () => {
+    expect(manifest._version).toBe('0.15.0');
   });
 
   it('should resolve the ChatConversation svelte file to an existing path', () => {
