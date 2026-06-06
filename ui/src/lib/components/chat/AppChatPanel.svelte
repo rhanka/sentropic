@@ -380,6 +380,11 @@
   // Context module (D3) — replaces contextEntries / lastRouteContextKey / contextNameByKey.
   // Instantiated with the sentropic ContextHost (context-adapter.ts).
   // The host callbacks read reactive Svelte store values via closures.
+  // Wrap $_ to satisfy context-adapter's translate signature (svelte-i18n
+  // MessageFormatter uses InterpolationValues; adapter expects Record<string,unknown>).
+  const i18nTranslate = (key: string, opts?: { values?: Record<string, unknown> }) =>
+    $_(key, opts as Parameters<typeof $_>[1]);
+
   const contextHost = createContextHost(
     () => ({
       routeId: $contextStore.route.id,
@@ -391,9 +396,9 @@
         $organizationsStore,
         $foldersStore,
         $initiativesStore,
-        $_,
+        i18nTranslate,
       )(type, id),
-    $_,
+    i18nTranslate,
   );
   const contextModule: ContextModule = createContextModule(contextHost);
   // Subscribe to the module entries store; keeps contextEntries reactive.
