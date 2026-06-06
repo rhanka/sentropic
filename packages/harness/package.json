@@ -12,6 +12,9 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "harness": "./dist/bin/harness.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
