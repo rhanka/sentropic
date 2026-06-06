@@ -16,3 +16,10 @@ export {
     InvalidSubcommandError,
     type Subcommand,
 } from './registry.js';
+export { VerbRegistry, DuplicateVerbError, type VerbBinding } from './verb-registry.js';
+export {
+    FEDERATION_MANIFEST,
+    loadFederatedSubcommands,
+    type FederationEntry,
+    type LoadFederationDeps,
+} from './federation.js';
