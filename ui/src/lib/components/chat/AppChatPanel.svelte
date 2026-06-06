@@ -378,6 +378,9 @@
   // methods — the template renders identically from controller-backed fields.
   // ---------------------------------------------------------------------------
   const ctrl = createChatLoopController<LocalMessage, RuntimeSegmentSummary>();
+  // Slice 1D: inject the host transport so the controller can call sendMessage,
+  // retryMessage, stopMessage, editMessage, setFeedback without knowing the host.
+  ctrl.attachHost({ transport: chatCoreHost });
 
   const getContextIcon = (type: ChatContextEntry['contextType']) => {
     if (type === 'organization') return Building2;
@@ -2817,8 +2820,8 @@
     if (!next) return;
     errorMsg = null;
     try {
-      await chatCoreHost.editMessage(messageId, next);
-      ctrl.patchMessage(messageId, { content: next });
+      // Delegate host call + content patch to the controller (slice 1D).
+      await ctrl.edit(messageId, next);
       cancelEditMessage();
       await retryMessage(messageId);
     } catch (e) {
@@ -2826,86 +2829,56 @@
     }
   };
 
-  const bootstrapAssistantRun = (input: {
-    sessionId: string;
-    assistantMessageId: string;
-    streamId: string;
-    jobId: string;
-    model: string;
-    userMessage?: LocalMessage;
-    truncateAfterMessageId?: string;
-    checkpointUserMessageId?: string;
-  }) => {
-    const nowIso = new Date().toISOString();
-    const assistantMsg: LocalMessage = {
-      id: input.assistantMessageId,
-      sessionId: input.sessionId,
-      role: 'assistant',
-      content: null,
-      model: input.model,
-      createdAt: nowIso,
-      _localStatus: 'processing',
-      _streamId: input.streamId,
-    };
-    if (input.userMessage) {
-      ctrl.setMessages([...messages, input.userMessage, assistantMsg]);
-    } else if (input.truncateAfterMessageId) {
-      const userIndex = messages.findIndex(
-        (m) => m.id === input.truncateAfterMessageId,
-      );
-      const truncatedMessages =
-        userIndex >= 0
-          ? [...messages.slice(0, userIndex + 1), assistantMsg]
-          : [...messages, assistantMsg];
-      const truncatedHistory: ProjectedTimelineItem[] = [];
-      const keptHistoryMessageIds = new Set<string>();
-      for (const item of historyTimelineItems) {
-        truncatedHistory.push(item);
-        keptHistoryMessageIds.add(String(item.message.id ?? '').trim());
-        if (
-          item.kind === 'message' &&
-          String(item.message.id ?? '').trim() === input.truncateAfterMessageId
-        ) {
-          break;
-        }
-      }
-      historyTimelineItems = truncatedHistory;
-      // Set the truncated message list into the controller.
-      ctrl.setMessages(truncatedMessages);
-      // The controller's initialEventsByMessageId alias ($ctrl) will remain until
-      // the controller is asked to drop stale entries. We build a keep-set that
-      // includes the new assistant message so its events are not pruned later.
-      // (The actual cleanup of history events happens via resetProjectionState on
-      // full session reloads — per-retry truncation leaves orphaned events harmless.)
-    } else {
-      ctrl.appendMessage(assistantMsg);
-    }
-    followBottom = true;
-    scheduleScrollToBottom({ force: true });
-    if (input.checkpointUserMessageId) {
-      void createTurnCheckpoint(input.sessionId, input.checkpointUserMessageId);
-    }
-    ctrl.startJobPoll(input.jobId, assistantMsg._streamId ?? assistantMsg.id, {
-      timeoutMs: 90_000,
+  /**
+   * Build the standard LocalMessage factory for the assistant slot.
+   * Passed as buildAssistantMessage to ctrl.bootstrapRun / ctrl.send / ctrl.retry.
+   * Stamps model from the closed-over scope; sessionId comes from the base
+   * (the controller passes input.sessionId as base.sessionId in slice 1D).
+   */
+  const makeAssistantMsgFactory =
+    (model: string) =>
+    (base: {
+      id: string;
+      sessionId: string;
+      _streamId: string;
+      _localStatus: 'processing';
+      role: 'assistant';
+      content: null;
+      createdAt: string;
+    }): LocalMessage => ({
+      ...base,
+      model,
     });
-  };
 
   const retryMessage = async (messageId: string) => {
     if (!sessionId) return;
     errorMsg = null;
     try {
-      const res = await chatCoreHost.retryMessage(messageId, {
+      // App-side: truncate historyTimelineItems before the controller truncates
+      // the message list (bootstrapRun inside ctrl.retry does that).
+      const truncatedHistory: ProjectedTimelineItem[] = [];
+      for (const item of historyTimelineItems) {
+        truncatedHistory.push(item);
+        if (
+          item.kind === 'message' &&
+          String(item.message.id ?? '').trim() === messageId
+        ) {
+          break;
+        }
+      }
+      historyTimelineItems = truncatedHistory;
+
+      // Delegate host call + message list mutation + job-poll to the controller.
+      await ctrl.retry(messageId, {
         providerId: selectedProviderId,
         model: selectedModelId,
+        buildAssistantMessage: makeAssistantMsgFactory(selectedModelId),
+        pollTimeoutMs: 90_000,
       });
-      bootstrapAssistantRun({
-        sessionId: res.sessionId,
-        assistantMessageId: res.assistantMessageId,
-        streamId: res.streamId,
-        jobId: res.jobId,
-        model: selectedModelId,
-        truncateAfterMessageId: messageId,
-      });
+
+      // App-side scroll side-effect.
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.retry'));
     }
@@ -4154,39 +4127,49 @@
         }
       }
 
-      const res = await chatCoreHost.sendMessage(payload);
+      // Delegate host call + optimistic message insertion + job-poll to the controller.
+      // App-side: captures text + sentAttachments + model in factories for the controller.
+      const capturedText = text;
+      const capturedAttachments = sentAttachments;
+      const capturedModel = selectedModelId;
 
+      const { handle } = await ctrl.send(payload, {
+        buildUserMessage: (runHandle) => {
+          const nowIso = new Date().toISOString();
+          return {
+            id: runHandle.userMessageId,
+            sessionId: runHandle.sessionId,
+            role: 'user',
+            content: capturedText,
+            attachments: capturedAttachments,
+            createdAt: nowIso,
+            _localStatus: 'completed',
+          } as LocalMessage;
+        },
+        // base.sessionId = handle.sessionId (post-host-call, guaranteed real sessionId).
+        buildAssistantMessage: makeAssistantMsgFactory(capturedModel),
+        pollTimeoutMs: 90_000,
+      });
+
+      // App-side scroll + checkpoint (bootstrapRun inside ctrl.send already did message mutations)
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
+      if (handle.userMessageId) {
+        void createTurnCheckpoint(handle.sessionId, handle.userMessageId);
+      }
+
+      // App-side: clear composer + update session state.
       input = '';
       clearComposerAttachments();
       composerIsMultiline = false;
       updateComposerHeight();
-      if (res.sessionId && res.sessionId !== sessionId) {
+      if (handle.sessionId && handle.sessionId !== sessionId) {
         suppressSessionAutoSelect = false;
-        sessionId = res.sessionId;
-        if (!sessions.some((s) => s.id === res.sessionId)) {
-          sessions = [{ id: res.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
+        sessionId = handle.sessionId;
+        if (!sessions.some((s) => s.id === handle.sessionId)) {
+          sessions = [{ id: handle.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
         }
       }
-
-      const nowIso = new Date().toISOString();
-      const userMsg: LocalMessage = {
-        id: res.userMessageId,
-        sessionId: res.sessionId,
-        role: 'user',
-        content: text,
-        attachments: sentAttachments,
-        createdAt: nowIso,
-        _localStatus: 'completed',
-      };
-      bootstrapAssistantRun({
-        sessionId: res.sessionId,
-        assistantMessageId: res.assistantMessageId,
-        streamId: res.streamId,
-        jobId: res.jobId,
-        model: selectedModelId,
-        userMessage: userMsg,
-        checkpointUserMessageId: userMsg.id,
-      });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.send'));
     } finally {
@@ -4200,7 +4183,8 @@
     stoppingMessageId = activeAssistantMessage.id;
     errorMsg = null;
     try {
-      await chatCoreHost.stopMessage(activeAssistantMessage.id);
+      // Delegate host call to the controller (slice 1D).
+      await ctrl.stop(activeAssistantMessage.id);
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.stop'));
     } finally {
@@ -4214,9 +4198,8 @@
   ) => {
     errorMsg = null;
     try {
-      await chatCoreHost.setFeedback(messageId, next);
-      const voteValue = next === 'clear' ? null : next === 'up' ? 1 : -1;
-      ctrl.patchMessage(messageId, { feedbackVote: voteValue });
+      // Delegate host call + feedbackVote patch to the controller (slice 1D).
+      await ctrl.setFeedback(messageId, next);
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.feedback'));
     }
