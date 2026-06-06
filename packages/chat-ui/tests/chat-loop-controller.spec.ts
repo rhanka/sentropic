@@ -1883,3 +1883,394 @@ describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// 12. Steer (slice 1F)
+//
+// Strategy: inject a fake transport with postSteer + assertions:
+//   12a. sendSteer: optimistic message inserted before postSteer call
+//   12b. sendSteer: ack created (composerSteerAck non-null during in-flight)
+//   12c. sendSteer: postSteer called with targetStreamId + steerText
+//   12d. sendSteer: optimistic message removed on success
+//   12e. sendSteer: error rollback — optimistic message removed + ack cleared + re-throws
+//   12f. clearOptimisticSteerMessages: resets the array
+//   12g. sendSteer throws when no transport attached
+// ---------------------------------------------------------------------------
+
+/** Minimal fake transport for steer tests (postSteer only). */
+function makeSteerTransport(opts: {
+  postSteerThrows?: Error;
+} = {}) {
+  const calls: Array<{ streamId: string; message: string }> = [];
+  return {
+    calls,
+    transport: {
+      async sendMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async retryMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async stopMessage() {},
+      async editMessage() {},
+      async setFeedback() {},
+      async postSteer(streamId: string, message: string) {
+        calls.push({ streamId, message });
+        if (opts.postSteerThrows) throw opts.postSteerThrows;
+      },
+    },
+  };
+}
+
+describe('chat-loop-controller: steer (slice 1F)', () => {
+  // 12a. Optimistic message inserted before postSteer resolves
+  it('12a: sendSteer inserts optimistic message before host call completes', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    let snapshotDuringPost: ReturnType<typeof ctrl.getSnapshot> | null = null;
+    const { transport } = makeSteerTransport();
+    // Intercept postSteer to capture snapshot mid-call
+    const origPostSteer = transport.postSteer.bind(transport);
+    transport.postSteer = async (streamId, message) => {
+      snapshotDuringPost = ctrl.getSnapshot();
+      return origPostSteer(streamId, message);
+    };
+    ctrl.attachHost({ transport });
+
+    const promise = ctrl.sendSteer('hello', 'stream-s1', {
+      sessionId: 'sess-s1',
+      ackMessage: 'Steering...',
+    });
+
+    await promise;
+
+    // During the call, optimistic message should have been inserted
+    expect(snapshotDuringPost?.optimisticSteerMessages).toHaveLength(1);
+    const optimistic = snapshotDuringPost?.optimisticSteerMessages[0];
+    expect(optimistic?.content).toBe('hello');
+    expect(optimistic?.role).toBe('user');
+    expect(optimistic?._optimisticSteerTargetAssistantId).toBe('stream-s1');
+  });
+
+  // 12b. Ack is set during steer in-flight
+  it('12b: sendSteer sets composerSteerAck with correct streamId and message', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    let ackDuringPost: import('../src/state/chatLoopController.js').ComposerSteerAck | null = null;
+    const { transport } = makeSteerTransport();
+    const origPostSteer = transport.postSteer.bind(transport);
+    transport.postSteer = async (streamId, message) => {
+      ackDuringPost = ctrl.getSnapshot().composerSteerAck;
+      return origPostSteer(streamId, message);
+    };
+    ctrl.attachHost({ transport });
+
+    await ctrl.sendSteer('steer text', 'stream-s2', {
+      sessionId: 'sess-s2',
+      ackMessage: 'Processing steer...',
+    });
+
+    expect(ackDuringPost).not.toBeNull();
+    expect(ackDuringPost?.streamId).toBe('stream-s2');
+    expect(ackDuringPost?.message).toBe('Processing steer...');
+    expect(typeof ackDuringPost?.createdAtMs).toBe('number');
+  });
+
+  // 12c. host.postSteer called with correct args
+  it('12c: sendSteer calls host.postSteer with targetStreamId + steerText', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport, calls } = makeSteerTransport();
+    ctrl.attachHost({ transport });
+
+    await ctrl.sendSteer('my steer', 'stream-s3', {
+      sessionId: 'sess-s3',
+      ackMessage: 'Ack',
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.streamId).toBe('stream-s3');
+    expect(calls[0]?.message).toBe('my steer');
+  });
+
+  // 12d. Optimistic message removed on success
+  it('12d: sendSteer removes optimistic message after successful postSteer', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport } = makeSteerTransport();
+    ctrl.attachHost({ transport });
+
+    await ctrl.sendSteer('steer', 'stream-s4', {
+      sessionId: 'sess-s4',
+      ackMessage: 'Ack',
+    });
+
+    // After success, optimistic messages should be empty
+    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
+  });
+
+  // 12e. Error rollback — optimistic message removed + ack cleared + re-throws
+  it('12e: sendSteer rolls back optimistic message and clears ack on error, re-throws', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const error = new Error('postSteer failed');
+    const { transport } = makeSteerTransport({ postSteerThrows: error });
+    ctrl.attachHost({ transport });
+
+    await expect(
+      ctrl.sendSteer('steer', 'stream-s5', {
+        sessionId: 'sess-s5',
+        ackMessage: 'Ack',
+      }),
+    ).rejects.toThrow('postSteer failed');
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.optimisticSteerMessages).toHaveLength(0);
+    expect(snap.composerSteerAck).toBeNull();
+  });
+
+  // 12f. clearOptimisticSteerMessages resets the array
+  it('12f: clearOptimisticSteerMessages resets optimisticSteerMessages to empty', async () => {
+    const ctrl = createChatLoopController<Msg>();
+
+    let resolvePost!: () => void;
+    const transport = {
+      async sendMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async retryMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async stopMessage() {},
+      async editMessage() {},
+      async setFeedback() {},
+      postSteer: () => new Promise<void>((res) => { resolvePost = res; }),
+    };
+    ctrl.attachHost({ transport });
+
+    // Start the steer (don't await)
+    const promise = ctrl.sendSteer('msg', 'stream-s6', { sessionId: 'sess', ackMessage: 'Ack' });
+
+    // Steer is in-flight — optimistic message should be present
+    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(1);
+
+    // Clear optimistic messages explicitly
+    ctrl.clearOptimisticSteerMessages();
+    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
+
+    // Resolve the steer (will try to remove again but array is already empty — no error)
+    resolvePost();
+    await promise;
+    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
+  });
+
+  // 12g. sendSteer throws when no transport attached
+  it('12g: sendSteer throws when no host transport is attached', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await expect(
+      ctrl.sendSteer('x', 'stream-x', { sessionId: 'sess', ackMessage: 'Ack' }),
+    ).rejects.toThrow(/no host transport/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13. Model catalog (slice 1F)
+//
+// Strategy: inject a fake fetchFn and assert:
+//   13a. loadModelCatalog: providers + models + groups populated correctly
+//   13b. loadModelCatalog: selection defaults to catalog defaults
+//   13c. loadModelCatalog: coerces invalid selection to valid entry
+//   13d. setModelSelection: updates selectedProviderId + selectedModelId
+//   13e. applyUserDefaults: exact match → updates defaults + current (no session)
+//   13f. applyUserDefaults: model-only match → uses that entry's provider
+//   13g. applyUserDefaults: no match → falls back to first provider entry
+//   13h. applyUserDefaults: with active session → updates defaults but NOT current selection
+//   13i. resetModelSelectionToDefaults: reverts to stored defaults
+//   13j. snapshot exposes all catalog + selection fields
+//   13k. sentropic-string scan: 1F additions contain zero domain strings
+// ---------------------------------------------------------------------------
+
+const fakeCatalog = {
+  providers: [
+    { provider_id: 'openai', label: 'OpenAI', status: 'ready' as const },
+    { provider_id: 'gemini', label: 'Google Gemini', status: 'ready' as const },
+  ],
+  models: [
+    { provider_id: 'openai', model_id: 'gpt-4', label: 'GPT-4', default_contexts: [] },
+    { provider_id: 'openai', model_id: 'gpt-3.5-turbo', label: 'GPT-3.5', default_contexts: [] },
+    { provider_id: 'gemini', model_id: 'gemini-pro', label: 'Gemini Pro', default_contexts: [] },
+  ],
+  defaults: { provider_id: 'openai', model_id: 'gpt-4' },
+};
+
+describe('chat-loop-controller: model catalog (slice 1F)', () => {
+  // 13a. Providers + models + groups populated
+  it('13a: loadModelCatalog populates providers, models, and groups', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.modelCatalogProviders).toHaveLength(2);
+    expect(snap.modelCatalogModels).toHaveLength(3);
+    expect(snap.modelCatalogGroups).toHaveLength(2);
+    expect(snap.modelCatalogGroups[0]?.provider.provider_id).toBe('openai');
+    expect(snap.modelCatalogGroups[0]?.models).toHaveLength(2);
+    expect(snap.modelCatalogGroups[1]?.provider.provider_id).toBe('gemini');
+    expect(snap.modelCatalogGroups[1]?.models).toHaveLength(1);
+  });
+
+  // 13b. Selection defaults to catalog defaults
+  it('13b: loadModelCatalog sets selection to catalog defaults', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(snap.selectedModelId).toBe('gpt-4');
+    expect(snap.defaultProviderIdForNewSession).toBe('openai');
+    expect(snap.defaultModelIdForNewSession).toBe('gpt-4');
+  });
+
+  // 13c. Coerce invalid selection to valid entry after catalog loads
+  it('13c: loadModelCatalog coerces invalid selection to first valid entry', async () => {
+    const ctrl = createChatLoopController<Msg>();
+
+    // Load catalog with a default that doesn't exist → should coerce to something valid
+    await ctrl.loadModelCatalog(async () => ({
+      ...fakeCatalog,
+      defaults: { provider_id: 'openai', model_id: 'nonexistent-model' },
+    }));
+
+    const snap = ctrl.getSnapshot();
+    // coerceSelectionToValidEntry: no exact match, no model match, provider match → first openai model
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(['gpt-4', 'gpt-3.5-turbo']).toContain(snap.selectedModelId);
+  });
+
+  // 13d. setModelSelection updates selection
+  it('13d: setModelSelection updates selectedProviderId + selectedModelId', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    ctrl.setModelSelection('gemini', 'gemini-pro');
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.selectedProviderId).toBe('gemini');
+    expect(snap.selectedModelId).toBe('gemini-pro');
+  });
+
+  // 13e. applyUserDefaults: exact match → updates defaults + current (no session)
+  it('13e: applyUserDefaults(exact match, no session) updates defaults and current selection', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    ctrl.applyUserDefaults('gemini', 'gemini-pro', { sessionId: null });
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.defaultProviderIdForNewSession).toBe('gemini');
+    expect(snap.defaultModelIdForNewSession).toBe('gemini-pro');
+    expect(snap.selectedProviderId).toBe('gemini');
+    expect(snap.selectedModelId).toBe('gemini-pro');
+  });
+
+  // 13f. applyUserDefaults: model-only match → uses that entry's provider
+  it('13f: applyUserDefaults with model-only match uses the entry provider', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    // gpt-4 is openai, but we pass gemini as provider (wrong) → should resolve to openai
+    ctrl.applyUserDefaults('gemini', 'gpt-4', { sessionId: null });
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.defaultProviderIdForNewSession).toBe('openai');
+    expect(snap.defaultModelIdForNewSession).toBe('gpt-4');
+  });
+
+  // 13g. applyUserDefaults: no match → first provider entry
+  it('13g: applyUserDefaults with no match falls back to first model for the provider', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    // Completely unknown model
+    ctrl.applyUserDefaults('openai', 'totally-unknown', { sessionId: null });
+
+    const snap = ctrl.getSnapshot();
+    // No model match → first openai model
+    expect(snap.defaultProviderIdForNewSession).toBe('openai');
+    expect(['gpt-4', 'gpt-3.5-turbo']).toContain(snap.defaultModelIdForNewSession);
+  });
+
+  // 13h. applyUserDefaults: with active session → updates defaults but NOT current selection
+  it('13h: applyUserDefaults with active sessionId updates defaults but not current selection', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+    // Current selection is gpt-4 (from defaults)
+    expect(ctrl.getSnapshot().selectedModelId).toBe('gpt-4');
+
+    ctrl.applyUserDefaults('gemini', 'gemini-pro', { sessionId: 'active-session' });
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.defaultProviderIdForNewSession).toBe('gemini');
+    expect(snap.defaultModelIdForNewSession).toBe('gemini-pro');
+    // Current selection unchanged (session is active)
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(snap.selectedModelId).toBe('gpt-4');
+  });
+
+  // 13i. resetModelSelectionToDefaults reverts to stored defaults
+  it('13i: resetModelSelectionToDefaults restores selection to defaults', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+    // Change selection
+    ctrl.setModelSelection('gemini', 'gemini-pro');
+    expect(ctrl.getSnapshot().selectedModelId).toBe('gemini-pro');
+
+    ctrl.resetModelSelectionToDefaults();
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(snap.selectedModelId).toBe('gpt-4');
+  });
+
+  // 13j. Snapshot exposes all catalog + selection fields
+  it('13j: snapshot exposes all catalog and selection fields with correct types', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const snap = ctrl.getSnapshot();
+
+    // Catalog
+    expect(Array.isArray(snap.modelCatalogProviders)).toBe(true);
+    expect(Array.isArray(snap.modelCatalogModels)).toBe(true);
+    expect(Array.isArray(snap.modelCatalogGroups)).toBe(true);
+
+    // Selection
+    expect(typeof snap.selectedProviderId).toBe('string');
+    expect(typeof snap.selectedModelId).toBe('string');
+    expect(typeof snap.defaultProviderIdForNewSession).toBe('string');
+    expect(typeof snap.defaultModelIdForNewSession).toBe('string');
+
+    // Steer
+    expect(Array.isArray(snap.optimisticSteerMessages)).toBe(true);
+    expect(snap.composerSteerAck).toBeNull();
+  });
+
+  // 13k. sentropic-string scan: 1F additions contain zero domain strings
+  it('13k: controller source (with 1F additions) still contains zero sentropic domain strings', () => {
+    const controllerPath = path.join(
+      process.cwd(),
+      'src',
+      'state',
+      'chatLoopController.ts',
+    );
+    const source = fs.readFileSync(controllerPath, 'utf8');
+
+    const forbidden = [
+      'organization',
+      'folder',
+      'initiative',
+      'usecase',
+      'session_adapter',
+      'workspace',
+      'organization_update',
+      'folder_update',
+    ];
+
+    for (const term of forbidden) {
+      const lines = source.split('\n');
+      const codeLines = lines.filter(
+        (line) => !/^\s*(\/\/|\*)/.test(line),
+      );
+      const codeBlock = codeLines.join('\n');
+      expect(
+        codeBlock.includes(term),
+        `Domain string "${term}" found in non-comment code`,
+      ).toBe(false);
+    }
+  });
+});
