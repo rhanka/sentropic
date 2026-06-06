@@ -63,12 +63,12 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
   - [x] Tests: `tests/branch-md/parse.spec.ts` (golden synthetic fixture + malformed), `tests/scope/scope-boundary.spec.ts` (precedence/glob/unknown/profile-default).
   - [x] Gate: `make test-harness ENV=test-feat-harness-core` (9 tests green) + `make typecheck-harness`.
 
-- [ ] **Lot 3 — C1 branch-check + C2 scope-check → VerificationRun**
-  - [ ] `src/checks/branch-check.ts` — `checkBranch({ currentBranch, expectedBranch, profile })` (C1). **`expectedBranch` is CALLER-SUPPLIED this slice** (parsing it from a BRANCH.md identity block + a template identity line = explicit follow-on); golden tests cover match / mismatch / bypass.
-  - [ ] `src/checks/scope-check.ts` — `checkScope({ stagedFiles, boundary, profile })` (C2).
-  - [ ] `src/run/emit.ts` — `toVerificationRun(results, ctx)` (neutral; **NO track import**).
-  - [ ] Tests `tests/checks/scope-check.spec.ts` — matrix: in-scope ✓; forbidden hit ✗; **allowed+forbidden precedence**; **conditional WITHOUT matching exception** ✗; **conditional WITH matching exception** ✓ (exception-id↔path binding); **unknown path** behavior. `tests/checks/branch-check.spec.ts` — match/mismatch/bypass.
-  - [ ] Gate: `make test-harness`.
+- [x] **Lot 3 — C1 branch-check + C2 scope-check → VerificationRun**
+  - [x] `src/checks/branch-check.ts` — `checkBranch({ currentBranch, expectedBranch, profile, bypass? })` (C1). `expectedBranch` CALLER-SUPPLIED; tests cover match / mismatch / bypass / prefix.
+  - [x] `src/checks/scope-check.ts` — `checkScope({ stagedFiles, boundary, profile, declaredExceptions? })` (C2).
+  - [x] `src/run/emit.ts` — `toVerificationRun(checks, ctx)` (neutral; **NO track import**) + barrel re-exports.
+  - [x] Tests `tests/checks/scope-check.spec.ts` — matrix: in-scope ✓ / forbidden ✗ / allowed-beats-forbidden / conditional−exception ✗ / conditional+grammar-exception ✓ / wrong-grammar-exception ✗ / unknown ✗. `tests/checks/branch-check.spec.ts` — match/mismatch/bypass/prefix + `toVerificationRun` golden.
+  - [x] Gate: `make test-harness ENV=test-feat-harness-core` (21 tests green) + `make typecheck-harness`.
 
 - [ ] **Lot 4 — Genericity proof (2nd profile asserts DIVERGENCE)**
   - [ ] `tests/profile/genericity.spec.ts` — same input to C2 under `sentropic` vs `stub`; **assert divergent classification/exception outcomes** (not both-pass).
