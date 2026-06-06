@@ -1,10 +1,19 @@
+/**
+ * chat-tool-scope-workspace-type.test.ts
+ *
+ * Tests for workspace-type tool filtering logic.
+ * After D7 split: WorkspaceType, getWorkspaceTypeToolIds, and
+ * filterToolTogglesByWorkspaceType now live in the app-side adapter.
+ */
 import { describe, it, expect } from 'vitest';
 import {
   type ChatToolScopeToggle,
+} from '@sentropic/chat-ui/utils/chat-tool-scope';
+import {
   type WorkspaceType,
   getWorkspaceTypeToolIds,
   filterToolTogglesByWorkspaceType,
-} from '@sentropic/chat-ui/utils/chat-tool-scope';
+} from '$lib/chat/tool-scope-adapter';
 
 const TOGGLES: ChatToolScopeToggle[] = [
   { id: 'web', toolIds: ['web_search', 'web_extract'] },
