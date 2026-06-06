@@ -64,6 +64,13 @@ Ratify the `ChatCoreHost` typed contract (transport + streaming + local-tool + s
   - [x] Create `packages/chat-ui/tests/chat-loop-controller.spec.ts` (25 tests): projection parity golden (vs pure helpers), signature cache effectiveness, subscribe() store contract, event accumulation, message mutations, isTrackedAssistantStreamId, getProjectionEventsForMessage priority, sentropic-string scan.
   - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors; `make test-chat-ui` → 482/482 pass; `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker failures only)
 
+- [x] **Lot 1 Slice 1C — Live stream subscription → controller (ZERO-DOM)**
+  - [x] Extend `packages/chat-ui/src/state/chatLoopController.ts` with `ControllerStreamClient`, `ControllerPollJob`, `AttachStreamOptions` types; add `attachStream(opts)`, `detachStream()`, `startJobPoll(jobId, streamId, opts?)` to the `ChatLoopController` interface and implementation.
+  - [x] Controller owns: projection-event routing (via `handleIncomingStreamEvent`), terminal detection + `patchMessage` (via `handleStreamTerminal`), job-poll fallback loop (via `runJobPollLoop`). Callbacks `onProjectionEvent`/`onTerminal` allow AppChatPanel to trigger scroll AFTER state mutation.
+  - [x] Refactor `AppChatPanel.svelte`: remove `handleProjectionStreamEvent`, `handleAssistantTerminal`, `pollJobUntilTerminal`, local `jobPollInFlight` set, `let projectionHubKey`. In `onMount`, replace `streamHub.set(projectionHubKey, ...)` with `ctrl.attachStream({ streamClient: chatCoreHost.streamClient, pollJob, onProjectionEvent: scheduleScrollToBottom, onTerminal: scheduleScrollToBottom({ force: true }) })`. In `onDestroy`, replace `streamHub.delete(projectionHubKey)` with `ctrl.detachStream()`. Replace `pollJobUntilTerminal(...)` in `bootstrapAssistantRun` with `ctrl.startJobPoll(...)`. Zero markup change.
+  - [x] Extend `packages/chat-ui/tests/chat-loop-controller.spec.ts`: add describe block "stream subscription (slice 1C)" — 10 deterministic tests covering event routing, terminal patching (done/error), onProjectionEvent/onTerminal callbacks fire AFTER state update, detachStream cleans up, job-poll fallback (done+error), poll skips if already terminal, hot-swap semantics.
+  - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors (6 pre-existing Svelte warnings); `make test-chat-ui` → 492/492 pass (35 in chat-loop-controller.spec); `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker flake, stash-verified identical at HEAD)
+
 ## Feedback Loop
 - None.
 

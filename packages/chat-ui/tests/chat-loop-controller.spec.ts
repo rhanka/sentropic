@@ -450,6 +450,315 @@ describe('chat-loop-controller: getProjectionEventsForMessage', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 9. attachStream / detachStream — stream subscription lifecycle (slice 1C)
+//
+// Strategy: inject a fake streamClient + fake pollJob to feed deterministic
+// event sequences and assert:
+//   9a. Projection events are appended correctly from subscription
+//   9b. Terminal events (done/error) patch the message _localStatus
+//   9c. onProjectionEvent callback fires AFTER state is updated
+//   9d. onTerminal callback fires AFTER message is patched
+//   9e. detachStream removes the subscription
+//   9f. job-poll fallback marks terminal when SSE is missed (done + error)
+//   9g. job-poll does not run when message is already terminal
+//   9h. attachStream hot-swap detaches previous subscription
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal fake stream client for testing — records hub registrations.
+ */
+function makeFakeStreamClient() {
+  const handlers = new Map<string, (event: unknown) => void>();
+  return {
+    set(key: string, handler: (event: unknown) => void) {
+      handlers.set(key, handler);
+    },
+    delete(key: string) {
+      handlers.delete(key);
+    },
+    emit(event: unknown) {
+      for (const handler of handlers.values()) {
+        handler(event);
+      }
+    },
+    get size() {
+      return handlers.size;
+    },
+    hasAnyHandler() {
+      return handlers.size > 0;
+    },
+  };
+}
+
+type FakePollJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
+ * Minimal fake pollJob — returns statuses from a queue.
+ * Throws if the queue is empty (test setup issue).
+ */
+function makeFakePollJob(responses: FakePollJobStatus[]) {
+  const queue = [...responses];
+  return async (_jobId: string): Promise<{ status: string }> => {
+    const status = queue.shift();
+    if (!status) throw new Error('makeFakePollJob: queue exhausted');
+    return { status };
+  };
+}
+
+describe('chat-loop-controller: stream subscription (slice 1C)', () => {
+  // 9a. Projection events are appended from subscription
+  it('routes projection events from subscription into projectedStreamEventsById', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-sub-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['pending', 'completed']),
+    });
+
+    expect(client.hasAnyHandler()).toBe(true);
+
+    client.emit({ type: 'status', streamId, sequence: 1, data: { state: 'started' } });
+    client.emit({ type: 'content_delta', streamId, sequence: 2, data: { delta: 'Hello' } });
+
+    const events = ctrl.getSnapshot().projectedStreamEventsById.get(streamId);
+    expect(events).toHaveLength(2);
+    expect(events?.[0]?.eventType).toBe('status');
+    expect(events?.[1]?.eventType).toBe('content_delta');
+  });
+
+  // 9b. Terminal 'done' event patches message to completed
+  it("patches message _localStatus to 'completed' on terminal 'done' event", () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-done-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['completed']),
+    });
+
+    client.emit({ type: 'content_delta', streamId, sequence: 1, data: { delta: 'hi' } });
+    client.emit({ type: 'done', streamId, sequence: 2, data: {} });
+
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1');
+    expect(msg?._localStatus).toBe('completed');
+  });
+
+  // 9b. Terminal 'error' event patches message to failed
+  it("patches message _localStatus to 'failed' on terminal 'error' event", () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-err-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['failed']),
+    });
+
+    client.emit({ type: 'error', streamId, sequence: 1, data: { message: 'oops' } });
+
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1');
+    expect(msg?._localStatus).toBe('failed');
+  });
+
+  // 9c. onProjectionEvent callback fires after state is updated
+  it('onProjectionEvent is called with the streamId after event is appended', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-cb-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    const callbackStreamIds: string[] = [];
+    const versionAtCallback: number[] = [];
+
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['completed']),
+      onProjectionEvent: (sid) => {
+        callbackStreamIds.push(sid);
+        // State must already be updated when callback fires
+        versionAtCallback.push(ctrl.getSnapshot().projectionEventsVersion);
+      },
+    });
+
+    client.emit({ type: 'content_delta', streamId, sequence: 1, data: { delta: 'a' } });
+    client.emit({ type: 'content_delta', streamId, sequence: 2, data: { delta: 'b' } });
+
+    expect(callbackStreamIds).toEqual([streamId, streamId]);
+    // projectionEventsVersion must have been incremented before each callback
+    expect(versionAtCallback[0]).toBeGreaterThan(0);
+    expect(versionAtCallback[1]).toBeGreaterThan(versionAtCallback[0]!);
+  });
+
+  // 9d. onTerminal callback fires after message is patched
+  it('onTerminal is called with streamId + outcome after message is patched', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-term-cb-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    const terminalCalls: Array<{ streamId: string; outcome: string; status: string | undefined }> = [];
+
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['completed']),
+      onTerminal: (sid, outcome) => {
+        const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1');
+        terminalCalls.push({ streamId: sid, outcome, status: msg?._localStatus });
+      },
+    });
+
+    client.emit({ type: 'done', streamId, sequence: 1, data: {} });
+
+    expect(terminalCalls).toHaveLength(1);
+    expect(terminalCalls[0]?.outcome).toBe('done');
+    expect(terminalCalls[0]?.streamId).toBe(streamId);
+    // Message MUST already be patched when callback fires
+    expect(terminalCalls[0]?.status).toBe('completed');
+  });
+
+  // 9e. detachStream removes the subscription
+  it('detachStream removes the hub handler — subsequent events are ignored', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-detach-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['completed']),
+    });
+
+    // One event before detach
+    client.emit({ type: 'content_delta', streamId, sequence: 1, data: { delta: 'a' } });
+    expect(ctrl.getSnapshot().projectedStreamEventsById.get(streamId)).toHaveLength(1);
+
+    ctrl.detachStream();
+    expect(client.hasAnyHandler()).toBe(false);
+
+    // Event after detach — must be ignored
+    client.emit({ type: 'content_delta', streamId, sequence: 2, data: { delta: 'b' } });
+    expect(ctrl.getSnapshot().projectedStreamEventsById.get(streamId)).toHaveLength(1);
+  });
+
+  // 9f-done. job-poll fallback marks terminal 'completed' when SSE is missed
+  it('startJobPoll marks message completed when poll returns completed', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-poll-done-1';
+    const jobId = 'job-poll-done-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    // Poll responses: pending × 1, then completed
+    const pollFn = vi.fn()
+      .mockResolvedValueOnce({ status: 'pending' })
+      .mockResolvedValueOnce({ status: 'completed' });
+
+    const terminalOutcomes: string[] = [];
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: pollFn,
+      onTerminal: (_, outcome) => terminalOutcomes.push(outcome),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    ctrl.startJobPoll(jobId, streamId);
+
+    // Let the poll loop run to completion
+    await vi.waitFor(() => expect(terminalOutcomes).toHaveLength(1), { timeout: 2000 });
+
+    expect(terminalOutcomes[0]).toBe('done');
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1');
+    expect(msg?._localStatus).toBe('completed');
+  });
+
+  // 9f-error. job-poll fallback marks terminal 'failed' when poll returns failed
+  it('startJobPoll marks message failed when poll returns failed', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-poll-err-1';
+    const jobId = 'job-poll-err-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const pollFn = vi.fn().mockResolvedValueOnce({ status: 'failed' });
+    const terminalOutcomes: string[] = [];
+
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: pollFn,
+      onTerminal: (_, outcome) => terminalOutcomes.push(outcome),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    ctrl.startJobPoll(jobId, streamId);
+
+    await vi.waitFor(() => expect(terminalOutcomes).toHaveLength(1), { timeout: 2000 });
+    expect(terminalOutcomes[0]).toBe('error');
+  });
+
+  // 9g. job-poll does NOT run when message is already terminal
+  it('startJobPoll exits immediately when message is already completed', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-poll-skip-1';
+    const jobId = 'job-poll-skip-1';
+    // Already completed — poll should not be called
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'completed', content: 'done' });
+    ctrl.setMessages([asst]);
+
+    const pollFn = vi.fn();
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: pollFn,
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    ctrl.startJobPoll(jobId, streamId);
+
+    // Give a tick for async execution
+    await new Promise<void>((r) => setTimeout(r, 20));
+    expect(pollFn).not.toHaveBeenCalled();
+  });
+
+  // 9h. attachStream hot-swap detaches previous subscription
+  it('calling attachStream twice detaches the first subscription', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-swap-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client1 = makeFakeStreamClient();
+    const client2 = makeFakeStreamClient();
+
+    ctrl.attachStream({ streamClient: client1, pollJob: makeFakePollJob(['completed']) });
+    expect(client1.hasAnyHandler()).toBe(true);
+
+    ctrl.attachStream({ streamClient: client2, pollJob: makeFakePollJob(['completed']) });
+    // First client must be cleaned up
+    expect(client1.hasAnyHandler()).toBe(false);
+    // Second client is now active
+    expect(client2.hasAnyHandler()).toBe(true);
+
+    // Events from client2 land in the controller; client1 events are ignored
+    client2.emit({ type: 'content_delta', streamId, sequence: 1, data: { delta: 'hi' } });
+    expect(ctrl.getSnapshot().projectedStreamEventsById.get(streamId)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 8. Zero sentropic domain strings — runtime scan of controller module source
 // ---------------------------------------------------------------------------
 describe('chat-loop-controller: sentropic-string scan', () => {

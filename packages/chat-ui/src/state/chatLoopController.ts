@@ -1,14 +1,22 @@
 /**
  * chatLoopController — headless, framework-neutral controller for the chat loop.
  *
- * Slice 1B scope: owns ONLY the message list and projection state.
+ * Slice 1B scope: owns message list and projection state.
  *   - messages[]
  *   - initialEventsByMessageId  (batch history events from session history ndjson)
  *   - projectedStreamEventsById (live stream events accumulated per stream)
  *   - projectedAssistantComputationByMessageId (signature cache)
  *   - projectionEventsVersion (bump counter driving timeline recomputation)
  *
- * Later slices add: stream subscription (1C), send/steer (1D), local-tool (1E), model (1F).
+ * Slice 1C adds: live stream subscription lifecycle.
+ *   - attachStream({ streamClient, pollJob, onProjectionEvent?, onTerminal? })
+ *   - detachStream()
+ *   The controller subscribes to the host stream client, routes projection events
+ *   into its own appendProjectedLiveEvent, marks assistant messages
+ *   completed/failed on terminal events, and runs the job-poll fallback via
+ *   the injected pollJob function.
+ *
+ * Later slices add: send/steer (1D), local-tool (1E), model (1F).
  *
  * Design constraints (SPEC_EVOL_CHATUI_MODULARIZATION §3, R3):
  *   - Plain TypeScript — zero Svelte/framework imports.
@@ -23,6 +31,9 @@
  *     to keep the interface minimal. Later slices can narrow.
  *   - setMessages / patchMessage mutate messages fully (not patch-by-key) to keep
  *     the surface small; the caller decides what to write.
+ *   - attachStream callbacks (onProjectionEvent, onTerminal) are called AFTER the
+ *     controller has mutated state — so the host can trigger side-effects (scroll)
+ *     after the new projection is already in the snapshot.
  *
  * FLAG: reactivity bridge is the key architectural choice for later slices.
  *   The controller deliberately does NOT carry a Svelte store itself — it is a plain
@@ -52,6 +63,56 @@ import {
 // accepts the same shape from callers.
 // ---------------------------------------------------------------------------
 export type ControllerStreamEvent = ProjectionStreamEvent;
+
+// ---------------------------------------------------------------------------
+// Stream subscription API — slice 1C
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal stream client surface the controller needs for subscription lifecycle.
+ * Structurally compatible with StreamHubClient from '@sentropic/chat-ui/client'.
+ * Using a structural subtype here keeps the controller independent of the
+ * StreamHubClient import (allows testing with a plain fake object).
+ *
+ * The event handler accepts `unknown` so the controller can be wired to any
+ * host event emitter without importing the host's concrete event type.
+ * Internally, the controller casts the event to a record and reads fields
+ * defensively (String(raw.streamId ?? '')).
+ */
+export type ControllerStreamClient = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set(key: string, onEvent: (event: any) => void): void;
+  delete(key: string): void;
+};
+
+/**
+ * Job-poll function injected by the host (maps to ChatCoreHost.pollJob).
+ * The controller calls this as a fallback when SSE terminal events are missed.
+ */
+export type ControllerPollJob = (jobId: string) => Promise<{ status?: string }>;
+
+/**
+ * Options for attachStream.
+ *
+ * - streamClient: the host StreamHub (or any compatible set/delete client)
+ * - pollJob:      host's pollJob function (fallback when SSE terminal is missed)
+ * - onProjectionEvent: optional callback invoked AFTER each event is appended
+ *     to the controller's projectedStreamEventsById. Use for scroll scheduling.
+ * - onTerminal:   optional callback invoked AFTER the target message is patched
+ *     to completed/failed. Use for forced-scroll scheduling.
+ * - pollTimeoutMs: max ms to poll before giving up (default 60 000).
+ * - pollInitialDelayMs: delay before first poll attempt (default 750).
+ * - pollIntervalMs: interval between poll attempts (default 800).
+ */
+export type AttachStreamOptions = {
+  streamClient: ControllerStreamClient;
+  pollJob: ControllerPollJob;
+  onProjectionEvent?: (streamId: string) => void;
+  onTerminal?: (streamId: string, outcome: 'done' | 'error') => void;
+  pollTimeoutMs?: number;
+  pollInitialDelayMs?: number;
+  pollIntervalMs?: number;
+};
 
 // ---------------------------------------------------------------------------
 // Projected assistant computation (with signature for the cache)
@@ -186,6 +247,43 @@ export type ChatLoopController<
     runtimeSummariesByMessageId?: ReadonlyMap<string, RuntimeSummary>;
     composerSteerAck?: ChatProjectionSteerAck | null;
   }): ReadonlyArray<ChatProjectedTimelineItem<Message, RuntimeSummary>>;
+
+  // -- Stream subscription lifecycle (slice 1C) ----------------------------
+
+  /**
+   * Attach the controller to a live stream client.
+   *
+   * Registers a hub subscription that routes projection stream events into the
+   * controller's own appendProjectedLiveEvent. On terminal events ('done' /
+   * 'error'), patches the matching assistant message to completed/failed and
+   * triggers the optional onTerminal callback.
+   *
+   * Also starts a job-poll fallback loop via the injected pollJob (matching the
+   * behavior of AppChatPanel's pollJobUntilTerminal). The poll loop exits early
+   * if the message has already been marked terminal or hydrated by SSE.
+   *
+   * Safe to call multiple times — calling attachStream while already attached
+   * detaches the previous subscription first (same semantics as a hot-swap).
+   */
+  attachStream(opts: AttachStreamOptions): void;
+
+  /**
+   * Detach the stream subscription registered by attachStream.
+   * Removes the hub key from the stream client. Safe to call when not attached.
+   */
+  detachStream(): void;
+
+  /**
+   * Trigger the job-poll fallback for a specific job + stream id.
+   * Called by AppChatPanel after sendMessage / retryMessage to start the
+   * background poll loop (matches AppChatPanel's pollJobUntilTerminal call-site).
+   * No-ops if no stream is attached or the job is already being polled.
+   */
+  startJobPoll(
+    jobId: string,
+    streamId: string,
+    opts?: { timeoutMs?: number },
+  ): void;
 };
 
 // ---------------------------------------------------------------------------
@@ -220,6 +318,19 @@ export function createChatLoopController<
   let projectedTimelineItems: ReadonlyArray<
     ChatProjectedTimelineItem<Message, RuntimeSummary>
   > = [];
+
+  // -------------------------------------------------------------------------
+  // Stream subscription state (slice 1C)
+  // -------------------------------------------------------------------------
+  let streamHubKey: string | null = null;
+  let attachedClient: ControllerStreamClient | null = null;
+  let attachedPollJob: ControllerPollJob | null = null;
+  let attachedOnProjectionEvent: ((streamId: string) => void) | null = null;
+  let attachedOnTerminal: ((streamId: string, outcome: 'done' | 'error') => void) | null = null;
+  let attachedPollTimeoutMs = 60_000;
+  let attachedPollInitialDelayMs = 750;
+  let attachedPollIntervalMs = 800;
+  const jobPollInFlight = new Set<string>();
 
   const listeners = new Set<
     (state: ChatLoopProjectionState<Message, RuntimeSummary>) => void
@@ -311,6 +422,117 @@ export function createChatLoopController<
     );
     projectedAssistantComputationByMessageId.set(messageId, next);
     return { segments: next.segments, linkedSteerCount: next.linkedSteerCount };
+  };
+
+  // -------------------------------------------------------------------------
+  // Stream subscription helpers (slice 1C — framework-neutral, no domain strings)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Internal: called when the stream client emits an event.
+   * Mirrors AppChatPanel's handleProjectionStreamEvent:
+   *   - guard: must have a streamId + finite sequence + be a tracked stream
+   *   - append the event to projectedStreamEventsById
+   *   - on terminal (done/error): patch the target message + call onTerminal
+   *   - call onProjectionEvent after each append (for host-side scroll scheduling)
+   */
+  const handleIncomingStreamEvent = (rawUnknown: unknown): void => {
+    const raw =
+      rawUnknown && typeof rawUnknown === 'object'
+        ? (rawUnknown as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+    const streamId = String(raw.streamId ?? '').trim();
+    if (!streamId || !isTrackedAssistantStreamId(streamId)) return;
+    const sequence = Number(raw.sequence);
+    if (!Number.isFinite(sequence)) return;
+
+    const eventType = String(raw.type ?? '').trim();
+    appendProjectedLiveEvent(streamId, {
+      eventType,
+      data: (raw.data as Record<string, unknown>) ?? {},
+      sequence,
+      createdAt: undefined,
+    });
+
+    // Call the host callback AFTER the state mutation (scroll scheduling)
+    attachedOnProjectionEvent?.(streamId);
+
+    if (eventType === 'done' || eventType === 'error') {
+      handleStreamTerminal(streamId, eventType as 'done' | 'error');
+    }
+  };
+
+  /**
+   * Internal: marks the matching assistant message as completed/failed.
+   * Mirrors AppChatPanel's handleAssistantTerminal.
+   */
+  const handleStreamTerminal = (streamId: string, outcome: 'done' | 'error'): void => {
+    const target = messages.find((m) => (m._streamId ?? m.id) === streamId);
+    if (target) {
+      patchMessage(target.id, {
+        _localStatus: outcome === 'done' ? 'completed' : 'failed',
+      } as Partial<Message>);
+    }
+    // Call the host callback AFTER the state mutation (force-scroll scheduling)
+    attachedOnTerminal?.(streamId, outcome);
+  };
+
+  /**
+   * Internal: job-poll fallback loop.
+   * Mirrors AppChatPanel's pollJobUntilTerminal.
+   * Exits early if:
+   *   - the message is already hydrated (has content) or terminal
+   *   - the job reaches completed/failed status from the poll endpoint
+   *   - the timeout elapses
+   */
+  const runJobPollLoop = async (
+    jobId: string,
+    streamId: string,
+    opts?: { timeoutMs?: number },
+  ): Promise<void> => {
+    if (!jobId || !streamId) return;
+    if (jobPollInFlight.has(jobId)) return;
+    const pollFn = attachedPollJob;
+    if (!pollFn) return;
+
+    jobPollInFlight.add(jobId);
+    const timeoutMs = opts?.timeoutMs ?? attachedPollTimeoutMs;
+    const startedAt = Date.now();
+
+    try {
+      // Small initial delay — if SSE arrives first, avoid unnecessary polling.
+      await new Promise<void>((r) => setTimeout(r, attachedPollInitialDelayMs));
+
+      while (Date.now() - startedAt < timeoutMs) {
+        const current = messages.find((m) => (m._streamId ?? m.id) === streamId);
+        if (!current) return;
+        // Already hydrated or terminal — stop polling
+        if (current.content && current.content.trim().length > 0) return;
+        if (
+          current._localStatus === 'completed' ||
+          current._localStatus === 'failed'
+        )
+          return;
+
+        const job = await pollFn(jobId);
+        const status = String(job.status ?? 'unknown');
+
+        if (status === 'completed') {
+          handleStreamTerminal(streamId, 'done');
+          return;
+        }
+        if (status === 'failed') {
+          handleStreamTerminal(streamId, 'error');
+          return;
+        }
+        // pending/processing — wait before next attempt
+        await new Promise<void>((r) => setTimeout(r, attachedPollIntervalMs));
+      }
+    } catch {
+      // ignore — poll is best-effort fallback
+    } finally {
+      jobPollInFlight.delete(jobId);
+    }
   };
 
   // -------------------------------------------------------------------------
@@ -465,6 +687,44 @@ export function createChatLoopController<
     return projectedTimelineItems;
   };
 
+  // -- Stream subscription lifecycle (slice 1C) ----------------------------------
+
+  const attachStream = (opts: AttachStreamOptions): void => {
+    // If already attached, detach first (hot-swap semantics)
+    detachStream();
+
+    const key = `ctrl-projection:${Math.random().toString(36).slice(2)}`;
+    attachedClient = opts.streamClient;
+    attachedPollJob = opts.pollJob;
+    attachedOnProjectionEvent = opts.onProjectionEvent ?? null;
+    attachedOnTerminal = opts.onTerminal ?? null;
+    attachedPollTimeoutMs = opts.pollTimeoutMs ?? 60_000;
+    attachedPollInitialDelayMs = opts.pollInitialDelayMs ?? 750;
+    attachedPollIntervalMs = opts.pollIntervalMs ?? 800;
+    streamHubKey = key;
+
+    opts.streamClient.set(key, handleIncomingStreamEvent);
+  };
+
+  const detachStream = (): void => {
+    if (streamHubKey && attachedClient) {
+      attachedClient.delete(streamHubKey);
+    }
+    streamHubKey = null;
+    attachedClient = null;
+    attachedPollJob = null;
+    attachedOnProjectionEvent = null;
+    attachedOnTerminal = null;
+  };
+
+  const startJobPoll = (
+    jobId: string,
+    streamId: string,
+    opts?: { timeoutMs?: number },
+  ): void => {
+    void runJobPollLoop(jobId, streamId, opts);
+  };
+
   // -------------------------------------------------------------------------
   // Initial timeline build (empty state)
   // -------------------------------------------------------------------------
@@ -488,5 +748,8 @@ export function createChatLoopController<
     getProjectedAssistantComputation,
     isTrackedAssistantStreamId,
     buildTimeline,
+    attachStream,
+    detachStream,
+    startJobPoll,
   };
 }
