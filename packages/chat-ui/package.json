@@ -62,6 +62,11 @@
       "svelte": "./src/state/chatProjection.ts",
       "import": "./src/state/chatProjection.ts"
     },
+    "./state/chatLoopController": {
+      "types": "./src/state/chatLoopController.ts",
+      "svelte": "./src/state/chatLoopController.ts",
+      "import": "./src/state/chatLoopController.ts"
+    },
     "./state/chatWidgetShell": {
       "types": "./src/state/chatWidgetShell.ts",
       "svelte": "./src/state/chatWidgetShell.ts",

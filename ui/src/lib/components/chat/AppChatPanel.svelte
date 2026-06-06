@@ -13,6 +13,7 @@
     ApiError,
   } from '$lib/utils/api';
   import { createSentropicChatCoreHost } from '$lib/chat/chat-core-host-adapter';
+  import { createChatLoopController } from '@sentropic/chat-ui/state/chatLoopController';
 
   // ChatCoreHost instance — wraps the existing API utils (auth-aware) with the
   // ChatCoreHost contract. Zero behavior change: same requests, same error shapes.
@@ -184,16 +185,12 @@
     hasCheckpointMutationDelta,
   } from '$lib/utils/checkpointDelta';
   import {
-    appendLiveProjectionEvent,
-    countLinkedSteerMessages,
     mergeProjectionHistoryEvents,
-    projectAssistantRunSegments,
     type ProjectedRunSegment,
   } from '@sentropic/chat-ui/utils/chat-run-projection';
-  import {
-    buildProjectedTimeline as buildChatProjectedTimeline,
-    type ChatMessageAttachment,
-    type ChatProjectedTimelineItem,
+  import type {
+    ChatMessageAttachment,
+    ChatProjectedTimelineItem,
   } from '@sentropic/chat-ui/state/chatProjection';
   import {
     createImageAttachmentDraft,
@@ -335,11 +332,8 @@
     message: string;
     createdAtMs: number;
   };
-  type ProjectedAssistantComputation = {
-    signature: string;
-    segments: ProjectedRunSegment[];
-    linkedSteerCount: number;
-  };
+  // ProjectedAssistantComputation (with signature cache) was removed in slice 1B.
+  // The controller owns the cache internally via ChatProjectionComputation.
   type LocalToolStreamState = {
     streamId: string;
     name: LocalToolName;
@@ -374,6 +368,16 @@
       model_id: string;
     };
   };
+
+  // ---------------------------------------------------------------------------
+  // Headless projection controller (slice 1B).
+  // Owns: messages, initialEventsByMessageId, projectedStreamEventsById,
+  //       projection signature cache, projectedTimelineItems.
+  // Implements the Svelte store protocol (subscribe) so $ctrl auto-subscribes.
+  // AppChatPanel reads state from $ctrl and routes all mutations through ctrl.*
+  // methods — the template renders identically from controller-backed fields.
+  // ---------------------------------------------------------------------------
+  const ctrl = createChatLoopController<LocalMessage, RuntimeSegmentSummary>();
 
   const getContextIcon = (type: ChatContextEntry['contextType']) => {
     if (type === 'organization') return Building2;
@@ -588,7 +592,9 @@
   const buildCommentThreads = (items: CommentItem[]) =>
     buildChatCommentThreads(items);
 
-  let messages: LocalMessage[] = [];
+  // messages is now controller-backed (slice 1B). Mutations go through ctrl.*
+  // The $ctrl auto-subscription fires on every controller notify().
+  $: messages = $ctrl.messages as LocalMessage[];
   let loadingMessages = false;
   let sending = false;
   let stoppingMessageId: string | null = null;
@@ -658,7 +664,8 @@
   let commentThreadIndex = -1;
   let hasPreviousThread = false;
   let hasNextThread = false;
-  let projectedTimelineItems: ProjectedTimelineItem[] = [];
+  // projectedTimelineItems is now controller-owned (slice 1B).
+  $: projectedTimelineItems = $ctrl.projectedTimelineItems as ProjectedTimelineItem[];
   let historyTimelineItems: ProjectedTimelineItem[] = [];
   let stagedHistoryTimelineItems: ProjectedTimelineItem[] = [];
   let historyHydrationInFlight = false;
@@ -689,12 +696,18 @@
   };
   $: activeAssistantMessage =
     [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
+  // projectedTimelineItems is driven by the controller's subscribe() callback
+  // (via $ctrl auto-subscription). The steer-ack and optimistic-steer inputs
+  // are slices 1D/1E concerns — they will fold into the controller then.
+  // For now, rebuild the timeline when those local inputs change.
   $: {
-    projectionEventsVersion;
-    initialEventsByMessageId;
     composerSteerAck;
     optimisticSteerMessages;
-    projectedTimelineItems = buildProjectedTimeline(messages);
+    projectedTimelineItems = ctrl.buildTimeline({
+      optimisticSteerMessages,
+      runtimeSummariesByMessageId: runtimeSummaryByMessageId,
+      composerSteerAck,
+    }) as ProjectedTimelineItem[];
   }
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
@@ -1305,15 +1318,12 @@
   let prefsKey = '';
   let lastRouteContextKey: string | null = null;
 
-  // Historique batch (Option C): messageId -> events
-  let initialEventsByMessageId = new Map<string, StreamEvent[]>();
+  // Projection/history state (slice 1B) is owned by the controller.
+  // Aliases below make existing references compile without edits to every site.
+  // These getters read from the controller snapshot; mutations use ctrl.* methods.
+  $: initialEventsByMessageId = $ctrl.initialEventsByMessageId as Map<string, StreamEvent[]>;
   let runtimeSummaryByMessageId = new Map<string, RuntimeSegmentSummary>();
-  let projectedStreamEventsById = new Map<string, StreamEvent[]>();
-  let projectedAssistantComputationByMessageId = new Map<
-    string,
-    ProjectedAssistantComputation
-  >();
-  let projectionEventsVersion = 0;
+  $: projectedStreamEventsById = $ctrl.projectedStreamEventsById as Map<string, StreamEvent[]>;
   const loadedRuntimeDetailsMessageIds = new Set<string>();
   const loadingRuntimeDetailsMessageIds = new Set<string>();
   let historyTimelineSessionId: string | null = null;
@@ -1340,88 +1350,27 @@
   } | null = null;
   let projectionHubKey = '';
 
+  // ---------------------------------------------------------------------------
+  // Projection functions (slice 1B) — delegate to the controller.
+  // These thin wrappers keep all call-sites unchanged while routing through ctrl.
+  // ---------------------------------------------------------------------------
+
   const isTrackedAssistantStreamId = (streamId: string): boolean =>
-    messages.some(
-      (message) =>
-        message.role === 'assistant' && (message._streamId ?? message.id) === streamId,
-    );
+    ctrl.isTrackedAssistantStreamId(streamId);
 
   const mergeProjectedHistoryForStream = (
     streamId: string,
     events: readonly StreamEvent[],
-  ) => {
-    if (!streamId) return;
-    projectedStreamEventsById = new Map(projectedStreamEventsById);
-    projectedStreamEventsById.set(
-      streamId,
-      mergeProjectionHistoryEvents(
-        projectedStreamEventsById.get(streamId) ?? [],
-        events,
-      ),
-    );
-    projectionEventsVersion += 1;
-  };
+  ) => ctrl.mergeProjectedHistoryForStream(streamId, events as StreamEvent[]);
 
-  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) => {
-    if (!streamId) return;
-    projectedStreamEventsById = new Map(projectedStreamEventsById);
-    projectedStreamEventsById.set(
-      streamId,
-      appendLiveProjectionEvent(
-        projectedStreamEventsById.get(streamId) ?? [],
-        event,
-      ),
-    );
-    projectionEventsVersion += 1;
-  };
+  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) =>
+    ctrl.appendProjectedLiveEvent(streamId, event);
 
-  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] => {
-    const streamId = message._streamId ?? message.id;
-    const projected = projectedStreamEventsById.get(streamId);
-    if (projected && projected.length > 0) return projected;
-    const hydrated = initialEventsByMessageId.get(streamId);
-    if (hydrated && hydrated.length > 0) return hydrated;
-    return [];
-  };
+  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] =>
+    ctrl.getProjectionEventsForMessage(message) as StreamEvent[];
 
-  const buildProjectedAssistantSignature = (
-    message: LocalMessage,
-    events: readonly StreamEvent[],
-  ): string => {
-    const lastSequence =
-      events.length > 0
-        ? Number(events[events.length - 1]?.sequence ?? 0)
-        : 0;
-    return [
-      message._streamId ?? message.id,
-      message._localStatus ?? '',
-      message.content ? message.content.length : 0,
-      events.length,
-      Number.isFinite(lastSequence) ? lastSequence : 0,
-    ].join(':');
-  };
-
-  const getProjectedAssistantComputation = (
-    message: LocalMessage,
-  ): ProjectedAssistantComputation => {
-    const messageId = String(message.id ?? '').trim();
-    const projectionEvents = getProjectionEventsForMessage(message);
-    const signature = buildProjectedAssistantSignature(message, projectionEvents);
-    const cached = projectedAssistantComputationByMessageId.get(messageId);
-    if (cached?.signature === signature) return cached;
-
-    const segments = projectAssistantRunSegments(projectionEvents);
-    const next = {
-      signature,
-      segments,
-      linkedSteerCount: countLinkedSteerMessages(projectionEvents),
-    };
-    projectedAssistantComputationByMessageId = new Map(
-      projectedAssistantComputationByMessageId,
-    );
-    projectedAssistantComputationByMessageId.set(messageId, next);
-    return next;
-  };
+  // getProjectedAssistantComputation is used only by buildTimeline, which is
+  // now routed through ctrl.buildTimeline() (slice 1B). No local wrapper needed.
 
   const loadRuntimeDetailsForMessage = async (
     targetSessionId: string,
@@ -1472,37 +1421,15 @@
       buffer += decoder.decode();
       if (buffer.trim().length > 0) processLine(buffer);
       if (collectedEvents.length > 0) {
-        initialEventsByMessageId = new Map(initialEventsByMessageId);
-        initialEventsByMessageId.set(
-          messageId,
-          mergeProjectionHistoryEvents(
-            initialEventsByMessageId.get(messageId) ?? [],
-            collectedEvents,
-          ),
-        );
+        // Route through controller (slice 1B): mergeHistoryEvents invalidates cache + notifies.
+        ctrl.mergeHistoryEvents(messageId, collectedEvents);
         scanEventsForGeneratedFileCards(messageId, collectedEvents);
-        projectedAssistantComputationByMessageId = new Map(
-          projectedAssistantComputationByMessageId,
-        );
-        projectedAssistantComputationByMessageId.delete(messageId);
-        projectionEventsVersion += 1;
       }
       loadedRuntimeDetailsMessageIds.add(messageId);
     } finally {
       loadingRuntimeDetailsMessageIds.delete(messageId);
     }
   };
-
-  const buildProjectedTimeline = (
-    timeline: readonly LocalMessage[],
-  ): ProjectedTimelineItem[] =>
-    buildChatProjectedTimeline<LocalMessage, RuntimeSegmentSummary>({
-      timeline,
-      optimisticSteerMessages,
-      runtimeSummariesByMessageId: runtimeSummaryByMessageId,
-      composerSteerAck,
-      getAssistantComputation: getProjectedAssistantComputation,
-    });
 
   let lastDraftApplied = draft;
   $: {
@@ -2902,9 +2829,7 @@
     errorMsg = null;
     try {
       await chatCoreHost.editMessage(messageId, next);
-      messages = messages.map((m) =>
-        m.id === messageId ? { ...m, content: next } : m,
-      );
+      ctrl.patchMessage(messageId, { content: next });
       cancelEditMessage();
       await retryMessage(messageId);
     } catch (e) {
@@ -2934,12 +2859,12 @@
       _streamId: input.streamId,
     };
     if (input.userMessage) {
-      messages = [...messages, input.userMessage, assistantMsg];
+      ctrl.setMessages([...messages, input.userMessage, assistantMsg]);
     } else if (input.truncateAfterMessageId) {
       const userIndex = messages.findIndex(
         (m) => m.id === input.truncateAfterMessageId,
       );
-      messages =
+      const truncatedMessages =
         userIndex >= 0
           ? [...messages.slice(0, userIndex + 1), assistantMsg]
           : [...messages, assistantMsg];
@@ -2956,13 +2881,15 @@
         }
       }
       historyTimelineItems = truncatedHistory;
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          keptHistoryMessageIds.has(messageId),
-        ),
-      );
+      // Set the truncated message list into the controller.
+      ctrl.setMessages(truncatedMessages);
+      // The controller's initialEventsByMessageId alias ($ctrl) will remain until
+      // the controller is asked to drop stale entries. We build a keep-set that
+      // includes the new assistant message so its events are not pruned later.
+      // (The actual cleanup of history events happens via resetProjectionState on
+      // full session reloads — per-retry truncation leaves orphaned events harmless.)
     } else {
-      messages = [...messages, assistantMsg];
+      ctrl.appendMessage(assistantMsg);
     }
     followBottom = true;
     scheduleScrollToBottom({ force: true });
@@ -3461,12 +3388,8 @@
   ) => {
     const normalizedId = String(messageId ?? '').trim();
     if (!normalizedId || events.length === 0) return;
-    const next = new Map(initialEventsByMessageId);
-    next.set(
-      normalizedId,
-      mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
-    );
-    initialEventsByMessageId = next;
+    // Route through controller (slice 1B): mergeHistoryEvents handles dedup + notify.
+    ctrl.mergeHistoryEvents(normalizedId, events as StreamEvent[]);
     scanEventsForGeneratedFileCards(normalizedId, events);
   };
 
@@ -3526,9 +3449,12 @@
     const shouldRevealAtBottom =
       opts?.revealAtBottom === true && previousScrollHeight <= 0;
 
+    // Build next messages + history lists locally, then commit to controller atomically.
     const nextMessages = [...messages];
-    const nextInitialEvents = new Map(initialEventsByMessageId);
     const nextHistory = [...historyTimelineItems];
+    // Accumulate history events per message id to batch-merge into the controller.
+    const accumulatedHistoryEvents = new Map<string, StreamEvent[]>();
+
     for (const item of chronologicalBlock) {
       const normalizedMessage: LocalMessage = {
         ...item.message,
@@ -3559,13 +3485,11 @@
       }
 
       if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
-        nextInitialEvents.set(
-          item.message.id,
-          mergeProjectionHistoryEvents(
-            nextInitialEvents.get(item.message.id) ?? [],
-            item.segment.events,
-          ),
-        );
+        const msgId = item.message.id;
+        const existing = accumulatedHistoryEvents.get(msgId) ?? [];
+        // Merge segment events into accumulator (deduplicate by sequence)
+        const merged = mergeProjectionHistoryEvents(existing, item.segment.events);
+        accumulatedHistoryEvents.set(msgId, merged);
       }
       if (
         item.kind === 'runtime-segment' &&
@@ -3592,9 +3516,11 @@
 
     historyHydrationSwapPending = shouldRevealAtBottom;
 
-    messages = nextMessages;
-    initialEventsByMessageId = nextInitialEvents;
-    for (const [msgId, events] of nextInitialEvents) {
+    // Commit messages to controller (single notify per block).
+    ctrl.setMessages(nextMessages);
+    // Merge all accumulated history events into the controller.
+    for (const [msgId, events] of accumulatedHistoryEvents) {
+      ctrl.mergeHistoryEvents(msgId, events);
       scanEventsForGeneratedFileCards(msgId, events);
     }
     historyTimelineItems = nextHistory;
@@ -3660,7 +3586,7 @@
       // If the current sessionId is stale (e.g. from a different workspace), clear it
       if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {
         sessionId = null;
-        messages = [];
+        ctrl.setMessages([]);
       }
       if (!suppressSessionAutoSelect && !sessionId && sessions.length > 0) {
         void selectSession(sessions[0].id);
@@ -3690,18 +3616,16 @@
         historyHydrationInFlight = true;
         historyHydrationSwapPending = false;
         historyHydrationStickBottom = true;
-        messages = [];
         optimisticSteerMessages = [];
         historyTimelineItems = [];
         stagedHistoryTimelineItems = [];
         historyTimelineSessionId = null;
-        projectedStreamEventsById = new Map();
-        projectedAssistantComputationByMessageId = new Map();
-        projectionEventsVersion += 1;
-        initialEventsByMessageId = new Map();
         runtimeSummaryByMessageId = new Map();
         loadedRuntimeDetailsMessageIds.clear();
         loadingRuntimeDetailsMessageIds.clear();
+        // Reset controller state: clears messages + projection events (slice 1B).
+        ctrl.setMessages([]);
+        ctrl.resetProjectionState();
         applySessionCheckpoints([]);
         sessionDocs = [];
         sessionDocsError = null;
@@ -3765,15 +3689,13 @@
       if (stagedHistoryTimelineItems.length > 0) {
         await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
       }
-      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      ctrl.filterMessages(serverMessageIds);
       historyTimelineItems = historyTimelineItems.filter((item) =>
         serverTimelineKeys.has(item.key),
       );
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          serverEventMessageIds.has(messageId),
-        ),
-      );
+      // Stale entries in initialEventsByMessageId are harmless (unreachable by
+      // getProjectionEventsForMessage since those message ids are no longer in
+      // the message list). They will be cleared on next resetProjectionState.
       historyHydrationStickBottom = false;
       historyHydrationInFlight = false;
 
@@ -3828,21 +3750,19 @@
     const performDeferredClear = () => {
       if (!isCurrentHydration()) return false;
       optimisticSteerMessages = [];
-      projectedStreamEventsById = new Map();
-      projectedAssistantComputationByMessageId = new Map();
-      projectionEventsVersion += 1;
       loadedRuntimeDetailsMessageIds.clear();
       loadingRuntimeDetailsMessageIds.clear();
       resetLocalToolInterceptionState();
-      messages = [];
       historyTimelineItems = [];
-      initialEventsByMessageId = new Map();
       runtimeSummaryByMessageId = new Map();
       sessionDocs = [];
       sessionDocsError = null;
       suppressSessionAutoSelect = false;
       clearComposerAttachments();
       sessionId = id;
+      // Reset controller state: clears messages + projection events (slice 1B).
+      ctrl.setMessages([]);
+      ctrl.resetProjectionState();
       historyHydrationSwapPending = true;
       return true;
     };
@@ -3926,15 +3846,11 @@
         });
       }
 
-      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      ctrl.filterMessages(serverMessageIds);
       historyTimelineItems = historyTimelineItems.filter((item) =>
         serverTimelineKeys.has(item.key),
       );
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          serverEventMessageIds.has(messageId),
-        ),
-      );
+      // Stale entries in initialEventsByMessageId are harmless — see loadMessages comment.
 
       const lastAssistantModel = [...messages]
         .reverse()
@@ -3977,14 +3893,12 @@
     sessionHydrationGeneration += 1;
     suppressSessionAutoSelect = true;
     sessionId = null;
-    messages = [];
     historyTimelineItems = [];
     stagedHistoryTimelineItems = [];
     historyTimelineSessionId = null;
     sessionCheckpoints = [];
     sessionDocs = [];
     sessionDocsError = null;
-    initialEventsByMessageId = new Map();
     runtimeSummaryByMessageId = new Map();
     loadedRuntimeDetailsMessageIds.clear();
     loadingRuntimeDetailsMessageIds.clear();
@@ -3992,10 +3906,12 @@
     historyHydrationStickBottom = false;
     historyHydrationSwapPending = false;
     loadingMessages = false;
-    projectedAssistantComputationByMessageId = new Map();
     optimisticSteerMessages = [];
     resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
+    // Reset controller state: clears messages + projection events (slice 1B).
+    ctrl.setMessages([]);
+    ctrl.resetProjectionState();
     selectedProviderId = defaultProviderIdForNewSession;
     selectedModelId = defaultModelIdForNewSession;
     errorMsg = null;
@@ -4022,17 +3938,17 @@
       sessionHydrationGeneration += 1;
       suppressSessionAutoSelect = false;
       sessionId = null;
-      messages = [];
       historyTimelineItems = [];
       stagedHistoryTimelineItems = [];
       historyTimelineSessionId = null;
       sessionDocs = [];
       sessionDocsError = null;
-      initialEventsByMessageId = new Map();
-      projectedAssistantComputationByMessageId = new Map();
       optimisticSteerMessages = [];
       resetTodoRuntimePanel();
       resetLocalToolInterceptionState();
+      // Reset controller state: clears messages + projection events (slice 1B).
+      ctrl.setMessages([]);
+      ctrl.resetProjectionState();
       await loadSessions();
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.deleteSession'));
@@ -4043,11 +3959,10 @@
     streamId: string,
     t: 'done' | 'error',
   ) => {
-    messages = messages.map((m) =>
-      (m._streamId ?? m.id) === streamId
-        ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' }
-        : m,
-    );
+    const target = messages.find((m) => (m._streamId ?? m.id) === streamId);
+    if (target) {
+      ctrl.patchMessage(target.id, { _localStatus: t === 'done' ? 'completed' : 'failed' });
+    }
     scheduleScrollToBottom({ force: true });
   };
 
@@ -4364,9 +4279,7 @@
     try {
       await chatCoreHost.setFeedback(messageId, next);
       const voteValue = next === 'clear' ? null : next === 'up' ? 1 : -1;
-      messages = messages.map((m) =>
-        m.id === messageId ? { ...m, feedbackVote: voteValue } : m,
-      );
+      ctrl.patchMessage(messageId, { feedbackVote: voteValue });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.feedback'));
     }
