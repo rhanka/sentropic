@@ -38,7 +38,7 @@ Extend `@sentropic/cli` with a `VerbRegistry` + optional `deps.verbRegistry` fie
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- No active feedback items.
+- **Lot0-D1 (DISCOVERY, closed)**: Plan stated `make test SCOPE=packages/cli/tests` and `make typecheck` — these are the global multi-service targets. Real targets are `make test-cli` and `make typecheck-cli` (CLI-specific Docker-run lanes). No `lint-cli` target exists; `packages/cli/package.json` has no lint script. Applicable quality gates for CLI-only work: `typecheck-cli` + `test-cli`. No prod code impact; all 16 tests pass.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -64,18 +64,18 @@ Extend `@sentropic/cli` with a `VerbRegistry` + optional `deps.verbRegistry` fie
 
 ## Plan / Todo (lot-based)
 
-- [ ] **Lot 0 — Characterization (0-regression oracle)**
-  - [ ] Confirm worktree is `feat/stp-federation-42i`: `git -C /home/antoinefa/src/sentropic/tmp/feat-stp-federation-42i branch --show-current`
-  - [ ] Read `packages/cli/src/registry.ts`, `cli.ts`, `index.ts`, `bin/stp.mjs`, `packages/cli/package.json`
-  - [ ] Read existing tests: `packages/cli/tests/dispatch.spec.ts`, `packages/cli/tests/registry.spec.ts`
-  - [ ] Record current `packages/cli` version (`0.1.0`) and confirm it is the pre-bump baseline
-  - [ ] Run existing CLI tests GREEN as the 0-regression oracle: `make test SCOPE=packages/cli/tests ENV=test-feat-stp-federation-42i`
-  - [ ] Capture and record stdout of `stp --help`, `stp --version`, `stp bogus` (exact bytes) as regression fixtures
-  - [ ] Confirm scope boundaries (`Allowed/Forbidden/Conditional`) match this BRANCH.md
-  - [ ] Lot gate:
-    - [ ] `make typecheck ENV=test-feat-stp-federation-42i`
-    - [ ] `make lint ENV=test-feat-stp-federation-42i`
-    - [ ] CLI tests pass: `make test SCOPE=packages/cli/tests ENV=test-feat-stp-federation-42i`
+- [x] **Lot 0 — Characterization (0-regression oracle)**
+  - [x] Confirm worktree is `feat/stp-federation-42i`: `git -C /home/antoinefa/src/sentropic/tmp/feat-stp-federation-42i branch --show-current`
+  - [x] Read `packages/cli/src/registry.ts`, `cli.ts`, `index.ts`, `bin/stp.mjs`, `packages/cli/package.json`
+  - [x] Read existing tests: `packages/cli/tests/dispatch.spec.ts`, `packages/cli/tests/registry.spec.ts`
+  - [x] Record current `packages/cli` version (`0.1.0`) and confirm it is the pre-bump baseline
+  - [x] Run existing CLI tests GREEN as the 0-regression oracle: `make test-cli ENV=test-feat-stp-federation-42i` (real target: `test-cli`, not `make test SCOPE=...`)
+  - [x] Capture and record stdout of `stp --help`, `stp --version`, `stp bogus` (exact bytes) as regression fixtures
+  - [x] Confirm scope boundaries (`Allowed/Forbidden/Conditional`) match this BRANCH.md
+  - [x] Lot gate:
+    - [x] `make typecheck-cli ENV=test-feat-stp-federation-42i` PASS (real target: `typecheck-cli`; no `lint-cli` exists — CLI package has no lint tooling)
+    - [x] `make lint ENV=test-feat-stp-federation-42i` — N/A for CLI-only: no `lint-cli` target; `typecheck-cli` is the applicable quality gate (DISCOVERY: see Feedback Loop)
+    - [x] CLI tests pass: `make test-cli ENV=test-feat-stp-federation-42i` — 16 passed (8 existing + 8 new characterization)
 
 - [ ] **Lot 1 — `VerbRegistry` + `runCli` extension (0-regression GATE)**
   - [ ] Add `packages/cli/src/verb-registry.ts`:
