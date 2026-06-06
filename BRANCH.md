@@ -50,11 +50,12 @@ Ratify the `ChatCoreHost` typed contract (transport + streaming + local-tool + s
   - [x] Fix `streamHistory.ts`: use `asRecord(event)` for domain event field access (no union narrowing needed)
   - [x] Gate: `make typecheck-chat-ui` → exit 0; `make test-chat-ui` → 426/426 pass
 
-- [ ] **Lot 1 Slice 1A — Real transport verbs on host; AppChatPanel consumes them (ZERO-DOM)**
-  - [ ] Extend `ChatCoreTransport` in `packages/chat-ui/src/client/transport.ts` with all host verbs
-  - [ ] Create `ChatCoreTransportFactory` web impl via `createDefaultChatCoreTransport`
-  - [ ] Refactor AppChatPanel to use host/transport verbs for all ChatCoreHost call-sites
-  - [ ] Gate: `make typecheck-ui`, `make typecheck-chat-ui`, `make test-chat-ui`, `make test-ui` → all green
+- [x] **Lot 1 Slice 1A — Real transport verbs on host; AppChatPanel consumes them (ZERO-DOM)**
+  - [x] Extend `ChatCoreTransport` in `packages/chat-ui/src/client/transport.ts` with all 12 host verbs; implement in `createDefaultTransport`
+  - [x] Extend `createSentropicChatTransport` in `ui/src/lib/chat/web-host-adapter.ts` with all business verbs (satisfies expanded interface)
+  - [x] Refactor AppChatPanel to use `chatCoreHost` for all 14 ChatCoreHost call-sites; remove unused URL builder imports + `postChatSteer` import
+  - [x] Fix `ModelProviderId` cast for `initialProviderId` from `ModelCatalog.defaults?.provider_id` (string) to `ModelProviderId`
+  - [x] Gate: `make typecheck-ui` → 0 errors; `make typecheck-chat-ui` → exit 0; `make test-chat-ui` → 455/455; `make test-ui` → 445/447 pass (2 pre-existing `google-drive-picker` failures, confirmed on Step-1A.0 baseline)
 
 ## Feedback Loop
 - None.

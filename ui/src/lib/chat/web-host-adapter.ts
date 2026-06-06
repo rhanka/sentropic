@@ -16,9 +16,16 @@ import { API_BASE_URL } from '$lib/config';
 import { getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 import { streamHub } from '$lib/stores/streamHub';
 import { loadJobs, queueStore } from '$lib/stores/queue';
-import { apiFetch, apiPost } from '$lib/utils/api';
+import { apiFetch, apiGet, apiPost, apiPatch, apiDelete } from '$lib/utils/api';
 import {
   chatMessagesUrl,
+  chatMessageFeedbackUrl,
+  chatMessageRetryUrl,
+  chatMessageStopUrl,
+  chatMessageToolResultsUrl,
+  chatMessageUrl,
+  chatSessionHistoryUrl,
+  chatSessionsUrl,
   chatSessionUrl,
 } from '$lib/chat/session-adapter';
 import {
@@ -59,6 +66,72 @@ export const createSentropicChatTransport = (): ChatCoreTransport => ({
       method: 'GET',
     });
     return response.json() as Promise<unknown>;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Business verbs (Slice 1A — required by ChatCoreTransport interface)
+  // Delegates to the same auth-aware API utils used by AppChatPanel.
+  // ---------------------------------------------------------------------------
+
+  async fetchSessions() {
+    return apiGet<{ sessions: Array<{ id: string; title: string; createdAt: string; updatedAt: string }> }>(
+      chatSessionsUrl(),
+    );
+  },
+
+  fetchSessionHistory(sessionId, detail) {
+    return apiFetch(chatSessionHistoryUrl(sessionId, detail), {
+      method: 'GET',
+      headers: { Accept: 'application/x-ndjson' },
+    });
+  },
+
+  async sendMessage(payload) {
+    return apiPost<{ sessionId: string; userMessageId: string; assistantMessageId: string; streamId: string; jobId: string }>(
+      chatMessagesUrl(),
+      payload,
+    );
+  },
+
+  async retryMessage(messageId, opts) {
+    return apiPost<{ sessionId: string; userMessageId: string; assistantMessageId: string; streamId: string; jobId: string }>(
+      chatMessageRetryUrl(messageId),
+      { providerId: opts.providerId, model: opts.model },
+    );
+  },
+
+  async stopMessage(messageId) {
+    await apiPost(chatMessageStopUrl(messageId));
+  },
+
+  async editMessage(messageId, content) {
+    await apiPatch(chatMessageUrl(messageId), { content });
+  },
+
+  async setFeedback(messageId, vote) {
+    await apiPost(chatMessageFeedbackUrl(messageId), { vote });
+  },
+
+  async deleteSession(sessionId) {
+    await apiDelete(chatSessionUrl(sessionId));
+  },
+
+  async pollJob(jobId) {
+    return apiGet<{ status?: string }>(`/queue/jobs/${encodeURIComponent(jobId)}`);
+  },
+
+  async postLocalToolResult(streamId, toolCallId, result) {
+    await apiPost(chatMessageToolResultsUrl(streamId), { toolCallId, result });
+  },
+
+  async postSteer(streamId, message) {
+    await apiPost(`/chat/messages/${encodeURIComponent(streamId)}/steer`, { message });
+  },
+
+  async fetchModelCatalog() {
+    return apiGet<{ providers: Array<{ provider_id: string; label: string; status: 'ready' | 'planned' }>; models: Array<{ provider_id: string; model_id: string; label: string; default_contexts: string[] }>; defaults?: { provider_id?: string; model_id?: string } }>(
+      '/models/catalog',
+    );
   },
 });
 
