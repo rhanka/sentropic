@@ -5,8 +5,11 @@ Branch: `feat/stp-federation-42i` (BR-42i). Part of the BR-42 CLI-ecosystem coor
 
 Lineage: follows `spec/SPEC_EVOL_BUILD_APP_CLI.md` (BR-42a, shipped) and extends
 `spec/SPEC_STUDY_CLI_ECOSYSTEM_GAPS.md` §11 ("federation roster + vocabulary harmonization")
-+ §13 ("plan registration"). Sibling: BR-42k (`stp` à-la-carte + lazy-skill /
-conflict-avoidance mode, §12 of the gap-spec) — referenced but NOT scoped here.
++ §13 ("plan registration"). **NOTE: the gap-spec is NOT on `main`** — it lives on branch
+`chore/rules-skills-audit` (BR-25, **PR #259**); read it via
+`git show origin/chore/rules-skills-audit:spec/SPEC_STUDY_CLI_ECOSYSTEM_GAPS.md` (§11/§12 +
+ledger R6/R7/B6/B7). Sibling: BR-42k (`stp` à-la-carte + lazy-skill / conflict-avoidance mode,
+§12 of the gap-spec) — referenced but NOT scoped here.
 
 ---
 
@@ -16,7 +19,7 @@ conflict-avoidance mode, §12 of the gap-spec) — referenced but NOT scoped her
   `cli.ts` + `index.ts` (the actual seam), `packages/cli/bin/stp.mjs` (the live composition
   root), `packages/build-cli/src/cli.ts` (the working `stp app` example), and
   `spec/SPEC_STUDY_CLI_ECOSYSTEM_GAPS.md` §11/§12/§13/R6/R7/B6/B7 (the source of truth).
-  Double adversarial review (Opus 4.8 + Codex 5.5-high) **not yet run** — stub below.
+- **2026-06-06 (double-review)** — Opus 4.8 (conductor): APPROVE on the seam grounding + D7 contract + 0-regression framing. Codex 5.5-xhigh: **REVISE** — 7 must-fixes, all folded: (1) discovery distinguishes *absent* (skip) from *installed-but-broken* (fail loudly: missing `./cli` export, malformed `{run,version}`, ESM/CJS shape mismatch, transitive import failure, version skew) + full import specifiers; (2) `verbRegistry` goes on `CliDeps` (NOT a 3rd positional param — would break callers/tests); (3) harness premise corrected — `packages/harness` is not on main + a published `@sentropic/cli` cannot import a private unpublished `@sentropic/harness`; the D7 "one wiring change" is valid only AFTER BR-42h creates+publishes the harness CLI contract (flip `private:false`); (4) no `pending:true` harness reservation — `verify`/`commit` registered only at D7; (5) ship only ratified low-collision bare aliases (start with `report`); defer `init`/`doctor`/`commit`/`verify`/`knowledge` (high-collision; `knowledge` shadowed by the subcommand name); (6) gap-spec citation fixed (lives on PR #259, not main); (7) "self-register" → composition root imports/discovers + calls `registry.register`; external CLIs only EXPORT a contract.
 
 ---
 
@@ -136,13 +139,13 @@ The `packages/cli/src/` library stays plugin-agnostic; discovery code lives in `
 1. `stp` maintains a **static federation manifest** in `packages/cli/src/federation.ts`
    (or `bin/stp.mjs` inline for the first iteration): an ordered list of `{ name, package,
    summary, entryExport }` records for the known `@sentropic` CLIs.
-2. At startup the bin iterates the manifest and, for each cross-repo entry, attempts
-   `import('@sentropic/<pkg>/cli')` (or whatever entry the CLI package exports). If the
-   package is installed the import resolves; if not it is silently skipped (the subcommand
-   simply does not appear in `stp --help`).
+2. At startup the bin iterates the manifest and, for each cross-repo entry, attempts to
+   `import(<full specifier>)` where the specifier is taken **verbatim from the manifest entry**
+   (e.g. `@sentropic/track/cli`) — not a guessed `@sentropic/<pkg>/cli` pattern. The composition
+   root performs the import + registration; the external CLI only EXPORTS a contract (Codex MF7 —
+   no "self-registration": external packages never import `@sentropic/cli`).
 3. Each resolved import must expose `{ run: (argv: string[]) => Promise<number>, version: string }`
-   — this is the **cross-repo CLI contract** (see §5 below for the exact shape and its
-   relationship to `Subcommand`).
+   — the **cross-repo CLI contract** (see §5).
 4. Resolved entries are registered via `registry.register(...)` using the manifest's
    `name`/`summary` + the resolved `version`.
 
@@ -153,10 +156,10 @@ federated. Adding a new CLI requires a one-line manifest entry (a `packages/cli/
 version bump) rather than a naming-convention bet. This is the safer approach given the
 no-unvalidated-naming rule.
 
-**Import failure policy:** if a cross-repo CLI is in the manifest but not installed,
-`stp` silently omits it (no error, no startup crash). `stp --help` lists only the installed
-subcommands. `stp <name>` against an omitted entry falls through to the existing
-`formatUnknown` error path (lists available subcommands).
+**Import resolution policy (Codex MF1 — absent ≠ broken):**
+- **True absence** (module-not-found / `ERR_MODULE_NOT_FOUND` / `ERR_PACKAGE_PATH_NOT_EXPORTED` for an uninstalled package) → **silently skip**; the subcommand simply does not appear in `stp --help`, and `stp <name>` falls through to the existing `formatUnknown` path.
+- **Installed-but-broken** (the package resolves but the import THROWS for any other reason — a transitive import failure, an ESM/CJS interop error, or it resolves to a value that fails the `{ run, version }` shape/`InvalidSubcommandError` validation, or a version-skew the manifest declares incompatible) → **fail LOUDLY**: surface the offending package + error to stderr and a non-zero exit, never silently omit. Silent omission would hide a real breakage as a "missing command".
+- The skip-only-on-true-absence distinction is implemented by inspecting the import error code, not by a blanket try/catch-and-ignore.
 
 **`stp app` (in-repo) stays hard-imported** in `bin/stp.mjs` (no discovery needed). Same
 will apply to `stp harness` once it is wired at D7.
@@ -181,22 +184,28 @@ level flag, `runCli` checks the verb registry:
 
 ### 4.2 Initial verb vocabulary (proposed)
 
-The coordinator proposes the following bare verbs and their candidate owners.
-This is the key content requiring double review and coordinator/user sign-off.
+**Codex MF5: ship ONLY ratified low-collision aliases initially; defer high-collision ones.**
+A bare-verb alias is a permanent public CLI contract (costly to rename post-publish), so BR-42i
+ships a MINIMAL, ratified set and defers everything contentious to a later, deliberate decision.
 
-| Bare verb (`stp <verb>`) | Candidate owner | Owner verb | Notes |
+**Initial shipped vocabulary (BR-42i):**
+
+| Bare verb (`stp <verb>`) | Owner | Owner verb | Why low-collision / ratified |
 |---|---|---|---|
-| `report` | `stp track` | `track report` | Gap-spec §11.2 canonical example; track's work-in-flight report |
-| `status` | `stp track` | `track status` | Branch/lot/task status projection |
-| `init` | `stp app` | `app init` | Scaffold a new app; pre-empts harness `init` if harness ships one — see collision note |
-| `verify` | `stp harness` (D7) | `harness verify` | Run verify-hook suite; deferred until harness ships |
-| `doctor` | `stp app` | `app doctor` | Pre-flight checks; currently app-specific, may fan-in with harness later |
-| `ingest` | `stp track` | `track ingest` | Ingest harness neutral stream |
-| `commit` | `stp harness` (D7) | `harness commit` | Harness-wrapped `make commit`; deferred |
-| `knowledge` / `query` | `stp knowledge` | `knowledge query` | KM retrieval; `knowledge` is also the subcommand name (no bare-verb alias needed) |
+| `report` | `stp track` | `track report` | Gap-spec §11.2 **canonical example**; only `track` plausibly owns "report"; user-implied via §11. |
 
-**This table is a proposal for the double review, not frozen.**
-The exact vocabulary and ownership is decision B6 (see §7).
+**Deferred (NOT shipped/reserved by BR-42i)** — decide each as its owning CLI lands + the
+ecosystem usage clarifies, to avoid freezing a contested alias prematurely:
+
+- `init` — collides between `app init` (scaffold) and a future `harness init` (workspace) → keep `stp app init` / `stp harness init` explicit for now (no bare alias).
+- `doctor` — `app`-specific today, may fan-in with harness later.
+- `verify` / `commit` — harness-owned but harness isn't published (D7); register ONLY at D7.
+- `status` / `ingest` — track-owned candidates; reasonable but not yet ratified → defer to the B6 follow-up once `stp track` is federated and its surface is confirmed.
+- `knowledge` / `query` — `knowledge` is already the SUBCOMMAND name (`stp knowledge`) so a bare-verb alias would shadow it; no alias.
+
+**B6 reduces to**: ship `report`→`track report` now (reversible, low-collision, gap-spec
+canonical); the broader vocabulary is a deliberate follow-up decision (B6-followup), validated
+with the user before each alias is frozen. This keeps the durable public surface minimal.
 
 ### 4.3 Collision policy (decision B6 — key open decision)
 
@@ -263,18 +272,22 @@ export class VerbRegistry {
 }
 ```
 
-`runCli` in `cli.ts` gains an optional `VerbRegistry` parameter (zero breaking change — no
-registry = existing behavior). When the token does not match a subcommand name and a verb
-registry is provided, it checks the verb registry before falling through to `formatUnknown`.
+**Codex MF2 — the `runCli(argv, registry, deps)` signature is PRESERVED exactly.** The
+`VerbRegistry` is carried as a NEW OPTIONAL FIELD on the existing `CliDeps` object
+(`deps.verbRegistry?: VerbRegistry`), NOT as a 3rd positional parameter (a positional add
+would break current callers/tests). When `deps.verbRegistry` is present AND the token matches
+neither a subcommand name nor a top-level flag, `runCli` checks the verb registry before
+falling through to `formatUnknown`. Absent `deps.verbRegistry` → behavior is byte-identical
+to today.
 
-The bin wires both registries:
+The bin wires both registries (the verb registry rides on `deps`):
 
 ```js
 // bin/stp.mjs (extended)
 const verbRegistry = new VerbRegistry();
 verbRegistry.register({ verb: 'report', ownerCli: 'track', ownerArgv: ['report'] });
-// ... other stable verbs ...
 const code = await runCli(process.argv.slice(2), registry, { verbRegistry });
+//                                                            ^^^^^^^^^^^^^^^^ CliDeps field
 ```
 
 ---
@@ -294,23 +307,27 @@ const code = await runCli(process.argv.slice(2), registry, { verbRegistry });
    ```
    This is byte-identical to how `stp app` registers. No new seam required.
 
-2. **The `VerbRegistry` accepts harness verb bindings additively.** BR-42h adds:
+2. **The `VerbRegistry` accepts harness verb bindings additively at D7.** BR-42i does NOT
+   pre-reserve `verify`/`commit` (Codex MF4 — no `pending:true` field shipped unless BR-42i
+   implements+tests it; we don't). At D7, BR-42h adds them fresh:
    ```js
    verbRegistry.register({ verb: 'verify', ownerCli: 'harness', ownerArgv: ['verify'] });
-   verbRegistry.register({ verb: 'commit', ownerCli: 'harness', ownerArgv: ['commit'] });
    ```
-   If BR-42i ships with `verify`/`commit` reserved as D7 bindings (optional: register them
-   with a `pending: true` flag that prints a "not yet installed" message), BR-42h's D7 lot
-   simply removes the `pending` flag. If BR-42i does not pre-reserve them, BR-42h adds them
-   fresh — no collision risk (harness is the only owner).
+   No collision risk (harness is the sole owner of `verify`/`commit`).
 
-3. **The federation manifest** in `packages/cli/src/federation.ts` already includes a
-   `harness` entry (with `pending: true` or simply commented out) by the time BR-42h ships.
-   BR-42h's D7 lot activates it (flips `pending` or uncomments) and hard-imports the package
-   in `bin/stp.mjs` (in-repo pattern, same as `stp app`).
+3. **PRECONDITION (Codex MF3): the harness CLI must EXIST + be importable first.** `packages/harness`
+   is NOT on `main` (it is being built on `feat/harness-core`, `private:true`), and a PUBLISHED
+   `@sentropic/cli` cannot import a private/unpublished package. So the D7 "one wiring change" is
+   valid ONLY AFTER BR-42h: (a) creates the harness CLI contract (`runHarnessCli` + version export),
+   and (b) flips `private:false` + publishes (or, if `stp harness` is wired from the in-repo bin
+   pre-publish, the bin imports the workspace package — but the PUBLISHED `stp` still needs the
+   published harness). BR-42i only guarantees the SEAM is ready; it cannot pre-wire a non-existent
+   package.
 
-4. **No BR-42i code is reworked at D7.** The `SubcommandRegistry`, `VerbRegistry`, and
-   `runCli` extension are finalized by BR-42i and accepted as-is by BR-42h.
+4. **No BR-42i code is reworked at D7** — the `SubcommandRegistry`, `VerbRegistry`, and the
+   `CliDeps.verbRegistry` extension are finalized by BR-42i; BR-42h's D7 lot only ADDS a
+   `registry.register(harness)` + `verbRegistry.register(harness verbs)` call at the composition
+   root (and the manifest/import wiring), once the harness package exists+publishes.
 
 **The D7 contract in one sentence:** `packages/cli/` exposes `VerbRegistry` + an optional
 `verbRegistry` param to `runCli`; `packages/harness/bin/` (or `bin/stp.mjs`) calls
@@ -350,9 +367,11 @@ root. That is all.
 The existing `stp app` subcommand and the existing top-level `--version`/`--help` dispatch in
 `runCli` must keep working **byte-identical** after BR-42i:
 
-1. **`runCli` dispatch**: adding a `verbRegistry` parameter is purely additive (optional param
-   with a default of `undefined`). When `verbRegistry` is absent, `runCli` behaves exactly as
-   today. All existing tests pass unchanged.
+1. **`runCli` dispatch**: the `runCli(argv, registry, deps)` signature is UNCHANGED; the verb
+   registry is an optional FIELD on `CliDeps` (`deps.verbRegistry?`). When it is absent (today's
+   callers pass no such field), `runCli` behaves exactly as today. All existing tests pass
+   unchanged. (Byte-identical help/version holds only when NO plugins are installed AND no verb
+   registry is passed — i.e. for the existing test fixtures.)
 2. **`SubcommandRegistry`**: no interface change. Existing `.register()`/`.get()`/`.list()`
    semantics preserved.
 3. **`stp app` registration** in `bin/stp.mjs`: unchanged — the `runAppCli` + `BUILD_CLI_VERSION`
@@ -367,28 +386,23 @@ The existing `stp app` subcommand and the existing top-level `--version`/`--help
 
 ## 8. Open decisions
 
-### Decision B6 — Bare-verb ownership + collision policy (PRIMARY)
+### Decision B6 — Collision policy (DECIDED, reversible) + initial alias (DECIDED) 
 
-This is the key decision requiring coordinator/user sign-off before implementation.
+Post-Codex-MF5, B6 is **de-risked and conductor-decidable** (no longer a "freeze the whole
+vocabulary now" blocker):
+- **Collision policy = Option A (single-owner strict)** for the initial roster — `DuplicateVerbError`
+  at startup; coordinator is arbiter; `stp <cli> <verb>` long form is the always-available escape
+  hatch. Escalation path to Option C documented for ecosystem growth. *(reversible)*
+- **Initial shipped alias = `report` → `track report` ONLY** (§4.2) — low-collision, gap-spec §11.2
+  canonical, user-implied. *(reversible; low durable surface)*
 
-- **What needs deciding:** which CLI owns each bare verb as `stp <verb>`, and which collision
-  policy applies when multiple CLIs expose the same verb (Options A/B/C in §4.3).
-- **Recommendation:** Single-owner (Option A) for the initial roster; escalation path to
-  Option C as ecosystem grows. The specific verb-to-owner mapping in §4.2 requires review.
-- **Risk if wrong:** bare-verb aliases become a permanent public CLI contract (renaming is
-  costly post-publish). Decide the full vocabulary now.
-- **Blocking for:** lot implementation (cannot write `bin/stp.mjs` verb wiring without knowing
-  the policy and the vocabulary).
+### Decision B6-followup — broader verb vocabulary (DEFERRED, user-validated per alias)
 
-### Decision B6a — `init` verb ownership (sub-decision of B6)
-
-`stp init` is currently a clean single-owner case (`stp app init`). However, if harness ships
-a generic `harness init` (workspace init), both CLIs expose `init`. The collision must be
-pre-declared:
-- Option 1: `init` stays owned by `app` (product-app init); harness uses `harness init` only.
-- Option 2: `init` fans into both; context determines which is relevant.
-- Recommendation: reserve `init` for `app` in the initial vocabulary; harness uses `stp harness
-  init` explicitly. Revisit at D7 if harness needs a top-level `init` alias.
+The contested aliases (`status`/`ingest`/`init`/`doctor`/`verify`/`commit`/`knowledge`) are NOT
+shipped by BR-42i (Codex MF5). Each is decided later, as its owning CLI federates and usage
+clarifies, and **validated with the user before the alias is frozen** (durable public CLI
+naming, cf. no-unvalidated-naming). `init`/`verify`/`commit` specifically wait on the harness
+(D7). Until then: only the explicit `stp <cli> <verb>` form (no bare alias).
 
 ### Decision R42i-1 — Federation manifest location (reversible)
 
@@ -435,11 +449,12 @@ change (they self-update their own packages). Reversible.
 
 ### 9.2 Blocking (pending sign-off)
 
-| ID | Decision | § | Owner |
-|---|---|---|---|
-| **B6** | Bare-verb ownership + collision policy | §4.2, §4.3 | BR-42 coordinator + user |
-| **B6a** | `init` verb ownership (`app` vs fan-in with future harness) | §8 | BR-42 coordinator |
-| **B-graphify-rename** | `stp knowledge` name depends on B3 (graphify→KM rename) | §3.1 | graphify owner |
+| ID | Decision | § | Owner | State |
+|---|---|---|---|---|
+| **B6** | Collision policy (Option A single-owner) + initial alias (`report`) | §4.3, §8 | coordinator | **DECIDED** (reversible) — conductor took it post-MF5 |
+| **B6-followup** | Broader verb vocabulary (`status`/`init`/`verify`/…) | §4.2, §8 | coordinator + **user** | DEFERRED — validate each alias before freeze (durable naming) |
+| **B-graphify-rename** | `stp knowledge` name depends on B3 (graphify→KM rename) | §3.1 | graphify owner | pending (cross-repo) |
+| **B-harness-precondition** | `stp harness` D7 wiring needs harness package created+published first | §5 | BR-42h | pending (D7) |
 
 ---
 
