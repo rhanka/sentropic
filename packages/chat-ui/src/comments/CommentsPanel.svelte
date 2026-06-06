@@ -509,6 +509,8 @@
         {:else}
           <textarea
             class="w-full min-h-[36px] resize-none rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            role="textbox"
+            aria-label={labels('chat.composer.ariaLabel')}
             disabled={!workspaceCanComment || snap.commentThreadResolved}
             placeholder={commentPlaceholder()}
             value={snap.commentInput}
