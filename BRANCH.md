@@ -57,11 +57,11 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
   - [x] `src/profile/sentropic.ts` + `src/profile/stub.ts` (stub differs on a C2-consumed dimension).
   - [x] Gate: `make typecheck-harness` (green).
 
-- [ ] **Lot 2 — `BRANCH.md` parser + `ScopeBoundary`**
-  - [ ] `src/branch-md/parse.ts` — `parseBranchMd(text)` → `{ title, allowedPaths[], forbiddenPaths[], conditionalPaths[], lots[], exceptions[] }` (no branch identity — see C1 note).
-  - [ ] `src/scope/scope-boundary.ts` — `ScopeBoundary` + `classifyPath(path)` → `allowed|forbidden|conditional|unknown`.
-  - [ ] Tests: `tests/branch-md/parse.spec.ts` (golden: this BRANCH.md + malformed), `tests/scope/scope-boundary.spec.ts`.
-  - [ ] Gate: `make test-harness`.
+- [x] **Lot 2 — `BRANCH.md` parser + `ScopeBoundary`**
+  - [x] `src/branch-md/parse.ts` — `parseBranchMd(text)` → `{ title, allowedPaths[], forbiddenPaths[], conditionalPaths[], lots[], exceptions[] }` (tolerant; no throw on malformed).
+  - [x] `src/scope/scope-boundary.ts` — `ScopeBoundary` + `classifyPath(path)` → `allowed|forbidden|conditional|unknown` (precedence: allowed > forbidden > conditional > profile-default > unknown).
+  - [x] Tests: `tests/branch-md/parse.spec.ts` (golden synthetic fixture + malformed), `tests/scope/scope-boundary.spec.ts` (precedence/glob/unknown/profile-default).
+  - [x] Gate: `make test-harness ENV=test-feat-harness-core` (9 tests green) + `make typecheck-harness`.
 
 - [ ] **Lot 3 — C1 branch-check + C2 scope-check → VerificationRun**
   - [ ] `src/checks/branch-check.ts` — `checkBranch({ currentBranch, expectedBranch, profile })` (C1). **`expectedBranch` is CALLER-SUPPLIED this slice** (parsing it from a BRANCH.md identity block + a template identity line = explicit follow-on); golden tests cover match / mismatch / bypass.
