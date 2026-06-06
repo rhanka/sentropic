@@ -34,7 +34,25 @@
  *     - errorMsg / formatApiError presentation
  *     - copyToClipboard (browser API, not host-coupled)
  *
- * Later slices add: steer (1F), local-tool machine (1E).
+ * Slice 1E adds: local-tool execution state machine.
+ *   - attachLocalToolMachine(opts) — inject executor, decider, result-poster,
+ *     isRuntimeAvailable predicate, isLocalToolName predicate, and retryable-error
+ *     predicate. Controller owns: localToolStatesById, localToolInFlight,
+ *     localToolExecutionTimersById, pendingLocalToolPermissionPrompts,
+ *     localToolPermissionRetriesInFlight.
+ *   - detachLocalToolMachine() — clear all local-tool state + timers.
+ *   - handleLocalToolStreamEvent(event) — route an incoming stream event through
+ *     the local-tool machine (called from the app-side streamHub subscription).
+ *   - decideLocalToolPermission(prompt, decision) — handle user permission decision.
+ *   - Snapshot gains: localToolStatesById, pendingLocalToolPermissionPrompts.
+ *
+ *   App-side concerns kept in AppChatPanel (NOT moved here):
+ *     - streamHub subscription key lifecycle (set/delete in onMount/onDestroy)
+ *     - resolvePermissionPromptDetails (i18n labels — Svelte-specific)
+ *     - extensionActiveTabContext (browser-specific, drives context labels)
+ *     - the LocalToolPermissionRequiredError class import (app-level error types)
+ *
+ * Later slices add: steer (1F).
  *
  * Design constraints (SPEC_EVOL_CHATUI_MODULARIZATION §3, R3):
  *   - Plain TypeScript — zero Svelte/framework imports.
@@ -59,6 +77,13 @@
  *     truncateAfterMessageId path (which requires app-side historyTimelineItems
  *     manipulation before the controller's message list is updated).
  *     This keeps the split clean without duplicating logic.
+ *   - Local-tool machine (slice 1E): executor/decider/poster are injected via
+ *     attachLocalToolMachine — the controller is agnostic of the chrome extension
+ *     runtime and the host-specific ApiError shape. The app supplies predicates
+ *     (isLocalToolName, isLocalToolRuntimeAvailable, isRetryableLocalToolError)
+ *     and callbacks (executeLocalTool, decideLocalToolPermission, postLocalToolResult).
+ *     The LocalToolPermissionRequiredError class is identified by a caller-supplied
+ *     predicate (isLocalToolPermissionRequired) so the controller does not import it.
  *
  * FLAG: reactivity bridge is the key architectural choice for later slices.
  *   The controller deliberately does NOT carry a Svelte store itself — it is a plain
@@ -279,6 +304,97 @@ type ProjectedAssistantComputationCached = ChatProjectionComputation & {
 };
 
 // ---------------------------------------------------------------------------
+// Local-tool state machine types — slice 1E
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal state for a buffered local-tool call in flight.
+ * Mirrors AppChatPanel's LocalToolStreamState — kept framework-neutral.
+ */
+export type ControllerLocalToolStreamState = {
+  streamId: string;
+  name: string;
+  argsText: string;
+  lastSequence: number;
+  firstSeenAt: number;
+  executed: boolean;
+};
+
+/**
+ * Permission prompt surfaced when executeLocalTool throws a
+ * LocalToolPermissionRequiredError. App renders these as permission UI.
+ */
+export type ControllerLocalToolPermissionPrompt = {
+  toolCallId: string;
+  streamId: string;
+  name: string;
+  args: unknown;
+  /** The permission request payload returned by the runtime (opaque to the controller). */
+  request: {
+    requestId: string;
+    toolName: string;
+    origin: string;
+    details?: Record<string, unknown>;
+  };
+  createdAt: number;
+};
+
+/**
+ * Executor function injected by the app (wraps chrome.runtime.sendMessage / VSCode bridge).
+ * Must throw an error satisfying `isLocalToolPermissionRequired` when a permission
+ * prompt is needed. The controller does NOT import the concrete error class.
+ */
+export type ControllerLocalToolExecutorFn = (
+  toolCallId: string,
+  name: string,
+  args: unknown,
+  opts: { streamId: string },
+) => Promise<unknown>;
+
+/**
+ * Permission decision function injected by the app (wraps decideLocalToolPermission).
+ */
+export type ControllerLocalToolPermissionDeciderFn = (
+  requestId: string,
+  decision: string,
+) => Promise<void>;
+
+/**
+ * Result poster injected by the app (wraps chatCoreHost.postLocalToolResult with retry).
+ * App-side handles the ApiError retry logic so the controller stays transport-agnostic.
+ */
+export type ControllerLocalToolResultPosterFn = (
+  streamId: string,
+  toolCallId: string,
+  result: unknown,
+) => Promise<void>;
+
+/**
+ * Options for attachLocalToolMachine (slice 1E).
+ *
+ * - executeLocalTool: calls the extension runtime to execute a local tool.
+ *     Throws an error satisfying isLocalToolPermissionRequired when approval needed.
+ * - decideLocalToolPermission: sends the user's permission decision to the runtime.
+ * - postLocalToolResult: posts the tool result back to the stream (with retry on the app side).
+ * - isLocalToolName: predicate — true when the name is a recognized local tool name.
+ * - isLocalToolRuntimeAvailable: predicate — true when the extension runtime is present.
+ * - isLocalToolPermissionRequired: predicate — true when an error is a
+ *     LocalToolPermissionRequiredError and the controller should extract `error.request`.
+ *     The controller uses this to avoid importing the concrete error class.
+ * - getPermissionRequest: extract the permission request from a LocalToolPermissionRequiredError.
+ *     Called only when isLocalToolPermissionRequired returns true.
+ */
+export type AttachLocalToolMachineOptions = {
+  executeLocalTool: ControllerLocalToolExecutorFn;
+  decideLocalToolPermission: ControllerLocalToolPermissionDeciderFn;
+  postLocalToolResult: ControllerLocalToolResultPosterFn;
+  isLocalToolName: (name: string) => boolean;
+  isLocalToolRuntimeAvailable: () => boolean;
+  isLocalToolPermissionRequired: (error: unknown) => boolean;
+  getPermissionRequest: (error: unknown) => ControllerLocalToolPermissionPrompt['request'];
+};
+
+// ---------------------------------------------------------------------------
 // Public state snapshot exposed to the bridge layer
 // ---------------------------------------------------------------------------
 export type ChatLoopProjectionState<
@@ -297,6 +413,16 @@ export type ChatLoopProjectionState<
   readonly projectedTimelineItems: ReadonlyArray<
     ChatProjectedTimelineItem<Message, RuntimeSummary>
   >;
+  /**
+   * Local-tool execution state per toolCallId (slice 1E).
+   * ReadonlyMap — mutations go through the controller's local-tool machine.
+   */
+  readonly localToolStatesById: ReadonlyMap<string, ControllerLocalToolStreamState>;
+  /**
+   * Permission prompts awaiting user decision (slice 1E).
+   * App renders these as permission UI; decisions go through ctrl.decideLocalToolPermission.
+   */
+  readonly pendingLocalToolPermissionPrompts: readonly ControllerLocalToolPermissionPrompt[];
 };
 
 // ---------------------------------------------------------------------------
@@ -569,6 +695,81 @@ export type ChatLoopController<
    * Throws on transport failure — caller wraps in try/catch.
    */
   setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+
+  // -- Local-tool state machine (slice 1E) ------------------------------------
+
+  /**
+   * Attach the local-tool execution machine (slice 1E).
+   *
+   * Injects:
+   *   - executeLocalTool — calls the extension runtime to run a tool.
+   *   - decideLocalToolPermission — sends user decision to the runtime.
+   *   - postLocalToolResult — posts tool result back to the stream (app handles retry).
+   *   - isLocalToolName — predicate to identify local tool names.
+   *   - isLocalToolRuntimeAvailable — predicate to check runtime availability.
+   *   - isLocalToolPermissionRequired — identifies LocalToolPermissionRequiredError.
+   *   - getPermissionRequest — extracts the request from the error.
+   *
+   * The controller takes ownership of:
+   *   - localToolStatesById (Map<toolCallId, state>)
+   *   - localToolInFlight (Set<toolCallId>)
+   *   - localToolExecutionTimersById (Map<toolCallId, timer>)
+   *   - pendingLocalToolPermissionPrompts (array)
+   *   - localToolPermissionRetriesInFlight (Set<toolCallId>)
+   *
+   * Safe to call multiple times — replaces any previously attached machine.
+   */
+  attachLocalToolMachine(opts: AttachLocalToolMachineOptions): void;
+
+  /**
+   * Reset local-tool machine state without detaching injected functions (slice 1E).
+   *
+   * Clears all in-flight state (timers, state maps, permission prompts, in-flight sets)
+   * but keeps the executor/decider/poster/predicate injections intact.
+   * Use this on session change or session deletion to start fresh while keeping
+   * the machine ready for the next session.
+   *
+   * Notifies listeners (snapshot gains empty local-tool state).
+   */
+  resetLocalToolMachineState(): void;
+
+  /**
+   * Detach and reset the local-tool machine (slice 1E).
+   * Clears all timers, resets all state maps, AND clears injected functions.
+   * Call this on component destroy (after detachLocalToolMachine the machine
+   * will not execute any further tools until re-attached).
+   * Safe to call when not attached.
+   */
+  detachLocalToolMachine(): void;
+
+  /**
+   * Route an incoming stream event through the local-tool machine (slice 1E).
+   *
+   * Called from the app-side streamHub handler (the app keeps the hub subscription
+   * key lifecycle). The controller processes:
+   *   - 'status': awaiting_local_tool_results / local_tool_result_received / response_created
+   *   - 'done' / 'error': clear local-tool state for the stream
+   *   - 'tool_call_start' / 'tool_call_delta': buffer args + schedule execution
+   *
+   * No-ops when no local-tool machine is attached.
+   */
+  handleLocalToolStreamEvent(event: unknown): void;
+
+  /**
+   * Handle a user permission decision for a pending local-tool prompt (slice 1E).
+   *
+   * Mirrors AppChatPanel's handleLocalToolPermissionDecision:
+   *   1. Calls decideLocalToolPermission(requestId, decision).
+   *   2. Removes the prompt from pendingLocalToolPermissionPrompts.
+   *   3. On deny: posts an error result.
+   *   4. On allow: re-executes the tool; on permission-required again, re-queues the prompt.
+   *
+   * No-ops if a decision for this toolCallId is already in flight.
+   */
+  decideLocalToolPermission(
+    prompt: ControllerLocalToolPermissionPrompt,
+    decision: string,
+  ): Promise<void>;
 };
 
 // ---------------------------------------------------------------------------
@@ -622,6 +823,23 @@ export function createChatLoopController<
   >();
 
   // -------------------------------------------------------------------------
+  // Local-tool machine state (slice 1E)
+  // -------------------------------------------------------------------------
+  let ltExecuteLocalTool: ControllerLocalToolExecutorFn | null = null;
+  let ltDecideLocalToolPermission: ControllerLocalToolPermissionDeciderFn | null = null;
+  let ltPostLocalToolResult: ControllerLocalToolResultPosterFn | null = null;
+  let ltIsLocalToolName: ((name: string) => boolean) | null = null;
+  let ltIsLocalToolRuntimeAvailable: (() => boolean) | null = null;
+  let ltIsLocalToolPermissionRequired: ((error: unknown) => boolean) | null = null;
+  let ltGetPermissionRequest: ((error: unknown) => ControllerLocalToolPermissionPrompt['request']) | null = null;
+
+  const ltLocalToolStatesById = new Map<string, ControllerLocalToolStreamState>();
+  const ltLocalToolInFlight = new Set<string>();
+  const ltLocalToolExecutionTimersById = new Map<string, ReturnType<typeof setTimeout>>();
+  let ltPendingLocalToolPermissionPrompts: ControllerLocalToolPermissionPrompt[] = [];
+  const ltLocalToolPermissionRetriesInFlight = new Set<string>();
+
+  // -------------------------------------------------------------------------
   // Snapshot construction — always returns a new object reference
   // -------------------------------------------------------------------------
   const buildSnapshot = (): ChatLoopProjectionState<Message, RuntimeSummary> => ({
@@ -630,6 +848,8 @@ export function createChatLoopController<
     projectedStreamEventsById,
     projectionEventsVersion,
     projectedTimelineItems,
+    localToolStatesById: ltLocalToolStatesById,
+    pendingLocalToolPermissionPrompts: ltPendingLocalToolPermissionPrompts,
   });
 
   let currentSnapshot = buildSnapshot();
@@ -1191,6 +1411,591 @@ export function createChatLoopController<
   };
 
   // -------------------------------------------------------------------------
+  // Local-tool machine helpers (slice 1E)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Internal: get stream ids eligible for local-tool execution.
+   * Mirrors AppChatPanel's getLocalToolEligibleStreamIds — reads controller messages.
+   */
+  const ltGetLocalToolEligibleStreamIds = (): Set<string> =>
+    new Set(
+      messages
+        .filter((message) => {
+          if (message.role !== 'assistant') return false;
+          const status = message._localStatus;
+          if (status === 'failed') return false;
+          if (status === 'processing') return true;
+          // Not failed, not processing — eligible if no content (empty completion)
+          const content = message.content;
+          return !(content && typeof content === 'string' && content.trim().length > 0);
+        })
+        .map((message) => message._streamId ?? message.id),
+    );
+
+  /**
+   * Internal: mirrors AppChatPanel's isKnownAssistantStream.
+   * Returns true if streamId is tracked by a non-failed assistant message.
+   */
+  const ltIsKnownAssistantStream = (streamId: string): boolean =>
+    messages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message._streamId ?? message.id) === streamId &&
+        message._localStatus !== 'failed',
+    );
+
+  /**
+   * Internal: mirrors AppChatPanel's hasPendingPermissionPromptForStream.
+   */
+  const ltHasPendingPermissionPromptForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean =>
+    ltPendingLocalToolPermissionPrompts.some(
+      (item) =>
+        item.streamId === streamId &&
+        (!exceptToolCallId || item.toolCallId !== exceptToolCallId),
+    );
+
+  /**
+   * Internal: mirrors AppChatPanel's hasInFlightToolForStream.
+   */
+  const ltHasInFlightToolForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean => {
+    for (const inFlightToolCallId of ltLocalToolInFlight) {
+      if (exceptToolCallId && inFlightToolCallId === exceptToolCallId) continue;
+      const state = ltLocalToolStatesById.get(inFlightToolCallId);
+      if (!state) continue;
+      if (state.streamId === streamId) return true;
+    }
+    return false;
+  };
+
+  /**
+   * Internal: mirrors AppChatPanel's getNextPendingToolCallIdForStream.
+   */
+  const ltGetNextPendingToolCallIdForStream = (streamId: string): string | null => {
+    const pending = Array.from(ltLocalToolStatesById.entries())
+      .filter(([_, state]) => state.streamId === streamId && !state.executed)
+      .sort(([, a], [, b]) => {
+        if (a.firstSeenAt !== b.firstSeenAt) {
+          return a.firstSeenAt - b.firstSeenAt;
+        }
+        return a.lastSequence - b.lastSequence;
+      });
+    return pending[0]?.[0] ?? null;
+  };
+
+  /**
+   * Internal: parse buffered JSON tool args (may be streaming / incomplete).
+   * Mirrors AppChatPanel's parseBufferedToolArgs.
+   */
+  const ltParseBufferedToolArgs = (rawArgs: string): { ready: boolean; value: unknown } => {
+    const trimmed = rawArgs.trim();
+    if (!trimmed) return { ready: true, value: {} };
+    try {
+      return { ready: true, value: JSON.parse(trimmed) };
+    } catch {
+      return { ready: false, value: null };
+    }
+  };
+
+  /** Notify + rebuild snapshot after local-tool state mutation. */
+  const ltNotify = (): void => {
+    notify();
+  };
+
+  /**
+   * Internal: schedule execution of a buffered local tool.
+   * Mirrors AppChatPanel's scheduleBufferedLocalToolExecution.
+   */
+  const ltScheduleBufferedLocalToolExecution = (toolCallId: string, delayMs = 120): void => {
+    const existing = ltLocalToolExecutionTimersById.get(toolCallId);
+    if (existing) clearTimeout(existing);
+    const timerId = setTimeout(() => {
+      ltLocalToolExecutionTimersById.delete(toolCallId);
+      void ltTryExecuteBufferedLocalTool(toolCallId);
+    }, delayMs);
+    ltLocalToolExecutionTimersById.set(toolCallId, timerId);
+  };
+
+  /**
+   * Internal: schedule the next pending tool for a stream.
+   * Mirrors AppChatPanel's scheduleNextToolForStream.
+   */
+  const ltScheduleNextToolForStream = (streamId: string, delayMs = 80): void => {
+    const nextToolCallId = ltGetNextPendingToolCallIdForStream(streamId);
+    if (!nextToolCallId) return;
+    ltScheduleBufferedLocalToolExecution(nextToolCallId, delayMs);
+  };
+
+  /**
+   * Internal: clear all local-tool state for a specific stream.
+   * Mirrors AppChatPanel's clearLocalToolStateForStream.
+   */
+  const ltClearLocalToolStateForStream = (streamId: string): void => {
+    let changed = false;
+    for (const [toolCallId, state] of ltLocalToolStatesById.entries()) {
+      if (state.streamId !== streamId) continue;
+      const timerId = ltLocalToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      ltLocalToolExecutionTimersById.delete(toolCallId);
+      ltLocalToolStatesById.delete(toolCallId);
+      ltLocalToolInFlight.delete(toolCallId);
+      ltLocalToolPermissionRetriesInFlight.delete(toolCallId);
+      changed = true;
+    }
+    const before = ltPendingLocalToolPermissionPrompts.length;
+    ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+      (prompt) => prompt.streamId !== streamId,
+    );
+    if (changed || ltPendingLocalToolPermissionPrompts.length !== before) {
+      ltNotify();
+    }
+  };
+
+  /**
+   * Internal: try to execute a buffered local tool.
+   * Mirrors AppChatPanel's tryExecuteBufferedLocalTool — exact same sequencing:
+   *   - guard: executed, inFlight, runtimeAvailable, ordering, permissionPrompt, inFlight for stream
+   *   - special tab_type missing-args timeout (1500 ms)
+   *   - parseBufferedToolArgs — reschedule if not ready
+   *   - mark executed, add to inFlight, call executor
+   *   - on LocalToolPermissionRequiredError: queue prompt, return (do NOT call finally's schedule)
+   *   - on other error: forward error result; schedule next in finally
+   *   - on success: post result; schedule next in finally
+   */
+  const ltTryExecuteBufferedLocalTool = async (toolCallId: string): Promise<void> => {
+    const localToolState = ltLocalToolStatesById.get(toolCallId);
+    if (!localToolState || localToolState.executed) return;
+    if (ltLocalToolInFlight.has(toolCallId)) return;
+    if (!ltIsLocalToolRuntimeAvailable?.()) return;
+    const firstPendingToolCallId = ltGetNextPendingToolCallIdForStream(
+      localToolState.streamId,
+    );
+    if (firstPendingToolCallId && firstPendingToolCallId !== toolCallId) return;
+    if (ltHasPendingPermissionPromptForStream(localToolState.streamId, toolCallId)) return;
+    if (ltHasInFlightToolForStream(localToolState.streamId, toolCallId)) return;
+
+    // Special: tab_type with missing args — wait up to 1500 ms for args to arrive
+    if (!localToolState.argsText.trim() && localToolState.name === 'tab_type') {
+      const elapsed = Date.now() - localToolState.firstSeenAt;
+      if (elapsed < 1500) {
+        ltScheduleBufferedLocalToolExecution(toolCallId, 200);
+        return;
+      }
+      localToolState.executed = true;
+      ltLocalToolStatesById.set(toolCallId, localToolState);
+      ltNotify();
+      try {
+        await ltPostLocalToolResult!(localToolState.streamId, toolCallId, {
+          status: 'error',
+          error:
+            'tab_type arguments are missing (expected at least text, and optionally selector/x/y).',
+        });
+      } catch (forwardError) {
+        const reason =
+          forwardError instanceof Error ? forwardError.message : String(forwardError);
+        console.warn(
+          `Failed to forward missing-args error for ${localToolState.name} (${toolCallId}): ${reason}`,
+        );
+      }
+      ltScheduleNextToolForStream(localToolState.streamId);
+      return;
+    }
+
+    const parsed = ltParseBufferedToolArgs(localToolState.argsText);
+    if (!parsed.ready) {
+      ltScheduleBufferedLocalToolExecution(toolCallId, 120);
+      return;
+    }
+
+    localToolState.executed = true;
+    ltLocalToolStatesById.set(toolCallId, localToolState);
+    ltLocalToolInFlight.add(toolCallId);
+    ltNotify();
+
+    try {
+      const localResult = await ltExecuteLocalTool!(
+        toolCallId,
+        localToolState.name,
+        parsed.value,
+        { streamId: localToolState.streamId },
+      );
+      await ltPostLocalToolResult!(
+        localToolState.streamId,
+        toolCallId,
+        localResult,
+      );
+    } catch (error) {
+      if (ltIsLocalToolPermissionRequired?.(error)) {
+        const request = ltGetPermissionRequest!(error);
+        const prompt: ControllerLocalToolPermissionPrompt = {
+          toolCallId,
+          streamId: localToolState.streamId,
+          name: localToolState.name,
+          args: parsed.value,
+          request,
+          createdAt: Date.now(),
+        };
+        ltPendingLocalToolPermissionPrompts = [
+          ...ltPendingLocalToolPermissionPrompts.filter(
+            (item) => item.toolCallId !== toolCallId,
+          ),
+          prompt,
+        ];
+        ltNotify();
+        // Do NOT schedule next — permission decision will trigger it
+        return;
+      }
+
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `Failed to execute local tool ${localToolState.name} (${toolCallId}): ${reason}`,
+      );
+      try {
+        await ltPostLocalToolResult!(
+          localToolState.streamId,
+          toolCallId,
+          { status: 'error', error: reason },
+        );
+      } catch (forwardError) {
+        const forwardReason =
+          forwardError instanceof Error ? forwardError.message : String(forwardError);
+        console.warn(
+          `Failed to forward local tool error for ${localToolState.name} (${toolCallId}): ${forwardReason}`,
+        );
+      }
+    } finally {
+      // Only runs when NOT returning early (permission prompt path returns above)
+      ltLocalToolInFlight.delete(toolCallId);
+      ltNotify();
+      ltScheduleNextToolForStream(localToolState.streamId);
+    }
+  };
+
+  /**
+   * Internal: handle tool_call_start stream event.
+   * Mirrors AppChatPanel's handleLocalToolCallStart.
+   */
+  const ltHandleLocalToolCallStart = (rawEvent: Record<string, unknown>): void => {
+    const streamId = String(rawEvent.streamId ?? '').trim();
+    const toolCallId = String((rawEvent.data as Record<string, unknown>)?.tool_call_id ?? '').trim();
+    const toolNameRaw = String((rawEvent.data as Record<string, unknown>)?.name ?? '').trim();
+    const argsChunk =
+      typeof (rawEvent.data as Record<string, unknown>)?.args === 'string'
+        ? String((rawEvent.data as Record<string, unknown>)?.args)
+        : '';
+    const sequenceRaw = Number(rawEvent.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
+
+    if (!streamId || !toolCallId || !ltIsLocalToolName?.(toolNameRaw)) return;
+
+    const previous = ltLocalToolStatesById.get(toolCallId);
+    if (previous && sequence <= previous.lastSequence) return;
+
+    // Import shouldResetLocalToolStateForFreshRound logic inline to avoid import
+    const isFreshRound =
+      Boolean(previous) &&
+      Boolean(previous?.executed) &&
+      Number.isFinite(sequence) &&
+      sequence > (previous?.lastSequence ?? 0);
+
+    ltLocalToolStatesById.set(toolCallId, {
+      streamId,
+      name: toolNameRaw,
+      argsText:
+        previous && !isFreshRound
+          ? `${previous.argsText}${argsChunk}`
+          : argsChunk,
+      lastSequence: sequence,
+      firstSeenAt: previous?.firstSeenAt ?? Date.now(),
+      executed: isFreshRound ? false : (previous?.executed ?? false),
+    });
+    ltNotify();
+    ltScheduleBufferedLocalToolExecution(toolCallId);
+  };
+
+  /**
+   * Internal: handle tool_call_delta stream event.
+   * Mirrors AppChatPanel's handleLocalToolCallDelta.
+   */
+  const ltHandleLocalToolCallDelta = (rawEvent: Record<string, unknown>): void => {
+    const toolCallId = String((rawEvent.data as Record<string, unknown>)?.tool_call_id ?? '').trim();
+    if (!toolCallId) return;
+    const previous = ltLocalToolStatesById.get(toolCallId);
+    if (!previous) return;
+
+    const sequenceRaw = Number(rawEvent.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : previous.lastSequence;
+    if (sequence <= previous.lastSequence) return;
+
+    const deltaChunk =
+      typeof (rawEvent.data as Record<string, unknown>)?.delta === 'string'
+        ? String((rawEvent.data as Record<string, unknown>)?.delta)
+        : '';
+
+    ltLocalToolStatesById.set(toolCallId, {
+      ...previous,
+      argsText: `${previous.argsText}${deltaChunk}`,
+      lastSequence: sequence,
+    });
+    ltNotify();
+    ltScheduleBufferedLocalToolExecution(toolCallId);
+  };
+
+  /**
+   * Internal: handle status stream event for local-tool machine.
+   * Mirrors AppChatPanel's handleLocalToolStatusEvent.
+   */
+  const ltHandleLocalToolStatusEvent = (rawEvent: Record<string, unknown>): void => {
+    const streamId = String(rawEvent.streamId ?? '').trim();
+    if (!streamId || !ltIsKnownAssistantStream(streamId)) return;
+
+    const data = rawEvent.data as Record<string, unknown> | null;
+    const state = String(data?.state ?? '').trim();
+    const sequenceRaw = Number(rawEvent.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
+
+    if (state === 'awaiting_local_tool_results') {
+      // Import parsePendingLocalToolCallsFromStatusPayload logic inline
+      const record = data && typeof data === 'object' ? data : null;
+      const pendingRaw = Array.isArray(record?.pending_local_tool_calls)
+        ? (record!.pending_local_tool_calls as unknown[])
+        : [];
+      const seen = new Set<string>();
+      const pendingCalls: Array<{ toolCallId: string; name: string; argsText: string; sequence: number }> = [];
+      for (const item of pendingRaw) {
+        if (!item || typeof item !== 'object') continue;
+        const entry = item as Record<string, unknown>;
+        const toolCallId =
+          typeof entry.tool_call_id === 'string' ? entry.tool_call_id.trim() : '';
+        const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+        if (!toolCallId || seen.has(toolCallId) || !ltIsLocalToolName?.(name)) continue;
+        seen.add(toolCallId);
+        // serialize args
+        let argsText: string;
+        if (typeof entry.args === 'string') {
+          argsText = entry.args;
+        } else {
+          try {
+            argsText = JSON.stringify(entry.args ?? {});
+          } catch {
+            argsText = '{}';
+          }
+        }
+        pendingCalls.push({ toolCallId, name, argsText, sequence });
+      }
+
+      const pendingToolCallIds = new Set(pendingCalls.map((call) => call.toolCallId));
+      // Filter permission prompts: keep only those with a matching pending toolCallId for this stream
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (prompt) => {
+          if (prompt.streamId !== streamId) return true;
+          return pendingToolCallIds.has(prompt.toolCallId);
+        },
+      );
+
+      for (const call of pendingCalls) {
+        const previous = ltLocalToolStatesById.get(call.toolCallId);
+        const isFreshRound =
+          Boolean(previous) &&
+          Boolean(previous?.executed) &&
+          Number.isFinite(sequence) &&
+          sequence > (previous?.lastSequence ?? 0);
+        ltLocalToolStatesById.set(call.toolCallId, {
+          streamId,
+          name: call.name,
+          argsText:
+            previous &&
+            !isFreshRound &&
+            previous.argsText.trim().length > 0
+              ? previous.argsText
+              : call.argsText,
+          lastSequence: Math.max(previous?.lastSequence ?? 0, call.sequence),
+          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
+          executed: isFreshRound ? false : (previous?.executed ?? false),
+        });
+      }
+
+      ltNotify();
+      ltScheduleNextToolForStream(streamId, 0);
+      return;
+    }
+
+    if (state === 'local_tool_result_received') {
+      const toolCallId = String(data?.tool_call_id ?? '').trim();
+      if (!toolCallId) return;
+      const timerId = ltLocalToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      ltLocalToolExecutionTimersById.delete(toolCallId);
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.toolCallId !== toolCallId,
+      );
+      ltLocalToolStatesById.delete(toolCallId);
+      ltLocalToolInFlight.delete(toolCallId);
+      ltLocalToolPermissionRetriesInFlight.delete(toolCallId);
+      ltNotify();
+      return;
+    }
+
+    if (state === 'response_created') {
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.streamId !== streamId,
+      );
+      ltNotify();
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Local-tool machine public API (slice 1E)
+  // -------------------------------------------------------------------------
+
+  const attachLocalToolMachine = (opts: AttachLocalToolMachineOptions): void => {
+    ltExecuteLocalTool = opts.executeLocalTool;
+    ltDecideLocalToolPermission = opts.decideLocalToolPermission;
+    ltPostLocalToolResult = opts.postLocalToolResult;
+    ltIsLocalToolName = opts.isLocalToolName;
+    ltIsLocalToolRuntimeAvailable = opts.isLocalToolRuntimeAvailable;
+    ltIsLocalToolPermissionRequired = opts.isLocalToolPermissionRequired;
+    ltGetPermissionRequest = opts.getPermissionRequest;
+  };
+
+  /**
+   * Internal: clear only state (timers + maps), not the injected functions.
+   * Called by both resetLocalToolMachineState and detachLocalToolMachine.
+   */
+  const ltClearMachineState = (): void => {
+    ltLocalToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
+    ltLocalToolExecutionTimersById.clear();
+    ltLocalToolStatesById.clear();
+    ltLocalToolInFlight.clear();
+    ltLocalToolPermissionRetriesInFlight.clear();
+    ltPendingLocalToolPermissionPrompts = [];
+  };
+
+  const resetLocalToolMachineState = (): void => {
+    ltClearMachineState();
+    ltNotify();
+  };
+
+  const detachLocalToolMachine = (): void => {
+    ltClearMachineState();
+    ltExecuteLocalTool = null;
+    ltDecideLocalToolPermission = null;
+    ltPostLocalToolResult = null;
+    ltIsLocalToolName = null;
+    ltIsLocalToolRuntimeAvailable = null;
+    ltIsLocalToolPermissionRequired = null;
+    ltGetPermissionRequest = null;
+    ltNotify();
+  };
+
+  const handleLocalToolStreamEvent = (event: unknown): void => {
+    // No-op if machine not attached
+    if (!ltIsLocalToolName) return;
+
+    const raw =
+      event && typeof event === 'object' ? (event as Record<string, unknown>) : null;
+    if (!raw) return;
+
+    const streamId = String(raw.streamId ?? '').trim();
+    if (!streamId) return;
+
+    const eventType = String(raw.type ?? '').trim();
+
+    if (eventType === 'status') {
+      ltHandleLocalToolStatusEvent(raw);
+      return;
+    }
+
+    if (eventType === 'done' || eventType === 'error') {
+      ltClearLocalToolStateForStream(streamId);
+      return;
+    }
+
+    if (eventType !== 'tool_call_start' && eventType !== 'tool_call_delta') return;
+    if (!ltIsLocalToolRuntimeAvailable?.()) return;
+
+    const eligibleStreamIds = ltGetLocalToolEligibleStreamIds();
+    if (!eligibleStreamIds.has(streamId)) return;
+
+    if (eventType === 'tool_call_start') {
+      ltHandleLocalToolCallStart(raw);
+      return;
+    }
+    ltHandleLocalToolCallDelta(raw);
+  };
+
+  const decideLocalToolPermission = async (
+    prompt: ControllerLocalToolPermissionPrompt,
+    decision: string,
+  ): Promise<void> => {
+    if (ltLocalToolPermissionRetriesInFlight.has(prompt.toolCallId)) return;
+    ltLocalToolPermissionRetriesInFlight.add(prompt.toolCallId);
+
+    try {
+      await ltDecideLocalToolPermission!(prompt.request.requestId, decision);
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (item) => item.toolCallId !== prompt.toolCallId,
+      );
+      ltNotify();
+
+      if (decision === 'deny_once' || decision === 'deny_always') {
+        await ltPostLocalToolResult!(prompt.streamId, prompt.toolCallId, {
+          status: 'error',
+          error: `Permission denied for ${prompt.request.toolName} on ${prompt.request.origin}.`,
+        });
+        return;
+      }
+
+      const localResult = await ltExecuteLocalTool!(
+        prompt.toolCallId,
+        prompt.name,
+        prompt.args,
+        { streamId: prompt.streamId },
+      );
+      await ltPostLocalToolResult!(prompt.streamId, prompt.toolCallId, localResult);
+    } catch (error) {
+      if (ltIsLocalToolPermissionRequired?.(error)) {
+        const request = ltGetPermissionRequest!(error);
+        const nextPrompt: ControllerLocalToolPermissionPrompt = {
+          ...prompt,
+          request,
+          createdAt: Date.now(),
+        };
+        ltPendingLocalToolPermissionPrompts = [
+          ...ltPendingLocalToolPermissionPrompts.filter(
+            (item) => item.toolCallId !== prompt.toolCallId,
+          ),
+          nextPrompt,
+        ];
+        ltNotify();
+        return;
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      try {
+        await ltPostLocalToolResult!(prompt.streamId, prompt.toolCallId, {
+          status: 'error',
+          error: reason,
+        });
+      } catch (forwardError) {
+        const forwardReason =
+          forwardError instanceof Error ? forwardError.message : String(forwardError);
+        console.warn(
+          `Failed to forward permission decision error for ${prompt.name} (${prompt.toolCallId}): ${forwardReason}`,
+        );
+      }
+    } finally {
+      ltLocalToolPermissionRetriesInFlight.delete(prompt.toolCallId);
+      ltScheduleNextToolForStream(prompt.streamId);
+    }
+  };
+
+  // -------------------------------------------------------------------------
   // Initial timeline build (empty state)
   // -------------------------------------------------------------------------
   recomputeTimeline();
@@ -1224,5 +2029,10 @@ export function createChatLoopController<
     stop,
     edit,
     setFeedback,
+    attachLocalToolMachine,
+    resetLocalToolMachineState,
+    detachLocalToolMachine,
+    handleLocalToolStreamEvent,
+    decideLocalToolPermission,
   };
 }
