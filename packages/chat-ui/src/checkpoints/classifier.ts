@@ -1,5 +1,23 @@
-import { parsePendingLocalToolCallsFromStatusPayload } from '@sentropic/chat-ui/utils/localToolStreamSync';
-import { isLocalToolName } from '@sentropic/chat-ui/stores/localTools';
+/**
+ * classifier.ts — Generic checkpoint mutation classifier.
+ *
+ * Pure TypeScript, zero sentropic domain strings.
+ * Sentropic-specific logic (MUTATING_TOOL_NAME_SUFFIXES, humanizeDomainMutationLabel,
+ * isLocalToolName from stores) lives in ui/src/lib/adapters/checkpointHostAdapter.ts.
+ *
+ * The `opts.isMutatingTool` hook lets hosts declare additional tool names as mutating
+ * (e.g. custom API tools with _create/_update/_delete suffixes).
+ *
+ * The `opts.isLocalToolName` hook lets hosts declare which tool names are "local"
+ * so that status-event tool calls can be included in the mutation scan.
+ * Defaults to `() => false` — correct for environments with no local tools (no
+ * local tool calls will appear in status events, so filtering all is equivalent).
+ *
+ * The `opts.humanizeMutation` hook lets hosts produce human-readable mutation labels
+ * for tool calls that are not git/bash/file_edit.
+ */
+
+import { parsePendingLocalToolCallsFromStatusPayload } from '../utils/localToolStreamSync.js';
 
 export type CheckpointSummaryLike = {
   anchorSequence?: number | null;
@@ -33,7 +51,6 @@ const parseArgsRecord = (argsText: string): Record<string, unknown> | null => {
   }
 };
 
-const MUTATING_TOOL_NAME_SUFFIXES = ['_create', '_update', '_delete'];
 const READ_ONLY_GIT_ACTIONS = new Set(['status', 'diff', 'ls_files']);
 const MUTATING_GIT_ACTIONS = new Set([
   'add',
@@ -75,14 +92,18 @@ const isMutatingBashCommand = (argsText: string): boolean => {
   return BASH_MUTATION_PATTERNS.some((pattern) => pattern.test(command));
 };
 
-const isMutatingToolCall = (toolName: string, argsText: string): boolean => {
+/**
+ * Generic built-in classifier. Returns true for git mutations, bash mutations,
+ * and file_edit. The `isMutatingTool` hook can extend this for custom tools.
+ */
+const isBuiltinMutatingToolCall = (toolName: string, argsText: string): boolean => {
   const normalized = toolName.trim().toLowerCase();
   if (!normalized) return false;
   if (normalized === 'file_edit') return true;
   if (normalized === 'git') return isMutatingGitAction(argsText);
   if (normalized === 'bash') return isMutatingBashCommand(argsText);
   if (normalized === 'plan') return false;
-  return MUTATING_TOOL_NAME_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+  return false;
 };
 
 type ParsedToolCall = {
@@ -90,8 +111,33 @@ type ParsedToolCall = {
   argsText: string;
 };
 
+type ClassifierOpts = {
+  /** Returns true if the named tool is a mutating operation. Called after built-in classifiers. */
+  isMutatingTool?: (toolName: string, argsText: string) => boolean;
+  /**
+   * Returns true if toolName is a "local" tool (so it can be included from status events).
+   * Default: `() => false` — correct when no local tools exist in the host environment.
+   */
+  isLocalToolName?: (name: string) => boolean;
+  /** Returns a human-readable label for a mutating tool call (for preview). */
+  humanizeMutation?: (toolName: string, argsText: string) => string | null;
+};
+
+const DEFAULT_IS_LOCAL_TOOL_NAME = (_name: string): boolean => false;
+
+const isMutatingToolCall = (
+  toolName: string,
+  argsText: string,
+  opts?: ClassifierOpts,
+): boolean => {
+  if (isBuiltinMutatingToolCall(toolName, argsText)) return true;
+  if (opts?.isMutatingTool) return opts.isMutatingTool(toolName, argsText);
+  return false;
+};
+
 const collectToolCallsFromEvents = (
   events: CheckpointStreamEventLike[],
+  isLocalToolName: (name: string) => boolean,
 ): ParsedToolCall[] => {
   const toolCalls = new Map<string, { name: string; argsText: string }>();
 
@@ -136,31 +182,7 @@ const collectToolCallsFromEvents = (
     }
   }
 
-  for (const toolCall of toolCalls.values()) {
-    if (!toolCall.name.trim()) continue;
-  }
-  return [...toolCalls.values()];
-};
-
-const humanizeDomainMutationLabel = (
-  toolName: string,
-  argsText: string,
-): string | null => {
-  const record = parseArgsRecord(argsText);
-  const entity = toolName.replace(/_(create|update|delete)$/i, '');
-  const label = entity.replace(/_/g, ' ').trim();
-  if (!label) return null;
-  const idCandidate =
-    String(
-      record?.id ??
-        record?.folderId ??
-        record?.useCaseId ??
-        record?.organizationId ??
-        record?.workspaceId ??
-        '',
-    ).trim();
-  const action = toolName.split('_').slice(-1)[0];
-  return idCandidate ? `${label} ${action}: ${idCandidate}` : `${label} ${action}`;
+  return [...toolCalls.values()].filter((tc) => tc.name.trim().length > 0);
 };
 
 const getGitMutationPreviewItems = (argsText: string): string[] => {
@@ -195,9 +217,10 @@ const getBashMutationPreviewItems = (argsText: string): string[] => {
 const getToolCallPreviewItems = (
   toolName: string,
   argsText: string,
+  opts?: ClassifierOpts,
 ): string[] => {
   const normalized = toolName.trim().toLowerCase();
-  if (!isMutatingToolCall(normalized, argsText)) return [];
+  if (!isMutatingToolCall(normalized, argsText, opts)) return [];
   if (normalized === 'file_edit') {
     const record = parseArgsRecord(argsText);
     const path = String(record?.path ?? '').trim();
@@ -205,18 +228,33 @@ const getToolCallPreviewItems = (
   }
   if (normalized === 'git') return getGitMutationPreviewItems(argsText);
   if (normalized === 'bash') return getBashMutationPreviewItems(argsText);
-  const domainLabel = humanizeDomainMutationLabel(normalized, argsText);
-  return domainLabel ? [domainLabel] : [normalized.replace(/_/g, ' ')];
+  if (opts?.humanizeMutation) {
+    const label = opts.humanizeMutation(normalized, argsText);
+    if (label) return [label];
+  }
+  return [normalized.replace(/_/g, ' ')];
 };
 
+/**
+ * Returns true if the checkpoint covers assistant messages that contain mutating
+ * tool calls (git commit, bash rm, file_edit, or host-custom mutating tools).
+ *
+ * @param checkpoint - The checkpoint to test (must have anchorSequence > 0).
+ * @param messages - Full message list for the session.
+ * @param initialEventsByMessageId - Stream events keyed by message id / streamId.
+ * @param opts - Optional host hooks: isMutatingTool, isLocalToolName, humanizeMutation.
+ */
 export const hasCheckpointMutationDelta = (
   checkpoint: CheckpointSummaryLike | null | undefined,
   messages: CheckpointMessageLike[],
   initialEventsByMessageId: Map<string, CheckpointStreamEventLike[]>,
+  opts?: ClassifierOpts,
 ): boolean => {
   if (!checkpoint) return false;
   const anchorSequence = Number(checkpoint.anchorSequence ?? 0);
   if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) return false;
+
+  const isLocal = opts?.isLocalToolName ?? DEFAULT_IS_LOCAL_TOOL_NAME;
 
   const assistantMessagesAfterAnchor = messages.filter((message) => {
     if (message.role !== 'assistant') return false;
@@ -229,24 +267,31 @@ export const hasCheckpointMutationDelta = (
     if (!streamId) continue;
     const events = initialEventsByMessageId.get(streamId) ?? [];
     if (events.length === 0) continue;
-    for (const toolCall of collectToolCallsFromEvents(events)) {
-      if (isMutatingToolCall(toolCall.name, toolCall.argsText)) return true;
+    for (const toolCall of collectToolCallsFromEvents(events, isLocal)) {
+      if (isMutatingToolCall(toolCall.name, toolCall.argsText, opts)) return true;
     }
   }
 
   return false;
 };
 
+/**
+ * Returns a deduplicated list (up to 8) of human-readable mutation preview items
+ * for a checkpoint — for use in tooltip/title rendering.
+ */
 export const getCheckpointMutationPreviewItems = (
   checkpoint: CheckpointSummaryLike | null | undefined,
   messages: CheckpointMessageLike[],
   initialEventsByMessageId: Map<string, CheckpointStreamEventLike[]>,
+  opts?: ClassifierOpts,
 ): string[] => {
   if (!checkpoint) return [];
   const anchorSequence = Number(checkpoint.anchorSequence ?? 0);
   if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) return [];
 
+  const isLocal = opts?.isLocalToolName ?? DEFAULT_IS_LOCAL_TOOL_NAME;
   const items = new Set<string>();
+
   const assistantMessagesAfterAnchor = messages.filter((message) => {
     if (message.role !== 'assistant') return false;
     const sequence = Number(message.sequence ?? 0);
@@ -258,8 +303,8 @@ export const getCheckpointMutationPreviewItems = (
     if (!streamId) continue;
     const events = initialEventsByMessageId.get(streamId) ?? [];
     if (events.length === 0) continue;
-    for (const toolCall of collectToolCallsFromEvents(events)) {
-      for (const item of getToolCallPreviewItems(toolCall.name, toolCall.argsText)) {
+    for (const toolCall of collectToolCallsFromEvents(events, isLocal)) {
+      for (const item of getToolCallPreviewItems(toolCall.name, toolCall.argsText, opts)) {
         items.add(item);
         if (items.size >= 8) return [...items];
       }

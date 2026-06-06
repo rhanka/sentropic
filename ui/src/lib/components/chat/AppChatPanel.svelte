@@ -21,6 +21,9 @@
   // ChatCoreHost instance — wraps the existing API utils (auth-aware) with the
   // ChatCoreHost contract. Zero behavior change: same requests, same error shapes.
   const chatCoreHost = createSentropicChatCoreHost();
+  // Sentropic CheckpointHost: API fetch/create/restore + domain hooks (isMutatingTool,
+  // isLocalToolName, humanizeMutation) wired to the generic module classifier.
+  const checkpointHost = createCheckpointHost();
   import { session } from '$lib/stores/session';
   import {
     listComments,
@@ -96,9 +99,6 @@
     normalizeGeneratedFileCard,
   } from '$lib/chat/document-adapter';
   import {
-    chatSessionCheckpointCreateUrl,
-    chatSessionCheckpointRestoreUrl,
-    chatSessionCheckpointsUrl,
     chatSessionsUrl,
     formatChatApiError,
   } from '$lib/chat/session-adapter';
@@ -177,9 +177,12 @@
     type UserAISettingsUpdatedPayload,
   } from '$lib/utils/user-ai-settings-events';
   import {
-    getCheckpointMutationPreviewItems,
     hasCheckpointMutationDelta,
-  } from '$lib/utils/checkpointDelta';
+    getCheckpointMutationPreviewItems,
+    applySessionCheckpoints as applySessionCheckpointsFromModule,
+    getCheckpointForUserMessage as getCheckpointForUserMessageFromModule,
+  } from '@sentropic/chat-ui/checkpoints';
+  import { createCheckpointHost } from '$lib/adapters/checkpointHostAdapter';
   import {
     mergeProjectionHistoryEvents,
     type ProjectedRunSegment,
@@ -2443,21 +2446,16 @@
 
   const getCheckpointForUserMessage = (
     userMessageId: string,
-  ): ChatCheckpoint | null => {
-    const id = String(userMessageId ?? '').trim();
-    if (!id) return null;
-    return checkpointsByAnchorMessageId.get(id) ?? null;
-  };
+  ): ChatCheckpoint | null =>
+    getCheckpointForUserMessageFromModule(checkpointsByAnchorMessageId, userMessageId);
 
   const hasCheckpointRollbackDelta = (
     checkpoint: ChatCheckpoint | null | undefined,
-  ): boolean => {
-    return hasCheckpointMutationDelta(
-      checkpoint,
-      messages,
-      initialEventsByMessageId,
-    );
-  };
+  ): boolean =>
+    hasCheckpointMutationDelta(checkpoint, messages, initialEventsByMessageId, {
+      isMutatingTool: checkpointHost.isMutatingTool,
+      isLocalToolName: checkpointHost.isLocalToolName,
+    });
 
   const getCheckpointPreviewTitle = (userMessageId: string): string => {
     const checkpoint = getCheckpointForUserMessage(userMessageId);
@@ -2467,6 +2465,11 @@
       checkpoint,
       messages,
       initialEventsByMessageId,
+      {
+        isMutatingTool: checkpointHost.isMutatingTool,
+        isLocalToolName: checkpointHost.isLocalToolName,
+        humanizeMutation: checkpointHost.humanizeMutation,
+      },
     );
     if (previewItems.length === 0) return baseTitle;
     return `${baseTitle}\n${previewItems.join('\n')}`;
@@ -2479,7 +2482,7 @@
     checkpointActionInFlight = true;
     errorMsg = null;
     try {
-      await apiPost(chatSessionCheckpointRestoreUrl(sessionId, checkpoint.id), {});
+      await checkpointHost.restoreCheckpoint(sessionId, checkpoint.id);
       await loadMessages(sessionId, { scrollToBottom: true, silent: true });
       return true;
     } catch (e) {
@@ -2875,13 +2878,8 @@
 
   const applySessionCheckpoints = (items: ChatCheckpoint[]) => {
     sessionCheckpoints = items;
-    const map = new Map<string, ChatCheckpoint>();
-    for (const checkpoint of sessionCheckpoints) {
-      const anchorId = String(checkpoint.anchorMessageId ?? '').trim();
-      if (!anchorId || map.has(anchorId)) continue;
-      map.set(anchorId, checkpoint);
-    }
-    checkpointsByAnchorMessageId = map;
+    // Delegate indexing to the module — returns Map<anchorMessageId, checkpoint>.
+    checkpointsByAnchorMessageId = applySessionCheckpointsFromModule(items);
   };
 
   const mergeInitialEventsForMessage = (
@@ -3053,12 +3051,8 @@
       return;
     }
     try {
-      const res = await apiGet<{ checkpoints?: ChatCheckpoint[] }>(
-        chatSessionCheckpointsUrl(id, 20),
-      );
-      applySessionCheckpoints(
-        Array.isArray(res.checkpoints) ? res.checkpoints : [],
-      );
+      const items = await checkpointHost.fetchCheckpoints(id);
+      applySessionCheckpoints(items as ChatCheckpoint[]);
     } catch {
       applySessionCheckpoints([]);
     }
@@ -3070,9 +3064,7 @@
   ) => {
     if (!targetSessionId || !anchorMessageId) return;
     try {
-      await apiPost(chatSessionCheckpointCreateUrl(targetSessionId), {
-        anchorMessageId,
-      });
+      await checkpointHost.createCheckpoint(targetSessionId, anchorMessageId);
       await loadCheckpoints(targetSessionId);
     } catch {
       // checkpoint creation is best-effort and must not block chat flow

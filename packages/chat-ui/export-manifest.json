@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-06",
-  "_version": "0.14.0",
+  "_version": "0.15.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -569,6 +569,24 @@
         "HistoryEventRaw",
         "HistoryPayload",
         "projectRestoredTimeline"
+      ]
+    },
+    "./checkpoints": {
+      "kind": "ts",
+      "file": "dist/checkpoints/index.js",
+      "exports": [
+        "CheckpointSummaryLike",
+        "CheckpointMessageLike",
+        "CheckpointStreamEventLike",
+        "hasCheckpointMutationDelta",
+        "getCheckpointMutationPreviewItems",
+        "CheckpointItem",
+        "PendingCheckpointPrompt",
+        "applySessionCheckpoints",
+        "getCheckpointForUserMessage",
+        "openCheckpointPrompt",
+        "Checkpoint",
+        "CheckpointHost"
       ]
     }
   }
