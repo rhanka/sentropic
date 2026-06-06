@@ -51,11 +51,11 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
   - [x] `Makefile`: `typecheck-harness`/`test-harness`/`build-harness`/`pack-harness` mirroring `*-build-cli`.
   - [x] Gate: `make typecheck-harness` green + `make pack-harness` clean (7 files, 2.5 kB).
 
-- [ ] **Lot 1 — Neutral artifact + profile SPI**
-  - [ ] `src/artifacts/verification-run.ts` — `VerificationRun` v0 + `Violation` (schema-freeze §above).
-  - [ ] `src/profile/profile.ts` — `HarnessProfile` (only the C1/C2 fields above).
-  - [ ] `src/profile/sentropic.ts` + `src/profile/stub.ts` (stub differs on a C2-consumed dimension).
-  - [ ] Gate: `make typecheck-harness`.
+- [x] **Lot 1 — Neutral artifact + profile SPI**
+  - [x] `src/artifacts/verification-run.ts` — `VerificationRun` v0 + `Violation` (schema-freeze §above).
+  - [x] `src/profile/profile.ts` — `HarnessProfile` (only the C1/C2 fields above).
+  - [x] `src/profile/sentropic.ts` + `src/profile/stub.ts` (stub differs on a C2-consumed dimension).
+  - [x] Gate: `make typecheck-harness` (green).
 
 - [ ] **Lot 2 — `BRANCH.md` parser + `ScopeBoundary`**
   - [ ] `src/branch-md/parse.ts` — `parseBranchMd(text)` → `{ title, allowedPaths[], forbiddenPaths[], conditionalPaths[], lots[], exceptions[] }` (no branch identity — see C1 note).
