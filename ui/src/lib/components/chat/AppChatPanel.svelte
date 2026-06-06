@@ -1251,22 +1251,10 @@
     handleLocalToolCallDelta(event);
   };
 
-  const handleProjectionStreamEvent = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId || !isTrackedAssistantStreamId(streamId)) return;
-    const sequence = Number((event as any)?.sequence);
-    if (!Number.isFinite(sequence)) return;
-    appendProjectedLiveEvent(streamId, {
-      eventType: String((event as any)?.type ?? '').trim(),
-      data: (event as any)?.data ?? {},
-      sequence,
-      createdAt: undefined,
-    });
-    if (event.type === 'done' || event.type === 'error') {
-      void handleAssistantTerminal(streamId, event.type);
-    }
-    scheduleScrollToBottom();
-  };
+  // handleProjectionStreamEvent removed in slice 1C — logic moved to
+  // ctrl.attachStream({ onProjectionEvent, onTerminal }). The controller now
+  // owns the event routing and message terminal-patching; AppChatPanel only
+  // provides the scroll callbacks via the optional hooks.
 
   $: commentPlaceholder = !$workspaceCanComment
     ? $_('chat.comments.placeholder.disabledViewer')
@@ -1332,7 +1320,7 @@
   let todoRuntimeDeleteInFlight = false;
   let composerSteerInFlight = false;
   let composerSteerAck: ComposerSteerAck | null = null;
-  const jobPollInFlight = new Set<string>();
+  // jobPollInFlight removed in slice 1C — tracking moved to the controller.
   let localToolsHubKey = '';
   const localToolStatesById = new Map<string, LocalToolStreamState>();
   const localToolInFlight = new Set<string>();
@@ -1348,7 +1336,8 @@
     origin: string;
     title: string | null;
   } | null = null;
-  let projectionHubKey = '';
+  // projectionHubKey removed in slice 1C — ctrl.attachStream/detachStream
+  // manages the subscription key internally.
 
   // ---------------------------------------------------------------------------
   // Projection functions (slice 1B) — delegate to the controller.
@@ -2896,7 +2885,7 @@
     if (input.checkpointUserMessageId) {
       void createTurnCheckpoint(input.sessionId, input.checkpointUserMessageId);
     }
-    void pollJobUntilTerminal(input.jobId, assistantMsg._streamId ?? assistantMsg.id, {
+    ctrl.startJobPoll(input.jobId, assistantMsg._streamId ?? assistantMsg.id, {
       timeoutMs: 90_000,
     });
   };
@@ -3955,65 +3944,13 @@
     }
   };
 
-  const handleAssistantTerminal = (
-    streamId: string,
-    t: 'done' | 'error',
-  ) => {
-    const target = messages.find((m) => (m._streamId ?? m.id) === streamId);
-    if (target) {
-      ctrl.patchMessage(target.id, { _localStatus: t === 'done' ? 'completed' : 'failed' });
-    }
-    scheduleScrollToBottom({ force: true });
-  };
+  // handleAssistantTerminal removed in slice 1C — moved to the controller.
+  // ctrl.attachStream injects onTerminal: (streamId, outcome) =>
+  //   scheduleScrollToBottom({ force: true }) so the DOM scroll still fires.
 
-  const pollJobUntilTerminal = async (
-    jobId: string,
-    streamId: string,
-    opts?: { timeoutMs?: number },
-  ) => {
-    if (!jobId || !streamId) return;
-    if (jobPollInFlight.has(jobId)) return;
-    jobPollInFlight.add(jobId);
-    const timeoutMs = opts?.timeoutMs ?? 60_000;
-    const startedAt = Date.now();
-    try {
-      // Petit délai: si SSE marche, on évite de poller tout de suite
-      await new Promise((r) => setTimeout(r, 750));
-
-      while (Date.now() - startedAt < timeoutMs) {
-        // Si entre-temps le message a été hydraté (contenu final) ou marqué terminal, on stop
-        const current = messages.find(
-          (m) => (m._streamId ?? m.id) === streamId,
-        );
-        if (!current) return;
-        if (current.content && current.content.trim().length > 0) return;
-        if (
-          current._localStatus === 'completed' ||
-          current._localStatus === 'failed'
-        )
-          return;
-
-        // Queue: endpoint user-scopé
-        const job = await chatCoreHost.pollJob(jobId);
-        const status = String((job as any)?.status ?? 'unknown');
-
-        if (status === 'completed') {
-          handleAssistantTerminal(streamId, 'done');
-          return;
-        }
-        if (status === 'failed') {
-          handleAssistantTerminal(streamId, 'error');
-          return;
-        }
-        // pending/processing
-        await new Promise((r) => setTimeout(r, 800));
-      }
-    } catch {
-      // ignore (fallback best-effort)
-    } finally {
-      jobPollInFlight.delete(jobId);
-    }
-  };
+  // pollJobUntilTerminal removed in slice 1C — moved to the controller.
+  // Call ctrl.startJobPoll(jobId, streamId, opts) at each run bootstrap.
+  // jobPollInFlight tracking is now owned by the controller.
 
   const loadModelCatalog = async () => {
     try {
@@ -4372,9 +4309,12 @@
     streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
       handleLocalToolStreamEvent(event);
     });
-    projectionHubKey = `chat-projection:${Math.random().toString(36).slice(2)}`;
-    streamHub.set(projectionHubKey, (event: StreamHubEvent) => {
-      handleProjectionStreamEvent(event);
+    // Slice 1C: controller owns the projection stream subscription.
+    ctrl.attachStream({
+      streamClient: chatCoreHost.streamClient,
+      pollJob: (jobId) => chatCoreHost.pollJob(jobId),
+      onProjectionEvent: () => scheduleScrollToBottom(),
+      onTerminal: () => scheduleScrollToBottom({ force: true }),
     });
     if (mode !== 'ai') return;
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
@@ -4483,8 +4423,7 @@
     commentHubKey = '';
     if (localToolsHubKey) streamHub.delete(localToolsHubKey);
     localToolsHubKey = '';
-    if (projectionHubKey) streamHub.delete(projectionHubKey);
-    projectionHubKey = '';
+    ctrl.detachStream(); // slice 1C: controller owns projection subscription teardown
     resetLocalToolInterceptionState();
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
