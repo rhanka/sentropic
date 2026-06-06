@@ -209,12 +209,12 @@ describe('ChatConversation — export surface registration', () => {
     expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
   });
 
-  it('should have version 0.13.0 in package.json (minor bump — feat/chatui-dock ChatDock extraction)', () => {
-    expect(pkgJson.version).toBe('0.13.0');
+  it('should have version 0.13.1 in package.json (patch — openStream relative-base fix)', () => {
+    expect(pkgJson.version).toBe('0.13.1');
   });
 
-  it('should have _version 0.13.0 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.13.0');
+  it('should have _version 0.13.1 in export-manifest.json', () => {
+    expect(manifest._version).toBe('0.13.1');
   });
 
   it('should resolve the ChatConversation svelte file to an existing path', () => {
