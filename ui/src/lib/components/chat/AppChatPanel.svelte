@@ -12,6 +12,11 @@
     apiDelete,
     ApiError,
   } from '$lib/utils/api';
+  import { createSentropicChatCoreHost } from '$lib/chat/chat-core-host-adapter';
+
+  // ChatCoreHost instance — wraps the existing API utils (auth-aware) with the
+  // ChatCoreHost contract. Zero behavior change: same requests, same error shapes.
+  const chatCoreHost = createSentropicChatCoreHost();
   import { session } from '$lib/stores/session';
   import {
     listComments,
@@ -87,17 +92,9 @@
     normalizeGeneratedFileCard,
   } from '$lib/chat/document-adapter';
   import {
-    chatMessageFeedbackUrl,
-    chatMessageRetryUrl,
-    chatMessageStopUrl,
-    chatMessageToolResultsUrl,
-    chatMessageUrl,
-    chatMessagesUrl,
     chatSessionCheckpointCreateUrl,
     chatSessionCheckpointRestoreUrl,
     chatSessionCheckpointsUrl,
-    chatSessionHistoryUrl,
-    chatSessionUrl,
     chatSessionsUrl,
     formatChatApiError,
   } from '$lib/chat/session-adapter';
@@ -165,7 +162,6 @@
   import { downloadGeneratedFile, type GeneratedFileCard } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { generateInjectedScript } from '$lib/upstream/injected-script';
-  import { postChatSteer } from '@sentropic/chat-ui/utils/chat-steer';
   import {
     filterPermissionPromptsForPendingStream,
     parsePendingLocalToolCallsFromStatusPayload,
@@ -803,10 +799,7 @@
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        await apiPost(chatMessageToolResultsUrl(streamId), {
-          toolCallId,
-          result,
-        });
+        await chatCoreHost.postLocalToolResult(streamId, toolCallId, result);
         return;
       } catch (error) {
         lastError = error;
@@ -1438,13 +1431,7 @@
     if (loadingRuntimeDetailsMessageIds.has(messageId)) return;
     loadingRuntimeDetailsMessageIds.add(messageId);
     try {
-      const response = await apiFetch(
-        chatSessionHistoryUrl(targetSessionId, 'full'),
-        {
-          method: 'GET',
-          headers: { Accept: 'application/x-ndjson' },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(targetSessionId, 'full');
       if (!response.body) return;
       const decoder = new TextDecoder();
       const reader = response.body.getReader();
@@ -2914,9 +2901,7 @@
     if (!next) return;
     errorMsg = null;
     try {
-      await apiPatch(chatMessageUrl(messageId), {
-        content: next,
-      });
+      await chatCoreHost.editMessage(messageId, next);
       messages = messages.map((m) =>
         m.id === messageId ? { ...m, content: next } : m,
       );
@@ -2993,13 +2978,7 @@
     if (!sessionId) return;
     errorMsg = null;
     try {
-      const res = await apiPost<{
-        sessionId: string;
-        userMessageId: string;
-        assistantMessageId: string;
-        streamId: string;
-        jobId: string;
-      }>(chatMessageRetryUrl(messageId), {
+      const res = await chatCoreHost.retryMessage(messageId, {
         providerId: selectedProviderId,
         model: selectedModelId,
       });
@@ -3335,7 +3314,7 @@
     updateComposerHeight();
 
     try {
-      await postChatSteer(apiPost, targetStreamId, steerText);
+      await chatCoreHost.postSteer(targetStreamId, steerText);
     } catch (e) {
       optimisticSteerMessages = optimisticSteerMessages.filter(
         (message) => message.id !== localSteerMessage.id,
@@ -3676,8 +3655,8 @@
     loadingSessions = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{ sessions: ChatSession[] }>(chatSessionsUrl());
-      sessions = res.sessions ?? [];
+      const res = await chatCoreHost.fetchSessions();
+      sessions = (res.sessions ?? []) as ChatSession[];
       // If the current sessionId is stale (e.g. from a different workspace), clear it
       if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {
         sessionId = null;
@@ -3728,15 +3707,7 @@
         sessionDocsError = null;
         resetTodoRuntimePanel();
       }
-      const response = await apiFetch(
-        chatSessionHistoryUrl(id, 'summary'),
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/x-ndjson',
-          },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(id, 'summary');
       if (!response.body) {
         throw new Error('Session history stream returned an empty body');
       }
@@ -3877,13 +3848,7 @@
     };
 
     try {
-      const response = await apiFetch(
-        chatSessionHistoryUrl(id, 'summary'),
-        {
-          method: 'GET',
-          headers: { Accept: 'application/x-ndjson' },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(id, 'summary');
       if (!response.body) {
         throw new Error('Session history stream returned an empty body');
       }
@@ -4053,7 +4018,7 @@
     if (!sessionId) return;
     errorMsg = null;
     try {
-      await apiDelete(chatSessionUrl(sessionId));
+      await chatCoreHost.deleteSession(sessionId);
       sessionHydrationGeneration += 1;
       suppressSessionAutoSelect = false;
       sessionId = null;
@@ -4114,9 +4079,7 @@
           return;
 
         // Queue: endpoint user-scopé
-        const job = await apiGet<{ status?: string }>(
-          `/queue/jobs/${encodeURIComponent(jobId)}`,
-        );
+        const job = await chatCoreHost.pollJob(jobId);
         const status = String((job as any)?.status ?? 'unknown');
 
         if (status === 'completed') {
@@ -4139,15 +4102,16 @@
 
   const loadModelCatalog = async () => {
     try {
-      const payload = await apiGet<ModelCatalogPayload>('/models/catalog');
-      modelCatalogProviders = Array.isArray(payload.providers)
+      const payload = await chatCoreHost.fetchModelCatalog();
+      modelCatalogProviders = (Array.isArray(payload.providers)
         ? payload.providers
-        : [];
-      modelCatalogModels = Array.isArray(payload.models) ? payload.models : [];
-      const initialProviderId =
+        : []) as ModelCatalogProvider[];
+      modelCatalogModels = (Array.isArray(payload.models) ? payload.models : []) as ModelCatalogModel[];
+      const initialProviderId = (
         payload.defaults?.provider_id ??
         modelCatalogProviders[0]?.provider_id ??
-        'openai';
+        'openai'
+      ) as ModelProviderId;
       const initialModelId =
         payload.defaults?.model_id ??
         modelCatalogModels.find((entry) => entry.provider_id === initialProviderId)
@@ -4338,13 +4302,7 @@
         }
       }
 
-      const res = await apiPost<{
-        sessionId: string;
-        userMessageId: string;
-        assistantMessageId: string;
-        streamId: string;
-        jobId: string;
-      }>(chatMessagesUrl(), payload);
+      const res = await chatCoreHost.sendMessage(payload);
 
       input = '';
       clearComposerAttachments();
@@ -4390,7 +4348,7 @@
     stoppingMessageId = activeAssistantMessage.id;
     errorMsg = null;
     try {
-      await apiPost(chatMessageStopUrl(activeAssistantMessage.id));
+      await chatCoreHost.stopMessage(activeAssistantMessage.id);
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.stop'));
     } finally {
@@ -4404,7 +4362,7 @@
   ) => {
     errorMsg = null;
     try {
-      await apiPost(chatMessageFeedbackUrl(messageId), { vote: next });
+      await chatCoreHost.setFeedback(messageId, next);
       const voteValue = next === 'clear' ? null : next === 'up' ? 1 : -1;
       messages = messages.map((m) =>
         m.id === messageId ? { ...m, feedbackVote: voteValue } : m,
