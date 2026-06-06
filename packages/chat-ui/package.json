@@ -221,6 +221,11 @@
       "types": "./src/state/sessionList.ts",
       "svelte": "./src/state/sessionList.ts",
       "import": "./src/state/sessionList.ts"
+    },
+    "./context": {
+      "types": "./src/context/index.ts",
+      "svelte": "./src/context/index.ts",
+      "import": "./src/context/index.ts"
     }
   },
   "files": [
