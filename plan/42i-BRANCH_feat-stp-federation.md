@@ -145,12 +145,13 @@ Extend `@sentropic/cli` with a `VerbRegistry` + optional `deps.verbRegistry` fie
     - [x] Confirm all prior lot tests still pass (0-regression) — 47/47 unchanged
 
 - [ ] **Lot N — Final validation + package bump + PR**
-  - [ ] `make typecheck ENV=test-feat-stp-federation-42i`
-  - [ ] `make lint ENV=test-feat-stp-federation-42i`
-  - [ ] Full CLI tests rerun: `make test SCOPE=packages/cli/tests ENV=test-feat-stp-federation-42i`
-  - [ ] Bump `packages/cli/package.json` version from `0.1.0` → `0.2.0` (minor: new public API surface `VerbRegistry` + `loadFederatedSubcommands` + `FEDERATION_MANIFEST`) — required by `enforce-package-bump` CI gate
-  - [ ] Confirm `CLI_VERSION` constant in `packages/cli/src/cli.ts` is updated to match `0.2.0`
-  - [ ] Confirm `packages/cli/src/index.ts` exports all new public symbols: `VerbRegistry`, `VerbBinding`, `DuplicateVerbError`, `FederationEntry`, `FEDERATION_MANIFEST`, `loadFederatedSubcommands`
+  - [x] `make typecheck-cli ENV=test-feat-stp-federation-42i` — PASS (exit 0)
+  - [x] `make lint ENV=test-feat-stp-federation-42i` — N/A (no lint-cli target; typecheck-cli is the gate per Feedback Loop Lot0-D1)
+  - [x] Full CLI tests rerun: `make test-cli ENV=test-feat-stp-federation-42i` — 47 passed (5 files: characterization 8 + dispatch 10 + verb-registry 9 + registry 4 + federation 16)
+  - [x] Bump `packages/cli/package.json` version from `0.1.0` → `0.2.0` (minor: new public API surface `VerbRegistry` + `loadFederatedSubcommands` + `FEDERATION_MANIFEST`) — required by `enforce-package-bump` CI gate
+  - [x] Confirm `CLI_VERSION` constant in `packages/cli/src/cli.ts` is updated to match `0.2.0`
+  - [x] Confirm `packages/cli/src/index.ts` exports all new public symbols: `VerbRegistry`, `VerbBinding`, `DuplicateVerbError`, `FederationEntry`, `FEDERATION_MANIFEST`, `loadFederatedSubcommands`, `LoadFederationDeps`
+  - [x] `make build-cli ENV=test-feat-stp-federation-42i` — PASS (exit 0; dist rebuilt with 0.2.0)
   - [ ] Final gate step 1: create PR using `plan/42i-BRANCH_feat-stp-federation.md` text as PR body
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `plan/42i-BRANCH_feat-stp-federation.md`, push, and merge
