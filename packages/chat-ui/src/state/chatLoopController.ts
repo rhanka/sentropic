@@ -16,7 +16,25 @@
  *   completed/failed on terminal events, and runs the job-poll fallback via
  *   the injected pollJob function.
  *
- * Later slices add: send/steer (1D), local-tool (1E), model (1F).
+ * Slice 1D adds: message lifecycle orchestration (send / bootstrap / retry / stop / edit / feedback).
+ *   - attachHost({ transport }) — inject the host transport (send/retry/stop/edit/setFeedback)
+ *   - send(payload, opts) — call host transport, build optimistic messages, wire stream/poll
+ *   - bootstrapRun(input) — optimistic assistant message insertion + startJobPoll
+ *   - retry(messageId, opts) — call host retryMessage + bootstrapRun
+ *   - stop(messageId) — call host stopMessage
+ *   - edit(messageId, content) — call host editMessage + patchMessage content
+ *   - setFeedback(messageId, vote) — call host setFeedback + patchMessage feedbackVote
+ *
+ *   App-side concerns kept in AppChatPanel (NOT moved here):
+ *     - historyTimelineItems truncation on retry (Svelte state, not Message[])
+ *     - followBottom / scheduleScrollToBottom (DOM concern)
+ *     - createTurnCheckpoint (Lot 2 checkpoint intercept)
+ *     - input clearing / composer height reset / attachment assembly (composer UX)
+ *     - sessionId auto-select / sessions list update after first sendMessage
+ *     - errorMsg / formatApiError presentation
+ *     - copyToClipboard (browser API, not host-coupled)
+ *
+ * Later slices add: steer (1F), local-tool machine (1E).
  *
  * Design constraints (SPEC_EVOL_CHATUI_MODULARIZATION §3, R3):
  *   - Plain TypeScript — zero Svelte/framework imports.
@@ -34,6 +52,13 @@
  *   - attachStream callbacks (onProjectionEvent, onTerminal) are called AFTER the
  *     controller has mutated state — so the host can trigger side-effects (scroll)
  *     after the new projection is already in the snapshot.
+ *   - attachHost is a separate call from attachStream so stream and transport can
+ *     be wired independently (e.g., stream attached in onMount; transport at
+ *     construction time). Both are hot-swappable.
+ *   - bootstrapRun is PUBLIC so AppChatPanel can call it directly for the
+ *     truncateAfterMessageId path (which requires app-side historyTimelineItems
+ *     manipulation before the controller's message list is updated).
+ *     This keeps the split clean without duplicating logic.
  *
  * FLAG: reactivity bridge is the key architectural choice for later slices.
  *   The controller deliberately does NOT carry a Svelte store itself — it is a plain
@@ -112,6 +137,137 @@ export type AttachStreamOptions = {
   pollTimeoutMs?: number;
   pollInitialDelayMs?: number;
   pollIntervalMs?: number;
+};
+
+// ---------------------------------------------------------------------------
+// Host transport surface — slice 1D
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal payload for sending a new message.
+ * Structurally compatible with ChatCoreHost.sendMessage payload.
+ * Using a structural subtype keeps the controller independent of the
+ * concrete host import.
+ */
+export type ControllerSendPayload = {
+  sessionId?: string;
+  content: string;
+  providerId?: string;
+  model?: string;
+  primaryContextType?: string;
+  primaryContextId?: string;
+  contexts?: Array<{ contextType: string; contextId: string }>;
+  tools?: string[];
+  localToolDefinitions?: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
+  attachments?: Array<{
+    kind: 'image' | 'file';
+    source: 'context_document';
+    documentId: string;
+    fileName?: string;
+    mimeType?: string;
+    sizeBytes?: number;
+  }>;
+};
+
+/**
+ * Handle returned by sendMessage / retryMessage on the host transport.
+ * Structurally compatible with ChatCoreHost RunHandle.
+ */
+export type ControllerRunHandle = {
+  sessionId: string;
+  userMessageId: string;
+  assistantMessageId: string;
+  streamId: string;
+  jobId: string;
+};
+
+/**
+ * Minimal host transport surface the controller needs for message lifecycle.
+ * Structurally compatible with ChatCoreHost — the controller does NOT import
+ * ChatCoreHost directly so it stays host-agnostic.
+ */
+export type ControllerHostTransport = {
+  sendMessage(payload: ControllerSendPayload): Promise<ControllerRunHandle>;
+  retryMessage(
+    messageId: string,
+    opts: { providerId: string; model: string },
+  ): Promise<ControllerRunHandle>;
+  stopMessage(messageId: string): Promise<void>;
+  editMessage(messageId: string, content: string): Promise<void>;
+  setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+};
+
+/**
+ * Options for attachHost (slice 1D).
+ */
+export type AttachHostOptions = {
+  transport: ControllerHostTransport;
+};
+
+/**
+ * Input for bootstrapRun (slice 1D).
+ *
+ * The controller handles the Message-list mutation + startJobPoll.
+ * App-side is responsible for:
+ *   - historyTimelineItems truncation (Svelte state) BEFORE calling bootstrapRun
+ *     when truncateAfterMessageId is set.
+ *   - scroll side-effects and checkpoint creation AFTER bootstrapRun returns.
+ *
+ * The controller builds the assistant message using buildAssistantMessage.
+ * Callers may provide a `buildAssistantMessage` factory to stamp any
+ * host-specific fields (e.g. sessionId, model) onto the base shape —
+ * this keeps the controller generic over the Message type parameter.
+ */
+export type BootstrapRunInput<Message extends ChatProjectionMessage> = {
+  sessionId: string;
+  assistantMessageId: string;
+  streamId: string;
+  jobId: string;
+  /**
+   * Factory: build the new optimistic assistant message.
+   * Receives the base fields the controller always sets, plus the sessionId
+   * from the BootstrapRunInput (which on the send path is the post-host-call
+   * sessionId from the RunHandle). Callers stamp model and any other
+   * host-specific fields on top of the base.
+   */
+  buildAssistantMessage: (base: {
+    id: string;
+    sessionId: string;
+    _streamId: string;
+    _localStatus: 'processing';
+    role: 'assistant';
+    content: null;
+    createdAt: string;
+  }) => Message;
+  /**
+   * Optional user message to prepend (new-session send path).
+   * When set, controller calls setMessages([...messages, userMsg, assistantMsg]).
+   */
+  userMessage?: Message;
+  /**
+   * When set (retry path), controller truncates messages to everything up to
+   * and including this id, then appends assistantMsg.
+   * App-side MUST truncate historyTimelineItems BEFORE calling bootstrapRun.
+   */
+  truncateAfterMessageId?: string;
+  /**
+   * Job poll timeout override (default 90 000 ms).
+   */
+  pollTimeoutMs?: number;
+};
+
+/**
+ * Result returned by bootstrapRun and send/retry — exposes the optimistic
+ * assistant message so app-side can schedule scroll and checkpoint creation
+ * without re-reading controller state.
+ */
+export type BootstrapRunResult<Message extends ChatProjectionMessage> = {
+  assistantMessage: Message;
+  handle: ControllerRunHandle;
 };
 
 // ---------------------------------------------------------------------------
@@ -284,6 +440,135 @@ export type ChatLoopController<
     streamId: string,
     opts?: { timeoutMs?: number },
   ): void;
+
+  // -- Host transport lifecycle (slice 1D) ------------------------------------
+
+  /**
+   * Attach a host transport to the controller (slice 1D).
+   *
+   * The transport provides the REST verbs (sendMessage, retryMessage, stopMessage,
+   * editMessage, setFeedback) that the controller calls when driving lifecycle
+   * methods. Structurally compatible with ChatCoreHost — no concrete import.
+   *
+   * Safe to call multiple times — replaces any previously attached transport.
+   * Safe to call before attachStream (transport and stream are independent).
+   */
+  attachHost(opts: AttachHostOptions): void;
+
+  /**
+   * Detach the host transport. Safe to call when no transport is attached.
+   */
+  detachHost(): void;
+
+  /**
+   * Optimistic assistant message insertion + job-poll start (slice 1D).
+   *
+   * Builds the assistant message using the caller-supplied factory, inserts it
+   * into the message list (append, prepend-with-user, or truncate-after),
+   * and starts the background job-poll fallback.
+   *
+   * App-side responsibilities (AFTER this call returns):
+   *   - followBottom = true + scheduleScrollToBottom
+   *   - createTurnCheckpoint (Lot 2 intercept — keep in AppChatPanel)
+   *   - When truncateAfterMessageId is set, truncate historyTimelineItems
+   *     BEFORE calling bootstrapRun.
+   *
+   * Returns { assistantMessage, handle } so the caller can read the
+   * committed assistant message without re-scanning messages[].
+   */
+  bootstrapRun(
+    input: BootstrapRunInput<Message>,
+  ): BootstrapRunResult<Message>;
+
+  /**
+   * Send a new user message via the host transport and bootstrap the run (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.sendMessage(payload)
+   *   2. Calls bootstrapRun with the RunHandle + caller-supplied userMessage factory
+   *   3. Returns { handle, assistantMessage } for app-side side-effects
+   *
+   * App-side responsibilities after this call resolves:
+   *   - Input clearing / composer height reset / attachment clear
+   *   - sessionId update (res.sessionId may be new)
+   *   - sessions list prepend for new sessions
+   *   - errorMsg on catch
+   *   - sending flag management
+   *   - followBottom + scroll + createTurnCheckpoint (via bootstrapRun return)
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  send(
+    payload: ControllerSendPayload,
+    opts: {
+      buildUserMessage: (handle: ControllerRunHandle) => Message;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message> & { handle: ControllerRunHandle }>;
+
+  /**
+   * Retry an existing message via the host transport and bootstrap the run (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.retryMessage(messageId, opts)
+   *   2. Calls bootstrapRun with truncateAfterMessageId = messageId
+   *   3. Returns { handle, assistantMessage }
+   *
+   * App-side responsibilities after this call resolves:
+   *   - historyTimelineItems truncation BEFORE calling (must be done before call)
+   *     → Actually: bootstrapRun handles messages[]; app must sync historyTimelineItems
+   *       if needed (retry path: app truncates historyTimelineItems, THEN calls retry)
+   *   - followBottom + scroll + errorMsg on catch
+   *
+   * NOTE: app-side truncates historyTimelineItems before calling retry.
+   *   The controller truncates messages[] inside bootstrapRun.
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  retry(
+    messageId: string,
+    opts: {
+      providerId: string;
+      model: string;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message>>;
+
+  /**
+   * Stop the active assistant generation via the host transport (slice 1D).
+   *
+   * Calls host.stopMessage(messageId).
+   * App-side manages stoppingMessageId flag + errorMsg on catch.
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  stop(messageId: string): Promise<void>;
+
+  /**
+   * Edit a user message content via the host transport (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.editMessage(messageId, content)
+   *   2. Patches the message content in the controller's message list
+   *
+   * App-side calls cancelEditMessage() + retry(messageId) after this resolves.
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  edit(messageId: string, content: string): Promise<void>;
+
+  /**
+   * Submit feedback on an assistant message via the host transport (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.setFeedback(messageId, vote)
+   *   2. Patches the message feedbackVote in the controller's message list
+   *
+   * App-side manages errorMsg on catch.
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
 };
 
 // ---------------------------------------------------------------------------
@@ -726,6 +1011,186 @@ export function createChatLoopController<
   };
 
   // -------------------------------------------------------------------------
+  // Host transport state (slice 1D)
+  // -------------------------------------------------------------------------
+  let attachedTransport: ControllerHostTransport | null = null;
+
+  // -------------------------------------------------------------------------
+  // Host transport lifecycle (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const attachHost = (opts: AttachHostOptions): void => {
+    attachedTransport = opts.transport;
+  };
+
+  const detachHost = (): void => {
+    attachedTransport = null;
+  };
+
+  // -------------------------------------------------------------------------
+  // bootstrapRun — optimistic message insertion + job-poll start (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const bootstrapRun = (
+    input: BootstrapRunInput<Message>,
+  ): BootstrapRunResult<Message> => {
+    const nowIso = new Date().toISOString();
+    const assistantMessage = input.buildAssistantMessage({
+      id: input.assistantMessageId,
+      sessionId: input.sessionId,
+      _streamId: input.streamId,
+      _localStatus: 'processing',
+      role: 'assistant',
+      content: null,
+      createdAt: nowIso,
+    });
+
+    if (input.userMessage) {
+      // New-session send path: prepend user + assistant
+      setMessages([...messages, input.userMessage, assistantMessage]);
+    } else if (input.truncateAfterMessageId) {
+      // Retry path: truncate messages after the given id, then append assistant.
+      // NOTE: app-side MUST have already truncated historyTimelineItems before
+      // calling bootstrapRun, since that is Svelte state.
+      const userIndex = messages.findIndex(
+        (m) => m.id === input.truncateAfterMessageId,
+      );
+      const truncatedMessages =
+        userIndex >= 0
+          ? [...messages.slice(0, userIndex + 1), assistantMessage]
+          : [...messages, assistantMessage];
+      setMessages(truncatedMessages);
+    } else {
+      // Append path
+      appendMessage(assistantMessage);
+    }
+
+    const handle: ControllerRunHandle = {
+      sessionId: input.sessionId,
+      userMessageId: input.userMessage?.id ?? '',
+      assistantMessageId: input.assistantMessageId,
+      streamId: input.streamId,
+      jobId: input.jobId,
+    };
+
+    startJobPoll(input.jobId, assistantMessage._streamId ?? assistantMessage.id, {
+      timeoutMs: input.pollTimeoutMs ?? 90_000,
+    });
+
+    return { assistantMessage, handle };
+  };
+
+  // -------------------------------------------------------------------------
+  // send — calls host transport, builds optimistic messages, bootstraps run (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const send = async (
+    payload: ControllerSendPayload,
+    opts: {
+      buildUserMessage: (handle: ControllerRunHandle) => Message;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message> & { handle: ControllerRunHandle }> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+
+    const runHandle = await transport.sendMessage(payload);
+
+    const handle: ControllerRunHandle = {
+      sessionId: runHandle.sessionId,
+      userMessageId: runHandle.userMessageId,
+      assistantMessageId: runHandle.assistantMessageId,
+      streamId: runHandle.streamId,
+      jobId: runHandle.jobId,
+    };
+
+    const userMessage = opts.buildUserMessage(handle);
+
+    const result = bootstrapRun({
+      sessionId: handle.sessionId,
+      assistantMessageId: handle.assistantMessageId,
+      streamId: handle.streamId,
+      jobId: handle.jobId,
+      buildAssistantMessage: opts.buildAssistantMessage,
+      userMessage,
+      pollTimeoutMs: opts.pollTimeoutMs,
+    });
+
+    return { ...result, handle };
+  };
+
+  // -------------------------------------------------------------------------
+  // retry — calls host transport retryMessage + bootstrapRun (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const retry = async (
+    messageId: string,
+    opts: {
+      providerId: string;
+      model: string;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message>> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+
+    const runHandle = await transport.retryMessage(messageId, {
+      providerId: opts.providerId,
+      model: opts.model,
+    });
+
+    return bootstrapRun({
+      sessionId: runHandle.sessionId,
+      assistantMessageId: runHandle.assistantMessageId,
+      streamId: runHandle.streamId,
+      jobId: runHandle.jobId,
+      buildAssistantMessage: opts.buildAssistantMessage,
+      truncateAfterMessageId: messageId,
+      pollTimeoutMs: opts.pollTimeoutMs,
+    });
+  };
+
+  // -------------------------------------------------------------------------
+  // stop — calls host transport stopMessage (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const stop = async (messageId: string): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+    await transport.stopMessage(messageId);
+  };
+
+  // -------------------------------------------------------------------------
+  // edit — calls host editMessage + patches content in message list (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const edit = async (messageId: string, content: string): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+    await transport.editMessage(messageId, content);
+    patchMessage(messageId, { content } as Partial<Message>);
+  };
+
+  // -------------------------------------------------------------------------
+  // setFeedback — calls host setFeedback + patches feedbackVote (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const setFeedback = async (
+    messageId: string,
+    vote: 'up' | 'down' | 'clear',
+  ): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+    await transport.setFeedback(messageId, vote);
+    const voteValue = vote === 'clear' ? null : vote === 'up' ? 1 : -1;
+    // feedbackVote is not in ChatProjectionMessage's base constraint but IS in
+    // the concrete Message type used by consumers (LocalMessage). Cast via unknown.
+    patchMessage(messageId, { feedbackVote: voteValue } as unknown as Partial<Message>);
+  };
+
+  // -------------------------------------------------------------------------
   // Initial timeline build (empty state)
   // -------------------------------------------------------------------------
   recomputeTimeline();
@@ -751,5 +1216,13 @@ export function createChatLoopController<
     attachStream,
     detachStream,
     startJobPoll,
+    attachHost,
+    detachHost,
+    bootstrapRun,
+    send,
+    retry,
+    stop,
+    edit,
+    setFeedback,
   };
 }

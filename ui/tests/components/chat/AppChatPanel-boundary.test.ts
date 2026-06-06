@@ -34,7 +34,10 @@ describe('AppChatPanel boundary', () => {
     expect(source).toContain('addGoogleDriveComposerAttachments');
     expect(source).toContain('payload.attachments');
     expect(source).toContain('kind: attachment.kind');
-    expect(source).toContain('attachments: sentAttachments');
+    // Attachments wired: sentAttachments captured into controller send factory
+    // (capturedAttachments = sentAttachments, then buildUserMessage uses capturedAttachments)
+    expect(source).toContain('capturedAttachments = sentAttachments');
+    expect(source).toContain('attachments: capturedAttachments');
   });
 
   it('renders a pending-only attachment band with click-to-enlarge, not a persistent session-doc band', () => {
