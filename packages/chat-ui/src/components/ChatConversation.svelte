@@ -2,6 +2,10 @@
   /**
    * ChatConversation.svelte — turnkey, app-agnostic 1:1 chat dialogue.
    *
+   * Slice 1G (R5): ChatConversation now collapses onto the chat-loop controller.
+   * The previous parallel loop (handleSend / subscribeToStream / inline local-tool
+   * dispatch) is DELETED. All state is owned by createChatLoopController().
+   *
    * Composes the already-published @sentropic/chat-ui primitives:
    *   ChatPanel (shell) -> ChatTimeline -> StreamMessage -> ChatComposer
    *   -> ModelSelector (when models supplied) -> MessageActions (per message)
@@ -9,13 +13,12 @@
    *
    * All app-coupled concerns (comments, documents, jobs, workspaceScope,
    * attachments) default OFF — enabled only when the caller supplies the
-   * matching flag + adapter.  Local-tool handoff is wired via
-   * `parsePendingLocalToolCallsFromStatusPayload` + `host.localTools` dispatch.
+   * matching flag + adapter.
    *
    * No app store is imported.  No hardcoded user-facing string.  All labels
    * go through the injected `labels` resolver.
    *
-   * Baseline: chat-ui@0.12.0 (real send→stream wiring + local-tool dispatch).
+   * Baseline: chat-ui@0.14.0 (controller-backed, R5 — no 3rd loop).
    */
 
   import type {
@@ -25,7 +28,12 @@
   import type { ChatContextProvider } from '../state/chat-context.js';
   import type { RendererRegistry } from '../renderers/registry.js';
   import type { ModelCatalogGroup, ModelCatalogModel } from '../utils/model-selection.js';
-  import type { StreamHubEvent } from '../client/streamTypes.js';
+  import type { ControllerHostTransport, ControllerRunHandle } from '../state/chatLoopController.js';
+
+  import { onDestroy } from 'svelte';
+  import { createChatLoopController } from '../state/chatLoopController.js';
+  import { isLocalToolName } from '../stores/localTools.js';
+  import { createRendererRegistry } from '../renderers/registry.js';
 
   import ChatPanel from './ChatPanel.svelte';
   import ChatTimeline from './ChatTimeline.svelte';
@@ -37,11 +45,6 @@
 
   import type { ChatContextEntry } from '../state/chat-context.js';
   import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
-  import { buildProjectedTimeline } from '../state/chatProjection.js';
-  import { projectAssistantRunSegments, appendLiveProjectionEvent } from '../utils/chat-run-projection.js';
-  import { parsePendingLocalToolCallsFromStatusPayload } from '../utils/localToolStreamSync.js';
-  import { isLocalToolName as _isLocalToolName } from '../stores/localTools.js';
-  import { createRendererRegistry } from '../renderers/registry.js';
 
   // ---------------------------------------------------------------------------
   // Feature flags type — all default OFF except steer/retry/stop
@@ -84,8 +87,6 @@
    * Session identifier.  If omitted the component renders in an empty /
    * loading state; the caller is responsible for bootstrapping and passing
    * the resolved sessionId before messages are shown.
-   * Full session-creation via `host.transport.createSession` is a deferred
-   * feature (transport interface does not yet expose createSession).
    */
   export let sessionId: string | undefined = undefined;
 
@@ -184,131 +185,155 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Timeline projection state
+  // Chat-loop controller (R5 — the ONLY loop; no 3rd parallel loop)
+  //
+  // The controller owns all chat state:
+  //   - message list + projection (inherited from slices 1B-1F)
+  //   - stream subscription (1C)
+  //   - send/bootstrap/retry/stop/edit/feedback lifecycle (1D)
+  //   - local-tool execution state machine (1E)
+  //   - steer + model catalog (1F)
+  //
+  // ChatConversation:
+  //   1. Creates the controller.
+  //   2. Builds a ControllerHostTransport adapter that wraps host.transport
+  //      (postMessage → sendMessage returning ControllerRunHandle).
+  //   3. Attaches stream (host.streamClient) with a no-op pollJob fallback.
+  //   4. Attaches local-tool machine when host.localTools is present.
+  //   5. Renders from $ctrl.projectedTimelineItems.
+  //   6. handleSend → ctrl.send(...).
   // ---------------------------------------------------------------------------
 
-  // Minimal message type compatible with ChatProjectionMessage
+  // Minimal SimpleMessage type compatible with ChatProjectionMessage
   type SimpleMessage = {
     id: string;
     role: string;
     content?: string | null;
     _localStatus?: 'processing' | 'completed' | 'failed';
     _streamId?: string;
+    sessionId?: string;
+    createdAt?: string;
   };
 
-  let timeline: SimpleMessage[] = [];
+  const ctrl = createChatLoopController<SimpleMessage>();
 
-  // Stream events per message id (for live projection)
-  let streamEventsById: Map<string, Array<{ eventType: string; sequence: number; data: unknown }>> = new Map();
+  // Reactive snapshot — Svelte store protocol ($ctrl triggers re-render)
+  $: ctrlState = $ctrl;
+  $: projectedItems = ctrlState.projectedTimelineItems as ChatProjectedTimelineItem<SimpleMessage, unknown>[];
 
-  // Build projected timeline items
-  $: projectedItems = buildProjectedTimeline({
-    timeline,
-    getAssistantComputation: (message: SimpleMessage) => {
-      const events = streamEventsById.get(message.id) ?? [];
-      const segments = projectAssistantRunSegments(events);
-      return { segments, linkedSteerCount: 0 };
+  // ---------------------------------------------------------------------------
+  // Wire host transport → controller (ControllerHostTransport adapter)
+  //
+  // The controller's send() needs sendMessage() → ControllerRunHandle.
+  // host.transport.postMessage(sessionId, body) returns Promise<Response>.
+  // We wrap that here so the controller stays transport-agnostic.
+  // ---------------------------------------------------------------------------
+
+  const buildControllerTransport = (): ControllerHostTransport => ({
+    async sendMessage(payload) {
+      // sessionId comes from the ChatConversation prop (closure reference)
+      const sid = sessionId ?? '';
+      const response = await host.transport.postMessage(sid, { content: payload.content });
+      const body = await response.json() as Record<string, unknown>;
+      const assistantMessageId = String(body.assistantMessageId ?? '').trim();
+      const streamId = String(body.streamId ?? assistantMessageId).trim();
+      const jobId = String(body.jobId ?? streamId).trim();
+      const userMessageId = String(body.userMessageId ?? '').trim();
+      const handle: ControllerRunHandle = {
+        sessionId: sid,
+        userMessageId,
+        assistantMessageId,
+        streamId,
+        jobId,
+      };
+      return handle;
     },
-  }) as ChatProjectedTimelineItem<SimpleMessage, unknown>[];
+    async retryMessage(_messageId, _opts) {
+      // Retry not yet wired in ChatConversation (deferred — no retry UI in turnkey)
+      throw new Error('ChatConversation: retryMessage not wired');
+    },
+    async stopMessage(_messageId) {
+      // Stop not yet wired in ChatConversation (deferred — no stop UI in turnkey)
+    },
+    async editMessage(_messageId, _content) {
+      // Edit not yet wired in ChatConversation (deferred — no edit UI in turnkey)
+    },
+    async setFeedback(_messageId, _vote) {
+      // Feedback not yet wired in ChatConversation (deferred — no feedback UI in turnkey)
+    },
+    async postSteer(_streamId, _message) {
+      // Steer not yet wired in ChatConversation (deferred — no steer UI in turnkey)
+    },
+  });
 
   // ---------------------------------------------------------------------------
-  // Active stream subscriptions (per assistant message _streamId)
+  // Wire controller stream + local-tool machine
   // ---------------------------------------------------------------------------
 
-  // Map of subKey → streamId for active subscriptions; we track them so we can
-  // tear them down when the component is destroyed or the stream terminates.
-  const activeStreamSubs = new Map<string, string>();
+  // Attach host transport to controller immediately (controller needs it for send())
+  ctrl.attachHost({ transport: buildControllerTransport() });
 
-  // Subscribe to a stream via host.streamClient, feed events into streamEventsById
-  // and dispatch local-tool calls via host.localTools.
-  const subscribeToStream = (assistantMsgId: string, streamId: string): void => {
-    if (!host?.streamClient) return;
-    const subKey = `conv:${assistantMsgId}:${Math.random().toString(36).slice(2)}`;
-    activeStreamSubs.set(subKey, streamId);
-
-    host.streamClient.setStream(subKey, streamId, (event: StreamHubEvent) => {
-      // Feed projection events
-      const eventStreamId = String((event as Record<string, unknown>).streamId ?? '').trim();
-      const sequence = Number((event as Record<string, unknown>).sequence);
-      if (eventStreamId === streamId && Number.isFinite(sequence)) {
-        const projEvent = {
-          eventType: String(event.type ?? '').trim(),
-          data: (event as Record<string, unknown>).data ?? {},
-          sequence,
-        };
-        streamEventsById = new Map(streamEventsById);
-        streamEventsById.set(
-          assistantMsgId,
-          appendLiveProjectionEvent(
-            streamEventsById.get(assistantMsgId) ?? [],
-            projEvent,
-          ),
-        );
-      }
-
-      // On terminal events: mark assistant message completed + clean up subscription
-      if (event.type === 'done' || event.type === 'error') {
-        timeline = timeline.map((m) =>
-          m.id === assistantMsgId
-            ? { ...m, _localStatus: event.type === 'done' ? 'completed' : 'failed' }
-            : m,
-        );
-        host.streamClient?.delete(subKey);
-        activeStreamSubs.delete(subKey);
-        return;
-      }
-
-      // On status events: detect local-tool pending calls and dispatch them
-      if (event.type === 'status' && host?.localTools) {
-        const eventData = (event as Record<string, unknown>).data;
-        const pendingCalls = parsePendingLocalToolCallsFromStatusPayload(
-          streamId,
-          Number((event as Record<string, unknown>).sequence ?? 0),
-          eventData,
-          _isLocalToolName,
-        );
-        for (const call of pendingCalls) {
-          void dispatchLocalTool(streamId, call.toolCallId, call.name, call.argsText);
-        }
-      }
+  // Attach stream subscription (controller owns projection routing)
+  // No-op pollJob: ChatConversation has no job-poll endpoint — stream-only.
+  // A second subscription below routes events to the local-tool machine.
+  let localToolHubKey: string | null = null;
+  if (host?.streamClient) {
+    ctrl.attachStream({
+      streamClient: host.streamClient,
+      pollJob: async () => ({ status: 'pending' }),
+      pollInitialDelayMs: 99999, // effectively disabled — stream-only turnkey
     });
-  };
 
-  // Dispatch a local tool call via host.localTools.sendMessage
-  const dispatchLocalTool = async (
-    streamId: string,
-    toolCallId: string,
-    name: string,
-    argsText: string,
-  ): Promise<void> => {
-    const localTools = host?.localTools;
-    if (!localTools?.sendMessage) return;
-    let args: unknown = {};
-    try {
-      const trimmed = argsText.trim();
-      if (trimmed) args = JSON.parse(trimmed);
-    } catch {
-      // malformed args — leave as {}
-    }
-    try {
-      await localTools.sendMessage({
-        type: 'tool_execute',
-        toolCallId,
-        name,
-        args,
+    // Second subscription: route all stream events through the local-tool machine.
+    // Mirrors AppChatPanel's streamHub.set(localToolsHubKey, ctrl.handleLocalToolStreamEvent).
+    // The controller's own attachStream handler owns projection; this one owns local tools.
+    if (host.localTools) {
+      localToolHubKey = `conv-lt:${Math.random().toString(36).slice(2)}`;
+      host.streamClient.set(localToolHubKey, (event: unknown) => {
+        ctrl.handleLocalToolStreamEvent(event);
       });
-    } catch {
-      // Local-tool errors are advisory; the stream continues regardless
     }
-  };
+  }
 
-  // Tear down all active stream subscriptions when the component is destroyed
-  import { onDestroy } from 'svelte';
+  // Attach local-tool machine when host.localTools is present
+  if (host?.localTools) {
+    const localTools = host.localTools;
+    ctrl.attachLocalToolMachine({
+      isLocalToolName,
+      isLocalToolRuntimeAvailable: () => Boolean(localTools.sendMessage),
+      isLocalToolPermissionRequired: () => false,
+      getPermissionRequest: () => ({
+        requestId: '',
+        toolName: '',
+        origin: '',
+      }),
+      executeLocalTool: async (toolCallId, name, args, _opts) => {
+        if (!localTools.sendMessage) return undefined;
+        const result = await localTools.sendMessage({
+          type: 'tool_execute',
+          toolCallId,
+          name,
+          args,
+        });
+        return result;
+      },
+      decideLocalToolPermission: async (_requestId, _decision) => {
+        // No permission UI in turnkey ChatConversation
+      },
+      postLocalToolResult: async (_streamId, _toolCallId, _result) => {
+        // Result posting not wired in turnkey (deferred)
+      },
+    });
+  }
+
+  // Tear down controller on component destroy
   onDestroy(() => {
-    for (const [subKey] of activeStreamSubs) {
-      host?.streamClient?.delete(subKey);
+    if (localToolHubKey && host?.streamClient) {
+      host.streamClient.delete(localToolHubKey);
     }
-    activeStreamSubs.clear();
+    ctrl.detachStream();
+    ctrl.detachLocalToolMachine();
+    ctrl.detachHost();
   });
 
   // ---------------------------------------------------------------------------
@@ -333,15 +358,15 @@
   };
 
   // ---------------------------------------------------------------------------
-  // Send handler — posts a message via host.transport, then drives the stream
+  // Send handler — delegates entirely to the controller (R5: no 3rd loop)
   //
-  // Flow (mirrors AppChatPanel.bootstrapAssistantRun exactly):
-  //   1. Optimistically append user message to timeline.
-  //   2. POST via host.transport.postMessage; parse JSON for
-  //      { assistantMessageId, streamId }.
-  //   3. Create the assistant SimpleMessage with _streamId and append to timeline.
-  //   4. Subscribe to the stream via host.streamClient.setStream so the existing
-  //      StreamMessage template path renders the live stream immediately.
+  // The controller's send():
+  //   1. Calls controllerTransport.sendMessage → wraps host.transport.postMessage
+  //   2. Builds optimistic user + assistant messages
+  //   3. Starts job-poll fallback (disabled via pollInitialDelayMs)
+  //
+  // ChatConversation only manages composerInput / isSending (UI state).
+  // All timeline mutations happen inside the controller.
   // ---------------------------------------------------------------------------
 
   const handleSend = async (): Promise<void> => {
@@ -351,46 +376,24 @@
     isSending = true;
     composerInput = '';
 
-    // Step 1: Optimistic user message
-    const localId = `local_${Date.now()}`;
-    const userMessage: SimpleMessage = {
-      id: localId,
-      role: 'user',
-      content: text,
-      _localStatus: 'completed',
-    };
-    timeline = [...timeline, userMessage];
-
     try {
-      // Step 2: POST and parse the server response
-      const response = await host.transport.postMessage(sessionId, { content: text });
-      const body = await response.json() as Record<string, unknown>;
-
-      const assistantMessageId = String(body.assistantMessageId ?? '').trim();
-      const streamId = String(body.streamId ?? assistantMessageId).trim();
-
-      if (!assistantMessageId) {
-        // No assistant message id returned — cannot wire stream; stay in optimistic state
-        return;
-      }
-
-      // Step 3: Create assistant message carrying _streamId, append to timeline
-      const nowIso = new Date().toISOString();
-      const assistantMsg: SimpleMessage = {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: null,
-        _localStatus: 'processing',
-        _streamId: streamId,
-      };
-      timeline = [...timeline, assistantMsg];
-
-      // Step 4: Subscribe to the stream — events flow into streamEventsById
-      // and the existing {#if host?.streamClient && item.message._streamId} path
-      // in the template renders StreamMessage live.
-      subscribeToStream(assistantMessageId, streamId);
-
-      void nowIso; // used in assistantMsg above
+      await ctrl.send(
+        { content: text, sessionId },
+        {
+          buildUserMessage: (_handle) => ({
+            id: `local_${Date.now()}`,
+            role: 'user',
+            content: text,
+            _localStatus: 'completed',
+            sessionId,
+            createdAt: new Date().toISOString(),
+          }),
+          buildAssistantMessage: (base) => ({
+            ...base,
+            sessionId: base.sessionId,
+          }),
+        },
+      );
     } catch {
       // Silent: user message stays in optimistic state; deeper error handling is app-owned
     } finally {
@@ -421,7 +424,7 @@
 </script>
 
 <!--
-  ChatConversation — turnkey wrapper.
+  ChatConversation — turnkey wrapper (controller-backed, R5).
 
   Structure:
     .chat-conversation-{layout}

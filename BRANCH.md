@@ -94,6 +94,12 @@ Ratify the `ChatCoreHost` typed contract (transport + streaming + local-tool + s
   - [x] Extend `packages/chat-ui/tests/chat-loop-controller.spec.ts`: add describe blocks 12 "steer (slice 1F)" (7 tests) + 13 "model catalog (slice 1F)" (11 tests). Total: 543/543 pass.
   - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors (6 pre-existing warnings); `make test-chat-ui` → 543/543 pass; `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker flake, stash-verified)
 
+- [x] **Lot 1 Slice 1G — ChatConversation collapses onto the controller (R5, no 3rd loop)**
+  - [x] DELETE parallel loop in `ChatConversation.svelte`: remove `handleSend`, `subscribeToStream`, `dispatchLocalTool`, `activeStreamSubs`, `timeline`, `streamEventsById`, `projectedItems` local state, `SimpleMessage` local type, `onDestroy` local-sub teardown.
+  - [x] Rebuild ChatConversation on `createChatLoopController()`: instantiate `ctrl`, build `ControllerHostTransport` adapter (wraps `host.transport.postMessage` → `ControllerRunHandle`), `ctrl.attachHost`, `ctrl.attachStream` (no-op pollJob), second `streamClient.set` subscription routing events to `ctrl.handleLocalToolStreamEvent`, `ctrl.attachLocalToolMachine` (uses `host.localTools.sendMessage` directly). `handleSend` → `ctrl.send(...)`. Timeline rendered from `$ctrl.projectedTimelineItems`.
+  - [x] Update `packages/chat-ui/tests/chat-conversation-functional.dom.spec.ts`: update fake stream client to capture `set()` handlers (controller path) + update assertions from `setStream` to `set` (R5 proof: controller uses `set()` not `setStream()`). `emit()` delivers to all `set` handlers. Local-tool assertion proves controller's machine drives execution.
+  - [x] Gate: `make typecheck-chat-ui` → exit 0; `make typecheck-ui` → 0 errors (6 pre-existing warnings); `make test-chat-ui` → 543/543 pass; `make test-chat-ui-dom` → 134/134 pass (9 functional harness pass); `make test-ui` → 445/447 pass (2 pre-existing google-drive-picker flake)
+
 ## Feedback Loop
 - None.
 
