@@ -124,13 +124,13 @@ Extend `@sentropic/cli` with a `VerbRegistry` + optional `deps.verbRegistry` fie
     - [x] N/A `make lint-cli` — no lint-cli target (per Feedback Loop Lot0-D1)
     - [x] `make test-cli ENV=test-feat-stp-federation-42i` — 47 passed (8 characterization + 4 registry + 10 dispatch + 9 verb-registry + 16 federation); all files PASS
 
-- [ ] **Lot 3 — Wire the bin + ship the `report` alias**
-  - [ ] Extend `packages/cli/bin/stp.mjs`:
-    - [ ] Import `VerbRegistry`, `loadFederatedSubcommands` from `../dist/index.js`
-    - [ ] In `buildRegistry()`, run `await loadFederatedSubcommands(registry)` after the `stp app` hard-registration — cross-repo CLIs not installed at this point → all silently skip (graceful); machinery ships now
-    - [ ] Build a `VerbRegistry` with the single initial alias: `verbRegistry.register({ verb: 'report', ownerCli: 'track', ownerArgv: ['report'], note: 'equiv: stp track report' })`
-    - [ ] Pass `{ verbRegistry }` as the `CliDeps` argument to `runCli`: `const code = await runCli(process.argv.slice(2), registry, { verbRegistry })`
-    - [ ] `stp app` hard-import of `@sentropic/build-cli` unchanged
+- [x] **Lot 3 — Wire the bin + ship the `report` alias**
+  - [x] Extend `packages/cli/bin/stp.mjs`:
+    - [x] Import `VerbRegistry`, `loadFederatedSubcommands` from `../dist/index.js`
+    - [x] In `buildRegistry()`, run `await loadFederatedSubcommands(registry)` after the `stp app` hard-registration — cross-repo CLIs not installed at this point → all silently skip (graceful); machinery ships now
+    - [x] Build a `VerbRegistry` with the single initial alias: `verbRegistry.register({ verb: 'report', ownerCli: 'track', ownerArgv: ['report'], note: 'equiv: stp track report' })`
+    - [x] Pass `{ verbRegistry }` as the `CliDeps` argument to `runCli`: `const code = await runCli(process.argv.slice(2), registry, { verbRegistry })`
+    - [x] `stp app` hard-import of `@sentropic/build-cli` unchanged
   - [ ] UAT checkpoint (bin behavior, push branch first):
     - [ ] Push branch: `git push origin feat/stp-federation-42i`
     - [ ] From root workspace: run `stp --help` → lists `app` (and any installed cross-repo CLIs); `report` alias noted if printed
@@ -138,11 +138,11 @@ Extend `@sentropic/cli` with a `VerbRegistry` + optional `deps.verbRegistry` fie
     - [ ] From root workspace: run `stp bogus` → `Unknown subcommand: bogus` with `app` in available list
     - [ ] From root workspace: run `stp report` → since `track` not installed, falls through to `formatUnknown` (correct, not a crash)
     - [ ] From root workspace: run `stp app --help` → unchanged output (0-regression)
-  - [ ] Lot gate:
-    - [ ] `make typecheck ENV=test-feat-stp-federation-42i`
-    - [ ] `make lint ENV=test-feat-stp-federation-42i`
-    - [ ] CLI tests — all: `make test SCOPE=packages/cli/tests ENV=test-feat-stp-federation-42i`
-    - [ ] Confirm all prior lot tests still pass (0-regression)
+  - [x] Lot gate:
+    - [x] `make typecheck-cli ENV=test-feat-stp-federation-42i` PASS
+    - [x] N/A `make lint-cli` — no lint-cli target (per Feedback Loop Lot0-D1)
+    - [x] `make test-cli ENV=test-feat-stp-federation-42i` — 47 passed (5 files: characterization 8 + registry 4 + dispatch 10 + verb-registry 9 + federation 16); all PASS
+    - [x] Confirm all prior lot tests still pass (0-regression) — 47/47 unchanged
 
 - [ ] **Lot N — Final validation + package bump + PR**
   - [ ] `make typecheck ENV=test-feat-stp-federation-42i`
