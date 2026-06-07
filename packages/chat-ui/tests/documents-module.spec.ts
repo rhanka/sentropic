@@ -42,12 +42,12 @@ describe('documents module — export surface registration', () => {
     expect(Object.keys(pkgJson.exports)).toContain('./documents/GeneratedFileCardTray.svelte');
   });
 
-  it('should have version 0.18.0 in package.json (minor — comments module + CommentsPanel sibling-surface)', () => {
-    expect(pkgJson.version).toBe('0.18.0');
+  it('should have version 0.19.0 in package.json (minor — orphan sweep + composer fidelity restore)', () => {
+    expect(pkgJson.version).toBe('0.19.0');
   });
 
-  it('should have _version 0.18.0 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.18.0');
+  it('should have _version 0.19.0 in export-manifest.json', () => {
+    expect(manifest._version).toBe('0.19.0');
   });
 
   it('should resolve the documents index source file to an existing path', () => {
