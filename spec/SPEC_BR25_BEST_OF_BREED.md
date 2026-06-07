@@ -6,22 +6,22 @@ This is the BR25 decision output document. It synthesizes the Lot 1-3 study (`SP
 
 ## Recommendation summary
 
-Adopt the Entropiq conductor model as the source of truth and selectively borrow from external references where they cover gaps. Publish reusable primitives as templates and skills before any CLI or npm packaging. Add mechanical enforcement only for objective failures with documented incident history.
+Adopt the Sentropic conductor model as the source of truth and selectively borrow from external references where they cover gaps. Publish reusable primitives as templates and skills before any CLI or npm packaging. Add mechanical enforcement only for objective failures with documented incident history.
 
 ## Method ranking by dimension
 
-| Dimension | Keep from Entropiq | Borrow from external | Net recommendation |
+| Dimension | Keep from Sentropic | Borrow from external | Net recommendation |
 | --- | --- | --- | --- |
 | Intention capture | `spec_vol`/`spec_evol` split, branch-bound intent | Spec Kit task layering after `vol_validated`, Graphify evidence linking | Adopt review-state ladder: study → vol_draft → vol_validated → evol → decision_record |
 | Loop control | Lot-based execution, conductor reports | Superpowers brainstorm/plan/TDD/verify rituals, GSD short loops | Codify capture/plan/act/observe/decide/verify/publish loop with explicit stop conditions |
-| Branch discipline | Worktrees, allowed/forbidden paths, port slots, make-only | None (Entropiq leads) | Publish as portable template; this is the differentiator |
+| Branch discipline | Worktrees, allowed/forbidden paths, port slots, make-only | None (Sentropic leads) | Publish as portable template; this is the differentiator |
 | Verification | Staged gates (typecheck/lint/build/unit/E2E/CI/UAT) | Verification-before-completion skill | Add risk-to-check mapping; require check category in handoff |
 | Mechanical enforcement | Written rules, manual reviews | Superpowers hooks, Spec Kit CI checks | Adopt Layer A advisory hooks first (see Lot 4 candidates) |
 | Memory and context | `BRANCH.md`, `PLAN.md`, specs, incident reports | Graphify clusters, Claude project memory | Layer memory: rules > branch > spec > skill > incident graph; agent-local is never source of truth |
 | Publication | None today | Codex skills, Claude commands, Spec Kit templates, npm packaging | Ship templates first, then skills/commands, then optional CLI; never publish ports/secrets |
 | Interoperability | Make-only as common interface | MCP servers, agent-neutral markdown | Keep portable markdown templates; expose CLI via make targets that any agent can invoke |
 
-## What Entropiq does better
+## What Sentropic does better
 
 - Multi-agent branch isolation with explicit worktrees and per-branch ENV/port slots.
 - Docker-first and make-only consistency between local and CI.
@@ -40,7 +40,7 @@ Adopt the Entropiq conductor model as the source of truth and selectively borrow
 
 ## Minimum durable method
 
-The recommended minimum, applicable inside and outside Entropiq, is:
+The recommended minimum, applicable inside and outside Sentropic, is:
 
 1. Capture intention with explicit review state.
 2. Create a scoped branch plan with allowed/forbidden paths and lot-by-lot tasks.
