@@ -1,13 +1,9 @@
 /**
  * comments/utils.ts
  *
- * Generic comment utility functions — pure TS, zero sentropic domain strings.
- * These are the subset of comment-adapter.ts helpers that are generic enough
- * to live in the package (no SECTION_LABEL_KEYS, no domain enum).
- *
- * The app-side comment-adapter.ts continues to export them for UI consumers
- * that already import from there; this file is the canonical package-internal
- * source.
+ * Generic comment utility functions — pure TS, zero domain strings.
+ * This file is the canonical source for these helpers (no section label
+ * keys, no domain enum — those stay app-side in the host adapter).
  */
 
 import type { MentionMember, CommentItem, CommentThreadSummary } from './types.js';
