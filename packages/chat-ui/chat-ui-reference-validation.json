@@ -54,6 +54,30 @@
       "class": "assembly",
       "assemblyValidatedBy": ["tests/chat-conversation-functional.dom.spec.ts"],
       "composes": ["ChatPanel.svelte", "ChatTimeline.svelte", "ChatComposer.svelte", "ModelSelector.svelte", "MessageActions.svelte", "StreamMessage.svelte", "ChatContextPicker.svelte"]
+    },
+    "checkpoints": {
+      "class": "headless"
+    },
+    "context": {
+      "class": "headless"
+    },
+    "documents": {
+      "class": "headless"
+    },
+    "comments": {
+      "class": "headless"
+    },
+    "AttachmentBand.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+    },
+    "GeneratedFileCardTray.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+    },
+    "CommentsPanel.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
     }
   }
 }
