@@ -1275,7 +1275,8 @@
       "error": "Unable to send steer message"
     },
     "edit": {
-      "placeholder": "Edit message…"
+      "placeholder": "Edit message…",
+      "editLabel": "Edit"
     },
     "feedback": {
       "useful": "Useful",
