@@ -165,9 +165,10 @@ test.describe('Tenancy / cloisonnement workspace', () => {
       await expect(widget).toBeVisible({ timeout: 10_000 });
       await widget.getByRole('button', { name: 'Commentaires', exact: true }).click();
 
+      // CommentsPanel uses a textarea (role=textbox, aria-label=Composer).
+      // Click it directly — no contenteditable child.
       const composer = widget.locator('[role="textbox"][aria-label="Composer"]:visible');
-      const editable = composer.locator('[contenteditable="true"]');
-      await editable.click();
+      await composer.click();
       await page.keyboard.type('@');
 
       return widget;

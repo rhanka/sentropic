@@ -25,18 +25,9 @@
   // isLocalToolName, humanizeMutation) wired to the generic module classifier.
   const checkpointHost = createCheckpointHost();
   import { session } from '$lib/stores/session';
-  import {
-    listComments,
-    createComment,
-    updateComment,
-    closeComment,
-    reopenComment,
-    deleteComment,
-    listMentionMembers,
-    type CommentItem,
-    type CommentContextType,
-    type MentionMember,
-  } from '$lib/utils/comments';
+  import type { CommentContextType } from '$lib/utils/comments';
+  import CommentsPanel from '@sentropic/chat-ui/comments/CommentsPanel.svelte';
+  import { createSentropicCommentHost } from '$lib/chat/comment-host-adapter';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import ChatComposerWrapper from '$lib/components/chat/ChatComposerWrapper.svelte';
   import ChatTimelineWrapper from '$lib/components/chat/ChatTimelineWrapper.svelte';
@@ -89,19 +80,7 @@
     contextTypeIconKey,
     type ChatContextType,
   } from '$lib/chat/context-adapter';
-  import {
-    buildCommentThreads as buildChatCommentThreads,
-    findAssignedMentionFromText,
-    formatCommentTimestamp as formatChatCommentTimestamp,
-    getCommentAuthorLabel,
-    getCommentSectionLabel as getChatCommentSectionLabel,
-    getInitials,
-    getMentionCandidate,
-    getMentionLabel,
-    getMentionMatches as getChatMentionMatches,
-    isAiComment,
-    isCommentByUser,
-  } from '$lib/chat/comment-adapter';
+  // comment-adapter helpers removed — comment logic moved to CommentsPanel/createCommentState
   import {
     createChatSessionCreatePayload,
     createChatSessionDocumentContext,
@@ -425,109 +404,10 @@
   export let commentSectionKey: string | null = null;
   export let commentSectionLabel: string | null = null;
   export let commentThreadId: string | null = null;
-  export let commentThreads: Array<{
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-    createdBy: string;
-  }> = [];
 
-  const getCommentSectionLabel = (type: string | null, key: string | null) =>
-    getChatCommentSectionLabel(type, key, $_);
+  // Comment helpers removed — moved to CommentsPanel / createCommentState / comment-host-adapter.
 
-  const commentAuthorLabel = (comment: CommentItem) =>
-    getCommentAuthorLabel(comment);
-
-  const mentionLabelFor = (member: MentionMember) => getMentionLabel(member);
-
-  const isCommentByCurrentUser = (comment: CommentItem) =>
-    isCommentByUser(comment, $session.user);
-
-  const getMentionMatches = (query: string) =>
-    getChatMentionMatches(mentionMembers, query);
-
-  let timeFormatter = new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  let dateFormatter = new Intl.DateTimeFormat('en-US', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-  $: {
-    const intlLocale = $locale === 'fr' ? 'fr-FR' : 'en-US';
-    timeFormatter = new Intl.DateTimeFormat(intlLocale, {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    dateFormatter = new Intl.DateTimeFormat(intlLocale, {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  }
-
-  const formatCommentTimestamp = (value: string | null | undefined) =>
-    formatChatCommentTimestamp({
-      value,
-      now: new Date(),
-      yesterdayLabel: $_('common.yesterday'),
-      timeFormatter,
-      dateFormatter,
-    });
-
-  const findAssignedUserFromText = (text: string) =>
-    findAssignedMentionFromText(text, mentionMembers);
-
-  const loadMentionMembers = async () => {
-    const workspaceId = getScopedWorkspaceIdForUser();
-    if (!workspaceId) return;
-    if (mentionLoading && workspaceId === mentionWorkspaceId) return;
-    mentionLoading = true;
-    mentionError = null;
-    mentionDelayElapsed = false;
-    if (mentionDelayTimer) clearTimeout(mentionDelayTimer);
-    mentionDelayTimer = setTimeout(() => {
-      mentionDelayElapsed = true;
-      mentionDelayTimer = null;
-    }, 500);
-    try {
-      const res = await listMentionMembers(workspaceId);
-      mentionMembers = res.items ?? [];
-      mentionWorkspaceId = workspaceId;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      mentionError = msg;
-    } finally {
-      mentionLoading = false;
-    }
-  };
-
-  const selectMentionMember = (member: MentionMember) => {
-    const candidate = getMentionCandidate(commentInput);
-    if (!candidate) return;
-    const label = mentionLabelFor(member);
-    const nextInput = `${commentInput.slice(0, candidate.start)}@${label} ${commentInput.slice(candidate.end)}`;
-    commentInput = nextInput;
-    assignedToUserId = member.userId;
-    assignedToLabel = label;
-    showMentionMenu = false;
-    mentionQuery = '';
-    mentionMatches = [];
-    mentionSuppressUntilChange = true;
-    mentionSuppressValue = nextInput.trimEnd();
-    void focusComposerEnd();
-  };
-
-  const buildCommentThreads = (items: CommentItem[]) =>
-    buildChatCommentThreads(items);
+  // Comment state/functions removed — now managed by CommentsPanel + createCommentState.
 
   // messages is now controller-backed (slice 1B). Mutations go through ctrl.*
   // The $ctrl auto-subscription fires on every controller notify().
@@ -548,57 +428,14 @@
   let composerAttachments: ChatComposerAttachmentDraft[] = [];
   let composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
   let lightboxImage: { src: string; alt: string } | null = null;
-  let commentInput = '';
-  let commentMessages: CommentItem[] = [];
   export let commentLoading = false;
-  const hasCommentContext = () =>
-    Boolean(commentContextType && commentContextId);
-  let commentError: string | null = null;
-  let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
-  let commentHubKey = '';
-  let commentItemsByThread = new Map<string, CommentItem[]>();
-  let lastCommentKey = '';
-  let lastCommentSectionKey: string | null = null;
-  let lastCommentThreadId: string | null = null;
-  let lastCommentMessageCount = 0;
-  let lastSelectedCommentThreadId: string | null = null;
-  let mentionMembers: MentionMember[] = [];
-  let mentionLoading = false;
-  let mentionError: string | null = null;
-  let mentionQuery = '';
-  let mentionMatches: MentionMember[] = [];
-  let showMentionMenu = false;
-  let mentionDelayTimer: ReturnType<typeof setTimeout> | null = null;
-  let mentionDelayElapsed = false;
-  let mentionWorkspaceId: string | null = null;
-  let mentionMenuRef: HTMLDivElement | null = null;
-  let showCommentMenu = false;
-  let commentMenuButtonRef: HTMLButtonElement | null = null;
-  let showResolvedComments = false;
-  let assignedToUserId: string | null = null;
-  let assignedToLabel: string | null = null;
-  let mentionSuppressUntilChange = false;
-  let mentionSuppressValue = '';
-  // eslint-disable-next-line no-unused-vars
-  let handleMentionRefresh: ((_: Event) => void) | null = null;
   let listEl: HTMLDivElement | null = null;
   let historyStageMeasureEl: HTMLDivElement | null = null;
   let composerEl: HTMLDivElement | null = null;
   let panelEl: HTMLDivElement | null = null;
   let followBottom = true;
   let scrollScheduled = false;
-  let commentPlaceholder = '';
-  let commentThreadResolved = false;
-  let commentThreadResolvedAt: string | null = null;
-  let currentCommentRoot: CommentItem | null = null;
-  let activeCommentSectionLabel: string | null = null;
-  let canResolveCurrent = false;
-  let resolvedThreads: typeof commentThreads = [];
-  let resolvedCount = 0;
-  let visibleCommentThreads: typeof commentThreads = [];
-  let commentThreadIndex = -1;
-  let hasPreviousThread = false;
-  let hasNextThread = false;
+  // Comment-specific state removed — now owned by CommentsPanel / createCommentState.
   // projectedTimelineItems is now controller-owned (slice 1B).
   $: projectedTimelineItems = $ctrl.projectedTimelineItems as ProjectedTimelineItem[];
   let historyTimelineItems: ProjectedTimelineItem[] = [];
@@ -653,19 +490,21 @@
   $: composerRunInFlight = sending || composerSteerReady;
   $: composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
   $: attachmentBand = buildAttachmentBandItems(composerAttachments);
+  // resolveComposerPrimaryAction: mode==='comments' path removed (now CommentsPanel).
+  // AI-only invocation:
   $: composerPrimaryActionState = resolveComposerPrimaryAction({
-    mode,
+    mode: 'ai',
     input,
-    commentInput,
-    commentContextType,
-    commentContextId,
-    workspaceCanComment: $workspaceCanComment,
-    commentThreadResolved,
+    commentInput: '',
+    commentContextType: null,
+    commentContextId: null,
+    workspaceCanComment: true,
+    commentThreadResolved: false,
     sending,
     composerRunInFlight,
     composerSteerReady,
     composerSteerInFlight,
-    attachments: mode === 'ai' ? composerAttachmentSummary : undefined,
+    attachments: composerAttachmentSummary,
   });
   $: composerPrimaryButtonShowsSteer = shouldShowSteerAction({
     composerRunInFlight,
@@ -778,18 +617,10 @@
   // / handleLocalToolStatusEvent removed in slice 1E — logic moved to the controller.
   // AppChatPanel now calls ctrl.handleLocalToolStreamEvent(event) from the streamHub handler.
 
-  $: commentPlaceholder = !$workspaceCanComment
-    ? $_('chat.comments.placeholder.disabledViewer')
-    : commentThreadResolved
-      ? $_('chat.comments.placeholder.resolved')
-      : $_('chat.comments.placeholder.write');
   let scrollForcePending = false;
   const BOTTOM_THRESHOLD_PX = 96;
   let editingMessageId: string | null = null;
   let editingContent = '';
-  let editingCommentId: string | null = null;
-  let editingCommentContent = '';
-  let lastEditableCommentId: string | null = null;
   const copiedMessageIds = new Set<string>();
   const COMPOSER_BASE_HEIGHT = 40;
   let composerIsMultiline = false;
@@ -1424,16 +1255,9 @@
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // mode==='comments' KeyDown is now handled inside CommentsPanel.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (mode === 'comments') {
-        if (showMentionMenu && mentionMatches.length > 0) {
-          selectMentionMember(mentionMatches[0]);
-          return;
-        }
-        void sendCommentMessage();
-        return;
-      }
       if (composerSteerReady) {
         void sendComposerSteer();
       } else {
@@ -1462,421 +1286,10 @@
     }
   };
 
-  const loadCommentThreads = async (opts?: { silent?: boolean }) => {
-    if (mode !== 'comments') return;
-    if (!hasCommentContext()) {
-      commentThreads = [];
-      commentMessages = [];
-      commentItemsByThread = new Map();
-      lastCommentThreadId = null;
-      lastCommentMessageCount = 0;
-      return;
-    }
-    const contextType = commentContextType;
-    const contextId = commentContextId;
-    if (!contextType || !contextId) return;
-    const shouldShowLoader = !opts?.silent;
-    if (shouldShowLoader) commentLoading = true;
-    commentError = null;
-    const activeThreadId = commentThreadId;
-    try {
-      const res = await listComments({
-        contextType,
-        contextId,
-      });
-      const items = res.items || [];
-      const { threads, map } = buildCommentThreads(items);
-      commentThreads = threads;
-      commentItemsByThread = new Map(map);
-      if (activeThreadId && commentItemsByThread.has(activeThreadId)) {
-        commentMessages = commentItemsByThread.get(activeThreadId) ?? [];
-        const nextCount = commentMessages.length;
-        const threadChanged = lastCommentThreadId !== activeThreadId;
-        if (threadChanged) {
-          lastCommentThreadId = activeThreadId;
-          lastCommentMessageCount = nextCount;
-          followBottom = true;
-          scheduleScrollToBottom({ force: true });
-        } else if (
-          nextCount > lastCommentMessageCount &&
-          (followBottom || isNearBottom())
-        ) {
-          lastCommentMessageCount = nextCount;
-          scheduleScrollToBottom({ force: true });
-        } else {
-          lastCommentMessageCount = nextCount;
-        }
-      } else if (!opts?.silent) {
-        commentMessages = [];
-        lastCommentThreadId = null;
-        lastCommentMessageCount = 0;
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      commentError = msg;
-    } finally {
-      if (shouldShowLoader) commentLoading = false;
-    }
-  };
+  // All comment functions + reactive statements removed — now owned by CommentsPanel.
 
-  const scheduleCommentReload = () => {
-    if (commentReloadTimer) return;
-    commentReloadTimer = setTimeout(() => {
-      commentReloadTimer = null;
-      void loadCommentThreads({ silent: true });
-    }, 150);
-  };
-
-  const sendCommentMessage = async () => {
-    if (mode !== 'comments') return;
-    if (!$workspaceCanComment || commentThreadResolved) return;
-    if (!commentContextType || !commentContextId) return;
-    const trimmed = commentInput.trim();
-    if (!trimmed) return;
-    try {
-      if (trimmed.includes('@') && mentionMembers.length === 0) {
-        await loadMentionMembers();
-      }
-      if (!assignedToUserId && mentionMembers.length > 0) {
-        const inferred = findAssignedUserFromText(trimmed);
-        if (inferred) {
-          assignedToUserId = inferred.userId;
-          assignedToLabel = mentionLabelFor(inferred);
-        }
-      }
-      if (commentThreadId) {
-        await createComment({
-          contextType: commentContextType,
-          contextId: commentContextId,
-          sectionKey: commentSectionKey || undefined,
-          content: trimmed,
-          threadId: commentThreadId,
-          assignedTo: assignedToUserId ?? undefined,
-        });
-      } else {
-        const nowIso = new Date().toISOString();
-        const currentUser = $session.user;
-        const res = await createComment({
-          contextType: commentContextType,
-          contextId: commentContextId,
-          sectionKey: commentSectionKey || undefined,
-          content: trimmed,
-          assignedTo: assignedToUserId ?? undefined,
-        });
-        commentThreadId = res.thread_id;
-        const assignedUserId = assignedToUserId ?? currentUser?.id ?? null;
-        const assignedMember = assignedToUserId
-          ? (mentionMembers.find((m) => m.userId === assignedToUserId) ?? null)
-          : null;
-        const optimisticComment: CommentItem = {
-          id: res.id,
-          context_type: commentContextType,
-          context_id: commentContextId,
-          section_key: commentSectionKey ?? null,
-          created_by: currentUser?.id ?? '',
-          assigned_to: assignedUserId,
-          status: 'open',
-          thread_id: res.thread_id,
-          content: trimmed,
-          created_at: nowIso,
-          updated_at: null,
-          created_by_user: currentUser
-            ? {
-                id: currentUser.id,
-                email: currentUser.email ?? null,
-                displayName: currentUser.displayName ?? null,
-              }
-            : null,
-          assigned_to_user: assignedMember
-            ? {
-                id: assignedMember.userId,
-                email: assignedMember.email ?? null,
-                displayName: assignedMember.displayName ?? null,
-              }
-            : assignedUserId && currentUser
-              ? {
-                  id: currentUser.id,
-                  email: currentUser.email ?? null,
-                  displayName: currentUser.displayName ?? null,
-                }
-              : null,
-        };
-        commentItemsByThread = new Map(commentItemsByThread);
-        commentItemsByThread.set(res.thread_id, [optimisticComment]);
-        commentMessages = [optimisticComment];
-        const authorLabel =
-          currentUser?.displayName ||
-          currentUser?.email ||
-          currentUser?.id ||
-          'Moi';
-        commentThreads = [
-          {
-            id: res.thread_id,
-            sectionKey: commentSectionKey ?? null,
-            count: 1,
-            lastAt: nowIso,
-            preview: trimmed,
-            authorLabel,
-            status: 'open' as const,
-            assignedTo: assignedUserId,
-            rootId: res.id,
-            createdBy: currentUser?.id ?? '',
-          },
-          ...commentThreads,
-        ].filter((t, idx, arr) => arr.findIndex((x) => x.id === t.id) === idx);
-        lastCommentThreadId = res.thread_id;
-        lastCommentMessageCount = 1;
-      }
-      commentInput = '';
-      assignedToUserId = null;
-      assignedToLabel = null;
-      mentionQuery = '';
-      mentionMatches = [];
-      showMentionMenu = false;
-      followBottom = true;
-      await loadCommentThreads({ silent: true });
-      if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
-        commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
-      }
-      scheduleScrollToBottom({ force: true });
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const selectCommentThread = (thread: (typeof commentThreads)[number]) => {
-    commentThreadId = thread.id;
-    commentSectionKey = thread.sectionKey;
-    showCommentMenu = false;
-  };
-
-  const handleNewCommentThread = () => {
-    commentThreadId = null;
-    showCommentMenu = false;
-  };
-
-  const goToRelativeCommentThread = (direction: -1 | 1) => {
-    if (commentThreadIndex < 0) return;
-    const next = visibleCommentThreads[commentThreadIndex + direction];
-    if (!next) return;
-    commentThreadId = next.id;
-    commentSectionKey = next.sectionKey;
-  };
-
-  const selectNextOpenThreadAfterResolve = (currentThreadId: string, previousOpenThreadOrder: string[]) => {
-    const openThreads = commentThreads.filter((t) => t.status !== 'closed');
-    if (openThreads.length === 0) {
-      commentThreadId = null;
-      return;
-    }
-    const preferredIds = previousOpenThreadOrder.filter((id) => id !== currentThreadId);
-    const next = preferredIds
-      .map((id) => openThreads.find((t) => t.id === id) ?? null)
-      .find(Boolean) ?? openThreads[0];
-    commentThreadId = next?.id ?? null;
-    commentSectionKey = next?.sectionKey ?? null;
-  };
-
-  const handleResolveCommentThread = async () => {
-    if (!currentCommentRoot || !canResolveCurrent) return;
-    try {
-      const currentThreadId = commentThreadId;
-      const previousOpenThreadOrder = commentThreads.filter((t) => t.status !== 'closed').map((t) => t.id);
-      const wasClosed = currentCommentRoot.status === 'closed';
-      if (wasClosed) {
-        await reopenComment(currentCommentRoot.id);
-      } else {
-        await closeComment(currentCommentRoot.id);
-      }
-      await loadCommentThreads({ silent: true });
-      if (!wasClosed && currentThreadId) {
-        selectNextOpenThreadAfterResolve(currentThreadId, previousOpenThreadOrder);
-      }
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const handleDeleteCommentThread = async () => {
-    if (!currentCommentRoot) return;
-    if (!confirm($_('chat.comments.confirmDeleteThread'))) return;
-    try {
-      await deleteComment(currentCommentRoot.id);
-      commentThreadId = null;
-      await loadCommentThreads({ silent: true });
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const saveCommentEdit = async (commentId: string, content: string) => {
-    if (mode !== 'comments') return;
-    const trimmed = content.trim();
-    if (!trimmed) return;
-    try {
-      await updateComment(commentId, { content: trimmed });
-      await loadCommentThreads();
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const startEditComment = (comment: CommentItem) => {
-    editingCommentId = comment.id;
-    editingCommentContent = comment.content;
-  };
-
-  const cancelEditComment = () => {
-    editingCommentId = null;
-    editingCommentContent = '';
-  };
-
-  $: if (mode === 'comments' && editingCommentId && commentThreadId) {
-    const items = commentItemsByThread.get(commentThreadId) ?? [];
-    if (!items.some((c) => c.id === editingCommentId)) {
-      cancelEditComment();
-    }
-  }
-
-  $: if (mode === 'comments' && editingCommentId) {
-    const last =
-      commentMessages.length > 0
-        ? commentMessages[commentMessages.length - 1]
-        : null;
-    if (last && last.id === editingCommentId) {
-      followBottom = true;
-      scheduleScrollToBottom({ force: true });
-    }
-  }
-
-  const commitEditComment = async () => {
-    if (!editingCommentId) return;
-    await saveCommentEdit(editingCommentId, editingCommentContent);
-    cancelEditComment();
-  };
-
-  $: if (mode === 'comments') {
-    if (commentSectionKey !== lastCommentSectionKey) {
-      lastCommentSectionKey = commentSectionKey;
-      commentThreads = [];
-      commentMessages = [];
-      commentItemsByThread = new Map();
-      lastCommentThreadId = null;
-      lastCommentMessageCount = 0;
-    }
-    const key = `${commentContextType || ''}:${commentContextId || ''}:${commentSectionKey || ''}`;
-    if (key !== lastCommentKey) {
-      lastCommentKey = key;
-      void loadCommentThreads();
-    }
-  }
-
-  $: if (mode === 'comments' && commentThreadId) {
-    const root = commentItemsByThread.get(commentThreadId)?.[0] ?? null;
-    currentCommentRoot = root;
-    commentThreadResolved = root?.status === 'closed';
-    commentThreadResolvedAt = (root?.updated_at ?? root?.created_at ?? null) as
-      | string
-      | null;
-  } else {
-    currentCommentRoot = null;
-    commentThreadResolved = false;
-    commentThreadResolvedAt = null;
-  }
-
-  $: canResolveCurrent =
-    Boolean(currentCommentRoot) &&
-    (currentCommentRoot?.created_by === $session.user?.id || $selectedWorkspaceRole === 'admin') &&
-    $workspaceCanComment;
-  $: activeCommentSectionLabel =
-    getCommentSectionLabel(commentContextType, currentCommentRoot?.section_key ?? commentSectionKey) ??
-    commentSectionLabel ??
-    $_('common.general');
-
-  $: resolvedThreads = commentThreads.filter((t) => t.status === 'closed');
-  $: resolvedCount = resolvedThreads.length;
-  $: visibleCommentThreads = showResolvedComments ? commentThreads : commentThreads.filter((t) => t.status !== 'closed');
-  $: commentThreadIndex = commentThreadId ? visibleCommentThreads.findIndex((t) => t.id === commentThreadId) : -1;
-  $: hasPreviousThread = commentThreadIndex > 0;
-  $: hasNextThread = commentThreadIndex >= 0 && commentThreadIndex < visibleCommentThreads.length - 1;
-
-  $: if (mode === 'comments') {
-    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
-      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
-    } else if (!commentLoading) {
-      commentMessages = [];
-    }
-  }
-
-  $: if (mode === 'comments') {
-    const last =
-      commentMessages.length > 0
-        ? commentMessages[commentMessages.length - 1]
-        : null;
-    lastEditableCommentId =
-      commentThreadId && $session.user && last && isCommentByCurrentUser(last)
-        ? last.id
-        : null;
-  }
-
-  $: if (mode === 'comments') {
-    if (
-      mentionSuppressUntilChange &&
-      commentInput.trimEnd() === mentionSuppressValue
-    ) {
-      mentionQuery = '';
-      showMentionMenu = false;
-      mentionMatches = [];
-    } else {
-      if (
-        mentionSuppressUntilChange &&
-        commentInput.trimEnd() !== mentionSuppressValue
-      ) {
-        mentionSuppressUntilChange = false;
-        mentionSuppressValue = '';
-      }
-      const candidate = getMentionCandidate(commentInput);
-      if (candidate) {
-        mentionQuery = candidate.query;
-        showMentionMenu = true;
-        void loadMentionMembers();
-      } else {
-        mentionQuery = '';
-        showMentionMenu = false;
-      }
-      mentionMatches = showMentionMenu ? getMentionMatches(mentionQuery) : [];
-    }
-  }
-
-  $: if (mode === 'comments') {
-    if (commentThreadId !== lastSelectedCommentThreadId) {
-      lastSelectedCommentThreadId = commentThreadId;
-      lastCommentThreadId = commentThreadId;
-      lastCommentMessageCount = commentMessages.length;
-      if (commentThreadId) {
-        followBottom = true;
-        scheduleScrollToBottom({ force: true });
-      }
-    }
-  }
-
-  $: if (mode === 'comments' && commentContextType && commentContextId) {
-    if (!commentHubKey)
-      commentHubKey = `commentThreads:${Math.random().toString(36).slice(2)}`;
-    streamHub.set(commentHubKey, (evt: any) => {
-      if (evt?.type !== 'comment_update') return;
-      if (
-        evt.contextType !== commentContextType ||
-        evt.contextId !== commentContextId
-      )
-        return;
-      scheduleCommentReload();
-    });
-  } else if (commentHubKey) {
-    streamHub.delete(commentHubKey);
-    commentHubKey = '';
-  }
-
+  // commentHost: sentropic-wired CommentHost, instantiated once at mount.
+  const commentHost = createSentropicCommentHost((key: string) => $_(key));
 
   const loadSessionDocs = async () => {
     if (!sessionId) return;
@@ -2554,10 +1967,7 @@
   };
 
   const handleComposerPrimaryAction = () => {
-    if (composerPrimaryActionState.action === 'comment_send') {
-      void sendCommentMessage();
-      return;
-    }
+    // comment_send is now handled inside CommentsPanel
     if (composerPrimaryActionState.action === 'steer_send') {
       void sendComposerSteer();
       return;
@@ -3229,12 +2639,7 @@
     }
   };
 
-  export const refreshCommentThreads = async () => {
-    await loadCommentThreads({ silent: true });
-    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
-      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
-    }
-  };
+  // refreshCommentThreads removed — CommentsPanel owns thread state via createCommentState.
 
   export const newSession = () => {
     sessionHydrationGeneration += 1;
@@ -3562,33 +2967,10 @@
     handleDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
-      if (showMentionMenu) {
-        if (mentionMenuRef?.contains(target)) return;
-        showMentionMenu = false;
-      }
+      // mention menu handled inside CommentsPanel
     };
     if (handleDocumentClick) {
       document.addEventListener('click', handleDocumentClick);
-    }
-    if (mode === 'comments') {
-      void loadMentionMembers();
-      handleMentionRefresh = (event: Event) => {
-        const detail = (event as CustomEvent<any>).detail as {
-          workspaceId?: string;
-        } | null;
-        const currentWs = getScopedWorkspaceIdForUser();
-        if (
-          !currentWs ||
-          !detail?.workspaceId ||
-          detail.workspaceId !== currentWs
-        )
-          return;
-        void loadMentionMembers();
-      };
-      window.addEventListener(
-        'streamhub:workspace_membership_update',
-        handleMentionRefresh,
-      );
     }
     // Slice 1E: inject the local-tool machine into the controller.
     // The controller owns state + sequencing; the app supplies extension-specific
@@ -3711,29 +3093,18 @@
   }
 
   onDestroy(() => {
-    if (mentionDelayTimer) clearTimeout(mentionDelayTimer);
     if (sessionDocsReloadTimer) clearTimeout(sessionDocsReloadTimer);
     sessionDocsReloadTimer = null;
     if (sessionDocsSseKey) streamHub.delete(sessionDocsSseKey);
     sessionDocsSseKey = '';
     if (sessionTitlesSseKey) streamHub.delete(sessionTitlesSseKey);
     sessionTitlesSseKey = '';
-    if (commentReloadTimer) clearTimeout(commentReloadTimer);
-    commentReloadTimer = null;
-    if (commentHubKey) streamHub.delete(commentHubKey);
-    commentHubKey = '';
     if (localToolsHubKey) streamHub.delete(localToolsHubKey);
     localToolsHubKey = '';
     ctrl.detachStream(); // slice 1C: controller owns projection subscription teardown
     ctrl.detachLocalToolMachine(); // slice 1E: controller owns local-tool teardown
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
-    }
-    if (handleMentionRefresh) {
-      window.removeEventListener(
-        'streamhub:workspace_membership_update',
-        handleMentionRefresh,
-      );
     }
     if (handleUserAISettingsUpdated) {
       window.removeEventListener(
@@ -3753,359 +3124,27 @@
 
 <div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
   {#if mode === 'comments'}
-    {@const assignedUser = currentCommentRoot?.assigned_to_user ?? null}
-    {@const isAssignedToMe = assignedUser?.id && assignedUser.id === $session.user?.id}
-    <div class="border-b border-slate-100 px-3 py-2 space-y-2">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="min-w-0 text-xs text-slate-500 flex flex-wrap items-center gap-2">
-          <span>{activeCommentSectionLabel}</span>
-          {#if currentCommentRoot?.status === 'closed' && commentThreadResolvedAt}
-            <span class="text-slate-400">•</span>
-            <span>
-              {$_('chat.comments.resolvedAt', {
-                values: { at: formatCommentTimestamp(commentThreadResolvedAt) },
-              })}
-            </span>
-          {:else if assignedUser}
-            <span class="text-slate-400">•</span>
-            <span>
-              {#if isAssignedToMe}
-                {$_('chat.comments.assignedToMe')}
-              {:else}
-                {$_('chat.comments.assignedTo', {
-                  values: {
-                    label:
-                      assignedUser.displayName ||
-                      assignedUser.email ||
-                      assignedUser.id,
-                  },
-                })}
-              {/if}
-            </span>
-          {/if}
-        </div>
-        <div class="flex flex-wrap items-center gap-1">
-          <MenuPopover bind:open={showCommentMenu} bind:triggerRef={commentMenuButtonRef} widthClass="w-72">
-            <svelte:fragment slot="trigger" let:toggle>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={toggle}
-                title={$_('chat.comments.chooseThread')}
-                aria-label={$_('chat.comments.chooseThread')}
-                type="button"
-                bind:this={commentMenuButtonRef}
-              >
-                <List class="w-3.5 h-3.5" />
-              </button>
-            </svelte:fragment>
-            <svelte:fragment slot="menu">
-              {#if resolvedCount > 0}
-                <button
-                  class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 flex items-center gap-2"
-                  type="button"
-                  on:click|stopPropagation={() => (showResolvedComments = !showResolvedComments)}
-                >
-                  {#if showResolvedComments}
-                    <Eye class="w-3.5 h-3.5" />
-                    <span>{$_('chat.comments.hideResolved')}</span>
-                  {:else}
-                    <EyeOff class="w-3.5 h-3.5" />
-                    <span>{$_('chat.comments.showResolved')}</span>
-                  {/if}
-                </button>
-                <div class="border-t border-slate-100 my-1"></div>
-              {/if}
-              <button
-                class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                type="button"
-                on:click={handleNewCommentThread}
-              >
-                {$_('chat.comments.newThread')}
-                {activeCommentSectionLabel ? ` — ${activeCommentSectionLabel}` : ''}
-              </button>
-              <div class="border-t border-slate-100 my-1"></div>
-              {#if visibleCommentThreads.length === 0}
-                <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.comments.none')}</div>
-              {:else}
-                <div class="max-h-56 overflow-auto slim-scroll space-y-1">
-                  {#each visibleCommentThreads as t (t.id)}
-                    <button
-                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {commentThreadId === t.id ? 'text-slate-900 font-semibold' : 'text-slate-600'} {t.status === 'closed' ? 'line-through text-slate-400' : ''}"
-                      type="button"
-                      on:click={() => selectCommentThread(t)}
-                    >
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="truncate">
-                          {getCommentSectionLabel(commentContextType, t.sectionKey) || $_('chat.tabs.comments')}
-                        </span>
-                        <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
-                          <MessageCircle class="w-3 h-3" />
-                          {t.count}
-                        </span>
-                      </div>
-                      <div class="text-[10px] text-slate-400 truncate">
-                        {t.authorLabel} — {t.preview}
-                      </div>
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-            </svelte:fragment>
-          </MenuPopover>
-          <button
-            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-            on:click={handleNewCommentThread}
-            title={$_('chat.comments.newThread')}
-            aria-label={$_('chat.comments.newThread')}
-            type="button"
-          >
-            <Plus class="w-4 h-4" />
-          </button>
-          <button
-            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-            on:click={() => void handleResolveCommentThread()}
-            title={commentThreadResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
-            aria-label={commentThreadResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
-            type="button"
-            disabled={!currentCommentRoot || !canResolveCurrent}
-          >
-            {#if commentThreadResolved}
-              <FolderOpen class="w-4 h-4" />
-            {:else}
-              <Check class="w-4 h-4" />
-            {/if}
-          </button>
-          <button
-            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-            type="button"
-            disabled={!hasPreviousThread}
-            on:click={() => goToRelativeCommentThread(-1)}
-            title={$_('chat.comments.previous')}
-            aria-label={$_('chat.comments.previous')}
-          >
-            <ChevronLeft class="w-4 h-4" />
-          </button>
-          <button
-            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-            type="button"
-            disabled={!hasNextThread}
-            on:click={() => goToRelativeCommentThread(1)}
-            title={$_('chat.comments.next')}
-            aria-label={$_('chat.comments.next')}
-          >
-            <ChevronRight class="w-4 h-4" />
-          </button>
-          <button
-            class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-            on:click={() => void handleDeleteCommentThread()}
-            title={$_('chat.comments.deleteThread')}
-            aria-label={$_('chat.comments.deleteThread')}
-            type="button"
-            disabled={!currentCommentRoot}
-          >
-            <Trash2 class="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
-
-  <div
-    class="flex-1 min-h-0 relative"
-    style={mode === 'comments' && commentThreadResolved
-      ? 'background-color: #f1f5f9 !important;'
-      : ''}
-  >
+    <CommentsPanel
+      host={commentHost}
+      contextType={commentContextType}
+      contextId={commentContextId}
+      sectionKey={commentSectionKey}
+      sectionLabel={commentSectionLabel}
+      bind:commentThreadId
+      bind:commentLoading
+      labels={(key: string, opts?: Record<string, unknown>) => $_(key, opts as Parameters<typeof $_>[1])}
+    />
+  {:else}
+    <!-- AI mode: full chat panel with timeline, composer, etc. -->
     <div
-      class="h-full overflow-y-auto p-3 space-y-2 slim-scroll"
-      style={mode === 'comments' && commentThreadResolved
-        ? 'scrollbar-gutter: stable; background-color: #f1f5f9 !important;'
-        : 'scrollbar-gutter: stable;'}
-      bind:this={listEl}
-      on:scroll={onListScroll}
+      class="flex-1 min-h-0 relative"
     >
-      {#if mode === 'comments'}
-        {#if commentError}
-          <div
-            class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2"
-          >
-            {commentError}
-          </div>
-        {/if}
-        {#if commentLoading && commentMessages.length === 0}
-          <div class="text-xs text-slate-500">{$_('common.loading')}</div>
-        {:else if !commentThreadId}
-          {#if commentThreads.length > 0}
-            <div class="text-xs text-slate-500">
-              {$_('chat.comments.selectThreadHint')}
-            </div>
-          {:else}
-            <div class="text-xs text-slate-500">
-              {$_('chat.comments.emptyHint')}
-            </div>
-          {/if}
-        {:else if commentMessages.length === 0}
-          <div class="text-xs text-slate-500">
-            {$_('chat.comments.noMessagesThread')}
-          </div>
-        {:else}
-          {#each commentMessages as c (c.id)}
-            {@const isMine = isCommentByCurrentUser(c)}
-            {@const canEdit =
-              isMine && c.id === lastEditableCommentId && $workspaceCanComment}
-            {#if isMine}
-              <div class="flex flex-col items-end group">
-                {#if isAiComment(c)}
-                  <div class="mb-1 flex items-center justify-end">
-                    <div
-                      class="relative h-7 w-7 rounded-full bg-primary text-white border border-primary/80 flex items-center justify-center text-[11px]"
-                    >
-                      {getInitials(commentAuthorLabel(c))}
-                      <span
-                        class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 flex items-center justify-center"
-                      >
-                        <Brain class="w-2.5 h-2.5 text-slate-700" />
-                      </span>
-                    </div>
-                  </div>
-                {/if}
-                <div
-                  class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
-                >
-                  {#if editingCommentId === c.id}
-                    <div class="space-y-2">
-                      <EditableInput
-                        markdown={true}
-                        bind:value={editingCommentContent}
-                        placeholder={$_('chat.edit.placeholder')}
-                        disabled={!$workspaceCanComment}
-                      />
-                      <div
-                        class="flex items-center justify-end gap-2 text-[11px]"
-                      >
-                        <button
-                          class="chat-edit-action-secondary rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
-                          type="button"
-                          on:click={cancelEditComment}
-                        >
-                          {$_('common.cancel')}
-                        </button>
-                        <button
-                          class="chat-edit-action-primary rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
-                          type="button"
-                          on:click={() => void commitEditComment()}
-                        >
-                          {$_('common.send')}
-                        </button>
-                      </div>
-                    </div>
-                  {:else}
-                    <Streamdown content={c.content ?? ''} />
-                  {/if}
-                </div>
-                <div
-                  class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <button
-                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    on:click={async () => {
-                      const text = c.content ?? '';
-                      const ok = await copyToClipboard(
-                        text,
-                        renderMarkdownWithRefs(text),
-                      );
-                      if (ok) markCopied(c.id);
-                    }}
-                    type="button"
-                    aria-label={$_('common.copy')}
-                    title={$_('common.copy')}
-                  >
-                    {#if isCopied(c.id)}
-                      <Check class="w-3.5 h-3.5 text-slate-900" />
-                    {:else}
-                      <Copy class="w-3.5 h-3.5" />
-                    {/if}
-                  </button>
-                  {#if canEdit && editingCommentId !== c.id}
-                    <button
-                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                      on:click={() => startEditComment(c)}
-                      type="button"
-                      aria-label="Modifier"
-                      title="Modifier"
-                    >
-                      <Pencil class="w-3.5 h-3.5" />
-                    </button>
-                  {/if}
-                </div>
-              </div>
-            {:else}
-              <div class="flex items-start gap-2 group">
-                <div
-                  class="relative h-7 w-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] text-slate-600"
-                >
-                  {getInitials(commentAuthorLabel(c))}
-                  {#if isAiComment(c)}
-                    <span
-                      class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 flex items-center justify-center"
-                    >
-                      <Brain class="w-2.5 h-2.5 text-slate-700" />
-                    </span>
-                  {/if}
-                </div>
-                <div class="max-w-[85%] w-full">
-                  <div
-                    class="text-[11px] text-slate-500 mb-1 flex items-center gap-2"
-                  >
-                    <span
-                      >{commentAuthorLabel(c)}{isAiComment(c)
-                        ? ', Assistant IA'
-                        : ''}</span
-                    >
-                    {#if c.created_at}
-                      <span>{formatCommentTimestamp(c.created_at)}</span>
-                    {/if}
-                  </div>
-                  <div
-                    class="rounded border border-slate-200 bg-white text-xs px-3 py-2 break-words"
-                  >
-                    <Streamdown content={c.content ?? ''} />
-                  </div>
-                  <div
-                    class="mt-1 flex items-center gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <button
-                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                      on:click={async () => {
-                        const text = c.content ?? '';
-                        const ok = await copyToClipboard(
-                          text,
-                          renderMarkdownWithRefs(text),
-                        );
-                        if (ok) markCopied(c.id);
-                      }}
-                      type="button"
-                      aria-label={$_('common.copy')}
-                      title={$_('common.copy')}
-                    >
-                      {#if isCopied(c.id)}
-                        <Check class="w-3.5 h-3.5 text-slate-900" />
-                      {:else}
-                        <Copy class="w-3.5 h-3.5" />
-                      {/if}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            {/if}
-          {/each}
-        {/if}
-        {#if commentLoading && commentMessages.length > 0}
-          <div class="text-[11px] text-slate-400 mt-2">
-            {$_('chat.comments.updating')}
-          </div>
-        {/if}
-      {:else}
+      <div
+        class="h-full overflow-y-auto p-3 space-y-2 slim-scroll"
+        style="scrollbar-gutter: stable;"
+        bind:this={listEl}
+        on:scroll={onListScroll}
+      >
         {#snippet renderTimelineMessageAttachments(item: any)}
           {#if item.kind === 'message' && item.message.role === 'user' && (item.message.attachments?.length ?? 0) > 0}
             <div class="mt-1 flex justify-end">
@@ -4438,9 +3477,8 @@
             {errorMsg}
           </div>
         {/if}
-      {/if}
+      </div>
     </div>
-  </div>
 
   {#if mode === 'ai' && todoRuntimePanel}
     <div class="w-full border-t border-slate-200 bg-slate-50/70" data-testid="todo-runtime-panel">
@@ -4561,9 +3599,9 @@
       </div>
     </div>
   {/if}
+  {/if}
 
   {#snippet renderComposerSurface()}
-          {#if mode === 'ai'}
             {#if sessionDocsError}
               <div
                 class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
@@ -4594,87 +3632,10 @@
               placeholder={$_('chat.composer.placeholder.chat')}
               on:change={handleComposerChange}
             />
-          {:else}
-            {#if (commentThreadResolved || !$workspaceCanComment) && commentInput.trim().length === 0}
-              <div
-                class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400"
-              >
-                {commentPlaceholder}
-              </div>
-            {/if}
-            {#if assignedToLabel}
-              <div
-                class="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600"
-              >
-                <span
-                  >{$_('chat.comments.assignedTo', {
-                    values: { label: assignedToLabel },
-                  })}</span
-                >
-                <button
-                  type="button"
-                  class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200"
-                  on:click={() => {
-                    assignedToUserId = null;
-                    assignedToLabel = null;
-                  }}
-                  aria-label={$_('chat.comments.unassign')}
-                  title={$_('chat.comments.unassign')}
-                >
-                  <X class="w-3 h-3" />
-                </button>
-              </div>
-            {/if}
-            <EditableInput
-              markdown={true}
-              bind:value={commentInput}
-              placeholder={commentPlaceholder}
-              on:change={handleComposerChange}
-              disabled={!$workspaceCanComment || commentThreadResolved}
-            />
-          {/if}
   {/snippet}
 
   {#snippet renderFloatingLayer()}
-        {#if mode === 'comments' && showMentionMenu}
-          <div
-            class="absolute bottom-12 left-0 z-30 w-64 rounded-lg border border-slate-200 bg-white shadow-lg p-2"
-            bind:this={mentionMenuRef}
-          >
-            {#if mentionLoading && mentionDelayElapsed}
-              <div class="px-2 py-1 text-[11px] text-slate-500">
-                {$_('common.loading')}
-              </div>
-            {:else if mentionError}
-              <div class="px-2 py-1 text-[11px] text-red-600">
-                {$_('chat.comments.mention.loadError')}
-              </div>
-            {:else if !mentionLoading && mentionMatches.length === 0}
-              <div class="px-2 py-1 text-[11px] text-slate-500">
-                {$_('chat.comments.mention.none')}
-              </div>
-            {:else}
-              <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
-                {#each mentionMatches as member (member.userId)}
-                  <button
-                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                    type="button"
-                    on:click={() => selectMentionMember(member)}
-                  >
-                    <div class="font-medium text-slate-900 truncate">
-                      {mentionLabelFor(member)}
-                    </div>
-                    {#if member.email}
-                      <div class="text-[10px] text-slate-400 truncate">
-                        {member.email}
-                      </div>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/if}
+        <!-- floating layer: checkpoints panel and other overlays (mention menu moved to CommentsPanel) -->
   {/snippet}
 
   {#snippet renderLeftControls()}
@@ -4842,30 +3803,26 @@
         </button>
   {/snippet}
 
-  <ChatComposerWrapper
-    mode={mode}
-    value={mode === 'comments' ? commentInput : input}
-    disabled={mode === 'comments' &&
-      (!$workspaceCanComment || commentThreadResolved)}
-    isMultiline={composerIsMultiline}
-    maxHeight={composerMaxHeight}
-    surfaceEnabled={($workspaceCanComment && !commentThreadResolved) ||
-      mode !== 'comments'}
-    surfaceDisabled={mode === 'comments' &&
-      (!$workspaceCanComment || commentThreadResolved)}
-    ariaLabel={$_('chat.composer.ariaLabel')}
-    tabIndex={mode === 'comments' &&
-    (!$workspaceCanComment || commentThreadResolved)
-      ? -1
-      : 0}
-    bind:composerElement={composerEl}
-    onKeyDown={handleKeyDown}
-    onPaste={handleComposerPaste}
-    {renderComposerSurface}
-    {renderFloatingLayer}
-    {renderLeftControls}
-    {renderRightActions}
-  />
+  {#if mode !== 'comments'}
+    <ChatComposerWrapper
+      mode="ai"
+      value={input}
+      disabled={false}
+      isMultiline={composerIsMultiline}
+      maxHeight={composerMaxHeight}
+      surfaceEnabled={true}
+      surfaceDisabled={false}
+      ariaLabel={$_('chat.composer.ariaLabel')}
+      tabIndex={0}
+      bind:composerElement={composerEl}
+      onKeyDown={handleKeyDown}
+      onPaste={handleComposerPaste}
+      {renderComposerSurface}
+      {renderFloatingLayer}
+      {renderLeftControls}
+      {renderRightActions}
+    />
+  {/if}
 </div>
 
 <svelte:window on:keydown={handleLightboxKeydown} />

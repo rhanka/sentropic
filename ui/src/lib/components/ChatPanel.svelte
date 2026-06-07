@@ -25,26 +25,13 @@
   export let commentSectionKey: string | null = null;
   export let commentSectionLabel: string | null = null;
   export let commentThreadId: string | null = null;
-  export let commentThreads: Array<{
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-    createdBy: string;
-  }> = [];
   export let commentLoading = false;
 
   let appPanel: any;
 
   export const focusComposer = async () => appPanel?.focusComposer?.();
   export const selectSession = async (id: string) => appPanel?.selectSession?.(id);
-  export const refreshCommentThreads = async () =>
-    appPanel?.refreshCommentThreads?.();
+  // refreshCommentThreads removed — CommentsPanel manages its own thread state
   export const newSession = () => appPanel?.newSession?.();
   export const deleteCurrentSession = async () =>
     appPanel?.deleteCurrentSession?.();
@@ -64,7 +51,6 @@
   {commentSectionKey}
   {commentSectionLabel}
   bind:commentThreadId
-  bind:commentThreads
   bind:commentLoading
 />
 {/snippet}
