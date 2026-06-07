@@ -251,21 +251,6 @@
       "types": "./src/comments/CommentsPanel.svelte.d.ts",
       "svelte": "./src/comments/CommentsPanel.svelte",
       "import": "./src/comments/CommentsPanel.svelte"
-    },
-    "./comments/CommentTimeline.svelte": {
-      "types": "./src/comments/CommentTimeline.svelte.d.ts",
-      "svelte": "./src/comments/CommentTimeline.svelte",
-      "import": "./src/comments/CommentTimeline.svelte"
-    },
-    "./comments/CommentComposer.svelte": {
-      "types": "./src/comments/CommentComposer.svelte.d.ts",
-      "svelte": "./src/comments/CommentComposer.svelte",
-      "import": "./src/comments/CommentComposer.svelte"
-    },
-    "./comments/CommentThreadNav.svelte": {
-      "types": "./src/comments/CommentThreadNav.svelte.d.ts",
-      "svelte": "./src/comments/CommentThreadNav.svelte",
-      "import": "./src/comments/CommentThreadNav.svelte"
     }
   },
   "files": [

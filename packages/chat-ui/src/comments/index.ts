@@ -12,10 +12,7 @@
  *   - Generic helpers: buildCommentThreads, getMentionCandidate, getMentionMatches,
  *     findAssignedMentionFromText, getInitials, getCommentAuthorLabel, getMentionLabel,
  *     isCommentByUser, isAiComment, formatCommentTimestamp, isSameDay
- *   - CommentsPanel.svelte — self-contained comment panel
- *   - CommentTimeline.svelte — timeline of comment messages
- *   - CommentComposer.svelte — composer surface
- *   - CommentThreadNav.svelte — thread navigation header
+ *   - CommentsPanel.svelte — self-contained comment panel (canonical comments surface)
  */
 
 // Types
