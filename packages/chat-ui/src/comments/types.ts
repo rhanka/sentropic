@@ -8,7 +8,6 @@
 
 /**
  * Minimal shape of a comment as returned by the host.
- * Extends CommentLike from comment-adapter for full parity.
  */
 export type CommentItem = {
   id: string;
