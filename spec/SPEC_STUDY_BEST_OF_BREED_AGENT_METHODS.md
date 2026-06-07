@@ -2,7 +2,7 @@
 
 ## Intention
 
-Turn the strongest parts of Entropiq conductor practice, Graphify, Superpowers, GSD-style execution discipline, GitHub Spec Kit, and current AI coding-agent ecosystems into a durable, shareable method for AI-assisted development.
+Turn the strongest parts of Sentropic conductor practice, Graphify, Superpowers, GSD-style execution discipline, GitHub Spec Kit, and current AI coding-agent ecosystems into a durable, shareable method for AI-assisted development.
 
 ## Product boundary
 
@@ -12,7 +12,7 @@ This branch is about developer-agent operating methods, rules, specs, skills, pl
 
 - Graphify: knowledge graph extraction, community clustering, audit reports, visual publication, traceability from raw material to conclusions.
 - Superpowers: brainstorming, writing plans, TDD, worktrees, verification, subagent-driven development, branch finishing.
-- Entropiq conductor: `PLAN.md`, `BRANCH.md`, branch lanes, port isolation, make-only discipline, spec_vol/spec_evol, commit discipline, conductor reports.
+- Sentropic conductor: `PLAN.md`, `BRANCH.md`, branch lanes, port isolation, make-only discipline, spec_vol/spec_evol, commit discipline, conductor reports.
 - GSD-style execution: small loops, explicit next actions, low ceremony, progress visibility, interruption recovery, outcome bias.
 - GitHub Spec Kit: spec-first planning, task decomposition, implementation tracking, repository-native collaboration.
 - AI coding tools: Codex, Claude Code, Gemini CLI, Clawcode-like tools, MCP servers, plugins, skills, commands, hooks, and CI agents.
@@ -32,13 +32,13 @@ No public network verification was performed in this pass. Claims below are base
 - Branch discipline: worktree isolation, allowed paths, forbidden paths, commit size, merge readiness.
 - Memory and context: what should persist across sessions and what should be regenerated.
 - Publication: what can become reusable public infrastructure without leaking project-specific context.
-- Interoperability: what can work across Codex, Claude, Gemini, GitHub, CLI, and Entropiq product surfaces.
+- Interoperability: what can work across Codex, Claude, Gemini, GitHub, CLI, and Sentropic product surfaces.
 
 ## Boundary with BR19
 
 BR25 studies developer-agent operating methods: how coding agents plan, branch, execute, verify, publish, remember context, and coordinate with humans. These methods live around the repository and developer workflow.
 
-BR19 owns product skill catalog design: user-facing skills available inside Entropiq, sandboxed execution, tool replacement, runtime permissions, and product UX for skill discovery and invocation.
+BR19 owns product skill catalog design: user-facing skills available inside Sentropic, sandboxed execution, tool replacement, runtime permissions, and product UX for skill discovery and invocation.
 
 The two branches may share vocabulary, but they must not share implementation ownership during this phase:
 
@@ -49,14 +49,14 @@ The two branches may share vocabulary, but they must not share implementation ow
 
 ## Benchmark matrix
 
-| Method family | Best pattern | Weak point | Entropiq adoption target |
+| Method family | Best pattern | Weak point | Sentropic adoption target |
 | --- | --- | --- | --- |
 | Graphify | Evidence graph from raw inputs to clustered insights and an audit trail. | Can become a report generator without action discipline if not tied to decisions. | Use for benchmark publication, incident taxonomy, and rule-evolution traceability. |
-| Superpowers | Explicit skills for brainstorming, planning, TDD, worktrees, verification, subagents, and finishing. | Skill invocation can become ritual if every task forces all skills. | Convert repeated Entropiq workflows into narrow skills with trigger rules and small outputs. |
-| Entropiq conductor | Strong branch lanes, worktree isolation, port discipline, make-only execution, allowed/forbidden paths, and conductor reporting. | Too much policy is written prose rather than mechanically enforced. | Keep conductor as the repo-native control plane, then add targeted checks for repeated violations. |
+| Superpowers | Explicit skills for brainstorming, planning, TDD, worktrees, verification, subagents, and finishing. | Skill invocation can become ritual if every task forces all skills. | Convert repeated Sentropic workflows into narrow skills with trigger rules and small outputs. |
+| Sentropic conductor | Strong branch lanes, worktree isolation, port discipline, make-only execution, allowed/forbidden paths, and conductor reporting. | Too much policy is written prose rather than mechanically enforced. | Keep conductor as the repo-native control plane, then add targeted checks for repeated violations. |
 | GSD-style execution | Short loops, visible next action, low ceremony, interruption recovery, and outcome bias. | Can under-document why decisions were made if optimized too hard for speed. | Use for session cadence: small deltas, explicit blockers, and fast handoff notes. |
-| GitHub Spec Kit | Spec-first repository workflow with plans, tasks, implementation trace, and reviewable artifacts. | Generic templates do not encode Entropiq-specific branch isolation, make-only, or port rules. | Borrow task/spec layering and implementation trace; preserve Entropiq branch controls. |
-| Codex ecosystem | Skills, plugins, connectors, MCP tools, local files, CLI/API hooks, and repo-aware execution. | Enforcement varies by host; skills can drift from repo rules. | Publish Entropiq methods as Codex skills/plugins plus make-backed checks. |
+| GitHub Spec Kit | Spec-first repository workflow with plans, tasks, implementation trace, and reviewable artifacts. | Generic templates do not encode Sentropic-specific branch isolation, make-only, or port rules. | Borrow task/spec layering and implementation trace; preserve Sentropic branch controls. |
+| Codex ecosystem | Skills, plugins, connectors, MCP tools, local files, CLI/API hooks, and repo-aware execution. | Enforcement varies by host; skills can drift from repo rules. | Publish Sentropic methods as Codex skills/plugins plus make-backed checks. |
 | Claude ecosystem | Slash commands, project memory, MCP servers, and concise agent rituals. | Commands often rely on convention rather than branch-aware enforcement. | Export compatible commands/templates for planning, review, and handoff. |
 | Gemini ecosystem | CLI-oriented agent operation, broad context handling, and scriptable developer loops. | Distribution conventions are less uniform across teams. | Keep templates and hooks portable rather than Codex-only. |
 
@@ -71,13 +71,13 @@ Best-of-breed behavior separates raw user intent from execution interpretation. 
 
 BR25 should preserve that split. The branch-specific `spec_vol` section in `BRANCH.md` can record proposed intention during study, but must not masquerade as a validated `SPEC_VOL`. For this branch, the correct output is a study recommendation and review packet, not a binding product spec.
 
-Graphify improves intention capture by retaining traceability from source statements to derived concepts. Superpowers improves it by requiring brainstorming before creative implementation. GitHub Spec Kit improves it by keeping specs close to tasks. Entropiq improves it by binding intent to branch scope and forbidden paths.
+Graphify improves intention capture by retaining traceability from source statements to derived concepts. Superpowers improves it by requiring brainstorming before creative implementation. GitHub Spec Kit improves it by keeping specs close to tasks. Sentropic improves it by binding intent to branch scope and forbidden paths.
 
 Recommended durable primitive: every serious agent task should record `intent`, `non-goals`, `decision owner`, `review state`, and `evidence links`. The review state must distinguish draft, study, validated, superseded, and rejected.
 
 ### Spec evolution
 
-Spec evolution works when the original intent is not overwritten. Entropiq's `spec_vol/spec_evol` split is stronger than generic plan/task systems because it protects user will from implementation drift.
+Spec evolution works when the original intent is not overwritten. Sentropic's `spec_vol/spec_evol` split is stronger than generic plan/task systems because it protects user will from implementation drift.
 
 Adopt the following evolution ladder:
 
@@ -101,7 +101,7 @@ Best execution loops are explicit and short:
 - Verify: run only the appropriate gate at the right phase.
 - Publish: commit/report with traceable scope.
 
-Superpowers supplies the clearest named loops. GSD-style execution supplies the best cadence. Entropiq supplies stronger branch boundaries. The combined method should avoid both extremes: no unbounded improvisation, and no heavyweight process for trivial edits.
+Superpowers supplies the clearest named loops. GSD-style execution supplies the best cadence. Sentropic supplies stronger branch boundaries. The combined method should avoid both extremes: no unbounded improvisation, and no heavyweight process for trivial edits.
 
 Loop control must include explicit stop conditions:
 
@@ -113,7 +113,7 @@ Loop control must include explicit stop conditions:
 
 ### Branch discipline
 
-Entropiq's branch discipline is the strongest reference in this study. The durable method should keep:
+Sentropic's branch discipline is the strongest reference in this study. The durable method should keep:
 
 - One worktree per branch in `tmp/<slug>`.
 - Branch identity recorded in `BRANCH.md`.
@@ -128,7 +128,7 @@ External methods rarely encode port isolation or Docker-first discipline. That i
 
 ### Verification
 
-Verification should be staged, not reflexive. Entropiq's rule set already distinguishes typecheck, lint, build, unit, E2E, CI, UAT, logs, and cleanup. The missing best-of-breed layer is a verification contract that maps task risk to the minimum acceptable check.
+Verification should be staged, not reflexive. Sentropic's rule set already distinguishes typecheck, lint, build, unit, E2E, CI, UAT, logs, and cleanup. The missing best-of-breed layer is a verification contract that maps task risk to the minimum acceptable check.
 
 Recommended categories:
 
@@ -201,7 +201,7 @@ Publish the method as layers, from most portable to most repo-specific:
 
 Private-only material:
 
-- Entropiq-specific ports, service names, secrets, deployment lanes, branch history, incident raw logs, and product roadmap details.
+- Sentropic-specific ports, service names, secrets, deployment lanes, branch history, incident raw logs, and product roadmap details.
 - Any BR19 product skill runtime details until separately approved.
 
 Public-safe material:
@@ -224,7 +224,7 @@ Recommended packaging model:
 - `commands/`: thin wrappers for Claude/Gemini-style flows.
 - `plugins/`: integrations that expose repo-aware tools and connectors.
 - `cli/`: optional enforcement and reporting commands.
-- `api/`: only if a future Entropiq developer platform needs remote orchestration; not part of BR25 implementation.
+- `api/`: only if a future Sentropic developer platform needs remote orchestration; not part of BR25 implementation.
 
 CLI/API hooks should be idempotent and read-heavy first:
 
@@ -235,9 +235,9 @@ CLI/API hooks should be idempotent and read-heavy first:
 - `commit-check`: measure diff size and required branch checklist updates.
 - `report`: generate Done/Checks/Risks/Scope/Read-set summary.
 
-## Entropiq synthesis
+## Sentropic synthesis
 
-Entropiq already does better than the external references on:
+Sentropic already does better than the external references on:
 
 - Multi-agent branch isolation with explicit worktrees.
 - Docker-first and make-only operational consistency.
@@ -247,7 +247,7 @@ Entropiq already does better than the external references on:
 - Branch-scoped reporting and feedback loops.
 - Selective staging and small commit discipline.
 
-External references do better than current Entropiq practice on:
+External references do better than current Sentropic practice on:
 
 - Packaging reusable operating methods as shareable skills and commands.
 - Making evidence graphs and audit reports visually inspectable.
@@ -281,7 +281,7 @@ Reusable naming conventions:
 - Verify current Codex plugin/skill packaging constraints before committing to file layout.
 - Verify Claude and Gemini command/plugin conventions before shipping cross-agent templates.
 - Explore whether Graphify output should become a default report format for incident audits or only an optional publication path.
-- Decide whether Entropiq should publish a standalone CLI or first ship repo-local make targets.
+- Decide whether Sentropic should publish a standalone CLI or first ship repo-local make targets.
 
 ## Architecture hypothesis
 
@@ -299,7 +299,7 @@ The preferred sequencing is:
 - Template extraction: publish neutral markdown templates without enforcement.
 - Skill/command packaging: wrap templates in Codex/Claude/Gemini-compatible operating procedures.
 - Repo-local enforcement: add small make-backed checks for objective failures.
-- Public packaging: publish CLI/plugin/npm only after the checks prove useful in Entropiq.
+- Public packaging: publish CLI/plugin/npm only after the checks prove useful in Sentropic.
 
 ## study_evol rules
 
