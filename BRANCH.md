@@ -67,7 +67,8 @@ Restore the comments composer EditableInput fidelity in AppChatPanel, sweep app-
   - [x] packages/chat-ui/src/comments/utils.ts + types.ts: remove stale doc references to the deleted app-side copies.
 
 - [x] **Lot 3 — Reference-validation reclassify + 0.19.0 bump**
-  - [x] chat-ui-reference-validation.json: add headless entries (checkpoints/context/documents/comments), primitive entries (AttachmentBand/GeneratedFileCardTray/CommentsPanel dogfooded by AppChatPanel), non-canonical gated entries (CommentTimeline/CommentComposer/CommentThreadNav); ContextChips/SessionList legacy entries kept.
+  - [x] chat-ui-reference-validation.json: add headless entries (checkpoints/context/documents/comments), primitive entries (AttachmentBand/GeneratedFileCardTray/CommentsPanel dogfooded by AppChatPanel); ContextChips/SessionList legacy entries kept.
+  - [x] Delete orphan comments sub-components (CommentTimeline/CommentComposer/CommentThreadNav .svelte + .d.ts): never consumed nor parity-proven, would ship born-deprecated; package.json exports, export-manifest subpaths, manifest entries and barrel doc cleaned; comments-module.spec asserts their absence (no-orphan gate).
   - [x] tests/reference-validation.spec.ts: extend extraction to all `./<dir>/*.svelte` exports + module index subpaths + duplicate-basename guard.
   - [x] packages/chat-ui/package.json bumped 0.19.0; export-manifest.json _version/_generated bumped.
   - [x] Version assertions updated: chat-conversation.spec.ts, chat-core-host.spec.ts, documents-module.spec.ts (no other 0.18.0 left in packages/chat-ui/tests + ui/tests).
