@@ -34,7 +34,7 @@ Commit the cross-cutting app/workspace/PaaS architecture tracking register (`spe
 - [x] `spec/SPEC_EVOL_ARCHITECTURE.md` v3 added (baseline corrected against `origin/main`; concepts hardened; studies ARCH-01..17; waves 0-3; risks 1-20)
 - [x] Owner decisions D1-D11 recorded as DECIDED 2026-06-07 in section 6.3 (D10 deferred into ARCH-10)
 - [x] Round-3 audit fixes applied (IdP live status PR #254, cowork split status, catalog dynamic-source nuance, claim merge-policy, ARCH-12/15 scheduling, untracked sibling-document references annotated in section 2.2)
-- [ ] CI green (docs-only; no package bump required — no `packages/**/src` touched)
+- [x] CI green (run 27107761992, success; docs-only — no package bump required, no `packages/**/src` touched)
 - [ ] PR review, then delete `BRANCH.md` before merge
 
 ## Notes
