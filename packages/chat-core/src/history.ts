@@ -252,6 +252,22 @@ const getStatusState = (event: ChatHistoryStreamEvent): string => {
   return String(data?.state ?? '').trim();
 };
 
+/**
+ * Scan the persisted stream events for the run's terminal outcome.
+ * Mirrors the live terminal handling ('done' completes, 'error' fails);
+ * the last terminal event in sequence order wins.
+ */
+const getTerminalOutcome = (
+  events: readonly ChatHistoryStreamEvent[],
+): 'done' | 'error' | null => {
+  let terminal: 'done' | 'error' | null = null;
+  for (const event of events) {
+    if (event.eventType === 'done') terminal = 'done';
+    else if (event.eventType === 'error') terminal = 'error';
+  }
+  return terminal;
+};
+
 const isAssistantVisibleEvent = (event: ChatHistoryStreamEvent): boolean =>
   event.eventType === 'content_delta';
 
@@ -484,11 +500,27 @@ export const buildChatHistoryTimeline = (
     }
 
     const streamId = message._streamId ?? message.id;
-    const projectedSegments = projectChatHistorySegments(getEventsForMessage(message));
+    const projectionEvents = getEventsForMessage(message);
+    // Terminal-state fidelity: persist the run outcome on the projected
+    // message itself. The summary detail mode strips segment events
+    // (compactChatHistoryTimelineForSummary), so clients can NOT derive the
+    // terminal state from events. Without this, a failed run with null
+    // content is restored as implicitly "in progress" forever, which locks
+    // the chat composer in steer mode and silently makes attachment-only
+    // sends impossible (no send request is ever issued).
+    const terminalOutcome = getTerminalOutcome(projectionEvents);
+    const projectedMessage: ChatHistoryMessage =
+      message._localStatus || !terminalOutcome
+        ? message
+        : {
+            ...message,
+            _localStatus: terminalOutcome === 'error' ? 'failed' : 'completed',
+          };
+    const projectedSegments = projectChatHistorySegments(projectionEvents);
     const segments =
       projectedSegments.length > 0
         ? projectedSegments
-        : buildFallbackProjectedSegments(message);
+        : buildFallbackProjectedSegments(projectedMessage);
     const linkedSteers = (steerIdsByAssistantId.get(message.id) ?? [])
       .map((steerId) => timeline.find((entry) => entry.id === steerId) ?? null)
       .filter((entry): entry is ChatHistoryMessage => entry !== null);
@@ -507,8 +539,8 @@ export const buildChatHistoryTimeline = (
       return -1;
     })();
     const isTerminal =
-      (message._localStatus ?? (message.content ? 'completed' : 'processing')) ===
-      'completed';
+      (projectedMessage._localStatus ??
+        (projectedMessage.content ? 'completed' : 'processing')) === 'completed';
     let steerCursor = 0;
 
     for (let index = 0; index < segments.length; index += 1) {
@@ -543,7 +575,7 @@ export const buildChatHistoryTimeline = (
         projected.push({
           kind: 'runtime-segment',
           key: `${message.id}:${segment.id}`,
-          message,
+          message: projectedMessage,
           streamId,
           segment,
           isActiveRuntimeSegment: false,
@@ -554,7 +586,7 @@ export const buildChatHistoryTimeline = (
       projected.push({
         kind: 'assistant-segment',
         key: `${message.id}:${segment.id}`,
-        message,
+        message: projectedMessage,
         streamId,
         segment,
         isLastAssistantSegment: index === lastAssistantIndex,
