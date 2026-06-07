@@ -78,27 +78,6 @@
     "CommentsPanel.svelte": {
       "class": "primitive",
       "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
-    },
-    "CommentTimeline.svelte": {
-      "class": "legacy",
-      "deprecation": {
-        "owner": "sentropic-chat",
-        "note": "BYO building block shipped with the comments module; not yet consumed by sentropic nor parity-proven (CommentsPanel is the canonical panel). Promote to primitive/assembly when a consumer or parity harness lands."
-      }
-    },
-    "CommentComposer.svelte": {
-      "class": "legacy",
-      "deprecation": {
-        "owner": "sentropic-chat",
-        "note": "BYO building block shipped with the comments module; not yet consumed by sentropic nor parity-proven (CommentsPanel is the canonical panel). Promote to primitive/assembly when a consumer or parity harness lands."
-      }
-    },
-    "CommentThreadNav.svelte": {
-      "class": "legacy",
-      "deprecation": {
-        "owner": "sentropic-chat",
-        "note": "BYO building block shipped with the comments module; not yet consumed by sentropic nor parity-proven (CommentsPanel is the canonical panel). Promote to primitive/assembly when a consumer or parity harness lands."
-      }
     }
   }
 }

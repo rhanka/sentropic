@@ -37,16 +37,13 @@ describe('comments module — export surface registration', () => {
     expect(Object.keys(pkgJson.exports)).toContain('./comments/CommentsPanel.svelte');
   });
 
-  it('should export CommentTimeline.svelte subpath in package.json', () => {
-    expect(Object.keys(pkgJson.exports)).toContain('./comments/CommentTimeline.svelte');
-  });
-
-  it('should export CommentComposer.svelte subpath in package.json', () => {
-    expect(Object.keys(pkgJson.exports)).toContain('./comments/CommentComposer.svelte');
-  });
-
-  it('should export CommentThreadNav.svelte subpath in package.json', () => {
-    expect(Object.keys(pkgJson.exports)).toContain('./comments/CommentThreadNav.svelte');
+  it('should not export orphan comment sub-components (CommentsPanel is the canonical surface)', () => {
+    // CommentTimeline/CommentComposer/CommentThreadNav were removed in 0.19.0:
+    // never consumed by sentropic nor parity-proven (no-orphan gate). Re-export
+    // only when CommentsPanel composes them or a consumer/parity harness lands.
+    expect(Object.keys(pkgJson.exports)).not.toContain('./comments/CommentTimeline.svelte');
+    expect(Object.keys(pkgJson.exports)).not.toContain('./comments/CommentComposer.svelte');
+    expect(Object.keys(pkgJson.exports)).not.toContain('./comments/CommentThreadNav.svelte');
   });
 
   it('should resolve the comments index source file to an existing path', () => {
