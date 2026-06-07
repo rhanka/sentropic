@@ -87,12 +87,21 @@ Each candidate is sized so it can land as a single reviewable change. Counts bel
 - Bypass: `--no-branch-update` for trivial fixes.
 - Rollback: remove hook.
 
-### C8 - test-env guard
+### C8 - environment data-lifecycle guard
 
-- Target failure: tests launched on `ENV=dev` (root workspace).
-- Mechanism: `make test-*` targets refuse `ENV=dev`; CI step asserts the same in workflow envs.
-- Inputs: resolved `ENV` value at make-target entry.
-- Output: explicit error pointing to branch ENV slot.
+- Target failure: an operation violates the data lifecycle of the environment it runs in
+  (destructive tests on persistent working data, prod data overwritten, UAT lot run on an
+  environment not prepared with UAT data).
+- Generic rule (user directive 2026-06-07): each environment declares a data-lifecycle
+  class; an operation only runs where its data effect is allowed by that class. Refusing
+  `ENV=dev` is the sentropic-profile *instance* of this rule, never the engine rule.
+- Mechanism: engine check `operation class x env lifecycle class -> allow/deny`; the
+  env-to-class mapping and the operation classification are profile data. Sentropic
+  profile: `make test-*` refuse `ENV=dev` (persistent working data; 2026-03-14 purge
+  incident) and prod; `ENV=test-*` is disposable so tests run freely; UAT environments
+  must be seeded with UAT data before UAT lots; prod is never overwritten.
+- Inputs: resolved `ENV` value at make-target entry + profile lifecycle table.
+- Output: explicit error naming the environment's lifecycle class and an allowed env family.
 - Bypass: none; root UAT uses dedicated `make uat-*` targets, not `test-*`.
 - Rollback: remove guard.
 
