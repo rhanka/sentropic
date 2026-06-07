@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
-  "_generated": "2026-06-06",
-  "_version": "0.18.0",
+  "_generated": "2026-06-07",
+  "_version": "0.19.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -664,24 +664,6 @@
       "file": "src/comments/CommentsPanel.svelte",
       "exists": true,
       "_propSnapshot": "Props: host (CommentHost), contextType? (string|null), contextId? (string|null), sectionKey? (string|null), sectionLabel? (string|null), commentThreadId? (string|null, bindable), workspaceCanComment? (boolean), commentLoading? (boolean, bindable), labels? (fn), formatTimestamp? (fn), renderComposerInput? (Snippet), renderEditForm? (Snippet), renderSendButton? (Snippet), renderThreadMenuPopover? (Snippet)"
-    },
-    "./comments/CommentTimeline.svelte": {
-      "kind": "svelte",
-      "file": "src/comments/CommentTimeline.svelte",
-      "exists": true,
-      "_propSnapshot": "Props: commentMessages? (CommentItem[]), commentLoading? (boolean), commentThreadId? (string|null), lastEditableCommentId? (string|null), editingCommentId? (string|null), editingCommentContent? (string), workspaceCanComment? (boolean), labels? (fn), formatTimestamp? (fn), isCommentByCurrentUser? (fn), isCopied? (fn), renderEditForm? (Snippet), onStartEdit? (fn), onCopy? (fn), onCommitEdit? (fn), onCancelEdit? (fn), listEl? (HTMLDivElement|null, bindable)"
-    },
-    "./comments/CommentComposer.svelte": {
-      "kind": "svelte",
-      "file": "src/comments/CommentComposer.svelte",
-      "exists": true,
-      "_propSnapshot": "Props: commentInput? (string), assignedToLabel? (string|null), workspaceCanComment? (boolean), commentThreadResolved? (boolean), showMentionMenu? (boolean), mentionMatches? (MentionMember[]), mentionLoading? (boolean), mentionDelayElapsed? (boolean), mentionError? (string|null), placeholder? (string), labels? (fn), getMentionLabel? (fn), renderInput? (Snippet), onSelectMention? (fn), onClearAssignment? (fn), mentionMenuRef? (HTMLDivElement|null, bindable)"
-    },
-    "./comments/CommentThreadNav.svelte": {
-      "kind": "svelte",
-      "file": "src/comments/CommentThreadNav.svelte",
-      "exists": true,
-      "_propSnapshot": "Props: activeCommentSectionLabel? (string), commentThreadResolved? (boolean), commentThreadResolvedAt? (string|null), assignedToLabel? (string|null), isAssignedToCurrentUser? (boolean), currentCommentRootId? (string|null), canResolveCurrent? (boolean), hasPreviousThread? (boolean), hasNextThread? (boolean), showResolvedComments? (boolean), resolvedCount? (number), visibleCommentThreads? (CommentThreadSummary[]), commentThreadId? (string|null), showCommentMenu? (boolean), labels? (fn), getThreadSectionLabel? (fn), formatTimestamp? (fn), onNewThread? (fn), onSelectThread? (fn), onResolveThread? (fn), onDeleteThread? (fn), onPreviousThread? (fn), onNextThread? (fn), onToggleShowResolved? (fn), renderThreadMenu? (Snippet)"
     }
   }
 }

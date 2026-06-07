@@ -3124,6 +3124,29 @@
 
 <div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
   {#if mode === 'comments'}
+    {#snippet renderComposerInput(p: { value: string; disabled: boolean; placeholder: string; onChange: (v: string) => void; onKeyDown: (e: KeyboardEvent) => void })}
+      <!-- Restore GOLD fidelity: comments composer uses EditableInput (TipTap/contenteditable).
+           The wrapping div captures keydown events from the ProseMirror contenteditable,
+           forwarding them to CommentsPanel's Enter-to-send / @mention handler.
+           role=textbox + aria-label preserve the selector used by e2e spec 04. -->
+      <!-- svelte-ignore a11y-no-static-element-interactions a11y-interactive-supports-focus -->
+      <div
+        class="w-full"
+        role="textbox"
+        aria-label={$_('chat.composer.ariaLabel')}
+        aria-multiline="true"
+        tabindex="0"
+        on:keydown={p.onKeyDown}
+      >
+        <EditableInput
+          markdown={true}
+          value={p.value}
+          placeholder={p.placeholder}
+          disabled={p.disabled}
+          on:change={(e) => p.onChange((e as CustomEvent<{ value: string }>).detail.value)}
+        />
+      </div>
+    {/snippet}
     <CommentsPanel
       host={commentHost}
       contextType={commentContextType}
@@ -3133,6 +3156,7 @@
       bind:commentThreadId
       bind:commentLoading
       labels={(key: string, opts?: Record<string, unknown>) => $_(key, opts as Parameters<typeof $_>[1])}
+      {renderComposerInput}
     />
   {:else}
     <!-- AI mode: full chat panel with timeline, composer, etc. -->

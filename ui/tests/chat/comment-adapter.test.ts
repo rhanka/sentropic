@@ -4,19 +4,34 @@ import {
   findAssignedMentionFromText,
   formatCommentTimestamp,
   getCommentAuthorLabel,
-  getCommentSectionLabel,
   getInitials,
   getMentionCandidate,
   getMentionLabel,
   getMentionMatches,
   isCommentByUser,
-} from '$lib/chat/comment-adapter';
+  type CommentItem,
+} from '@sentropic/chat-ui/comments';
+import { getCommentSectionLabel } from '$lib/chat/comment-adapter';
 
 const members = [
   { userId: 'u_ada', email: 'ada@example.com', displayName: 'Ada Lovelace' },
   { userId: 'u_bob', email: 'bob@example.com', displayName: 'Bob Stone' },
   { userId: 'u_cam', email: 'cam@example.com', displayName: null },
 ];
+
+const makeComment = (over: Partial<CommentItem> & Pick<CommentItem, 'id' | 'thread_id' | 'created_by'>): CommentItem => ({
+  context_type: 'usecase',
+  context_id: 'ctx_1',
+  section_key: null,
+  assigned_to: null,
+  status: 'open',
+  content: '',
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: null,
+  created_by_user: null,
+  assigned_to_user: null,
+  ...over,
+});
 
 describe('chat comment adapter', () => {
   it('normalizes display labels and current-user checks', () => {
@@ -53,38 +68,34 @@ describe('chat comment adapter', () => {
 
   it('builds sorted comment thread summaries and item maps', () => {
     const { threads, map } = buildCommentThreads([
-      {
+      makeComment({
         id: 'c_2',
         thread_id: 't_1',
         section_key: 'problem',
         content: 'Second',
-        status: 'open',
         assigned_to: 'u_bob',
         created_by: 'u_bob',
         created_at: '2024-01-01T10:01:00Z',
         created_by_user: { displayName: 'Bob Stone' },
-      },
-      {
+      }),
+      makeComment({
         id: 'c_1',
         thread_id: 't_1',
         section_key: 'problem',
         content: 'First',
-        status: 'open',
         assigned_to: 'u_bob',
         created_by: 'u_ada',
         created_at: '2024-01-01T10:00:00Z',
         created_by_user: { displayName: 'Ada Lovelace' },
-      },
-      {
+      }),
+      makeComment({
         id: 'c_3',
         thread_id: 't_2',
-        section_key: null,
         content: 'Latest',
         status: 'closed',
-        assigned_to: null,
         created_by: 'u_cam',
         created_at: '2024-01-01T11:00:00Z',
-      },
+      }),
     ]);
 
     expect(threads.map((thread) => thread.id)).toEqual(['t_2', 't_1']);
