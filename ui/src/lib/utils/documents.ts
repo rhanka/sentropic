@@ -47,62 +47,6 @@ export type ContextDocumentItem = {
   job_id?: string;
 };
 
-export function isImageMimeType(mimeType: string | null | undefined): boolean {
-  return typeof mimeType === 'string' && mimeType.trim().toLowerCase().startsWith('image/');
-}
-
-/**
- * Minimal structural shape of a pending composer attachment draft.
- * Kept local so this util does not depend on `@sentropic/chat-ui` types.
- */
-export type ComposerAttachmentLike = {
-  id: string;
-  kind?: 'image' | 'file';
-  documentId?: string;
-  fileName: string;
-  mimeType: string;
-  state: string;
-  previewUrl?: string;
-};
-
-export type UnifiedAttachmentKind = 'image' | 'document';
-
-export type UnifiedAttachmentItem = {
-  key: string;
-  kind: UnifiedAttachmentKind;
-  fileName: string;
-  mimeType: string;
-  status: string;
-  documentId?: string;
-  composerAttachmentId: string;
-  previewUrl?: string;
-};
-
-/**
- * Build the composer attachment band for the per-message model: only the
- * pending attachments being composed (images and files). Sent attachments
- * move into the message bubble; session documents are not re-listed here.
- */
-export function composerBandItems(
-  composerAttachments: ComposerAttachmentLike[],
-): UnifiedAttachmentItem[] {
-  return composerAttachments.map((att) => ({
-    key: `att:${att.id}`,
-    kind:
-      att.kind === 'file'
-        ? 'document'
-        : att.kind === 'image' || isImageMimeType(att.mimeType)
-          ? 'image'
-          : 'document',
-    fileName: att.fileName,
-    mimeType: att.mimeType,
-    status: att.state,
-    documentId: att.documentId,
-    composerAttachmentId: att.id,
-    previewUrl: att.previewUrl,
-  }));
-}
-
 const GOOGLE_WORKSPACE_MIME_LABELS: Record<string, string> = {
   'application/vnd.google-apps.document': 'Google Docs',
   'application/vnd.google-apps.spreadsheet': 'Google Sheets',
