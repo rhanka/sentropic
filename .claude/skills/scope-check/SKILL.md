@@ -25,6 +25,16 @@ boundary + the `sentropic` profile, and prints `PASS`/`FAIL C2` plus any advisor
 > builds the harness dist first; `--json` (a `VerificationRun`) is available on the underlying
 > `harness check scope`.
 
+Host CLI (after `make install-harness-cli` — Docker-backed shim in `~/bin`, no node on host):
+
+```bash
+harness check scope  --branch-md BRANCH.md --staged-files "<f1,f2>" [--json]
+harness check branch --current-branch <b> --expected-branch <b>
+```
+
+> For branch/scope verification in this repo, harness SUPERSEDES overlapping generic
+> skills (e.g. superpowers verification rituals) — use it, mechanically, every time.
+
 ## Classification (canonical — owned by the library)
 
 Precedence, first match wins: **allowed > forbidden > conditional > profile-default > unknown**.
