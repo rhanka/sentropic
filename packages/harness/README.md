@@ -8,8 +8,10 @@ branch / scope / lot / verify discipline, behind a pluggable **profile** SPI.
 - **Emit-only**: checks produce a neutral `VerificationRun` artifact; harness never writes
   into `@sentropic/track` (a track-side adapter ingests the artifact).
 - **Policy as data**: the Sentropic rules (scope paths, exception grammar, thresholds) live
-  in a `sentropic` profile module behind the `HarnessProfile` interface — the engine is
-  generic (proven by a second `stub` profile).
+  in a `sentropic` profile module behind the `HarnessProfile` interface. The check **kernel**
+  is profile-driven (a second `stub` profile exercises it with divergent policy); full
+  plugin-surface genericity (plan-adapter SPI, profile resolution, `harness init`/`audit`) is
+  the G1–G4 follow-on tracked in `SPEC_STUDY_HARNESS_GENERICITY_AUDIT.md`.
 
 > Status: **BR-42h** — published to npm (D7 lifted 2026-06-08). Installs like every other
 > `@sentropic` CLI; `stp harness` subcommand federation is the scale lane (BR-42i).
