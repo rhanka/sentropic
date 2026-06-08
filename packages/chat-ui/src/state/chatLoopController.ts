@@ -916,7 +916,10 @@ export type ChatLoopController<
    *   1. Builds an optimistic steer message and appends to optimisticSteerMessages.
    *   2. Creates a composerSteerAck (shown while server processes the steer).
    *   3. Calls host.postSteer(targetStreamId, steerText).
-   *   4. On success: removes the optimistic message. ACK clears after ackTimeoutMs.
+   *   4. On success: KEEPS the optimistic message (it is the only visible
+   *      rendering of the steer text until the next session reload, which
+   *      clears optimistic steers and shows the server-persisted message).
+   *      ACK clears after ackTimeoutMs.
    *   5. On error: rolls back the optimistic message; clears ACK; re-throws so
    *      the caller (AppChatPanel) can display an errorMsg.
    *
@@ -2289,11 +2292,12 @@ export function createChatLoopController<
       // 3. Call host
       await transport.postSteer(targetStreamId, steerText);
 
-      // 4. On success: remove optimistic message
-      steerOptimisticMessages = steerOptimisticMessages.filter(
-        (m) => m.id !== optimistic.id,
-      );
-      notify();
+      // 4. On success: KEEP the optimistic message. It is the only visible
+      // rendering of the steer text in the live timeline (the server-persisted
+      // steer message only arrives on the next session history reload, which
+      // calls clearOptimisticSteerMessages first — no duplication).
+      // Removing it here (pre-0.19.1 regression) made the steer bubble vanish
+      // as soon as POST /chat/messages/:id/steer resolved.
     } catch (error) {
       // 5. On error: rollback optimistic message, clear ACK, re-throw
       steerOptimisticMessages = steerOptimisticMessages.filter(

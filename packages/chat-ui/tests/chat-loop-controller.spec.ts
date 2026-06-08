@@ -1986,8 +1986,13 @@ describe('chat-loop-controller: steer (slice 1F)', () => {
     expect(calls[0]?.message).toBe('my steer');
   });
 
-  // 12d. Optimistic message removed on success
-  it('12d: sendSteer removes optimistic message after successful postSteer', async () => {
+  // 12d. Optimistic message KEPT on success — it is the only visible rendering
+  // of the steer text until the next session reload (which clears optimistic
+  // steers before showing the server-persisted message). Removing it on success
+  // was a fidelity regression vs the pre-extraction AppChatPanel behavior
+  // (steer bubble vanished as soon as POST .../steer resolved — e2e
+  // 09-run-steering-core + 00-ai-generation caught it).
+  it('12d: sendSteer keeps the optimistic message after successful postSteer', async () => {
     const ctrl = createChatLoopController<Msg>();
     const { transport } = makeSteerTransport();
     ctrl.attachHost({ transport });
@@ -1997,8 +2002,10 @@ describe('chat-loop-controller: steer (slice 1F)', () => {
       ackMessage: 'Ack',
     });
 
-    // After success, optimistic messages should be empty
-    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
+    // After success, the optimistic steer message stays visible.
+    const snap = ctrl.getSnapshot();
+    expect(snap.optimisticSteerMessages).toHaveLength(1);
+    expect(snap.optimisticSteerMessages[0]?.content).toBe('steer');
   });
 
   // 12e. Error rollback — optimistic message removed + ack cleared + re-throws
@@ -2045,7 +2052,8 @@ describe('chat-loop-controller: steer (slice 1F)', () => {
     ctrl.clearOptimisticSteerMessages();
     expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
 
-    // Resolve the steer (will try to remove again but array is already empty — no error)
+    // Resolve the steer — the success path keeps whatever is in the array
+    // (nothing here: it was explicitly cleared above) and never re-adds.
     resolvePost();
     await promise;
     expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
