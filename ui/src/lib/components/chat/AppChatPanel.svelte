@@ -27,6 +27,7 @@
   import { session } from '$lib/stores/session';
   import type { CommentContextType } from '$lib/utils/comments';
   import CommentsPanel from '@sentropic/chat-ui/comments/CommentsPanel.svelte';
+  import type { CommentThreadSummary } from '@sentropic/chat-ui/comments';
   import { createSentropicCommentHost } from '$lib/chat/comment-host-adapter';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import ChatComposerWrapper from '$lib/components/chat/ChatComposerWrapper.svelte';
@@ -3147,6 +3148,92 @@
         />
       </div>
     {/snippet}
+    {#snippet renderThreadMenuPopover(p: {
+      threads: CommentThreadSummary[];
+      currentThreadId: string | null;
+      resolvedCount: number;
+      showResolvedComments: boolean;
+      onSelect: (t: CommentThreadSummary) => void;
+      onNew: () => void;
+      onToggleShowResolved: () => void;
+      getThreadSectionLabel: (sectionKey: string | null) => string;
+    })}
+      <!-- Thread picker — faithful restore of the pre-extraction comments header
+           menu (MenuPopover + max-h-56 thread list). Lost when CommentsPanel
+           became canonical (host never passed this snippet); e2e 07_comment_assistant
+           selectThreadByLabel depends on it. -->
+      <MenuPopover widthClass="w-72">
+        <svelte:fragment slot="trigger" let:toggle>
+          <button
+            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+            on:click={toggle}
+            title={$_('chat.comments.chooseThread')}
+            aria-label={$_('chat.comments.chooseThread')}
+            type="button"
+          >
+            <List class="w-3.5 h-3.5" />
+          </button>
+        </svelte:fragment>
+        <svelte:fragment slot="menu" let:close>
+          {#if p.resolvedCount > 0}
+            <button
+              class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 flex items-center gap-2"
+              type="button"
+              on:click|stopPropagation={p.onToggleShowResolved}
+            >
+              {#if p.showResolvedComments}
+                <Eye class="w-3.5 h-3.5" />
+                <span>{$_('chat.comments.hideResolved')}</span>
+              {:else}
+                <EyeOff class="w-3.5 h-3.5" />
+                <span>{$_('chat.comments.showResolved')}</span>
+              {/if}
+            </button>
+            <div class="border-t border-slate-100 my-1"></div>
+          {/if}
+          <button
+            class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
+            type="button"
+            on:click={() => {
+              close();
+              p.onNew();
+            }}
+          >
+            {$_('chat.comments.newThread')}
+          </button>
+          <div class="border-t border-slate-100 my-1"></div>
+          {#if p.threads.length === 0}
+            <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.comments.none')}</div>
+          {:else}
+            <div class="max-h-56 overflow-auto slim-scroll space-y-1">
+              {#each p.threads as t (t.id)}
+                <button
+                  class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {p.currentThreadId === t.id ? 'text-slate-900 font-semibold' : 'text-slate-600'} {t.status === 'closed' ? 'line-through text-slate-400' : ''}"
+                  type="button"
+                  on:click={() => {
+                    close();
+                    p.onSelect(t);
+                  }}
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate">
+                      {p.getThreadSectionLabel(t.sectionKey) || $_('chat.tabs.comments')}
+                    </span>
+                    <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                      <MessageCircle class="w-3 h-3" />
+                      {t.count}
+                    </span>
+                  </div>
+                  <div class="text-[10px] text-slate-400 truncate">
+                    {t.authorLabel} — {t.preview}
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </svelte:fragment>
+      </MenuPopover>
+    {/snippet}
     <CommentsPanel
       host={commentHost}
       contextType={commentContextType}
@@ -3157,6 +3244,7 @@
       bind:commentLoading
       labels={(key: string, opts?: Record<string, unknown>) => $_(key, opts as Parameters<typeof $_>[1])}
       {renderComposerInput}
+      {renderThreadMenuPopover}
     />
   {:else}
     <!-- AI mode: full chat panel with timeline, composer, etc. -->
