@@ -25,7 +25,7 @@ boundary + the `sentropic` profile, and prints `PASS`/`FAIL C2` plus any advisor
 > builds the harness dist first; `--json` (a `VerificationRun`) is available on the underlying
 > `harness check scope`.
 
-Host CLI (after `make install-harness-cli` — Docker-backed shim in `~/bin`, no node on host):
+Host CLI (installed like the other @sentropic CLIs — `npm i -g @sentropic/harness`):
 
 ```bash
 harness check scope  --branch-md BRANCH.md --staged-files "<f1,f2>" [--json]

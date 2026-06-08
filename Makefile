@@ -899,12 +899,42 @@ build-harness: ## Build @sentropic/harness dist package
 pack-harness: build-harness ## Validate @sentropic/harness npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
-.PHONY: install-harness-cli
-install-harness-cli: build-harness ## Install the `harness` CLI shim into ~/bin (Docker-backed, no node on host; BR42h-EX1)
-	@mkdir -p $(HOME)/bin
-	@sed "s|@HARNESS_REPO@|$(CURDIR)|" packages/harness/host/harness.sh > $(HOME)/bin/harness
-	@chmod +x $(HOME)/bin/harness
-	@echo "✅ installed $(HOME)/bin/harness (engine repo: $(CURDIR)) — try: harness"
+.PHONY: publish-harness
+publish-harness: build-harness ## Publish @sentropic/harness from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/harness \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/harness@"$$version" version >/dev/null 2>&1; then echo "@sentropic/harness@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-harness-token
+publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-harness in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/harness \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/harness@"$$version" version >/dev/null 2>&1; then echo "@sentropic/harness@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
 .PHONY: scope-check
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
