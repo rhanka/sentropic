@@ -34,7 +34,7 @@ Add a tenancy spine to the standalone IdP (`auth.sent-tech.ca`): model which org
 - **Exception process**: declare `BR39e-EXn` in `## Feedback Loop` (reason, impact, rollback) before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- (none yet)
+- `BR39e-EX1` — hand-edited `api/drizzle/meta/_journal.json` + hand-wrote `api/drizzle/0031_tenancy_spine.sql` (instead of `make db-generate`). Reason: `db-generate`'s no-container path runs `npm ci` (root-dev node_modules footgun); the migration needs a custom D5 backfill drizzle-kit can't generate anyway. Impact: runtime `migrate()` is journal+`.sql` based (no snapshot needed to apply); only future `db-generate` diffing is affected. Rollback: regenerate meta via `make db-generate` on the isolated branch stack at the lot gate.
 
 ## AI Flaky tests
 - Accept only non-systematic provider/network nondeterminism as `flaky accepted` (≥1 success same commit/command). Never add timeouts. Record signature in this file. Capture user sign-off before merge.
@@ -55,12 +55,13 @@ Add a tenancy spine to the standalone IdP (`auth.sent-tech.ca`): model which org
   - [ ] Confirm scope boundaries; declare exceptions if needed.
 
 - [ ] **Lot 1 — Tenancy core (schema + migration)**
-  - [ ] `tenants` table (id/`tid` immutable, name, status active/suspended/offboarded). No `parent_tenant_id`.
-  - [ ] `tenant_memberships` table ((user_id,tenant_id) unique; status invited/requested/approved/rejected/suspended; role; approved_by; requested_at/decided_at) mirroring `workspace_memberships`.
-  - [ ] `oauth_clients.tenant_id` association kept; default `sentropic` tenant.
-  - [ ] D5 migration: seed default `sentropic` tenant + `approved` membership for all existing users; live-default-safe + idempotent.
+  - [x] `tenants` table (id/`tid` immutable, name, status active/suspended/offboarded). No `parent_tenant_id`. (`api/src/db/schema.ts`)
+  - [x] `tenant_memberships` table ((user_id,tenant_id) unique; status invited/requested/approved/rejected/suspended; role; approved_by; requested_at/decided_at) mirroring `workspace_memberships`.
+  - [x] `oauth_clients.tenant_id` association kept; default `sentropic` tenant.
+  - [x] D5 migration `0031_tenancy_spine.sql`: seed default `sentropic` tenant + `approved` membership for all existing users; idempotent (`ON CONFLICT DO NOTHING`), live-default-safe (new tables, defaults baked in). Journal entry idx 31 added.
   - [ ] Negative-test harness scaffold (tenant A → tenant B isolation).
   - [ ] Lot gate: `make typecheck-api` + `make lint-api`; API tests (`api/tests/**` tenancy schema/migration); `make test-api ENV=test-auth-39e`.
+    - [ ] At gate (branch stack up = safe exec path): regenerate drizzle meta snapshot via `make db-generate` and reconcile (hand-written `.sql` + journal applied at runtime; snapshot deferred to avoid npm-ci footgun on root dev). `BR39e-EX1`: `api/drizzle/meta/_journal.json` edited by hand (allowed — part of the single branch migration).
 
 - [ ] **Lot 2 — Tenant-scoped acceptance**
   - [ ] Membership status machine (request → approve/reject/suspend).
