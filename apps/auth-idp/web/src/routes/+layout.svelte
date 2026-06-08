@@ -9,30 +9,31 @@
   $effect(() => {
     if (browser) document.documentElement.lang = $locale;
   });
+
+  // STOPGAP (DS-approved): align the header to the DS look/tokens of ui/Header.svelte
+  // (bg-white border-b h-14 max-w, SENT logo + subtitle, FR/EN <select>). To be
+  // replaced by the published DS shell (@sentropic/design-system-svelte AppHeader +
+  // LanguageToggle + IdentityMenu) once the package version/theme is wired.
+  const onLocaleChange = (event: Event) =>
+    setLocale((event.currentTarget as HTMLSelectElement).value as 'fr' | 'en');
 </script>
 
 <div class="min-h-screen bg-gray-50">
-  <header class="flex items-center justify-between px-6 py-4">
-    <span class="text-sm font-semibold text-slate-700">Sentropic ID</span>
-    <div class="flex items-center gap-1 text-xs">
-      <button
-        type="button"
-        class="rounded px-2 py-1 font-medium {$locale === 'fr'
-          ? 'bg-primary text-white'
-          : 'text-slate-500 hover:bg-slate-200'}"
-        onclick={() => setLocale('fr')}
+  <header class="border-b border-slate-200 bg-white">
+    <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
+      <div class="flex items-baseline gap-2">
+        <span class="text-base font-bold tracking-tight text-slate-900">SENT</span>
+        <span class="text-sm text-slate-500">Sentropic&nbsp;ID</span>
+      </div>
+      <select
+        class="rounded border border-slate-200 px-2 py-1 text-sm text-slate-700"
+        value={$locale}
+        onchange={onLocaleChange}
+        aria-label="Language"
       >
-        FR
-      </button>
-      <button
-        type="button"
-        class="rounded px-2 py-1 font-medium {$locale === 'en'
-          ? 'bg-primary text-white'
-          : 'text-slate-500 hover:bg-slate-200'}"
-        onclick={() => setLocale('en')}
-      >
-        EN
-      </button>
+        <option value="fr">FR</option>
+        <option value="en">EN</option>
+      </select>
     </div>
   </header>
   {@render children()}
