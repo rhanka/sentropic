@@ -1,64 +1,57 @@
 ---
 name: scope-check
-description: Verify modified files against branch allowed/forbidden/conditional paths
+description: Verify modified files against branch allowed/forbidden/conditional paths (via @sentropic/harness)
 paths: "**/BRANCH.md"
-allowed-tools: Read Bash Grep Glob
+allowed-tools: Bash
 ---
 
 # Scope Check
 
-Workflow skill to verify that modified files respect branch scope boundaries declared in BRANCH.md.
+Thin wrapper over the `@sentropic/harness` **C2 scope-check**. The classification logic lives ONCE
+in the library (`packages/harness`), surfaced via `make scope-check` — this skill no longer
+re-implements it in prose (BR-42h Lot 5c; D6 "skills → wrappers").
 
-## Steps
+## Run
 
-1. **Read BRANCH.md scope boundaries**
-   Parse the `## Branch Scope Boundaries (MANDATORY)` section and extract:
-   - **Allowed Paths**: globs where implementation is permitted
-   - **Forbidden Paths**: globs that must not be modified
-   - **Conditional Paths**: globs that require a declared `BRxx-EXn` exception
-   Also extract any declared exceptions from `## Feedback Loop`.
+```bash
+make scope-check    # advisory; never blocks (BR25 D5 Layer A)
+```
 
-2. **Get modified files**
-   For committed changes:
-   ```bash
-   git diff --name-only HEAD~1
-   ```
-   For uncommitted/staged changes:
-   ```bash
-   git diff --cached --name-only
-   git diff --name-only
-   ```
-   Combine all modified files into a single list (deduplicated).
+`make scope-check` reads the branch `BRANCH.md` scope boundaries, gathers the local changed files
+(`git diff --cached --name-only` ∪ `git diff --name-only`, deduped), classifies each against the
+boundary + the `sentropic` profile, and prints `PASS`/`FAIL C2` plus any advisory violations.
 
-3. **Classify each file**
-   For each modified file, match against scope boundaries in order:
-   - **Allowed Paths** match -> `OK`
-   - **Forbidden Paths** match -> `VIOLATION` (report immediately)
-   - **Conditional Paths** match -> check if a `BRxx-EXn` exception is declared for this path
-     - Exception declared -> `OK (exception BRxx-EXn)`
-     - No exception -> `VIOLATION (missing exception)`
-   - **No match** -> `WARNING (unknown path)`
+> Run from the branch worktree root so `BRANCH.md` and `git` state are the branch's. The target
+> builds the harness dist first; `--json` (a `VerificationRun`) is available on the underlying
+> `harness check scope`.
 
-4. **Report summary table**
-   Output a markdown table:
-   ```
-   | File | Status | Detail |
-   |------|--------|--------|
-   | api/src/services/foo.ts | OK | Allowed path: api/** |
-   | Makefile | VIOLATION | Forbidden path |
-   | api/drizzle/0042.sql | OK (exception BR04-EX1) | Conditional path |
-   | scripts/deploy.sh | WARNING | Unknown path |
-   ```
+Host CLI (installed like the other @sentropic CLIs — `npm i -g @sentropic/harness`):
 
-   Final summary line:
-   - `PASS` if zero violations
-   - `FAIL` with count of violations
+```bash
+harness check scope  --branch-md BRANCH.md --staged-files "<f1,f2>" [--json]
+harness check branch --current-branch <b> --expected-branch <b>
+```
+
+> For branch/scope verification in this repo, harness SUPERSEDES overlapping generic
+> skills (e.g. superpowers verification rituals) — use it, mechanically, every time.
+
+## Classification (canonical — owned by the library)
+
+Precedence, first match wins: **allowed > forbidden > conditional > profile-default > unknown**.
+
+- **allowed** → OK. Allowed is the *granted* implementation scope: an explicitly-allowed subtree
+  such as `packages/harness/**` intentionally wins over a broader forbidden `packages/**`.
+- **forbidden** (explicit, or a profile default such as `Makefile` / `docker-compose*.yml` /
+  `.cursor/rules/**`) → violation.
+- **conditional** → violation unless a declared exception id matches the profile grammar (`BRxx-EXn`).
+- **unknown** (outside Allowed/Forbidden/Conditional) → advisory violation — intentionally stricter
+  than the old "warning", to surface undeclared scope drift.
+
+All violations are **advisory** (D5 Layer A): reported, never blocking, until a blocking promotion.
 
 ## Rules
 
-- Always check both staged and unstaged changes
-- Glob matching follows standard gitignore-style patterns
-- A file matching both Allowed and Forbidden is a VIOLATION (Forbidden takes precedence)
-- Conditional paths without a declared exception are VIOLATIONS
-- Unknown paths are warnings, not violations — but should be investigated
-- Run this check before every commit to catch scope drift early
+- Checks both staged and unstaged local changes.
+- Run before every commit to catch scope drift early.
+- The classification is owned by `@sentropic/harness` (`classifyPath` / `checkScope`) — change it
+  there (with a test), never re-implement it in this skill.

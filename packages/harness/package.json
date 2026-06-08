@@ -1,0 +1,38 @@
+{
+  "name": "@sentropic/harness",
+  "version": "0.1.0",
+  "description": "Neutral, host-agnostic code-work / PR-workflow tooling for AI dev: branch/scope/lot/verify discipline. Tooling-only, zero product-runtime deps. (BR-42h)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/harness"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "harness": "./dist/bin/harness.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "typescript": "5.4.5",
+    "vitest": "4.0.18"
+  }
+}
