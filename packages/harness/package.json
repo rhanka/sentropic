@@ -1,8 +1,7 @@
 {
   "name": "@sentropic/harness",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Neutral, host-agnostic code-work / PR-workflow tooling for AI dev: branch/scope/lot/verify discipline. Tooling-only, zero product-runtime deps. (BR-42h core slice; publish deferred per BR25 D7.)",
+  "version": "0.1.0",
+  "description": "Neutral, host-agnostic code-work / PR-workflow tooling for AI dev: branch/scope/lot/verify discipline. Tooling-only, zero product-runtime deps. (BR-42h)",
   "type": "module",
   "license": "MIT",
   "repository": {
