@@ -59,9 +59,9 @@ Add a tenancy spine to the standalone IdP (`auth.sent-tech.ca`): model which org
   - [x] `tenant_memberships` table ((user_id,tenant_id) unique; status invited/requested/approved/rejected/suspended; role; approved_by; requested_at/decided_at) mirroring `workspace_memberships`.
   - [x] `oauth_clients.tenant_id` association kept; default `sentropic` tenant.
   - [x] D5 migration `0031_tenancy_spine.sql`: seed default `sentropic` tenant + `approved` membership for all existing users; idempotent (`ON CONFLICT DO NOTHING`), live-default-safe (new tables, defaults baked in). Journal entry idx 31 added.
-  - [ ] Negative-test harness scaffold (tenant A → tenant B isolation).
-  - [ ] Lot gate: `make typecheck-api` + `make lint-api`; API tests (`api/tests/**` tenancy schema/migration); `make test-api ENV=test-auth-39e`.
-    - [ ] At gate (branch stack up = safe exec path): regenerate drizzle meta snapshot via `make db-generate` and reconcile (hand-written `.sql` + journal applied at runtime; snapshot deferred to avoid npm-ci footgun on root dev). `BR39e-EX1`: `api/drizzle/meta/_journal.json` edited by hand (allowed — part of the single branch migration).
+  - [x] Negative-test harness scaffold (tenant A → tenant B isolation). `api/tests/api/auth/tenancy.test.ts` — 3 tests (seed backfill, membership defaults+uniqueness, A→B isolation).
+  - [x] Lot gate (scoped): `make typecheck-api` GREEN (tsc no errors); `make test-api-unit SCOPE=tests/api/auth/tenancy.test.ts ENV=test-auth-39e` → 3/3 passed (migration `0031` applied at boot, backfill verified).
+  - [ ] Final-lot gate (deferred): `make lint-api`; full `make test-api ENV=test-auth-39e`; regenerate drizzle meta snapshot via `make db-generate` on the up branch stack and reconcile (hand-written `.sql`+journal already apply at runtime; snapshot deferred to avoid npm-ci footgun on root dev). `BR39e-EX1`: `api/drizzle/meta/_journal.json` hand-edited (allowed — part of the single branch migration).
 
 - [ ] **Lot 2 — Tenant-scoped acceptance**
   - [ ] Membership status machine (request → approve/reject/suspend).
