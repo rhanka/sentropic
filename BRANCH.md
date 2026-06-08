@@ -30,7 +30,7 @@ Integrate the architecture target program (ARCH-01..19, decided D1-D11 + DD1-DD1
 - [x] §5 pointer added (architecture target program → §8)
 - [x] §8 added: BR-44 hardening; BR-45..48 Wave-1a framing studies; BR-49..52 Wave-1b; BR-53..60 Wave-2 (gated); BR-61..65 Wave-3 proofs+storage; BR-66..67 last; owner items; external lanes
 - [x] §7 source specifications: SPEC_EVOL_ARCHITECTURE + SPEC_EVOL_DATA_ARCHITECTURE added
-- [ ] CI green (docs-only; no package bump required)
+- [x] CI green (docs-only; no package bump required)
 - [ ] PR review, then delete `BRANCH.md` before merge
 
 ## Notes
