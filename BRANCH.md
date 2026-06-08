@@ -29,7 +29,7 @@ Commit the "data in the agentic era" deep study (`spec/SPEC_EVOL_DATA_ARCHITECTU
 - [x] `spec/SPEC_EVOL_DATA_ARCHITECTURE.md` v3 added (5 axes; evidence-grounded baseline: 57 tables, 47 jsonb, queue without lease/reaper, dead `task_io_contracts`, unbounded `chat_stream_events`; round-1 concept review + round-2 decision-packet audit, 4× GO-WITH-CHANGES)
 - [x] Owner decisions DD1-DD11 recorded as DECIDED 2026-06-07 (incl. DD5 rider: knowledge base is LLM-wiki/graph-first via graphify, vector = subordinate addition; DD6: separate unpublished package; DD10: envelope v0 with binding-defined scope map)
 - [x] Tracker updated: ARCH-18 + ARCH-19 rows, review-log entry, ARCH-20 dissolution recorded
-- [ ] CI green (docs-only; no package bump required — no `packages/**/src` touched)
+- [x] CI green (docs-only; no package bump required — no `packages/**/src` touched)
 - [ ] PR review, then delete `BRANCH.md` before merge
 
 ## Notes
