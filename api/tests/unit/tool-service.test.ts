@@ -595,6 +595,122 @@ describe('Tool Service', () => {
       expect(after.matrixConfig).toBeTruthy();
       expect((after.matrixConfig as any).valueAxes?.[0]?.weight).toBe(0.3);
     });
+
+    // Regression (BUG-ORG): small/nano models emit `updates` as an OBJECT {field:value}
+    // (and sometimes a sibling `patch` object) instead of the advertised array
+    // [{field,value}]. Executors must tolerantly normalize these shapes before the
+    // "updates is required" guard, otherwise the field update never applies.
+    describe('tolerant updates normalization (object / patch forms)', () => {
+      it('organization_update: applies when updates is an object {field:value}', async () => {
+        const updated = await toolService.updateOrganizationFields({
+          organizationId,
+          // Model-emitted shape: object instead of array. Runtime must tolerate it.
+          updates: { technologies: '- Test' } as any,
+          workspaceId,
+          sessionId: testSessionId,
+          messageId: msgCompanyUpdateId,
+          toolCallId: 'tool-obj-1'
+        });
+        expect(updated.applied.length).toBe(1);
+        expect(updated.applied[0].field).toBe('technologies');
+
+        const after = await toolService.getOrganization(organizationId, { workspaceId, select: ['technologies'] });
+        expect(after.data.technologies).toBe('- Test');
+      });
+
+      it('organization_update: applies when only a `patch` object is provided', async () => {
+        const updated = await toolService.updateOrganizationFields({
+          organizationId,
+          // Model hedges with patch{} + updates{} or patch only. Fold patch too.
+          patch: { kpis: '- KPI A\n- KPI B' },
+          workspaceId,
+          sessionId: testSessionId,
+          messageId: msgCompanyUpdateId,
+          toolCallId: 'tool-patch-1'
+        } as any);
+        expect(updated.applied.length).toBe(1);
+        expect(updated.applied[0].field).toBe('kpis');
+
+        const after = await toolService.getOrganization(organizationId, { workspaceId, select: ['kpis'] });
+        expect(after.data.kpis).toBe('- KPI A\n- KPI B');
+      });
+
+      it('organization_update: still applies with the canonical array form', async () => {
+        const updated = await toolService.updateOrganizationFields({
+          organizationId,
+          updates: [{ field: 'industry', value: 'Aerospace' }],
+          workspaceId
+        });
+        expect(updated.applied[0].field).toBe('industry');
+
+        const after = await toolService.getOrganization(organizationId, { workspaceId, select: ['industry'] });
+        expect(after.data.industry).toBe('Aerospace');
+      });
+
+      it('organization_update: empty object {} still errors "updates is required"', async () => {
+        await expect(
+          toolService.updateOrganizationFields({
+            organizationId,
+            updates: {} as any,
+            patch: {},
+            workspaceId
+          } as any)
+        ).rejects.toThrow('updates is required');
+      });
+
+      it('organization_update: unknown field is still rejected', async () => {
+        await expect(
+          toolService.updateOrganizationFields({
+            organizationId,
+            updates: { bogusField: 'x' } as any,
+            workspaceId
+          })
+        ).rejects.toThrow('Unsupported field: bogusField');
+      });
+
+      it('folder_update: applies when updates is an object {field:value}', async () => {
+        const updated = await toolService.updateFolderFields({
+          folderId,
+          updates: { name: 'Folder via object' } as any,
+          workspaceId,
+          sessionId: testSessionId,
+          messageId: msgFolderUpdateId,
+          toolCallId: 'tool-f-obj'
+        });
+        expect(updated.applied[0].field).toBe('name');
+
+        const after = await toolService.getFolder(folderId, { workspaceId, select: ['name'] });
+        expect(after.data.name).toBe('Folder via object');
+      });
+
+      it('executive_summary_update: applies when updates is an object {field:value}', async () => {
+        await toolService.updateExecutiveSummaryFields({
+          folderId,
+          updates: { introduction: 'Intro via object' } as any,
+          workspaceId,
+          sessionId: testSessionId,
+          messageId: msgExecutiveSummaryUpdateId,
+          toolCallId: 'tool-es-obj'
+        });
+
+        const after = await toolService.getExecutiveSummary(folderId, { workspaceId });
+        expect(after.executiveSummary?.introduction).toBe('Intro via object');
+      });
+
+      it('update_initiative: applies when updates is an object {path:value}', async () => {
+        const updated = await toolService.updateInitiativeFields({
+          initiativeId,
+          // Initiative uses {path,value}; object form maps key->path.
+          updates: { description: 'Desc via object' } as any,
+          workspaceId
+        });
+        expect(updated.applied.length).toBe(1);
+        expect(updated.applied[0].path).toBe('data.description');
+
+        const [row] = await db.select().from(initiatives).where(eq(initiatives.id, initiativeId));
+        expect((row.data as any).description).toBe('Desc via object');
+      });
+    });
   });
 });
 
