@@ -49,7 +49,9 @@ export type InitiativeFieldUpdate = {
 
 export type UpdateInitiativeFieldsInput = {
   initiativeId: string;
-  updates: InitiativeFieldUpdate[];
+  // Tolerant input: canonical array, OR object {path:value}, OR sibling `patch` object.
+  updates?: InitiativeFieldUpdate[] | Record<string, unknown> | unknown;
+  patch?: Record<string, unknown> | unknown;
   /** Contexte chat (optionnel) */
   userId?: string | null;
   sessionId?: string | null;
@@ -190,6 +192,58 @@ function getAtPath(root: unknown, segments: string[]): unknown {
     return undefined;
   }
   return cur;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Tolerant normalizer for the chat field-update tools.
+ *
+ * The advertised JSON schema is `updates: Array<{[keyName]: string, value: unknown}>`,
+ * but small/nano models frequently emit the natural object form instead:
+ *   - `updates` as an object `{field: value, ...}` (or `{path: value, ...}`)
+ *   - and/or a sibling `patch` object `{field: value, ...}` (the model hedges)
+ * Without coercion the executors throw "updates is required" and the update never
+ * applies. This helper coerces every supported shape into the canonical array
+ * `[{[keyName]: string, value: unknown}]` BEFORE the validation guard. It is purely
+ * additive tolerance: the array form passes through unchanged, the "updates is
+ * required" guard still fires on a genuinely empty call, and the downstream
+ * field-enum / "Unsupported field" validation is untouched.
+ *
+ * @param keyName 'field' for organization/folder/executive_summary, 'path' for initiative.
+ */
+function normalizeFieldUpdates(
+  rawUpdates: unknown,
+  rawPatch: unknown,
+  keyName: 'field' | 'path'
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+
+  const pushFromObject = (obj: Record<string, unknown>): void => {
+    for (const [key, value] of Object.entries(obj)) {
+      const trimmedKey = String(key ?? '').trim();
+      if (!trimmedKey) continue;
+      out.push({ [keyName]: trimmedKey, value });
+    }
+  };
+
+  if (Array.isArray(rawUpdates)) {
+    // Already canonical: pass through, dropping null/undefined entries.
+    for (const entry of rawUpdates) {
+      if (entry == null) continue;
+      out.push(entry as Record<string, unknown>);
+    }
+  } else if (isPlainObject(rawUpdates)) {
+    pushFromObject(rawUpdates);
+  }
+
+  if (isPlainObject(rawPatch)) {
+    pushFromObject(rawPatch);
+  }
+
+  return out;
 }
 
 // setAtPath supprimé : on utilise maintenant jsonb_set directement dans SQL pour les mises à jour partielles
@@ -354,7 +408,9 @@ export class ToolService {
 
   async updateOrganizationFields(input: {
     organizationId: string;
-    updates: Array<{ field: string; value: unknown }>;
+    // Tolerant input: canonical array, OR object {field:value}, OR sibling `patch` object.
+    updates?: Array<{ field: string; value: unknown }> | Record<string, unknown> | unknown;
+    patch?: Record<string, unknown> | unknown;
     userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
@@ -363,8 +419,9 @@ export class ToolService {
     locale?: string;
   }): Promise<{ organizationId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.organizationId) throw new Error('organizationId is required');
-    if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
-    if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
+    const updates = normalizeFieldUpdates(input.updates, input.patch, 'field') as Array<{ field: string; value: unknown }>;
+    if (updates.length === 0) throw new Error('updates is required');
+    if (updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
@@ -394,7 +451,7 @@ export class ToolService {
     const nextData: OrganizationData = { ...dataBefore };
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
-    for (const u of input.updates) {
+    for (const u of updates) {
       const field = String(u.field ?? '').trim();
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
@@ -559,8 +616,9 @@ export class ToolService {
     applied: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   }> {
     if (!input.initiativeId) throw new Error('initiativeId is required');
-    if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
-    if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
+    const updates = normalizeFieldUpdates(input.updates, input.patch, 'path') as InitiativeFieldUpdate[];
+    if (updates.length === 0) throw new Error('updates is required');
+    if (updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
@@ -578,8 +636,8 @@ export class ToolService {
     // Construire les updates partiels avec jsonb_set pour ne modifier que les champs spécifiés
     const pathSegmentsList: string[][] = [];
     const valuesList: unknown[] = [];
-    
-    for (const u of input.updates) {
+
+    for (const u of updates) {
       const fullPath = normalizeDataPath(u.path);
       const segments = getPathSegments(fullPath);
       if (segments[0] !== 'data') throw new Error('Only data.* paths are supported');
@@ -768,7 +826,9 @@ export class ToolService {
 
   async updateFolderFields(input: {
     folderId: string;
-    updates: Array<{ field: string; value: unknown }>;
+    // Tolerant input: canonical array, OR object {field:value}, OR sibling `patch` object.
+    updates?: Array<{ field: string; value: unknown }> | Record<string, unknown> | unknown;
+    patch?: Record<string, unknown> | unknown;
     userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
@@ -777,8 +837,9 @@ export class ToolService {
     locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
-    if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
-    if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
+    const updates = normalizeFieldUpdates(input.updates, input.patch, 'field') as Array<{ field: string; value: unknown }>;
+    if (updates.length === 0) throw new Error('updates is required');
+    if (updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
@@ -794,7 +855,7 @@ export class ToolService {
     const setPayload: Record<string, unknown> = {};
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
-    for (const u of input.updates) {
+    for (const u of updates) {
       const field = String(u.field ?? '').trim();
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
@@ -1044,7 +1105,9 @@ export class ToolService {
 
   async updateExecutiveSummaryFields(input: {
     folderId: string;
-    updates: Array<{ field: string; value: unknown }>;
+    // Tolerant input: canonical array, OR object {field:value}, OR sibling `patch` object.
+    updates?: Array<{ field: string; value: unknown }> | Record<string, unknown> | unknown;
+    patch?: Record<string, unknown> | unknown;
     userId?: string | null;
     workspaceId?: string | null;
     sessionId?: string | null;
@@ -1053,8 +1116,9 @@ export class ToolService {
     locale?: string;
   }): Promise<{ folderId: string; applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> }> {
     if (!input.folderId) throw new Error('folderId is required');
-    if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
-    if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
+    const updates = normalizeFieldUpdates(input.updates, input.patch, 'field') as Array<{ field: string; value: unknown }>;
+    if (updates.length === 0) throw new Error('updates is required');
+    if (updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
@@ -1073,7 +1137,7 @@ export class ToolService {
     const applied: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 
     const next = deepClone(before) as Record<string, unknown>;
-    for (const u of input.updates) {
+    for (const u of updates) {
       const field = String(u.field ?? '').trim();
       if (!field) throw new Error('Invalid field');
       if (!allowed.has(field)) throw new Error(`Unsupported field: ${field}`);
