@@ -1234,6 +1234,7 @@
       "pendingTaskLabel": "Tâche en attente"
     },
     "comments": {
+      "assistantLabel": ", Assistant IA",
       "chooseThread": "Liste des commentaires",
       "newThread": "Nouveau commentaire",
       "none": "Aucune conversation",

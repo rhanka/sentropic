@@ -43,7 +43,10 @@ test.describe('Comment assistant', () => {
   }
 
   async function selectThreadByLabel(widget: any, label: string) {
-    const menuButton = widget.locator('button[aria-label="Choisir une conversation"]');
+    // Comments thread picker (canonical CommentsPanel header).
+    // aria-label follows chat.comments.chooseThread ("Liste des commentaires",
+    // renamed from "Choisir une conversation" in 0c398ee28).
+    const menuButton = widget.locator('button[aria-label="Liste des commentaires"]');
     await menuButton.click();
     const threadList = widget.locator('div.max-h-56');
     const targetThread = threadList.locator('button').filter({ hasText: label }).first();

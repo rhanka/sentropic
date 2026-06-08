@@ -414,7 +414,11 @@
               </div>
               <div class="max-w-[85%] w-full">
                 <div class="text-[11px] text-slate-500 mb-1 flex items-center gap-2">
-                  <span>{authorLabel}{isAi ? ', AI' : ''}</span>
+                  <!-- AI author suffix goes through the labels resolver (host i18n);
+                       pre-extraction AppChatPanel labels bag carried
+                       assistantLabel: ', Assistant IA' — hardcoding ', AI' here
+                       was a Lot-5 fidelity regression (e2e 07_comment_assistant). -->
+                  <span>{authorLabel}{isAi ? (labels('chat.comments.assistantLabel') || ', AI') : ''}</span>
                   {#if c.created_at}
                     <span>{formatTimestamp(c.created_at)}</span>
                   {/if}
