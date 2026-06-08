@@ -89,12 +89,12 @@ Fold the two attachment-rendering components the modularization Lot 4 deliberate
     - [x] `make test-chat-ui` green (760/760 node) + `make test-chat-ui-dom` green (149/149 jsdom, 11 files).
     - [x] `make typecheck-chat-ui` green.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] `spec/SPEC_EVOL_CHATUI_MODULARIZATION.md`: note the documents-module rendering gap (lightbox + message attachments) closed by this branch; record the app-dogfood blocking follow-up (`BR38c-B1`).
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] NOT APPLICABLE: `spec/SPEC_EVOL_CHATUI_MODULARIZATION.md` is NOT committed on `main` (verified absent from this worktree; it lives only in the owner's local root workspace) — updating it belongs to the modularization owner's lane. Components self-document via `.svelte.d.ts` + `export-manifest.json` prop snapshots; `BR38c-B1` tracks the app-dogfood follow-up here.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck (`make typecheck-chat-ui`) + retest node (`make test-chat-ui`) + retest dom (`make test-chat-ui-dom`).
-  - [ ] Bump `packages/chat-ui/package.json` minor (new public components) — `enforce-package-bump` gate.
+  - [x] Typecheck (`make typecheck-chat-ui`) + retest node (`make test-chat-ui` 760/760) + retest dom (`make test-chat-ui-dom` 149/149).
+  - [x] Bump `packages/chat-ui/package.json` minor `0.19.1` -> `0.20.0` (+ `export-manifest.json` `_version`; + the 3 version-pinned test assertions per established pattern) — `enforce-package-bump` gate satisfied.
   - [ ] Final gate step 1: create PR using `BRANCH.md` as PR body; report branch name + test counts to conductor (h2a).
   - [ ] Final gate step 2: branch CI green; resolve blockers.
   - [ ] Final gate step 3: merge after CI green; npm publish HELD until conductor ping (`BR38c-D1` name veto); after publish verify npm `latest` moved.
