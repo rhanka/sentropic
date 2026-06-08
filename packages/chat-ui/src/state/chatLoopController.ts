@@ -117,6 +117,7 @@
 import {
   projectAssistantRunSegments,
   countLinkedSteerMessages,
+  getProjectedRunTerminalOutcome,
   mergeProjectionHistoryEvents,
   appendLiveProjectionEvent,
   type ProjectionStreamEvent,
@@ -1157,7 +1158,11 @@ export function createChatLoopController<
     const signature = buildComputationSignature(message, projectionEvents);
     const cached = projectedAssistantComputationByMessageId.get(messageId);
     if (cached?.signature === signature) {
-      return { segments: cached.segments, linkedSteerCount: cached.linkedSteerCount };
+      return {
+        segments: cached.segments,
+        linkedSteerCount: cached.linkedSteerCount,
+        terminalOutcome: cached.terminalOutcome,
+      };
     }
 
     const segments = projectAssistantRunSegments(projectionEvents);
@@ -1165,12 +1170,17 @@ export function createChatLoopController<
       signature,
       segments,
       linkedSteerCount: countLinkedSteerMessages(projectionEvents),
+      terminalOutcome: getProjectedRunTerminalOutcome(projectionEvents),
     };
     projectedAssistantComputationByMessageId = new Map(
       projectedAssistantComputationByMessageId,
     );
     projectedAssistantComputationByMessageId.set(messageId, next);
-    return { segments: next.segments, linkedSteerCount: next.linkedSteerCount };
+    return {
+      segments: next.segments,
+      linkedSteerCount: next.linkedSteerCount,
+      terminalOutcome: next.terminalOutcome,
+    };
   };
 
   // -------------------------------------------------------------------------
