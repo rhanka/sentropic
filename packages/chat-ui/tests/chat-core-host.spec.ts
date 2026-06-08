@@ -237,12 +237,12 @@ describe('ChatCoreHost — export surface registration', () => {
     expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
   });
 
-  it('should have version 0.19.2 in package.json (patch — live terminal projection backstop fixes server-completed UI freeze)', () => {
-    expect(pkgJson.version).toBe('0.19.2');
+  it('should have version 0.20.0 in package.json (minor — documents rendering fold: ImageLightbox + MessageAttachments)', () => {
+    expect(pkgJson.version).toBe('0.20.0');
   });
 
-  it('should have _version 0.19.2 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.19.2');
+  it('should have _version 0.20.0 in export-manifest.json', () => {
+    expect(manifest._version).toBe('0.20.0');
   });
 
   it('should resolve the chat-core-host source file to an existing path', () => {
