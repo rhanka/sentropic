@@ -635,6 +635,18 @@
       "exists": true,
       "_propSnapshot": "Props: cards (ChatGeneratedFileCard[]), onDownload? (fn: card→void), downloadLabel? (string)"
     },
+    "./documents/ImageLightbox.svelte": {
+      "kind": "svelte",
+      "file": "dist/documents/ImageLightbox.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: image ({src,alt}|null), onClose? (fn: →void), closeLabel? (string), downloadLabel? (string)"
+    },
+    "./documents/MessageAttachments.svelte": {
+      "kind": "svelte",
+      "file": "dist/documents/MessageAttachments.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: attachments (ChatMessageAttachment[]), onResolveSrc? (fn: attachment→string), onEnlarge? (fn: src,alt→void), enlargeLabel? (string)"
+    },
     "./comments": {
       "kind": "ts",
       "file": "src/comments/index.ts",

@@ -242,6 +242,16 @@
       "svelte": "./src/documents/GeneratedFileCardTray.svelte",
       "import": "./src/documents/GeneratedFileCardTray.svelte"
     },
+    "./documents/ImageLightbox.svelte": {
+      "types": "./src/documents/ImageLightbox.svelte.d.ts",
+      "svelte": "./src/documents/ImageLightbox.svelte",
+      "import": "./src/documents/ImageLightbox.svelte"
+    },
+    "./documents/MessageAttachments.svelte": {
+      "types": "./src/documents/MessageAttachments.svelte.d.ts",
+      "svelte": "./src/documents/MessageAttachments.svelte",
+      "import": "./src/documents/MessageAttachments.svelte"
+    },
     "./comments": {
       "types": "./src/comments/index.ts",
       "svelte": "./src/comments/index.ts",

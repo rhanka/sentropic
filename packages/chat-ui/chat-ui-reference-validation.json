@@ -75,6 +75,14 @@
       "class": "primitive",
       "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
     },
+    "ImageLightbox.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+    },
+    "MessageAttachments.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+    },
     "CommentsPanel.svelte": {
       "class": "primitive",
       "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
