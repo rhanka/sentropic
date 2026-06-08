@@ -89,6 +89,13 @@ Corrected after round-2 falsification against `origin/main`.
   unwritten, and the live comments API restricts `contextType` to product enums
   (`organization|folder|initiative|usecase|matrix|executive_summary`) even
   though the comments package types already allow `canvas|artifact`.
+- Consumer evidence (2026-06-07): OpenERP shipped `@sentropic/chat-ui@0.19.0`
+  embedded natively and reports that `LocalToolName` is a closed enum
+  (`isLocalToolName` rejects unknown names before dispatch), so hosts cannot
+  register app-side tools such as `read_canvas_context` despite
+  `setLocalToolsAdapter`. An open host-tool extension point is a chat-ui
+  deliverable the ARCH-03 canvas seam depends on; the fix is owned by the chat
+  lane.
 - Storage: an S3-compatible artifact service exists
   (`api/src/services/storage-s3.ts`; MinIO dev / Scaleway prod).
 - Events: fragmented — `execution_events`, `chat_stream_events`, Postgres
@@ -698,7 +705,7 @@ the round-3 audit and answered by the owner on 2026-06-07.
 |---|---|---|---|
 | ARCH-01 | App control-plane model + catalog projection | SPEC_EVOL_APP_CATALOG | Control-plane model FIRST, projection second; `app_templates`/`app_instances`/`tenants` resources; build-cli manifest reuse; which DB owns them (product vs IdP seam, with D1); migration cost estimate for flagship retro-modeling (D7) |
 | ARCH-02 | Public app auth and anonymous quotas | SPEC_EVOL_PUBLIC_APP_AUTH | Guest principal rows (D3); guest-to-existing-account merge policy (FK re-key + authorship transfer); claim-across-OIDC-redirect with BR-39n; cookie/CSRF/origin model; app-safe chat DTO + factory extraction of workspaces/documents/comments routers |
-| ARCH-03 | Diag public app proof | SPEC_EVOL_DIAG_APP | Mermaid tool via execution seam; documents+S3 persistence (D9); comments `contextType` extension; chat-ui modular-core composition; claim UX; retention |
+| ARCH-03 | Diag public app proof | SPEC_EVOL_DIAG_APP | Mermaid tool via execution seam; documents+S3 persistence (D9); comments `contextType` extension; chat-ui modular-core composition; open host-tool extension point (OpenERP consumer finding); claim UX; retention |
 | ARCH-04 | Immo e2e app proof | SPEC_EVOL_IMMO_APP | IdP Phase B membership gate; org-B residence (D8); app-foundry generation via build-cli; UAT-to-published lifecycle; B2B2B disclosure boundaries |
 | ARCH-05 | Code workspace + remote UAT routing | SPEC_EVOL_CODE_WORKSPACE_REMOTE | Repo binding; remote registration on device-pairing/cowork-bridge/S2S; confirm cowork backend split owner/branch; route-grant + edge proxy protocol; preview domain; personal-remote isolation |
 | ARCH-06 | Graphify workspace knowledge | SPEC_EVOL_WORKSPACE_KNOWLEDGE | Gated on graphify-fusion Lot 0; snapshot permission semantics; incremental rebuilds; query API; ignore/secret policy; artifact retention |
@@ -804,3 +811,6 @@ Dispatch order, corrected rounds 2-3:
   D5=B (preview-domain name still a Wave-0 deliverable), D6=B (anonymous
   budget ownership framed in ARCH-13), D7=A, D8=B, D9=B, D10=C (deferred into
   ARCH-10), D11=B. Study backlog unblocked for dispatch.
+- 2026-06-07: Consumer evidence logged from OpenERP (chat-ui 0.19 embedded
+  natively; closed `LocalToolName` enum blocks host-defined tools) — fix owned
+  by the chat lane; tracked here as an ARCH-03 dependency.
