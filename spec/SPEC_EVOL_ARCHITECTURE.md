@@ -720,6 +720,8 @@ the round-3 audit and answered by the owner on 2026-06-07.
 | ARCH-15 | Data residency, retention, export/deletion | SPEC_EVOL_DATA_LIFECYCLE | Guest retention; tenant deletion/export; self-host portability of data policies; GDPR lawful basis for quota identifiers |
 | ARCH-16 | Canvas/LiveDocument runtime | SPEC_EVOL_CHAT_CANVAS | CRDT vs snapshot model; `LiveDocumentStore` port; comments on canvas/artifact; NOT a Diag-proof prerequisite (D9) |
 | ARCH-17 | Deployment control plane + edge proxy | SPEC_EVOL_DEPLOYMENT_PLANE | `UatEndpoint`/`AppDeployment` desired/observed state; provider/k8s-ops contract; domains/TLS/rollback; route-grant format; SSRF/websocket policy |
+| ARCH-18 | Master data architecture (five axes: control-plane data, universal business objects, knowledge/ontologies, agentic data, physical planes) | SPEC_EVOL_DATA_ARCHITECTURE | DECIDED DD1-DD11 (2026-06-07, two double-review rounds); assigns outbox→ARCH-14, knowledge pipeline→ARCH-06, retention/GDPR/erasure→ARCH-15; hardening prerequisite branch (queue reaper, stream retention+index, task_io_contracts drop) lands before outbox/UBO storage |
+| ARCH-19 | Universal Business Objects & object type registry | per SPEC_EVOL_DATA_ARCHITECTURE §6 lots | Envelope v0 ratified (DD10, binding-defined scope map); typed references (DD7); schema evolution (DD8); validation ladders (DD2a/b); OpenERP mapping gates the standard-set freeze only (DD3); storage lots gated on ARCH-11 semantics + ARCH-14 events; separate unpublished package (DD6) |
 
 ## 8. Suggested Branch Grouping
 
@@ -814,3 +816,10 @@ Dispatch order, corrected rounds 2-3:
 - 2026-06-07: Consumer evidence logged from OpenERP (chat-ui 0.19 embedded
   natively; closed `LocalToolName` enum blocks host-defined tools) — fix owned
   by the chat lane; tracked here as an ARCH-03 dependency.
+- 2026-06-07: ARCH-18 (master data architecture, `SPEC_EVOL_DATA_ARCHITECTURE`)
+  and ARCH-19 (Universal Business Objects & object type registry) registered.
+  Owner decisions DD1-DD11 taken the same day after two double adversarial
+  rounds (Codex 5.5 xhigh + Opus 4.8 × 2). The v1 idea of an ARCH-20
+  "physical planes" study was dissolved into ARCH-14 (EventBus/outbox),
+  ARCH-13 (analytical consumer gate), ARCH-10 annex (Postgres-isms register),
+  and a standalone ArtifactStorePort branch.
