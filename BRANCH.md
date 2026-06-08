@@ -20,6 +20,10 @@ Root-cause and fix the client-side regression where pasting an image into the ch
   - `packages/chat-ui/package.json`
   - `packages/chat-ui/tests/**`
   - `e2e/tests/04-chat-image-paste.spec.ts`
+  - `e2e/tests/07_comment_assistant.spec.ts`
+  - `e2e/tests/09-run-steering-core.spec.ts`
+  - `ui/src/locales/fr.json`
+  - `ui/src/locales/en.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -67,3 +71,12 @@ Root-cause and fix the client-side regression where pasting an image into the ch
       - [x] Adjacent: `make test-e2e E2E_SPEC=tests/04-google-drive-composer.spec.ts RETRIES=0 ...` (2/2)
       - [x] Adjacent: `make test-e2e E2E_SPEC=tests/04-tenancy-workspaces.spec.ts RETRIES=0 ...` (run 1: 5/6, mention-autocomplete dropdown timing; run 2 same commit/command: 6/6 -> non-systematic, unrelated to chat history projection)
     - [x] `make down REGISTRY=local API_PORT=9460 UI_PORT=5560 MAILDEV_UI_PORT=1460 ENV=test-uat`
+- [ ] **Lot 2 — UAT-proof: drive the 4 systematically-red e2e specs to green**
+  - [x] 09/00 fix: keep optimistic steer message on postSteer success in chatLoopController (pre-0.19.1 removal made the steer bubble vanish when POST /chat/messages/:id/steer resolved); chat-ui 0.19.0 -> 0.19.1; unit test 12d updated to KEEP semantics (748/748 pass).
+  - [ ] 09 spec: re-anchor timeline structural scan on the hydration-swap wrapper (rows stopped being direct children of the scroll container at ddaeebec2, 2026-05-20; spec predates it and is in no CI e2e group) — assertions unchanged; `make test-e2e E2E_SPEC=tests/09-run-steering-core.spec.ts RETRIES=0 ...` 1/1 PASS.
+  - [ ] 07 fix: restore comments thread-picker menu by passing CommentsPanel `renderThreadMenuPopover` snippet from AppChatPanel (seam existed, host never passed it after extraction); spec selector updated to canonical aria-label "Liste des commentaires".
+  - [ ] 07 fix: AI author suffix through labels resolver — new key `chat.comments.assistantLabel` (", Assistant IA" fr / ", AI assistant" en); hardcoded ", AI" in CommentsPanel was a Lot-5 labels-contract regression; `make test-e2e E2E_SPEC=tests/07_comment_assistant.spec.ts RETRIES=0 ...` 2/2 PASS.
+  - [ ] 00: no code change — userMessage2 invisibility was the same optimistic-steer-removal family (message2 sent while run 1 active -> steer path); `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts RETRIES=0 ...` 2/2 PASS post-fix.
+  - [ ] 01 lock-breaks-on-leave: A/B-proven pre-existing, no code change — same `editableB toBeEnabled` red on origin/main build cbb97c106 (workers=4, warm + fresh stack); GREEN 8/8 with WORKERS=1 on fresh stack; cause: parallel lock tests share User A storage state + same organization, concurrent SSE connections keep `clearLocksForUser` count > 0 when the leave-test context closes; CI green via default RETRIES=2 (local runs force RETRIES=0). Out of chat scope.
+  - [ ] Lot gate: `make typecheck-chat-ui` + `make test-chat-ui` (39 files / 748 tests) + `make typecheck-ui` (0 errors) on final tree.
+  - [ ] Final: `make test-ui` + `make test-pkg-chat-core` + `make down ... ENV=test-uat`.
