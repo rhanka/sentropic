@@ -71,7 +71,15 @@ export function runHarnessCli(argv: string[], out: (s: string) => void): number 
     code = 'C2';
     commandLabel = 'harness check scope';
     const branchMdPath = str(flags['branch-md']);
-    const parsed = branchMdPath ? parseBranchMd(readFileSync(branchMdPath, 'utf8')) : undefined;
+    let parsed: ReturnType<typeof parseBranchMd> | undefined;
+    if (branchMdPath) {
+      try {
+        parsed = parseBranchMd(readFileSync(branchMdPath, 'utf8'));
+      } catch {
+        out(`harness: cannot read plan file: ${branchMdPath}`);
+        return 2;
+      }
+    }
     result = checkScope({
       stagedFiles: list(flags['staged-files']),
       boundary: {

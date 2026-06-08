@@ -40,4 +40,12 @@ describe('harness CLI (pure, arg-based)', () => {
     expect(obj.result).toBe('fail');
     expect(obj.checks[0].code).toBe('C2');
   });
+
+  it('check scope — clean error (exit 2, no throw) when the plan file is unreadable', () => {
+    const { code, text } = capture([
+      'check', 'scope', '--branch-md', '/nonexistent/BRANCH.md', '--staged-files', 'x.ts',
+    ]);
+    expect(code).toBe(2);
+    expect(text).toMatch(/cannot read plan file: \/nonexistent\/BRANCH\.md/);
+  });
 });
