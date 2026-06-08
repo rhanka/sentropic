@@ -22,6 +22,10 @@ Root-cause and fix the client-side regression where pasting an image into the ch
   - `e2e/tests/04-chat-image-paste.spec.ts`
   - `e2e/tests/07_comment_assistant.spec.ts`
   - `e2e/tests/09-run-steering-core.spec.ts`
+  - `e2e/tests/08-chat-checkpoint-restore.spec.ts`
+  - `e2e/tests/08-chat-context-chips.spec.ts`
+  - `e2e/tests/08-pptx-org-generation.spec.ts`
+  - `e2e/tests/08-chat-org-update-tool.spec.ts`
   - `ui/src/locales/fr.json`
   - `ui/src/locales/en.json`
   - `BRANCH.md`
@@ -80,3 +84,12 @@ Root-cause and fix the client-side regression where pasting an image into the ch
   - [x] 01 lock-breaks-on-leave: A/B-proven pre-existing, no code change — same `editableB toBeEnabled` red on origin/main build cbb97c106 (workers=4, warm + fresh stack); GREEN 8/8 with WORKERS=1 on fresh stack; cause: parallel lock tests share User A storage state + same organization, concurrent SSE connections keep `clearLocksForUser` count > 0 when the leave-test context closes; CI green via default RETRIES=2 (local runs force RETRIES=0). Out of chat scope.
   - [x] Lot gate: `make typecheck-chat-ui` + `make test-chat-ui` (39 files / 748 tests) + `make typecheck-ui` (0 errors, 6 pre-existing warnings) on final tree.
   - [x] Final: `make test-ui` (440/442; known local flake google-drive-picker.test.ts 2-fail only) + `make test-pkg-chat-core` (21 files / 252 tests) + `make down ... ENV=test-uat`.
+- [ ] **Lot 3 — UAT-proof S3: 3 missing e2e specs + org-update + loop-guard salvage proofs**
+  - [ ] `e2e/tests/08-chat-checkpoint-restore.spec.ts` (AI-independent): mock session/history/checkpoints; full timeline (2 user/assistant exchanges) + checkpoint anchored at first user message + `organization_update` tool event on the 2nd assistant segment (mutation delta) -> per-message restore affordance renders; click + confirm -> POST `/checkpoints/:id/restore` 200, timeline rewinds (2nd exchange gone), post-restore POST `/chat/messages` fires; pageerrors=0. `make test-e2e E2E_SPEC=tests/08-chat-checkpoint-restore.spec.ts RETRIES=0 ...` 1/1 PASS.
+  - [ ] `e2e/tests/08-chat-context-chips.spec.ts` (AI-independent): seed org via API, navigate to org-detail (route adds active context), composer menu chip renders RESOLVED org name (not UUID) + `text-slate-900`; send -> payload carries `primaryContextType=organization`/`primaryContextId` + `contexts[]`; toggle chip off -> `text-slate-400`, next send drops the context. `make test-e2e E2E_SPEC=tests/08-chat-context-chips.spec.ts RETRIES=0 ...` 1/1 PASS.
+  - [ ] `e2e/tests/08-pptx-org-generation.spec.ts` (AI-gated -> contract-only): PPTX has no non-AI UI button / no direct API; only surface is `document_generate format:pptx` chat tool + `GET /pptx/jobs/:id/download`. Chat from org-detail, poll queue for completed `pptx_generate` job, assert download route 200 + presentationml content-type + PK zip magic. AI flaky (model nondeterminism allowed). `make test-e2e E2E_SPEC=tests/08-pptx-org-generation.spec.ts RETRIES=0 ...`.
+  - [ ] Part B `e2e/tests/08-chat-org-update-tool.spec.ts` (AI, default model gpt-4.1-nano): no existing e2e proves a chat-tool ORG field update (`organization_update` lives in api services, not in 00/08 specs). Seed org (technologies='Legacy mainframe'), chat 'update the technologies field to <value>', assert API GET shows changed `technologies` containing the value. Conclusion: does DEFAULT model succeed?
+  - [ ] Part C.1 loop-guard breaker unit: `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_TEST_WORKERS=1 ...` (record counts).
+  - [ ] Part C.2 multi-step tool workflow: cite already-green spec demonstrating a multi-tool progressing run (00-ai-generation test 2: read_usecase -> update_usecase_field -> web_extract).
+  - [ ] Part C.3 DOCX proven (03-dashboard green); PPTX = Part A.3.
+  - [ ] Lot gate: `make typecheck-ui` (specs-only; no ui/src change expected) + `make down ... ENV=test-uat`.
