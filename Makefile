@@ -899,6 +899,13 @@ build-harness: ## Build @sentropic/harness dist package
 pack-harness: build-harness ## Validate @sentropic/harness npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
+.PHONY: install-harness-cli
+install-harness-cli: build-harness ## Install the `harness` CLI shim into ~/bin (Docker-backed, no node on host; BR42h-EX1)
+	@mkdir -p $(HOME)/bin
+	@sed "s|@HARNESS_REPO@|$(CURDIR)|" packages/harness/host/harness.sh > $(HOME)/bin/harness
+	@chmod +x $(HOME)/bin/harness
+	@echo "✅ installed $(HOME)/bin/harness (engine repo: $(CURDIR)) — try: harness"
+
 .PHONY: scope-check
 scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
 	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \

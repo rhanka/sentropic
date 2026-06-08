@@ -83,6 +83,16 @@ Scaffold `packages/harness` (`@sentropic/harness`, **`"private": true`** for now
 - [x] **Lot 5b — CI job (BR42h-EX2)**: `validate-harness` job (typecheck/test/build/pack, **no ENV**) + `harness:` `changes` filter (Makefile/package.json/package-lock.json/packages/harness/**/ci.yml) + output declaration, mirroring `validate-build-cli` exactly. Bootstrap/publish enum DEFERRED (private, D7). YAML indentation matches siblings.
 - [x] **Lot 5c — skill wrapper (BR42h-EX3)**: `.claude/skills/scope-check` → thin wrapper over `make scope-check`; deleted the contradictory "Forbidden takes precedence" line; canonicalised **allowed-wins** + documented unknown-as-advisory-violation. Advisory (D5).
 
+- [ ] **Lot 6 — Installed CLI + 3-host surfaces (user directive 2026-06-08: "a CLI is a CLI; UAT = install it and USE it")**
+  - [x] `packages/harness/host/harness.sh` — host shim template (Docker-backed, repo path baked at install; CWD mounted `/workdir` so relative `--branch-md` resolves; repo mounted read-only).
+  - [x] `make install-harness-cli` (BR42h-EX1 lane) — generates `~/bin/harness` (`~/bin` verified in PATH); dep `build-harness`.
+  - [x] CLI polish: unreadable plan file → clean `harness: cannot read plan file: <p>` exit 2 (was a raw ENOENT stack); cli-smoke test added (31 tests total).
+  - [x] `AGENTS.md` (Codex) + new `GEMINI.md` (Gemini): "Scope & branch discipline — use harness (mandatory)" section, supersedes overlapping generic skills for scope/branch checks.
+  - [x] `.claude/skills/scope-check` (Claude): documents the installed CLI + supersedes-superpowers rule on this scope.
+  - [x] Lot gate: `make typecheck-harness` + `make test-harness ENV=test-feat-harness-core` (31 PASS) + reinstall + live verification (usage + check branch from `/tmp`, relative `--branch-md` from worktree, clean exit-2 error).
+  - [ ] **USER UAT (the real one)**: `harness` typeable in the user's terminal and used in real work for branch/scope discipline (instead of generic skills).
+  - Note: shim installed from this worktree binds to it — REINSTALL from the root repo after merge (`make install-harness-cli`).
+
 - [x] **Lot N — Final (verified; PR/push = user gate)**
   - [x] Reviewed `packages/harness/**`: **zero product-runtime imports, zero `@sentropic/*`/track import** (only `node:fs` in the bin) — neutral tooling lib confirmed; advisory-only (D5; C8 blocking deferred).
   - [x] Full gate green: `make typecheck-harness` + `make test-harness ENV=test-feat-harness-core` (30 tests, 7 files) + `make pack-harness` (51 files, `dist/bin/harness.js` in tarball).
