@@ -71,23 +71,23 @@ Fold the two attachment-rendering components the modularization Lot 4 deliberate
   - [x] Environment mapping: ports API `8738`, UI `5138`, Maildev `1038`; `ENV=test-38c-documents-rendering` if a stack is ever needed (package gates are env-less isolated docker runs: `typecheck-chat-ui`, `test-chat-ui`, `test-chat-ui-dom`).
   - [x] Scope boundaries validated; `ui/**` forbidden (collision guard).
 
-- [ ] **Lot 1 — Fold rendering components into `src/documents/`**
-  - [ ] `packages/chat-ui/src/documents/ImageLightbox.svelte` (+ `.svelte.d.ts`): full-screen overlay (backdrop click, close button, Escape via window keydown, download link), `image: {src, alt} | null` + `labels` resolver + `onClose`; image-only; mirrors the app reference markup; zero domain strings.
-  - [ ] `packages/chat-ui/src/documents/MessageAttachments.svelte` (+ `.svelte.d.ts`): sent-message attachment grid (image thumbnails + file download links), `attachments` + `resolveAttachmentSrc` (DocumentHost slice, string|Promise handled like AttachmentBand) + `labels` + `onEnlarge(src, alt)`; zero domain strings.
-  - [ ] Export entries `./documents/ImageLightbox.svelte` + `./documents/MessageAttachments.svelte` in `package.json` (types -> `.svelte.d.ts`) consistent with `./documents/AttachmentBand.svelte`; update `export-manifest.json`.
-  - [ ] Classify both components in `chat-ui-reference-validation.json` per current manifest conventions (documents module; app dogfood deferred pending `BR38c-B1` — note in entry).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-chat-ui` (isolated tsc) green.
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] Existing suites stay green with the new exports/manifest (`export-surface.spec.ts`, `reference-validation.spec.ts`): `make test-chat-ui`.
+- [x] **Lot 1 — Fold rendering components into `src/documents/`**
+  - [x] `packages/chat-ui/src/documents/ImageLightbox.svelte` (+ `.svelte.d.ts`): full-screen overlay (backdrop click, close button, Escape via window keydown, download link), `image: {src, alt} | null` + flat label props (`closeLabel`/`downloadLabel`, module convention) + `onClose`; image-only; inline SVG icons (no lucide, module convention); zero domain strings.
+  - [x] `packages/chat-ui/src/documents/MessageAttachments.svelte` (+ `.svelte.d.ts`): sent-message attachment grid (image thumbnails + file download links), `attachments: ChatMessageAttachment[]` + `onResolveSrc` (SYNC callback mirroring `AttachmentBand.onResolveSrc`, fallback previewUrl→url) + `onEnlarge(src, alt)` + `enlargeLabel`; zero domain strings.
+  - [x] Export entries `./documents/ImageLightbox.svelte` + `./documents/MessageAttachments.svelte` in `package.json` (types -> `.svelte.d.ts`) consistent with `./documents/AttachmentBand.svelte`; `export-manifest.json` updated with prop snapshots.
+  - [x] Both components classified `primitive` in `chat-ui-reference-validation.json` (dogfoodedBy AppChatPanel — real import lands with `BR38c-B1`).
+  - [x] Lot gate:
+    - [x] `make typecheck-chat-ui` green.
+    - [x] **UI tests (TypeScript only)**
+      - [x] Existing suites green with the new exports/manifest: `make test-chat-ui` — 760/760 (39 files; export-surface 120, reference-validation 98).
 
-- [ ] **Lot 2 — Fake-host harness + string scan**
-  - [ ] New `packages/chat-ui/tests/image-lightbox.dom.spec.ts` (jsdom): closed when `image=null`; renders overlay+img when set; Escape calls `onClose`; backdrop and close button call `onClose`; download link `href`/`download` attributes.
-  - [ ] New `packages/chat-ui/tests/message-attachments.dom.spec.ts` (jsdom): image grid renders via fake `resolveAttachmentSrc` (sync AND async); placeholder when unresolvable; file row renders download link; thumbnail click calls `onEnlarge(src, alt)`; fixtures contain zero sentropic strings.
-  - [ ] Sentropic-string scan of `src/documents/` additions (grep gate: no `organization|folder|initiative|usecase|workspace`, no sentropic routes/endpoints).
-  - [ ] Lot gate:
-    - [ ] `make test-chat-ui` green (node) + `make test-chat-ui-dom` green (jsdom).
-    - [ ] `make typecheck-chat-ui` green.
+- [x] **Lot 2 — Fake-host harness + string scan**
+  - [x] New `packages/chat-ui/tests/image-lightbox.dom.spec.ts` (jsdom, 8 tests): closed when `image=null`; overlay+img render; Escape calls `onClose` (and not when closed / non-Escape); backdrop + close button call `onClose`; custom `closeLabel`; download link `href`/`download`/`rel`.
+  - [x] New `packages/chat-ui/tests/message-attachments.dom.spec.ts` (jsdom, 7 tests): empty list renders nothing; thumbnail via fake `onResolveSrc`; previewUrl→url fallbacks; placeholder when unresolvable; file download row; `onEnlarge(src, alt)` wiring; custom `enlargeLabel`. Zero sentropic strings in fixtures.
+  - [x] Sentropic-string scan of `src/documents/` additions — CLEAN (grep `organization|folder|initiative|usecase|workspace|sentropic.|sent-tech`).
+  - [x] Lot gate:
+    - [x] `make test-chat-ui` green (760/760 node) + `make test-chat-ui-dom` green (149/149 jsdom, 11 files).
+    - [x] `make typecheck-chat-ui` green.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] `spec/SPEC_EVOL_CHATUI_MODULARIZATION.md`: note the documents-module rendering gap (lightbox + message attachments) closed by this branch; record the app-dogfood blocking follow-up (`BR38c-B1`).
