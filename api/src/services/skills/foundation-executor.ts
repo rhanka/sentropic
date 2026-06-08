@@ -123,8 +123,18 @@ function optionalSelect(args: Record<string, unknown>): never[] | null {
   return (Array.isArray(args.select) ? args.select : null) as never[] | null;
 }
 
-function optionalUpdates(args: Record<string, unknown>): never[] {
-  return (Array.isArray(args.updates) ? args.updates : []) as never[];
+// Forward `updates` raw (array OR object {field:value}) so the executor can
+// tolerantly normalize the natural object form some small/nano models emit.
+// Do NOT collapse non-array to [] here, or the object form would be lost before
+// reaching the executor's normalizer (which then throws "updates is required").
+function optionalUpdates(args: Record<string, unknown>): unknown {
+  return args.updates;
+}
+
+// Forward an optional sibling `patch` object the same way (some models hedge with
+// patch{} alongside updates{}). The executor folds it into the canonical updates.
+function optionalPatch(args: Record<string, unknown>): unknown {
+  return args.patch;
 }
 
 function requiredStringArg(
@@ -280,6 +290,7 @@ export async function executeFoundationSkillTool(
     const updateResult = await toolService.updateInitiativeFields({
       initiativeId,
       updates: optionalUpdates(args),
+      patch: optionalPatch(args),
       userId: options.userId,
       sessionId: options.sessionId,
       messageId: options.assistantMessageId,
@@ -337,6 +348,7 @@ export async function executeFoundationSkillTool(
     const updateResult = await toolService.updateOrganizationFields({
       organizationId,
       updates: optionalUpdates(args),
+      patch: optionalPatch(args),
       userId: options.userId,
       sessionId: options.sessionId,
       messageId: options.assistantMessageId,
@@ -397,6 +409,7 @@ export async function executeFoundationSkillTool(
     const updateResult = await toolService.updateFolderFields({
       folderId,
       updates: optionalUpdates(args),
+      patch: optionalPatch(args),
       userId: options.userId,
       sessionId: options.sessionId,
       messageId: options.assistantMessageId,
@@ -455,6 +468,7 @@ export async function executeFoundationSkillTool(
     const updateResult = await toolService.updateExecutiveSummaryFields({
       folderId,
       updates: optionalUpdates(args),
+      patch: optionalPatch(args),
       userId: options.userId,
       sessionId: options.sessionId,
       messageId: options.assistantMessageId,
