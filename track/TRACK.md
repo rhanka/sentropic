@@ -111,10 +111,14 @@ registry). BR-27..BR-30: RESERVED (OpenERP impl follow-ups of BR-26).
 | BR-70 | resource-plane-v0 (ARCH-21a) | dispatchable after BR-44 | **chat-core** (ResourceProvider port, ToolRegistry.resolve reuse, async resume), **api/services/catalog** (mounts + authz), **chat-ui** (RF11 tree, file chips, terminal pane, custom-renderer slot), skills (`accessMethods`), chat-server, flow, events, llm-mesh (tool family), ui | **BR-44**; **+ PR #257** (runtime) + catalog-authz; chat-ui lane settled | chat-ui host-tool ext |
 | BR-71 | resource-plane-21b (ARCH-21b) | gated (SPLIT recommended) | api (`/workspace`, `query`), graphify/events (`/knowledge`, watch), chat-ui (watch UI), apps (`/apps`), cowork-* (remote bash), build-cli | **BR-61 + BR-60 + BR-57 + BR-45** (apps) + ARCH-05/16/17 | graphify fusion; cowork remote |
 
-Reviewer recommendation (both): SPLIT BR-70 into core (ResourceProvider +
-verb dispatch + async) vs chat-ui visualization (RF11), and SPLIT BR-71 into
-its 5 gated sub-branches (`/workspace`+query, `/knowledge`+watch, `/apps`
-mount, real bash + remote-fs, canvas edit-back). Owner decision §5.
+**Owner DECIDED 2026-06-09 (Q2=A): SPLIT both.** BR-70 → BR-70core
+(ResourceProvider + verb dispatch + async resume; gated BR-44) + BR-70viz
+(RF11 trace/chips/terminal/custom-renderer; runs INSIDE the serialized chat-ui
+lane, §5 Q1). BR-71 → five gated sub-branches: `/workspace`+query (ARCH-19
+resolver), `/knowledge`+watch (ARCH-14 outbox + ARCH-06 + graphify fusion),
+`/apps` mount (ARCH-01/BR-45), real bash + `remote-fs` (ARCH-05/17), canvas
+edit-back (ARCH-16). Sub-branch numbering reserved at the BR-70/71 split point
+(do not reuse BR-68/69).
 
 ## 5. Scope-collision / merge-risk (the dominant coherence risk)
 
@@ -138,10 +142,27 @@ mount, real bash + remote-fs, canvas edit-back). Owner decision §5.
 - chat-ui host-tool open extension point (OpenERP/Diag `LocalToolName` finding) → BR-62, chat lane.
 - h2a `claude:openerp` (DD3 UBO mapping incl. order→lines→invoice) → BR-50.
 
-## 7. Open items
+## 7. Owner decisions taken 2026-06-09 + open items
 
-- Live track sidecar is empty → ingest per-branch `BRANCH.md` into the harness
-  track once the harness CLI is runnable (Docker build), so `track_report`/
-  `track_query` become live. This registry is the interim source of truth.
-- BR-70/71 SPLIT (owner decision §5 of the audit).
+Decisions (post coherence audit):
+- **Q1=A** chat-ui serialization: SINGLE chat-ui owner, strict order #257 →
+  #272 → WP-CHAT B → BR-70viz → BR-62/BR-64. PLUS the owner wants a dedicated
+  **h2a-roles + track-work-package pass** that WRAPS the branches (one WP per
+  branch/cluster) to guarantee orchestration / prioritization / orthogonality
+  — TO DO as soon as the track system is functional (see open items).
+- **Q2=A** SPLIT BR-70 (core + viz) and BR-71 (5 sub-branches) — see §4.
+- **Q3=B** initial dispatch = BR-44 (hardening) + BR-45/46/47/48 (Wave-1a
+  studies), 5 lanes; Wave-1b (BR-49/50/51/52) next.
+- **Q4=A** merge the 3 docs PRs #276 → #280 → #281.
+
+Open items:
+- **Track not yet functional**: the live sidecar is empty (harness BRANCH.md
+  ingestion not run; harness CLI needs a Docker build). Making track
+  functional is the GATE for the Q1 h2a-roles + track-WP wrapping pass. Until
+  then this registry + PLAN are the interim source of truth.
+- **h2a-roles + track-WP pass** (Q1): define h2a roles + one track work-package
+  per branch/cluster wrapping the branches for orchestration/priority/
+  orthogonality — gated on track functional.
 - Migration calendar enforcement for `api/drizzle/*` across BR-44/60/59/61/65.
+- #272 scope-violation (touches `ui/AppChatPanel.svelte` it forbids) — chat
+  lane to fix/split before merge.
