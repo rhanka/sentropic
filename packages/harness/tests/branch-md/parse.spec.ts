@@ -39,6 +39,29 @@ describe('parseBranchMd', () => {
     expect(p.lots[1].checked).toBe(false);
   });
 
+  it('parses the CANONICAL template headings (parenthetical suffix) — regression for the silent-empty-scope bug', () => {
+    // plan/BRANCH_TEMPLATE.md (and every real BRANCH.md) writes the bucket headings
+    // with a parenthetical suffix, so the closing `**` is NOT adjacent to "Paths".
+    // The parser must still extract the globs (it previously returned empty → in-scope
+    // files wrongly classified as `unknown`; C2 being advisory hid it).
+    const CANON = `# Feature: BR-99 — canon
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - \`src/**\`
+  - \`BRANCH.md\`
+- **Forbidden Paths (must not change in this branch)**:
+  - \`Makefile\`
+  - \`docker-compose*.yml\`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - \`.github/workflows/**\`
+`;
+    const p = parseBranchMd(CANON);
+    expect(p.allowedPaths).toEqual(['src/**', 'BRANCH.md']);
+    expect(p.forbiddenPaths).toEqual(['Makefile', 'docker-compose*.yml']);
+    expect(p.conditionalPaths).toEqual(['.github/workflows/**']);
+  });
+
   it('returns an empty structure for malformed input (no throw)', () => {
     const p = parseBranchMd('garbage\n\nno headings here');
     expect(p.title).toBe('');
