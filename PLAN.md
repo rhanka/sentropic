@@ -668,3 +668,26 @@ branches use the §6 slot convention (slot registered at dispatch).
 - Graphify fusion `plan/34` Lot 0 (BR-34, npm transfer-vs-republish fork) → BR-57.
 - chat-ui host-tool open extension point (chat lane, OpenERP finding) →
   BR-62 canvas seam.
+
+### Resource Plane (ARCH-21, registered 2026-06-08, decided RF1-RF11)
+
+`spec/SPEC_EVOL_RESOURCE_FS.md` — a uniform Resource Plane (filesystem-
+presented) over capabilities/data/context/knowledge; a projection over
+already-decided subsystems, NOT a new store. Decided: verb floor
+`ls/read/edit/grep` (grep≡query) + model-selected SKILL.md `accessMethods` →
+typed tool (RF2); invoke distinct from write (RF3); canonical ResourceRef+etag
+(RF1); async via the existing chat resume (RF4); authz-projected namespace
+(RF5); injection boundary on read+list (RF6); MCP tools + URI-preserving
+resources (RF7); `watch` deferred to outbox (RF8); ETag/CAS + app-local-then-
+extract package (RF9); `resource_terminal` (virtual, human/V8, not a default
+LLM tool) + `local_bash`/`remote_bash` (real, gated) (RF10); ToolInteractionTrace
++ chips/terminal + custom-renderer slot (RF11).
+
+| ID | Branch | Type | Gates | Deliverable |
+|---|---|---|---|---|
+| BR-70 | `feat/arch21a-resource-plane` | impl (integrative) | BR-44 queue hardening (for `/proc/jobs`) | ResourceProvider port + verb dispatcher + canonical ResourceRef/etag; catalog mounts `/tools /skills /agents /workflows /canvas`; MCP tools + URI-preserving resources read (one server); `resource_invoke` async via existing chat resume; `/context/session` + minimal `/context/nav`; authz-projected namespace (separate discover/read/invoke, deny-as-missing); LLM discovery→typed-tool grain (RF2); `resource_terminal` human pane; ToolInteractionTrace + file chips (view via read) + terminal pane + custom-renderer slot |
+| BR-71 | `study+feat/arch21b-resource-plane` | gated | ARCH-14 outbox; ARCH-19 resolver; ARCH-06 graphify fusion; ARCH-05 remote sessions; ARCH-16 canvas; ARCH-17 edge | `/workspace` data + `query`; `/knowledge` + freshness (per-partition watermarks); generic `watch`; `/apps`; `local_bash`/`remote_bash` (tmux-attached k8s sessions) + `remote-fs` provider path→ref; canvas edit-back |
+
+Owner items still open from ARCH-21: RF9 package NAME at extraction time
+(gated ARCH-12/D11); RF11 custom-renderer registry+sandbox shape (chat-ui
+deliverable, default ships in BR-70).
