@@ -2,11 +2,12 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../../src/db/client';
-import { tenants, tenantMemberships } from '../../../src/db/schema';
+import { oauthClients, tenants, tenantMemberships } from '../../../src/db/schema';
 import {
   requestMembership,
   decideMembership,
   listTenantMemberships,
+  listTenantClients,
   isTenantAdmin,
   TenantAdminRequiredError,
   InvalidMembershipTransitionError,
@@ -43,10 +44,26 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
   });
 
   afterEach(async () => {
+    await db.delete(oauthClients).where(inArray(oauthClients.clientId, ['rp-a-test', 'rp-b-test', 'rp-default-test']));
     await db.delete(tenantMemberships).where(inArray(tenantMemberships.tenantId, TEST_TENANTS));
     await db.delete(tenants).where(inArray(tenants.id, TEST_TENANTS));
     await cleanupAuthData();
   });
+
+  async function makeClient(clientId: string, tenantId?: string) {
+    await db
+      .insert(oauthClients)
+      .values({
+        id: `client-${clientId}`,
+        clientId,
+        name: clientId,
+        redirectUris: ['https://example.test/cb'],
+        allowedScopes: ['openid'],
+        tokenEndpointAuthMethod: 'none',
+        ...(tenantId ? { tenantId } : {}),
+      })
+      .onConflictDoNothing();
+  }
 
   it('requestMembership creates a `requested` row for an active tenant', async () => {
     const user = await createTestUser({ email: `req-${crypto.randomUUID()}@example.com`, displayName: 'U' });
@@ -148,5 +165,32 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
     await makeMembership(TENANT_A, target.id, 'requested');
     const res = await decideMembership(superAdmin.id, 'admin_app', TENANT_A, target.id, 'approve');
     expect(res.status).toBe('approved');
+  });
+
+  it('Lot 4: a tenant admin lists only their own tenant clients (RP governance)', async () => {
+    const admin = await createTestUser({ email: `cadmin-${crypto.randomUUID()}@example.com`, displayName: 'CA' });
+    await makeMembership(TENANT_A, admin.id, 'approved', 'admin');
+    await makeClient('rp-a-test', TENANT_A);
+    await makeClient('rp-b-test', TENANT_B);
+
+    const items = await listTenantClients(admin.id, 'editor', TENANT_A);
+    const ids = items.map((row) => row.clientId);
+    expect(ids).toContain('rp-a-test');
+    expect(ids).not.toContain('rp-b-test');
+  });
+
+  it('Lot 4: listing another tenant clients is forbidden (A->B)', async () => {
+    const adminA = await createTestUser({ email: `cadminA-${crypto.randomUUID()}@example.com`, displayName: 'CAA' });
+    await makeMembership(TENANT_A, adminA.id, 'approved', 'admin');
+    await expect(listTenantClients(adminA.id, 'editor', TENANT_B)).rejects.toBeInstanceOf(TenantAdminRequiredError);
+  });
+
+  it('Lot 4: a new OAuth client defaults to the `sentropic` tenant', async () => {
+    await makeClient('rp-default-test'); // no explicit tenant
+    const [row] = await db
+      .select({ tenantId: oauthClients.tenantId })
+      .from(oauthClients)
+      .where(eq(oauthClients.clientId, 'rp-default-test'));
+    expect(row?.tenantId).toBe('sentropic');
   });
 });

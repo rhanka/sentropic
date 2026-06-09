@@ -76,15 +76,14 @@ Add a tenancy spine to the standalone IdP (`auth.sent-tech.ca`): model which org
   - [x] Token-time binding/lifecycle gate: membership re-validated at token exchange (`isApprovedMember`); claim dropped if suspended/revoked between authorize and token. App adapter wired via `tenant_memberships` in `api/src/routes/auth/oauth.ts`.
   - [x] Lot gate (scoped): full `make test-auth-hono` → 27 files / **103 passed** (incl. `tid` emitted + dropped-when-revoked, no authorize/wellknown regression); `make typecheck-api` GREEN (app wiring). Full `make test-api` + lint deferred to final gate.
 
-- [ ] **Lot 4 — RP onboarding / tenant↔client**
-  - [ ] Tenant-scoped client governance (redirect/CORS per tenant); design-system clients → `sentropic` tenant.
-  - [ ] Decide Lot 5 split here (separate branch or in-line spike).
-  - [ ] Lot gate: typecheck/lint; API tests; `make test-api ENV=test-auth-39e`.
+- [x] **Lot 4 — RP onboarding / tenant↔client**
+  - [x] `oauth_clients.tenant_id` → FK to `tenants` + DEFAULT `sentropic` + backfill existing rows (folded into migration `0031`; ALTER-DEFAULT-safe). New clients belong to `sentropic` unless specified; prod clients (design-system/-test, h2a-gateway) backfilled by the migration.
+  - [x] Tenant-scoped client governance: `listTenantClients` (tenant-admin) + route `GET /tenants/:tenantId/clients`. Per-tenant redirect/CORS governance surface = the same auth-admin authority (deferred deeper policy to a follow-up; the association + listing is the foundation).
+  - [x] Lot 5 split DECIDED: openerp brokered lane → SEPARATE follow-up branch (user pre-authorized "splitté si trop gros") to keep BR-39e (Lots 1-4) a clean mergeable tenancy spine.
+  - [x] Lot gate (scoped): typecheck-api GREEN + `make test-api-unit SCOPE="…tenant-membership.test.ts …tenancy.test.ts" ENV=test-auth-39e` → **15/15** (client governance + default-tenant + A→B isolation). NB: required `make clean` (fresh DB volume) since 0031 was amended — drizzle won't re-apply a migration already recorded by tag on a persisted volume. Also bumped `@sentropic/auth-ui` 0.3.1→0.3.2 (peer-widen `auth-hono ^0.5.0`).
 
-- [ ] **Lot 5 — openerp brokered lane (spike, may split)**
-  - [ ] Trusted external issuer + RFC8693 token-exchange; `(iss,sub)` composite; optional `org` HINT claim (advisory).
-  - [ ] NOT OIDC Federation. Co-design with claude:openerp (related-origins/webauthn eTLD+1 question).
-  - [ ] Lot gate: typecheck/lint; API tests; `make test-api ENV=test-auth-39e`.
+- [ ] **Lot 5 — openerp brokered lane (DEFERRED to follow-up branch `feat/auth-39e-openerp-broker`)**
+  - [ ] Trusted external issuer + RFC8693 token-exchange; `(iss,sub)` composite; optional `org` HINT claim (advisory). NOT OIDC Federation. Co-design with claude:openerp (related-origins/webauthn eTLD+1). Tracked separately; NOT part of this branch's merge.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Integrate `spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md` into canonical specs (or keep standalone); delete the working spec if folded.
