@@ -2,6 +2,10 @@
  * Text extraction helpers for document summarization.
  * MVP requirement: support pdf, docx, pptx, xlsx, md.
  */
+import { randomBytes } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import ExcelJS from 'exceljs';
 
 type ExtractedDocumentMetadata = {
@@ -238,6 +242,77 @@ function extractPdfPageCountFromAst(ast: unknown): number | undefined {
   return undefined;
 }
 
+/**
+ * Office/PDF extensions officeparser dispatches on (its `switch (ext)`).
+ * We resolve the extension ourselves from the known mime type and filename so
+ * officeparser never has to guess from raw bytes.
+ *
+ * WHY: when `parseOffice` receives a Buffer (no path/extension) it delegates type
+ * detection to `file-type` magic-byte sniffing. For real-world OOXML files
+ * (docx/pptx/xlsx are ZIP containers) `file-type@22` regularly fails to classify
+ * the archive — the OOXML markers (`[Content_Types].xml`, `word/`/`ppt/`/`xl/`)
+ * fall outside its bounded scan budget — and returns plain `zip`. officeparser
+ * then hits its `default:` branch and throws
+ * "Sorry, OfficeParser currently supports docx, pptx, xlsx, ... files only.
+ *  ... add support for zip files", even though the file IS a valid docx.
+ * Routing on the extension we already know avoids the sniffing entirely.
+ */
+const OFFICE_MIME_TO_EXT: Record<string, string> = {
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.oasis.opendocument.text': 'odt',
+  'application/vnd.oasis.opendocument.presentation': 'odp',
+  'application/vnd.oasis.opendocument.spreadsheet': 'ods',
+  'application/pdf': 'pdf',
+  'application/rtf': 'rtf',
+  'text/rtf': 'rtf',
+};
+
+const OFFICE_EXTENSIONS = new Set(['docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods', 'pdf', 'rtf']);
+
+/** Resolve the officeparser extension from mime first, then filename suffix. */
+function resolveOfficeExtension(mime: string, name: string): string | null {
+  const fromMime = OFFICE_MIME_TO_EXT[mime];
+  if (fromMime) return fromMime;
+  const dot = name.lastIndexOf('.');
+  if (dot >= 0) {
+    const ext = name.slice(dot + 1);
+    if (OFFICE_EXTENSIONS.has(ext)) return ext;
+  }
+  return null;
+}
+
+/**
+ * Parse an office/PDF document via officeparser.
+ * Always routes through a temp file carrying the correct extension so officeparser
+ * uses its reliable extension dispatch instead of fragile byte-sniffing (see
+ * OFFICE_MIME_TO_EXT note). Falls back to the raw Buffer only when we cannot
+ * determine an extension (officeparser then sniffs, matching legacy behavior).
+ */
+async function parseOfficeDocument(bytes: Uint8Array, ext: string | null): Promise<unknown> {
+  // NOTE: officeparser has a brittle CLI detection that assumes process.argv[1] exists.
+  if (!process.argv[1]) process.argv[1] = 'app';
+
+  const mod = (await import('officeparser')) as unknown as {
+    parseOffice: (file: unknown, config?: Record<string, unknown>) => Promise<unknown>;
+  };
+
+  const buf = Buffer.from(bytes);
+  if (!ext) {
+    return mod.parseOffice(buf, { outputErrorToConsole: false });
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), 'docparse-'));
+  const file = join(dir, `${randomBytes(8).toString('hex')}.${ext}`);
+  try {
+    await writeFile(file, buf);
+    return await mod.parseOffice(file, { outputErrorToConsole: false });
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function extractDocumentInfoFromDocument(params: {
   bytes: Uint8Array;
   filename?: string | null;
@@ -261,16 +336,12 @@ export async function extractDocumentInfoFromDocument(params: {
     return { text, metadata, headingsH1: [] };
   }
 
-  // Office / PDF via officeparser@6
-  // NOTE: officeparser has a brittle CLI detection that assumes process.argv[1] exists in some environments.
-  if (!process.argv[1]) process.argv[1] = 'app';
-
-  const mod = (await import('officeparser')) as unknown as {
-    parseOffice: (file: unknown, config?: Record<string, unknown>) => Promise<unknown>;
-  };
-
-  const buf = Buffer.from(params.bytes);
-  const ast = await mod.parseOffice(buf, { outputErrorToConsole: false });
+  // Office / PDF via officeparser@6.
+  // Resolve the extension from the known mime/filename so officeparser uses its
+  // reliable extension dispatch instead of byte-sniffing (which mis-detects many
+  // real-world docx/pptx/xlsx as plain "zip" and throws "unsupported").
+  const ext = resolveOfficeExtension(mime, name);
+  const ast = await parseOfficeDocument(params.bytes, ext);
 
   // v6 returns an AST with a toText() helper.
   const maybeAst = ast as { toText?: () => string } | null;
