@@ -53,3 +53,13 @@ INSERT INTO "tenant_memberships" ("tenant_id", "user_id", "status", "role", "req
 SELECT 'sentropic', "users"."id", 'approved', 'member', now(), now()
 FROM "users"
 ON CONFLICT ("tenant_id", "user_id") DO NOTHING;
+--> statement-breakpoint
+-- BR-39e Lot 4: a client belongs to a tenant. Default to the public `sentropic` tenant,
+-- backfill existing rows, and add the FK (ON DELETE set null). `sentropic` already seeded above.
+ALTER TABLE "oauth_clients" ALTER COLUMN "tenant_id" SET DEFAULT 'sentropic';
+--> statement-breakpoint
+UPDATE "oauth_clients" SET "tenant_id" = 'sentropic' WHERE "tenant_id" IS NULL;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "oauth_clients" ADD CONSTRAINT "oauth_clients_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN null; END $$;

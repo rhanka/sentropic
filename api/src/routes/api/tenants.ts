@@ -4,6 +4,7 @@ import type { Context } from 'hono';
 import {
   assertTenantAdmin,
   decideMembership,
+  listTenantClients,
   listTenantMemberships,
   requestMembership,
   InvalidMembershipTransitionError,
@@ -53,6 +54,18 @@ tenantsRouter.get('/:tenantId/memberships', async (c) => {
       tenantId,
       statusParam as MembershipStatus | undefined,
     );
+    return c.json({ items });
+  } catch (error) {
+    return mapServiceError(c, error);
+  }
+});
+
+// Tenant-admin: list the OAuth clients (RPs) registered to this tenant (Lot 4 governance).
+tenantsRouter.get('/:tenantId/clients', async (c) => {
+  const user = c.get('user');
+  const tenantId = c.req.param('tenantId');
+  try {
+    const items = await listTenantClients(user.userId, user.role, tenantId);
     return c.json({ items });
   } catch (error) {
     return mapServiceError(c, error);
