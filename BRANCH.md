@@ -63,11 +63,12 @@ Add a tenancy spine to the standalone IdP (`auth.sent-tech.ca`): model which org
   - [x] Lot gate (scoped): `make typecheck-api` GREEN (tsc no errors); `make test-api-unit SCOPE=tests/api/auth/tenancy.test.ts ENV=test-auth-39e` → 3/3 passed (migration `0031` applied at boot, backfill verified).
   - [ ] Final-lot gate (deferred): `make lint-api`; full `make test-api ENV=test-auth-39e`; regenerate drizzle meta snapshot via `make db-generate` on the up branch stack and reconcile (hand-written `.sql`+journal already apply at runtime; snapshot deferred to avoid npm-ci footgun on root dev). `BR39e-EX1`: `api/drizzle/meta/_journal.json` hand-edited (allowed — part of the single branch migration).
 
-- [ ] **Lot 2 — Tenant-scoped acceptance**
-  - [ ] Membership status machine (request → approve/reject/suspend).
-  - [ ] Minimal `auth-admin` role (D4); tenant-scoped approver authority.
-  - [ ] Pending cap + rate-limit + anti-enumeration on join/acceptance.
-  - [ ] Lot gate: typecheck/lint; API tests (acceptance flow, anti-enumeration, A→B negatives); `make test-api ENV=test-auth-39e`.
+- [x] **Lot 2 — Tenant-scoped acceptance**
+  - [x] Membership status machine (request → approve/reject/suspend) with validated transitions. `api/src/services/auth/tenant-membership.ts` (`requestMembership`/`decideMembership`/`listTenantMemberships`).
+  - [x] Minimal `auth-admin` role (D4) = `tenant_memberships.role='admin'` approved member is the tenant-scoped approver; global `admin_app` bootstraps. `isTenantAdmin`/`assertTenantAdmin`.
+  - [x] Anti-enumeration (opaque `pending` for missing/suspended tenant + existing member) + pending caps (per-user MAX 20, per-tenant MAX 200) on join. Explicit time-based rate-limit folded into caps + (tenant,user) unique index (no spam rows); a dedicated limiter is deferred (no consumer need yet).
+  - [x] Routes `/tenants/*` (auth) — `api/src/routes/api/tenants.ts` mounted in `index.ts`.
+  - [x] Lot gate (scoped): `make typecheck-api` GREEN; `make test-api-unit SCOPE="tests/api/auth/tenant-membership.test.ts tests/api/auth/tenancy.test.ts" ENV=test-auth-39e` → 12/12 passed (incl. anti-enumeration, non-admin 403, invalid-transition 409, A→B isolation, admin_app bootstrap).
 
 - [ ] **Lot 3 — Tenant claim + selection**
   - [ ] Immutable `tid` claim derived from VALIDATED `approved` membership (never request param).
