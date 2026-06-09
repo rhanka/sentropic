@@ -648,14 +648,26 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       createdAt: new Date(),
     });
 
-    // Enqueue summarization job (async)
+    // Enqueue summarization job (async).
+    // If enqueue throws (queue paused/cancelling, DB error), do NOT leave the row
+    // as a silent orphan (status=uploaded, job_id=NULL) that no heal path can ever
+    // surface — mark it failed with the real reason so the UI shows "Échec" + cause.
     let jobId: string | null = null;
+    let summarizationError: string | null = null;
     if (!indexingSkipped) {
-      jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
-      await db
-        .update(contextDocuments)
-        .set({ jobId, updatedAt: new Date() })
-        .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+      try {
+        jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
+        await db
+          .update(contextDocuments)
+          .set({ jobId, updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+      } catch (e) {
+        summarizationError = e instanceof Error ? e.message : String(e);
+        await db
+          .update(contextDocuments)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+      }
     }
 
     return c.json(
@@ -667,9 +679,10 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
         mime_type: mimeType,
         size_bytes: file.size,
         storage_key: storageKey,
-        status: indexingSkipped ? 'ready' : 'uploaded',
+        status: indexingSkipped ? 'ready' : summarizationError ? 'failed' : 'uploaded',
         indexing_skipped: indexingSkipped,
         ...(jobId ? { job_id: jobId } : {}),
+        ...(summarizationError ? { error: summarizationError } : {}),
       },
       201
     );
@@ -792,12 +805,21 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
     });
 
     let jobId: string | null = null;
+    let summarizationError: string | null = null;
     if (!indexingSkipped) {
-      jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
-      await db
-        .update(contextDocuments)
-        .set({ jobId, updatedAt: new Date() })
-        .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+      try {
+        jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
+        await db
+          .update(contextDocuments)
+          .set({ jobId, updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+      } catch (e) {
+        summarizationError = e instanceof Error ? e.message : String(e);
+        await db
+          .update(contextDocuments)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+      }
     }
 
     created.push({
@@ -809,9 +831,10 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
       mime_type: mimeType,
       size_bytes: sizeBytes,
       storage_key: null,
-      status: indexingSkipped ? 'ready' : 'uploaded',
+      status: indexingSkipped ? 'ready' : summarizationError ? 'failed' : 'uploaded',
       indexing_skipped: indexingSkipped,
       ...(jobId ? { job_id: jobId } : {}),
+      ...(summarizationError ? { error: summarizationError } : {}),
     });
   }
 
