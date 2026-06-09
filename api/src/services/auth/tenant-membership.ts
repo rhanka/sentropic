@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { tenantMemberships, tenants } from '../../db/schema';
+import { oauthClients, tenantMemberships, tenants } from '../../db/schema';
 
 // BR-39e Lot 2 — tenant-scoped membership acceptance.
 //
@@ -183,4 +183,22 @@ export async function listTenantMemberships(
         ? and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.status, status))
         : eq(tenantMemberships.tenantId, tenantId),
     );
+}
+
+/** Tenant-admin only: list the OAuth clients (RPs) belonging to a tenant — RP governance (Lot 4). */
+export async function listTenantClients(
+  callerId: string,
+  callerGlobalRole: string | undefined,
+  tenantId: string,
+): Promise<Array<{ clientId: string; name: string; redirectUris: string[]; tokenEndpointAuthMethod: string }>> {
+  await assertTenantAdmin(callerId, tenantId, callerGlobalRole);
+  return db
+    .select({
+      clientId: oauthClients.clientId,
+      name: oauthClients.name,
+      redirectUris: oauthClients.redirectUris,
+      tokenEndpointAuthMethod: oauthClients.tokenEndpointAuthMethod,
+    })
+    .from(oauthClients)
+    .where(eq(oauthClients.tenantId, tenantId));
 }
