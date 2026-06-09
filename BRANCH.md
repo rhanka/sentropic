@@ -27,9 +27,10 @@ Fold the two attachment-rendering components the modularization Lot 4 deliberate
   - `packages/chat-ui/chat-ui-reference-validation.json`
   - `packages/chat-ui/export-manifest.json`
   - `ui/src/lib/components/chat/AppChatPanel.svelte` (app dogfood — owner override, in-scope)
+  - `ui/tests/components/chat/AppChatPanel-boundary.test.ts` (boundary test evolution: lightbox/thumbnails moved to package components)
   - `spec/SPEC_EVOL_CHATUI_MODULARIZATION.md` (docs note: rendering gap closed)
 - **Forbidden Paths (must not change in this branch)**:
-  - `ui/**` except `AppChatPanel.svelte` (no broader app refactor)
+  - `ui/**` except `AppChatPanel.svelte` + `AppChatPanel-boundary.test.ts` (no broader app refactor)
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -47,6 +48,8 @@ Fold the two attachment-rendering components the modularization Lot 4 deliberate
 - `BR38c-B1` — `resolved` (2026-06-08, owner override): the fidelity condition is met IN THIS PR — `AppChatPanel.svelte` now imports and renders `documents/ImageLightbox` + `documents/MessageAttachments`, app-local lightbox + message-attachment markup deleted (zero dual path), dead lucide imports (`X`/`Download`/`ImageIcon`) removed. `reference-validation` now detects the real dogfood (no WARN). No separate follow-up.
 - `BR38c-N1` — `acknowledge` (adjacent, out of scope): open `LocalToolName` registry for host-defined tools (openerp finding, routed to chat lane) — separate deliverable; do not touch `stores/localTools` here.
 - `BR38c-N2` — `acknowledge` (baseline note): the BRANCH.md present on `main` at branch creation is the PR #270 merge leak, removed by PR #271; overwriting it in this worktree is the normal flow, no impact.
+- `BR38c-T1` — `resolved` (test evolution): `ui/tests/components/chat/AppChatPanel-boundary.test.ts` source-grepped `chat-image-lightbox` (the inline app-local data-testid). Since the lightbox + per-message thumbnails moved into the package components, the assertion now checks `<ImageLightbox` + `<MessageAttachments` (the data-testid lives inside `ImageLightbox`). Evolution, not regression — matches the file's own pattern for `AttachmentBand`.
+- `BR38c-T2` — `attention` (local-only, NOT a branch issue): `ui/tests/utils/google-drive-picker.test.ts` (2 tests) fails LOCALLY only — `TypeError: ... is not a constructor` at `google-drive-picker.ts:216` (`new googlePicker.DocsView()` with an arrow-fn mock) under the local container's `vitest v4.1.5`. Unrelated to this branch (no touch to google-drive-picker); CI `build-ui` runs it GREEN (only `AppChatPanel-boundary` failed in CI). Local vitest-version artifact; do not chase. Owner/chat lane may pin/fix the mock separately.
 
 ## AI Flaky tests
 - Acceptance rule:
