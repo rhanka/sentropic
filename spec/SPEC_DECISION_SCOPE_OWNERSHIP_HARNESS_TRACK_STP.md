@@ -66,22 +66,36 @@ and treats `category: static` C1/C2 (branch/path) as **evidence/provenance only*
 item-bucket movers. (Opt-in later: track MAY infer "delivered out-of-scope" by correlating a
 violation with an item — track's inference, not harness writing item-state.)
 
-## harness as the dev-discipline skill manager
+## harness OWNS the whole dev-discipline layer (superpowers is a backend, not a complement)
 
-harness becomes the single front door to the dev-discipline skill layer (owner directive:
-"superpowers must be fully managed by harness", plus TDD/debug/review):
+Owner directive (2026-06-09, sharpened): harness does **not** "complement" superpowers — it
+**owns the entire dev-discipline space** and superpowers (and any per-host skill pack) is an
+**interchangeable BACKEND** harness invokes, never something an agent calls directly. The full
+space in scope: **brainstorm · TDD/test · debug · code-review · verify** (and any future
+discipline skill). harness is the single front door for ALL of it.
+
 - **Registry + host wrappers, not re-implementation.** A profile-data table (the existing
   `HarnessProfile` SPI) names which discipline skills are required, in what order, with what
-  severity. superpowers (and per-host equivalents) are **interchangeable backends** behind it.
-- Verbs: `harness discipline tdd|debug|review|verify` (+ `harness skill list/run`), each
-  delegating to the backing skill and **wrapping its output into the neutral `VerificationRun`**
-  (categories `unit`/`static`/… already in the taxonomy).
+  severity, and which backend provides each. Backends are swappable per host (superpowers on
+  Claude, host equivalents on Codex/Gemini); the agent never sees them.
+- **Verbs** (all delegating to a backend, all wrapping output in the neutral `VerificationRun`,
+  categories `unit`/`static`/… already in the taxonomy):
+  `harness discipline brainstorm | tdd | test | debug | review | verify` (+ `harness skill list/run`).
+- **High-assurance review = consensus of ≥2 independent peers** (owner directive): a first-class
+  verb `harness discipline review --consensus` (a.k.a. **ultra-review**) fans the review out to
+  **at least two independent model peers** (e.g. Opus 4.8 max + Codex 5.5-xhigh — whatever is
+  available), then **reconciles** their findings (agree/contradict, majority/▸escalate) into one
+  `VerificationRun`. This is the same double-review pattern used to ratify THIS decision, made a
+  standing harness capability — not an ad-hoc ritual.
 - **Advisory first** (BR25 D5 Layer A; exit 0), `blocking` severity reserved for later opt-in
-  gating (e.g. "no commit without a TDD red-green record"); harness orchestrates ordering and
-  records adherence — it does not forbid by default.
-- Agent surface: *"In Sentropic worktrees, use `stp`/`harness discipline` for branch, scope,
-  TDD, debug, review — do not call generic skills (superpowers) directly unless harness
-  delegates to them."* harness/track/stp **supersede** generic verification on these axes.
+  gating (e.g. "no commit without a TDD red-green record", "no merge without a passing
+  consensus review"); harness orchestrates ordering + records adherence — it does not forbid by
+  default.
+- **Agent surface (replaces "superpowers is complementary"):** *"In Sentropic worktrees, ALL dev
+  discipline — brainstorm, TDD/test, debug, review (incl. consensus/ultra-review), verify, branch,
+  scope — goes through `stp` / `harness discipline …`. Do NOT call superpowers (or any generic
+  skill) directly; harness invokes them as backends."* harness/track/stp **fully supersede**
+  generic verification on these axes — superpowers is never an agent-facing alternative.
 
 ## Risks (ranked) + mitigations
 
