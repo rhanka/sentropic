@@ -71,12 +71,17 @@ export function parseBranchMd(text: string): ParsedBranchMd {
       continue;
     }
 
-    if (/\*\*Allowed Paths\*\*/i.test(line)) {
+    // Prefix-match the bucket headings: the canonical BRANCH_TEMPLATE.md carries a
+    // parenthetical suffix (e.g. `**Allowed Paths (implementation scope)**`), so the
+    // closing `**` is NOT adjacent to "Paths". Match the prefix only (as Conditional
+    // already did) — otherwise Allowed/Forbidden silently parse to empty on every
+    // real BRANCH.md and in-scope files wrongly classify as `unknown`.
+    if (/\*\*Allowed Paths/i.test(line)) {
       bucket = 'allowed';
       pushBucket(backtickGlobs(line));
       continue;
     }
-    if (/\*\*Forbidden Paths\*\*/i.test(line)) {
+    if (/\*\*Forbidden Paths/i.test(line)) {
       bucket = 'forbidden';
       pushBucket(backtickGlobs(line));
       continue;
