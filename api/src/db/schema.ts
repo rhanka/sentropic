@@ -244,7 +244,9 @@ export const oauthClients = pgTable('oauth_clients', {
   tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('client_secret_basic'),
   dpopBoundAccessTokens: boolean('dpop_bound_access_tokens').notNull().default(false),
   requirePkce: boolean('require_pkce').notNull().default(true),
-  tenantId: text('tenant_id'),
+  // BR-39e Lot 4: a client belongs to a tenant (governance). FK to `tenants`, default to the
+  // public `sentropic` tenant; ON DELETE set null so removing a tenant orphans (not deletes) clients.
+  tenantId: text('tenant_id').references(() => tenants.id, { onDelete: 'set null' }).default('sentropic'),
   ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
@@ -634,6 +636,49 @@ export const workspaceMemberships = pgTable('workspace_memberships', {
 }));
 
 export type WorkspaceMembershipRow = typeof workspaceMemberships.$inferSelect;
+
+// BR-39e: IdP tenancy spine — a `tenant` registry + per-(user,tenant) membership.
+// `tenant` models WHICH ORG a human belongs to (distinct from `oauth_clients.tenant_id`,
+// which only records which client a token was minted for). The tenant claim (`tid`) is
+// derived from a VALIDATED `approved` membership — never a request param.
+// See spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md. No `parent_tenant_id` (nested tenants out of v1).
+export const tenants = pgTable('tenants', {
+  id: text('id').primaryKey(), // immutable slug == the `tid` claim (e.g. 'sentropic')
+  name: text('name').notNull(),
+  status: text('status').notNull().default('active'), // 'active' | 'suspended' | 'offboarded'
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  statusIdx: index('tenants_status_idx').on(table.status),
+}));
+
+export type TenantRow = typeof tenants.$inferSelect;
+
+// Per-(user,tenant) membership, mirroring `workspace_memberships`. A human is ONE `users`
+// row that can hold several memberships (D0/A: `tenant_id` is NOT on `users`; email stays
+// globally unique). Status drives tenant-scoped acceptance (Lot 2).
+export const tenantMemberships = pgTable('tenant_memberships', {
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('requested'), // 'invited'|'requested'|'approved'|'rejected'|'suspended'
+  role: text('role').notNull().default('member'), // tenant-scoped: 'member' | 'admin'
+  approvedByUserId: text('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  requestedAt: timestamp('requested_at', { withTimezone: false }).notNull().defaultNow(),
+  decidedAt: timestamp('decided_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  tenantUserUnique: uniqueIndex('tenant_memberships_tenant_id_user_id_unique').on(table.tenantId, table.userId),
+  tenantIdIdx: index('tenant_memberships_tenant_id_idx').on(table.tenantId),
+  userIdIdx: index('tenant_memberships_user_id_idx').on(table.userId),
+  statusIdx: index('tenant_memberships_status_idx').on(table.status),
+}));
+
+export type TenantMembershipRow = typeof tenantMemberships.$inferSelect;
 
 // Lot 2: Object edition locks (soft locks with TTL, enforced on mutations)
 export const objectLocks = pgTable('object_locks', {

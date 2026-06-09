@@ -287,6 +287,19 @@ export interface AuthHonoAccountPolicyPort {
   afterUserCreated?(user: AuthHonoUserRecord): Promise<void> | void;
 }
 
+/**
+ * BR-39e: tenancy spine. OPTIONAL — when absent, auth-hono keeps the legacy behavior of
+ * sourcing the auth-code `tenantId` from the client. When present, the tenant claim (`tid`)
+ * is derived ONLY from a VALIDATED `approved` membership (never a raw request parameter),
+ * and re-checked at token time (lifecycle gate).
+ */
+export interface AuthHonoTenantPort {
+  /** Tenant ids the user is an `approved` member of, for selection + claim derivation. */
+  listApprovedTenantIds(userId: string): Promise<string[]>;
+  /** True iff (userId, tenantId) is currently an `approved` membership (binding re-check). */
+  isApprovedMember(userId: string, tenantId: string): Promise<boolean>;
+}
+
 export interface AuthHonoPorts {
   users: AuthHonoUserPort;
   credentials: AuthHonoCredentialPort;
@@ -303,4 +316,6 @@ export interface AuthHonoPorts {
   accountPolicy: AuthHonoAccountPolicyPort;
   oauthStateStore: OauthStateStorePort;
   jwks: JwksPort;
+  /** BR-39e tenancy spine (optional; legacy behavior when absent). */
+  tenant?: AuthHonoTenantPort;
 }

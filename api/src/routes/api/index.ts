@@ -7,6 +7,7 @@ import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
 import { analyticsRouter } from './analytics';
 import { adminRouter } from './admin';
+import { tenantsRouter } from './tenants';
 import { meRouter } from './me';
 import { streamsRouter } from './streams';
 import { chatRouter } from './chat';
@@ -190,6 +191,11 @@ apiRouter.route('/ai-settings', aiSettingsRouter);
 // Admin app only routes (require admin_app)
 apiRouter.use('/admin/*', requireAuth, requireRole('admin_app'));
 apiRouter.route('/admin', adminRouter);
+
+// BR-39e: tenant membership acceptance. Authenticated for all endpoints; tenant-scoped
+// authorization (approve/reject/suspend/list) is enforced inside the service per path tenant.
+apiRouter.use('/tenants/*', requireAuth);
+apiRouter.route('/tenants', tenantsRouter);
 
 // Queue monitoring is workspace-scoped and available to authenticated users.
 // Destructive actions remain admin-only at the router level.
