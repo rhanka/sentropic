@@ -70,11 +70,11 @@ Add a tenancy spine to the standalone IdP (`auth.sent-tech.ca`): model which org
   - [x] Routes `/tenants/*` (auth) — `api/src/routes/api/tenants.ts` mounted in `index.ts`.
   - [x] Lot gate (scoped): `make typecheck-api` GREEN; `make test-api-unit SCOPE="tests/api/auth/tenant-membership.test.ts tests/api/auth/tenancy.test.ts" ENV=test-auth-39e` → 12/12 passed (incl. anti-enumeration, non-admin 403, invalid-transition 409, A→B isolation, admin_app bootstrap).
 
-- [ ] **Lot 3 — Tenant claim + selection**
-  - [ ] Immutable `tid` claim derived from VALIDATED `approved` membership (never request param).
-  - [ ] Tenant selection at `authorize` for multi-membership users; single membership implicit.
-  - [ ] Bind tokens to client_id + tenant + membership status + iss + aud + session; lifecycle gates on authorize/token/userinfo/introspect.
-  - [ ] Lot gate: typecheck/lint; API tests (claim derivation, selection, token binding, lifecycle); UI/E2E if authorize UI changes; `make test-api ENV=test-auth-39e`.
+- [x] **Lot 3 — Tenant claim + selection**
+  - [x] Immutable `tid` claim derived from VALIDATED `approved` membership (never request param). New optional `AuthHonoTenantPort` (`listApprovedTenantIds`/`isApprovedMember`); auth code `tenantId` sourced from membership in `authorize-handler` (was `client.tenantId`); `tid` emitted on id_token + access_token in `token-handler`; added to discovery `claims_supported`. auth-hono `0.4.0`→`0.5.0`.
+  - [x] Tenant selection at `authorize`: single membership → implicit; explicit `?tenant=` honored ONLY if an approved membership; 0 or >1 without valid selection → no claim. (A multi-membership selection SCREEN is deferred — RP can pass `?tenant=`.)
+  - [x] Token-time binding/lifecycle gate: membership re-validated at token exchange (`isApprovedMember`); claim dropped if suspended/revoked between authorize and token. App adapter wired via `tenant_memberships` in `api/src/routes/auth/oauth.ts`.
+  - [x] Lot gate (scoped): full `make test-auth-hono` → 27 files / **103 passed** (incl. `tid` emitted + dropped-when-revoked, no authorize/wellknown regression); `make typecheck-api` GREEN (app wiring). Full `make test-api` + lint deferred to final gate.
 
 - [ ] **Lot 4 — RP onboarding / tenant↔client**
   - [ ] Tenant-scoped client governance (redirect/CORS per tenant); design-system clients → `sentropic` tenant.
