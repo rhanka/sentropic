@@ -17,7 +17,7 @@ export const createWellKnownRouter = (options: CreateWellKnownRouterOptions): Ho
   router.get('/openid-configuration', (c) =>
     c.json({
       authorization_endpoint: `${issuer}${oauthPrefix}/authorize`,
-      claims_supported: ['sub', 'aud', 'iss', 'exp', 'iat', 'nonce', 'auth_time', 'acr', 'email', 'email_verified', 'name'],
+      claims_supported: ['sub', 'aud', 'iss', 'exp', 'iat', 'nonce', 'auth_time', 'acr', 'email', 'email_verified', 'name', 'tid'],
       code_challenge_methods_supported: ['S256'],
       dpop_signing_alg_values_supported: ['EdDSA'],
       grant_types_supported: ['authorization_code', 'client_credentials'],

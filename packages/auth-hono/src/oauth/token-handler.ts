@@ -316,6 +316,16 @@ const issueTokens = async (
   const idExpiresAt = options.ports.clock.addSeconds(now, idTokenTtlSeconds);
   const scopes = codePayload.scope.split(/\s+/).filter(Boolean);
   const cnf = dpopJkt ? { jkt: dpopJkt } : undefined;
+
+  // BR-39e: bind the tenant claim to a STILL-`approved` membership at token time (lifecycle
+  // gate). If the membership was suspended/revoked between authorize and token exchange, drop
+  // the claim so no tenant-scoped token is issued for a non-member.
+  let boundTenantId: string | null = codePayload.tenantId;
+  if (boundTenantId && options.ports.tenant) {
+    const stillApproved = await options.ports.tenant.isApprovedMember(codePayload.userId, boundTenantId);
+    if (!stillApproved) boundTenantId = null;
+  }
+
   const jwks = createJwksService({ clock: options.ports.clock, jwksPort: options.ports.jwks });
   const accessJti = options.ports.random.uuid();
   const accessAudience = `${trimTrailingSlash(options.issuer)}/api/v1/auth/oauth/userinfo`;
@@ -325,6 +335,7 @@ const issueTokens = async (
       auth_time: toEpochSeconds(codePayload.authTime),
       client_id: client.clientId,
       ...(cnf ? { cnf } : {}),
+      ...(boundTenantId ? { tid: boundTenantId } : {}),
       scope: codePayload.scope,
     },
     {
@@ -368,6 +379,7 @@ const issueTokens = async (
         ...(scopes.includes('email') ? { email: user.email, email_verified: user.emailVerified } : {}),
         ...(scopes.includes('profile') ? { name: user.displayName } : {}),
         ...(codePayload.nonce ? { nonce: codePayload.nonce } : {}),
+        ...(boundTenantId ? { tid: boundTenantId } : {}),
       },
       {
         audience: client.clientId,
