@@ -108,6 +108,38 @@ describe('OAuth token handler', () => {
     expect(decodeJwt(body.access_token)).toMatchObject({ cnf: { jkt } });
     expect(decodeJwt(body.id_token)).toMatchObject({ cnf: { jkt } });
   });
+
+  it('BR-39e: emits the `tid` claim from the auth-code tenant, re-validated at token time', async () => {
+    const { ports, store } = await createOauthPorts({ authenticated: true });
+    ports.tenant = {
+      listApprovedTenantIds: async () => ['acme'],
+      isApprovedMember: async (_userId, tenantId) => tenantId === 'acme',
+    };
+    const { router } = createOauthRouterForTest({ ports });
+    await saveCode(store, 'code-tid', { scope: 'openid profile email', tenantId: 'acme' });
+
+    const response = await tokenRequest(router, { code: 'code-tid' });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { access_token: string; id_token: string };
+    expect(decodeJwt(body.id_token)).toMatchObject({ tid: 'acme', sub: oauthUser.id });
+    expect(decodeJwt(body.access_token)).toMatchObject({ tid: 'acme' });
+  });
+
+  it('BR-39e: drops the `tid` claim when the membership is no longer approved at token time', async () => {
+    const { ports, store } = await createOauthPorts({ authenticated: true });
+    ports.tenant = {
+      listApprovedTenantIds: async () => [],
+      isApprovedMember: async () => false, // suspended/revoked between authorize and token exchange
+    };
+    const { router } = createOauthRouterForTest({ ports });
+    await saveCode(store, 'code-tid-revoked', { scope: 'openid profile email', tenantId: 'acme' });
+
+    const response = await tokenRequest(router, { code: 'code-tid-revoked' });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { access_token: string; id_token: string };
+    expect(decodeJwt(body.id_token)).not.toHaveProperty('tid');
+    expect(decodeJwt(body.access_token)).not.toHaveProperty('tid');
+  });
 });
 
 const saveCode = async (

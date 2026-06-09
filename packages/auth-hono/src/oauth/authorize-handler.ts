@@ -182,6 +182,26 @@ const sealContinuation = async (
 ): Promise<string> => {
   const now = options.ports.clock.now();
   const expiresAt = options.ports.clock.addSeconds(now, options.stateTtlSeconds ?? 10 * 60);
+
+  // BR-39e: derive the tenant bound to this auth code from the user's VALIDATED membership,
+  // never from the raw client/param. Legacy behavior (client tenant) when no tenancy spine is
+  // wired. An explicit `?tenant=` selection is honored ONLY if it is an approved membership.
+  let tenantId: string | null = request.client.tenantId;
+  if (options.ports.tenant) {
+    tenantId = null;
+    if (session?.userId) {
+      const approved = await options.ports.tenant.listApprovedTenantIds(session.userId);
+      const requested = c.req.query('tenant') ?? null;
+      if (requested) {
+        tenantId = approved.includes(requested) ? requested : null;
+      } else if (approved.length === 1) {
+        tenantId = approved[0];
+      }
+      // 0 or >1 approved tenants without a valid explicit selection → no tenant claim
+      // (a multi-tenant selection screen is deferred; the RP may re-request with ?tenant=).
+    }
+  }
+
   return options.stateCodec.seal({
     acr: session?.acr,
     authTime: session?.authTime,
@@ -195,7 +215,7 @@ const sealContinuation = async (
     redirectUri: request.redirectUri,
     scope: request.scope,
     state: request.state,
-    tenantId: request.client.tenantId,
+    tenantId,
     userId: session?.userId,
   });
 };

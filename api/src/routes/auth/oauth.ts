@@ -20,7 +20,7 @@ import { jwtVerify, SignJWT } from 'jose';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
-import { emailVerificationCodes, magicLinks, userSessions, users } from '../../db/schema';
+import { emailVerificationCodes, magicLinks, tenantMemberships, userSessions, users } from '../../db/schema';
 import { logger } from '../../logger';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
@@ -210,6 +210,31 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
     markUsed: unsupportedOAuthPort,
   },
   oauthStateStore: createOauthStateStoreAdapter(),
+  // BR-39e: tenancy spine. The tenant claim (`tid`) is derived from an `approved` membership
+  // and re-validated at token time; both reads are tenant-scoped to the calling user.
+  tenant: {
+    async listApprovedTenantIds(userId: string) {
+      const rows = await db
+        .select({ tenantId: tenantMemberships.tenantId })
+        .from(tenantMemberships)
+        .where(and(eq(tenantMemberships.userId, userId), eq(tenantMemberships.status, 'approved')));
+      return rows.map((row) => row.tenantId);
+    },
+    async isApprovedMember(userId: string, tenantId: string) {
+      const [row] = await db
+        .select({ userId: tenantMemberships.userId })
+        .from(tenantMemberships)
+        .where(
+          and(
+            eq(tenantMemberships.userId, userId),
+            eq(tenantMemberships.tenantId, tenantId),
+            eq(tenantMemberships.status, 'approved'),
+          ),
+        )
+        .limit(1);
+      return Boolean(row);
+    },
+  },
   random: {
     bytes: (length) => new Uint8Array(randomBytes(length)),
     numericCode: (length) =>
