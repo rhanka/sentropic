@@ -52,6 +52,8 @@
   } from '$lib/utils/documents';
   import AttachmentBand from '@sentropic/chat-ui/documents/AttachmentBand.svelte';
   import GeneratedFileCardTray from '@sentropic/chat-ui/documents/GeneratedFileCardTray.svelte';
+  import ImageLightbox from '@sentropic/chat-ui/documents/ImageLightbox.svelte';
+  import MessageAttachments from '@sentropic/chat-ui/documents/MessageAttachments.svelte';
   import {
     createComposerAttachmentId,
     buildAttachmentBandItems,
@@ -121,9 +123,7 @@
     Check,
     Copy,
     Pencil,
-    X,
     Plus,
-    Download,
     FileText,
     Globe,
     Link2,
@@ -142,7 +142,6 @@
     Eye,
     EyeOff,
     FolderOpen,
-    Image as ImageIcon,
     Trash2,
     ChevronLeft,
     ChevronRight,
@@ -1445,13 +1444,6 @@
 
   const closeLightbox = () => {
     lightboxImage = null;
-  };
-
-  const handleLightboxKeydown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && lightboxImage) {
-      event.preventDefault();
-      closeLightbox();
-    }
   };
 
   const attachImageFileToComposer = async (
@@ -3258,52 +3250,13 @@
         on:scroll={onListScroll}
       >
         {#snippet renderTimelineMessageAttachments(item: any)}
-          {#if item.kind === 'message' && item.message.role === 'user' && (item.message.attachments?.length ?? 0) > 0}
-            <div class="mt-1 flex justify-end">
-              <div class="grid max-w-[85%] grid-cols-2 gap-1">
-                {#each item.message.attachments as attachment (attachment.id ?? attachment.documentId ?? attachment.url ?? attachment.fileName)}
-                  {#if attachment.kind === 'image'}
-                    {@const imageSrc = getAttachmentImageSrc(attachment)}
-                    <div class="overflow-hidden rounded border border-primary/20 bg-white/10">
-                      {#if imageSrc}
-                        <button
-                          type="button"
-                          class="block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                          aria-label={$_('chat.attachments.enlarge')}
-                          title={$_('chat.attachments.enlarge')}
-                          on:click={() =>
-                            openLightbox(imageSrc, attachment.fileName ?? 'image')}
-                        >
-                          <img
-                            src={imageSrc}
-                            alt={attachment.fileName ?? 'image'}
-                            class="block h-24 w-24 object-cover"
-                            loading="lazy"
-                          />
-                        </button>
-                      {:else}
-                        <div class="flex h-24 w-24 items-center justify-center bg-slate-100 text-slate-500">
-                          <ImageIcon class="h-5 w-5" />
-                        </div>
-                      {/if}
-                    </div>
-                  {:else if attachment.kind === 'file'}
-                    <a
-                      class="col-span-2 flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
-                      href={getAttachmentImageSrc(attachment)}
-                      download={attachment.fileName ?? 'document'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={attachment.fileName ?? 'document'}
-                    >
-                      <FileText class="h-4 w-4 shrink-0 text-primary" />
-                      <span class="truncate">{attachment.fileName ?? 'document'}</span>
-                      <Download class="ml-auto h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    </a>
-                  {/if}
-                {/each}
-              </div>
-            </div>
+          {#if item.kind === 'message' && item.message.role === 'user'}
+            <MessageAttachments
+              attachments={item.message.attachments ?? []}
+              onResolveSrc={getAttachmentImageSrc}
+              onEnlarge={(src: string, alt: string) => openLightbox(src, alt)}
+              enlargeLabel={$_('chat.attachments.enlarge')}
+            />
           {/if}
         {/snippet}
 
@@ -3937,50 +3890,12 @@
   {/if}
 </div>
 
-<svelte:window on:keydown={handleLightboxKeydown} />
-
-{#if lightboxImage}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-    data-testid="chat-image-lightbox"
-  >
-    <button
-      type="button"
-      class="absolute inset-0 h-full w-full cursor-default"
-      aria-label={$_('chat.attachments.lightbox.close')}
-      on:click={closeLightbox}
-    ></button>
-    <div class="relative z-10 flex max-h-full max-w-full flex-col items-center gap-2">
-      <div class="flex items-center gap-2 self-end">
-        <a
-          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-          href={lightboxImage.src}
-          download={lightboxImage.alt}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={$_('chat.attachments.lightbox.download')}
-          title={$_('chat.attachments.lightbox.download')}
-        >
-          <Download class="h-5 w-5" />
-        </a>
-        <button
-          type="button"
-          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-          aria-label={$_('chat.attachments.lightbox.close')}
-          title={$_('chat.attachments.lightbox.close')}
-          on:click={closeLightbox}
-        >
-          <X class="h-5 w-5" />
-        </button>
-      </div>
-      <img
-        src={lightboxImage.src}
-        alt={lightboxImage.alt}
-        class="max-h-[80vh] max-w-[90vw] rounded object-contain shadow-2xl"
-      />
-    </div>
-  </div>
-{/if}
+<ImageLightbox
+  image={lightboxImage}
+  onClose={closeLightbox}
+  closeLabel={$_('chat.attachments.lightbox.close')}
+  downloadLabel={$_('chat.attachments.lightbox.download')}
+/>
 
 <style>
   .composer-rich :global(.markdown-input-wrapper),
