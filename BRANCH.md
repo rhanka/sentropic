@@ -4,8 +4,8 @@
 Fold the two attachment-rendering components the modularization Lot 4 deliberately left app-local — the image lightbox and the per-message attachment thumbnails — into `@sentropic/chat-ui` `src/documents/`, host-callback-driven, closing the rendering gap of the documents module. Re-authored from current `main` (chat-ui 0.19.0); supersedes the pre-modularization `feat/38c-chat-ui-vision-defaults` (kept as local reference, never pushed).
 
 ## Scope / Guardrails
-- Scope limited to `packages/chat-ui` (documents module + exports + tests + manifest). Package-only: NO app changes.
-- AppChatPanel / `ui/**` MUST NOT be touched in this branch (owner + conductor directive; app dogfooding is a separate blocking follow-up sequenced via `codex:chatui-app-retrofit`).
+- Scope: the `@sentropic/chat-ui/documents` rendering fold (2 components) AND the app dogfood that proves them (`AppChatPanel.svelte` consumes them, app-local duplication deleted — zero dual path).
+- **OWNER OVERRIDE (rhanka, 2026-06-08): NO deferred BR38c-B1 — the app consumption is done IN THIS PR.** This supersedes the chat-lane "don't touch AppChatPanel / sequence via chatui-app-retrofit" directive. Collision risk with `codex:chatui-app-retrofit` accepted by the owner; the AppChatPanel edit is surgical (swap inline lightbox + message-attachments markup for the two package components, drop the now-dead lucide imports).
 - Zero sentropic domain strings in the module (scanned); all domain logic via `DocumentHost` / injected callbacks.
 - Match the documents module conventions exactly: unprefixed component names, `.svelte.d.ts` per exported component, `./documents/*.svelte` export entries.
 - Dedup rule: reuse `documents/attachmentState.ts` + `DocumentHost.resolveAttachmentSrc` — no parallel state/host modules (review DROP list applies).
@@ -26,9 +26,10 @@ Fold the two attachment-rendering components the modularization Lot 4 deliberate
   - `packages/chat-ui/tests/**`
   - `packages/chat-ui/chat-ui-reference-validation.json`
   - `packages/chat-ui/export-manifest.json`
+  - `ui/src/lib/components/chat/AppChatPanel.svelte` (app dogfood — owner override, in-scope)
   - `spec/SPEC_EVOL_CHATUI_MODULARIZATION.md` (docs note: rendering gap closed)
 - **Forbidden Paths (must not change in this branch)**:
-  - `ui/**` (AppChatPanel collision guard — app dogfood is a separate follow-up)
+  - `ui/**` except `AppChatPanel.svelte` (no broader app refactor)
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -43,7 +44,7 @@ Fold the two attachment-rendering components the modularization Lot 4 deliberate
 ## Feedback Loop
 - `BR38c-D1` — `attention` (naming, publish-gating): lightbox public name split across reviewers — `ImageLightbox` (architect + owner x2) vs `AttachmentLightbox` (conductor). Implementation starts as `ImageLightbox.svelte` (majority); conductor holds npm publish for owner (rhanka) veto on final public names; pre-publish rename trivial if vetoed. `MessageAttachments.svelte` is consensus.
 - `BR38c-D2` — `acknowledge` (deferred helper): `attachmentState.runComposerAttachmentUpload` SKIPPED in this PR per contract-consumer-codesign house rule (conductor + owner 23:15Z); re-propose during the app-dogfood follow-up if the real host proves the need (additive minor).
-- `BR38c-B1` — `attention` (blocking child, NOT this PR): owner fidelity condition — the lot does not CLOSE until the app actually renders both components (AppChatPanel dogfood follow-up, sequenced through `codex:chatui-app-retrofit`; one owner edits AppChatPanel at a time). Track after merge+publish.
+- `BR38c-B1` — `resolved` (2026-06-08, owner override): the fidelity condition is met IN THIS PR — `AppChatPanel.svelte` now imports and renders `documents/ImageLightbox` + `documents/MessageAttachments`, app-local lightbox + message-attachment markup deleted (zero dual path), dead lucide imports (`X`/`Download`/`ImageIcon`) removed. `reference-validation` now detects the real dogfood (no WARN). No separate follow-up.
 - `BR38c-N1` — `acknowledge` (adjacent, out of scope): open `LocalToolName` registry for host-defined tools (openerp finding, routed to chat lane) — separate deliverable; do not touch `stores/localTools` here.
 - `BR38c-N2` — `acknowledge` (baseline note): the BRANCH.md present on `main` at branch creation is the PR #270 merge leak, removed by PR #271; overwriting it in this worktree is the normal flow, no impact.
 
@@ -89,13 +90,24 @@ Fold the two attachment-rendering components the modularization Lot 4 deliberate
     - [x] `make test-chat-ui` green (760/760 node) + `make test-chat-ui-dom` green (149/149 jsdom, 11 files).
     - [x] `make typecheck-chat-ui` green.
 
+- [ ] **Lot 3 — App dogfood (owner override: in this PR, no defer)**
+  - [x] `AppChatPanel.svelte` imports `documents/ImageLightbox.svelte` + `documents/MessageAttachments.svelte`.
+  - [x] Replace the inline lightbox markup (`<svelte:window on:keydown>` + `{#if lightboxImage}` overlay) with `<ImageLightbox image onClose closeLabel downloadLabel />`; drop the app `handleLightboxKeydown` (component owns Escape); keep app `openLightbox`/`closeLightbox`/`lightboxImage` state.
+  - [x] Replace the `renderTimelineMessageAttachments` inline grid with `<MessageAttachments attachments onResolveSrc={getAttachmentImageSrc} onEnlarge enlargeLabel />`.
+  - [x] Remove now-dead lucide imports `X`/`Download`/`Image as ImageIcon` (kept `FileText`, still used elsewhere). `data-testid="chat-image-lightbox"` preserved (e2e selectors intact).
+  - [x] Sanity: zero dangling refs (`handleLightboxKeydown`/`<ImageIcon`/`<X`/`<Download` = 0); `reference-validation` detects real dogfood (no WARN).
+  - [ ] Lot gate:
+    - [x] `make typecheck-ui` (0 errors; 6 pre-existing warnings unrelated) + `make lint-ui` (eslint clean) green (REGISTRY=local). Fixed `onEnlarge` lambda params (explicit `string` types, matching the file's `AttachmentBand` handler convention).
+    - [ ] **E2E** (offloaded to CI on PR — ui/ change triggers the full suite incl. `03-chat` vision): paste/upload image → thumbnail → click → lightbox open/close → vision answer.
+    - [ ] UAT (owner, root `ENV=dev`): paste an image, confirm thumbnail tray, send, lightbox open/close, vision answer.
+
 - [x] **Lot N-1 — Docs consolidation**
-  - [x] NOT APPLICABLE: `spec/SPEC_EVOL_CHATUI_MODULARIZATION.md` is NOT committed on `main` (verified absent from this worktree; it lives only in the owner's local root workspace) — updating it belongs to the modularization owner's lane. Components self-document via `.svelte.d.ts` + `export-manifest.json` prop snapshots; `BR38c-B1` tracks the app-dogfood follow-up here.
+  - [x] NOT APPLICABLE: `spec/SPEC_EVOL_CHATUI_MODULARIZATION.md` is NOT committed on `main` (verified absent from this worktree; owner's local-only) — updating it is the modularization owner's lane. Components self-document via `.svelte.d.ts` + `export-manifest.json` prop snapshots.
 
 - [ ] **Lot N — Final validation**
-  - [x] Typecheck (`make typecheck-chat-ui`) + retest node (`make test-chat-ui` 760/760) + retest dom (`make test-chat-ui-dom` 149/149).
-  - [x] Bump `packages/chat-ui/package.json` minor `0.19.1` -> `0.20.0` (+ `export-manifest.json` `_version`; + the 3 version-pinned test assertions per established pattern) — `enforce-package-bump` gate satisfied.
-  - [ ] Final gate step 1: create PR using `BRANCH.md` as PR body; report branch name + test counts to conductor (h2a).
-  - [ ] Final gate step 2: branch CI green; resolve blockers.
-  - [ ] Final gate step 3: merge after CI green; npm publish HELD until conductor ping (`BR38c-D1` name veto); after publish verify npm `latest` moved.
-  - [ ] Post-merge: open `BR38c-B1` follow-up coordination with `codex:chatui-app-retrofit` (app dogfood; lot closes only then).
+  - [x] Typecheck (`make typecheck-chat-ui`) + retest node (`make test-chat-ui` 762/762, dogfood now real) + retest dom (`make test-chat-ui-dom` 149/149).
+  - [x] `make typecheck-ui` + `make lint-ui` green (app dogfood).
+  - [x] Bump `packages/chat-ui/package.json` minor `0.19.1` -> `0.20.0` (+ `export-manifest.json` `_version`; + the 3 version-pinned test assertions) — `enforce-package-bump` gate satisfied.
+  - [ ] Final gate step 1: PR updated (#272); report branch + test counts to conductor (h2a).
+  - [ ] Final gate step 2: branch CI green (full ui suite + e2e now run, ui/ changed); resolve blockers.
+  - [ ] Final gate step 3: merge after CI green + owner UAT; npm publish HELD until conductor ping (`BR38c-D1` name veto); after publish verify npm `latest` moved.
