@@ -2611,7 +2611,7 @@ export class QueueManager {
           })
           .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
         const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(`Unsupported mime type for summarization: ${doc.mimeType}. ${msg}`);
+        throw new Error(`Failed to extract text from document (${doc.mimeType}): ${msg}`);
       }
 
       const trimmed = text.trim();
