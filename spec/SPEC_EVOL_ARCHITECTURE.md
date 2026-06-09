@@ -722,6 +722,8 @@ the round-3 audit and answered by the owner on 2026-06-07.
 | ARCH-17 | Deployment control plane + edge proxy | SPEC_EVOL_DEPLOYMENT_PLANE | `UatEndpoint`/`AppDeployment` desired/observed state; provider/k8s-ops contract; domains/TLS/rollback; route-grant format; SSRF/websocket policy |
 | ARCH-18 | Master data architecture (five axes: control-plane data, universal business objects, knowledge/ontologies, agentic data, physical planes) | SPEC_EVOL_DATA_ARCHITECTURE | DECIDED DD1-DD11 (2026-06-07, two double-review rounds); assigns outbox→ARCH-14, knowledge pipeline→ARCH-06, retention/GDPR/erasure→ARCH-15; hardening prerequisite branch (queue reaper, stream retention+index, task_io_contracts drop) lands before outbox/UBO storage |
 | ARCH-19 | Universal Business Objects & object type registry | per SPEC_EVOL_DATA_ARCHITECTURE §6 lots | Envelope v0 ratified (DD10, binding-defined scope map); typed references (DD7); schema evolution (DD8); validation ladders (DD2a/b); OpenERP mapping gates the standard-set freeze only (DD3); storage lots gated on ARCH-11 semantics + ARCH-14 events; separate unpublished package (DD6) |
+| ARCH-21a | Resource Plane — integrative (filesystem-presented) | SPEC_EVOL_RESOURCE_FS | DECIDED RF1-RF11 (2026-06-08, review + 2 mini-studies). Verb floor `ls/read/edit/grep` (grep≡query, delegating) + model-selected SKILL.md `accessMethods` → typed tool (RF2); `invoke` distinct from write (RF3); canonical ResourceRef+etag (RF1); async via existing chat resume (RF4); authz-projected namespace, separate discover/read/invoke, deny-as-missing (RF5); injection boundary on read+list (RF6); MCP tools + URI-preserving resources read (RF7); `resource_terminal` virtual shell, human/V8-authoring not a default LLM tool (RF10); ToolInteractionTrace + chips/terminal + custom-renderer slot (RF11). Amends ARCH-01/06/07/14/19/02 |
+| ARCH-21b | Resource Plane — net-new, gated | SPEC_EVOL_RESOURCE_FS §4 | `/workspace` data + `query` (ARCH-19 resolver); `/knowledge`+freshness (ARCH-14 outbox+ARCH-06+graphify fusion, per-partition watermarks RF8); generic `watch` (ARCH-14); `/apps` (ARCH-01); `local_bash`/`remote_bash` real shells incl. tmux-attached k8s sessions (ARCH-05/ARCH-17); `remote-fs` provider + path→ref mapping; canvas edit-back (ARCH-16) |
 
 ## 8. Suggested Branch Grouping
 
@@ -823,3 +825,13 @@ Dispatch order, corrected rounds 2-3:
   "physical planes" study was dissolved into ARCH-14 (EventBus/outbox),
   ARCH-13 (analytical consumer gate), ARCH-10 annex (Postgres-isms register),
   and a standalone ArtifactStorePort branch.
+- 2026-06-08: ARCH-21 (Resource Plane, filesystem-presented,
+  `SPEC_EVOL_RESOURCE_FS`) registered after a brainstorm + double review +
+  two double mini-studies (Codex 5.5 xhigh + Opus 4.8). Owner decisions
+  RF1-RF11 taken the same day. SPLIT into ARCH-21a (integrative, dispatchable
+  — verb floor over the catalog/MCP, skill-resolution, async via the existing
+  chat resume, virtual `resource_terminal`, ToolInteractionTrace viz) and
+  ARCH-21b (net-new, gated on ARCH-14/19/06/05/16/17 — data/knowledge/watch/
+  apps/real-bash). The plane is a projection over already-decided subsystems,
+  NOT a new store; the filesystem is presentation, not contract. A stringly
+  LLM terminal was rejected (would undercut the typed-tool grain).
