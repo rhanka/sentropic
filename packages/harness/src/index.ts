@@ -15,6 +15,16 @@ export type {
   CheckResult,
 } from './artifacts/verification-run.js';
 
+// Neutral narrative artifact emitted by method/branch verbs (ingested by a track-side adapter).
+export type {
+  WorkEvent,
+  WorkEventVerb,
+  WorkEventStatus,
+  WorkEventValue,
+} from './artifacts/work-event.js';
+export { toWorkEvent } from './run/work-event.js';
+export type { WorkEventInput, WorkEventContext } from './run/work-event.js';
+
 // Policy SPI + profiles (policy-as-data; engine is generic).
 export type { HarnessProfile } from './profile/profile.js';
 export { sentropicProfile } from './profile/sentropic.js';
