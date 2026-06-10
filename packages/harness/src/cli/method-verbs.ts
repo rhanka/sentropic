@@ -9,6 +9,7 @@
 import { toWorkEvent } from '../run/work-event.js';
 import type { WorkEventContext, WorkEventInput } from '../run/work-event.js';
 import type { WorkEventValue } from '../artifacts/work-event.js';
+import { HARNESS_SKILLS, HOST_SKILL_DIR, isHostId } from '../skills/manifest.js';
 import { str, type FlagValue } from './args.js';
 
 const PLACEHOLDER_TS = '1970-01-01T00:00:00.000Z';
@@ -136,19 +137,27 @@ function build(verb: MethodVerb, positionals: string[], flags: Record<string, Fl
     }
     case 'skills': {
       const sub = positionals[1];
-      if (sub !== 'install') {
-        return { lines: ['usage: harness skills install --host <claude|codex|gemini>'], code: 2 };
-      }
       const host = str(flags.host);
-      if (host !== 'claude' && host !== 'codex' && host !== 'gemini') {
+      if (sub !== 'install' || !isHostId(host)) {
         return { lines: ['usage: harness skills install --host <claude|codex|gemini>'], code: 2 };
       }
+      const dir = HOST_SKILL_DIR[host];
+      const lines = [
+        header('skills install', 'requested', 'harness/using-harness'),
+        `  install plan → ${dir} (host: ${host}); harness/using-harness supersedes superpowers:`,
+        ...HARNESS_SKILLS.map(
+          (s) => `    ${dir}/harness-${s.name}/SKILL.md${s.supersedes ? ` (supersedes superpowers:${s.supersedes})` : ''}`,
+        ),
+      ];
       return {
-        input: { verb, status: 'requested', subject: 'install', skill: 'harness/using-harness', detail: { host } },
-        lines: [
-          header('skills install', 'requested', 'harness/using-harness'),
-          `  install plan: copy the harness/* skill pack into the ${host} host skills dir; using-harness supersedes superpowers.`,
-        ],
+        input: {
+          verb,
+          status: 'requested',
+          subject: 'install',
+          skill: 'harness/using-harness',
+          detail: { host, dir, skills: HARNESS_SKILLS.map((s) => s.name) },
+        },
+        lines,
         code: 0,
       };
     }
