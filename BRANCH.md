@@ -57,12 +57,12 @@ Opus 4.8 peer co-design + track solicitation (see `plan/42h-BRANCH_feat-harness-
   - [x] Read harness src/tests, `verification-run.ts`, `emit.ts`, profile SPI, Makefile harness lane.
   - [x] Confirm pure-CLI invariant + verb/skill split from the decided taxonomy.
 
-- [ ] **Lot 1 — `WorkEvent` neutral artifact**
-  - [ ] `src/artifacts/work-event.ts` — emit-only narrative event (kind, verb, status, refs, ts) + types.
-  - [ ] `src/run/work-event.ts` — `toWorkEvent(...)` assembler (pure, deterministic).
-  - [ ] Export from `src/index.ts`.
-  - [ ] Tests `tests/artifacts/work-event.spec.ts`.
-  - [ ] Lot gate: `make typecheck-harness && make test-harness ENV=test-harness-verbs`.
+- [x] **Lot 1 — `WorkEvent` neutral artifact**
+  - [x] `src/artifacts/work-event.ts` — emit-only narrative event (kind, verb, status, refs, ts) + types.
+  - [x] `src/run/work-event.ts` — `toWorkEvent(...)` assembler (pure, deterministic).
+  - [x] Export from `src/index.ts`.
+  - [x] Tests `tests/artifacts/work-event.spec.ts` (4 tests).
+  - [x] Lot gate: typecheck-harness clean + test-harness 36/36 green (ENV=test-harness-verbs).
 
 - [ ] **Lot 2 — CLI verb router + method verbs**
   - [ ] Refactor `src/cli/run.ts` to a verb-dispatch table; keep `check scope|branch` byte-identical.
