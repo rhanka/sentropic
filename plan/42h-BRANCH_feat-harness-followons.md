@@ -14,7 +14,7 @@ is the **backlog handoff** — no implementation here.
 - **DONE / shipped**: harness 0.1.0→0.1.1 (PRs #266, #279), OIDC attach, scope-ownership decision
   (PR #284), shared BRANCH.md grammar spec (PR #286). BR-42i `stp` federation MERGED (#261,
   `@sentropic/cli@0.2.0`); FEDERATION_MANIFEST marks `harness` as **GATED_D7** (in-process register
-  ready, ZERO rework). BR-42k DISSOLVED into the harness discipline layer.
+  ready, ZERO rework). BR-42k DISSOLVED into the harness method-verb layer (42h-L3).
 - **Owner**: scale / `stp` program (this is a BR-42 lot). Coordinated with the live BR-42i session.
 
 ## Backlog (ready lots — captured, not yet branched)
@@ -27,34 +27,54 @@ is the **backlog handoff** — no implementation here.
   fallback / fail-closed-on-stale-track) per `SPEC_DECISION_SCOPE_OWNERSHIP_HARNESS_TRACK_STP.md`.
   Zero glob logic of its own (track→rules, harness→check, compose). Starts in harness-fallback mode
   until track ships scope-state (see Attendus).
-- [ ] **42h-L3 — REPLACE superpowers with a native sentropic discipline skill-pack (REIMPLEMENT, better)**.
-  Principle (rhanka 2026-06-09): we do NOT keep superpowers as a backend. Default = sentropic ships
-  the SAME capability natively; if superpowers is installed we SUPERSEDE it for a coherent global `stp`
-  stack; the user MAY opt to keep superpowers (per-repo profile policy). superpowers is never a
-  dependency. Grounded by the 4-peer consensus (Opus 4.8 + Sonnet 4.6 + Fable 5 + Codex 5.5-xhigh):
-  - **Reimplement as native `discipline-*` SKILLS, better** (the discipline IS skill text — LLM
-    reasoning — NOT a CLI verb): `discipline-brainstorm` (spec-ladder STUDY→VOL→EVOL + double/multi
-    adversarial review + batched decisions — already stronger than superpowers, `SPEC_STUDY_BEST_OF_BREED_AGENT_METHODS.md:83`),
-    `discipline-debug` (generic root-cause loop anchored on `rules/live-debug.md` + the `debug-*` skills),
-    `discipline-tdd` (test-pyramid + scoped-test-under-evolution loop, `rules/testing.md`),
-    `discipline-review` (≥2-peer adversarial consensus > superpowers' single review),
-    `discipline-plan` (spec-ladder + BRANCH.md lots, completes with track), `discipline-skill-authoring`,
-    and a `using-discipline` bootstrap replacing `using-superpowers`.
-  - **Keep/improve the native ones already stronger**: `branch-init` (worktrees), `branch-close`
-    (finishing — superset: UAT gate + PR-body contract + scope-check), `lot-gate` + harness
-    `VerificationRun` (verification), `post-branch-update` (writing-skills), `launch-agent` (dispatch).
-  - **harness CLI = the mechanical/recording layer the skills call**: `harness verify --category`,
-    **`harness review --consensus`** (fans ≥2 independent peers — Opus 4.8 + Codex 5.5-xhigh — and
-    reconciles into one `VerificationRun`; record narratives as `WorkEvent`, not VerificationRun —
-    don't shoehorn cognition into the verification taxonomy). Branch/scope already shipped.
+- [ ] **42h-L3 — REPLACE superpowers with native sentropic capability (reimplement, better; homogeneous `harness <verb>`)**.
+  Principle (rhanka 2026-06-09): we do NOT keep superpowers as a backend. Default = sentropic ships the
+  SAME capability natively; if superpowers is installed we SUPERSEDE it for a coherent global `stp` stack;
+  the user MAY opt to keep superpowers (per-repo profile policy). superpowers is never a dependency. The
+  word "discipline" is dropped (rhanka: too long). Verbs follow `harness <verb> [<subject>] [--<option>]`
+  — the LIVE grain (`harness check scope|branch`; mirrors `remote run|attach`), NOT track's `<noun> <action>`.
+  Grounded by a peer co-design (Opus 4.8, `harness {verb} --{option}` taxonomy) + a track solicitation
+  (h2a `env:harness-verb-taxonomy:to-track-01`) and the prior 4-peer gap consensus.
+  - **Verb table** (capability → verb → verb|skill → artifact). NAMES: `test` never `tdd`; `branch init`
+    never `branch --init` (sub-verb = 2nd positional, mirrors `check scope`; flags tune, never mode):
+    - `harness brainstorm [<topic>] [--peers <n>] [--ladder study|vol|evol]` — **SKILL** `harness/brainstorm`
+      (spec-ladder STUDY→VOL→EVOL + ≥2-peer adversarial review + batched decisions; FULLY native reimpl,
+      NOT delegated — `SPEC_STUDY_BEST_OF_BREED_AGENT_METHODS.md:83`). Verb scaffolds the spec-ladder doc +
+      a track orientation Decision; emits `WorkEvent`.
+    - `harness test [<scope>] [--category unit|integration|e2e] [--watch]` — **SKILL** `harness/test`
+      (test-pyramid + scoped-test loop, `rules/testing.md`) + mechanical tail shelling to `make test*`.
+      Emits `VerificationRun`. NOT an stp bare verb (only track's `report` is aliased).
+    - `harness debug [<symptom>]` — **SKILL** `harness/debug` (generic root-cause loop, `rules/live-debug.md`
+      + the `debug-*` assets). Emits `WorkEvent` (no pass/fail).
+    - `harness review [<target>] --consensus [--peers <n>]` — **SKILL** `harness/review` (≥2 independent
+      peers — Opus 4.8 + Codex 5.5-xhigh — reconcile). Emits `WorkEvent`; optional `VerificationRun`
+      (`category:static`) when it gates a lot.
+    - `harness plan [<spec>] [--lots <n>]` — **SKILL** `harness/plan` (spec-ladder + BRANCH.md lots); writes
+      BRANCH.md master then invokes `track branch import` (one direction, harness→track). Emits `WorkEvent`.
+    - `harness branch init [<slug>]` / `harness branch close` — **VERB** (worktree/scope/ports; final gate +
+      PR). Supersets the `branch-init`/`branch-close` skills.
+    - `harness verify [<lot>] --category static|unit|integration|e2e|ci|uat [--json]` — **VERB**; category
+      roll-up wrapping `check scope|branch` + lot-gate; the canonical `VerificationRun` producer.
+    - `harness init` / `harness audit` — **VERB** + **SKILL** `harness/adopt`: the repo-agnostic
+      rule-adaptability surface (scaffold a harness profile / diff repo vs profile over the `HarnessProfile`
+      SPI). This IS the "adapt our rules to ANY repo" skill (rhanka 2026-06-09). Ties 42h-L4 G3/G4.
+    - `harness skills install --host claude|codex|gemini` + index **SKILL** `harness/using-harness`
+      (REPLACES superpowers' `using-superpowers`; carries the supersede directive). NOT "using-discipline".
+  - **Verb vs skill split**: mechanical verbs (branch/verify/test-tail/init/audit/skills) compute → emit
+    `VerificationRun`/`WorkEvent` in `@sentropic/harness` core; method skills (brainstorm/debug/review/plan)
+    hold the LLM reasoning — the verb only loads the skill + scaffolds + records. Cognition is NOT shoehorned
+    into the verification taxonomy (narratives = `WorkEvent`, not `VerificationRun`).
+  - **Homogeneity / federation**: every verb reads as `stp harness <verb>`; NO stp bare aliases. No collision
+    with track (`report`/`item`/`decision`/`scope validate`/`branch import`) or remote (`run`/`delegate`) —
+    namespaced. (`stp harness report` = workflow roll-up; `stp report` stays track's backlog status.)
   - **SIBLING (route, don't reimplement)**: dispatch/subagents → `remote delegate`/`remote run`
-    (grounded `remote/docs/superpowers/specs/2026-06-09-cross-type-agent-delegation-design.md`);
-    plan-state → `track` (emit `WorkEvent` → `stp track ingest`).
-  - **The matchid-reflex fix (cheapest, do first)**: a `using-discipline` index + the supersede
-    directive (already on `.claude/skills/scope-check/SKILL.md:35`) stamped into every regenerated
-    discipline skill, multi-host (claude/codex/gemini) via `install-skills --host`; plus BR-42k
-    quiet-mode so an agent sees `harness discipline …`, not superpowers. Trigger interception is
-    host-level → only skill-text supersession does it, no CLI verb can.
+    (grounded `remote/docs/superpowers/specs/2026-06-09-cross-type-agent-delegation-design.md`); plan-state
+    realization → `track` (emit `WorkEvent` → track ingests; track owns AWAITED/DROPPED/DONE/TO-DO).
+  - **The matchid-reflex fix (cheapest, do first)**: the `harness/using-harness` index + the supersede
+    directive (already on `.claude/skills/scope-check/SKILL.md:35`) stamped into every regenerated `harness/*`
+    skill, multi-host (claude/codex/gemini) via `harness skills install --host`; plus BR-42k quiet-mode so an
+    agent reaches `harness/*`, not superpowers. Trigger interception is host-level → only skill-text
+    supersession does it, no CLI verb can.
   - Absorbs the dissolved BR-42k. NOTE: this SUPERSEDES the prior `SPEC_STUDY_HARNESS_WORKFLOW_ARTICULATION.md`
     "delegate ideation/TDD/debug to superpowers" stance — record as a spec-evol amendment.
 - [ ] **42h-L4 — genericity G1–G6** (`spec/SPEC_STUDY_HARNESS_GENERICITY_AUDIT.md`): plan-adapter SPI +
