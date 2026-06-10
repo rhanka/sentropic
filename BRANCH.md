@@ -36,7 +36,13 @@ Opus 4.8 peer co-design + track solicitation (see `plan/42h-BRANCH_feat-harness-
 - **Exception process**: declare `BR42h-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- none open.
+- **UAT-B result (agent-driven, 2026-06-10)** `acknowledge`: real agents `claude` + `codex` BOTH chose
+  `harness/debug` + `harness check scope` + `harness/brainstorm` over the superpowers equivalents (the
+  supersede directive works). `gemini` `attention`: env-blocked — headless CLI demands `GEMINI_API_KEY`
+  (only OAuth creds present in this box), so its live run could not complete. NOT a harness defect: the
+  `gemini` install path is implemented + unit-tested (`skills install --host gemini`), and the directive
+  is host-agnostic skill text validated identically by 2/3 real agents. User can run the gemini in-vivo
+  check with their own key.
 
 ## AI Flaky tests
 - N/A — harness has no AI/provider-dependent tests (pure deterministic unit tests).
@@ -93,5 +99,6 @@ Opus 4.8 peer co-design + track solicitation (see `plan/42h-BRANCH_feat-harness-
   - [x] `make typecheck-harness` clean + `make test-harness` 61/61 + `make pack-harness` (tarball ships dist + 7 skills/).
   - [x] Bump `packages/harness/package.json` 0.1.1 → 0.2.0 (minor: additive verb surface) + description.
   - [x] Update `README.md` verb table + skill-pack section.
-  - [ ] Agent-driven UAT: reproduce the harness-core pre-UAT (claude/codex/gemini invoke harness verbs, not superpowers).
+  - [x] Agent-driven UAT: UAT-A real built bin runs every verb (correct output + exit codes); UAT-B real
+    agents claude+codex choose harness verbs over superpowers (gemini env-blocked on API key — see Feedback Loop).
   - [ ] Final gate: PR with this `BRANCH.md` as body → CI green → remove `BRANCH.md` → merge (user authorized loop-until-merge).
