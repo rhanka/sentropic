@@ -72,12 +72,13 @@ Opus 4.8 peer co-design + track solicitation (see `plan/42h-BRANCH_feat-harness-
   - [x] Tests `tests/cli/method-verbs.spec.ts` (10 tests: routing, `--json` WorkEvent, skill pointers, sub-verb positional, usage errors).
   - [x] Lot gate: typecheck clean + test-harness 46/46 green.
 
-- [ ] **Lot 3 — mechanical producers: `verify` / `init` / `audit`**
-  - [ ] `harness verify --category <c> [--json]` — category roll-up emitting a `VerificationRun` (reuses checks).
-  - [ ] `harness init [--profile sentropic|stub]` — emits a profile scaffold (the SPI data) for any repo.
-  - [ ] `harness audit [--staged-files …] [--branch-md …] [--profile …]` — repo-vs-profile drift → `VerificationRun(static)`.
-  - [ ] Tests `tests/cli/mechanical-verbs.spec.ts`.
-  - [ ] Lot gate: `make typecheck-harness && make test-harness ENV=test-harness-verbs`.
+- [x] **Lot 3 — mechanical producers: `verify` / `init` / `audit`**
+  - [x] `harness verify --category <c> [--json]` — category roll-up emitting a `VerificationRun` (aggregates C1+C2).
+  - [x] `harness init [--profile sentropic|stub]` — emits a profile descriptor (the SPI data) for any repo.
+  - [x] `harness audit [--staged-files …] [--branch-md …] [--profile …]` — repo-vs-profile drift → `VerificationRun(static)`.
+  - [x] Shared `src/cli/scope.ts` (de-dup: `check scope` + `verify` + `audit` parse BRANCH.md in one place).
+  - [x] Tests `tests/cli/mechanical-verbs.spec.ts` (11 tests).
+  - [x] Lot gate: typecheck clean + test-harness 57/57 green. NB: run `make` with `-C <worktree>` (cwd reverts to root across turns).
 
 - [ ] **Lot 4 — `harness/*` skill pack + `skills install` plan**
   - [ ] `packages/harness/skills/using-harness/SKILL.md` (index + supersede directive) + `brainstorm`,

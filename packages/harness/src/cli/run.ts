@@ -1,18 +1,21 @@
-import { readFileSync } from 'node:fs';
-import { parseBranchMd } from '../branch-md/parse.js';
-import { checkScope } from '../checks/scope-check.js';
 import { checkBranch } from '../checks/branch-check.js';
 import { toVerificationRun } from '../run/emit.js';
 import { sentropicProfile } from '../profile/sentropic.js';
 import { stubProfile } from '../profile/stub.js';
 import type { HarnessProfile } from '../profile/profile.js';
 import type { CheckResult, VerificationCategory } from '../artifacts/verification-run.js';
-import { parseFlags, str, list, type FlagValue } from './args.js';
+import { parseFlags, str, type FlagValue } from './args.js';
+import { scopeFromFlags } from './scope.js';
 import { handleMethodVerb } from './method-verbs.js';
+import { handleMechanicalVerb } from './mechanical-verbs.js';
 
 const USAGE = [
   'usage: harness check <scope|branch> [--current-branch <b>] [--expected-branch <b>] ' +
     '[--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--json]',
+  '       harness verify [--category static|unit|integration|e2e|ci|uat] [--staged-files <list>] ' +
+    '[--current-branch <b>] [--expected-branch <b>] [--branch-md <path>] [--profile sentropic|stub] [--json]',
+  '       harness init [--profile sentropic|stub] [--json]',
+  '       harness audit [--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--json]',
   '       harness brainstorm [<topic>] [--peers <n>] [--ladder study|vol|evol] [--json]',
   '       harness test [<scope>] [--category unit|integration|e2e] [--watch] [--json]',
   '       harness debug [<symptom>] [--json]',
@@ -43,26 +46,12 @@ function handleCheck(
   if (sub === 'scope') {
     code = 'C2';
     commandLabel = 'harness check scope';
-    const branchMdPath = str(flags['branch-md']);
-    let parsed: ReturnType<typeof parseBranchMd> | undefined;
-    if (branchMdPath) {
-      try {
-        parsed = parseBranchMd(readFileSync(branchMdPath, 'utf8'));
-      } catch {
-        out(`harness: cannot read plan file: ${branchMdPath}`);
-        return 2;
-      }
+    const outcome = scopeFromFlags(flags, profile);
+    if (outcome.unreadable !== undefined) {
+      out(`harness: cannot read plan file: ${outcome.unreadable}`);
+      return 2;
     }
-    result = checkScope({
-      stagedFiles: list(flags['staged-files']),
-      boundary: {
-        allowed: parsed?.allowedPaths ?? [],
-        forbidden: parsed?.forbiddenPaths ?? [],
-        conditional: parsed?.conditionalPaths ?? [],
-      },
-      profile,
-      declaredExceptions: parsed?.exceptions ?? [],
-    });
+    result = outcome.result as CheckResult;
   } else {
     code = 'C1';
     commandLabel = 'harness check branch';
@@ -111,6 +100,9 @@ export function runHarnessCli(argv: string[], out: (s: string) => void): number 
   if (command === 'check') {
     return handleCheck(positionals, flags, out);
   }
+
+  const mechanicalCode = handleMechanicalVerb(positionals, flags, out);
+  if (mechanicalCode !== null) return mechanicalCode;
 
   const methodCode = handleMethodVerb(positionals, flags, out);
   if (methodCode !== null) return methodCode;
