@@ -90,8 +90,8 @@ Opus 4.8 peer co-design + track solicitation (see `plan/42h-BRANCH_feat-harness-
   - [x] Lot gate: typecheck clean + test-harness 61/61 green.
 
 - [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-harness && make test-harness ENV=test-harness-verbs && make pack-harness`.
-  - [ ] Bump `packages/harness/package.json` 0.1.1 → 0.2.0 (minor: additive verb surface).
-  - [ ] Update `README.md` verb table.
-  - [ ] Final gate: PR with this `BRANCH.md` as body → CI green → remove `BRANCH.md` → push → merge.
-  - [ ] STOP + escalate to user before any push/PR/merge (outward/irreversible).
+  - [x] `make typecheck-harness` clean + `make test-harness` 61/61 + `make pack-harness` (tarball ships dist + 7 skills/).
+  - [x] Bump `packages/harness/package.json` 0.1.1 → 0.2.0 (minor: additive verb surface) + description.
+  - [x] Update `README.md` verb table + skill-pack section.
+  - [ ] Agent-driven UAT: reproduce the harness-core pre-UAT (claude/codex/gemini invoke harness verbs, not superpowers).
+  - [ ] Final gate: PR with this `BRANCH.md` as body → CI green → remove `BRANCH.md` → merge (user authorized loop-until-merge).

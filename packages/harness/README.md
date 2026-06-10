@@ -1,7 +1,8 @@
 # @sentropic/harness
 
-Neutral, host-agnostic **code-work / PR-workflow** tooling for AI-driven development:
-branch / scope / lot / verify discipline, behind a pluggable **profile** SPI.
+Neutral, host-agnostic **code-work / PR-workflow** tooling for AI-driven development: a homogeneous
+`harness <verb>` method layer (branch · scope · verify · test · debug · review · brainstorm · plan)
+behind a pluggable **profile** SPI. The NATIVE sentropic replacement for superpowers.
 
 - **Tooling-only**: zero product-runtime coupling (no Drizzle / Hono / Svelte / Mistral),
   zero `@sentropic/*` deps. Node built-ins + TypeScript only.
@@ -31,14 +32,34 @@ harness check branch --current-branch "$(git branch --show-current)" --expected-
 harness check scope --branch-md BRANCH.md --staged-files "$(git diff --cached --name-only | paste -sd,)" [--json]
 ```
 
-`--json` emits a neutral `VerificationRun`. `--profile sentropic|stub` selects the policy
-pack (default `sentropic`). In an `@sentropic` repo, `make scope-check` wraps the staged+
-unstaged scope check; agents (Claude/Codex/Gemini) are told to use harness — not a generic
-verification skill — for branch/scope discipline (see `AGENTS.md`/`GEMINI.md`).
+`--json` emits a neutral artifact. `--profile sentropic|stub` selects the policy pack (default
+`sentropic`). In an `@sentropic` repo, `make scope-check` wraps the staged+unstaged scope check.
 
-## This slice
-`BRANCH.md` parser · `ScopeBoundary` · **C1** branch-check · **C2** scope-check (advisory,
-BR25 **D5** Layer A) · neutral `VerificationRun`.
+## Verbs
 
-See `BRANCH.md` (branch root) for the lot plan and the design articulation specs
-(`SPEC_STUDY_HARNESS_WORKFLOW_ARTICULATION.md`, `SPEC_STUDY_CLI_ECOSYSTEM_GAPS.md`).
+`harness <verb> [<subject>] [--<option>]`, homogeneous with the sibling CLIs (`stp harness <verb>`):
+
+| Verb | Kind | Emits | Reasoning |
+|---|---|---|---|
+| `check scope\|branch` | producer | `VerificationRun` | — |
+| `verify --category <c>` | producer | `VerificationRun` (roll-up) | — |
+| `init` / `audit` | producer | profile descriptor / `VerificationRun` | skill `harness/adopt` |
+| `brainstorm [--peers] [--ladder]` | recorder | `WorkEvent` | skill `harness/brainstorm` |
+| `test [--category]` | recorder | `WorkEvent` | skill `harness/test` |
+| `debug` | recorder | `WorkEvent` | skill `harness/debug` |
+| `review --consensus [--peers]` | recorder | `WorkEvent` | skill `harness/review` |
+| `plan [--lots]` | recorder | `WorkEvent` | skill `harness/plan` |
+| `branch init\|close` | recorder | `WorkEvent` | — |
+| `skills install --host <h>` | recorder | `WorkEvent` | installs the pack |
+
+**Producers** compute a pass/fail verdict; **recorders** scaffold + record a narrative `WorkEvent` and
+point to a `harness/*` skill that carries the LLM reasoning (the binary never does the thinking).
+
+## Skill pack (superpowers replacement)
+
+`harness skills install --host claude|codex|gemini` installs `harness/{using-harness,brainstorm,test,
+debug,review,plan,adopt}`. `harness/using-harness` loads first and **supersedes** the superpowers skills
+for those acts. superpowers is never a dependency; the user may opt to keep it per repo.
+
+See `BRANCH.md` (branch root) for the lot plan and the design specs
+(`SPEC_DECISION_SCOPE_OWNERSHIP_HARNESS_TRACK_STP.md`, `SPEC_STUDY_HARNESS_WORKFLOW_ARTICULATION.md`).
