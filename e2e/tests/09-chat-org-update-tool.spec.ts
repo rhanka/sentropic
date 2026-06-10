@@ -3,24 +3,23 @@ import { test, expect, request } from '@playwright/test';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 /**
- * Targeted proof for the owner-reported issue: "the model failed to update an
+ * Targeted proof for the owner-reported BUG-1: "the model failed to update an
  * organization's technologies field". This spec seeds an organization, asks the
  * chat (DEFAULT e2e model) to update its `technologies` field, waits for the run
  * to complete, and asserts via API that the field actually changed.
  *
- * Conclusion driver: if the DEFAULT model succeeds here, the owner's failure with
- * "GPT-5.4 Nano" is a model-capability issue, not a platform/tool bug.
+ * ROOT CAUSE (pre-#277): the DEFAULT model (gpt-4.1-nano) reproducibly calls
+ * organization_update with a `patch` object (or an `updates` OBJECT) instead of
+ * the declared required `updates:[{field,value}]` ARRAY. The old executor required
+ * an array and rejected with "updates is required"; the model did not self-correct.
  *
- * RECORDED CONCLUSION (2026-06-07, 2 runs RETRIES=0, identical signature): the
- * DEFAULT model (gpt-4.1-nano) reproducibly FAILS. It calls organization_update
- * with {"organizationId":"...","patch":{"technologies":"..."}} instead of the
- * declared required `updates:[{field,value}]`, receives the tool error
- * "updates is required", and does NOT self-correct (run 1: apologizes and stops;
- * run 2: asks the user which shape to use). The platform tool pipeline is
- * correct: schema declares `updates` (required, enum'd fields), args stream and
- * parse fine, the error is fed back to the model. Model-capability issue.
- * Kept as a fixme-gated diagnostic so CI group 08 stays green; re-enable when
- * the default e2e model can follow the declared tool schema.
+ * FIX (#277, merged): tool-service `normalizeFieldUpdates` coerces the
+ * model-emitted `updates` object / `patch` object into the canonical
+ * `[{field,value}]` array BEFORE the validation guard. So the exact mis-call the
+ * weak model makes now applies the update instead of erroring. This spec is the
+ * end-to-end proof: it drives the REAL model and asserts the persisted field
+ * actually changes. UN-FIXMED for #277 — the executor-level tolerance is what
+ * makes the field change deterministic regardless of which shape the model emits.
  */
 test.setTimeout(8 * 60_000);
 
@@ -47,10 +46,6 @@ test.describe('Chat organization_update tool', () => {
   test('updates the organization technologies field on request (default model)', async ({
     browser,
   }) => {
-    test.fixme(
-      true,
-      'Default model gpt-4.1-nano reproducibly mis-calls organization_update (sends `patch` object instead of required `updates` array) and does not self-correct from the tool error — see header comment for the recorded evidence.',
-    );
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,
@@ -159,6 +154,11 @@ test.describe('Chat organization_update tool', () => {
         if (after !== before && after.toLowerCase().includes('kubernetes')) break;
         await page.waitForTimeout(2000);
       }
+
+      // Concrete proof line for the report (reporter=list surfaces console.log).
+      console.log(
+        `[org-update.spec] BUG-1 proof — technologies before=${JSON.stringify(before)} after=${JSON.stringify(after)} toolCallObserved=${toolCallObserved}`,
+      );
 
       // Primary assertion: the field changed and carries the requested value.
       expect(after).not.toBe(before);
