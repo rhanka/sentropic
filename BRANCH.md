@@ -80,13 +80,14 @@ Opus 4.8 peer co-design + track solicitation (see `plan/42h-BRANCH_feat-harness-
   - [x] Tests `tests/cli/mechanical-verbs.spec.ts` (11 tests).
   - [x] Lot gate: typecheck clean + test-harness 57/57 green. NB: run `make` with `-C <worktree>` (cwd reverts to root across turns).
 
-- [ ] **Lot 4 — `harness/*` skill pack + `skills install` plan**
-  - [ ] `packages/harness/skills/using-harness/SKILL.md` (index + supersede directive) + `brainstorm`,
-    `test`, `debug`, `review`, `plan`, `adopt` SKILL.md (native reimplementations, grounded on our rules).
-  - [ ] `harness skills install --host claude|codex|gemini` prints the install plan (source skills → host dir).
-  - [ ] `package.json` `files` includes `skills` (ships in the npm tarball).
-  - [ ] Tests `tests/cli/skills-install.spec.ts` + a skill-pack inventory assertion.
-  - [ ] Lot gate: `make typecheck-harness && make test-harness ENV=test-harness-verbs`.
+- [x] **Lot 4 — `harness/*` skill pack + `skills install` plan**
+  - [x] `packages/harness/skills/{using-harness,brainstorm,test,debug,review,plan,adopt}/SKILL.md` —
+    native reimplementations grounded on our rules; using-harness carries the supersede directive.
+  - [x] `src/skills/manifest.ts` (canonical pack inventory + host dirs) exported from `index.ts`.
+  - [x] `harness skills install --host claude|codex|gemini` prints the per-skill install plan (source → host dir).
+  - [x] `package.json` `files` includes `skills` (ships in the npm tarball).
+  - [x] Tests `tests/cli/skills-install.spec.ts` (4 tests, incl. fs inventory: every manifest entry ships a SKILL.md).
+  - [x] Lot gate: typecheck clean + test-harness 61/61 green.
 
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-harness && make test-harness ENV=test-harness-verbs && make pack-harness`.
