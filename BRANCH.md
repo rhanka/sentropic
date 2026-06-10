@@ -64,13 +64,13 @@ Opus 4.8 peer co-design + track solicitation (see `plan/42h-BRANCH_feat-harness-
   - [x] Tests `tests/artifacts/work-event.spec.ts` (4 tests).
   - [x] Lot gate: typecheck-harness clean + test-harness 36/36 green (ENV=test-harness-verbs).
 
-- [ ] **Lot 2 — CLI verb router + method verbs**
-  - [ ] Refactor `src/cli/run.ts` to a verb-dispatch table; keep `check scope|branch` byte-identical.
-  - [ ] `src/cli/verbs/*.ts` for `brainstorm`, `test`, `debug`, `review`, `plan`, `branch` (init|close),
-    `skills` (install) — each emits a `WorkEvent` + prints guidance/skill pointer (pure).
-  - [ ] Updated `USAGE` listing all verbs.
-  - [ ] Tests `tests/cli/method-verbs.spec.ts` (routing, `--json` WorkEvent, skill pointers, sub-verb positional).
-  - [ ] Lot gate: `make typecheck-harness && make test-harness ENV=test-harness-verbs`.
+- [x] **Lot 2 — CLI verb router + method verbs**
+  - [x] Refactor `src/cli/run.ts` to a verb-dispatch table; `check scope|branch` byte-identical (cli-smoke 6/6 green).
+  - [x] `src/cli/args.ts` (shared argv helpers) + `src/cli/method-verbs.ts` for `brainstorm`, `test`, `debug`,
+    `review`, `plan`, `branch` (init|close), `skills` (install) — each emits a `WorkEvent` + prints skill pointer (pure).
+  - [x] Updated `USAGE` listing all verbs.
+  - [x] Tests `tests/cli/method-verbs.spec.ts` (10 tests: routing, `--json` WorkEvent, skill pointers, sub-verb positional, usage errors).
+  - [x] Lot gate: typecheck clean + test-harness 46/46 green.
 
 - [ ] **Lot 3 — mechanical producers: `verify` / `init` / `audit`**
   - [ ] `harness verify --category <c> [--json]` — category roll-up emitting a `VerificationRun` (reuses checks).

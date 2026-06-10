@@ -7,58 +7,31 @@ import { sentropicProfile } from '../profile/sentropic.js';
 import { stubProfile } from '../profile/stub.js';
 import type { HarnessProfile } from '../profile/profile.js';
 import type { CheckResult, VerificationCategory } from '../artifacts/verification-run.js';
+import { parseFlags, str, list, type FlagValue } from './args.js';
+import { handleMethodVerb } from './method-verbs.js';
 
-type FlagValue = string | boolean;
-
-function parseFlags(args: string[]): { positionals: string[]; flags: Record<string, FlagValue> } {
-  const positionals: string[] = [];
-  const flags: Record<string, FlagValue> = {};
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a.startsWith('--')) {
-      const key = a.slice(2);
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith('--')) {
-        flags[key] = true;
-      } else {
-        flags[key] = next;
-        i++;
-      }
-    } else {
-      positionals.push(a);
-    }
-  }
-  return { positionals, flags };
-}
-
-function str(v: FlagValue | undefined): string | undefined {
-  return typeof v === 'string' ? v : undefined;
-}
-
-function list(v: FlagValue | undefined): string[] {
-  const s = str(v);
-  return s ? s.split(/[\s,]+/).filter(Boolean) : [];
-}
-
-const USAGE =
+const USAGE = [
   'usage: harness check <scope|branch> [--current-branch <b>] [--expected-branch <b>] ' +
-  '[--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--json]';
+    '[--staged-files <list>] [--branch-md <path>] [--profile sentropic|stub] [--json]',
+  '       harness brainstorm [<topic>] [--peers <n>] [--ladder study|vol|evol] [--json]',
+  '       harness test [<scope>] [--category unit|integration|e2e] [--watch] [--json]',
+  '       harness debug [<symptom>] [--json]',
+  '       harness review [<target>] [--consensus] [--peers <n>] [--json]',
+  '       harness plan [<spec>] [--lots <n>] [--json]',
+  '       harness branch <init|close> [<slug>] [--json]',
+  '       harness skills install --host <claude|codex|gemini> [--json]',
+].join('\n');
 
-/**
- * Pure, arg-based CLI driver — reads everything from `argv`, writes via `out`, returns an exit code.
- * No internal git calls (the caller supplies branch + staged files), no `process.exit`.
- * Advisory (D5 Layer A): a failing check returns 0; only a usage error returns non-zero.
- * Acquiring git state under Docker-first (the `make scope-check` passthrough) is a separate,
- * to-be-double-reviewed concern.
- */
-export function runHarnessCli(argv: string[], out: (s: string) => void): number {
-  const { positionals, flags } = parseFlags(argv);
-  const command = positionals[0];
+/** The `check scope|branch` static checks (C2/C1) — emit a neutral VerificationRun. */
+function handleCheck(
+  positionals: string[],
+  flags: Record<string, FlagValue>,
+  out: (s: string) => void,
+): number {
   const sub = positionals[1];
-
-  if (command !== 'check' || (sub !== 'scope' && sub !== 'branch')) {
+  if (sub !== 'scope' && sub !== 'branch') {
     out(USAGE);
-    return command === undefined ? 0 : 2;
+    return 2;
   }
 
   const profile: HarnessProfile = str(flags.profile) === 'stub' ? stubProfile : sentropicProfile;
@@ -121,4 +94,27 @@ export function runHarnessCli(argv: string[], out: (s: string) => void): number 
   }
 
   return 0;
+}
+
+/**
+ * Pure, arg-based CLI driver — reads everything from `argv`, writes via `out`, returns an exit code.
+ * No internal git calls (the caller supplies branch + staged files), no `process.exit`, no fs writes.
+ * Advisory (D5 Layer A): a failing check returns 0; only a usage error returns non-zero.
+ *
+ * Verb families: `check` (C1/C2 → VerificationRun); method/recorder verbs (brainstorm/test/debug/
+ * review/plan/branch/skills → WorkEvent + skill pointer, see `method-verbs.ts`).
+ */
+export function runHarnessCli(argv: string[], out: (s: string) => void): number {
+  const { positionals, flags } = parseFlags(argv);
+  const command = positionals[0];
+
+  if (command === 'check') {
+    return handleCheck(positionals, flags, out);
+  }
+
+  const methodCode = handleMethodVerb(positionals, flags, out);
+  if (methodCode !== null) return methodCode;
+
+  out(USAGE);
+  return command === undefined ? 0 : 2;
 }
