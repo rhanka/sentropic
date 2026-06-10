@@ -15,6 +15,16 @@ export type {
   CheckResult,
 } from './artifacts/verification-run.js';
 
+// Neutral narrative artifact emitted by method/branch verbs (ingested by a track-side adapter).
+export type {
+  WorkEvent,
+  WorkEventVerb,
+  WorkEventStatus,
+  WorkEventValue,
+} from './artifacts/work-event.js';
+export { toWorkEvent } from './run/work-event.js';
+export type { WorkEventInput, WorkEventContext } from './run/work-event.js';
+
 // Policy SPI + profiles (policy-as-data; engine is generic).
 export type { HarnessProfile } from './profile/profile.js';
 export { sentropicProfile } from './profile/sentropic.js';
@@ -35,6 +45,10 @@ export { checkScope } from './checks/scope-check.js';
 export type { ScopeCheckInput } from './checks/scope-check.js';
 export { toVerificationRun } from './run/emit.js';
 export type { NamedCheck, VerificationContext } from './run/emit.js';
+
+// Harness skill-pack inventory — the native superpowers-surface replacement.
+export { HARNESS_SKILLS, HOST_SKILL_DIR, isHostId } from './skills/manifest.js';
+export type { SkillEntry, HostId } from './skills/manifest.js';
 
 // Pure, arg-based CLI driver (the `harness` bin is a thin wrapper over this).
 export { runHarnessCli } from './cli/run.js';

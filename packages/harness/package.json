@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/harness",
-  "version": "0.1.1",
-  "description": "Neutral, host-agnostic code-work / PR-workflow tooling for AI dev: branch/scope/lot/verify discipline. Tooling-only, zero product-runtime deps. (BR-42h)",
+  "version": "0.2.0",
+  "description": "Neutral, host-agnostic code-work / PR-workflow tooling for AI dev: a homogeneous `harness <verb>` method layer (branch/scope/verify/test/debug/review/brainstorm/plan), the native superpowers replacement. Tooling-only, zero product-runtime deps. (BR-42h)",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,7 @@
   },
   "files": [
     "dist",
+    "skills",
     "README.md",
     "LICENSE"
   ],
