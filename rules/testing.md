@@ -39,7 +39,7 @@ On TARGET=production (requires `make build-api build-ui-image` first):
 
 ## AI Flaky Allowlist (Non-blocking)
 - API: `make test-api-ai`, `api/tests/ai/**`
-- E2E: `e2e/tests/00-ai-generation.spec.ts`, `e2e/tests/03-chat.spec.ts`, `e2e/tests/03-chat-chrome-extension.spec.ts`, `e2e/tests/07_comment_assistant.spec.ts`, `e2e/tests/08-chat-multitool-demo.spec.ts`, `e2e/tests/08-chat-org-update-tool.spec.ts`
+- E2E: `e2e/tests/00-ai-generation.spec.ts`, `e2e/tests/03-chat.spec.ts`, `e2e/tests/03-chat-chrome-extension.spec.ts`, `e2e/tests/07_comment_assistant.spec.ts`, `e2e/tests/09-chat-multitool-demo.spec.ts`, `e2e/tests/09-chat-org-update-tool.spec.ts`
 - Acceptance: failure signature indicates provider/network/model nondeterminism
 - Must record exact command + failing file + failure signature in `BRANCH.md`
 - User sign-off required before merge
