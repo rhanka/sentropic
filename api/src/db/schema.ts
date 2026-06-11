@@ -129,9 +129,12 @@ export const jobQueue = pgTable('job_queue', {
   result: text('result'), // JSON string
   error: text('error'),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  startedAt: text('started_at'),
-  completedAt: text('completed_at')
-});
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  attempts: integer('attempts').notNull().default(0),
+}, (table) => ({
+  statusStartedAtIdx: index('job_queue_status_started_at_idx').on(table.status, table.startedAt),
+}));
 
 // WebAuthn Authentication Tables
 export const users = pgTable('users', {
@@ -472,6 +475,7 @@ export const chatStreamEvents = pgTable('chat_stream_events', {
   streamIdIdx: index('chat_stream_events_stream_id_idx').on(table.streamId),
   sequenceIdx: index('chat_stream_events_sequence_idx').on(table.streamId, table.sequence),
   streamIdSequenceUnique: uniqueIndex('chat_stream_events_stream_id_sequence_unique').on(table.streamId, table.sequence),
+  createdAtIdx: index('chat_stream_events_created_at_idx').on(table.createdAt),
 }));
 
 export const chatMessageFeedback = pgTable('chat_message_feedback', {
@@ -864,23 +868,6 @@ export const taskDependencies = pgTable('task_dependencies', {
   workspaceIdIdx: index('task_dependencies_workspace_id_idx').on(table.workspaceId),
 }));
 
-export const taskIoContracts = pgTable('task_io_contracts', {
-  id: text('id').primaryKey(),
-  workspaceId: text('workspace_id')
-    .notNull()
-    .references(() => workspaces.id, { onDelete: 'cascade' }),
-  taskId: text('task_id')
-    .notNull()
-    .references(() => tasks.id, { onDelete: 'cascade' }),
-  schemaFormat: text('schema_format').notNull().default('json_schema'),
-  inputSchema: jsonb('input_schema').notNull().default(sql`'{}'::jsonb`),
-  outputSchema: jsonb('output_schema').notNull().default(sql`'{}'::jsonb`),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
-}, (table) => ({
-  taskIdUnique: uniqueIndex('task_io_contracts_task_id_unique').on(table.taskId),
-  workspaceIdIdx: index('task_io_contracts_workspace_id_idx').on(table.workspaceId),
-}));
 
 export const agentDefinitions = pgTable('agent_definitions', {
   id: text('id').primaryKey(),
@@ -1265,7 +1252,6 @@ export type TodoRow = typeof todos.$inferSelect;
 export type TaskRow = typeof tasks.$inferSelect;
 export type TodoDependencyRow = typeof todoDependencies.$inferSelect;
 export type TaskDependencyRow = typeof taskDependencies.$inferSelect;
-export type TaskIoContractRow = typeof taskIoContracts.$inferSelect;
 export type GuardrailRow = typeof guardrails.$inferSelect;
 export type WorkflowDefinitionRow = typeof workflowDefinitions.$inferSelect;
 export type WorkflowDefinitionTaskRow = typeof workflowDefinitionTasks.$inferSelect;
