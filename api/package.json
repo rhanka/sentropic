@@ -27,6 +27,7 @@
     "test:security": "vitest run tests/security",
     "test:unit": "vitest run tests/unit",
     "db:generate": "drizzle-kit generate",
+    "db:generate-control": "drizzle-kit generate --config=drizzle.control.config.ts",
     "db:migrate": "tsx src/scripts/db-migrate.ts",
     "db:push": "drizzle-kit push",
     "db:status": "tsx src/scripts/db-status.ts",
