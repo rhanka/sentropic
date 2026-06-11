@@ -84,3 +84,42 @@ describe('harness method verbs (WorkEvent recorders)', () => {
     expect(capture(['skills', 'install', '--host', 'bogus']).code).toBe(2);
   });
 });
+
+describe('harness test — category validation (BR-42h-L3 0.2.1)', () => {
+  it('rejects an unknown --category (exit 2 + usage)', () => {
+    const { code, text } = capture(['test', '--category', 'bogus']);
+    expect(code).toBe(2);
+    expect(text).toMatch(/usage: harness test .*unit\|integration\|e2e/);
+  });
+
+  it('accepts the valid categories', () => {
+    for (const c of ['unit', 'integration', 'e2e']) {
+      expect(capture(['test', '--category', c]).code).toBe(0);
+    }
+  });
+
+  it('no category is valid (category is optional)', () => {
+    expect(capture(['test']).code).toBe(0);
+    expect(capture(['test', 'packages/harness']).code).toBe(0);
+  });
+
+  it('--json emits a WorkEvent carrying the category + watch', () => {
+    const { obj } = json(['test', 'pkg', '--category', 'integration', '--watch', '--json']);
+    expect(obj).toMatchObject({ verb: 'test', status: 'requested', skill: 'harness/test' });
+    expect((obj.detail as Record<string, unknown>).category).toBe('integration');
+    expect((obj.detail as Record<string, unknown>).watch).toBe(true);
+  });
+});
+
+describe('harness debug/plan — WorkEvent --json shape (completeness)', () => {
+  it('debug --json is an opened WorkEvent pointing to harness/debug', () => {
+    const { obj } = json(['debug', 'stream-freeze', '--json']);
+    expect(obj).toMatchObject({ verb: 'debug', status: 'opened', subject: 'stream-freeze', skill: 'harness/debug' });
+  });
+
+  it('plan --json carries lots in detail', () => {
+    const { obj } = json(['plan', 'SPEC_X', '--lots', '4', '--json']);
+    expect(obj).toMatchObject({ verb: 'plan', status: 'opened', skill: 'harness/plan' });
+    expect((obj.detail as Record<string, unknown>).lots).toBe(4);
+  });
+});
