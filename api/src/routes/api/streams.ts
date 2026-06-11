@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { env } from '../../config/env';
 import { readAppContractStreamEvents, type ChatStreamPort } from '../../../../packages/chat-server/src/index';
 import { db, pool } from '../../db/client';
 import { listActiveStreamIds } from '../../services/stream-service';
@@ -218,10 +219,20 @@ async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
 
 // GET /streams/active?since_minutes=360&limit=200
 streamsRouter.get('/active', async (c) => {
-  const sinceMinutes = Number(c.req.query('since_minutes') || '360');
+  const sinceMinutesRaw = Number(c.req.query('since_minutes') || '360');
   const limit = Number(c.req.query('limit') || '200');
+
+  // D2.c: clamp since_minutes to the retention floor so callers cannot request
+  // events older than the purge retention window (silent post-purge truncation).
+  const retentionDays = env.STREAM_RETENTION_DAYS ?? 7;
+  const retentionMinutes = retentionDays * 24 * 60;
+  const sinceMinutes = Math.min(
+    Number.isFinite(sinceMinutesRaw) ? sinceMinutesRaw : 360,
+    retentionMinutes,
+  );
+
   const streamIds = await listActiveStreamIds({
-    sinceMinutes: Number.isFinite(sinceMinutes) ? sinceMinutes : 360,
+    sinceMinutes,
     limit: Number.isFinite(limit) ? limit : 200
   });
   return c.json({ streamIds });
