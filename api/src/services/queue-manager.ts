@@ -538,6 +538,14 @@ export class QueueManager {
     this.loadSettings();
   }
 
+  /**
+   * Returns the ids of all jobs currently in-flight in this process.
+   * Used by the queue reaper sweep to exclude live jobs from being reaped.
+   */
+  getLiveJobIds(): IterableIterator<string> {
+    return this.jobControllers.keys();
+  }
+
   private async notifyJobEvent(jobId: string): Promise<void> {
     const notifyPayload = JSON.stringify({ job_id: jobId });
     const client = await pool.connect();
@@ -3858,8 +3866,8 @@ export class QueueManager {
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
+      startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
       error: row.error || undefined,
     }));
   }
@@ -3977,8 +3985,8 @@ export class QueueManager {
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
+      startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
       error: row.error || undefined,
     }));
   }

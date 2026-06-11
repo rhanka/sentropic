@@ -8,6 +8,8 @@ import { purgeExpiredAuthData } from './services/challenge-purge';
 import { ensureAdminWorkspaceExists, claimAdminWorkspaceOwner } from './services/workspace-service';
 import { runAdminApprovalSweep } from './services/admin-approval-sweep';
 import { runChatTracePurge } from './services/chat-trace-sweep';
+import { runQueueReaperSweep } from './services/queue-reaper-sweep';
+import { runStreamEventsPurge } from './services/chat/stream-purge-sweep';
 import { createJwksAdapter } from './services/auth/jwks-adapter';
 import { lt } from 'drizzle-orm';
 
@@ -162,6 +164,30 @@ if (process.env.NODE_ENV !== 'test') {
       logger.error({ err: error }, 'Lock expiry sweep failed');
     });
   }, 30 * 1000);
+
+  // Queue reaper (WI-1): recover stranded `processing` jobs at boot (before any
+  // local jobs start → liveJobIds=[]) then every 5 minutes with live ids excluded.
+  // Boot sweep runs before any local job starts, so no live ids to skip.
+  await runQueueReaperSweep([]);
+  setInterval(() => {
+    // Import queueManager lazily to avoid circular-import at module load time.
+    import('./services/queue-manager').then(({ queueManager }) => {
+      const liveIds = Array.from(queueManager.getLiveJobIds());
+      void runQueueReaperSweep(liveIds);
+    }).catch((error) => {
+      logger.error({ err: error }, 'Queue reaper periodic sweep failed');
+    });
+  }, 5 * 60 * 1000); // every 5 minutes
+
+  // Stream events purge (WI-2): purge old chat_stream_events at boot, then daily.
+  try {
+    await runStreamEventsPurge();
+  } catch {
+    // already logged inside
+  }
+  setInterval(() => {
+    void runStreamEventsPurge();
+  }, 24 * 60 * 60 * 1000);
 }
 
 const [{ serve }, { app }] = await Promise.all([
