@@ -10,6 +10,7 @@ import { runAdminApprovalSweep } from './services/admin-approval-sweep';
 import { runChatTracePurge } from './services/chat-trace-sweep';
 import { runQueueReaperSweep } from './services/queue-reaper-sweep';
 import { runStreamEventsPurge } from './services/chat/stream-purge-sweep';
+import { outboxDispatcher } from './services/outbox/outbox-dispatcher';
 import { createJwksAdapter } from './services/auth/jwks-adapter';
 import { lt } from 'drizzle-orm';
 
@@ -188,6 +189,14 @@ if (process.env.NODE_ENV !== 'test') {
   setInterval(() => {
     void runStreamEventsPurge();
   }, 24 * 60 * 60 * 1000);
+
+  // Outbox dispatcher (BR-60 ARCH-14): LISTEN outbox_pending + periodic sweep.
+  // Claims control.event_outbox pending rows and emits via EventBusPort (pg NOTIFY).
+  try {
+    await outboxDispatcher.start();
+  } catch (error) {
+    logger.error({ err: error }, 'Outbox dispatcher failed to start');
+  }
 }
 
 const [{ serve }, { app }] = await Promise.all([
