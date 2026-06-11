@@ -46,7 +46,7 @@ The D11-governed surface = the exported public API of each non-private `@sentrop
 
 ## 7. Forks resolved + owner batch
 - **F1** strict 0.x mapping ✔ · **F2** build the surface-snapshot gate now (review keeps class-correctness) ✔ · **F3** optional-executor (patch) + behavioral CHANGELOG ✔.
-- **OWNER-IRREVERSIBLE DECISIONS (2, for the batched packet — do not fire piecemeal)**: (a) **`@sentropic/contracts` 1.0 graduation timing** (signals external-consumer stability, ties to B2B2B/marketplace/D10; reversible default = "0.x until first external consumer"); (b) **published app-template immutability + upgrade/rollback/down-migration guarantees** (calcifies once external instances exist). The engineering policy above is independent of both.
+- **OWNER-IRREVERSIBLE DECISIONS — RESOLVED (rhanka, 2026-06-11): DEFER BOTH**: (a) `@sentropic/contracts` stays **0.x until the first external (non-monorepo) consumer**, then graduates to 1.0; (b) published app-templates are **immutable + carry down-migrations** for rollback. The engineering policy above is independent of both and applies now.
 
 ## 8. Dependencies & non-goals
 - **Gates open** (this study unblocks): ARCH-14 comments-executor + any EventEnvelope field; flow-contracts adoption; ARCH-01 published app-template vocabulary (OD-2). **Buildable follow-up lot**: the CI surface-snapshot + pack/install-smoke gate (one lot). **Non-goals**: no contract mutation shipped; no CI implementation here; no licensing/marketplace (D10/ARCH-10).
