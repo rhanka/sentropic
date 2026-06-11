@@ -225,6 +225,13 @@
       "when": 1780617600000,
       "tag": "0031_tenancy_spine",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1781222400000,
+      "tag": "0032_data_hardening",
+      "breakpoints": true
     }
   ]
 }
