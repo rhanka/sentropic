@@ -3866,8 +3866,8 @@ export class QueueManager {
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
+      startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
       error: row.error || undefined,
     }));
   }
@@ -3985,8 +3985,8 @@ export class QueueManager {
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
+      startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
       error: row.error || undefined,
     }));
   }
