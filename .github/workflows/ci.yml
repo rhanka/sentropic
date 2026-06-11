@@ -703,7 +703,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Download API image artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -816,7 +816,7 @@ jobs:
         continue-on-error: true
       - name: Download API image artifact
         if: steps.check-api-image.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -829,7 +829,7 @@ jobs:
         continue-on-error: true
       - name: Download UI image artifact
         if: steps.check-ui-image.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -868,7 +868,7 @@ jobs:
         continue-on-error: true
       - name: Download API image artifact
         if: steps.check-api-image-vscode.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -881,7 +881,7 @@ jobs:
         continue-on-error: true
       - name: Download UI image artifact
         if: steps.check-ui-image-vscode.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -979,7 +979,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Download API image artifact
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -988,7 +988,7 @@ jobs:
         run: make load-api
       - name: Download UI image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -1059,7 +1059,7 @@ jobs:
         continue-on-error: true
       - name: Download UI image artifact
         if: steps.image-check.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -1095,7 +1095,7 @@ jobs:
         continue-on-error: true
       - name: Download API image artifact
         if: steps.image-check.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
