@@ -108,7 +108,11 @@ function build(verb: MethodVerb, positionals: string[], flags: Record<string, Fl
       };
     }
     case 'test': {
-      const detail = prune({ category: str(flags.category), watch: flags.watch === true });
+      const category = str(flags.category);
+      if (category !== undefined && category !== 'unit' && category !== 'integration' && category !== 'e2e') {
+        return { lines: ['usage: harness test [<scope>] [--category unit|integration|e2e] [--watch]'], code: 2 };
+      }
+      const detail = prune({ category, watch: flags.watch === true });
       return {
         input: { verb, status: 'requested', subject, skill: 'harness/test', detail },
         lines: [
