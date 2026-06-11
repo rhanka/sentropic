@@ -372,11 +372,18 @@ Freshness corrections for when it does land:
 v1 undersold the scope. Honest split:
 
 **ARCH-21a — integrative, dispatchable now** (over existing abstractions):
-- `ResourceProvider` port + verb dispatcher + canonical `ResourceRef`/etag
-  (catalog + MCP id derivation/stability is the net-new core here);
-- catalog projection mounts `/tools /skills /agents /workflows /canvas`;
-- MCP `/mcp/<server>/tools` + URI-preserving `/mcp/<server>/resources` read
-  (one server proof — the named missing mapping);
+- `ResourceProvider` PORT + verb dispatcher + canonical `ResourceRef`/etag
+  (the port abstraction is the net-new Resource Plane core);
+- catalog projection mounts `/tools /skills /agents /workflows /canvas` — the
+  Resource Plane CONSUMES the catalog (it does NOT own the catalog sources).
+  The `CatalogSource → ResourceProvider` ADAPTER (so the catalog mounts under
+  the plane) is a CATALOG-lineage deliverable (BR-42j, WP-CATALOG), not BR-70;
+- `/mcp/<server>/tools` mount (tools already mapped by `McpCatalogSource`,
+  BR-42b). MCP `/mcp/<server>/resources` requires extending `McpCatalogSource`
+  to map `resources/list`+`read` (URI-preserving) — this MAPPING is a
+  CATALOG-lineage deliverable (BR-42i, the BR-19b/BR-42b continuation), NOT a
+  BR-70 deliverable; the Resource Plane only PROJECTS what the catalog source
+  exposes. BR-70 depends on BR-42i (resources) + BR-42j (adapter);
 - `resource_invoke` returning inline result OR a handle, async via the
   existing chat resume; `/proc/jobs/<id>/{status,result}` after BR-44;
 - `/context/session` (+ minimal `/context/nav`);
@@ -443,8 +450,11 @@ Feasible NOW, no unbuilt dependency (review-validated):
 
 - `/tools /skills /agents /workflows /canvas` `list`+`read` from the catalog,
   authz-scoped (the scoping is the net-new proof, not assumed).
-- `/mcp/<server>/tools` + URI-preserving `/mcp/<server>/resources` `read` for
-  ONE real MCP server (the missing mapping).
+- `/mcp/<server>/tools` mount (catalog already maps MCP tools). The MCP
+  `/mcp/<server>/resources` mapping is a CATALOG deliverable (BR-42i,
+  WP-CATALOG) — the v0 proof projects whatever the catalog exposes; if BR-42i
+  has not landed, v0 proves the tools mount and the resources mount follows
+  the catalog source.
 - `resource_invoke(ref,args,idempotencyKey)` returning inline result OR a
   `/proc/jobs/<id>` handle; long invoke suspends + resumes the turn via the
   existing `acceptLocalToolResult`/`resumeFrom` path — the model never polls.
@@ -479,7 +489,7 @@ RF11=A+C-controlled (custom-renderer slot within the unified contract).
 | RF4 | Async await mechanism | A server-driven event resume reusing `acceptLocalToolResult`/`resumeFrom` (`/proc` = observability); B LLM polls `/proc/jobs/<id>/result`; C sync-only v0 | A |
 | RF5 | Authz / discoverability | A separate discover/read/invoke scopes + deny-as-missing envelope + bounded pagination + probe audit; B namespace-listing = authz (existence oracle risk); C raw catalog | A |
 | RF6 | Injection boundary (read AND list) | A all read content data-tagged with provenance + content-type, never instructions, AND list-time tool/resource DESCRIPTIONS treated as untrusted; B trust server content; C per-provider trust flag | A |
-| RF7 | MCP resources mount + lifecycle | A URI-preserving allowlisted resources + templates + MIME/size/class/secret policy; persistent connection only if `watch`/subscribe wanted (current source is connect-list-close); B tools-only v0, resources next; C full passthrough | A (B acceptable for a narrow v0) |
+| RF7 | MCP resources mount + lifecycle | A URI-preserving allowlisted resources + templates + MIME/size/class/secret policy; persistent connection only if `watch`/subscribe wanted (current source is connect-list-close); B tools-only v0, resources next; C full passthrough | A (B acceptable for a narrow v0). OWNERSHIP CORRECTION (owner, 2026-06-11): the MCP `resources/list`+`read` MAPPING belongs to the CATALOG lineage (continuation of BR-19b/BR-42b `McpCatalogSource`) = **BR-42i (WP-CATALOG)**, NOT BR-70. The Resource Plane only PROJECTS it. The `CatalogSource→ResourceProvider` adapter = **BR-42j (WP-CATALOG)**. BR-70 depends on both |
 | RF8 | Watch / freshness | A outbox-backed (after ARCH-14), per-partition watermarks + `last_indexed_at`/`lag`, no global seq; B raw NOTIFY; C no `watch` v0 | C now (ARCH-21a), A later (ARCH-21b) |
 | RF9 | Edit/versioning + package home | edit: A ETag/CAS + error envelope (B provider-specific / C no-writes-v0 for non-data); home: A app-local proof then extract / B new `@sentropic/resource-fs` now / C chat-core subpath | edit A (C for non-data v0); home A then extract, gated on ARCH-12/D11 |
 
