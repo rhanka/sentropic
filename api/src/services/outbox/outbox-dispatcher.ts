@@ -25,10 +25,9 @@
  * After successful publish: mark status='dispatched', dispatched_at=now().
  */
 
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { pool } from '../../db/client';
 import { db } from '../../db/client';
-import { eventOutbox } from '../../db/control-schema';
 import type { EventBusPort } from './event-bus';
 import { eventBus as defaultEventBus } from './event-bus';
 import { logger } from '../../logger';
