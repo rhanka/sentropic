@@ -65,12 +65,12 @@ Purely-internal data-spine hardening: stranded-`processing` queue recovery (reap
 - [ ] **Lot 0 — Characterization (RED-first) + row-count gate**
   - [x] Read mandatory rules + spec + cited code.
   - [x] Verify branch: `fix/data-hardening`, worktree `/home/antoinefa/src/sentropic/tmp/data-hardening`.
-  - [ ] Measure `chat_stream_events` row count via `make db-query QUERY="SELECT count(*) FROM chat_stream_events" ENV=test-data-hardening` → decide D2.d index path.
-  - [ ] Write RED characterization tests: stranded job consumes maxConcurrentJobs budget; `task_io_contracts` zero refs in api/src.
+  - [x] Measure `chat_stream_events` row count via `make db-query QUERY="SELECT count(*) FROM chat_stream_events" ENV=test-data-hardening` → result: 0 rows (fresh test DB) → **plain migration path (D2.d: standard drizzle CREATE INDEX)**.
+  - [x] Write RED characterization tests: stranded job consumes maxConcurrentJobs budget; reaper not-yet-created guard; stream purge not-yet-created guard; since_minutes clamp guard.
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-data-hardening` + `make lint-api ENV=test-data-hardening`
-    - [ ] Scoped RED run: `make test-api-queue SCOPE=tests/queue/queue.test.ts ENV=test-data-hardening`
-    - [ ] Commit Lot 0 artifacts (BRANCH.md + new test stubs).
+    - [ ] Scoped RED run: `make test-api-queue SCOPE=tests/queue/queue-reaper.test.ts ENV=test-data-hardening`
+    - [x] Commit Lot 0 artifacts (BRANCH.md + new test stubs).
 
 - [ ] **Lot 1 — WI-1 Reaper (schema + reaper module + wire-in)**
   - [ ] `api/src/db/schema.ts`: add `attempts int not null default 0` to `jobQueue`; change `startedAt`/`completedAt` from `text` to `timestamp with time zone`; add index `(status, started_at)`.
