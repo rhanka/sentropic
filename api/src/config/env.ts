@@ -103,7 +103,17 @@ const envSchema = z.object({
   // Chat tracing (debug / audit)
   // Store OpenAI payloads + tool calls for troubleshooting loops.
   CHAT_TRACE_ENABLED: z.string().optional(),
-  CHAT_TRACE_RETENTION_DAYS: z.coerce.number().optional()
+  CHAT_TRACE_RETENTION_DAYS: z.coerce.number().optional(),
+
+  // Queue reaper (WI-1) — stranded-processing recovery.
+  // QUEUE_REAPER_STALE_MINUTES: jobs in 'processing' older than this are reaped.
+  // QUEUE_MAX_REDELIVERIES: maximum reap-requeue cycles before a job is marked failed.
+  QUEUE_REAPER_STALE_MINUTES: z.coerce.number().optional(),
+  QUEUE_MAX_REDELIVERIES: z.coerce.number().optional(),
+
+  // Stream events retention (WI-2) — chat_stream_events purge.
+  // STREAM_RETENTION_DAYS: events older than this are deleted in batches.
+  STREAM_RETENTION_DAYS: z.coerce.number().optional()
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

@@ -242,8 +242,8 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
+      startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
       error: row.error || undefined,
     } satisfies Omit<Job, 'streamId'>;
 
@@ -269,8 +269,8 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
         status: row.status as Job['status'],
         workspaceId: row.workspaceId,
         createdAt: row.createdAt.toISOString(),
-        startedAt: row.startedAt || undefined,
-        completedAt: row.completedAt || undefined,
+        startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+        completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
         error: row.error || undefined,
       } satisfies Omit<Job, 'streamId'>;
 
@@ -366,7 +366,8 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
         q.error AS "error",
         q.created_at AS "createdAt",
         q.started_at AS "startedAt",
-        q.completed_at AS "completedAt"
+        q.completed_at AS "completedAt",
+        q.attempts AS "attempts"
     `)) as JobQueueRow[];
     return rows ?? [];
   }
