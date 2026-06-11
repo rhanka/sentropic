@@ -27,16 +27,18 @@ import { createId } from '../../src/utils/id';
 async function insertStrandedJob(overrides: {
   type?: string;
   status?: string;
-  startedAt?: string | null;
+  startedAt?: Date | null;
   data?: string;
   attempts?: number;
 }): Promise<string> {
   const id = createId();
   const now = new Date();
-  const staleDate = new Date(now.getTime() - 40 * 60 * 1000); // 40 minutes ago
+  const staleDate = new Date(now.getTime() - 40 * 60 * 1000); // 40 minutes ago (> default 30m threshold)
+  const startedAt = overrides.startedAt !== undefined ? overrides.startedAt : staleDate;
+  const attempts = overrides.attempts ?? 0;
 
   await db.run(sql`
-    INSERT INTO job_queue (id, type, status, workspace_id, data, created_at, started_at)
+    INSERT INTO job_queue (id, type, status, workspace_id, data, created_at, started_at, attempts)
     VALUES (
       ${id},
       ${overrides.type ?? 'organization_enrich'},
@@ -44,7 +46,8 @@ async function insertStrandedJob(overrides: {
       ${ADMIN_WORKSPACE_ID},
       ${overrides.data ?? '{}'},
       ${now},
-      ${overrides.startedAt !== undefined ? overrides.startedAt : staleDate}
+      ${startedAt},
+      ${attempts}
     )
   `);
   return id;
