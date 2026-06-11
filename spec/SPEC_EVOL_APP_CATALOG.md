@@ -74,8 +74,10 @@ Current flagship behavior is deeply keyed on `workspace.type` (enum `neutral|ai-
 ## 5. Acceptance
 Q1-Q5 resolved with consensus-backed, code-grounded design; 4 control-schema tables sketched (templates/instances/hostnames/bindings) with namespace + isolation + CHECK + uniqueness discipline; blueprint = net-new vocabulary with build-cli scaffold as referenced artifact; projection = refresh+outbox-invalidated `AppCatalogSource` (kind:'app', deny-by-default, tenant-filtered); D7 estimate = authoring S/M/L + cutover risk per flagship. Forks F1-F4 resolved. The 2 owner-irreversible decisions (§6) ratified before the implementation branch. This doc becomes the ARCH-01 output; converted to a branch plan later.
 
-## 6. ⚠️ Owner-irreversible decisions (ratify BEFORE the implementation branch — surfaced by consensus)
-These calcify at IMPLEMENTATION (public URLs / published API), not in this study; the study is complete with recommendations, but these need owner sign-off before any instance/template ships.
+## 6. Owner-irreversible decisions — RESOLVED (rhanka, 2026-06-11)
+- **OD-1 = RESOLVED: keep `ai-priorities` / `opportunity` / `code`** as the public app_slugs (continuity; internal ids become public ids).
+- **OD-2 = RESOLVED (reversible default adopted): api-local now**, extract a dedicated `@sentropic/app-template` package only when the marketplace/third-party story is real (ARCH-10/D10).
+Original framing kept below for traceability.
 
 - **OD-1 — Public `app_slug` names for the 3 retro-modeled flagships.** Slugs surface in `/api/apps/:appSlug` (arch:676) + hostnames; once instances/URLs circulate they calcify exactly like the D5 preview domain (a Wave-0 owner deliverable). Repo policy requires owner validation of durable names.
   - *Recommendation*: keep the existing internal identifiers as slugs for continuity — `ai-priorities`, `opportunity`, `code` — unless a public-facing rename is wanted (e.g. `priorities`/`opportunities`). Low engineering cost either way; the cost is naming-permanence.
