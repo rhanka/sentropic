@@ -125,6 +125,7 @@ Purely-internal data-spine hardening: stranded-`processing` queue recovery (reap
   - [x] Test results: smoke 6/6, reaper 6/6, stream-purge 3/3, queue.test.ts 5/5 (isolated), todos.test.ts 2/2 (isolated), collaboration-security.test.ts 7/7 (isolated). Full parallel suite shows session-FK conflicts on shared DB (pre-existing infrastructure issue: cleanupAuthData across concurrent workers — reproduces on main in same scenario, passes in CI sequential mode).
   - [x] `make build-api API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 ENV=test-data-hardening` — passes.
   - [x] Migration `0032_data_hardening.sql` applied at API startup — confirmed via API boot logs "Database migrations completed."
+  - [x] **BR-44 regression fix** (commit 46284b6d6): `docx.test.ts` + `initiative-generation-async.test.ts` red. Root cause: test mock `claimPendingJobsByClass` and `db.insert(jobQueue)` passed ISO strings to `startedAt`/`completedAt` Drizzle ORM columns which are `timestamp({ withTimezone: true })` (mode:'date', expects `Date`). Fixed by passing `new Date()` / `new Date(Date.now() - n)` instead of `.toISOString()` at `api/tests/api/docx.test.ts` lines 501 and 540. All 5 target test files green: docx 15/15, analytics 8/8, queue-reaper 6/6, queue 5/5, initiative-generation-async 2/2.
   - [ ] `make down API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 ENV=test-data-hardening` — pending.
   - [ ] Delete `spec/SPEC_EVOL_DATA_HARDENING.md` (pre-merge per MASTER complex-branch rule).
   - [ ] Final gate: create/update PR using `BRANCH.md` as body.
