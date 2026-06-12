@@ -91,6 +91,12 @@ const envSchema = z.object({
   // Service-to-service (client_credentials) — stateless tokens (BR39d-D5)
   OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC: z.coerce.number().default(900),
   OAUTH_SERVICE_RESOURCE_URI: z.string().optional(),
+  // MCP resource server (BR-39l Lot 3) — activation-by-consumption of @sentropic/mcp-auth.
+  // Default OFF: only the RFC 9728 PRM well-known + a sample guarded /api/v1/mcp/* surface
+  // are mounted when explicitly enabled. MCP_RESOURCE_URI overrides the resource/audience
+  // (defaults to the OAuth issuer URL).
+  MCP_RESOURCE_SERVER_ENABLED: z.string().optional(),
+  MCP_RESOURCE_URI: z.string().optional(),
   // Dev/test self-S2S dogfood client (BR39d-D10)
   OAUTH_SELF_SERVICE_CLIENT_ID: z.string().optional(),
   OAUTH_SELF_SERVICE_CLIENT_SECRET: z.string().optional(),
