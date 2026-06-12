@@ -67,7 +67,7 @@ Activate the two ratified new libraries and unblock the #1 gap (a user token can
   - [x] CI (`BR39l-EX1`): `validate-/publish-oauth-verify` + `…-mcp-auth` jobs + `changes` filters + `bootstrap_publish_target` options + bootstrap steps (artifact actions `@v7`).
   - [ ] First-publish bootstrap for the 2 new packages (`workflow_dispatch bootstrap_publish_target=oauth-verify|mcp-auth`) + OIDC trusted-publisher attach (Playwright MCP) — orchestrator action per publish memory.
   - [ ] Compat matrix + contract-tests per published package — golden corpus T1-T9 landed; matrix doc is orchestrator/architect follow-up.
-  - [x] Final gate: `make lint-api` (0 errors), `make typecheck-api` green; `make test-api SCOPE=tests/api/auth` 88/88; `make test-api SCOPE=tests/api/mcp-resource-server.test.ts`; package suites oauth-verify 21/21, mcp-auth 39/39, auth-hono 113/113. Migration `0033` applies on fresh DB.
+  - [x] Final gate (REGISTRY=local, ENV=test-auth-39l-fin, fresh DB + clean-node-modules): `make lint-api` 0 errors; `make typecheck-api` green; `make test-api SCOPE=tests/api/auth` 88/88 (incl. relocated `service-auth-middleware.test.ts`); `make test-api SCOPE=tests/api/mcp-resource-server.test.ts` 5/5 (REAL oauth-verify+mcp-auth, api healthy); package suites oauth-verify 21/21, mcp-auth 39/39, auth-hono 113/113. Migration `0033` applies cleanly on fresh DB.
   - [ ] PR (body=BRANCH.md); CI green; remove BRANCH.md; merge (--merge). Lot 2 merge gated on rhanka D0/D11 + C6/C7.
 
 ## Deferred to follow-up (per ratified plan)
