@@ -232,6 +232,13 @@
       "when": 1781222400000,
       "tag": "0032_data_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1781308800000,
+      "tag": "0033_oauth_clients_resource_indicators",
+      "breakpoints": true
     }
   ]
 }
