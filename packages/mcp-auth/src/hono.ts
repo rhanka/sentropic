@@ -8,6 +8,17 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import type { McpAuth, McpAuthContext } from './core.js';
 
+// CANONICAL home of the service (S2S) RS middleware relocated from @sentropic/auth-hono
+// (architect verdict E2/F8). auth-hono now re-exports these via a thin delegating wrapper.
+export {
+  createRequireServiceAuth,
+  type CreateRequireServiceAuthOptions,
+  type ServiceAuthClockPort,
+  type ServiceAuthContext,
+  type ServiceAuthDpopReplayPort,
+  type ServiceAuthPorts,
+} from './service-auth.js';
+
 /**
  * Mount the RFC 9728 PRM well-known (`/.well-known/oauth-protected-resource`) on a Hono
  * router. `app.route('/', mcpAuthRoutes(mcp))`.
