@@ -247,6 +247,9 @@ export const oauthClients = pgTable('oauth_clients', {
   tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('client_secret_basic'),
   dpopBoundAccessTokens: boolean('dpop_bound_access_tokens').notNull().default(false),
   requirePkce: boolean('require_pkce').notNull().default(true),
+  // BR-39l Lot 2: RFC 8707 resource-indicator allowlist for the authorization_code flow.
+  // Additive, default-deny ('{}' = no resource permitted ⇒ invalid_target).
+  resourceIndicators: text('resource_indicators').array().notNull().default(sql`'{}'`),
   // BR-39e Lot 4: a client belongs to a tenant (governance). FK to `tenants`, default to the
   // public `sentropic` tenant; ON DELETE set null so removing a tenant orphans (not deletes) clients.
   tenantId: text('tenant_id').references(() => tenants.id, { onDelete: 'set null' }).default('sentropic'),
