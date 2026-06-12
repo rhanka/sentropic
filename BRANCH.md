@@ -38,11 +38,11 @@ Give @sentropic/chat-ui a generic theming seam (CSS custom-property token contra
 - Rationale: single package-scoped seam; one test cycle.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Gap analysis & design**
-  - [ ] Inventory chat-ui styling surface (tailwind utilities, style blocks, streamdown)
-  - [ ] Inventory DS repo chat implementation + token system (read-only)
-  - [ ] Consume DS lane gap list via h2a (or proceed on evidence + re-ping)
-  - [ ] Design theming seam, double adversarial review (Codex xhigh + Opus)
+- [x] **Lot 0 — Gap analysis & design**
+  - [x] Inventory chat-ui styling surface (tailwind utilities, style blocks, streamdown)
+  - [x] Inventory DS repo chat implementation + token system (read-only)
+  - [x] Consume DS lane gap list via h2a (no reply yet; re-pinged on thread, proceeded on verified evidence)
+  - [x] Design theming seam, double adversarial review (Codex xhigh: A/B/D/E accept-with-changes, C reject-as-written -> fixed; Opus: A/D/E accept, B/C accept-with-changes -> all changes applied)
 - [ ] **Lot 1 — Theming seam implementation**
   - [ ] Implement token seam in packages/chat-ui (defaults = current sentropic values)
   - [ ] Document contract (packages/chat-ui/THEMING.md or README section)
