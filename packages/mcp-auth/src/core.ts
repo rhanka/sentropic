@@ -109,8 +109,15 @@ export const createMcpAuth = (config: McpAuthConfig): McpAuth => {
     throw new Error('@sentropic/mcp-auth: at least one authorizationServer is required.');
   }
   const prmUrl = protectedResourceMetadataUrl(resource);
-  const keySource =
-    config.keySource ?? fromRemoteJwks(`${authorizationServers[0]}/.well-known/jwks.json`);
+
+  // Resolve the key source lazily on first verify, NOT at construction: PRM serving and the
+  // unauthenticated 401 challenge must work without ever touching the key source (and the
+  // default remote-JWKS source performs discovery/fetch we don't want at startup).
+  let keySource: TokenKeySource | undefined = config.keySource;
+  const getKeySource = (): TokenKeySource => {
+    keySource ??= fromRemoteJwks(`${authorizationServers[0]}/.well-known/jwks.json`);
+    return keySource;
+  };
 
   const metadata = (): ProtectedResourceMetadata =>
     buildProtectedResourceMetadata({
@@ -137,7 +144,7 @@ export const createMcpAuth = (config: McpAuthConfig): McpAuth => {
     try {
       claims = await verifyAccessToken({
         token,
-        keySource,
+        keySource: getKeySource(),
         issuer: authorizationServers,
         audience: resource,
         requiredScopes: opts?.requiredScopes,
@@ -163,7 +170,7 @@ export const createMcpAuth = (config: McpAuthConfig): McpAuth => {
       }
     }
 
-    const jkt = await enforceDpop(req, claims, token, scheme, config, keySource);
+    const jkt = await enforceDpop(req, claims, token, scheme, config);
 
     const tid = typeof claims.tid === 'string' ? claims.tid : null;
     await enforceTid(tid, claims, config);
@@ -190,7 +197,6 @@ const enforceDpop = async (
   accessToken: string,
   scheme: 'Bearer' | 'DPoP',
   config: McpAuthConfig,
-  _keySource: TokenKeySource,
 ): Promise<string | null> => {
   const boundJkt = claims.cnf?.jkt;
   if (!boundJkt && !config.requireDpop) return null;
