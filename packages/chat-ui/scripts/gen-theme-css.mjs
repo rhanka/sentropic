@@ -123,8 +123,38 @@ const header = `/**
  */
 `;
 
+/**
+ * Host-contract classes: the components reference `slim-scroll` but its
+ * definition lives in the sentropic host stylesheet (ui/src/app.css). For
+ * Mode B parity the same rules ship here, scoped. Values mirror app.css
+ * verbatim — keep in sync.
+ */
+const hostContractCss = `
+/* slim-scroll — discreet scrollbars (mirrors sentropic ui/src/app.css) */
+${SCOPE_SELECTOR} .slim-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
+}
+${SCOPE_SELECTOR} .slim-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+${SCOPE_SELECTOR} .slim-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+${SCOPE_SELECTOR} .slim-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(15, 23, 42, 0.22);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+${SCOPE_SELECTOR} .slim-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(15, 23, 42, 0.32);
+}
+`;
+
 const outDir = resolve(pkgRoot, 'src', 'theme');
 mkdirSync(outDir, { recursive: true });
 const outFile = resolve(outDir, 'chat-ui.css');
-writeFileSync(outFile, header + result.css, 'utf8');
+writeFileSync(outFile, header + result.css + hostContractCss, 'utf8');
 console.log(`[gen-theme-css] wrote ${outFile} (${result.css.length} bytes)`);
