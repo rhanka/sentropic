@@ -1,9 +1,15 @@
-// COMPAT WRAPPER (architect verdict E2/F8). The CANONICAL home of this RS middleware is now
-// `@sentropic/mcp-auth/hono` (`createRequireServiceAuth`). auth-hono keeps this signature-stable
-// wrapper — same behavior, sharing the SAME verification core (`@sentropic/oauth-verify`), no
-// fourth copy of verify code — for ≥1 minor so pinned RPs are not forced to bump; it is dropped
-// at auth-hono 1.0. The wrapper builds on oauth-verify primitives directly (NOT on mcp-auth) to
-// respect the dependency DAG (auth-hono and mcp-auth never import each other).
+// @sentropic/mcp-auth/hono — service (S2S) resource-server middleware.
+//
+// CANONICAL home of `createRequireServiceAuth` (architect verdict E2/F8): the RS middleware
+// that used to live inside the IdP package (@sentropic/auth-hono) now lives here, next to the
+// rest of the MCP resource-server kit. auth-hono keeps only a thin delegating compat wrapper
+// (signature-stable, no behavior change) until its 1.0.
+//
+// Unlike `createMcpAuth` (remote-JWKS, PRM, resource_metadata challenges), this guard targets
+// the IdP-colocated case: an in-process JWKS provider (oauth-verify `JwksProviderLike`, which
+// auth-hono's DB-backed `JwksPort` satisfies structurally) and an optional DPoP replay store.
+// Verification primitives are shared via @sentropic/oauth-verify — no duplication.
+
 import {
   DpopVerifyError,
   fromJwksPort,
@@ -12,21 +18,30 @@ import {
   verifyAccessToken,
   verifyDpopProof,
   type AccessTokenClaims,
+  type JwksProviderLike,
 } from '@sentropic/oauth-verify';
 import type { Context, MiddlewareHandler } from 'hono';
 
-import type { AuthHonoClockPort } from '../ports.js';
-import type { JwksPort, OauthStateStorePort } from './state-store-types.js';
+/** Minimal clock port (matches auth-hono's `AuthHonoClockPort`). */
+export interface ServiceAuthClockPort {
+  now(): Date;
+  addSeconds(date: Date, seconds: number): Date;
+}
+
+/** Minimal DPoP replay port (matches auth-hono's `recordDpopJti`). */
+export interface ServiceAuthDpopReplayPort {
+  recordDpopJti(jti: string, expiresAt: Date): Promise<boolean>;
+}
 
 /**
- * Narrow port set for resource-server verification (BR39d-D6). Resource servers
- * must not construct users/credentials/sessions/email ports just to verify a
- * bearer or DPoP-bound access token.
+ * Narrow port set for resource-server verification (BR39d-D6). Resource servers must not
+ * construct users/credentials/sessions/email ports just to verify a bearer or DPoP-bound
+ * access token. `jwks` is the in-process key source (oauth-verify `JwksProviderLike`).
  */
 export interface ServiceAuthPorts {
-  clock: AuthHonoClockPort;
-  jwks: JwksPort;
-  dpopReplay?: Pick<OauthStateStorePort, 'recordDpopJti'>;
+  clock: ServiceAuthClockPort;
+  jwks: JwksProviderLike;
+  dpopReplay?: ServiceAuthDpopReplayPort;
 }
 
 export interface ServiceAuthContext {
@@ -217,11 +232,11 @@ const verifyServiceDpopProof = async (options: VerifyServiceDpopProofOptions): P
 };
 
 const serviceAuthErrorResponse = (c: Context, error: ServiceAuthError): Response => {
-  c.header('WWW-Authenticate', buildWwwAuthenticate(error));
+  c.header('WWW-Authenticate', buildServiceWwwAuthenticate(error));
   return c.json({ error: { code: error.code, message: error.message } }, error.status);
 };
 
-const buildWwwAuthenticate = (error: ServiceAuthError): string => {
+const buildServiceWwwAuthenticate = (error: ServiceAuthError): string => {
   const params = [`error="${error.code}"`, `error_description="${error.message}"`];
   return `${error.scheme} ${params.join(', ')}`;
 };
