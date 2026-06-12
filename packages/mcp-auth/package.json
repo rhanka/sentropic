@@ -21,6 +21,13 @@
       "import": "./dist/hono.js"
     }
   },
+  "typesVersions": {
+    "*": {
+      "hono": [
+        "./dist/hono.d.ts"
+      ]
+    }
+  },
   "files": [
     "dist",
     "src",
