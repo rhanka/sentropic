@@ -73,3 +73,4 @@ graphify-out/
 gcp-sa*.json
 .secrets/
 .track/*.lock
+packages/chat-ui/.svelte-kit/
