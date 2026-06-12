@@ -25,8 +25,6 @@ const THEME_CSS_PATH = join(SRC_ROOT, 'theme', 'chat-ui.css');
 
 /** Known non-Tailwind classes used by components (styled via scoped <style>, host CSS, or used as hooks). */
 const CUSTOM_CLASS_ALLOWLIST = new Set([
-  'chat-dock-shell',
-  'chat-conversation-send-btn',
   'chatMarkdown',
   'stream-aux-markdown',
   'userMarkdown',
@@ -35,6 +33,12 @@ const CUSTOM_CLASS_ALLOWLIST = new Set([
   'shiki',
   'lucide-icon'
 ]);
+
+/** Package hook-class prefixes (semantic hooks for host/theme CSS, never Tailwind). */
+const CUSTOM_CLASS_PREFIXES = ['chat-', 'topai-'];
+
+const isCustomClass = (cls: string): boolean =>
+  CUSTOM_CLASS_ALLOWLIST.has(cls) || CUSTOM_CLASS_PREFIXES.some((p) => cls.startsWith(p));
 
 function listFiles(dir: string, exts: string[]): string[] {
   const out: string[] = [];
@@ -51,11 +55,25 @@ function extractClasses(source: string): Set<string> {
   const found = new Set<string>();
   const add = (chunk: string) => {
     for (const token of chunk.split(/\s+/)) {
-      if (token) found.add(token);
+      // Require at least one letter (drops interpolation/punctuation artifacts).
+      if (token && /[a-zA-Z]/.test(token)) found.add(token);
     }
   };
-  // class="..." attributes
-  for (const m of source.matchAll(/class="([^"]*)"/g)) add(m[1]);
+  // class="..." attributes — may contain {expressions}; harvest string
+  // literals inside the braces, then the static remainder.
+  for (const m of source.matchAll(/class="([^"]*)"/g)) {
+    const raw = m[1];
+    for (const expr of raw.matchAll(/\{([^}]*)\}/g)) {
+      for (const lit of expr[1].matchAll(/'([^']*)'/g)) {
+        // Keep only tokens shaped like utility classes (dash/variant/arbitrary);
+        // plain words in these expressions are usually data values ('chat').
+        for (const token of lit[1].split(/\s+/)) {
+          if (/[-:[]/.test(token)) found.add(token);
+        }
+      }
+    }
+    add(raw.replace(/\{[^}]*\}/g, ' '));
+  }
   // class:NAME={...} directives (token before `=`)
   for (const m of source.matchAll(/class:([^\s={]+)[=\s{]/g)) found.add(m[1]);
   // class={...} expressions: collect string/template literal contents
@@ -83,7 +101,7 @@ describe('theme stylesheet drift guard', () => {
     for (const file of svelteFiles) {
       const source = readFileSync(file, 'utf8');
       for (const cls of extractClasses(source)) {
-        if (CUSTOM_CLASS_ALLOWLIST.has(cls)) continue;
+        if (isCustomClass(cls)) continue;
         const selector = `.${cssEscapeClass(cls)}`;
         if (!css.includes(selector)) {
           missing.push(`${file.replace(PKG_ROOT + '/', '')}: ${cls}`);
