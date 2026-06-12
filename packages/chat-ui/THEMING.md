@@ -76,6 +76,16 @@ Where one token themes several utilities (e.g. `text-slate-500` and
 fallbacks keep both sentropic shades; theming intentionally collapses them
 onto the single design-system token.
 
+### Semantic hook classes
+
+Components also carry unstyled semantic hook classes (`chat-conversation`,
+`chat-conversation-user-message`, `chat-user-bubble`, `chat-composer-surface`,
+`chat-message-action-button`, `chat-session-list-*`, `chat-context-chip*`,
+`chat-dock-shell`, ...). The sentropic host uses them for its dark/VSCode
+themes; a Mode B consumer may target them for surgical overrides that survive
+package upgrades better than utility-class selectors. `slim-scroll`
+(discreet scrollbars) is part of the stylesheet.
+
 ### Known v1 limitations (by design — escalate before working around)
 
 - **Semantic-level theming only.** Per-role component tokens
