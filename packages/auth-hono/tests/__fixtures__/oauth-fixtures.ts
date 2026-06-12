@@ -37,6 +37,7 @@ export const createOauthClient = (input: Partial<OauthClientRecord> = {}): Oauth
   ownerUserId: null,
   redirectUris: ['http://localhost:5397/callback'],
   requirePkce: true,
+  resourceIndicators: [],
   responseTypes: ['code'],
   tenantId: null,
   tokenEndpointAuthMethod: 'client_secret_basic',
