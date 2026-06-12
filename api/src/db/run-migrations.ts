@@ -39,14 +39,34 @@ async function reconcileSettingsUserScopeSchema(): Promise<void> {
 }
 
 /**
+ * Apply the `control` schema migration stream.
+ *
+ * The control schema hosts internal infrastructure tables (ARCH-14 event-spine):
+ * `control.event_outbox`, future `control.event_audit`, etc.
+ *
+ * Applied AFTER the public migration stream to respect boot ordering.
+ * The `CREATE SCHEMA IF NOT EXISTS control` is the very first control migration.
+ */
+async function runControlMigrations(): Promise<void> {
+  // Drizzle's migrator tracks applied migrations in its own _drizzle table.
+  // For the control stream we use a dedicated table name to avoid collisions.
+  await migrate(db, {
+    migrationsFolder: './drizzle/control',
+    migrationsTable: '__drizzle_control_migrations',
+    migrationsSchema: 'public',
+  });
+}
+
+/**
  * Run database migrations (idempotent)
- * 
+ *
  * This function applies all pending migrations from the drizzle folder.
  * It's safe to call multiple times as migrations are idempotent.
- * 
+ *
  * @throws Error if migrations fail
  */
 export async function runMigrations(): Promise<void> {
   await migrate(db, { migrationsFolder: './drizzle' });
   await reconcileSettingsUserScopeSchema();
+  await runControlMigrations();
 }
