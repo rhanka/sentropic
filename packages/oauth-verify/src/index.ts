@@ -109,7 +109,11 @@ export function fromJwksPort(jwksProvider: JwksProviderLike): TokenKeySource {
         ? await jwksProvider.findKeyByKid(header.kid)
         : await jwksProvider.getActiveKey();
       if (!record) {
-        throw new TokenVerifyError('Access token signing key is unknown.');
+        throw new TokenVerifyError(
+          header.kid
+            ? `Access token signing key is unknown (kid=${header.kid}).`
+            : 'Access token signing key is unknown.'
+        );
       }
       return importJWK(record.publicJwk, record.alg);
     },
