@@ -62,8 +62,19 @@ describe('createMcpAuth — construction', () => {
     expect(() => createMcpAuth({ resource: RESOURCE, authorizationServers: [] })).toThrow();
   });
 
-  it('defaults the key source to the AS remote JWKS', () => {
+  it('does NOT resolve the key source at construction (lazy until first verify)', () => {
+    vi.mocked(fromRemoteJwks).mockClear();
     makeMcp();
+    expect(fromRemoteJwks).not.toHaveBeenCalled();
+  });
+
+  it('defaults the key source to the AS remote JWKS on first verify', async () => {
+    vi.mocked(fromRemoteJwks).mockClear();
+    vi.mocked(verifyAccessToken).mockResolvedValue({
+      sub: 'u', iss: AS, aud: RESOURCE, exp: 0, iat: 0, scope: 'mcp:tools:invoke',
+    });
+    const mcp = makeMcp();
+    await mcp.verify(bearer());
     expect(fromRemoteJwks).toHaveBeenCalledWith(`${AS}/.well-known/jwks.json`);
   });
 });
