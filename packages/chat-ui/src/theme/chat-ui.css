@@ -1,0 +1,1293 @@
+/**
+ * @sentropic/chat-ui — opt-in theming stylesheet (GENERATED, do not edit).
+ *
+ * Regenerate: make exec-ui CMD="node ../packages/chat-ui/scripts/gen-theme-css.mjs"
+ * Source of truth: scripts/theme-token-map.mjs + component class usage.
+ *
+ * Usage (consumers WITHOUT Tailwind, e.g. design-system docs):
+ *   import '@sentropic/chat-ui/theme.css';
+ *   <div data-st-chat-theme> ...chat-ui components... </div>
+ * Theme by setting --st-* design-system tokens on the scope element (or
+ * import a @sentropic/design-system-themes stylesheet). Unthemed defaults
+ * render the exact sentropic look. Consumers that already run Tailwind over
+ * this package (like the sentropic app) must NOT import this file.
+ */
+[data-st-chat-theme], [data-st-chat-theme] *, [data-st-chat-theme]::before, [data-st-chat-theme] ::before, [data-st-chat-theme]::after, [data-st-chat-theme] ::after {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+[data-st-chat-theme]::backdrop, [data-st-chat-theme] ::backdrop {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}/*
+! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com
+*//*
+1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
+2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)
+*/
+
+[data-st-chat-theme],
+[data-st-chat-theme] *,
+[data-st-chat-theme]::before,
+[data-st-chat-theme] ::before,
+[data-st-chat-theme]::after,
+[data-st-chat-theme] ::after {
+  box-sizing: border-box; /* 1 */
+  border-width: 0; /* 2 */
+  border-style: solid; /* 2 */
+  border-color: #e5e7eb; /* 2 */
+}
+
+[data-st-chat-theme]::before,
+[data-st-chat-theme] ::before,
+[data-st-chat-theme]::after,
+[data-st-chat-theme] ::after {
+  --tw-content: '';
+}
+
+/*
+1. Use a consistent sensible line-height in all browsers.
+2. Prevent adjustments of font size after orientation changes in iOS.
+3. Use a more readable tab size.
+4. Use the user's configured `sans` font-family by default.
+5. Use the user's configured `sans` font-feature-settings by default.
+6. Use the user's configured `sans` font-variation-settings by default.
+7. Disable tap highlights on iOS
+*/
+
+[data-st-chat-theme],
+[data-st-chat-theme] {
+  line-height: 1.5; /* 1 */
+  -webkit-text-size-adjust: 100%; /* 2 */
+  -moz-tab-size: 4; /* 3 */
+  tab-size: 4; /* 3 */
+  font-family: var(--st-font-sans, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"); /* 4 */
+  font-feature-settings: normal; /* 5 */
+  font-variation-settings: normal; /* 6 */
+  -webkit-tap-highlight-color: transparent; /* 7 */
+}
+
+/*
+1. Remove the margin in all browsers.
+2. Inherit line-height from `html` so users can set them as a class directly on the `html` element.
+*/
+
+[data-st-chat-theme] {
+  margin: 0; /* 1 */
+  line-height: inherit; /* 2 */
+}
+
+/*
+1. Add the correct height in Firefox.
+2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)
+3. Ensure horizontal rules are visible by default.
+*/
+
+[data-st-chat-theme] hr {
+  height: 0; /* 1 */
+  color: inherit; /* 2 */
+  border-top-width: 1px; /* 3 */
+}
+
+/*
+Add the correct text decoration in Chrome, Edge, and Safari.
+*/
+
+[data-st-chat-theme] abbr:where([title]) {
+  text-decoration: underline dotted;
+}
+
+/*
+Remove the default font size and weight for headings.
+*/
+
+[data-st-chat-theme] h1,
+[data-st-chat-theme] h2,
+[data-st-chat-theme] h3,
+[data-st-chat-theme] h4,
+[data-st-chat-theme] h5,
+[data-st-chat-theme] h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/*
+Reset links to optimize for opt-in styling instead of opt-out.
+*/
+
+[data-st-chat-theme] a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+/*
+Add the correct font weight in Edge and Safari.
+*/
+
+[data-st-chat-theme] b,
+[data-st-chat-theme] strong {
+  font-weight: bolder;
+}
+
+/*
+1. Use the user's configured `mono` font-family by default.
+2. Use the user's configured `mono` font-feature-settings by default.
+3. Use the user's configured `mono` font-variation-settings by default.
+4. Correct the odd `em` font sizing in all browsers.
+*/
+
+[data-st-chat-theme] code,
+[data-st-chat-theme] kbd,
+[data-st-chat-theme] samp,
+[data-st-chat-theme] pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; /* 1 */
+  font-feature-settings: normal; /* 2 */
+  font-variation-settings: normal; /* 3 */
+  font-size: 1em; /* 4 */
+}
+
+/*
+Add the correct font size in all browsers.
+*/
+
+[data-st-chat-theme] small {
+  font-size: 80%;
+}
+
+/*
+Prevent `sub` and `sup` elements from affecting the line height in all browsers.
+*/
+
+[data-st-chat-theme] sub,
+[data-st-chat-theme] sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+[data-st-chat-theme] sub {
+  bottom: -0.25em;
+}
+
+[data-st-chat-theme] sup {
+  top: -0.5em;
+}
+
+/*
+1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)
+2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)
+3. Remove gaps between table borders by default.
+*/
+
+[data-st-chat-theme] table {
+  text-indent: 0; /* 1 */
+  border-color: inherit; /* 2 */
+  border-collapse: collapse; /* 3 */
+}
+
+/*
+1. Change the font styles in all browsers.
+2. Remove the margin in Firefox and Safari.
+3. Remove default padding in all browsers.
+*/
+
+[data-st-chat-theme] button,
+[data-st-chat-theme] input,
+[data-st-chat-theme] optgroup,
+[data-st-chat-theme] select,
+[data-st-chat-theme] textarea {
+  font-family: inherit; /* 1 */
+  font-feature-settings: inherit; /* 1 */
+  font-variation-settings: inherit; /* 1 */
+  font-size: 100%; /* 1 */
+  font-weight: inherit; /* 1 */
+  line-height: inherit; /* 1 */
+  letter-spacing: inherit; /* 1 */
+  color: inherit; /* 1 */
+  margin: 0; /* 2 */
+  padding: 0; /* 3 */
+}
+
+/*
+Remove the inheritance of text transform in Edge and Firefox.
+*/
+
+[data-st-chat-theme] button,
+[data-st-chat-theme] select {
+  text-transform: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Remove default button styles.
+*/
+
+[data-st-chat-theme] button,
+[data-st-chat-theme] input:where([type='button']),
+[data-st-chat-theme] input:where([type='reset']),
+[data-st-chat-theme] input:where([type='submit']) {
+  -webkit-appearance: button; /* 1 */
+  background-color: transparent; /* 2 */
+  background-image: none; /* 2 */
+}
+
+/*
+Use the modern Firefox focus style for all focusable elements.
+*/
+
+[data-st-chat-theme] :-moz-focusring {
+  outline: auto;
+}
+
+/*
+Remove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)
+*/
+
+[data-st-chat-theme] :-moz-ui-invalid {
+  box-shadow: none;
+}
+
+/*
+Add the correct vertical alignment in Chrome and Firefox.
+*/
+
+[data-st-chat-theme] progress {
+  vertical-align: baseline;
+}
+
+/*
+Correct the cursor style of increment and decrement buttons in Safari.
+*/
+
+[data-st-chat-theme]::-webkit-inner-spin-button,
+[data-st-chat-theme] ::-webkit-inner-spin-button,
+[data-st-chat-theme]::-webkit-outer-spin-button,
+[data-st-chat-theme] ::-webkit-outer-spin-button {
+  height: auto;
+}
+
+/*
+1. Correct the odd appearance in Chrome and Safari.
+2. Correct the outline style in Safari.
+*/
+
+[data-st-chat-theme] [type='search'] {
+  -webkit-appearance: textfield; /* 1 */
+  outline-offset: -2px; /* 2 */
+}
+
+/*
+Remove the inner padding in Chrome and Safari on macOS.
+*/
+
+[data-st-chat-theme]::-webkit-search-decoration, [data-st-chat-theme] ::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Change font properties to `inherit` in Safari.
+*/
+
+[data-st-chat-theme]::-webkit-file-upload-button, [data-st-chat-theme] ::-webkit-file-upload-button {
+  -webkit-appearance: button; /* 1 */
+  font: inherit; /* 2 */
+}
+
+/*
+Add the correct display in Chrome and Safari.
+*/
+
+[data-st-chat-theme] summary {
+  display: list-item;
+}
+
+/*
+Removes the default spacing and border for appropriate elements.
+*/
+
+[data-st-chat-theme] blockquote,
+[data-st-chat-theme] dl,
+[data-st-chat-theme] dd,
+[data-st-chat-theme] h1,
+[data-st-chat-theme] h2,
+[data-st-chat-theme] h3,
+[data-st-chat-theme] h4,
+[data-st-chat-theme] h5,
+[data-st-chat-theme] h6,
+[data-st-chat-theme] hr,
+[data-st-chat-theme] figure,
+[data-st-chat-theme] p,
+[data-st-chat-theme] pre {
+  margin: 0;
+}
+
+[data-st-chat-theme] fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+[data-st-chat-theme] legend {
+  padding: 0;
+}
+
+[data-st-chat-theme] ol,
+[data-st-chat-theme] ul,
+[data-st-chat-theme] menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+Reset default styling for dialogs.
+*/
+[data-st-chat-theme] dialog {
+  padding: 0;
+}
+
+/*
+Prevent resizing textareas horizontally by default.
+*/
+
+[data-st-chat-theme] textarea {
+  resize: vertical;
+}
+
+/*
+1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)
+2. Set the default placeholder color to the user's configured gray 400 color.
+*/
+
+[data-st-chat-theme] input::placeholder,
+[data-st-chat-theme] textarea::placeholder {
+  opacity: 1; /* 1 */
+  color: #9ca3af; /* 2 */
+}
+
+/*
+Set the default cursor for buttons.
+*/
+
+[data-st-chat-theme] button,
+[data-st-chat-theme] [role="button"] {
+  cursor: pointer;
+}
+
+/*
+Make sure disabled buttons don't get the pointer cursor.
+*/
+[data-st-chat-theme] :disabled {
+  cursor: default;
+}
+
+/*
+1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)
+2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)
+   This can trigger a poorly considered lint error in some tools but is included by design.
+*/
+
+[data-st-chat-theme] img,
+[data-st-chat-theme] svg,
+[data-st-chat-theme] video,
+[data-st-chat-theme] canvas,
+[data-st-chat-theme] audio,
+[data-st-chat-theme] iframe,
+[data-st-chat-theme] embed,
+[data-st-chat-theme] object {
+  display: block; /* 1 */
+  vertical-align: middle; /* 2 */
+}
+
+/*
+Constrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)
+*/
+
+[data-st-chat-theme] img,
+[data-st-chat-theme] video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Make elements with the HTML hidden attribute stay hidden by default */
+[data-st-chat-theme] [hidden]:where(:not([hidden="until-found"])) {
+  display: none;
+}
+[data-st-chat-theme] .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+[data-st-chat-theme] .pointer-events-none {
+  pointer-events: none;
+}
+[data-st-chat-theme] .visible {
+  visibility: visible;
+}
+[data-st-chat-theme] .collapse {
+  visibility: collapse;
+}
+[data-st-chat-theme] .static {
+  position: static;
+}
+[data-st-chat-theme] .fixed {
+  position: fixed;
+}
+[data-st-chat-theme] .absolute {
+  position: absolute;
+}
+[data-st-chat-theme] .relative {
+  position: relative;
+}
+[data-st-chat-theme] .inset-0 {
+  inset: 0px;
+}
+[data-st-chat-theme] .inset-x-0 {
+  left: 0px;
+  right: 0px;
+}
+[data-st-chat-theme] .-right-1 {
+  right: -0.25rem;
+}
+[data-st-chat-theme] .-top-1 {
+  top: -0.25rem;
+}
+[data-st-chat-theme] .bottom-0 {
+  bottom: 0px;
+}
+[data-st-chat-theme] .bottom-4 {
+  bottom: 1rem;
+}
+[data-st-chat-theme] .bottom-full {
+  bottom: 100%;
+}
+[data-st-chat-theme] .left-0 {
+  left: 0px;
+}
+[data-st-chat-theme] .left-2 {
+  left: 0.5rem;
+}
+[data-st-chat-theme] .right-0 {
+  right: 0px;
+}
+[data-st-chat-theme] .right-4 {
+  right: 1rem;
+}
+[data-st-chat-theme] .top-0 {
+  top: 0px;
+}
+[data-st-chat-theme] .top-1\/2 {
+  top: 50%;
+}
+[data-st-chat-theme] .z-10 {
+  z-index: 10;
+}
+[data-st-chat-theme] .z-30 {
+  z-index: 30;
+}
+[data-st-chat-theme] .z-40 {
+  z-index: 40;
+}
+[data-st-chat-theme] .z-50 {
+  z-index: 50;
+}
+[data-st-chat-theme] .col-span-2 {
+  grid-column: span 2 / span 2;
+}
+[data-st-chat-theme] .mb-1 {
+  margin-bottom: 0.25rem;
+}
+[data-st-chat-theme] .mb-2 {
+  margin-bottom: 0.5rem;
+}
+[data-st-chat-theme] .mb-3 {
+  margin-bottom: 0.75rem;
+}
+[data-st-chat-theme] .mb-4 {
+  margin-bottom: 1rem;
+}
+[data-st-chat-theme] .ml-0\.5 {
+  margin-left: 0.125rem;
+}
+[data-st-chat-theme] .ml-1 {
+  margin-left: 0.25rem;
+}
+[data-st-chat-theme] .ml-auto {
+  margin-left: auto;
+}
+[data-st-chat-theme] .mt-0\.5 {
+  margin-top: 0.125rem;
+}
+[data-st-chat-theme] .mt-1 {
+  margin-top: 0.25rem;
+}
+[data-st-chat-theme] .mt-2 {
+  margin-top: 0.5rem;
+}
+[data-st-chat-theme] .mt-4 {
+  margin-top: 1rem;
+}
+[data-st-chat-theme] .mt-6 {
+  margin-top: 1.5rem;
+}
+[data-st-chat-theme] .block {
+  display: block;
+}
+[data-st-chat-theme] .inline {
+  display: inline;
+}
+[data-st-chat-theme] .flex {
+  display: flex;
+}
+[data-st-chat-theme] .inline-flex {
+  display: inline-flex;
+}
+[data-st-chat-theme] .table {
+  display: table;
+}
+[data-st-chat-theme] .grid {
+  display: grid;
+}
+[data-st-chat-theme] .hidden {
+  display: none;
+}
+[data-st-chat-theme] .h-10 {
+  height: 2.5rem;
+}
+[data-st-chat-theme] .h-14 {
+  height: 3.5rem;
+}
+[data-st-chat-theme] .h-24 {
+  height: 6rem;
+}
+[data-st-chat-theme] .h-3\.5 {
+  height: 0.875rem;
+}
+[data-st-chat-theme] .h-4 {
+  height: 1rem;
+}
+[data-st-chat-theme] .h-7 {
+  height: 1.75rem;
+}
+[data-st-chat-theme] .h-8 {
+  height: 2rem;
+}
+[data-st-chat-theme] .h-9 {
+  height: 2.25rem;
+}
+[data-st-chat-theme] .h-\[85dvh\] {
+  height: 85dvh;
+}
+[data-st-chat-theme] .h-full {
+  height: 100%;
+}
+[data-st-chat-theme] .max-h-16 {
+  max-height: 4rem;
+}
+[data-st-chat-theme] .max-h-24 {
+  max-height: 6rem;
+}
+[data-st-chat-theme] .max-h-48 {
+  max-height: 12rem;
+}
+[data-st-chat-theme] .max-h-\[80vh\] {
+  max-height: 80vh;
+}
+[data-st-chat-theme] .max-h-\[calc\(100dvh-1rem\)\] {
+  max-height: calc(100dvh - 1rem);
+}
+[data-st-chat-theme] .max-h-full {
+  max-height: 100%;
+}
+[data-st-chat-theme] .min-h-0 {
+  min-height: 0px;
+}
+[data-st-chat-theme] .min-h-\[36px\] {
+  min-height: 36px;
+}
+[data-st-chat-theme] .w-10 {
+  width: 2.5rem;
+}
+[data-st-chat-theme] .w-24 {
+  width: 6rem;
+}
+[data-st-chat-theme] .w-3\.5 {
+  width: 0.875rem;
+}
+[data-st-chat-theme] .w-4 {
+  width: 1rem;
+}
+[data-st-chat-theme] .w-64 {
+  width: 16rem;
+}
+[data-st-chat-theme] .w-7 {
+  width: 1.75rem;
+}
+[data-st-chat-theme] .w-8 {
+  width: 2rem;
+}
+[data-st-chat-theme] .w-9 {
+  width: 2.25rem;
+}
+[data-st-chat-theme] .w-auto {
+  width: auto;
+}
+[data-st-chat-theme] .w-full {
+  width: 100%;
+}
+[data-st-chat-theme] .min-w-0 {
+  min-width: 0px;
+}
+[data-st-chat-theme] .min-w-4 {
+  min-width: 1rem;
+}
+[data-st-chat-theme] .max-w-\[12rem\] {
+  max-width: 12rem;
+}
+[data-st-chat-theme] .max-w-\[14rem\] {
+  max-width: 14rem;
+}
+[data-st-chat-theme] .max-w-\[160px\] {
+  max-width: 160px;
+}
+[data-st-chat-theme] .max-w-\[220px\] {
+  max-width: 220px;
+}
+[data-st-chat-theme] .max-w-\[80\%\] {
+  max-width: 80%;
+}
+[data-st-chat-theme] .max-w-\[85\%\] {
+  max-width: 85%;
+}
+[data-st-chat-theme] .max-w-\[90vw\] {
+  max-width: 90vw;
+}
+[data-st-chat-theme] .max-w-full {
+  max-width: 100%;
+}
+[data-st-chat-theme] .flex-1 {
+  flex: 1 1 0%;
+}
+[data-st-chat-theme] .flex-shrink-0 {
+  flex-shrink: 0;
+}
+[data-st-chat-theme] .shrink-0 {
+  flex-shrink: 0;
+}
+[data-st-chat-theme] .border-collapse {
+  border-collapse: collapse;
+}
+[data-st-chat-theme] .-translate-y-1\/2 {
+  --tw-translate-y: -50%;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+[data-st-chat-theme] .rotate-180 {
+  --tw-rotate: 180deg;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+@keyframes spin {
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+[data-st-chat-theme] .animate-spin {
+  animation: spin 1s linear infinite;
+}
+[data-st-chat-theme] .cursor-default {
+  cursor: default;
+}
+[data-st-chat-theme] .cursor-not-allowed {
+  cursor: not-allowed;
+}
+[data-st-chat-theme] .cursor-pointer {
+  cursor: pointer;
+}
+[data-st-chat-theme] .resize-none {
+  resize: none;
+}
+[data-st-chat-theme] .resize {
+  resize: both;
+}
+[data-st-chat-theme] .list-decimal {
+  list-style-type: decimal;
+}
+[data-st-chat-theme] .list-disc {
+  list-style-type: disc;
+}
+[data-st-chat-theme] .grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+[data-st-chat-theme] .flex-col {
+  flex-direction: column;
+}
+[data-st-chat-theme] .flex-wrap {
+  flex-wrap: wrap;
+}
+[data-st-chat-theme] .items-start {
+  align-items: flex-start;
+}
+[data-st-chat-theme] .items-end {
+  align-items: flex-end;
+}
+[data-st-chat-theme] .items-center {
+  align-items: center;
+}
+[data-st-chat-theme] .justify-end {
+  justify-content: flex-end;
+}
+[data-st-chat-theme] .justify-center {
+  justify-content: center;
+}
+[data-st-chat-theme] .justify-between {
+  justify-content: space-between;
+}
+[data-st-chat-theme] .gap-0 {
+  gap: 0px;
+}
+[data-st-chat-theme] .gap-1 {
+  gap: 0.25rem;
+}
+[data-st-chat-theme] .gap-1\.5 {
+  gap: 0.375rem;
+}
+[data-st-chat-theme] .gap-2 {
+  gap: 0.5rem;
+}
+[data-st-chat-theme] .space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+}
+[data-st-chat-theme] .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+}
+[data-st-chat-theme] .self-end {
+  align-self: flex-end;
+}
+[data-st-chat-theme] .overflow-auto {
+  overflow: auto;
+}
+[data-st-chat-theme] .overflow-hidden {
+  overflow: hidden;
+}
+[data-st-chat-theme] .overflow-visible {
+  overflow: visible;
+}
+[data-st-chat-theme] .overflow-y-auto {
+  overflow-y: auto;
+}
+[data-st-chat-theme] .overflow-x-hidden {
+  overflow-x: hidden;
+}
+[data-st-chat-theme] .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-st-chat-theme] .whitespace-pre-wrap {
+  white-space: pre-wrap;
+}
+[data-st-chat-theme] .break-words {
+  overflow-wrap: break-word;
+}
+[data-st-chat-theme] .rounded {
+  border-radius: 0.25rem;
+}
+[data-st-chat-theme] .rounded-full {
+  border-radius: 9999px;
+}
+[data-st-chat-theme] .rounded-lg {
+  border-radius: 0.5rem;
+}
+[data-st-chat-theme] .rounded-t-xl {
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+}
+[data-st-chat-theme] .border {
+  border-width: 1px;
+}
+[data-st-chat-theme] .border-b {
+  border-bottom-width: 1px;
+}
+[data-st-chat-theme] .border-l {
+  border-left-width: 1px;
+}
+[data-st-chat-theme] .border-t {
+  border-top-width: 1px;
+}
+[data-st-chat-theme] .border-gray-200 {
+  border-color: var(--st-semantic-border-subtle, #e5e7eb);
+}
+[data-st-chat-theme] .border-primary\/20 {
+  border-color: color-mix(in srgb, var(--st-semantic-action-primary, oklch(50% 0.134 242.749)) 20%, transparent);
+}
+[data-st-chat-theme] .border-primary\/80 {
+  border-color: color-mix(in srgb, var(--st-semantic-action-primary, oklch(50% 0.134 242.749)) 80%, transparent);
+}
+[data-st-chat-theme] .border-red-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(254 202 202 / var(--tw-border-opacity, 1));
+}
+[data-st-chat-theme] .border-slate-100 {
+  border-color: var(--st-semantic-border-subtle, #f1f5f9);
+}
+[data-st-chat-theme] .border-slate-200 {
+  border-color: var(--st-semantic-border-subtle, #e2e8f0);
+}
+[data-st-chat-theme] .bg-black {
+  --tw-bg-opacity: 1;
+  background-color: rgb(0 0 0 / var(--tw-bg-opacity, 1));
+}
+[data-st-chat-theme] .bg-black\/80 {
+  background-color: rgb(0 0 0 / 0.8);
+}
+[data-st-chat-theme] .bg-primary {
+  --tw-bg-opacity: 1;
+  background-color: var(--st-semantic-action-primary, oklch(50% 0.134 242.749));
+}
+[data-st-chat-theme] .bg-red-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 242 242 / var(--tw-bg-opacity, 1));
+}
+[data-st-chat-theme] .bg-slate-100 {
+  background-color: var(--st-semantic-surface-sunken, #f1f5f9);
+}
+[data-st-chat-theme] .bg-slate-200 {
+  background-color: var(--st-component-control-hoverBackground, #e2e8f0);
+}
+[data-st-chat-theme] .bg-slate-300 {
+  background-color: var(--st-component-control-disabledBackground, #cbd5e1);
+}
+[data-st-chat-theme] .bg-slate-50 {
+  background-color: var(--st-semantic-surface-subtle, #f8fafc);
+}
+[data-st-chat-theme] .bg-slate-800 {
+  background-color: var(--st-semantic-action-primary, #1e293b);
+}
+[data-st-chat-theme] .bg-transparent {
+  background-color: transparent;
+}
+[data-st-chat-theme] .bg-white {
+  --tw-bg-opacity: 1;
+  background-color: var(--st-semantic-surface-default, #ffffff);
+}
+[data-st-chat-theme] .bg-white\/10 {
+  background-color: rgb(255 255 255 / 0.1);
+}
+[data-st-chat-theme] .bg-opacity-40 {
+  --tw-bg-opacity: 0.4;
+}
+[data-st-chat-theme] .object-contain {
+  object-fit: contain;
+}
+[data-st-chat-theme] .object-cover {
+  object-fit: cover;
+}
+[data-st-chat-theme] .p-0\.5 {
+  padding: 0.125rem;
+}
+[data-st-chat-theme] .p-1 {
+  padding: 0.25rem;
+}
+[data-st-chat-theme] .p-2 {
+  padding: 0.5rem;
+}
+[data-st-chat-theme] .p-3 {
+  padding: 0.75rem;
+}
+[data-st-chat-theme] .p-4 {
+  padding: 1rem;
+}
+[data-st-chat-theme] .p-6 {
+  padding: 1.5rem;
+}
+[data-st-chat-theme] .px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+[data-st-chat-theme] .px-1\.5 {
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+}
+[data-st-chat-theme] .px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+[data-st-chat-theme] .px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+[data-st-chat-theme] .px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+[data-st-chat-theme] .py-0\.5 {
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+}
+[data-st-chat-theme] .py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+[data-st-chat-theme] .py-1\.5 {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+[data-st-chat-theme] .py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+[data-st-chat-theme] .text-left {
+  text-align: left;
+}
+[data-st-chat-theme] .text-\[10px\] {
+  font-size: 10px;
+}
+[data-st-chat-theme] .text-\[11px\] {
+  font-size: 11px;
+}
+[data-st-chat-theme] .text-\[9px\] {
+  font-size: 9px;
+}
+[data-st-chat-theme] .text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+[data-st-chat-theme] .text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+[data-st-chat-theme] .text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+[data-st-chat-theme] .text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+[data-st-chat-theme] .font-medium {
+  font-weight: 500;
+}
+[data-st-chat-theme] .font-semibold {
+  font-weight: 600;
+}
+[data-st-chat-theme] .text-blue-600 {
+  --tw-text-opacity: 1;
+  color: rgb(37 99 235 / var(--tw-text-opacity, 1));
+}
+[data-st-chat-theme] .text-primary {
+  --tw-text-opacity: 1;
+  color: var(--st-semantic-action-primary, oklch(50% 0.134 242.749));
+}
+[data-st-chat-theme] .text-red-500 {
+  color: var(--st-semantic-status-failed, #ef4444);
+}
+[data-st-chat-theme] .text-red-600 {
+  color: var(--st-semantic-feedback-danger, #dc2626);
+}
+[data-st-chat-theme] .text-red-700 {
+  color: var(--st-semantic-feedback-danger, #b91c1c);
+}
+[data-st-chat-theme] .text-slate-400 {
+  color: var(--st-semantic-text-muted, #94a3b8);
+}
+[data-st-chat-theme] .text-slate-500 {
+  color: var(--st-semantic-text-muted, #64748b);
+}
+[data-st-chat-theme] .text-slate-600 {
+  color: var(--st-semantic-text-secondary, #475569);
+}
+[data-st-chat-theme] .text-slate-700 {
+  color: var(--st-semantic-text-secondary, #334155);
+}
+[data-st-chat-theme] .text-slate-800 {
+  color: var(--st-semantic-text-primary, #1e293b);
+}
+[data-st-chat-theme] .text-slate-900 {
+  color: var(--st-semantic-text-primary, #0f172a);
+}
+[data-st-chat-theme] .text-white {
+  color: var(--st-semantic-action-primaryText, #ffffff);
+}
+[data-st-chat-theme] .opacity-0 {
+  opacity: 0;
+}
+[data-st-chat-theme] .opacity-50 {
+  opacity: 0.5;
+}
+[data-st-chat-theme] .opacity-60 {
+  opacity: 0.6;
+}
+[data-st-chat-theme] .shadow-2xl {
+  --tw-shadow: var(--st-elevation-3, 0 25px 50px -12px rgb(0 0 0 / 0.25));
+  --tw-shadow-colored: 0 25px 50px -12px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+[data-st-chat-theme] .shadow-lg {
+  --tw-shadow: var(--st-elevation-2, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+  --tw-shadow-colored: 0 10px 15px -3px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+[data-st-chat-theme] .shadow-sm {
+  --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+[data-st-chat-theme] .outline-none {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+[data-st-chat-theme] .outline {
+  outline-style: solid;
+}
+[data-st-chat-theme] .filter {
+  filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
+}
+[data-st-chat-theme] .transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+[data-st-chat-theme] .transition-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+[data-st-chat-theme] .transition-opacity {
+  transition-property: opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+[data-st-chat-theme] .transition-transform {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+[data-st-chat-theme] .duration-150 {
+  transition-duration: 150ms;
+}
+[data-st-chat-theme] .hover\:bg-primary\/90:hover {
+  background-color: color-mix(in srgb, var(--st-semantic-action-primary, oklch(50% 0.134 242.749)) 90%, transparent);
+}
+[data-st-chat-theme] .hover\:bg-red-50:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 242 242 / var(--tw-bg-opacity, 1));
+}
+[data-st-chat-theme] .hover\:bg-slate-100:hover {
+  background-color: var(--st-semantic-surface-sunken, #f1f5f9);
+}
+[data-st-chat-theme] .hover\:bg-slate-200:hover {
+  background-color: var(--st-component-control-hoverBackground, #e2e8f0);
+}
+[data-st-chat-theme] .hover\:bg-slate-50:hover {
+  background-color: var(--st-semantic-surface-subtle, #f8fafc);
+}
+[data-st-chat-theme] .hover\:bg-white\/20:hover {
+  background-color: rgb(255 255 255 / 0.2);
+}
+[data-st-chat-theme] .hover\:text-blue-800:hover {
+  --tw-text-opacity: 1;
+  color: rgb(30 64 175 / var(--tw-text-opacity, 1));
+}
+[data-st-chat-theme] .hover\:text-red-700:hover {
+  color: var(--st-semantic-feedback-danger, #b91c1c);
+}
+[data-st-chat-theme] .hover\:text-slate-600:hover {
+  color: var(--st-semantic-text-secondary, #475569);
+}
+[data-st-chat-theme] .hover\:text-slate-700:hover {
+  color: var(--st-semantic-text-secondary, #334155);
+}
+[data-st-chat-theme] .hover\:opacity-100:hover {
+  opacity: 1;
+}
+[data-st-chat-theme] .focus\:outline-none:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+[data-st-chat-theme] .focus\:ring-2:focus {
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+}
+[data-st-chat-theme] .focus\:ring-primary\/30:focus {
+  --tw-ring-color: color-mix(in srgb, var(--st-semantic-action-primary, oklch(50% 0.134 242.749)) 30%, transparent);
+}
+[data-st-chat-theme] .focus-visible\:outline-none:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+[data-st-chat-theme] .focus-visible\:ring-2:focus-visible {
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+}
+[data-st-chat-theme] .focus-visible\:ring-primary\/30:focus-visible {
+  --tw-ring-color: color-mix(in srgb, var(--st-semantic-action-primary, oklch(50% 0.134 242.749)) 30%, transparent);
+}
+[data-st-chat-theme] .focus-visible\:ring-white\/50:focus-visible {
+  --tw-ring-color: rgb(255 255 255 / 0.5);
+}
+[data-st-chat-theme] .disabled\:opacity-50:disabled {
+  opacity: 0.5;
+}
+[data-st-chat-theme] .disabled\:opacity-60:disabled {
+  opacity: 0.6;
+}
+[data-st-chat-theme] .group:hover .group-hover\:opacity-100 {
+  opacity: 1;
+}
+@media (min-width: 640px) {
+
+  [data-st-chat-theme] .sm\:absolute {
+    position: absolute;
+  }
+
+  [data-st-chat-theme] .sm\:inset-auto {
+    inset: auto;
+  }
+
+  [data-st-chat-theme] .sm\:bottom-0 {
+    bottom: 0px;
+  }
+
+  [data-st-chat-theme] .sm\:right-0 {
+    right: 0px;
+  }
+
+  [data-st-chat-theme] .sm\:hidden {
+    display: none;
+  }
+
+  [data-st-chat-theme] .sm\:h-\[70vh\] {
+    height: 70vh;
+  }
+
+  [data-st-chat-theme] .sm\:max-h-\[calc\(100vh-2rem\)\] {
+    max-height: calc(100vh - 2rem);
+  }
+
+  [data-st-chat-theme] .sm\:w-\[28rem\] {
+    width: 28rem;
+  }
+
+  [data-st-chat-theme] .sm\:max-w-\[calc\(100vw-2rem\)\] {
+    max-width: calc(100vw - 2rem);
+  }
+
+  [data-st-chat-theme] .sm\:rounded-lg {
+    border-radius: 0.5rem;
+  }
+}
+[data-st-chat-theme] .\[\&_\*\]\:text-slate-400 * {
+  color: var(--st-semantic-text-muted, #94a3b8);
+}
