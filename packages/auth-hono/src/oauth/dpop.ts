@@ -1,14 +1,10 @@
 import {
-  calculateJwkThumbprint,
-  decodeProtectedHeader,
-  importJWK,
-  jwtVerify,
-  type JWK,
-  type JWTPayload,
-} from 'jose';
+  DpopVerifyError,
+  verifyDpopProof,
+  type VerifiedDpop,
+} from '@sentropic/oauth-verify';
 
 import type { AuthHonoPorts } from '../ports.js';
-import { sha256Base64url } from './crypto-utils.js';
 
 export interface VerifyDpopProofOptions {
   accessToken?: string;
@@ -19,10 +15,7 @@ export interface VerifyDpopProofOptions {
   proof: string;
 }
 
-export interface VerifiedDpopProof {
-  jkt: string;
-  jti: string;
-}
+export type VerifiedDpopProof = VerifiedDpop;
 
 export class OAuthDpopProofError extends Error {
   constructor(message: string) {
@@ -31,63 +24,33 @@ export class OAuthDpopProofError extends Error {
   }
 }
 
+/**
+ * AS-side DPoP proof verification. Thin adapter over `@sentropic/oauth-verify`'s shared
+ * `verifyDpopProof`: it binds the IdP's clock + replay store and re-maps verification
+ * failures onto `OAuthDpopProofError` for the OAuth handlers (token/userinfo/revoke).
+ */
 export const verifyOAuthDpopProof = async (
   options: VerifyDpopProofOptions
 ): Promise<VerifiedDpopProof> => {
-  const header = decodeProtectedHeader(options.proof);
-  const publicJwk = header.jwk as JWK | undefined;
-  if (!publicJwk || !header.alg || header.typ !== 'dpop+jwt') {
-    throw new OAuthDpopProofError('DPoP proof header is invalid.');
-  }
-
-  const key = await importJWK(publicJwk, header.alg);
-  const { payload } = await jwtVerify(options.proof, key);
-  await validateDpopPayload(payload, options);
-
-  const expiresAt = options.ports.clock.addSeconds(
-    options.ports.clock.now(),
-    options.iatSkewSeconds ?? 60
-  );
-  const recorded = await options.ports.oauthStateStore.recordDpopJti(String(payload.jti), expiresAt);
-  if (!recorded) {
-    throw new OAuthDpopProofError('DPoP proof jti was already used.');
-  }
-
-  return {
-    jkt: await calculateJwkThumbprint(publicJwk),
-    jti: String(payload.jti),
-  };
-};
-
-const validateDpopPayload = async (
-  payload: JWTPayload,
-  options: VerifyDpopProofOptions
-): Promise<void> => {
-  if (payload.htm !== options.htm.toUpperCase()) {
-    throw new OAuthDpopProofError('DPoP htm claim does not match the request method.');
-  }
-  if (payload.htu !== options.htu) {
-    throw new OAuthDpopProofError('DPoP htu claim does not match the request URL.');
-  }
-  if (!payload.jti || typeof payload.jti !== 'string') {
-    throw new OAuthDpopProofError('DPoP jti claim is required.');
-  }
-  if (typeof payload.iat !== 'number') {
-    throw new OAuthDpopProofError('DPoP iat claim is required.');
-  }
-
-  const nowSeconds = Math.floor(options.ports.clock.now().getTime() / 1000);
-  if (Math.abs(payload.iat - nowSeconds) > (options.iatSkewSeconds ?? 60)) {
-    throw new OAuthDpopProofError('DPoP iat claim is outside the allowed skew.');
-  }
-
-  if (options.accessToken) {
-    await validateAth(payload, options.accessToken);
-  }
-};
-
-const validateAth = async (payload: JWTPayload, accessToken: string): Promise<void> => {
-  if (payload.ath !== (await sha256Base64url(accessToken))) {
-    throw new OAuthDpopProofError('DPoP ath claim does not match the access token.');
+  const iatSkewSec = options.iatSkewSeconds ?? 60;
+  try {
+    return await verifyDpopProof({
+      accessToken: options.accessToken,
+      htm: options.htm,
+      htu: options.htu,
+      iatSkewSec,
+      now: options.ports.clock.now(),
+      proof: options.proof,
+      replay: (jti) =>
+        options.ports.oauthStateStore.recordDpopJti(
+          jti,
+          options.ports.clock.addSeconds(options.ports.clock.now(), iatSkewSec)
+        ),
+    });
+  } catch (error) {
+    if (error instanceof DpopVerifyError) {
+      throw new OAuthDpopProofError(error.message);
+    }
+    throw error;
   }
 };
