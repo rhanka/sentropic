@@ -59,6 +59,9 @@ export const createOAuthTokenHandler =
       return oauthJsonError(c, 400, 'invalid_grant', 'PKCE verification failed.');
     }
 
+    const resourceError = validateTokenResource(c, form, codePayload);
+    if (resourceError) return resourceError;
+
     const dpopJkt = await resolveDpopJkt(c, options, auth.client, codePayload);
     if (dpopJkt instanceof Response) return dpopJkt;
 
@@ -115,6 +118,30 @@ const parseClientCredentials = (
     clientId: form.get('client_id'),
     secret: form.get('client_secret') ?? undefined,
   };
+};
+
+/**
+ * RFC 8707 resource validation on the token leg of the `authorization_code` flow (BR-39l Lot 2).
+ * - C1 single-aud: more than one `resource` value ⇒ `invalid_target`.
+ * - C3 sealing: if the client re-sends `resource` on the token request (the MCP draft requires it
+ *   on both legs), it MUST equal the value sealed at authorize time, else `invalid_grant`
+ *   (audience downgrade/upgrade rejection). The `aud` is derived ONLY from the sealed value.
+ * No `resource` on the token leg is accepted (the sealed value still governs `aud`).
+ */
+const validateTokenResource = (
+  c: Context,
+  form: URLSearchParams,
+  codePayload: AuthCodePayload
+): Response | null => {
+  const requested = form.getAll('resource').filter((value) => value.length > 0);
+  if (requested.length === 0) return null;
+  if (requested.length > 1) {
+    return oauthJsonError(c, 400, 'invalid_target', 'Only a single resource indicator is supported.');
+  }
+  if (requested[0] !== (codePayload.resource ?? null)) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'resource does not match the authorization request.');
+  }
+  return null;
 };
 
 const resolveDpopJkt = async (
@@ -328,7 +355,11 @@ const issueTokens = async (
 
   const jwks = createJwksService({ clock: options.ports.clock, jwksPort: options.ports.jwks });
   const accessJti = options.ports.random.uuid();
-  const accessAudience = `${trimTrailingSlash(options.issuer)}/api/v1/auth/oauth/userinfo`;
+  // BR-39l Lot 2 (C3/C4): variable RFC 8707 audience. The access-token `aud` is the resource
+  // sealed at authorize time (single string), or the userinfo URL by default — byte-identical to
+  // auth-hono 0.5.0 when no `resource` was requested. The id_token `aud` (client_id) is untouched.
+  const accessAudience =
+    codePayload.resource ?? `${trimTrailingSlash(options.issuer)}/api/v1/auth/oauth/userinfo`;
   const accessToken = await jwks.signJwt(
     {
       acr: codePayload.acr,

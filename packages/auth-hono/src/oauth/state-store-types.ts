@@ -16,6 +16,12 @@ export interface OauthClientRecord {
   requirePkce: boolean;
   tenantId: string | null;
   ownerUserId: string | null;
+  /**
+   * RFC 8707 resource-indicator allowlist for the `authorization_code` flow (BR-39l Lot 2).
+   * Additive, default-deny: an empty/absent allowlist means the client may NOT request any
+   * `resource` (any value ⇒ `invalid_target`). Mirrors `ServiceClientRecord.resourceIndicators`.
+   */
+  resourceIndicators?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +36,12 @@ export interface AuthCodePayload {
   codeChallengeMethod: 'S256';
   dpopJkt: string | null;
   nonce: string | null;
+  /**
+   * RFC 8707 resource sealed at authorize time (BR-39l Lot 2). When present, it becomes the
+   * access-token `aud`; the token-leg `resource` (if sent) MUST equal it. Absent ⇒ default-aud
+   * (userinfo URL), byte-identical to auth-hono 0.5.0.
+   */
+  resource?: string | null;
   acr: string;
   authTime: Date;
   expiresAt: Date;
