@@ -1,3 +1,9 @@
+// COMPAT WRAPPER (architect verdict E2/F8). The CANONICAL home of this RS middleware is now
+// `@sentropic/mcp-auth/hono` (`createRequireServiceAuth`). auth-hono keeps this signature-stable
+// wrapper — same behavior, sharing the SAME verification core (`@sentropic/oauth-verify`), no
+// fourth copy of verify code — for ≥1 minor so pinned RPs are not forced to bump; it is dropped
+// at auth-hono 1.0. The wrapper builds on oauth-verify primitives directly (NOT on mcp-auth) to
+// respect the dependency DAG (auth-hono and mcp-auth never import each other).
 import {
   DpopVerifyError,
   fromJwksPort,
