@@ -59,17 +59,21 @@ COPY packages/chat-server/package.json ./packages/chat-server/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
 COPY packages/flow/package.json ./packages/flow/package.json
 COPY packages/skills/package.json ./packages/skills/package.json
+COPY packages/oauth-verify/package.json ./packages/oauth-verify/package.json
+COPY packages/mcp-auth/package.json ./packages/mcp-auth/package.json
 RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
     else npm install --workspaces --include-workspace-root; fi
 # Security: Audit production dependencies for HIGH/CRITICAL vulnerabilities
 RUN npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root
 COPY . .
+RUN npm --workspace @sentropic/oauth-verify run build
 RUN npm --workspace @sentropic/auth-hono run build
 RUN npm --workspace @sentropic/auth-client run build
 RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/flow run build
 RUN npm --workspace @sentropic/contracts run build
 RUN npm --workspace @sentropic/comments run build
+RUN npm --workspace @sentropic/mcp-auth run build
 
 FROM base AS development
 WORKDIR /workspace/api
