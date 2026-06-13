@@ -38,6 +38,10 @@ const envSchema = z.object({
   DOC_STORAGE_REGION: z.string().optional(),
   DOC_STORAGE_ACCESS_KEY: z.string().optional(),
   DOC_STORAGE_SECRET_KEY: z.string().optional(),
+  // Artifact store (BR-52): backend override ('s3' | 'local-fs'); auto-selects S3 when a
+  // DOC_STORAGE_BUCKET is configured, else local-FS. ARTIFACT_FS_ROOT is the local-FS root.
+  ARTIFACT_STORE_BACKEND: z.string().optional(),
+  ARTIFACT_FS_ROOT: z.string().optional(),
   SCW_DEFAULT_ORGANIZATION_ID: z.string().optional(),
   SCW_DEFAULT_PROJECT_ID: z.string().optional(),
   SCW_NAMESPACE_ID: z.string().optional(),
