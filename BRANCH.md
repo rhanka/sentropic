@@ -56,7 +56,7 @@ Introduce `ArtifactStorePort` (SPEC_EVOL_DATA_ARCHITECTURE §3.5 Axis E, line 31
   - [x] Confirm scope, guardrails, env mapping (`test-artifact-port`).
   - [x] Confirm command style: `make ... ENV=<env>` with `ENV` last.
 
-- [ ] **Lot 1 — Port + adapters + factory + unit tests**
+- [x] **Lot 1 — Port + adapters + factory + unit tests** (committed: storage-s3 5733c7c54 + module + tests 7c9363bd0; Codex review BR52-REV1 applied; typecheck/lint 0 errors)
   - [ ] `artifact-store/port.ts`: `ArtifactRef`, `ArtifactMetadata`, `PutArtifactInput`, `PutArtifactResult`, `ArtifactStorePort` interface (`put`/`getBytes`/`getStream`/`head`/`delete`/`defaultBucket`).
   - [ ] `storage-s3.ts`: extend `putObject` with optional `metadata?: Record<string,string>` (set `Metadata`); extend `headObject` to return `metadata?: Record<string,string>` — additive, backward-compatible.
   - [ ] `artifact-store/s3-artifact-store.ts`: `S3ArtifactStore` delegating to `storage-s3` fns; sha256 on put; persist checksum in S3 object metadata; head reads it; pass-through `version` (S3 VersionId where present).
@@ -68,7 +68,7 @@ Introduce `ArtifactStorePort` (SPEC_EVOL_DATA_ARCHITECTURE §3.5 Axis E, line 31
   - [ ] Design consensus: adversarial review of `port.ts` (Codex 5.5-xhigh) before push (reversible-decision discipline).
 
 - [ ] **Lot 2 — Activation (one consumer through the port)**
-  - [ ] Rewire `context-document-source.ts`: replace direct `getObjectBytes({bucket,key})` with `getArtifactStore().getBytes({bucket,key})` (byte-identical via S3 adapter).
+  - [x] Rewire `context-document-source.ts`: replace direct `getObjectBytes({bucket,key})` with `getArtifactStore().getBytes({bucket,key})` (byte-identical via S3 adapter).
   - [ ] Lot gate: `make typecheck-api` + `make lint-api` + `make test-api ENV=test-artifact-port`.
   - [ ] E2E non-regression: document/context flows (group covering documents) green on CI.
 
