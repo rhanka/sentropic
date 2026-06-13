@@ -12,7 +12,7 @@ export type {
   ObjectTypeStatus,
   ObjectTypeDefinition,
   NewObjectTypeDefinition,
-} from './types';
+} from './types.js';
 
 export {
   isReferenceKind,
@@ -20,4 +20,4 @@ export {
   isTypedReference,
   isObjectTypeDefinition,
   isObjectEnvelope,
-} from './guards';
+} from './guards.js';
