@@ -101,3 +101,52 @@ export const eventOutbox = controlSchema.table(
 
 export type EventOutboxRow = typeof eventOutbox.$inferSelect;
 export type EventOutboxInsert = typeof eventOutbox.$inferInsert;
+
+/**
+ * control.object_type_definitions — the object-type registry (ARCH-19 / BR-59).
+ *
+ * Registers a UBO object type: payload JSON Schema, declared queryable fields
+ * (drive generated indexes — index-generation is BR-61, NOT here), DD7 typed
+ * references (lookup vs containment, cardinality, ID-level on-delete — never a
+ * DB FK), and PII/secret classification. Wire shape = @sentropic/ubo-contracts
+ * `ObjectTypeDefinition`.
+ *
+ * Guardrails: control namespace, NO cross-namespace FK, CHECK discipline, DD9 isolation.
+ * Storage of the objects themselves (`business_objects`) is BR-61 (gated on ARCH-11).
+ */
+export const objectTypeDefinitions = controlSchema.table(
+  'object_type_definitions',
+  {
+    id: text('id').primaryKey(),
+    objectType: text('object_type').notNull(),
+    // null = global / first-party type; set = tenant-scoped custom type (DD9).
+    tenantId: text('tenant_id'),
+    jsonSchema: jsonb('json_schema').notNull(),
+    declaredQueryableFields: jsonb('declared_queryable_fields').notNull().default(sql`'[]'::jsonb`),
+    typedReferenceFields: jsonb('typed_reference_fields').notNull().default(sql`'[]'::jsonb`),
+    classification: jsonb('classification').notNull().default(sql`'[]'::jsonb`),
+    schemaVersion: integer('schema_version').notNull().default(1),
+    status: text('status').notNull().default('draft'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    // One definition per (object_type, tenant); global types (tenant null) coalesced to '' for uniqueness.
+    objectTypeTenantUnique: uniqueIndex('object_type_definitions_type_tenant_unique').on(
+      table.objectType,
+      sql`coalesce(${table.tenantId}, '')`,
+    ),
+    tenantIdx: index('object_type_definitions_tenant_idx').on(table.tenantId),
+    statusCheck: check(
+      'object_type_definitions_status_check',
+      sql`${table.status} IN ('draft', 'active', 'deprecated')`,
+    ),
+    schemaVersionCheck: check(
+      'object_type_definitions_schema_version_check',
+      sql`${table.schemaVersion} >= 1`,
+    ),
+  }),
+);
+
+export type ObjectTypeDefinitionRow = typeof objectTypeDefinitions.$inferSelect;
+export type ObjectTypeDefinitionInsert = typeof objectTypeDefinitions.$inferInsert;

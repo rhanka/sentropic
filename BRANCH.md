@@ -32,7 +32,8 @@
 - [ ] **Lot N — gates** (`make typecheck-api lint-api test-api build-api ENV=test-registry-v0`)
 
 ## Feedback Loop
-- none
+- **BR59-EX1** (Makefile, GRANTED by claude:scale per foundations/CI-infra mandate; flagged to conductor): added a `db-generate-control` make target (exact mirror of `db-generate`) — BR-60 left only the `db:generate-control` npm script with no make target. Additive, low-risk, reusable for all future control-schema lots.
+- **BR-60 meta fix**: BR-60 committed control `0000.sql` + `_journal.json` but NOT `0000_snapshot.json` → drizzle diffed an empty baseline. Committed `0001_snapshot.json` (consistent meta going forward) + made `0001` `CREATE SCHEMA IF NOT EXISTS` (idempotent — applies cleanly after 0000).
 
 ## Deferred to BR-61
 - `business_objects` storage + resolver + envelope-union view + generated indexes (gated on ARCH-11).

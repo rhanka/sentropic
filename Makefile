@@ -1925,6 +1925,14 @@ db-generate: ## Generate migration files from schema.ts changes (uses exec if co
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc "npm ci --include=dev && npm run db:generate"; \
 	fi
 
+.PHONY: db-generate-control
+db-generate-control: ## Generate control-schema migration files (control migration stream; BR-60 ARCH-14)
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -gt 0 ]; then \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate-control; \
+	else \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc "npm ci --include=dev && npm run db:generate-control"; \
+	fi
+
 .PHONY: db-migrate
 db-migrate: ## Apply pending migrations (creates tables if DB is empty)
 	$(COMPOSE_RUN_API) npm run db:migrate
