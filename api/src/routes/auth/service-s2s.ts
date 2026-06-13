@@ -1,5 +1,6 @@
-import { createRequireServiceAuth, type ServiceAuthPorts } from '@sentropic/auth-hono';
 import { createAuthClient } from '@sentropic/auth-client';
+// E2/F8 relocation: the canonical RS middleware now lives in @sentropic/mcp-auth/hono.
+import { createRequireServiceAuth, type ServiceAuthPorts } from '@sentropic/mcp-auth/hono';
 import { Hono, type Context } from 'hono';
 
 import { env } from '../../config/env';
