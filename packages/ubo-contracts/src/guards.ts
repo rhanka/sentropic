@@ -8,7 +8,7 @@ import type {
   OnDelete,
   ReferenceKind,
   TypedReference,
-} from './types';
+} from './types.js';
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
