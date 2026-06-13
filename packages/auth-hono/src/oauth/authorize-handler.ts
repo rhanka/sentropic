@@ -21,6 +21,7 @@ interface ValidatedAuthorizeRequest {
   dpopJkt: string | null;
   nonce: string | null;
   redirectUri: string;
+  resource: string | null;
   scope: string;
   state: string | null;
 }
@@ -129,12 +130,16 @@ const validateAuthorizeRequest = async (
   const scopeResult = validateScope(c.req.query('scope') ?? '', client, redirectUri, state, c.req.url);
   if (scopeResult instanceof Response) return scopeResult;
 
+  const resourceResult = validateResource(c.req.queries('resource'), client, redirectUri, state, c.req.url);
+  if (resourceResult instanceof Response) return resourceResult;
+
   return {
     client,
     codeChallenge,
     dpopJkt: c.req.query('dpop_jkt') ?? null,
     nonce: c.req.query('nonce') ?? null,
     redirectUri,
+    resource: resourceResult,
     scope: scopeResult,
     state,
   };
@@ -172,6 +177,34 @@ const validateScope = (
     return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl);
   }
   return requestedScopes.join(' ');
+};
+
+/**
+ * RFC 8707 resource indicator validation on the `authorization_code` flow (BR-39l Lot 2).
+ * - C1 single-aud: more than one `resource` value ⇒ `invalid_target` (no multi-audience tokens).
+ * - C2 default-deny allowlist: a requested `resource` must be in `client.resourceIndicators`,
+ *   else `invalid_target`. No `resource` ⇒ `null` (default-aud = userinfo, byte-identical to 0.5.0).
+ * The validated value is sealed into the continuation and becomes the access-token `aud`.
+ */
+const validateResource = (
+  resources: string[] | undefined,
+  client: OauthClientRecord,
+  redirectUri: string,
+  state: string | null,
+  baseUrl: string
+): string | null | Response => {
+  const requested = (resources ?? []).filter((value) => value.length > 0);
+  if (requested.length === 0) return null;
+  if (requested.length > 1) {
+    return redirectWithOAuthError(redirectUri, 'invalid_target', state, baseUrl);
+  }
+
+  const value = requested[0];
+  const allowlist = client.resourceIndicators ?? [];
+  if (!allowlist.includes(value)) {
+    return redirectWithOAuthError(redirectUri, 'invalid_target', state, baseUrl);
+  }
+  return value;
 };
 
 const sealContinuation = async (
@@ -213,6 +246,7 @@ const sealContinuation = async (
     expiresAt: expiresAt.toISOString(),
     nonce: request.nonce,
     redirectUri: request.redirectUri,
+    resource: request.resource,
     scope: request.scope,
     state: request.state,
     tenantId,
