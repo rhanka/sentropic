@@ -77,6 +77,8 @@ export async function putObject(params: {
   key: string;
   body: Uint8Array | Buffer;
   contentType?: string;
+  /** Optional user metadata (S3 lowercases keys; stored as x-amz-meta-*). */
+  metadata?: Record<string, string>;
 }): Promise<void> {
   const client = getS3Client();
   const { endpoint } = getDocStorageConfig();
@@ -86,6 +88,7 @@ export async function putObject(params: {
       Key: params.key,
       Body: params.body,
       ContentType: params.contentType,
+      Metadata: params.metadata,
     });
 
   try {
@@ -138,6 +141,7 @@ export async function putObject(params: {
 export async function headObject(pointer: S3ObjectPointer): Promise<{
   contentLength?: number;
   contentType?: string;
+  metadata?: Record<string, string>;
 }> {
   const client = getS3Client();
   const res = await client.send(
@@ -149,6 +153,7 @@ export async function headObject(pointer: S3ObjectPointer): Promise<{
   return {
     contentLength: typeof res.ContentLength === 'number' ? res.ContentLength : undefined,
     contentType: typeof res.ContentType === 'string' ? res.ContentType : undefined,
+    metadata: res.Metadata,
   };
 }
 
