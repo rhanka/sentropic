@@ -61,6 +61,7 @@ export const createOAuthConsentDecisionHandler =
         expiresAt: options.ports.clock.addSeconds(now, options.authorizationCodeTtlSeconds ?? 60),
         nonce: payload.nonce,
         redirectUri: payload.redirectUri,
+        resource: payload.resource ?? null,
         scope: payload.scope,
         tenantId: payload.tenantId,
         userId: payload.userId ?? '',

@@ -39,6 +39,7 @@ import { productsRouter } from './products';
 import { bidsRouter } from './bids';
 import { proposalsRouter } from './proposals';
 import { viewTemplatesRouter } from './view-templates';
+import { mcpRouter } from './mcp';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -46,6 +47,10 @@ export const apiRouter = new Hono();
 
 // Public routes (no authentication required)
 apiRouter.route('/health', healthRouter);
+
+// MCP resource server (BR-39l Lot 3): self-authenticating via Bearer/DPoP access tokens
+// (mcp-auth, not the session-cookie requireAuth). Gated OFF by default (MCP_RESOURCE_SERVER_ENABLED).
+apiRouter.route('/mcp', mcpRouter);
 // Editor routes (require editor role or higher)
 apiRouter.use('/organizations/*', requireAuth);
 apiRouter.route('/organizations', organizationsRouter);
