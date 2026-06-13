@@ -9,6 +9,8 @@ export interface OAuthContinuationState {
   expiresAt: string;
   nonce: string | null;
   redirectUri: string;
+  /** RFC 8707 resource sealed at authorize time (BR-39l Lot 2); carried authorize → consent → code. */
+  resource?: string | null;
   scope: string;
   state: string | null;
   tenantId: string | null;
