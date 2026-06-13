@@ -62,6 +62,7 @@
     "@sentropic/llm-mesh": "file:../packages/llm-mesh",
     "@sentropic/mcp-auth": "file:../packages/mcp-auth",
     "@sentropic/oauth-verify": "file:../packages/oauth-verify",
+    "@sentropic/ubo-contracts": "file:../packages/ubo-contracts",
     "@simplewebauthn/server": "^13.2.2",
     "@xmldom/xmldom": "0.9.10",
     "better-queue": "^3.8.12",

@@ -8,6 +8,13 @@
       "when": 1749600000000,
       "tag": "0000_control_schema_and_event_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781314286382,
+      "tag": "0001_freezing_blue_marvel",
+      "breakpoints": true
     }
   ]
 }

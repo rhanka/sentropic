@@ -1266,6 +1266,10 @@ build-chat-server: ## Build @sentropic/chat-server dist package
 build-comments: build-contracts ## Build @sentropic/comments dist package (depends on contracts dist)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
 
+.PHONY: build-ubo-contracts
+build-ubo-contracts: ## Build @sentropic/ubo-contracts (private, BR-59) dist package — no @sentropic deps
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/ubo-contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+
 .PHONY: typecheck-contracts
 typecheck-contracts: install-internal-packages ## Run @sentropic/contracts type checks
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
@@ -1808,7 +1812,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # Development environment
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
-prepare-node-workspace: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+prepare-node-workspace: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
@@ -1858,7 +1862,7 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test-ci
-up-api-test-ci: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+up-api-test-ci: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
@@ -2041,6 +2045,14 @@ db-generate: ## Generate migration files from schema.ts changes (uses exec if co
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate; \
 	else \
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc "npm ci --include=dev && npm run db:generate"; \
+	fi
+
+.PHONY: db-generate-control
+db-generate-control: ## Generate control-schema migration files (control migration stream; BR-60 ARCH-14)
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -gt 0 ]; then \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate-control; \
+	else \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc "npm ci --include=dev && npm run db:generate-control"; \
 	fi
 
 .PHONY: db-migrate
