@@ -65,6 +65,8 @@
     "@sentropic/auth-ui": "file:../packages/auth-ui",
     "@sentropic/chat-ui": "file:../packages/chat-ui",
     "@sentropic/cowork-bridge": "file:../packages/cowork-bridge",
+    "@sentropic/design-system-svelte": "^0.34.40",
+    "@sentropic/design-system-themes": "^0.11.0",
     "@simplewebauthn/browser": "^13.2.2",
     "@tiptap/core": "^3.6.5",
     "@tiptap/extension-placeholder": "^3.14.0",
