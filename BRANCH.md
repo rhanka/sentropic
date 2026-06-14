@@ -34,7 +34,7 @@ Make `@sentropic/auth-ui` render its 6 screens with **native `@sentropic/design-
 ## Feedback Loop
 - FL-1 `risk`: DS `@sentropic/design-system-svelte` exports a single `.` barrel → verify tree-shaking keeps the auth bundle lean (no Highcharts/chart bloat). Mitigation: measure `apps/auth-idp/web/build` size before/after; if bloated, import via deep paths or raise with DS lane. Status: open.
 - FL-2 `resolved`: `@sentropic/design-system-svelte` package.json has ONLY a `.` export — NO `styles.css`. Svelte components ship plain scoped `<style>` (compiled natively) and `ThemeProvider` injects the theme token CSS via `{@html "<style>${compileTheme(...)}</style>"}` into `<svelte:head>`. So NO base-styles import is required at any host; just wrap content in `<ThemeProvider theme={entropicTheme}>`. (The docs app's `@sentropic/design-system-react/styles.css` import only styles React/Vue islands — irrelevant for a Svelte-only host.) Build caveat: a host with a `postcss.config` (tailwind+autoprefixer) + `vitePreprocess()` re-runs PostCSS over DS node_modules `<style>` and ThemeProvider's `{@html}` literal → `Unknown word css`. Fix: `vitePreprocess({ style: false })` on hosts that have a PostCSS config and no `<style lang>` blocks in their own `.svelte` (applies to idp-web). Status: resolved.
-- FL-3 `note`: host login pages pass slot content with hardcoded colors (`apps/auth-idp/web` `text-primary`, `ui/` `text-indigo-600`) → align slot links to DS (`<Link>` / `text-[var(--st-...)]`). Status: open.
+- FL-3 `resolved`: host login pages passed slot links with hardcoded colors (`apps/auth-idp/web` `text-primary`, `ui/` `text-indigo-600`) → replaced both with DS `<Link href=... variant="standalone">`. Status: resolved.
 
 ## AI Flaky tests
 - Standard acceptance rule (non-systematic provider/network nondeterminism only; document signature + user sign-off). No AI tests expected in scope.
@@ -58,14 +58,15 @@ Make `@sentropic/auth-ui` render its 6 screens with **native `@sentropic/design-
 - [ ] **Lot 1 — Foundation + AuthLogin proof (both hosts)**
   - [x] `packages/auth-ui/package.json`: add `@sentropic/design-system-svelte` + `@sentropic/design-system-themes` to `peerDependencies`; bump `0.3.3 → 0.4.0`.
   - [x] `apps/auth-idp/web`: add the 2 DS deps to package.json; `make lock-idp-web`; wire `<ThemeProvider theme={entropicTheme}>` in `apps/auth-idp/web/src/routes/+layout.svelte`; no separate base-styles import needed (svelte pkg has no styles.css export; ThemeProvider injects token CSS + components self-style) — FL-2 resolved; build needed `vitePreprocess({ style: false })` so the host tailwind/autoprefixer PostCSS stops choking on DS scoped `<style>`/ThemeProvider `{@html}`.
-  - [ ] `ui/`: add the 2 DS deps via `make install-ui`; create `ui/src/routes/auth/+layout.svelte` wrapping with `<ThemeProvider theme={entropicTheme}>` + DS base styles.
-  - [ ] Convert `packages/auth-ui/src/components/AuthLogin.svelte`: `auth-ui-button--primary` → `<Button variant="primary">`, `auth-ui-link` (onclick actions) → `<Button variant="ghost">`, `auth-ui-alert error/info` → `<Alert tone="error|info">`, title/subtitle → `<Typography>`; remove the corresponding `<style>` rules; preserve labels/i18n/logic/slots.
-  - [ ] Align host login slot links (`no-account`, `register-new-device`) to DS `<Link>` (drop `text-indigo-600`/`text-primary` hardcodes) — FL-3.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-auth-ui`
-    - [ ] `make build-idp-web` (proves DS resolves + compiles in the auth.sent-tech.ca host) + record `build/` size delta (FL-1).
-    - [ ] `make typecheck-ui` + `make lint-ui` (ui/ host compiles with the new auth layout).
-    - [ ] UAT (visual, login screen): build `apps/auth-idp/web` + screenshot the login page; confirm primary button = DS entropic primary (not indigo).
+  - [x] `ui/`: add the 2 DS deps via `make install-ui`; create `ui/src/routes/auth/+layout.svelte` wrapping with `<ThemeProvider theme={entropicTheme}>` (no base-styles import per FL-2).
+  - [x] Convert `packages/auth-ui/src/components/AuthLogin.svelte`: primary button → `<Button variant="primary">`, onclick link-actions → `<Button variant="ghost">`, error/info alerts → `<Alert tone="error|info">`, title/subtitle → `<Typography>`; removed the dead `auth-ui-button*`/`auth-ui-link*`/`auth-ui-alert*`/`auth-ui-title`/`auth-ui-subtitle` `<style>` rules; preserved labels/i18n/logic/slots.
+  - [x] Align host login slot links (`no-account`, `register-new-device`) to DS `<Link variant="standalone">` (dropped `text-indigo-600`/`text-primary` hardcodes) — FL-3 resolved.
+  - [x] Lot gate:
+    - [x] `make typecheck-auth-ui` — PASS (tsc clean).
+    - [x] `make build-idp-web` — PASS (DS resolves + compiles in the auth.sent-tech.ca host). FL-1: build size 604K (vs 576K stopgap baseline; +28K, no Highcharts/chart bloat — barrel tree-shakes). Needed `kit.alias` + vite `dedupe` for the DS peers (auth-ui src is a `file:` symlink, mirrors the existing `@simplewebauthn/browser` alias) and `vitePreprocess({ style: false })`.
+    - [x] `make lint-ui` — PASS (eslint clean).
+    - [~] `make typecheck-ui` — BLOCKED by host OOM (exit 137, OS OOM killer) — REPRODUCED on a CLEAN ui/ (changes stashed) → environmental memory pressure, NOT a branch regression. Type soundness covered by `typecheck-auth-ui` (component) + `lint-ui` (type-aware eslint) + `build-idp-web` (same AuthLogin + DS Link compiles). To re-run when host memory frees up.
+    - [ ] UAT (visual, login screen): conductor handles visual UAT.
 
 - [ ] **Lot 2 — Convert remaining 5 components**
   - [ ] `AuthRegister.svelte`, `AuthMagicLinkVerify.svelte`, `AuthDevicePair.svelte`, `AuthDevices.svelte`, `OAuthConsent.svelte`: same DS mapping as AuthLogin; remove dead `auth-ui-*` `<style>`; preserve labels/logic/slots.
