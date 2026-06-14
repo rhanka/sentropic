@@ -60,8 +60,6 @@ fallback after each token is the exact sentropic value.
 | `--st-semantic-surface-default` | panels, bubbles, composer (`bg-white`) | `#ffffff` |
 | `--st-semantic-surface-subtle` | subtle fills (`bg-slate-50`) | `#f8fafc` |
 | `--st-semantic-surface-sunken` | chips, tool cards (`bg-slate-100`) | `#f1f5f9` |
-| `--st-component-control-hoverBackground` | hover fills (`bg-slate-200`) | `#e2e8f0` |
-| `--st-component-control-disabledBackground` | disabled send button (`bg-slate-300`) | `#cbd5e1` |
 | `--st-semantic-text-primary` | main text (`text-slate-900/800`) | `#0f172a` / `#1e293b` |
 | `--st-semantic-text-secondary` | secondary text (`text-slate-700/600`) | `#334155` / `#475569` |
 | `--st-semantic-text-muted` | muted text/icons (`text-slate-500/400`) | `#64748b` / `#94a3b8` |
@@ -70,6 +68,15 @@ fallback after each token is the exact sentropic value.
 | `--st-semantic-feedback-danger` | error text/hover (`text-red-600/700`) | `#dc2626` / `#b91c1c` |
 | `--st-elevation-2` / `--st-elevation-3` | `shadow-lg` / `shadow-2xl` | tailwind defaults |
 | `--st-font-sans` | base font of the chat subtree | tailwind sans stack |
+
+### Deferred (literal in v1, owner ratification 2026-06-13)
+
+Two control fills are NOT tokenized in this release — they are kept as literals
+(`bg-slate-200` → `#e2e8f0`, `bg-slate-300` → `#cbd5e1`) because they fall outside the
+design-system's frozen chat-token list. They will be re-tokenized to
+`--st-component-control-hoverBackground` / `--st-component-control-disabledBackground`
+(or whatever the DS lane counter-proposes) once the DS ratifies them — a non-breaking
+additive change.
 
 Where one token themes several utilities (e.g. `text-slate-500` and
 `text-slate-400` both map to `--st-semantic-text-muted`), the unthemed

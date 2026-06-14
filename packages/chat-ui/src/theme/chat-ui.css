@@ -962,10 +962,12 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
   background-color: var(--st-semantic-surface-sunken, #f1f5f9);
 }
 [data-st-chat-theme] .bg-slate-200 {
-  background-color: var(--st-component-control-hoverBackground, #e2e8f0);
+  --tw-bg-opacity: 1;
+  background-color: rgb(226 232 240 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .bg-slate-300 {
-  background-color: var(--st-component-control-disabledBackground, #cbd5e1);
+  --tw-bg-opacity: 1;
+  background-color: rgb(203 213 225 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .bg-slate-50 {
   background-color: var(--st-semantic-surface-subtle, #f8fafc);
@@ -1186,7 +1188,8 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
   background-color: var(--st-semantic-surface-sunken, #f1f5f9);
 }
 [data-st-chat-theme] .hover\:bg-slate-200:hover {
-  background-color: var(--st-component-control-hoverBackground, #e2e8f0);
+  --tw-bg-opacity: 1;
+  background-color: rgb(226 232 240 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .hover\:bg-slate-50:hover {
   background-color: var(--st-semantic-surface-subtle, #f8fafc);
