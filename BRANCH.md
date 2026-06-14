@@ -56,7 +56,7 @@ Make `@sentropic/auth-ui` render its 6 screens with **native `@sentropic/design-
   - [ ] Env mapping: ENV=`test-auth-ui-ds`; UI/build ports default per host build targets (no long-running dev needed; static builds + visual via preview).
 
 - [ ] **Lot 1 — Foundation + AuthLogin proof (both hosts)**
-  - [ ] `packages/auth-ui/package.json`: add `@sentropic/design-system-svelte` + `@sentropic/design-system-themes` to `peerDependencies` (+ devDependencies for local resolution); bump `0.3.3 → 0.4.0`.
+  - [x] `packages/auth-ui/package.json`: add `@sentropic/design-system-svelte` + `@sentropic/design-system-themes` to `peerDependencies`; bump `0.3.3 → 0.4.0`.
   - [ ] `apps/auth-idp/web`: add the 2 DS deps to package.json; `make lock-idp-web`; wire `<ThemeProvider theme={entropicTheme}>` + DS base styles in `apps/auth-idp/web/src/routes/+layout.svelte`; verify the correct base-styles import (resolve FL-2).
   - [ ] `ui/`: add the 2 DS deps via `make install-ui`; create `ui/src/routes/auth/+layout.svelte` wrapping with `<ThemeProvider theme={entropicTheme}>` + DS base styles.
   - [ ] Convert `packages/auth-ui/src/components/AuthLogin.svelte`: `auth-ui-button--primary` → `<Button variant="primary">`, `auth-ui-link` (onclick actions) → `<Button variant="ghost">`, `auth-ui-alert error/info` → `<Alert tone="error|info">`, title/subtitle → `<Typography>`; remove the corresponding `<style>` rules; preserve labels/i18n/logic/slots.
