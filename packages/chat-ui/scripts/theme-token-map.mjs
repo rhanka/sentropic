@@ -75,7 +75,9 @@ export const themeColors = {
   slate: {
     50: v('--st-semantic-surface-subtle', '#f8fafc'),
     100: v('--st-semantic-surface-sunken', '#f1f5f9'),
-    200: v('--st-component-control-hoverBackground', '#e2e8f0'),
+    // BLOCKED (owner ratification 2026-06-13): kept literal — not in the DS frozen chat-token
+    // list. Re-token to --st-component-control-hoverBackground only once the DS lane ratifies it.
+    200: '#e2e8f0',
     400: v('--st-semantic-text-muted', '#94a3b8'),
     500: v('--st-semantic-text-muted', '#64748b'),
     600: v('--st-semantic-text-secondary', '#475569'),
@@ -117,7 +119,9 @@ export const pluginColorOverrides = {
   },
   backgroundColor: {
     slate: {
-      300: v('--st-component-control-disabledBackground', '#cbd5e1'),
+      // BLOCKED (owner ratification 2026-06-13): kept literal — not in the DS frozen chat-token
+      // list. Re-token to --st-component-control-disabledBackground only once the DS lane ratifies it.
+      300: '#cbd5e1',
       800: v('--st-semantic-action-primary', '#1e293b')
     }
   }

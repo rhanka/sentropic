@@ -153,9 +153,12 @@ describe('theme stylesheet drift guard', () => {
     expect(block(`${SCOPE} .border-gray-200`)).toContain('var(--st-semantic-border-subtle, #e5e7eb)');
     // Send button states (class: directives in ChatConversation)
     expect(block(`${SCOPE} .bg-slate-800`)).toContain('var(--st-semantic-action-primary, #1e293b)');
-    expect(block(`${SCOPE} .bg-slate-300`)).toContain(
-      'var(--st-component-control-disabledBackground, #cbd5e1)'
-    );
+    // BLOCKED token (owner ratification 2026-06-13): disabled send button stays a LITERAL
+    // slate-300 (#cbd5e1 = rgb 203 213 225) until the DS lane ratifies a control token —
+    // it must NOT carry any --st-* theming var. The --tw-bg-opacity wrapper is Tailwind's
+    // standard literal-color emission (same form as the scrim/black/white literals below).
+    expect(block(`${SCOPE} .bg-slate-300`)).toContain('rgb(203 213 225 / var(--tw-bg-opacity, 1))');
+    expect(block(`${SCOPE} .bg-slate-300`)).not.toContain('--st-');
     // Primary + alpha modifiers (color-mix path; functions must receive the
     // explicit /NN value, never the legacy var(--tw-bg-opacity) expression)
     expect(block(`${SCOPE} .bg-primary`)).toContain(
