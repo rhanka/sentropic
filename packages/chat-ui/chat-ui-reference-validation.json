@@ -2,39 +2,57 @@
   "components": {
     "ChatDock.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/ChatWidget.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/ChatWidget.svelte"
+      ]
     },
     "ChatPanel.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/ChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/ChatPanel.svelte"
+      ]
     },
     "ChatWidget.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/ChatWidget.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/ChatWidget.svelte"
+      ]
     },
     "StreamMessage.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/StreamMessage.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/StreamMessage.svelte"
+      ]
     },
     "ChatTimeline.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/ChatTimelineWrapper.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/ChatTimelineWrapper.svelte"
+      ]
     },
     "ChatComposer.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/ChatComposerWrapper.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/ChatComposerWrapper.svelte"
+      ]
     },
     "ModelSelector.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
     },
     "MessageActions.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
     },
     "ChatContextPicker.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
     },
     "ContextChips.svelte": {
       "class": "legacy",
@@ -52,8 +70,18 @@
     },
     "ChatConversation.svelte": {
       "class": "assembly",
-      "assemblyValidatedBy": ["tests/chat-conversation-functional.dom.spec.ts"],
-      "composes": ["ChatPanel.svelte", "ChatTimeline.svelte", "ChatComposer.svelte", "ModelSelector.svelte", "MessageActions.svelte", "StreamMessage.svelte", "ChatContextPicker.svelte"]
+      "assemblyValidatedBy": [
+        "tests/chat-conversation-functional.dom.spec.ts"
+      ],
+      "composes": [
+        "ChatPanel.svelte",
+        "ChatTimeline.svelte",
+        "ChatComposer.svelte",
+        "ModelSelector.svelte",
+        "MessageActions.svelte",
+        "StreamMessage.svelte",
+        "ChatContextPicker.svelte"
+      ]
     },
     "checkpoints": {
       "class": "headless"
@@ -69,23 +97,37 @@
     },
     "AttachmentBand.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
     },
     "GeneratedFileCardTray.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
     },
     "ImageLightbox.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
     },
     "MessageAttachments.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
     },
     "CommentsPanel.svelte": {
       "class": "primitive",
-      "dogfoodedBy": ["ui/src/lib/components/chat/AppChatPanel.svelte"]
+      "dogfoodedBy": [
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
+      ]
+    },
+    "theme.css": {
+      "class": "headless",
+      "note": "Opt-in precompiled theming stylesheet (Mode B consumers without Tailwind); not a component. See THEMING.md."
     }
   }
 }
