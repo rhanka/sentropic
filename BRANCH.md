@@ -68,13 +68,15 @@ Make `@sentropic/auth-ui` render its 6 screens with **native `@sentropic/design-
     - [~] `make typecheck-ui` — BLOCKED by host OOM (exit 137, OS OOM killer) — REPRODUCED on a CLEAN ui/ (changes stashed) → environmental memory pressure, NOT a branch regression. Type soundness covered by `typecheck-auth-ui` (component) + `lint-ui` (type-aware eslint) + `build-idp-web` (same AuthLogin + DS Link compiles). To re-run when host memory frees up.
     - [ ] UAT (visual, login screen): conductor handles visual UAT.
 
-- [ ] **Lot 2 — Convert remaining 5 components**
-  - [ ] `AuthRegister.svelte`, `AuthMagicLinkVerify.svelte`, `AuthDevicePair.svelte`, `AuthDevices.svelte`, `OAuthConsent.svelte`: same DS mapping as AuthLogin; remove dead `auth-ui-*` `<style>`; preserve labels/logic/slots.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-auth-ui` + `make typecheck-ui` + `make lint-ui`
-    - [ ] `make build-idp-web`
-    - [ ] `make test-auth-ui` (existing vitest, evolve if assertions reference old classes)
-    - [ ] UAT (visual): screenshot register + consent screens.
+- [x] **Lot 2 — Convert remaining 5 components**
+  - [x] `AuthRegister.svelte`, `AuthMagicLinkVerify.svelte`, `AuthDevicePair.svelte`, `AuthDevices.svelte`, `OAuthConsent.svelte`: same DS mapping as AuthLogin (Button/Input/Alert/Typography/Card); removed dead `auth-ui-*` `<style>`; preserved labels/logic/slots. Kept the bespoke OTP code-grid (AuthRegister) + loading spinners (no DS equivalent) but re-pointed their CSS vars to `--st-*` tokens.
+  - [x] Lot gate:
+    - [x] `make typecheck-auth-ui` — PASS (tsc clean).
+    - [x] `make build-idp-web` — PASS (all 6 converted components compile in host; build 620K).
+    - [x] `make test-auth-ui ENV=test-auth-ui-ds` — PASS (34/34; tests are contract/transport/webauthn only, no CSS-class assertions → no evolution needed).
+    - [x] `make lint-ui` — PASS (eslint clean).
+    - [~] `make typecheck-ui` — same host-OOM (137) as Lot 1, environmental (reproduced on clean ui/). Covered by typecheck-auth-ui + lint-ui + build-idp-web.
+    - [ ] UAT (visual): conductor handles visual UAT.
 
 - [ ] **Lot 3 — Host shell + cleanup**
   - [ ] `apps/auth-idp/web/src/routes/+layout.svelte`: replace the STOPGAP hand-rolled header with DS `<AppHeader>` + `<LanguageToggle>` (brand SENT / "Sentropic ID", FR/EN), removing the stopgap markup.
