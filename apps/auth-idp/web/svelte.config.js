@@ -27,7 +27,14 @@ const config = {
       handleMissingId: 'warn'
     }
   },
-  preprocess: vitePreprocess()
+  // `style: false` disables PostCSS preprocessing of <style> blocks. Tailwind is
+  // applied to the global `src/app.css` (Vite runs postcss.config on it directly)
+  // and none of this project's own .svelte files use <style> blocks. The consumed
+  // `@sentropic/auth-ui` + `@sentropic/design-system-svelte` ship plain scoped
+  // <style> (and `{@html "<style>${css}</style>"}` in ThemeProvider) which Svelte
+  // compiles natively; running the host's tailwind/autoprefixer PostCSS over them
+  // breaks (postcss "Unknown word css" on ThemeProvider's `${css}` literal).
+  preprocess: vitePreprocess({ style: false })
 };
 
 export default config;
