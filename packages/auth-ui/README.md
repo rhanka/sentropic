@@ -9,9 +9,37 @@ The package is **host-adapter driven**. It owns the user-facing flow, the WebAut
 ```bash
 npm install @sentropic/auth-ui
 # peer deps you already have:
-#   svelte                   ^5.0.0
-#   @simplewebauthn/browser  ^13.2.2
+#   svelte                            ^5.0.0
+#   @simplewebauthn/browser           ^13.2.2
+#   @sentropic/design-system-svelte   ^0.34.0   (DS primitives — since 0.4.0)
+#   @sentropic/design-system-themes   ^0.11.0   (theme tokens — since 0.4.0)
 ```
+
+## Design System theming (since 0.4.0)
+
+Since `0.4.0` the components render with native `@sentropic/design-system-svelte`
+primitives (`Button`, `Input`, `Alert`, `Typography`, `Link`, `Card`). Their
+colors/spacing come from DS theme tokens, **not** from `auth-ui` itself — so the
+host MUST wrap the auth routes in the DS `ThemeProvider` with a theme (the
+Sentropic brand theme is `entropicTheme`). Without it the DS token CSS vars are
+unset and components fall back to DS defaults.
+
+```svelte
+<!-- host +layout.svelte around the /auth/* routes -->
+<script lang="ts">
+  import { ThemeProvider } from '@sentropic/design-system-svelte';
+  import { entropicTheme } from '@sentropic/design-system-themes';
+  let { children } = $props();
+</script>
+
+<ThemeProvider theme={entropicTheme}>
+  {#snippet children()}{@render children()}{/snippet}
+</ThemeProvider>
+```
+
+No base stylesheet import is required: DS Svelte components ship scoped styles and
+`ThemeProvider` injects the compiled token CSS. The DS packages are declared as
+**peerDependencies** (the host owns the DS version + theme).
 
 ## Quick start
 

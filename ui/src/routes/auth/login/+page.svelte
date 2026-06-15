@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { locale } from 'svelte-i18n';
   import AuthLogin from '@sentropic/auth-ui/components/AuthLogin.svelte';
+  import { Link } from '@sentropic/design-system-svelte';
   import type { AuthUiSession } from '@sentropic/auth-ui';
   import { setUser } from '$lib/stores/session';
   import {
@@ -36,11 +37,11 @@
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50">
   <AuthLogin {transport} {labels} onLoggedIn={handleLoggedIn}>
-    <a slot="no-account" href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+    <Link slot="no-account" href="/auth/register" variant="standalone">
       {labels.loginNoAccount}
-    </a>
-    <a slot="register-new-device" href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+    </Link>
+    <Link slot="register-new-device" href="/auth/register" variant="standalone">
       {labels.loginRegisterNewDevice}
-    </a>
+    </Link>
   </AuthLogin>
 </div>
