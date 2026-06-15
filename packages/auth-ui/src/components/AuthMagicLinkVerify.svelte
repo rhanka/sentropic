@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { Alert, Typography } from '@sentropic/design-system-svelte';
   import {
     createAuthUiError,
     createDefaultAuthUiLabels,
@@ -67,27 +68,21 @@
 
 <div class="auth-ui-magic-link">
   <header class="auth-ui-header">
-    <h2 class="auth-ui-title">{resolvedLabels.magicLinkTitle}</h2>
+    <Typography variant="h2" align="center">{resolvedLabels.magicLinkTitle}</Typography>
   </header>
 
   {#if loading && !error}
     <div class="auth-ui-loading" role="status">
       <div class="auth-ui-spinner" aria-hidden="true"></div>
-      <p class="auth-ui-loading__label">{resolvedLabels.magicLinkVerifying}</p>
+      <Typography variant="body-sm" tone="muted" align="center">{resolvedLabels.magicLinkVerifying}</Typography>
     </div>
   {:else if success}
-    <div class="auth-ui-alert auth-ui-alert--success" role="status">
-      <h3 class="auth-ui-alert__title">{resolvedLabels.magicLinkSuccessTitle}</h3>
-      <p>{resolvedLabels.redirectingDashboard}</p>
-    </div>
+    <Alert tone="success" title={resolvedLabels.magicLinkSuccessTitle} message={resolvedLabels.redirectingDashboard} />
   {:else if error}
-    <div class="auth-ui-alert auth-ui-alert--error" role="alert">
-      <h3 class="auth-ui-alert__title">{resolvedLabels.magicLinkErrorTitle}</h3>
-      <p>{error}</p>
-    </div>
+    <Alert tone="error" title={resolvedLabels.magicLinkErrorTitle} message={error} />
     <div class="auth-ui-actions">
       <slot name="back-to-login">
-        <span class="auth-ui-link">{resolvedLabels.magicLinkBackToLogin}</span>
+        <Typography variant="body-sm" tone="muted">{resolvedLabels.magicLinkBackToLogin}</Typography>
       </slot>
     </div>
   {/if}
@@ -101,16 +96,9 @@
     max-width: 28rem;
     margin: 0 auto;
     padding: 2rem 1rem;
-    font-family: var(--auth-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--auth-text, #111827);
   }
   .auth-ui-header {
     text-align: center;
-  }
-  .auth-ui-title {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 700;
   }
   .auth-ui-loading {
     text-align: center;
@@ -120,46 +108,15 @@
     width: 3rem;
     height: 3rem;
     border: 2px solid transparent;
-    border-bottom-color: var(--auth-primary, #4f46e5);
+    border-bottom-color: var(--st-color-primary, #4f46e5);
     border-radius: 50%;
     animation: auth-ui-spin 0.75s linear infinite;
-  }
-  .auth-ui-loading__label {
-    margin-top: 1rem;
-    font-size: 0.875rem;
-    color: var(--auth-muted, #6b7280);
+    margin-bottom: 1rem;
   }
   @keyframes auth-ui-spin {
     to { transform: rotate(360deg); }
   }
-  .auth-ui-alert {
-    padding: 1rem;
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem;
-  }
-  .auth-ui-alert--error {
-    background: var(--auth-error-bg, #fef2f2);
-    color: var(--auth-error-text, #991b1b);
-  }
-  .auth-ui-alert--success {
-    background: var(--auth-success-bg, #f0fdf4);
-    color: var(--auth-success-text, #166534);
-  }
-  .auth-ui-alert__title {
-    margin: 0 0 0.5rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-  }
   .auth-ui-actions {
     text-align: center;
-  }
-  .auth-ui-link {
-    color: var(--auth-link, #4f46e5);
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-decoration: none;
-  }
-  .auth-ui-link:hover {
-    text-decoration: underline;
   }
 </style>
