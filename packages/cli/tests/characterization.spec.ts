@@ -33,6 +33,12 @@ function buildBinLikeRegistry(): SubcommandRegistry {
         version: '0.2.0',
         run: async () => 0,
     });
+    registry.register({
+        name: 'surface',
+        summary: 'Build multi-repo analysis surfaces with graphify fragments.',
+        version: '0.3.0',
+        run: async () => 0,
+    });
     return registry;
 }
 
@@ -78,6 +84,7 @@ describe('Lot 0 characterization — stp output oracle', () => {
         // Explicit sub-assertions for legibility in CI output
         expect(actual).toContain(`stp ${CLI_VERSION}`);
         expect(actual).toContain('app 0.2.0');
+        expect(actual).toContain('surface 0.3.0');
     });
 
     it('stp -v output is byte-identical to stp --version (alias parity)', async () => {
@@ -124,7 +131,7 @@ describe('Lot 0 characterization — stp output oracle', () => {
         expect(err).toHaveLength(0);
     });
 
-    it('CLI_VERSION is the post-bump baseline 0.2.0 (version bump, not a regression)', () => {
-        expect(CLI_VERSION).toBe('0.2.0');
+    it('CLI_VERSION is the post-bump baseline 0.3.0 (version bump, not a regression)', () => {
+        expect(CLI_VERSION).toBe('0.3.0');
     });
 });
