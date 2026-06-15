@@ -18,7 +18,7 @@
     <div class="min-h-screen bg-gray-50">
       <AppHeader brandName="SENT" productName="Sentropic ID">
         {#snippet actions()}
-          <LanguageToggle locale={$locale} onLocaleChange={(next) => setLocale(next)} />
+          <LanguageToggle locale={$locale} onLocaleChange={setLocale} />
         {/snippet}
       </AppHeader>
       {@render pageChildren()}
