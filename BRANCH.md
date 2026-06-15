@@ -78,10 +78,10 @@ Make `@sentropic/auth-ui` render its 6 screens with **native `@sentropic/design-
     - [~] `make typecheck-ui` — same host-OOM (137) as Lot 1, environmental (reproduced on clean ui/). Covered by typecheck-auth-ui + lint-ui + build-idp-web.
     - [ ] UAT (visual): conductor handles visual UAT.
 
-- [ ] **Lot 3 — Host shell + cleanup**
-  - [ ] `apps/auth-idp/web/src/routes/+layout.svelte`: replace the STOPGAP hand-rolled header with DS `<AppHeader>` + `<LanguageToggle>` (brand SENT / "Sentropic ID", FR/EN), removing the stopgap markup.
-  - [ ] Remove any now-dead `auth-ui-*` CSS / `--auth-*` fallback vars no longer used.
-  - [ ] Lot gate: `make typecheck-auth-ui` + `make build-idp-web` + `make typecheck-ui` + `make lint-ui`.
+- [x] **Lot 3 — Host shell + cleanup**
+  - [x] `apps/auth-idp/web/src/routes/+layout.svelte`: replaced the STOPGAP hand-rolled header with DS `<AppHeader brandName="SENT" productName="Sentropic ID">` + `<LanguageToggle>` (FR/EN wired to `$lib/locale` setLocale); removed the stopgap markup + comment.
+  - [x] No dead `--auth-*` vars remain (count 0, removed in Lots 1-2); remaining `auth-ui-*` classes are LAYOUT-only (header/section/actions/spinner/list/grid/badge) — kept (DS does not dictate layout).
+  - [x] Lot gate: `make typecheck-auth-ui` PASS · `make build-idp-web` PASS (AppHeader/LanguageToggle compile; built in 19s) · `make lint-ui` PASS · `make typecheck-ui` deferred to CI (host OOM exit 137, env-only, reproduced on clean ui/ — covered by typecheck-auth-ui + lint-ui + build-idp-web).
 
 - [ ] **Lot N-1 — Docs**
   - [ ] Update `packages/auth-ui/README.md` (+ THEMING note if present): document the DS peerDependency + host ThemeProvider/entropic setup.
