@@ -15,7 +15,14 @@
  * The built library lives at ../dist (produced by `tsc -p tsconfig.json`).
  */
 
-import { runCli, SubcommandRegistry, VerbRegistry, loadFederatedSubcommands } from '../dist/index.js';
+import {
+    CLI_VERSION,
+    runCli,
+    runSurfaceCli,
+    SubcommandRegistry,
+    VerbRegistry,
+    loadFederatedSubcommands,
+} from '../dist/index.js';
 import { runAppCli, BUILD_CLI_VERSION } from '@sentropic/build-cli';
 
 async function buildRegistry() {
@@ -25,6 +32,12 @@ async function buildRegistry() {
         summary: 'Scaffold and operate a runnable @sentropic chat application (init, doctor).',
         version: BUILD_CLI_VERSION,
         run: (argv) => runAppCli(argv),
+    });
+    registry.register({
+        name: 'surface',
+        summary: 'Build multi-repo analysis surfaces with graphify fragments.',
+        version: CLI_VERSION,
+        run: (argv) => runSurfaceCli(argv),
     });
     // Discover and register cross-repo federated CLIs. All entries in FEDERATION_MANIFEST
     // that are not installed will silently skip; installed-but-broken will fail loudly.
