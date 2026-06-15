@@ -45,13 +45,13 @@ The IdP `auth.sent-tech.ca` re-shows the "Autoriser l'application" consent scree
   - [x] consent-decision-handler: saveGrant on approve.
   - [x] Unit tests (`packages/auth-hono/tests/oauth-consent-persistence.test.ts`): (a) covered ⇒ skip→code; (b) requested superset of stored ⇒ NO skip (consent shown); (c) `prompt=consent` ⇒ always consent; (d) no consentStore ⇒ always consent (compat); (e) deny ⇒ no save; (f) prompt=none covered ⇒ code, uncovered ⇒ consent_required; (+ different-client binding).
   - [x] Gate: `make typecheck-auth-hono` (exit 0) + `make test-auth-hono` (29 files, 120 tests pass).
-- [ ] **Lot 2 — api wiring + persistence**
-  - [ ] `api/drizzle/0034_oauth_consents.sql` (hand-written + `_journal.json` entry; NO db-generate, like 0031/0033) + `api/src/db/schema.ts` table.
-  - [ ] consentStore adapter (upsert) + wire into api auth-hono ports (`api/src/routes/auth/oauth.ts` or wherever ports are built).
-  - [ ] Integration test (`api/tests/api/auth/**`): authorize→consent approve→grant row; 2nd authorize same scopes ⇒ 302 to redirect_uri with code (NO consent); 2nd authorize NEW scope ⇒ consent screen.
-  - [ ] Gate: `make typecheck-api` + scoped `make test-api-unit SCOPE=...` + `make test-auth-hono`.
-- [ ] **Lot 3 — bump + docs**
-  - [ ] auth-hono `0.6.0 → 0.7.0`; README/RECIPES note the optional consentStore + skip behavior.
+- [x] **Lot 2 — api wiring + persistence** (code complete; gate BLOCKED by pre-existing dep audit — see FL-3)
+  - [x] `api/drizzle/0034_oauth_consents.sql` (hand-written + `_journal.json` idx 34; NO db-generate, like 0031/0033) + `api/src/db/schema.ts` `oauthConsents` table (UNIQUE(user_id,client_id), FKs cascade).
+  - [x] consentStore adapter (`api/src/services/auth/consent-store-adapter.ts`, upsert + scope union) wired into api auth-hono ports (`api/src/routes/auth/oauth.ts`).
+  - [x] Integration test (`api/tests/api/auth/oauth-consent-persistence.test.ts`): authorize→consent approve→grant row; 2nd authorize same scopes ⇒ 302 to redirect_uri with code (NO consent); 2nd authorize NEW scope ⇒ consent screen; deny ⇒ no row.
+  - [ ] Gate: `make typecheck-api` + scoped `make test-api-unit SCOPE=...` + `make test-auth-hono` — BLOCKED: `make typecheck-api`/`test-api-unit` rebuild the api image, which fails at `api/Dockerfile:67` `npm audit --audit-level=high` on a pre-existing transitive `ws` HIGH advisory (lockfile byte-identical to origin/main; this branch touches no deps). Needs the standing `fix/sec-*` dep-bump branch. `make test-auth-hono` passes (re-run below).
+- [x] **Lot 3 — bump + docs**
+  - [x] auth-hono `0.6.0 → 0.7.0`; README "Consent persistence — `consentStore`" section + 0.7.0 versioning entry (no RECIPES.md in this package).
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-auth-hono` + `make typecheck-api` + `make test-auth-hono` + `make test-api` (+ `make clean test-e2e` if auth e2e touched).
   - [ ] `enforce-package-bump` (auth-hono 0.7.0).
@@ -59,8 +59,9 @@ The IdP `auth.sent-tech.ca` re-shows the "Autoriser l'application" consent scree
   - [ ] Post-merge: bootstrap-publish auth-hono 0.7.0 (no trusted-publisher, per [[project_br39_full_roadmap]]); verify npm.
 
 ## Feedback Loop
-- FL-1 `risk`: the skip-path must reuse the EXACT code-issuance (seal + single-use auth code + redirect) used by consent-approve — duplication risks divergent security behavior. Mitigation: shared helper, both call it.
+- FL-1 `risk`: the skip-path must reuse the EXACT code-issuance (seal + single-use auth code + redirect) used by consent-approve — duplication risks divergent security behavior. Mitigation: shared helper, both call it. RESOLVED 2026-06-15: extracted `oauth/issue-authorized-code.ts`; both consent-approve and the authorize skip-path call `issueAuthorizedCode`.
 - FL-2 `note`: migration-amend on a persisted test volume needs `make clean` (down -v) not `make down` (drizzle won't re-apply a recorded tag) — per 39e lesson.
+- FL-3 `blocker` (owner: conductor, 2026-06-15): `make typecheck-api` and `make test-api-unit` cannot run in this worktree — `prepare-node-workspace` rebuilds the api image and the `api base` stage fails at `api/Dockerfile:67` `npm audit --audit-level=high` on a transitive `ws` HIGH advisory (GHSA-58qx-3vcg-4xpx / GHSA-96hv-2xvq-fx4p). PRE-EXISTING on origin/main: `git diff origin/main..HEAD -- package-lock.json` is empty; this branch touches no `package.json`/`package-lock.json` (outside Allowed Paths anyway). Fix = standing `fix/sec-*` global dep-bump branch (`ws`). The api integration test + schema/adapter are code-complete and reviewed; only the Docker-build dep gate blocks execution. auth-hono Lot-1 gates (`typecheck-auth-hono` + `test-auth-hono`) pass and are unaffected.
 
 ## Deferred
 - Consent revocation endpoint + admin "connected apps" UI (future WP).
