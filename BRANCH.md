@@ -37,14 +37,14 @@ The IdP `auth.sent-tech.ca` re-shows the "Autoriser l'application" consent scree
 - [x] Mono-branch + cherry-pick — cohesive auth-core change; impl delegated to 1 sub-agent, conductor integrates + gates + PR + merge.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline** (worktree off origin/main `974bd1dfc`; branch verified; migration n+1 = 0034; auth-hono 0.6.0).
-- [ ] **Lot 1 — auth-hono core**
-  - [ ] Add optional `consentStore` port (ports.ts) + types (state-store-types.ts or a new consent-types).
-  - [ ] Factor out "issue authorized code" from consent-decision-handler into a shared helper; call it from the authorize skip-path.
-  - [ ] authorize-handler: stored-grant skip logic (cover + `prompt!=='consent'`); prompt=none covered ⇒ success.
-  - [ ] consent-decision-handler: saveGrant on approve.
-  - [ ] Unit tests (`packages/auth-hono/tests/**`): (a) covered ⇒ skip→code; (b) requested superset of stored ⇒ NO skip (consent shown); (c) `prompt=consent` ⇒ always consent; (d) no consentStore ⇒ always consent (compat); (e) deny ⇒ no save; (f) prompt=none covered ⇒ code, uncovered ⇒ consent_required.
-  - [ ] Gate: `make typecheck-auth-hono` + `make test-auth-hono`.
+- [x] **Lot 0 — Baseline** (worktree off origin/main `974bd1dfc`; branch verified; migration n+1 = 0034; auth-hono 0.6.0).
+- [x] **Lot 1 — auth-hono core**
+  - [x] Add optional `consentStore` port (ports.ts) + types (`AuthHonoConsentStorePort`/`AuthHonoConsentGrant` in ports.ts, mirror optional `tenant` idiom).
+  - [x] Factor out "issue authorized code" from consent-decision-handler into a shared helper (`oauth/issue-authorized-code.ts`); call it from the authorize skip-path.
+  - [x] authorize-handler: stored-grant skip logic (cover + `prompt!=='consent'`); prompt=none covered ⇒ success.
+  - [x] consent-decision-handler: saveGrant on approve.
+  - [x] Unit tests (`packages/auth-hono/tests/oauth-consent-persistence.test.ts`): (a) covered ⇒ skip→code; (b) requested superset of stored ⇒ NO skip (consent shown); (c) `prompt=consent` ⇒ always consent; (d) no consentStore ⇒ always consent (compat); (e) deny ⇒ no save; (f) prompt=none covered ⇒ code, uncovered ⇒ consent_required; (+ different-client binding).
+  - [x] Gate: `make typecheck-auth-hono` (exit 0) + `make test-auth-hono` (29 files, 120 tests pass).
 - [ ] **Lot 2 — api wiring + persistence**
   - [ ] `api/drizzle/0034_oauth_consents.sql` (hand-written + `_journal.json` entry; NO db-generate, like 0031/0033) + `api/src/db/schema.ts` table.
   - [ ] consentStore adapter (upsert) + wire into api auth-hono ports (`api/src/routes/auth/oauth.ts` or wherever ports are built).
