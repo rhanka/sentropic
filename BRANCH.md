@@ -83,8 +83,8 @@ Make `@sentropic/auth-ui` render its 6 screens with **native `@sentropic/design-
   - [x] No dead `--auth-*` vars remain (count 0, removed in Lots 1-2); remaining `auth-ui-*` classes are LAYOUT-only (header/section/actions/spinner/list/grid/badge) — kept (DS does not dictate layout).
   - [x] Lot gate: `make typecheck-auth-ui` PASS · `make build-idp-web` PASS (AppHeader/LanguageToggle compile; built in 19s) · `make lint-ui` PASS · `make typecheck-ui` deferred to CI (host OOM exit 137, env-only, reproduced on clean ui/ — covered by typecheck-auth-ui + lint-ui + build-idp-web).
 
-- [ ] **Lot N-1 — Docs**
-  - [ ] Update `packages/auth-ui/README.md` (+ THEMING note if present): document the DS peerDependency + host ThemeProvider/entropic setup.
+- [x] **Lot N-1 — Docs**
+  - [x] `packages/auth-ui/README.md`: added DS peer deps to Install + new "Design System theming (since 0.4.0)" section (host wraps /auth in `ThemeProvider theme={entropicTheme}`, no base-styles import, DS = peerDependencies).
 
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-auth-ui` + `make typecheck-ui` + `make lint-ui`
