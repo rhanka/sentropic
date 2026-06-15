@@ -23,3 +23,4 @@ export {
     type FederationEntry,
     type LoadFederationDeps,
 } from './federation.js';
+export { runSurfaceCli, type SurfaceCliDeps } from './surface-cli.js';
