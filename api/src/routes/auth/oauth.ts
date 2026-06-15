@@ -22,6 +22,7 @@ import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
 import { emailVerificationCodes, magicLinks, tenantMemberships, userSessions, users } from '../../db/schema';
 import { logger } from '../../logger';
+import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
@@ -169,6 +170,9 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
     addSeconds: (date, seconds) => new Date(date.getTime() + seconds * 1000),
     now: () => new Date(),
   },
+  // Consent persistence: lets the IdP skip the consent screen when a stored grant for the
+  // exact (user, client) covers the requested scopes; re-consents on any uncovered scope.
+  consentStore: createConsentStoreAdapter(),
   cookies: authHonoCookiePort,
   credentials: {
     create: unsupportedOAuthPort,
