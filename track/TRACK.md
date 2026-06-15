@@ -108,8 +108,18 @@ registry). BR-27..BR-30: RESERVED (OpenERP impl follow-ups of BR-26).
 
 | ID | Title | Status | Scope | Depends-on | External lanes |
 |---|---|---|---|---|---|
-| BR-70 | resource-plane-v0 (ARCH-21a) | dispatchable after BR-44 | **chat-core** (ResourceProvider port, ToolRegistry.resolve reuse, async resume), **api/services/catalog** (mounts + authz), **chat-ui** (RF11 tree, file chips, terminal pane, custom-renderer slot), skills (`accessMethods`), chat-server, flow, events, llm-mesh (tool family), ui | **BR-44**; **+ PR #257** (runtime) + catalog-authz; chat-ui lane settled | chat-ui host-tool ext |
+| BR-70 | resource-plane-v0 (ARCH-21a) | dispatchable after BR-44 | **chat-core** (ResourceProvider PORT, ToolRegistry.resolve reuse, async resume), api/services/catalog (PROJECTS the catalog — consumes, does NOT own sources), **chat-ui** (RF11 tree, file chips, terminal pane, custom-renderer slot), skills (`accessMethods`), chat-server, flow, events, llm-mesh (tool family), ui | **BR-44**; **+ PR #257** (runtime) + catalog-authz; **+ BR-42j (catalog→ResourceProvider adapter) + BR-42i (MCP resources)**; chat-ui lane settled | chat-ui host-tool ext |
 | BR-71 | resource-plane-21b (ARCH-21b) | gated (SPLIT recommended) | api (`/workspace`, `query`), graphify/events (`/knowledge`, watch), chat-ui (watch UI), apps (`/apps`), cowork-* (remote bash), build-cli | **BR-61 + BR-60 + BR-57 + BR-45** (apps) + ARCH-05/16/17 | graphify fusion; cowork remote |
+
+**WP-CATALOG (added 2026-06-11, owner correction): Capability catalog & MCP**
+(ARCH-01/BR-42b lineage; accountable=architect). The MCP work belongs to the
+catalog lineage (BR-19 → BR-19b → BR-42b), NOT the Resource Plane (BR-70).
+Items: BR-42b (unified catalog, MCP TOOLS — DONE #247); **BR-42i**
+(mcp-resources-mapping: extend `McpCatalogSource` with `resources/list`+`read`,
+URI-preserving, allowlist+MIME/size/secret); **BR-42j** (catalog→ResourceProvider
+adapter so the catalog mounts under the Resource Plane port); BR-33
+(managed-marketplace). Scope: `api/services/catalog`, `packages/skills`. BR-70
+(Resource Plane) DEPENDS on BR-42i + BR-42j and PROJECTS the catalog.
 
 **Owner DECIDED 2026-06-09 (Q2=A): SPLIT both.** BR-70 → BR-70core
 (ResourceProvider + verb dispatch + async resume; gated BR-44) + BR-70viz
