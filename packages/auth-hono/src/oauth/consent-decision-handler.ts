@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 
 import type { AuthHonoPorts } from '../ports.js';
 import { appendParams, oauthJsonError, redirectOrJson } from './http-utils.js';
+import { issueAuthorizedCode } from './issue-authorized-code.js';
 import type { OAuthContinuationCodec, OAuthContinuationState } from './state-codec.js';
 import { resolveOAuthSession } from './session-resolver.js';
 
@@ -46,33 +47,17 @@ export const createOAuthConsentDecisionHandler =
       );
     }
 
-    const code = options.ports.random.token(32);
-    const now = options.ports.clock.now();
-    await options.ports.oauthStateStore.saveAuthCode(
-      code,
-      {
-        acr: payload.acr ?? 'urn:sentropic:loa:bearer',
-        authTime: new Date(payload.authTime ?? now.toISOString()),
-        clientId: payload.clientId,
-        codeChallenge: payload.codeChallenge,
-        codeChallengeMethod: 'S256',
-        createdAt: now,
-        dpopJkt: payload.dpopJkt,
-        expiresAt: options.ports.clock.addSeconds(now, options.authorizationCodeTtlSeconds ?? 60),
-        nonce: payload.nonce,
-        redirectUri: payload.redirectUri,
-        resource: payload.resource ?? null,
-        scope: payload.scope,
-        tenantId: payload.tenantId,
-        userId: payload.userId ?? '',
-      },
-      options.authorizationCodeTtlSeconds ?? 60
-    );
+    // Persist the grant so subsequent authorize requests for a covered scope set skip consent.
+    // Approve-only: a deny never records a grant. Absent consentStore ⇒ legacy (no persistence).
+    if (options.ports.consentStore && payload.userId) {
+      await options.ports.consentStore.saveGrant(
+        payload.userId,
+        payload.clientId,
+        payload.scope.split(/\s+/).filter(Boolean)
+      );
+    }
 
-    return redirectOrJson(
-      c,
-      appendParams(payload.redirectUri, { code, state: payload.state }, c.req.url)
-    );
+    return issueAuthorizedCode(c, options, payload);
   };
 
 const validateConsentState = async (
