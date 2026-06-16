@@ -1,1 +1,1 @@
-Unknown subcommand: bogus. Available subcommands: app. Run `stp --help`.
+Unknown subcommand: bogus. Available subcommands: app, surface. Run `stp --help`.

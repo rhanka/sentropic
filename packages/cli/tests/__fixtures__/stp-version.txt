@@ -1,2 +1,3 @@
-stp 0.2.0
+stp 0.3.1
   app 0.2.0
+  surface 0.3.1
