@@ -35,7 +35,7 @@ async function buildRegistry() {
     });
     registry.register({
         name: 'surface',
-        summary: 'Build multi-repo analysis surfaces with graphify fragments.',
+        summary: 'Build multi-repo analysis surfaces from graphify graph.json files.',
         version: CLI_VERSION,
         run: (argv) => runSurfaceCli(argv),
     });
