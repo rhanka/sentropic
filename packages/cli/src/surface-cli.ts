@@ -16,7 +16,8 @@ export async function runSurfaceCli(
 ): Promise<number> {
     const log = deps.log ?? ((line: string) => console.log(line));
     const error = deps.error ?? ((line: string) => console.error(line));
-    const [verb, manifestArg] = argv;
+    const [verb, ...args] = argv;
+    const manifestArg = args[0];
 
     if (verb === undefined || verb === '--help' || verb === '-h') {
         log(formatSurfaceHelp());
@@ -45,18 +46,26 @@ export async function runSurfaceCli(
     }
 
     if (verb === 'build') {
-        if (manifestArg === undefined) {
-            error('Usage: stp surface build <manifest>');
+        const buildArgs = parseBuildArgs(args);
+        if (buildArgs.error !== undefined) {
+            error(buildArgs.error);
+            return 1;
+        }
+        if (buildArgs.manifestPath === undefined) {
+            error('Usage: stp surface build <manifest> [--refresh]');
             return 1;
         }
         try {
-            const manifest = await loadManifest(manifestArg, deps);
+            const manifest = await loadManifest(buildArgs.manifestPath, deps);
             const result = await buildSurface(manifest, {
                 runner: deps.runner,
                 cwd: deps.cwd,
                 graphifyFile: deps.graphifyFile,
                 env: deps.env,
                 mkdir: deps.mkdir,
+                exists: deps.exists,
+                readFile: deps.readFile,
+                refresh: buildArgs.refresh || deps.refresh,
                 writeFile: deps.writeFile,
             });
             log(`Built analysis surface "${manifest.id}" -> ${result.outputPath}`);
@@ -73,13 +82,36 @@ export async function runSurfaceCli(
 
 function formatSurfaceHelp(): string {
     return [
-        'stp surface — build AnalysisSurface graphs from graphify fragments',
+        'stp surface — build AnalysisSurface graphs from graphify graph.json files',
         '',
         'Usage:',
-        '  stp surface build <manifest>',
+        '  stp surface build <manifest> [--refresh]',
         '  stp surface validate <manifest>',
         '  stp surface --help | -h',
     ].join('\n');
+}
+
+function parseBuildArgs(args: readonly string[]): {
+    readonly manifestPath?: string;
+    readonly refresh: boolean;
+    readonly error?: string;
+} {
+    let manifestPath: string | undefined;
+    let refresh = false;
+    for (const arg of args) {
+        if (arg === '--refresh') {
+            refresh = true;
+            continue;
+        }
+        if (arg.startsWith('-')) {
+            return { refresh, error: `Unknown surface build option: ${arg}` };
+        }
+        if (manifestPath !== undefined) {
+            return { refresh, error: `Unexpected surface build argument: ${arg}` };
+        }
+        manifestPath = arg;
+    }
+    return manifestPath === undefined ? { refresh } : { manifestPath, refresh };
 }
 
 async function loadManifest(path: string, deps: SurfaceCliDeps) {
