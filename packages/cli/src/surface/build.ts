@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
-import { mkdir as fsMkdir, writeFile as fsWriteFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { mkdir as fsMkdir, readFile as fsReadFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import type { AnalysisSurfaceManifest } from './manifest.js';
 
 export interface ProcessCommand {
@@ -20,13 +21,7 @@ export interface ProcessRunner {
     run(command: ProcessCommand): Promise<ProcessResult>;
 }
 
-export interface SurfaceGraph {
-    readonly id: string;
-    readonly repos: AnalysisSurfaceManifest['repos'];
-    readonly options?: Readonly<Record<string, unknown>>;
-    readonly nodes: readonly unknown[];
-    readonly edges: readonly unknown[];
-}
+export type SurfaceGraph = Readonly<Record<string, unknown>>;
 
 export interface SurfaceBuildResult {
     readonly outputPath: string;
@@ -39,6 +34,9 @@ export interface BuildSurfaceDeps {
     readonly graphifyFile?: string;
     readonly env?: Readonly<Record<string, string>>;
     readonly mkdir?: (path: string) => Promise<void> | void;
+    readonly exists?: (path: string) => boolean;
+    readonly readFile?: (path: string) => Promise<string> | string;
+    readonly refresh?: boolean;
     readonly writeFile?: (path: string, data: string) => Promise<void> | void;
 }
 
@@ -73,11 +71,6 @@ export const nodeProcessRunner: ProcessRunner = {
     },
 };
 
-interface ParsedFragment {
-    readonly nodes: readonly unknown[];
-    readonly edges: readonly unknown[];
-}
-
 export async function buildSurface(
     manifest: AnalysisSurfaceManifest,
     deps: BuildSurfaceDeps = {},
@@ -86,55 +79,81 @@ export async function buildSurface(
     const graphifyFile = deps.graphifyFile ?? 'graphify';
     const cwd = deps.cwd ?? process.cwd();
     const mkdir = deps.mkdir ?? ((path: string) => fsMkdir(path, { recursive: true }).then(() => {}));
-    const writeFile = deps.writeFile ?? fsWriteFile;
+    const exists = deps.exists ?? existsSync;
+    const readFile = deps.readFile ?? ((path: string) => fsReadFile(path, 'utf8'));
+    const refresh = shouldRefresh(manifest, deps);
 
-    const fragments: ParsedFragment[] = [];
-    for (const repo of manifest.repos) {
-        const command: ProcessCommand = {
-            file: graphifyFile,
-            args: graphifyArgs(manifest, repo),
-            cwd: repo.path,
-            env: deps.env,
-        };
-        const result = await runner.run(command);
-        if (result.code !== 0) {
-            const reason = result.stderr.trim() || result.stdout.trim() || 'no stderr';
-            throw new SurfaceBuildError(
-                `graphify build failed for ${repo.path} (exit ${String(result.code)}): ${reason}`,
-            );
+    // branch/window stay manifest metadata. graphify update owns repo refresh
+    // semantics; merge-graphs accepts only graph.json inputs and --out.
+    if (refresh) {
+        for (const repo of manifest.repos) {
+            const result = await runner.run({
+                file: graphifyFile,
+                args: ['update', repo.path],
+                cwd,
+                env: deps.env,
+            });
+            if (result.code !== 0) {
+                const reason = result.stderr.trim() || result.stdout.trim() || 'no stderr';
+                throw new SurfaceBuildError(
+                    `graphify update failed for ${repo.path} (exit ${String(result.code)}): ${reason}`,
+                );
+            }
         }
-        fragments.push(parseFragment(result.stdout, repo.path));
     }
 
-    const graph = mergeFragments(manifest, fragments);
+    const graphPaths = manifest.repos.map((repo) => ({
+        repoPath: repo.path,
+        graphPath: resolveGraphJsonPath(repo.path),
+    }));
+    for (const { repoPath, graphPath } of graphPaths) {
+        if (!exists(graphPath)) {
+            throw new SurfaceBuildError(
+                `Missing graphify graph for ${repoPath}: expected ${graphPath}. Run graphify on this repository first, or rebuild with refresh enabled.`,
+            );
+        }
+    }
+
     const outputDir = join(cwd, '.stp', 'surfaces', manifest.id);
     const outputPath = join(outputDir, 'graph.json');
     await mkdir(outputDir);
-    await writeFile(outputPath, `${JSON.stringify(graph, null, 2)}\n`);
+
+    const result = await runner.run({
+        file: graphifyFile,
+        args: ['merge-graphs', ...graphPaths.map((graph) => graph.graphPath), '--out', outputPath],
+        cwd,
+        env: deps.env,
+    });
+    if (result.code !== 0) {
+        const reason = result.stderr.trim() || result.stdout.trim() || 'no stderr';
+        throw new SurfaceBuildError(
+            `graphify merge-graphs failed (exit ${String(result.code)}): ${reason}`,
+        );
+    }
+
+    const graph = parseMergedGraph(await readFile(outputPath), outputPath);
     return { outputPath, graph };
 }
 
-function graphifyArgs(
-    manifest: AnalysisSurfaceManifest,
-    repo: AnalysisSurfaceManifest['repos'][number],
-): string[] {
-    const args = ['build', '--fragment'];
-    if (repo.branch !== undefined) {
-        args.push('--branch', repo.branch);
-    }
-    if (repo.window !== undefined) {
-        args.push('--window', repo.window);
-    }
-    if (manifest.options !== undefined) {
-        args.push('--options', JSON.stringify(manifest.options));
-    }
-    return args;
+function shouldRefresh(manifest: AnalysisSurfaceManifest, deps: BuildSurfaceDeps): boolean {
+    return deps.refresh === true || manifest.options?.['refresh'] === true;
 }
 
-function parseFragment(stdout: string, repoPath: string): ParsedFragment {
-    const text = stdout.trim();
+function resolveGraphJsonPath(path: string): string {
+    const name = basename(path);
+    if (name === 'graph.json') {
+        return path;
+    }
+    if (name === '.graphify') {
+        return join(path, 'graph.json');
+    }
+    return join(path, '.graphify', 'graph.json');
+}
+
+function parseMergedGraph(source: string, outputPath: string): SurfaceGraph {
+    const text = source.trim();
     if (text === '') {
-        throw new SurfaceBuildError(`graphify emitted an empty fragment for ${repoPath}.`);
+        throw new SurfaceBuildError(`graphify merge-graphs wrote an empty graph file: ${outputPath}`);
     }
 
     let parsed: unknown;
@@ -142,82 +161,13 @@ function parseFragment(stdout: string, repoPath: string): ParsedFragment {
         parsed = JSON.parse(text) as unknown;
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        throw new SurfaceBuildError(`Invalid graphify fragment JSON for ${repoPath}: ${message}`);
+        throw new SurfaceBuildError(`Invalid graphify merged graph JSON at ${outputPath}: ${message}`);
     }
 
-    const fragment = extractFragmentObject(parsed);
-    const nodes = fragment['nodes'];
-    const edges = fragment['edges'];
-    if (nodes !== undefined && !Array.isArray(nodes)) {
-        throw new SurfaceBuildError(`Invalid graphify fragment for ${repoPath}: nodes must be an array.`);
-    }
-    if (edges !== undefined && !Array.isArray(edges)) {
-        throw new SurfaceBuildError(`Invalid graphify fragment for ${repoPath}: edges must be an array.`);
-    }
-    return {
-        nodes: nodes ?? [],
-        edges: edges ?? [],
-    };
-}
-
-function extractFragmentObject(parsed: unknown): Record<string, unknown> {
     if (!isRecord(parsed)) {
-        throw new SurfaceBuildError('graphify fragment JSON must be an object.');
-    }
-    const extraction = parsed['extraction'];
-    if (isRecord(extraction)) {
-        return extraction;
+        throw new SurfaceBuildError(`graphify merged graph JSON at ${outputPath} must be an object.`);
     }
     return parsed;
-}
-
-function mergeFragments(
-    manifest: AnalysisSurfaceManifest,
-    fragments: readonly ParsedFragment[],
-): SurfaceGraph {
-    const graph: {
-        id: string;
-        repos: AnalysisSurfaceManifest['repos'];
-        options?: Readonly<Record<string, unknown>>;
-        nodes: readonly unknown[];
-        edges: readonly unknown[];
-    } = {
-        id: manifest.id,
-        repos: manifest.repos,
-        nodes: dedupeById(fragments.flatMap((fragment) => fragment.nodes)),
-        edges: dedupeById(fragments.flatMap((fragment) => fragment.edges)),
-    };
-    if (manifest.options !== undefined) {
-        graph.options = manifest.options;
-    }
-    return graph;
-}
-
-function dedupeById(items: readonly unknown[]): unknown[] {
-    const seen = new Set<string>();
-    const deduped: unknown[] = [];
-    for (const item of items) {
-        const id = itemId(item);
-        if (id !== undefined) {
-            if (seen.has(id)) {
-                continue;
-            }
-            seen.add(id);
-        }
-        deduped.push(item);
-    }
-    return deduped;
-}
-
-function itemId(item: unknown): string | undefined {
-    if (!isRecord(item)) {
-        return undefined;
-    }
-    const id = item['id'];
-    if (typeof id === 'string' || typeof id === 'number') {
-        return String(id);
-    }
-    return undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
