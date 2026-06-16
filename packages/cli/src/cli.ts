@@ -15,7 +15,7 @@ import type { SubcommandRegistry } from './registry.js';
 import type { VerbRegistry } from './verb-registry.js';
 
 /** CLI version surfaced by `stp --version` (kept in sync with package.json on bump). */
-export const CLI_VERSION = '0.3.0';
+export const CLI_VERSION = '0.3.1';
 
 /** Injectable IO sinks so the dispatcher stays pure and unit-testable. */
 export interface CliDeps {

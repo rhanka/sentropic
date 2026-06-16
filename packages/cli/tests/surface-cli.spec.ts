@@ -46,13 +46,21 @@ describe('runSurfaceCli', () => {
     it('builds a surface with injected IO and process runner', async () => {
         const { deps, out, err } = capture();
         const calls: ProcessCommand[] = [];
-        const writes: Array<{ path: string; data: string }> = [];
+        const files = new Map<string, string>([
+            ['/workspace/surface.json', jsonManifest()],
+            ['/repos/app/.graphify/graph.json', '{}'],
+        ]);
+        const graph = { nodes: [{ key: 'repo:app' }], edges: [] };
         const runner: ProcessRunner = {
             async run(command) {
                 calls.push(command);
+                const outIndex = command.args.indexOf('--out');
+                if (outIndex >= 0) {
+                    files.set(command.args[outIndex + 1], JSON.stringify(graph));
+                }
                 return {
                     code: 0,
-                    stdout: JSON.stringify({ nodes: [{ id: 'repo:app' }], edges: [] }),
+                    stdout: 'merge log',
                     stderr: '',
                 };
             },
@@ -61,22 +69,55 @@ describe('runSurfaceCli', () => {
         const code = await runSurfaceCli(['build', 'surface.json'], {
             ...deps,
             cwd: '/workspace',
-            readFile: async () => jsonManifest(),
-            exists: (p) => p === '/repos/app',
+            readFile: async (path) => files.get(path) ?? '',
+            exists: (p) => p === '/repos/app' || files.has(p),
             runner,
             mkdir: async () => {},
-            writeFile: async (path, data) => {
-                writes.push({ path, data });
-            },
         });
 
         expect(code).toBe(0);
         expect(calls).toHaveLength(1);
-        expect(calls[0].args).toEqual(['build', '--fragment', '--branch', 'main']);
-        expect(writes[0].path).toBe('/workspace/.stp/surfaces/team-surface/graph.json');
+        expect(calls[0].args).toEqual([
+            'merge-graphs',
+            '/repos/app/.graphify/graph.json',
+            '--out',
+            '/workspace/.stp/surfaces/team-surface/graph.json',
+        ]);
         expect(out.join('\n')).toContain(
             'Built analysis surface "team-surface" -> /workspace/.stp/surfaces/team-surface/graph.json',
         );
+        expect(err).toHaveLength(0);
+    });
+
+    it('passes --refresh through to buildSurface before merging', async () => {
+        const { deps, err } = capture();
+        const calls: ProcessCommand[] = [];
+        const files = new Map<string, string>([
+            ['/workspace/surface.json', jsonManifest()],
+            ['/repos/app/.graphify/graph.json', '{}'],
+        ]);
+        const runner: ProcessRunner = {
+            async run(command) {
+                calls.push(command);
+                const outIndex = command.args.indexOf('--out');
+                if (outIndex >= 0) {
+                    files.set(command.args[outIndex + 1], JSON.stringify({ nodes: [], edges: [] }));
+                }
+                return { code: 0, stdout: 'ok', stderr: '' };
+            },
+        };
+
+        const code = await runSurfaceCli(['build', 'surface.json', '--refresh'], {
+            ...deps,
+            cwd: '/workspace',
+            readFile: async (path) => files.get(path) ?? '',
+            exists: (p) => p === '/repos/app' || files.has(p),
+            runner,
+            mkdir: async () => {},
+        });
+
+        expect(code).toBe(0);
+        expect(calls.map((call) => call.args[0])).toEqual(['update', 'merge-graphs']);
         expect(err).toHaveLength(0);
     });
 
@@ -87,7 +128,7 @@ describe('runSurfaceCli', () => {
             const code = await runSurfaceCli(argv, deps);
 
             expect(code).toBe(0);
-            expect(out.join('\n')).toContain('stp surface build <manifest>');
+            expect(out.join('\n')).toContain('stp surface build <manifest> [--refresh]');
             expect(err).toHaveLength(0);
         }
     });
@@ -107,6 +148,6 @@ describe('runSurfaceCli', () => {
         const code = await runSurfaceCli(['build'], deps);
 
         expect(code).toBe(1);
-        expect(err.join('\n')).toContain('Usage: stp surface build <manifest>');
+        expect(err.join('\n')).toContain('Usage: stp surface build <manifest> [--refresh]');
     });
 });
