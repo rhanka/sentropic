@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cli",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "description": "The Sentropic umbrella CLI: binary `stp` (alias `sentropic`) that federates the ecosystem as subcommands (`stp app …`, and reserved federation points `stp graphify …` / `stp h2a …` / `stp remote …`). BR-42a1 ships the subcommand-registration seam; `stp app` is delivered by @sentropic/build-cli.",
   "type": "module",
   "license": "MIT",
