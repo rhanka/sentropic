@@ -10,10 +10,12 @@ import {
   type CodexDeviceEnrollmentResult,
 } from './codex-provider-auth';
 import {
+  acquireClaudeCodeAccountTransport,
   acquireOpenAICodexAccountTransport,
   disconnectCodexAccountTransports,
   getPrimaryCodexAccountTransport,
   storeCodexAccountTransport,
+  type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
   type LlmAccountTransportPublic,
 } from './llm-account-transports';
@@ -71,6 +73,7 @@ const CODEX_CONNECTION_SETTINGS_KEY = 'provider_connection:codex';
 const CODEX_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:codex_pending';
 const CODEX_CONNECTION_SECRET_KEY = 'provider_connection_secret:codex';
 const OPENAI_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:openai';
+const ANTHROPIC_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:anthropic';
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -203,6 +206,24 @@ export const resolveConnectedCodexTransport = async (
   });
 };
 
+export const resolveConnectedClaudeCodeTransport = async (
+  userId: string,
+  options: {
+    workspaceId?: string | null;
+    modelId?: string | null;
+    affinityKey?: string | null;
+    requestId?: string | null;
+  } = {},
+): Promise<ClaudeCodeAccountTransportAcquisition | null> => {
+  return acquireClaudeCodeAccountTransport({
+    userId,
+    workspaceId: options.workspaceId,
+    modelId: normalizeOptionalText(options.modelId) ?? 'claude-sonnet-4-6',
+    affinityKey: options.affinityKey,
+    requestId: options.requestId,
+  });
+};
+
 export const getOpenAITransportMode = async (): Promise<'codex' | 'token'> =>
   normalizeText(
     await settingsService.get(OPENAI_TRANSPORT_MODE_SETTING_KEY, { fallbackToGlobal: true }),
@@ -218,6 +239,25 @@ export const setOpenAITransportMode = async (
     OPENAI_TRANSPORT_MODE_SETTING_KEY,
     normalized,
     'OpenAI runtime source mode (`token` or `codex`).',
+  );
+  return normalized;
+};
+
+export const getAnthropicTransportMode = async (): Promise<'claude-code' | 'token'> =>
+  normalizeText(
+    await settingsService.get(ANTHROPIC_TRANSPORT_MODE_SETTING_KEY, { fallbackToGlobal: true }),
+  ).toLowerCase() === 'claude-code'
+    ? 'claude-code'
+    : 'token';
+
+export const setAnthropicTransportMode = async (
+  mode: 'claude-code' | 'token',
+): Promise<'claude-code' | 'token'> => {
+  const normalized = mode === 'claude-code' ? 'claude-code' : 'token';
+  await settingsService.set(
+    ANTHROPIC_TRANSPORT_MODE_SETTING_KEY,
+    normalized,
+    'Anthropic runtime source mode (`token` or `claude-code`).',
   );
   return normalized;
 };
