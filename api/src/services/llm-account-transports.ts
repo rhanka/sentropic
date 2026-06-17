@@ -4,6 +4,7 @@ import { pool, db } from '../db/client';
 import { env } from '../config/env';
 import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
+import { refreshClaudeCodeAccessToken } from './claude-code-provider-auth';
 import { refreshCodexAccessToken } from './codex-provider-auth';
 
 export type LlmAccountTransportStatus =
@@ -27,16 +28,23 @@ export type LlmAccountTransportPublic = {
   updatedAt: string | null;
 };
 
-export type CodexAccountTransportAcquisition = {
+export type LlmAccountTransportAcquisition = {
   accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: string | null;
   accountId: string | null;
   accountLabel: string | null;
   stableSessionId: string;
   accountTransportAccountId: string;
   leaseId: string;
   reservationId: string;
+  transportProviderId: string;
+  metadata?: Record<string, unknown> | null;
   recordOutcome(input: LlmAccountTransportOutcomeInput): Promise<void>;
 };
+
+export type CodexAccountTransportAcquisition = LlmAccountTransportAcquisition;
+export type ClaudeCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
 
 export type LlmAccountTransportOutcomeInput = {
   status: 'success' | 'failed' | 'rate_limited' | 'auth_failed';
@@ -56,6 +64,19 @@ export type CodexTokenSecretPayload = {
   source: 'codex-device' | 'legacy-codex-setting' | 'codex-refresh';
 };
 
+export type ClaudeCodeTokenSecretPayload = {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: 'bearer';
+  obtainedAt: string;
+  expiresAt: string | null;
+  source: 'claude-code-import' | 'claude-code-refresh';
+  clientId: string | null;
+  subscriptionType: string | null;
+  rateLimitTier: string | null;
+  profile: Record<string, unknown> | null;
+};
+
 type AccountSelectionRow = {
   account_id: string;
   external_account_id: string | null;
@@ -63,6 +84,7 @@ type AccountSelectionRow = {
   token_secret: string | null;
   token_expires_at: Date | string | null;
   model_allowlist: unknown;
+  metadata: unknown;
 };
 
 type LeaseSelectionRow = AccountSelectionRow & {
@@ -80,10 +102,13 @@ type AcquisitionRow = AccountSelectionRow & {
 
 const CODEX_TARGET_PROVIDER_ID = 'openai';
 const CODEX_TRANSPORT_PROVIDER_ID = 'codex';
+const CLAUDE_CODE_TARGET_PROVIDER_ID = 'anthropic';
+const CLAUDE_CODE_TRANSPORT_PROVIDER_ID = 'claude-code';
 const RESERVATION_TTL_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 
-const refreshes = new Map<string, Promise<CodexTokenSecretPayload | null>>();
+const codexRefreshes = new Map<string, Promise<CodexTokenSecretPayload | null>>();
+const claudeCodeRefreshes = new Map<string, Promise<ClaudeCodeTokenSecretPayload | null>>();
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -153,7 +178,7 @@ export const inferTokenExpiresAt = (
   return exp && exp > 0 ? new Date(exp * 1000).toISOString() : null;
 };
 
-const parseTokenSecret = (value: string | null | undefined): CodexTokenSecretPayload | null => {
+const parseCodexTokenSecret = (value: string | null | undefined): CodexTokenSecretPayload | null => {
   const decrypted = decryptSecretOrNull(value);
   if (!decrypted) return null;
   try {
@@ -177,6 +202,36 @@ const parseTokenSecret = (value: string | null | undefined): CodexTokenSecretPay
   }
 };
 
+const parseClaudeCodeTokenSecret = (
+  value: string | null | undefined,
+): ClaudeCodeTokenSecretPayload | null => {
+  const decrypted = decryptSecretOrNull(value);
+  if (!decrypted) return null;
+  try {
+    const parsed = JSON.parse(decrypted) as Partial<ClaudeCodeTokenSecretPayload> | null;
+    const accessToken = normalizeOptionalText(parsed?.accessToken);
+    const refreshToken = normalizeOptionalText(parsed?.refreshToken);
+    if (!parsed || !accessToken || !refreshToken) return null;
+    return {
+      accessToken,
+      refreshToken,
+      tokenType: 'bearer',
+      obtainedAt: normalizeOptionalText(parsed.obtainedAt) ?? new Date().toISOString(),
+      expiresAt: normalizeOptionalText(parsed.expiresAt),
+      source: parsed.source === 'claude-code-refresh' ? 'claude-code-refresh' : 'claude-code-import',
+      clientId: normalizeOptionalText(parsed.clientId),
+      subscriptionType: normalizeOptionalText(parsed.subscriptionType),
+      rateLimitTier: normalizeOptionalText(parsed.rateLimitTier),
+      profile:
+        parsed.profile && typeof parsed.profile === 'object' && !Array.isArray(parsed.profile)
+          ? parsed.profile as Record<string, unknown>
+          : null,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const isTokenExpiring = (expiresAt: string | null | undefined): boolean => {
   if (!expiresAt) return false;
   const parsed = new Date(expiresAt);
@@ -192,6 +247,7 @@ const computeStableSessionId = (input: {
   transportProviderId: string;
   modelId: string;
   leaseId: string;
+  prefix: string;
 }): string => {
   const secret = env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
   const digest = createHmac('sha256', secret)
@@ -206,7 +262,7 @@ const computeStableSessionId = (input: {
     ].join('\u001f'))
     .digest('base64url')
     .slice(0, 32);
-  return `codex_${digest}`;
+  return `${input.prefix}_${digest}`;
 };
 
 const buildTokenPayload = (input: {
@@ -223,6 +279,28 @@ const buildTokenPayload = (input: {
   obtainedAt: new Date().toISOString(),
   expiresAt: input.expiresAt ?? inferTokenExpiresAt(input.accessToken, input.idToken),
   source: input.source,
+});
+
+const buildClaudeCodeTokenPayload = (input: {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: string | null;
+  source: ClaudeCodeTokenSecretPayload['source'];
+  clientId?: string | null;
+  subscriptionType?: string | null;
+  rateLimitTier?: string | null;
+  profile?: Record<string, unknown> | null;
+}): ClaudeCodeTokenSecretPayload => ({
+  accessToken: input.accessToken,
+  refreshToken: input.refreshToken,
+  tokenType: 'bearer',
+  obtainedAt: new Date().toISOString(),
+  expiresAt: input.expiresAt ?? null,
+  source: input.source,
+  clientId: normalizeOptionalText(input.clientId),
+  subscriptionType: normalizeOptionalText(input.subscriptionType),
+  rateLimitTier: normalizeOptionalText(input.rateLimitTier),
+  profile: input.profile ?? null,
 });
 
 export const storeCodexAccountTransport = async (input: {
@@ -308,6 +386,108 @@ export const storeCodexAccountTransport = async (input: {
   return getPrimaryCodexAccountTransport({ ownerUserId });
 };
 
+export const storeClaudeCodeAccountTransport = async (input: {
+  ownerUserId: string;
+  accountLabel?: string | null;
+  externalAccountId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: string | null;
+  clientId?: string | null;
+  subscriptionType?: string | null;
+  rateLimitTier?: string | null;
+  profile?: Record<string, unknown> | null;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  const externalAccountId = normalizeOptionalText(input.externalAccountId);
+  const accessToken = normalizeOptionalText(input.accessToken);
+  const refreshToken = normalizeOptionalText(input.refreshToken);
+  if (!ownerUserId || !externalAccountId || !accessToken || !refreshToken) return null;
+
+  const token = buildClaudeCodeTokenPayload({
+    accessToken,
+    refreshToken,
+    expiresAt: normalizeOptionalText(input.expiresAt),
+    source: 'claude-code-import',
+    clientId: input.clientId,
+    subscriptionType: input.subscriptionType,
+    rateLimitTier: input.rateLimitTier,
+    profile: input.profile,
+  });
+  const now = new Date();
+  const accountId = createId();
+  const tokenSecret = encryptSecret(JSON.stringify(token));
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+  const metadata = {
+    source: token.source,
+    credentialSchemaVersion: 1,
+    productAccountSource: 'claude-code',
+    endpointFamily: 'anthropic-messages',
+    clientId: token.clientId,
+    subscriptionType: token.subscriptionType,
+    rateLimitTier: token.rateLimitTier,
+    profile: token.profile,
+  };
+
+  await db.run(sql`
+    INSERT INTO llm_provider_accounts (
+      id,
+      owner_user_id,
+      scope,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id,
+      account_label,
+      status,
+      token_secret,
+      token_expires_at,
+      connected_at,
+      disconnected_at,
+      last_error,
+      metadata,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${accountId},
+      ${ownerUserId},
+      'user',
+      ${CLAUDE_CODE_TARGET_PROVIDER_ID},
+      ${CLAUDE_CODE_TRANSPORT_PROVIDER_ID},
+      ${externalAccountId},
+      ${accountLabel},
+      'active',
+      ${tokenSecret},
+      ${token.expiresAt ? new Date(token.expiresAt) : null},
+      ${now},
+      NULL,
+      NULL,
+      ${JSON.stringify(metadata)}::jsonb,
+      ${now},
+      ${now}
+    )
+    ON CONFLICT (
+      owner_user_id,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id
+    )
+    WHERE external_account_id IS NOT NULL
+    DO UPDATE SET
+      account_label = COALESCE(EXCLUDED.account_label, llm_provider_accounts.account_label),
+      status = 'active',
+      token_secret = EXCLUDED.token_secret,
+      token_expires_at = EXCLUDED.token_expires_at,
+      connected_at = EXCLUDED.connected_at,
+      disconnected_at = NULL,
+      last_error = NULL,
+      metadata = EXCLUDED.metadata,
+      updated_at = EXCLUDED.updated_at
+  `);
+
+  return getPrimaryClaudeCodeAccountTransport({ ownerUserId });
+};
+
 export const getPrimaryCodexAccountTransport = async (input: {
   ownerUserId: string;
 }): Promise<LlmAccountTransportPublic | null> => {
@@ -330,6 +510,69 @@ export const getPrimaryCodexAccountTransport = async (input: {
     WHERE owner_user_id = ${ownerUserId}
       AND target_provider_id = ${CODEX_TARGET_PROVIDER_ID}
       AND transport_provider_id = ${CODEX_TRANSPORT_PROVIDER_ID}
+      AND status <> 'disconnected'
+    ORDER BY
+      CASE status
+        WHEN 'active' THEN 0
+        WHEN 'cooldown' THEN 1
+        WHEN 'reauth_required' THEN 2
+        ELSE 3
+      END,
+      connected_at DESC NULLS LAST,
+      updated_at DESC NULLS LAST
+    LIMIT 1
+  `) as Array<{
+    id: string;
+    targetProviderId: string;
+    transportProviderId: string;
+    externalAccountId: string | null;
+    accountLabel: string | null;
+    status: LlmAccountTransportStatus;
+    connectedAt: Date | string | null;
+    disconnectedAt: Date | string | null;
+    tokenExpiresAt: Date | string | null;
+    lastError: string | null;
+    updatedAt: Date | string | null;
+  }>;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    targetProviderId: row.targetProviderId,
+    transportProviderId: row.transportProviderId,
+    externalAccountId: row.externalAccountId,
+    accountLabel: row.accountLabel,
+    status: row.status,
+    connectedAt: toIso(row.connectedAt),
+    disconnectedAt: toIso(row.disconnectedAt),
+    tokenExpiresAt: toIso(row.tokenExpiresAt),
+    lastError: row.lastError,
+    updatedAt: toIso(row.updatedAt),
+  };
+};
+
+export const getPrimaryClaudeCodeAccountTransport = async (input: {
+  ownerUserId: string;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return null;
+  const rows = await db.all(sql`
+    SELECT
+      id,
+      target_provider_id as "targetProviderId",
+      transport_provider_id as "transportProviderId",
+      external_account_id as "externalAccountId",
+      account_label as "accountLabel",
+      status,
+      connected_at as "connectedAt",
+      disconnected_at as "disconnectedAt",
+      token_expires_at as "tokenExpiresAt",
+      last_error as "lastError",
+      updated_at as "updatedAt"
+    FROM llm_provider_accounts
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${CLAUDE_CODE_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${CLAUDE_CODE_TRANSPORT_PROVIDER_ID}
       AND status <> 'disconnected'
     ORDER BY
       CASE status
@@ -444,7 +687,7 @@ const refreshCodexTokenIfNeeded = async (input: {
     return null;
   }
 
-  const existing = refreshes.get(input.accountId);
+  const existing = codexRefreshes.get(input.accountId);
   if (existing) return existing;
 
   const refreshPromise = (async () => {
@@ -480,26 +723,110 @@ const refreshCodexTokenIfNeeded = async (input: {
       `);
       return null;
     } finally {
-      refreshes.delete(input.accountId);
+      codexRefreshes.delete(input.accountId);
     }
   })();
 
-  refreshes.set(input.accountId, refreshPromise);
+  codexRefreshes.set(input.accountId, refreshPromise);
   return refreshPromise;
 };
 
-export const acquireOpenAICodexAccountTransport = async (input: {
+const refreshClaudeCodeTokenIfNeeded = async (input: {
+  accountId: string;
+  externalAccountId: string | null;
+  token: ClaudeCodeTokenSecretPayload;
+}): Promise<ClaudeCodeTokenSecretPayload | null> => {
+  if (!isTokenExpiring(input.token.expiresAt)) return input.token;
+  if (!input.token.refreshToken) {
+    await db.run(sql`
+      UPDATE llm_provider_accounts
+      SET status = 'reauth_required',
+          token_secret = NULL,
+          token_expires_at = NULL,
+          last_error = 'Claude Code token expired and no refresh token is available.',
+          updated_at = ${new Date()}
+      WHERE id = ${input.accountId}
+    `);
+    return null;
+  }
+
+  const existing = claudeCodeRefreshes.get(input.accountId);
+  if (existing) return existing;
+
+  const refreshPromise = (async () => {
+    try {
+      const refreshed = await refreshClaudeCodeAccessToken({
+        refreshToken: input.token.refreshToken,
+        clientId: input.token.clientId ?? undefined,
+      });
+      const next = buildClaudeCodeTokenPayload({
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        source: 'claude-code-refresh',
+        clientId: input.token.clientId,
+        subscriptionType: input.token.subscriptionType,
+        rateLimitTier: input.token.rateLimitTier,
+        profile: input.token.profile,
+      });
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET token_secret = ${encryptSecret(JSON.stringify(next))},
+            token_expires_at = ${next.expiresAt ? new Date(next.expiresAt) : null},
+            status = 'active',
+            last_error = NULL,
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return next;
+    } catch (error) {
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET status = 'reauth_required',
+            last_error = ${error instanceof Error ? error.message : 'Claude Code token refresh failed.'},
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return null;
+    } finally {
+      claudeCodeRefreshes.delete(input.accountId);
+    }
+  })();
+
+  claudeCodeRefreshes.set(input.accountId, refreshPromise);
+  return refreshPromise;
+};
+
+type ParsedAccountTransportToken = {
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: string | null;
+};
+
+const acquireDbAccountTransport = async <TToken extends ParsedAccountTransportToken>(input: {
   userId: string;
   workspaceId?: string | null;
-  modelId: string;
+  modelId?: string | null;
   affinityKey?: string | null;
   requestId?: string | null;
-}): Promise<CodexAccountTransportAcquisition | null> => {
+  targetProviderId: string;
+  transportProviderId: string;
+  defaultModelId: string;
+  stableSessionPrefix: string;
+  parseTokenSecret(value: string | null | undefined): TToken | null;
+  refreshTokenIfNeeded(input: {
+    accountId: string;
+    externalAccountId: string | null;
+    token: TToken;
+  }): Promise<TToken | null>;
+  invalidTokenMessage: string;
+  reauthMessage: string;
+}): Promise<LlmAccountTransportAcquisition | null> => {
   const userId = normalizeOptionalText(input.userId);
   if (!userId) return null;
 
   const workspaceId = normalizeOptionalText(input.workspaceId);
-  const modelId = normalizeOptionalText(input.modelId) ?? 'gpt-5.5';
+  const modelId = normalizeOptionalText(input.modelId) ?? input.defaultModelId;
   const affinityKey = normalizeOptionalText(input.affinityKey) ?? `user:${userId}`;
   const requestId = normalizeOptionalText(input.requestId) ?? createId();
   const now = new Date();
@@ -520,8 +847,8 @@ export const acquireOpenAICodexAccountTransport = async (input: {
         workspaceId ?? '',
         userId,
         affinityKey,
-        CODEX_TARGET_PROVIDER_ID,
-        CODEX_TRANSPORT_PROVIDER_ID,
+        input.targetProviderId,
+        input.transportProviderId,
         modelId,
       ].join('\u001f'),
     ]);
@@ -536,6 +863,7 @@ export const acquireOpenAICodexAccountTransport = async (input: {
          a.token_secret,
          a.token_expires_at,
          a.model_allowlist,
+         a.metadata,
          a.status as account_status,
          a.cooldown_until
        FROM llm_account_leases l
@@ -548,7 +876,7 @@ export const acquireOpenAICodexAccountTransport = async (input: {
          AND l.transport_provider_id = $5
          AND l.model_id = $6
        FOR UPDATE OF l, a`,
-      [workspaceId, userId, affinityKey, CODEX_TARGET_PROVIDER_ID, CODEX_TRANSPORT_PROVIDER_ID, modelId],
+      [workspaceId, userId, affinityKey, input.targetProviderId, input.transportProviderId, modelId],
     );
     const leased = leaseResult.rows[0];
     if (leased) {
@@ -577,7 +905,8 @@ export const acquireOpenAICodexAccountTransport = async (input: {
            a.account_label,
            a.token_secret,
            a.token_expires_at,
-           a.model_allowlist
+           a.model_allowlist,
+           a.metadata
          FROM llm_provider_accounts a
          LEFT JOIN (
            SELECT account_id, count(*)::integer as active_reservations
@@ -605,7 +934,7 @@ export const acquireOpenAICodexAccountTransport = async (input: {
            a.created_at ASC
          LIMIT 1
          FOR UPDATE OF a SKIP LOCKED`,
-        [now, userId, CODEX_TARGET_PROVIDER_ID, CODEX_TRANSPORT_PROVIDER_ID, modelId],
+        [now, userId, input.targetProviderId, input.transportProviderId, modelId],
       );
       const account = accountResult.rows[0];
       if (!account) {
@@ -618,10 +947,11 @@ export const acquireOpenAICodexAccountTransport = async (input: {
         workspaceId,
         userId,
         affinityKey,
-        targetProviderId: CODEX_TARGET_PROVIDER_ID,
-        transportProviderId: CODEX_TRANSPORT_PROVIDER_ID,
+        targetProviderId: input.targetProviderId,
+        transportProviderId: input.transportProviderId,
         modelId,
         leaseId,
+        prefix: input.stableSessionPrefix,
       });
       const reservationId = createId();
       await client.query(
@@ -645,8 +975,8 @@ export const acquireOpenAICodexAccountTransport = async (input: {
           workspaceId,
           userId,
           affinityKey,
-          CODEX_TARGET_PROVIDER_ID,
-          CODEX_TRANSPORT_PROVIDER_ID,
+          input.targetProviderId,
+          input.transportProviderId,
           modelId,
           account.account_id,
           stableSessionId,
@@ -676,18 +1006,18 @@ export const acquireOpenAICodexAccountTransport = async (input: {
   }
 
   if (!acquired) return null;
-  const token = parseTokenSecret(acquired.token_secret);
+  const token = input.parseTokenSecret(acquired.token_secret);
   if (!token) {
     await recordLlmAccountTransportOutcome({
       accountId: acquired.account_id,
       reservationId: acquired.reservation_id,
       status: 'auth_failed',
-      errorMessage: 'Codex account token secret is missing or invalid.',
+      errorMessage: input.invalidTokenMessage,
     });
     return null;
   }
 
-  const freshToken = await refreshCodexTokenIfNeeded({
+  const freshToken = await input.refreshTokenIfNeeded({
     accountId: acquired.account_id,
     externalAccountId: acquired.external_account_id,
     token,
@@ -697,19 +1027,28 @@ export const acquireOpenAICodexAccountTransport = async (input: {
       accountId: acquired.account_id,
       reservationId: acquired.reservation_id,
       status: 'auth_failed',
-      errorMessage: 'Codex account requires reauthentication.',
+      errorMessage: input.reauthMessage,
     });
     return null;
   }
 
+  const metadata =
+    acquired.metadata && typeof acquired.metadata === 'object' && !Array.isArray(acquired.metadata)
+      ? acquired.metadata as Record<string, unknown>
+      : null;
+
   return {
     accessToken: freshToken.accessToken,
+    refreshToken: freshToken.refreshToken ?? null,
+    expiresAt: freshToken.expiresAt ?? null,
     accountId: acquired.external_account_id,
     accountLabel: acquired.account_label,
     stableSessionId: acquired.stable_session_id,
     accountTransportAccountId: acquired.account_id,
     leaseId: acquired.lease_id,
     reservationId: acquired.reservation_id,
+    transportProviderId: input.transportProviderId,
+    metadata,
     recordOutcome: (outcome) =>
       recordLlmAccountTransportOutcome({
         ...outcome,
@@ -718,6 +1057,44 @@ export const acquireOpenAICodexAccountTransport = async (input: {
       }),
   };
 };
+
+export const acquireOpenAICodexAccountTransport = async (input: {
+  userId: string;
+  workspaceId?: string | null;
+  modelId: string;
+  affinityKey?: string | null;
+  requestId?: string | null;
+}): Promise<CodexAccountTransportAcquisition | null> =>
+  acquireDbAccountTransport({
+    ...input,
+    targetProviderId: CODEX_TARGET_PROVIDER_ID,
+    transportProviderId: CODEX_TRANSPORT_PROVIDER_ID,
+    defaultModelId: 'gpt-5.5',
+    stableSessionPrefix: 'codex',
+    parseTokenSecret: parseCodexTokenSecret,
+    refreshTokenIfNeeded: refreshCodexTokenIfNeeded,
+    invalidTokenMessage: 'Codex account token secret is missing or invalid.',
+    reauthMessage: 'Codex account requires reauthentication.',
+  });
+
+export const acquireClaudeCodeAccountTransport = async (input: {
+  userId: string;
+  workspaceId?: string | null;
+  modelId: string;
+  affinityKey?: string | null;
+  requestId?: string | null;
+}): Promise<ClaudeCodeAccountTransportAcquisition | null> =>
+  acquireDbAccountTransport({
+    ...input,
+    targetProviderId: CLAUDE_CODE_TARGET_PROVIDER_ID,
+    transportProviderId: CLAUDE_CODE_TRANSPORT_PROVIDER_ID,
+    defaultModelId: 'claude-sonnet-4-6',
+    stableSessionPrefix: 'claude_code',
+    parseTokenSecret: parseClaudeCodeTokenSecret,
+    refreshTokenIfNeeded: refreshClaudeCodeTokenIfNeeded,
+    invalidTokenMessage: 'Claude Code account token secret is missing or invalid.',
+    reauthMessage: 'Claude Code account requires reauthentication.',
+  });
 
 export const recordLlmAccountTransportOutcome = async (
   input: LlmAccountTransportOutcomeInput & {

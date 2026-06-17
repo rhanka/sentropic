@@ -416,3 +416,27 @@ export const createCodexAccountAuthInput = (
     },
   },
 });
+
+export const createClaudeCodeAccountAuthInput = (
+  transport: {
+    accessToken: string;
+    refreshToken?: string | null;
+    accountId?: string | null;
+    accountLabel?: string | null;
+    expiresAt?: string | null;
+    stableSessionId?: string | null;
+  },
+): SecretAuthMaterial => ({
+  type: 'account-transport',
+  provider: 'claude-code',
+  accessToken: transport.accessToken,
+  ...(transport.refreshToken ? { refreshToken: transport.refreshToken } : {}),
+  accountId: transport.accountId ?? null,
+  ...(transport.accountLabel ? { accountLabel: transport.accountLabel } : {}),
+  ...(transport.expiresAt ? { expiresAt: transport.expiresAt } : {}),
+  descriptor: {
+    metadata: {
+      transportSessionId: transport.stableSessionId ?? null,
+    },
+  },
+});
