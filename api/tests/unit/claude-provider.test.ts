@@ -1,11 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the Anthropic SDK before importing the provider
 const mockAnthropicCreate = vi.fn();
 const mockAnthropicStream = vi.fn();
+const mockAnthropicConstructor = vi.fn();
 
 vi.mock('@anthropic-ai/sdk', () => {
   class MockAnthropic {
+    constructor(options: unknown) {
+      mockAnthropicConstructor(options);
+    }
+
     messages = {
       create: mockAnthropicCreate,
       stream: mockAnthropicStream,
@@ -29,6 +34,10 @@ describe('ClaudeProviderRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     runtime = new ClaudeProviderRuntime();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe('provider descriptor', () => {
@@ -145,6 +154,37 @@ describe('ClaudeProviderRuntime', () => {
         expect.anything(),
       );
       expect(result).toEqual({ content: [{ type: 'text', text: 'Hello' }] });
+    });
+
+    it('uses Authorization Bearer without X-Api-Key for Claude Code transport', async () => {
+      mockAnthropicCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Hello' }] });
+
+      await runtime.generate({
+        mode: 'messages',
+        claudeCodeTransport: { accessToken: 'claude-code-access' },
+        requestOptions: {
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: 'Hi' }],
+        },
+      });
+
+      const options = mockAnthropicConstructor.mock.calls.at(-1)?.[0] as {
+        fetch?: typeof fetch;
+      };
+      const upstreamFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response('{}', { status: 200, headers: init?.headers }),
+      );
+      vi.stubGlobal('fetch', upstreamFetch);
+
+      await options.fetch?.('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': 'dummy', 'anthropic-version': '2023-06-01' },
+      });
+
+      const headers = new Headers(upstreamFetch.mock.calls[0]?.[1]?.headers);
+      expect(headers.get('authorization')).toBe('Bearer claude-code-access');
+      expect(headers.has('x-api-key')).toBe(false);
     });
   });
 

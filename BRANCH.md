@@ -91,28 +91,28 @@ OAuth bearer material through `llm-mesh`.
   - [x] Route OpenAI/Codex dispatch through the coordinator.
   - [x] Preserve the existing settings API response shape.
   - [x] Ensure request overrides still bypass account transports.
-- [ ] Lot 4 - Claude Code executable transport:
-  - [ ] Prove the Claude Code refresh/client metadata/profile identity contract
+- [x] Lot 4 - Claude Code executable transport:
+  - [x] Prove the Claude Code refresh/client metadata/profile identity contract
     before marking `claude-code` app-executable.
-  - [ ] Define the non-UI Claude Code credential import contract.
-  - [ ] Add backend activation through `provider_connection_mode:anthropic` with
+  - [x] Define the non-UI Claude Code credential import contract.
+  - [x] Add backend activation through `provider_connection_mode:anthropic` with
     default `token` and explicit `claude-code` opt-in.
-  - [ ] Persist and acquire at least two `claude-code` accounts through the DB
+  - [x] Persist and acquire at least two `claude-code` accounts through the DB
     coordinator.
-  - [ ] Route Anthropic/Claude dispatch through `llm-mesh` acquisition with
+  - [x] Route Anthropic/Claude dispatch through `llm-mesh` acquisition with
     `Authorization: Bearer` and no `X-Api-Key`.
-  - [ ] Record Claude Code outcomes, cooldown, refresh, and `reauth_required`
+  - [x] Record Claude Code outcomes, cooldown, refresh, and `reauth_required`
     state.
-  - [ ] Add focused package/API tests for two Claude Code accounts, sticky
+  - [x] Add focused package/API tests for two Claude Code accounts, sticky
     affinity, cooldown failover for new sessions, and planned-transport
     enforcement.
 - [ ] Lot 5 - Verification and publish:
-  - [ ] Run focused package/API tests.
-  - [ ] Run `make typecheck-api API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 REGISTRY=local ENV=test-feat-llm-mesh-account-transports`.
-  - [ ] Run `make typecheck-chat-core ENV=test-feat-llm-mesh-account-transports`.
-  - [ ] Run `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 REGISTRY=local ENV=test-feat-llm-mesh-account-transports`.
-  - [ ] Run `make test-pkg-chat-core ENV=test-feat-llm-mesh-account-transports`.
-  - [ ] Run `make scope-check API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 ENV=test-feat-llm-mesh-account-transports`.
+  - [x] Run focused package/API tests.
+  - [x] Run `make typecheck-api API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 REGISTRY=local ENV=test-feat-llm-mesh-account-transports`.
+  - [x] Run `make typecheck-chat-core ENV=test-feat-llm-mesh-account-transports`.
+  - [x] Run `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 REGISTRY=local ENV=test-feat-llm-mesh-account-transports`.
+  - [x] Run `make test-pkg-chat-core ENV=test-feat-llm-mesh-account-transports`.
+  - [x] Run `make scope-check API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1320 ENV=test-feat-llm-mesh-account-transports`.
   - [ ] Commit, push, and open PR.
 
 ## Feedback Loop
