@@ -3642,6 +3642,7 @@ When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string l
           credential: options.providerApiKey ?? undefined,
           userId: options.userId,
           workspaceId: sessionWorkspaceId,
+          sessionId: options.sessionId,
           messages: currentMessages,
           tools,
           reasoningSummary: 'detailed',
