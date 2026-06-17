@@ -161,6 +161,7 @@ export const providerProfiles = {
     capabilities: capabilities({
       reasoningTier: 'advanced',
       structuredOutputLevel: 'tool-input-schema',
+      accountTransports: ['claude-code'],
     }),
   },
   mistral: {

@@ -230,4 +230,9 @@ describe('createLlmMesh', () => {
     expect(getModelProfile('gcp', 'google/gemini-3.5-flash@gcp')?.defaultTaskHints).toEqual([]);
     expect(getModelProfile('gcp', 'google/gemini-3.1-flash-lite@gcp')?.defaultTaskHints).toEqual([]);
   });
+
+  it('advertises executable account transports for OpenAI and Anthropic families', () => {
+    expect(getProviderProfile('openai').capabilities.auth.accountTransports).toContain('codex');
+    expect(getProviderProfile('anthropic').capabilities.auth.accountTransports).toContain('claude-code');
+  });
 });

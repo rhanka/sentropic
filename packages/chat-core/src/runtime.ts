@@ -1326,6 +1326,7 @@ export interface ConsumeAssistantStreamRequest {
   readonly credential?: string;
   readonly userId?: string;
   readonly workspaceId?: string;
+  readonly sessionId?: string | null;
   readonly messages: ReadonlyArray<unknown>;
   readonly tools?: ReadonlyArray<unknown>;
   readonly toolChoice?: 'auto' | 'required' | 'none';
