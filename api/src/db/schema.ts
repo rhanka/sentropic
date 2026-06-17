@@ -395,6 +395,121 @@ export const documentConnectorAccounts = pgTable('document_connector_accounts', 
   providerIdx: index('document_connector_accounts_provider_idx').on(table.provider),
 }));
 
+export const llmProviderAccounts = pgTable('llm_provider_accounts', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  scope: text('scope').notNull().default('user'),
+  targetProviderId: text('target_provider_id').notNull(),
+  transportProviderId: text('transport_provider_id').notNull(),
+  externalAccountId: text('external_account_id'),
+  accountLabel: text('account_label'),
+  status: text('status').notNull().default('active'),
+  modelAllowlist: jsonb('model_allowlist').notNull().default(sql`'[]'::jsonb`),
+  priority: integer('priority').notNull().default(0),
+  weight: integer('weight').notNull().default(1),
+  tokenSecret: text('token_secret'),
+  tokenExpiresAt: timestamp('token_expires_at', { withTimezone: false }),
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: false }),
+  connectedAt: timestamp('connected_at', { withTimezone: false }),
+  disconnectedAt: timestamp('disconnected_at', { withTimezone: false }),
+  cooldownUntil: timestamp('cooldown_until', { withTimezone: false }),
+  lastError: text('last_error'),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  ownerTransportExternalUnique: uniqueIndex('llm_provider_accounts_owner_transport_external_unique').on(
+    table.ownerUserId,
+    table.targetProviderId,
+    table.transportProviderId,
+    table.externalAccountId,
+  ).where(sql`${table.externalAccountId} IS NOT NULL`),
+  routingIdx: index('llm_provider_accounts_routing_idx').on(
+    table.ownerUserId,
+    table.targetProviderId,
+    table.transportProviderId,
+    table.status,
+    table.priority,
+  ),
+  workspaceIdx: index('llm_provider_accounts_workspace_idx').on(table.workspaceId),
+  cooldownIdx: index('llm_provider_accounts_cooldown_idx').on(table.cooldownUntil),
+}));
+
+export const llmAccountLeases = pgTable('llm_account_leases', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  affinityKey: text('affinity_key').notNull(),
+  targetProviderId: text('target_provider_id').notNull(),
+  transportProviderId: text('transport_provider_id').notNull(),
+  modelId: text('model_id').notNull().default(''),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => llmProviderAccounts.id, { onDelete: 'cascade' }),
+  stableSessionId: text('stable_session_id').notNull(),
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  releasedAt: timestamp('released_at', { withTimezone: false }),
+}, (table) => ({
+  activeAffinityUnique: uniqueIndex('llm_account_leases_active_affinity_unique').on(
+    sql`coalesce(${table.workspaceId}, '')`,
+    sql`coalesce(${table.userId}, '')`,
+    table.affinityKey,
+    table.targetProviderId,
+    table.transportProviderId,
+    table.modelId,
+  ).where(sql`${table.status} = 'active'`),
+  accountIdx: index('llm_account_leases_account_idx').on(table.accountId),
+}));
+
+export const llmAccountReservations = pgTable('llm_account_reservations', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => llmProviderAccounts.id, { onDelete: 'cascade' }),
+  leaseId: text('lease_id')
+    .notNull()
+    .references(() => llmAccountLeases.id, { onDelete: 'cascade' }),
+  requestId: text('request_id'),
+  status: text('status').notNull().default('active'),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: false }),
+}, (table) => ({
+  activeAccountIdx: index('llm_account_reservations_active_account_idx')
+    .on(table.accountId, table.expiresAt)
+    .where(sql`${table.status} = 'active'`),
+  leaseIdx: index('llm_account_reservations_lease_idx').on(table.leaseId),
+}));
+
+export const llmAccountQuotaState = pgTable('llm_account_quota_state', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => llmProviderAccounts.id, { onDelete: 'cascade' }),
+  quotaKey: text('quota_key').notNull(),
+  status: text('status').notNull().default('unknown'),
+  utilizationBasisPoints: integer('utilization_basis_points'),
+  remainingCount: integer('remaining_count'),
+  resetAt: timestamp('reset_at', { withTimezone: false }),
+  cooldownUntil: timestamp('cooldown_until', { withTimezone: false }),
+  rawPayload: jsonb('raw_payload').notNull().default(sql`'{}'::jsonb`),
+  version: integer('version').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  accountKeyUnique: uniqueIndex('llm_account_quota_state_account_key_unique').on(
+    table.accountId,
+    table.quotaKey,
+  ),
+  statusIdx: index('llm_account_quota_state_status_idx').on(
+    table.status,
+    table.cooldownUntil,
+  ),
+}));
+
 export type OrganizationRow = typeof organizations.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type InitiativeRow = typeof initiatives.$inferSelect;
@@ -617,6 +732,10 @@ export type RevokedTokenRow = typeof revokedTokens.$inferSelect;
 export type IdTokenSigningKeyRow = typeof idTokenSigningKeys.$inferSelect;
 export type ServiceClientRow = typeof serviceClients.$inferSelect;
 export type DocumentConnectorAccountRow = typeof documentConnectorAccounts.$inferSelect;
+export type LlmProviderAccountRow = typeof llmProviderAccounts.$inferSelect;
+export type LlmAccountLeaseRow = typeof llmAccountLeases.$inferSelect;
+export type LlmAccountReservationRow = typeof llmAccountReservations.$inferSelect;
+export type LlmAccountQuotaStateRow = typeof llmAccountQuotaState.$inferSelect;
 export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type ChatContextRow = typeof chatContexts.$inferSelect;

@@ -239,6 +239,13 @@
       "when": 1781308800000,
       "tag": "0033_oauth_clients_resource_indicators",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1781395200000,
+      "tag": "0034_llm_account_transports",
+      "breakpoints": true
     }
   ]
 }

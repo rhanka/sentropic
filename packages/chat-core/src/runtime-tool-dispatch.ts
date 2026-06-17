@@ -410,6 +410,7 @@ export class ChatRuntimeToolDispatch {
         credential: request.credential,
         userId: request.userId,
         workspaceId: request.workspaceId,
+        sessionId: request.sessionId,
         messages: request.messages,
         tools: request.tools,
         reasoningSummary: request.reasoningSummary,
