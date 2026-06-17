@@ -75,9 +75,21 @@ export interface CodexAccountAuthMaterial extends AuthMaterialBase {
   expiresAt?: string | null;
 }
 
-export interface FutureAccountTransportAuthMaterial extends AuthMaterialBase {
+export interface AccountTransportAuthMaterial extends AuthMaterialBase {
   type: 'account-transport';
-  provider: Exclude<AccountTransportProviderId, 'codex'> | (string & {});
+  provider: AccountTransportProviderId | (string & {});
+  accessToken: string;
+  refreshToken?: string;
+  accountId?: string | null;
+  accountLabel?: string | null;
+  expiresAt?: string | null;
+  headers?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PlannedAccountTransportAuthMaterial extends AuthMaterialBase {
+  type: 'account-transport';
+  provider: AccountTransportProviderId | (string & {});
   status: 'planned';
   accessToken?: string;
   refreshToken?: string;
@@ -97,7 +109,8 @@ export type SecretAuthMaterial =
   | WorkspaceTokenAuthMaterial
   | EnvironmentTokenAuthMaterial
   | CodexAccountAuthMaterial
-  | FutureAccountTransportAuthMaterial
+  | AccountTransportAuthMaterial
+  | PlannedAccountTransportAuthMaterial
   | NoAuthMaterial;
 
 export type AuthSource = SecretAuthMaterial;
@@ -125,6 +138,11 @@ export type AuthInput = SecretAuthMaterial | AuthResolution;
 
 export const futureAccountTransportProviderIds = [
   'gemini-code-assist',
+  'claude-code',
+] as const satisfies readonly AccountTransportProviderId[];
+
+export const executableAccountTransportProviderIds = [
+  'codex',
   'claude-code',
 ] as const satisfies readonly AccountTransportProviderId[];
 
@@ -185,6 +203,7 @@ export const describeAuthMaterial = (
         accountProviderId: material.provider,
         ...(material.accountId ? { accountId: material.accountId } : {}),
         ...(material.accountLabel ? { accountLabel: material.accountLabel } : {}),
+        ...('expiresAt' in material && material.expiresAt ? { expiresAt: material.expiresAt } : {}),
         ...(material.refreshToken ? { hasRefreshToken: true } : {}),
         ...baseDescriptor,
       };
