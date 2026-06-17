@@ -41,8 +41,19 @@ export const validateAdapterAuthSource = (
       : { ok: false, message: 'Codex account access token is empty' };
   }
 
-  return {
-    ok: false,
-    message: `${source.provider} account transport is planned, not executable`,
-  };
+  if (
+    source.type === 'account-transport'
+    && 'status' in source
+    && source.status === 'planned'
+    && !hasText(source.accessToken)
+  ) {
+    return {
+      ok: false,
+      message: `${source.provider} account transport is planned, not executable`,
+    };
+  }
+
+  return hasText(source.accessToken)
+    ? { ok: true }
+    : { ok: false, message: `${source.provider} account transport access token is empty` };
 };
