@@ -146,6 +146,7 @@ export interface CallLLMStreamOptions {
   credential?: string;
   userId?: string;
   workspaceId?: string;
+  sessionId?: string | null;
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
@@ -194,6 +195,50 @@ export interface StreamEvent {
   type: StreamEventType;
   data: unknown;
 }
+
+type CodexTransportOutcome = {
+  status: 'success' | 'failed' | 'rate_limited' | 'auth_failed';
+  providerStatusCode?: number | null;
+  retryAfterMs?: number | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+};
+
+const mapCodexTransportErrorOutcome = (error: unknown): CodexTransportOutcome => {
+  const record = error as Record<string, unknown> | null;
+  const status =
+    record && typeof record.status === 'number'
+      ? record.status
+      : record && typeof record.statusCode === 'number'
+        ? record.statusCode
+        : null;
+  const message =
+    (record && typeof record.message === 'string' && record.message) ||
+    (error instanceof Error ? error.message : null);
+  const code = record && typeof record.code === 'string' ? record.code : null;
+  if (status === 401 || status === 403) {
+    return {
+      status: 'auth_failed',
+      providerStatusCode: status,
+      errorCode: code,
+      errorMessage: message,
+    };
+  }
+  if (status === 429) {
+    return {
+      status: 'rate_limited',
+      providerStatusCode: status,
+      errorCode: code,
+      errorMessage: message,
+    };
+  }
+  return {
+    status: 'failed',
+    providerStatusCode: status,
+    errorCode: code,
+    errorMessage: message,
+  };
+};
 
 type GeminiRequestBuildOptions = {
   model?: string;
@@ -1187,6 +1232,7 @@ export async function* callLLMStream(
     credential,
     userId,
     workspaceId,
+    sessionId,
     reasoningEffort,
     reasoningSummary,
     tools,
@@ -1228,8 +1274,14 @@ export async function* callLLMStream(
     typeof userId === 'string' &&
     userId.trim().length > 0 &&
     selectedModel === 'gpt-5.5' &&
+    credentialResolution.source !== 'request_override' &&
     (await getOpenAITransportMode()) === 'codex'
-      ? await resolveConnectedCodexTransport(userId)
+      ? await resolveConnectedCodexTransport(userId, {
+          workspaceId,
+          modelId: selectedModel,
+          affinityKey: sessionId ? `chat_session:${sessionId}` : undefined,
+          requestId: createId(),
+        })
       : null;
   const useCodexTransport = Boolean(codexTransport);
 
@@ -1996,6 +2048,7 @@ export async function* callLLMStream(
       : {})
   };
 
+  let codexOutcome: CodexTransportOutcome = { status: 'success' };
   try {
     yield { type: 'status', data: { state: 'started' } };
 
@@ -2035,6 +2088,7 @@ export async function* callLLMStream(
 
     for await (const chunk of stream) {
       if (signal?.aborted) {
+        codexOutcome = { status: 'failed', errorMessage: 'Stream aborted' };
         yield { type: 'error', data: { message: 'Stream aborted' } };
         return;
       }
@@ -2180,6 +2234,10 @@ export async function* callLLMStream(
             (typeof (record as Record<string, unknown>).request_id === 'string' && ((record as Record<string, unknown>).request_id as string)) ||
             (errRec && typeof errRec.request_id === 'string' && (errRec.request_id as string)) ||
             '';
+          codexOutcome = {
+            status: 'failed',
+            errorMessage: message,
+          };
           yield { type: 'error', data: { message, ...(requestId ? { request_id: requestId } : {}) } };
           break;
         }
@@ -2194,6 +2252,7 @@ export async function* callLLMStream(
       }
     }
   } catch (error) {
+    codexOutcome = mapCodexTransportErrorOutcome(error);
     const normalized = normalizeProviderError(selection.providerId, error);
     yield {
       type: 'error',
@@ -2203,5 +2262,14 @@ export async function* callLLMStream(
       }
     };
     throw error;
+  } finally {
+    if (codexTransport) {
+      await codexTransport.recordOutcome(codexOutcome).catch((error) => {
+        console.warn(
+          '[llm-runtime] Failed to record Codex account transport outcome',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    }
   }
 }

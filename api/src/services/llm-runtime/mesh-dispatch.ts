@@ -403,10 +403,16 @@ export const dispatchMeshStreamRaw = async (
 };
 
 export const createCodexAccountAuthInput = (
-  transport: { accessToken: string; accountId?: string | null },
+  transport: { accessToken: string; accountId?: string | null; accountLabel?: string | null; stableSessionId?: string | null },
 ): SecretAuthMaterial => ({
-  type: 'codex-account',
+  type: 'account-transport',
   provider: 'codex',
   accessToken: transport.accessToken,
   accountId: transport.accountId ?? null,
+  ...(transport.accountLabel ? { accountLabel: transport.accountLabel } : {}),
+  descriptor: {
+    metadata: {
+      transportSessionId: transport.stableSessionId ?? null,
+    },
+  },
 });
