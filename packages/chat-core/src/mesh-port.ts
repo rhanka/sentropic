@@ -92,6 +92,7 @@ export type MeshStreamRequest = {
   readonly credential?: string;
   readonly userId?: string;
   readonly workspaceId?: string;
+  readonly sessionId?: string | null;
   readonly reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   readonly reasoningSummary?: 'auto' | 'concise' | 'detailed';
   readonly tools?: ReadonlyArray<unknown>;

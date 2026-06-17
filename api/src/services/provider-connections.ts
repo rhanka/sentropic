@@ -9,6 +9,16 @@ import {
   startCodexDeviceEnrollment,
   type CodexDeviceEnrollmentResult,
 } from './codex-provider-auth';
+import {
+  acquireClaudeCodeAccountTransport,
+  acquireOpenAICodexAccountTransport,
+  disconnectCodexAccountTransports,
+  getPrimaryCodexAccountTransport,
+  storeCodexAccountTransport,
+  type ClaudeCodeAccountTransportAcquisition,
+  type CodexAccountTransportAcquisition,
+  type LlmAccountTransportPublic,
+} from './llm-account-transports';
 import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { settingsService } from './settings';
@@ -56,12 +66,14 @@ type CodexConnectedSecret = {
   idToken: string;
   accountLabel: string | null;
   connectedAt: string;
+  expiresAt?: string | null;
 };
 
 const CODEX_CONNECTION_SETTINGS_KEY = 'provider_connection:codex';
 const CODEX_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:codex_pending';
 const CODEX_CONNECTION_SECRET_KEY = 'provider_connection_secret:codex';
 const OPENAI_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:openai';
+const ANTHROPIC_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:anthropic';
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -175,40 +187,41 @@ const deleteCodexSecrets = async (userId: string): Promise<void> => {
   ]);
 };
 
-const readJwtStringClaim = (claims: Record<string, unknown> | null, key: string): string | null => {
-  const value = claims?.[key];
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-};
-
-const inferCodexAccountId = (accessToken: string, idToken: string | null): string | null => {
-  const accessClaims = decodeJwtPayload(accessToken);
-  const idClaims = idToken ? decodeJwtPayload(idToken) : null;
-  const authClaim = (accessClaims?.['https://api.openai.com/auth'] ??
-    idClaims?.['https://api.openai.com/auth']) as Record<string, unknown> | null | undefined;
-  const orgs = (accessClaims?.organizations ?? idClaims?.organizations) as unknown;
-  const firstOrg = Array.isArray(orgs) ? (orgs[0] as Record<string, unknown> | undefined) : undefined;
-  return (
-    readJwtStringClaim(accessClaims, 'chatgpt_account_id') ||
-    readJwtStringClaim(idClaims, 'chatgpt_account_id') ||
-    readJwtStringClaim(accessClaims, 'https://api.openai.com/auth.chatgpt_account_id') ||
-    readJwtStringClaim(idClaims, 'https://api.openai.com/auth.chatgpt_account_id') ||
-    (authClaim && typeof authClaim.chatgpt_account_id === 'string' ? authClaim.chatgpt_account_id.trim() : null) ||
-    (firstOrg && typeof firstOrg.id === 'string' ? firstOrg.id.trim() : null)
-  );
-};
-
 export const resolveConnectedCodexTransport = async (
   userId: string,
-): Promise<{ accessToken: string; accountId: string | null } | null> => {
-  const secret = parseSecretPayload<CodexConnectedSecret>(
-    await settingsService.get(CODEX_CONNECTION_SECRET_KEY, { userId, fallbackToGlobal: false }),
-  );
-  const accessToken = normalizeOptionalText(secret?.accessToken);
-  if (!accessToken) return null;
-  return {
-    accessToken,
-    accountId: inferCodexAccountId(accessToken, normalizeOptionalText(secret?.idToken)),
-  };
+  options: {
+    workspaceId?: string | null;
+    modelId?: string | null;
+    affinityKey?: string | null;
+    requestId?: string | null;
+  } = {},
+): Promise<CodexAccountTransportAcquisition | null> => {
+  await migrateLegacyCodexConnectionIfNeeded(userId);
+  return acquireOpenAICodexAccountTransport({
+    userId,
+    workspaceId: options.workspaceId,
+    modelId: normalizeOptionalText(options.modelId) ?? 'gpt-5.5',
+    affinityKey: options.affinityKey,
+    requestId: options.requestId,
+  });
+};
+
+export const resolveConnectedClaudeCodeTransport = async (
+  userId: string,
+  options: {
+    workspaceId?: string | null;
+    modelId?: string | null;
+    affinityKey?: string | null;
+    requestId?: string | null;
+  } = {},
+): Promise<ClaudeCodeAccountTransportAcquisition | null> => {
+  return acquireClaudeCodeAccountTransport({
+    userId,
+    workspaceId: options.workspaceId,
+    modelId: normalizeOptionalText(options.modelId) ?? 'claude-sonnet-4-6',
+    affinityKey: options.affinityKey,
+    requestId: options.requestId,
+  });
 };
 
 export const getOpenAITransportMode = async (): Promise<'codex' | 'token'> =>
@@ -230,23 +243,48 @@ export const setOpenAITransportMode = async (
   return normalized;
 };
 
+export const getAnthropicTransportMode = async (): Promise<'claude-code' | 'token'> =>
+  normalizeText(
+    await settingsService.get(ANTHROPIC_TRANSPORT_MODE_SETTING_KEY, { fallbackToGlobal: true }),
+  ).toLowerCase() === 'claude-code'
+    ? 'claude-code'
+    : 'token';
+
+export const setAnthropicTransportMode = async (
+  mode: 'claude-code' | 'token',
+): Promise<'claude-code' | 'token'> => {
+  const normalized = mode === 'claude-code' ? 'claude-code' : 'token';
+  await settingsService.set(
+    ANTHROPIC_TRANSPORT_MODE_SETTING_KEY,
+    normalized,
+    'Anthropic runtime source mode (`token` or `claude-code`).',
+  );
+  return normalized;
+};
+
 const toCodexProviderState = (
   codexConnection: CodexConnectionPayload | null,
+  codexAccount?: LlmAccountTransportPublic | null,
 ): ProviderConnectionState => {
-  const status = codexConnection?.status ?? 'disconnected';
-  const ready = status === 'connected';
+  const visibleStatus =
+    codexConnection?.status === 'pending'
+      ? 'pending'
+      : codexAccount && (codexAccount.status === 'active' || codexAccount.status === 'cooldown')
+        ? 'connected'
+        : codexConnection?.status ?? 'disconnected';
+  const ready = visibleStatus === 'connected' && codexAccount?.status !== 'cooldown';
   return {
     providerId: 'codex',
     label: 'Codex',
     ready,
-    connectionStatus: status,
+    connectionStatus: visibleStatus,
     enrollmentId: codexConnection?.enrollmentId ?? null,
     enrollmentUrl: codexConnection?.enrollmentUrl ?? null,
     enrollmentCode: codexConnection?.enrollmentCode ?? null,
     enrollmentExpiresAt: codexConnection?.enrollmentExpiresAt ?? null,
-    managedBy: status === 'disconnected' ? 'none' : 'admin_settings',
-    accountLabel: codexConnection?.accountLabel ?? null,
-    updatedAt: codexConnection?.updatedAt ?? null,
+    managedBy: visibleStatus === 'disconnected' ? 'none' : 'admin_settings',
+    accountLabel: codexAccount?.accountLabel ?? codexConnection?.accountLabel ?? null,
+    updatedAt: codexAccount?.updatedAt ?? codexConnection?.updatedAt ?? null,
     updatedByUserId: codexConnection?.updatedByUserId ?? null,
     canConfigure: true,
   };
@@ -287,10 +325,33 @@ const assertExpectedAccountLabel = (
   }
 };
 
+const migrateLegacyCodexConnectionIfNeeded = async (
+  userId: string,
+): Promise<LlmAccountTransportPublic | null> => {
+  const existing = await getPrimaryCodexAccountTransport({ ownerUserId: userId });
+  if (existing) return existing;
+
+  const secret = parseSecretPayload<CodexConnectedSecret>(
+    await settingsService.get(CODEX_CONNECTION_SECRET_KEY, { userId, fallbackToGlobal: false }),
+  );
+  const accessToken = normalizeOptionalText(secret?.accessToken);
+  if (!accessToken) return null;
+
+  return storeCodexAccountTransport({
+    ownerUserId: userId,
+    accountLabel: normalizeOptionalText(secret?.accountLabel),
+    accessToken,
+    refreshToken: normalizeOptionalText(secret?.refreshToken),
+    idToken: normalizeOptionalText(secret?.idToken),
+    source: 'legacy-codex-setting',
+  });
+};
+
 export const listProviderConnections = async (input?: {
   userId?: string | null;
 }): Promise<ProviderConnectionState[]> => {
   const userId = normalizeOptionalText(input?.userId);
+  const codexAccount = userId ? await migrateLegacyCodexConnectionIfNeeded(userId) : null;
   const [codexConnection, openaiCredential, geminiCredential, anthropicCredential, mistralCredential, cohereCredential] = await Promise.all([
     userId ? readCodexConnection(userId) : Promise.resolve(null),
     resolveProviderCredential({
@@ -336,7 +397,7 @@ export const listProviderConnections = async (input?: {
   });
 
   return [
-    toCodexProviderState(codexConnection),
+    toCodexProviderState(codexConnection, codexAccount),
     toSimpleProviderState('openai', 'OpenAI', openaiCredential),
     toSimpleProviderState('gemini', 'Gemini', geminiCredential),
     toSimpleProviderState('anthropic', 'Anthropic', anthropicCredential),
@@ -462,13 +523,16 @@ export const completeCodexEnrollment = async (input: {
 
   await Promise.all([
     deleteUserScopedSetting(input.updatedByUserId, CODEX_CONNECTION_PENDING_SECRET_KEY),
+    deleteUserScopedSetting(input.updatedByUserId, CODEX_CONNECTION_SECRET_KEY),
     writeCodexConnection(input.updatedByUserId, visible),
-    writeEncryptedSetting(
-      input.updatedByUserId,
-      CODEX_CONNECTION_SECRET_KEY,
-      secret,
-      'Codex provider credential for the current admin user.',
-    ),
+    storeCodexAccountTransport({
+      ownerUserId: input.updatedByUserId,
+      accountLabel: secret.accountLabel,
+      accessToken: secret.accessToken,
+      refreshToken: secret.refreshToken,
+      idToken: secret.idToken,
+      source: 'codex-device',
+    }),
   ]);
 
   return toCodexProviderState(visible);
@@ -491,6 +555,7 @@ export const disconnectCodexEnrollment = async (input: {
   await Promise.all([
     writeCodexConnection(input.updatedByUserId, next),
     deleteCodexSecrets(input.updatedByUserId),
+    disconnectCodexAccountTransports({ ownerUserId: input.updatedByUserId }),
   ]);
 
   return toCodexProviderState(next);
