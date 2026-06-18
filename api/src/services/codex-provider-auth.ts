@@ -23,6 +23,13 @@ export type CodexDeviceEnrollmentResult = {
   refreshToken: string;
 };
 
+export type CodexTokenRefreshResult = {
+  idToken: string | null;
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: string | null;
+};
+
 const normalizeIntervalSeconds = (value: unknown): number => {
   const parsed =
     typeof value === 'number'
@@ -92,6 +99,50 @@ const exchangeAuthorizationCode = async (input: {
     idToken: payload.id_token,
     accessToken: payload.access_token,
     refreshToken: payload.refresh_token,
+  };
+};
+
+export const refreshCodexAccessToken = async (input: {
+  refreshToken: string;
+}): Promise<CodexTokenRefreshResult> => {
+  const obtainedAt = Date.now();
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: input.refreshToken,
+    client_id: CODEX_CLIENT_ID,
+  });
+  const response = await fetch(CODEX_OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      accept: 'application/json',
+    },
+    body,
+  });
+  const payload = await readJsonOrThrow<{
+    id_token?: string;
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number | string;
+  }>(response, 'Codex token refresh failed.');
+  if (!payload.access_token) {
+    throw new Error('Codex token refresh returned no access token.');
+  }
+
+  const expiresInSeconds =
+    typeof payload.expires_in === 'number'
+      ? payload.expires_in
+      : typeof payload.expires_in === 'string'
+        ? Number.parseInt(payload.expires_in, 10)
+        : Number.NaN;
+
+  return {
+    idToken: payload.id_token ?? null,
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token ?? null,
+    expiresAt: Number.isFinite(expiresInSeconds) && expiresInSeconds > 0
+      ? new Date(obtainedAt + expiresInSeconds * 1000).toISOString()
+      : null,
   };
 };
 

@@ -603,6 +603,7 @@ export class ChatRuntimeFinalization {
         credential,
         userId,
         workspaceId: workspaceId ?? undefined,
+        sessionId,
         messages: pass2Messages,
         tools: undefined,
         toolChoice: 'none',
@@ -690,4 +691,3 @@ export class ChatRuntimeFinalization {
     return { skipped: false, streamSeq, lastErrorMessage };
   }
 }
-
