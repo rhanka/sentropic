@@ -78,4 +78,15 @@ describe('adapter auth validation', () => {
       message: 'claude-code account transport is planned, not executable',
     });
   });
+
+  it('accepts executable account transport material', () => {
+    expect(
+      validateAdapterAuthSource({
+        type: 'account-transport',
+        provider: 'claude-code',
+        accessToken: 'claude-access-token',
+        accountId: 'acct_claude',
+      }),
+    ).toEqual({ ok: true });
+  });
 });
