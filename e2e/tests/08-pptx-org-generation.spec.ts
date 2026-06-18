@@ -24,7 +24,7 @@ test.describe('Chat PPTX generation (organization context)', () => {
   const pollForCompletedPptxJob = async (
     page: import('@playwright/test').Page,
     workspaceId: string,
-    timeoutMs = 5 * 60_000,
+    timeoutMs = 60_000,
   ): Promise<string> => {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {

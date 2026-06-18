@@ -52,6 +52,7 @@ export class MeshDispatchAdapter implements MeshDispatchPort {
       credential: request.credential,
       userId: request.userId,
       workspaceId: request.workspaceId,
+      sessionId: (request as { sessionId?: string | null }).sessionId,
       reasoningEffort: request.reasoningEffort,
       reasoningSummary: request.reasoningSummary,
       tools: request.tools as OpenAI.Chat.Completions.ChatCompletionTool[] | undefined,
