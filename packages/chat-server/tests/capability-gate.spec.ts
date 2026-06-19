@@ -172,4 +172,81 @@ describe('chat-server capability gate', () => {
       expect(enqueueInputs[0].vscodeCodeAgent).toEqual({ id: 'agent-from-client' });
     });
   });
+
+  describe('mount-declared local tools + allowedLocalTools name allowlist (0.3.0)', () => {
+    const RENDER = { name: 'render_mermaid', description: 'render a mermaid diagram' };
+
+    function buildServerWithLocalTools(
+      capabilities: ChatServerCapabilities | undefined,
+      localToolDefinitions: ReadonlyArray<unknown>,
+    ) {
+      const enqueueInputs: EnqueueInput[] = [];
+      const deps = createInMemoryChatServerDeps({
+        onEnqueue: (input) => enqueueInputs.push(input as EnqueueInput),
+      });
+      const app = createChatServer(deps, {
+        routes: 'canonical',
+        capabilities,
+        localToolDefinitions,
+      });
+      return { app, enqueueInputs };
+    }
+
+    it('advertises a mount-declared local tool on a locked public mount while ignoring client defs', async () => {
+      const { app, enqueueInputs } = buildServerWithLocalTools(
+        {
+          acceptClientProviderApiKey: false,
+          acceptClientVscodeAgent: false,
+          acceptClientLocalToolDefinitions: false,
+          allowedLocalTools: ['render_mermaid'],
+        },
+        [RENDER],
+      );
+      await postMessage(app, PRIVILEGED_BODY);
+      expect(enqueueInputs[0].localToolDefinitions).toEqual([RENDER]);
+    });
+
+    it('drops client local-tool defs whose name is not on allowedLocalTools', async () => {
+      const { app, enqueueInputs } = buildServerWithLocalTools(
+        { allowedLocalTools: ['render_mermaid'] },
+        [],
+      );
+      await postMessage(app, {
+        content: 'Hello',
+        localToolDefinitions: [{ name: 'rm_rf', schema: {} }, RENDER],
+      });
+      expect(enqueueInputs[0].localToolDefinitions).toEqual([RENDER]);
+    });
+
+    it('lets a mount-declared def take precedence over a client def of the same name', async () => {
+      const { app, enqueueInputs } = buildServerWithLocalTools({}, [RENDER]);
+      await postMessage(app, {
+        content: 'Hello',
+        localToolDefinitions: [{ name: 'render_mermaid', description: 'client override attempt' }],
+      });
+      expect(enqueueInputs[0].localToolDefinitions).toEqual([RENDER]);
+    });
+
+    it('drops a nameless client def under a name allowlist', async () => {
+      const { app, enqueueInputs } = buildServerWithLocalTools(
+        { allowedLocalTools: ['render_mermaid'] },
+        [RENDER],
+      );
+      await postMessage(app, {
+        content: 'Hello',
+        localToolDefinitions: [{ schema: {} }],
+      });
+      expect(enqueueInputs[0].localToolDefinitions).toEqual([RENDER]);
+    });
+
+    it('preserves the permissive default byte-for-byte when no mount defs and no allowlist', async () => {
+      const { app, enqueueInputs } = buildServerWithLocalTools(undefined, []);
+      await postMessage(app, {
+        content: 'Hello',
+        localToolDefinitions: [{ name: 'a' }, { name: 'a' }, { schema: {} }],
+      });
+      // No dedup, no reorder, no filtering — identical to pre-0.3.0.
+      expect(enqueueInputs[0].localToolDefinitions).toEqual([{ name: 'a' }, { name: 'a' }, { schema: {} }]);
+    });
+  });
 });
