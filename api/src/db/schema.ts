@@ -310,6 +310,24 @@ export const oauthTokens = pgTable('oauth_tokens', {
   userIdIdx: index('oauth_tokens_user_id_idx').on(table.userId),
 }));
 
+// Consent persistence: a user's approved grant per exact (user_id, client_id). The IdP skips
+// the consent screen when the stored scopes are a superset of the requested scopes. No row ⇒
+// re-consent (always-consent legacy behavior). Migration 0034.
+export const oauthConsents = pgTable('oauth_consents', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  scopes: text('scopes').array().notNull().default(sql`'{}'`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  userClientUnique: uniqueIndex('oauth_consents_user_id_client_id_unique').on(table.userId, table.clientId),
+  userIdIdx: index('oauth_consents_user_id_idx').on(table.userId),
+}));
+
 export const oauthDpopProofs = pgTable('oauth_dpop_proofs', {
   jti: text('jti').primaryKey(),
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
