@@ -1882,6 +1882,69 @@ describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
       ).toBe(false);
     }
   });
+
+  // 11r. EXTERNAL host registers a custom tool name (render_mermaid): the
+  // controller recognizes it as local via the host-injected isLocalToolName
+  // hook, fires the injected executor, and posts the result. This proves the
+  // open-registration seam drives a non-built-in tool end-to-end.
+  it('11r: controller drives an external custom tool name via injected isLocalToolName + executor', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const { opts, calls } = makeFakeLocalToolMachine({
+        executeResult: { svg: '<svg/>' },
+      });
+      // Simulate the host having registered `render_mermaid`: only built-ins
+      // + the host-registered custom name are recognized as local.
+      opts.isLocalToolName = (name: string) =>
+        ['bash', 'tab_read'].includes(name) || name === 'render_mermaid';
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([
+        assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' }),
+      ]);
+
+      emitToolCallStart(
+        ctrl,
+        'stream-1',
+        'tc-mermaid',
+        'render_mermaid',
+        '{"source":"graph TD; A-->B"}',
+        1,
+      );
+      await vi.runAllTimersAsync();
+
+      // Recognized + executed via host executor.
+      expect(ctrl.getSnapshot().localToolStatesById.has('tc-mermaid')).toBe(true);
+      expect(calls.execute).toHaveLength(1);
+      expect(calls.execute[0]?.name).toBe('render_mermaid');
+      expect(calls.execute[0]?.args).toEqual({ source: 'graph TD; A-->B' });
+      // Result posted back to the stream.
+      expect(calls.poster).toHaveLength(1);
+      expect(calls.poster[0]?.toolCallId).toBe('tc-mermaid');
+      expect(calls.poster[0]?.result).toEqual({ svg: '<svg/>' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11s. A tool name the host did NOT register is NOT recognized as local and
+  // never reaches the executor (guards against the seam over-capturing).
+  it('11s: an unregistered custom tool name is ignored by the local-tool machine', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { opts, calls } = makeFakeLocalToolMachine();
+    // Host registered only render_mermaid (plus built-ins); render_chart is not.
+    opts.isLocalToolName = (name: string) =>
+      ['bash', 'tab_read'].includes(name) || name === 'render_mermaid';
+    ctrl.attachLocalToolMachine(opts);
+    ctrl.setMessages([
+      assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' }),
+    ]);
+
+    emitToolCallStart(ctrl, 'stream-1', 'tc-chart', 'render_chart', '{}', 1);
+
+    expect(ctrl.getSnapshot().localToolStatesById.has('tc-chart')).toBe(false);
+    expect(calls.execute).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
