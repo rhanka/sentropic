@@ -19,6 +19,7 @@ export * from './oauth/crypto-utils.js';
 export * from './oauth/dpop.js';
 export * from './oauth/http-utils.js';
 export * from './oauth/introspect-handler.js';
+export * from './oauth/issue-authorized-code.js';
 export * from './oauth/jwks-service.js';
 export * from './oauth/router.js';
 export * from './oauth/revoke-handler.js';

@@ -4,9 +4,11 @@ import type { AuthHonoPorts } from '../ports.js';
 import type { OauthClientRecord } from './state-store-types.js';
 import type { OAuthContinuationCodec, OAuthContinuationState } from './state-codec.js';
 import { appendParams, oauthJsonError, redirectWithOAuthError } from './http-utils.js';
+import { issueAuthorizedCode } from './issue-authorized-code.js';
 import { resolveOAuthAcr, resolveOAuthSession } from './session-resolver.js';
 
 export interface OAuthAuthorizeHandlerOptions {
+  authorizationCodeTtlSeconds?: number;
   consentUrl: string;
   issuer: string;
   loginUrl: string;
@@ -49,18 +51,55 @@ export const createOAuthAuthorizeHandler =
       return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
     }
 
-    if (prompt === 'none') {
-      return redirectWithOAuthError(validation.redirectUri, 'consent_required', validation.state, c.req.url);
-    }
-
-    const sealedState = await sealContinuation(c, options, validation, {
+    const consentState: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'> = {
       acr: resolveOAuthAcr(session.sessionRecord),
       authTime: session.sessionRecord.createdAt.toISOString(),
       userId: session.user.id,
-    });
+    };
 
-    return c.redirect(appendParams(options.consentUrl, { state: sealedState }, c.req.url), 302);
+    // Consent persistence (optional): skip the consent screen and issue the code directly
+    // when a stored grant for the exact (user, client) covers every requested scope.
+    // `prompt=consent` ALWAYS forces the screen; coverage is a strict set-superset check,
+    // so any requested scope absent from the grant re-shows consent (scope-escalation guard).
+    const skipConsent =
+      prompt !== 'consent' &&
+      (await hasCoveringGrant(options.ports, session.user.id, validation.client.clientId, validation.scope));
+
+    if (prompt === 'none') {
+      if (!skipConsent) {
+        return redirectWithOAuthError(validation.redirectUri, 'consent_required', validation.state, c.req.url);
+      }
+    } else if (!skipConsent) {
+      const sealedState = await sealContinuation(c, options, validation, consentState);
+      return c.redirect(appendParams(options.consentUrl, { state: sealedState }, c.req.url), 302);
+    }
+
+    const sealedState = await sealContinuation(c, options, validation, consentState);
+    const payload = await options.stateCodec.unseal(sealedState);
+    if (!payload) {
+      return oauthJsonError(c, 400, 'invalid_request', 'OAuth continuation is invalid.');
+    }
+    return issueAuthorizedCode(c, options, payload);
   };
+
+/**
+ * True iff `consentStore` is wired AND a stored grant for `(userId, clientId)` covers every
+ * requested scope (stored ⊇ requested). No store ⇒ false (legacy always-consent). The
+ * superset check is the scope-escalation invariant: a single uncovered scope forces consent.
+ */
+const hasCoveringGrant = async (
+  ports: AuthHonoPorts,
+  userId: string,
+  clientId: string,
+  requestedScope: string
+): Promise<boolean> => {
+  if (!ports.consentStore) return false;
+  const grant = await ports.consentStore.getGrant(userId, clientId);
+  if (!grant) return false;
+  const granted = new Set(grant.scopes);
+  const requested = requestedScope.split(/\s+/).filter(Boolean);
+  return requested.every((scope) => granted.has(scope));
+};
 
 const resumeLoginContinuation = async (
   c: Context,

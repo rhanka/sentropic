@@ -300,6 +300,24 @@ export interface AuthHonoTenantPort {
   isApprovedMember(userId: string, tenantId: string): Promise<boolean>;
 }
 
+/**
+ * Consent persistence. OPTIONAL — when absent, auth-hono keeps the legacy behavior of
+ * always re-showing the consent screen on every `/authorize`. When present, an approved
+ * grant per exact `(userId, clientId)` lets the authorize handler skip consent and issue
+ * the auth code directly, provided the stored grant's scopes are a SUPERSET of the
+ * requested scopes (scope-escalation re-consents) and `prompt !== 'consent'`.
+ */
+export interface AuthHonoConsentGrant {
+  scopes: string[];
+}
+
+export interface AuthHonoConsentStorePort {
+  /** The user's currently granted scopes for this client, or `null` if no grant exists. */
+  getGrant(userId: string, clientId: string): Promise<AuthHonoConsentGrant | null>;
+  /** Upsert the grant for `(userId, clientId)`, unioning `scopes` with any prior grant. */
+  saveGrant(userId: string, clientId: string, scopes: string[]): Promise<void>;
+}
+
 export interface AuthHonoPorts {
   users: AuthHonoUserPort;
   credentials: AuthHonoCredentialPort;
@@ -318,4 +336,6 @@ export interface AuthHonoPorts {
   jwks: JwksPort;
   /** BR-39e tenancy spine (optional; legacy behavior when absent). */
   tenant?: AuthHonoTenantPort;
+  /** Consent persistence (optional; always-consent legacy behavior when absent). */
+  consentStore?: AuthHonoConsentStorePort;
 }
