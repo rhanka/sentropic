@@ -61,6 +61,17 @@ export type ChatServerUser = {
  *   the list is STRIPPED before reaching the queue. `'all'` disables stripping.
  *   It does NOT cap server/context/workspace tools that the host's own queue
  *   or generation layer may add downstream — those are the host's concern.
+ * - Local tools have two independent knobs. `acceptClientLocalToolDefinitions`
+ *   gates the client SOURCE (whether `body.localToolDefinitions` is read at
+ *   all); `allowedLocalTools` is a NAME allowlist applied to the merged result.
+ *   The mount can also DECLARE its own definitions via
+ *   {@link ChatServerOptions.localToolDefinitions} — always advertised, taking
+ *   precedence over a client definition of the same name. A public mount that
+ *   wants exactly one host tool sets `acceptClientLocalToolDefinitions:false`,
+ *   declares it in `localToolDefinitions`, and optionally pins
+ *   `allowedLocalTools` to its name. EXECUTION of local tools is always
+ *   host-side (the browser's local-tool machine); these knobs only control what
+ *   the model is TOLD it can call.
  */
 export type ChatServerCapabilities = {
   /** Accept `providerApiKey` from the request body. Default: `true`. */
@@ -76,6 +87,18 @@ export type ChatServerCapabilities = {
    * host adds downstream.
    */
   allowedTools?: string[] | 'all';
+  /**
+   * Allowlist applied by NAME to local-tool definitions (both client-supplied
+   * and server-declared via {@link ChatServerOptions.localToolDefinitions}).
+   * `'all'` (default) advertises every definition; a string array drops every
+   * definition whose `name` is not on the list (a definition without a usable
+   * `name` cannot pass a name allowlist and is dropped). This is the local-tool
+   * counterpart of `allowedTools`: a public mount can advertise exactly one
+   * local tool (e.g. `['render_mermaid']`) while ignoring whatever the client
+   * tries to add. Independent of `acceptClientLocalToolDefinitions` — that flag
+   * gates the client SOURCE, this allowlist gates the resulting NAMES.
+   */
+  allowedLocalTools?: string[] | 'all';
 };
 
 type ResolvedCapabilities = {
@@ -83,6 +106,7 @@ type ResolvedCapabilities = {
   acceptClientLocalToolDefinitions: boolean;
   acceptClientVscodeAgent: boolean;
   allowedTools: ReadonlySet<string> | 'all';
+  allowedLocalTools: ReadonlySet<string> | 'all';
 };
 
 export type ChatServerOptions = {
@@ -99,6 +123,17 @@ export type ChatServerOptions = {
    * {@link ChatServerCapabilities}.
    */
   capabilities?: ChatServerCapabilities;
+  /**
+   * Local-tool definitions DECLARED BY THE MOUNT — always advertised to the
+   * model regardless of the request body. Each entry must carry a string
+   * `name`. Use together with `capabilities.acceptClientLocalToolDefinitions:
+   * false` (and optionally `capabilities.allowedLocalTools`) to expose a fixed
+   * set of local tools on a PUBLIC mount without trusting the client: the host
+   * declares e.g. `render_mermaid` here, the client cannot add others. A
+   * server-declared definition takes precedence over a client definition of the
+   * same `name`. Default: none (client is the only source, as today).
+   */
+  localToolDefinitions?: ReadonlyArray<unknown>;
 };
 
 export type CreatedChatMessage = {
@@ -362,6 +397,7 @@ function resolveCapabilities(
   capabilities: ChatServerCapabilities | undefined,
 ): ResolvedCapabilities {
   const allowedTools = capabilities?.allowedTools;
+  const allowedLocalTools = capabilities?.allowedLocalTools;
   return {
     acceptClientProviderApiKey: capabilities?.acceptClientProviderApiKey ?? true,
     acceptClientLocalToolDefinitions:
@@ -371,6 +407,10 @@ function resolveCapabilities(
       allowedTools === undefined || allowedTools === 'all'
         ? 'all'
         : new Set(allowedTools),
+    allowedLocalTools:
+      allowedLocalTools === undefined || allowedLocalTools === 'all'
+        ? 'all'
+        : new Set(allowedLocalTools),
   };
 }
 
@@ -388,6 +428,56 @@ function gateTools(
   if (tools === undefined) return undefined;
   if (allowedTools === 'all') return tools;
   return tools.filter((tool) => allowedTools.has(tool));
+}
+
+/** Extract a usable `name` from a local-tool definition, or `undefined`. */
+function localToolDefinitionName(def: unknown): string | undefined {
+  if (def && typeof def === 'object') {
+    const name = (def as { name?: unknown }).name;
+    if (typeof name === 'string' && name.length > 0) return name;
+  }
+  return undefined;
+}
+
+/**
+ * Resolves the local-tool definitions advertised to the model by merging the
+ * mount's server-declared definitions with the (already source-gated) client
+ * definitions, then applying the `allowedLocalTools` name allowlist.
+ *
+ * - Permissive fast-path: when the mount declares no server-side definitions
+ *   AND sets no name allowlist (`'all'`), the client definitions pass through
+ *   BYTE-FOR-BYTE — identical to the pre-0.3.0 behavior (no dedup, no reorder).
+ * - Otherwise: server-declared definitions are canonical and take precedence
+ *   over a client definition of the same `name`; definitions whose name is not
+ *   on the allowlist are dropped; a nameless definition cannot satisfy a name
+ *   allowlist and is dropped. Returns `undefined` when nothing survives, so a
+ *   queue adapter treating `undefined` as "no local tools" is not handed `[]`.
+ */
+function resolveLocalToolDefinitions(
+  serverDefs: ReadonlyArray<unknown>,
+  clientDefs: ReadonlyArray<unknown> | undefined,
+  allowedLocalTools: ReadonlySet<string> | 'all',
+): unknown[] | undefined {
+  if (serverDefs.length === 0 && allowedLocalTools === 'all') {
+    return clientDefs === undefined ? undefined : [...clientDefs];
+  }
+  const passes = (def: unknown): boolean => {
+    if (allowedLocalTools === 'all') return true;
+    const name = localToolDefinitionName(def);
+    return name !== undefined && allowedLocalTools.has(name);
+  };
+  const result: unknown[] = [];
+  const seen = new Set<string>();
+  for (const def of [...serverDefs, ...(clientDefs ?? [])]) {
+    if (!passes(def)) continue;
+    const name = localToolDefinitionName(def);
+    if (name !== undefined) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+    }
+    result.push(def);
+  }
+  return result.length > 0 ? result : undefined;
 }
 
 function numberValue(value: unknown): number | undefined {
@@ -524,6 +614,7 @@ export function createChatServer(
   const routePath = (suffix: string) => `${basePath}${suffix}`;
   const includeControls = options.includeControls ?? true;
   const capabilities = resolveCapabilities(options.capabilities);
+  const serverLocalToolDefinitions = options.localToolDefinitions ?? [];
 
   app.use('*', async (c, next) => {
     if (c.req.header('sec-sentropic-wire-version')) {
@@ -567,6 +658,11 @@ export function createChatServer(
       Array.isArray(body.localToolDefinitions)
         ? body.localToolDefinitions
         : undefined;
+    const localToolDefinitions = resolveLocalToolDefinitions(
+      serverLocalToolDefinitions,
+      clientLocalToolDefinitions,
+      capabilities.allowedLocalTools,
+    );
     const clientVscodeAgent = capabilities.acceptClientVscodeAgent
       ? body.vscodeCodeAgent
       : undefined;
@@ -597,7 +693,7 @@ export function createChatServer(
         model: created.model ?? null,
         contexts: parseContexts(body.contexts),
         tools: gatedTools,
-        localToolDefinitions: clientLocalToolDefinitions,
+        localToolDefinitions,
         vscodeCodeAgent: clientVscodeAgent,
         locale: resolveLocale(c),
       },
