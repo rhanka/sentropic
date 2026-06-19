@@ -412,6 +412,12 @@ build it (D7) with the explicit acceptance criteria in §8.
 
 ## 5. Decisions to ratify (batched)
 
+> **SUPERSEDED for the auth/data/env model (2026-06-19):** D11 + OQ2 + the env model were
+> re-challenged (Opus 4.8 max + Codex 5.5 xhigh) and ratified by rhanka into a 3-tier model
+> (PREPROD synthetic-isolated + VALIDATION prod-mapped via **federation** + PROD), with new
+> D12–D15 (validation env, scrubbed import, orthogonality gate). The canonical decision record is
+> `SPEC_DECISION_DEPLOYMENT_PLANE.md`. The D11/OQ2 text below is the pre-challenge draft, kept for history.
+
 Each decision: options + recommendation. Reversible ones can be taken solo;
 blocking/irreversible ones (D3 preprod DB, D6 secrets, D7 prod gate, D8
 migrations, D11 preprod RP ID) want the batched-packet owner review.
