@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step \u2014 noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-08",
-  "_version": "0.21.0",
+  "_version": "0.22.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -96,6 +96,7 @@
         "ChatWidgetDisplayMode",
         "ChatWidgetLayoutState",
         "chatWidgetLayout",
+        "BUILTIN_LOCAL_TOOL_NAMES",
         "LocalToolName",
         "LocalToolExecutionStatus",
         "LocalToolPermissionDecision",
@@ -106,6 +107,11 @@
         "LocalToolPermissionPolicyEntry",
         "LocalToolPermissionRequiredError",
         "setLocalToolsAdapter",
+        "registerLocalTool",
+        "registerLocalTools",
+        "unregisterLocalTool",
+        "clearRegisteredLocalTools",
+        "listRegisteredLocalTools",
         "isLocalToolName",
         "isLocalToolRuntimeAvailable",
         "getLocalToolDefinitions",
@@ -333,6 +339,7 @@
       "kind": "ts",
       "file": "dist/stores/localTools.js",
       "exports": [
+        "BUILTIN_LOCAL_TOOL_NAMES",
         "LocalToolName",
         "LocalToolExecutionStatus",
         "LocalToolPermissionDecision",
@@ -343,6 +350,11 @@
         "LocalToolPermissionPolicyEntry",
         "LocalToolPermissionRequiredError",
         "setLocalToolsAdapter",
+        "registerLocalTool",
+        "registerLocalTools",
+        "unregisterLocalTool",
+        "clearRegisteredLocalTools",
+        "listRegisteredLocalTools",
         "isLocalToolName",
         "isLocalToolRuntimeAvailable",
         "getLocalToolDefinitions",
