@@ -1,5 +1,5 @@
 import type { AuthHonoConsentGrant, AuthHonoConsentStorePort } from '@sentropic/auth-hono';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db } from '../../db/client';
 import { oauthConsents } from '../../db/schema';
@@ -32,16 +32,23 @@ export const createConsentStoreAdapter = (
 
     async saveGrant(userId, clientId, scopes): Promise<void> {
       const timestamp = now();
-      // Upsert + union: on conflict, merge the existing scopes with the new ones (dedup), so a
-      // narrower re-approval never shrinks the grant. ARRAY(... DISTINCT UNNEST) builds the union.
+      // Union with any prior grant so a narrower re-approval never shrinks it. The merge is done
+      // in JS (read-then-upsert), NOT a raw-SQL array union: drizzle expands a JS array embedded in
+      // a `sql` template as a record tuple `($1,$2,...)`, which Postgres rejects with "cannot cast
+      // type record to text[]". Setting the column with a plain JS array lets drizzle bind it as a
+      // proper text[]. Concurrent approvals for the same (user,client) are not a real scenario
+      // (single user, single consent screen), so last-write-wins is safe here.
+      const [existing] = await database
+        .select({ scopes: oauthConsents.scopes })
+        .from(oauthConsents)
+        .where(and(eq(oauthConsents.userId, userId), eq(oauthConsents.clientId, clientId)))
+        .limit(1);
+      const merged = Array.from(new Set([...(existing?.scopes ?? []), ...scopes]));
       await database
         .insert(oauthConsents)
-        .values({ clientId, createdAt: timestamp, scopes, updatedAt: timestamp, userId })
+        .values({ clientId, createdAt: timestamp, scopes: merged, updatedAt: timestamp, userId })
         .onConflictDoUpdate({
-          set: {
-            scopes: sql`ARRAY(SELECT DISTINCT unnest(${oauthConsents.scopes} || ${scopes}::text[]))`,
-            updatedAt: timestamp,
-          },
+          set: { scopes: merged, updatedAt: timestamp },
           target: [oauthConsents.userId, oauthConsents.clientId],
         });
     },
