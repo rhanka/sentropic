@@ -1,6 +1,7 @@
 # SPEC DECISION — Deployment-plane (ARCH-17 / BR-55) ratification dossier
 
-Status: **PARTIALLY RATIFIED** (2026-06-19). The auth/data/env model was **re-challenged** with a
+Status: **RATIFIED** (2026-06-19/20) — ALL owner decisions taken; only OQ0 (cluster operator
+baselines) remains external. The auth/data/env model was **re-challenged** with a
 double pass (Opus 4.8 max + Codex 5.5 xhigh — they converged on the model, diverged on validation
 identity) and **ratified by rhanka**. Full analysis/evidence: `SPEC_EVOL_DEPLOYMENT_PLANE.md` (PR
 #340); THIS file is the clean decision record. Each decision: stake → options → recommendation →
@@ -67,17 +68,25 @@ validation) was wrong.
 | D6 | Per-env secrets | SealedSecrets per ns; **distinct KEK/DB/client-secrets/signing-keys per tier (now 3-way)**. |
 | D10 | Ownership | Foundations builds; coord. scale; BR-55b0 owned by the cluster operator (cross-repo). |
 
-## STILL OPEN — owner decisions not yet taken (next batch)
+## RATIFIED 2026-06-20 (final owner batch — all owner decisions now taken)
 
-- **D4 — preprod/validation domain names** (needs your validation; durable naming). Reco
-  `auth-preprod.sent-tech.ca` / `auth-validation.sent-tech.ca` (or your `preprod.auth.sent-tech.ca`
-  nesting — to confirm).
-- **D8 — prod migration coupling** (decouple via `MIGRATE_ON_BOOT` + migration Job, vs keep
-  boot-migrations + expand/contract). Pre-deploy backup mandatory either way.
-- **D9 — rollback** (ship a real gated `db-restore-prod` vs app-only fast-path). Until it ships:
-  forward-only migrations.
-- **OQ0** (cluster operator: create `poc-k8s/tenants/sentropic-preprod` + `…-validation` baseline).
-- **OQ1** (cluster headroom for preprod + validation namespaces — `kubectl describe quota`).
+- **D4 — domain naming = NESTED (RATIFIED).** `preprod.auth.sent-tech.ca`,
+  `preprod.sentropic.sent-tech.ca`, `validation.sentropic.sent-tech.ca` (tier = sub-domain; needs a
+  `*.sent-tech.ca` wildcard cert or per-host DNS-01 — cert-manager already does DNS-01).
+- **D8 — migration coupling = DECOUPLE (RATIFIED).** `MIGRATE_ON_BOOT` flag + dedicated migration
+  Job/initContainer; pre-deploy `db-backup-prod` mandatory.
+- **D9 — rollback = SHIP `db-restore-prod` (RATIFIED).** Real gated `db-restore-prod` (pg_restore into
+  the live pod, proven on preprod first) + app-only digest-repin fast-path for no-migration releases.
+
+## RESOLVED (facts, not owner picks)
+- **OQ1 — cluster headroom = OK** (verified 2026-06-20). Node requests 19–36% CPU / 24–57% mem; each
+  tier ≈ 290m CPU / 640Mi mem; preprod+validation fit. Each gets its OWN tenant-quota (the prod
+  `sentropic` quota being near-full is irrelevant). Constraint is OQ0, not capacity.
+
+## REMAINING — external (not an owner decision)
+- **OQ0 — cluster operator** must create `poc-k8s/tenants/sentropic-preprod/` +
+  `…-validation/` baselines (Namespace, ResourceQuota, LimitRange, NetworkPolicy, pull-secret).
+  Cross-repo (poc-k8s); hard predecessor to BR-55b/BR-55e. **Relayed via GitHub.**
 
 ---
 
