@@ -48,7 +48,7 @@ export const validateAdapterAuthSource = (
     return {
       ok: true,
       headers: {
-        'Authorization': `Bearer ${source.accessToken}`,
+        'Authorization': `Bearer ${source.accessToken.trim()}`,
         'anthropic-version': '2023-06-01',
       },
     };
