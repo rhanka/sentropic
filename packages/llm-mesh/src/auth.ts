@@ -17,7 +17,7 @@ export const accountTransportProviderIds = [
 
 export type AccountTransportProviderId = (typeof accountTransportProviderIds)[number];
 
-export type AuthSourceType = TokenAuthSourceType | 'codex-account' | 'account-transport' | 'none';
+export type AuthSourceType = TokenAuthSourceType | 'codex-account' | 'claude-code-account' | 'account-transport' | 'none';
 
 export interface AuthDescriptor {
   sourceType: AuthSourceType;
@@ -87,6 +87,16 @@ export interface AccountTransportAuthMaterial extends AuthMaterialBase {
   metadata?: Record<string, unknown>;
 }
 
+export interface ClaudeCodeAccountAuthMaterial extends AuthMaterialBase {
+  type: 'claude-code-account';
+  provider: 'claude-code';
+  accessToken: string;
+  accountId?: string | null;
+  accountLabel?: string | null;
+  expiresAt?: string | null;
+  // No refreshToken — refresh is gateway-owned (not llm-mesh, not remote)
+}
+
 export interface PlannedAccountTransportAuthMaterial extends AuthMaterialBase {
   type: 'account-transport';
   provider: AccountTransportProviderId | (string & {});
@@ -109,6 +119,7 @@ export type SecretAuthMaterial =
   | WorkspaceTokenAuthMaterial
   | EnvironmentTokenAuthMaterial
   | CodexAccountAuthMaterial
+  | ClaudeCodeAccountAuthMaterial
   | AccountTransportAuthMaterial
   | PlannedAccountTransportAuthMaterial
   | NoAuthMaterial;
@@ -138,7 +149,6 @@ export type AuthInput = SecretAuthMaterial | AuthResolution;
 
 export const futureAccountTransportProviderIds = [
   'gemini-code-assist',
-  'claude-code',
 ] as const satisfies readonly AccountTransportProviderId[];
 
 export const executableAccountTransportProviderIds = [
@@ -194,6 +204,16 @@ export const describeAuthMaterial = (
         ...(material.accountLabel ? { accountLabel: material.accountLabel } : {}),
         ...(material.expiresAt ? { expiresAt: material.expiresAt } : {}),
         ...(material.refreshToken ? { hasRefreshToken: true } : {}),
+        ...baseDescriptor,
+      };
+
+    case 'claude-code-account':
+      return {
+        sourceType: material.type,
+        accountProviderId: material.provider,
+        ...(material.accountId ? { accountId: material.accountId } : {}),
+        ...(material.accountLabel ? { accountLabel: material.accountLabel } : {}),
+        ...(material.expiresAt ? { expiresAt: material.expiresAt } : {}),
         ...baseDescriptor,
       };
 
