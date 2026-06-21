@@ -1,0 +1,36 @@
+{
+  "name": "@sentropic/focus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Focused-session document runtime (FocusSnapshot): the concrete decision-dossier document model + deterministic terminal/MD/HTML renderers. Read-only snapshot render-core; markdown injected by the host, HTML sanitized by the host. App-local-first, not yet published. (Focus-M1 L1)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/focus"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "typescript": "5.4.5",
+    "vitest": "4.0.18"
+  }
+}

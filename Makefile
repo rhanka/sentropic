@@ -1017,6 +1017,23 @@ build-harness: ## Build @sentropic/harness dist package
 pack-harness: build-harness ## Validate @sentropic/harness npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
+# --- @sentropic/focus (BR-FOCUS-EX1: additive lane; private, pure-TS render-core, node test env) ---
+.PHONY: typecheck-focus test-focus build-focus pack-focus
+typecheck-focus: ## Run @sentropic/focus type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+
+test-focus: ## Run @sentropic/focus tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+
+build-focus: ## Build @sentropic/focus dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+
+pack-focus: build-focus ## Validate @sentropic/focus npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
 .PHONY: publish-harness
 publish-harness: build-harness ## Publish @sentropic/harness from CI OIDC trusted publishing
 	@docker run --rm \
