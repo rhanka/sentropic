@@ -30,6 +30,7 @@ Create the PRIVATE `packages/focus` render-core: the concrete `DecisionDossierDo
 
 ## Feedback Loop
 - `BR-FOCUS-EX1` `acknowledge` (conductor-approved): path `Makefile`; reason: a new Docker-first pure-TS package needs build/test entry points mirroring `@sentropic/harness`; impact: four additive targets (`typecheck-focus`, `test-focus`, `build-focus`, `pack-focus`), no existing target changed; rollback: delete the four targets.
+- `BR-FOCUS-EX2` `acknowledge` (conductor-approved): path `package-lock.json`; reason: `packages/focus` is a `workspaces: ["packages/*"]` member, so the root lock MUST list it or the CI `install-internal-packages` gate fails lock-sync (6 jobs failed on PR #344 for exactly this); impact: +242 generated lines (the focus workspace entry + its dev toolset tree), regenerated via `make lock-root` (`--package-lock-only`, no node_modules install); rollback: revert the lockfile hunk.
 
 ## AI Flaky tests
 - None (no AI tests in scope).
