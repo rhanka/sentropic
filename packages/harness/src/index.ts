@@ -9,11 +9,25 @@ export const HARNESS_PACKAGE = '@sentropic/harness' as const;
 export type {
   VerificationRun,
   VerificationCheck,
+  VerificationTarget,
   VerificationCategory,
   Violation,
   ViolationSeverity,
   CheckResult,
 } from './artifacts/verification-run.js';
+
+// Dependency-free runtime validator + frozen verdict-derivation predicate for the v0 seam.
+export {
+  validateVerificationRunV0,
+  deriveVerdict,
+  VERIFICATION_CATEGORIES,
+  VIOLATION_SEVERITIES,
+} from './artifacts/validate-verification-run.js';
+export type {
+  ValidationMode,
+  ValidateOptions,
+  ValidationResult,
+} from './artifacts/validate-verification-run.js';
 
 // Neutral narrative artifact emitted by method/branch verbs (ingested by a track-side adapter).
 export type {
