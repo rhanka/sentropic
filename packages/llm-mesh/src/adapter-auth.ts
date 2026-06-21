@@ -11,7 +11,7 @@ const unwrapAuthMaterial = (input?: AuthInput): SecretAuthMaterial | undefined =
 
 export const validateAdapterAuthSource = (
   input?: AuthInput,
-): { ok: boolean; message?: string } => {
+): { ok: boolean; message?: string; headers?: Record<string, string> } => {
   const source = unwrapAuthMaterial(input);
   if (!source || source.type === 'none') {
     return { ok: false, message: 'Provider auth source is not configured' };
@@ -39,6 +39,19 @@ export const validateAdapterAuthSource = (
     return hasText(source.accessToken)
       ? { ok: true }
       : { ok: false, message: 'Codex account access token is empty' };
+  }
+
+  if (source.type === 'claude-code-account') {
+    if (!source.accessToken?.trim()) {
+      return { ok: false, message: 'access token is empty' };
+    }
+    return {
+      ok: true,
+      headers: {
+        'Authorization': `Bearer ${source.accessToken}`,
+        'anthropic-version': '2023-06-01',
+      },
+    };
   }
 
   if (
