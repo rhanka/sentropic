@@ -1,0 +1,83 @@
+# Feature: Focus-M1 L3 — `stp focus <decision-id>` read-only dogfood
+
+## Objective
+Add the first usable end-to-end Focus dogfood: a `./cli` subpath on the private `packages/focus` that renders a real track decision dossier read-only (terminal / MD / HTML), and wire it into the `stp` umbrella CLI as a conditional in-repo `focus` subcommand (federation manifest left cross-repo-only).
+
+## Scope / Guardrails
+- Scope limited to `packages/focus/**`, the `stp` focus wire in `packages/cli/**`, and `spec/SPEC_VOL_FOCUS.md`.
+- No migration files (no `api/`).
+- Make-only workflow, no direct Docker commands.
+- Root workspace reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/focus-cli-readonly`.
+- Read-only: NO track write, NO new track event, NO publish of focus.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `packages/focus/**`
+  - `spec/SPEC_VOL_FOCUS.md`
+  - `BRANCH.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `packages/cli/src/federation.ts` `FEDERATION_MANIFEST` (cross-repo-only, test-locked)
+  - any track-WRITE / ingest path; any new track event; cerclage / live / diagram-adapter / mdast core
+  - any OTHER package
+- **Conditional Paths (allowed only with declared `BR-FOCUS-EXn`)**:
+  - `packages/cli/bin/stp.mjs` (the `tryRegisterFocus` wire) — `BR-FOCUS-EX1`
+  - `packages/cli/src/**` (the factored `tryRegisterFocus` helper only) — `BR-FOCUS-EX1`
+  - `packages/cli/package.json` (additive version bump) — `BR-FOCUS-EX1`
+  - `packages/cli/tests/**` (the helper test) — `BR-FOCUS-EX1`
+  - `package-lock.json` (only if focus exports change require `make lock-root`) — `BR-FOCUS-EX2`
+- **Exception process**:
+  - Declare `BR-FOCUS-EXn` in `## Feedback Loop` with reason, impact, rollback.
+
+## Feedback Loop
+- `BR-FOCUS-EX1` — `acknowledge` (conductor-authorized in the L3 launch packet): the `stp focus` federation wire is L3's deliverable. Touch `packages/cli/bin/stp.mjs` (call a `tryRegisterFocus` helper after `app` registration, before `loadFederatedSubcommands`), factor that helper into `packages/cli/src/focus.ts` (mirrors `federation.ts` injectable-importer pattern → testable), export it from `packages/cli/src/index.ts`, add `packages/cli/tests/focus.spec.ts`, and bump `packages/cli/package.json` version (additive: `stp` gains a subcommand). Impact: additive only — no existing behavior changes; `FEDERATION_MANIFEST` untouched. Rollback: revert the cli commit; `stp` loses only the in-repo `focus` wire.
+- `BR-FOCUS-EX2` — `deferred/acknowledge`: `package-lock.json` touched only if the new `./cli` export forces a lock refresh (`make lock-root`). Impact: lock entries only. Rollback: revert lock commit. Status: applied only if needed.
+
+## AI Flaky tests
+- None — focus + cli tests are pure/deterministic (no AI, no network).
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (single orthogonal lot; one final gate cycle)
+- [ ] **Multi-branch**
+- Rationale: a single orthogonal deliverable (the CLI read-only surface + its wire); no independent CI sub-streams.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: no UI surface — gates are the focus + cli make checks. Conductor opens the PR.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/{workflow,MASTER,subagents,testing}.md`, `spec/SPEC_VOL_FOCUS.md`, `packages/focus/**`, `packages/cli/{bin/stp.mjs,src/federation.ts,tests/federation.spec.ts}`, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Create isolated worktree `tmp/focus-cli-readonly` from `origin/main`; verify branch.
+  - [x] Capture make targets: `typecheck-focus test-focus build-focus pack-focus install-internal-packages`, `typecheck-cli test-cli build-cli pack-cli`, `lock-root`.
+  - [x] Confirm scope + declare `BR-FOCUS-EX1`/`BR-FOCUS-EX2`.
+
+- [ ] **Lot 1 — focus `./cli` + exports + bump**
+  - [ ] Add `packages/focus/src/cli/index.ts` exporting `{ run, version }` (version = focus package version).
+  - [ ] `run` parses `stp focus <decision-id> [--format terminal|md|html] [--workspace <ws>] [--baseline-commit <sha>] [--events-path <path>]`; defaults `--events-path=.track/events.jsonl`, `--format=terminal`; clear error on missing decision-id / unknown decision / contract mismatch.
+  - [ ] Flow: `readDecisionDossier(eventsPath, query, readAt)` → renderer for chosen format → stdout; exit 0 success, non-zero + stderr on error. Read-only.
+  - [ ] Add `./cli` subpath to `packages/focus/package.json` exports; bump focus version (additive minor).
+  - [ ] Lot gate: `make typecheck-focus build-focus pack-focus ENV=focus-cli-l3`.
+
+- [ ] **Lot 2 — `stp focus` wire + cli bump + helper test**
+  - [ ] Factor `tryRegisterFocus(registry, deps?)` into `packages/cli/src/focus.ts` (injectable importer + error sink; ABSENCE_CODES mirror; `{run,version}` shape check; register name `focus`).
+  - [ ] Export it from `packages/cli/src/index.ts`; call it in `packages/cli/bin/stp.mjs` after `app`, before `loadFederatedSubcommands`.
+  - [ ] Add `packages/cli/tests/focus.spec.ts`: absent-code → skipped; broken/bad-shape → throws; valid → registered.
+  - [ ] Do NOT touch `FEDERATION_MANIFEST`. Bump `packages/cli/package.json` version (additive).
+  - [ ] Lot gate: `make typecheck-cli test-cli build-cli pack-cli ENV=focus-cli-l3` (federation.spec.ts unchanged-green).
+
+- [ ] **Lot 3 — focus cli specs + spec sync**
+  - [ ] Add `packages/focus/tests/cli.spec.ts`: run `./cli`'s `run([...])` against the L2 `.track` fixture for each `--format`; assert exit 0 + output contains the decision title/outcome; assert non-zero + message on missing/unknown decision-id.
+  - [ ] Update `spec/SPEC_VOL_FOCUS.md` §4b: mark L3 with the CLI surface + the DECIDED federation mechanism (Option B conditional-bin-wire; manifest cross-repo-only) + consensus note.
+  - [ ] Lot gate: `make test-focus ENV=focus-cli-l3`.
+
+- [ ] **Lot N — Final validation**
+  - [ ] `make typecheck-focus test-focus build-focus pack-focus ENV=focus-cli-l3`
+  - [ ] `make typecheck-cli test-cli build-cli pack-cli ENV=focus-cli-l3`
+  - [ ] Confirm `packages/cli/tests/federation.spec.ts` still green (manifest length 6, no in-repo entries).
+  - [ ] Bumped `packages/focus/package.json` + `packages/cli/package.json` versions.
+  - [ ] Push `feat/focus-cli-readonly`. Conductor opens the PR.
