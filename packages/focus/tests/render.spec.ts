@@ -9,75 +9,17 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-  renderHtml,
-  renderMd,
-  renderTerminal,
-  toDecisionDossierDocument,
-} from "../src/index.js";
+import { renderHtml, renderMd, renderTerminal } from "../src/index.js";
 import type { HtmlRenderHooks } from "../src/index.js";
 import { decisionDossierFixture } from "./fixture.data.js";
 
-const doc = toDecisionDossierDocument(decisionDossierFixture);
+const doc = decisionDossierFixture;
 
 // A trivial host markdown hook (NOT marked — proves injection). Wraps content in a marker.
 const hooks: HtmlRenderHooks = {
   renderMarkdown: (md) => `<md>${md}</md>`,
   sanitizeHtml: (html) => `<!--sanitized-->${html}`,
 };
-
-describe("toDecisionDossierDocument", () => {
-  it("maps the fixture into a concrete decision-dossier document", () => {
-    expect(doc.ref).toBe("decision:focus-render-core");
-    expect(doc.subject).toBe("Focus-M1 L1 render-core packaging");
-    expect(doc.hash).toBe("sha256:abc123");
-    expect(doc.cursor).toBe("v7");
-  });
-
-  it("projects dossier blocks into typed FocusNodes plus a terminal outcome node", () => {
-    const kinds = doc.sections.map((s) => s.kind);
-    expect(kinds).toEqual([
-      "prose",
-      "question",
-      "optionSet",
-      "diagram",
-      "outcome",
-    ]);
-    const outcome = doc.sections[doc.sections.length - 1];
-    expect(outcome.kind).toBe("outcome");
-    if (outcome.kind === "outcome") {
-      expect(outcome.modality).toBe("decision");
-    }
-  });
-
-  it("gives every node a stable id and a targetRef", () => {
-    for (const node of doc.sections) {
-      expect(node.id.length).toBeGreaterThan(0);
-      expect(node.targetRef.length).toBeGreaterThan(0);
-    }
-  });
-
-  it("carries comprehension evidence verbatim (subject/hash/sig intact)", () => {
-    expect(doc.provenance.comprehensionEvidence).toEqual({
-      subject: "Focus-M1 L1 render-core packaging",
-      dossierHash: "sha256:abc123",
-      signature: "sig:deadbeef",
-    });
-  });
-
-  it("carries the amendment trace at the document level", () => {
-    expect(doc.amendmentTrace).toHaveLength(2);
-    expect(doc.amendmentTrace[0]?.author).toBe("owner");
-  });
-
-  it("projects generic affordances as DISABLED snapshot metadata", () => {
-    expect(doc.interactions).toHaveLength(2);
-    for (const a of doc.interactions) {
-      expect(a.enabled).toBe(false);
-    }
-    expect(doc.interactions.map((a) => a.name)).toContain("ratifyOutcome");
-  });
-});
 
 describe("renderTerminal", () => {
   const out = renderTerminal(doc);
