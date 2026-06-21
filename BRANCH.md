@@ -75,9 +75,10 @@ Add the first usable end-to-end Focus dogfood: a `./cli` subpath on the private 
   - [x] Update `spec/SPEC_VOL_FOCUS.md` §4b: marked L3 SHIPPED with the CLI surface + the DECIDED federation mechanism (Option B conditional-bin-wire; manifest cross-repo-only) + consensus note + review-log entry.
   - [x] Lot gate: `make test-focus ENV=test-focus-cli-l3` — GREEN (38 tests).
 
-- [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-focus test-focus build-focus pack-focus ENV=test-focus-cli-l3`
-  - [ ] `make typecheck-cli test-cli build-cli pack-cli ENV=test-focus-cli-l3`
-  - [ ] Confirm `packages/cli/tests/federation.spec.ts` still green (manifest length 6, no in-repo entries).
+- [x] **Lot N — Final validation**
+  - [x] `make typecheck-focus test-focus build-focus pack-focus ENV=test-focus-cli-l3` — GREEN (38 tests; dist/cli ships).
+  - [x] `make typecheck-cli test-cli build-cli pack-cli ENV=test-focus-cli-l3` — GREEN (72 tests; dist/focus.js + bin/stp.mjs ship).
+  - [x] Confirmed `packages/cli/tests/federation.spec.ts` still green — 16 tests, manifest length 6, no in-repo entries.
   - [x] Bumped `packages/focus/package.json` (0.3.0) + `packages/cli/package.json` (0.4.0); `make lock-root` to refresh.
+  - [x] Scope confirmed vs merge-base `efd36972f`: only the 11 authorized files; `FEDERATION_MANIFEST` untouched.
   - [ ] Push `feat/focus-cli-readonly`. Conductor opens the PR.
