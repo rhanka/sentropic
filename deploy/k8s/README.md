@@ -9,7 +9,16 @@ by the cluster operator and live in
 [`poc-k8s/tenants/sentropic/`](https://github.com/rhanka/poc-k8s/tree/main/tenants/sentropic).
 Apply them first; the Makefile in this repo will not create them.
 
-## Files
+## Layout (kustomize base + overlays, since BR-55a)
+
+The manifests are a **kustomize base + overlays**: `base/` holds the
+namespace-agnostic resources (listed below); `overlays/prod/` sets
+`namespace: sentropic`, adds the ingress, and is what `make k8s-deploy` applies
+(`kubectl apply -k deploy/k8s/overlays/prod`). Per-release image pins go in the
+overlay (BR-55c/d); the preprod/validation overlays come in BR-55b/e. The old
+`K8S_INGRESS=1` gate is gone — the ingress is part of the prod overlay.
+
+## Files (under `base/`, except the ingress which is in `overlays/prod/`)
 
 - `10-rbac.yaml` — namespace-scoped ServiceAccount used by every Pod, with
   `imagePullSecrets: [{ name: sentropic-registry }]` so every Pod can pull
@@ -30,9 +39,10 @@ Apply them first; the Makefile in this repo will not create them.
   DNS path honors the option on this IPv4-only POC egress path.
 - `40-ui.yaml` — `sentropic-ui` SCW Container Registry image + ClusterIP
   Service (port 5173) + placeholder ConfigMap for future overlays.
-- `60-ingress.yaml` — public Traefik Ingress for `sentropic.sent-tech.ca`
+- `overlays/prod/ingress.yaml` — public Traefik Ingress for `sentropic.sent-tech.ca`
   (single host → `ui`; nginx proxies `/api`→api:8787) with cert-manager TLS via
-  the platform `letsencrypt-prod` ClusterIssuer. Apply with `K8S_INGRESS=1`.
+  the platform `letsencrypt-prod` ClusterIssuer. Lives in the prod overlay and is
+  applied by `make k8s-deploy` (kustomize) — no separate `K8S_INGRESS` flag.
 
 ## Prerequisites (cluster operator side, in `~/src/poc-k8s/`)
 

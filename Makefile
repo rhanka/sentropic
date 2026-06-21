@@ -2594,34 +2594,22 @@ GH_DEPLOY_RUN_ID ?=
 
 .PHONY: k8s-deploy k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
-k8s-deploy: ## Apply tenant manifests on the poc cluster (K8S_INGRESS=1 includes 60-ingress.yaml)
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/10-rbac.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/15-networkpolicy.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/20-postgres.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/30-api.yaml
-	# BR-39 deploy — the standalone IdP (auth.sent-tech.ca) runs from the SAME api
-	# image (D4-a). Applied after 30-api.yaml so the api (which owns migrations on
-	# the shared DB) rolls first; the IdP runs no migration of its own.
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/35-auth-idp.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/40-ui.yaml
+k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress is part of the overlay
+	# BR-55a: one kustomize apply (base + overlays/prod). The standalone IdP
+	# (auth.sent-tech.ca) runs from the SAME api image; the api owns migrations on the
+	# shared DB and the IdP runs none of its own. The prod overlay sets
+	# namespace=sentropic and includes the ingress (the old K8S_INGRESS gate is gone).
+	# Image = base default (:main) until the release pipeline pins a tag (BR-55c/d).
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/prod
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
-	@if [ "$(K8S_INGRESS)" = "1" ]; then \
-	  KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/60-ingress.yaml; \
-	fi
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/auth-idp deployment/ui
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui       --timeout=300s
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/60-ingress.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/40-ui.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/35-auth-idp.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/30-api.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/20-postgres.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/15-networkpolicy.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/10-rbac.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl delete -k deploy/k8s/overlays/prod --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete secret sentropic-postgres sentropic-api --ignore-not-found
 
 k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (.env)
@@ -2819,7 +2807,7 @@ gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_R
 # and lives ONLY on the operator machine + the live cluster.
 
 # --- Postgres backup (BR37c-EX1, append-only; operator-side, live cluster) ----
-# Manual trigger / restore helpers around deploy/k8s/70-pgbackup-cronjob.yaml.
+# Manual trigger / restore helpers around deploy/k8s/base/70-pgbackup-cronjob.yaml.
 # Backup S3 creds + bucket come from the sentropic-pgbackup SealedSecret; the
 # CronJob dumps with pg_dump (initContainer) and uploads via aws-cli. These
 # targets never hardcode a secret value.
