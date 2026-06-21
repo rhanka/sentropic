@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sentropic
+resources:
+  - ../../base
+  - ingress.yaml
+# Images use the base default (:main) today, matching the live cluster. The release
+# pipeline pins immutable per-release tags/digests here (BR-55c/d), e.g.:
+#   images:
+#     - name: rg.fr-par.scw.cloud/nc-reg/sentropic-api
+#       newTag: vYYYY.MM.DD.N

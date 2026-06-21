@@ -2,7 +2,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-api-to-postgres
-  namespace: sentropic
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: postgres
@@ -27,7 +26,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-ui-to-api
-  namespace: sentropic
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: api
@@ -53,7 +51,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-pgbackup-to-postgres
-  namespace: sentropic
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: postgres
@@ -83,7 +80,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-traefik-to-ui
-  namespace: sentropic
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: ui
@@ -110,7 +106,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-auth-idp-to-postgres
-  namespace: sentropic
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: postgres
@@ -139,7 +134,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-traefik-to-auth-idp
-  namespace: sentropic
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: auth-idp
