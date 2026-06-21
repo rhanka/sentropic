@@ -6,7 +6,6 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: pgbackup
-  namespace: sentropic
   labels:
     app.kubernetes.io/name: sentropic
     app.kubernetes.io/component: pgbackup
