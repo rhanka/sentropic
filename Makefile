@@ -1017,19 +1017,21 @@ build-harness: ## Build @sentropic/harness dist package
 pack-harness: build-harness ## Validate @sentropic/harness npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
-# --- @sentropic/focus (BR-FOCUS-EX1: additive lane; private, pure-TS render-core, node test env) ---
+# --- @sentropic/focus (BR-FOCUS-EX (Makefile): focus gained its first real runtime dep
+#     @sentropic/track, so it builds via the WORKSPACE node_modules — the install-internal-packages
+#     + `npx --offline tsc/vitest` pattern used by chat-core/comments — NOT the isolated zero-dep
+#     temp-toolset (which cannot resolve @sentropic/track + its transitive deps). Private, pure-TS
+#     render-core + the /track read binding; node test env. install-internal-packages installs the
+#     packages/focus workspace (incl. @sentropic/track@0.17.0) into node_modules from the lockfile.) ---
 .PHONY: typecheck-focus test-focus build-focus pack-focus
-typecheck-focus: ## Run @sentropic/focus type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+typecheck-focus: install-internal-packages ## Run @sentropic/focus type checks (requires @sentropic/track in workspace node_modules)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
 
-test-focus: ## Run @sentropic/focus tests
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+test-focus: install-internal-packages ## Run @sentropic/focus tests (requires @sentropic/track in workspace node_modules)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline vitest run tests --environment node'
 
-build-focus: ## Build @sentropic/focus dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+build-focus: install-internal-packages ## Build @sentropic/focus dist package (requires @sentropic/track in workspace node_modules)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
 
 pack-focus: build-focus ## Validate @sentropic/focus npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
@@ -1259,8 +1261,8 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 	@echo "✅ Windows .exe packaged in ui/static/cowork-desktop/"
 
 .PHONY: install-internal-packages
-install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow} into node_modules (no api/ui)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --include-workspace-root --ignore-scripts --no-audit --no-fund'
+install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow,focus} into node_modules (no api/ui)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --workspace=packages/focus --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
 .PHONY: build-contracts
 build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
