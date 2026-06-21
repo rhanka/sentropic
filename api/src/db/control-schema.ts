@@ -150,3 +150,145 @@ export const objectTypeDefinitions = controlSchema.table(
 
 export type ObjectTypeDefinitionRow = typeof objectTypeDefinitions.$inferSelect;
 export type ObjectTypeDefinitionInsert = typeof objectTypeDefinitions.$inferInsert;
+
+/**
+ * control.app_templates — versioned app blueprint (ARCH-01 / BR-45, SPEC_EVOL_APP_CATALOG §2 Q2).
+ *
+ * D2=B: the PRODUCT control-plane source of truth for apps; the in-memory catalog is NEVER
+ * the app source of truth (the `kind:'app'` projection is BR-46). A PUBLISHED template row is
+ * IMMUTABLE — reconciliation state (desired/observed) is NOT here; it lives on instances.
+ * `family_id` is the stable app-family id (groups version rows); `id` is the version-row id.
+ *
+ * NAMING NOTE (framed D0): `control.app_templates`/`app_instances`/`app_instance_hostnames`/
+ * `app_workspace_bindings` are working names pending owner validation at impl — merge HOLDS.
+ */
+export const appTemplates = controlSchema.table(
+  'app_templates',
+  {
+    // Version-row id (one row per published/draft version).
+    id: text('id').primaryKey(),
+    // Stable app-family id (groups versions) — distinct from the version-row id.
+    familyId: text('family_id').notNull(),
+    appSlug: text('app_slug').notNull(),
+    // Control-plane resource version (semver), NOT a package version.
+    version: text('version').notNull(),
+    status: text('status').notNull().default('draft'),
+    blueprint: jsonb('blueprint').notNull(),
+    // DD8 mirror — the blueprint vocabulary schema version.
+    blueprintSchemaVersion: integer('blueprint_schema_version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    // Append-only version rows: one per (app_slug, version).
+    slugVersionUnique: uniqueIndex('app_templates_slug_version_unique').on(table.appSlug, table.version),
+    // One row per (family_id, version) — the instance pin addresses a template by this pair.
+    familyVersionUnique: uniqueIndex('app_templates_family_version_unique').on(table.familyId, table.version),
+    statusCheck: check(
+      'app_templates_status_check',
+      sql`${table.status} IN ('draft', 'published', 'deprecated')`,
+    ),
+  }),
+);
+
+export type AppTemplateRow = typeof appTemplates.$inferSelect;
+export type AppTemplateInsert = typeof appTemplates.$inferInsert;
+
+/**
+ * control.app_instances — a template bound to a tenant + environment, reconciled (BR-45).
+ *
+ * Pins `template_family_id` + `template_version` (the bound version). The instance `status`
+ * (`provisioning|active|suspended|retired`) is a SEPARATE state machine from the template
+ * `status`. `observed_state` is FILLED BY ARCH-17 (deployment execution stays OUT of BR-45 —
+ * this table only declares the columns). Tenant: composite columns, no re-key (ARCH-11 owns
+ * the `identity_tenant_id` backfill). Soft ref to the template (control-namespace rule).
+ */
+export const appInstances = controlSchema.table(
+  'app_instances',
+  {
+    id: text('id').primaryKey(),
+    templateFamilyId: text('template_family_id').notNull(),
+    templateVersion: text('template_version').notNull(),
+    // IdP tenant (grandfather-compatible value until ARCH-11 re-key).
+    tenantId: text('tenant_id').notNull(),
+    identityTenantId: text('identity_tenant_id'),
+    environment: text('environment').notNull().default('preview'),
+    status: text('status').notNull().default('provisioning'),
+    desiredState: jsonb('desired_state').notNull().default(sql`'{}'::jsonb`),
+    observedState: jsonb('observed_state').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    templateIdx: index('app_instances_template_idx').on(table.templateFamilyId, table.templateVersion),
+    tenantIdx: index('app_instances_tenant_idx').on(table.tenantId),
+    environmentCheck: check(
+      'app_instances_environment_check',
+      sql`${table.environment} IN ('prod', 'preview', 'local')`,
+    ),
+    statusCheck: check(
+      'app_instances_status_check',
+      sql`${table.status} IN ('provisioning', 'active', 'suspended', 'retired')`,
+    ),
+  }),
+);
+
+export type AppInstanceRow = typeof appInstances.$inferSelect;
+export type AppInstanceInsert = typeof appInstances.$inferInsert;
+
+/**
+ * control.app_instance_hostnames — host-authoritative routing (BR-45, SPEC §2 Q2).
+ *
+ * `hostname` is the PRIMARY KEY (globally unique, canonicalized lower-case): one hostname maps
+ * to EXACTLY one instance, so a slug/Host mismatch → 404 is DB-guaranteed. Soft ref to the
+ * instance (control-namespace rule; integrity is service-enforced).
+ */
+export const appInstanceHostnames = controlSchema.table(
+  'app_instance_hostnames',
+  {
+    hostname: text('hostname').primaryKey(),
+    appInstanceId: text('app_instance_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    instanceIdx: index('app_instance_hostnames_instance_idx').on(table.appInstanceId),
+  }),
+);
+
+export type AppInstanceHostnameRow = typeof appInstanceHostnames.$inferSelect;
+export type AppInstanceHostnameInsert = typeof appInstanceHostnames.$inferInsert;
+
+/**
+ * control.app_workspace_bindings — M:N workspace↔instance binding (BR-45, SPEC §2 Q2).
+ *
+ * `workspace_id` is a SOFT id ref to `public.workspaces` (NO cross-namespace FK). `tenant_id`
+ * is denormalized for DD9 composite `(tenant_id, workspace_id)` isolation (re-key pending
+ * ARCH-11). One binding per (instance, workspace).
+ */
+export const appWorkspaceBindings = controlSchema.table(
+  'app_workspace_bindings',
+  {
+    id: text('id').primaryKey(),
+    appInstanceId: text('app_instance_id').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    tenantId: text('tenant_id').notNull(),
+    identityTenantId: text('identity_tenant_id'),
+    allowedWorkspaceTypes: text('allowed_workspace_types').array().notNull().default(sql`'{}'::text[]`),
+    defaultWorkspaceTemplate: text('default_workspace_template'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    instanceWorkspaceUnique: uniqueIndex('app_workspace_bindings_instance_workspace_unique').on(
+      table.appInstanceId,
+      table.workspaceId,
+    ),
+    tenantWorkspaceIdx: index('app_workspace_bindings_tenant_workspace_idx').on(
+      table.tenantId,
+      table.workspaceId,
+    ),
+  }),
+);
+
+export type AppWorkspaceBindingRow = typeof appWorkspaceBindings.$inferSelect;
+export type AppWorkspaceBindingInsert = typeof appWorkspaceBindings.$inferInsert;
