@@ -112,7 +112,7 @@ diagrams = fenced fallback. Decided refinements applied: events STAGED, app-loca
 |---|---|---|---|---|
 | **L1** | `feat/focus-render-core` | PRIVATE `packages/focus`: the CONCRETE `DecisionDossierDocument` model + the **terminal + MD + HTML renderers (all 3, HTML mandatory)**, driven by a `DecisionDossierView` FIXTURE (incl. amendment-trace + existing affordances). Markdown via injection (host-supplied `marked`); HTML sanitized via a host hook; diagrams = fenced MD fallback. Pure + unit-tested on the fixture. | none (fixture-driven) | L2 |
 | **L2** | `feat/focus-track-read` | `packages/focus` `/track` read binding (`@sentropic/focus/track`): `new TrackReader(eventsPath).canevas(workspace, { baselineCommit, decisionId }).dossier` (a `@sentropic/track/read` `DecisionDossierView`) + `amendmentTrace(decisionId)` → `DecisionDossierDocument`. Real decision by id. Binds the **versioned `/read` subpath** (NOT track's barrel), gates on `reader.contractVersion`. Reads are PURE/read-only/clockless — NO auth/identity (the `readAt` timestamp is caller-supplied). **SHIPPED 2026-06-21** (focus 0.2.0; track ^0.17.0, READ contract 1.11.0). | L1 model; `@sentropic/track` dep | L1 |
-| **L3** | `feat/focus-cli-readonly` | `stp focus <decision-id>` federated subcommand (read-only): read (L2) → render terminal / `--format md` / `--format html` (mandatory). The first usable end-to-end dogfood. | L1 + L2; `@sentropic/cli` federation wiring | — |
+| **L3** | `feat/focus-cli-readonly` | `stp focus <decision-id>` in-repo subcommand (read-only): read (L2) → render terminal / `--format md` / `--format html` (mandatory). The first usable end-to-end dogfood. Real surface: `@sentropic/focus/cli` exports `{ run, version }`; `run` parses `stp focus <decision-id> [--format terminal\|md\|html] [--workspace <ws>] [--baseline-commit <sha>] [--events-path <path>]` (defaults `--format terminal`, `--events-path .track/events.jsonl`; `--workspace` required), reads via L2 `readDecisionDossier` → renders to stdout (exit 0); non-zero + stderr on error (2 usage / 3 not-found / 4 contract-mismatch / 1 other). Wired into `stp` by a conditional in-repo helper (NOT the federation manifest — see L3 note). **SHIPPED 2026-06-21** (focus 0.3.0 `./cli`; @sentropic/cli 0.4.0). | L1 + L2; `@sentropic/cli` wiring | — |
 | **L4** | `feat/focus-cli-write` | The ONE write: a CLI Q/R prompt → `ratifyOutcome`→`decision.outcome` OR `amendSpec`→`item.spec-amend` via `@sentropic/track/ingest` (auth-by-context; CLI carries the user/workspace identity). Read-back to confirm. | L3; track ingest auth model | — |
 
 Merge order: **L1 → L2 → L3 → L4** (L1/L2 partly parallel: L1 on the fixture, L2 the read binding; L3 needs both; L4 needs L3). Each lot: scoped tests + a `make`/CI gate; `packages/focus` private so publish jobs skip (enforce-package-bump still applies → bump patch). MUST-NOT: introduce a new track event, publish the package, or add a live/cerclage/diagram-adapter path in M1.
@@ -125,6 +125,20 @@ Open in the plan: the **CLI write identity model** (L4 — how the headless `stp
 - `Dossier = { context: string; options: Option[]; qa: QAEntry[]; selectedOptionId?; recommendation?: { optionId; rationale }; resultingSpecChange?; decisionEvaluation?; artifacts?: DossierArtifact[] }`; `Option = { id; title; summary; pros?; cons? }`; `QAEntry = { id; question; answer? }`.
 - **`ComprehensionEvidence` is NESTED, not a sibling:** `dossier.artifacts[]` is a discriminated union → on `kind:'h2a-decision-dossier'` → `.comprehension?: ComprehensionEvidence[]`. `ComprehensionEvidence = { subject; dossierHash; h2aEventRef?; attestationHash?; sig?; at? }`. **Anti-confused-deputy invariant:** `subject` = the NAMED attester/decider — DISTINCT from the channel `prov.principal` that merely RELAYED the write; the binding surfaces the attester, never laundering the origin into the relayer.
 - `amendmentTrace(decisionId): AmendmentStep[]` ordered by `seq` over the aggregate's `spec.amended` / `dossier.revised` / `decision.artifact-added` / `decision.outcome` events. `AmendmentStep = { seq; at; by; kind; prov; origin: 'human'|'machine'; summary?; patchRef?; proposalRef? }`; `origin` derives PURELY from `prov.proposed` (machine never laundered).
+
+**L3 federation mechanism — DECIDED (Opus 4.8 + Codex 5.5xhigh consensus = Option B, conditional in-repo wire):**
+`@sentropic/focus` is PRIVATE / app-local-first (not published), so `focus` is NOT a `FEDERATION_MANIFEST`
+entry — the manifest is documented + TEST-LOCKED as cross-repo-only (`packages/cli/tests/federation.spec.ts`
+asserts its length is 6 + no in-repo entries; `app`/`surface` are wired separately, `harness` is GATED_D7).
+Instead the `stp` composition root (`packages/cli/bin/stp.mjs`) calls a small `tryRegisterFocus(registry)`
+helper (`packages/cli/src/focus.ts`) AFTER the in-repo `app`/`surface` registrations and BEFORE the cross-repo
+`loadFederatedSubcommands`. The helper MIRRORS the federation loader's absent-vs-broken policy: dynamic-
+`import('@sentropic/focus/cli')`; on `ERR_MODULE_NOT_FOUND` / `ERR_PACKAGE_PATH_NOT_EXPORTED` → silently skip
+(focus simply absent, e.g. `stp` published standalone); any OTHER import error, or a module failing the
+`{ run: function, version: string }` shape check → report via the error sink and rethrow (a BROKEN in-repo focus
+must NOT masquerade as "absent"). Registered name = `focus`, summary advertises the read-only render. The helper
+takes an injectable `{ importer, error }` (same style as `loadFederatedSubcommands`) so its absent/broken/bad-
+shape/valid branches are unit-tested without `@sentropic/focus` installed (`packages/cli/tests/focus.spec.ts`).
 
 ## 5. Open
 - The exact NEW track ingest events (answer/annotation/comment/cerclage payloads) — co-design with track (next).
@@ -146,3 +160,9 @@ Open in the plan: the **CLI write identity model** (L4 — how the headless `stp
   read-only render + 1 write via existing events; NO new package / events / cerclage / live-HTML / diagram
   adapter / mdast core; concrete decision-dossier (not generic Focus platform); split FocusSnapshot vs
   FocusLiveSession; align ARCH-21. Reviews: `.tmp/focus-review-{opus,codex}.md`.
+- 2026-06-21 (L3 SHIPPED): the first usable dogfood — `@sentropic/focus/cli` read-only driver (`stp focus
+  <decision-id> [--format terminal|md|html]`) over the L2 read binding, wired into `stp` (@sentropic/cli 0.4.0)
+  by the DECIDED conditional in-repo helper `tryRegisterFocus` (Option B; `FEDERATION_MANIFEST` left cross-repo-
+  only + test-locked at length 6). focus 0.3.0 (`./cli` subpath). Read-only: NO track write/event (L4), NO new
+  package, NO cerclage/live/diagram-adapter/mdast core. Gates green: focus 38 tests (8 new CLI specs, 3 formats +
+  5 error paths), cli 72 tests (federation.spec.ts 16 unchanged-green, focus.spec.ts 9 new).
