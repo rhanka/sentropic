@@ -23,6 +23,12 @@ export interface VerificationContext {
   startedAt: string;
   finishedAt: string;
   artifacts?: string[];
+  /**
+   * Immutable locator for the full run JSON (DEC-S2). Producer-supplied; when omitted a
+   * deterministic `verification-run:{runId}` placeholder is used so the field stays REQUIRED
+   * on the artifact. Immutability is a producer guarantee, not enforced here.
+   */
+  artifactLocator?: string;
 }
 
 /**
@@ -52,6 +58,7 @@ export function toVerificationRun(checks: NamedCheck[], ctx: VerificationContext
     finishedAt: ctx.finishedAt,
     checks: verificationChecks,
     violations,
+    artifactLocator: ctx.artifactLocator ?? `verification-run:${ctx.runId}`,
     artifacts: ctx.artifacts ?? [],
   };
 }

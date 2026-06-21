@@ -33,6 +33,8 @@ describe('VerificationRun golden shape', () => {
       finishedAt: '2026-06-04T09:00:00.500Z',
       checks: [{ code: 'C2', category: 'static', pass: true, violations: [] }],
       violations: [],
+      // Producer-supplied locator; absent on the input ctx ⇒ deterministic `verification-run:{runId}`.
+      artifactLocator: 'verification-run:run-1',
       artifacts: [],
     };
     expect(run).toEqual(expected);
