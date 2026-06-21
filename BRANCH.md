@@ -56,12 +56,12 @@ Add the first usable end-to-end Focus dogfood: a `./cli` subpath on the private 
   - [x] Capture make targets: `typecheck-focus test-focus build-focus pack-focus install-internal-packages`, `typecheck-cli test-cli build-cli pack-cli`, `lock-root`.
   - [x] Confirm scope + declare `BR-FOCUS-EX1`/`BR-FOCUS-EX2`.
 
-- [ ] **Lot 1 — focus `./cli` + exports + bump**
-  - [ ] Add `packages/focus/src/cli/index.ts` exporting `{ run, version }` (version = focus package version).
-  - [ ] `run` parses `stp focus <decision-id> [--format terminal|md|html] [--workspace <ws>] [--baseline-commit <sha>] [--events-path <path>]`; defaults `--events-path=.track/events.jsonl`, `--format=terminal`; clear error on missing decision-id / unknown decision / contract mismatch.
-  - [ ] Flow: `readDecisionDossier(eventsPath, query, readAt)` → renderer for chosen format → stdout; exit 0 success, non-zero + stderr on error. Read-only.
-  - [ ] Add `./cli` subpath to `packages/focus/package.json` exports; bump focus version (additive minor).
-  - [ ] Lot gate: `make typecheck-focus build-focus pack-focus ENV=focus-cli-l3`.
+- [x] **Lot 1 — focus `./cli` + exports + bump**
+  - [x] Add `packages/focus/src/cli/index.ts` exporting `{ run, version }` (version = focus package version).
+  - [x] `run` parses `stp focus <decision-id> [--format terminal|md|html] [--workspace <ws>] [--baseline-commit <sha>] [--events-path <path>]`; defaults `--events-path=.track/events.jsonl`, `--format=terminal`; clear error on missing decision-id / unknown decision / contract mismatch.
+  - [x] Flow: `readDecisionDossier(eventsPath, query, readAt)` → renderer for chosen format → stdout; exit 0 success, non-zero + stderr on error. Read-only.
+  - [x] Add `./cli` subpath to `packages/focus/package.json` exports; bump focus version (additive minor → 0.3.0).
+  - [x] Lot gate: `make typecheck-focus build-focus pack-focus ENV=focus-cli-l3` — GREEN (dist/cli ships in tarball).
 
 - [ ] **Lot 2 — `stp focus` wire + cli bump + helper test**
   - [ ] Factor `tryRegisterFocus(registry, deps?)` into `packages/cli/src/focus.ts` (injectable importer + error sink; ABSENCE_CODES mirror; `{run,version}` shape check; register name `focus`).
