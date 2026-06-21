@@ -17,6 +17,10 @@ Operator-independent; faithful (no prod change) — unblocks preprod/validation 
 - **BR55a-EX1** (Makefile, default-forbidden): `k8s-deploy`/`k8s-undeploy` must switch from
   per-file `kubectl apply -f` (+ the K8S_INGRESS conditional) to `kubectl apply -k deploy/k8s/overlays/prod`.
   Impact: those two targets only. Rollback: revert the targets to the per-file applies.
+- **BR55a-EX2** (`ui/tests/utils/sentropic-infra-contract.test.ts`): the infra-contract test reads
+  the k8s manifest paths to assert canonical image names; the `base/` move requires updating its two
+  paths (`30-api.yaml`/`40-ui.yaml` → `base/...`). Same-PR boundary-test evolution. Impact: 2 path
+  strings (image assertions unchanged). Rollback: revert the paths.
 
 ## Plan / Todo
 - [x] `git mv` 10/15/20/30/35/40/70 → `deploy/k8s/base/`, strip `metadata.namespace` (overlay sets it).
