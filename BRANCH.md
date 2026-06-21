@@ -63,12 +63,12 @@ Add the first usable end-to-end Focus dogfood: a `./cli` subpath on the private 
   - [x] Add `./cli` subpath to `packages/focus/package.json` exports; bump focus version (additive minor → 0.3.0).
   - [x] Lot gate: `make typecheck-focus build-focus pack-focus ENV=focus-cli-l3` — GREEN (dist/cli ships in tarball).
 
-- [ ] **Lot 2 — `stp focus` wire + cli bump + helper test**
-  - [ ] Factor `tryRegisterFocus(registry, deps?)` into `packages/cli/src/focus.ts` (injectable importer + error sink; ABSENCE_CODES mirror; `{run,version}` shape check; register name `focus`).
-  - [ ] Export it from `packages/cli/src/index.ts`; call it in `packages/cli/bin/stp.mjs` after `app`, before `loadFederatedSubcommands`.
-  - [ ] Add `packages/cli/tests/focus.spec.ts`: absent-code → skipped; broken/bad-shape → throws; valid → registered.
-  - [ ] Do NOT touch `FEDERATION_MANIFEST`. Bump `packages/cli/package.json` version (additive).
-  - [ ] Lot gate: `make typecheck-cli test-cli build-cli pack-cli ENV=focus-cli-l3` (federation.spec.ts unchanged-green).
+- [x] **Lot 2 — `stp focus` wire + cli bump + helper test**
+  - [x] Factor `tryRegisterFocus(registry, deps?)` into `packages/cli/src/focus.ts` (injectable importer + error sink; ABSENCE_CODES mirror; `{run,version}` shape check; register name `focus`).
+  - [x] Export it from `packages/cli/src/index.ts`; call it in `packages/cli/bin/stp.mjs` after `app`/`surface`, before `loadFederatedSubcommands`.
+  - [x] Add `packages/cli/tests/focus.spec.ts` (9 tests): absent-code → skipped; broken/bad-shape/null → throws; registration-fail → throws; valid → registered.
+  - [x] Did NOT touch `FEDERATION_MANIFEST`. Bumped `packages/cli/package.json` 0.3.1 → 0.4.0 (additive).
+  - [x] Lot gate: `make typecheck-cli test-cli build-cli pack-cli ENV=test-focus-cli-l3` — GREEN (72 cli tests pass; federation.spec.ts 16 unchanged-green; dist/focus.js ships).
 
 - [ ] **Lot 3 — focus cli specs + spec sync**
   - [ ] Add `packages/focus/tests/cli.spec.ts`: run `./cli`'s `run([...])` against the L2 `.track` fixture for each `--format`; assert exit 0 + output contains the decision title/outcome; assert non-zero + message on missing/unknown decision-id.
