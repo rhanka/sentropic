@@ -23,4 +23,5 @@ export {
     type FederationEntry,
     type LoadFederationDeps,
 } from './federation.js';
+export { tryRegisterFocus, type RegisterFocusDeps } from './focus.js';
 export { runSurfaceCli, type SurfaceCliDeps } from './surface-cli.js';
