@@ -22,6 +22,7 @@ import {
     SubcommandRegistry,
     VerbRegistry,
     loadFederatedSubcommands,
+    tryRegisterFocus,
 } from '../dist/index.js';
 import { runAppCli, BUILD_CLI_VERSION } from '@sentropic/build-cli';
 
@@ -39,6 +40,10 @@ async function buildRegistry() {
         version: CLI_VERSION,
         run: (argv) => runSurfaceCli(argv),
     });
+    // Conditionally wire the in-repo `focus` subcommand (Focus-M1 L3). `@sentropic/focus` is a
+    // PRIVATE app-local package, so it is NOT a cross-repo FEDERATION_MANIFEST entry; this mirrors
+    // the federation loader's absent-vs-broken policy (absent → silently skip; broken → fail loud).
+    await tryRegisterFocus(registry, { importer: (spec) => import(spec) });
     // Discover and register cross-repo federated CLIs. All entries in FEDERATION_MANIFEST
     // that are not installed will silently skip; installed-but-broken will fail loudly.
     await loadFederatedSubcommands(registry, { importer: (spec) => import(spec) });
