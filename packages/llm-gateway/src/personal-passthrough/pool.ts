@@ -166,13 +166,26 @@ export class CoordinatorPoolState implements PoolStatePort {
   }
 
   async select(request: PoolSelectionRequest): Promise<PoolSelection> {
-    // Kill-switch guard (spec §7 D0): a grant-requiring request is cross-user;
-    // reject it while the switch is OFF. v0 personal-passthrough has no grant.
-    if (request.authorization && !this.crossUserPoolEnabled) {
-      throw new GatewayError(
-        'cross-user-disabled',
-        'cross-user pooling is disabled (kill switch OFF)',
-      );
+    // Kill-switch FAIL-CLOSED (#7, spec §7 D0). The cross-user pool is a gated
+    // path: it requires BOTH the switch ON AND an authorization grant.
+    const isCrossUser =
+      request.selectionMode === 'cross-user-pool' || request.authorization !== undefined;
+    if (isCrossUser) {
+      // 1. The switch must be ON for any non-personal selection path.
+      if (!this.crossUserPoolEnabled) {
+        throw new GatewayError(
+          'cross-user-disabled',
+          'cross-user pooling is disabled (kill switch OFF)',
+        );
+      }
+      // 2. A non-personal selection MUST carry an authorization grant (no
+      // anonymous cross-user dispatch — spec §7 traceability invariant).
+      if (!request.authorization) {
+        throw new GatewayError(
+          'cross-user-disabled',
+          'cross-user selection requires an authorization grant',
+        );
+      }
     }
 
     // B1: the VERIFIED caller is the owner. Deny-as-missing when they own no
