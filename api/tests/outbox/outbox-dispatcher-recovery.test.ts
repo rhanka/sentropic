@@ -53,16 +53,22 @@ describe('Outbox dispatcher crash recovery (BR-60)', () => {
 
     const id = await insertStrandedOutboxRow({ attempts: 1, staleMinutesAgo: 10 });
 
-    await dispatcher.runDispatchSweep();
+    const result = await dispatcher.runDispatchSweep();
 
     const rows = (await db.all(sql`
       SELECT status, attempts, claimed_at
       FROM control.event_outbox WHERE id = ${id}
     `)) as Array<Record<string, unknown>>;
 
-    expect(rows[0].status).toBe('pending');
-    expect(Number(rows[0].attempts)).toBe(2); // incremented
-    expect(rows[0].claimed_at).toBeNull(); // cleared
+    // A single sweep RECOVERS the below-ceiling stale row (recoverStaleProcessing:
+    // status→pending, attempts 1→2, claimed_at cleared) AND THEN — in the same pass —
+    // claims + delivers the now-pending row via the NoopEventBus (claimAndDispatch:
+    // attempts 2→3, status→dispatched). Recover-then-deliver is the intended one-sweep
+    // behaviour. Assert the RECLAIM happened (distinguishes the below-ceiling path from
+    // the at-ceiling 'failed' path) and that the row was recovered + delivered.
+    expect(result.staleReclaimed).toBeGreaterThanOrEqual(1); // reclaimed, not failed
+    expect(rows[0].status).toBe('dispatched');
+    expect(Number(rows[0].attempts)).toBe(3); // reclaim (1→2) + dispatch claim (2→3)
   });
 
   it('should fail a stale processing row at or above the redelivery ceiling', async () => {
