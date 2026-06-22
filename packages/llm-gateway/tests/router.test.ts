@@ -42,11 +42,13 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     const oBody = (await openai.json()) as { error: { code?: string } };
     expect(oBody.error.code).toBe('not_implemented');
 
+    // /v1/models is caller/pool-policy filtered (spec §3): the stub caller-auth
+    // fails, so an unauthenticated request gets a provider-shaped 401 — never
+    // the pool. (A real authenticated snapshot is covered in models.test.ts.)
     const models = await app.request('/v1/models');
-    expect(models.status).toBe(200);
-    const mBody = (await models.json()) as { object: string; data: unknown[] };
-    expect(mBody.object).toBe('list');
-    expect(mBody.data).toEqual([]);
+    expect(models.status).toBe(401);
+    const mBody = (await models.json()) as { error: { type: string } };
+    expect(mBody.error.type).toBe('invalid_request_error');
   });
 
   it('defaults the cross-user kill switch OFF (personal-passthrough only)', () => {
