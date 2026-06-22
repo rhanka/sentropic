@@ -15,8 +15,9 @@ The manifests are a **kustomize base + overlays**: `base/` holds the
 namespace-agnostic resources (listed below); `overlays/prod/` sets
 `namespace: sentropic`, adds the ingress, and is what `make k8s-deploy` applies
 (`kubectl apply -k deploy/k8s/overlays/prod`). Per-release image pins go in the
-overlay (BR-55c/d); the preprod/validation overlays come in BR-55b/e. The old
-`K8S_INGRESS=1` gate is gone — the ingress is part of the prod overlay.
+overlay (BR-55c/d); the preprod overlay is `overlays/preprod/` (BR-55b — see
+"Preprod overlay" below), the validation overlay comes in BR-55e. The old
+`K8S_INGRESS=1` gate is gone — the ingress is part of each tier overlay.
 
 ## Files (under `base/`, except the ingress which is in `overlays/prod/`)
 
@@ -43,6 +44,42 @@ overlay (BR-55c/d); the preprod/validation overlays come in BR-55b/e. The old
   (single host → `ui`; nginx proxies `/api`→api:8787) with cert-manager TLS via
   the platform `letsencrypt-prod` ClusterIssuer. Lives in the prod overlay and is
   applied by `make k8s-deploy` (kustomize) — no separate `K8S_INGRESS` flag.
+
+## Preprod overlay (`overlays/preprod/`, BR-55b)
+
+`overlays/preprod/` is the PREPROD tier of the deployment-plane
+(`spec/SPEC_DECISION_DEPLOYMENT_PLANE.md`, RATIFIED). It re-stamps the shared
+`base/` into the **isolated `sentropic-preprod` namespace** and is what the
+preprod CD pipeline applies (`kubectl apply -k deploy/k8s/overlays/preprod`,
+wired in BR-55c). It mirrors `overlays/prod/` and diverges only where the tier
+requires isolation:
+
+- **Namespace** — `namespace: sentropic-preprod`. The Namespace, ResourceQuota,
+  LimitRange, default-deny NetworkPolicy and `sentropic-registry` pull-secret are
+  owned by the poc-k8s operator (k8s-ops `#37`/`#39`), like prod. The base ships
+  no Namespace resource, so the `namespace:` transformer is sufficient (no
+  `$patch:delete`). Postgres is the base StatefulSet re-stamped here → its OWN
+  1Gi PVC in this namespace (D3: a separate preprod DB, so preprod migrations can
+  never touch prod data).
+- **Hosts (D4 nested)** — `ingress.yaml` exposes `preprod.sentropic.sent-tech.ca`
+  (→ ui) and `preprod.auth.sent-tech.ca` (→ auth-idp) through the SAME shared
+  Traefik LoadBalancer + cert-manager `letsencrypt-prod` ClusterIssuer as prod.
+  The base `allow-traefik-to-{ui,auth-idp}` NetworkPolicies are namespace-agnostic
+  (`namespaceSelector: traefik`), so they cover the default-deny baseline here
+  unchanged.
+- **Isolated WebAuthn RP IDs (D11R)** — `patch-api-config.yaml` /
+  `patch-auth-idp-config.yaml` (strategic-merge ConfigMap overrides) point the
+  host-shaped config at the preprod hosts and set DISTINCT WebAuthn RP IDs
+  (`preprod.sentropic.sent-tech.ca` for the api, `preprod.auth.sent-tech.ca` for
+  the IdP), each a registrable suffix of its own origin and fully isolated from
+  prod's `sent-tech.ca` RP ID. Preprod users are synthetic.
+- **Secrets** — the per-tier distinct KEK / DB password / signing keys (D6) are
+  operator-authored SealedSecrets in the `sentropic-preprod` namespace (mirrors
+  the prod `05-`/`06-`/`07-` pattern, intentionally not in this repo's tooling).
+
+The overlay touches neither `base/` nor `overlays/prod/`: `kubectl kustomize
+deploy/k8s/overlays/prod` is byte-identical before and after, so prod never moves
+(the deployment-plane decoupling invariant).
 
 ## Prerequisites (cluster operator side, in `~/src/poc-k8s/`)
 
