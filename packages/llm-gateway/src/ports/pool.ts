@@ -40,9 +40,14 @@ export interface PoolSelectionRequest extends AccountTransportAcquireInput {
 }
 
 /**
- * Result of selecting + leasing a pooled account. Wraps the Layer-A
- * acquisition (material + descriptor + lease + reservation + recordOutcome)
- * and carries the (gated) authorization grant so dispatch stays traceable.
+ * Result of selecting + leasing a pooled account. Wraps the Layer-A PUBLIC
+ * acquisition `AccountTransportAcquisition` (the `acquire()` result: material +
+ * descriptor + lease + reservation + recordOutcome) — NOT the private
+ * `selectAccount` (which is an internal method on the in-memory coordinator,
+ * not exported). The gateway attaches the (gated) `AuthorizationGrant` here
+ * (spec §7 D0: `AuthzMode` + responsible `ProviderIdentity`) so every cross-user
+ * dispatch is traceable. v0 personal-passthrough leaves `authorization` absent
+ * (caller == provider, kill switch OFF — carried-but-not-enforced).
  */
 export interface PoolSelection {
   readonly acquisition: AccountTransportAcquisition;
