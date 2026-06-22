@@ -118,6 +118,20 @@ Land the WP16 Layer-B foundation: the architect-signed `SPEC_EVOL_LLM_GATEWAY` s
   - [x] Version `0.0.0` → `0.1.0` (first-publish target). (`FL-6` resolved.)
   - [x] Lot-3a gate: `make typecheck-llm-gateway` clean (src+tests), `make test-llm-gateway` 48/48 (7 files). #353 stays DRAFT; wire NOT frozen-final (awaits Lot-3 sign).
 
+- [x] **Lot 3b — Review-fixes (double-review returned FIX-FIRST; all findings resolved gateway-side, #353 stays DRAFT)**
+  - [x] B1 caller==provider — `personal-passthrough/pool.ts`: owner-scoped per-caller coordinator (`coordinatorFor`) + `metadata.ownerUserId` owner filter + per-caller `affinityKey`; deny-as-missing; unowned accounts non-selectable. NO llm-mesh change. Tests: `tests/caller-ownership.test.ts`.
+  - [x] B2 stop leaking `leaseId` — `redaction.ts`: `RedactedSelectionView` drops `leaseId`/`accountFingerprint`, carries a gateway-local OPAQUE `correlationId` (`newCorrelationId`). Test: `tests/passthrough.test.ts` "B2 …" + `tests/redaction.test.ts` (asserts no `lease`/`leaseId`/account-id in the metering record or view).
+  - [x] B3 `[DONE]` terminator ownership — `router/index.ts` (drop synthetic `OPENAI_DONE`) + `flow.ts`/`ports/dispatch.ts`/`personal-passthrough/dispatch.ts` (provider stream owns terminator). Tests: `tests/passthrough.test.ts` "B3 provider already emits [DONE] → exactly one" + "B3 mid-stream error → NO trailing [DONE]".
+  - [x] #4 provider response headers — `ports/dispatch.ts` (carry `headers`/`GatewayDispatchStream`) + `router/index.ts` (allowlist `FORWARDABLE_PROVIDER_HEADERS` + `X-Sentropic-Request-Id`; pool-internal headers dropped). Test: `tests/passthrough.test.ts` "#4 provider response header passthrough".
+  - [x] #5 malformed JSON → 400 — `router/index.ts` (`mapGatewayError(wire,'bad-request')`). Test: `tests/errors.test.ts` "returns EXACTLY 400 …" (no `[400,503]` tolerance).
+  - [x] #6 stream failure before first byte → 503 — `flow.ts` `runStreamFlow` (buffer first frame; pre-first-byte failure rethrows provider-shaped error; settle without throw only AFTER bytes). Test: `tests/passthrough.test.ts` "#6 … returns 503, not an empty 200".
+  - [x] #7 kill-switch fail-closed — `flow.ts` (reject cross-user mode while OFF) + `personal-passthrough/pool.ts` (`selectionMode`; grant required when ON). Tests: `tests/caller-ownership.test.ts` "#7 …" + `tests/redaction.test.ts` "#7 …".
+  - [x] #8 authz shape → spec §7 — `ports/authz.ts` rename `mode`→`authzMode`, `responsibleProvider`→`providerIdentity`; usages + snapshot updated.
+  - [x] #9 contract-snapshot real freeze — `tests/contract-snapshot.test.ts`: router-derived unknown-route guard + exact JSON bodies + exact SSE bytes + full error envelopes (status+body+code+message+headers).
+  - [x] #10 `x-api-key` caller-auth — `personal-passthrough/caller-auth.ts` (accept `x-api-key` scheme). Spec §3 updated. Test: `tests/errors.test.ts` "#10 …".
+  - [x] #11 `fingerprint()` removed (was dictionary-reversible) — `redaction.ts` logs use fixed `[redacted]` mask + opaque correlation id. Test: `tests/redaction.test.ts`.
+  - [x] Lot-3b gate: `make typecheck-llm-gateway` clean (src+tests), `make test-llm-gateway` 65/65 (8 files). Scope: ONLY `packages/llm-gateway/**` + `spec/SPEC_EVOL_LLM_GATEWAY.md` + `BRANCH.md` (NO llm-mesh, NO api, NO Makefile/ci.yml). #353 stays DRAFT, version 0.1.0, NOT published.
+
 - [ ] **Lot 3 — Contract double-review GATE (before any publish)**
   - [ ] Double adversarial review of the frozen wire: Opus 4.8max + Codex 5.5xhigh.
   - [x] BR-46 contract-snapshot of `/v1/{messages,chat/completions,models}` + health (DONE in Lot-3a: `tests/contract-snapshot.test.ts`, 12 tests — the freeze DETECTOR the reviewers ratify against).
