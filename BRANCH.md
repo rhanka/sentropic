@@ -22,7 +22,11 @@ Close the CI-coverage gap the conductor flagged: the foundation service test dir
 
 ## Feedback Loop
 - `acknowledge` (BR70-CI1 conductor-GO'd): "wire tests/{artifact-store,object-registry,outbox,services,resource-plane} into a suite + re-validate (BR-52/59/60 unit green-by-absence → run for real)". Done for the 4 dirs that exist; `resource-plane` has no test dir (noted).
-- `attention` (possible RED on first real run): these suites have never run in CI. If a suite is RED, it is a REAL finding — either a regression hidden by absence or a test-setup gap (e.g. the api-test stack must apply the `control` schema migrations for artifact-store/object-registry/outbox). Diagnose from the CI log: if a genuine test bug in BR-52/59/60 → fix here or flag the owning lane; if a stack/migration gap → fix the test stack. Do NOT delete/skip the test to go green.
+- `attention` (FIRST REAL RUN = 3 distinct findings surfaced, #356 run 27929797428): the wiring worked — the suites ran for real and revealed:
+  1. **object-registry (BR-59) = GREEN** ✓.
+  2. **outbox (BR-60, MINE) = RED**: real test-ISOLATION bug. 5/18 fail with bidirectional pollution (`expected 'failed' got 'dispatched'`, `expected 0 to be ≥1`, stale-reclaim got 'dispatched') — the 6 outbox test files pass in isolation (single-file, BR-60 dev) but interfere when run as one `vitest run tests/outbox` process (shared outbox table / dispatcher, no per-test scoping). FIX (mine): isolate per test (unique aggregate keys + truncate-before, or scoped dispatcher). Do NOT skip.
+  3. **artifact-store (BR-52, MINE) = RED**: 4/12 `LocalFsArtifactStore` tests fail in CI (round-trip/delete/path-traversal) while passing locally → a CI filesystem/cwd gap (LocalFs path differs under `/workspace`). FIX (mine): make the LocalFs root deterministic/writable in CI (os.tmpdir/unique).
+  4. **services (NOT mine) = DROPPED from this PR**: `tests/services/` is a cross-lane grab-bag (`catalog/*`, `flow/*` — chat/catalog/flow lanes), 15/326 fail on STALE expectations (`expected 31 tools got 11`, "Lot 7" tool-count). Wiring it surfaced OTHER lanes' green-by-absence debt — out of scope for BR70-CI1 (foundation CI). Removed the `services` matrix entry + `test:services` script; **routed to the conductor** to task the catalog/flow lanes.
 - `acknowledge` (39etc concurrency): 39etc owns a separate ci.yml PR (Lot 2 publish paths-filter). This PR touches a DIFFERENT section (test matrix) → low collision risk; coordinate if a conflict surfaces.
 
 ## AI Flaky tests
