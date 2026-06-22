@@ -30,6 +30,7 @@ import type {
   GatewayDispatchResponse,
   GatewayDispatchStreamEvent,
   GatewayWire,
+  ProviderResponseHeaders,
 } from './ports/dispatch.js';
 import type { PoolSelection, PoolSelectionRequest } from './ports/pool.js';
 import { GatewayError } from './router/errors.js';
@@ -216,10 +217,12 @@ const settle = async (
   });
 };
 
-/** Result of a non-stream gateway call (router sends `body` with `status`). */
+/** Result of a non-stream gateway call (router sends `body` with `status` + allowlisted headers). */
 export interface GatewayJsonResult {
   readonly status: number;
   readonly body: unknown;
+  /** Provider response headers (#4); the router forwards the allowlist. */
+  readonly headers?: ProviderResponseHeaders;
 }
 
 /**
@@ -259,19 +262,41 @@ export const runJsonFlow = async (
     ok ? 'success' : 'failed',
     extractUsage(request.wire, response.body),
   );
-  // Faithful passthrough: provider-native JSON, provider status code verbatim.
-  return { status: response.status, body: response.body };
+  // Faithful passthrough: provider-native JSON, status code + headers verbatim (#4).
+  return {
+    status: response.status,
+    body: response.body,
+    ...(response.headers ? { headers: response.headers } : {}),
+  };
 };
 
 /**
- * Run a STREAMING gateway request. Yields the provider-native SSE frames
- * (already framed by the dispatch adapter). Settles exactly once at end —
- * including a mid-stream failure (no retry after bytes streamed, spec §2).
+ * The result of starting a streaming gateway request: the provider stream
+ * headers (#4, known before the first byte) + the frame generator. The generator
+ * settles exactly once at end. A failure BEFORE the first byte does NOT reach
+ * here — `runStreamFlow` rejects with a provider-shaped `GatewayError` instead
+ * (#6), so the router can return a real HTTP error, never an empty 200.
  */
-export async function* runStreamFlow(
+export interface GatewayStreamResult {
+  readonly headers?: ProviderResponseHeaders;
+  readonly stream: AsyncGenerator<GatewayDispatchStreamEvent, void, unknown>;
+}
+
+/**
+ * Start a STREAMING gateway request. Resolves to `{ headers, stream }` once the
+ * provider stream has started (first frame buffered). The frame generator relays
+ * the provider-native SSE frames VERBATIM (including the provider's own [DONE] —
+ * the gateway synthesizes NO terminator, B3) and settles exactly once at end.
+ *
+ * #6: a failure BEFORE any byte streams (auth/select/dispatch/first-frame)
+ * rejects this promise with a provider-shaped `GatewayError` — the router maps
+ * it to a real HTTP error, NEVER an empty 200 stream. A mid-stream failure
+ * (after >=1 byte) settles failure WITHOUT throwing (no retry post-stream, §2).
+ */
+export const runStreamFlow = async (
   deps: GatewayFlowDeps,
   request: GatewayFlowRequest,
-): AsyncGenerator<GatewayDispatchStreamEvent, void, unknown> {
+): Promise<GatewayStreamResult> => {
   const prepared = await prepare(deps, request);
   const dispatchRequest: GatewayDispatchRequest = {
     wire: request.wire,
@@ -283,28 +308,58 @@ export async function* runStreamFlow(
     ...(request.signal ? { signal: request.signal } : {}),
   };
 
-  let streamedAny = false;
-  let usage: SettleUsage | undefined;
-  let failed = false;
+  // Obtain the provider stream + buffer the FIRST frame eagerly. A pre-first-byte
+  // failure here rejects (caught below) -> provider-shaped error, never empty 200.
+  let dispatchStream;
+  let iterator: AsyncIterator<GatewayDispatchStreamEvent>;
+  let firstResult: IteratorResult<GatewayDispatchStreamEvent>;
   try {
-    for await (const event of deps.config.dispatch.dispatchStream(dispatchRequest)) {
-      streamedAny = true;
-      const eventUsage = extractUsageFromFrame(request.wire, event.raw);
-      if (eventUsage) {
-        usage = eventUsage;
-      }
-      yield event;
-    }
+    dispatchStream = deps.config.dispatch.dispatchStream(dispatchRequest);
+    iterator = dispatchStream.frames[Symbol.asyncIterator]();
+    firstResult = await iterator.next();
   } catch {
-    // Mid-stream provider failure (spec §2): NO retry after bytes streamed.
-    // Settle with failure/estimated usage; the dispatch adapter is responsible
-    // for emitting a provider-native error event before this point.
-    failed = true;
-  } finally {
-    void streamedAny;
-    await settle(deps, request, prepared, failed ? 'failed' : 'success', usage);
+    // No byte streamed -> settle failure, then surface a provider-shaped error.
+    await settle(deps, request, prepared, 'failed', undefined);
+    throw new GatewayError('pooled-account-unavailable', 'stream failed before first byte');
   }
-}
+
+  let usage: SettleUsage | undefined = firstResult.done
+    ? undefined
+    : extractUsageFromFrame(request.wire, firstResult.value.raw);
+
+  const stream = (async function* (): AsyncGenerator<
+    GatewayDispatchStreamEvent,
+    void,
+    unknown
+  > {
+    let failed = false;
+    try {
+      if (!firstResult.done) {
+        yield firstResult.value;
+      }
+      // Relay the rest verbatim. A throw here is mid-stream (>=1 byte already out).
+      for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
+        const eventUsage = extractUsageFromFrame(request.wire, next.value.raw);
+        if (eventUsage) {
+          usage = eventUsage;
+        }
+        yield next.value;
+      }
+    } catch {
+      // Mid-stream provider failure (spec §2): NO retry after bytes streamed.
+      // Settle failure; the dispatch adapter already emitted a provider-native
+      // error event. The gateway synthesizes NO terminator (B3).
+      failed = true;
+    } finally {
+      await settle(deps, request, prepared, failed ? 'failed' : 'success', usage);
+    }
+  })();
+
+  return {
+    ...(dispatchStream.headers ? { headers: dispatchStream.headers } : {}),
+    stream,
+  };
+};
 
 /** Extract usage from a non-stream provider-native response body. */
 const extractUsage = (wire: GatewayWire, body: unknown): SettleUsage | undefined => {

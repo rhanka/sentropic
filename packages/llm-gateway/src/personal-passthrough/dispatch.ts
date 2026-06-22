@@ -23,7 +23,7 @@ import type {
   GatewayDispatchPort,
   GatewayDispatchRequest,
   GatewayDispatchResponse,
-  GatewayDispatchStreamEvent,
+  GatewayDispatchStream,
 } from '../ports/dispatch.js';
 import type { SecretAuthMaterial } from '@sentropic/llm-mesh';
 
@@ -40,15 +40,15 @@ export interface ProviderTransportRequest {
 
 /**
  * The provider transport seam. `send` returns the native non-stream response
- * (status + body verbatim); `sendStream` yields native SSE frames (already
- * framed by the provider — `event:`/`data:` for Anthropic, `data:`/`[DONE]`
- * for OpenAI). The gateway relays both verbatim.
+ * (status + body + headers verbatim); `sendStream` returns the native stream
+ * (its provider headers + frame iterator — frames already framed by the
+ * provider: `event:`/`data:` for Anthropic, `data:`/`[DONE]` for OpenAI,
+ * INCLUDING the provider's own `[DONE]` terminator). The gateway relays both
+ * verbatim and synthesizes NO terminator of its own (B3).
  */
 export interface ProviderTransport {
   send(request: ProviderTransportRequest): Promise<GatewayDispatchResponse>;
-  sendStream(
-    request: ProviderTransportRequest,
-  ): AsyncIterable<GatewayDispatchStreamEvent>;
+  sendStream(request: ProviderTransportRequest): GatewayDispatchStream;
 }
 
 export interface PassthroughDispatchOptions {
@@ -71,18 +71,28 @@ export class PassthroughDispatch implements GatewayDispatchPort {
     request: GatewayDispatchRequest,
   ): Promise<GatewayDispatchResponse> {
     const response = await this.transport.send(this.toTransportRequest(request));
-    // Faithful: provider status + body verbatim. No mutation.
-    return { status: response.status, body: response.body };
+    // Faithful: provider status + body + headers verbatim. No mutation (#4).
+    return {
+      status: response.status,
+      body: response.body,
+      ...(response.headers ? { headers: response.headers } : {}),
+    };
   }
 
-  async *dispatchStream(
-    request: GatewayDispatchRequest,
-  ): AsyncIterable<GatewayDispatchStreamEvent> {
-    // Relay native SSE frames verbatim. A mid-stream transport throw propagates
-    // to the flow (which settles failure; no retry post-stream, spec §2).
-    for await (const event of this.transport.sendStream(this.toTransportRequest(request))) {
-      yield { raw: event.raw };
-    }
+  dispatchStream(request: GatewayDispatchRequest): GatewayDispatchStream {
+    // Relay native SSE frames verbatim (including the provider's own [DONE], B3).
+    // A mid-stream transport throw propagates to the flow (which settles failure;
+    // no retry post-stream, spec §2). Provider stream headers carried through (#4).
+    const stream = this.transport.sendStream(this.toTransportRequest(request));
+    const frames = (async function* () {
+      for await (const event of stream.frames) {
+        yield { raw: event.raw };
+      }
+    })();
+    return {
+      ...(stream.headers ? { headers: stream.headers } : {}),
+      frames,
+    };
   }
 
   private toTransportRequest(

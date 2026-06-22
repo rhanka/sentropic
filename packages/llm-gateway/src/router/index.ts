@@ -20,14 +20,14 @@ import { Hono } from 'hono';
 import type { GatewayConfig } from '../config.js';
 import type { GatewayFlowDeps, MeteringSink, TargetResolver } from '../flow.js';
 import { runJsonFlow, runStreamFlow } from '../flow.js';
-import type { GatewayWire } from '../ports/dispatch.js';
+import type { GatewayWire, ProviderResponseHeaders } from '../ports/dispatch.js';
 import {
   mapGatewayError,
   notImplemented,
   toProviderShapedError,
   type ProviderShapedError,
 } from './errors.js';
-import { OPENAI_DONE, SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
+import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
 
 export interface ReadinessProbe {
   /** True when DB + secret-store + pool are all ready (spec §8 fail-closed). */
@@ -52,6 +52,56 @@ export interface CreateGatewayRouterOptions {
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
+
+/**
+ * Allowlist of provider response headers the gateway FORWARDS (#4) for faithful
+ * passthrough — request-ids, rate-limit signals, provider/version/beta markers,
+ * retry hints. Lowercased. We forward ONLY these: anything off-list (including
+ * any gateway/pool-internal header, hop-by-hop/transport headers, or cookies) is
+ * dropped, so no pool internal can ever ride out on a provider header.
+ */
+const FORWARDABLE_PROVIDER_HEADERS: ReadonlySet<string> = new Set([
+  // Correlation / request ids.
+  'request-id',
+  'x-request-id',
+  'anthropic-request-id',
+  'openai-organization',
+  'openai-version',
+  'openai-processing-ms',
+  // Provider/API version + beta markers.
+  'anthropic-version',
+  'anthropic-beta',
+  'x-api-version',
+  // Rate-limit / retry signals.
+  'retry-after',
+  'anthropic-ratelimit-requests-limit',
+  'anthropic-ratelimit-requests-remaining',
+  'anthropic-ratelimit-requests-reset',
+  'anthropic-ratelimit-tokens-limit',
+  'anthropic-ratelimit-tokens-remaining',
+  'anthropic-ratelimit-tokens-reset',
+  'x-ratelimit-limit-requests',
+  'x-ratelimit-remaining-requests',
+  'x-ratelimit-reset-requests',
+  'x-ratelimit-limit-tokens',
+  'x-ratelimit-remaining-tokens',
+  'x-ratelimit-reset-tokens',
+]);
+
+/** Forward the allowlisted provider headers onto the response (#4). */
+const forwardProviderHeaders = (
+  c: import('hono').Context,
+  headers: ProviderResponseHeaders | undefined,
+): void => {
+  if (!headers) {
+    return;
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (FORWARDABLE_PROVIDER_HEADERS.has(key.toLowerCase())) {
+      c.header(key, value);
+    }
+  }
+};
 
 const defaultRequestId = (): string =>
   `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -139,6 +189,7 @@ export const createGatewayRouter = (
     if (!stream) {
       try {
         const result = await runJsonFlow(flowDeps, flowRequest);
+        forwardProviderHeaders(c, result.headers); // #4 allowlisted provider headers
         c.header(REQUEST_ID_HEADER, id);
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
@@ -146,41 +197,38 @@ export const createGatewayRouter = (
       }
     }
 
-    // Streaming: run the flow, relay native SSE frames verbatim. A pre-dispatch
-    // failure (auth/select) throws BEFORE any byte streams -> provider-shaped
-    // error. A mid-stream failure is settled inside the flow (no retry).
+    // Streaming: `runStreamFlow` resolves once the provider stream started
+    // (first frame buffered). A failure BEFORE any byte (auth/select/dispatch/
+    // first-frame) REJECTS here -> provider-shaped HTTP error, never an empty 200
+    // (#6). A mid-stream failure is settled inside the stream (no retry, §2).
+    let streamResult;
     try {
-      const iterator = runStreamFlow(flowDeps, flowRequest);
-      // Pull the first frame eagerly so a pre-dispatch error surfaces as a
-      // provider-shaped HTTP error rather than an empty 200 stream.
-      const first = await iterator.next();
-      c.header('Content-Type', SSE_CONTENT_TYPE);
-      c.header('Cache-Control', 'no-cache');
-      c.header(REQUEST_ID_HEADER, id);
-      const finalize = wire === 'openai-chat-completions' ? OPENAI_DONE : '';
-      return c.body(
-        new ReadableStream<Uint8Array>({
-          async start(controller) {
-            const encoder = new TextEncoder();
-            try {
-              if (!first.done) {
-                controller.enqueue(encoder.encode(first.value.raw));
-              }
-              for await (const event of iterator) {
-                controller.enqueue(encoder.encode(event.raw));
-              }
-              if (finalize && !first.done) {
-                controller.enqueue(encoder.encode(finalize));
-              }
-            } finally {
-              controller.close();
-            }
-          },
-        }),
-      );
+      streamResult = await runStreamFlow(flowDeps, flowRequest);
     } catch (error) {
       return sendError(c, toProviderShapedError(wire, error), id);
     }
+
+    forwardProviderHeaders(c, streamResult.headers); // #4 allowlisted provider headers
+    c.header('Content-Type', SSE_CONTENT_TYPE);
+    c.header('Cache-Control', 'no-cache');
+    c.header(REQUEST_ID_HEADER, id);
+    // B3: relay provider frames VERBATIM. The gateway synthesizes NO terminator —
+    // a real OpenAI transport emits its own `[DONE]`; Anthropic uses message_stop.
+    // On a mid-stream error the stream simply ends (no synthetic [DONE]).
+    return c.body(
+      new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          try {
+            for await (const event of streamResult.stream) {
+              controller.enqueue(encoder.encode(event.raw));
+            }
+          } finally {
+            controller.close();
+          }
+        },
+      }),
+    );
   };
 
   // --- Provider-compat wire (FROZEN v1 surface) ---
