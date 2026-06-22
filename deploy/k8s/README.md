@@ -160,6 +160,26 @@ make k8s-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 make k8s-deploy KUBECONFIG=$HOME/.kube/poc.yaml K8S_INGRESS=1 ENV=test-feat-deploy-poc-k8s
 ```
 
+## Continuous deploy: main → preprod (BR-55c, ARCH-17)
+
+Every `main` merge auto-deploys to the **isolated `sentropic-preprod` namespace**
+only — the `deploy-preprod` job in `.github/workflows/ci.yml` decodes the
+preprod-scoped `KUBE_CONFIG_DATA_PREPROD` secret (poc-k8s; a namespace-scoped
+kubeconfig that can ONLY write `sentropic-preprod`, the prod ns is RBAC-denied)
+and runs `make k8s-deploy-preprod`, which pins the **immutable per-content image
+tags** (`API_VERSION`/`UI_VERSION` from `make version`) into `overlays/preprod`
+before applying (killing the floating `:main` staleness).
+
+**No `main` merge can touch the `sentropic` (prod) namespace.** The legacy
+prod-targeting `deploy-k8s` CI job is removed; `make k8s-deploy` (the prod
+overlay) is now a **manual** target only, and PRODUCTION deploys exclusively via
+the gated `release-prod` pipeline (BR-55d: GitHub `production` Environment +
+`rhanka` reviewer + recette attestation). Manual preprod deploy from a host:
+
+```bash
+make k8s-deploy-preprod KUBECONFIG=$HOME/.kube/poc-sentropic-preprod.yaml ENV=preprod
+```
+
 ## Smoke test
 
 ```bash
