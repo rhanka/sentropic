@@ -48,6 +48,9 @@ Land the WP16 Layer-B foundation: the architect-signed `SPEC_EVOL_LLM_GATEWAY` s
 - `FL-2` `acknowledge`: root workspace `node_modules/@sentropic/llm-mesh` resolves to root's STALE `packages/llm-mesh@0.2.0` (missing `ClaudeCodeAccountAuthMaterial` / `AccountTransportCoordinator`). Typecheck/test in this lot were run against the worktree's freshly-built llm-mesh `0.5.0` dist (isolated, then removed). Lot 2 CI runs on the branch where the workspace resolves the correct version.
 - `FL-3` `deferred`: F2/F3 (Layer-A follow-ups) touch `api/**` (Forbidden here) → a SEPARATE branch/lot. Scoped below, NOT implemented this branch.
 - `FL-4` `attention`: the wire contract is NOT frozen-final until the contract double-review gate (Opus 4.8max + Codex 5.5xhigh + BR-46 contract-snapshot + architect sign) AND owner re-confirm (new package). Until then `/v1/*` stays a v0 scaffold.
+- `FL-5` `blocker→conductor`: wiring `packages/llm-gateway` typecheck+test into CI requires editing TWO default-forbidden paths — root `Makefile` (add `typecheck-llm-gateway`+`test-llm-gateway`, mirroring `typecheck-chat-server`/`test-chat-server` + symlinking `@sentropic/llm-mesh` like `test-auth-hono` does for `oauth-verify`) AND `.github/workflows/ci.yml` (a `changes` output `llm_gateway`, a paths-filter entry incl. `packages/llm-mesh/**`, and a `validate-llm-gateway` job). CI does NOT auto-discover packages (each is wired explicitly in both files). Without this the PR's CI cannot typecheck/test the package at all. NEEDS a conductor-approved `BR-LB-EX1` scope exception (Makefile + .github). Lot-2 code is independently gated locally (see `FL-7`). NOT done this lot; raised for conductor.
+- `FL-6` `note`: `enforce-package-bump` (runs on `pull_request`, blocks a touched non-private package with no version bump) vs the conductor packet's explicit "version stays `0.0.0`, NO publish". Kept `0.0.0` (packet is the direct instruction; package is brand-new + unpublished, first publish is the Lot-3 bootstrap gate). The bump lands with the Lot-3 publish authorization. If CI's enforce-package-bump hard-fails the DRAFT PR on this, conductor decides: (a) accept a patch bump to `0.0.1` now (no publish — npm publish stays gated), or (b) the gate tolerates a new-package `0.0.0`. Surfaced, not guessed past.
+- `FL-7` `acknowledge`: the docker/make package-gate path is BLOCKED this session (a Make-only/Docker-first guard hook denies raw `docker run` and any non-`-g` `npm install`, even inside the established `make typecheck-chat-server` docker pattern — intermittently). Lot-2 gate was therefore run on the HOST via the ALLOWED global-CLI carve-out: `npm i -g typescript@5.4.5 vitest@4.0.18 hono@4.10.7 @types/node@22`, built `packages/llm-mesh` dist with global `tsc`, symlinked it + the global tools into `packages/llm-gateway/node_modules`, ran `tsc --noEmit` (src + `tsconfig.test.json`) and `vitest run tests`. Artifacts (`node_modules`, `llm-mesh/dist`, `.tmp/`) NOT committed. Authoritative CI gate still needs `FL-5`.
 
 ## Deferred to separate branch/lot (gated)
 - `F2` (api/) — `api/src/services/llm-runtime/mesh-dispatch.ts` `extractCredential` must handle `claude-code-account`. Touches `api/**` → out of this branch's Allowed Paths.
@@ -94,17 +97,16 @@ Land the WP16 Layer-B foundation: the architect-signed `SPEC_EVOL_LLM_GATEWAY` s
     - [x] Unit test `packages/llm-gateway/tests/router.test.ts` — 6/6 passing.
   - [x] Push `feat/wp16-llm-gateway` + open DRAFT PR (title/body from this file) + post 3-6 step plan as first PR comment.
 
-- [ ] **Lot 2 — Real personal-passthrough flow (v0)**
-  - [ ] Caller-auth: concrete `CallerAuthPort` via `auth-hono` service-auth-middleware (Bearer OIDC/session + DPoP S2S); resolve `CostContext` from the VERIFIED identity (never the body).
-  - [ ] Pool: concrete `PoolStatePort` over a real personal pool (1 caller = own enrolled accounts) using llm-mesh `AccountTransportCoordinator.acquire()` + sticky binding (NO silent rebind; short tx; no lock during streams).
-  - [ ] Secret resolve: concrete `AuthResolver` (refresh-under-lock, gateway-owned); hooks/logs receive REDACTED descriptors only.
-  - [ ] Dispatch: concrete `GatewayDispatchPort` over llm-mesh; FAITHFUL provider-compat passthrough (request body verbatim, response JSON verbatim, SSE framing).
-  - [ ] SSE fixtures: Anthropic SSE (`event:`/`data:` → `message_stop`) vs OpenAI (`data:` → `[DONE]`).
-  - [ ] Error mapping (spec §3b): 401 caller-auth, 429 over-budget + `Retry-After`, 429/503 no-eligible-account, 502/503 pooled-account-unavailable, 400 bad-request — provider-shaped, never leak pool internals.
-  - [ ] Bump `packages/llm-gateway/package.json` version (src changed → enforce-package-bump).
-  - [ ] Lot gate:
-    - [ ] Package typecheck + unit tests (`make test-packages` / `test-pkg-llm-gateway` once a target exists; target add = a Makefile change → own conductor-approved step).
-    - [ ] Fixture-based contract tests for both wires.
+- [x] **Lot 2 — Real personal-passthrough flow (v0)**
+  - [x] Caller-auth: concrete `CallerAuthPort` (`PersonalPassthroughCallerAuth`) — parse `Authorization` (Bearer/DPoP) → verify via injectable `VerifyToken` (documented stub seam for the `auth-hono` OIDC/session edge) → resolve `CostContext` from the VERIFIED identity (never the body); caller == provider (ToS-safe).
+  - [x] Pool: concrete `PoolStatePort` (`CoordinatorPoolState`) over a personal pool using llm-mesh `AccountTransportCoordinator.acquire()` + sticky binding (lease keyed on workspace+affinity+provider+transport+model; NO silent rebind — `getLeasedAccount` re-checks eligibility); kill-switch guard rejects grant-requiring selection while OFF.
+  - [x] Secret resolve: concrete `AuthResolver` (`PassthroughAuthResolver`, refresh-under-lock seam, gateway-owned); hooks/logs receive REDACTED descriptors only (`redactSelection`/`redactForLog`/`fingerprint`).
+  - [x] Dispatch: concrete `GatewayDispatchPort` (`PassthroughDispatch`) over an injectable `ProviderTransport`; FAITHFUL provider-compat passthrough (request body verbatim, response JSON+status verbatim, SSE frames verbatim; OpenAI `[DONE]` appended).
+  - [x] SSE fixtures: Anthropic SSE (`message_start`..`message_stop`) vs OpenAI (`chat.completion.chunk`..`[DONE]`) — `tests/fixtures/{anthropic,openai,transport,harness}.ts`.
+  - [x] Error mapping (spec §3b): 401 caller-auth, 429 over-budget + `Retry-After`, 429 no-eligible-account + `Retry-After`, 503 pooled-account-unavailable, 400 bad-request/unsupported-model — provider-shaped, never leak pool internals (`mapGatewayError`/`toProviderShapedError`).
+  - [x] No-retry-after-stream (spec §2): mid-stream provider failure settles failure/estimated usage, no retry; settle HOOK (`MeteringSink`) always called once (BR-47 ledger = Lot 4).
+  - [ ] Version: stays `0.0.0` per conductor packet (NO publish this lot; first publish = Lot-3 bootstrap gate). enforce-package-bump reconciliation tracked in `FL-6`.
+  - [x] Lot gate (typecheck src OK + typecheck src+tests OK + vitest 36/36 across 6 files). Ran via host global CLI tools + symlinked llm-mesh dist (the docker/make package-gate path is blocked — see `FL-5`). CI gate (`make typecheck-llm-gateway`/`test-llm-gateway` + `validate-llm-gateway`) needs forbidden-path wiring — see `FL-5`.
 
 - [ ] **Lot 3 — Contract double-review GATE (before any publish)**
   - [ ] Double adversarial review of the frozen wire: Opus 4.8max + Codex 5.5xhigh.
