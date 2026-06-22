@@ -192,10 +192,16 @@ if (process.env.NODE_ENV !== 'test') {
 
   // Outbox dispatcher (BR-60 ARCH-14): LISTEN outbox_pending + periodic sweep.
   // Claims control.event_outbox pending rows and emits via EventBusPort (pg NOTIFY).
-  try {
-    await outboxDispatcher.start();
-  } catch (error) {
-    logger.error({ err: error }, 'Outbox dispatcher failed to start');
+  // Autostart is suppressible (OUTBOX_DISPATCHER_AUTOSTART=false): the api-test stack
+  // runs NODE_ENV=development (not 'test'), so without this flag a background dispatcher
+  // would race the explicit-dispatch outbox unit tests and pre-empt their rows (BR70-CI1
+  // root cause). Prod/dev leave it unset → the dispatcher starts normally.
+  if (process.env.OUTBOX_DISPATCHER_AUTOSTART !== 'false') {
+    try {
+      await outboxDispatcher.start();
+    } catch (error) {
+      logger.error({ err: error }, 'Outbox dispatcher failed to start');
+    }
   }
 }
 
