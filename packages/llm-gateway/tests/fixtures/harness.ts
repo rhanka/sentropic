@@ -95,6 +95,8 @@ export interface HarnessOptions {
   readonly transport: FixtureTransport;
   readonly accounts?: AccountTransportAccount[];
   readonly crossUserPoolEnabled?: boolean;
+  /** Gateway mode (default personal-passthrough). Set `cross-user-pool` for #7 fail-closed tests. */
+  readonly mode?: GatewayConfig['mode'];
 }
 
 export interface Harness {
@@ -112,7 +114,7 @@ export const buildHarness = (options: HarnessOptions): Harness => {
     crossUserPoolEnabled: options.crossUserPoolEnabled ?? false,
   });
   const config: GatewayConfig = {
-    mode: DEFAULT_GATEWAY_MODE,
+    mode: options.mode ?? DEFAULT_GATEWAY_MODE,
     crossUserPoolEnabled: options.crossUserPoolEnabled ?? false,
     callerAuth: new PersonalPassthroughCallerAuth({ verifyToken: fixtureVerifyToken }),
     pool,
@@ -153,6 +155,20 @@ export const authHeaders = (
   correlationId?: string,
 ): Record<string, string> => ({
   authorization: `Bearer valid-${principal}`,
+  'content-type': 'application/json',
+  ...(correlationId ? { 'x-correlation-id': correlationId } : {}),
+});
+
+/**
+ * Build Anthropic-SDK-style headers: the sentropic key as `x-api-key` (+
+ * `anthropic-version`), NO `Authorization` (#10 drop-in transparency).
+ */
+export const apiKeyHeaders = (
+  principal: string,
+  correlationId?: string,
+): Record<string, string> => ({
+  'x-api-key': `valid-${principal}`,
+  'anthropic-version': '2023-06-01',
   'content-type': 'application/json',
   ...(correlationId ? { 'x-correlation-id': correlationId } : {}),
 });

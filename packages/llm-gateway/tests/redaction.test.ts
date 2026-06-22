@@ -122,4 +122,30 @@ describe('kill-switch guard (cross-user disabled while OFF)', () => {
     // Settle the lease so the test leaves no dangling reservation.
     await selection.acquisition.recordOutcome({ status: 'success' });
   });
+
+  it('#7: rejects a cross-user selectionMode while the switch is OFF (fail-closed)', async () => {
+    const pool = new CoordinatorPoolState({ accounts: ownedByP(), crossUserPoolEnabled: false });
+    await expect(
+      pool.select({
+        cost: { tenantId: 't', principalId: 'p', source: 'layer-c', correlationId: 'c' },
+        targetProviderId: 'anthropic',
+        transportProviderId: 'claude-code',
+        modelId: 'claude-sonnet-4-6',
+        selectionMode: 'cross-user-pool',
+      }),
+    ).rejects.toBeInstanceOf(GatewayError);
+  });
+
+  it('#7: with the switch ON, a cross-user selection WITHOUT a grant is rejected', async () => {
+    const pool = new CoordinatorPoolState({ accounts: ownedByP(), crossUserPoolEnabled: true });
+    await expect(
+      pool.select({
+        cost: { tenantId: 't', principalId: 'p', source: 'layer-c', correlationId: 'c' },
+        targetProviderId: 'anthropic',
+        transportProviderId: 'claude-code',
+        modelId: 'claude-sonnet-4-6',
+        selectionMode: 'cross-user-pool',
+      }),
+    ).rejects.toBeInstanceOf(GatewayError);
+  });
 });

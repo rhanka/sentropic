@@ -13,8 +13,8 @@ import {
   toProviderShapedError,
 } from '../src/index.js';
 import { FixtureTransport } from './fixtures/transport.js';
-import { authHeaders, buildHarness, twoAccountPool } from './fixtures/harness.js';
-import { anthropicRequest } from './fixtures/anthropic.js';
+import { apiKeyHeaders, authHeaders, buildHarness, twoAccountPool } from './fixtures/harness.js';
+import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
 import { openAiRequest } from './fixtures/openai.js';
 
 describe('provider-shaped error mapper (unit)', () => {
@@ -87,6 +87,34 @@ describe('error mapping through the router (integration)', () => {
     expect(transport.seenMaterials).toHaveLength(0);
   });
 
+  it('#10: authenticates a caller via x-api-key (Anthropic-SDK drop-in)', async () => {
+    const transport = new FixtureTransport({
+      jsonResponse: { status: 200, body: anthropicMessageResponse },
+    });
+    const { app } = buildHarness({ transport });
+    // The Anthropic SDK sends the (sentropic) key as x-api-key, NO Authorization.
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: apiKeyHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+    // Authenticated: the request ran end to end (account selected + dispatched).
+    expect(res.status).toBe(200);
+    expect(transport.seenMaterials).toHaveLength(1);
+  });
+
+  it('#10: an INVALID x-api-key still maps to 401 (no pool selected)', async () => {
+    const transport = new FixtureTransport();
+    const { app } = buildHarness({ transport });
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': 'NOT-VALID', 'content-type': 'application/json' },
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+    expect(res.status).toBe(401);
+    expect(transport.seenMaterials).toHaveLength(0);
+  });
+
   it('returns 400 for an unsupported model', async () => {
     const transport = new FixtureTransport();
     const { app } = buildHarness({ transport });
@@ -99,7 +127,7 @@ describe('error mapping through the router (integration)', () => {
     expect(transport.seenMaterials).toHaveLength(0);
   });
 
-  it('returns 400 for a malformed JSON body', async () => {
+  it('returns EXACTLY 400 for a malformed JSON body (§3b bad-request)', async () => {
     const transport = new FixtureTransport();
     const { app } = buildHarness({ transport });
     const res = await app.request('/v1/messages', {
@@ -107,7 +135,11 @@ describe('error mapping through the router (integration)', () => {
       headers: authHeaders('user-a'),
       body: '{ not json',
     });
-    expect([400, 503]).toContain(res.status);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { type: string; error: { type: string } };
+    // Anthropic provider-shaped invalid-request envelope.
+    expect(body.type).toBe('error');
+    expect(body.error.type).toBe('invalid_request_error');
     expect(transport.seenMaterials).toHaveLength(0);
   });
 

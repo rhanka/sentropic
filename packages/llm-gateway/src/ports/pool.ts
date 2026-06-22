@@ -37,6 +37,12 @@ export interface PoolSelectionRequest extends AccountTransportAcquireInput {
    * reject any request that would require a grant.
    */
   readonly authorization?: AuthorizationGrant;
+  /**
+   * Selection path (#7 fail-closed). `personal-passthrough` = caller==provider,
+   * no grant. `cross-user-pool` = REQUIRES an authorization grant AND the kill
+   * switch ON. Defaults to `personal-passthrough` when absent.
+   */
+  readonly selectionMode?: 'personal-passthrough' | 'cross-user-pool';
 }
 
 /**

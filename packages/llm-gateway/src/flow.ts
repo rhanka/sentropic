@@ -121,6 +121,18 @@ const prepare = async (
 }> => {
   const { config } = deps;
 
+  // 0. KILL-SWITCH FAIL-CLOSED (#7, spec §7 D0). The cross-user pool must NOT
+  // serve ANY request while the switch is OFF — not just grant-carrying ones.
+  // When the gateway is configured for cross-user mode but the switch is OFF,
+  // reject every request (provider-shaped). v0 personal-passthrough mode is the
+  // ONLY unblocked path and needs no grant (caller == provider).
+  if (config.mode === 'cross-user-pool' && !config.crossUserPoolEnabled) {
+    throw new GatewayError(
+      'cross-user-disabled',
+      'cross-user pooling is disabled (kill switch OFF)',
+    );
+  }
+
   // 1. caller-auth -> CostContext (from the VERIFIED identity, never the body).
   const auth = await config.callerAuth.verify(request.headers);
   if (!auth.ok || !auth.cost) {
