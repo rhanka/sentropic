@@ -23,15 +23,23 @@ it (do not reinvent the sticky-binding / FOR UPDATE SKIP LOCKED / no-silent-rebi
 NOT chat-server, NOT the pure llm-mesh lib: the gateway OWNS caller-auth, pool state, quota reservation, account
 selection, auth-swap, dispatch, settlement, observability. The split exists in code: api delegates provider/model
 to llm-mesh (`provider-runtime.ts`); chat-core sees only the opaque `MeshDispatchPort` (`chat-core/mesh-port.ts`);
-BR-47 defines the quota ledger. It REUSES: `@sentropic/llm-mesh` (adapters + `selectAccount` Layer-A + the
-account-transport AuthMaterial), the BR-47 ledger (metering), `auth-hono`/`auth-client` (caller auth).
+BR-47 defines the quota ledger. It REUSES: `@sentropic/llm-mesh` (adapters + the Layer-A account-selection
+surface `AccountTransportCoordinator.acquire()` returning `AccountTransportAcquisition` + the account-transport
+AuthMaterial), the BR-47 ledger (metering), `auth-hono`/`auth-client` (caller auth).
+
+> **PUBLIC SELECTION SURFACE (FL-1(a), architect-verified):** the Layer-A selection + sticky-lease surface the
+> gateway consumes is the PUBLIC `AccountTransportCoordinator.acquire()` (returning `AccountTransportAcquisition`).
+> `selectAccount` is a PRIVATE method on `InMemoryAccountTransportCoordinator`, NOT an exported pure planner.
+> Exposing a pure, side-effect-free planner from llm-mesh is DEFERRED to llm-mesh v0.6+; until then the gateway
+> selects exclusively through `acquire()`. This spec therefore names `acquire()` everywhere (not `selectAccount`).
 
 ## 2. Request flow (`POST /v1/messages`)
 caller-auth (Bearer OIDC/session OR DPoP S2S; `auth-hono service-auth-middleware` verifies iss/aud/scope/ath/jti)
 → resolve `CostContext` (tenant/workspace/principal/source/correlationId/callSite/budgetScope — from the VERIFIED
 identity, NEVER the body) → parse provider/model + max-token estimate → BR-47 `budget_reservations` BEFORE
-dispatch (deny-over-cap → provider-shaped quota error, no account selected) → Layer-A `selectAccount` over the
-gateway's eligible pool snapshot + budget signal → short in-flight pool reservation + sticky binding → resolve
+dispatch (deny-over-cap → provider-shaped quota error, no account selected) → Layer-A account selection via
+`AccountTransportCoordinator.acquire()` over the gateway's eligible pool snapshot + budget signal → short
+in-flight pool reservation + sticky binding → resolve
 the selected pooled `AuthMaterial` via the gateway `AuthResolver` (refresh under lock if expired) → dispatch via
 llm-mesh → provider-compat SSE stream back → SETTLE one `cost_event` with normalized usage (estimated if usage
 missing — BR-47 never-zero).
@@ -108,17 +116,20 @@ or is deleted after the api routes through the gateway. Ingress = `llm.sent-tech
      before it runs.
   3. **assisted mode** — an ASSISTANT processes the requests submitted by a third party on the provider's behalf
      (mediated execution, provider-accountable).
-  This authorization layer sits ON TOP of the pool: the lease + `selectAccount` result MUST carry the
-  authorization-mode + the responsible provider-identity, so every dispatch is traceable to a responsible
-  provider session. Gated behind the kill-switch with the cross-user activation (personal-passthrough v0 is
+  This authorization layer sits ON TOP of the pool: the lease + the Layer-A `acquire()` result
+  (`AccountTransportAcquisition`) MUST carry the authorization-mode + the responsible provider-identity (the
+  gateway wraps the public acquisition in its own `PoolSelection`, attaching an `AuthorizationGrant` =
+  `AuthzMode` + `ProviderIdentity`), so every dispatch is traceable to a responsible provider session. Gated
+  behind the kill-switch with the cross-user activation (personal-passthrough v0 is
   exempt — caller == provider).
 - **Package NAME `@sentropic/llm-gateway`** — owner-ratified 2026-06-21 (supersedes `mesh-gateway`); ingress
   `llm.sent-tech.ca`. Durable published name.
 - **Wire contract** (`/v1/messages` + `/v1/chat/completions` provider-compat) — IRREVERSIBLE once consumers depend.
-**Architect reco-defaults (converged):** D1 provider-compat primary (native only for admin); D3 package + separate
-service, mountable in api for transition; D4 pool-state = DB (metadata/selection) + KMS (secrets); D5 the api
-mesh-dispatch routes THROUGH the gateway (stage: mount → remove direct bypasses); D6 sticky = NO silent rebind
-(audited rebind only); D7 freeze only `/v1/{messages,chat/completions,models}` + health for v1 (expand w/ contract tests).
+**Architect reco-defaults (converged, renumbered contiguous):** D1 provider-compat primary (native only for
+admin); D2 package + separate service, mountable in api for transition; D3 pool-state = DB (metadata/selection)
++ KMS (secrets); D4 the api mesh-dispatch routes THROUGH the gateway (stage: mount → remove direct bypasses);
+D5 sticky = NO silent rebind (audited rebind only); D6 freeze only `/v1/{messages,chat/completions,models}` +
+health for v1 (expand w/ contract tests).
 
 ## 8. Risks
 Provider-API drift (the compat SSE is a frozen contract — Anthropic SSE vs OpenAI `[DONE]`; needs fixtures);
@@ -135,3 +146,12 @@ ONLY); double-metering (one financial charge); **provider TERMS** (owner accepta
 - 2026-06-21: RENAMED `mesh-gateway` → **`llm-gateway`** (owner-ratified) + ingress `mesh.sent-tech.ca` →
   `llm.sent-tech.ca`; folded in the owner-ratified cross-user 3-mode authorization model (§7 D0). Build lane =
   `claude:mesh`. Pending: architect review of the renamed spec; remote notified of the package/env/ingress change.
+- 2026-06-22: architect §7 corrections applied (Lot-3a freeze prep). (a) §1/§2/§7 wording: `selectAccount`
+  references replaced with the real PUBLIC API `AccountTransportCoordinator.acquire()` / `AccountTransportAcquisition`
+  (FL-1(a): `acquire()` is public, `selectAccount` is private; exposing a pure planner DEFERRED to llm-mesh v0.6+).
+  (b) §7 reco-defaults renumbered contiguous D1..D6 (the prior list skipped D2 — was D1,D3,D4,D5,D6,D7; content
+  unchanged, numbering hygiene only — architect to confirm at sign). (c) code: `authzMode`+`providerIdentity`
+  carried on a gateway `PoolSelection` wrapping the PUBLIC `AccountTransportAcquisition` (not a private
+  selectAccount), carried-but-NOT-enforced in v0 (personal-passthrough = caller==provider, kill-switch OFF).
+  The wire is NOT frozen-final until the Lot-3 double-review (Opus 4.8max + Codex 5.5xhigh) + BR-46 contract-snapshot
+  + architect sign + owner re-confirm.
