@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { mapGatewayError, type GatewayFailureKind, type GatewayWire } from '../src/index.js';
+import { mapGatewayError, type GatewayFailureKind } from '../src/index.js';
 import { FixtureTransport, anthropicFrames, openAiFrames } from './fixtures/transport.js';
 import { buildHarness, authHeaders } from './fixtures/harness.js';
 import { anthropicMessageResponse, anthropicRequest } from './fixtures/anthropic.js';
@@ -42,44 +42,57 @@ const FROZEN_ROUTES = [
 ] as const;
 
 /**
- * FROZEN §3b error-mapping table: internal failure class -> { status, body
- * type } per wire. Derived live from `mapGatewayError` and asserted against the
- * golden, so a change to the mapper that drifts the wire fails here.
+ * FROZEN §3b error-mapping table: internal failure class -> the EXACT provider
+ * envelope (status + full body + code + message) per wire. Derived live from
+ * `mapGatewayError` and asserted against this golden, so ANY drift in status,
+ * type, code OR message text fails here. Anthropic body = `{type:'error',
+ * error:{type,message}}`; OpenAI body = `{error:{message,type,code?}}`.
  */
 const FROZEN_ERROR_MAP: Record<
   GatewayFailureKind,
-  { anthropic: { status: number; type: string }; openai: { status: number; type: string } }
+  {
+    anthropic: { status: number; type: string; message: string };
+    openai: { status: number; type: string; message: string; code: string };
+  }
 > = {
   'caller-auth-failed': {
-    anthropic: { status: 401, type: 'authentication_error' },
-    openai: { status: 401, type: 'invalid_request_error' },
+    anthropic: { status: 401, type: 'authentication_error', message: 'authentication failed' },
+    openai: { status: 401, type: 'invalid_request_error', message: 'authentication failed', code: 'invalid_api_key' },
   },
   'over-budget': {
-    anthropic: { status: 429, type: 'rate_limit_error' },
-    openai: { status: 429, type: 'rate_limit_error' },
+    anthropic: { status: 429, type: 'rate_limit_error', message: 'rate limit exceeded' },
+    openai: { status: 429, type: 'rate_limit_error', message: 'rate limit exceeded', code: 'rate_limit_exceeded' },
   },
   'no-eligible-account': {
-    anthropic: { status: 429, type: 'overloaded_error' },
-    openai: { status: 429, type: 'rate_limit_error' },
+    anthropic: { status: 429, type: 'overloaded_error', message: 'service temporarily unavailable' },
+    openai: { status: 429, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
   },
   'pooled-account-unavailable': {
-    anthropic: { status: 503, type: 'overloaded_error' },
-    openai: { status: 503, type: 'rate_limit_error' },
+    anthropic: { status: 503, type: 'overloaded_error', message: 'service temporarily unavailable' },
+    openai: { status: 503, type: 'rate_limit_error', message: 'service temporarily unavailable', code: 'overloaded' },
   },
   'cross-user-disabled': {
-    anthropic: { status: 400, type: 'invalid_request_error' },
-    openai: { status: 400, type: 'invalid_request_error' },
+    anthropic: { status: 400, type: 'invalid_request_error', message: 'request not permitted' },
+    openai: { status: 400, type: 'invalid_request_error', message: 'request not permitted', code: 'unsupported' },
   },
   'bad-request': {
-    anthropic: { status: 400, type: 'invalid_request_error' },
-    openai: { status: 400, type: 'invalid_request_error' },
+    anthropic: { status: 400, type: 'invalid_request_error', message: 'invalid request' },
+    openai: { status: 400, type: 'invalid_request_error', message: 'invalid request', code: 'invalid_request' },
   },
 };
 
-const bodyType = (wire: GatewayWire, body: unknown): string =>
-  wire === 'anthropic-messages'
-    ? (body as { error: { type: string } }).error.type
-    : (body as { error: { type: string } }).error.type;
+/** The actual (method, path) pairs registered on the real Hono router. */
+const actualRouterRoutes = (app: { routes: { method: string; path: string }[] }): string[] => {
+  const seen = new Set<string>();
+  for (const r of app.routes) {
+    // Skip Hono framework middleware entries (`ALL` method / wildcard paths).
+    if (r.method === 'ALL' || r.path === '*' || r.path === '/*') {
+      continue;
+    }
+    seen.add(`${r.method} ${r.path}`);
+  }
+  return [...seen].sort();
+};
 
 describe('BR-46 v1 wire contract snapshot — route inventory', () => {
   it('freezes the exact v1 route inventory + methods (spec §3)', () => {
@@ -92,6 +105,16 @@ describe('BR-46 v1 wire contract snapshot — route inventory', () => {
       'GET /healthz',
       'GET /readyz',
     ]);
+  });
+
+  it('UNKNOWN-ROUTE GUARD: the REAL router exposes EXACTLY the frozen routes', () => {
+    // Derived live from the mounted Hono router. Adding/removing/renaming ANY
+    // route (or changing its method) makes this FAIL until the FROZEN_ROUTES
+    // golden is deliberately edited in the same PR — a real freeze, not a
+    // hand-written constant that can silently drift from the router.
+    const { app } = buildHarness({ transport: new FixtureTransport() });
+    const expected = FROZEN_ROUTES.map((r) => `${r.method} ${r.path}`).sort();
+    expect(actualRouterRoutes(app)).toEqual(expected);
   });
 
   it('mounts every frozen route (no 404) on the real router', async () => {
@@ -148,7 +171,7 @@ describe('BR-46 v1 wire contract snapshot — /v1/models shape', () => {
 });
 
 describe('BR-46 v1 wire contract snapshot — non-stream JSON passthrough', () => {
-  it('freezes the Anthropic /v1/messages JSON response + request-id header', async () => {
+  it('freezes the EXACT Anthropic /v1/messages status + body + request-id header', async () => {
     const transport = new FixtureTransport({
       jsonResponse: { status: 200, body: anthropicMessageResponse },
     });
@@ -158,14 +181,16 @@ describe('BR-46 v1 wire contract snapshot — non-stream JSON passthrough', () =
       headers: authHeaders('user-a'),
       body: JSON.stringify(anthropicRequest(false)),
     });
+    // EXACT status.
     expect(res.status).toBe(200);
-    expect(res.headers.get(REQUEST_ID_HEADER)).toBeTruthy();
-    // Provider-native body passed through VERBATIM (the gateway does not reshape).
-    const body = (await res.json()) as { type?: string };
-    expect(body.type).toBe('message');
+    // EXACT gateway request-id header (the harness pins it deterministically).
+    expect(res.headers.get(REQUEST_ID_HEADER)).toBe('req_fixture_id');
+    // EXACT provider-native body, byte-faithful (the gateway does NOT reshape).
+    const body = await res.json();
+    expect(body).toEqual(anthropicMessageResponse);
   });
 
-  it('freezes the OpenAI /v1/chat/completions JSON response + request-id header', async () => {
+  it('freezes the EXACT OpenAI /v1/chat/completions status + body + request-id header', async () => {
     const transport = new FixtureTransport({
       jsonResponse: { status: 200, body: openAiChatResponse },
     });
@@ -176,15 +201,16 @@ describe('BR-46 v1 wire contract snapshot — non-stream JSON passthrough', () =
       body: JSON.stringify(openAiRequest(false)),
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get(REQUEST_ID_HEADER)).toBeTruthy();
-    const body = (await res.json()) as { object?: string };
-    expect(body.object).toBe('chat.completion');
+    expect(res.headers.get(REQUEST_ID_HEADER)).toBe('req_fixture_id');
+    const body = await res.json();
+    expect(body).toEqual(openAiChatResponse);
   });
 });
 
 describe('BR-46 v1 wire contract snapshot — SSE framing', () => {
-  it('freezes Anthropic SSE framing (text/event-stream; event:/data:; message_stop)', async () => {
-    const transport = new FixtureTransport({ streamFrames: anthropicFrames() });
+  it('freezes the EXACT Anthropic SSE bytes (event:/data: ... message_stop, NO [DONE])', async () => {
+    const frames = anthropicFrames();
+    const transport = new FixtureTransport({ streamFrames: frames });
     const { app } = buildHarness({ transport });
     const res = await app.request('/v1/messages', {
       method: 'POST',
@@ -192,18 +218,18 @@ describe('BR-46 v1 wire contract snapshot — SSE framing', () => {
       body: JSON.stringify(anthropicRequest(true)),
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(res.headers.get('content-type')).toBe('text/event-stream; charset=utf-8');
     const text = await res.text();
-    // Anthropic frames: `event: <name>\ndata: <json>\n\n`, terminating message_stop.
-    expect(text).toContain('event: message_start');
-    expect(text).toContain('event: message_stop');
-    expect(text).toContain('\ndata: ');
-    // NEVER the OpenAI terminator on the Anthropic wire.
+    // EXACT bytes: relayed stream EQUALS the provider frames verbatim (no synth).
+    expect(text).toBe(frames.join(''));
+    // Anthropic terminates with message_stop and carries NO [DONE] (B3).
+    expect(text.endsWith('event: message_stop\ndata: {"type":"message_stop"}\n\n')).toBe(true);
     expect(text).not.toContain('[DONE]');
   });
 
-  it('freezes OpenAI SSE framing (data: chunks terminated by data: [DONE])', async () => {
-    const transport = new FixtureTransport({ streamFrames: openAiFrames() });
+  it('freezes the EXACT OpenAI SSE bytes (data: chunks + provider data: [DONE], exactly one)', async () => {
+    const frames = openAiFrames(); // includes the provider's own data: [DONE]
+    const transport = new FixtureTransport({ streamFrames: frames });
     const { app } = buildHarness({ transport });
     const res = await app.request('/v1/chat/completions', {
       method: 'POST',
@@ -211,50 +237,62 @@ describe('BR-46 v1 wire contract snapshot — SSE framing', () => {
       body: JSON.stringify(openAiRequest(true)),
     });
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(res.headers.get('content-type')).toBe('text/event-stream; charset=utf-8');
     const text = await res.text();
-    expect(text).toContain('data: {');
-    expect(text).toContain('"object":"chat.completion.chunk"');
-    // OpenAI terminates with the [DONE] sentinel (spec §3b).
-    expect(text.trimEnd().endsWith('data: [DONE]')).toBe(true);
+    // EXACT bytes: relayed stream EQUALS the provider frames verbatim (B3 — the
+    // gateway synthesizes NO terminator; the provider's single [DONE] is relayed).
+    expect(text).toBe(frames.join(''));
+    expect(text.split('data: [DONE]').length - 1).toBe(1);
+    expect(text.endsWith('data: [DONE]\n\n')).toBe(true);
     // NEVER Anthropic event names on the OpenAI wire.
     expect(text).not.toContain('event: message_start');
   });
 });
 
 describe('BR-46 v1 wire contract snapshot — §3b error-mapping table', () => {
-  it('freezes the per-wire {status, body-type} mapping for every failure class', () => {
+  it('freezes the EXACT per-wire status + body (type, message, code) for every failure class', () => {
     for (const kind of Object.keys(FROZEN_ERROR_MAP) as GatewayFailureKind[]) {
       const golden = FROZEN_ERROR_MAP[kind];
 
+      // Anthropic: EXACT status + full `{type:'error', error:{type,message}}`.
       const a = mapGatewayError('anthropic-messages', kind);
       expect(a.status).toBe(golden.anthropic.status);
-      expect(bodyType('anthropic-messages', a.body)).toBe(golden.anthropic.type);
+      expect(a.body).toEqual({
+        type: 'error',
+        error: { type: golden.anthropic.type, message: golden.anthropic.message },
+      });
 
+      // OpenAI: EXACT status + full `{error:{message,type,code}}`.
       const o = mapGatewayError('openai-chat-completions', kind);
       expect(o.status).toBe(golden.openai.status);
-      expect(bodyType('openai-chat-completions', o.body)).toBe(golden.openai.type);
+      expect(o.body).toEqual({
+        error: {
+          message: golden.openai.message,
+          type: golden.openai.type,
+          code: golden.openai.code,
+        },
+      });
     }
   });
 
-  it('freezes the Retry-After attachment for rate-limit/overloaded classes', () => {
+  it('freezes the EXACT Retry-After header for rate-limit/overloaded classes', () => {
     for (const kind of ['over-budget', 'no-eligible-account', 'pooled-account-unavailable'] as const) {
       const a = mapGatewayError('anthropic-messages', kind, 7);
-      expect(a.headers?.['Retry-After']).toBe('7');
+      expect(a.headers).toEqual({ 'Retry-After': '7' });
+      const o = mapGatewayError('openai-chat-completions', kind, 7);
+      expect(o.headers).toEqual({ 'Retry-After': '7' });
     }
-    // Auth + bad-request never carry Retry-After.
+    // Auth + bad-request never carry Retry-After (no headers at all).
     expect(mapGatewayError('anthropic-messages', 'caller-auth-failed', 7).headers).toBeUndefined();
     expect(mapGatewayError('openai-chat-completions', 'bad-request', 7).headers).toBeUndefined();
   });
 
-  it('freezes the two provider-shaped error envelopes (Anthropic vs OpenAI)', () => {
+  it('freezes the two provider-shaped error envelope key-sets (Anthropic vs OpenAI)', () => {
     const a = mapGatewayError('anthropic-messages', 'bad-request');
-    // Anthropic: {"type":"error","error":{"type","message"}}
     expect((a.body as { type: string }).type).toBe('error');
     expect(Object.keys((a.body as { error: object }).error).sort()).toEqual(['message', 'type']);
 
     const o = mapGatewayError('openai-chat-completions', 'bad-request');
-    // OpenAI: {"error":{"message","type","code"}}
     expect(Object.keys((o.body as { error: object }).error).sort()).toEqual([
       'code',
       'message',
