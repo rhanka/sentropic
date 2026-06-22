@@ -50,26 +50,48 @@ failure/estimated usage; **no retry after bytes have streamed**.
 ## 3. Wire contract (FROZEN v1 surface — expand only with contract tests)
 `POST /v1/messages` (Anthropic Messages compat), `POST /v1/chat/completions` (OpenAI Chat Completions compat),
 `GET /v1/models` (filtered by caller/pool policy), `GET /healthz`, `GET /readyz`. Auth = SENTROPIC auth (NOT
-provider auth): `Authorization: Bearer <OIDC/session>` OR `DPoP <token>` + DPoP proof for S2S. FAITHFUL
-passthrough: request/response JSON shape + SSE framing (Anthropic SSE vs OpenAI `[DONE]`) + provider version
-headers + provider-style error bodies. Gateway-added but INVISIBLE: caller-auth, account selection, pooled-cred
-swap, metering, request ids. **NEVER expose** pooled account ids/tokens/refresh-state/pool errors (surface them
-only as provider-shaped availability/rate-limit errors). Provider-compat = the PRIMARY surface (Layer-C drop-in
-via `ANTHROPIC_BASE_URL`/OpenAI base URL); a sentropic-native API only for admin/status/debug.
+provider auth): `Authorization: Bearer <OIDC/session>` OR `DPoP <token>` + DPoP proof for S2S OR `x-api-key:
+<sentropic-key>` (the Anthropic-SDK drop-in scheme — the SDK sends its key as `x-api-key`, never
+`Authorization: Bearer`, so a client with `ANTHROPIC_BASE_URL=<gateway>` + the standard `ANTHROPIC_API_KEY` reaches
+the gateway as `x-api-key`; the VALUE is a sentropic key, NOT a provider key — the gateway swaps in the pooled
+provider credential). FAITHFUL passthrough: request/response JSON shape + SSE framing (Anthropic SSE vs OpenAI
+`[DONE]`) + provider response headers (request-id/version/beta/rate-limit/retry, via an allowlist; the gateway
+forwards only the allowlisted provider headers + `X-Sentropic-Request-Id` and NEVER a pool-internal header) +
+provider-style error bodies. Gateway-added but INVISIBLE: caller-auth, account selection, pooled-cred
+swap, metering, request ids. **TERMINATOR OWNERSHIP**: the gateway relays provider bytes VERBATIM and synthesizes
+NO terminator — a real OpenAI transport emits its own `data: [DONE]`; Anthropic terminates with `message_stop`
+(no `[DONE]`); on a mid-stream error NO synthetic `[DONE]` is appended (it would mask the error as a clean stop).
+**NEVER expose** pooled account ids/tokens/refresh-state/pool errors NOR any pool-internal id (lease/reservation/
+account id) on the wire, in logs, or in the metering record (surface only provider-shaped availability/rate-limit
+errors; logs/metering carry a gateway-local OPAQUE correlation id, never a reversible fingerprint). Provider-compat
+= the PRIMARY surface (Layer-C drop-in via `ANTHROPIC_BASE_URL`/OpenAI base URL); a sentropic-native API only for
+admin/status/debug.
+
+> **CALLER==PROVIDER (B1, personal-passthrough v0):** llm-mesh's `acquire()` selects over EVERY account in its
+> coordinator and ignores `userId`, and its sticky lease key omits the caller. The gateway — the only layer that
+> knows account OWNERSHIP — enforces caller==provider MECHANICALLY: each pool account carries an OWNER (the
+> enrolling caller's verified user id, `metadata.ownerUserId`); a given caller is handed a coordinator built over
+> ONLY their own accounts, and the caller identity is folded into the sticky `affinityKey`. A caller can neither
+> select nor stick to another caller's account; an unowned account is never selectable (deny by default). This is a
+> mechanical guarantee, not a convention — and it does NOT modify llm-mesh (published `@sentropic/llm-mesh@0.5.0`).
 
 ### 3b. Precise contract (for Layer-C/B integration tests)
 - **Request**: provider-NATIVE body passed through verbatim (Anthropic Messages `{model,messages,max_tokens,
   stream?,...}`; OpenAI `{model,messages,stream?,...}`). Headers: `Authorization: Bearer <sentropic>` | `DPoP
-  <token>`+proof, `Content-Type: application/json`, provider version headers passed through. The gateway resolves
-  provider/model from the body `model` via the catalog/pool.
-- **Response (non-stream)** = provider-NATIVE JSON passed through + gateway header `X-Sentropic-Request-Id`.
-- **Response (stream/SSE)** = provider-NATIVE framing passed through (Anthropic `event: message_start\ndata:…` →
-  `message_stop`; OpenAI `data:…\n\n` → `data: [DONE]`).
+  <token>`+proof | `x-api-key: <sentropic-key>` (Anthropic-SDK drop-in), `Content-Type: application/json`,
+  provider version headers passed through. The gateway resolves provider/model from the body `model` via the
+  catalog/pool. A malformed JSON body is a `400` bad-request (provider invalid-request) — NOT a 503.
+- **Response (non-stream)** = provider-NATIVE JSON passed through + gateway header `X-Sentropic-Request-Id` + the
+  allowlisted provider response headers (#4).
+- **Response (stream/SSE)** = provider-NATIVE framing passed through VERBATIM, gateway synthesizes no terminator
+  (Anthropic `event: message_start\ndata:…` → `message_stop`, NO `[DONE]`; OpenAI `data:…\n\n` → the provider's
+  own `data: [DONE]`). A failure BEFORE the first byte returns a provider-shaped `503` HTTP error (never an empty
+  `200` stream); after the first byte the gateway settles and does NOT retry (no synthetic terminator on error).
 - **Errors** = provider-SHAPED, gateway-mapped, NEVER leak pool internals. Anthropic shape
   `{"type":"error","error":{"type","message"}}`; OpenAI `{"error":{"message","type","code"}}`. Mapping:
   401 caller-auth-fail (provider auth-error); 429 over-budget BR-47 (provider rate-limit + `Retry-After`);
   429/503 no-eligible-account (provider overloaded + `Retry-After`); 502/503 pooled-account-unavailable AFTER
-  refresh-fail/exclusion (provider overloaded — NOT the pool detail); 400 bad-request/unsupported-model
+  refresh-fail/exclusion (provider overloaded — NOT the pool detail); 400 bad-request/unsupported-model/malformed-JSON
   (provider invalid-request). Mid-stream provider failure: provider-native error event in the SSE, then settle.
 
 ## 4. Pool + auth-swap
@@ -106,6 +128,10 @@ or is deleted after the api routes through the gateway. Ingress = `llm.sent-tech
   Codex.) **Sequencing (refined w/ remote)**: ship gateway mode **PERSONAL-PASSTHROUGH first** (1 caller =
   their OWN enrolled accounts, ToS-conforming — remote's Layer-C personal pool); the CROSS-USER pool activates
   ONLY after the owner ToS-acceptance + kill-switch. The personal-passthrough path is the unblocked v0.
+  **The kill switch is FAIL-CLOSED (#7):** while OFF, the gateway rejects ANY non-personal selection path — both
+  a request configured for `cross-user-pool` mode AND any request carrying an authorization grant — not merely
+  grant-carrying ones. With the switch ON, a cross-user selection MUST carry an authorization grant (no anonymous
+  cross-user dispatch). The v0 personal-passthrough path needs no grant (caller==provider).
 - **CROSS-USER AUTHORIZATION MODEL (owner-ratified 2026-06-21):** cross-user pooling IS permitted, but with
   **traceability of authorization management**. Invariant: **when a user supplies their account, they take on a
   FULL SESSION and the associated RESPONSIBILITIES** (the account-provider is accountable for what runs under
@@ -155,3 +181,17 @@ ONLY); double-metering (one financial charge); **provider TERMS** (owner accepta
   selectAccount), carried-but-NOT-enforced in v0 (personal-passthrough = caller==provider, kill-switch OFF).
   The wire is NOT frozen-final until the Lot-3 double-review (Opus 4.8max + Codex 5.5xhigh) + BR-46 contract-snapshot
   + architect sign + owner re-confirm.
+- 2026-06-22: Lot-3b — DOUBLE-REVIEW (Opus 4.8max + Codex 5.5) returned FIX-FIRST; all 11 findings resolved
+  gateway-side (NO llm-mesh change — `@sentropic/llm-mesh@0.5.0` published, untouched). Blockers: B1 caller==provider
+  enforced mechanically (owner-scoped per-caller coordinator + owner filter + per-caller affinity key; deny-as-missing;
+  unowned accounts non-selectable); B2 metering/log surface carries a gateway-local OPAQUE correlation id — no
+  `leaseId`/lease/raw account id (the redacted view dropped `leaseId`); B3 terminator ownership — gateway relays
+  provider bytes verbatim and synthesizes NO `[DONE]` (provider emits its own; no synthetic terminator after a
+  mid-stream error). Majors: #4 provider response headers forwarded via an allowlist (+ `X-Sentropic-Request-Id`,
+  pool-internal headers dropped); #5 malformed JSON → exact 400; #6 stream failure before first byte → 503 (not
+  empty 200); #7 kill-switch FAIL-CLOSED (reject any non-personal path while OFF; grant required when ON); #8 authz
+  shape aligned to the ratified §7 (`authzMode`+`providerIdentity`); #9 BR-46 contract-snapshot is now a real freeze
+  (router-derived unknown-route guard + exact bodies/SSE bytes/error envelopes+headers); #10 `x-api-key` caller-auth
+  (Anthropic-SDK drop-in). Minor: #11 `fingerprint()` removed (was dictionary-reversible) — logs use a fixed
+  `[redacted]` mask + an opaque correlation id. Gate: `make typecheck-llm-gateway` clean, `make test-llm-gateway`
+  65/65. #353 stays DRAFT, version unchanged (0.1.0), NOT published — awaits architect sign + owner re-confirm.
