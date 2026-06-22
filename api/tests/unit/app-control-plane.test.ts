@@ -66,6 +66,13 @@ describe('AppControlPlane — templates', () => {
     expect(versions).toHaveLength(2);
   });
 
+  it('enforces family = one app_slug (rejects a version bound to a different slug)', async () => {
+    const v1 = await acp.createTemplate(draft('mono', '1.0.0'));
+    await expect(
+      acp.createTemplate(draft('other', '2.0.0', v1.familyId))
+    ).rejects.toBeInstanceOf(AppControlPlaneValidationError);
+  });
+
   it('lifecycle: draft mutable → published immutable → deprecated; invalid transitions rejected', async () => {
     const t = await acp.createTemplate(draft('delta'));
     const patched = await acp.updateDraft(t.id, { blueprintSchemaVersion: 2 });
@@ -170,5 +177,13 @@ describe('AppControlPlane — workspace bindings', () => {
 
     const listed = await acp.listBindings({ appInstanceId: inst.id });
     expect(listed).toHaveLength(1);
+  });
+
+  it('rejects a cross-tenant workspace binding (isolation, no DB FK)', async () => {
+    const t = await publishedTemplate('kappa');
+    const inst = await acp.createInstance({ templateFamilyId: t.familyId, templateVersion: '1.0.0', tenantId: TENANT });
+    await expect(
+      acp.bindWorkspace({ appInstanceId: inst.id, workspaceId: 'ws-x', tenantId: 'other-acp-tenant', allowedWorkspaceTypes: [] })
+    ).rejects.toBeInstanceOf(AppControlPlaneValidationError);
   });
 });
