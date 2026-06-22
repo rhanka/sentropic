@@ -115,8 +115,10 @@ describe('faithful SSE passthrough framing', () => {
     assertNoPoolSecrets(text);
   });
 
-  it('relays OpenAI SSE chunks verbatim and appends data: [DONE]', async () => {
-    const frames = openAiFrames();
+  it('relays OpenAI SSE chunks (incl. the provider [DONE]) verbatim, synthesizing none', async () => {
+    // B3: the transport (a real OpenAI provider) emits its OWN data: [DONE]; the
+    // gateway relays the bytes verbatim and adds NO terminator of its own.
+    const frames = openAiFrames(); // includes the provider's data: [DONE]
     const transport = new FixtureTransport({ streamFrames: frames });
     const { app } = buildHarness({ transport });
 
@@ -129,13 +131,50 @@ describe('faithful SSE passthrough framing', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     const text = await res.text();
-    // Native chunks verbatim + the gateway-added [DONE] terminator.
-    expect(text).toBe(`${frames.join('')}data: [DONE]\n\n`);
+    // Byte-faithful: relayed bytes EQUAL the provider frames (no synthesized [DONE]).
+    expect(text).toBe(frames.join(''));
 
     const events = parseSse(text);
     expect(events[0]?.data).toContain('chat.completion.chunk');
     expect(events.at(-1)?.data).toBe('[DONE]');
     assertNoPoolSecrets(text);
+  });
+
+  it('B3: provider already emits [DONE] -> EXACTLY ONE [DONE] (no double terminator)', async () => {
+    const frames = openAiFrames(); // provider includes one data: [DONE]
+    const transport = new FixtureTransport({ streamFrames: frames });
+    const { app } = buildHarness({ transport });
+
+    const res = await app.request('/v1/chat/completions', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(openAiRequest(true)),
+    });
+    const text = await res.text();
+    // Exactly one [DONE] sentinel in the whole stream.
+    expect(text.split('data: [DONE]').length - 1).toBe(1);
+  });
+
+  it('B3: mid-stream OpenAI error -> NO trailing synthetic [DONE]', async () => {
+    // Provider chunks then a native error chunk, then the connection drops —
+    // OpenAI does NOT emit [DONE] after a mid-stream error, and the gateway
+    // must not synthesize one (it would mask the error as a clean stop).
+    const frames = openAiFramesWithError();
+    const transport = new FixtureTransport({
+      streamFrames: frames,
+      failAfterFrames: frames.length,
+    });
+    const { app } = buildHarness({ transport });
+
+    const res = await app.request('/v1/chat/completions', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(openAiRequest(true)),
+    });
+    const text = await res.text();
+    expect(text).toContain('server_error');
+    // No synthetic [DONE] after the mid-stream error.
+    expect(text).not.toContain('[DONE]');
   });
 });
 
@@ -185,6 +224,80 @@ describe('no-retry-after-stream (spec §2)', () => {
     expect(transport.seenMaterials).toHaveLength(1);
     expect(metering.settlements).toHaveLength(1);
     expect(metering.last?.outcome).toBe('failed');
+  });
+
+  it('#6: a failure BEFORE the first byte returns 503, not an empty 200 stream', async () => {
+    const transport = new FixtureTransport({ failBeforeFirstFrame: true });
+    const { app, metering } = buildHarness({ transport });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(true)),
+    });
+
+    // No byte streamed -> a real provider-shaped HTTP error, not an empty 200.
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { error: { type: string } };
+    expect(body.error.type).toBe('overloaded_error');
+    // The flow still settled exactly once (failure), and never leaks pool detail.
+    expect(metering.settlements).toHaveLength(1);
+    expect(metering.last?.outcome).toBe('failed');
+    expect(JSON.stringify(body)).not.toContain('lease');
+  });
+});
+
+describe('#4 provider response header passthrough', () => {
+  it('forwards allowlisted provider headers on a non-stream response, drops the rest', async () => {
+    const transport = new FixtureTransport({
+      jsonResponse: { status: 200, body: anthropicMessageResponse },
+      responseHeaders: {
+        'anthropic-request-id': 'req_anthropic_abc',
+        'anthropic-version': '2023-06-01',
+        'retry-after': '3',
+        // Off-allowlist / pool-leak risk headers MUST be dropped.
+        'x-gateway-lease': 'lease_secret_1',
+        'set-cookie': 'session=abc',
+      },
+    });
+    const { app } = buildHarness({ transport });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+
+    expect(res.status).toBe(200);
+    // Allowlisted provider headers forwarded.
+    expect(res.headers.get('anthropic-request-id')).toBe('req_anthropic_abc');
+    expect(res.headers.get('anthropic-version')).toBe('2023-06-01');
+    expect(res.headers.get('retry-after')).toBe('3');
+    // Gateway request id always present.
+    expect(res.headers.get('x-sentropic-request-id')).toBe('req_fixture_id');
+    // Off-allowlist headers dropped (no pool internal rides out).
+    expect(res.headers.get('x-gateway-lease')).toBeNull();
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('forwards allowlisted provider headers on a stream response', async () => {
+    const transport = new FixtureTransport({
+      streamFrames: anthropicFrames(),
+      responseHeaders: { 'anthropic-request-id': 'req_stream_xyz', 'x-internal': 'nope' },
+    });
+    const { app } = buildHarness({ transport });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(true)),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(res.headers.get('anthropic-request-id')).toBe('req_stream_xyz');
+    expect(res.headers.get('x-internal')).toBeNull();
+    await res.text();
   });
 });
 

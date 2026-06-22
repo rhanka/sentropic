@@ -31,10 +31,19 @@ export interface GatewayDispatchRequest {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * Provider response headers carried through the dispatch contract (#4). The
+ * gateway forwards an ALLOWLIST of these so request-ids/rate-limit/version/beta/
+ * retry headers survive — faithful passthrough. Keys are lowercased.
+ */
+export type ProviderResponseHeaders = Readonly<Record<string, string>>;
+
 /** Non-stream provider-native response, passed through verbatim. */
 export interface GatewayDispatchResponse {
   readonly status: number;
   readonly body: unknown;
+  /** Provider response headers (lowercased). The router forwards the allowlist (#4). */
+  readonly headers?: ProviderResponseHeaders;
 }
 
 /** Provider-native SSE event, framed by wire (Anthropic event/data; OpenAI data + [DONE]). */
@@ -42,9 +51,19 @@ export interface GatewayDispatchStreamEvent {
   readonly raw: string;
 }
 
+/**
+ * A streaming dispatch result: the provider response headers (known BEFORE the
+ * first byte) + the async frame iterator. Carrying headers here lets the router
+ * forward the allowlisted provider stream headers (#4) faithfully.
+ */
+export interface GatewayDispatchStream {
+  /** Provider response headers (lowercased) for the stream. */
+  readonly headers?: ProviderResponseHeaders;
+  /** The provider-native SSE frames, relayed verbatim. */
+  readonly frames: AsyncIterable<GatewayDispatchStreamEvent>;
+}
+
 export interface GatewayDispatchPort {
   dispatch(request: GatewayDispatchRequest): Promise<GatewayDispatchResponse>;
-  dispatchStream(
-    request: GatewayDispatchRequest,
-  ): AsyncIterable<GatewayDispatchStreamEvent>;
+  dispatchStream(request: GatewayDispatchRequest): GatewayDispatchStream;
 }
