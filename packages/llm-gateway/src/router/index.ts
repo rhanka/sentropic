@@ -168,12 +168,12 @@ export const createGatewayRouter = (
       return sendError(c, notImplemented(wire), id);
     }
 
-    // Parse the provider-native body (bad JSON -> provider-shaped 400).
+    // Parse the provider-native body (bad JSON -> provider-shaped 400, §3b).
     let body: unknown;
     try {
       body = await c.req.json();
     } catch {
-      return sendError(c, toProviderShapedError(wire, undefined), id);
+      return sendError(c, mapGatewayError(wire, 'bad-request'), id);
     }
 
     const model = readModel(body);

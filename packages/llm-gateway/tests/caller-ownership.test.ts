@@ -132,3 +132,51 @@ describe('B1 caller==provider — caller-owned account selection', () => {
     expect(transport.seenMaterials).toHaveLength(0);
   });
 });
+
+describe('#7 kill-switch fail-closed (gateway in cross-user mode, switch OFF)', () => {
+  it('rejects EVERY request through the router when cross-user mode + switch OFF', async () => {
+    const transport = new FixtureTransport({
+      jsonResponse: { status: 200, body: anthropicMessageResponse },
+    });
+    // Gateway configured for cross-user mode but the kill switch is OFF.
+    const { app } = buildHarness({
+      transport,
+      accounts: [accountFor('user-a', 'alpha')],
+      mode: 'cross-user-pool',
+      crossUserPoolEnabled: false,
+    });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+
+    // Fail-closed: a plain bad-request (kill-switch internal never revealed),
+    // and NO account was ever selected/dispatched.
+    expect(res.status).toBe(400);
+    expect(transport.seenMaterials).toHaveLength(0);
+    const text = await res.text();
+    expect(text).not.toContain('kill');
+    expect(text).not.toContain('lease');
+  });
+
+  it('the v0 personal-passthrough path needs NO grant (switch OFF, mode personal)', async () => {
+    const transport = new FixtureTransport({
+      jsonResponse: { status: 200, body: anthropicMessageResponse },
+    });
+    const { app } = buildHarness({
+      transport,
+      accounts: [accountFor('user-a', 'alpha')],
+      // default mode = personal-passthrough, switch OFF.
+    });
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+    // Personal path is the unblocked v0 — succeeds with no grant required.
+    expect(res.status).toBe(200);
+    expect(transport.seenMaterials).toHaveLength(1);
+  });
+});

@@ -30,34 +30,51 @@ export interface VerifiedPrincipal {
 }
 
 /**
+ * Caller-auth schemes the gateway accepts (spec §3):
+ *  - `Bearer`  — `Authorization: Bearer <OIDC/session>` (the canonical path).
+ *  - `DPoP`    — `DPoP <token>` + proof for S2S.
+ *  - `x-api-key` — the SENTROPIC key sent via the `x-api-key` header. The
+ *    Anthropic SDK sends its key as `x-api-key` (never `Authorization: Bearer`);
+ *    so a client using `ANTHROPIC_BASE_URL=<gateway>` + the standard
+ *    `ANTHROPIC_API_KEY` env reaches the gateway as `x-api-key`. The gateway
+ *    accepts it as a caller-auth scheme (the VALUE is a sentropic key/token,
+ *    NOT a provider key — the gateway swaps in the pooled provider credential).
+ */
+export type CallerAuthScheme = 'Bearer' | 'DPoP' | 'x-api-key';
+
+/**
  * Token verification port — the documented stub seam for the OIDC/session edge.
  * Production binds this to `auth-hono` (iss/aud/scope/ath/jti). It resolves the
- * VERIFIED principal from a bearer/DPoP token, or `undefined` when invalid.
+ * VERIFIED principal from a bearer/DPoP/x-api-key token, or `undefined` when invalid.
  */
 export interface VerifyToken {
   verify(
     token: string,
-    scheme: 'Bearer' | 'DPoP',
+    scheme: CallerAuthScheme,
     headers: Readonly<Record<string, string>>,
   ): Promise<VerifiedPrincipal | undefined> | VerifiedPrincipal | undefined;
 }
 
 const parseAuthorization = (
   headers: Readonly<Record<string, string>>,
-): { scheme: 'Bearer' | 'DPoP'; token: string } | undefined => {
+): { scheme: CallerAuthScheme; token: string } | undefined => {
   // Case-insensitive header lookup (Hono lowercases, but be defensive).
   const raw =
     headers['authorization'] ?? headers['Authorization'] ?? '';
   const [scheme, ...rest] = raw.trim().split(/\s+/);
   const token = rest.join(' ').trim();
-  if (!token) {
-    return undefined;
+  if (token) {
+    if (scheme === 'Bearer') {
+      return { scheme: 'Bearer', token };
+    }
+    if (scheme === 'DPoP') {
+      return { scheme: 'DPoP', token };
+    }
   }
-  if (scheme === 'Bearer') {
-    return { scheme: 'Bearer', token };
-  }
-  if (scheme === 'DPoP') {
-    return { scheme: 'DPoP', token };
+  // Anthropic-SDK drop-in (spec §3): the sentropic key arrives as `x-api-key`.
+  const apiKey = (headers['x-api-key'] ?? headers['X-Api-Key'] ?? '').trim();
+  if (apiKey) {
+    return { scheme: 'x-api-key', token: apiKey };
   }
   return undefined;
 };
