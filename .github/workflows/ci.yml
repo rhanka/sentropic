@@ -770,6 +770,15 @@ jobs:
             ai_specs: "chat-tools,company-enrichment-sync,documents-tool,initiative-generation-sync"
           - suite: security
           - suite: limit
+          # BR70-CI1: the foundation data-spine test dirs (BR-52 artifact-store /
+          # BR-59 object-registry / BR-60 outbox) were green-by-absence — no matrix
+          # suite ran them. Each resolves via the test-api-% Makefile pattern to the
+          # per-dir npm script added in api/package.json. (`tests/services/` is a
+          # cross-lane grab-bag — catalog/flow/chat — NOT foundation, routed to its
+          # owning lanes separately, so it is intentionally not wired here.)
+          - suite: artifact-store
+          - suite: object-registry
+          - suite: outbox
           - suite: endpoints
             endpoints_shard: 1
           - suite: endpoints
