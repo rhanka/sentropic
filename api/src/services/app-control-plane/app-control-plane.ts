@@ -73,7 +73,9 @@ const INSTANCE_TRANSITIONS: Readonly<Record<AppInstanceStatus, ReadonlyArray<App
 };
 
 function isUniqueViolation(err: unknown): boolean {
-  return (err as { code?: string } | null)?.code === '23505';
+  // drizzle wraps the pg error: the original 23505 sits on `.code` OR on `.cause.code`.
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === '23505' || e?.cause?.code === '23505';
 }
 
 function first<T>(rows: T[]): T {
