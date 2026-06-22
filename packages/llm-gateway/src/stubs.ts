@@ -10,7 +10,7 @@ import type {
   GatewayDispatchPort,
   GatewayDispatchRequest,
   GatewayDispatchResponse,
-  GatewayDispatchStreamEvent,
+  GatewayDispatchStream,
 } from './ports/dispatch.js';
 import type { AuthResolver, PoolSelection, PoolStatePort } from './ports/pool.js';
 import type { GatewayConfig } from './config.js';
@@ -48,11 +48,8 @@ export const stubDispatch: GatewayDispatchPort = {
   async dispatch(_request: GatewayDispatchRequest): Promise<GatewayDispatchResponse> {
     return notImplemented('dispatch');
   },
-  // eslint-disable-next-line require-yield
-  async *dispatchStream(
-    _request: GatewayDispatchRequest,
-  ): AsyncIterable<GatewayDispatchStreamEvent> {
-    notImplemented('dispatchStream');
+  dispatchStream(_request: GatewayDispatchRequest): GatewayDispatchStream {
+    return notImplemented('dispatchStream');
   },
 };
 
