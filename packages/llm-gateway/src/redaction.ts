@@ -4,15 +4,18 @@
  * descriptors ONLY — never the executable `SecretAuthMaterial`. This module is
  * the single chokepoint that turns a selection into a log-safe shape.
  *
- * Rule: the response body and any log line emitted by the gateway MUST NOT
- * contain the pooled `accessToken` / `refreshToken` / raw `accountId`. The
- * descriptor exposes only a stable, non-reversible fingerprint + coarse
- * metadata (provider, has-refresh, expiry presence).
+ * Rule (spec §3): the response body, the metering record, and any log line the
+ * gateway emits MUST NOT contain the pooled `accessToken` / `refreshToken` / raw
+ * `accountId`, NOR any pool-INTERNAL id (the `leaseId`, reservation id, stable
+ * session id). The log-safe view exposes only coarse, non-identifying metadata
+ * (provider, has-refresh, expiry presence) plus a gateway-local OPAQUE
+ * correlation id that is minted by the gateway and cannot be reversed back to a
+ * pool lease or account.
  */
 
 import type { AuthDescriptor, SecretAuthMaterial } from '@sentropic/llm-mesh';
 
-/** Secret-bearing keys that must NEVER be logged. */
+/** Secret-bearing keys whose value must NEVER be logged (replaced, not hashed). */
 const SECRET_KEYS = new Set([
   'accessToken',
   'refreshToken',
@@ -24,56 +27,53 @@ const SECRET_KEYS = new Set([
   'apiKey',
 ]);
 
-/** A short, non-reversible fingerprint of a token for correlation in logs. */
-export const fingerprint = (secret: string | undefined | null): string => {
-  if (!secret) {
-    return 'none';
-  }
-  // Length + a tiny rolling hash. NOT cryptographic — just enough to tell two
-  // tokens apart in a log without revealing any byte of the secret.
-  let h = 0;
-  for (let i = 0; i < secret.length; i += 1) {
-    h = (h * 31 + secret.charCodeAt(i)) >>> 0;
-  }
-  return `fp_${secret.length}_${h.toString(36)}`;
-};
+/** Fixed mask for a redacted secret. Non-reversible, leaks no length. */
+export const REDACTED = '[redacted]';
 
 /**
- * A log-safe view of a selected pooled account. Carries ONLY the descriptor
- * (already redacted by llm-mesh) plus a token fingerprint — never the token.
+ * Mint a gateway-local OPAQUE correlation id for a selected account. It is a
+ * fresh random token — NOT derived from the pool `accountId`/`leaseId` — so it
+ * cannot be reversed back to a pool lease or account, yet still lets two log
+ * lines for the same call be correlated. (Replaces the prior reversible
+ * `fingerprint`, which was a dictionary-reversible unkeyed rolling hash.)
+ */
+export const newCorrelationId = (): string =>
+  `gw_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+
+/**
+ * A log-safe view of a selected pooled account. Carries ONLY coarse metadata +
+ * a gateway-local opaque correlation id — NEVER the token, the raw account id,
+ * or any pool-internal id (`leaseId` / reservation / stable session).
  */
 export interface RedactedSelectionView {
   readonly provider: string;
-  readonly accountFingerprint: string;
+  /** Gateway-minted opaque id — not derived from any pool id (spec §3). */
+  readonly correlationId: string;
   readonly hasRefreshToken: boolean;
   readonly expiresAtPresent: boolean;
-  readonly leaseId?: string;
 }
 
 /**
  * Build a log-safe view from the redacted descriptor + executable material.
- * The raw `accountId` is hashed to a fingerprint so logs never carry the pool's
- * internal account identifier verbatim.
+ * Neither the raw `accountId` nor the `leaseId` is carried: the view exposes a
+ * gateway-minted opaque correlation id instead, so the metering/log surface
+ * cannot identify the pool lease or account (spec §3).
  */
 export const redactSelection = (
   descriptor: AuthDescriptor,
-  material: SecretAuthMaterial,
-): RedactedSelectionView => {
-  const accessToken = 'accessToken' in material ? material.accessToken : undefined;
-  return {
-    provider: descriptor.accountProviderId ?? descriptor.sourceType,
-    accountFingerprint: fingerprint(descriptor.accountId ?? accessToken),
-    hasRefreshToken: Boolean(descriptor.hasRefreshToken),
-    expiresAtPresent: Boolean(descriptor.expiresAt),
-    ...(typeof descriptor.metadata?.leaseId === 'string'
-      ? { leaseId: descriptor.metadata.leaseId }
-      : {}),
-  };
-};
+  _material: SecretAuthMaterial,
+  correlationId: string = newCorrelationId(),
+): RedactedSelectionView => ({
+  provider: descriptor.accountProviderId ?? descriptor.sourceType,
+  correlationId,
+  hasRefreshToken: Boolean(descriptor.hasRefreshToken),
+  expiresAtPresent: Boolean(descriptor.expiresAt),
+});
 
 /**
  * Deep-redact an arbitrary value for logging: replaces any secret-bearing key
- * value with a fingerprint. Used to scrub objects before they reach a logger.
+ * value with the fixed `[redacted]` mask (non-reversible, length-hiding). Used
+ * to scrub objects before they reach a logger.
  */
 export const redactForLog = (value: unknown, depth = 0): unknown => {
   if (depth > 6 || value === null || typeof value !== 'object') {
@@ -85,7 +85,7 @@ export const redactForLog = (value: unknown, depth = 0): unknown => {
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
     if (SECRET_KEYS.has(key) && typeof val === 'string') {
-      out[key] = fingerprint(val);
+      out[key] = REDACTED;
     } else {
       out[key] = redactForLog(val, depth + 1);
     }

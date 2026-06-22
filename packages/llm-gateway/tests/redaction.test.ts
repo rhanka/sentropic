@@ -10,25 +10,25 @@ import type { AuthDescriptor, SecretAuthMaterial } from '@sentropic/llm-mesh';
 import {
   CoordinatorPoolState,
   GatewayError,
-  fingerprint,
+  newCorrelationId,
   redactForLog,
   redactSelection,
 } from '../src/index.js';
 import { InMemoryAccountTransportCoordinator } from '@sentropic/llm-mesh';
 
 describe('redaction helpers', () => {
-  it('fingerprints a token without revealing any byte of it', () => {
-    const fp = fingerprint('SECRET-ALPHA-TOKEN-xyz');
-    expect(fp).not.toContain('SECRET');
-    expect(fp).not.toContain('ALPHA');
-    expect(fp.startsWith('fp_')).toBe(true);
-    // Stable + distinguishing.
-    expect(fingerprint('SECRET-ALPHA-TOKEN-xyz')).toBe(fp);
-    expect(fingerprint('SECRET-BETA-TOKEN-xyz')).not.toBe(fp);
-    expect(fingerprint(undefined)).toBe('none');
+  it('mints an opaque correlation id not derived from any pool id', () => {
+    const a = newCorrelationId();
+    const b = newCorrelationId();
+    // Opaque + gateway-local: never reuses an account id / lease id verbatim.
+    expect(a.startsWith('gw_')).toBe(true);
+    expect(a).not.toContain('acct-');
+    expect(a).not.toContain('lease');
+    // Distinct per call (cannot pin two unrelated calls to the same lease).
+    expect(a).not.toBe(b);
   });
 
-  it('redactSelection exposes only descriptor + fingerprint, never the token', () => {
+  it('redactSelection exposes only coarse metadata + opaque id, never tokens or pool ids', () => {
     const material: SecretAuthMaterial = {
       type: 'account-transport',
       provider: 'claude-code',
@@ -47,12 +47,19 @@ describe('redaction helpers', () => {
     const serialized = JSON.stringify(view);
     expect(serialized).not.toContain('SECRET-ALPHA-TOKEN-xyz');
     expect(serialized).not.toContain('SECRET-ALPHA-REFRESH-xyz');
+    // B2: NO pool-internal id (raw account id, lease id) reaches the view.
+    expect(serialized).not.toContain('acct-alpha');
+    expect(serialized).not.toContain('lease_1');
+    expect(serialized).not.toContain('leaseId');
+    expect(serialized).not.toContain('lease');
+    expect(view.correlationId.startsWith('gw_')).toBe(true);
     expect(view.hasRefreshToken).toBe(true);
-    expect(view.leaseId).toBe('lease_1');
     expect(view.provider).toBe('claude-code');
+    // The view no longer carries a `leaseId` key at all.
+    expect('leaseId' in view).toBe(false);
   });
 
-  it('redactForLog deep-scrubs secret-bearing keys', () => {
+  it('redactForLog deep-scrubs secret-bearing keys with a fixed mask (non-reversible)', () => {
     const scrubbed = redactForLog({
       accessToken: 'SECRET-ALPHA-TOKEN-xyz',
       nested: { refreshToken: 'SECRET-ALPHA-REFRESH-xyz', model: 'claude-sonnet-4-6' },
@@ -62,6 +69,8 @@ describe('redaction helpers', () => {
     expect(serialized).not.toContain('SECRET-ALPHA-TOKEN-xyz');
     expect(serialized).not.toContain('SECRET-ALPHA-REFRESH-xyz');
     expect(serialized).not.toContain('Bearer SECRET');
+    // Fixed mask, not a length-leaking fingerprint.
+    expect((scrubbed as { accessToken: string }).accessToken).toBe('[redacted]');
     // Non-secret fields survive.
     expect(serialized).toContain('claude-sonnet-4-6');
   });
@@ -92,8 +101,8 @@ describe('kill-switch guard (cross-user disabled while OFF)', () => {
         transportProviderId: 'claude-code',
         modelId: 'claude-sonnet-4-6',
         authorization: {
-          mode: 'direct',
-          responsibleProvider: { providerSubjectId: 'other-user' },
+          authzMode: 'direct',
+          providerIdentity: { providerSubjectId: 'other-user' },
         },
       }),
     ).rejects.toBeInstanceOf(GatewayError);
