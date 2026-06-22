@@ -43,7 +43,7 @@ Q2=distinct-dev-crypto taken as the recommended default).
 - **DV3 — data = real prod copy, PII included (RATIFIED; owner Q3).** `dev` is seeded with a full real
   prod data copy (NOT synthetic, NOT PII-masked). Consequence: **`dev` holds real PII → it is
   access-controlled with the SAME strictness as prod** (not an open sandbox), despite minimal quotas.
-  (Supersedes OQ2R synthetic/scrubbed-shape.)
+  (Supersedes OQ2R synthetic/scrubbed-shape.)  **'Same strictness as prod' = concrete controls (mandatory):** `dev` is NON-public (private ingress / IP-allowlist, no end-user traffic), NetworkPolicy + RBAC restrict access, `kubectl exec`/port-forward locked down, PII access audited, backups encrypted. Tension acknowledged: `dev` auto-CDs UNREVIEWED `main` code against REAL PII (prod is gated by D7, dev is not) → the non-public + audited posture IS the compensating control.
 - **DV4 — auth = standalone `dev.auth`, parent RP ID; FEDERATION (D11R) DROPPED (RATIFIED; owner Q1).**
   `dev.auth` is a standalone IdP that **imports prod users**, with `WEBAUTHN_RP_ID = sent-tech.ca` (the
   parent, same as prod) so a user's **existing prod passkey verifies at `dev.auth`** (real login, zero
@@ -51,7 +51,7 @@ Q2=distinct-dev-crypto taken as the recommended default).
   OPPOSITE of federation, which did not. **Trade-off (conscious):** this is the shared-parent-RP-ID
   option set aside on 2026-06-20 for federation; the owner now picks it for real-login fidelity. The
   residual exposure (dev becomes a passkey-ceremony surface for real identities) is bounded by DV5
-  (distinct dev crypto → a dev session is never prod-valid) + DV3 (prod-grade access control on dev).
+  (distinct dev crypto → a dev session is never prod-valid) + DV3 (prod-grade access control on dev).  **Anti-replay (must-enforce):** the shared parent RP ID means a dev assertion carries the SAME `rpIdHash` as prod — tier separation then rests on (i) `dev.auth` registering ONLY `https://dev.auth.sent-tech.ca` as an allowed WebAuthn origin and strictly REJECTING prod origins, (ii) prod NEVER adding a `dev.auth` origin to its allowed set, and (iii) single-use server challenges. (A credential's registration origin (prod) need NOT equal its assertion origin (dev) — WebAuthn requires only an RP-ID registrable-suffix match + an allowed assertion origin; this is why importing the public-key rows + parent RP ID is sufficient.)
 - **DV5 — crypto = distinct per tier; only DATA is copied (RATIFIED; owner Q2 default).** Even with
   real data, `dev` **regenerates its OWN** id-token signing keys, `OAUTH_SIGNING_KEK`, DB creds, and
   OAuth client secrets, and does **NOT** import sessions/tokens/authorization-codes/magic-links
@@ -60,7 +60,7 @@ Q2=distinct-dev-crypto taken as the recommended default).
   and the real data tables ARE imported now (per DV4/DV3). (D6 distinct-crypto stays, now 2-way
   dev+prod; the RP ID is NO LONGER distinct — it is the shared parent, per DV4.)
 - **DV6 — orthogonality gate (D15) retained.** The automated access-isolation suite runs against
-  `dev`'s real data and remains the **prod-promotion gate** referenced by the D7 recette attestation.
+  `dev`'s real data and remains the **prod-promotion gate** referenced by the D7 recette attestation.  The suite evaluates the EXACT `main` digest being promoted (a stable evaluation point), not whatever transient state the auto-CD `dev` tier has drifted to.
 
 **Preserved unchanged:** PROD (D2/D3), D5 (tag `vYYYY.MM.DD.N` + immutable-digest promotion), D6
 (distinct crypto per tier — now 2-way), D7 (prod gate = GitHub `production` Environment + reviewer
@@ -101,7 +101,7 @@ validation) was wrong.
 - **D12 — validation env shape (RATIFIED 2026-06-20 — ⊘ SUPERSEDED 2026-06-22: single `sentropic-dev` ns, main-aligned not gated, see DV2).** Permanent `sentropic-validation` namespace (own PG /
   secrets / hosts / KEK / signing keys). **Pending OQ1** (poc-cluster headroom for a 3rd namespace —
   if blocked, fall back to ephemeral/time-boxed).
-- **D13/D14 — prod→validation import path (RATIFIED direction).** Repeatable make-driven, **fail-closed
+- **D13/D14 — prod→validation import path (RATIFIED direction).** ⊘ SUPERSEDED 2026-06-22 (re-scoped by DV3/DV4/DV5: real data INCL PII + `webauthn_credentials` ARE imported now; the scrub still drops/rotates signing-keys/KEK/client-secrets/sessions/tokens). See § REVISION. — Repeatable make-driven, **fail-closed
   scrub** (rollback on any scrub error; allowlist transform, raw clone rejected). ALWAYS drop/rotate:
   `id_token_signing_keys` (drop+regen), `OAUTH_SIGNING_KEK` + DB creds (env secrets, never from dump),
   `oauth_clients`/`service_clients` secrets + redirect URIs, `sessions`/`user_sessions`,
@@ -132,7 +132,7 @@ validation) was wrong.
 | D2 | Prod namespace | Keep live `sentropic` AS prod (zero disruption). |
 | D3 | Preprod DB | Separate (a shared DB would let preprod migrations mutate prod). |
 | D5 | Tag policy | `vYYYY.MM.DD.N` + immutable-digest promotion. |
-| D6 | Per-env secrets | SealedSecrets per ns; **distinct KEK/DB/client-secrets/signing-keys per tier (now 3-way)**. |
+| D6 | Per-env secrets | SealedSecrets per ns; **distinct KEK/DB/client-secrets/signing-keys per tier (now 2-way dev+prod — ⊘ was 3-way pre-2026-06-22, see § REVISION)**. |
 | D10 | Ownership | Foundations builds; coord. scale; BR-55b0 owned by the cluster operator (cross-repo). |
 
 ## RATIFIED 2026-06-20 (final owner batch — all owner decisions now taken)
@@ -151,8 +151,7 @@ validation) was wrong.
   `sentropic` quota being near-full is irrelevant). Constraint is OQ0, not capacity.
 
 ## REMAINING — external (not an owner decision)
-- **OQ0 — cluster operator** must create `poc-k8s/tenants/sentropic-preprod/` +
-  `…-validation/` baselines (Namespace, ResourceQuota, LimitRange, NetworkPolicy, pull-secret).
+- **OQ0 — cluster operator** ⊘ REVISED 2026-06-22 (see § REVISION): a SINGLE `sentropic-dev` baseline (NOT preprod+validation). must create `poc-k8s/tenants/sentropic-dev/` baselines (Namespace, ResourceQuota, LimitRange, NetworkPolicy, pull-secret).
   Cross-repo (poc-k8s); hard predecessor to BR-55b/BR-55e. **Relayed via GitHub.**
 
 ---
