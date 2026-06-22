@@ -1,74 +1,64 @@
-# Feature: App control-plane tables + service (BR-45 / ARCH-01 impl)
+# Feature: Preprod kustomize overlay + isolated preprod tier (BR-55b / ARCH-17)
 
 ## Objective
-Realize the app control-plane model from SPEC_EVOL_APP_CATALOG §2 Q2 (decided D1=B/D2=B/D7=A): add the `control` tables `app_templates` (family-versioned; published rows IMMUTABLE; `family_id`+`blueprint_schema_version`, NO desired/observed), `app_instances` (pin a published template@version + a SEPARATE `provisioning`/`active`/`suspended`/`retired` status state machine), `app_instance_hostnames` (hostname PK — one host→one instance, DB-guaranteed), `app_workspace_bindings` (M:N workspace↔instance) — working names, framed naming D0 owner-validate at merge — + an `AppControlPlane` service (template lifecycle, instance create + status transitions, hostname add, workspace-binding upsert; all guards ATOMIC per the Codex review). Mirrors the BR-59/BR-60 control-schema pattern. EXPLICITLY OUT: the catalog projection (`kind:'app'` — BR-46 contract delta), any `@sentropic/contracts` `TenantContext` mutation (BR-46 D0), deployment execution + runtime-health/`observed` filling (ARCH-17), tenant re-key (ARCH-11; this branch uses composite tenant columns, grandfather-compatible, no re-key).
+Materialize the PREPROD tier of the deployment-plane (SPEC_DECISION_DEPLOYMENT_PLANE.md, RATIFIED) as a `deploy/k8s/overlays/preprod/` kustomize overlay that mirrors `overlays/prod` but targets the isolated `sentropic-preprod` namespace (baseline owned by poc-k8s, k8s-ops #37/#39): re-stamps the shared `base/` (rbac, networkpolicy, postgres, api, auth-idp, ui, pgbackup) into `sentropic-preprod`, adds the preprod public ingress (D4 NESTED hosts `preprod.sentropic.sent-tech.ca` → ui + `preprod.auth.sent-tech.ca` → auth-idp), and patches the non-secret api/auth-idp ConfigMaps to the preprod hosts + an ISOLATED WebAuthn RP ID (D11R: preprod = synthetic users, distinct RP ID, fully isolated from prod). Realizes D1 (separate preprod ns), D3 (separate preprod Postgres = base StatefulSet re-stamped → own PVC), D6 (per-tier distinct secrets). EXPLICITLY OUT: `cd.yml` main→preprod auto-deploy + the publish-only staleness fix (BR-55c), `release-prod.yml` + D7/D8/D9 (BR-55d), the validation tier + federation + scrub import + D15 (BR-55e). The per-ns SealedSecrets (distinct KEK/DB/signing-keys, D6) are operator-authored by poc-k8s per ns (like prod 05/06/07), coordinated here, NOT authored in this PR. ZERO change to `overlays/prod` or `base` (prod must not move — the decoupling invariant).
 
 ## Scope / Guardrails
-- Scope limited to the `control` schema + a new app-control-plane service; no product-schema change.
-- ONE migration in `api/drizzle/control/*.sql` (generated via `make db-generate-control`).
-- Make-only workflow; no direct Docker commands.
-- Root `ENV=dev` reserved for the user; tests on `ENV=test-app-control-plane`.
-- `ENV=<env>` LAST arg of every `make` command.
-- Ports (branch nn=45, slot 0): API `9225`, UI `5425`, Maildev UI `1325`.
+- Scope limited to a NEW `deploy/k8s/overlays/preprod/` overlay + the README doc; no change to `base/` or `overlays/prod/`.
+- Mirror the proven `overlays/prod` pattern line-by-line; diverge only where the tier requires it (namespace, hosts, RP-ID isolation).
+- Make-only workflow; no direct Docker commands; kustomize render validation only (no live apply from this branch — preprod deploy lands with cd.yml in BR-55c).
+- NEVER touch prod: the preprod overlay is additive; `kubectl apply -k overlays/prod` output must be byte-identical before/after.
+- Root `ENV=dev` reserved for the user. This branch ships only static manifests (no dev stack).
+- Ports (branch nn=55, slot 0): API `9275`, UI `5475`, Maildev UI `1375` — allocated by convention, UNUSED (manifests-only branch, no `make dev`).
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/db/control-schema.ts` (additive: 4 new tables next to eventOutbox/objectTypeDefinitions)
-  - `api/src/services/app-control-plane/**` (new service)
-  - `api/tests/unit/app-control-plane.test.ts` (CI-covered `unit` suite)
+  - `deploy/k8s/overlays/preprod/**` (new overlay: kustomization, ingress, ConfigMap patches)
+  - `deploy/k8s/README.md` (document the preprod overlay alongside prod)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/contracts/**` (TenantContext mutation = BR-46 D0)
-  - `api/src/services/catalog/**` (the `kind:'app'` projection waits for BR-46 policy)
-  - `api/src/db/schema.ts` (product schema — app control-plane lives in `control`)
-- **Conditional Paths (allowed only with explicit BR45-EXn exception)**:
-  - `api/drizzle/control/*.sql` + `api/drizzle/control/meta/**` (ONE migration via `make db-generate-control` — declared BR45-EX1)
+  - `deploy/k8s/base/**` (shared base — re-stamped, never mutated by a tier)
+  - `deploy/k8s/overlays/prod/**` (prod must not move — the decoupling invariant)
+  - `.github/workflows/**` (`cd.yml` main→preprod = BR-55c; `release-prod.yml` = BR-55d)
+- **Conditional Paths (allowed only with explicit BR55b-EXn exception)**:
+  - none anticipated (kustomize render validated without a Makefile target; if one is genuinely needed → BR55b-EX with rationale)
 
 ## Feedback Loop
-- `acknowledge` (BR45-RESET — built from a STALE spec, reset + reworked): the first impl read SPEC_EVOL_APP_CATALOG from the main working-tree (on a different branch) and built the WRONG 3-table model (generic `resource_bindings`, `environment dev|preprod|prod`, no instance status, no hostnames). `git reset --hard` + reworked against the AUTHORITATIVE worktree spec §2 Q2 (4 tables: templates `family_id`/no-desired-observed, instances `prod|preview|local`+`provisioning|active|suspended|retired`, hostnames PK, workspace-bindings M:N). Lesson recorded in memory (read specs from the worktree). Codex 5.5-xhigh review folded: atomic lifecycle/instance-create (tx+FOR UPDATE)/binding-upsert, real SemVer, deprecate-only-from-published.
-- `BR45-EX1` (Conditional-path exception, MANDATORY): touches `api/drizzle/control/0002_*.sql` + `api/drizzle/control/meta/{0002_snapshot.json,_journal.json}` — the ONE control migration for the 4 new tables, generated via `make db-generate-control` (mirrors the BR-59/BR-60 control-migration precedent). Rationale: the tables require a migration; impact: control-schema-only, additive; rollback: drop the migration file + revert the journal/snapshot.
-- `BR45-REV2` (Codex re-review, applied): `(family_id, version)` made UNIQUE (instance pin addresses by it); `allowed_workspace_types` → `text[]` (spec §2 Q2, was jsonb); `bindWorkspace` now verifies the instance exists (no orphan bindings). Prior fixes confirmed (atomic guards / real SemVer / env / lifecycle).
-- `attention` (BR45-D0-NAMES — framed D0, HOLD merge): durable table names `control.app_templates`/`app_instances`/`resource_bindings` are a D0 (SPEC_EVOL_APP_CATALOG §5 — "owner-validate at IMPL"). This branch BUILDS with the study's working names but the MERGE must wait for owner validation (escalate conductor→rhanka; I do not sign D0). Names are confined to the schema file + the migration for a cheap rename if the owner picks different.
-- `acknowledge` (tenant approach — decided): composite tenant columns now (`tenant_id` = IdP tenant slug/`tid`; `workspace_id?` = product scope), grandfather-compatible, NO re-key. `identity_tenant_id` is left for the ARCH-11 backfill (added as a nullable column now per the decided gradual path, populated later — no flag-day).
-- `acknowledge` (consensus): SPEC_EVOL_APP_CATALOG is double-consensus (Opus 4.8 + Codex 5.5-xhigh CONVERGED). Impl-time: light Codex review of the concrete schema before commit (mirrors BR-52/BR-70 discipline).
+- `acknowledge` (BR55b-FORK-1 — hosts D4, architect-confirmed): D4 RATIFIED = NESTED → 2 ingresses `preprod.sentropic.sent-tech.ca` (ui) + `preprod.auth.sent-tech.ca` (auth-idp), mirroring prod. Architect (ARCH-17) confirmed NESTED, no owner simplification post-D4; poc-k8s's casual FLAT `preprod.sent-tech.ca` answered an erroneous ACK (poc-k8s does not own naming). Built NESTED; poc-k8s to be corrected on the DNS records (two A records) at ingress-ready ping.
+- `acknowledge` (BR55b-FORK-2 — WebAuthn RP-ID isolation, architect verdict = (b), CODE-VERIFIED): architect grepped origin/main — the api runs a LIVE WebAuthn path (`webauthn-adapter.ts`, `webauthn-authentication.ts:89,209`, `webauthn-config.ts:36` reads WEBAUTHN_RP_ID, routes register/login/credentials) → option (c) "vestigial" was FALSE. Verdict (b): api `WEBAUTHN_RP_ID=preprod.sentropic.sent-tech.ca` (registrable suffix of its origin + isolated from prod); (a) parent `sent-tech.ca` REJECTED (not isolated). auth-idp `WEBAUTHN_RP_ID=preprod.auth.sent-tech.ca`. Two distinct RP IDs, each isolated from prod; preprod users synthetic so cross-surface passkey non-portability is a non-issue. Architect escalated to 39etc IN PARALLEL (non-blocking): the api's live WebAuthn path contradicts the pure BR-39 IdP-standalone model — if a migration removes WebAuthn from the api, preprod flips to (c); else (b) holds.
+- `acknowledge` (poc-k8s handoff): #37+#39 MERGED on k8s-ops main — ns `sentropic-preprod`+`sentropic-validation` live (quota/limitrange/netpol default-deny + `sentropic-registry` pull-secret); per-tier creds `KUBE_CONFIG_DATA_PREPROD/VALIDATION` (namespace-scoped, prod inaccessible) for BR-55c. Shared Traefik LB 51.159.11.157 + cert-manager `letsencrypt-prod`. poc-k8s posts the Cloudflare A record(s) on my ingress-ready ping.
+- `acknowledge` (D6 secret boundary): distinct KEK/DB/signing-key SealedSecrets are operator-authored per ns by poc-k8s (mirrors prod 05/06/07, intentionally not in repo tooling) — coordinated, not authored in this PR.
+- `acknowledge` (no Namespace / netpol re-stamp): base has NO Namespace resource and its `allow-traefik-to-{ui,auth-idp}` netpols are ns-agnostic (namespaceSelector `traefik`) → `namespace: sentropic-preprod` transformer + base netpols suffice; no `$patch:delete`, no extra netpol.
 
 ## AI Flaky tests
-- Acceptance rule: accept only non-systematic provider/network/model nondeterminism (≥1 success same commit+command); never add timeouts; analyze vs `main`.
+- N/A — manifests-only branch; validation is `kustomize build` render correctness + prod zero-diff, no test suite.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (one cohesive control-plane addition; single final test cycle)
+- [x] **Mono-branch + cherry-pick** (one cohesive overlay addition; single render-validation cycle)
 - [ ] **Multi-branch**
-- Rationale: schema + service + tests are one foundations unit, no independent sub-workstream.
+- Rationale: a single additive overlay, no independent sub-workstream.
 
 ## UAT Management (in orchestration context)
-- No UI surface → no interactive UAT; validation is API unit tests (the tables/service have no route wiring in this branch; consumed by tests until BR-46 projection + BR-53 auth land).
+- No UI surface in this PR. Validation = `kustomize build overlays/preprod` renders cleanly + `overlays/prod` render byte-identical before/after (prod-untouched proof). Live preprod bring-up + smoke is exercised by BR-55c (`cd.yml`) once the overlay merges.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read SPEC_EVOL_APP_CATALOG + SPEC_EVOL_APP_TEMPLATE_LIFECYCLE; confirm decided D1=B/D2=B/D7=A + tenant composite-cols + naming D0.
-  - [x] Confirm control-schema pattern (controlSchema.table; eventOutbox/objectTypeDefinitions precedents).
-  - [x] Worktree `tmp/app-control-plane` from `origin/main`; `cp ../../.env .env`.
+  - [x] Worktree `tmp/deploy-preprod` from `origin/main` (1c6867942, post-#352); `cp ../../.env .env`.
+  - [x] Read SPEC_DECISION_DEPLOYMENT_PLANE.md + base/overlays-prod manifests FROM the worktree.
+  - [x] Co-design packet to architect (FORK-1 hosts, FORK-2 RP-ID, C1–C5) — ARCH-17 accountability.
 
-- [ ] **Lot 1 — control tables + migration**
-  - [ ] `control-schema.ts`: `appTemplates` (id, app_slug, version, owner_tenant_id, identity_tenant_id?, status draft|published|deprecated, blueprint jsonb, manifest_ref, capabilities jsonb, policy_defaults jsonb, desired jsonb, observed jsonb, created_by, created_at, updated_at) — unique (app_slug, version); CHECK status IN set; index (owner_tenant_id).
-  - [ ] `appInstances` (id, template_id, template_version pinned, tenant_id, identity_tenant_id?, workspace_id?, environment, public_host, route_mounts jsonb, deployment_ref, desired jsonb, observed jsonb, created_at, updated_at) — index (template_id), (tenant_id); CHECK environment in set.
-  - [ ] `resourceBindings` (id, tenant_id, identity_tenant_id?, resource_kind, resource_id, workspace_id?, binding_role, policy jsonb, desired jsonb, observed jsonb, created_at, updated_at) — index (tenant_id, resource_kind, resource_id); CHECK binding_role/resource_kind in set.
-  - [ ] Generate migration: `make db-generate-control` → fix `CREATE SCHEMA IF NOT EXISTS` idempotency if regenerated (BR-60 lesson); commit `_snapshot.json` too.
-  - [ ] Lot gate: `make typecheck-api lint-api ENV=test-app-control-plane`.
-
-- [ ] **Lot 2 — AppControlPlane service + tests**
-  - [ ] `app-control-plane/app-control-plane.ts`: port + Pg adapter — template CRUD (create draft / publish [draft→published, immutable] / deprecate), instance create (pins template_id+version, rejects non-published template), binding upsert; validation (semver version, app_slug shape, status transitions draft→published→deprecated only, instance pins an EXISTING published template_version); projection-status fields (validation status + projection revision + last_projected_at on the template `observed`). Anti-pollution caps mirror BR-59 (MAX per scope).
-  - [ ] `app-control-plane/index.ts` singleton.
-  - [ ] **API tests** (`api/tests/unit/app-control-plane.test.ts`): template create/publish-immutability/deprecate transitions + invalid-transition reject; instance pins published version (reject draft/unknown); binding upsert; unique (app_slug,version); status CHECK; composite tenant columns round-trip.
-  - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/app-control-plane.test.ts ENV=test-app-control-plane`.
-  - [ ] Impl-time Codex 5.5-xhigh review of the concrete schema + service before commit.
+- [x] **Lot 1 — preprod overlay (architect FORK verdicts in hand)**
+  - [x] `overlays/preprod/kustomization.yaml`: `namespace: sentropic-preprod`; resources `../../base` + `ingress.yaml`; `patches` (strategic-merge) for the api + auth-idp ConfigMaps.
+  - [x] `overlays/preprod/ingress.yaml`: two Ingresses (D4 nested) — `preprod.sentropic.sent-tech.ca` → ui:http, `preprod.auth.sent-tech.ca` → auth-idp:http; cert-manager `letsencrypt-prod`, Traefik websecure.
+  - [x] `overlays/preprod/patch-api-config.yaml` + `patch-auth-idp-config.yaml`: preprod host overrides (AUTH_CALLBACK_BASE_URL, OAUTH_ISSUER_URL, UI_BASE_URL, CORS_ALLOWED_ORIGINS) + WebAuthn RP-ID isolation per FORK-2 verdict (b).
+  - [x] `deploy/k8s/README.md`: document the preprod overlay (hosts, isolation, operator secret boundary).
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint (api).
-  - [ ] `make test-api-unit SCOPE=tests/unit/app-control-plane.test.ts ENV=test-app-control-plane` + CI green.
+  - [x] `kubectl kustomize overlays/preprod` renders without error; asserted ns (22× sentropic-preprod, 0 prod leak) + 2 nested hosts + isolated RP-IDs (api=preprod.sentropic, idp=preprod.auth) + api CM merge (12 base keys preserved + 3 overrides).
+  - [x] Prod zero-diff: `kubectl kustomize overlays/prod` builds, hosts unchanged (sentropic/auth.sent-tech.ca), ns=sentropic — base/prod untouched.
   - [ ] PR with `BRANCH.md` body; CI green.
-  - [ ] **HOLD merge for owner D0 naming validation** (escalate conductor→rhanka when h2a up); on owner GO + CI green: remove BRANCH.md, push, merge (D2 preprod-only).
+  - [ ] **HOLD merge for architect ARCH-17 sign-off** (FORK-1 + FORK-2 resolved); on GO + CI green: remove BRANCH.md, push, merge (D2 preprod-only). Then ping poc-k8s for the Cloudflare A record(s) + report conductor for track.
