@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { AuthDescriptor, SecretAuthMaterial } from '@sentropic/llm-mesh';
+import type { AccountTransportAccount, AuthDescriptor, SecretAuthMaterial } from '@sentropic/llm-mesh';
 import {
   CoordinatorPoolState,
   GatewayError,
@@ -14,7 +14,18 @@ import {
   redactForLog,
   redactSelection,
 } from '../src/index.js';
-import { InMemoryAccountTransportCoordinator } from '@sentropic/llm-mesh';
+
+/** One caller-owned account (owner `p`) for the kill-switch select() tests. */
+const ownedByP = (): AccountTransportAccount[] => [
+  {
+    accountId: 'acct-x',
+    targetProviderId: 'anthropic',
+    transportProviderId: 'claude-code',
+    accessToken: 'SECRET-X',
+    status: 'active',
+    metadata: { ownerUserId: 'p' },
+  },
+];
 
 describe('redaction helpers', () => {
   it('mints an opaque correlation id not derived from any pool id', () => {
@@ -78,16 +89,7 @@ describe('redaction helpers', () => {
 
 describe('kill-switch guard (cross-user disabled while OFF)', () => {
   it('rejects a grant-carrying selection while crossUserPoolEnabled is OFF', async () => {
-    const coordinator = new InMemoryAccountTransportCoordinator([
-      {
-        accountId: 'acct-x',
-        targetProviderId: 'anthropic',
-        transportProviderId: 'claude-code',
-        accessToken: 'SECRET-X',
-        status: 'active',
-      },
-    ]);
-    const pool = new CoordinatorPoolState({ coordinator, crossUserPoolEnabled: false });
+    const pool = new CoordinatorPoolState({ accounts: ownedByP(), crossUserPoolEnabled: false });
 
     await expect(
       pool.select({
@@ -109,16 +111,7 @@ describe('kill-switch guard (cross-user disabled while OFF)', () => {
   });
 
   it('allows a personal-passthrough selection (no grant) while OFF', async () => {
-    const coordinator = new InMemoryAccountTransportCoordinator([
-      {
-        accountId: 'acct-x',
-        targetProviderId: 'anthropic',
-        transportProviderId: 'claude-code',
-        accessToken: 'SECRET-X',
-        status: 'active',
-      },
-    ]);
-    const pool = new CoordinatorPoolState({ coordinator, crossUserPoolEnabled: false });
+    const pool = new CoordinatorPoolState({ accounts: ownedByP(), crossUserPoolEnabled: false });
     const selection = await pool.select({
       cost: { tenantId: 't', principalId: 'p', source: 'layer-c', correlationId: 'c' },
       targetProviderId: 'anthropic',
