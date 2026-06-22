@@ -3,14 +3,26 @@
  *
  * Selection reuses Layer-A: `AccountTransportCoordinator.acquire()` is the
  * public selection + sticky-lease surface. The gateway pool wraps it and adds:
+ *   - CALLER-OWNED ACCOUNTS (B1, spec §7 personal-passthrough = caller==provider):
+ *     llm-mesh's `acquire()` selects over EVERY account in its coordinator and
+ *     ignores `userId`; its lease key excludes the caller. So the gateway, which
+ *     is the only layer that knows account OWNERSHIP, enforces caller==provider
+ *     MECHANICALLY: each pool account carries an OWNER (the enrolling caller's
+ *     verified user id) and the gateway hands a given caller a coordinator built
+ *     over ONLY that caller's accounts (`coordinatorFor`). A caller therefore
+ *     cannot select, nor stick to, another caller's account — the coordinator it
+ *     uses literally cannot see them. Deny-as-missing when the caller owns none.
+ *   - the per-caller AFFINITY KEY: the gateway folds the verified caller id into
+ *     the sticky `affinityKey` (llm-mesh's lease key omits the caller), so even
+ *     within one coordinator a sticky lease is caller-partitioned (belt + braces).
  *   - the kill-switch guard (reject any cross-user grant while OFF);
  *   - the gateway-owned financial context (CostContext on the request).
  *
  * Sticky binding (spec §4): the coordinator keys the lease on
  * `workspaceId + affinityKey + targetProviderId + transportProviderId + modelId`
- * (`buildLeaseKey` in llm-mesh). Same caller+affinity -> SAME account; the
- * coordinator does NOT silently rebind a leased account (it only re-uses an
- * eligible lease or selects fresh when none exists).
+ * (`buildLeaseKey` in llm-mesh) and the gateway prefixes `affinityKey` with the
+ * caller. Same caller+affinity -> SAME account; the coordinator does NOT silently
+ * rebind a leased account (it only re-uses an eligible lease or selects fresh).
  *
  * The AuthResolver returns the executable material from the acquisition. Refresh
  * under lock is GATEWAY-owned (spec §4) — here, v0, the coordinator hands a
@@ -23,6 +35,7 @@ import type {
   AuthDescriptor,
   SecretAuthMaterial,
 } from '@sentropic/llm-mesh';
+import { InMemoryAccountTransportCoordinator } from '@sentropic/llm-mesh';
 
 import type {
   AuthResolver,
@@ -35,8 +48,49 @@ import type { AccountTransportAccount } from '@sentropic/llm-mesh';
 import type { CostContext } from '../ports/cost-context.js';
 import { GatewayError } from '../router/errors.js';
 
+/**
+ * The gateway-owned OWNER of a pooled account = the verified user id of the
+ * caller who enrolled it. Stored under the account `metadata.ownerUserId`
+ * (gateway convention; llm-mesh ignores account metadata). An account WITHOUT an
+ * owner is unowned and is NEVER selectable in personal-passthrough (deny by
+ * default) — caller==provider requires a known owner.
+ */
+export const OWNER_METADATA_KEY = 'ownerUserId';
+
+/** Read the gateway owner of a pool account (undefined when unowned). */
+export const accountOwnerId = (account: AccountTransportAccount): string | undefined => {
+  const owner = account.metadata?.[OWNER_METADATA_KEY];
+  return typeof owner === 'string' && owner.length > 0 ? owner : undefined;
+};
+
+/**
+ * Factory that builds a coordinator scoped to a SINGLE owner's accounts. The
+ * default builds an in-memory coordinator over the owner-filtered subset, so a
+ * caller's coordinator cannot see another caller's accounts. Production injects
+ * a DB-backed factory (still owner-scoped). The gateway caches one coordinator
+ * per owner so sticky leases persist across that owner's requests.
+ */
+export type CoordinatorFactory = (
+  ownerUserId: string,
+  ownedAccounts: readonly AccountTransportAccount[],
+) => AccountTransportCoordinator;
+
+const defaultCoordinatorFactory: CoordinatorFactory = (_ownerUserId, ownedAccounts) =>
+  new InMemoryAccountTransportCoordinator(ownedAccounts);
+
 export interface CoordinatorPoolStateOptions {
-  readonly coordinator: AccountTransportCoordinator;
+  /**
+   * The full gateway account snapshot. Each account's OWNER (`metadata.ownerUserId`)
+   * scopes it to one caller. v0 personal-passthrough = every account is owned by
+   * the caller who enrolled it (caller==provider).
+   */
+  readonly accounts?: readonly AccountTransportAccount[];
+  /**
+   * Per-owner coordinator factory (spec §4). Default = in-memory over the
+   * owner-filtered subset. The gateway calls it ONCE per owner and caches the
+   * result so sticky leases survive across requests.
+   */
+  readonly coordinatorFactory?: CoordinatorFactory;
   /**
    * Kill switch (spec §7 D0). DEFAULT OFF. While OFF, ANY selection request
    * carrying an `authorization` grant is rejected — v0 personal-passthrough
@@ -44,28 +98,42 @@ export interface CoordinatorPoolStateOptions {
    * cross-user request.
    */
   readonly crossUserPoolEnabled?: boolean;
-  /**
-   * Optional eligible-account snapshot for `listEligibleAccounts` / `/v1/models`
-   * filtering. The coordinator owns selection; this is a read-only view.
-   */
-  readonly accounts?: readonly AccountTransportAccount[];
 }
 
 export class CoordinatorPoolState implements PoolStatePort {
-  private readonly coordinator: AccountTransportCoordinator;
-  private readonly crossUserPoolEnabled: boolean;
   private readonly accounts: readonly AccountTransportAccount[];
+  private readonly coordinatorFactory: CoordinatorFactory;
+  private readonly crossUserPoolEnabled: boolean;
+  /** One coordinator per OWNER (caller), so sticky leases persist + can't cross callers. */
+  private readonly coordinators = new Map<string, AccountTransportCoordinator>();
 
   constructor(options: CoordinatorPoolStateOptions) {
-    this.coordinator = options.coordinator;
-    this.crossUserPoolEnabled = options.crossUserPoolEnabled ?? false;
     this.accounts = options.accounts ?? [];
+    this.coordinatorFactory = options.coordinatorFactory ?? defaultCoordinatorFactory;
+    this.crossUserPoolEnabled = options.crossUserPoolEnabled ?? false;
+  }
+
+  /** The accounts OWNED by a given caller (B1 caller==provider filter). */
+  private ownedBy(ownerUserId: string): readonly AccountTransportAccount[] {
+    return this.accounts.filter((account) => accountOwnerId(account) === ownerUserId);
+  }
+
+  /** The owner-scoped coordinator for a caller (built once, then cached). */
+  private coordinatorFor(ownerUserId: string): AccountTransportCoordinator {
+    let coordinator = this.coordinators.get(ownerUserId);
+    if (!coordinator) {
+      coordinator = this.coordinatorFactory(ownerUserId, this.ownedBy(ownerUserId));
+      this.coordinators.set(ownerUserId, coordinator);
+    }
+    return coordinator;
   }
 
   async listEligibleAccounts(
     request: PoolSelectionRequest,
   ): Promise<readonly AccountTransportAccount[]> {
-    return this.accounts.filter(
+    // B1: only the verified caller's OWN accounts are ever eligible.
+    const owner = request.cost.principalId;
+    return this.ownedBy(owner).filter(
       (account) =>
         account.targetProviderId === request.targetProviderId &&
         account.transportProviderId === request.transportProviderId &&
@@ -76,12 +144,13 @@ export class CoordinatorPoolState implements PoolStatePort {
     );
   }
 
-  async snapshotModels(_cost: CostContext): Promise<readonly ModelCatalogEntry[]> {
-    // Distinct models the personal pool can serve (spec §3). Account ids/tokens
-    // are NEVER exposed — only model id + owning target provider.
+  async snapshotModels(cost: CostContext): Promise<readonly ModelCatalogEntry[]> {
+    // Distinct models the CALLER'S OWN pool can serve (spec §3 — filtered by
+    // caller/pool policy). Account ids/tokens are NEVER exposed — only model id +
+    // owning target provider. B1: another caller's models never appear here.
     const seen = new Set<string>();
     const entries: ModelCatalogEntry[] = [];
-    for (const account of this.accounts) {
+    for (const account of this.ownedBy(cost.principalId)) {
       if ((account.status ?? 'active') !== 'active') {
         continue;
       }
@@ -106,14 +175,38 @@ export class CoordinatorPoolState implements PoolStatePort {
       );
     }
 
-    // Acquire over the personal pool (sticky lease; no silent rebind).
-    const acquisition = await this.coordinator.acquire({
+    // B1: the VERIFIED caller is the owner. Deny-as-missing when they own no
+    // matching account — never fall through to another caller's pool.
+    const owner = request.cost.principalId;
+    if (!owner) {
+      throw new GatewayError('caller-auth-failed', 'no verified caller identity');
+    }
+    const eligible = await this.listEligibleAccounts(request);
+    if (eligible.length === 0) {
+      throw new GatewayError(
+        'no-eligible-account',
+        'caller owns no eligible account in pool',
+      );
+    }
+
+    // B1: per-caller AFFINITY KEY — llm-mesh's lease key omits the caller, so we
+    // fold the verified owner into the affinity so the sticky lease is
+    // caller-partitioned even inside one coordinator.
+    const callerAffinity =
+      request.affinityKey != null ? `${owner}${request.affinityKey}` : undefined;
+
+    // Acquire over the caller's OWN coordinator (sticky lease; no silent rebind;
+    // cannot see another caller's accounts).
+    const coordinator = this.coordinatorFor(owner);
+    const acquisition = await coordinator.acquire({
       targetProviderId: request.targetProviderId,
       transportProviderId: request.transportProviderId,
       ...(request.modelId !== undefined ? { modelId: request.modelId } : {}),
       ...(request.workspaceId !== undefined ? { workspaceId: request.workspaceId } : {}),
-      ...(request.userId !== undefined ? { userId: request.userId } : {}),
-      ...(request.affinityKey !== undefined ? { affinityKey: request.affinityKey } : {}),
+      // userId carried for audit; llm-mesh ignores it, the OWNER-scoped
+      // coordinator + affinity key are what enforce caller==provider.
+      userId: owner,
+      ...(callerAffinity !== undefined ? { affinityKey: callerAffinity } : {}),
       ...(request.requestId !== undefined ? { requestId: request.requestId } : {}),
       ...(request.reservationTtlMs !== undefined
         ? { reservationTtlMs: request.reservationTtlMs }

@@ -4,7 +4,6 @@
  * and a recording metering sink. No network, no docker — fixtures only.
  */
 
-import { InMemoryAccountTransportCoordinator } from '@sentropic/llm-mesh';
 import type { AccountTransportAccount } from '@sentropic/llm-mesh';
 
 import {
@@ -22,13 +21,17 @@ import {
 } from '../../src/index.js';
 import { FixtureTransport } from './transport.js';
 
+/** The default verified principal id `valid-user-a` resolves to (caller==owner). */
+export const OWNER_USER_A = 'user-a';
+
 /**
- * Two enrolled personal accounts on the Claude-Code transport (caller-owned) —
- * the sticky-selection tests assert over these two. Plus one Codex account so
- * the OpenAI-wire (`gpt-5.5` -> `codex`) tests can select successfully. All
- * caller-owned (personal-passthrough; caller == provider).
+ * Two enrolled personal accounts on the Claude-Code transport (caller-owned by
+ * `OWNER_USER_A`) — the sticky-selection tests assert over these two. Plus one
+ * Codex account so the OpenAI-wire (`gpt-5.5` -> `codex`) tests can select
+ * successfully. All owned by the caller (personal-passthrough; caller==provider),
+ * carried in the gateway-owned `metadata.ownerUserId`.
  */
-export const twoAccountPool = (): AccountTransportAccount[] => [
+export const twoAccountPool = (owner: string = OWNER_USER_A): AccountTransportAccount[] => [
   {
     accountId: 'acct-alpha',
     accountLabel: 'alpha',
@@ -39,6 +42,7 @@ export const twoAccountPool = (): AccountTransportAccount[] => [
     status: 'active',
     priority: 10,
     modelIds: ['claude-sonnet-4-6', 'claude-opus-4-7'],
+    metadata: { ownerUserId: owner },
   },
   {
     accountId: 'acct-beta',
@@ -50,6 +54,7 @@ export const twoAccountPool = (): AccountTransportAccount[] => [
     status: 'active',
     priority: 10,
     modelIds: ['claude-sonnet-4-6', 'claude-opus-4-7'],
+    metadata: { ownerUserId: owner },
   },
   {
     accountId: 'acct-codex',
@@ -61,6 +66,7 @@ export const twoAccountPool = (): AccountTransportAccount[] => [
     status: 'active',
     priority: 10,
     modelIds: ['gpt-5.5'],
+    metadata: { ownerUserId: owner },
   },
 ];
 
@@ -94,16 +100,14 @@ export interface HarnessOptions {
 export interface Harness {
   readonly app: ReturnType<typeof createGatewayRouter>;
   readonly metering: RecordingMeteringSink;
-  readonly coordinator: InMemoryAccountTransportCoordinator;
+  readonly pool: CoordinatorPoolState;
   readonly config: GatewayConfig;
 }
 
 /** A correlation source that echoes the caller-supplied `x-correlation-id`. */
 export const buildHarness = (options: HarnessOptions): Harness => {
   const accounts = options.accounts ?? twoAccountPool();
-  const coordinator = new InMemoryAccountTransportCoordinator(accounts);
   const pool = new CoordinatorPoolState({
-    coordinator,
     accounts,
     crossUserPoolEnabled: options.crossUserPoolEnabled ?? false,
   });
@@ -140,7 +144,7 @@ export const buildHarness = (options: HarnessOptions): Harness => {
     metering,
     requestId: () => 'req_fixture_id',
   });
-  return { app, metering, coordinator, config };
+  return { app, metering, pool, config };
 };
 
 /** Build an Authorization header for a valid principal + optional correlation id. */
