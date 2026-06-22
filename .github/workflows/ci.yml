@@ -1513,32 +1513,40 @@ jobs:
         if: inputs.bootstrap_publish_target == 'harness' || inputs.bootstrap_publish_target == 'all'
         run: make publish-harness-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
 
-  # Deploy Kubernetes tenant after api+ui images are published with the main alias.
-  # Triggered on main. Requires GH secret KUBECONFIG_B64
-  # (base64 of ~/.kube/poc.yaml). See deploy/k8s/README.md and BRANCH.md Lot 2.5.
-  deploy-k8s:
+  # BR-55c (ARCH-17): main -> PREPROD continuous deploy. REPLACES the legacy
+  # prod-targeting deploy-k8s job — NO main merge can touch the `sentropic` (prod)
+  # namespace any more. Prod deploys ONLY via the gated release-prod (BR-55d:
+  # GitHub production Environment + rhanka reviewer). This job uses the
+  # preprod-scoped KUBE_CONFIG_DATA_PREPROD (poc-k8s; a namespace-scoped kubeconfig
+  # that can ONLY write the sentropic-preprod ns — the prod ns is RBAC-denied), and
+  # `make k8s-deploy-preprod` pins the immutable content-hash image tags into
+  # overlays/preprod before applying (kills the floating :main staleness, D-c1).
+  deploy-preprod:
     runs-on: ubuntu-latest
     needs: [publish-api-image, publish-ui-image]
-    if: github.ref == 'refs/heads/main'
+    # Deploy on every main merge. Run even when the publish jobs were SKIPPED (no
+    # api/ui content change) so an overlay/manifest-only change still reaches preprod;
+    # only skip if a publish job actually FAILED.
+    if: >-
+      always() && github.ref == 'refs/heads/main' && !cancelled()
+      && needs.publish-api-image.result != 'failure'
+      && needs.publish-ui-image.result != 'failure'
     steps:
       - uses: actions/checkout@v6
-      - name: Decode kubeconfig from secret
+      - name: Decode the preprod kubeconfig from secret
         env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+          KUBE_CONFIG_DATA_PREPROD: ${{ secrets.KUBE_CONFIG_DATA_PREPROD }}
         run: |
           set -eu
-          if [ -z "${KUBECONFIG_B64:-}" ]; then
-            echo "::error::GH secret KUBECONFIG_B64 is missing or empty. See BRANCH.md Lot 2.5 user action item."
+          if [ -z "${KUBE_CONFIG_DATA_PREPROD:-}" ]; then
+            echo "::error::GH secret KUBE_CONFIG_DATA_PREPROD is missing or empty (poc-k8s preprod kubeconfig)."
             exit 1
           fi
-          printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
-          chmod 600 kubeconfig.yaml
-      - name: Apply manifests and verify api + ui on Kubernetes
+          printf '%s' "${KUBE_CONFIG_DATA_PREPROD}" | base64 -d > kubeconfig-preprod.yaml
+          chmod 600 kubeconfig-preprod.yaml
+      - name: Deploy to the sentropic-preprod namespace (immutable image pin)
         env:
-          KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-preprod.yaml
         run: |
           set -eu
-          make k8s-deploy KUBECONFIG="${KUBECONFIG}" ENV=ci-k8s
-          kubectl -n sentropic rollout status  deployment/api      --timeout=300s
-          kubectl -n sentropic rollout status  deployment/auth-idp --timeout=300s
-          kubectl -n sentropic rollout status  deployment/ui       --timeout=300s
+          make k8s-deploy-preprod KUBECONFIG="${KUBECONFIG}" ENV=ci-preprod
