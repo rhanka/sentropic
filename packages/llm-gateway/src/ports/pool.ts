@@ -50,6 +50,15 @@ export interface PoolSelection {
 }
 
 /**
+ * A model the pool can serve, for `/v1/models` (spec §3). Carries ONLY the
+ * model id + owning provider — NEVER account ids/tokens.
+ */
+export interface ModelCatalogEntry {
+  readonly id: string;
+  readonly ownedBy: string;
+}
+
+/**
  * PoolStatePort — gateway-owned pool lifecycle. v0 stub backs onto an
  * in-memory Layer-A coordinator; Lot 2+ backs onto the control-plane DB.
  */
@@ -60,6 +69,11 @@ export interface PoolStatePort {
   ): Promise<readonly AccountTransportAccount[]>;
   /** Select + lease one account (short tx; NO silent rebind). */
   select(request: PoolSelectionRequest): Promise<PoolSelection>;
+  /**
+   * The distinct models the caller's pool can serve (spec §3 — `/v1/models`,
+   * filtered by caller/pool policy). NEVER exposes account ids/tokens.
+   */
+  snapshotModels(cost: CostContext): Promise<readonly ModelCatalogEntry[]>;
 }
 
 /**

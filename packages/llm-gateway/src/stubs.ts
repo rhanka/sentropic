@@ -33,6 +33,9 @@ export const stubPool: PoolStatePort = {
   async select(): Promise<PoolSelection> {
     return notImplemented('pool.select');
   },
+  async snapshotModels() {
+    return [];
+  },
 };
 
 export const stubAuthResolver: AuthResolver = {
