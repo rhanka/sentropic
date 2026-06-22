@@ -141,12 +141,19 @@ export class PgAppControlPlane implements AppControlPlane {
       throw new AppControlPlaneValidationError(`invalid version (semver): '${input.version}'`);
     }
     const familyId = input.familyId ?? randomUUID();
-    const countRows = await db
-      .select({ c: sql<number>`count(*)::int` })
+    const familyRows = await db
+      .select({ appSlug: appTemplates.appSlug })
       .from(appTemplates)
       .where(eq(appTemplates.familyId, familyId));
-    if ((countRows[0]?.c ?? 0) >= MAX_TEMPLATES_PER_FAMILY) {
+    if (familyRows.length >= MAX_TEMPLATES_PER_FAMILY) {
       throw new AppControlPlaneValidationError(`version cap reached for family '${familyId}'`);
+    }
+    // Family invariant (no DB FK): a family groups versions of ONE app — one app_slug.
+    const slugMismatch = familyRows.find((r) => r.appSlug !== input.appSlug);
+    if (slugMismatch) {
+      throw new AppControlPlaneValidationError(
+        `family '${familyId}' is bound to app_slug '${slugMismatch.appSlug}', not '${input.appSlug}'`
+      );
     }
     try {
       const rows = await db
@@ -353,6 +360,13 @@ export class PgAppControlPlane implements AppControlPlane {
   async bindWorkspace(input: BindWorkspaceInput): Promise<AppWorkspaceBindingRow> {
     const instance = await this.getInstance(input.appInstanceId);
     if (!instance) throw new AppControlPlaneNotFoundError(`instance '${input.appInstanceId}' not found`);
+    // Cross-tenant isolation (no DB FK): the binding tenant MUST match the instance's tenant,
+    // else tenant B could create/hijack a binding on tenant A's instance.
+    if (input.tenantId !== instance.tenantId) {
+      throw new AppControlPlaneValidationError(
+        `tenant '${input.tenantId}' cannot bind an instance owned by tenant '${instance.tenantId}'`
+      );
+    }
     const rows = await db
       .insert(appWorkspaceBindings)
       .values({
