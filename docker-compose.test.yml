@@ -2,6 +2,10 @@ services:
   api:
     environment:
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT:-true}
+      # BR70-CI1: the test api runs NODE_ENV=development, so its background outbox
+      # dispatcher would race + pre-empt the explicit-dispatch outbox unit tests.
+      # Suppress the autostart here; the outbox tests drive the dispatcher directly.
+      - OUTBOX_DISPATCHER_AUTOSTART=false
       - ADMIN_EMAIL=e2e-admin@example.com
       - LOCK_TTL_MS=15000  # 15s for E2E tests (default: 60s)
       - WEBAUTHN_RP_ID=localhost
