@@ -209,4 +209,29 @@ describe('settlement + metering hook (spec §5)', () => {
     expect(JSON.stringify(settle?.account)).not.toContain('SECRET-ALPHA-TOKEN-xyz');
     expect(settle?.account.hasRefreshToken).toBe(true);
   });
+
+  it('B2: no leaseId / lease / raw account id reaches the metering record', async () => {
+    const transport = new FixtureTransport({
+      jsonResponse: { status: 200, body: anthropicMessageResponse },
+    });
+    const { app, metering } = buildHarness({ transport });
+
+    await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+
+    // The whole settlement record (the metering surface) must carry NO pool id.
+    const record = JSON.stringify(metering.settlements);
+    expect(record).not.toContain('leaseId');
+    expect(record).not.toContain('lease_');
+    expect(record).not.toContain('lease');
+    // The pool's raw account ids never reach the metering record.
+    for (const secret of POOL_SECRETS) {
+      expect(record).not.toContain(secret);
+    }
+    // The account view exposes only a gateway-local opaque correlation id.
+    expect(metering.last?.account.correlationId.startsWith('gw_')).toBe(true);
+  });
 });

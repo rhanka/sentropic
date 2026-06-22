@@ -36,10 +36,14 @@ export interface ProviderIdentity {
 /**
  * Authorization grant attached to a cross-user lease. v0 = always absent
  * (personal-passthrough). Gated behind the kill switch.
+ *
+ * Field names follow the architect-ratified spec §7: `authzMode` +
+ * `providerIdentity` (NOT `mode` / `responsibleProvider` — that wording diverged
+ * in Lot-3a and is corrected here to match the ratified contract).
  */
 export interface AuthorizationGrant {
-  readonly mode: AuthzMode;
-  readonly responsibleProvider: ProviderIdentity;
+  readonly authzMode: AuthzMode;
+  readonly providerIdentity: ProviderIdentity;
   /** For `explicit-validation`: the approval token/reference, if pre-collected. */
   readonly approvalRef?: string;
 }
