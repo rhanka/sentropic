@@ -66,7 +66,12 @@ export class LocalFsArtifactStore implements ArtifactStorePort {
       size: body.byteLength,
       lastModified: new Date().toISOString(),
     };
-    await fs.writeFile(this.metaPath(input), JSON.stringify(meta));
+    // The meta sidecar lives in a SEPARATE subtree (<root>/meta/...) from the blob
+    // (<root>/blobs/...), so the blob mkdir above does not create its parent — mkdir it
+    // too, or writeFile ENOENTs for any nested (or even flat) key (BR70-CI1, BR-52).
+    const metaFile = this.metaPath(input);
+    await fs.mkdir(path.dirname(metaFile), { recursive: true });
+    await fs.writeFile(metaFile, JSON.stringify(meta));
     return { ref: { bucket: input.bucket, key: input.key }, checksum, size: body.byteLength };
   }
 
