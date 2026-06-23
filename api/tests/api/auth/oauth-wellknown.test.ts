@@ -34,6 +34,18 @@ describe('OAuth well-known routes', () => {
     ]);
   });
 
+  it('mounts the advertised end_session endpoint (route reachable, not 404)', async () => {
+    // The discovery doc advertises /api/v1/auth/oauth/end_session; assert the host actually wires
+    // the GET route. An unauthenticated, navigation-style request returns the logged-out page (200),
+    // never a 404, proving the handler is mounted (host-wiring guard).
+    const res = await app.request('http://localhost:9197/api/v1/auth/oauth/end_session', {
+      headers: { 'Sec-Fetch-Mode': 'navigate' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('signed out');
+  });
+
   it('serves the public JWKS with a cache header', async () => {
     await ensureActiveSigningKey('test-wellknown-kid');
 
