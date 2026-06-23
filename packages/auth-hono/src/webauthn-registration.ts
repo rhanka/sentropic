@@ -35,11 +35,22 @@ export interface AuthHonoGenerateRegistrationOptionsInput {
   userName: string;
 }
 
+/**
+ * BR-39r L4 — pre-persist hook. Invoked AFTER the WebAuthn response is cryptographically
+ * verified but BEFORE the credential row is persisted. Used to atomically consume a single-use
+ * invitation token inside the registration flow: if it throws (consume lost the race / invalid),
+ * the credential is NEVER created (no orphan), guaranteeing single-use. A resolved hook means
+ * "proceed with persistence". The service is contractually required to call this exactly once,
+ * immediately before its `credentials.create`, and to abort persistence if it rejects.
+ */
+export type AuthHonoBeforePersistCredential = (input: { userId: string }) => Promise<void> | void;
+
 export interface AuthHonoVerifyRegistrationInput {
   credential: RegistrationResponseJSON;
   deviceName?: string;
   expectedChallenge: string;
   userId: string;
+  beforePersist?: AuthHonoBeforePersistCredential;
 }
 
 export type AuthHonoVerifyRegistrationResult =
@@ -141,6 +152,12 @@ export const createAuthWebAuthnRegistrationService = (
 
       if (existing && !existing.revokedAt) {
         return invalidRegistration('duplicate_credential', 'Credential is already registered.', 409);
+      }
+
+      // BR-39r L4: pre-persist hook (atomic invite consume). Verified above; if this rejects,
+      // we propagate and the credential is NOT created (no orphan, single-use guaranteed).
+      if (input.beforePersist) {
+        await input.beforePersist({ userId: input.userId });
       }
 
       await options.ports.credentials.create({

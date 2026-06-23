@@ -4,6 +4,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
 
 import type {
+  AuthHonoBeforePersistCredential,
   AuthHonoGenerateRegistrationOptionsInput,
   AuthHonoWebAuthnRegistrationService,
 } from './webauthn-registration.js';
@@ -14,6 +15,17 @@ export interface CreateAuthWebAuthnRegistrationRouteHandlersOptions {
   prepareRegistrationOptions: AuthHonoPrepareRegistrationOptions;
   resolveRegistrationUser: AuthHonoResolveRegistrationUser;
   service: AuthHonoWebAuthnRegistrationService;
+  /**
+   * BR-39r L4 — produce a pre-persist hook (atomic invite consume) for this request, run AFTER
+   * the resolved user is known and the WebAuthn response will be verified, but BEFORE the
+   * credential is persisted. Return `undefined` for requests with no invite. If the returned hook
+   * rejects, the credential is NOT created (no orphan) — single-use guaranteed.
+   */
+  resolveBeforePersist?: (
+    input: AuthHonoRegistrationVerifyRequest,
+    resolved: AuthHonoResolvedRegistrationUser,
+    c: Context
+  ) => AuthHonoBeforePersistCredential | undefined | Promise<AuthHonoBeforePersistCredential | undefined>;
 }
 
 export type AuthHonoPrepareRegistrationOptions = (
@@ -149,7 +161,12 @@ export const createAuthWebAuthnRegistrationRouteHandlers = (
       );
     }
 
+    const beforePersist = options.resolveBeforePersist
+      ? await options.resolveBeforePersist(input.value, registrationUser, c)
+      : undefined;
+
     const result = await options.service.verifyRegistration({
+      beforePersist,
       credential: input.value.credential,
       deviceName: input.value.deviceName,
       expectedChallenge: challenge,
