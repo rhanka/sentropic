@@ -32,15 +32,32 @@ export const createOAuthConsentDetailsHandler =
 export const createOAuthConsentDecisionHandler =
   (options: OAuthConsentHandlerOptions) =>
   async (c: Context): Promise<Response> => {
-    const body = await c.req.json<{ decision?: string; state?: string }>().catch(() => null);
-    if (!body?.state || !['approve', 'deny'].includes(body.decision ?? '')) {
+    // Accept BOTH a native form POST (x-www-form-urlencoded → the browser follows the resulting
+    // 302; the final RP navigation no longer depends on JS once the form is rendered — the
+    // prod-regression fix) and a JSON fetch (programmatic clients, 200+JSON). The request's Accept
+    // header drives the response shape in redirectOrJson:
+    // a native form sends Accept: text/html → 302 navigable; a fetch sends Accept: application/json
+    // → 200+JSON.
+    const contentType = c.req.header('content-type') ?? '';
+    let decision: string | undefined;
+    let state: string | undefined;
+    if (contentType.includes('form-urlencoded') || contentType.includes('multipart/form-data')) {
+      const form = await c.req.parseBody().catch(() => null);
+      decision = typeof form?.decision === 'string' ? form.decision : undefined;
+      state = typeof form?.state === 'string' ? form.state : undefined;
+    } else {
+      const json = await c.req.json<{ decision?: string; state?: string }>().catch(() => null);
+      decision = json?.decision;
+      state = json?.state;
+    }
+    if (!state || !['approve', 'deny'].includes(decision ?? '')) {
       return oauthJsonError(c, 400, 'invalid_request', 'Consent decision and state are required.');
     }
 
-    const payload = await validateConsentState(c, options, body.state);
+    const payload = await validateConsentState(c, options, state);
     if (payload instanceof Response) return payload;
 
-    if (body.decision === 'deny') {
+    if (decision === 'deny') {
       return redirectOrJson(
         c,
         appendParams(payload.redirectUri, { error: 'access_denied', state: payload.state }, c.req.url)
