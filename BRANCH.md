@@ -37,7 +37,7 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
   - Declare `BR39rL4-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- (none)
+- `BR39rL4-EX1` (`acknowledge`): touch root `package-lock.json` via `make lock-root`. Reason: bumping `@sentropic/auth-hono` to 0.10.0 broke the workspace `npm ci` (auth-ui peer capped at ^0.9.0); widened auth-ui's auth-hono peer to include ^0.10.0 and relocked. Impact: lockfile self-versions sync to auth-hono 0.10.0 / auth-ui 0.6.0 (same EX pattern used by L3-EX1). Rollback: revert the two package.json edits + `make lock-root`.
 
 ## AI Flaky tests
 - Not applicable (no AI tests in scope).
@@ -62,13 +62,13 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
   - [x] Env mapping: `test-idprpl4` API 9302 / UI 5302 / Maildev 1132 (verified free via `make ps-all`).
   - [x] Confirm scope boundaries.
 
-- [ ] **Lot 1 — Single-use invite-token store (auth-hono port + table + migration)**
-  - [ ] Add `AuthHonoInvitesPort` (`findValid`, atomic `consume`) to `packages/auth-hono/src/ports.ts` as optional `invites?`.
-  - [ ] Add `auth_invite_tokens` table to `api/src/db/schema.ts` (id, token_hash UNIQUE, email, client_id nullable, expires_at, consumed_at nullable, consumed_by_user_id nullable, created_at).
-  - [ ] Generate ONE migration `api/drizzle/00xx_auth_invite_tokens.sql`.
-  - [ ] Add api adapter `api/src/services/auth/invite-store-adapter.ts` (hash-at-rest SHA-256; atomic UPDATE ... WHERE consumed_at IS NULL AND expires_at>now RETURNING email).
-  - [ ] Bump `packages/auth-hono/package.json` 0.9.0 → 0.10.0.
-  - [ ] Lot gate: `make typecheck-api ENV=test-idprpl4`.
+- [x] **Lot 1 — Single-use invite-token store (auth-hono port + table + migration)**
+  - [x] Add `AuthHonoInvitesPort` (`findValid`, atomic `consume`) to `packages/auth-hono/src/ports.ts` as optional `invites?`.
+  - [x] Add `auth_invite_tokens` table to `api/src/db/schema.ts` (id, token_hash UNIQUE, email, client_id nullable, expires_at, consumed_at nullable, consumed_by_user_id nullable, created_at).
+  - [x] One migration `api/drizzle/0036_auth_invite_tokens.sql` + journal entry (hand-written: project keeps drizzle snapshots drifted; migrator applies via `_journal.json`).
+  - [x] Add api adapter `api/src/services/auth/invite-store-adapter.ts` (hash-at-rest SHA-256; atomic UPDATE ... WHERE consumed_at IS NULL AND expires_at>now RETURNING email).
+  - [x] Bump `packages/auth-hono/package.json` 0.9.0 → 0.10.0; widen auth-ui peer + bump auth-ui 0.6.0 + `make lock-root` (EX1).
+  - [ ] Lot gate: `make typecheck-api ENV=test-idprpl4` (run with later lots).
 
 - [ ] **Lot 2 — authorize honors login_hint + sentropic_invite_token (routing only, C3 no-enum)**
   - [ ] Add `registerUrl` option to `OAuthAuthorizeHandlerOptions`.
