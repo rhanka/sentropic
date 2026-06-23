@@ -11,6 +11,13 @@
   import { createAuthUiError } from '../errors.js';
 
   interface Props {
+    /**
+     * When set, the approve/deny actions render as a native `<form>` POST to this URL, so the
+     * consent decision + the resulting RP redirect (a server 302) no longer depend on JS for
+     * navigation (the prod-regression fix). When unset, the legacy fetch + onRedirect path is used
+     * (backward-compat for programmatic hosts).
+     */
+    decisionAction?: string;
     labels?: Partial<OAuthConsentLabels>;
     onError?: (error: AuthUiError) => void;
     onRedirect?: (url: string) => void;
@@ -18,7 +25,7 @@
     transport: OAuthConsentTransport;
   }
 
-  let { labels, onError, onRedirect, state: consentState, transport }: Props = $props();
+  let { decisionAction, labels, onError, onRedirect, state: consentState, transport }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultOAuthConsentLabels(labels ?? {}));
 
@@ -95,14 +102,30 @@
       <p class="auth-ui-redirect-uri">{details.redirectUri}</p>
     </section>
 
-    <div class="auth-ui-actions">
-      <Button variant="primary" type="button" disabled={submitting !== null} onclick={() => submit('approve')}>
-        {submitting === 'approve' ? resolvedLabels.approving : resolvedLabels.approve}
-      </Button>
-      <Button variant="secondary" type="button" disabled={submitting !== null} onclick={() => submit('deny')}>
-        {submitting === 'deny' ? resolvedLabels.denying : resolvedLabels.deny}
-      </Button>
-    </div>
+    {#if decisionAction}
+      <!-- Native form POST: the browser follows the server 302 to the RP redirect_uri, so the
+           final navigation does not depend on JS (BR-39r prod-regression fix). The consent UI
+           itself is still painted by JS after the details fetch — full no-JS rendering is a
+           later server-render lot, out of scope here. -->
+      <form class="auth-ui-actions" method="POST" action={decisionAction}>
+        <input type="hidden" name="state" value={consentState} />
+        <Button variant="primary" type="submit" name="decision" value="approve">
+          {resolvedLabels.approve}
+        </Button>
+        <Button variant="secondary" type="submit" name="decision" value="deny">
+          {resolvedLabels.deny}
+        </Button>
+      </form>
+    {:else}
+      <div class="auth-ui-actions">
+        <Button variant="primary" type="button" disabled={submitting !== null} onclick={() => submit('approve')}>
+          {submitting === 'approve' ? resolvedLabels.approving : resolvedLabels.approve}
+        </Button>
+        <Button variant="secondary" type="button" disabled={submitting !== null} onclick={() => submit('deny')}>
+          {submitting === 'deny' ? resolvedLabels.denying : resolvedLabels.deny}
+        </Button>
+      </div>
+    {/if}
 
     <slot name="footer"></slot>
   {/if}
