@@ -34,6 +34,7 @@ Add additive OIDC RP-Initiated Logout (`end_session_endpoint`), `prompt=select_a
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- `BR39r-L3-EX1` (scope exception): widen `packages/auth-ui/package.json` `@sentropic/auth-hono` peerDependency range to include `^0.9.0`, and sync `package-lock.json`. Reason: the 0.8.0->0.9.0 bump makes the workspace npm install fail with ERESOLVE because auth-ui's peer range is capped at `^0.8.0`; this blocks `typecheck-api`/`lint-api`/`test-api` (all depend on workspace install). auth-ui does NOT import auth-hono in `src/` (pure peer-range declaration). Impact: peer-range widen only, no behavior change. Rollback: revert the one-line range + lockfile. Precedent: EVERY prior auth-hono minor bump did the identical same-PR widen (BR39l-EX3 ^0.6.0, EX6 ^0.4.0, ^0.7.0, ^0.8.0 in commit 1c30b39d9). Paths: `packages/auth-ui/package.json`, `package-lock.json`.
 - `attention` C2 loop-prevention finding: `apps/auth-idp/web/.../login/+page.svelte` + `packages/auth-ui/.../AuthLogin.svelte` ALWAYS render the login form on mount; `onLoggedIn` (the `continue` resume trigger) fires ONLY after a fresh passkey assertion (`verifyPasskeyAuthentication`) which mints a NEW session id. No auto-resume from an existing cookie exists. Therefore NO login-page edit is required for the forced-reauth flow.
 
 ## AI Flaky tests
