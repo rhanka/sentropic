@@ -20,9 +20,15 @@
     onLoggedIn: (session: AuthUiSession) => void | Promise<void>;
     onLostDevice?: () => void;
     onError?: (error: AuthUiError) => void;
+    /**
+     * BR-39r L4 — OIDC `login_hint`: optional email hint forwarded to the authentication-options
+     * request so the IdP can scope the passkey challenge to a known user. Passkey login stays
+     * discoverable; the hint is advisory.
+     */
+    presetEmail?: string;
   }
 
-  let { transport, labels, onLoggedIn, onLostDevice, onError }: Props = $props();
+  let { transport, labels, onLoggedIn, onLostDevice, onError, presetEmail }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
 
@@ -42,7 +48,9 @@
     loading = true;
     error = '';
     try {
-      const optionsResult = await transport.createPasskeyAuthenticationOptions({});
+      const optionsResult = await transport.createPasskeyAuthenticationOptions(
+        presetEmail ? { email: presetEmail } : {}
+      );
       if (!optionsResult.ok) {
         error = optionsResult.error.message;
         onError?.(optionsResult.error);
