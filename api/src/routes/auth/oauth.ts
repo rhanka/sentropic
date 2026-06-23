@@ -86,6 +86,9 @@ export const createSentropicOAuthOptions = (request?: Request) => ({
   idTokenTtlSeconds: env.OAUTH_ID_TOKEN_TTL_SEC,
   issuer: resolveOAuthIssuer(request),
   loginUrl: `${resolveOAuthUiBaseUrl(request)}/auth/login`,
+  // BR-39r L4: invitation → device-enrollment deep link target (authorize routes here when a
+  // `sentropic_invite_token` is present and there is no live session).
+  registerUrl: `${resolveOAuthUiBaseUrl(request)}/auth/register`,
   ports: getSentropicOAuthPorts(),
   serviceAccessTokenTtlSeconds: env.OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC,
   stateCodec: createOAuthHmacStateCodec({ secret: resolveOAuthStateSecret() }),

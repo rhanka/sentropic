@@ -70,12 +70,12 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
   - [x] Bump `packages/auth-hono/package.json` 0.9.0 → 0.10.0; widen auth-ui peer + bump auth-ui 0.6.0 + `make lock-root` (EX1).
   - [ ] Lot gate: `make typecheck-api ENV=test-idprpl4` (run with later lots).
 
-- [ ] **Lot 2 — authorize honors login_hint + sentropic_invite_token (routing only, C3 no-enum)**
-  - [ ] Add `registerUrl` option to `OAuthAuthorizeHandlerOptions`.
-  - [ ] In the L3 `!session || forceReauth` block: route invite (presence only) → registerUrl; login_hint alone → loginUrl w/ email hint; live same-user → continue; live session w/ email≠login_hint → force switch (reuse L3 forceReauth).
-  - [ ] Carry login_hint + sentropic_invite_token as PLAIN register-URL params.
-  - [ ] Wire `registerUrl` in `api/src/routes/auth/oauth.ts` (`createSentropicOAuthOptions`).
-  - [ ] Lot gate: `make typecheck-api ENV=test-idprpl4`.
+- [x] **Lot 2 — authorize honors login_hint + sentropic_invite_token (routing only, C3 no-enum)**
+  - [x] Add `registerUrl` option to `OAuthAuthorizeHandlerOptions`.
+  - [x] In the L3 `!session || forceReauth` block: route invite (presence only) → registerUrl; login_hint alone → loginUrl w/ email hint; live same-user → continue; live session w/ email≠login_hint → force switch (reuse L3 forceReauth).
+  - [x] Carry login_hint + sentropic_invite_token as PLAIN register-URL params.
+  - [x] Wire `registerUrl` in `api/src/routes/auth/oauth.ts` (`createSentropicOAuthOptions`).
+  - [ ] Lot gate: `make typecheck-api ENV=test-idprpl4` (run with later lots).
 
 - [ ] **Lot 3 — registration validates + consumes invite atomically pre-persist + generic fallback**
   - [ ] Add a pre-persist hook (`beforePersist`) threaded verify→consume→persist (no orphan credential if consume loses the race).
