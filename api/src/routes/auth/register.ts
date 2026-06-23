@@ -1,5 +1,6 @@
 import {
   createAuthWebAuthnRegistrationRouteHandlers,
+  type AuthHonoBeforePersistCredential,
   type AuthHonoFinalizeRegistration,
   type AuthHonoPrepareRegistrationOptions,
   type AuthHonoResolveRegistrationUser,
@@ -11,10 +12,38 @@ import { db } from '../../db/client';
 import { users, webauthnCredentials } from '../../db/schema';
 import { logger } from '../../logger';
 import { authHonoWebAuthnRegistrationService } from '../../services/auth/webauthn-adapter';
+import { createInviteStoreAdapter, hashInviteToken } from '../../services/auth/invite-store-adapter';
 import { verifyValidationToken } from '../../services/email-verification';
 import { createSession } from '../../services/session-manager';
 import { ensureWorkspaceForUser } from '../../services/workspace-service';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
+
+/**
+ * BR-39r L4 — single-use invitation tokens (invitation → direct device enrollment).
+ *
+ * An invite token is recognizable by the opaque `sit_` prefix (vs an email-verification JWT).
+ * It is validated read-only at options/resolve time only to decide whether to SKIP the email
+ * step, and is CONSUMED ATOMICALLY exactly once at credential-persist time (`resolveBeforePersist`
+ * → `invites.consume`), after the WebAuthn response is verified but before the credential row is
+ * written. C3 (no account-enumeration): EVERY invalid invite state (unknown / expired / consumed /
+ * email-mismatch) collapses into the generic cold-register fallback — there is no `invalid_invite`
+ * signal; an invalid invite simply behaves like a normal registration (email verification required).
+ */
+const INVITE_TOKEN_PREFIX = 'sit_';
+const isInviteToken = (token: string | undefined): token is string =>
+  typeof token === 'string' && token.startsWith(INVITE_TOKEN_PREFIX);
+
+const invites = createInviteStoreAdapter();
+
+/**
+ * Read-only: is this invite token currently valid AND bound to `normalizedEmail`?
+ * Any negative answer (unknown / expired / consumed / email-mismatch) returns false → the caller
+ * falls through to the generic email-first behavior (C3 no-enumeration). Never consumes.
+ */
+const inviteMatchesEmail = async (token: string, normalizedEmail: string): Promise<boolean> => {
+  const valid = await invites.findValid(hashInviteToken(token), new Date());
+  return Boolean(valid && valid.email.trim().toLowerCase() === normalizedEmail);
+};
 
 /**
  * WebAuthn Registration Routes (`@sentropic/auth-hono`)
@@ -31,8 +60,15 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
 }) => {
   const normalizedEmail = email.trim().toLowerCase();
 
-  if (verificationToken) {
-    const tokenValidation = await verifyValidationToken(verificationToken);
+  // BR-39r L4: an invite token bound to this email is proof-of-email — skip the email-code check.
+  // An invite token that is NOT valid for this email (unknown/expired/consumed/mismatch) collapses
+  // into `hasProof=false` → the generic cold-register path (C3 no account-enumeration).
+  const hasInvite = isInviteToken(verificationToken) && (await inviteMatchesEmail(verificationToken, normalizedEmail));
+  // The remaining email-token path only applies to non-invite tokens.
+  const emailToken = isInviteToken(verificationToken) ? undefined : verificationToken;
+
+  if (emailToken) {
+    const tokenValidation = await verifyValidationToken(emailToken);
     if (!tokenValidation.valid || tokenValidation.email !== normalizedEmail) {
       logger.warn({ email: normalizedEmail }, 'Invalid verification token');
       return {
@@ -45,6 +81,9 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
     }
     logger.info({ email: normalizedEmail }, 'Verification token validated for registration');
   }
+
+  // Unified "the email is proven" flag: a verified email token OR a valid invite for this email.
+  const hasProof = Boolean(emailToken) || hasInvite;
 
   const emailLocalPart = normalizedEmail.split('@')[0] ?? normalizedEmail;
   const defaultDisplayName = deriveDisplayNameFromEmail(normalizedEmail);
@@ -118,7 +157,9 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
     };
   }
 
-  if (!verificationToken) {
+  if (!hasProof) {
+    // No proof of email (no valid email token AND no valid invite for this email). C3: an invalid
+    // invite is indistinguishable from a cold register here — same generic message.
     logger.warn({ email: normalizedEmail }, 'Email not verified - verification token required');
     return {
       error: {
@@ -169,16 +210,32 @@ const resolveSentropicRegistrationUser: AuthHonoResolveRegistrationUser = async 
 }) => {
   const normalizedEmail = email.trim().toLowerCase();
 
-  const tokenValidation = await verifyValidationToken(verificationToken);
-  if (!tokenValidation.valid || tokenValidation.email !== normalizedEmail) {
-    logger.warn({ email: normalizedEmail }, 'Invalid verification token');
-    return {
-      error: {
-        code: 'invalid_verification_token',
-        message: 'Le token de vérification est invalide ou expiré',
-        status: 403,
-      },
-    };
+  if (isInviteToken(verificationToken)) {
+    // BR-39r L4 invite path. Read-only validity check here (single-use consume happens atomically
+    // at beforePersist). C3: an invalid invite collapses into the generic email-first fallback —
+    // NO `invalid_invite` signal, identical to a cold register without proof.
+    if (!(await inviteMatchesEmail(verificationToken, normalizedEmail))) {
+      logger.warn({ email: normalizedEmail }, 'Invite token invalid or not bound to this email');
+      return {
+        error: {
+          code: 'email_verification_required',
+          message: "Vous devez vérifier votre email avec un code avant d'enregistrer un device",
+          status: 403,
+        },
+      };
+    }
+  } else {
+    const tokenValidation = await verifyValidationToken(verificationToken);
+    if (!tokenValidation.valid || tokenValidation.email !== normalizedEmail) {
+      logger.warn({ email: normalizedEmail }, 'Invalid verification token');
+      return {
+        error: {
+          code: 'invalid_verification_token',
+          message: 'Le token de vérification est invalide ou expiré',
+          status: 403,
+        },
+      };
+    }
   }
 
   const [existingUser] = await db
@@ -362,9 +419,35 @@ const finalizeSentropicRegistration: AuthHonoFinalizeRegistration = async (
   });
 };
 
+/**
+ * BR-39r L4 — pre-persist invite consume. Returns a hook ONLY when the request carries an invite
+ * token; the hook runs after WebAuthn verification, before the credential row is written, and
+ * ATOMICALLY consumes the invite. If `consume` returns `null` (lost the concurrency race / already
+ * consumed / expired) OR the bound email no longer matches, the hook THROWS — so NO credential is
+ * created (no orphan), enforcing single-use. The throw surfaces as a generic registration failure
+ * (C3: no `invalid_invite` signal).
+ */
+const resolveRegistrationBeforePersist = (
+  input: { email: string; verificationToken: string },
+): AuthHonoBeforePersistCredential | undefined => {
+  if (!isInviteToken(input.verificationToken)) return undefined;
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const tokenHash = hashInviteToken(input.verificationToken);
+  return async ({ userId }) => {
+    const consumed = await invites.consume(tokenHash, new Date(), userId);
+    if (!consumed || consumed.email.trim().toLowerCase() !== normalizedEmail) {
+      logger.warn({ email: normalizedEmail, userId }, 'Invite consume failed at persist (single-use / mismatch)');
+      throw new Error('invite_consume_failed');
+    }
+    logger.info({ email: normalizedEmail, userId }, 'Invite token consumed at credential persist');
+  };
+};
+
 const registerHandlers = createAuthWebAuthnRegistrationRouteHandlers({
   finalizeRegistration: finalizeSentropicRegistration,
   prepareRegistrationOptions: prepareSentropicRegistrationOptions,
+  resolveBeforePersist: (input) =>
+    resolveRegistrationBeforePersist({ email: input.email, verificationToken: input.verificationToken }),
   resolveRegistrationUser: resolveSentropicRegistrationUser,
   service: authHonoWebAuthnRegistrationService,
 });
