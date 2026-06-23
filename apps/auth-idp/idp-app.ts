@@ -88,7 +88,11 @@ export const createIdpApp = (): Hono => {
     fontSrc: ["'self'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
-    formAction: ["'self'"],
+    // The consent decision is a native-form POST whose server 302 lands on the RP's (cross-origin)
+    // redirect_uri; form-action is enforced across that redirect, so 'self' alone would block it.
+    // OAuth safety here is the server-side registered-redirect_uri validation, not CSP — so we
+    // allow https RP origins (+ localhost RPs in non-prod). (BR-39r consent fix.)
+    formAction: ["'self'", 'https:', ...(isProduction ? [] : ['http://localhost:*', 'http://127.0.0.1:*'])],
     frameAncestors: ["'none'"],
     ...(isProduction ? { upgradeInsecureRequests: [] } : {}),
   };
