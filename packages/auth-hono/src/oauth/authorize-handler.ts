@@ -60,11 +60,17 @@ export const createOAuthAuthorizeHandler =
     const loginHint = c.req.query('login_hint') || null;
     const inviteToken = c.req.query('sentropic_invite_token') || null;
 
-    // Force re-auth when `prompt=login`/`select_account`, OR when a live session resolves to a
-    // DIFFERENT email than `login_hint` (never silently authorize the wrong account).
+    // Force re-auth when `prompt=login`/`select_account`, OR when `login_hint` is present and the
+    // live session resolves to a DIFFERENT email (never silently authorize the wrong account).
+    // Normalize BOTH sides for the comparison (the session email is not guaranteed lowercase); a
+    // null session email is treated as a mismatch so a hinted RP flow cannot silently continue on
+    // a session that cannot match the hint.
     let forceReauth = prompts.has('login') || prompts.has('select_account');
-    if (session && loginHint && session.user.email && session.user.email !== loginHint.trim().toLowerCase()) {
-      forceReauth = true;
+    if (session && loginHint) {
+      const sessEmail = session.user.email?.trim().toLowerCase() ?? null;
+      if (sessEmail !== loginHint.trim().toLowerCase()) {
+        forceReauth = true;
+      }
     }
 
     if (!session || forceReauth) {
