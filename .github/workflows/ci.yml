@@ -32,6 +32,7 @@ on:
           - cli
           - harness
           - llm-gateway
+          - focus
           - all
 
 env:
@@ -133,6 +134,7 @@ jobs:
       harness: ${{ steps.filter.outputs.harness }}
       harness_publish: ${{ steps.filter.outputs.harness_publish }}
       focus: ${{ steps.filter.outputs.focus }}
+      focus_publish: ${{ steps.filter.outputs.focus_publish }}
       cli: ${{ steps.filter.outputs.cli }}
       cli_publish: ${{ steps.filter.outputs.cli_publish }}
     steps:
@@ -351,6 +353,10 @@ jobs:
               - 'package-lock.json'
               - 'packages/focus/**'
               - '.github/workflows/ci.yml'
+            focus_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/focus/**'
             build_cli_publish:
               - 'package.json'
               - 'package-lock.json'
@@ -1617,6 +1623,9 @@ jobs:
       - name: Bootstrap publish llm-gateway
         if: inputs.bootstrap_publish_target == 'llm-gateway' || inputs.bootstrap_publish_target == 'all'
         run: make publish-llm-gateway-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish focus
+        if: inputs.bootstrap_publish_target == 'focus' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-focus-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
 
   # BR-55c (ARCH-17): main -> PREPROD continuous deploy. REPLACES the legacy
   # prod-targeting deploy-k8s job — NO main merge can touch the `sentropic` (prod)
