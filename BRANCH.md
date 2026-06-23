@@ -81,11 +81,12 @@ Add additive OIDC RP-Initiated Logout (`end_session_endpoint`), `prompt=select_a
     - [x] Sub-lot gate: `make test-auth-hono SCOPE=tests/oauth-authorize-select-account.test.ts ENV=test-idprpl3` (5/5 pass).
 
 - [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-api ENV=test-idprpl3` + `make lint-api ENV=test-idprpl3`.
-  - [ ] `make test-auth-hono ENV=test-idprpl3` (full package suite).
-  - [ ] `make test-api SCOPE=tests/api/auth/oauth-wellknown.test.ts ENV=test-idprpl3` (host discovery).
-  - [ ] `packages/auth-hono/package.json` bumped to 0.9.0 (CI `enforce-package-bump`).
-  - [ ] `make down ENV=test-idprpl3`.
+  - [x] `make typecheck-api ENV=test-idprpl3` (exit 0, 0 TS errors) + `make lint-api ENV=test-idprpl3` (exit 0, 0 errors; 205 pre-existing no-console warnings, none in changed files).
+  - [x] `make typecheck-auth-hono ENV=test-idprpl3` (pass).
+  - [x] `make test-auth-hono ENV=test-idprpl3` (full package suite: 32 files, 138 tests pass).
+  - [x] `make test-api-endpoints SCOPE=tests/api/auth/oauth-wellknown.test.ts ENV=test-idprpl3` (host discovery + end_session reachability: 3 tests pass).
+  - [x] `packages/auth-hono/package.json` bumped to 0.9.0 (CI `enforce-package-bump`).
+  - [x] `make down ENV=test-idprpl3`.
 
 ## Deferred
 - Dedicated optional `postLogoutRedirectUris` client field (logout landing distinct from OAuth callbacks): NOT this PR. C1 reuses `client.redirectUris` (additive-minimal, no migration). Follow-up to a future BR-39r/39x branch if a client ever needs a distinct logout landing. Owner: 39etc auth lane, date: 2026-06-23.
