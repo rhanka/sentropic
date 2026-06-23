@@ -77,11 +77,11 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
   - [x] Wire `registerUrl` in `api/src/routes/auth/oauth.ts` (`createSentropicOAuthOptions`).
   - [ ] Lot gate: `make typecheck-api ENV=test-idprpl4` (run with later lots).
 
-- [ ] **Lot 3 — registration validates + consumes invite atomically pre-persist + generic fallback**
-  - [ ] Add a pre-persist hook (`beforePersist`) threaded verify→consume→persist (no orphan credential if consume loses the race).
-  - [ ] Wire invite consume into `api/src/routes/auth/register.ts`: recognize `sit_` token, consume atomically after WebAuthn verify, before credential insert; bind token↔email; skip email-verification when valid invite.
-  - [ ] C3: collapse invalid/expired/consumed/email-mismatch/unknown into the generic "verify email" fallback (no `invalid_invite` error).
-  - [ ] Lot gate: `make typecheck-api ENV=test-idprpl4`.
+- [x] **Lot 3 — registration validates + consumes invite atomically pre-persist + generic fallback**
+  - [x] Add a pre-persist hook (`beforePersist` / `resolveBeforePersist`) threaded verify→consume→persist (no orphan credential if consume loses the race) in package service + route-handler + api adapter + api service.
+  - [x] Wire invite consume into `api/src/routes/auth/register.ts`: recognize `sit_` token, consume atomically after WebAuthn verify, before credential insert; bind token↔email; skip email-verification when valid invite.
+  - [x] C3: collapse invalid/expired/consumed/email-mismatch/unknown into the generic "verify email" fallback (no `invalid_invite` error).
+  - [x] Lot gate: `make typecheck-auth-hono` green.
 
 - [ ] **Lot 4 — host register pages: wire presets + RESUME OAuth continuation (both hosts)**
   - [ ] `apps/auth-idp/web/src/routes/auth/register/+page.svelte`: read login_hint→presetEmail, sentropic_invite_token→presetVerificationToken, skipEmailVerification when invite present; on success RESUME `continue` (mirror login page) else fallback goto.
