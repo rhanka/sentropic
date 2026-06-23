@@ -14,6 +14,13 @@ export interface OAuthAuthorizeHandlerOptions {
   issuer: string;
   loginUrl: string;
   ports: AuthHonoPorts;
+  /**
+   * BR-39r L4: register URL for the invitation → device-enrollment deep link. When a
+   * `sentropic_invite_token` is present and there is no live session, authorize routes here
+   * (carrying `login_hint` + `sentropic_invite_token` as PLAIN params) instead of `loginUrl`.
+   * Falls back to `loginUrl` when not provided.
+   */
+  registerUrl?: string;
   stateCodec: OAuthContinuationCodec;
   stateTtlSeconds?: number;
 }
@@ -44,7 +51,27 @@ export const createOAuthAuthorizeHandler =
     // is exclusive and takes precedence. `login` OR `select_account` force re-authentication.
     const prompts = new Set((c.req.query('prompt') ?? '').split(/\s+/).filter(Boolean));
     const session = await resolveOAuthSession(c.req.raw, options.ports);
-    const forceReauth = prompts.has('login') || prompts.has('select_account');
+
+    // BR-39r L4 (OIDC Evolution 2): `login_hint` (standard) + namespaced `sentropic_invite_token`.
+    // authorize ROUTES ONLY on token PRESENCE — it NEVER checks invite validity (validity is
+    // checked + the token is consumed at registration; an emailed invite link is routinely
+    // prefetched by scanners/AV, so consuming here would burn the real user's invite). C3: the
+    // redirect SHAPE must not reveal invite validity or account existence.
+    const loginHint = c.req.query('login_hint') || null;
+    const inviteToken = c.req.query('sentropic_invite_token') || null;
+
+    // Force re-auth when `prompt=login`/`select_account`, OR when `login_hint` is present and the
+    // live session resolves to a DIFFERENT email (never silently authorize the wrong account).
+    // Normalize BOTH sides for the comparison (the session email is not guaranteed lowercase); a
+    // null session email is treated as a mismatch so a hinted RP flow cannot silently continue on
+    // a session that cannot match the hint.
+    let forceReauth = prompts.has('login') || prompts.has('select_account');
+    if (session && loginHint) {
+      const sessEmail = session.user.email?.trim().toLowerCase() ?? null;
+      if (sessEmail !== loginHint.trim().toLowerCase()) {
+        forceReauth = true;
+      }
+    }
 
     if (!session || forceReauth) {
       if (prompts.has('none')) {
@@ -59,7 +86,21 @@ export const createOAuthAuthorizeHandler =
         forceReauth,
         forceReauthSessionId: session?.sessionRecord.id,
       });
-      return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
+
+      // Invite present + no live session ⇒ route to the register (device-enrollment) surface,
+      // carrying the OAuth request in the sealed `continue` and `login_hint` + the invite token
+      // as PLAIN params (the token IS the single-use bearer secret; registration's atomic consume
+      // binds token↔email). A live session that must re-auth still goes to login (not register).
+      if (inviteToken && !session && options.registerUrl) {
+        const registerParams: Record<string, string> = { continue: continuation, sentropic_invite_token: inviteToken };
+        if (loginHint) registerParams.login_hint = loginHint;
+        return c.redirect(appendParams(options.registerUrl, registerParams, c.req.url), 302);
+      }
+
+      // login_hint (with or without invite when no registerUrl is wired) ⇒ pre-fill login.
+      const loginParams: Record<string, string> = { continue: continuation };
+      if (loginHint) loginParams.login_hint = loginHint;
+      return c.redirect(appendParams(options.loginUrl, loginParams, c.req.url), 302);
     }
 
     const consentState: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'> = {

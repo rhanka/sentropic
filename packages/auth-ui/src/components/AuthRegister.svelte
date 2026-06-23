@@ -47,6 +47,23 @@
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
 
+  // BR-39r L4 (C3, invite fall-through): only a SYNTACTIC `sit_`-prefixed preset token is treated as
+  // an invite. When the server later rejects the invite it answers with the GENERIC
+  // `email_verification_required` (never an `invalid_invite` signal); the component then silently
+  // falls back to the cold email-first register, indistinguishable from a normal registration.
+  const INVITE_TOKEN_PREFIX = 'sit_';
+  const isInvitePreset =
+    skipEmailVerification &&
+    typeof presetVerificationToken === 'string' &&
+    presetVerificationToken.startsWith(INVITE_TOKEN_PREFIX);
+
+  // The fetch transport surfaces the raw server payload `{ error: { code, message } }` in
+  // `AuthUiError.cause`; the generic invalid-invite outcome is `error.code === 'email_verification_required'`.
+  const isEmailVerificationRequired = (err: AuthUiError): boolean => {
+    const cause = err.cause as { error?: { code?: unknown } } | undefined;
+    return cause?.error?.code === 'email_verification_required';
+  };
+
   let email = $state(presetEmail ?? '');
   let codeDigits = $state<string[]>(['', '', '', '', '', '']);
   let loading = $state(false);
@@ -175,6 +192,17 @@
       deviceName,
     });
     if (!optionsResult.ok) {
+      // BR-39r L4: an invalid/expired/consumed invite collapses into the generic
+      // `email_verification_required` (C3). When we opened in invite mode, fall back silently to the
+      // cold email-first step (NO invalid-invite message) so the user can still register normally.
+      if (isInvitePreset && isEmailVerificationRequired(optionsResult.error)) {
+        verificationToken = '';
+        error = '';
+        success = '';
+        step = 'email';
+        loading = false;
+        return;
+      }
       reportError(optionsResult.error, optionsResult.error.message);
       loading = false;
       return;
