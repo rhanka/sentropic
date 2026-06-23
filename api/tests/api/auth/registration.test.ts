@@ -293,6 +293,52 @@ describe('Registration API — invitation tokens (BR-39r L4, C3 no-enum)', () =>
     expect(uuidRegex.test(data.userId)).toBe(true);
   });
 
+  it('a VALID invite for an EXISTING-UNVERIFIED user proceeds (the invite stands in for the email code)', async () => {
+    const email = uniqueEmail('existing-unverified');
+    await createTestUser({ email, displayName: 'Existing Unverified', emailVerified: false });
+    const token = `sit_${randomUUID()}`;
+    await seedInvite({ token, email, expiresAt: future() });
+
+    const res = await optionsRequest(email, token);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(uuidRegex.test(data.userId)).toBe(true);
+  });
+
+  // C3 ORACLE (the gap the previous tests missed): an INVALID `sit_` token for an EXISTING VERIFIED
+  // email must be byte-identical (status + body) to the same token for an UNKNOWN email. Before the
+  // remediation, the existing-verified user short-circuited to 200 options (account enumeration).
+  it('an INVALID invite for an EXISTING-VERIFIED email is indistinguishable from an UNKNOWN email', async () => {
+    const existingVerifiedEmail = uniqueEmail('existing-verified');
+    await createTestUser({ email: existingVerifiedEmail, displayName: 'Existing Verified', emailVerified: true });
+
+    const invalidToken = `sit_${randomUUID()}`; // unknown/never-seeded → invalid for any email
+    const existingRes = await optionsRequest(existingVerifiedEmail, invalidToken);
+    const unknownRes = await optionsRequest(uniqueEmail('unknown'), invalidToken);
+
+    expect(existingRes.status).toBe(unknownRes.status);
+    expect(existingRes.status).toBe(403);
+    const existingBody = await existingRes.json();
+    const unknownBody = await unknownRes.json();
+    expect(existingBody).toEqual(unknownBody);
+    expect(existingBody.error.code).toBe('email_verification_required');
+    expect(existingBody.error.code).not.toBe('invalid_invite');
+  });
+
+  it('an invite bound to a DIFFERENT email is indistinguishable for existing-verified vs unknown emails', async () => {
+    const existingVerifiedEmail = uniqueEmail('existing-verified');
+    await createTestUser({ email: existingVerifiedEmail, displayName: 'Existing Verified', emailVerified: true });
+    const token = `sit_${randomUUID()}`;
+    await seedInvite({ token, email: uniqueEmail('bound-elsewhere'), expiresAt: future() });
+
+    const existingRes = await optionsRequest(existingVerifiedEmail, token);
+    const unknownRes = await optionsRequest(uniqueEmail('unknown'), token);
+
+    expect(existingRes.status).toBe(unknownRes.status);
+    expect(existingRes.status).toBe(403);
+    expect(await existingRes.json()).toEqual(await unknownRes.json());
+  });
+
   it('an UNKNOWN invite token → generic fallback (identical to a cold register)', async () => {
     const email = uniqueEmail('invited');
     const res = await optionsRequest(email, `sit_${randomUUID()}`);
