@@ -132,6 +132,14 @@ const main = async (): Promise<void> => {
       codeUrl = route.request().url();
       await route.fulfill({ status: 200, contentType: 'text/html', body: 'captured' });
     });
+    // BR-39r: the native-form consent navigates the RP via a real top-level 302 (not the old
+    // window.location.assign). context.route does not reliably intercept that redirect-follow, but
+    // the request event fires with the code-bearing URL (even when the unhosted RP then refuses the
+    // connection). Capture it here so the smoke proves the server-302 carried the code.
+    context.on('request', (req) => {
+      const url = req.url();
+      if (!codeUrl && url.startsWith(redirectBase)) codeUrl = url;
+    });
 
     const resumeUrl = new URL('/api/v1/auth/oauth/authorize', IDP_BASE_URL);
     resumeUrl.searchParams.set('continue', continuation);
