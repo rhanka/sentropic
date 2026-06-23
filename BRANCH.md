@@ -61,15 +61,15 @@ Add additive OIDC RP-Initiated Logout (`end_session_endpoint`), `prompt=select_a
   - [x] Bump `packages/auth-hono/package.json` 0.8.0 -> 0.9.0.
   - [ ] Lot gate: `make typecheck-api ENV=test-idprpl3` + `make lint-api ENV=test-idprpl3` (final lot).
 
-- [ ] **Lot 2 — end_session (A) + C1 redirect validation + host wiring**
-  - [ ] Extract `validateRedirectUri` into a shared helper (redirect-utils); reuse in authorize + end_session.
-  - [ ] New `packages/auth-hono/src/oauth/end-session-handler.ts` (RP-initiated logout, CSRF-guarded, C1 validated redirect).
-  - [ ] Register route in `packages/auth-hono/src/oauth/router.ts`; export from `packages/auth-hono/src/index.ts`.
-  - [ ] Wire `GET /oauth/end_session` in `api/src/routes/auth/oauth.ts`.
-  - [ ] **API tests**
-    - [ ] New `packages/auth-hono/tests/oauth-end-session.test.ts`.
-    - [ ] Reachability assertion in `api/tests/api/auth/oauth-wellknown.test.ts` (or end-session test).
-    - [ ] Sub-lot gate: `make test-auth-hono SCOPE=tests/oauth-end-session.test.ts ENV=test-idprpl3`.
+- [x] **Lot 2 — end_session (A) + C1 redirect validation + host wiring**
+  - [x] Extract `validateRedirectUri` into a shared helper (redirect-utils); reuse in authorize + end_session.
+  - [x] New `packages/auth-hono/src/oauth/end-session-handler.ts` (RP-initiated logout, CSRF-guarded, C1 validated redirect).
+  - [x] Register route in `packages/auth-hono/src/oauth/router.ts`; export from `packages/auth-hono/src/index.ts`.
+  - [x] Wire `GET /oauth/end_session` in `api/src/routes/auth/oauth.ts`.
+  - [x] **API tests**
+    - [x] New `packages/auth-hono/tests/oauth-end-session.test.ts` (8 tests green).
+    - [x] Reachability assertion in `api/tests/api/auth/oauth-wellknown.test.ts`.
+    - [x] Sub-lot gate: `make test-auth-hono SCOPE=tests/oauth-end-session.test.ts ENV=test-idprpl3` (8/8 pass).
 
 - [ ] **Lot 3 — prompt=select_account + login resume-gap (C2)**
   - [ ] Add `forceReauth?` + `forceReauthSessionId?` to `OAuthContinuationState` (`state-codec.ts`).
