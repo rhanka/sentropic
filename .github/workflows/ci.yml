@@ -31,6 +31,7 @@ on:
           - build-cli
           - cli
           - harness
+          - llm-gateway
           - all
 
 env:
@@ -96,6 +97,7 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
+      llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
       cowork_bridge: ${{ steps.filter.outputs.cowork_bridge }}
       cowork_bridge_publish: ${{ steps.filter.outputs.cowork_bridge_publish }}
@@ -113,6 +115,7 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       flow: ${{ steps.filter.outputs.flow }}
       llm_mesh_publish: ${{ steps.filter.outputs.llm_mesh_publish }}
+      llm_gateway_publish: ${{ steps.filter.outputs.llm_gateway_publish }}
       chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
       oauth_verify_publish: ${{ steps.filter.outputs.oauth_verify_publish }}
       mcp_auth_publish: ${{ steps.filter.outputs.mcp_auth_publish }}
@@ -163,10 +166,21 @@ jobs:
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
               - '.github/workflows/ci.yml'
+            llm_gateway:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/llm-gateway/**'
+              - 'packages/llm-mesh/**'
+              - '.github/workflows/ci.yml'
             llm_mesh_publish:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
+            llm_gateway_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/llm-gateway/**'
             chat_ui:
               - 'Makefile'
               - 'package.json'
@@ -435,6 +449,27 @@ jobs:
         run: make build-llm-mesh
       - name: Pack LLM Mesh
         run: make pack-llm-mesh
+
+  # BR-LB-EX1 — @sentropic/llm-gateway (WP16 Layer-B) CI validation (owner-approved
+  # 2026-06-22). Mirrors validate-llm-mesh; the make targets build the sibling
+  # @sentropic/llm-mesh dist first (the gateway depends on it). No publish job here —
+  # first publish is a manual bootstrap (see BRANCH.md), not steady-state OIDC.
+  validate-llm-gateway:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck LLM Gateway
+        run: make typecheck-llm-gateway
+      - name: Test LLM Gateway
+        run: make test-llm-gateway
+      - name: Build LLM Gateway
+        run: make build-llm-gateway
+      - name: Pack LLM Gateway
+        run: make pack-llm-gateway
 
   validate-chat-ui:
     runs-on: ubuntu-latest
@@ -1262,6 +1297,20 @@ jobs:
       - name: Publish LLM Mesh
         run: make publish-llm-mesh
 
+  publish-llm-gateway:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-llm-gateway]
+    if: needs.changes.outputs.llm_gateway_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish LLM Gateway
+        run: make publish-llm-gateway
+
   publish-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-ui]
@@ -1565,6 +1614,9 @@ jobs:
       - name: Bootstrap publish harness
         if: inputs.bootstrap_publish_target == 'harness' || inputs.bootstrap_publish_target == 'all'
         run: make publish-harness-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish llm-gateway
+        if: inputs.bootstrap_publish_target == 'llm-gateway' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-llm-gateway-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
 
   # BR-55c (ARCH-17): main -> PREPROD continuous deploy. REPLACES the legacy
   # prod-targeting deploy-k8s job — NO main merge can touch the `sentropic` (prod)
