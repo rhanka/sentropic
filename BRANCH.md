@@ -38,6 +38,7 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
 
 ## Feedback Loop
 - `BR39rL4-EX1` (`acknowledge`): touch root `package-lock.json` via `make lock-root`. Reason: bumping `@sentropic/auth-hono` to 0.10.0 broke the workspace `npm ci` (auth-ui peer capped at ^0.9.0); widened auth-ui's auth-hono peer to include ^0.10.0 and relocked. Impact: lockfile self-versions sync to auth-hono 0.10.0 / auth-ui 0.6.0 (same EX pattern used by L3-EX1). Rollback: revert the two package.json edits + `make lock-root`.
+- `BR39rL4-Q1` (`attention`): spec §F asks to wire `login_hint`→presetEmail in BOTH host login pages, but the launch-packet Allowed Paths do NOT list `apps/auth-idp/web/.../auth/login/**` or `ui/.../auth/login/**` (only register pages + AuthLogin.svelte). Stayed strict to Allowed Paths: shipped the AuthLogin `presetEmail` capability + authorize-side `login_hint` forwarding; the host login-page read (2 lines each, mirror of register-page pattern) is the ONLY remaining piece of §F. Conductor: approve a 1-line Allowed-Paths extension or defer (recorded in `## Deferred`). The PRIMARY invite→register flow is complete and unaffected.
 
 ## AI Flaky tests
 - Not applicable (no AI tests in scope).
@@ -53,6 +54,7 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
 ## Deferred
 - **Invite issuance** (creating `auth_invite_tokens` rows + sending the invite email) is OUT of scope. L4 only CONSUMES invites at registration. Issuance belongs to the inviting surface (membership/admin flow) — owner-side follow-up.
 - **e2e round-trip** (deep-link → enrollment → RP return) deferred to UAT/e2e once L3+L4 land (AI-e2e gate stability); unit/api tests cover the security paths.
+- **Host login-page `login_hint` wiring** (`apps/auth-idp/web/.../auth/login/+page.svelte` + `ui/.../auth/login/+page.svelte`): out of launch-packet Allowed Paths (see Feedback `BR39rL4-Q1`). The AuthLogin `presetEmail` prop + authorize-side `login_hint` forwarding to `loginUrl` are shipped; only the host pages reading `?login_hint=` into the prop remains (each is a 2-line mirror of the register-page change). Conductor to approve a scope extension or land in a follow-up.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
@@ -83,14 +85,14 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
   - [x] C3: collapse invalid/expired/consumed/email-mismatch/unknown into the generic "verify email" fallback (no `invalid_invite` error).
   - [x] Lot gate: `make typecheck-auth-hono` green.
 
-- [ ] **Lot 4 — host register pages: wire presets + RESUME OAuth continuation (both hosts)**
-  - [ ] `apps/auth-idp/web/src/routes/auth/register/+page.svelte`: read login_hint→presetEmail, sentropic_invite_token→presetVerificationToken, skipEmailVerification when invite present; on success RESUME `continue` (mirror login page) else fallback goto.
-  - [ ] `ui/src/routes/auth/register/+page.svelte`: same wiring + continuation resume.
+- [x] **Lot 4 — host register pages: wire presets + RESUME OAuth continuation (both hosts)**
+  - [x] `apps/auth-idp/web/src/routes/auth/register/+page.svelte`: read login_hint→presetEmail, sentropic_invite_token→presetVerificationToken, skipEmailVerification when invite present; on success RESUME `continue` (mirror login page) else fallback goto.
+  - [x] `ui/src/routes/auth/register/+page.svelte`: same wiring + continuation resume.
 
-- [ ] **Lot 5 — (if needed) AuthLogin presetEmail for login_hint**
-  - [ ] Add `presetEmail` prop to `AuthLogin.svelte` → pass to `createPasskeyAuthenticationOptions({ email })`.
-  - [ ] Wire login_hint→presetEmail in both login pages.
-  - [ ] Bump `packages/auth-ui/package.json` (minor) + widen auth-hono peer to include ^0.10.0 + `make lock-root` (BR39rL4-EX1).
+- [x] **Lot 5 — AuthLogin presetEmail for login_hint**
+  - [x] Add `presetEmail` prop to `AuthLogin.svelte` → pass to `createPasskeyAuthenticationOptions({ email })`.
+  - [x] Bump `packages/auth-ui/package.json` 0.6.0 + widen auth-hono peer to include ^0.10.0 + `make lock-root` (done in Lot 1 EX1).
+  - [SCOPE] Host login-page wiring (`apps/auth-idp/web/.../auth/login/+page.svelte`, `ui/.../auth/login/+page.svelte`) NOT done — those paths are OUTSIDE the launch-packet Allowed Paths (only register pages + AuthLogin.svelte were allowed). The component capability + authorize-side `login_hint` forwarding are shipped; the 2-line host login-page read is recorded in `## Deferred`. See Feedback `BR39rL4-Q1`.
 
 - [ ] **Lot 6 — Tests**
   - [ ] `packages/auth-hono/tests/oauth-authorize-login-hint-invite.test.ts`: invite present → registerUrl; login_hint alone → loginUrl w/ hint; same-user session → continue; session email≠login_hint → force switch.
