@@ -15,10 +15,12 @@ describe('OAuth well-known handlers', () => {
     await expect(response.json()).resolves.toMatchObject({
       authorization_endpoint: 'http://localhost:9197/api/v1/auth/oauth/authorize',
       code_challenge_methods_supported: ['S256'],
+      end_session_endpoint: 'http://localhost:9197/api/v1/auth/oauth/end_session',
       grant_types_supported: ['authorization_code', 'client_credentials'],
       id_token_signing_alg_values_supported: ['EdDSA'],
       issuer: 'http://localhost:9197',
       jwks_uri: 'http://localhost:9197/.well-known/jwks.json',
+      prompt_values_supported: ['none', 'login', 'consent', 'select_account'],
       response_types_supported: ['code'],
       token_endpoint: 'http://localhost:9197/api/v1/auth/oauth/token',
       token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
