@@ -6,6 +6,7 @@ import type {
 } from '../contracts.js';
 
 export interface OAuthConsentProps {
+  decisionAction?: string;
   labels?: Partial<OAuthConsentLabels>;
   onError?: (error: AuthUiError) => void;
   onRedirect?: (url: string) => void;
