@@ -1080,7 +1080,7 @@ pack-harness: build-harness ## Validate @sentropic/harness npm package contents 
 #     temp-toolset (which cannot resolve @sentropic/track + its transitive deps). Private, pure-TS
 #     render-core + the /track read binding; node test env. install-internal-packages installs the
 #     packages/focus workspace (incl. @sentropic/track@0.17.0) into node_modules from the lockfile.) ---
-.PHONY: typecheck-focus test-focus build-focus pack-focus
+.PHONY: typecheck-focus test-focus build-focus pack-focus publish-focus publish-focus-token
 typecheck-focus: install-internal-packages ## Run @sentropic/focus type checks (requires @sentropic/track in workspace node_modules)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
 
@@ -1092,6 +1092,41 @@ build-focus: install-internal-packages ## Build @sentropic/focus dist package (r
 
 pack-focus: build-focus ## Validate @sentropic/focus npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+publish-focus: build-focus ## Publish @sentropic/focus from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/focus \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/focus@"$$version" version >/dev/null 2>&1; then echo "@sentropic/focus@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+publish-focus-token: build-focus ## Publish @sentropic/focus using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-focus in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/focus \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/focus@"$$version" version >/dev/null 2>&1; then echo "@sentropic/focus@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
 .PHONY: publish-harness
 publish-harness: build-harness ## Publish @sentropic/harness from CI OIDC trusted publishing
