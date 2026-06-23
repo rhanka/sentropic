@@ -105,7 +105,9 @@ const main = async (): Promise<void> => {
     }
     const continuation = afterAuthorize.searchParams.get('continue');
     if (!continuation) fail(`served login screen missing the OAuth continuation: ${page.url()}`);
-    await page.waitForSelector('.auth-ui-title', { timeout: 5000 });
+    await page
+      .getByRole('heading', { name: /connexion|sign in/i })
+      .waitFor({ state: 'visible', timeout: 5000 });
     console.log('SCREEN-SMOKE: /authorize -> served /auth/login screen mounted (auth-ui) OK');
 
     // 2. Inject the seeded IdP session cookie (deterministic stand-in for a real
@@ -130,6 +132,14 @@ const main = async (): Promise<void> => {
       codeUrl = route.request().url();
       await route.fulfill({ status: 200, contentType: 'text/html', body: 'captured' });
     });
+    // BR-39r: the native-form consent navigates the RP via a real top-level 302 (not the old
+    // window.location.assign). context.route does not reliably intercept that redirect-follow, but
+    // the request event fires with the code-bearing URL (even when the unhosted RP then refuses the
+    // connection). Capture it here so the smoke proves the server-302 carried the code.
+    context.on('request', (req) => {
+      const url = req.url();
+      if (!codeUrl && url.startsWith(redirectBase)) codeUrl = url;
+    });
 
     const resumeUrl = new URL('/api/v1/auth/oauth/authorize', IDP_BASE_URL);
     resumeUrl.searchParams.set('continue', continuation);
@@ -140,7 +150,9 @@ const main = async (): Promise<void> => {
       fail(`authorize-with-session did not land on the served /auth/oauth/consent screen: ${page.url()}`);
     }
     // The served consent screen renders the real auth-ui consent UI + Approve btn.
-    const approveButton = page.locator('button.auth-ui-button--primary');
+    // Role-based selectors (not stale CSS classes): the DS-native conversion replaced the old
+    // `.auth-ui-*` classes, and BR-39r makes the actions a native <form> with submit Buttons.
+    const approveButton = page.getByRole('button', { name: /autoriser|approve/i });
     await approveButton.waitFor({ state: 'visible', timeout: 5000 });
     console.log('SCREEN-SMOKE: resume -> served /auth/oauth/consent screen mounted (auth-ui) OK');
 
