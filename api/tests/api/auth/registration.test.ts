@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { app } from '../../../src/app';
 import { cleanupAuthData, createTestUser, generateTestVerificationToken } from '../../utils/auth-helper';
 import { db } from '../../../src/db/client';
-import { users } from '../../../src/db/schema';
+import { authInviteTokens, users } from '../../../src/db/schema';
+import { hashInviteToken } from '../../../src/services/auth/invite-store-adapter';
 
 const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const uniqueEmail = (prefix: string) => `${prefix}-${randomUUID().slice(0, 8)}@example.com`;
@@ -229,5 +230,102 @@ describe('Registration API Routes', () => {
 
       expect(res.status).toBe(400);
     });
+  });
+});
+
+/**
+ * BR-39r L4 — invitation-token registration (C3 no account-enumeration).
+ * Every invalid invite state (unknown / expired / consumed / email-mismatch) must produce the
+ * SAME public behavior as a cold register with no proof: the generic `email_verification_required`
+ * (403) — never a distinct `invalid_invite` signal. A valid invite for a new email is proof and
+ * yields registration options (the email-code step is skipped).
+ */
+describe('Registration API — invitation tokens (BR-39r L4, C3 no-enum)', () => {
+  const future = () => new Date(Date.now() + 60 * 60 * 1000);
+  const past = () => new Date(Date.now() - 60 * 60 * 1000);
+
+  const seedInvite = async (input: {
+    token: string;
+    email: string;
+    expiresAt: Date;
+    consumedAt?: Date | null;
+  }): Promise<void> => {
+    await db.insert(authInviteTokens).values({
+      id: randomUUID(),
+      tokenHash: hashInviteToken(input.token),
+      email: input.email,
+      clientId: null,
+      expiresAt: input.expiresAt,
+      consumedAt: input.consumedAt ?? null,
+      consumedByUserId: null,
+      createdAt: new Date(),
+    });
+  };
+
+  afterEach(async () => {
+    await db.delete(authInviteTokens);
+    await cleanupAuthData();
+  });
+
+  const optionsRequest = (email: string, verificationToken?: string) =>
+    app.request('/api/v1/auth/register/options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(verificationToken ? { email, verificationToken } : { email }),
+    });
+
+  // The C3 reference: a cold register with no token for a new user.
+  const expectGenericFallback = async (res: Response) => {
+    expect(res.status).toBe(403);
+    const data = await res.json();
+    expect(data.error.code).toBe('email_verification_required');
+    expect(data.error.code).not.toBe('invalid_invite');
+  };
+
+  it('a VALID invite for a new email yields registration options (email step skipped)', async () => {
+    const email = uniqueEmail('invited');
+    const token = `sit_${randomUUID()}`;
+    await seedInvite({ token, email, expiresAt: future() });
+
+    const res = await optionsRequest(email, token);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(uuidRegex.test(data.userId)).toBe(true);
+  });
+
+  it('an UNKNOWN invite token → generic fallback (identical to a cold register)', async () => {
+    const email = uniqueEmail('invited');
+    const res = await optionsRequest(email, `sit_${randomUUID()}`);
+    await expectGenericFallback(res);
+  });
+
+  it('an EXPIRED invite → generic fallback', async () => {
+    const email = uniqueEmail('invited');
+    const token = `sit_${randomUUID()}`;
+    await seedInvite({ token, email, expiresAt: past() });
+    await expectGenericFallback(await optionsRequest(email, token));
+  });
+
+  it('an already-CONSUMED invite → generic fallback', async () => {
+    const email = uniqueEmail('invited');
+    const token = `sit_${randomUUID()}`;
+    await seedInvite({ token, email, expiresAt: future(), consumedAt: new Date() });
+    await expectGenericFallback(await optionsRequest(email, token));
+  });
+
+  it('an invite bound to a DIFFERENT email → generic fallback (no enumeration)', async () => {
+    const requestedEmail = uniqueEmail('invited');
+    const token = `sit_${randomUUID()}`;
+    await seedInvite({ token, email: uniqueEmail('other'), expiresAt: future() });
+    await expectGenericFallback(await optionsRequest(requestedEmail, token));
+  });
+
+  it('all invalid invite states are indistinguishable from the no-token cold register', async () => {
+    const email = uniqueEmail('invited');
+    const coldRegister = await optionsRequest(email);
+    const unknownInvite = await optionsRequest(uniqueEmail('invited'), `sit_${randomUUID()}`);
+
+    expect(unknownInvite.status).toBe(coldRegister.status);
+    expect((await unknownInvite.json()).error.code).toBe((await coldRegister.json()).error.code);
   });
 });
