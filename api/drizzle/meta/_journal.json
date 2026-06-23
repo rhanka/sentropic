@@ -253,6 +253,13 @@
       "when": 1781395200001,
       "tag": "0035_oauth_consents",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781395200002,
+      "tag": "0036_auth_invite_tokens",
+      "breakpoints": true
     }
   ]
 }
