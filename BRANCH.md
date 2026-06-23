@@ -71,13 +71,13 @@ Add additive OIDC RP-Initiated Logout (`end_session_endpoint`), `prompt=select_a
     - [x] Reachability assertion in `api/tests/api/auth/oauth-wellknown.test.ts`.
     - [x] Sub-lot gate: `make test-auth-hono SCOPE=tests/oauth-end-session.test.ts ENV=test-idprpl3` (8/8 pass).
 
-- [ ] **Lot 3 — prompt=select_account + login resume-gap (C2)**
-  - [ ] Add `forceReauth?` + `forceReauthSessionId?` to `OAuthContinuationState` (`state-codec.ts`).
-  - [ ] Parse `prompt` as a space-delimited Set in `authorize-handler.ts`; force-reauth for `login` OR `select_account`; `none` exclusivity errors.
-  - [ ] Seal `forceReauth`/`forceReauthSessionId`; close resume-gap at `resumeLoginContinuation`.
-  - [ ] **API tests**
-    - [ ] New `packages/auth-hono/tests/oauth-authorize-select-account.test.ts`.
-    - [ ] Sub-lot gate: `make test-auth-hono SCOPE=tests/oauth-authorize-select-account.test.ts ENV=test-idprpl3`.
+- [x] **Lot 3 — prompt=select_account + login resume-gap (C2)**
+  - [x] Add `forceReauth?` + `forceReauthSessionId?` to `OAuthContinuationState` (`state-codec.ts`).
+  - [x] Parse `prompt` as a space-delimited Set in `authorize-handler.ts`; force-reauth for `login` OR `select_account`; `none` exclusivity errors.
+  - [x] Seal `forceReauth`/`forceReauthSessionId`; close resume-gap at `resumeLoginContinuation`.
+  - [x] **API tests**
+    - [x] New `packages/auth-hono/tests/oauth-authorize-select-account.test.ts` (5 tests green).
+    - [x] Sub-lot gate: `make test-auth-hono SCOPE=tests/oauth-authorize-select-account.test.ts ENV=test-idprpl3` (5/5 pass).
 
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-api ENV=test-idprpl3` + `make lint-api ENV=test-idprpl3`.

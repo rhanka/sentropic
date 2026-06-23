@@ -40,15 +40,25 @@ export const createOAuthAuthorizeHandler =
     const validation = await validateAuthorizeRequest(c, options.ports);
     if (validation instanceof Response) return validation;
 
-    const prompt = c.req.query('prompt') ?? '';
+    // OIDC parses `prompt` as a space-delimited set of values (not an exact string). `none`
+    // is exclusive and takes precedence. `login` OR `select_account` force re-authentication.
+    const prompts = new Set((c.req.query('prompt') ?? '').split(/\s+/).filter(Boolean));
     const session = await resolveOAuthSession(c.req.raw, options.ports);
+    const forceReauth = prompts.has('login') || prompts.has('select_account');
 
-    if (!session || prompt === 'login') {
-      if (prompt === 'none') {
-        return redirectWithOAuthError(validation.redirectUri, 'login_required', validation.state, c.req.url);
+    if (!session || forceReauth) {
+      if (prompts.has('none')) {
+        // `prompt=none` cannot be satisfied without re-auth: surface the precise OIDC error.
+        const errorCode = prompts.has('select_account') ? 'account_selection_required' : 'login_required';
+        return redirectWithOAuthError(validation.redirectUri, errorCode, validation.state, c.req.url);
       }
 
-      const continuation = await sealContinuation(c, options, validation);
+      // Seal the force-reauth intent + the CURRENT session id (if any). HMAC-signed → tamper-proof.
+      // Do NOT proactively revoke: the user may abandon the flow and keep their session.
+      const continuation = await sealContinuation(c, options, validation, undefined, {
+        forceReauth,
+        forceReauthSessionId: session?.sessionRecord.id,
+      });
       return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
     }
 
@@ -63,10 +73,10 @@ export const createOAuthAuthorizeHandler =
     // `prompt=consent` ALWAYS forces the screen; coverage is a strict set-superset check,
     // so any requested scope absent from the grant re-shows consent (scope-escalation guard).
     const skipConsent =
-      prompt !== 'consent' &&
+      !prompts.has('consent') &&
       (await hasCoveringGrant(options.ports, session.user.id, validation.client.clientId, validation.scope));
 
-    if (prompt === 'none') {
+    if (prompts.has('none')) {
       if (!skipConsent) {
         return redirectWithOAuthError(validation.redirectUri, 'consent_required', validation.state, c.req.url);
       }
@@ -123,7 +133,11 @@ const resumeLoginContinuation = async (
   if (scopeResult instanceof Response) return scopeResult;
 
   const session = await resolveOAuthSession(c.req.raw, options.ports);
-  if (!session) {
+  // C2: close the silent-resume gap. With no session, OR when force-reauth was sealed AND the
+  // resolved session is still the SAME pre-existing session (the user did not actually re-auth),
+  // re-redirect to login. A genuinely fresh login mints a NEW session id ≠ the sealed old id →
+  // resume proceeds to consent.
+  if (!session || (payload.forceReauth && session.sessionRecord.id === payload.forceReauthSessionId)) {
     return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
   }
 
@@ -234,7 +248,8 @@ const sealContinuation = async (
   c: Context,
   options: OAuthAuthorizeHandlerOptions,
   request: ValidatedAuthorizeRequest,
-  session?: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'>
+  session?: Pick<OAuthContinuationState, 'acr' | 'authTime' | 'userId'>,
+  forceReauth?: Pick<OAuthContinuationState, 'forceReauth' | 'forceReauthSessionId'>
 ): Promise<string> => {
   const now = options.ports.clock.now();
   const expiresAt = options.ports.clock.addSeconds(now, options.stateTtlSeconds ?? 10 * 60);
@@ -267,6 +282,8 @@ const sealContinuation = async (
     createdAt: now.toISOString(),
     dpopJkt: request.dpopJkt,
     expiresAt: expiresAt.toISOString(),
+    forceReauth: forceReauth?.forceReauth,
+    forceReauthSessionId: forceReauth?.forceReauthSessionId,
     nonce: request.nonce,
     redirectUri: request.redirectUri,
     resource: request.resource,
