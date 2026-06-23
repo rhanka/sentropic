@@ -54,12 +54,12 @@ Add additive OIDC RP-Initiated Logout (`end_session_endpoint`), `prompt=select_a
   - [x] Define env mapping: `ENV=test-idprpl3`, `API_PORT=9301`, `UI_PORT=5301`, `MAILDEV_UI_PORT=1131`.
   - [x] Confirm scope boundaries.
 
-- [ ] **Lot 1 — Discovery (D) + golden tests + version bump**
-  - [ ] Add `end_session_endpoint` + `prompt_values_supported` to `wellknown-handler.ts` (keys sorted).
-  - [ ] Update `packages/auth-hono/tests/oauth-wellknown.test.ts`.
-  - [ ] Update `api/tests/api/auth/oauth-wellknown.test.ts`.
-  - [ ] Bump `packages/auth-hono/package.json` 0.8.0 -> 0.9.0.
-  - [ ] Lot gate: `make typecheck-api ENV=test-idprpl3` + `make lint-api ENV=test-idprpl3`.
+- [x] **Lot 1 — Discovery (D) + golden tests + version bump**
+  - [x] Add `end_session_endpoint` + `prompt_values_supported` to `wellknown-handler.ts` (keys sorted).
+  - [x] Update `packages/auth-hono/tests/oauth-wellknown.test.ts`.
+  - [x] Update `api/tests/api/auth/oauth-wellknown.test.ts`.
+  - [x] Bump `packages/auth-hono/package.json` 0.8.0 -> 0.9.0.
+  - [ ] Lot gate: `make typecheck-api ENV=test-idprpl3` + `make lint-api ENV=test-idprpl3` (final lot).
 
 - [ ] **Lot 2 — end_session (A) + C1 redirect validation + host wiring**
   - [ ] Extract `validateRedirectUri` into a shared helper (redirect-utils); reuse in authorize + end_session.
