@@ -107,7 +107,7 @@ Additive OIDC Evolution 2 on the standalone IdP: honor `login_hint` and a namesp
   - [ ] `make test-api-endpoints SCOPE=tests/api/auth/registration.test.ts ENV=test-idprpl4` + `make test-api-unit SCOPE=tests/unit/auth/invite-store-adapter.test.ts ENV=test-idprpl4` — BLOCKED by BLOCK1.
   - [x] ZERO discovery change (wellknown-handler.ts untouched; golden tests unchanged — confirmed by diff).
   - [x] Bumped affected packages: auth-hono 0.10.0, auth-ui 0.6.0 (+lockfile self-versions).
-  - [x] No test stack started (api gates blocked pre-boot); nothing to `make down`.
+  - [x] `make down ENV=test-idprpl4` run — the only services that booted were db-generate's deps (postgres/maildev/scw-tem-mock); all removed, `make ps-all` shows no test-idprpl4 containers.
   - [ ] PR base=main AFTER L3 merges (conductor handles push/PR/merge after BLOCK1 recovery + api gates green).
 </content>
 </invoke>
