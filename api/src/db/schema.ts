@@ -235,6 +235,22 @@ export const emailVerificationCodes = pgTable('email_verification_codes', {
   verificationTokenIdx: index('email_verification_codes_verification_token_idx').on(table.verificationToken),
 }));
 
+// BR-39r L4: single-use invitation tokens (invitation → direct device enrollment).
+// Token value is opaque high-entropy with prefix `sit_`; only the SHA-256 hash is stored.
+// Consumed ATOMICALLY at registration (UPDATE ... WHERE consumed_at IS NULL AND expires_at>now).
+export const authInviteTokens = pgTable('auth_invite_tokens', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the opaque `sit_` token
+  email: text('email').notNull(),
+  clientId: text('client_id'), // nullable: invite may not be bound to a specific RP
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: false }), // nullable until consumed (single-use)
+  consumedByUserId: text('consumed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  expiresAtIdx: index('auth_invite_tokens_expires_at_idx').on(table.expiresAt),
+}));
+
 export const oauthClients = pgTable('oauth_clients', {
   id: text('id').primaryKey(),
   clientId: text('client_id').notNull().unique(),

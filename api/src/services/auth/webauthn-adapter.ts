@@ -34,7 +34,7 @@ export const authHonoWebAuthnRegistrationService: AuthHonoWebAuthnRegistrationSe
     });
   },
 
-  async verifyRegistration({ credential, deviceName, expectedChallenge, userId }) {
+  async verifyRegistration({ beforePersist, credential, deviceName, expectedChallenge, userId }) {
     // Replay protection: challenge must exist, be unused, and match this userId.
     const challengeValid = await verifyChallenge(expectedChallenge, userId, 'registration');
     if (!challengeValid) {
@@ -68,6 +68,7 @@ export const authHonoWebAuthnRegistrationService: AuthHonoWebAuthnRegistrationSe
     }
 
     const result = await verifyWebAuthnRegistration({
+      beforePersist,
       credential,
       deviceName,
       expectedChallenge,

@@ -318,6 +318,26 @@ export interface AuthHonoConsentStorePort {
   saveGrant(userId: string, clientId: string, scopes: string[]): Promise<void>;
 }
 
+/**
+ * BR-39r L4: single-use invitation tokens (invitation → direct device enrollment).
+ * OPTIONAL — when absent, the invite path is inert (registration behaves as a normal cold
+ * register). The token is the single-use bearer secret bound to an email; it is consumed
+ * ATOMICALLY at registration (never at authorize — an emailed link is routinely prefetched).
+ *
+ * `consume` MUST be a single atomic statement so exactly one concurrent caller wins:
+ * `UPDATE auth_invite_tokens SET consumed_at=$now, consumed_by_user_id=$uid
+ *  WHERE token_hash=$h AND consumed_at IS NULL AND expires_at>$now RETURNING email`.
+ *
+ * C3 (no account-enumeration): the caller MUST collapse every failure mode
+ * (invalid / expired / consumed / email-mismatch / unknown) into one generic behavior.
+ */
+export interface AuthHonoInvitesPort {
+  /** Look up a still-valid invite by token hash (read-only; does NOT consume). */
+  findValid(tokenHash: string, now: Date): Promise<{ email: string; clientId: string | null } | null>;
+  /** Atomically consume the invite; returns the bound `email` to the single winner, else `null`. */
+  consume(tokenHash: string, now: Date, userId: string): Promise<{ email: string } | null>;
+}
+
 export interface AuthHonoPorts {
   users: AuthHonoUserPort;
   credentials: AuthHonoCredentialPort;
@@ -338,4 +358,6 @@ export interface AuthHonoPorts {
   tenant?: AuthHonoTenantPort;
   /** Consent persistence (optional; always-consent legacy behavior when absent). */
   consentStore?: AuthHonoConsentStorePort;
+  /** BR-39r L4 single-use invitation tokens (optional; inert when absent). */
+  invites?: AuthHonoInvitesPort;
 }
