@@ -4,6 +4,7 @@ import {
   authorizePath,
   createOauthPorts,
   createOauthRouterForTest,
+  oauthUser,
 } from './__fixtures__/oauth-fixtures.js';
 
 const loginUrl = 'http://localhost:5397/auth/login';
@@ -95,5 +96,34 @@ describe('OAuth authorize login_hint + sentropic_invite_token routing (BR-39r L4
 
     expect(response.status).toBe(302);
     expect(locationPath(response)).toBe(loginUrl);
+  });
+
+  // FIX 2 oracle: a live session whose resolved email is NULL must NOT silently authorize when a
+  // login_hint is present — the comparison treats a null session email as a mismatch → force reauth.
+  it('forces reauth when a live session has a NULL email and login_hint is present', async () => {
+    const { ports } = await createOauthPorts({ authenticated: true });
+    // Resolve the session to a user with no email (e.g. a legacy/null-email account).
+    ports.users = { findById: async () => ({ ...oauthUser, email: null }) };
+    const { router, stateCodec } = createOauthRouterForTest({ ports, registerUrl });
+
+    const response = await router.request(authorizePath({ login_hint: 'hinted@example.com' }));
+
+    expect(response.status).toBe(302);
+    expect(locationPath(response)).toBe(loginUrl);
+    const payload = await stateCodec.unseal(locationParams(response).get('continue') ?? '');
+    expect(payload).toMatchObject({ forceReauth: true });
+  });
+
+  // FIX 2 oracle: the session email is compared case-insensitively (a mixed-case session email that
+  // equals the hint after normalization must NOT force reauth — it proceeds to consent).
+  it('does NOT force reauth when a mixed-case session email equals login_hint after normalization', async () => {
+    const { ports } = await createOauthPorts({ authenticated: true });
+    ports.users = { findById: async () => ({ ...oauthUser, email: 'Ada@Example.com' }) };
+    const { router } = createOauthRouterForTest({ ports, registerUrl });
+
+    const response = await router.request(authorizePath({ login_hint: 'ada@example.com' }));
+
+    expect(response.status).toBe(302);
+    expect(locationPath(response)).toBe('http://localhost:5397/auth/oauth/consent');
   });
 });
