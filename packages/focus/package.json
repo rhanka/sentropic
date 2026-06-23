@@ -1,8 +1,7 @@
 {
   "name": "@sentropic/focus",
   "version": "0.3.0",
-  "private": true,
-  "description": "Focused-session document runtime (FocusSnapshot): the concrete decision-dossier document model + deterministic terminal/MD/HTML renderers + a /track read binding over @sentropic/track/read + a /cli read-only driver (stp focus). Read-only snapshot render-core; markdown injected by the host, HTML sanitized by the host. App-local-first, not yet published. (Focus-M1 L3)",
+  "description": "Focused-session document runtime (FocusSnapshot): the concrete decision-dossier document model + deterministic terminal/MD/HTML renderers + a /track read binding over @sentropic/track/read + a /cli read-only driver (stp focus). Read-only snapshot render-core; markdown injected by the host, HTML sanitized by the host. (Focus-M1 L3)",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -31,6 +30,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
