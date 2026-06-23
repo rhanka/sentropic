@@ -2604,6 +2604,7 @@ down-maildev: ## Stop MailDev service
 # `make -C ~/src/poc-k8s apply-sentropic` first.
 # All targets honour KUBECONFIG (default ~/.kube/poc.yaml).
 K8S_NAMESPACE ?= sentropic
+K8S_PREPROD_NAMESPACE ?= sentropic-preprod
 K8S_ENV_FILE  ?= .env
 KUBECONFIG    ?= $(HOME)/.kube/poc.yaml
 SCW_REGISTRY_SECRET ?= sentropic-registry
@@ -2621,7 +2622,7 @@ GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: k8s-deploy k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
+.PHONY: k8s-deploy k8s-deploy-preprod k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
 k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress is part of the overlay
 	# BR-55a: one kustomize apply (base + overlays/prod). The standalone IdP
@@ -2635,6 +2636,19 @@ k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui       --timeout=300s
+
+k8s-deploy-preprod: ## BR-55c: deploy main->preprod (ns sentropic-preprod) with the immutable content-hash image pin. NEVER touches the prod (sentropic) ns.
+	# BR-55c (D-c1/D-c4): pin the immutable per-content image tags (API_VERSION/UI_VERSION
+	# = content sha1 — the SAME tags publish-{api,ui}-image push) into the preprod overlay,
+	# then apply. This kills the floating :main staleness. The preprod-scoped KUBECONFIG
+	# (poc-k8s, namespace-scoped to sentropic-preprod) can ONLY write this ns — the prod
+	# `sentropic` ns is unreachable. The auth-idp shares the api image, so pinning the api
+	# image covers it. Idempotent: the images: block is appended once per checkout.
+	@grep -q '^images:' deploy/k8s/overlays/preprod/kustomization.yaml || printf '\nimages:\n  - name: %s/%s\n    newTag: "%s"\n  - name: %s/%s\n    newTag: "%s"\n' "$(REGISTRY)" "$(API_IMAGE_NAME)" "$(API_VERSION)" "$(REGISTRY)" "$(UI_IMAGE_NAME)" "$(UI_VERSION)" >> deploy/k8s/overlays/preprod/kustomization.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/preprod
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/api      --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/ui       --timeout=300s
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
