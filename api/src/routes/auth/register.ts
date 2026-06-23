@@ -54,16 +54,37 @@ const inviteMatchesEmail = async (token: string, normalizedEmail: string): Promi
 
 export const registerRouter = new Hono();
 
+// C3 no-account-enumeration: the generic "verify your email to continue" outcome. EVERY invalid
+// invite state (unknown / expired / consumed / email-mismatch) AND a cold register without proof
+// collapse into THIS identical 403 — so an attacker holding any syntactic `sit_` token cannot
+// distinguish an existing-verified email from an unknown one.
+const emailVerificationRequired = () => ({
+  error: {
+    code: 'email_verification_required' as const,
+    message: "Vous devez vérifier votre email avec un code avant d'enregistrer un device",
+    status: 403 as const,
+  },
+});
+
 const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = async ({
   email,
   verificationToken,
 }) => {
   const normalizedEmail = email.trim().toLowerCase();
 
-  // BR-39r L4: an invite token bound to this email is proof-of-email — skip the email-code check.
-  // An invite token that is NOT valid for this email (unknown/expired/consumed/mismatch) collapses
-  // into `hasProof=false` → the generic cold-register path (C3 no account-enumeration).
-  const hasInvite = isInviteToken(verificationToken) && (await inviteMatchesEmail(verificationToken, normalizedEmail));
+  // BR-39r L4 (C3): when a SYNTACTIC `sit_` invite token is present, evaluate the invite UNIFORMLY
+  // BEFORE the existing-user short-circuit. An invite that is NOT valid for this email
+  // (unknown/expired/consumed/mismatch) returns the GENERIC `email_verification_required` (403)
+  // here — identical for existing-verified, existing-unverified, and unknown emails (no enumeration).
+  // A valid invite is proof-of-email and PROCEEDS for both new AND existing-unverified users.
+  let hasInvite = false;
+  if (isInviteToken(verificationToken)) {
+    hasInvite = await inviteMatchesEmail(verificationToken, normalizedEmail);
+    if (!hasInvite) {
+      logger.warn({ email: normalizedEmail }, 'Invite token invalid or not bound to this email');
+      return emailVerificationRequired();
+    }
+  }
   // The remaining email-token path only applies to non-invite tokens.
   const emailToken = isInviteToken(verificationToken) ? undefined : verificationToken;
 
@@ -134,16 +155,12 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
       'Using existing user for registration'
     );
 
-    if (!existingUser.emailVerified) {
+    // A valid invite for this email is proof-of-email → an existing-UNVERIFIED user proceeds (the
+    // invite stands in for the email-code step). Without proof, an unverified existing user is still
+    // blocked with the SAME generic 403 as a cold register (C3: no enumeration signal).
+    if (!existingUser.emailVerified && !hasInvite) {
       logger.warn({ email: normalizedEmail, userId }, 'Email not verified - registration blocked');
-      return {
-        error: {
-          code: 'email_verification_required',
-          message:
-            'You must verify your email via magic link before registering a WebAuthn credential',
-          status: 403,
-        },
-      };
+      return emailVerificationRequired();
     }
 
     logger.info({ email: normalizedEmail, role: userRole, userId }, 'Registration options generated');
@@ -161,13 +178,7 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
     // No proof of email (no valid email token AND no valid invite for this email). C3: an invalid
     // invite is indistinguishable from a cold register here — same generic message.
     logger.warn({ email: normalizedEmail }, 'Email not verified - verification token required');
-    return {
-      error: {
-        code: 'email_verification_required',
-        message: "Vous devez vérifier votre email avec un code avant d'enregistrer un device",
-        status: 403,
-      },
-    };
+    return emailVerificationRequired();
   }
 
   let userRole: 'admin_app' | 'admin_org' | 'editor' | 'guest' = 'editor';
@@ -211,18 +222,13 @@ const resolveSentropicRegistrationUser: AuthHonoResolveRegistrationUser = async 
   const normalizedEmail = email.trim().toLowerCase();
 
   if (isInviteToken(verificationToken)) {
-    // BR-39r L4 invite path. Read-only validity check here (single-use consume happens atomically
-    // at beforePersist). C3: an invalid invite collapses into the generic email-first fallback —
-    // NO `invalid_invite` signal, identical to a cold register without proof.
+    // BR-39r L4 invite path (C3): evaluate the invite UNIFORMLY before the existing-user lookup, so
+    // neither prepare nor resolve leaks account existence. Read-only validity check here (the
+    // single-use consume happens atomically at beforePersist). An invalid invite collapses into the
+    // generic `email_verification_required` — NO `invalid_invite` signal, identical to a cold register.
     if (!(await inviteMatchesEmail(verificationToken, normalizedEmail))) {
       logger.warn({ email: normalizedEmail }, 'Invite token invalid or not bound to this email');
-      return {
-        error: {
-          code: 'email_verification_required',
-          message: "Vous devez vérifier votre email avec un code avant d'enregistrer un device",
-          status: 403,
-        },
-      };
+      return emailVerificationRequired();
     }
   } else {
     const tokenValidation = await verifyValidationToken(verificationToken);
