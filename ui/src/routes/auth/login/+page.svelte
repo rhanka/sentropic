@@ -15,6 +15,12 @@
   const transport = createSentropicAuthTransport();
   $: labels = resolveAuthUiLabels($locale);
 
+  // BR-39r L4 — OIDC `login_hint`: authorize forwards the hinted email as a plain `login_hint` param
+  // so the login form can pre-scope the passkey challenge to the known user (advisory; passkey login
+  // stays discoverable). Mirror the register page's `window.location.search` read.
+  const loginParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const presetEmail = loginParams.get('login_hint') ?? undefined;
+
   async function handleLoggedIn(session: AuthUiSession): Promise<void> {
     setUser(toSentropicUser(session.user));
     if (session.sessionToken) {
@@ -36,7 +42,7 @@
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50">
-  <AuthLogin {transport} {labels} onLoggedIn={handleLoggedIn}>
+  <AuthLogin {transport} {labels} {presetEmail} onLoggedIn={handleLoggedIn}>
     <Link slot="no-account" href="/auth/register" variant="standalone">
       {labels.loginNoAccount}
     </Link>
