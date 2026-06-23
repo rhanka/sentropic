@@ -4,6 +4,7 @@ import {
   createOAuthAuthorizeHandler,
   createOAuthConsentDecisionHandler,
   createOAuthConsentDetailsHandler,
+  createOAuthEndSessionHandler,
   createOAuthHmacStateCodec,
   createOAuthIntrospectHandler,
   createOAuthRevokeHandler,
@@ -46,6 +47,7 @@ oauthRouter.get('/userinfo', withOAuthOptions(createOAuthUserInfoHandler));
 oauthRouter.post('/userinfo', withOAuthOptions(createOAuthUserInfoHandler));
 oauthRouter.post('/revoke', withOAuthOptions(createOAuthRevokeHandler));
 oauthRouter.post('/introspect', withOAuthOptions(createOAuthIntrospectHandler));
+oauthRouter.get('/end_session', withOAuthOptions(createOAuthEndSessionHandler));
 
 let cachedPorts: AuthHonoPorts | null = null;
 

@@ -5,6 +5,7 @@ import type { OauthClientRecord } from './state-store-types.js';
 import type { OAuthContinuationCodec, OAuthContinuationState } from './state-codec.js';
 import { appendParams, oauthJsonError, redirectWithOAuthError } from './http-utils.js';
 import { issueAuthorizedCode } from './issue-authorized-code.js';
+import { validateRedirectUri } from './redirect-utils.js';
 import { resolveOAuthAcr, resolveOAuthSession } from './session-resolver.js';
 
 export interface OAuthAuthorizeHandlerOptions {
@@ -182,23 +183,6 @@ const validateAuthorizeRequest = async (
     scope: scopeResult,
     state,
   };
-};
-
-const validateRedirectUri = (client: OauthClientRecord, redirectUri: string): string | null => {
-  if (!client.redirectUris.includes(redirectUri)) return 'redirect_uri is not registered for this client.';
-
-  let parsed: URL;
-  try {
-    parsed = new URL(redirectUri);
-  } catch {
-    return 'redirect_uri must be an absolute URI.';
-  }
-
-  if (parsed.hash) return 'redirect_uri must not contain a fragment.';
-  if (parsed.username || parsed.password) return 'redirect_uri must not contain credentials.';
-  if (parsed.protocol === 'https:') return null;
-  if (parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname)) return null;
-  return 'redirect_uri must use https except for localhost development callbacks.';
 };
 
 const validateScope = (
