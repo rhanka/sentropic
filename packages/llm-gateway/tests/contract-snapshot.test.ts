@@ -18,6 +18,7 @@
  * editing this golden in the SAME PR (visible in review), never silently.
  */
 
+import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import { mapGatewayError, type GatewayFailureKind } from '../src/index.js';
@@ -81,12 +82,28 @@ const FROZEN_ERROR_MAP: Record<
   },
 };
 
-/** The actual (method, path) pairs registered on the real Hono router. */
+/**
+ * The actual (method, path) pairs registered on the real Hono router.
+ *
+ * We skip Hono framework MIDDLEWARE — `method: 'ALL'` mounts on WILDCARD paths
+ * (`*`, `/*`, `/v1/*`, …) registered via `app.use(...)`. We do NOT skip an `ALL`
+ * on a CONCRETE path (e.g. `app.all('/v1/x')`): that is a real wire surface and
+ * MUST surface in the inventory so the freeze test catches it. The earlier
+ * blanket `method === 'ALL'` skip hid exactly that case — a hand-registered
+ * `ALL /v1/...` route would have slipped the freeze (architect fast-follow).
+ */
+const isWildcardMount = (path: string): boolean =>
+  path === '*' || path === '/*' || path.endsWith('/*');
+
 const actualRouterRoutes = (app: { routes: { method: string; path: string }[] }): string[] => {
   const seen = new Set<string>();
   for (const r of app.routes) {
-    // Skip Hono framework middleware entries (`ALL` method / wildcard paths).
-    if (r.method === 'ALL' || r.path === '*' || r.path === '/*') {
+    // Framework middleware: ALL-method mounts on a wildcard path.
+    if (r.method === 'ALL' && isWildcardMount(r.path)) {
+      continue;
+    }
+    // Bare catch-all of ANY method is framework plumbing too.
+    if (r.path === '*' || r.path === '/*') {
       continue;
     }
     seen.add(`${r.method} ${r.path}`);
@@ -115,6 +132,18 @@ describe('BR-46 v1 wire contract snapshot — route inventory', () => {
     const { app } = buildHarness({ transport: new FixtureTransport() });
     const expected = FROZEN_ROUTES.map((r) => `${r.method} ${r.path}`).sort();
     expect(actualRouterRoutes(app)).toEqual(expected);
+  });
+
+  it('GUARD catches an ALL-method route on a CONCRETE /v1 path (no blanket ALL skip)', () => {
+    // Regression for the freeze hole (architect fast-follow): a hand-registered
+    // `app.all('/v1/...')` MUST surface in the inventory so the freeze breaks,
+    // while `app.use('/v1/*')` middleware stays ignored.
+    const probe = new Hono();
+    probe.use('/v1/*', async (_c, next) => next()); // wildcard middleware -> ignored
+    probe.all('/v1/leak', (c) => c.text('x')); // concrete ALL route -> surfaced
+    const routes = actualRouterRoutes(probe);
+    expect(routes).toContain('ALL /v1/leak');
+    expect(routes).not.toContain('ALL /v1/*');
   });
 
   it('mounts every frozen route (no 404) on the real router', async () => {
