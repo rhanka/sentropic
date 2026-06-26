@@ -75,6 +75,23 @@ admin/status/debug.
 > select nor stick to another caller's account; an unowned account is never selectable (deny by default). This is a
 > mechanical guarantee, not a convention — and it does NOT modify llm-mesh (published `@sentropic/llm-mesh@0.5.0`).
 
+> **REMOTE/SENTROPIC BOUNDARY (WP16 rectification, 2026-06-24):** Sentropic owns the durable `@sentropic/llm-gateway`
+> product/service contract: provider mapping, Anthropic Messages → OpenAI/Codex Responses translation, Codex OAuth
+> transport, provider/account policy, fallback, quota/metering, specs, and publication. `remote` owns only launcher
+> and session responsibilities: tmux/resume/single-writer UX, local start/stop/status/logs glue, environment
+> injection (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`), and local session acquisition. Any `remote/apps/llm-gateway`
+> mirror is a temporary, private launcher shim and must be removed or explicitly linked to the Sentropic PR once this
+> branch lands.
+>
+> **CODEX OAUTH BACKEND CONTRACT:** Codex/ChatGPT-plan OAuth tokens (from `codex auth login`) do NOT call
+> `api.openai.com/v1/chat/completions` because those tokens lack the public API `model.request` scope. The gateway's
+> Codex OAuth transport targets `https://chatgpt.com/backend-api/codex/responses` (Responses API). For that transport,
+> Anthropic/Claude family requests that map to Codex use `gpt-5.5` (not `gpt-5.3-spark`), system/developer
+> `string | block[]` content is flattened into a single `instructions` string, `xhigh` reasoning is downgraded to
+> Codex-supported `high` and documented as a provider-capability downgrade, and Codex `response.completed.response.usage`
+> is preserved into stream `done.data.usage` for BR-47 settlement. This behavior is exported by `@sentropic/llm-gateway`
+> so remote can consume the published package instead of carrying a provider-semantics mirror.
+
 ### 3b. Precise contract (for Layer-C/B integration tests)
 - **Request**: provider-NATIVE body passed through verbatim (Anthropic Messages `{model,messages,max_tokens,
   stream?,...}`; OpenAI `{model,messages,stream?,...}`). Headers: `Authorization: Bearer <sentropic>` | `DPoP
