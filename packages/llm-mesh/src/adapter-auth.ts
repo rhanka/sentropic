@@ -43,13 +43,23 @@ export const validateAdapterAuthSource = (
 
   if (source.type === 'claude-code-account') {
     if (!source.accessToken?.trim()) {
-      return { ok: false, message: 'access token is empty' };
+      return { ok: false, message: 'Claude Code OAuth access token is empty' };
     }
+
+    const executableApiKey = source.executableApiKey?.trim();
+    if (!executableApiKey) {
+      return {
+        ok: false,
+        message: 'Claude Code OAuth token is not an Anthropic API key; gateway must mint an executable Claude API key before dispatch',
+      };
+    }
+
     return {
       ok: true,
       headers: {
-        'Authorization': `Bearer ${source.accessToken.trim()}`,
+        'x-api-key': executableApiKey,
         'anthropic-version': '2023-06-01',
+        ...(source.organizationUuid ? { 'X-Organization-Uuid': source.organizationUuid } : {}),
       },
     };
   }

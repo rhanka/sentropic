@@ -86,7 +86,9 @@ describe('claude-code-account auth material', () => {
     const material: ClaudeCodeAccountAuthMaterial = {
       type: 'claude-code-account',
       provider: 'claude-code',
-      accessToken: 'sk-ant-access-token',
+      accessToken: 'sk-ant-oat-oauth-token',
+      executableApiKey: 'sk-ant-api03-minted-key',
+      organizationUuid: 'org_uuid_123',
       accountId: 'acct_cc_123',
       accountLabel: 'Fabien (Claude Code)',
       expiresAt: '2026-12-31T00:00:00.000Z',
@@ -98,31 +100,48 @@ describe('claude-code-account auth material', () => {
       accountId: 'acct_cc_123',
       accountLabel: 'Fabien (Claude Code)',
       expiresAt: '2026-12-31T00:00:00.000Z',
+      metadata: { organizationUuid: 'org_uuid_123' },
     });
   });
 
-  it('rejects claude-code-account with an empty access token', () => {
+  it('rejects claude-code-account with an empty OAuth token', () => {
     expect(
       validateAdapterAuthSource({
         type: 'claude-code-account',
         provider: 'claude-code',
         accessToken: '   ',
       }),
-    ).toEqual({ ok: false, message: 'access token is empty' });
+    ).toEqual({ ok: false, message: 'Claude Code OAuth access token is empty' });
   });
 
-  it('accepts claude-code-account with a valid access token and returns Authorization header', () => {
+  it('rejects raw Claude Code OAuth tokens as executable Anthropic API credentials', () => {
     expect(
       validateAdapterAuthSource({
         type: 'claude-code-account',
         provider: 'claude-code',
-        accessToken: 'sk-ant-valid-token',
+        accessToken: 'sk-ant-oat-raw-oauth-token',
+      }),
+    ).toEqual({
+      ok: false,
+      message: 'Claude Code OAuth token is not an Anthropic API key; gateway must mint an executable Claude API key before dispatch',
+    });
+  });
+
+  it('accepts claude-code-account only after the gateway minted an executable API key', () => {
+    expect(
+      validateAdapterAuthSource({
+        type: 'claude-code-account',
+        provider: 'claude-code',
+        accessToken: 'sk-ant-oat-raw-oauth-token',
+        executableApiKey: 'sk-ant-api03-minted-key',
+        organizationUuid: 'org_uuid_123',
       }),
     ).toEqual({
       ok: true,
       headers: {
-        'Authorization': 'Bearer sk-ant-valid-token',
+        'x-api-key': 'sk-ant-api03-minted-key',
         'anthropic-version': '2023-06-01',
+        'X-Organization-Uuid': 'org_uuid_123',
       },
     });
   });

@@ -90,11 +90,21 @@ export interface AccountTransportAuthMaterial extends AuthMaterialBase {
 export interface ClaudeCodeAccountAuthMaterial extends AuthMaterialBase {
   type: 'claude-code-account';
   provider: 'claude-code';
+  /**
+   * Claude Code OAuth access token (`sk-ant-oat...`). Enrollment/refresh credential
+   * only: it MUST NOT be sent to the Anthropic Messages API as bearer/x-api-key.
+   */
   accessToken: string;
+  /**
+   * Gateway-minted executable Anthropic API key, obtained through the verified
+   * Claude Code OAuth control-plane flow. Until present, dispatch must fail closed.
+   */
+  executableApiKey?: string;
+  organizationUuid?: string | null;
   accountId?: string | null;
   accountLabel?: string | null;
   expiresAt?: string | null;
-  // No refreshToken — refresh is gateway-owned (not llm-mesh, not remote)
+  // OAuth refresh/mint is gateway-owned (not llm-mesh, not remote).
 }
 
 export interface PlannedAccountTransportAuthMaterial extends AuthMaterialBase {
@@ -214,6 +224,7 @@ export const describeAuthMaterial = (
         ...(material.accountId ? { accountId: material.accountId } : {}),
         ...(material.accountLabel ? { accountLabel: material.accountLabel } : {}),
         ...(material.expiresAt ? { expiresAt: material.expiresAt } : {}),
+        ...(material.organizationUuid ? { metadata: { organizationUuid: material.organizationUuid } } : {}),
         ...baseDescriptor,
       };
 

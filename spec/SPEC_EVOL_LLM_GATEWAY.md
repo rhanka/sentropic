@@ -91,6 +91,14 @@ admin/status/debug.
 > Codex-supported `high` and documented as a provider-capability downgrade, and Codex `response.completed.response.usage`
 > is preserved into stream `done.data.usage` for BR-47 settlement. This behavior is exported by `@sentropic/llm-gateway`
 > so remote can consume the published package instead of carrying a provider-semantics mirror.
+>
+> **CLAUDE CODE OAUTH FAIL-CLOSED CONTRACT:** Claude Code OAuth access tokens (`sk-ant-oat...`) are NOT Anthropic
+> API keys and MUST NOT be sent to `https://api.anthropic.com/v1/messages` as `Authorization: Bearer` or `x-api-key`.
+> They are enrollment/refresh credentials only. The executable dispatch credential is a gateway-minted Anthropic API
+> key produced by the verified Claude Code OAuth control-plane flow (e.g. validate/profile/create_api_key with the
+> required organization scope/header, once ratified). Until the gateway has such an executable key, `claude-code-account`
+> dispatch MUST fail closed. Remote may configure local Claude to use the gateway token (`gw-*`) but must not own or
+> shadow this provider policy.
 
 ### 3b. Precise contract (for Layer-C/B integration tests)
 - **Request**: provider-NATIVE body passed through verbatim (Anthropic Messages `{model,messages,max_tokens,
