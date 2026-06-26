@@ -7,3 +7,4 @@ export * from './wire.js';
 export * from './flow.js';
 export * from './personal-passthrough/index.js';
 export * from './stubs.js';
+export * from './codex.js';
