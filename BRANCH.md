@@ -6,6 +6,7 @@ Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sen
 ## Scope / Guardrails
 - Scope limited to a new PRIVATE package `packages/mcp-platform/**` + the copied spec + this `BRANCH.md`.
 - Package MUST be `"private": true`; NOT added to any publish filter, CI publish list, Makefile target, or trusted-publisher config. No npm publish.
+- MUST NOT be added to the root `package-lock.json` / activated via root `npm install` (= P1 package activation, architect/owner-gated). Root `package.json` / `package-lock.json` untouched in this branch. Verify only via the package's own ephemeral toolchain. (Fix F9)
 - MOCK-ONLY: mock OIDC issuer + mock MCP client/server; no real network, no prod credentials, no real Claude.ai dependency, no `mcp-wave` coupling, no immo special-casing.
 - No production code paths, no DB, no secrets in code/tests/logs.
 - Generic platform only (Wave/immo are consumers/examples, not baked in).
@@ -30,7 +31,8 @@ Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sen
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- none
+- F9 (doc-only): package intentionally NOT in root `package-lock.json`; root-install/activation is P1, architect/owner-gated. Owner: architect/owner. Status: parked (P1). No root lock/`package.json` change in this branch.
+- F8 (parked): the FINAL canonical `ElicitationPolicy` shape is architect-gated; strengthened provisionally only (§5 typed request/response + §5.2(b) secret-safety). Owner: architect. Status: parked.
 
 ## AI Flaky tests
 - Not applicable: all tests are deterministic in-memory mocks (no AI/provider/network calls).
@@ -73,7 +75,18 @@ Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sen
     - [x] `tests/secrets.test.ts` — no-secret-in-logs.
     - [x] `tests/writes.test.ts` — write-tool requires gate + idempotency + audit.
 
+- [x] **Lot R — Double-consensus review fixes (Codex BLOCK + Opus SHIP-WITH-NITS)**
+  - [x] F1 — tenant fail-closed on zero enrollment (`authz.ts`: empty authorized set → `no_enrollment`, no broad fallback) + test.
+  - [x] F2 — required claims enforced at invocation (`authz.ts` `missing_claims`; mock OIDC mints custom claims) + test.
+  - [x] F3 — elicitation client binding (`elicitation.ts`: completer.client MUST match actor.client) + test.
+  - [x] F4 — NHI delegation never self-declared (`elicitation.ts`: trusted injected `DelegationResolver`; default fail-closed) + tests; fixed the prior insecure accept test.
+  - [x] F5 — `advance()` cannot bypass §5.2 (only `requested→rendered`; later hops via `answer/validate/resume`) + test.
+  - [x] F6 — mutation gate non-fungible (`guard.ts`: gate bound to capability + session + principal; replay denied) + tests.
+  - [x] F7 — token no-passthrough structural (`mcp-transport.ts`: bearer consumed at boundary, handler gets `SanitizedMcpRequest`) + tests; strengthened authz structural test.
+  - [x] F8 — `ElicitationPolicy` strengthened provisionally + `elicitationPolicyIsSecretSafe` + architect-gated park note + test.
+  - [x] F9 — doc-only root-lock/activation note (README + BRANCH.md); root `package.json`/`package-lock.json` untouched.
+
 - [x] **Lot N — Gates**
   - [x] `tsc --noEmit` for the package — PASS (no Makefile target for a private package; ran package's own tsc 5.4.5 in an ephemeral temp toolchain, nothing installed in repo/global).
-  - [x] package vitest — PASS, 42/42 across 7 files (oidc 7, authz 11, elicitation 8, secrets 4, writes 5, transport 3, manifest 4); all deterministic in-memory.
+  - [x] package vitest — PASS, 55/55 across 7 files (oidc 7, authz 14, elicitation 12, secrets 4, writes 9, transport 4, manifest 5); all deterministic in-memory.
   - [ ] DO NOT push, DO NOT open PR (conductor runs double-consensus review before any merge).
