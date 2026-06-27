@@ -12,6 +12,8 @@ import type {
   AppMcpProviderManifest,
   CapabilityResource,
   CapabilityTool,
+  ConnectorTenantContext,
+  ConnectorTenantResolutionInput,
 } from '../manifest.js';
 import type {
   AppConnectorProviderAdapter,
@@ -19,8 +21,6 @@ import type {
   AppResourceResult,
   AppToolInvocation,
   AppToolResult,
-  ConnectorTenantContext,
-  ConnectorTenantResolutionInput,
 } from '../runtime.js';
 
 const listWidgets: CapabilityResource = {
