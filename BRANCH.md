@@ -51,27 +51,27 @@ Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sen
   - [x] Confirm scope and guardrails; copy spec into worktree.
   - [x] Scaffold private package (`package.json` private+unpublished, `tsconfig.json`, `README.md`, `LICENSE`).
 
-- [ ] **Lot 1 — Slice 1: manifest & adapter closed schemas**
-  - [ ] `src/manifest.ts` — `AppMcpProviderManifest`, capability schemas, gates, freshness, idempotency, secret requirement, tenant resolution/context.
-  - [ ] `src/runtime.ts` — `StpConnectorContext` (audited `getSecret`), `AppConnectorProviderAdapter`, envelopes, `DurableCallRef`, session/consent/enrollment/secret records, visibility states.
-  - [ ] `src/index.ts` — public re-exports.
-  - [ ] Lot gate:
-    - [ ] tests: `tests/manifest.test.ts` — closed read-only exceptions + sample manifest typecheck.
+- [x] **Lot 1 — Slice 1: manifest & adapter closed schemas**
+  - [x] `src/manifest.ts` — `AppMcpProviderManifest`, capability schemas, gates, freshness, idempotency, secret requirement, tenant resolution/context.
+  - [x] `src/runtime.ts` — `StpConnectorContext` (audited `getSecret`), `AppConnectorProviderAdapter`, envelopes, `DurableCallRef`, session/consent/enrollment/secret records, visibility states.
+  - [x] `src/index.ts` — public re-exports.
+  - [x] Lot gate:
+    - [x] tests: `tests/manifest.test.ts` — closed read-only exceptions + sample manifest typecheck.
 
-- [ ] **Lot 2 — Slice 2: mock harness + middleware + tests**
-  - [ ] `src/mock/oidc.ts` — in-memory mock OIDC issuer (EdDSA JWT, JWKS, sub/aud/scope/auth_time/tid, revocation list).
-  - [ ] `src/mock/mcp-transport.ts` — in-memory mock MCP client/server transport with per-session client binding.
-  - [ ] `src/mock/fake-connector.ts` — app-neutral fake connector adapter fixture.
-  - [ ] `src/audit.ts` — in-memory audit sink + redaction.
-  - [ ] `src/context.ts` — `StpConnectorContext` factory with audited secret accessor.
-  - [ ] `src/elicitation.ts` — fail-closed elicitation state machine.
-  - [ ] `src/authz.ts` — per-request authz middleware: audience-bound token verify, principal+tenant from token only, per-capability scope + freshness, deny-as-missing discovery, mutation gating.
-  - [ ] Lot gate (tests):
-    - [ ] `tests/oidc.test.ts` — issue/verify, audience binding, issuer mismatch, revocation.
-    - [ ] `tests/authz.test.ts` — cross-tenant denial; deny-as-missing discovery; fail-closed ambiguous mapping; revoked/missing consent; max_age fresh/stale step-up; insufficient_scope; token no-passthrough.
-    - [ ] `tests/elicitation.test.ts` — resume/cancel/timeout/denied + NHI fail-closed + sub-match anti-phishing.
-    - [ ] `tests/secrets.test.ts` — no-secret-in-logs.
-    - [ ] `tests/writes.test.ts` — write-tool requires gate + idempotency + audit.
+- [x] **Lot 2 — Slice 2: mock harness + middleware + tests**
+  - [x] `src/mock/oidc.ts` — in-memory mock OIDC issuer (EdDSA JWT, JWKS, sub/aud/scope/auth_time/tid, revocation list).
+  - [x] `src/mock/mcp-transport.ts` — in-memory mock MCP client/server transport with per-session client binding.
+  - [x] `src/mock/fake-connector.ts` — app-neutral fake connector adapter fixture.
+  - [x] `src/audit.ts` — in-memory audit sink + redaction.
+  - [x] `src/context.ts` — `StpConnectorContext` factory with audited secret accessor.
+  - [x] `src/elicitation.ts` — fail-closed elicitation state machine.
+  - [x] `src/authz.ts` — per-request authz middleware: audience-bound token verify, principal+tenant from token only, per-capability scope + freshness, deny-as-missing discovery, mutation gating.
+  - [x] Lot gate (tests):
+    - [x] `tests/oidc.test.ts` — issue/verify, audience binding, issuer mismatch, revocation.
+    - [x] `tests/authz.test.ts` — cross-tenant denial; deny-as-missing discovery; fail-closed ambiguous mapping; revoked/missing consent; max_age fresh/stale step-up; insufficient_scope; token no-passthrough.
+    - [x] `tests/elicitation.test.ts` — resume/cancel/timeout/denied + NHI fail-closed + sub-match anti-phishing.
+    - [x] `tests/secrets.test.ts` — no-secret-in-logs.
+    - [x] `tests/writes.test.ts` — write-tool requires gate + idempotency + audit.
 
 - [ ] **Lot N — Gates**
   - [ ] `tsc --noEmit` for the package (docker node image, in-memory).
