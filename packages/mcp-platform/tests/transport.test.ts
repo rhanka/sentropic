@@ -39,4 +39,30 @@ describe('InMemoryMcpServer / InMemoryMcpClient', () => {
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe('unknown_session');
   });
+
+  it('F7: the bearer is consumed at the boundary — the handler never receives the raw token', async () => {
+    let seenKeys: string[] = [];
+    let authSeen: unknown;
+    // The authorizer is the ONLY place that sees the raw token; its output (never
+    // the token itself) is what reaches the handler context.
+    const server = new InMemoryMcpServer(
+      async (req, session): Promise<McpResponse> => {
+        seenKeys = Object.keys(req as Record<string, unknown>);
+        authSeen = session.auth;
+        return { ok: true, result: { keys: seenKeys, auth: session.auth } };
+      },
+      (token) => ({ verified: typeof token === 'string' }),
+    );
+    const client = new InMemoryMcpClient('claude.ai', server);
+    client.connect();
+    const RAW = 'bearer-raw-token-must-not-cross-the-boundary';
+    const res = await client.send({ method: 'tools/call', token: RAW });
+
+    expect(res.ok).toBe(true);
+    // Structurally absent: the handler's request has no `token` field at all.
+    expect(seenKeys).not.toContain('token');
+    expect(authSeen).toEqual({ verified: true });
+    // The raw token appears nowhere in the response surfaced from the handler.
+    expect(JSON.stringify(res)).not.toContain(RAW);
+  });
 });
