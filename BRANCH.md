@@ -73,7 +73,7 @@ Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sen
     - [x] `tests/secrets.test.ts` — no-secret-in-logs.
     - [x] `tests/writes.test.ts` — write-tool requires gate + idempotency + audit.
 
-- [ ] **Lot N — Gates**
-  - [ ] `tsc --noEmit` for the package (docker node image, in-memory).
-  - [ ] package vitest (docker node image, in-memory).
+- [x] **Lot N — Gates**
+  - [x] `tsc --noEmit` for the package — PASS (no Makefile target for a private package; ran package's own tsc 5.4.5 in an ephemeral temp toolchain, nothing installed in repo/global).
+  - [x] package vitest — PASS, 42/42 across 7 files (oidc 7, authz 11, elicitation 8, secrets 4, writes 5, transport 3, manifest 4); all deterministic in-memory.
   - [ ] DO NOT push, DO NOT open PR (conductor runs double-consensus review before any merge).
