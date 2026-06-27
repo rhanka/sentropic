@@ -14,16 +14,30 @@ import { randomUUID } from 'node:crypto';
 export type McpRequest = {
   method: string;
   params?: Record<string, unknown>;
-  token?: string; // bearer presented per request (verified by the authz layer)
+  token?: string; // bearer presented per request; CONSUMED at the auth boundary
+};
+
+// What the downstream handler/connector actually receives: the bearer is
+// structurally absent — it never crosses the auth boundary (§6.6 no-passthrough).
+export type SanitizedMcpRequest = {
+  method: string;
+  params?: Record<string, unknown>;
 };
 
 export type McpResponse =
   | { ok: true; result: unknown }
   | { ok: false; error: { code: string; message: string } };
 
-export type McpRequestHandler = (
-  req: McpRequest,
+// Auth boundary: consumes the raw bearer and yields an authorization outcome. The
+// raw token is NEVER included in the context handed to the handler.
+export type TokenAuthorizer = (
+  token: string | undefined,
   session: { id: string; clientId: string },
+) => unknown;
+
+export type McpRequestHandler = (
+  req: SanitizedMcpRequest,
+  session: { id: string; clientId: string; auth?: unknown },
 ) => Promise<McpResponse>;
 
 type SessionRecord = { id: string; clientId: string; createdAt: string };
@@ -31,9 +45,11 @@ type SessionRecord = { id: string; clientId: string; createdAt: string };
 export class InMemoryMcpServer {
   readonly #sessions = new Map<string, SessionRecord>();
   readonly #handler: McpRequestHandler;
+  readonly #authorizer?: TokenAuthorizer;
 
-  constructor(handler: McpRequestHandler) {
+  constructor(handler: McpRequestHandler, authorizer?: TokenAuthorizer) {
     this.#handler = handler;
+    this.#authorizer = authorizer;
   }
 
   openSession(clientId: string): string {
@@ -51,14 +67,19 @@ export class InMemoryMcpServer {
   }
 
   /** Dispatch a request. Fail-closed when the session is unknown or the calling
-   *  client does not own it (cross-client isolation). */
+   *  client does not own it (cross-client isolation). The bearer is consumed at
+   *  this boundary and stripped before the handler runs (token no-passthrough). */
   async handle(sessionId: string, clientId: string, req: McpRequest): Promise<McpResponse> {
     const session = this.#sessions.get(sessionId);
     if (!session) return { ok: false, error: { code: 'unknown_session', message: 'no such session' } };
     if (session.clientId !== clientId) {
       return { ok: false, error: { code: 'session_client_mismatch', message: 'foreign client' } };
     }
-    return this.#handler(req, { id: session.id, clientId });
+    // Consume the bearer at the boundary; the handler only ever sees a sanitized
+    // request (no `token` field) plus an authorization outcome.
+    const { token, ...sanitized } = req;
+    const auth = this.#authorizer ? this.#authorizer(token, { id: session.id, clientId }) : undefined;
+    return this.#handler(sanitized, { id: session.id, clientId, auth });
   }
 }
 
