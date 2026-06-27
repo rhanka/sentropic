@@ -45,6 +45,11 @@ export type MutationGateResult =
  * Verify a mutating capability's gate + idempotency before invocation. Read-only
  * capabilities pass through. A mutation missing its elicitation gate (resumed)
  * or idempotency key is denied fail-closed.
+ *
+ * The gate is NON-FUNGIBLE (§5/§11 replay): a `resumed` elicitation only releases
+ * the gate for the SAME capability, session and principal it was raised for. A
+ * resumed record for capability X, another session or another principal can never
+ * be replayed to release the gate for this invocation.
  */
 export function assertMutationGate(
   capability: CapabilityTool,
@@ -60,7 +65,14 @@ export function assertMutationGate(
     capability.gates.requiresPrincipalGate;
   if (needsGate) {
     const ref = envelope.elicitationRef;
-    if (!ref || !elicitations.isGateReleased(ref)) missing.push('gate_required');
+    const rec = ref ? elicitations.get(ref) : undefined;
+    const bound =
+      rec !== undefined &&
+      rec.state === 'resumed' &&
+      rec.capabilityRef === capability.name &&
+      rec.sessionRef === envelope.ctx.session.mcpSessionId &&
+      rec.actor.sub === envelope.ctx.principal.sub;
+    if (!bound) missing.push('gate_required');
   }
 
   if (capability.idempotency.required && !envelope.idempotencyKey) {

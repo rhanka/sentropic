@@ -50,15 +50,32 @@ function ctx() {
   return { c, audit };
 }
 
-function releasedGate(): { elicitations: ElicitationManager; ref: string } {
+/** Build a resumed elicitation gate, optionally bound to a foreign
+ *  capability/session/principal (to probe F6 non-fungibility). Defaults bind to
+ *  the ctx() invocation context (create_widget / sess-1 / user-1). */
+function resumedGate(
+  over: { id?: string; capabilityRef?: string; sessionRef?: string; sub?: string } = {},
+): { elicitations: ElicitationManager; ref: string } {
   const elicitations = new ElicitationManager();
-  elicitations.create({ id: 'el-1', mode: 'confirm', sessionRef: 'sess-1', capabilityRef: 'create_widget', actor: { sub: 'user-1' }, ttlSeconds: 300, auditId: 'audit-1' });
-  elicitations.render('el-1');
-  elicitations.answer('el-1', { sub: 'user-1', isHuman: true });
-  elicitations.validate('el-1');
-  elicitations.resume('el-1');
-  return { elicitations, ref: 'el-1' };
+  const id = over.id ?? 'el-1';
+  const sub = over.sub ?? 'user-1';
+  elicitations.create({
+    id,
+    mode: 'confirm',
+    sessionRef: over.sessionRef ?? 'sess-1',
+    capabilityRef: over.capabilityRef ?? 'create_widget',
+    actor: { sub },
+    ttlSeconds: 300,
+    auditId: 'audit-1',
+  });
+  elicitations.render(id);
+  elicitations.answer(id, { sub, isHuman: true });
+  elicitations.validate(id);
+  elicitations.resume(id);
+  return { elicitations, ref: id };
 }
+
+const releasedGate = (): { elicitations: ElicitationManager; ref: string } => resumedGate();
 
 describe('mutation gating', () => {
   it('read-only capabilities pass the gate trivially', () => {
@@ -79,6 +96,40 @@ describe('mutation gating', () => {
     const { c } = ctx();
     const env: AppToolInvocation = { capabilityRef: 'create_widget', input: { label: 'x' }, ctx: c, idempotencyKey: 'idem-1' };
     const r = assertMutationGate(createWidget, env, new ElicitationManager());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.missing).toEqual(['gate_required']);
+  });
+
+  it('F6: the matching resumed gate (same capability/session/principal) releases', () => {
+    const { c } = ctx();
+    const { elicitations, ref } = resumedGate();
+    const env: AppToolInvocation = { capabilityRef: 'create_widget', input: { label: 'x' }, ctx: c, idempotencyKey: 'idem-1', elicitationRef: ref };
+    expect(assertMutationGate(createWidget, env, elicitations)).toEqual({ ok: true });
+  });
+
+  it('F6: a resumed gate for a FOREIGN capability is not fungible (replay denied)', () => {
+    const { c } = ctx();
+    const { elicitations, ref } = resumedGate({ id: 'el-cap', capabilityRef: 'delete_widget' });
+    const env: AppToolInvocation = { capabilityRef: 'create_widget', input: { label: 'x' }, ctx: c, idempotencyKey: 'idem-1', elicitationRef: ref };
+    const r = assertMutationGate(createWidget, env, elicitations);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.missing).toEqual(['gate_required']);
+  });
+
+  it('F6: a resumed gate from a FOREIGN session is not fungible (replay denied)', () => {
+    const { c } = ctx();
+    const { elicitations, ref } = resumedGate({ id: 'el-sess', sessionRef: 'sess-OTHER' });
+    const env: AppToolInvocation = { capabilityRef: 'create_widget', input: { label: 'x' }, ctx: c, idempotencyKey: 'idem-1', elicitationRef: ref };
+    const r = assertMutationGate(createWidget, env, elicitations);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.missing).toEqual(['gate_required']);
+  });
+
+  it('F6: a resumed gate for a FOREIGN principal is not fungible (replay denied)', () => {
+    const { c } = ctx();
+    const { elicitations, ref } = resumedGate({ id: 'el-sub', sub: 'attacker-9' });
+    const env: AppToolInvocation = { capabilityRef: 'create_widget', input: { label: 'x' }, ctx: c, idempotencyKey: 'idem-1', elicitationRef: ref };
+    const r = assertMutationGate(createWidget, env, elicitations);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.missing).toEqual(['gate_required']);
   });
