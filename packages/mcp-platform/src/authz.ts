@@ -20,7 +20,9 @@ export type AuthzDenyReason =
   | 'invalid_token'
   | 'missing_capability'
   | 'insufficient_scope'
+  | 'missing_claims'
   | 'stale_auth'
+  | 'no_enrollment'
   | 'cross_tenant'
   | 'ambiguous_tenant'
   | 'no_consent'
@@ -85,13 +87,17 @@ export type AuthzRequest = {
 
 type TenantOutcome =
   | { ok: true; tenantRef: string }
-  | { ok: false; reason: 'cross_tenant' | 'ambiguous_tenant' };
+  | { ok: false; reason: 'no_enrollment' | 'cross_tenant' | 'ambiguous_tenant' };
 
 /**
  * Resolve the authoritative tenant from the TOKEN only. Selector hints are
  * cross-checked: a hint naming a different tenant fails closed (cross_tenant);
  * conflicting hints fail closed (ambiguous_tenant). Hints never establish the
  * tenant.
+ *
+ * Tenant access is fail-closed (§6 "no default/broad tenant fallback"): the
+ * principal MUST be enrolled on this connector for the token's tenant. An empty
+ * enrollment set is NOT a wildcard — it denies (`no_enrollment`).
  */
 export function resolveAuthorizedTenant(
   claims: MockTokenClaims,
@@ -115,9 +121,10 @@ export function resolveAuthorizedTenant(
   }
 
   const authorized = deps.tenantResolver.authorizedTenants(claims.sub, deps.connectorInstanceId);
-  if (authorized.length > 0 && !authorized.includes(authoritative)) {
-    return { ok: false, reason: 'cross_tenant' };
-  }
+  // Fail-closed: an unenrolled principal (empty set) is denied, never broadly
+  // accepted. Enrollment that does not cover the token tenant is cross-tenant.
+  if (authorized.length === 0) return { ok: false, reason: 'no_enrollment' };
+  if (!authorized.includes(authoritative)) return { ok: false, reason: 'cross_tenant' };
   return { ok: true, tenantRef: authoritative };
 }
 
@@ -161,6 +168,13 @@ export function authorizeRequest(req: AuthzRequest, deps: AuthorizeDeps): AuthzR
       stepUp: 'scope',
       wwwAuthenticate: `Bearer error="insufficient_scope", scope="${cap.requiredScopes.join(' ')}"`,
     };
+  }
+
+  // Per-capability required claims (§4.3) enforced fail-closed at invocation: any
+  // claim the capability mandates that is absent from the verified token denies.
+  const missingClaims = cap.requiredClaims.filter((c) => claims[c] === undefined);
+  if (missingClaims.length > 0) {
+    return { allowed: false, reason: 'missing_claims', stepUp: 'auth' };
   }
 
   const policy = cap.freshness ?? deps.manifestFreshness;

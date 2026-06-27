@@ -31,6 +31,9 @@ export type MockTokenClaims = {
   jti: string;
   acr?: string;
   amr?: string[];
+  // Custom claims (e.g. role/assurance markers) gating capabilities via
+  // `requiredClaims` (§4.3). Standard claims above always win over custom ones.
+  [claim: string]: unknown;
 };
 
 export type IssueOptions = {
@@ -42,6 +45,7 @@ export type IssueOptions = {
   ttlSeconds?: number; // defaults to 3600
   acr?: string;
   amr?: string[];
+  claims?: Record<string, unknown>; // extra custom claims (e.g. requiredClaims gates)
   now?: number; // injectable clock (ms), defaults to Date.now()
 };
 
@@ -95,6 +99,8 @@ export class MockOidcIssuer {
     const nowSec = Math.floor((opts.now ?? Date.now()) / 1000);
     const jti = randomUUID();
     const claims: MockTokenClaims = {
+      // Custom claims first so the authoritative standard claims always win.
+      ...(opts.claims ?? {}),
       iss: this.issuer,
       sub: opts.sub,
       aud: opts.aud,
