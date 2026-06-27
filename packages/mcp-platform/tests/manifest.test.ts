@@ -6,11 +6,13 @@
  * manifest: no domain (Wave/immo) shape is baked in.
  */
 import { describe, expect, it } from 'vitest';
+import { elicitationPolicyIsSecretSafe } from '../src/manifest.js';
 import type {
   AppMcpProviderManifest,
   CapabilityPrompt,
   CapabilityResource,
   CapabilityTool,
+  ElicitationPolicy,
 } from '../src/manifest.js';
 
 const readOnlyGates = {
@@ -121,5 +123,21 @@ describe('manifest closed schemas (§4.2/§4.3)', () => {
   it('manifest stays app-neutral (no domain shape baked into the schema)', () => {
     expect(manifest.appId).toBe('fake-app');
     expect(manifest.tools.map((t) => t.name)).not.toContain('list_businesses');
+  });
+
+  it('F8: a form-mode elicitation policy MUST NOT carry secrets (§5.2 b, provisional)', () => {
+    const formWithSecret: ElicitationPolicy = {
+      capabilityRef: 'create_widget', mode: 'form', ttlSeconds: 120, required: true, carriesSecrets: true,
+    };
+    const formNoSecret: ElicitationPolicy = {
+      capabilityRef: 'create_widget', mode: 'form', ttlSeconds: 120, required: true,
+    };
+    // Sensitive entry must use url/credential mode (does not transit the MCP client).
+    const credential: ElicitationPolicy = {
+      capabilityRef: 'enroll_secret', mode: 'credential', ttlSeconds: 120, required: true, carriesSecrets: true,
+    };
+    expect(elicitationPolicyIsSecretSafe(formWithSecret)).toBe(false);
+    expect(elicitationPolicyIsSecretSafe(formNoSecret)).toBe(true);
+    expect(elicitationPolicyIsSecretSafe(credential)).toBe(true);
   });
 });
