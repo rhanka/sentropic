@@ -6,6 +6,16 @@
 > mock-only build of **slices 1 + 2** of
 > `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`).
 
+> **Not in the root lockfile — do NOT root-install/activate (P1, architect/owner-gated).**
+> The root workspace glob (`workspaces: ["packages/*"]`) would auto-enlist this
+> package on the next root `npm install`, but the committed root `package-lock.json`
+> intentionally has **no `mcp-platform` entry** and MUST NOT gain one in this branch.
+> Adding it to the root lock is effectively **package activation (P1)** and is gated
+> on architect/owner approval (see `rules/architecture.md` "Package extraction must
+> be activated by real app consumption"). Until then, verify this package with its
+> own ephemeral toolchain (below), never via a root install. Do not modify root
+> `package.json` or `package-lock.json`.
+
 ## What this is
 
 A faithful, app-neutral TypeScript scaffold of the generic Sentropic/STP MCP
