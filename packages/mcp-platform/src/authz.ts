@@ -12,8 +12,8 @@
  *
  * MOCK-ONLY: deterministic, in-memory resolvers; no network, no DB.
  */
-import type { AuthFreshnessPolicy, AppCapability } from './manifest.js';
-import type { ConnectorTenantContext, ConsentGrant, LifecycleState } from './runtime.js';
+import type { AuthFreshnessPolicy, AppCapability, ConnectorTenantContext } from './manifest.js';
+import type { ConsentGrant, LifecycleState } from './runtime.js';
 import type { MockTokenClaims, VerifyFailure, VerifyResult } from './mock/oidc.js';
 
 export type AuthzDenyReason =
