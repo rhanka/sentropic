@@ -163,6 +163,33 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
     if (!missing.allowed) expect(missing.reason).toBe('no_consent');
   });
 
+  it('F1: an unenrolled principal (empty authorized set) is denied fail-closed (no broad fallback)', () => {
+    const { deps, issuer } = buildDeps();
+    // 'stranger' is never enrolled on this connector → authorizedTenants() is empty.
+    const tok = issuer.issue({ sub: 'stranger', aud: AUD, scope: ['widgets:read'], tid: 'tenant-a', now: T }).token;
+    const r = authorizeRequest({ token: tok, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
+    expect(r.allowed).toBe(false);
+    if (!r.allowed) expect(r.reason).toBe('no_enrollment');
+  });
+
+  it('F2: a claim-gated capability is allowed with the claim and denied without it', () => {
+    const { deps, issuer } = buildDeps();
+    const claimGated: AppCapability = { ...fakeManifest.resources[0], name: 'list_secure', requiredClaims: ['mfa'] };
+    const depsClaim = { ...deps, capabilities: new Map(deps.capabilities).set('list_secure', claimGated) };
+
+    const withClaim = issuer.issue({
+      sub: 'user-1', aud: AUD, scope: ['widgets:read'], tid: 'tenant-a', claims: { mfa: true }, now: T,
+    }).token;
+    expect(
+      authorizeRequest({ token: withClaim, capabilityRef: 'list_secure', connectorInstanceId: CONN, now: T }, depsClaim).allowed,
+    ).toBe(true);
+
+    const withoutClaim = tokenFor(issuer, ['widgets:read']);
+    const r = authorizeRequest({ token: withoutClaim, capabilityRef: 'list_secure', connectorInstanceId: CONN, now: T }, depsClaim);
+    expect(r.allowed).toBe(false);
+    if (!r.allowed) expect(r.reason).toBe('missing_claims');
+  });
+
   it('rejects a non-audience-bound token and never passes it through (token no-passthrough §6.6)', () => {
     const { deps, issuer } = buildDeps();
     const wrongAud = issuer.issue({ sub: 'user-1', aud: 'https://elsewhere.test', scope: ['widgets:read'], tid: 'tenant-a', now: T }).token;
@@ -175,6 +202,18 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
     }
     // The decision object never carries the raw inbound token downstream.
     expect(JSON.stringify(r)).not.toContain(wrongAud);
+  });
+
+  it('F7: the authorized decision structurally omits the bearer token (no passthrough §6.6)', () => {
+    const { deps, issuer } = buildDeps();
+    const token = tokenFor(issuer, ['widgets:read']);
+    const r = authorizeRequest({ token, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
+    expect(r.allowed).toBe(true);
+    // The token field is structurally absent from the result (and the principal),
+    // not merely missing on the deny path.
+    expect('token' in (r as Record<string, unknown>)).toBe(false);
+    expect(JSON.stringify(r)).not.toContain(token);
+    if (r.allowed) expect('token' in (r.principal as Record<string, unknown>)).toBe(false);
   });
 });
 
