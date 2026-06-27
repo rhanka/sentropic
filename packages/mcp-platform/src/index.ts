@@ -21,8 +21,12 @@ export type {
   ConnectorTenantResolutionInput,
   ConnectorTenantContext,
   ElicitationPolicy,
+  ElicitationPolicyMode,
   AppMcpProviderManifest,
 } from './manifest.js';
+
+// Slice 1 — provisional §5.2(b) elicitation-policy secret-safety check (fix F8).
+export { elicitationPolicyIsSecretSafe } from './manifest.js';
 
 // Slice 1 — runtime contract (§4.3 envelopes, §4.4 adapter, §4.5 context, §6.3/§6.4 records, §7.1, §8).
 export type {
@@ -60,7 +64,13 @@ export type {
 
 // Slice 2 — mock MCP transport (§9 ref, §11).
 export { InMemoryMcpServer, InMemoryMcpClient } from './mock/mcp-transport.js';
-export type { McpRequest, McpResponse, McpRequestHandler } from './mock/mcp-transport.js';
+export type {
+  McpRequest,
+  SanitizedMcpRequest,
+  McpResponse,
+  McpRequestHandler,
+  TokenAuthorizer,
+} from './mock/mcp-transport.js';
 
 // Slice 2 — app-neutral fake connector fixture.
 export { createFakeConnector, fakeManifest } from './mock/fake-connector.js';
@@ -81,6 +91,7 @@ export type {
   ElicitationRecord,
   Completer,
   CreateInput,
+  DelegationResolver,
 } from './elicitation.js';
 
 // Slice 2 — per-request authz middleware (§6, §7.1, §11).
