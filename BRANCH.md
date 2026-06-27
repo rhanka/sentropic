@@ -1,87 +1,79 @@
-# Feature: llm-gateway Codex Responses contract
+# Feature: MCP provider platform scaffold (mock-only, slices 1+2)
 
 ## Objective
-Publish the reusable Codex OAuth/Responses semantics in `@sentropic/llm-gateway` so remote can consume the Sentropic-owned gateway package instead of carrying provider semantics in `remote/apps/llm-gateway`.
+Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sentropic/STP MCP provider platform: slice 1 (manifest/adapter closed schemas as concrete TypeScript) + slice 2 (mock OIDC + mock MCP harness + per-request authz middleware stub + contract/isolation tests). Source: `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`), §12 slices 1-2.
 
 ## Scope / Guardrails
-- Scope limited to `@sentropic/llm-gateway` Codex contract helpers, package tests, version bump, lockfile, and llm-gateway spec.
-- One migration max in `api/drizzle/*.sql` (not applicable).
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- Scope limited to a new PRIVATE package `packages/mcp-platform/**` + the copied spec + this `BRANCH.md`.
+- Package MUST be `"private": true`; NOT added to any publish filter, CI publish list, Makefile target, or trusted-publisher config. No npm publish.
+- MOCK-ONLY: mock OIDC issuer + mock MCP client/server; no real network, no prod credentials, no real Claude.ai dependency, no `mcp-wave` coupling, no immo special-casing.
+- No production code paths, no DB, no secrets in code/tests/logs.
+- Generic platform only (Wave/immo are consumers/examples, not baked in).
+- Make-only workflow; `ENV=<env>` last in any `make` command (none needed — in-memory mocks only).
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/llm-gateway/src/**`
-  - `packages/llm-gateway/tests/**`
-  - `packages/llm-gateway/package.json`
-  - `package-lock.json`
-  - `spec/SPEC_EVOL_LLM_GATEWAY.md`
+  - `packages/mcp-platform/**`
+  - `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
+  - any other `packages/*/**`, `api/**`, `ui/**`, `e2e/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception)**:
+  - none
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `acknowledge`: owner clarified the API-only port is insufficient; reusable gateway semantics must be shipped in the published `@sentropic/llm-gateway` package for remote.
-- `blocked`: local Docker is unavailable (`permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`), so `make lock-root` / `make test-llm-gateway` cannot run locally. CI must validate.
+- none
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- Not applicable: all tests are deterministic in-memory mocks (no AI/provider/network calls).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: focused package contract change touching one package, tests, lockfile, and spec.
+- [ ] **Multi-branch**
+- Rationale: single orthogonal scaffold; one isolated package, one test cycle.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/feat-<slug>`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/feat-<slug>` after UAT.
+- No UI/E2E surface. Real Claude.ai/MCP-client validation is UAT (spec §11), deferred to the owner; not a CI dependency.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read the relevant rules and spec.
-  - [x] Create/confirm isolated worktree and run development there.
-  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [x] Confirm scope and guardrails.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, the spec, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Create isolated worktree `tmp/mcp-platform-scaffold` on `feat/mcp-platform-scaffold`.
+  - [x] Confirm package conventions from existing `packages/*` (package.json/tsconfig/tests layout).
+  - [x] Confirm scope and guardrails; copy spec into worktree.
+  - [x] Scaffold private package (`package.json` private+unpublished, `tsconfig.json`, `README.md`, `LICENSE`).
 
-- [ ] **Lot 1 — Published Codex contract helpers**
-  - [x] Add exported Codex Responses backend constant and helpers to `@sentropic/llm-gateway`.
-  - [x] Cover ChatGPT backend URL, instructions flattening, xhigh→high, max_output_tokens omission, input id stripping, and usage propagation in package tests.
-  - [x] Bump `@sentropic/llm-gateway` to `0.2.0`.
-  - [x] Update root lockfile version entries for the package bump.
+- [ ] **Lot 1 — Slice 1: manifest & adapter closed schemas**
+  - [ ] `src/manifest.ts` — `AppMcpProviderManifest`, capability schemas, gates, freshness, idempotency, secret requirement, tenant resolution/context.
+  - [ ] `src/runtime.ts` — `StpConnectorContext` (audited `getSecret`), `AppConnectorProviderAdapter`, envelopes, `DurableCallRef`, session/consent/enrollment/secret records, visibility states.
+  - [ ] `src/index.ts` — public re-exports.
   - [ ] Lot gate:
-    - [ ] `make test-llm-gateway ENV=test-llm-gateway-codex-contract` — blocked locally by Docker socket permission; CI required.
+    - [ ] tests: `tests/manifest.test.ts` — closed read-only exceptions + sample manifest typecheck.
 
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Update `spec/SPEC_EVOL_LLM_GATEWAY.md` to freeze boundary and published package contract.
+- [ ] **Lot 2 — Slice 2: mock harness + middleware + tests**
+  - [ ] `src/mock/oidc.ts` — in-memory mock OIDC issuer (EdDSA JWT, JWKS, sub/aud/scope/auth_time/tid, revocation list).
+  - [ ] `src/mock/mcp-transport.ts` — in-memory mock MCP client/server transport with per-session client binding.
+  - [ ] `src/mock/fake-connector.ts` — app-neutral fake connector adapter fixture.
+  - [ ] `src/audit.ts` — in-memory audit sink + redaction.
+  - [ ] `src/context.ts` — `StpConnectorContext` factory with audited secret accessor.
+  - [ ] `src/elicitation.ts` — fail-closed elicitation state machine.
+  - [ ] `src/authz.ts` — per-request authz middleware: audience-bound token verify, principal+tenant from token only, per-capability scope + freshness, deny-as-missing discovery, mutation gating.
+  - [ ] Lot gate (tests):
+    - [ ] `tests/oidc.test.ts` — issue/verify, audience binding, issuer mismatch, revocation.
+    - [ ] `tests/authz.test.ts` — cross-tenant denial; deny-as-missing discovery; fail-closed ambiguous mapping; revoked/missing consent; max_age fresh/stale step-up; insufficient_scope; token no-passthrough.
+    - [ ] `tests/elicitation.test.ts` — resume/cancel/timeout/denied + NHI fail-closed + sub-match anti-phishing.
+    - [ ] `tests/secrets.test.ts` — no-secret-in-logs.
+    - [ ] `tests/writes.test.ts` — write-tool requires gate + idempotency + audit.
 
-- [ ] **Lot N — Final validation**
-  - [ ] Push branch and open PR.
-  - [ ] Verify CI package validation and publish job readiness.
-  - [ ] Merge, then verify `@sentropic/llm-gateway@0.2.0` is published.
-  - [ ] Notify remote to consume `@sentropic/llm-gateway@0.2.0` and remove/deprecate its mirror.
+- [ ] **Lot N — Gates**
+  - [ ] `tsc --noEmit` for the package (docker node image, in-memory).
+  - [ ] package vitest (docker node image, in-memory).
+  - [ ] DO NOT push, DO NOT open PR (conductor runs double-consensus review before any merge).
