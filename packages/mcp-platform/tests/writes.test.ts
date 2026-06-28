@@ -9,6 +9,7 @@ import { InMemoryAuditSink, SecretRedactor } from '../src/audit.js';
 import { MockSecretStore, createStpConnectorContext } from '../src/context.js';
 import { ElicitationManager } from '../src/elicitation.js';
 import { assertMutationGate, invokeGuardedTool } from '../src/guard.js';
+import { idempotencyDigest } from '../src/digest.js';
 import { fakeManifest } from '../src/mock/fake-connector.js';
 import type { CapabilityTool } from '../src/manifest.js';
 import type { AppToolInvocation } from '../src/runtime.js';
@@ -153,7 +154,28 @@ describe('mutation gating', () => {
     expect(res.ok).toBe(true);
     expect(run).toHaveBeenCalledOnce();
     const invoke = audit.events.find((e) => e.kind === 'tool.invoke');
-    expect(invoke?.detail?.idempotencyKey).toBe('idem-1');
+    // Fix G4: audit carries an opaque, stable digest — never the raw key.
+    expect(invoke?.detail?.idempotencyKey).toBeUndefined();
+    expect(invoke?.detail?.idempotencyKeyDigest).toBe(idempotencyDigest('idem-1'));
     expect(invoke?.detail?.mutatesExternalSystem).toBe(true);
+  });
+
+  it('G4: a secret-looking idempotencyKey never appears raw in the guard audit', async () => {
+    const { c, audit } = ctx();
+    const { elicitations, ref } = releasedGate();
+    const SECRET_KEY = 'sk-idem-secret-7f3a9c2e1b'; // a token/secret/PII-shaped key
+    const run = vi.fn(async () => ({ id: 'widget-x' }));
+    const env: AppToolInvocation = {
+      capabilityRef: 'create_widget',
+      input: { label: 'x' },
+      ctx: c,
+      idempotencyKey: SECRET_KEY,
+      elicitationRef: ref,
+    };
+    await invokeGuardedTool(createWidget, env, { elicitations, audit, auditId: 'audit-1', run });
+
+    expect(audit.dump()).not.toContain(SECRET_KEY); // raw key never leaks into audit
+    const invoke = audit.events.find((e) => e.kind === 'tool.invoke');
+    expect(invoke?.detail?.idempotencyKeyDigest).toBe(idempotencyDigest(SECRET_KEY));
   });
 });
