@@ -98,6 +98,75 @@ describe("focus CLI — renders a real decision dossier read-only", () => {
   });
 });
 
+describe("focus CLI — DS theming on the html surface (--ds / --theme)", () => {
+  // Sentinel DS token sheet, injected via deps so the test needs no DS package installed.
+  const tokenCss = '[data-st-theme="entropic"]{--st-semantic-text-primary:#0f172a}';
+  const themedDeps = (
+    base: { out: (t: string) => void; error: (t: string) => void },
+    seen: { themeId?: string },
+  ) => ({
+    ...base,
+    resolveThemeCss: (themeId: string) => {
+      seen.themeId = themeId;
+      return tokenCss;
+    },
+  });
+
+  it("emits a self-contained DS-themed document with --ds (exit 0)", async () => {
+    const c = capture();
+    const seen: { themeId?: string } = {};
+    const code = await run([...baseArgs("html"), "--ds"], themedDeps(c.deps, seen));
+    expect(code).toBe(0);
+    expect(c.err).toBe("");
+    expect(seen.themeId).toBe("entropic");
+    expect(c.out.startsWith("<!DOCTYPE html>")).toBe(true);
+    expect(c.out).toContain('data-st-theme="entropic"');
+    expect(c.out).toContain(tokenCss); // inlined DS tokens → self-contained
+    expect(c.out).toContain("data-focus-component-css"); // Focus component css
+    expect(c.out).toContain("var(--st-"); // mapped to DS tokens
+    expect(c.out).toContain(`<h1>${TITLE}</h1>`);
+  });
+
+  it("honours an explicit --theme id (implies --ds)", async () => {
+    const c = capture();
+    const seen: { themeId?: string } = {};
+    const code = await run(
+      [...baseArgs("html"), "--theme", "forge"],
+      themedDeps(c.deps, seen),
+    );
+    expect(code).toBe(0);
+    expect(seen.themeId).toBe("forge");
+    expect(c.out).toContain('data-st-theme="forge"');
+  });
+
+  it("leaves the default html surface bare when --ds is absent", async () => {
+    const c = capture();
+    const code = await run(baseArgs("html"), c.deps);
+    expect(code).toBe(0);
+    expect(c.out).not.toContain("data-st-theme");
+    expect(c.out).not.toContain("<!DOCTYPE");
+  });
+
+  it("exits 1 with a clear message when the DS theme CSS cannot be resolved", async () => {
+    const c = capture();
+    const code = await run([...baseArgs("html"), "--ds"], {
+      ...c.deps,
+      resolveThemeCss: () => {
+        throw new Error("Cannot find module");
+      },
+    });
+    expect(code).toBe(1);
+    expect(c.err).toContain("could not resolve DS theme CSS");
+  });
+
+  it("exits 2 when --ds is used with a non-html format", async () => {
+    const c = capture();
+    const code = await run([...baseArgs("terminal"), "--ds"], c.deps);
+    expect(code).toBe(2);
+    expect(c.err).toContain("--ds/--theme apply to --format html only");
+  });
+});
+
 describe("focus CLI — error handling (non-zero + clear stderr)", () => {
   it("exits 2 with a usage message when the <decision-id> is missing", async () => {
     const c = capture();

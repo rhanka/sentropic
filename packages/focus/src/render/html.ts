@@ -6,6 +6,10 @@
  * adapter). Markdown prose is converted via the host-supplied `renderMarkdown` hook (NO `marked`
  * dep, NO mdast core); the full document HTML is run through the host `sanitizeHtml` hook before
  * emission. The renderer core owns structure only; hosts own sanitization/styling.
+ *
+ * Theming is OPT-IN and additive (see {@link FocusHtmlTheme}): with no `theme` arg the output is the
+ * unchanged bare `focus-*` fragment; with a `theme` arg the (sanitized) fragment is wrapped into a
+ * self-contained DS-themed document. The core stays pure — no CSS is emitted by default.
  */
 
 import type {
@@ -15,6 +19,8 @@ import type {
   FocusNode,
 } from "../model.js";
 import type { HtmlRenderHooks } from "./hooks.js";
+import type { FocusHtmlTheme } from "./theme.js";
+import { wrapThemedHtmlDocument } from "./theme.js";
 
 /** Minimal HTML text escaping for attribute/text content the renderer itself emits. */
 const escapeHtml = (value: string): string =>
@@ -105,10 +111,18 @@ const renderAffordances = (affordances: readonly Affordance[]): string => {
   return `<section class="focus-affordances"><h3>Affordances (read-only snapshot)</h3><ul>${items.join("")}</ul></section>`;
 };
 
-/** Render a decision-dossier document to a sanitized HTML string. */
+/**
+ * Render a decision-dossier document to a sanitized HTML string.
+ *
+ * Default (no `theme`): the bare `focus-*` fragment, sanitized via the host hook — unchanged.
+ * With `theme`: the sanitized fragment wrapped into a self-contained DS-themed document (the DS
+ * token sheet + a Focus component stylesheet, scoped by `<html data-st-theme>`). See
+ * {@link FocusHtmlTheme}.
+ */
 export const renderHtml = (
   doc: DecisionDossierDocument,
   hooks: HtmlRenderHooks,
+  theme?: FocusHtmlTheme,
 ): string => {
   const header =
     `<header class="focus-header"><h1>${escapeHtml(doc.title)}</h1>` +
@@ -126,5 +140,9 @@ export const renderHtml = (
     affordances +
     "</article>";
 
-  return hooks.sanitizeHtml(html);
+  const sanitized = hooks.sanitizeHtml(html);
+  if (theme === undefined) {
+    return sanitized;
+  }
+  return wrapThemedHtmlDocument(sanitized, { title: doc.title, theme });
 };

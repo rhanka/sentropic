@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { renderHtml, renderMd, renderTerminal } from "../src/index.js";
+import { FOCUS_COMPONENT_CSS } from "../src/index.js";
 import type { HtmlRenderHooks } from "../src/index.js";
 import { decisionDossierFixture } from "./fixture.data.js";
 
@@ -135,5 +136,70 @@ describe("renderHtml", () => {
 
   it("escapes renderer-emitted text content", () => {
     expect(out).toContain("ref: <code>decision:focus-render-core</code>");
+  });
+});
+
+describe("renderHtml — default output stays a bare fragment (reversible)", () => {
+  const out = renderHtml(doc, hooks);
+
+  it("emits no DS theme wrapper when no theme arg is supplied", () => {
+    expect(out).not.toContain("data-st-theme");
+    expect(out).not.toContain("<!DOCTYPE");
+    expect(out).not.toContain("<html");
+    expect(out).not.toContain("<style");
+    expect(out).not.toContain("<link");
+  });
+
+  it("is byte-identical whether the theme arg is omitted or explicitly undefined", () => {
+    expect(renderHtml(doc, hooks, undefined)).toBe(out);
+  });
+});
+
+describe("renderHtml — DS-themed, self-contained document (opt-in)", () => {
+  // A sentinel DS token sheet (proves the inlined CSS is the host-supplied one, not invented).
+  const tokenCss = '[data-st-theme="entropic"]{--st-semantic-text-primary:#0f172a}';
+  const out = renderHtml(doc, hooks, { themeId: "entropic", inlineCss: tokenCss });
+
+  it("emits a self-contained html document scoped to the DS theme", () => {
+    expect(out.startsWith("<!DOCTYPE html>")).toBe(true);
+    expect(out).toContain('<html lang="en" data-st-theme="entropic">');
+    expect(out).toContain("</body></html>");
+  });
+
+  it("inlines the host-supplied DS token CSS in the head", () => {
+    expect(out).toContain("<style data-focus-theme-tokens>");
+    expect(out).toContain(tokenCss);
+  });
+
+  it("ships the Focus component stylesheet authored against DS tokens", () => {
+    expect(out).toContain("<style data-focus-component-css>");
+    expect(out).toContain(FOCUS_COMPONENT_CSS);
+    expect(out).toContain(".focus-document");
+    expect(out).toContain("var(--st-semantic-text-primary");
+    expect(out).toContain("var(--st-spacing-");
+    expect(out).toContain("var(--st-font-sans");
+  });
+
+  it("keeps the sanitized focus body inside <body> (sanitizer still applied)", () => {
+    expect(out).toContain('<body><!--sanitized--><article class="focus-document"');
+    expect(out).toContain("<h1>Should focus ship a private render-core first?</h1>");
+  });
+
+  it("defaults the theme id to entropic and links instead of inlining when asked", () => {
+    const linked = renderHtml(doc, hooks, {
+      stylesheetHref: "/css/entropic.css",
+    });
+    expect(linked).toContain('data-st-theme="entropic"');
+    expect(linked).toContain('<link rel="stylesheet" href="/css/entropic.css">');
+    expect(linked).not.toContain("data-focus-theme-tokens");
+  });
+
+  it("can omit the component stylesheet when the host owns it", () => {
+    const noComponent = renderHtml(doc, hooks, {
+      inlineCss: tokenCss,
+      includeComponentCss: false,
+    });
+    expect(noComponent).not.toContain("data-focus-component-css");
+    expect(noComponent).toContain("data-focus-theme-tokens");
   });
 });

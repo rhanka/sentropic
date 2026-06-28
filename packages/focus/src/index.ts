@@ -41,3 +41,9 @@ export { renderTerminal } from "./render/terminal.js";
 export type { TerminalRenderOptions } from "./render/terminal.js";
 export { renderMd } from "./render/md.js";
 export { renderHtml } from "./render/html.js";
+export type { FocusHtmlTheme } from "./render/theme.js";
+export {
+  DEFAULT_FOCUS_THEME_ID,
+  FOCUS_COMPONENT_CSS,
+  wrapThemedHtmlDocument,
+} from "./render/theme.js";

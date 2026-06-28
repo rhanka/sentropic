@@ -14,15 +14,20 @@
  *
  *   stp focus <decision-id> [--format terminal|md|html] [--workspace <ws>]
  *                           [--baseline-commit <sha>] [--events-path <path>]
+ *                           [--ds] [--theme <theme-id>]
  *
  * Defaults: `--events-path` = `.track/events.jsonl`, `--format` = `terminal`. `--workspace` is
- * required (a decision lives in a per-workspace canevas; there is no safe default).
+ * required (a decision lives in a per-workspace canevas; there is no safe default). `--ds` (and
+ * `--theme <id>`, which implies `--ds`) wrap the `html` surface into a SELF-CONTAINED DS-themed
+ * document by inlining `@sentropic/design-system-themes/css/<theme-id>.css` (resolved from
+ * node_modules); they apply to `--format html` only and leave the default output unchanged.
  */
 
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
-import { renderHtml, renderMd, renderTerminal } from "../index.js";
-import type { HtmlRenderHooks } from "../index.js";
+import { DEFAULT_FOCUS_THEME_ID, renderHtml, renderMd, renderTerminal } from "../index.js";
+import type { FocusHtmlTheme, HtmlRenderHooks } from "../index.js";
 import {
   DecisionNotFoundError,
   TrackContractMismatchError,
@@ -51,6 +56,10 @@ interface ParsedArgs {
   readonly workspace: string;
   readonly baselineCommit: string;
   readonly eventsPath: string;
+  /** Wrap the html surface into a self-contained DS-themed document (html only). */
+  readonly ds: boolean;
+  /** DS theme id used when `ds` is set. */
+  readonly themeId: string;
 }
 
 /** A parse failure carrying the message to print on stderr (exit code 2 = usage error). */
@@ -58,9 +67,11 @@ class UsageError extends Error {}
 
 const USAGE =
   "Usage: stp focus <decision-id> [--format terminal|md|html] " +
-  "[--workspace <ws>] [--baseline-commit <sha>] [--events-path <path>]\n" +
+  "[--workspace <ws>] [--baseline-commit <sha>] [--events-path <path>] " +
+  "[--ds] [--theme <theme-id>]\n" +
   "Render a track decision dossier read-only. Defaults: --format terminal, " +
-  `--events-path ${DEFAULT_EVENTS_PATH}. --workspace is required.`;
+  `--events-path ${DEFAULT_EVENTS_PATH}. --workspace is required. --ds/--theme ` +
+  `(default theme ${DEFAULT_FOCUS_THEME_ID}) DS-theme the html surface only.`;
 
 /** Read the single value that must follow a `--flag`, or fail with a usage error. */
 const takeValue = (argv: readonly string[], i: number, flag: string): string => {
@@ -81,6 +92,8 @@ const parseArgs = (argv: readonly string[]): ParsedArgs => {
   let workspace: string | undefined;
   let baselineCommit = "";
   let eventsPath = DEFAULT_EVENTS_PATH;
+  let ds = false;
+  let themeId = DEFAULT_FOCUS_THEME_ID;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -112,6 +125,14 @@ const parseArgs = (argv: readonly string[]): ParsedArgs => {
         eventsPath = takeValue(argv, i, "--events-path");
         i += 1;
         break;
+      case "--ds":
+        ds = true;
+        break;
+      case "--theme":
+        themeId = takeValue(argv, i, "--theme");
+        ds = true;
+        i += 1;
+        break;
       default:
         if (arg.startsWith("--")) {
           throw new UsageError(`Unknown option "${arg}".\n${USAGE}`);
@@ -132,6 +153,11 @@ const parseArgs = (argv: readonly string[]): ParsedArgs => {
   if (workspace === undefined || workspace.trim() === "") {
     throw new UsageError(`Missing --workspace (required).\n${USAGE}`);
   }
+  if (ds && format !== "html") {
+    throw new UsageError(
+      `--ds/--theme apply to --format html only (got --format ${format}).\n${USAGE}`,
+    );
+  }
 
   return {
     decisionId: positionals[0] as string,
@@ -139,6 +165,8 @@ const parseArgs = (argv: readonly string[]): ParsedArgs => {
     workspace,
     baselineCommit,
     eventsPath,
+    ds,
+    themeId,
   };
 };
 
@@ -151,7 +179,26 @@ export interface FocusCliDeps {
   readonly out?: (text: string) => void;
   /** Where error messages go (default: stderr). */
   readonly error?: (text: string) => void;
+  /**
+   * Resolve the DS token CSS for a theme id (used by `--ds`/`--theme`). Defaults to resolving +
+   * reading `@sentropic/design-system-themes/css/<themeId>.css` from node_modules; injectable so
+   * tests need not have the DS package installed. Throws if the theme CSS cannot be resolved.
+   */
+  readonly resolveThemeCss?: (themeId: string) => string;
 }
+
+/**
+ * Default DS-theme CSS resolver: resolve + read the published DS token sheet
+ * (`@sentropic/design-system-themes/css/<themeId>.css`, pure `[data-st-theme]{ --st-* }` custom
+ * properties) from node_modules. Throws if the package/theme is not installed.
+ */
+const defaultResolveThemeCss = (themeId: string): string => {
+  const requireFromHere = createRequire(import.meta.url);
+  const cssPath = requireFromHere.resolve(
+    `@sentropic/design-system-themes/css/${themeId}.css`,
+  );
+  return readFileSync(cssPath, "utf8");
+};
 
 /**
  * Default render hooks for the headless CLI. The HTML surface needs a markdown converter + a
@@ -215,9 +262,26 @@ export const run = async (
       case "md":
         out(renderMd(doc));
         break;
-      case "html":
-        out(renderHtml(doc, defaultHtmlHooks));
+      case "html": {
+        let theme: FocusHtmlTheme | undefined;
+        if (parsed.ds) {
+          const resolveThemeCss = deps.resolveThemeCss ?? defaultResolveThemeCss;
+          let inlineCss: string;
+          try {
+            inlineCss = resolveThemeCss(parsed.themeId);
+          } catch (e) {
+            error(
+              `focus: could not resolve DS theme CSS for "${parsed.themeId}" ` +
+                `(is @sentropic/design-system-themes installed?): ` +
+                `${e instanceof Error ? e.message : String(e)}`,
+            );
+            return 1;
+          }
+          theme = { themeId: parsed.themeId, inlineCss };
+        }
+        out(renderHtml(doc, defaultHtmlHooks, theme));
         break;
+      }
     }
     return 0;
   } catch (err) {
