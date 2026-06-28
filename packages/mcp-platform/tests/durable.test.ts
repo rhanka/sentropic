@@ -18,7 +18,9 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { FileRecordStore } from '../src/persistence.js';
 import { DurableCallAdapter, PersistentDurableCallStore } from '../src/durable.js';
-import { ElicitationManager } from '../src/elicitation.js';
+import { idempotencyDigest } from '../src/digest.js';
+import { ElicitationManager, type ElicitationRecord } from '../src/elicitation.js';
+import { PersistentElicitationStore } from '../src/stores.js';
 import { InMemoryAuditSink, SecretRedactor } from '../src/audit.js';
 import { createStpConnectorContext, MockSecretStore } from '../src/context.js';
 import { createFakeConnector, fakeManifest } from '../src/mock/fake-connector.js';
@@ -43,6 +45,8 @@ type EnvOver = {
   sub?: string;
   sessionId?: string;
   capabilityRef?: string;
+  tenant?: string;
+  connectorInstanceId?: string;
 };
 
 const envelope = (over: EnvOver = {}): AppToolInvocation => {
@@ -55,12 +59,12 @@ const envelope = (over: EnvOver = {}): AppToolInvocation => {
       sub: over.sub ?? 'user-1',
       claims: {},
       scopes: ['widgets:read'],
-      tenantRef: 'tenant-a',
+      tenantRef: over.tenant ?? 'tenant-a',
       authTime: new Date(T).toISOString(),
     },
     surface: 'chat',
     mcpSessionId: over.sessionId ?? 'sess-1',
-    connectorInstanceId: CONN,
+    connectorInstanceId: over.connectorInstanceId ?? CONN,
     consentRefs: ['consent-1'],
     grantRefs: [],
     secretStore: new MockSecretStore(redactor),
@@ -82,6 +86,30 @@ const driveElicitationToResumed = (m: ElicitationManager, id: string): void => {
   m.create({ id, mode: 'confirm', sessionRef: 'sess-1', capabilityRef: 'export_widgets', actor: { sub: 'user-1' }, ttlSeconds: 300, auditId: 'audit-1' });
   m.render(id);
   m.answer(id, { sub: 'user-1', isHuman: true });
+  m.validate(id);
+  m.resume(id);
+};
+
+// Drive an elicitation to `resumed`, optionally bound to a FOREIGN
+// capability/session/principal (to probe G1 gate non-fungibility). Defaults bind
+// to the default durable envelope (export_widgets / sess-1 / user-1).
+const driveElicitation = (
+  m: ElicitationManager,
+  id: string,
+  over: { capabilityRef?: string; sessionRef?: string; sub?: string } = {},
+): void => {
+  const sub = over.sub ?? 'user-1';
+  m.create({
+    id,
+    mode: 'confirm',
+    sessionRef: over.sessionRef ?? 'sess-1',
+    capabilityRef: over.capabilityRef ?? 'export_widgets',
+    actor: { sub },
+    ttlSeconds: 300,
+    auditId: 'audit-1',
+  });
+  m.render(id);
+  m.answer(id, { sub, isHuman: true });
   m.validate(id);
   m.resume(id);
 };
@@ -205,6 +233,123 @@ describe('§11 DurableCall — long call lifecycle (§8)', () => {
     expect(audit.events.map((e) => e.kind)).toEqual(
       expect.arrayContaining(['durable.launch', 'durable.start', 'durable.wait', 'durable.cancel']),
     );
+  });
+
+  it('G4: a secret-looking idempotencyKey never appears raw in a durable-call audit', () => {
+    // The key is caller-controlled and NOT registered with any redactor, so only
+    // the G4 digest (not redaction) can keep it out of the audit dump.
+    const audit = new InMemoryAuditSink(new SecretRedactor());
+    const adapter = new DurableCallAdapter({ audit, now: () => T });
+    const SECRET_KEY = 'sk-durable-idem-7f3a9c2e1b';
+    const id = adapter.launch({ envelope: envelope({ idempotencyKey: SECRET_KEY }) }).call.id;
+    adapter.start(id);
+    adapter.cancel(id, 'cleanup');
+
+    expect(audit.dump()).not.toContain(SECRET_KEY); // raw key never leaks (G4)
+    const launch = audit.events.find((e) => e.kind === 'durable.launch');
+    expect(launch?.detail?.idempotencyKey).toBeUndefined();
+    expect(launch?.detail?.idempotencyKeyDigest).toBe(idempotencyDigest(SECRET_KEY));
+  });
+});
+
+describe('G1 — durable elicitation gate is non-fungible (bound like F6)', () => {
+  // Build a fresh durable call parked in waiting(elicitation) at `ref`.
+  const waitingCall = (elic: ElicitationManager, ref: string): { adapter: DurableCallAdapter; id: string } => {
+    const adapter = newAdapter({ elicitations: elic });
+    const id = adapter.launch({ envelope: envelope({ idempotencyKey: `idem-${ref}`, elicitationRef: ref }) }).call.id;
+    adapter.start(id);
+    adapter.wait(id, 'elicitation');
+    return { adapter, id };
+  };
+
+  it('a foreign-capability / foreign-session / foreign-principal resumed ref does NOT clear the wait; a matching ref does', () => {
+    // foreign capability
+    let elic = new ElicitationManager();
+    driveElicitation(elic, 'el-cap', { capabilityRef: 'delete_widgets' });
+    let s = waitingCall(elic, 'el-cap');
+    expect(s.adapter.resume(s.id).call.state).toBe('waiting'); // not cleared
+
+    // foreign session
+    elic = new ElicitationManager();
+    driveElicitation(elic, 'el-sess', { sessionRef: 'sess-OTHER' });
+    s = waitingCall(elic, 'el-sess');
+    expect(s.adapter.resume(s.id).call.state).toBe('waiting');
+
+    // foreign principal
+    elic = new ElicitationManager();
+    driveElicitation(elic, 'el-sub', { sub: 'attacker-9' });
+    s = waitingCall(elic, 'el-sub');
+    expect(s.adapter.resume(s.id).call.state).toBe('waiting');
+
+    // matching capability + session + principal → wait clears
+    elic = new ElicitationManager();
+    driveElicitation(elic, 'el-ok', {});
+    s = waitingCall(elic, 'el-ok');
+    expect(s.adapter.resume(s.id).call.state).toBe('running');
+  });
+
+  it('binding holds across a FileRecordStore restart (foreign denied, then matching clears)', () => {
+    const dcPath = tmpPath();
+    const elPath = tmpPath();
+
+    const a1 = newAdapter({ store: new PersistentDurableCallStore(new FileRecordStore<McpDurableCall>(dcPath)) });
+    const id = a1.launch({ envelope: envelope({ idempotencyKey: 'idem-g1r', elicitationRef: 'el-g1r' }) }).call.id;
+    a1.start(id);
+    a1.wait(id, 'elicitation');
+
+    // restart: a FOREIGN-principal resumed gate sits at the same elicitationRef
+    const elicForeign = new ElicitationManager({
+      store: new PersistentElicitationStore(new FileRecordStore<ElicitationRecord>(elPath)),
+    });
+    driveElicitation(elicForeign, 'el-g1r', { sub: 'attacker-9' });
+    const a2 = newAdapter({
+      store: new PersistentDurableCallStore(new FileRecordStore<McpDurableCall>(dcPath)),
+      elicitations: elicForeign,
+    });
+    expect(a2.status(id)?.call.state).toBe('waiting'); // survived restart
+    expect(a2.resume(id).call.state).toBe('waiting'); // foreign gate denied across restart
+
+    // another restart: the gate at el-g1r is now correctly bound → clears
+    const elicOk = new ElicitationManager({
+      store: new PersistentElicitationStore(new FileRecordStore<ElicitationRecord>(elPath)),
+    });
+    driveElicitation(elicOk, 'el-g1r', {}); // overwrites the foreign record with a matching one
+    const a3 = newAdapter({
+      store: new PersistentDurableCallStore(new FileRecordStore<McpDurableCall>(dcPath)),
+      elicitations: elicOk,
+    });
+    expect(a3.resume(id).call.state).toBe('running');
+  });
+});
+
+describe('G2 — idempotency is scoped to the launch context', () => {
+  it('the same key from a DIFFERENT principal/session/tenant/capability/connector creates a DISTINCT call', () => {
+    const store = new PersistentDurableCallStore();
+    const adapter = newAdapter({ store });
+    const KEY = 'idem-shared';
+
+    const base = adapter.launch({ envelope: envelope({ idempotencyKey: KEY }) }); // user-1/sess-1/tenant-a/export_widgets/conn-1
+    const foreignPrincipal = adapter.launch({ envelope: envelope({ idempotencyKey: KEY, sub: 'user-2' }) });
+    const foreignSession = adapter.launch({ envelope: envelope({ idempotencyKey: KEY, sessionId: 'sess-2' }) });
+    const foreignTenant = adapter.launch({ envelope: envelope({ idempotencyKey: KEY, tenant: 'tenant-b' }) });
+    const foreignCapability = adapter.launch({ envelope: envelope({ idempotencyKey: KEY, capabilityRef: 'import_widgets' }) });
+    const foreignConnector = adapter.launch({ envelope: envelope({ idempotencyKey: KEY, connectorInstanceId: 'conn-2' }) });
+
+    const ids = new Set(
+      [base, foreignPrincipal, foreignSession, foreignTenant, foreignCapability, foreignConnector].map((r) => r.call.id),
+    );
+    expect(ids.size).toBe(6); // never returns another context's call
+    expect(store.all()).toHaveLength(6);
+  });
+
+  it('the same key in the SAME full context is idempotent (returns the same call)', () => {
+    const store = new PersistentDurableCallStore();
+    const adapter = newAdapter({ store });
+    const ctx = { idempotencyKey: 'idem-same', sub: 'user-7', sessionId: 'sess-7', tenant: 'tenant-z', connectorInstanceId: 'conn-7' };
+    const a = adapter.launch({ envelope: envelope(ctx) });
+    const b = adapter.launch({ envelope: envelope(ctx) });
+    expect(b.call.id).toBe(a.call.id);
+    expect(store.all()).toHaveLength(1); // no duplicate
   });
 });
 
