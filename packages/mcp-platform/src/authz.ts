@@ -13,8 +13,14 @@
  * MOCK-ONLY: deterministic, in-memory resolvers; no network, no DB.
  */
 import type { AuthFreshnessPolicy, AppCapability, ConnectorTenantContext } from './manifest.js';
-import type { ConsentGrant, LifecycleState } from './runtime.js';
+import type { ConnectorEnrollment, ConsentGrant, LifecycleState } from './runtime.js';
 import type { MockTokenClaims, VerifyFailure, VerifyResult } from './mock/oidc.js';
+import {
+  PersistentConsentStore,
+  PersistentEnrollmentStore,
+  type ConsentStore,
+  type EnrollmentStore,
+} from './stores.js';
 
 export type AuthzDenyReason =
   | 'invalid_token'
@@ -223,18 +229,47 @@ export function authorizeRequest(req: AuthzRequest, deps: AuthorizeDeps): AuthzR
 }
 
 // ---------------------------------------------------------------------------
-// In-memory resolvers (test fixtures) — deterministic, no persistence.
+// Record-backed resolvers — deterministic; restart-safe when a durable store
+// (FileRecordStore) is injected, else non-durable in-memory (default).
 // ---------------------------------------------------------------------------
 
+const isExpired = (expiresAt: string | undefined, now: number): boolean =>
+  expiresAt !== undefined && Date.parse(expiresAt) <= now;
+
+/**
+ * Enrollment-backed tenant resolver. `authorizedTenants` derives strictly from
+ * ACTIVE §6.3 `ConnectorEnrollment` records, so a revoked/expired enrollment is
+ * excluded and an unenrolled principal yields an empty set (fail-closed, no broad
+ * fallback — fix F1). Domain hints are resolver configuration, not a §6.3 record.
+ */
 export class InMemoryTenantRegistry implements TenantResolver {
-  readonly #enrollments = new Map<string, Set<string>>(); // principalSub::conn -> tenants
+  readonly #enrollments: EnrollmentStore;
   readonly #domainHints = new Map<string, string>(); // 'key:value' -> tenant
 
+  constructor(deps?: { store?: EnrollmentStore }) {
+    this.#enrollments = deps?.store ?? new PersistentEnrollmentStore();
+  }
+
   enroll(principalSub: string, connectorInstanceId: string, tenantRef: string): void {
-    const k = `${principalSub}::${connectorInstanceId}`;
-    const set = this.#enrollments.get(k) ?? new Set<string>();
-    set.add(tenantRef);
-    this.#enrollments.set(k, set);
+    const e: ConnectorEnrollment = {
+      id: connectorInstanceId,
+      connectorId: connectorInstanceId,
+      principalSub,
+      tenantRef,
+      state: 'active',
+      secretRefs: [],
+      createdAt: new Date().toISOString(),
+    };
+    this.#enrollments.put(e);
+  }
+
+  setEnrollmentState(
+    principalSub: string,
+    connectorInstanceId: string,
+    tenantRef: string,
+    state: LifecycleState,
+  ): void {
+    this.#enrollments.setState(principalSub, connectorInstanceId, tenantRef, state);
   }
 
   mapDomainHint(key: string, value: string, tenantRef: string): void {
@@ -242,24 +277,41 @@ export class InMemoryTenantRegistry implements TenantResolver {
   }
 
   authorizedTenants(principalSub: string, connectorInstanceId: string): string[] {
-    return [...(this.#enrollments.get(`${principalSub}::${connectorInstanceId}`) ?? [])];
+    return this.#enrollments
+      .forPrincipal(principalSub, connectorInstanceId)
+      .filter((e) => e.state === 'active')
+      .map((e) => e.tenantRef);
   }
 
   tenantOfDomainHint(key: string, value: string): string | undefined {
     return this.#domainHints.get(`${key}:${value}`);
   }
+
+  reload(): void {
+    this.#enrollments.reload();
+  }
 }
 
+/**
+ * Consent-grant-backed resolver. A grant authorizes only while `state === 'active'`
+ * AND unexpired; a missing match denies fail-closed (§6, §6.3). Restart-safe when
+ * a durable `ConsentStore` is injected.
+ */
 export class InMemoryConsentRegistry implements ConsentResolver {
-  readonly #grants: ConsentGrant[] = [];
+  readonly #grants: ConsentStore;
+  readonly #now: () => number;
+
+  constructor(deps?: { store?: ConsentStore; now?: () => number }) {
+    this.#grants = deps?.store ?? new PersistentConsentStore();
+    this.#now = deps?.now ?? ((): number => Date.now());
+  }
 
   grant(grant: ConsentGrant): void {
-    this.#grants.push(grant);
+    this.#grants.put(grant);
   }
 
   setState(id: string, state: LifecycleState): void {
-    const g = this.#grants.find((x) => x.id === id);
-    if (g) g.state = state;
+    this.#grants.setState(id, state);
   }
 
   consentState(
@@ -268,7 +320,8 @@ export class InMemoryConsentRegistry implements ConsentResolver {
     connectorInstanceId: string,
     requiredScopes: string[],
   ): 'active' | 'revoked' | 'missing' {
-    const matches = this.#grants.filter(
+    const now = this.#now();
+    const matches = this.#grants.all().filter(
       (g) =>
         g.principalSub === principalSub &&
         g.tenantRef === tenantRef &&
@@ -276,7 +329,11 @@ export class InMemoryConsentRegistry implements ConsentResolver {
         requiredScopes.every((s) => g.scopes.includes(s)),
     );
     if (matches.length === 0) return 'missing';
-    if (matches.some((g) => g.state === 'active')) return 'active';
+    if (matches.some((g) => g.state === 'active' && !isExpired(g.expiresAt, now))) return 'active';
     return 'revoked';
+  }
+
+  reload(): void {
+    this.#grants.reload();
   }
 }
