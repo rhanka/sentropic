@@ -1,7 +1,7 @@
-# Feature: MCP provider platform scaffold (mock-only, slices 1+2)
+# Feature: MCP provider platform scaffold (mock-only, slices 1+2+3+7)
 
 ## Objective
-Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sentropic/STP MCP provider platform: slice 1 (manifest/adapter closed schemas as concrete TypeScript) + slice 2 (mock OIDC + mock MCP harness + per-request authz middleware stub + contract/isolation tests) + slice 3 (restart-safe mock persistence backing the §6.3/§6.4/§5.1 records + the §11 persistence probe matrix, closing the review-identified type-only/probe gap). Source: `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`), §12 slices 1-3.
+Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sentropic/STP MCP provider platform: slice 1 (manifest/adapter closed schemas as concrete TypeScript) + slice 2 (mock OIDC + mock MCP harness + per-request authz middleware stub + contract/isolation tests) + slice 3 (restart-safe mock persistence backing the §6.3/§6.4/§5.1 records + the §11 persistence probe matrix, closing the review-identified type-only/probe gap) + slice 7 (mock durable-call/workflow adapter modeling long-running MCP tools via the canonical DurableCall lifecycle + the §8/§11 long-call probe matrix). Source: `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`), §12 slices 1-3 + slice 7.
 
 ## Scope / Guardrails
 - Scope limited to a new PRIVATE package `packages/mcp-platform/**` + the copied spec + this `BRANCH.md`.
@@ -100,4 +100,14 @@ Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sen
     - [x] `tests/persistence-store.test.ts` — generic RecordStore restart/reload/snapshot (4).
     - [x] `tests/persistence.test.ts` — §11 probes (11): restart lookup; session/consent expiry fail-closed; revoked-session denial; consent revocation persists; secret-status non-active fail-closed + no value on durable medium; enrollment revocation → `no_enrollment` after restart (F1 across restart); elicitation resume-after-restart + resumed gate stays bound (no replay).
   - [x] Slice-3 gate: `tsc --noEmit` PASS + vitest 70/70 across 9 files (prior 55 + 15 new); host-node ephemeral toolchain (global tsc/vitest symlinked then removed — no repo node_modules, root lock/package.json untouched). Docker gate = authoritative re-proof on a capable runner.
+  - [ ] DO NOT push, DO NOT open PR.
+
+- [x] **Lot 7 — Slice 7: mock durable-call / workflow adapter for long-running tools (§8, §11)**
+  - [x] `src/runtime.ts` — canonical `DurableCall` / `DurableCallKind` / `DurableCallState` (verbatim Hermes §3.2, NOT forked) + MCP projection `McpDurableCall` (canonical + `McpDurableCallRefs` + `waiting` qualifier `DurableCallWaitingFor`).
+  - [x] `src/durable.ts` — `PersistentDurableCallStore` (over the slice-3 `RecordStore<T>`, restart-safe) + `DurableCallAdapter` (launch/start/wait/resume/succeed/fail/cancel/status): lifecycle `queued -> running -> waiting -> succeeded|failed|cancelled`; idempotent launch (same key → same call); fail-closed resume (elicitation gate / injected consent-freshness-workflow resolver, default never-clears); succeed only from running; redacted per-transition audit (no token/secret/PII).
+  - [x] `src/mock/fake-connector.ts` — long-running, workflow-backed `export_widgets` tool (declared in `durability.longRunningTools`/`workflowBackedTools`); `invokeTool` returns a `DurableCallRef` via injected `launchDurable`, fails closed with no backend.
+  - [x] `src/index.ts` — slice-7 exports (`DurableCall*`/`McpDurableCall` types, `DurableCallAdapter`, `PersistentDurableCallStore`, store/dep types, `FakeConnectorDeps`).
+  - [x] Lot gate (tests):
+    - [x] `tests/durable.test.ts` (10): queue->run->wait(elicitation)->resume->succeed; cancel-from-waiting (terminal); failure path; idempotent re-launch returns same id (no duplicate); mid-flight call survives restart (reload) and resumes; waiting-on-consent cannot succeed until consent present; no token/secret in durable-call audit; manifest declares long/workflow tool; long-tool returns a `DurableCallRef`; long-tool fails closed with no backend.
+  - [x] Slice-7 gate: `tsc --noEmit` PASS + vitest 80/80 across 10 files (prior 70 + 10 new); host-node ephemeral toolchain (global tsc/vitest, no repo node_modules, root lock/package.json untouched). Docker gate = authoritative re-proof on a capable runner.
   - [ ] DO NOT push, DO NOT open PR.
