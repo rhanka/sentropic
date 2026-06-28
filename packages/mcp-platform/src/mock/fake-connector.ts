@@ -21,6 +21,7 @@ import type {
   AppResourceResult,
   AppToolInvocation,
   AppToolResult,
+  DurableCallRef,
 } from '../runtime.js';
 
 const listWidgets: CapabilityResource = {
@@ -54,13 +55,31 @@ const createWidget: CapabilityTool = {
   gates: { requiresElicitation: true, requiresHumanConfirmation: true, requiresPrincipalGate: false },
 };
 
+// Long-running, workflow-backed export. Returns a DurableCallRef (§8) instead of
+// an inline result — read-only, but the work outlives a single interaction.
+const exportWidgets: CapabilityTool = {
+  kind: 'tool',
+  name: 'export_widgets',
+  description: 'Export all widgets — long-running, workflow-backed; returns a DurableCallRef (§8).',
+  requiredScopes: ['widgets:read'],
+  requiredClaims: [],
+  inputSchema: { type: 'object', properties: { format: { type: 'string' } } },
+  outputSchema: { type: 'object' },
+  redactionClass: 'moderate',
+  mutability: 'read-only',
+  mutatesExternalSystem: false,
+  idempotency: { required: false },
+  freshness: { maxAgeSeconds: 3600, stepUp: 'either' },
+  gates: { requiresElicitation: false, requiresHumanConfirmation: false, requiresPrincipalGate: false },
+};
+
 export const fakeManifest: AppMcpProviderManifest = {
   appId: 'fake-app',
   providerId: 'fake-widgets',
   version: '0.0.0',
   displayName: 'Fake widgets connector',
   resources: [listWidgets],
-  tools: [createWidget],
+  tools: [createWidget, exportWidgets],
   prompts: [],
   authz: {
     requiredClaims: [],
@@ -69,11 +88,17 @@ export const fakeManifest: AppMcpProviderManifest = {
     freshness: { maxAgeSeconds: 3600, stepUp: 'either' },
   },
   audit: { eventKinds: ['tool.invoke', 'secret.access'], piiClass: 'low' },
-  durability: {},
+  durability: { longRunningTools: ['export_widgets'], workflowBackedTools: ['export_widgets'] },
   secrets: [{ name: 'fakeAccessToken', scope: 'connector-instance', sensitive: true, rotation: 'manual' }],
 };
 
-export function createFakeConnector(): AppConnectorProviderAdapter {
+/** Dependencies wiring a long-running tool to the §8 durable-call layer. */
+export type FakeConnectorDeps = {
+  /** Launches a durable call for a long-running tool and returns its ref (§8). */
+  launchDurable?: (req: AppToolInvocation) => DurableCallRef;
+};
+
+export function createFakeConnector(deps: FakeConnectorDeps = {}): AppConnectorProviderAdapter {
   return {
     appId: fakeManifest.appId,
     connectorId: fakeManifest.providerId,
@@ -91,10 +116,22 @@ export function createFakeConnector(): AppConnectorProviderAdapter {
     },
 
     async listCapabilities() {
-      return [listWidgets, createWidget];
+      return [listWidgets, createWidget, exportWidgets];
     },
 
-    async invokeTool(req: AppToolInvocation): Promise<AppToolResult> {
+    async invokeTool(req: AppToolInvocation): Promise<AppToolResult | DurableCallRef> {
+      // Long-running capability: never returns inline — hand back a DurableCallRef (§8).
+      if (req.capabilityRef === exportWidgets.name) {
+        if (!deps.launchDurable) {
+          return {
+            ok: false,
+            auditId: req.ctx.auditId,
+            redactionClass: exportWidgets.redactionClass,
+            error: { code: 'durable_backend_unavailable', message: 'no durable-call backend wired', retriable: true },
+          };
+        }
+        return deps.launchDurable(req);
+      }
       const input = req.input as { label?: string };
       return {
         ok: true,

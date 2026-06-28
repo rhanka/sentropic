@@ -48,6 +48,10 @@ export type {
   ConnectorVisibilityState,
   McpDurableCallRefs,
   DurableCallWaitingFor,
+  DurableCallKind,
+  DurableCallState,
+  DurableCall,
+  McpDurableCall,
   StpConnectorContext,
   AppConnectorProviderAdapter,
 } from './runtime.js';
@@ -72,8 +76,9 @@ export type {
   TokenAuthorizer,
 } from './mock/mcp-transport.js';
 
-// Slice 2 — app-neutral fake connector fixture.
+// Slice 2 — app-neutral fake connector fixture (+ slice-7 long-running tool).
 export { createFakeConnector, fakeManifest } from './mock/fake-connector.js';
+export type { FakeConnectorDeps } from './mock/fake-connector.js';
 
 // Slice 2 — audit sink + redaction (§5, §6).
 export { InMemoryAuditSink, SecretRedactor, REDACTION_TOKEN } from './audit.js';
@@ -140,3 +145,7 @@ export type {
   ElicitationStore,
   SecretKey,
 } from './stores.js';
+
+// Slice 7 — mock durable-call / workflow adapter for long-running MCP tools (§8, §11).
+export { DurableCallAdapter, PersistentDurableCallStore } from './durable.js';
+export type { DurableCallStore, DurableCallAdapterDeps, DurableLaunchInput } from './durable.js';
