@@ -3,7 +3,7 @@
 > **Status: PRIVATE, unpublished, reversible scaffold.** This package is
 > `"private": true`, is NOT wired into any publish filter / CI publish job /
 > Makefile target / trusted-publisher config, and MUST NOT be published. It is a
-> mock-only build of **slices 1 + 2** of
+> mock-only build of **slices 1 + 2 + 3** of
 > `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`).
 
 > **Not in the root lockfile — do NOT root-install/activate (P1, architect/owner-gated).**
@@ -60,6 +60,36 @@ exception explicitly (`mutatesExternalSystem: false`,
   timeout / denied, anti-phishing sub-match, NHI fail-closed).
 - `src/audit.ts` / `src/context.ts` — in-memory audit sink + redaction and the
   audited secret accessor backing `StpConnectorContext.getSecret`.
+
+### Slice 3 — restart-safe mock persistence + §11 persistence probes
+
+Closes the review-identified coverage gap (the §6.3 records + §6.4 secret status
+were type-only and the §11 persistence probes were not exercised).
+
+- `src/persistence.ts` — generic restart-safe `RecordStore<T>` primitive. Two
+  backings: `MemoryRecordStore` (non-durable default; restart simulated via
+  `MemoryRecordStore.fromSnapshot(store.snapshot())`) and `FileRecordStore` (a
+  durable JSON file under the **OS tmp dir, never in the repo**; a brand-new
+  instance at the same path = a genuine process restart, with `reload()` /
+  `snapshot()`). NO real DB/driver/network.
+- `src/stores.ts` — typed `SessionStore` / `ConsentStore` / `EnrollmentStore` /
+  `SecretStatusStore` / `ElicitationStore` ports over `RecordStore<T>`, backing
+  the §6.3 (`McpSession`, `ConsentGrant`, `ConnectorEnrollment`), §6.4
+  (`SecretStatus`, composite key `(principalSub, tenantRef, workspaceRef?,
+  connectorInstanceId, name)`) and §5.1 (`ElicitationRecord`) records. All
+  resolution is fail-closed (non-`active`/expired/missing → deny).
+- `elicitation.ts` / `context.ts` / `authz.ts` now resolve their §5.1 / §6.4 /
+  §6.3 state THROUGH these stores (default backing = non-durable in-memory, so
+  the F1-F9 security fixes and the existing suite are unchanged; inject a
+  `FileRecordStore` for restart-safety). Secret VALUES are NEVER written to the
+  durable medium — only status crosses the boundary (§5.2(b) / §11 no-leak).
+- `tests/persistence-store.test.ts` + `tests/persistence.test.ts` — the §11
+  probe matrix: restart lookup survives reload; session/consent expiry denied
+  after reload; revoked-session denial; consent revocation persists; secret-status
+  non-active persists fail-closed (and no value on the durable medium); enrollment
+  revocation persists → `no_enrollment` after restart (F1 across restart);
+  elicitation resume-after-restart + the resumed gate stays bound to
+  capability/session/principal post-reload (no replay).
 
 ## Running the gates (mock, in-memory)
 
