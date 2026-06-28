@@ -37,11 +37,15 @@ describe('local provider package surface', () => {
     expect(local).toBeInstanceOf(LocalAdapter);
   });
 
-  it('exposes the local model through the registry built from default adapters', () => {
+  it('resolves the local provider through the registry built from default adapters', () => {
     const registry = createProviderRegistry(createDefaultProviderAdapters());
     const local = registry.requireProvider('local');
 
-    expect(local.listModels().map((model) => model.modelId)).toEqual(LOCAL_MODELS);
+    expect(local.provider.providerId).toBe('local');
+    // No static model profile is advertised yet for `local` (the host sidecar
+    // serves `laneformer-2b-it` directly when selected); advertising it in the
+    // static catalog is a follow-up. So the registry lists zero local models.
+    expect(local.listModels()).toEqual([]);
   });
 
   it('uses the OpenAI wire family with no reasoning and no structured-output enforcement', () => {
