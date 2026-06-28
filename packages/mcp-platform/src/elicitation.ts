@@ -7,9 +7,13 @@
  * outcome is an absorbing terminal that DENIES the gated capability. Only
  * `resumed` releases the gate.
  *
- * MOCK-ONLY: in-memory, deterministic; no network, no secrets in form mode.
+ * MOCK-ONLY: in-memory by default, deterministic; no network, no secrets in form
+ * mode. Records resolve through an injectable, restart-safe `ElicitationStore`
+ * (§5.1, §11 "Resume after restart"); the default backing is non-durable and
+ * behaves identically to the prior in-memory map.
  */
 import type { DurableCallRef } from './runtime.js';
+import { PersistentElicitationStore, type ElicitationStore } from './stores.js';
 
 export type ElicitationState =
   // forward path
@@ -93,11 +97,17 @@ export type CreateInput = {
 
 /** Manages elicitation records and enforces the §5 fail-closed transitions. */
 export class ElicitationManager {
-  readonly #records = new Map<string, ElicitationRecord>();
+  readonly #store: ElicitationStore;
   readonly #delegationResolver?: DelegationResolver;
 
-  constructor(deps?: { delegationResolver?: DelegationResolver }) {
+  constructor(deps?: { delegationResolver?: DelegationResolver; store?: ElicitationStore }) {
     this.#delegationResolver = deps?.delegationResolver;
+    this.#store = deps?.store ?? new PersistentElicitationStore();
+  }
+
+  /** Re-read records from the durable medium (restart-safe lookup, §11). */
+  reload(): void {
+    this.#store.reload();
   }
 
   create(input: CreateInput): ElicitationRecord {
@@ -116,22 +126,23 @@ export class ElicitationManager {
       createdAt: at,
       updatedAt: at,
     };
-    this.#records.set(rec.id, rec);
+    this.#store.put(rec);
     return rec;
   }
 
   get(id: string): ElicitationRecord | undefined {
-    return this.#records.get(id);
+    return this.#store.get(id);
   }
 
   /** Only a record in state `resumed` releases the gated capability. */
   isGateReleased(id: string): boolean {
-    return this.#records.get(id)?.state === 'resumed';
+    return this.#store.get(id)?.state === 'resumed';
   }
 
   #set(rec: ElicitationRecord, state: ElicitationState): ElicitationRecord {
     rec.state = state;
     rec.updatedAt = new Date().toISOString();
+    this.#store.put(rec); // persist every transition so it survives a restart
     return rec;
   }
 
@@ -233,7 +244,7 @@ export class ElicitationManager {
   }
 
   #require(id: string): ElicitationRecord {
-    const rec = this.#records.get(id);
+    const rec = this.#store.get(id);
     if (!rec) throw new Error(`unknown elicitation '${id}'`);
     return rec;
   }
