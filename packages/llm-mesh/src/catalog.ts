@@ -367,16 +367,12 @@ export const modelProfiles = [
     defaultTaskHints: [],
     capabilities: modelCapabilities('gcp', 'standard', { vision: true }),
   },
-  // Local Laneformer 2B (latency-first, OpenAI-compatible host sidecar). OPT-IN
-  // only (`defaultTaskHints: []`) so adding it never changes default routing.
-  {
-    providerId: 'local',
-    modelId: 'laneformer-2b-it',
-    label: 'Laneformer 2B (local)',
-    reasoningTier: 'none',
-    defaultTaskHints: [],
-    capabilities: modelCapabilities('local', 'none'),
-  },
+  // NOTE: the `local` provider is declared (provider profile above) and wired in
+  // the api runtime (LocalProviderRuntime -> the host sidecar), but no static
+  // model profile is advertised here yet. The sidecar serves `laneformer-2b-it`
+  // directly when selected; advertising it in the static catalog (with capability
+  // + streaming-normalization fixtures) is a follow-up so this change stays
+  // scoped to the provider surface and does not touch the runtime stream path.
 ] as const satisfies readonly ModelProfile[];
 
 export const providerCapabilityMatrix = providerProfiles;
