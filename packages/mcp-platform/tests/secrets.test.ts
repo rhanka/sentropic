@@ -5,7 +5,7 @@
  * "no secret in logs/prompts/traces/fixtures" guarantee.
  */
 import { describe, expect, it } from 'vitest';
-import { InMemoryAuditSink, SecretRedactor } from '../src/audit.js';
+import { InMemoryAuditSink, REDACTION_TOKEN, SecretRedactor } from '../src/audit.js';
 import { MockSecretStore, SecretAccessError, createStpConnectorContext } from '../src/context.js';
 
 const SECRET = 'sk-super-secret-value-9f3a';
@@ -62,6 +62,20 @@ describe('secret accessor & redaction', () => {
     await expect(ctx.getSecret('fakeAccessToken')).rejects.toBeInstanceOf(SecretAccessError);
     const denied = audit.events.find((e) => e.kind === 'secret.access' && e.detail?.result === 'denied');
     expect(denied?.detail?.state).toBe('revoked');
+  });
+
+  it('G3: redaction stays monotonic after revoke — value unresolvable but still redacted', () => {
+    const { store, key, audit, redactor } = setup();
+    store.transition(key, 'revoked');
+
+    // (a) the LIVE value is dropped → resolve fails closed (cannot be used again)
+    expect(() => store.resolve(key)).toThrow(SecretAccessError);
+
+    // (b) redaction is MONOTONIC: the old value is STILL redacted post-revoke, so
+    // an already-emitted / late log line never un-redacts (NOT redactor.forget).
+    audit.log('post-revoke leak attempt', SECRET);
+    expect(audit.dump()).not.toContain(SECRET);
+    expect(redactor.redactString(SECRET)).toBe(REDACTION_TOKEN);
   });
 
   it('status lookup discloses state only (never the value) and is fail-closed when missing', () => {
