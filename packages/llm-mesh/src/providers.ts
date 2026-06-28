@@ -1,4 +1,4 @@
-export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp'] as const;
+export const providerIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local'] as const;
 
 export type ProviderId = (typeof providerIds)[number];
 
@@ -35,6 +35,11 @@ export const knownModelIds = [
   // what routes the id to provider `gcp`.
   'google/gemini-3.5-flash@gcp',
   'google/gemini-3.1-flash-lite@gcp',
+  // Local provider: an OpenAI-compatible endpoint on the host (e.g. the
+  // Laneformer 2B sidecar on 127.0.0.1:8089). The wire format is OpenAI; the
+  // baseURL/transport is configured in the api/gateway layer (the package stays
+  // transport-free). Multiple local models can be exposed under this provider.
+  'laneformer-2b-it',
 ] as const;
 
 export type KnownModelId = (typeof knownModelIds)[number];
@@ -50,6 +55,7 @@ export const knownModelIdsByProvider = {
   mistral: ['mistral-small-2603', 'magistral-medium-2509'],
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp'],
+  local: ['laneformer-2b-it'],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 
 export interface ModelReference {

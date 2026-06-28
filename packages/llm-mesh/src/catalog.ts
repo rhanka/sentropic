@@ -202,6 +202,21 @@ export const providerProfiles = {
       stringEnumsOnly: true,
     }),
   },
+  // Local provider: an OpenAI-compatible endpoint hosted on the machine (e.g.
+  // the Laneformer 2B sidecar on 127.0.0.1:8089). Uses the OpenAI wire family.
+  // No reasoning and no structured-output enforcement (a latency-first chat
+  // model). The baseURL/transport is wired in the api/gateway layer; this
+  // package stays transport-free. Disabled by default at the gateway level.
+  local: {
+    providerId: 'local',
+    family: 'openai',
+    label: 'Local',
+    status: 'planned',
+    capabilities: capabilities({
+      reasoningTier: 'none',
+      structuredOutputLevel: 'none',
+    }),
+  },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
 
 const modelCapabilities = (
@@ -351,6 +366,16 @@ export const modelProfiles = [
     reasoningTier: 'standard',
     defaultTaskHints: [],
     capabilities: modelCapabilities('gcp', 'standard', { vision: true }),
+  },
+  // Local Laneformer 2B (latency-first, OpenAI-compatible host sidecar). OPT-IN
+  // only (`defaultTaskHints: []`) so adding it never changes default routing.
+  {
+    providerId: 'local',
+    modelId: 'laneformer-2b-it',
+    label: 'Laneformer 2B (local)',
+    reasoningTier: 'none',
+    defaultTaskHints: [],
+    capabilities: modelCapabilities('local', 'none'),
   },
 ] as const satisfies readonly ModelProfile[];
 
