@@ -5,6 +5,7 @@ import { GeminiProviderRuntime } from './providers/gemini-provider';
 import { MistralProviderRuntime } from './providers/mistral-provider';
 import { OpenAIProviderRuntime } from './providers/openai-provider';
 import { GcpProviderRuntime } from './providers/gcp-provider';
+import { LocalProviderRuntime } from './providers/local-provider';
 
 class ProviderRegistry {
   private readonly providers: Map<ProviderId, ProviderRuntime>;
@@ -16,6 +17,7 @@ class ProviderRegistry {
     const mistral = new MistralProviderRuntime();
     const cohere = new CohereProviderRuntime();
     const gcp = new GcpProviderRuntime();
+    const local = new LocalProviderRuntime();
 
     this.providers = new Map<ProviderId, ProviderRuntime>([
       ['openai', openai],
@@ -24,6 +26,7 @@ class ProviderRegistry {
       ['mistral', mistral],
       ['cohere', cohere],
       ['gcp', gcp],
+      ['local', local],
     ]);
   }
 
