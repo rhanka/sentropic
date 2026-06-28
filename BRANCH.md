@@ -60,5 +60,15 @@ Frame REVERSIBLE OPTIONS for parked decision P5 (`SPEC_EVOL_APP_MCP_PROVIDER_PLA
   - [x] Open questions for architect + BR-70 owner.
   - [x] Commit doc + `BRANCH.md` atomically (`make commit`, selective add). No push, no PR.
 
+- [x] **Lot 2 — Apply Codex 5.5xhigh review corrections (C1-C6)**
+  - [x] C1 — Add `@sentropic/mcp-platform` to §1.1; make wire-shape home an explicit open decision (api-local / private scaffold / future published); stop implying `ubo-contracts` is the MCP contract home.
+  - [x] C2 — Reclassify reversibility: control-plane Drizzle migration/table IS the residence commitment → moved to irreversible side; reversible-now = interface/prototype/mock.
+  - [x] C3 — Split manifest-registry persistence from session/consent/enrollment persistence (separate stores, scaffold already models the latter).
+  - [x] C4 — Qualify the catalog→resource-plane projection: shipped for `list/stat/read/grep`; `resolvePath`/`resolveAlias` lack the discover gate.
+  - [x] C5 — Correct deny-as-missing: `provider-base.ts` only returns `unsupported`; projector is catalog-specific → MCP-specific projector still must be built.
+  - [x] C6 — Add Option D (code-owned manifests + separate durable stores + projection); defer package activation/publication (P1).
+  - [x] Update recommendation: Option C target, no package activation, control-plane manifest store only after P5, separate restart-safe auth/session/enrollment persistence.
+  - [x] Commit doc + `BRANCH.md` atomically (`make commit`, selective add). No push, no PR.
+
 ## Deferred / Notes
 - P5 stays parked (IRREVERSIBLE / owner-gated) until the architect + BR-70 owner ratify an option. No build slice may pre-empt it.

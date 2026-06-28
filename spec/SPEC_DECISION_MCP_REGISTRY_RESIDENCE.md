@@ -50,8 +50,14 @@ P5 must decide, concretely:
 2. **Exposure**: how MCP manifests register/resolve, and how the Sentropic
    surfaces (chat, VSCode, `stp`) discover them — authz-projected with
    deny-as-missing (`§7.1`).
-3. **Packaging**: published `@sentropic/mcp-registry` vs internal/app-local code
-   (overlaps P1; gated by `architecture.md` "activate by real consumption").
+3. **Packaging / wire-shape home**: where the manifest/capability wire shapes
+   (`AppMcpProviderManifest` etc.) live is an EXPLICIT open decision, NOT settled:
+   (a) api-local row types, (b) the existing PRIVATE `@sentropic/mcp-platform`
+   scaffold (which already declares them in code — see §1.1), or (c) a future
+   PUBLISHED package. Activation/publication of any package overlaps P1 and is
+   gated by `architecture.md` "activate by real consumption". This is NOT
+   `@sentropic/ubo-contracts` territory (that package is the object-type registry's
+   DATA wire-shape home, not the MCP contract home).
 
 ### 1.1 What already exists (VERIFIED against `origin/main`, post PR #371)
 
@@ -101,21 +107,52 @@ asks for, but BOTH constrain the answer:
     `unsupported`.
   - `CatalogResourceProvider` (`providers/catalog-provider.ts`) **ALREADY**
     projects the BR-42b catalog onto `/tools /skills /agents /workflows /canvas`,
-    **authz-projected with deny-as-missing** (`authz.catalogAccess(...).discover`),
-    read-only (`edit` denied, `invoke` `unsupported` in this slice). It enumerates
-    per-`(kind, sourceId)` from each source `snapshot()` and CONSUMES the catalog
-    registry — it does NOT own it.
+    **authz-projected with deny-as-missing for `list/stat/read/grep`**
+    (`authz.catalogAccess(...).discover`), read-only (`edit` denied, `invoke`
+    `unsupported` in this slice). It enumerates per-`(kind, sourceId)` from each
+    source `snapshot()` and CONSUMES the catalog registry — it does NOT own it.
+  - **GAP (C4)**: `resolvePath`/`resolveAlias`/`collectionRef`
+    (`catalog-provider.ts`) and `ResourceDispatcher.resolvePath` (`dispatcher.ts`)
+    resolve a path alias to a ref by SNAPSHOT MATCH **without applying the
+    `discover` authz gate** — alias resolution is not yet authz-projected, so it
+    needs hardening (or a `stat`/`read` gate before any ref is acted on) before it
+    is safe to expose.
   - Wired in `index.ts`; app-local in `api/`.
+- **The private MCP provider-platform scaffold (`@sentropic/mcp-platform`)** —
+  `packages/mcp-platform/` (present on this branch; PRIVATE, unpublished):
+  - `"private": true`, `version 0.0.0`, NOT in any publish filter / root lockfile /
+    trusted-publisher config; a MOCK-ONLY scaffold of
+    `SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM` slices 1+2+3+7 (no real DB/driver/network).
+  - **ALREADY declares the MCP manifest/capability WIRE SHAPES in code**
+    (`src/manifest.ts`: `AppMcpProviderManifest`, `CapabilityResource|Tool|Prompt`,
+    `ConnectorSecretRequirement`, `ElicitationPolicy`) and the adapter contract
+    (`src/runtime.ts`: `AppConnectorProviderAdapter`). These ARE the MCP wire
+    shapes — they live HERE, **not** in `@sentropic/ubo-contracts` (which is the
+    object-type registry's DATA wire-shape home).
+  - **ALREADY models the §6.3/§6.4/§5.1 RUNTIME state as SEPARATE typed,
+    restart-safe stores** (`src/stores.ts`: `PersistentSessionStore`,
+    `PersistentConsentStore`, `PersistentEnrollmentStore`,
+    `PersistentSecretStatusStore`, `PersistentElicitationStore`) over a generic
+    `RecordStore` (`MemoryRecordStore` | `FileRecordStore`), fail-closed,
+    status-only secrets. Crucially these runtime stores are modeled SEPARATELY from
+    any manifest/capability registry — a manifest store and these state stores are
+    distinct concerns (C3; see §6 Q5).
+  - `docs/ADOPTION_GUIDE.md` and spec §13.1 keep package activation/publication and
+    `mcp-registry` residence **owner/architect-gated** (P1 + P5).
 
 **Consequence**: the catalog→resource-plane projection pattern (authoritative
 capability list in the catalog, authz-projected read via a `ResourceProvider`) is
-already SHIPPED for the 5 catalog kinds. P5 is largely the question of whether the
-MCP-manifest registry adopts that same two-layer split, and what the authoritative
-layer is made of (in-memory snapshot vs durable DB), plus the packaging gate.
+already SHIPPED for `list/stat/read/grep` on the 5 catalog kinds. It is NOT yet
+complete: path/alias resolution (`resolvePath`/`resolveAlias`) returns refs by
+snapshot match WITHOUT the `discover` gate, so it still needs hardening (or a
+`stat`/`read` gate before any ref is acted on) before exposure (C4). P5 is largely
+the question of whether the MCP-manifest registry adopts that same two-layer split,
+and what the authoritative layer is made of (code-owned manifest vs in-memory
+snapshot vs durable DB), plus the packaging gate.
 
 ## 2. Options
 
-Three real options given the codebase, plus the status-quo baseline they build on.
+Four real options given the codebase, plus the status-quo baseline they build on.
 
 **Baseline (status quo, B0)** — the MCP capability state lives ONLY in the
 in-memory BR-42b catalog (`McpCatalogSource` snapshot), projected read-only by
@@ -143,19 +180,21 @@ or accepts the gap explicitly.
   the result (deny-as-missing, §7.1). The BR-70 Resource Plane projects the SAME
   store via a NEW `ResourceProvider` (mirroring `CatalogResourceProvider`); STP
   multiplexer (§7) reads the same service.
-- **Publish vs internal**: stays INTERNAL/app-local (like
-  object-type-registry, whose wire shapes are the PRIVATE `@sentropic/ubo-
-  contracts`). No published `@sentropic/mcp-registry` until a real 2nd consumer
-  (architecture activate-by-consumption + §2.1).
+- **Publish vs internal**: stays INTERNAL/app-local. MCP wire shapes already live
+  in the PRIVATE `@sentropic/mcp-platform` scaffold (NOT `@sentropic/ubo-contracts`,
+  which is the object-type registry's DATA home). No published
+  `@sentropic/mcp-registry` package until a real 2nd consumer (architecture
+  activate-by-consumption + §2.1).
 - **Migration from BR-59/BR-42b**: reuses the BR-59 *pattern* (not the
   `object_type_definitions` table — different concern); the BR-42b
   `McpCatalogSource` becomes a *feeder/reconciler* into the store rather than the
   source of truth. One Drizzle migration.
 - **Coupling to BR-70**: LOW — BR-70 is a read projection consumer, exactly like
   the existing `CatalogResourceProvider`. The store can ship without BR-70.
-- **Reversibility**: HIGH for the internal store (additive table + service +
-  provider, all removable); the *durable name + cross-plane published contract*
-  is the irreversible part and stays gated (§6).
+- **Reversibility**: MEDIUM — a real control-plane table/migration for the manifest
+  store **IS the residence commitment** (C2 / §5), not a freely removable slice;
+  only an interface/mock prototype is reversible-now. The durable name + cross-plane
+  published contract stay gated (§6).
 
 ### Option B — Resource-Plane projection only (registry-as-provider, no separate store)
 
@@ -166,8 +205,12 @@ or accepts the gap explicitly.
 - **Register/resolve**: a manifest "registers" by configuring an MCP source
   (out-of-band config); resolution = the in-memory snapshot, projected on read.
 - **Discovery**: directly through the resource-plane verbs (`ls /mcp/<server>/
-  tools`, `read …`), authz-projected NATIVELY (the deny-as-missing projector
-  already exists in `authz.ts`/`provider-base.ts`). STP reads the same plane.
+  tools`, `read …`). NOTE (C5): deny-as-missing is **not free** here —
+  `provider-base.ts` only defaults verbs to `unsupported`, and the only implemented
+  authz projector (`authz.ts` `ResourceAuthzProjector.catalogAccess`, which takes
+  `CatalogEntryMetadata`) is **catalog-SPECIFIC**. Option B reuses the
+  `CatalogResourceProvider` PATTERN, but an MCP-specific authz projector + provider
+  STILL must be built. STP reads the same plane.
 - **Publish vs internal**: app-local; nothing new to publish (the provider lives
   in `api/`); no durable-name commitment.
 - **Migration**: minimal — extend `McpCatalogSource` to map `resources`/`prompts`
@@ -184,14 +227,18 @@ or accepts the gap explicitly.
 
 ### Option C — Hybrid (authoritative control-plane store + Resource-Plane / STP projection)
 
-- **What it is**: A's durable control-plane store as the **source of truth** for
-  *which providers/connectors are enrolled, their manifest version, and
-  consent/grant/enrollment state* (`§6.3` records), PLUS B's Resource-Plane
-  projection + STP discovery as the **read/visibility layer**, with the live MCP
-  `tools/list`/`resources/list` snapshot filling capability detail. This is the
-  §8 flow literally (manifest → registry projection → visibility filtering →
-  invocation) and mirrors the SHIPPED catalog (authoritative list) ↔
-  `CatalogResourceProvider` (authz-projected read) split.
+- **What it is**: A's durable control-plane manifest/capability store as the
+  **source of truth** for *which providers are registered and their manifest
+  version* (the manifest registry), PLUS a **SEPARATE** durable persistence for the
+  `§6.2/§6.3` RUNTIME state (MCP sessions, consent grants, connector enrollments) —
+  these need NOT live in the same store (C3): the private `@sentropic/mcp-platform`
+  scaffold already models them as DISTINCT `src/stores.ts` ports, and consent /
+  enrollment may be an auth-lane store (Q5). PLUS B's Resource-Plane projection +
+  STP discovery as the **read/visibility layer** that may JOIN across both stores,
+  with the live MCP `tools/list`/`resources/list` snapshot filling capability
+  detail. This is the §8 flow literally (manifest → registry projection →
+  visibility filtering → invocation) and mirrors the SHIPPED catalog (authoritative
+  list) ↔ `CatalogResourceProvider` (authz-projected read) split.
 - **Register/resolve**: publish manifest = write to the control-plane store
   (validated, versioned); capability detail reconciled from the live MCP snapshot;
   resolve = store query + snapshot overlay.
@@ -206,92 +253,150 @@ or accepts the gap explicitly.
 - **Coupling to BR-70**: MEDIUM — the authoritative store is plane-independent
   (catalog-lineage per RF7), BR-70 is one projection consumer (the primary LLM/UX
   surface). Clean ownership seam.
-- **Reversibility**: HIGH for the build (store + provider + reconciler all
-  additive); irreversible commitment = publication + cross-plane published
-  contract (§6), gated.
+- **Reversibility**: MEDIUM — the manifest-store migration **IS the residence
+  commitment** (C2); only the projection/reconciler and the separate runtime stores
+  are freely additive. Irreversible commitments = the manifest migration itself +
+  publication + cross-plane published contract (§6), all gated.
+
+### Option D — Code-owned manifests (private scaffold) + separate durable runtime stores + projection
+
+- **What it is**: NO control-plane manifest DB table. The manifest/capability
+  registry is **code-owned**: manifests are declared in the
+  `@sentropic/mcp-platform` adapter (`AppMcpProviderManifest`, `src/manifest.ts`),
+  versioned by code/package version rather than DB rows. The `§6.2/§6.3` RUNTIME
+  state (sessions, consent grants, connector enrollments) **IS** durably persisted,
+  in the SEPARATE typed stores the scaffold already models (`src/stores.ts`, over a
+  restart-safe `RecordStore`). Discovery is a Resource-Plane / STP projection over
+  the code-owned manifests + the durable runtime state.
+- **Register/resolve**: a provider "registers" by shipping its adapter manifest in
+  code; resolve = read the in-code manifest + the durable enrollment/consent state;
+  capability detail reconciled from the live MCP snapshot.
+- **Discovery**: an MCP-specific `ResourceProvider` projects manifests + runtime
+  state, authz-projected deny-as-missing (the MCP projector must be built, per C5).
+  STP reads the same plane.
+- **Publish vs internal**: the scaffold stays PRIVATE and UNACTIVATED;
+  "activate / publish the package now" is explicitly DEFERRED (owner-gated P1, per
+  `packages/mcp-platform/docs/ADOPTION_GUIDE.md`).
+- **Migration**: lowest — extend the existing private scaffold (manifest types +
+  the separate durable stores) + add one MCP projection provider. **NO production
+  migration, so it does NOT pre-commit P5's residence.**
+- **Coupling to BR-70**: MEDIUM — manifests are plane-independent (code-owned);
+  BR-70 is one projection consumer.
+- **Reversibility**: HIGHEST — no manifest DB table means no residence commitment
+  to undo (C2); only package activation/publication stays gated.
 
 ## 3. Comparison
 
-| Criterion | A — Control-plane DB | B — Resource-Plane projection only | C — Hybrid (store + projection) |
-|---|---|---|---|
-| Fits existing BR-59 pattern | **High** (reuses object-type-registry shape) | Low (no durable store) | **High** (store = BR-59 shape) |
-| Fits existing BR-70 pattern | Medium (BR-70 = one consumer) | **High** (registry IS a provider) | **High** (mirrors catalog↔CatalogResourceProvider) |
-| Authoritative-source clarity | **High** (DB = single truth) | **Low** (snapshot, no truth of enrollment/consent) | **High** (DB truth + snapshot detail, clear seam) |
-| Restart-safe persistence (§6.2/§6.3) | **Yes** | **No** (in-memory snapshot) | **Yes** |
-| Discovery / surface parity (§7.1) | Yes (service + provider) | Yes (native plane) | **Yes** (one store, all surfaces project it) |
-| Publish / versioning blast-radius | Low if internal (PRIVATE contracts) | **Lowest** (nothing to publish) | Low if internal; deferred publish |
-| MCP resources/prompts coverage | Needs explicit modeling (additive) | Needs BR-42i mapping (additive) | Needs both (additive) |
-| Effort | Medium (migration + service + provider) | **Low** (extend source + 1 provider) | Medium-High (A + B) |
-| Reversibility (internal build) | **High** | **High** | **High** |
-| Reversibility (the P5 commitment) | Gated (name/contract) | Gated (contract) | Gated (name/contract) |
+| Criterion | A — Control-plane DB | B — Resource-Plane projection only | C — Hybrid (store + projection) | D — Code-owned + separate durable stores |
+|---|---|---|---|---|
+| Fits existing BR-59 pattern | **High** (reuses object-type-registry shape) | Low (no durable store) | **High** (manifest store = BR-59 shape) | Low (no manifest DB table; reuses scaffold store pattern for runtime state) |
+| Fits existing BR-70 pattern | Medium (BR-70 = one consumer) | **High** (registry IS a provider) | **High** (mirrors catalog↔CatalogResourceProvider) | **High** (projection consumer) |
+| Authoritative-source clarity | **High** (DB = single truth) | **Low** (snapshot, no truth of enrollment/consent) | **High** (manifest DB + SEPARATE runtime stores, clear seam) | Medium (manifest = code/package version; runtime = durable stores) |
+| Restart-safe persistence (§6.2/§6.3) | **Yes** | **No** (in-memory snapshot) | **Yes** | **Yes** (runtime stores durable; manifests code-pinned) |
+| Discovery / surface parity (§7.1) | Yes (service + provider) | Yes (native plane) | **Yes** (one read layer, all surfaces project it) | Yes (projection) |
+| Publish / versioning blast-radius | Low if internal (PRIVATE contracts) | **Lowest** (nothing to publish) | Low if internal; deferred publish | **Lowest** (scaffold stays private/unactivated) |
+| MCP resources/prompts coverage | Needs explicit modeling (additive) | Needs BR-42i mapping (additive) | Needs both (additive) | **Native** (manifest already models resources/tools/prompts) |
+| Effort | Medium (migration + service + provider) | **Low** (extend source + 1 provider) | Medium-High (A + B) | Low-Medium (extend scaffold + projection) |
+| Reversibility (internal build) | Medium (a real migration IS a residence commitment — C2/§5) | **High** | Medium (manifest migration = commitment) | **Highest** (no manifest DB table) |
+| Reversibility (the P5 commitment) | Gated (residence + name/contract) | Gated (contract) | Gated (residence + name/contract) | Gated (package activation only) |
 
 ## 4. Recommendation (PROPOSAL — architect + BR-70 owner to ratify)
 
-**Proposed: Option C (Hybrid), internal/app-local for v0, package publication
-deferred.** Rationale:
+**Proposed: Option C (Hybrid) as the TARGET — internal v0, NO package
+activation/publication, the control-plane manifest store created ONLY after P5
+ratification, projected through the Resource-Plane / STP, with SEPARATE restart-safe
+auth/session/enrollment persistence.** Until P5 is ratified, the reversible-now
+path is **Option D** (extend the private `@sentropic/mcp-platform` scaffold + its
+separate durable stores; NO production migration). Rationale:
 
-1. It is the only option that satisfies the platform's **restart-safe persistence**
-   requirement (`§6.2/§6.3`: sessions/consent/enrollment "MUST be resolved from
-   persisted state, never an in-memory map") while keeping the **authz-projected,
-   deny-as-missing discovery** (`§7.1`) that BR-70 already implements.
+1. C gives a durable, validated, versioned manifest/capability registry AND
+   satisfies the `§6.2/§6.3` restart-safe persistence requirement for
+   sessions/consent/enrollment — kept in a **SEPARATE** restart-safe store (C3; the
+   scaffold already models these distinctly), not folded into the manifest store.
+   It keeps the `§7.1` authz-projected deny-as-missing discovery, which an
+   MCP-specific projector must still build (the shipped projector is
+   catalog-specific — C5).
 2. It **reuses two patterns the repo already proves**: the BR-59
    `object_type_definitions` durable-validated-capped-scoped registry for the
-   authoritative store, and the catalog↔`CatalogResourceProvider` two-layer split
-   for the projection. Net-new surface area is minimized.
+   authoritative manifest store, and the catalog↔`CatalogResourceProvider`
+   two-layer split for the projection (whose alias-resolution authz gap must be
+   closed first — C4). Net-new surface area is minimized.
 3. It respects the **RF7 ownership boundary** (catalog lineage owns the MCP
-   manifest/mapping; BR-70 projects) — the store is plane-independent, so BR-70 and
-   the registry can evolve on separate cadences.
-4. It keeps the **irreversible bits parked**: nothing is published, no durable
-   public name is minted, no cross-repo contract is frozen in v0. The store wire
-   shapes go in the PRIVATE `@sentropic/ubo-contracts` (as object-type-registry
-   already does), so the public-API blast-radius is zero until a real 2nd consumer
-   triggers extraction (architecture activate-by-consumption + P1).
+   manifest/mapping; BR-70 projects) — the manifest store is plane-independent, so
+   BR-70 and the registry can evolve on separate cadences.
+4. It keeps the **irreversible bits parked**: a real control-plane Drizzle
+   migration/table for the manifest store **IS the residence commitment** (C2), so
+   it is NOT built until P5 ratifies; nothing is published, no durable public name
+   is minted, no cross-repo contract is frozen. The MCP wire shapes already live in
+   the PRIVATE `@sentropic/mcp-platform` scaffold (NOT `@sentropic/ubo-contracts`,
+   which is the object-type registry's DATA home), so the public-API blast-radius is
+   zero until a real 2nd consumer triggers extraction (architecture
+   activate-by-consumption + P1).
 
 Option B alone is rejected: it cannot durably bind consent/enrollment and would
 lie under restart. Option A alone is acceptable but leaves the projection
-under-specified; C = A's store + B's projection, which is the §8 flow as written.
+under-specified. **Option D is the safe REVERSIBLE-NOW slice** (no residence
+commitment) and may even be the destination if the architect prefers code-owned
+manifests over a DB table; C = A's manifest store + D's separate durable runtime
+stores + B's projection, which is the §8 flow as written.
 
 This is a PROPOSAL only. The architect + BR-70 owner ratify; until then P5 stays
-parked and no build slice may pre-empt it.
+parked and no build slice may pre-empt it — and per C2 the control-plane manifest
+migration/table is itself part of the parked decision.
 
 ## 5. Reversible vs irreversible split
 
 **Reversible / additive — can be designed and built now (does NOT decide P5):**
+These are **interface / prototype / mock-only** — NOT a production migration.
 
-- A new control-plane DB table for MCP provider manifests (one Drizzle migration),
-  modeled on `object_type_definitions` (validate-on-write, caps, version/status,
-  scope-bound). Removable/reshapeable.
-- An app-local registry service (`register/get/list/update/deprecate`,
-  reconcile-from-snapshot), internal to `api/`.
-- A new `McpRegistryResourceProvider` projecting the store into BR-70 mounts
-  (e.g. `/mcp/<server>/…`), mirroring `CatalogResourceProvider` (authz-projected,
-  deny-as-missing, read-only).
-- Extending `McpCatalogSource` to map `resources`/`prompts` (BR-42i) and feed the
-  store as a reconciler.
-- Wire shapes kept in the PRIVATE `@sentropic/ubo-contracts` (no public surface).
+- Extending the PRIVATE `@sentropic/mcp-platform` scaffold: manifest + capability
+  types, the adapter, and the SEPARATE durable runtime stores it already models
+  (`src/stores.ts` session/consent/enrollment/secret-status/elicitation), backed by
+  `MemoryRecordStore`/`FileRecordStore`. No production DB, no migration. The MCP
+  wire shapes already live here (NOT in `@sentropic/ubo-contracts`).
+- A prototype `McpRegistryResourceProvider` (mock-backed) projecting the scaffold's
+  manifests + runtime state into BR-70 mounts (e.g. `/mcp/<server>/…`), mirroring
+  `CatalogResourceProvider` — INCLUDING a NEW MCP-specific authz projector (the
+  shipped projector is catalog-specific — C5).
+- Closing the `CatalogResourceProvider`/`ResourceDispatcher` alias-resolution authz
+  gap (C4) so the projection pattern is safe to mirror.
+- Extending `McpCatalogSource` to map `resources`/`prompts` (BR-42i) as a
+  feeder/reconciler — additive over what exists.
 
 **Irreversible — the P5 commitment, stays architect + BR-70-owner gated:**
 
-- **Publication** of a `@sentropic/mcp-registry` package: durable npm name, public
-  API stability, trusted-publisher setup, compat matrix (overlaps P1; `§13.1`).
-- **Freezing the cross-plane contract** as a published surface other repos/hosts
-  depend on (the `ResourceRef`/manifest schema, the registry↔plane boundary).
+- **A real control-plane Drizzle migration / table / service** for the MCP manifest
+  registry (e.g. `control.mcp_provider_manifests`): creating it **IS the residence
+  commitment** (C2) — it picks the durable storage location and the manifest store's
+  ownership. It is NOT a "reversible now" slice.
 - **Committing the durable storage location** as ratified architecture
-  (control-plane ownership of the manifest store) — and with it the
-  **ownership boundary** (catalog-lineage store vs BR-70 deliverable; consistent
-  with RF7).
+  (control-plane ownership of the manifest store) — and with it the **ownership
+  boundary** (catalog-lineage store vs BR-70 deliverable; consistent with RF7).
+- **Activation / publication** of a package: durable npm name, public API
+  stability, trusted-publisher setup, compat matrix, and adding the package to the
+  root lockfile (= activation) (overlaps P1; `§13.1` / ADOPTION_GUIDE).
+- **Freezing the cross-plane contract** as a published surface other repos/hosts
+  depend on (the `ResourceRef`/manifest schema, the registry↔plane boundary, and
+  the wire-shape home choice among api-local / `@sentropic/mcp-platform` / a
+  published package).
 - **Persistence model for consent/enrollment** as a memorialized contract
-  (`§6.3` records), which downstream auth/consent flows will pin.
+  (`§6.3` records), which downstream auth/consent flows will pin — whether or not it
+  shares the manifest store's DB (Q5).
 
 The reversible slice can proceed under the catalog/BR-70 lanes WITHOUT resolving
-P5, provided it stays internal (no published name, no frozen cross-repo contract).
-The moment any of the irreversible bullets is touched, the gate applies.
+P5, provided it stays interface/prototype/mock (private scaffold, no production
+migration, no published name, no frozen cross-repo contract). The moment any of the
+irreversible bullets is touched — **including the control-plane manifest
+migration** — the gate applies.
 
 ## 6. Open questions for architect + BR-70 owner
 
-1. **Q1 — Authoritative store shape**: new dedicated `mcp_provider_manifests`
-   table vs reuse/extend `object_type_definitions`? (Assumption: a NEW table —
-   capabilities ≠ data object types — reusing the BR-59 *pattern*, not the table.)
+1. **Q1 — Authoritative manifest shape**: code-owned manifests in the private
+   `@sentropic/mcp-platform` scaffold (Option D, no DB) vs a new dedicated
+   `control.mcp_provider_manifests` table vs reuse/extend `object_type_definitions`?
+   (Assumption: code-owned now; a NEW table later only if/when P5 ratifies a DB
+   residence — capabilities ≠ data object types, reusing the BR-59 *pattern* not the
+   table.)
 2. **Q2 — Ownership**: is the MCP-manifest registry STORE a catalog-lineage
    deliverable (consistent with RF7 making the MCP mapping BR-42i and the adapter
    BR-42j) with BR-70 as projection consumer, or a BR-70-owned deliverable? This
