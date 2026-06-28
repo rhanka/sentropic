@@ -3,7 +3,7 @@
 > **Status: PRIVATE, unpublished, reversible scaffold.** This package is
 > `"private": true`, is NOT wired into any publish filter / CI publish job /
 > Makefile target / trusted-publisher config, and MUST NOT be published. It is a
-> mock-only build of **slices 1 + 2 + 3** of
+> mock-only build of **slices 1 + 2 + 3 + 7** of
 > `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`).
 
 > **Not in the root lockfile — do NOT root-install/activate (P1, architect/owner-gated).**
@@ -90,6 +90,43 @@ were type-only and the §11 persistence probes were not exercised).
   revocation persists → `no_enrollment` after restart (F1 across restart);
   elicitation resume-after-restart + the resumed gate stays bound to
   capability/session/principal post-reload (no replay).
+
+### Slice 7 — mock durable-call / workflow adapter for long-running tools
+
+Models a long-running MCP tool call via the canonical `DurableCall` lifecycle
+(§8 -> `SPEC_EVOL_AGENT_RUNTIME_HERMES_LOOP.md` §3.2), restart-safe over the
+slice-3 persistence layer. The canonical `DurableCall` shape is **not forked**:
+MCP correlation is threaded alongside it (`McpDurableCall = { call, refs,
+waitingFor? }`).
+
+- `src/runtime.ts` — adds the canonical `DurableCall` / `DurableCallKind` /
+  `DurableCallState` types (verbatim from Hermes §3.2) and the MCP projection
+  `McpDurableCall` (canonical record + `McpDurableCallRefs` + the `waiting`
+  qualifier `DurableCallWaitingFor`).
+- `src/durable.ts` — `PersistentDurableCallStore` (a `DurableCallStore` over the
+  slice-3 `RecordStore<T>`, so durable calls survive a restart) + `DurableCallAdapter`:
+  `launch` / `start` / `wait(reason)` / `resume` / `succeed` / `fail` / `cancel` /
+  `status`. Lifecycle `queued -> running -> waiting -> succeeded|failed|cancelled`,
+  with `waiting` qualified by `elicitation|consent|freshness|external-workflow`.
+  - **Idempotent launch**: a repeated launch with the same `idempotencyKey`
+    returns the SAME durable call — never a duplicate.
+  - **Fail-closed resume**: a `waiting` call only resumes once its wait condition
+    is cleared (elicitation gate released via the slice-2 `ElicitationManager`, or
+    an injected `isWaitCleared` resolver for consent/freshness/external-workflow;
+    absent resolver = never clears). `succeed` is reachable only from `running`, so
+    a waiting-on-consent call can never succeed until consent is present.
+  - **Audited**: every transition emits a redacted audit event carrying
+    ids/state/refs only — never a token, secret value or PII.
+- `src/mock/fake-connector.ts` — adds a long-running, workflow-backed tool
+  `export_widgets` (declared in `manifest.durability.longRunningTools` /
+  `workflowBackedTools`). Its `invokeTool` returns a `DurableCallRef` instead of
+  an inline result (via the injected `launchDurable`); fails closed when no
+  durable backend is wired.
+- `tests/durable.test.ts` — the §8 / §11 "Long call lifecycle" probes:
+  queue->run->wait(elicitation)->resume->succeed; cancel-from-waiting; failure
+  path; idempotent re-launch returns same id; mid-flight call survives a restart
+  (reload) and resumes; waiting-on-consent cannot succeed until consent present;
+  no token/secret in durable-call audit; long-tool returns a `DurableCallRef`.
 
 ## Running the gates (mock, in-memory)
 
