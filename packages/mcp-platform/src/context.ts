@@ -16,6 +16,12 @@ import type {
   StpConnectorContext,
 } from './runtime.js';
 import type { AuthFreshnessPolicy } from './manifest.js';
+import {
+  PersistentSecretStatusStore,
+  secretKeyOf,
+  type SecretKey,
+  type SecretStatusStore,
+} from './stores.js';
 
 export class SecretAccessError extends Error {
   constructor(
@@ -27,56 +33,58 @@ export class SecretAccessError extends Error {
   }
 }
 
-type SecretKey = {
-  principalSub: string;
-  tenantRef: string;
-  workspaceRef?: string;
-  connectorInstanceId: string;
-  name: string;
-};
+export type { SecretKey } from './stores.js';
 
-const keyOf = (k: SecretKey): string =>
-  [k.principalSub, k.tenantRef, k.workspaceRef ?? '-', k.connectorInstanceId, k.name].join('::');
-
-/** In-memory secret store; persistence-shaped (composite key), restart-safe. */
+/**
+ * Mock secret store: a restart-safe §6.4 STATUS lookup (persisted, value-free)
+ * plus an in-memory value map. The secret VALUE is deliberately never handed to
+ * the persisted status store — only status crosses the durable boundary, so a
+ * snapshot/file can never leak a secret (§5.2(b), §11 "No secret leakage"). The
+ * status survives a restart (inject a `FileRecordStore`-backed status store); the
+ * value, like a real secret, does not persist and is re-supplied on enrollment.
+ */
 export class MockSecretStore {
-  readonly #records = new Map<string, { value: string; status: SecretStatus }>();
+  readonly #values = new Map<string, string>(); // composite key → value (in-memory only)
+  readonly #status: SecretStatusStore;
   readonly #redactor: SecretRedactor;
 
-  constructor(redactor: SecretRedactor) {
+  constructor(redactor: SecretRedactor, statusStore?: SecretStatusStore) {
     this.#redactor = redactor;
+    this.#status = statusStore ?? new PersistentSecretStatusStore();
   }
 
   /** Enroll/mint a secret. The value is registered with the redactor so it can
    *  never be echoed in logs, audit events, prompts or fixtures. */
   put(key: SecretKey, value: string): void {
     this.#redactor.register(value);
-    this.#records.set(keyOf(key), {
-      value,
-      status: { name: key.name, scope: 'connector-instance', state: 'active' },
-    });
+    this.#values.set(secretKeyOf(key), value);
+    this.#status.put(key, { name: key.name, scope: 'connector-instance', state: 'active' });
   }
 
   transition(key: SecretKey, state: LifecycleState): void {
-    const rec = this.#records.get(keyOf(key));
-    if (rec) {
-      if (state !== 'active') this.#redactor.forget(rec.value);
-      rec.status = { ...rec.status, state, rotatedAt: new Date().toISOString() };
+    const cur = this.#status.get(key);
+    if (cur) {
+      if (state !== 'active') {
+        const v = this.#values.get(secretKeyOf(key));
+        if (v !== undefined) this.#redactor.forget(v);
+      }
+      this.#status.put(key, { ...cur, state, rotatedAt: new Date().toISOString() });
     }
   }
 
   /** State-only status (never the value), fail-closed when missing (§6.4). */
   statusFor(key: SecretKey): SecretStatus {
-    const rec = this.#records.get(keyOf(key));
-    return rec ? rec.status : { name: key.name, scope: 'connector-instance', state: 'revoked' };
+    return this.#status.get(key) ?? { name: key.name, scope: 'connector-instance', state: 'revoked' };
   }
 
   /** Resolve the value fail-closed: only `state === 'active'` authorizes use. */
   resolve(key: SecretKey): string {
-    const rec = this.#records.get(keyOf(key));
-    if (!rec) throw new SecretAccessError(key.name, 'missing');
-    if (rec.status.state !== 'active') throw new SecretAccessError(key.name, rec.status.state);
-    return rec.value;
+    const status = this.#status.get(key);
+    if (!status) throw new SecretAccessError(key.name, 'missing');
+    if (status.state !== 'active') throw new SecretAccessError(key.name, status.state);
+    const value = this.#values.get(secretKeyOf(key));
+    if (value === undefined) throw new SecretAccessError(key.name, 'missing');
+    return value;
   }
 }
 
