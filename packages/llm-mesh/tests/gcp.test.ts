@@ -17,7 +17,7 @@ const GCP_CATALOG_KEYS = [
 describe('gcp provider package surface', () => {
   it('adds gcp to the provider set (5 -> 6) without disturbing the existing five', () => {
     expect(providerIds).toContain('gcp');
-    expect(providerIds).toHaveLength(6);
+    expect(providerIds).toHaveLength(7);
     expect([...providerIds]).toEqual([
       'openai',
       'gemini',
@@ -25,6 +25,7 @@ describe('gcp provider package surface', () => {
       'mistral',
       'cohere',
       'gcp',
+      'local',
     ]);
   });
 
@@ -39,7 +40,7 @@ describe('gcp provider package surface', () => {
     );
 
     expect(gcp).toBeInstanceOf(GcpAdapter);
-    expect(adapters).toHaveLength(6);
+    expect(adapters).toHaveLength(7);
   });
 
   it('exposes the two GCP models through the registry built from default adapters', () => {
