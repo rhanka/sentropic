@@ -54,19 +54,25 @@ export class MockSecretStore {
   }
 
   /** Enroll/mint a secret. The value is registered with the redactor so it can
-   *  never be echoed in logs, audit events, prompts or fixtures. */
-  put(key: SecretKey, value: string): void {
+   *  never be echoed in logs, audit events, prompts or fixtures. The `scope`
+   *  (Opus nit #2) is threaded from the secret requirement when the caller knows
+   *  it; it defaults to 'connector-instance' (the most common enrollment scope)
+   *  for the mock store rather than being hardcoded. */
+  put(key: SecretKey, value: string, scope: SecretStatus['scope'] = 'connector-instance'): void {
     this.#redactor.register(value);
     this.#values.set(secretKeyOf(key), value);
-    this.#status.put(key, { name: key.name, scope: 'connector-instance', state: 'active' });
+    this.#status.put(key, { name: key.name, scope, state: 'active' });
   }
 
   transition(key: SecretKey, state: LifecycleState): void {
     const cur = this.#status.get(key);
     if (cur) {
       if (state !== 'active') {
-        const v = this.#values.get(secretKeyOf(key));
-        if (v !== undefined) this.#redactor.forget(v);
+        // Fix G3: drop the LIVE value so it can no longer be resolved (fail
+        // closed), but DO NOT `redactor.forget(value)` — redaction is MONOTONIC:
+        // once a value was a secret it stays redactable for the process/log
+        // lifetime, so an already-emitted log line never un-redacts on revoke.
+        this.#values.delete(secretKeyOf(key));
       }
       this.#status.put(key, { ...cur, state, rotatedAt: new Date().toISOString() });
     }
