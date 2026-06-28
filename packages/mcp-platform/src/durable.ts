@@ -26,6 +26,7 @@
  * in-memory (or tmp-file) state only.
  */
 import { randomUUID } from 'node:crypto';
+import { idempotencyDigest } from './digest.js';
 import { MemoryRecordStore, type RecordStore } from './persistence.js';
 import type { InMemoryAuditSink } from './audit.js';
 import type { ElicitationManager } from './elicitation.js';
@@ -44,12 +45,31 @@ const TERMINAL: ReadonlySet<DurableCallState> = new Set(['succeeded', 'failed', 
 // Persistence — DurableCallStore over the slice-3 RecordStore (restart-safe)
 // ---------------------------------------------------------------------------
 
+/**
+ * Fix G2 — an idempotency key is only idempotent WITHIN one launch context. A
+ * raw key alone is caller-controlled and could collide across principals; the
+ * lookup is scoped by (capability, connectorInstance, tenant, principal,
+ * session) so a same-key launch from a different context NEVER returns another
+ * principal's call.
+ */
+export type IdempotencyScope = {
+  capabilityRef?: string;
+  connectorInstanceRef: string;
+  tenantRef: string;
+  principalSub?: string;
+  sessionRef: string;
+};
+
 export interface DurableCallStore {
   get(id: string): McpDurableCall | undefined;
   put(rec: McpDurableCall): void;
   all(): McpDurableCall[];
-  /** Idempotency lookup (§8): the existing call for an idempotencyKey, if any. */
-  findByIdempotencyKey(key: string): McpDurableCall | undefined;
+  /**
+   * Idempotency lookup (§8): the existing call for an idempotencyKey, scoped to
+   * the launch context (fix G2). A match requires the SAME key AND the same
+   * capability + connectorInstance + tenant + principal + session.
+   */
+  findByIdempotencyKey(key: string, scope: IdempotencyScope): McpDurableCall | undefined;
   reload(): void;
   snapshot(): string;
 }
@@ -68,8 +88,16 @@ export class PersistentDurableCallStore implements DurableCallStore {
   all(): McpDurableCall[] {
     return this.#store.all();
   }
-  findByIdempotencyKey(key: string): McpDurableCall | undefined {
-    return this.#store.all().find((r) => r.refs.idempotencyKey === key);
+  findByIdempotencyKey(key: string, scope: IdempotencyScope): McpDurableCall | undefined {
+    return this.#store.all().find(
+      (r) =>
+        r.refs.idempotencyKey === key &&
+        r.call.capabilityRef === scope.capabilityRef &&
+        r.refs.connectorInstanceRef === scope.connectorInstanceRef &&
+        r.refs.tenantRef === scope.tenantRef &&
+        r.call.requestedBy.userId === scope.principalSub &&
+        r.refs.sessionRef === scope.sessionRef,
+    );
   }
   reload(): void {
     this.#store.reload();
@@ -143,16 +171,25 @@ export class DurableCallAdapter {
    */
   launch(input: DurableLaunchInput): McpDurableCall {
     const { envelope } = input;
+    const ctx = envelope.ctx;
     const key = envelope.idempotencyKey;
     if (key !== undefined) {
-      const existing = this.#store.findByIdempotencyKey(key);
+      // Fix G2: idempotency is scoped to the launch context — a same-key launch
+      // from a different principal/session/tenant/capability creates a DISTINCT
+      // call, never returns the other context's call.
+      const existing = this.#store.findByIdempotencyKey(key, {
+        capabilityRef: envelope.capabilityRef,
+        connectorInstanceRef: ctx.connectorInstanceId,
+        tenantRef: ctx.tenantRef,
+        principalSub: ctx.principal.sub,
+        sessionRef: ctx.session.mcpSessionId,
+      });
       if (existing) {
         this.#emit('durable.launch.idempotent_hit', existing);
         return existing; // same call, no duplicate
       }
     }
     const at = new Date(this.#now()).toISOString();
-    const ctx = envelope.ctx;
     const rec: McpDurableCall = {
       call: {
         id: this.#newId(),
@@ -268,8 +305,21 @@ export class DurableCallAdapter {
 
   #waitCleared(rec: McpDurableCall): boolean {
     if (rec.waitingFor === 'elicitation') {
+      // Fix G1: a released gate is NON-FUNGIBLE (mirror of guard.ts F6). A
+      // `resumed` elicitation only clears THIS wait when its record is bound to
+      // the SAME capability, session and principal as the durable call. A
+      // foreign-capability / foreign-session / foreign-principal resumed ref —
+      // even at this call's elicitationRef — MUST NOT clear the wait.
       const ref = rec.refs.elicitationRef;
-      return ref !== undefined && this.#elicitations?.isGateReleased(ref) === true;
+      if (ref === undefined || this.#elicitations === undefined) return false;
+      const elic = this.#elicitations.get(ref);
+      return (
+        elic !== undefined &&
+        elic.state === 'resumed' &&
+        elic.capabilityRef === rec.call.capabilityRef &&
+        elic.sessionRef === rec.refs.sessionRef &&
+        elic.actor.sub === rec.call.requestedBy.userId
+      );
     }
     // consent / freshness / external-workflow → injected resolver (fail-closed default)
     return this.#isWaitCleared?.(rec) === true;
@@ -316,7 +366,9 @@ export class DurableCallAdapter {
         capability: rec.call.capabilityRef,
         state: rec.call.state,
         waitingFor: rec.waitingFor,
-        idempotencyKey: rec.refs.idempotencyKey,
+        // Fix G4: NEVER the raw caller-controlled key (may be token/secret/PII);
+        // an opaque, stable digest keeps audit correlatable without leaking it.
+        idempotencyKeyDigest: idempotencyDigest(rec.refs.idempotencyKey),
         sessionRef: rec.refs.sessionRef,
         connectorInstanceRef: rec.refs.connectorInstanceRef,
         tenantRef: rec.refs.tenantRef,
