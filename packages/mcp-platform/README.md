@@ -128,6 +128,39 @@ waitingFor? }`).
   (reload) and resumes; waiting-on-consent cannot succeed until consent present;
   no token/secret in durable-call audit; long-tool returns a `DurableCallRef`.
 
+### §12 slice coverage map
+
+This package realizes a subset of the spec §12 "reversible build slices" as a
+**mock-only** scaffold. The code comments use an internal build-slice ordering
+(**1** schemas, **2** mock harness + middleware, **3** persistence, **7**
+durable-call) that consolidates several §12 concepts into single commits; this
+ordering is NOT the spec §12 item numbering. The table below is keyed to the
+**authoritative spec §12 list** so a reader can cross-reference precisely.
+
+| spec §12 item | status | realized in (build-slice) |
+| --- | --- | --- |
+| 1. App-neutral manifest & adapter schemas | **REALIZED** | `src/manifest.ts`, `src/runtime.ts` (slice 1) |
+| 2. Mock OIDC + mock MCP harness | **REALIZED** | `src/mock/oidc.ts` (`MockOidcIssuer`), `src/mock/mcp-transport.ts` (slice 2) |
+| 3. MCP session storage interface + in-memory impl | **REALIZED** | `src/stores.ts` (`PersistentSessionStore`), `src/persistence.ts` (slice 3) |
+| 4. Capability registry projection | **REALIZED (single-connector)** — SUBSUMED into discovery | `src/guard.ts` `listVisibleCapabilities`, `ConnectorVisibilityState` (slice 2). Cross-connector multiplexer → item 10 |
+| 5. Per-request authz middleware + tenant resolver port | **REALIZED** | `src/authz.ts` (`authorizeRequest`, `TenantResolver`, `ConsentResolver`) (slice 2) |
+| 6. Elicitation protocol + surface-neutral renderer contract | **REALIZED (protocol)** | `src/elicitation.ts` (`ElicitationManager`); typed modes / provisional `ElicitationPolicy` (F8, architect-gated). No UI renderer (no UI surface) (slice 2) |
+| 7. Audit/redaction event schema | **REALIZED** | `src/audit.ts` (`AuditEvent`, `SecretRedactor`, `InMemoryAuditSink`) (slice 2) |
+| 8. Secret lifecycle interface + redacted diagnostics | **REALIZED** | `src/context.ts` (`MockSecretStore`, audited `getSecret`), `src/stores.ts` (`PersistentSecretStatusStore`, status-only) (slice 2/3) |
+| 9. DurableCall/workflow adapter for long-running tools | **REALIZED** | `src/durable.ts` (`DurableCallAdapter`, `PersistentDurableCallStore`) (slice 7) |
+| 10. STP connector discovery/multiplexer read-only projection | **PARTIAL** — discovery realized; cross-connector multiplexer DEFERRED | `src/guard.ts` `listVisibleCapabilities` + `ConnectorVisibilityState` (single fake connector only) |
+| 11. Sample fake-data connector/provider | **REALIZED** (worked example) | `src/mock/fake-connector.ts` (`createFakeConnector`, `fakeManifest`) (slice 2) |
+| 12. Wave adapter migration guide/probes | **DEFERRED — NOT in this branch** | out of scope; `mcp-wave` MUST NOT be touched here |
+| 13. Domain provider adoption guide | **DOC** | `docs/ADOPTION_GUIDE.md` (with item 11 as the worked example) |
+
+**Whole-scaffold disposition:** this is a **MOCK-ONLY, private, unpublished**
+scaffold — no real network, production credentials, Claude.ai dependency, DB, or
+`mcp-wave` coupling. It is `"private": true`, absent from the root lockfile, and
+NOT wired into any publish filter / CI publish job / Makefile target /
+trusted-publisher config. **Merge, package activation (root-install), publication,
+and any production wiring are owner/architect-gated** (spec §13 / §13.1 parks P1-P6;
+see `docs/ADOPTION_GUIDE.md` "What stays owner/architect-gated").
+
 ## Running the gates (mock, in-memory)
 
 There is no Makefile target for this private package by design. Run the package's
