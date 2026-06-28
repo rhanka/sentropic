@@ -1,7 +1,7 @@
 # Feature: MCP provider platform scaffold (mock-only, slices 1+2)
 
 ## Objective
-Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sentropic/STP MCP provider platform: slice 1 (manifest/adapter closed schemas as concrete TypeScript) + slice 2 (mock OIDC + mock MCP harness + per-request authz middleware stub + contract/isolation tests). Source: `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`), §12 slices 1-2.
+Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sentropic/STP MCP provider platform: slice 1 (manifest/adapter closed schemas as concrete TypeScript) + slice 2 (mock OIDC + mock MCP harness + per-request authz middleware stub + contract/isolation tests) + slice 3 (restart-safe mock persistence backing the §6.3/§6.4/§5.1 records + the §11 persistence probe matrix, closing the review-identified type-only/probe gap). Source: `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`), §12 slices 1-3.
 
 ## Scope / Guardrails
 - Scope limited to a new PRIVATE package `packages/mcp-platform/**` + the copied spec + this `BRANCH.md`.
@@ -86,7 +86,18 @@ Deliver a PRIVATE, unpublished, reversible mock-only scaffold of the generic Sen
   - [x] F8 — `ElicitationPolicy` strengthened provisionally + `elicitationPolicyIsSecretSafe` + architect-gated park note + test.
   - [x] F9 — doc-only root-lock/activation note (README + BRANCH.md); root `package.json`/`package-lock.json` untouched.
 
-- [x] **Lot N — Gates**
+- [x] **Lot N — Gates (slices 1+2)**
   - [x] `tsc --noEmit` for the package — PASS (no Makefile target for a private package; ran package's own tsc 5.4.5 in an ephemeral temp toolchain, nothing installed in repo/global).
   - [x] package vitest — PASS, 55/55 across 7 files (oidc 7, authz 14, elicitation 12, secrets 4, writes 9, transport 4, manifest 5); all deterministic in-memory.
   - [ ] DO NOT push, DO NOT open PR (conductor runs double-consensus review before any merge).
+
+- [x] **Lot 3 — Slice 3: restart-safe mock persistence + §11 persistence probes**
+  - [x] `src/persistence.ts` — generic restart-safe `RecordStore<T>` (`MemoryRecordStore` snapshot/restore + `FileRecordStore` tmp-file under the OS tmp dir, `reload`/`snapshot`/`destroy`); no real DB/driver/network.
+  - [x] `src/stores.ts` — typed `SessionStore`/`ConsentStore`/`EnrollmentStore`/`SecretStatusStore`/`ElicitationStore` over `RecordStore<T>`; fail-closed §6.3/§6.4/§5.1 resolution (composite §6.4 key kept); secret VALUE never persisted (status only).
+  - [x] Wire `elicitation.ts`/`context.ts`/`authz.ts` to resolve §5.1/§6.4/§6.3 state through the stores (default non-durable in-memory backing → no F1-F9 regression; inject `FileRecordStore` for restart-safety).
+  - [x] `src/index.ts` — slice-3 exports.
+  - [x] Lot gate (tests):
+    - [x] `tests/persistence-store.test.ts` — generic RecordStore restart/reload/snapshot (4).
+    - [x] `tests/persistence.test.ts` — §11 probes (11): restart lookup; session/consent expiry fail-closed; revoked-session denial; consent revocation persists; secret-status non-active fail-closed + no value on durable medium; enrollment revocation → `no_enrollment` after restart (F1 across restart); elicitation resume-after-restart + resumed gate stays bound (no replay).
+  - [x] Slice-3 gate: `tsc --noEmit` PASS + vitest 70/70 across 9 files (prior 55 + 15 new); host-node ephemeral toolchain (global tsc/vitest symlinked then removed — no repo node_modules, root lock/package.json untouched). Docker gate = authoritative re-proof on a capable runner.
+  - [ ] DO NOT push, DO NOT open PR.
