@@ -15,6 +15,7 @@ export type ClaudeAdapterClient = AnthropicAdapterClient;
 export interface MistralAdapterClient extends ProviderAdapterClient {}
 export interface CohereAdapterClient extends ProviderAdapterClient {}
 export interface GcpAdapterClient extends ProviderAdapterClient {}
+export interface LocalAdapterClient extends ProviderAdapterClient {}
 
 export class OpenAIAdapter extends BaseProviderAdapter<OpenAIAdapterClient> {
   constructor(options: ProviderAdapterOptions<OpenAIAdapterClient> = {}) {
@@ -63,6 +64,16 @@ export class GcpAdapter extends BaseProviderAdapter<GcpAdapterClient> {
   }
 }
 
+// Local provider adapter: an OpenAI-compatible endpoint hosted on the machine
+// (e.g. the Laneformer 2B sidecar on 127.0.0.1:8089). It uses the default
+// token-bearing auth like the sibling adapters; the actual baseURL/transport is
+// supplied by the api/gateway layer (this package stays transport-free).
+export class LocalAdapter extends BaseProviderAdapter<LocalAdapterClient> {
+  constructor(options: ProviderAdapterOptions<LocalAdapterClient> = {}) {
+    super('local', options);
+  }
+}
+
 export interface DefaultProviderAdapterClients {
   openai?: OpenAIAdapterClient;
   gemini?: GeminiAdapterClient;
@@ -70,6 +81,7 @@ export interface DefaultProviderAdapterClients {
   mistral?: MistralAdapterClient;
   cohere?: CohereAdapterClient;
   gcp?: GcpAdapterClient;
+  local?: LocalAdapterClient;
 }
 
 export const createDefaultProviderAdapters = (
@@ -82,5 +94,6 @@ export const createDefaultProviderAdapters = (
     new MistralAdapter({ client: clients.mistral }),
     new CohereAdapter({ client: clients.cohere }),
     new GcpAdapter({ client: clients.gcp }),
+    new LocalAdapter({ client: clients.local }),
   ];
 };
