@@ -118,3 +118,25 @@ export type {
   MutationGateReason,
   GuardedInvokeDeps,
 } from './guard.js';
+
+// Slice 3 — restart-safe mock persistence primitive (§6.3/§6.4/§5.1, §11).
+export { MemoryRecordStore, FileRecordStore } from './persistence.js';
+export type { RecordStore } from './persistence.js';
+
+// Slice 3 — typed, restart-safe stores for §6.3 / §6.4 / §5.1 records (§11 probes).
+export {
+  PersistentSessionStore,
+  PersistentConsentStore,
+  PersistentEnrollmentStore,
+  PersistentSecretStatusStore,
+  PersistentElicitationStore,
+  secretKeyOf,
+} from './stores.js';
+export type {
+  SessionStore,
+  ConsentStore,
+  EnrollmentStore,
+  SecretStatusStore,
+  ElicitationStore,
+  SecretKey,
+} from './stores.js';
