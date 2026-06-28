@@ -4,7 +4,7 @@ import { providerRegistry } from '../../src/services/provider-registry';
 import { providerIds } from '../../src/services/provider-runtime';
 
 describe('ProviderRegistry expansion', () => {
-  it('should list all 6 providers', () => {
+  it('should list all 7 providers', () => {
     const providers = providerRegistry.listProviders();
     const ids = providers.map((p) => p.providerId);
 
@@ -14,14 +14,15 @@ describe('ProviderRegistry expansion', () => {
     expect(ids).toContain('mistral');
     expect(ids).toContain('cohere');
     expect(ids).toContain('gcp');
-    expect(ids).toHaveLength(6);
+    expect(ids).toContain('local');
+    expect(ids).toHaveLength(7);
   });
 
   it('should have all provider IDs in the providerIds constant', () => {
     expect(providerIds).toEqual(
-      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp']),
+      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local']),
     );
-    expect(providerIds).toHaveLength(6);
+    expect(providerIds).toHaveLength(7);
   });
 
   it('should resolve each provider via getProvider', () => {
@@ -44,7 +45,7 @@ describe('ProviderRegistry expansion', () => {
     ).toThrow('Provider not found');
   });
 
-  it('should list models from all 6 providers', () => {
+  it('should list models from all 7 providers', () => {
     const models = providerRegistry.listModels();
     const providerIdsInModels = [...new Set(models.map((m) => m.providerId))];
 
