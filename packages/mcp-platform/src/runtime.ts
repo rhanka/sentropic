@@ -134,6 +134,61 @@ export type McpDurableCallRefs = {
 // Qualifies the canonical `waiting` state so observers can act (§8).
 export type DurableCallWaitingFor = 'elicitation' | 'consent' | 'freshness' | 'external-workflow';
 
+// Canonical kinds (Hermes §3.2). A long-running MCP tool is `'mcp'`; an
+// orchestrated one is `'workflow'`.
+export type DurableCallKind =
+  | 'workflow'
+  | 'background-agent'
+  | 'remote-spawn'
+  | 'mcp'
+  | 'connector'
+  | 'tool'
+  | 'canevas';
+
+// Canonical lifecycle states (Hermes §3.2). `waiting` is further qualified by
+// DurableCallWaitingFor (§8).
+export type DurableCallState =
+  | 'queued'
+  | 'running'
+  | 'waiting'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+/**
+ * Canonical durable-call record, transcribed VERBATIM from
+ * SPEC_EVOL_AGENT_RUNTIME_HERMES_LOOP §3.2. This package MUST NOT fork the shape
+ * (§8): MCP-specific correlation is threaded ALONGSIDE via `McpDurableCallRefs`,
+ * never by adding/renaming fields here. `DurableCallRef == DurableCall.id`.
+ */
+export type DurableCall = {
+  id: string;
+  kind: DurableCallKind;
+  requestedBy: { surface: 'chat' | 'vscode' | 'stp' | 'backend'; userId?: string; h2aInstance?: string };
+  mandateRef?: string;
+  trackRef?: string;
+  workflowRunId?: string;
+  capabilityRef?: string;
+  authz: { scopes: string[]; consentRef?: string; delegated: boolean };
+  state: DurableCallState;
+  checkpointRef?: string;
+  evidenceRefs: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * MCP projection of a durable call (§8): the canonical `call` PLUS the MCP
+ * correlation refs threaded alongside it and the `waiting` qualifier. The
+ * canonical record is never forked — refs/qualifier extend it, they never
+ * replace its fields.
+ */
+export type McpDurableCall = {
+  call: DurableCall;
+  refs: McpDurableCallRefs;
+  waitingFor?: DurableCallWaitingFor; // qualifies call.state === 'waiting'
+};
+
 // ---------------------------------------------------------------------------
 // Target runtime context (§4.5)
 // ---------------------------------------------------------------------------
