@@ -12,6 +12,7 @@
  */
 import type { ElicitationManager } from './elicitation.js';
 import type { InMemoryAuditSink } from './audit.js';
+import { idempotencyDigest } from './digest.js';
 import type { AppCapability, CapabilityTool } from './manifest.js';
 import type { AppToolInvocation, AppToolResult } from './runtime.js';
 
@@ -123,7 +124,9 @@ export async function invokeGuardedTool(
     detail: {
       capability: capability.name,
       mutatesExternalSystem: capability.mutatesExternalSystem,
-      idempotencyKey: envelope.idempotencyKey,
+      // Fix G4: audit a stable opaque digest, never the raw caller-controlled
+      // idempotencyKey (which may be a token / secret / PII string).
+      idempotencyKeyDigest: idempotencyDigest(envelope.idempotencyKey),
     },
   });
   return { ok: true, output, auditId: deps.auditId, redactionClass: capability.redactionClass };

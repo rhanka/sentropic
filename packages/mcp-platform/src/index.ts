@@ -148,4 +148,12 @@ export type {
 
 // Slice 7 — mock durable-call / workflow adapter for long-running MCP tools (§8, §11).
 export { DurableCallAdapter, PersistentDurableCallStore } from './durable.js';
-export type { DurableCallStore, DurableCallAdapterDeps, DurableLaunchInput } from './durable.js';
+export type {
+  DurableCallStore,
+  DurableCallAdapterDeps,
+  DurableLaunchInput,
+  IdempotencyScope,
+} from './durable.js';
+
+// Fix G4 — opaque audit handle for caller-controlled idempotency keys.
+export { idempotencyDigest } from './digest.js';
