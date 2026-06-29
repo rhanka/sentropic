@@ -1,0 +1,26 @@
+{
+  "name": "@sentropic/annotate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Geometry/cerclage primitive for canvas annotation — host-agnostic selection/anchor contracts (Anchor/Selection) + geometry helpers (bboxOf/topCenter/cornerPin) + a Svelte AnnotationLayer adapter. UNPUBLISHED (centralized into sentropic from the diag site). Its in-memory CommentStore (src/comment-store.ts) duplicates @sentropic/comments and is flagged for follow-up rewire — see the deprecation note in that file.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": { "types": "./src/index.ts", "import": "./src/index.ts" },
+    "./svelte": { "types": "./src/svelte/index.ts", "svelte": "./src/svelte/index.ts" }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "svelte": { "optional": true }
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0"
+  }
+}

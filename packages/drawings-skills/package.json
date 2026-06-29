@@ -1,0 +1,43 @@
+{
+  "name": "@sentropic/drawings-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Catalog (per-format skill+tool+agent) + canvas (editor/render contracts + Svelte adapter) for diagram formats. First format: mermaid. Aligns to the sentropic BR-42b catalog (skills+tools+agents+canvas / CatalogSource). UNPUBLISHED (centralized into sentropic from the diag site). Depends on the @sentropic/annotate workspace package.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": { "types": "./src/index.ts", "svelte": "./src/index.ts", "import": "./src/index.ts" },
+    "./catalog": { "types": "./src/catalog/index.ts", "import": "./src/catalog/index.ts" },
+    "./canvas": { "types": "./src/canvas/index.ts", "import": "./src/canvas/index.ts" },
+    "./canvas/svelte": { "types": "./src/canvas/svelte/index.ts", "svelte": "./src/canvas/svelte/index.ts" }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sentropic/annotate": "*"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0",
+    "mermaid": "^11.14.0",
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "@codemirror/commands": "^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "svelte": { "optional": true },
+    "mermaid": { "optional": true },
+    "@codemirror/state": { "optional": true },
+    "@codemirror/view": { "optional": true },
+    "@codemirror/commands": { "optional": true }
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0",
+    "mermaid": "^11.14.0",
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "@codemirror/commands": "^6.0.0"
+  }
+}
