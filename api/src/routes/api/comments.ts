@@ -7,16 +7,17 @@ import {
   CommentNotFoundError,
   ThreadNotFoundError,
   targetFromLive,
+  type CommentTarget,
 } from '@sentropic/comments';
 import { db } from '../../db/client';
-import { folders, organizations, initiatives, users, workspaceMemberships } from '../../db/schema';
+import { folders, organizations, initiatives, users, workspaceMemberships, contextDocuments } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceCommenterRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceAdmin } from '../../services/workspace-access';
 import { commentStore, commentEventSink } from '../../services/comments/instance';
 
 export const commentsRouter = new Hono();
 
-const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'matrix', 'executive_summary']); // TODO Lot 10: remove 'usecase'
+const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'matrix', 'executive_summary', 'artifact']); // TODO Lot 10: remove 'usecase'
 const statusSchema = z.enum(['open', 'closed']);
 
 /** Build a tenant context from the live session (tenantId := workspaceId). */
@@ -46,6 +47,16 @@ async function ensureContextExists(contextType: string, contextId: string, works
       .select({ id: initiatives.id })
       .from(initiatives)
       .where(and(eq(initiatives.id, contextId), eq(initiatives.workspaceId, workspaceId)))
+      .limit(1);
+    return !!row;
+  }
+  if (contextType === 'artifact') {
+    // The artifact target id IS the context_documents primary key (the docId),
+    // workspace-scoped. Absent => 404 (no document annotation anchor created).
+    const [row] = await db
+      .select({ id: contextDocuments.id })
+      .from(contextDocuments)
+      .where(and(eq(contextDocuments.id, contextId), eq(contextDocuments.workspaceId, workspaceId)))
       .limit(1);
     return !!row;
   }
@@ -189,11 +200,25 @@ commentsRouter.post('/', requireWorkspaceCommenterRole(), zValidator('json', cre
   }
 
   const threadId = body.thread_id?.trim() || undefined;
-  const target = targetFromLive({
-    contextType: body.context_type,
-    contextId: body.context_id,
-    sectionKey: body.section_key ?? null,
-  });
+  // Artifact (document/PDF) anchors carry the consensus-literal `kind:'artifact'`
+  // directly — NOT through `targetFromLive` (which would collapse to
+  // `kind:'record'`, recordType:'artifact'). `targetToLive` (store side) maps it
+  // back to `context_type='artifact'`, so persistence/read-back round-trips and
+  // the GET host-side filter (`recordType ?? kind`) still matches. The package
+  // preserves `section_key` verbatim (the PDF-anchor convention; see
+  // `services/comments/pdf-anchor.ts`).
+  const target: CommentTarget =
+    body.context_type === 'artifact'
+      ? {
+          kind: 'artifact',
+          id: body.context_id,
+          ...(body.section_key ? { sectionKey: body.section_key } : {}),
+        }
+      : targetFromLive({
+          contextType: body.context_type,
+          contextId: body.context_id,
+          sectionKey: body.section_key ?? null,
+        });
 
   let created;
   try {
