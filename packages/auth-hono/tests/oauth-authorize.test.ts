@@ -71,6 +71,8 @@ describe('OAuth authorize and consent handlers', () => {
     expect(`${location.origin}${location.pathname}`).toBe('http://localhost:5397/callback');
     expect(location.searchParams.get('error')).toBe('login_required');
     expect(location.searchParams.get('state')).toBe('rp-state');
+    // RFC 9207: the login_required error response carries the AS issuer as `iss`.
+    expect(location.searchParams.get('iss')).toBe('http://localhost:9197');
   });
 
   it('redirects authenticated browser authorization to consent with sealed state', async () => {
@@ -117,6 +119,8 @@ describe('OAuth authorize and consent handlers', () => {
     const redirect = new URL(body.redirectTo);
     expect(`${redirect.origin}${redirect.pathname}`).toBe('http://localhost:5397/callback');
     expect(redirect.searchParams.get('state')).toBe('rp-state');
+    // RFC 9207: the success authorization response carries the AS issuer as `iss`.
+    expect(redirect.searchParams.get('iss')).toBe('http://localhost:9197');
     const code = redirect.searchParams.get('code') ?? '';
     await expect(store.consumeAuthCode(code)).resolves.toMatchObject({
       clientId: 'example-rp',
@@ -143,6 +147,8 @@ describe('OAuth authorize and consent handlers', () => {
     const redirect = new URL(body.redirectTo);
     expect(redirect.searchParams.get('error')).toBe('access_denied');
     expect(redirect.searchParams.get('state')).toBe('rp-state');
+    // RFC 9207: the error (access_denied) authorization response also carries `iss`.
+    expect(redirect.searchParams.get('iss')).toBe('http://localhost:9197');
   });
 
   it('rejects unknown clients, unsafe redirect URIs, plaintext PKCE, and invalid scopes', async () => {
@@ -168,5 +174,7 @@ describe('OAuth authorize and consent handlers', () => {
     const location = new URL(invalidScope.headers.get('location') ?? '');
     expect(location.searchParams.get('error')).toBe('invalid_scope');
     expect(location.searchParams.get('state')).toBe('rp-state');
+    // RFC 9207: error redirects to the RP carry the AS issuer as `iss`.
+    expect(location.searchParams.get('iss')).toBe('http://localhost:9197');
   });
 });
