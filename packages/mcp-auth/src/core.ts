@@ -21,7 +21,8 @@ import { McpAuthError, buildWwwAuthenticate } from './challenge.js';
 import {
   buildProtectedResourceMetadata,
   protectedResourceMetadataUrl,
-  PROTECTED_RESOURCE_METADATA_PATH,
+  protectedResourceMetadataPath,
+  legacyProtectedResourceMetadataPath,
   type ProtectedResourceMetadata,
 } from './prm.js';
 
@@ -109,6 +110,10 @@ export const createMcpAuth = (config: McpAuthConfig): McpAuth => {
     throw new Error('@sentropic/mcp-auth: at least one authorizationServer is required.');
   }
   const prmUrl = protectedResourceMetadataUrl(resource);
+  // RFC 9728 §3.1 canonical pathname (well-known segment BEFORE the resource path) + the pre-RFC
+  // appended pathname, so `handle()` serves the correct doc AND redirects the old suffix.
+  const prmPath = protectedResourceMetadataPath(resource);
+  const legacyPrmPath = legacyProtectedResourceMetadataPath(resource);
 
   // Resolve the key source lazily on first verify, NOT at construction: PRM serving and the
   // unauthenticated 401 challenge must work without ever touching the key source (and the
@@ -129,10 +134,15 @@ export const createMcpAuth = (config: McpAuthConfig): McpAuth => {
 
   const handle = async (req: Request): Promise<Response | null> => {
     const url = new URL(req.url);
-    if (url.pathname === PROTECTED_RESOURCE_METADATA_PATH) {
+    if (url.pathname === prmPath) {
       return Response.json(metadata(), {
         headers: { 'Cache-Control': 'public, max-age=300' },
       });
+    }
+    // Transition shim (one minor): the pre-RFC appended suffix 308-redirects to the RFC-correct
+    // URL. Only fires for a path-ful resource (for a path-less resource legacy === canonical).
+    if (legacyPrmPath !== prmPath && url.pathname === legacyPrmPath) {
+      return new Response(null, { status: 308, headers: { Location: prmUrl } });
     }
     return null;
   };
