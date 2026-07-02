@@ -95,6 +95,34 @@ describe('createMcpAuth — handle() PRM serving', () => {
     const mcp = makeMcp();
     expect(await mcp.handle(bearer())).toBeNull();
   });
+
+  it('serves the doc at the RFC 9728 §3.1 canonical path for a path-ful resource', async () => {
+    const mcp = createMcpAuth({
+      resource: 'https://immo.sent-tech.ca/mcp',
+      authorizationServers: [AS],
+    });
+    const res = await mcp.handle(
+      new Request('https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp'),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(200);
+    expect((await res!.json()).resource).toBe('https://immo.sent-tech.ca/mcp');
+  });
+
+  it('308-redirects the pre-RFC appended suffix to the canonical URL', async () => {
+    const mcp = createMcpAuth({
+      resource: 'https://immo.sent-tech.ca/mcp',
+      authorizationServers: [AS],
+    });
+    const res = await mcp.handle(
+      new Request('https://immo.sent-tech.ca/mcp/.well-known/oauth-protected-resource'),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(308);
+    expect(res!.headers.get('Location')).toBe(
+      'https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp',
+    );
+  });
 });
 
 describe('createMcpAuth — verify() happy path', () => {

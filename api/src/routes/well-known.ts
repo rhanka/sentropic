@@ -9,6 +9,9 @@ wellKnownRouter.get('/openid-configuration', (c) =>
   forwardToWellKnownRouter(c, '/openid-configuration'),
 );
 wellKnownRouter.get('/jwks.json', (c) => forwardToWellKnownRouter(c, '/jwks.json'));
+wellKnownRouter.get('/oauth-authorization-server', (c) =>
+  forwardToWellKnownRouter(c, '/oauth-authorization-server'),
+);
 
 const forwardToWellKnownRouter = (c: Context, path: string): Response | Promise<Response> => {
   const url = new URL(c.req.url);
