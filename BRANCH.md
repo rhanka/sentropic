@@ -7,6 +7,12 @@ RFC 8414 AS-metadata alias, RFC 9207 `iss` authorization-response parameter, RFC
 correct Protected-Resource-Metadata URL construction (+ a one-minor redirect shim), and an
 env-driven `resource_indicators` allowlist on the prod-safe OAuth client registration script.
 
+Note on the `auth-hono` bump: kept to PATCH (0.10.0 → 0.10.1) to stay within
+`@sentropic/auth-ui@0.6.0`'s peer-compat ceiling (`^0.10.0`) — a MINOR (0.11.0) would break the
+workspace `npm install` (ERESOLVE) and require an out-of-scope `packages/auth-ui/package.json`
+peer-range extension. The changes are additive (new endpoints/params); the architect may re-cut
+as a minor + extend auth-ui's peer range at merge if preferred.
+
 ## Scope / Guardrails
 - Make-only workflow, no direct Docker commands.
 - Library + register-script + tests only. No prod, no kubectl, no DCR, no `registration_endpoint`.
