@@ -37,10 +37,12 @@ describe('OAuth well-known handlers', () => {
     const { ports } = await createOauthPorts();
     const router = createWellKnownRouter({ issuer: 'http://localhost:9197', ports });
 
-    const [oidc, alias] = await Promise.all([
-      router.request('/openid-configuration').then((r) => r.json()),
-      router.request('/oauth-authorization-server').then((r) => r.json()),
-    ]);
+    const oidcResponse = await router.request('/openid-configuration');
+    const aliasResponse = await router.request('/oauth-authorization-server');
+    expect(aliasResponse.status).toBe(200);
+
+    const oidc = await oidcResponse.json();
+    const alias = (await aliasResponse.json()) as Record<string, unknown>;
 
     expect(alias).toEqual(oidc);
     expect((alias as Record<string, unknown>).authorization_response_iss_parameter_supported).toBe(true);
