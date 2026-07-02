@@ -34,6 +34,26 @@ describe('OAuth well-known routes', () => {
     ]);
   });
 
+  it('serves the RFC 8414 AS-metadata alias at /.well-known/oauth-authorization-server (N1 forward)', async () => {
+    const res = await app.request(
+      'http://localhost:9197/.well-known/oauth-authorization-server',
+      { headers: { Origin: allowedOrigin } },
+    );
+
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    // Same source of truth as OIDC discovery (the api well-known router forwards to auth-hono).
+    expect(payload.issuer).toBe('http://localhost:9197');
+    expect(payload.authorization_endpoint).toBe(
+      'http://localhost:9197/api/v1/auth/oauth/authorize',
+    );
+    expect(payload.token_endpoint).toBe('http://localhost:9197/api/v1/auth/oauth/token');
+    expect(payload.jwks_uri).toBe('http://localhost:9197/.well-known/jwks.json');
+    // RFC 9207 iss mix-up defense advertised; NO DCR (registration_endpoint absent).
+    expect(payload.authorization_response_iss_parameter_supported).toBe(true);
+    expect(payload.registration_endpoint).toBeUndefined();
+  });
+
   it('mounts the advertised end_session endpoint (route reachable, not 404)', async () => {
     // The discovery doc advertises /api/v1/auth/oauth/end_session; assert the host actually wires
     // the GET route. An unauthenticated, navigation-style request returns the logged-out page (200),
