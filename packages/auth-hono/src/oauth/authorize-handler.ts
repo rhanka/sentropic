@@ -44,7 +44,7 @@ export const createOAuthAuthorizeHandler =
       return resumeLoginContinuation(c, options, continuation);
     }
 
-    const validation = await validateAuthorizeRequest(c, options.ports);
+    const validation = await validateAuthorizeRequest(c, options.ports, options.issuer);
     if (validation instanceof Response) return validation;
 
     // OIDC parses `prompt` as a space-delimited set of values (not an exact string). `none`
@@ -77,7 +77,7 @@ export const createOAuthAuthorizeHandler =
       if (prompts.has('none')) {
         // `prompt=none` cannot be satisfied without re-auth: surface the precise OIDC error.
         const errorCode = prompts.has('select_account') ? 'account_selection_required' : 'login_required';
-        return redirectWithOAuthError(validation.redirectUri, errorCode, validation.state, c.req.url);
+        return redirectWithOAuthError(validation.redirectUri, errorCode, validation.state, c.req.url, options.issuer);
       }
 
       // Seal the force-reauth intent + the CURRENT session id (if any). HMAC-signed → tamper-proof.
@@ -119,7 +119,7 @@ export const createOAuthAuthorizeHandler =
 
     if (prompts.has('none')) {
       if (!skipConsent) {
-        return redirectWithOAuthError(validation.redirectUri, 'consent_required', validation.state, c.req.url);
+        return redirectWithOAuthError(validation.redirectUri, 'consent_required', validation.state, c.req.url, options.issuer);
       }
     } else if (!skipConsent) {
       const sealedState = await sealContinuation(c, options, validation, consentState);
@@ -170,7 +170,7 @@ const resumeLoginContinuation = async (
   const redirectError = validateRedirectUri(client, payload.redirectUri);
   if (redirectError) return oauthJsonError(c, 400, 'invalid_request', redirectError);
 
-  const scopeResult = validateScope(payload.scope, client, payload.redirectUri, payload.state, c.req.url);
+  const scopeResult = validateScope(payload.scope, client, payload.redirectUri, payload.state, c.req.url, options.issuer);
   if (scopeResult instanceof Response) return scopeResult;
 
   const session = await resolveOAuthSession(c.req.raw, options.ports);
@@ -198,7 +198,8 @@ const resumeLoginContinuation = async (
 
 const validateAuthorizeRequest = async (
   c: Context,
-  ports: AuthHonoPorts
+  ports: AuthHonoPorts,
+  issuer: string
 ): Promise<ValidatedAuthorizeRequest | Response> => {
   const clientId = c.req.query('client_id');
   const client = clientId ? await ports.oauthStateStore.findClient(clientId) : null;
@@ -214,18 +215,18 @@ const validateAuthorizeRequest = async (
 
   const state = c.req.query('state') ?? null;
   if (c.req.query('response_type') !== 'code') {
-    return redirectWithOAuthError(redirectUri, 'unsupported_response_type', state, c.req.url);
+    return redirectWithOAuthError(redirectUri, 'unsupported_response_type', state, c.req.url, issuer);
   }
 
   const codeChallenge = c.req.query('code_challenge') ?? '';
   if (!codeChallenge || c.req.query('code_challenge_method') !== 'S256') {
-    return redirectWithOAuthError(redirectUri, 'invalid_request', state, c.req.url);
+    return redirectWithOAuthError(redirectUri, 'invalid_request', state, c.req.url, issuer);
   }
 
-  const scopeResult = validateScope(c.req.query('scope') ?? '', client, redirectUri, state, c.req.url);
+  const scopeResult = validateScope(c.req.query('scope') ?? '', client, redirectUri, state, c.req.url, issuer);
   if (scopeResult instanceof Response) return scopeResult;
 
-  const resourceResult = validateResource(c.req.queries('resource'), client, redirectUri, state, c.req.url);
+  const resourceResult = validateResource(c.req.queries('resource'), client, redirectUri, state, c.req.url, issuer);
   if (resourceResult instanceof Response) return resourceResult;
 
   return {
@@ -245,14 +246,15 @@ const validateScope = (
   client: OauthClientRecord,
   redirectUri: string,
   state: string | null,
-  baseUrl: string
+  baseUrl: string,
+  issuer: string
 ): string | Response => {
   const requestedScopes = scope.split(/\s+/).filter(Boolean);
   if (requestedScopes.includes('offline_access')) {
-    return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl);
+    return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl, issuer);
   }
   if (requestedScopes.some((requestedScope) => !client.allowedScopes.includes(requestedScope))) {
-    return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl);
+    return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl, issuer);
   }
   return requestedScopes.join(' ');
 };
@@ -269,18 +271,19 @@ const validateResource = (
   client: OauthClientRecord,
   redirectUri: string,
   state: string | null,
-  baseUrl: string
+  baseUrl: string,
+  issuer: string
 ): string | null | Response => {
   const requested = (resources ?? []).filter((value) => value.length > 0);
   if (requested.length === 0) return null;
   if (requested.length > 1) {
-    return redirectWithOAuthError(redirectUri, 'invalid_target', state, baseUrl);
+    return redirectWithOAuthError(redirectUri, 'invalid_target', state, baseUrl, issuer);
   }
 
   const value = requested[0];
   const allowlist = client.resourceIndicators ?? [];
   if (!allowlist.includes(value)) {
-    return redirectWithOAuthError(redirectUri, 'invalid_target', state, baseUrl);
+    return redirectWithOAuthError(redirectUri, 'invalid_target', state, baseUrl, issuer);
   }
   return value;
 };
