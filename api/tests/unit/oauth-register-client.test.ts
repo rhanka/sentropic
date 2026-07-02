@@ -71,4 +71,31 @@ describe('buildOAuthClientRegistration', () => {
       buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_SECRET: 'dev-only-secret' }),
     ).toThrow(/dev-only/i);
   });
+
+  it('mints a PUBLIC client (token_endpoint_auth_method=none, PKCE, no secret) in none-mode', () => {
+    const publicEnv: NodeJS.ProcessEnv = { ...baseEnv, OAUTH_CLIENT_TOKEN_AUTH: 'none' };
+    delete publicEnv.OAUTH_CLIENT_SECRET;
+    const values = buildOAuthClientRegistration(publicEnv);
+
+    expect(values.tokenEndpointAuthMethod).toBe('none');
+    expect(values.clientSecretHash).toBeNull();
+    expect(values.requirePkce).toBe(true);
+    expect(values.grantTypes).toEqual(['authorization_code']);
+    expect(values.resourceIndicators).toEqual(['https://immo.sent-tech.ca/mcp']);
+  });
+
+  it('keeps confidential (client_secret_basic) as the default and still requires a secret', () => {
+    const values = buildOAuthClientRegistration({ ...baseEnv });
+    expect(values.tokenEndpointAuthMethod).toBe('client_secret_basic');
+
+    const noSecret: NodeJS.ProcessEnv = { ...baseEnv };
+    delete noSecret.OAUTH_CLIENT_SECRET;
+    expect(() => buildOAuthClientRegistration(noSecret)).toThrow(/OAUTH_CLIENT_SECRET/);
+  });
+
+  it('rejects an unsupported OAUTH_CLIENT_TOKEN_AUTH value', () => {
+    expect(() =>
+      buildOAuthClientRegistration({ ...baseEnv, OAUTH_CLIENT_TOKEN_AUTH: 'private_key_jwt' }),
+    ).toThrow(/OAUTH_CLIENT_TOKEN_AUTH/);
+  });
 });

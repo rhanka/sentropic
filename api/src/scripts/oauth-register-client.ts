@@ -28,6 +28,10 @@
 //                                ⇒ '{}' (default-deny: no `resource` value permitted on the
 //                                authorization_code flow ⇒ invalid_target). For an MCP client
 //                                bound to a resource, e.g. https://immo.sent-tech.ca/mcp.
+//   OAUTH_CLIENT_TOKEN_AUTH      'client_secret_basic' (default, confidential) or 'none' (public
+//                                client + PKCE, NO secret — e.g. a claude.ai MCP connector using
+//                                Advanced-settings custom credentials). In 'none' mode
+//                                OAUTH_CLIENT_SECRET is neither required nor stored.
 //
 // Free auth (sub + email): no tenant, no claim set. authorization_code + PKCE,
 // client_secret_basic — matching the dev seed's `design-system` shape.
@@ -59,7 +63,7 @@ const requireEnv = (source: NodeJS.ProcessEnv, name: string): string => {
 export interface OAuthClientRegistrationValues {
   allowedScopes: string[];
   clientId: string;
-  clientSecretHash: string;
+  clientSecretHash: string | null;
   createdAt: Date;
   dpopBoundAccessTokens: boolean;
   grantTypes: string[];
@@ -100,10 +104,27 @@ export const buildOAuthClientRegistration = (
     );
   }
 
-  const clientSecret = requireEnv(source, 'OAUTH_CLIENT_SECRET');
-  // Reject the well-known dev secret pattern to avoid registering a weak secret.
-  if (/dev-only/i.test(clientSecret)) {
-    throw new Error('Refusing a dev-only client secret. Provide a strong, generated secret.');
+  // token_endpoint_auth_method: 'client_secret_basic' (confidential, default) or 'none' (public
+  // client + PKCE, no secret — e.g. a claude.ai MCP connector via Advanced-settings custom creds).
+  const tokenEndpointAuthMethod = (source.OAUTH_CLIENT_TOKEN_AUTH ?? 'client_secret_basic').trim();
+  if (tokenEndpointAuthMethod !== 'client_secret_basic' && tokenEndpointAuthMethod !== 'none') {
+    throw new Error(
+      `Unsupported OAUTH_CLIENT_TOKEN_AUTH '${tokenEndpointAuthMethod}'. ` +
+        "Use 'client_secret_basic' (confidential) or 'none' (public + PKCE).",
+    );
+  }
+  const isPublicClient = tokenEndpointAuthMethod === 'none';
+
+  // Public clients carry NO secret (PKCE is the proof); confidential clients require a strong one,
+  // stored only as its sha256 hash (plaintext never persisted).
+  let clientSecretHash: string | null = null;
+  if (!isPublicClient) {
+    const clientSecret = requireEnv(source, 'OAUTH_CLIENT_SECRET');
+    // Reject the well-known dev secret pattern to avoid registering a weak secret.
+    if (/dev-only/i.test(clientSecret)) {
+      throw new Error('Refusing a dev-only client secret. Provide a strong, generated secret.');
+    }
+    clientSecretHash = hashSecret(clientSecret);
   }
 
   const scopes = parseList(source.OAUTH_CLIENT_SCOPES ?? 'openid,profile,email');
@@ -122,7 +143,7 @@ export const buildOAuthClientRegistration = (
   return {
     allowedScopes: scopes,
     clientId,
-    clientSecretHash: hashSecret(clientSecret),
+    clientSecretHash,
     createdAt: now,
     dpopBoundAccessTokens: false,
     grantTypes: ['authorization_code'],
@@ -132,7 +153,7 @@ export const buildOAuthClientRegistration = (
     requirePkce: true,
     resourceIndicators,
     responseTypes: ['code'],
-    tokenEndpointAuthMethod: 'client_secret_basic',
+    tokenEndpointAuthMethod,
     updatedAt: now,
   };
 };
