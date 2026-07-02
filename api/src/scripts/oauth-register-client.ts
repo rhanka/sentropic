@@ -187,8 +187,8 @@ const main = async (): Promise<void> => {
 
 // Only run the DB upsert when executed directly (kubectl Job / `npm run oauth:register-client`).
 // Importing this module (e.g. from a unit test of `buildOAuthClientRegistration`) is side-effect-free.
-const invokedDirectly =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+const entrypoint = process.argv[1];
+const invokedDirectly = entrypoint !== undefined && import.meta.url === pathToFileURL(entrypoint).href;
 
 if (invokedDirectly) {
   try {
