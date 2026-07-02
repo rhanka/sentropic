@@ -27,6 +27,9 @@ export {
 export {
   buildProtectedResourceMetadata,
   protectedResourceMetadataUrl,
+  protectedResourceMetadataPath,
+  legacyProtectedResourceMetadataUrl,
+  legacyProtectedResourceMetadataPath,
   PROTECTED_RESOURCE_METADATA_PATH,
   type ProtectedResourceMetadata,
   type BuildProtectedResourceMetadataInput,

@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/mcp-auth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-agnostic MCP resource-server kit for Sentropic: RFC 9728 Protected Resource Metadata, MCP-profile audience-bound access-token validation (DPoP, tenant hook), and RFC 6750 WWW-Authenticate challenge semantics. Fetch-style core + optional Hono adapter. Consumes @sentropic/oauth-verify; owns the MCP scope grammar.",
   "type": "module",
   "license": "MIT",
