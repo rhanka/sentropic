@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildProtectedResourceMetadata,
   protectedResourceMetadataUrl,
+  protectedResourceMetadataPath,
+  legacyProtectedResourceMetadataUrl,
+  legacyProtectedResourceMetadataPath,
   PROTECTED_RESOURCE_METADATA_PATH,
 } from '../src/prm.js';
 
@@ -61,5 +64,32 @@ describe('RFC 9728 Protected Resource Metadata', () => {
       'https://mcp.example.com/.well-known/oauth-protected-resource',
     );
     expect(PROTECTED_RESOURCE_METADATA_PATH).toBe('/.well-known/oauth-protected-resource');
+  });
+
+  it('inserts the well-known segment BEFORE the resource path (RFC 9728 §3.1)', () => {
+    expect(protectedResourceMetadataUrl('https://immo.sent-tech.ca/mcp')).toBe(
+      'https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp',
+    );
+    expect(protectedResourceMetadataUrl('https://immo.sent-tech.ca/api/v1/mcp/')).toBe(
+      'https://immo.sent-tech.ca/.well-known/oauth-protected-resource/api/v1/mcp',
+    );
+    expect(protectedResourceMetadataPath('https://immo.sent-tech.ca/mcp')).toBe(
+      '/.well-known/oauth-protected-resource/mcp',
+    );
+  });
+
+  it('exposes the pre-RFC appended URL for the redirect shim', () => {
+    expect(legacyProtectedResourceMetadataUrl('https://immo.sent-tech.ca/mcp')).toBe(
+      'https://immo.sent-tech.ca/mcp/.well-known/oauth-protected-resource',
+    );
+    expect(legacyProtectedResourceMetadataPath('https://immo.sent-tech.ca/mcp')).toBe(
+      '/mcp/.well-known/oauth-protected-resource',
+    );
+  });
+
+  it('makes canonical and legacy paths identical for a path-less resource', () => {
+    expect(protectedResourceMetadataPath('https://mcp.example.com')).toBe(
+      legacyProtectedResourceMetadataPath('https://mcp.example.com'),
+    );
   });
 });

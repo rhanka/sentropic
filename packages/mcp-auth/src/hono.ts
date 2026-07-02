@@ -7,6 +7,12 @@
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import type { McpAuth, McpAuthContext } from './core.js';
+import {
+  protectedResourceMetadataUrl,
+  protectedResourceMetadataPath,
+  legacyProtectedResourceMetadataPath,
+  PROTECTED_RESOURCE_METADATA_PATH,
+} from './prm.js';
 
 // CANONICAL home of the service (S2S) RS middleware relocated from @sentropic/auth-hono
 // (architect verdict E2/F8). auth-hono now re-exports these via a thin delegating wrapper.
@@ -20,14 +26,32 @@ export {
 } from './service-auth.js';
 
 /**
- * Mount the RFC 9728 PRM well-known (`/.well-known/oauth-protected-resource`) on a Hono
- * router. `app.route('/', mcpAuthRoutes(mcp))`.
+ * Mount the RFC 9728 Protected Resource Metadata well-known on a Hono router. Intended to be
+ * mounted at the ROOT of the resource server: `app.route('/', mcpAuthRoutes(mcp))`.
+ *
+ * Serves, deriving all paths from the configured resource:
+ *  - the RFC 9728 §3.1 canonical path (well-known segment BEFORE the resource path) with the doc;
+ *  - the pre-RFC appended suffix as a 308 redirect to the canonical URL (one-minor transition shim);
+ *  - the mount-relative `/.well-known/oauth-protected-resource` with the doc, for back-compat with
+ *    hosts that instead mount this router UNDER the resource prefix
+ *    (`app.route('/api/v1/mcp', mcpAuthRoutes(mcp))`).
  */
 export const mcpAuthRoutes = (mcp: McpAuth): Hono => {
   const router = new Hono();
-  router.get('/.well-known/oauth-protected-resource', (c) => c.json(mcp.metadata(), 200, {
-    'Cache-Control': 'public, max-age=300',
-  }));
+  const resource = mcp.metadata().resource;
+  const canonicalPath = protectedResourceMetadataPath(resource);
+  const legacyPath = legacyProtectedResourceMetadataPath(resource);
+  const canonicalUrl = protectedResourceMetadataUrl(resource);
+  const serveMetadata = (c: Context) =>
+    c.json(mcp.metadata(), 200, { 'Cache-Control': 'public, max-age=300' });
+
+  router.get(canonicalPath, serveMetadata);
+  if (PROTECTED_RESOURCE_METADATA_PATH !== canonicalPath) {
+    router.get(PROTECTED_RESOURCE_METADATA_PATH, serveMetadata);
+  }
+  if (legacyPath !== canonicalPath && legacyPath !== PROTECTED_RESOURCE_METADATA_PATH) {
+    router.get(legacyPath, (c) => c.redirect(canonicalUrl, 308));
+  }
   return router;
 };
 
