@@ -12,7 +12,8 @@ describe('OAuth well-known handlers', () => {
     const response = await router.request('/openid-configuration');
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    const payload = (await response.json()) as Record<string, unknown>;
+    expect(payload).toMatchObject({
       authorization_endpoint: 'http://localhost:9197/api/v1/auth/oauth/authorize',
       code_challenge_methods_supported: ['S256'],
       end_session_endpoint: 'http://localhost:9197/api/v1/auth/oauth/end_session',
@@ -26,6 +27,26 @@ describe('OAuth well-known handlers', () => {
       token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
       userinfo_endpoint: 'http://localhost:9197/api/v1/auth/oauth/userinfo',
     });
+    // RFC 9207: the AS advertises that it emits the authorization-response `iss` parameter.
+    expect(payload.authorization_response_iss_parameter_supported).toBe(true);
+    // DCR (RFC 7591) is deferred: never advertise a registration_endpoint (static clients only).
+    expect(payload.registration_endpoint).toBeUndefined();
+  });
+
+  it('serves the RFC 8414 alias at /oauth-authorization-server with the identical metadata', async () => {
+    const { ports } = await createOauthPorts();
+    const router = createWellKnownRouter({ issuer: 'http://localhost:9197', ports });
+
+    const oidcResponse = await router.request('/openid-configuration');
+    const aliasResponse = await router.request('/oauth-authorization-server');
+    expect(aliasResponse.status).toBe(200);
+
+    const oidc = await oidcResponse.json();
+    const alias = (await aliasResponse.json()) as Record<string, unknown>;
+
+    expect(alias).toEqual(oidc);
+    expect((alias as Record<string, unknown>).authorization_response_iss_parameter_supported).toBe(true);
+    expect((alias as Record<string, unknown>).registration_endpoint).toBeUndefined();
   });
 
   it('returns public JWKS with cache headers and rotated keys', async () => {

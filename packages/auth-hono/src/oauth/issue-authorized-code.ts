@@ -6,6 +6,8 @@ import type { OAuthContinuationState } from './state-codec.js';
 
 export interface IssueAuthorizedCodeOptions {
   authorizationCodeTtlSeconds?: number;
+  /** RFC 9207 authorization-server issuer identifier, echoed as `iss` on the success response. */
+  issuer: string;
   ports: AuthHonoPorts;
 }
 
@@ -45,6 +47,7 @@ export const issueAuthorizedCode = async (
 
   return redirectOrJson(
     c,
-    appendParams(payload.redirectUri, { code, state: payload.state }, c.req.url)
+    // RFC 9207: echo the AS issuer as `iss` on the success authorization response.
+    appendParams(payload.redirectUri, { code, iss: options.issuer, state: payload.state }, c.req.url)
   );
 };

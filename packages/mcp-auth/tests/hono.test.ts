@@ -60,6 +60,38 @@ describe('@sentropic/mcp-auth/hono', () => {
     expect(doc.authorization_servers).toEqual([AS]);
   });
 
+  it('serves the RFC 9728 §3.1 canonical path + 308 shim for a path-ful resource (root mount)', async () => {
+    const mcp = createMcpAuth({
+      resource: 'https://immo.sent-tech.ca/mcp',
+      authorizationServers: [AS],
+    });
+    const app = new Hono();
+    app.route('/', mcpAuthRoutes(mcp));
+
+    const canonical = await app.request('https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp');
+    expect(canonical.status).toBe(200);
+    expect((await canonical.json()).resource).toBe('https://immo.sent-tech.ca/mcp');
+
+    const shim = await app.request('https://immo.sent-tech.ca/mcp/.well-known/oauth-protected-resource');
+    expect(shim.status).toBe(308);
+    expect(shim.headers.get('location')).toBe(
+      'https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp',
+    );
+  });
+
+  it('keeps serving the mount-relative well-known when mounted UNDER the resource prefix', async () => {
+    // Back-compat with the api sample router that mounts mcpAuthRoutes under /api/v1/mcp.
+    const mcp = createMcpAuth({
+      resource: 'https://api.example.com/api/v1/mcp',
+      authorizationServers: [AS],
+    });
+    const app = new Hono();
+    app.route('/api/v1/mcp', mcpAuthRoutes(mcp));
+    const res = await app.request('https://api.example.com/api/v1/mcp/.well-known/oauth-protected-resource');
+    expect(res.status).toBe(200);
+    expect((await res.json()).resource).toBe('https://api.example.com/api/v1/mcp');
+  });
+
   it('guards a protected route: 401 + PRM pointer without a token', async () => {
     const app = buildApp();
     const res = await app.request('/mcp/invoke', { method: 'POST' });
