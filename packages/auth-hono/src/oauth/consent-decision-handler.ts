@@ -8,6 +8,8 @@ import { resolveOAuthSession } from './session-resolver.js';
 
 export interface OAuthConsentHandlerOptions {
   authorizationCodeTtlSeconds?: number;
+  /** RFC 9207 authorization-server issuer identifier, echoed as `iss` on the RP redirect. */
+  issuer: string;
   ports: AuthHonoPorts;
   stateCodec: OAuthContinuationCodec;
 }
@@ -60,7 +62,12 @@ export const createOAuthConsentDecisionHandler =
     if (decision === 'deny') {
       return redirectOrJson(
         c,
-        appendParams(payload.redirectUri, { error: 'access_denied', state: payload.state }, c.req.url)
+        // RFC 9207: echo the AS issuer as `iss` on the access_denied authorization response.
+        appendParams(
+          payload.redirectUri,
+          { error: 'access_denied', iss: options.issuer, state: payload.state },
+          c.req.url
+        )
       );
     }
 

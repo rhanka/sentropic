@@ -34,13 +34,17 @@ export const redirectWithOAuthError = (
   redirectUri: string,
   code: string,
   state: string | null,
-  baseUrl: string
+  baseUrl: string,
+  // RFC 9207: the authorization-server issuer identifier, echoed on the error authorization
+  // response so a mix-up-defending client can bind the response to the AS it started with.
+  issuer?: string | null
 ): Response =>
   Response.redirect(
     appendParams(
       redirectUri,
       {
         error: code,
+        iss: issuer,
         state,
       },
       baseUrl

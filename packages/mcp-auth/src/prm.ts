@@ -35,9 +35,38 @@ export interface BuildProtectedResourceMetadataInput {
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/u, '');
 
-/** The absolute URL of the PRM document for a given resource. */
-export const protectedResourceMetadataUrl = (resource: string): string =>
+/**
+ * The absolute URL of the PRM document for a given resource, per RFC 9728 §3.1: the
+ * `/.well-known/oauth-protected-resource` path is inserted BETWEEN the host and the resource's
+ * own path — it is NOT appended after it. For a path-less resource the two are identical.
+ *
+ *   `https://mcp.example.com`      → `https://mcp.example.com/.well-known/oauth-protected-resource`
+ *   `https://immo.sent-tech.ca/mcp`→ `https://immo.sent-tech.ca/.well-known/oauth-protected-resource/mcp`
+ *
+ * Spec-strict clients (e.g. claude.ai) compute and probe this exact URL from the resource
+ * identifier; the previous appended form (`legacyProtectedResourceMetadataUrl`) 404s them.
+ */
+export const protectedResourceMetadataUrl = (resource: string): string => {
+  const url = new URL(trimTrailingSlash(resource));
+  const resourcePath = url.pathname === '/' ? '' : url.pathname;
+  return `${url.origin}${PROTECTED_RESOURCE_METADATA_PATH}${resourcePath}`;
+};
+
+/** The pathname (no origin) a host serves the RFC 9728 §3.1 PRM document at. */
+export const protectedResourceMetadataPath = (resource: string): string =>
+  new URL(protectedResourceMetadataUrl(resource)).pathname;
+
+/**
+ * The pre-RFC (appended) PRM URL: `<resource>/.well-known/oauth-protected-resource`. Kept so a
+ * host can serve a one-minor 308 redirect shim from this suffix to the RFC-correct URL, so
+ * clients pinned to the old advertised location keep working during the transition.
+ */
+export const legacyProtectedResourceMetadataUrl = (resource: string): string =>
   `${trimTrailingSlash(resource)}${PROTECTED_RESOURCE_METADATA_PATH}`;
+
+/** The pathname (no origin) of the pre-RFC appended PRM location (redirect-shim source). */
+export const legacyProtectedResourceMetadataPath = (resource: string): string =>
+  new URL(legacyProtectedResourceMetadataUrl(resource)).pathname;
 
 /** Build the RFC 9728 PRM document from an MCP resource-server config. */
 export const buildProtectedResourceMetadata = (
