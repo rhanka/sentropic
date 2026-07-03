@@ -69,6 +69,13 @@ spec:
         app.kubernetes.io/name: sentropic
         app.kubernetes.io/component: api
     spec:
+      # enableServiceLinks:false — k8s default (true) injects <SVC>_PORT=tcp://<ip>:<port>
+      # env vars for every Service, which shadow app port envs. mcp-auth 0.2.0 then builds
+      # `new URL('http://localhost:tcp://10.32.10.123:8787/api/v1/mcp')` (Invalid URL) at api
+      # boot -> CrashLoopBackOff. Regression P0 2026-07-02 (api down 15h). Keep this pinned so
+      # `kubectl apply -k` never re-enables service-links. (Also fix mcp-auth to derive the MCP
+      # resource base from AUTH_CALLBACK_BASE_URL, not a shadowable port env — follow-up B.)
+      enableServiceLinks: false
       serviceAccountName: sentropic-app
       containers:
         - name: api
