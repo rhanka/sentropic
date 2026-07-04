@@ -38,6 +38,7 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
 
 ## Feedback Loop
 - S6c parity evidence: branch stack verified up (ui 5620=200, api 9520 responding); pixel captures É1/É2/É3 pending on Playwright MCP attach (user Chrome busy — intermittent). Evidence will be attached BEFORE owner UAT/merge; CI e2e chat specs provide the functional proof meanwhile.
+- e2e dup-composer (CI run 1): my AI-surface reuse of the comments `renderComposerInput` snippet (aria-textbox wrapper) duplicated ChatComposer's own textbox → strict-mode locator violations in 03/01/04 specs. Fixed: dedicated bare `renderComposerSurfaceInput` snippet (exact original EditableInput).
 
 ## AI Flaky tests
 - Acceptance rule:
