@@ -69,7 +69,7 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
   - [x] S1b: session hydration helpers extracted into `chatSessionHydration.ts` (NDJSON splitter/parser, hydration generations, flush predicate, message normalize/ordered-upsert) + 9 unit tests.
   - [x] S2: resolveHydratedModelSelection extracted into `utils/model-selection.ts` (dedup of 2 app copies; dead catalog id never re-selected) + 4 tests.
   - [x] S3: composer steer derivation (isAssistantMessageInProgress + resolveComposerSteerState) extracted into `chatDraft.ts` + 5 tests (attachments/primary-action already module).
-  - [ ] S4: layout/scroll cluster.
+  - [x] S4: timeline ordering (compare/merge block into history) + scroll-restore resolver extracted into `chatSessionHydration.ts` + 4 tests.
   - [ ] Lot gate: `make typecheck-chat-ui` + `make test-chat-ui` green.
 
 - [ ] **Lot 2 — ChatPanelShell.svelte view (gold markup)**
