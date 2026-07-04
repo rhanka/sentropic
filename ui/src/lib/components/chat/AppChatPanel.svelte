@@ -29,10 +29,7 @@
   import CommentsPanel from '@sentropic/chat-ui/comments/CommentsPanel.svelte';
   import type { CommentThreadSummary } from '@sentropic/chat-ui/comments';
   import { createSentropicCommentHost } from '$lib/chat/comment-host-adapter';
-  import StreamMessage from '$lib/components/StreamMessage.svelte';
-  import ChatComposerWrapper from '$lib/components/chat/ChatComposerWrapper.svelte';
-  import ChatTimelineWrapper from '$lib/components/chat/ChatTimelineWrapper.svelte';
-  import { Streamdown } from 'svelte-streamdown';
+  import ChatPanelShell from '@sentropic/chat-ui/components/ChatPanelShell.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';
   import MenuPopover from '$lib/components/MenuPopover.svelte';
@@ -50,10 +47,6 @@
     uploadDocument,
     type ContextDocumentItem,
   } from '$lib/utils/documents';
-  import AttachmentBand from '@sentropic/chat-ui/documents/AttachmentBand.svelte';
-  import GeneratedFileCardTray from '@sentropic/chat-ui/documents/GeneratedFileCardTray.svelte';
-  import ImageLightbox from '@sentropic/chat-ui/documents/ImageLightbox.svelte';
-  import MessageAttachments from '@sentropic/chat-ui/documents/MessageAttachments.svelte';
   import {
     createComposerAttachmentId,
     buildAttachmentBandItems,
@@ -106,8 +99,6 @@
     type LocalToolPermissionDecision,
     type LocalToolName,
   } from '@sentropic/chat-ui/stores/localTools';
-  import ModelSelector from '@sentropic/chat-ui/components/ModelSelector.svelte';
-  import MessageActions from '@sentropic/chat-ui/components/MessageActions.svelte';
   import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
   // ChatContextEntry from @sentropic/chat-ui/state/chat-context imported above via context-adapter chain.
   import {
@@ -3115,8 +3106,11 @@
   });
 </script>
 
-<div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
-  {#if mode === 'comments'}
+
+<!-- Gold shell adoption (S6a): the gold panel markup now lives in
+     @sentropic/chat-ui ChatPanelShell; this host defines the domain snippets
+     (rich-text input, popover menus, icons) and wires its orchestration
+     state into the shell's props. -->
     {#snippet renderComposerInput(p: { value: string; disabled: boolean; placeholder: string; onChange: (v: string) => void; onKeyDown: (e: KeyboardEvent) => void })}
       <!-- Restore GOLD fidelity: comments composer uses EditableInput (TipTap/contenteditable).
            The wrapping div captures keydown events from the ProseMirror contenteditable,
@@ -3226,48 +3220,7 @@
         </svelte:fragment>
       </MenuPopover>
     {/snippet}
-    <CommentsPanel
-      host={commentHost}
-      contextType={commentContextType}
-      contextId={commentContextId}
-      sectionKey={commentSectionKey}
-      sectionLabel={commentSectionLabel}
-      bind:commentThreadId
-      bind:commentLoading
-      labels={(key: string, opts?: Record<string, unknown>) => $_(key, opts as Parameters<typeof $_>[1])}
-      {renderComposerInput}
-      {renderThreadMenuPopover}
-    />
-  {:else}
-    <!-- AI mode: full chat panel with timeline, composer, etc. -->
-    <div
-      class="flex-1 min-h-0 relative"
-    >
-      <div
-        class="h-full overflow-y-auto p-3 space-y-2 slim-scroll"
-        style="scrollbar-gutter: stable;"
-        bind:this={listEl}
-        on:scroll={onListScroll}
-      >
-        {#snippet renderTimelineMessageAttachments(item: any)}
-          {#if item.kind === 'message' && item.message.role === 'user'}
-            <MessageAttachments
-              attachments={item.message.attachments ?? []}
-              onResolveSrc={getAttachmentImageSrc}
-              onEnlarge={(src: string, alt: string) => openLightbox(src, alt)}
-              enlargeLabel={$_('chat.attachments.enlarge')}
-            />
-          {/if}
-        {/snippet}
-
-        {#snippet renderTimelineUserMessage(item: any)}
-            {#if item.kind === 'message' && item.message.role === 'user'}
-              {@const m = item.message}
-              <div class="flex flex-col items-end group">
-                <div
-                  class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
-                >
-                  {#if editingMessageId === m.id}
+{#snippet renderEditForm(p: { messageId: string })}
                     <div class="space-y-2">
                       <EditableInput
                         markdown={true}
@@ -3287,424 +3240,14 @@
                         <button
                           class="chat-edit-action-primary rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
                           type="button"
-                          on:click={() => void saveEditMessage(m.id)}
+                          on:click={() => void saveEditMessage(p.messageId)}
                         >
                           {$_('common.send')}
                         </button>
                       </div>
                     </div>
-                  {:else}
-                    {#if (m.content ?? '').trim().length > 0}
-                      <Streamdown content={m.content ?? ''} />
-                    {/if}
-                  {/if}
-                </div>
-                <div
-                  class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  {#if hasCheckpointRollbackDelta(getCheckpointForUserMessage(m.id))}
-                    <button
-                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                      on:click={() => openCheckpointPromptForMessage(m.id)}
-                      type="button"
-                      aria-label={$_('chat.checkpoints.restoreFromMessage')}
-                      title={getCheckpointPreviewTitle(m.id)}
-                    >
-                      <UndoDot class="w-3.5 h-3.5" />
-                    </button>
-                  {/if}
-                  <MessageActions
-                    role="user"
-                    streamStatus="completed"
-                    isCopied={isCopied(m.id)}
-                    labels={$_}
-                    onCopy={async () => {
-                      const text = m.content ?? '';
-                      const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
-                      if (ok) markCopied(m.id);
-                    }}
-                    onEdit={() => startEditMessage(m)}
-                  />
-                </div>
-              </div>
-            {/if}
-        {/snippet}
-
-        {#snippet renderTimelineAssistantSegment(item: any)}
-              {@const m = item.message}
-              <div class="flex justify-start group">
-                <div class="max-w-[85%] w-full">
-                  <StreamMessage
-                    variant="chat"
-                    streamId={item.key}
-                    status={item.isTerminal ? 'completed' : 'processing'}
-                    finalContent={item.segment.content}
-                    smoothContentStreaming={isGeminiModel(m.model)}
-                    subscriptionMode="passive"
-                    initialEvents={item.segment.events}
-                    initiallyExpanded={false}
-                    deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
-                    onGeneratedFile={(card) => handleGeneratedFileCard(m.id, card)}
-                  />
-                  {#if item.isTerminal && item.isLastAssistantSegment}
-                    <GeneratedFileCardTray
-                      cards={generatedFileCardsByMessageId.get(m.id) ?? []}
-                      onDownload={(card: ChatGeneratedFileCard) => void downloadGeneratedFile(card)}
-                      downloadLabel={$_('common.download')}
-                    />
-                  {/if}
-                  <MessageActions
-                    role="assistant"
-                    streamStatus={item.isTerminal ? 'completed' : 'processing'}
-                    isLastAssistantSegment={item.isLastAssistantSegment}
-                    isCopied={isCopied(item.key)}
-                    feedbackVote={m.feedbackVote ?? null}
-                    labels={$_}
-                    onCopy={async () => {
-                      const text = m.content ?? '';
-                      const ok = await copyToClipboard(text, renderMarkdownWithRefs(text));
-                      if (ok) markCopied(item.key);
-                    }}
-                    onRegenerate={() => void retryFromAssistant(m.id)}
-                    onFeedback={(action: 'up' | 'down' | 'clear') => void setFeedback(m.id, action)}
-                  />
-                </div>
-              </div>
-        {/snippet}
-
-        {#snippet renderTimelineRuntimeSegment(item: any)}
-              <div class="flex justify-start">
-                <div class="max-w-[85%] w-full">
-                  <StreamMessage
-                    variant="chat"
-                    streamId={item.key}
-                    status={item.message._localStatus ??
-                      (item.message.content ? 'completed' : 'processing')}
-                    subscriptionMode="passive"
-                    initialEvents={item.segment.events}
-                    runtimeSummary={item.segment.runtimeSummary}
-                    initiallyExpanded={false}
-                    deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
-                    requestDeferredDetails={sessionId ? (() => { const sid = sessionId; return sid ? loadRuntimeDetailsForMessage(sid, item.message.id) : Promise.resolve(); }) : undefined}
-                    showRuntimeInlinePreview={item.isActiveRuntimeSegment}
-                    acknowledgementText={item.acknowledgementText}
-                    onTodoRuntime={handleTodoRuntimeToolResult}
-                    onGeneratedFile={(card) => handleGeneratedFileCard(item.message.id, card)}
-                  />
-                </div>
-              </div>
-        {/snippet}
-
-        {#snippet renderTimelineItems(items: ProjectedTimelineItem[])}
-          <ChatTimelineWrapper
-            {items}
-            renderUserMessage={renderTimelineUserMessage}
-            renderMessageAttachments={renderTimelineMessageAttachments}
-            renderAssistantSegment={renderTimelineAssistantSegment}
-            renderRuntimeSegment={renderTimelineRuntimeSegment}
-          />
-        {/snippet}
-
-        {#if stagedHistoryTimelineItems.length > 0}
-          <div
-            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1] p-3 space-y-2"
-            bind:this={historyStageMeasureEl}
-            aria-hidden="true"
-          >
-            {@render renderTimelineItems(stagedHistoryTimelineItems)}
-          </div>
-        {:else}
-          <div
-            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1]"
-            bind:this={historyStageMeasureEl}
-            aria-hidden="true"
-          ></div>
-        {/if}
-
-        {#if historyHydrationInFlight && projectedTimelineItems.length === 0}
-          <div class="text-xs text-slate-500">{$_('common.loading')}</div>
-        {:else if messages.length === 0}
-          <div class="text-xs text-slate-500">{$_('chat.chat.empty')}</div>
-        {:else}
-          <div class:invisible={historyHydrationSwapPending}>
-            {@render renderTimelineItems(projectedTimelineItems)}
-          </div>
-        {/if}
-        {#if pendingLocalToolPermissionPrompts.length > 0}
-          {#each pendingLocalToolPermissionPrompts as prompt (prompt.toolCallId)}
-            <div class="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
-              <div class="text-xs font-semibold text-slate-700">
-                {$_('chat.tools.permissions.promptTitle')}
-              </div>
-              <div class="text-[11px] text-slate-600">
-                {$_('chat.tools.permissions.promptDescription', {
-                  values: {
-                    tool: prompt.request.toolName,
-                  },
-                })}
-              </div>
-              {#if resolvePermissionPromptDetails(prompt).length > 0}
-                <div class="space-y-1">
-                  {#each resolvePermissionPromptDetails(prompt) as detail}
-                    <div class="text-[11px] text-slate-600 break-all">
-                      <span class="font-semibold text-slate-700">{detail.label}:</span>
-                      {' '}
-                      {detail.value}
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-              <div class="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  class="chat-tool-permission-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
-                  on:click={() =>
-                    void handleLocalToolPermissionDecision(
-                      prompt,
-                      'allow_once',
-                    )}
-                >
-                  {$_('chat.tools.permissions.allowOnce')}
-                </button>
-                <button
-                  type="button"
-                  class="chat-tool-permission-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
-                  on:click={() =>
-                    void handleLocalToolPermissionDecision(
-                      prompt,
-                      'deny_once',
-                    )}
-                >
-                  {$_('chat.tools.permissions.denyOnce')}
-                </button>
-                <button
-                  type="button"
-                  class="chat-tool-permission-choice rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
-                  on:click={() =>
-                    void handleLocalToolPermissionDecision(
-                      prompt,
-                      'allow_always',
-                    )}
-                >
-                  {$_('chat.tools.permissions.allowAlways')}
-                </button>
-                <button
-                  type="button"
-                  class="chat-tool-permission-choice rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
-                  on:click={() =>
-                    void handleLocalToolPermissionDecision(
-                      prompt,
-                      'deny_always',
-                    )}
-                >
-                  {$_('chat.tools.permissions.denyAlways')}
-                </button>
-              </div>
-            </div>
-          {/each}
-        {/if}
-        {#if pendingCheckpointPrompt}
-          <div class="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
-            <div class="text-xs font-semibold text-slate-700">
-              {pendingCheckpointPrompt.kind === 'retry'
-                ? $_('chat.checkpoints.confirmRestoreBeforeRetry')
-                : $_('chat.checkpoints.confirmRestoreBeforeAction')}
-            </div>
-            <div class="text-[11px] text-slate-600">
-              {$_('chat.checkpoints.confirmRestoreDetails')}
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
-                on:click={() => void confirmCheckpointPrompt()}
-                disabled={checkpointActionInFlight}
-              >
-                {$_('chat.checkpoints.restoreCta')}
-              </button>
-              <button
-                type="button"
-                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
-                on:click={() => void cancelCheckpointPrompt()}
-                disabled={checkpointActionInFlight}
-              >
-                {pendingCheckpointPrompt.kind === 'retry'
-                  ? $_('chat.checkpoints.retryWithoutRestore')
-                  : $_('chat.checkpoints.continueWithoutRestore')}
-              </button>
-            </div>
-          </div>
-        {/if}
-        {#if errorMsg}
-          <div
-            class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2"
-          >
-            {errorMsg}
-          </div>
-        {/if}
-      </div>
-    </div>
-
-  {#if mode === 'ai' && todoRuntimePanel}
-    <div class="w-full border-t border-slate-200 bg-slate-50/70" data-testid="todo-runtime-panel">
-      <div class="px-3 py-2">
-        <div class="w-full flex items-center justify-between gap-2">
-          <div class="min-w-0">
-            <div class="text-xs font-semibold text-slate-700">
-              {$_('chat.todoRuntimePanel.title')}
-            </div>
-            <div class="text-[11px] text-slate-500 truncate">
-              {todoRuntimePanel.title || $_('chat.todoRuntimePanel.subtitle')}
-            </div>
-          </div>
-          <div class="flex items-center gap-1">
-            <button
-              class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-              type="button"
-              disabled={todoRuntimeDeleteInFlight}
-              on:click={() => (pendingTodoRuntimeDeleteConfirm = true)}
-              aria-label={$_('chat.todoRuntimePanel.delete')}
-              title={$_('chat.todoRuntimePanel.delete')}
-              data-testid="todo-runtime-delete-button"
-            >
-              <Trash2 class="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-              on:click={() => (todoRuntimeCollapsed = !todoRuntimeCollapsed)}
-              aria-label={todoRuntimeCollapsed
-                ? $_('chat.todoRuntimePanel.expand')
-                : $_('chat.todoRuntimePanel.collapse')}
-              title={todoRuntimeCollapsed
-                ? $_('chat.todoRuntimePanel.expand')
-                : $_('chat.todoRuntimePanel.collapse')}
-              data-testid="todo-runtime-toggle-button"
-            >
-              <ChevronDown
-                class={`w-4 h-4 transition-transform duration-150 ${
-                  todoRuntimeCollapsed ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-        {#if !todoRuntimeCollapsed}
-          <div class="mt-2 max-h-28 overflow-y-auto slim-scroll space-y-2 text-[11px] text-slate-700">
-            {#if pendingTodoRuntimeDeleteConfirm}
-              <div class="chat-delete-confirm-surface rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
-                <div class="text-xs font-semibold text-slate-700">
-                  {$_('chat.todoRuntimePanel.confirmDelete')}
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    class="chat-delete-confirm-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
-                    on:click={() => void handleDeleteTodoRuntime()}
-                    disabled={todoRuntimeDeleteInFlight}
-                  >
-                    {$_('common.delete')}
-                  </button>
-                  <button
-                    type="button"
-                    class="chat-delete-confirm-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                    on:click={() => (pendingTodoRuntimeDeleteConfirm = false)}
-                    disabled={todoRuntimeDeleteInFlight}
-                  >
-                    {$_('common.cancel')}
-                  </button>
-                </div>
-              </div>
-            {/if}
-            {#if todoRuntimePanel.conflictMessage}
-              <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
-                {todoRuntimePanel.conflictMessage}
-              </div>
-            {/if}
-            <div>
-              <div class="font-medium">
-                {$_('chat.todoRuntimePanel.tasksLabel')} ({todoRuntimePanel.tasks.length})
-              </div>
-              {#if todoRuntimePanel.tasks.length === 0}
-                <div class="mt-1 text-[11px] text-slate-500">
-                  {$_('chat.todoRuntimePanel.noTasks')}
-                </div>
-              {:else}
-                <ul class="mt-1 space-y-1">
-                  {#each todoRuntimePanel.tasks as task, index (task.id ?? `${todoRuntimePanel.todoId}-${index}`)}
-                    {@const done = isRuntimeTaskDone(task.status)}
-                    <li class="flex items-center gap-2">
-                      <span
-                        class={`inline-flex h-3.5 w-3.5 items-center justify-center rounded border text-[9px] leading-none ${
-                          done
-                            ? 'border-emerald-500 bg-emerald-500 text-white'
-                            : 'border-slate-400 text-transparent'
-                        }`}
-                      >{done ? '✓' : ''}</span
-                      >
-                      <span
-                        class={`truncate ${
-                          done ? 'line-through text-slate-400' : 'text-slate-700'
-                        }`}
-                      >
-                        {task.title}
-                      </span>
-                      <span class="sr-only">
-                        {done
-                          ? $_('chat.todoRuntimePanel.completedTaskLabel')
-                          : $_('chat.todoRuntimePanel.pendingTaskLabel')}
-                      </span>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </div>
-          </div>
-        {/if}
-      </div>
-    </div>
-  {/if}
-  {/if}
-
-  {#snippet renderComposerSurface()}
-            {#if sessionDocsError}
-              <div
-                class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
-              >
-                {sessionDocsError}
-              </div>
-            {/if}
-            {#if googleDriveConnectionError}
-              <div
-                class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
-              >
-                {googleDriveConnectionError}
-              </div>
-            {/if}
-            <AttachmentBand
-              items={attachmentBand}
-              onResolveSrc={getBandItemImageSrc}
-              onEnlarge={(item: UnifiedAttachmentItem, src: string) => openLightbox(src, item.fileName)}
-              onRemove={(item: UnifiedAttachmentItem) => void removeBandItem(item)}
-              removeLabel={$_('chat.documents.delete.ariaLabel')}
-              enlargeLabel={$_('chat.attachments.enlarge')}
-              loadingLabel={$_('common.loading')}
-              errorLabel={$_('common.error')}
-            />
-            <EditableInput
-              markdown={true}
-              bind:value={input}
-              placeholder={$_('chat.composer.placeholder.chat')}
-              on:change={handleComposerChange}
-            />
-  {/snippet}
-
-  {#snippet renderFloatingLayer()}
-        <!-- floating layer: checkpoints panel and other overlays (mention menu moved to CommentsPanel) -->
-  {/snippet}
-
-  {#snippet renderLeftControls()}
-        {#if mode === 'ai'}
+{/snippet}
+{#snippet renderComposerMenu()}
           <MenuPopover
             placement="up"
             align="left"
@@ -3818,114 +3361,108 @@
 
             </svelte:fragment>
           </MenuPopover>
-          <ModelSelector
-            bind:value={selectedModelSelectionKey}
-            groups={$ctrl.modelCatalogGroups as ModelCatalogGroup[]}
-            models={$ctrl.modelCatalogModels as ModelCatalogModel[]}
-            widthCh={selectedModelWidthCh}
-            labels={$_}
-            onChange={({ providerId, modelId }: { providerId: ModelProviderId; modelId: string }) => {
-              ctrl.setModelSelection(providerId, modelId);
-              selectedModelSelectionKey = `${providerId}::${modelId}`;
-            }}
-          />
-        {/if}
-  {/snippet}
+{/snippet}
+{#snippet renderRestoreIcon()}<UndoDot class="w-3.5 h-3.5" />{/snippet}
+{#snippet renderTrashIcon()}<Trash2 class="w-4 h-4" />{/snippet}
+{#snippet renderChevronIcon(p: { collapsed: boolean })}
+  <ChevronDown
+    class={`w-4 h-4 transition-transform duration-150 ${p.collapsed ? 'rotate-180' : ''}`}
+  />
+{/snippet}
+{#snippet renderStopIcon()}<Square class="w-4 h-4 fill-current stroke-none" />{/snippet}
+{#snippet renderSteerIcon()}<ShipWheel class="w-4 h-4" />{/snippet}
+{#snippet renderSendIcon()}<Send class="w-4 h-4" />{/snippet}
 
-  {#snippet renderRightActions()}
-        {#if composerSteerReady && activeAssistantMessage}
-          <button
-            class="chat-composer-stop-button rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
-            on:click={stopAssistantMessage}
-            disabled={stoppingMessageId === activeAssistantMessage.id}
-            type="button"
-            aria-label="Stopper"
-            title="Stopper"
-          >
-            <Square class="w-4 h-4 fill-current stroke-none" />
-          </button>
-        {/if}
-        <button
-          class="rounded bg-primary hover:bg-primary/90 text-white w-8 h-8 flex items-center justify-center disabled:opacity-60"
-          on:click={handleComposerPrimaryAction}
-          disabled={composerPrimaryActionState.disabled}
-          type="button"
-          aria-label={composerPrimaryButtonShowsSteer
-            ? $_('chat.steer.submit')
-            : $_('common.send')}
-          title={composerPrimaryButtonShowsSteer
-            ? $_('chat.steer.submit')
-            : $_('common.send')}
-          data-testid={composerPrimaryButtonShowsSteer
-            ? 'chat-composer-steer-button'
-            : 'chat-composer-send-button'}
-        >
-          {#if composerPrimaryButtonShowsSteer}
-            <ShipWheel class="w-4 h-4" />
-          {:else}
-            <Send class="w-4 h-4" />
-          {/if}
-        </button>
-  {/snippet}
-
-  {#if mode !== 'comments'}
-    <ChatComposerWrapper
-      mode="ai"
-      value={input}
-      disabled={false}
-      isMultiline={composerIsMultiline}
-      maxHeight={composerMaxHeight}
-      surfaceEnabled={true}
-      surfaceDisabled={false}
-      ariaLabel={$_('chat.composer.ariaLabel')}
-      tabIndex={0}
-      bind:composerElement={composerEl}
-      onKeyDown={handleKeyDown}
-      onPaste={handleComposerPaste}
-      {renderComposerSurface}
-      {renderFloatingLayer}
-      {renderLeftControls}
-      {renderRightActions}
-    />
-  {/if}
-</div>
-
-<ImageLightbox
-  image={lightboxImage}
-  onClose={closeLightbox}
-  closeLabel={$_('chat.attachments.lightbox.close')}
-  downloadLabel={$_('chat.attachments.lightbox.download')}
+<ChatPanelShell
+  {mode}
+  labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
+  commentHost={commentHost}
+  {commentContextType}
+  {commentContextId}
+  {commentSectionKey}
+  {commentSectionLabel}
+  bind:commentThreadId
+  bind:commentLoading
+  {renderComposerInput}
+  {renderThreadMenuPopover}
+  bind:panelEl
+  bind:listEl
+  bind:historyStageMeasureEl
+  {onListScroll}
+  {projectedTimelineItems}
+  {stagedHistoryTimelineItems}
+  messagesCount={messages.length}
+  {historyHydrationInFlight}
+  {historyHydrationSwapPending}
+  {sessionId}
+  {editingMessageId}
+  {renderEditForm}
+  onStartEditMessage={startEditMessage}
+  {copyToClipboard}
+  {renderMarkdownWithRefs}
+  isCopied={isCopied}
+  markCopied={markCopied}
+  showCheckpointRestoreForMessage={(id: string) => hasCheckpointRollbackDelta(getCheckpointForUserMessage(id))}
+  openCheckpointPromptForMessage={openCheckpointPromptForMessage}
+  getCheckpointPreviewTitle={getCheckpointPreviewTitle}
+  getGeneratedFileCards={(id: string) => generatedFileCardsByMessageId.get(id) ?? []}
+  onGeneratedFileCard={handleGeneratedFileCard}
+  downloadGeneratedFile={(card: ChatGeneratedFileCard) => void downloadGeneratedFile(card)}
+  useUnifiedActiveRunPresentation={(m: unknown) => useUnifiedActiveRunPresentation(m as LocalMessage)}
+  isSmoothStreamingModel={isGeminiModel}
+  loadRuntimeDetails={(sid: string, mid: string) => loadRuntimeDetailsForMessage(sid, mid)}
+  onTodoRuntime={handleTodoRuntimeToolResult as never}
+  retryFromAssistant={(id: string) => void retryFromAssistant(id)}
+  setFeedback={(id: string, action: 'up' | 'down' | 'clear') => void setFeedback(id, action)}
+  getAttachmentImageSrc={getAttachmentImageSrc as never}
+  openLightbox={openLightbox}
+  {renderRestoreIcon}
+  pendingLocalToolPermissionPrompts={pendingLocalToolPermissionPrompts as never}
+  onLocalToolPermissionDecision={handleLocalToolPermissionDecision as never}
+  resolvePermissionPromptDetails={resolvePermissionPromptDetails as never}
+  pendingCheckpointPrompt={pendingCheckpointPrompt}
+  {checkpointActionInFlight}
+  confirmCheckpointPrompt={confirmCheckpointPrompt}
+  cancelCheckpointPrompt={cancelCheckpointPrompt}
+  {errorMsg}
+  todoRuntimePanel={todoRuntimePanel}
+  bind:todoRuntimeCollapsed
+  {todoRuntimeDeleteInFlight}
+  bind:pendingTodoRuntimeDeleteConfirm
+  onDeleteTodoRuntime={handleDeleteTodoRuntime}
+  isRuntimeTaskDone={isRuntimeTaskDone}
+  {renderTrashIcon}
+  {renderChevronIcon}
+  lightboxImage={lightboxImage}
+  onCloseLightbox={closeLightbox}
+  bind:input
+  {composerIsMultiline}
+  {composerMaxHeight}
+  bind:composerEl
+  onComposerKeyDown={handleKeyDown}
+  onComposerPaste={handleComposerPaste}
+  onComposerChange={handleComposerChange}
+  {sessionDocsError}
+  {googleDriveConnectionError}
+  attachmentBand={attachmentBand}
+  getBandItemImageSrc={getBandItemImageSrc as never}
+  removeBandItem={(item: unknown) => void removeBandItem(item as UnifiedAttachmentItem)}
+  {renderComposerMenu}
+  bind:selectedModelSelectionKey
+  modelCatalogGroups={$ctrl.modelCatalogGroups}
+  modelCatalogModels={$ctrl.modelCatalogModels}
+  {selectedModelWidthCh}
+  onModelChange={({ providerId, modelId }: { providerId: string; modelId: string }) => {
+    ctrl.setModelSelection(providerId as ModelProviderId, modelId);
+    selectedModelSelectionKey = `${providerId}::${modelId}`;
+  }}
+  showStopButton={composerSteerReady && activeAssistantMessage !== null}
+  stopInFlight={stoppingMessageId === activeAssistantMessage?.id}
+  onStopAssistant={stopAssistantMessage}
+  primaryDisabled={composerPrimaryActionState.disabled}
+  primaryShowsSteer={composerPrimaryButtonShowsSteer}
+  onPrimaryAction={handleComposerPrimaryAction}
+  {renderStopIcon}
+  {renderSteerIcon}
+  {renderSendIcon}
 />
-
-<style>
-  .composer-rich :global(.markdown-input-wrapper),
-  .userMarkdown :global(.markdown-input-wrapper) {
-    padding-left: 0;
-    margin-left: 0;
-    border-left: 0;
-  }
-
-  .composer-rich :global(.markdown-input-wrapper:hover),
-  .userMarkdown :global(.markdown-input-wrapper:hover) {
-    border-left-color: transparent;
-    background-color: transparent;
-  }
-
-  .composer-rich :global(.markdown-wrapper) {
-    max-height: 100%;
-    overflow: hidden;
-  }
-
-  .composer-rich :global(.ProseMirror) {
-    outline: none;
-  }
-
-  .composer-single-line :global(.ProseMirror) {
-    line-height: 1.25rem;
-  }
-
-  .userMarkdown :global(.markdown-wrapper .text-slate-700),
-  .userMarkdown :global(.markdown-wrapper .text-slate-700 *) {
-    color: #fff;
-  }
-</style>
