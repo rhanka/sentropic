@@ -3362,6 +3362,14 @@
             </svelte:fragment>
           </MenuPopover>
 {/snippet}
+{#snippet renderComposerSurfaceInput()}
+            <EditableInput
+              markdown={true}
+              bind:value={input}
+              placeholder={$_('chat.composer.placeholder.chat')}
+              on:change={handleComposerChange}
+            />
+{/snippet}
 {#snippet renderRestoreIcon()}<UndoDot class="w-3.5 h-3.5" />{/snippet}
 {#snippet renderTrashIcon()}<Trash2 class="w-4 h-4" />{/snippet}
 {#snippet renderChevronIcon(p: { collapsed: boolean })}
@@ -3384,6 +3392,7 @@
   bind:commentThreadId
   bind:commentLoading
   {renderComposerInput}
+  {renderComposerSurfaceInput}
   {renderThreadMenuPopover}
   bind:panelEl
   bind:listEl

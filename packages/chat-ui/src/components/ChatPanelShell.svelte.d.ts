@@ -36,6 +36,7 @@ export type ChatPanelShellProps = {
   commentThreadId?: string | null;
   commentLoading?: boolean;
   labels?: (key: string, opts?: Record<string, unknown>) => string;
+  renderComposerSurfaceInput?: Snippet;
   renderComposerInput?: Snippet<
     [
       {

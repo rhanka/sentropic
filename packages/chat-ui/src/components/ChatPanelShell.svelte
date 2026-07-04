@@ -53,6 +53,13 @@
     k,
   ) => k;
 
+  /**
+   * AI composer surface input — host renders its bare rich-text editor
+   * (no aria-textbox wrapper: the ChatComposer shell provides the textbox
+   * role itself; a wrapper here would duplicate it).
+   */
+  export let renderComposerSurfaceInput: Snippet | undefined = undefined;
+
   /** Host-rendered rich-text composer input (e.g. TipTap contenteditable). */
   export let renderComposerInput:
     | Snippet<
@@ -698,14 +705,8 @@
                 loadingLabel={labels('common.loading')}
                 errorLabel={labels('common.error')}
               />
-              {#if renderComposerInput}
-                {@render renderComposerInput({
-                  value: input,
-                  disabled: false,
-                  placeholder: labels('chat.composer.placeholder.chat'),
-                  onChange: (v: string) => onComposerChange(new CustomEvent('change', { detail: { value: v } })),
-                  onKeyDown: onComposerKeyDown,
-                })}
+              {#if renderComposerSurfaceInput}
+                {@render renderComposerSurfaceInput()}
               {/if}
     {/snippet}
 
