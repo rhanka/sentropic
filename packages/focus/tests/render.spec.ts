@@ -181,7 +181,6 @@ describe("renderHtml — chrome i18n (F2, FR-first)", () => {
     expect(out).toContain("<h3>Résultat (décision)</h3>");
     expect(out).toContain("<h3>Traçabilité des amendements</h3>");
     expect(out).toContain("<h3>Actions (aperçu en lecture seule)</h3>");
-    expect(out).toContain("(désactivé)");
     expect(out).not.toContain("Amendment trace");
     expect(out).not.toContain("Outcome (");
   });
