@@ -30,6 +30,10 @@ export const decisionDossierFixture: DecisionDossierDocument = {
       id: "q-publish",
       targetRef: "q-publish",
       question: "Publish @sentropic/focus at L1?",
+      context:
+        "L1 is fixture-driven with **no track dependency**. Publishing before a real consumer wires it would ship dead scaffolding.",
+      stakes:
+        "The repo's real-consumption rule: a package is only accepted once an app root imports it.",
       recommendedAnswer: "No — keep it private until a real consumer wires it.",
       answer: "No.",
       state: "validated",
@@ -45,7 +49,12 @@ export const decisionDossierFixture: DecisionDossierDocument = {
           id: "opt-private",
           targetRef: "opt-private",
           label: "Private app-local package",
-          body: "private: true, extract later",
+          summary: "Ship private: true; extract to a public package later.",
+          rationale:
+            "Keeps the reusable boundary **without** breaking the real-consumption rule.",
+          consequenceIfChosen:
+            "Extract `@sentropic/focus` only once a real consumer wires it.",
+          recommended: true,
           annotation: "accept",
         },
         {
@@ -53,6 +62,7 @@ export const decisionDossierFixture: DecisionDossierDocument = {
           id: "opt-publish",
           targetRef: "opt-publish",
           label: "Publish immediately",
+          impact: "Ships an **unconsumed** package — dead scaffolding on npm.",
           annotation: "reject",
           annotationComment: "Violates the real-consumption rule.",
         },
@@ -79,8 +89,12 @@ export const decisionDossierFixture: DecisionDossierDocument = {
       id: "decision:focus-render-core:outcome",
       targetRef: "decision:focus-render-core:outcome",
       modality: "decision",
+      verdict: "GO — private-first",
       statement:
         "Ship a PRIVATE @sentropic/focus render-core first; publish only after a real consumer wires it.",
+      motivation:
+        "The private-first path is **reversible** and satisfies the repo's real-consumption rule; publishing early is not.",
+      chosenOptionId: "opt-private",
     },
   ],
   interactions: [

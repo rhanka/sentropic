@@ -3,8 +3,9 @@
  *
  * Asserts: the fixture maps to a `DecisionDossierDocument`; terminal/MD/HTML render the
  * structure; the amendment trace renders on all three; affordances appear as DISABLED metadata;
- * diagrams fall back to a fenced/`<pre>`/text block (no diagram adapter); markdown is injected
- * (MD passthrough, HTML via the host hook) and HTML is sanitized via the host hook.
+ * diagrams fall back to a fenced/`<pre>`/text block (no diagram adapter); HTML markdown uses a
+ * built-in default (marked, F1) with an optional host override; MD prose passes through; and HTML
+ * is sanitized via the host hook.
  */
 
 import { describe, expect, it } from "vitest";
@@ -107,7 +108,7 @@ describe("renderHtml", () => {
     expect(out).toContain("<h1>Should focus ship a private render-core first?</h1>");
   });
 
-  it("injects markdown via the host renderMarkdown hook (no marked dep)", () => {
+  it("uses the host renderMarkdown hook as an override when provided", () => {
     expect(out).toContain("<md>## Context");
   });
 
@@ -128,14 +129,120 @@ describe("renderHtml", () => {
     expect(out).toContain("Split M1 into L1..L4");
   });
 
-  it("renders affordances as aria-disabled metadata", () => {
+  it("renders affordances as disabled DS buttons + a copyable command (no <del>)", () => {
     expect(out).toContain('class="focus-affordance"');
+    expect(out).toContain('class="focus-affordance-btn"');
     expect(out).toContain('aria-disabled="true"');
     expect(out).toContain('data-affordance="ratifyOutcome"');
+    expect(out).toContain('class="focus-affordance-cmd"');
+    expect(out).toContain(
+      "stp focus decision:focus-render-core:outcome --ratifyOutcome",
+    );
+    expect(out).not.toContain("<del>");
   });
 
   it("escapes renderer-emitted text content", () => {
-    expect(out).toContain("ref: <code>decision:focus-render-core</code>");
+    expect(out).toContain("réf: <code>decision:focus-render-core</code>");
+  });
+});
+
+describe("renderHtml — built-in default markdown (F1, no host hook)", () => {
+  // No renderMarkdown hook → the built-in default (marked) must render real markdown, not raw '##'.
+  const out = renderHtml(doc, { sanitizeHtml: (html) => html });
+
+  it("renders markdown headings instead of raw '##'", () => {
+    expect(out).toContain("<h2>Context</h2>");
+    expect(out).not.toContain("## Context");
+  });
+
+  it("renders inline emphasis (bold) from the prose", () => {
+    expect(out).toContain("<strong>first</strong>");
+  });
+
+  it("still lets a host renderMarkdown hook override the default", () => {
+    const overridden = renderHtml(doc, {
+      renderMarkdown: (md) => `<md>${md}</md>`,
+      sanitizeHtml: (html) => html,
+    });
+    expect(overridden).toContain("<md>## Context");
+    expect(overridden).not.toContain("<h2>Context</h2>");
+  });
+});
+
+describe("renderHtml — chrome i18n (F2, FR-first)", () => {
+  it("renders chrome labels FR-first by default (no locale)", () => {
+    const out = renderHtml(doc, hooks);
+    expect(out).toContain("sujet: Focus-M1 L1 render-core packaging");
+    expect(out).toContain("réf: <code>decision:focus-render-core</code>");
+    expect(out).toContain("curseur: <code>v7</code>");
+    expect(out).toContain("<em>(validé)</em>");
+    expect(out).toContain("préco: No");
+    expect(out).toContain("réponse: No.");
+    expect(out).toContain("<h3>Résultat (décision)</h3>");
+    expect(out).toContain("<h3>Traçabilité des amendements</h3>");
+    expect(out).toContain("<h3>Actions (aperçu en lecture seule)</h3>");
+    expect(out).toContain("(désactivé)");
+    expect(out).not.toContain("Amendment trace");
+    expect(out).not.toContain("Outcome (");
+  });
+
+  it("renders English chrome when locale is 'en'", () => {
+    const en = renderHtml({ ...doc, locale: "en" }, hooks);
+    expect(en).toContain("subject: Focus-M1 L1 render-core packaging");
+    expect(en).toContain("<h3>Outcome (decision)</h3>");
+    expect(en).toContain("Amendment trace");
+    expect(en).not.toContain("Résultat");
+    expect(en).not.toContain("Traçabilité");
+  });
+
+  it("sets <html lang> from the authored content language when themed", () => {
+    const themed = renderHtml({ ...doc, language: "fr-CA" }, hooks, {
+      inlineCss: "x",
+    });
+    expect(themed).toContain('<html lang="fr-CA" data-st-theme="entropic">');
+  });
+
+  it("defaults <html lang> to the FR-first locale when no language is set", () => {
+    const themed = renderHtml(doc, hooks, { inlineCss: "x" });
+    expect(themed).toContain('<html lang="fr" data-st-theme="entropic">');
+  });
+});
+
+describe("renderHtml — enriched model (F3, detailed/motivated)", () => {
+  // Default markdown (no override) + FR chrome → the rich bodies render as real markdown.
+  const out = renderHtml(doc, { sanitizeHtml: (html) => html });
+
+  it("marks and badges the recommended option", () => {
+    expect(out).toContain('data-recommended="true"');
+    expect(out).toContain('focus-badge-recommended">recommandé</span>');
+  });
+
+  it("renders option rationale + consequence with eyebrow labels (markdown)", () => {
+    expect(out).toContain('class="focus-option-rationale"');
+    expect(out).toContain('focus-eyebrow">Justification</span>');
+    expect(out).toContain("<strong>without</strong>");
+    expect(out).toContain('class="focus-option-consequence"');
+    expect(out).toContain('focus-eyebrow">Conséquence si retenue</span>');
+    expect(out).toContain("<code>@sentropic/focus</code>");
+  });
+
+  it("renders the rejected option's impact", () => {
+    expect(out).toContain('class="focus-option-impact"');
+    expect(out).toContain("<strong>unconsumed</strong>");
+  });
+
+  it("renders the question context and stakes (markdown)", () => {
+    expect(out).toContain('class="focus-q-context"');
+    expect(out).toContain("<strong>no track dependency</strong>");
+    expect(out).toContain('class="focus-q-stakes"');
+    expect(out).toContain('focus-eyebrow">Enjeux</span>');
+  });
+
+  it("renders the outcome verdict and motivation", () => {
+    expect(out).toContain('class="focus-verdict">GO — private-first</p>');
+    expect(out).toContain('class="focus-outcome-motivation"');
+    expect(out).toContain('focus-eyebrow">Motivation</span>');
+    expect(out).toContain("<strong>reversible</strong>");
   });
 });
 
@@ -155,6 +262,34 @@ describe("renderHtml — default output stays a bare fragment (reversible)", () 
   });
 });
 
+describe("FOCUS_COMPONENT_CSS — flat, 100% DS tokens (F4)", () => {
+  it("has no box-shadow and no card radius on content (flat)", () => {
+    expect(FOCUS_COMPONENT_CSS).not.toContain("box-shadow");
+    expect(FOCUS_COMPONENT_CSS).not.toContain("radius-md");
+    expect(FOCUS_COMPONENT_CSS).not.toContain("radius-lg");
+  });
+
+  it("uses only the pill radius (badges/tags), never a content-box radius", () => {
+    const radii = FOCUS_COMPONENT_CSS.match(/border-radius:[^;]+;/g) ?? [];
+    expect(radii.length).toBeGreaterThan(0);
+    expect(radii.every((r) => /radius-pill|999px/.test(r))).toBe(true);
+  });
+
+  it("accents options by a left filet colored via DS alert tokens (no encasing box)", () => {
+    expect(FOCUS_COMPONENT_CSS).toContain("border-left: 0.25rem");
+    expect(FOCUS_COMPONENT_CSS).toContain("--st-component-alert-successBorder");
+    expect(FOCUS_COMPONENT_CSS).toContain("--st-component-alert-errorBorder");
+    expect(FOCUS_COMPONENT_CSS).toContain("--st-component-alert-warningBorder");
+  });
+
+  it("styles the enriched F3 elements and wraps long content", () => {
+    expect(FOCUS_COMPONENT_CSS).toContain(".focus-eyebrow");
+    expect(FOCUS_COMPONENT_CSS).toContain(".focus-verdict");
+    expect(FOCUS_COMPONENT_CSS).toContain(".focus-badge-recommended");
+    expect(FOCUS_COMPONENT_CSS).toContain("overflow-wrap: anywhere");
+  });
+});
+
 describe("renderHtml — DS-themed, self-contained document (opt-in)", () => {
   // A sentinel DS token sheet (proves the inlined CSS is the host-supplied one, not invented).
   const tokenCss = '[data-st-theme="entropic"]{--st-semantic-text-primary:#0f172a}';
@@ -162,7 +297,7 @@ describe("renderHtml — DS-themed, self-contained document (opt-in)", () => {
 
   it("emits a self-contained html document scoped to the DS theme", () => {
     expect(out.startsWith("<!DOCTYPE html>")).toBe(true);
-    expect(out).toContain('<html lang="en" data-st-theme="entropic">');
+    expect(out).toContain('<html lang="fr" data-st-theme="entropic">');
     expect(out).toContain("</body></html>");
   });
 
