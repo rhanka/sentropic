@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/focus",
-  "version": "0.4.0",
-  "description": "Focused-session document runtime (FocusSnapshot): the concrete decision-dossier document model + deterministic terminal/MD/HTML renderers + a /track read binding over @sentropic/track/read + a /cli read-only driver (stp focus). Read-only snapshot render-core; markdown injected by the host, HTML sanitized by the host. (Focus-M1 L3)",
+  "version": "0.5.0",
+  "description": "Focused-session document runtime (FocusSnapshot): the concrete decision-dossier document model + deterministic terminal/MD/HTML renderers + a /track read binding over @sentropic/track/read + a /cli read-only driver (stp focus). Read-only snapshot render-core; markdown rendered by a built-in default (marked, host-overridable), HTML sanitized by the host. (Focus-M1 F1)",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -40,7 +40,8 @@
   },
   "dependencies": {
     "@sentropic/design-system-themes": "^0.11.0",
-    "@sentropic/track": "^0.17.0"
+    "@sentropic/track": "^0.17.0",
+    "marked": "^17.0.6"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",

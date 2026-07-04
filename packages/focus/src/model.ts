@@ -23,6 +23,9 @@ export type FocusRef = string;
  */
 export type TargetRef = string;
 
+/** UI-chrome locale for renderer labels. FR-first (repo policy). */
+export type FocusLocale = "fr" | "en";
+
 /** Outcome modalities. The decision-dossier's primary modality is `decision`. */
 export type OutcomeModality = "decision" | "orientation" | "amendment" | "comment";
 
@@ -51,6 +54,10 @@ export interface ProseNode extends FocusNodeBase {
 export interface QuestionNode extends FocusNodeBase {
   readonly kind: "question";
   readonly question: string;
+  /** Framing/context for the question — MARKDOWN. */
+  readonly context?: string;
+  /** What is at stake — MARKDOWN. */
+  readonly stakes?: string;
   /** The recommended answer (préco). Optional — a question may be open with no préco yet. */
   readonly recommendedAnswer?: string;
   /** The actual answer, when answered. */
@@ -62,7 +69,18 @@ export interface QuestionNode extends FocusNodeBase {
 export interface OptionNode extends FocusNodeBase {
   readonly kind: "option";
   readonly label: string;
+  /** One-line summary (plain text). */
+  readonly summary?: string;
+  /** Rich body — MARKDOWN. */
   readonly body?: string;
+  /** Why this option — MARKDOWN. */
+  readonly rationale?: string;
+  /** What happens if this option is chosen — MARKDOWN. */
+  readonly consequenceIfChosen?: string;
+  /** Impact / tradeoffs — MARKDOWN. */
+  readonly impact?: string;
+  /** Marks the recommended option (the préco). */
+  readonly recommended?: boolean;
   readonly annotation: OptionAnnotationState;
   /** Optional free-text comment carried with a `comment` annotation. */
   readonly annotationComment?: string;
@@ -79,7 +97,13 @@ export interface OptionSetNode extends FocusNodeBase {
 export interface OutcomeNode extends FocusNodeBase {
   readonly kind: "outcome";
   readonly modality: OutcomeModality;
+  /** Short verdict verb (e.g. "GO", "NO-GO", "ratifié"). Optional. */
+  readonly verdict?: string;
   readonly statement: string;
+  /** Justification / motivation — MARKDOWN. */
+  readonly motivation?: string;
+  /** id/targetRef of the chosen option, if any. */
+  readonly chosenOptionId?: string;
 }
 
 /** One ordered step of the amendment trace. */
@@ -160,6 +184,10 @@ export interface DecisionDossierDocument {
   readonly hash: string;
   /** Read cursor / version marker from the source. */
   readonly cursor: string;
+  /** UI-chrome locale for renderer labels (FR-first default). Distinct from content `language`. */
+  readonly locale?: FocusLocale;
+  /** BCP-47 language of the AUTHORED content — sets `<html lang>`; never machine-translated. */
+  readonly language?: string;
   readonly sections: readonly FocusNode[];
   /** Disabled-affordance metadata (read-only snapshot). */
   readonly interactions: readonly Affordance[];
