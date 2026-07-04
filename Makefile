@@ -2728,3 +2728,35 @@ oauth-rotate-keys: ## Rotate the active Ed25519 signing key; old key stays in JW
 oauth-rotate-service-client: ## Rotate a service client secret (single-secret cutover). Usage: make oauth-rotate-service-client CLIENT_ID=<id> ENV=<env>
 	@test -n "$(CLIENT_ID)" || { echo "ERROR: CLIENT_ID is required: make oauth-rotate-service-client CLIENT_ID=<id> ENV=<env>"; exit 1; }
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -e CLIENT_ID="$(CLIENT_ID)" api sh -lc "npm run oauth:rotate-service-client"
+
+# BR-CSV-EX1 — additive targets for @sentropic/cited-source-viewer (Lot 2 first cut, feat/cited-source-viewer-lot2).
+# Rationale: the repo is Make-only; the new package needs its quality gates runnable through make.
+#   Mirrors the chat-ui docker ephemeral-install pattern (BR-A0b-EX1 precedent). Additive only —
+#   no existing target modified. Publish/pack wiring deliberately deferred to the architect API review.
+# Rollback: delete the four targets below.
+.PHONY: typecheck-cited-source-viewer
+typecheck-cited-source-viewer: ## Run @sentropic/cited-source-viewer type checks
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+
+.PHONY: test-cited-source-viewer
+test-cited-source-viewer: ## Run @sentropic/cited-source-viewer pure tests (node env: quote match, pdf geometry, body registry, purity gates)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
+
+.PHONY: test-cited-source-viewer-dom
+# Toolchain note (differs from the chat-ui dom recipe on three pins, all forced):
+#   - svelte@5.56.4: svelte 5.55.7's ESM compiler build fails to strip TS optional-parameter
+#     markers (`foo?`) from lang="ts" components, so the DS dist .svelte files compile into
+#     invalid JS under vite/vitest (CJS build unaffected). Fixed upstream by 5.56.x; still
+#     within the workspace override range ^5.55.7.
+#   - vite@7.3.6 + @sveltejs/vite-plugin-svelte@6.2.4: vitest 4.0.18 depends on vite ^7 (a
+#     top-level vite@8 gets shadowed by a nested vite@7 copy anyway), so pin ONE vite 7 and
+#     the plugin major that peers with it (plugin 7.x peers vite ^8 only).
+test-cited-source-viewer-dom: ## Run @sentropic/cited-source-viewer frame tests (jsdom, Svelte 5 + real DS components)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.56.4 vite@7.3.6 @sveltejs/vite-plugin-svelte@6.2.4 jsdom@29.1.1 "@sentropic/design-system-svelte@^0.34.33" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@sentropic node_modules/@lucide; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-themes" node_modules/@sentropic/design-system-themes; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
+
+.PHONY: build-cited-source-viewer
+build-cited-source-viewer: ## Build @sentropic/cited-source-viewer (tsc dist for the pure modules + declarations; .svelte sources are plain-JS script and ship as-is)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
