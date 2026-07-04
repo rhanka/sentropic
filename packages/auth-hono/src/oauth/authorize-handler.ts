@@ -193,6 +193,16 @@ const resumeLoginContinuation = async (
     userId: session.user.id,
   });
 
+  // `prompt=login` forces re-AUTHENTICATION but must NOT force re-CONSENT (OIDC): a stored grant
+  // covering the requested scopes still applies. Mirror the main-flow skipConsent check here so the
+  // re-auth resume issues the code directly instead of re-showing consent on every login. Note:
+  // `prompt=consent` never sets forceReauth, so it never reaches this resume path — no consent
+  // override is bypassed, and scope-escalation stays guarded by hasCoveringGrant's superset check.
+  if (await hasCoveringGrant(options.ports, session.user.id, client.clientId, scopeResult)) {
+    const codePayload = await options.stateCodec.unseal(sealedState);
+    if (codePayload) return issueAuthorizedCode(c, options, codePayload);
+  }
+
   return c.redirect(appendParams(options.consentUrl, { state: sealedState }, c.req.url), 302);
 };
 
