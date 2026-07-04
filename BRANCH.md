@@ -37,7 +37,7 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
   - Declare exception ID `BRGS-EXn` in `## Feedback Loop` before touching any conditional/forbidden path, with reason, impact, rollback.
 
 ## Feedback Loop
-- (none yet)
+- S6c parity evidence: branch stack verified up (ui 5620=200, api 9520 responding); pixel captures É1/É2/É3 pending on Playwright MCP attach (user Chrome busy — intermittent). Evidence will be attached BEFORE owner UAT/merge; CI e2e chat specs provide the functional proof meanwhile.
 
 ## AI Flaky tests
 - Acceptance rule:
