@@ -73,7 +73,13 @@ export const themeColors = {
       ? `rgb(255 255 255 / ${opacityValue})`
       : v('--st-semantic-surface-default', '#ffffff'),
   slate: {
-    50: v('--st-semantic-surface-subtle', '#f8fafc'),
+    // Function form: the todo-runtime panel uses `bg-slate-50/70` (gold
+    // shell) — same alpha pattern as `primary` so the modifier keeps working
+    // against the themable var (color-mix fallback == literal at N/100).
+    50: ({ opacityValue }) =>
+      hasExplicitAlpha(opacityValue)
+        ? withAlpha(v('--st-semantic-surface-subtle', '#f8fafc'), opacityValue)
+        : v('--st-semantic-surface-subtle', '#f8fafc'),
     100: v('--st-semantic-surface-sunken', '#f1f5f9'),
     // BLOCKED (owner ratification 2026-06-13): kept literal — not in the DS frozen chat-token
     // list. Re-token to --st-component-control-hoverBackground only once the DS lane ratifies it.

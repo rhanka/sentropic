@@ -24,6 +24,7 @@
   import MessageActions from './MessageActions.svelte';
   import StreamMessage from './StreamMessage.svelte';
   import GeneratedFileCardTray from '../documents/GeneratedFileCardTray.svelte';
+  import ImageLightbox from '../documents/ImageLightbox.svelte';
   import MessageAttachments from '../documents/MessageAttachments.svelte';
   import type { ChatGeneratedFileCard } from '../documents/generated-file-cards.js';
   import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
@@ -179,6 +180,33 @@
   export let cancelCheckpointPrompt: () => void | Promise<void> = () => {};
 
   export let errorMsg: string | null = null;
+
+  // --- AI mode: todo-runtime bottom panel + lightbox (gold shell S5a2c1) ---
+  export type TodoRuntimeTaskLike = {
+    id?: string;
+    title: string;
+    status?: string;
+  };
+  export type TodoRuntimePanelLike = {
+    todoId: string;
+    title: string;
+    conflictMessage: string | null;
+    tasks: TodoRuntimeTaskLike[];
+  };
+  export let todoRuntimePanel: TodoRuntimePanelLike | null = null;
+  export let todoRuntimeCollapsed = false;
+  export let todoRuntimeDeleteInFlight = false;
+  export let pendingTodoRuntimeDeleteConfirm = false;
+  export let onDeleteTodoRuntime: () => void | Promise<void> = () => {};
+  export let isRuntimeTaskDone: (status: string | undefined) => boolean = () =>
+    false;
+  /** Icons stay host-side (lucide): trash + collapse chevron. */
+  export let renderTrashIcon: Snippet | undefined = undefined;
+  export let renderChevronIcon: Snippet<[{ collapsed: boolean }]> | undefined =
+    undefined;
+
+  export let lightboxImage: { src: string; alt: string } | null = null;
+  export let onCloseLightbox: () => void = () => {};
 </script>
 
 <div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
@@ -479,7 +507,129 @@
         {/if}
       </div>
     </div>
-    <!-- S5a2c seam: composer region (attachment band, composer, model selector). -->
+    {#if todoRuntimePanel}
+      <div class="w-full border-t border-slate-200 bg-slate-50/70" data-testid="todo-runtime-panel">
+        <div class="px-3 py-2">
+          <div class="w-full flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="text-xs font-semibold text-slate-700">
+                {labels('chat.todoRuntimePanel.title')}
+              </div>
+              <div class="text-[11px] text-slate-500 truncate">
+                {todoRuntimePanel.title || labels('chat.todoRuntimePanel.subtitle')}
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button
+                class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                type="button"
+                disabled={todoRuntimeDeleteInFlight}
+                on:click={() => (pendingTodoRuntimeDeleteConfirm = true)}
+                aria-label={labels('chat.todoRuntimePanel.delete')}
+                title={labels('chat.todoRuntimePanel.delete')}
+                data-testid="todo-runtime-delete-button"
+              >
+                {#if renderTrashIcon}{@render renderTrashIcon()}{/if}
+              </button>
+              <button
+                type="button"
+                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                on:click={() => (todoRuntimeCollapsed = !todoRuntimeCollapsed)}
+                aria-label={todoRuntimeCollapsed
+                  ? labels('chat.todoRuntimePanel.expand')
+                  : labels('chat.todoRuntimePanel.collapse')}
+                title={todoRuntimeCollapsed
+                  ? labels('chat.todoRuntimePanel.expand')
+                  : labels('chat.todoRuntimePanel.collapse')}
+                data-testid="todo-runtime-toggle-button"
+              >
+                {#if renderChevronIcon}{@render renderChevronIcon({ collapsed: todoRuntimeCollapsed })}{/if}
+              </button>
+            </div>
+          </div>
+          {#if !todoRuntimeCollapsed}
+            <div class="mt-2 max-h-28 overflow-y-auto slim-scroll space-y-2 text-[11px] text-slate-700">
+              {#if pendingTodoRuntimeDeleteConfirm}
+                <div class="chat-delete-confirm-surface rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+                  <div class="text-xs font-semibold text-slate-700">
+                    {labels('chat.todoRuntimePanel.confirmDelete')}
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      class="chat-delete-confirm-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                      on:click={() => void onDeleteTodoRuntime()}
+                      disabled={todoRuntimeDeleteInFlight}
+                    >
+                      {labels('common.delete')}
+                    </button>
+                    <button
+                      type="button"
+                      class="chat-delete-confirm-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      on:click={() => (pendingTodoRuntimeDeleteConfirm = false)}
+                      disabled={todoRuntimeDeleteInFlight}
+                    >
+                      {labels('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              {/if}
+              {#if todoRuntimePanel.conflictMessage}
+                <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                  {todoRuntimePanel.conflictMessage}
+                </div>
+              {/if}
+              <div>
+                <div class="font-medium">
+                  {labels('chat.todoRuntimePanel.tasksLabel')} ({todoRuntimePanel.tasks.length})
+                </div>
+                {#if todoRuntimePanel.tasks.length === 0}
+                  <div class="mt-1 text-[11px] text-slate-500">
+                    {labels('chat.todoRuntimePanel.noTasks')}
+                  </div>
+                {:else}
+                  <ul class="mt-1 space-y-1">
+                    {#each todoRuntimePanel.tasks as task, index (task.id ?? `${todoRuntimePanel.todoId}-${index}`)}
+                      {@const done = isRuntimeTaskDone(task.status)}
+                      <li class="flex items-center gap-2">
+                        <span
+                          class={`inline-flex h-3.5 w-3.5 items-center justify-center rounded border text-[9px] leading-none ${
+                            done
+                              ? 'border-emerald-500 bg-emerald-500 text-white'
+                              : 'border-slate-400 text-transparent'
+                          }`}
+                        >{done ? '✓' : ''}</span
+                        >
+                        <span
+                          class={`truncate ${
+                            done ? 'line-through text-slate-400' : 'text-slate-700'
+                          }`}
+                        >
+                          {task.title}
+                        </span>
+                        <span class="sr-only">
+                          {done
+                            ? labels('chat.todoRuntimePanel.completedTaskLabel')
+                            : labels('chat.todoRuntimePanel.pendingTaskLabel')}
+                        </span>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+    <!-- S5a2c2 seam: composer region (attachment band, composer, model selector). -->
     <slot name="ai-composer" />
   {/if}
 </div>
+
+<ImageLightbox
+  image={lightboxImage}
+  onClose={onCloseLightbox}
+  closeLabel={labels('chat.attachments.lightbox.close')}
+  downloadLabel={labels('chat.attachments.lightbox.download')}
+/>
