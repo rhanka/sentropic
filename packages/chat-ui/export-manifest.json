@@ -1,7 +1,7 @@
 {
-  "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step \u2014 noted below). Regenerate by reading src/** exports and updating this file on any export change.",
+  "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-08",
-  "_version": "0.22.0",
+  "_version": "0.23.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -428,49 +428,49 @@
       "kind": "svelte",
       "file": "dist/components/ChatPanel.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./components/ChatWidget.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatWidget.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./components/StreamMessage.svelte": {
       "kind": "svelte",
       "file": "dist/components/StreamMessage.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./components/ChatTimeline.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatTimeline.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./components/ChatComposer.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatComposer.svelte",
       "exists": true,
-      "_propSnapshot": "Props: mode? ('ai'|'comments'), value? (string), disabled? (boolean), isMultiline? (boolean), maxHeight? (number), surfaceEnabled? (boolean), surfaceDisabled? (boolean), ariaLabel? (string), tabIndex? (number), composerElement? (HTMLDivElement|null), onKeyDown? (fn), onPaste? (fn), renderComposerSurface (Snippet), renderFloatingLayer (Snippet), renderAttachmentTray? (Snippet), renderLeftControls (Snippet), renderRightActions (Snippet), autoGrow? (boolean, default false \u2014 P6 opt-in), baseHeight? (number, default 40), containerHeight? (number, default 0)"
+      "_propSnapshot": "Props: mode? ('ai'|'comments'), value? (string), disabled? (boolean), isMultiline? (boolean), maxHeight? (number), surfaceEnabled? (boolean), surfaceDisabled? (boolean), ariaLabel? (string), tabIndex? (number), composerElement? (HTMLDivElement|null), onKeyDown? (fn), onPaste? (fn), renderComposerSurface (Snippet), renderFloatingLayer (Snippet), renderAttachmentTray? (Snippet), renderLeftControls (Snippet), renderRightActions (Snippet), autoGrow? (boolean, default false — P6 opt-in), baseHeight? (number, default 40), containerHeight? (number, default 0)"
     },
     "./components/ModelSelector.svelte": {
       "kind": "svelte",
       "file": "dist/components/ModelSelector.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./components/MessageActions.svelte": {
       "kind": "svelte",
       "file": "dist/components/MessageActions.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./components/ChatContextPicker.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatContextPicker.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./utils/markdown-refs": {
       "kind": "ts",
@@ -547,19 +547,19 @@
       "kind": "svelte",
       "file": "dist/components/ContextChips.svelte",
       "exists": true,
-      "_propSnapshot": "DEFERRED to A0b \u2014 requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
+      "_propSnapshot": "DEFERRED to A0b — requires svelte-check/compile step to extract prop types from .svelte files; not available in node-only vitest environment"
     },
     "./components/ChatConversation.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatConversation.svelte",
       "exists": true,
-      "_propSnapshot": "Props: host (ChatUiWebHost), sessionId? (string), layout? ('inline'|'docked'|'floating'), labels? (ChatUiLabelResolver), features? (ChatConversationFeatures), renderers? (RendererRegistry), models? (ModelCatalogModel[]), modelGroups? (ModelCatalogGroup[]), selectedModel? (string), contextProvider? (ChatContextProvider). v0.12.1: handleSend drives real stream (host.transport.postMessage JSON parse \u2192 assistant _streamId \u2192 host.streamClient.setStream \u2192 StreamMessage live) + local-tool dispatch via host.localTools.sendMessage + ChatContextPicker replaces ContextChips."
+      "_propSnapshot": "Props: host (ChatUiWebHost), sessionId? (string), layout? ('inline'|'docked'|'floating'), labels? (ChatUiLabelResolver), features? (ChatConversationFeatures), renderers? (RendererRegistry), models? (ModelCatalogModel[]), modelGroups? (ModelCatalogGroup[]), selectedModel? (string), contextProvider? (ChatContextProvider). v0.12.1: handleSend drives real stream (host.transport.postMessage JSON parse → assistant _streamId → host.streamClient.setStream → StreamMessage live) + local-tool dispatch via host.localTools.sendMessage + ChatContextPicker replaces ContextChips."
     },
     "./components/SessionList.svelte": {
       "kind": "svelte",
       "file": "dist/components/SessionList.svelte",
       "exists": true,
-      "_propSnapshot": "Props: sessions? (SessionListEntry[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn: sessionId \u2192 void), onDelete? (fn: sessionId \u2192 void)"
+      "_propSnapshot": "Props: sessions? (SessionListEntry[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn: sessionId → void), onDelete? (fn: sessionId → void)"
     },
     "./state/sessionList": {
       "kind": "ts",
@@ -639,25 +639,25 @@
       "kind": "svelte",
       "file": "dist/documents/AttachmentBand.svelte",
       "exists": true,
-      "_propSnapshot": "Props: items (UnifiedAttachmentItem[]), onResolveSrc? (fn: item\u2192string), onEnlarge? (fn: item,src\u2192void), onRemove? (fn: item\u2192void), removeLabel? (string), enlargeLabel? (string), loadingLabel? (string), errorLabel? (string)"
+      "_propSnapshot": "Props: items (UnifiedAttachmentItem[]), onResolveSrc? (fn: item→string), onEnlarge? (fn: item,src→void), onRemove? (fn: item→void), removeLabel? (string), enlargeLabel? (string), loadingLabel? (string), errorLabel? (string)"
     },
     "./documents/GeneratedFileCardTray.svelte": {
       "kind": "svelte",
       "file": "dist/documents/GeneratedFileCardTray.svelte",
       "exists": true,
-      "_propSnapshot": "Props: cards (ChatGeneratedFileCard[]), onDownload? (fn: card\u2192void), downloadLabel? (string)"
+      "_propSnapshot": "Props: cards (ChatGeneratedFileCard[]), onDownload? (fn: card→void), downloadLabel? (string)"
     },
     "./documents/ImageLightbox.svelte": {
       "kind": "svelte",
       "file": "dist/documents/ImageLightbox.svelte",
       "exists": true,
-      "_propSnapshot": "Props: image ({src,alt}|null), onClose? (fn: \u2192void), closeLabel? (string), downloadLabel? (string)"
+      "_propSnapshot": "Props: image ({src,alt}|null), onClose? (fn: →void), closeLabel? (string), downloadLabel? (string)"
     },
     "./documents/MessageAttachments.svelte": {
       "kind": "svelte",
       "file": "dist/documents/MessageAttachments.svelte",
       "exists": true,
-      "_propSnapshot": "Props: attachments (ChatMessageAttachment[]), onResolveSrc? (fn: attachment\u2192string), onEnlarge? (fn: src,alt\u2192void), enlargeLabel? (string)"
+      "_propSnapshot": "Props: attachments (ChatMessageAttachment[]), onResolveSrc? (fn: attachment→string), onEnlarge? (fn: src,alt→void), enlargeLabel? (string)"
     },
     "./comments": {
       "kind": "ts",
@@ -694,6 +694,24 @@
     "./theme.css": {
       "kind": "css",
       "file": "dist/theme/chat-ui.css"
+    },
+    "./components/ChatPanelShell.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatPanelShell.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: mode? ('ai'|'comments'), panelEl? (bindable), comment* (host/context/thread), labels? (translator), renderComposerInput?/renderThreadMenuPopover?/renderEditForm?/renderComposerMenu?/render*Icon? (Snippets), listEl?/historyStageMeasureEl?/composerEl? (bindable), projectedTimelineItems?/stagedHistoryTimelineItems?, messagesCount?, historyHydration*?, sessionId?, editing/clipboard/checkpoint/generated-file/runtime/action/attachment callbacks, permission prompts + checkpoint confirm + errorMsg, todoRuntimePanel* + lightbox, composer input/multiline/maxHeight/keydown/paste/change, attachmentBand + band callbacks, model selection (selectedModelSelectionKey bindable, groups/models/widthCh/onModelChange), stop/primary action states"
+    },
+    "./components/ChatSessionsBar.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatSessionsBar.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: sessions? (ChatWidgetSession[]), sessionId? (string|null), loading? (boolean), barLabels (SessionsBarLabels), labels? (translator), onNewSession?/onConfirmDelete? (callbacks), deleteConfirmPending? (bindable boolean), deleteInFlight? (boolean), renderSessionsMenu? (Snippet), renderPlusIcon?/renderTrashIcon? (Snippets)"
+    },
+    "./state/chatSessionHydration": {
+      "kind": "ts",
+      "file": "dist/state/chatSessionHydration.js",
+      "exists": true,
+      "_propSnapshot": "Exports: SessionHistoryMetaLine/SessionHistoryTimelineLine/SessionHistoryLine types, parseSessionHistoryLine, createNdjsonSplitter, createHydrationGenerations, shouldFlushHistoryStage, normalizeHydratedMessage, upsertSequencedMessage, getTimelineItemSortSequence/Subsequence, compareTimelineItems, mergeTimelineBlockIntoHistory, HistoryScrollRestore + resolveHistoryScrollRestore"
     }
   }
 }
