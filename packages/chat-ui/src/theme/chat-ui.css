@@ -530,6 +530,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .visible {
   visibility: visible;
 }
+[data-st-chat-theme] .invisible {
+  visibility: hidden;
+}
 [data-st-chat-theme] .collapse {
   visibility: collapse;
 }
@@ -596,6 +599,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .z-50 {
   z-index: 50;
+}
+[data-st-chat-theme] .z-\[-1\] {
+  z-index: -1;
 }
 [data-st-chat-theme] .col-span-2 {
   grid-column: span 2 / span 2;
@@ -838,6 +844,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .items-center {
   align-items: center;
+}
+[data-st-chat-theme] .justify-start {
+  justify-content: flex-start;
 }
 [data-st-chat-theme] .justify-end {
   justify-content: flex-end;
@@ -1128,6 +1137,11 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .opacity-60 {
   opacity: 0.6;
+}
+[data-st-chat-theme] .shadow {
+  --tw-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --tw-shadow-colored: 0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 [data-st-chat-theme] .shadow-2xl {
   --tw-shadow: var(--st-elevation-3, 0 25px 50px -12px rgb(0 0 0 / 0.25));
