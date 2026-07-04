@@ -79,6 +79,7 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
   - [x] S5a2c1: todo-runtime panel + lightbox ported (alpha-capable slate-50 in theme token map).
   - [x] S5a2c2: composer region (ChatComposer mount + surface/left/right snippets + ModelSelector) + gold <style> ported.
   - [x] Gold markup/composition fully moved into `ChatPanelShell.svelte` (host concerns injected via props/snippets).
+  - [x] S5b: ChatSessionsBar component (gold sessions bar from ChatWidget, resolveSessionsBar-driven).
   - [ ] Density: carry the sentropic "petit" sizing as it is today (preset formalization deferred to Lot A2).
   - [ ] Lot gate: typecheck + test-chat-ui green.
 
