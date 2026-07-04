@@ -20,9 +20,12 @@
   import CommentsPanel from '../comments/CommentsPanel.svelte';
   import type { CommentHost } from '../comments/host.js';
   import type { CommentThreadSummary } from '../comments/types.js';
+  import ChatComposer from './ChatComposer.svelte';
   import ChatTimeline from './ChatTimeline.svelte';
+  import ModelSelector from './ModelSelector.svelte';
   import MessageActions from './MessageActions.svelte';
   import StreamMessage from './StreamMessage.svelte';
+  import AttachmentBand from '../documents/AttachmentBand.svelte';
   import GeneratedFileCardTray from '../documents/GeneratedFileCardTray.svelte';
   import ImageLightbox from '../documents/ImageLightbox.svelte';
   import MessageAttachments from '../documents/MessageAttachments.svelte';
@@ -207,6 +210,54 @@
 
   export let lightboxImage: { src: string; alt: string } | null = null;
   export let onCloseLightbox: () => void = () => {};
+
+  // --- AI mode: composer region (gold shell S5a2c2) ---
+  export let input = '';
+  export let composerIsMultiline = false;
+  export let composerMaxHeight = 40;
+  export let composerEl: HTMLDivElement | null = null;
+  export let onComposerKeyDown: (event: KeyboardEvent) => void = () => {};
+  export let onComposerPaste: ((event: ClipboardEvent) => void) | undefined =
+    undefined;
+  export let onComposerChange: (event: CustomEvent<{ value: string }>) => void =
+    () => {};
+
+  /** Composer surface banners (host-domain errors, gold markup module-side). */
+  export let sessionDocsError: string | null = null;
+  export let googleDriveConnectionError: string | null = null;
+
+  /** Attachment band above the input (documents suite). */
+  export let attachmentBand: readonly unknown[] = [];
+  export let getBandItemImageSrc:
+    | ((item: unknown) => string | Promise<string>)
+    | undefined = undefined;
+  export let removeBandItem: (item: unknown) => void | Promise<void> = () => {};
+
+  /**
+   * Left controls: the "+" documents/contexts/tools popover is host domain
+   * (drive wiring, tool registry) — injected as a snippet; the module renders
+   * the gold ModelSelector next to it.
+   */
+  export let renderComposerMenu: Snippet | undefined = undefined;
+  export let selectedModelSelectionKey = '';
+  export let modelCatalogGroups: readonly unknown[] = [];
+  export let modelCatalogModels: readonly unknown[] = [];
+  export let selectedModelWidthCh = 18;
+  export let onModelChange: (selection: {
+    providerId: string;
+    modelId: string;
+  }) => void = () => {};
+
+  /** Right actions: stop (while steering) + primary send/steer button. */
+  export let showStopButton = false;
+  export let stopInFlight = false;
+  export let onStopAssistant: () => void = () => {};
+  export let primaryDisabled = true;
+  export let primaryShowsSteer = false;
+  export let onPrimaryAction: () => void = () => {};
+  export let renderStopIcon: Snippet | undefined = undefined;
+  export let renderSteerIcon: Snippet | undefined = undefined;
+  export let renderSendIcon: Snippet | undefined = undefined;
 </script>
 
 <div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
@@ -622,8 +673,112 @@
         </div>
       </div>
     {/if}
-    <!-- S5a2c2 seam: composer region (attachment band, composer, model selector). -->
-    <slot name="ai-composer" />
+    {#snippet renderComposerSurface()}
+              {#if sessionDocsError}
+                <div
+                  class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
+                >
+                  {sessionDocsError}
+                </div>
+              {/if}
+              {#if googleDriveConnectionError}
+                <div
+                  class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
+                >
+                  {googleDriveConnectionError}
+                </div>
+              {/if}
+              <AttachmentBand
+                items={attachmentBand as never}
+                onResolveSrc={getBandItemImageSrc as never}
+                onEnlarge={((item: { fileName: string }, src: string) => openLightbox(src, item.fileName)) as never}
+                onRemove={((item: unknown) => void removeBandItem(item)) as never}
+                removeLabel={labels('chat.documents.delete.ariaLabel')}
+                enlargeLabel={labels('chat.attachments.enlarge')}
+                loadingLabel={labels('common.loading')}
+                errorLabel={labels('common.error')}
+              />
+              {#if renderComposerInput}
+                {@render renderComposerInput({
+                  value: input,
+                  disabled: false,
+                  placeholder: labels('chat.composer.placeholder.chat'),
+                  onChange: (v: string) => onComposerChange(new CustomEvent('change', { detail: { value: v } })),
+                  onKeyDown: onComposerKeyDown,
+                })}
+              {/if}
+    {/snippet}
+
+    {#snippet renderFloatingLayer()}
+          <!-- floating layer: checkpoints panel and other overlays (mention menu moved to CommentsPanel) -->
+    {/snippet}
+
+    {#snippet renderLeftControls()}
+          {#if renderComposerMenu}{@render renderComposerMenu()}{/if}
+          <ModelSelector
+            bind:value={selectedModelSelectionKey}
+            groups={modelCatalogGroups as never}
+            models={modelCatalogModels as never}
+            widthCh={selectedModelWidthCh}
+            {labels}
+            onChange={onModelChange as never}
+          />
+    {/snippet}
+
+    {#snippet renderRightActions()}
+          {#if showStopButton}
+            <button
+              class="chat-composer-stop-button rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
+              on:click={onStopAssistant}
+              disabled={stopInFlight}
+              type="button"
+              aria-label="Stopper"
+              title="Stopper"
+            >
+              {#if renderStopIcon}{@render renderStopIcon()}{/if}
+            </button>
+          {/if}
+          <button
+            class="rounded bg-primary hover:bg-primary/90 text-white w-8 h-8 flex items-center justify-center disabled:opacity-60"
+            on:click={onPrimaryAction}
+            disabled={primaryDisabled}
+            type="button"
+            aria-label={primaryShowsSteer
+              ? labels('chat.steer.submit')
+              : labels('common.send')}
+            title={primaryShowsSteer
+              ? labels('chat.steer.submit')
+              : labels('common.send')}
+            data-testid={primaryShowsSteer
+              ? 'chat-composer-steer-button'
+              : 'chat-composer-send-button'}
+          >
+            {#if primaryShowsSteer}
+              {#if renderSteerIcon}{@render renderSteerIcon()}{/if}
+            {:else}
+              {#if renderSendIcon}{@render renderSendIcon()}{/if}
+            {/if}
+          </button>
+    {/snippet}
+
+    <ChatComposer
+      mode="ai"
+      value={input}
+      disabled={false}
+      isMultiline={composerIsMultiline}
+      maxHeight={composerMaxHeight}
+      surfaceEnabled={true}
+      surfaceDisabled={false}
+      ariaLabel={labels('chat.composer.ariaLabel')}
+      tabIndex={0}
+      bind:composerElement={composerEl}
+      onKeyDown={onComposerKeyDown}
+      onPaste={onComposerPaste}
+      {renderComposerSurface}
+      {renderFloatingLayer}
+      {renderLeftControls}
+      {renderRightActions}
+    />
   {/if}
 </div>
 
@@ -633,3 +788,36 @@
   closeLabel={labels('chat.attachments.lightbox.close')}
   downloadLabel={labels('chat.attachments.lightbox.download')}
 />
+
+<style>
+  .composer-rich :global(.markdown-input-wrapper),
+  .userMarkdown :global(.markdown-input-wrapper) {
+    padding-left: 0;
+    margin-left: 0;
+    border-left: 0;
+  }
+
+  .composer-rich :global(.markdown-input-wrapper:hover),
+  .userMarkdown :global(.markdown-input-wrapper:hover) {
+    border-left-color: transparent;
+    background-color: transparent;
+  }
+
+  .composer-rich :global(.markdown-wrapper) {
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .composer-rich :global(.ProseMirror) {
+    outline: none;
+  }
+
+  .composer-single-line :global(.ProseMirror) {
+    line-height: 1.25rem;
+  }
+
+  .userMarkdown :global(.markdown-wrapper .text-slate-700),
+  .userMarkdown :global(.markdown-wrapper .text-slate-700 *) {
+    color: #fff;
+  }
+</style>

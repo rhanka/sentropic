@@ -77,8 +77,8 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
   - [x] S5a2a: timeline region ported (5 snippets + hydration measure + loading/empty/timeline render) + theme css regenerated (drift guard).
   - [x] S5a2b: banners/confirm region ported (local-tool permission prompts, checkpoint confirm, error banner).
   - [x] S5a2c1: todo-runtime panel + lightbox ported (alpha-capable slate-50 in theme token map).
-  - [ ] S5a2c2: composer region + gold <style>.
-  - [ ] Move the gold markup/composition from AppChatPanel into `packages/chat-ui/src/components/ChatPanelShell.svelte`, rendering from the controller; host-specific concerns stay injected via existing adapter ports.
+  - [x] S5a2c2: composer region (ChatComposer mount + surface/left/right snippets + ModelSelector) + gold <style> ported.
+  - [x] Gold markup/composition fully moved into `ChatPanelShell.svelte` (host concerns injected via props/snippets).
   - [ ] Density: carry the sentropic "petit" sizing as it is today (preset formalization deferred to Lot A2).
   - [ ] Lot gate: typecheck + test-chat-ui green.
 
