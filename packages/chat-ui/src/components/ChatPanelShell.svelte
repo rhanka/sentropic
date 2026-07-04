@@ -157,6 +157,28 @@
 
   /** Checkpoint-restore icon (host-injected to keep icon set host-side). */
   export let renderRestoreIcon: Snippet | undefined = undefined;
+
+  // --- AI mode: banners + confirms (gold shell S5a2b) ---
+  export type LocalToolPermissionPromptLike = {
+    toolCallId: string;
+    request: { toolName: string };
+  };
+  export let pendingLocalToolPermissionPrompts: readonly LocalToolPermissionPromptLike[] =
+    [];
+  export let onLocalToolPermissionDecision: (
+    prompt: LocalToolPermissionPromptLike,
+    decision: 'allow_once' | 'deny_once' | 'allow_always' | 'deny_always',
+  ) => void | Promise<void> = () => {};
+  export let resolvePermissionPromptDetails: (
+    prompt: LocalToolPermissionPromptLike,
+  ) => Array<{ label: string; value: string }> = () => [];
+
+  export let pendingCheckpointPrompt: { kind: string } | null = null;
+  export let checkpointActionInFlight = false;
+  export let confirmCheckpointPrompt: () => void | Promise<void> = () => {};
+  export let cancelCheckpointPrompt: () => void | Promise<void> = () => {};
+
+  export let errorMsg: string | null = null;
 </script>
 
 <div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
@@ -343,9 +365,118 @@
             {@render renderTimelineItems(projectedTimelineItems)}
           </div>
         {/if}
-        <!-- S5a2b seam: permission prompts, checkpoint confirm, error banner,
-             todo-runtime confirm land next. -->
-        <slot name="ai-rest" />
+        {#if pendingLocalToolPermissionPrompts.length > 0}
+          {#each pendingLocalToolPermissionPrompts as prompt (prompt.toolCallId)}
+            <div class="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+              <div class="text-xs font-semibold text-slate-700">
+                {labels('chat.tools.permissions.promptTitle')}
+              </div>
+              <div class="text-[11px] text-slate-600">
+                {labels('chat.tools.permissions.promptDescription', {
+                  values: {
+                    tool: prompt.request.toolName,
+                  },
+                })}
+              </div>
+              {#if resolvePermissionPromptDetails(prompt).length > 0}
+                <div class="space-y-1">
+                  {#each resolvePermissionPromptDetails(prompt) as detail}
+                    <div class="text-[11px] text-slate-600 break-all">
+                      <span class="font-semibold text-slate-700">{detail.label}:</span>
+                      {' '}
+                      {detail.value}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  class="chat-tool-permission-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
+                  on:click={() =>
+                    void onLocalToolPermissionDecision(
+                      prompt,
+                      'allow_once',
+                    )}
+                >
+                  {labels('chat.tools.permissions.allowOnce')}
+                </button>
+                <button
+                  type="button"
+                  class="chat-tool-permission-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                  on:click={() =>
+                    void onLocalToolPermissionDecision(
+                      prompt,
+                      'deny_once',
+                    )}
+                >
+                  {labels('chat.tools.permissions.denyOnce')}
+                </button>
+                <button
+                  type="button"
+                  class="chat-tool-permission-choice rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
+                  on:click={() =>
+                    void onLocalToolPermissionDecision(
+                      prompt,
+                      'allow_always',
+                    )}
+                >
+                  {labels('chat.tools.permissions.allowAlways')}
+                </button>
+                <button
+                  type="button"
+                  class="chat-tool-permission-choice rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
+                  on:click={() =>
+                    void onLocalToolPermissionDecision(
+                      prompt,
+                      'deny_always',
+                    )}
+                >
+                  {labels('chat.tools.permissions.denyAlways')}
+                </button>
+              </div>
+            </div>
+          {/each}
+        {/if}
+        {#if pendingCheckpointPrompt}
+          <div class="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+            <div class="text-xs font-semibold text-slate-700">
+              {pendingCheckpointPrompt.kind === 'retry'
+                ? labels('chat.checkpoints.confirmRestoreBeforeRetry')
+                : labels('chat.checkpoints.confirmRestoreBeforeAction')}
+            </div>
+            <div class="text-[11px] text-slate-600">
+              {labels('chat.checkpoints.confirmRestoreDetails')}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                on:click={() => void confirmCheckpointPrompt()}
+                disabled={checkpointActionInFlight}
+              >
+                {labels('chat.checkpoints.restoreCta')}
+              </button>
+              <button
+                type="button"
+                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                on:click={() => void cancelCheckpointPrompt()}
+                disabled={checkpointActionInFlight}
+              >
+                {pendingCheckpointPrompt.kind === 'retry'
+                  ? labels('chat.checkpoints.retryWithoutRestore')
+                  : labels('chat.checkpoints.continueWithoutRestore')}
+              </button>
+            </div>
+          </div>
+        {/if}
+        {#if errorMsg}
+          <div
+            class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2"
+          >
+            {errorMsg}
+          </div>
+        {/if}
       </div>
     </div>
     <!-- S5a2c seam: composer region (attachment band, composer, model selector). -->
