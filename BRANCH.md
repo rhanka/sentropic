@@ -85,7 +85,7 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
   - [ ] Lot gate: typecheck + test-chat-ui green.
 
 - [ ] **Lot 3 — Sentropic adoption (no visual change)**
-  - [ ] `AppChatPanel.svelte` becomes a thin host wrapper: adapters + app stores wired into `ChatPanelShell`.
+  - [x] `AppChatPanel.svelte` renders through `ChatPanelShell` (template 3931→3477 lines; dead app wrappers ChatComposerWrapper/ChatTimelineWrapper deleted; boundary + picker tests evolved — vitest4 constructible mocks; dogfoodedBy repointed).
   - [ ] Full `make test-ui` (vitest) green; boundary tests evolved in same commits if extraction breaks source-grep tests.
   - [ ] Parity proof: re-capture gold screens (É1/É2/É3-4) on the branch stack and diff vs the QA'd reference; record evidence.
   - [ ] Lot gate: typecheck-ui + lint-ui + test-ui + test-chat-ui green; parity evidence attached.
