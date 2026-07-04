@@ -73,6 +73,8 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
   - [ ] Lot gate: `make typecheck-chat-ui` + `make test-chat-ui` green.
 
 - [ ] **Lot 2 — ChatPanelShell.svelte view (gold markup)**
+  - [x] S5a1: ChatPanelShell scaffold + comments region (CommentsPanel forwarding, snippet props host-injected).
+  - [ ] S5a2: AI region (timeline + composer) ported faithfully from AppChatPanel L3241-3899.
   - [ ] Move the gold markup/composition from AppChatPanel into `packages/chat-ui/src/components/ChatPanelShell.svelte`, rendering from the controller; host-specific concerns stay injected via existing adapter ports.
   - [ ] Density: carry the sentropic "petit" sizing as it is today (preset formalization deferred to Lot A2).
   - [ ] Lot gate: typecheck + test-chat-ui green.
