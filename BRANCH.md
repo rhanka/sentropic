@@ -66,7 +66,7 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
 
 - [ ] **Lot 1 — Headless shell state (chat-ui/state)**
   - [x] S1a: sessions bar (label/menu/new/delete + inline delete-confirm) extracted into `chatWidgetShell.ts` (existing headless home) + 7 unit tests.
-  - [ ] S1b: session hydration helpers (NDJSON staging, deferred-clear anti-flash, hydration generations) extracted as pure injectable helpers.
+  - [x] S1b: session hydration helpers extracted into `chatSessionHydration.ts` (NDJSON splitter/parser, hydration generations, flush predicate, message normalize/ordered-upsert) + 9 unit tests.
   - [ ] S2: model-selection cluster.
   - [ ] S3: composer/steer/attachments cluster.
   - [ ] S4: layout/scroll cluster.
