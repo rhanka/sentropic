@@ -27,13 +27,13 @@
     "ChatTimeline.svelte": {
       "class": "primitive",
       "dogfoodedBy": [
-        "ui/src/lib/components/chat/ChatTimelineWrapper.svelte"
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
       ]
     },
     "ChatComposer.svelte": {
       "class": "primitive",
       "dogfoodedBy": [
-        "ui/src/lib/components/chat/ChatComposerWrapper.svelte"
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
       ]
     },
     "ModelSelector.svelte": {
