@@ -223,13 +223,15 @@
     };
   };
 
-  const isTerminalStatus = (s?: string) => s === 'completed' || s === 'failed' || s === 'done' || s === 'cancelled';
+  // NOTE: explicit union (not `s?:`) — the Svelte compiler keeps the `?` in its
+  // JS output, which the dom-test pipeline (rollup parseAst) rejects.
+  const isTerminalStatus = (s: string | undefined) => s === 'completed' || s === 'failed' || s === 'done' || s === 'cancelled';
 
   // Limite d'historique: sur les cartes/jobs on veut souvent un historique court,
   // tandis que sur le chat on garde davantage d'étapes.
   $: stepLimit = variant === 'job' ? Math.max(1, maxHistory) : 30;
 
-  const upsertStep = (title: string, body?: string) => {
+  const upsertStep = (title: string, body: string | undefined = undefined) => {
     const last = st.steps[st.steps.length - 1];
     if (last && last.title === title) {
       last.body = body;
@@ -295,12 +297,14 @@
     eventType: string,
     data: any,
     sequence: number,
-    createdAt?: string,
-    options?: {
-      collectDetails?: boolean;
-      collectContent?: boolean;
-      preserveAuxPreview?: boolean;
-    },
+    createdAt: string | undefined = undefined,
+    options:
+      | {
+          collectDetails?: boolean;
+          collectContent?: boolean;
+          preserveAuxPreview?: boolean;
+        }
+      | undefined = undefined,
   ) => {
     const collectDetails = options?.collectDetails ?? true;
     const collectContent = options?.collectContent ?? true;
