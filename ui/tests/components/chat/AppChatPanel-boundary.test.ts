@@ -46,14 +46,18 @@ describe('AppChatPanel boundary', () => {
     // rendered by the <AttachmentBand> module component (the data-testid
     // `chat-composer-attachment-band` now lives inside that component).
     expect(source).toContain('buildAttachmentBandItems');
-    expect(source).toContain('<AttachmentBand');
+    // Gold shell adoption (S6a): the band/lightbox/thumbnails markup renders
+    // inside @sentropic/chat-ui ChatPanelShell; the host passes the band items
+    // and lightbox wiring as props.
+    expect(source).toContain('<ChatPanelShell');
+    expect(source).toContain('attachmentBand={attachmentBand}');
     expect(source).toContain('openLightbox');
     // The image lightbox + per-message thumbnails now render via the
     // @sentropic/chat-ui/documents module components (the data-testid
     // `chat-image-lightbox` lives inside <ImageLightbox>; the per-message
     // grid lives inside <MessageAttachments>).
-    expect(source).toContain('<ImageLightbox');
-    expect(source).toContain('<MessageAttachments');
+    expect(source).toContain('lightboxImage={lightboxImage}');
+    expect(source).toContain('getAttachmentImageSrc');
     // Documents follow the same per-message model as images.
     expect(source).toContain('attachFileToComposer');
     // The separate bottom attachment tray is removed.
