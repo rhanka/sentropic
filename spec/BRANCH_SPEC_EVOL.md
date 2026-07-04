@@ -2,11 +2,11 @@
 
 Working note for `feat/chatui-gold-shell` (consolidated before tests, deleted at branch close).
 
-## Source anatomy — `ui/src/lib/components/chat/AppChatPanel.svelte` (3931 lines)
-- Script: L1–3116 (~210 top-level state vars, orchestration).
-- Template (gold markup): L3118–3899 (`.topai-chat-panel-shell`).
-- Style: L3900–3931 (31 lines).
-- Comments concern ALREADY extracted (CommentsPanel + createCommentState); AppChatPanel only mounts it for `mode==='comments'`.
+## Source anatomy — the gold shell spans TWO app-local components (~7000 lines)
+- `ui/src/lib/components/ChatWidget.svelte` (3107 lines; script L1–1960, template L1960–3107): dock chrome on top of module `ChatDock` — tabs (Commentaires/Chat IA/Jobs), **sessions bar** (label L2951–2958, menu/new/delete L2960–3060 incl. inline delete-confirm), jobs badge (already module: `resolveChatWidgetJobBadge`), focus-trap UX, display-mode wiring.
+- `ui/src/lib/components/chat/AppChatPanel.svelte` (3931 lines; script L1–3116 ~210 vars, gold template L3118–3899 `.topai-chat-panel-shell`, style L3900–3931): timeline + composer composition.
+- Comments concern ALREADY extracted (CommentsPanel + createCommentState); mounted for `mode==='comments'`.
+- Existing headless home for widget-chrome state: `packages/chat-ui/src/state/chatWidgetShell.ts` (tabs/badge/visibility pure helpers) → S1a extends it (sessions bar) instead of creating a parallel module.
 
 ## Host interface today (stays host-side)
 - Props: `sessions`, `contextStore`, `sessionId`, `draft`, `loadingSessions`, `mode: 'ai'|'comments'`, `comment*` (context/section/thread ids + labels), `commentLoading`.

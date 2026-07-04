@@ -64,9 +64,12 @@ Extract the sentropic gold chat panel composition (`ui/src/lib/components/chat/A
   - [x] Confirm scope and guardrails (above).
   - [x] Cartography: inventory AppChatPanel concerns → controller boundary doc (`spec/BRANCH_SPEC_EVOL.md`).
 
-- [ ] **Lot 1 — Headless panel-shell controller (chat-ui/state)**
-  - [ ] Extract orchestration state (sessions bar, model selection, attachments, steer/primary-action, tabs/layout, empty-state) into `packages/chat-ui/src/state/panelShell.ts` (framework-neutral, no Svelte imports).
-  - [ ] Unit tests for the controller (vitest, no DOM).
+- [ ] **Lot 1 — Headless shell state (chat-ui/state)**
+  - [x] S1a: sessions bar (label/menu/new/delete + inline delete-confirm) extracted into `chatWidgetShell.ts` (existing headless home) + 7 unit tests.
+  - [ ] S1b: session hydration helpers (NDJSON staging, deferred-clear anti-flash, hydration generations) extracted as pure injectable helpers.
+  - [ ] S2: model-selection cluster.
+  - [ ] S3: composer/steer/attachments cluster.
+  - [ ] S4: layout/scroll cluster.
   - [ ] Lot gate: `make typecheck-chat-ui` + `make test-chat-ui` green.
 
 - [ ] **Lot 2 — ChatPanelShell.svelte view (gold markup)**
