@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createHydrationGenerations,
+  getTimelineItemSortSubsequence,
+  mergeTimelineBlockIntoHistory,
+  resolveHistoryScrollRestore,
   createNdjsonSplitter,
   normalizeHydratedMessage,
   parseSessionHistoryLine,
@@ -104,5 +107,51 @@ describe('chatSessionHydration (gold shell S1b)', () => {
     const list = [{ id: 'a', sequence: 5 }];
     const next = upsertSequencedMessage(list, { id: 'z' });
     expect(next.map((m) => m.id)).toEqual(['z', 'a']);
+  });
+});
+
+describe('timeline ordering + scroll restore (gold shell S4)', () => {
+  const msg = (id: string, sequence: number) =>
+    ({ kind: 'message', key: `m:${id}`, message: { id, sequence } }) as never;
+  const seg = (id: string, sequence: number, kind: 'assistant-segment' | 'runtime-segment', segId: string) =>
+    ({ kind, key: `${kind}:${id}:${segId}`, message: { id, sequence }, streamId: id, segment: { id: segId, events: [] } }) as never;
+
+  it('orders by message sequence, then message row before runtime before assistant segments', () => {
+    const merged = mergeTimelineBlockIntoHistory(
+      [],
+      [seg('a', 1, 'assistant-segment', 'run:a:2'), msg('b', 2), seg('a', 1, 'runtime-segment', 'run:a:1'), msg('a', 1)],
+    );
+    expect(merged.map((i: { key: string }) => i.key)).toEqual([
+      'm:a',
+      'runtime-segment:a:run:a:1',
+      'assistant-segment:a:run:a:2',
+      'm:b',
+    ]);
+  });
+
+  it('upserts by key (replaces an existing item instead of duplicating)', () => {
+    const first = mergeTimelineBlockIntoHistory([], [msg('a', 1)]);
+    const second = mergeTimelineBlockIntoHistory(first, [msg('a', 1)]);
+    expect(second).toHaveLength(1);
+  });
+
+  it('subsequence: id without a numeric tail falls back to runtime=0, assistant=1', () => {
+    expect(getTimelineItemSortSubsequence(seg('a', 1, 'runtime-segment', 'abc'))).toBe(0);
+    expect(getTimelineItemSortSubsequence(seg('a', 1, 'assistant-segment', 'abc'))).toBe(1);
+  });
+
+  it('scroll restore: reveal/stick pin to bottom, otherwise delta-restore, else scheduled bottom', () => {
+    expect(
+      resolveHistoryScrollRestore({ revealAtBottom: true, stickBottom: false, previousScrollHeight: 0, previousScrollTop: 0, scrollHeight: 900 }),
+    ).toEqual({ kind: 'stick-bottom' });
+    expect(
+      resolveHistoryScrollRestore({ revealAtBottom: false, stickBottom: true, previousScrollHeight: 500, previousScrollTop: 100, scrollHeight: 900 }),
+    ).toEqual({ kind: 'stick-bottom' });
+    expect(
+      resolveHistoryScrollRestore({ revealAtBottom: false, stickBottom: false, previousScrollHeight: 500, previousScrollTop: 100, scrollHeight: 900 }),
+    ).toEqual({ kind: 'restore', scrollTop: 500 });
+    expect(
+      resolveHistoryScrollRestore({ revealAtBottom: false, stickBottom: false, previousScrollHeight: 0, previousScrollTop: 0, scrollHeight: 900 }),
+    ).toEqual({ kind: 'schedule-bottom' });
   });
 });
