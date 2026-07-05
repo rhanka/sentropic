@@ -54,36 +54,42 @@ export class StreamHistory {
 
   record(event: StreamHubEvent): void {
     const type = event.type;
+    // For the generic job_update, the jobId field is in the typed union member.
     if (type === 'job_update' && 'jobId' in event) {
-      if (event.jobId) this.lastJobEventById.set(event.jobId, event);
+      const jobId = String((event as { jobId?: string }).jobId ?? '');
+      if (jobId) this.lastJobEventById.set(jobId, event);
       return;
     }
-    if (type === 'organization_update' && 'organizationId' in event) {
-      if (event.organizationId) {
-        this.lastOrganizationEventById.set(event.organizationId, event);
+    // Domain event types are dispatched via the open member (fields accessed via asRecord).
+    const rec = asRecord(event);
+    if (type === 'organization_update') {
+      const organizationId = String(rec.organizationId ?? '');
+      if (organizationId) this.lastOrganizationEventById.set(organizationId, event);
+      return;
+    }
+    if (type === 'folder_update') {
+      const folderId = String(rec.folderId ?? '');
+      if (folderId) this.lastFolderEventById.set(folderId, event);
+      return;
+    }
+    if (type === 'usecase_update') {
+      const useCaseId = String(rec.useCaseId ?? '');
+      if (useCaseId) this.lastUseCaseEventById.set(useCaseId, event);
+      return;
+    }
+    if (type === 'comment_update') {
+      const contextType = String(rec.contextType ?? '');
+      const contextId = String(rec.contextId ?? '');
+      if (contextType && contextId) {
+        this.lastCommentEventByKey.set(`${contextType}:${contextId}`, event);
       }
       return;
     }
-    if (type === 'folder_update' && 'folderId' in event) {
-      if (event.folderId) this.lastFolderEventById.set(event.folderId, event);
-      return;
-    }
-    if (type === 'usecase_update' && 'useCaseId' in event) {
-      if (event.useCaseId) this.lastUseCaseEventById.set(event.useCaseId, event);
-      return;
-    }
-    if (type === 'comment_update' && 'contextType' in event && 'contextId' in event) {
-      if (event.contextType && event.contextId) {
-        this.lastCommentEventByKey.set(
-          `${event.contextType}:${event.contextId}`,
-          event,
-        );
-      }
-      return;
-    }
-    if (type === 'lock_update' && 'objectType' in event && 'objectId' in event) {
-      if (event.objectType && event.objectId) {
-        this.lastLockEventByKey.set(`${event.objectType}:${event.objectId}`, event);
+    if (type === 'lock_update') {
+      const objectType = String(rec.objectType ?? '');
+      const objectId = String(rec.objectId ?? '');
+      if (objectType && objectId) {
+        this.lastLockEventByKey.set(`${objectType}:${objectId}`, event);
       }
       return;
     }

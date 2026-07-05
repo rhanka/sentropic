@@ -17,6 +17,7 @@ export type ClaudeGenerateRequest = {
   mode: 'messages';
   requestOptions: Anthropic.MessageCreateParams;
   credential?: string;
+  claudeCodeTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null };
   signal?: AbortSignal;
 };
 
@@ -24,8 +25,19 @@ export type ClaudeStreamGenerateRequest = {
   mode: 'messages';
   requestOptions: Anthropic.MessageCreateParams;
   credential?: string;
+  claudeCodeTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null };
   signal?: AbortSignal;
 };
+
+const buildClaudeCodeFetch =
+  (transport: { accessToken: string; accountId?: string | null; stableSessionId?: string | null }): typeof fetch =>
+  async (input, init) => {
+    const headers = new Headers(init?.headers ?? {});
+    headers.delete('x-api-key');
+    headers.delete('X-Api-Key');
+    headers.set('authorization', `Bearer ${transport.accessToken}`);
+    return fetch(input, { ...init, headers });
+  };
 
 export class ClaudeProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
@@ -84,7 +96,7 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
       throw new Error('ClaudeProviderRuntime.generate: unsupported mode');
     }
 
-    const client = this.getClient(payload.credential);
+    const client = this.getClient(payload.credential, payload.claudeCodeTransport);
     return await client.messages.create(
       { ...payload.requestOptions, stream: false },
       { signal: payload.signal },
@@ -97,7 +109,7 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
       throw new Error('ClaudeProviderRuntime.streamGenerate: unsupported mode');
     }
 
-    const client = this.getClient(payload.credential);
+    const client = this.getClient(payload.credential, payload.claudeCodeTransport);
     const stream = client.messages.stream(payload.requestOptions, {
       signal: payload.signal,
     });
@@ -105,7 +117,17 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
     return this.toAsyncIterable(stream);
   }
 
-  private getClient(apiKeyOverride?: string): Anthropic {
+  private getClient(
+    apiKeyOverride?: string,
+    claudeCodeTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null },
+  ): Anthropic {
+    if (claudeCodeTransport?.accessToken) {
+      return new Anthropic({
+        apiKey: 'claude_code_dummy_key',
+        fetch: buildClaudeCodeFetch(claudeCodeTransport),
+      });
+    }
+
     const validation = this.validateCredential(apiKeyOverride);
     if (!validation.ok) {
       throw new Error(validation.message || 'Anthropic API key is not configured');

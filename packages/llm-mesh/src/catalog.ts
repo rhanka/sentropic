@@ -161,6 +161,7 @@ export const providerProfiles = {
     capabilities: capabilities({
       reasoningTier: 'advanced',
       structuredOutputLevel: 'tool-input-schema',
+      accountTransports: ['claude-code'],
     }),
   },
   mistral: {
@@ -199,6 +200,21 @@ export const providerProfiles = {
       structuredOutputLevel: 'json-schema-subset',
       unsupportedKeywords: geminiUnsupportedJsonSchemaKeywords,
       stringEnumsOnly: true,
+    }),
+  },
+  // Local provider: an OpenAI-compatible endpoint hosted on the machine (e.g.
+  // the Laneformer 2B sidecar on 127.0.0.1:8089). Uses the OpenAI wire family.
+  // No reasoning and no structured-output enforcement (a latency-first chat
+  // model). The baseURL/transport is wired in the api/gateway layer; this
+  // package stays transport-free. Disabled by default at the gateway level.
+  local: {
+    providerId: 'local',
+    family: 'openai',
+    label: 'Local',
+    status: 'planned',
+    capabilities: capabilities({
+      reasoningTier: 'none',
+      structuredOutputLevel: 'none',
     }),
   },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
@@ -351,6 +367,12 @@ export const modelProfiles = [
     defaultTaskHints: [],
     capabilities: modelCapabilities('gcp', 'standard', { vision: true }),
   },
+  // NOTE: the `local` provider is declared (provider profile above) and wired in
+  // the api runtime (LocalProviderRuntime -> the host sidecar), but no static
+  // model profile is advertised here yet. The sidecar serves `laneformer-2b-it`
+  // directly when selected; advertising it in the static catalog (with capability
+  // + streaming-normalization fixtures) is a follow-up so this change stays
+  // scoped to the provider surface and does not touch the runtime stream path.
 ] as const satisfies readonly ModelProfile[];
 
 export const providerCapabilityMatrix = providerProfiles;

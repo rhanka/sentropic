@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import AuthLogin from '@sentropic/auth-ui/components/AuthLogin.svelte';
+  import { Link } from '@sentropic/design-system-svelte';
   import type { AuthUiSession } from '@sentropic/auth-ui';
   import { locale } from '$lib/locale';
   import { createIdpAuthTransport, resolveAuthUiLabels } from '$lib/auth-transport';
@@ -8,6 +9,12 @@
 
   const transport = createIdpAuthTransport();
   let labels = $derived(resolveAuthUiLabels($locale));
+
+  // BR-39r L4 — OIDC `login_hint`: authorize forwards the hinted email as a plain `login_hint` param
+  // so the login form can pre-scope the passkey challenge to the known user (advisory; passkey login
+  // stays discoverable). Mirror the register page's `window.location.search` read.
+  const loginParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const presetEmail = loginParams.get('login_hint') ?? undefined;
 
   // Same continuation contract as the product `ui/` login screen: after a
   // successful login the IdP resumes the OAuth authorize flow (`continue`) it
@@ -26,16 +33,12 @@
 </script>
 
 <div class="flex items-center justify-center px-4 pb-16 pt-6">
-  <AuthLogin {transport} {labels} onLoggedIn={handleLoggedIn}>
-    <a slot="no-account" href="/auth/register" class="font-medium text-primary hover:opacity-80">
+  <AuthLogin {transport} {labels} {presetEmail} onLoggedIn={handleLoggedIn}>
+    <Link slot="no-account" href="/auth/register" variant="standalone">
       {labels.loginNoAccount}
-    </a>
-    <a
-      slot="register-new-device"
-      href="/auth/register"
-      class="font-medium text-primary hover:opacity-80"
-    >
+    </Link>
+    <Link slot="register-new-device" href="/auth/register" variant="standalone">
       {labels.loginRegisterNewDevice}
-    </a>
+    </Link>
   </AuthLogin>
 </div>

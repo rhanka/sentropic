@@ -1,10 +1,47 @@
+/**
+ * Migrated from checkpointDelta.ts to @sentropic/chat-ui/checkpoints + sentropic adapter opts.
+ * The generic module provides the core classifier; sentropic-specific opts (isMutatingTool,
+ * isLocalToolName, humanizeMutation) come from the adapter hooks.
+ */
 import { describe, expect, it } from 'vitest';
 import {
   getCheckpointMutationPreviewItems,
   hasCheckpointMutationDelta,
-} from '../../src/lib/utils/checkpointDelta';
+} from '@sentropic/chat-ui/checkpoints';
 
-describe('checkpointDelta', () => {
+// Sentropic domain opts (mirrors checkpointHostAdapter.ts hooks, without network calls).
+const MUTATING_TOOL_NAME_SUFFIXES = ['_create', '_update', '_delete'];
+const isMutatingTool = (toolName: string, _argsText: string): boolean =>
+  MUTATING_TOOL_NAME_SUFFIXES.some((suffix) => toolName.trim().toLowerCase().endsWith(suffix));
+
+const humanizeMutation = (toolName: string, argsText: string): string | null => {
+  let record: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = JSON.parse(argsText.trim());
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      record = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // ignore
+  }
+  const entity = toolName.replace(/_(create|update|delete)$/i, '');
+  const label = entity.replace(/_/g, ' ').trim();
+  if (!label) return null;
+  const idCandidate = String(
+    record?.id ??
+      record?.folderId ??
+      record?.useCaseId ??
+      record?.organizationId ??
+      record?.workspaceId ??
+      '',
+  ).trim();
+  const action = toolName.split('_').slice(-1)[0];
+  return idCandidate ? `${label} ${action}: ${idCandidate}` : `${label} ${action}`;
+};
+
+const sentropicOpts = { isMutatingTool, humanizeMutation };
+
+describe('checkpointDelta (migrated to @sentropic/chat-ui/checkpoints)', () => {
   it('does not expose checkpoint restore for read-only assistant turns', () => {
     const result = hasCheckpointMutationDelta(
       { anchorSequence: 1 },
@@ -28,6 +65,7 @@ describe('checkpointDelta', () => {
           ],
         ],
       ]),
+      sentropicOpts,
     );
 
     expect(result).toBe(false);
@@ -56,6 +94,7 @@ describe('checkpointDelta', () => {
           ],
         ],
       ]),
+      sentropicOpts,
     );
 
     expect(result).toBe(true);
@@ -85,6 +124,7 @@ describe('checkpointDelta', () => {
             ],
           ],
         ]),
+        sentropicOpts,
       ),
     ).toBe(false);
 
@@ -111,6 +151,7 @@ describe('checkpointDelta', () => {
             ],
           ],
         ]),
+        sentropicOpts,
       ),
     ).toBe(true);
   });
@@ -153,6 +194,7 @@ describe('checkpointDelta', () => {
           ],
         ],
       ]),
+      sentropicOpts,
     );
 
     expect(preview).toEqual(['src/lib/chat.ts', 'folder update: fld_123']);

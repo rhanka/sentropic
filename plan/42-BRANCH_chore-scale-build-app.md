@@ -40,6 +40,13 @@ client. See `handover-h2a-trust-concepts.md` + `b2b2b-sentropic-eval.md`.
   contract + observability + MCP/marketplace catalog (see §16 / BR-42b / BR-42g).
 - **BR-42g `feat/events-bigquery-sink`** — *Purpose*: add a **BigQuery `EventSink`** adapter
   (**PG and/or BigQuery**, incl. **PG-via-BigQuery**) for observability storage.
+- **BR-42h `feat/harness-followons`** — *Purpose*: the `@sentropic/harness` follow-ons handed to
+  scale/`stp` (the BR-25 in-fine deliverable is DONE: `@sentropic/harness@0.1.1` shipped). Backlog
+  in `plan/42h-BRANCH_feat-harness-followons.md`: D7 publish-federation register (GATED_D7 in
+  BR-42i's manifest, ZERO rework), `stp scope check` router, harness method-verb layer
+  (`harness brainstorm|test|debug|review --consensus|plan` + `branch|verify|init|audit`; native
+  superpowers-surface replacement — **BR-42k dissolved into it**), genericity G1–G6, enforcement
+  candidates C5/C7/C8/C10, BRANCH.md grammar conformance. Decision: `spec/SPEC_DECISION_SCOPE_OWNERSHIP_HARNESS_TRACK_STP.md`.
 
 ## Orchestration Mode
 - [x] **Multi-branch**: BR-42b..g are largely orthogonal package extensions and parallelisable; BR-42a1

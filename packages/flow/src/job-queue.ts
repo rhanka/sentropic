@@ -1,8 +1,18 @@
 /**
  * @sentropic/flow — JobQueue port.
  *
- * Postgres-based job queue with lease/heartbeat/DLQ/idempotency. The
- * concrete `JobType` and `JobData` unions live in the application
+ * Postgres-based job queue. Concrete implementation details (no lease/heartbeat/DLQ):
+ *   - Atomic `FOR UPDATE SKIP LOCKED` claim ensures each job is processed by exactly
+ *     one worker in a given in-process dispatcher (single-replica assumption).
+ *   - Status: pending → processing → completed | failed.
+ *   - `_retry` in the data JSON field tracks executor-level retry (attempt/maxRetries).
+ *   - `started_at` / `completed_at` stored as `timestamp with time zone`.
+ *   - `attempts` column tracks reaper-level requeue cycles (distinct from `_retry`).
+ *   - Stranded `processing` jobs are recovered by a periodic reaper sweep:
+ *     requeued up to QUEUE_MAX_REDELIVERIES times, then failed; `chat_message`
+ *     strands are always failed+finalized, never requeued.
+ *
+ * The concrete `JobType` and `JobData` unions live in the application
  * because they are tied to specific executor implementations
  * (organization_enrich, matrix_generate, etc.). The package keeps
  * them as generic parameters so future consumers can plug their own.

@@ -13,11 +13,15 @@ const config = {
     }),
     // `@sentropic/auth-ui` is consumed from its workspace SOURCE via a relative
     // `file:` symlink (web is a self-contained sub-project, not a workspace
-    // member), so its peer `@simplewebauthn/browser` is not resolvable from the
-    // auth-ui source path. Alias it to THIS project's installed copy for both
-    // svelte-check and the Vite build (one source of truth, no tsconfig paths).
+    // member), so its peer deps are not resolvable from the auth-ui source path.
+    // Alias each peer (`@simplewebauthn/browser`, the DS svelte components + the
+    // DS themes used by auth-ui's native DS components) to THIS project's installed
+    // copy for both svelte-check and the Vite build (one source of truth, no
+    // tsconfig paths). The DS deps are also `dedupe`d in vite.config.ts.
     alias: {
-      '@simplewebauthn/browser': './node_modules/@simplewebauthn/browser'
+      '@simplewebauthn/browser': './node_modules/@simplewebauthn/browser',
+      '@sentropic/design-system-svelte': './node_modules/@sentropic/design-system-svelte',
+      '@sentropic/design-system-themes': './node_modules/@sentropic/design-system-themes'
     },
     paths: {
       relative: false
@@ -27,7 +31,14 @@ const config = {
       handleMissingId: 'warn'
     }
   },
-  preprocess: vitePreprocess()
+  // `style: false` disables PostCSS preprocessing of <style> blocks. Tailwind is
+  // applied to the global `src/app.css` (Vite runs postcss.config on it directly)
+  // and none of this project's own .svelte files use <style> blocks. The consumed
+  // `@sentropic/auth-ui` + `@sentropic/design-system-svelte` ship plain scoped
+  // <style> (and `{@html "<style>${css}</style>"}` in ThemeProvider) which Svelte
+  // compiles natively; running the host's tailwind/autoprefixer PostCSS over them
+  // breaks (postcss "Unknown word css" on ThemeProvider's `${css}` literal).
+  preprocess: vitePreprocess({ style: false })
 };
 
 export default config;

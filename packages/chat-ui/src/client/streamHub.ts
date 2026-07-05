@@ -9,6 +9,25 @@ import {
   type StreamHubSubscription,
 } from './streamTypes.js';
 
+/**
+ * ALL SSE event type names the router registers EventSource listeners for.
+ * Extends STREAM_HUB_EVENT_TYPES with app-layer domain event names so that
+ * named server-sent events are received by the EventSource.
+ * These strings live here (implementation detail), NOT in the exported
+ * STREAM_HUB_EVENT_TYPES which defines the generic package taxonomy.
+ */
+const ALL_SSE_EVENT_TYPES: readonly string[] = [
+  ...STREAM_HUB_EVENT_TYPES,
+  'organization_update',
+  'folder_update',
+  'usecase_update',
+  'comment_update',
+  'lock_update',
+  'presence_update',
+  'workspace_update',
+  'workspace_membership_update',
+];
+
 export const createStreamHub = (options: StreamHubOptions): StreamHubClient => {
   return new StreamHub(options);
 };
@@ -128,73 +147,45 @@ class StreamHub implements StreamHubClient {
       });
       return;
     }
+    // Domain event types — dispatched via the open StreamHubEvent member.
+    // The extra fields (organizationId, folderId, etc.) are preserved in the
+    // event object for app-side consumers and the StreamHistory cache.
+    // Cast is safe: the open `{ type: string; data: unknown }` member covers them.
     if (type === 'organization_update') {
-      this.dispatch({
-        type,
-        organizationId: String(payload.organizationId ?? ''),
-        data: payload.data,
-      });
+      this.dispatch({ type, organizationId: String(payload.organizationId ?? ''), data: payload.data } as StreamHubEvent);
       return;
     }
     if (type === 'folder_update') {
-      this.dispatch({
-        type,
-        folderId: String(payload.folderId ?? ''),
-        data: payload.data,
-      });
+      this.dispatch({ type, folderId: String(payload.folderId ?? ''), data: payload.data } as StreamHubEvent);
       return;
     }
     if (type === 'usecase_update') {
-      this.dispatch({
-        type,
-        useCaseId: String(payload.useCaseId ?? ''),
-        data: payload.data,
-      });
+      this.dispatch({ type, useCaseId: String(payload.useCaseId ?? ''), data: payload.data } as StreamHubEvent);
       return;
     }
     if (type === 'comment_update') {
-      this.dispatch({
-        type,
-        contextType: String(payload.contextType ?? ''),
-        contextId: String(payload.contextId ?? ''),
-        data: payload.data,
-      });
+      this.dispatch({ type, contextType: String(payload.contextType ?? ''), contextId: String(payload.contextId ?? ''), data: payload.data } as StreamHubEvent);
       return;
     }
     if (type === 'lock_update') {
-      this.dispatch({
-        type,
-        objectType: String(payload.objectType ?? ''),
-        objectId: String(payload.objectId ?? ''),
-        data: payload.data,
-      });
+      this.dispatch({ type, objectType: String(payload.objectType ?? ''), objectId: String(payload.objectId ?? ''), data: payload.data } as StreamHubEvent);
       return;
     }
     if (type === 'presence_update') {
-      this.dispatch({
-        type,
-        objectType: String(payload.objectType ?? ''),
-        objectId: String(payload.objectId ?? ''),
-        data: payload.data,
-      });
+      this.dispatch({ type, objectType: String(payload.objectType ?? ''), objectId: String(payload.objectId ?? ''), data: payload.data } as StreamHubEvent);
       return;
     }
     if (type === 'workspace_update') {
-      this.dispatch({
-        type,
-        workspaceId: String(payload.workspaceId ?? ''),
-        data: payload.data,
-      });
+      this.dispatch({ type, workspaceId: String(payload.workspaceId ?? ''), data: payload.data } as StreamHubEvent);
       return;
     }
     if (type === 'workspace_membership_update') {
       this.dispatch({
         type,
         workspaceId: String(payload.workspaceId ?? ''),
-        userId:
-          typeof payload.userId === 'string' ? payload.userId : undefined,
+        userId: typeof payload.userId === 'string' ? payload.userId : undefined,
         data: payload.data,
-      });
+      } as StreamHubEvent);
       return;
     }
     if (type === 'ping') {
@@ -269,10 +260,10 @@ class StreamHub implements StreamHubClient {
     for (const sub of this.subs.values()) {
       try {
         if (sub.onlyType && event.type !== sub.onlyType) continue;
+        if (sub.onlyTypes && sub.onlyTypes.length > 0 && !sub.onlyTypes.includes(event.type)) continue;
         if (sub.streamId) {
-          if (!('streamId' in event) || event.streamId !== sub.streamId) {
-            continue;
-          }
+          if (!('streamId' in event)) continue;
+          if ((event as { streamId: string }).streamId !== sub.streamId) continue;
         }
         sub.onEvent(event);
       } catch {
@@ -364,7 +355,7 @@ class StreamHub implements StreamHubClient {
       }
     };
 
-    for (const type of STREAM_HUB_EVENT_TYPES) {
+    for (const type of ALL_SSE_EVENT_TYPES) {
       source.addEventListener(type, (event) => handle(type, event as MessageEvent));
     }
     source.onerror = () => {

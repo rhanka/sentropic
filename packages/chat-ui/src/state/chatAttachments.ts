@@ -1,21 +1,25 @@
-export type ChatAttachmentKind = 'image' | 'file';
+/**
+ * state/chatAttachments.ts
+ *
+ * Backward-compatible re-export facade for ChatComposerAttachmentDraft and
+ * related attachment types. The canonical definitions now live in
+ * packages/chat-ui/src/documents/types.ts (D7 documents module).
+ *
+ * All existing imports of these types from this path continue to resolve
+ * without modification. Local helpers (createImageAttachmentDraft,
+ * summarizeComposerAttachments, isSupportedImageAttachmentMimeType,
+ * ComposerAttachmentSummary) remain here as they are not duplicated.
+ */
 
-export type ChatAttachmentSource = 'paste' | 'upload' | 'drive' | 'context_document' | 'external_url';
+// Re-export canonical types from documents/types (dedup chain)
+export type {
+  ChatAttachmentKind,
+  ChatAttachmentSource,
+  ChatAttachmentState,
+  ChatComposerAttachmentDraft,
+} from '../documents/types.js';
 
-export type ChatAttachmentState = 'pending' | 'uploading' | 'ready' | 'failed';
-
-export type ChatComposerAttachmentDraft = {
-  id: string;
-  kind: ChatAttachmentKind;
-  source: ChatAttachmentSource;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  state: ChatAttachmentState;
-  documentId?: string;
-  previewUrl?: string;
-  error?: string;
-};
+// Local types that remain in this module (not duplicated elsewhere)
 
 export type ComposerAttachmentSummary = {
   total: number;
@@ -25,6 +29,13 @@ export type ComposerAttachmentSummary = {
   failed: number;
   images: number;
 };
+
+// Local imports for helper implementations
+import type {
+  ChatAttachmentSource,
+  ChatAttachmentState,
+  ChatComposerAttachmentDraft,
+} from '../documents/types.js';
 
 const SUPPORTED_IMAGE_ATTACHMENT_MIME_TYPES = new Set([
   'image/gif',

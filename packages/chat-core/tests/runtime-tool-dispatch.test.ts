@@ -734,4 +734,142 @@ describe('ChatRuntime.consumeToolCalls (Lot 21c / 21e-2)', () => {
     expect(result.streamSeq).toBe(15);
     expect(loopState.streamSeq).toBe(15);
   });
+
+  it('trips a terminal loop breaker after repeated identical returned tool errors in one assistant turn', async () => {
+    let requestSeq = 0;
+    const execStub = vi.fn(async () => {
+      requestSeq += 1;
+      return {
+        result: {
+          status: 'error',
+          code: 'code_runtime_error',
+          error: `Sandbox execution failed for request req_${requestSeq}`,
+        },
+        streamSeq: 10,
+      } as unknown as ExecuteServerToolResult;
+    });
+    const { runtime } = buildFixture({ executeServerTool: execStub });
+    const loopState = buildLoopState();
+    const repeatedArgs = '{"format":"docx","entityId":"org-1"}';
+
+    loopState.toolCalls = [
+      { id: 'tc-docx-1', name: 'document_generate', args: repeatedArgs },
+    ];
+    const first = await runtime.consumeToolCalls(buildInput(loopState));
+    expect(JSON.parse(first.responseToolOutputs[0]?.output ?? '{}')).toEqual({
+      status: 'error',
+      code: 'code_runtime_error',
+      error: 'Sandbox execution failed for request req_1',
+    });
+    expect(loopState.continueGenerationLoop).toBe(true);
+
+    loopState.toolCalls = [
+      { id: 'tc-docx-2', name: 'document_generate', args: repeatedArgs },
+    ];
+    const second = await runtime.consumeToolCalls(buildInput(loopState));
+    expect(JSON.parse(second.responseToolOutputs[0]?.output ?? '{}')).toEqual({
+      status: 'error',
+      code: 'code_runtime_error',
+      error: 'Sandbox execution failed for request req_2',
+    });
+    expect(loopState.continueGenerationLoop).toBe(true);
+
+    loopState.toolCalls = [
+      { id: 'tc-docx-3', name: 'document_generate', args: repeatedArgs },
+    ];
+    const third = await runtime.consumeToolCalls(buildInput(loopState));
+    const breakerOutput = JSON.parse(third.responseToolOutputs[0]?.output ?? '{}');
+
+    expect(execStub).toHaveBeenCalledTimes(3);
+    expect(loopState.continueGenerationLoop).toBe(false);
+    expect(third.shouldBreakLoop).toBe(true);
+    expect(breakerOutput.status).toBe('error');
+    expect(breakerOutput.code).toBe('tool_loop_repeated_error');
+    expect(breakerOutput.error).toContain('document_generate');
+    expect(breakerOutput.error).toContain('Stop retrying this tool call');
+  });
+
+  it('normalizes noisy thrown tool errors before tripping the loop breaker', async () => {
+    let requestSeq = 0;
+    const execStub = vi.fn(async () => {
+      requestSeq += 1;
+      throw new Error(
+        `Sandbox transport failed for request req_${requestSeq} trace trace_${requestSeq}`,
+      );
+    });
+    const { runtime } = buildFixture({ executeServerTool: execStub });
+    const loopState = buildLoopState();
+    const repeatedArgs = '{"format":"docx","entityId":"org-1"}';
+
+    loopState.toolCalls = [
+      { id: 'tc-docx-throw-1', name: 'document_generate', args: repeatedArgs },
+    ];
+    const first = await runtime.consumeToolCalls(buildInput(loopState));
+    expect(JSON.parse(first.responseToolOutputs[0]?.output ?? '{}')).toEqual({
+      status: 'error',
+      error: 'Sandbox transport failed for request req_1 trace trace_1',
+    });
+    expect(loopState.continueGenerationLoop).toBe(true);
+
+    loopState.toolCalls = [
+      { id: 'tc-docx-throw-2', name: 'document_generate', args: repeatedArgs },
+    ];
+    const second = await runtime.consumeToolCalls(buildInput(loopState));
+    expect(JSON.parse(second.responseToolOutputs[0]?.output ?? '{}')).toEqual({
+      status: 'error',
+      error: 'Sandbox transport failed for request req_2 trace trace_2',
+    });
+    expect(loopState.continueGenerationLoop).toBe(true);
+
+    loopState.toolCalls = [
+      { id: 'tc-docx-throw-3', name: 'document_generate', args: repeatedArgs },
+    ];
+    const third = await runtime.consumeToolCalls(buildInput(loopState));
+    const breakerOutput = JSON.parse(third.responseToolOutputs[0]?.output ?? '{}');
+
+    expect(execStub).toHaveBeenCalledTimes(3);
+    expect(loopState.continueGenerationLoop).toBe(false);
+    expect(third.shouldBreakLoop).toBe(true);
+    expect(breakerOutput.status).toBe('error');
+    expect(breakerOutput.code).toBe('tool_loop_repeated_error');
+    expect(breakerOutput.error).toContain('document_generate');
+  });
+
+  it('does not trip the repeated-error breaker when tool arguments change meaningfully', async () => {
+    const execStub = vi.fn(async () => ({
+      result: {
+        status: 'error',
+        code: 'code_runtime_error',
+        error: 'Sandbox execution failed for request req_67890',
+      },
+      streamSeq: 10,
+    }) as unknown as ExecuteServerToolResult);
+    const { runtime } = buildFixture({ executeServerTool: execStub });
+    const loopState = buildLoopState();
+
+    loopState.toolCalls = [
+      {
+        id: 'tc-docx-1',
+        name: 'document_generate',
+        args: '{"format":"docx","entityId":"org-1"}',
+      },
+    ];
+    await runtime.consumeToolCalls(buildInput(loopState));
+
+    loopState.toolCalls = [
+      {
+        id: 'tc-docx-2',
+        name: 'document_generate',
+        args: '{"format":"docx","entityId":"org-2"}',
+      },
+    ];
+    const second = await runtime.consumeToolCalls(buildInput(loopState));
+    const secondOutput = JSON.parse(second.responseToolOutputs[0]?.output ?? '{}');
+
+    expect(execStub).toHaveBeenCalledTimes(2);
+    expect(loopState.continueGenerationLoop).toBe(true);
+    expect(second.shouldBreakLoop).toBe(false);
+    expect(secondOutput.code).toBe('code_runtime_error');
+    expect(secondOutput.code).not.toBe('tool_loop_repeated_error');
+  });
 });

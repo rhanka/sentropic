@@ -1,0 +1,12 @@
+stp — the Sentropic umbrella CLI (alias: sentropic)
+
+Usage:
+  stp <subcommand> [args...]
+  stp --version | -v        Print the CLI version and registered subcommand versions
+  stp --help | -h           Show this help
+
+Subcommands:
+  app      Scaffold and operate a runnable @sentropic chat application (init, doctor).
+  surface  Build multi-repo analysis surfaces from graphify graph.json files.
+
+Run `stp <subcommand> --help` for subcommand-specific help.

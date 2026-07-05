@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { Alert, Button, Input, Typography } from '@sentropic/design-system-svelte';
   import {
     createDefaultAuthUiLabels,
     normalizeAuthEmail,
@@ -45,6 +46,23 @@
   }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
+
+  // BR-39r L4 (C3, invite fall-through): only a SYNTACTIC `sit_`-prefixed preset token is treated as
+  // an invite. When the server later rejects the invite it answers with the GENERIC
+  // `email_verification_required` (never an `invalid_invite` signal); the component then silently
+  // falls back to the cold email-first register, indistinguishable from a normal registration.
+  const INVITE_TOKEN_PREFIX = 'sit_';
+  const isInvitePreset =
+    skipEmailVerification &&
+    typeof presetVerificationToken === 'string' &&
+    presetVerificationToken.startsWith(INVITE_TOKEN_PREFIX);
+
+  // The fetch transport surfaces the raw server payload `{ error: { code, message } }` in
+  // `AuthUiError.cause`; the generic invalid-invite outcome is `error.code === 'email_verification_required'`.
+  const isEmailVerificationRequired = (err: AuthUiError): boolean => {
+    const cause = err.cause as { error?: { code?: unknown } } | undefined;
+    return cause?.error?.code === 'email_verification_required';
+  };
 
   let email = $state(presetEmail ?? '');
   let codeDigits = $state<string[]>(['', '', '', '', '', '']);
@@ -174,6 +192,17 @@
       deviceName,
     });
     if (!optionsResult.ok) {
+      // BR-39r L4: an invalid/expired/consumed invite collapses into the generic
+      // `email_verification_required` (C3). When we opened in invite mode, fall back silently to the
+      // cold email-first step (NO invalid-invite message) so the user can still register normally.
+      if (isInvitePreset && isEmailVerificationRequired(optionsResult.error)) {
+        verificationToken = '';
+        error = '';
+        success = '';
+        step = 'email';
+        loading = false;
+        return;
+      }
       reportError(optionsResult.error, optionsResult.error.message);
       loading = false;
       return;
@@ -216,60 +245,51 @@
 
 <div class="auth-ui-register">
   <header class="auth-ui-header">
-    <h2 class="auth-ui-title">{resolvedLabels.registerTitle}</h2>
-    <p class="auth-ui-subtitle">{resolvedLabels.registerSubtitle}</p>
+    <Typography variant="h2" align="center">{resolvedLabels.registerTitle}</Typography>
+    <Typography variant="body-sm" tone="muted" align="center">{resolvedLabels.registerSubtitle}</Typography>
   </header>
 
   {#if !webauthnSupported}
-    <div class="auth-ui-alert auth-ui-alert--error" role="alert">
-      <h3 class="auth-ui-alert__title">{resolvedLabels.registerUnsupportedBrowserTitle}</h3>
-      <p>{error}</p>
-    </div>
+    <Alert tone="error" title={resolvedLabels.registerUnsupportedBrowserTitle} message={error} />
   {:else if step === 'email'}
     <form class="auth-ui-form" onsubmit={handleRequestCode}>
-      <div class="auth-ui-field">
-        <label for="auth-ui-register-email" class="auth-ui-label">{resolvedLabels.registerEmailLabel}</label>
-        <input
-          id="auth-ui-register-email"
-          type="email"
-          required
-          bind:value={email}
-          disabled={loading}
-          placeholder={resolvedLabels.emailPlaceholder}
-          class="auth-ui-input"
-        />
-      </div>
+      <Input
+        id="auth-ui-register-email"
+        label={resolvedLabels.registerEmailLabel}
+        type="email"
+        required
+        bind:value={email}
+        disabled={loading}
+        placeholder={resolvedLabels.emailPlaceholder}
+      />
       {#if success}
-        <div class="auth-ui-alert auth-ui-alert--success" role="status">{success}</div>
+        <Alert tone="success" title={success} />
       {/if}
-      <button
+      <Button
+        variant="primary"
         type="submit"
         disabled={loading || !email.trim() || !isValidEmail(email.trim())}
-        class="auth-ui-button auth-ui-button--primary"
       >
         {loading ? resolvedLabels.registerSendingCode : resolvedLabels.registerGetCode}
-      </button>
+      </Button>
       {#if error}
-        <div class="auth-ui-alert auth-ui-alert--error" role="alert">{error}</div>
+        <Alert tone="error" title={error} />
       {/if}
       <div class="auth-ui-actions">
         <slot name="login-link">
-          <span class="auth-ui-link">{resolvedLabels.registerAlreadyHaveAccount}</span>
+          <Typography variant="body-sm" tone="muted">{resolvedLabels.registerAlreadyHaveAccount}</Typography>
         </slot>
       </div>
     </form>
   {:else if step === 'code'}
     <form class="auth-ui-form" onsubmit={handleCodeSubmit}>
-      <div class="auth-ui-field">
-        <label for="auth-ui-register-email-readonly" class="auth-ui-label">{resolvedLabels.registerEmailLabel}</label>
-        <input
-          id="auth-ui-register-email-readonly"
-          type="email"
-          value={email}
-          disabled
-          class="auth-ui-input auth-ui-input--disabled"
-        />
-      </div>
+      <Input
+        id="auth-ui-register-email-readonly"
+        label={resolvedLabels.registerEmailLabel}
+        type="email"
+        value={email}
+        disabled
+      />
       <div class="auth-ui-field">
         <label class="auth-ui-label" for="auth-ui-code-0">{resolvedLabels.registerCodeLabel}</label>
         <div class="auth-ui-code-row" onpaste={handleCodePaste}>
@@ -288,49 +308,30 @@
             />
           {/each}
         </div>
-        <p class="auth-ui-help">{resolvedLabels.registerCodeHelp}</p>
+        <Typography variant="caption" tone="muted" align="center">{resolvedLabels.registerCodeHelp}</Typography>
       </div>
       {#if error}
-        <div class="auth-ui-alert auth-ui-alert--error" role="alert">{error}</div>
+        <Alert tone="error" title={error} />
       {/if}
-      <button
-        type="submit"
-        disabled={loading || codeString.length !== 6}
-        class="auth-ui-button auth-ui-button--primary"
-      >
+      <Button variant="primary" type="submit" disabled={loading || codeString.length !== 6}>
         {loading ? resolvedLabels.registerVerifyingCode : resolvedLabels.registerVerifyCode}
-      </button>
-      <button
-        type="button"
-        class="auth-ui-button auth-ui-button--ghost"
-        onclick={backToEmail}
-      >
+      </Button>
+      <Button variant="secondary" type="button" onclick={backToEmail}>
         {resolvedLabels.registerChangeEmail}
-      </button>
+      </Button>
     </form>
   {:else if step === 'webauthn'}
     <div class="auth-ui-section">
-      <div class="auth-ui-alert auth-ui-alert--info" role="status">
-        <h3 class="auth-ui-alert__title">{resolvedLabels.registerCodeVerifiedTitle}</h3>
-        <p>{resolvedLabels.registerDeviceNow}</p>
-      </div>
+      <Alert tone="info" title={resolvedLabels.registerCodeVerifiedTitle} message={resolvedLabels.registerDeviceNow} />
       {#if error}
-        <div class="auth-ui-alert auth-ui-alert--error" role="alert">{error}</div>
+        <Alert tone="error" title={error} />
       {/if}
-      <button
-        type="button"
-        disabled={loading}
-        onclick={handleWebAuthnRegister}
-        class="auth-ui-button auth-ui-button--primary"
-      >
+      <Button variant="primary" type="button" disabled={loading} onclick={handleWebAuthnRegister}>
         {loading ? resolvedLabels.registerRegistering : resolvedLabels.registerPasskeyButton}
-      </button>
+      </Button>
     </div>
   {:else if step === 'success'}
-    <div class="auth-ui-alert auth-ui-alert--success" role="status">
-      <h3 class="auth-ui-alert__title">{resolvedLabels.registerSuccessTitle}</h3>
-      <p>{success}</p>
-    </div>
+    <Alert tone="success" title={resolvedLabels.registerSuccessTitle} message={success} />
   {/if}
 </div>
 
@@ -338,57 +339,22 @@
   .auth-ui-register {
     display: flex; flex-direction: column; gap: 1.5rem;
     max-width: 28rem; margin: 0 auto; padding: 2rem 1rem;
-    font-family: var(--auth-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--auth-text, #111827);
   }
   .auth-ui-header { text-align: center; display: flex; flex-direction: column; gap: 0.5rem; }
-  .auth-ui-title { margin: 0; font-size: 1.5rem; font-weight: 700; }
-  .auth-ui-subtitle { margin: 0; font-size: 0.875rem; color: var(--auth-muted, #6b7280); }
   .auth-ui-form, .auth-ui-section {
     display: flex; flex-direction: column; gap: 1rem;
   }
   .auth-ui-field { display: flex; flex-direction: column; gap: 0.375rem; }
   .auth-ui-label { font-size: 0.875rem; font-weight: 500; }
-  .auth-ui-help { margin: 0.25rem 0 0; font-size: 0.75rem; color: var(--auth-muted, #6b7280); text-align: center; }
-  .auth-ui-input {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--auth-border, #d1d5db);
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem;
-  }
-  .auth-ui-input:focus { outline: none; border-color: var(--auth-primary, #4f46e5); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
-  .auth-ui-input--disabled { background: var(--auth-disabled-bg, #f3f4f6); color: var(--auth-muted, #6b7280); }
   .auth-ui-code-row { display: flex; gap: 0.5rem; justify-content: center; }
   .auth-ui-code-input {
     width: 3rem; height: 3.5rem;
     text-align: center;
     font-size: 1.5rem; font-weight: 600;
-    border: 2px solid var(--auth-border, #d1d5db);
-    border-radius: var(--auth-radius-lg, 0.5rem);
+    border: 2px solid var(--st-color-border, #d1d5db);
+    border-radius: var(--st-radius-lg, 0.5rem);
   }
-  .auth-ui-code-input:focus { outline: none; border-color: var(--auth-primary, #4f46e5); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+  .auth-ui-code-input:focus { outline: none; border-color: var(--st-color-primary, #4f46e5); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
   .auth-ui-code-input:disabled { opacity: 0.5; cursor: not-allowed; }
-  .auth-ui-button {
-    width: 100%;
-    padding: 0.625rem 1rem;
-    border: none;
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem; font-weight: 500;
-    cursor: pointer;
-  }
-  .auth-ui-button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .auth-ui-button--primary { background: var(--auth-primary, #4f46e5); color: var(--auth-primary-text, #ffffff); }
-  .auth-ui-button--ghost { background: var(--auth-ghost-bg, #ffffff); border: 1px solid var(--auth-border, #d1d5db); color: var(--auth-text, #111827); }
-  .auth-ui-alert {
-    padding: 1rem;
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem;
-  }
-  .auth-ui-alert--error { background: var(--auth-error-bg, #fef2f2); color: var(--auth-error-text, #991b1b); }
-  .auth-ui-alert--success { background: var(--auth-success-bg, #f0fdf4); color: var(--auth-success-text, #166534); }
-  .auth-ui-alert--info { background: var(--auth-info-bg, #eff6ff); color: var(--auth-info-text, #1e3a8a); }
-  .auth-ui-alert__title { margin: 0 0 0.25rem; font-size: 0.95rem; font-weight: 600; }
   .auth-ui-actions { text-align: center; }
-  .auth-ui-link { color: var(--auth-link, #4f46e5); font-size: 0.875rem; font-weight: 500; text-decoration: none; }
-  .auth-ui-link:hover { text-decoration: underline; }
 </style>

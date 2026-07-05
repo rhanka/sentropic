@@ -1,0 +1,58 @@
+{
+  "name": "@sentropic/mcp-auth",
+  "version": "0.2.0",
+  "description": "Framework-agnostic MCP resource-server kit for Sentropic: RFC 9728 Protected Resource Metadata, MCP-profile audience-bound access-token validation (DPoP, tenant hook), and RFC 6750 WWW-Authenticate challenge semantics. Fetch-style core + optional Hono adapter. Consumes @sentropic/oauth-verify; owns the MCP scope grammar.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/mcp-auth"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./hono": {
+      "types": "./dist/hono.d.ts",
+      "import": "./dist/hono.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "hono": [
+        "./dist/hono.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@sentropic/oauth-verify": "file:../oauth-verify"
+  },
+  "peerDependencies": {
+    "hono": "^4.10.7",
+    "jose": "^5.10.0"
+  },
+  "peerDependenciesMeta": {
+    "hono": {
+      "optional": true
+    }
+  }
+}

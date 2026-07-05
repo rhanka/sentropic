@@ -189,7 +189,15 @@ test.describe('chat steering core', () => {
       await expect(timelineContainer).toBeVisible();
       const timelineShape = await timelineContainer.evaluate(
         (container, expectedSteerText) => {
-          const rows = Array.from(container.children).map((row) => {
+          // Timeline rows live inside a hydration-swap wrapper
+          // (<div class:invisible={historyHydrationSwapPending}>, added by
+          // ddaeebec2 "refactor: split app chat panel wrapper"); the staging
+          // sibling is pointer-events-none. Anchor the row scan on that
+          // wrapper — assertion semantics below are unchanged.
+          const rowsHost =
+            container.querySelector(':scope > div:not(.pointer-events-none)') ??
+            container;
+          const rows = Array.from(rowsHost.children).map((row) => {
             const htmlRow = row as HTMLElement;
             const className = htmlRow.className ?? '';
             const role = className.includes('items-end')

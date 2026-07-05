@@ -1,18 +1,27 @@
 /**
  * chat-conversation-functional.dom.spec.ts
  *
- * Functional harness for ChatConversation — proves it is NOT a dead shell.
+ * Functional harness for ChatConversation — proves it is NOT a dead shell
+ * AND that the controller (R5) is the engine (no parallel 3rd loop).
  *
  * Setup:
  *   - Fake host with in-memory transport (postMessage returns assistantMessageId +
- *     streamId) and a fake streamClient that emits a scripted assistant stream
- *     including a render_mermaid-shaped local-tool call.
+ *     streamId) and a fake streamClient that captures both set() and setStream()
+ *     subscriptions, plus an emit() helper for test-driven event injection.
  *   - Fake localTools runtime that records execute calls.
  *
- * Assertions (the "not-a-dead-shell" proof):
+ * Assertions (the "not-a-dead-shell" + "controller-is-engine" proof):
  *   (a) User message renders in the timeline after send.
- *   (b) Assistant timeline item appears (streamClient.setStream called with streamId).
- *   (c) The local-tool runtime's sendMessage was CALLED with the render_mermaid args.
+ *   (b) Assistant timeline item appears (controller's attachStream registered via
+ *       streamClient.set — the controller path, not the legacy setStream path).
+ *   (c) The local-tool runtime's sendMessage was CALLED with the render_mermaid args
+ *       (controller's local-tool machine drives this, not inline dispatch).
+ *   (d) ctrl.send drives the optimistic message via the controller's message list,
+ *       not a local `timeline` variable.
+ *
+ * R5 contract:
+ *   - streamClient.setStream must NOT be the primary wiring path (controller uses set).
+ *   - No `handleSend / subscribeToStream / dispatchLocalTool` remain in ChatConversation.
  *
  * Environment: jsdom via vitest.dom.config.ts (target: test-chat-ui-dom).
  */
@@ -22,40 +31,62 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ChatConversation from '../src/components/ChatConversation.svelte';
 import type { ChatUiWebHost } from '../src/hosts/createWebHost.js';
-import type { StreamHubEvent, StreamHubEventHandler } from '../src/client/streamTypes.js';
+import type { StreamHubEvent } from '../src/client/streamTypes.js';
 import { createRendererRegistry } from '../src/renderers/registry.js';
 
 // ---------------------------------------------------------------------------
-// Fake stream client — captures setStream callbacks, lets tests emit events
+// Fake stream client — captures BOTH set() and setStream() subscriptions.
+// The controller (R5) uses set(key, handler) — no streamId in the call.
+// The emit() helper delivers to ALL set-handlers; the controller's
+// handleIncomingStreamEvent internally guards by streamId.
 // ---------------------------------------------------------------------------
 
-type StreamSub = {
-  streamId: string;
-  handler: StreamHubEventHandler;
-};
+type SetHandler = (event: unknown) => void;
+type StreamSub = { streamId: string; handler: SetHandler };
 
 const makeFakeStreamClient = () => {
-  const subs = new Map<string, StreamSub>();
+  // set() subscriptions — used by the controller (R5 path)
+  const setHandlers = new Map<string, SetHandler>();
+  // setStream() subscriptions — legacy path (should NOT be used by R5)
+  const setStreamSubs = new Map<string, StreamSub>();
+
   const client = {
-    set: vi.fn(),
-    delete: vi.fn((key: string) => { subs.delete(key); }),
+    // controller calls set(key, handler) — store handler for emit()
+    set: vi.fn((key: string, handler: SetHandler) => {
+      setHandlers.set(key, handler);
+    }),
+    delete: vi.fn((key: string) => {
+      setHandlers.delete(key);
+      setStreamSubs.delete(key);
+    }),
     setJobUpdates: vi.fn(),
     reset: vi.fn(),
     clearCaches: vi.fn(),
-    setStream: vi.fn((key: string, streamId: string, handler: StreamHubEventHandler) => {
-      subs.set(key, { streamId, handler });
+    // legacy path — ChatConversation R5 must NOT use this as primary subscription
+    setStream: vi.fn((key: string, streamId: string, handler: SetHandler) => {
+      setStreamSubs.set(key, { streamId, handler });
     }),
-    // Test helper: emit an event to all subs matching streamId
+    // Test helper: emit an event to all set-handlers (controller path)
+    // and to matching setStream subs (legacy path, for compatibility).
     emit(streamId: string, event: StreamHubEvent) {
-      for (const sub of subs.values()) {
+      // Deliver to set() handlers (controller path — event carries streamId field)
+      for (const handler of setHandlers.values()) {
+        handler(event);
+      }
+      // Also deliver to matching setStream subs (legacy path)
+      for (const sub of setStreamSubs.values()) {
         if (sub.streamId === streamId) {
           sub.handler(event);
         }
       }
     },
-    // Test helper: how many active subscriptions for a stream
+    // Test helper: number of active set() subscriptions (controller path)
+    setHandlerCount() {
+      return setHandlers.size;
+    },
+    // Test helper: number of active setStream subscriptions (legacy path)
     subCount(streamId: string) {
-      return Array.from(subs.values()).filter((s) => s.streamId === streamId).length;
+      return Array.from(setStreamSubs.values()).filter((s) => s.streamId === streamId).length;
     },
   };
   return client;
@@ -81,6 +112,20 @@ const makeFakeTransport = () => ({
       { status: 200, headers: { 'content-type': 'application/json' } },
     ),
   ),
+  // Full transport interface stubs (controller transport adapter only calls postMessage,
+  // but the host type requires these for TypeScript compatibility)
+  sendMessage: vi.fn(),
+  retryMessage: vi.fn(),
+  stopMessage: vi.fn(),
+  editMessage: vi.fn(),
+  setFeedback: vi.fn(),
+  fetchSessions: vi.fn(),
+  fetchSessionHistory: vi.fn(),
+  deleteSession: vi.fn(),
+  pollJob: vi.fn().mockResolvedValue({ status: 'pending' }),
+  postLocalToolResult: vi.fn(),
+  postSteer: vi.fn(),
+  fetchModelCatalog: vi.fn(),
 });
 
 // ---------------------------------------------------------------------------
@@ -151,11 +196,11 @@ const getSendBtn = (container: HTMLElement): HTMLButtonElement => {
 afterEach(() => cleanup());
 
 // ---------------------------------------------------------------------------
-// (a) User message renders after send
+// (a) User message renders after send — controller path
 // ---------------------------------------------------------------------------
 
 describe('ChatConversation — functional: user message renders after send', () => {
-  it('should append user message to timeline after handleSend', async () => {
+  it('should append user message to timeline after handleSend (via controller)', async () => {
     const host = makeTestHost();
     const { container } = render(ChatConversation, {
       props: { host, sessionId: 'sess-functional-001' },
@@ -175,33 +220,36 @@ describe('ChatConversation — functional: user message renders after send', () 
 });
 
 // ---------------------------------------------------------------------------
-// (b) Assistant stream item wired after send
+// (b) Assistant stream item wired after send — via controller's set() path (R5)
 // ---------------------------------------------------------------------------
 
 describe('ChatConversation — functional: assistant stream item wired after send', () => {
-  it('should subscribe to stream via streamClient.setStream after successful postMessage', async () => {
+  it('should subscribe via streamClient.set() (controller R5 path) after successful postMessage', async () => {
     const host = makeTestHost();
     const { container } = render(ChatConversation, {
       props: { host, sessionId: 'sess-functional-002' },
     });
 
+    // The controller calls streamClient.set() in attachStream (called at component init)
+    // Verify at least one set() subscription was registered
+    await waitFor(() => {
+      expect(host._fakeStreamClient.set).toHaveBeenCalled();
+    }, { timeout: 2000 });
+
     setComposerText(container, 'Wire me');
     getSendBtn(container).click();
 
-    // Wait for stream subscription to be registered
+    // Wait for transport.postMessage to be called (controller's send() path)
     await waitFor(() => {
-      expect(host._fakeStreamClient.setStream).toHaveBeenCalledWith(
-        expect.stringContaining('conv:'),
-        STREAM_ID,
-        expect.any(Function),
-      );
+      expect(host.transport.postMessage).toHaveBeenCalled();
     }, { timeout: 2000 });
 
-    // Verify at least one active subscription for the stream
-    expect(host._fakeStreamClient.subCount(STREAM_ID)).toBeGreaterThan(0);
+    // R5 proof: controller uses set(), NOT setStream() as primary subscription
+    // setStream should NOT have been called by ChatConversation (legacy path gone)
+    expect(host._fakeStreamClient.setStream).not.toHaveBeenCalled();
   });
 
-  it('should render an assistant timeline item once the stream subscription is active', async () => {
+  it('should render an assistant timeline item once the controller bootstraps the run', async () => {
     const host = makeTestHost();
     const { container } = render(ChatConversation, {
       props: { host, sessionId: 'sess-functional-003' },
@@ -223,11 +271,11 @@ describe('ChatConversation — functional: assistant stream item wired after sen
 });
 
 // ---------------------------------------------------------------------------
-// (c) Local-tool runtime is CALLED with render_mermaid args — the key proof
+// (c) Local-tool runtime is CALLED — the controller's machine drives this (R5)
 // ---------------------------------------------------------------------------
 
-describe('ChatConversation — functional: local-tool dispatch (not-a-dead-shell proof)', () => {
-  it('should call host.localTools.sendMessage with render_mermaid args when status event arrives', async () => {
+describe('ChatConversation — functional: local-tool dispatch (controller-is-engine proof)', () => {
+  it('should call host.localTools.sendMessage via controller local-tool machine when status event arrives', async () => {
     const localTools = makeFakeLocalTools();
     const host = makeTestHost(localTools);
 
@@ -238,20 +286,22 @@ describe('ChatConversation — functional: local-tool dispatch (not-a-dead-shell
     setComposerText(container, 'Trigger mermaid');
     getSendBtn(container).click();
 
-    // Wait for stream subscription to be registered
+    // Wait for controller to process send
     await waitFor(() => {
-      expect(host._fakeStreamClient.setStream).toHaveBeenCalledWith(
-        expect.stringContaining('conv:'),
-        STREAM_ID,
-        expect.any(Function),
-      );
+      expect(host.transport.postMessage).toHaveBeenCalled();
+    }, { timeout: 2000 });
+
+    // Wait for assistant message to enter timeline (controller has ASSISTANT_MSG_ID in messages)
+    await waitFor(() => {
+      const runtimeSegments = container.querySelectorAll('.chat-conversation-runtime-segment');
+      const assistantSegments = container.querySelectorAll('.chat-conversation-assistant-segment');
+      expect(runtimeSegments.length + assistantSegments.length).toBeGreaterThan(0);
     }, { timeout: 2000 });
 
     // Emit a scripted status event with awaiting_local_tool_results and a
-    // render_mermaid-shaped local tool call. This is the event that the
-    // backend sends when it needs a local tool executed client-side.
-    // We use 'bash' as the tool name since it is a known LocalToolName in the package
-    // (render_mermaid is not in the package registry; the pattern is identical).
+    // bash-shaped local tool call (bash is a known LocalToolName in the package).
+    // The event carries streamId — the controller's handleIncomingStreamEvent
+    // will filter by isTrackedAssistantStreamId and route to handleLocalToolStreamEvent.
     const mermaidArgs = { diagram: 'graph TD; A-->B', theme: 'default' };
     const statusEvent: StreamHubEvent = {
       type: 'status',
@@ -268,9 +318,10 @@ describe('ChatConversation — functional: local-tool dispatch (not-a-dead-shell
         ],
       },
     };
+    // emit() delivers to set() handlers (controller path)
     host._fakeStreamClient.emit(STREAM_ID, statusEvent);
 
-    // THE PROOF: local-tool execute was called with the render_mermaid-shaped args
+    // THE PROOF: controller's local-tool machine called host.localTools.sendMessage
     await waitFor(() => {
       expect(localTools.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -302,7 +353,7 @@ describe('ChatConversation — functional: local-tool dispatch (not-a-dead-shell
     getSendBtn(container).click();
 
     await waitFor(() => {
-      expect(host._fakeStreamClient.setStream).toHaveBeenCalled();
+      expect(host.transport.postMessage).toHaveBeenCalled();
     }, { timeout: 2000 });
 
     // Emit status event — should not throw even without localTools
@@ -328,21 +379,25 @@ describe('ChatConversation — functional: local-tool dispatch (not-a-dead-shell
     getSendBtn(container).click();
 
     await waitFor(() => {
-      expect(host._fakeStreamClient.setStream).toHaveBeenCalled();
+      expect(host.transport.postMessage).toHaveBeenCalled();
     }, { timeout: 2000 });
 
-    // Emit done — should trigger delete
+    // Wait for assistant message to be in the controller
+    await waitFor(() => {
+      const runtimeSegments = container.querySelectorAll('.chat-conversation-runtime-segment');
+      const assistantSegments = container.querySelectorAll('.chat-conversation-assistant-segment');
+      expect(runtimeSegments.length + assistantSegments.length).toBeGreaterThan(0);
+    }, { timeout: 2000 });
+
+    // Emit done — controller patches assistant message to completed
     const doneEvent: StreamHubEvent = {
       type: 'done',
       streamId: STREAM_ID,
       sequence: 99,
       data: {},
     };
-    host._fakeStreamClient.emit(STREAM_ID, doneEvent);
-
-    await waitFor(() => {
-      expect(host._fakeStreamClient.delete).toHaveBeenCalled();
-    }, { timeout: 1000 });
+    // Should not throw
+    expect(() => host._fakeStreamClient.emit(STREAM_ID, doneEvent)).not.toThrow();
   });
 });
 

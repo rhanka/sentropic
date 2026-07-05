@@ -504,14 +504,12 @@ describe('AI Workflow - Complete Integration Test', () => {
 
     expect(generatedInitiatives.length).toBeGreaterThan(0);
     const firstGenerated = generatedInitiatives[0];
-    // organizationId may be null when the LLM returns organizationIds: [] (valid per prompt contract)
-    // When assigned, it must reference one of the provided org IDs
-    if (firstGenerated.organizationId) {
-      expect(createdOrganizationIds).toContain(firstGenerated.organizationId);
-    }
-    // At least one initiative across the batch should have an org assigned
-    const anyWithOrg = generatedInitiatives.some((i: any) => i.organizationId != null);
-    expect(anyWithOrg).toBe(true);
+    // organizationId may be null when the LLM returns organizationIds: [] (valid per prompt contract).
+    // When assigned, every organization ID must reference one of the explicit org_ids.
+    const assignedOrganizationIds = generatedInitiatives
+      .map((initiative: any) => initiative.organizationId)
+      .filter((organizationId: unknown): organizationId is string => typeof organizationId === 'string' && organizationId.length > 0);
+    expect(assignedOrganizationIds.every((organizationId) => createdOrganizationIds.includes(organizationId))).toBe(true);
     expect(firstGenerated.data?.name).toBeDefined();
     expect(firstGenerated.data?.description).toBeDefined();
   }, 180000);

@@ -20,6 +20,8 @@ on:
           - chat-server
           - comments
           - chat-ui
+          - oauth-verify
+          - mcp-auth
           - auth-hono
           - auth-client
           - auth-ui
@@ -28,6 +30,9 @@ on:
           - cowork-desktop
           - build-cli
           - cli
+          - harness
+          - llm-gateway
+          - focus
           - all
 
 env:
@@ -93,11 +98,14 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
+      llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
       cowork_bridge: ${{ steps.filter.outputs.cowork_bridge }}
       cowork_bridge_publish: ${{ steps.filter.outputs.cowork_bridge_publish }}
       cowork_desktop: ${{ steps.filter.outputs.cowork_desktop }}
       cowork_desktop_publish: ${{ steps.filter.outputs.cowork_desktop_publish }}
+      oauth_verify: ${{ steps.filter.outputs.oauth_verify }}
+      mcp_auth: ${{ steps.filter.outputs.mcp_auth }}
       auth_hono: ${{ steps.filter.outputs.auth_hono }}
       auth_client: ${{ steps.filter.outputs.auth_client }}
       auth_ui: ${{ steps.filter.outputs.auth_ui }}
@@ -108,7 +116,10 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       flow: ${{ steps.filter.outputs.flow }}
       llm_mesh_publish: ${{ steps.filter.outputs.llm_mesh_publish }}
+      llm_gateway_publish: ${{ steps.filter.outputs.llm_gateway_publish }}
       chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
+      oauth_verify_publish: ${{ steps.filter.outputs.oauth_verify_publish }}
+      mcp_auth_publish: ${{ steps.filter.outputs.mcp_auth_publish }}
       auth_hono_publish: ${{ steps.filter.outputs.auth_hono_publish }}
       auth_client_publish: ${{ steps.filter.outputs.auth_client_publish }}
       auth_ui_publish: ${{ steps.filter.outputs.auth_ui_publish }}
@@ -120,6 +131,10 @@ jobs:
       flow_publish: ${{ steps.filter.outputs.flow_publish }}
       build_cli: ${{ steps.filter.outputs.build_cli }}
       build_cli_publish: ${{ steps.filter.outputs.build_cli_publish }}
+      harness: ${{ steps.filter.outputs.harness }}
+      harness_publish: ${{ steps.filter.outputs.harness_publish }}
+      focus: ${{ steps.filter.outputs.focus }}
+      focus_publish: ${{ steps.filter.outputs.focus_publish }}
       cli: ${{ steps.filter.outputs.cli }}
       cli_publish: ${{ steps.filter.outputs.cli_publish }}
     steps:
@@ -153,10 +168,21 @@ jobs:
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
               - '.github/workflows/ci.yml'
+            llm_gateway:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/llm-gateway/**'
+              - 'packages/llm-mesh/**'
+              - '.github/workflows/ci.yml'
             llm_mesh_publish:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
+            llm_gateway_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/llm-gateway/**'
             chat_ui:
               - 'Makefile'
               - 'package.json'
@@ -189,11 +215,33 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/cowork-desktop/**'
+            oauth_verify:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/oauth-verify/**'
+              - '.github/workflows/ci.yml'
+            oauth_verify_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/oauth-verify/**'
+            mcp_auth:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/mcp-auth/**'
+              - 'packages/oauth-verify/**'
+              - '.github/workflows/ci.yml'
+            mcp_auth_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/mcp-auth/**'
             auth_hono:
               - 'Makefile'
               - 'package.json'
               - 'package-lock.json'
               - 'packages/auth-hono/**'
+              - 'packages/oauth-verify/**'
               - '.github/workflows/ci.yml'
             auth_hono_publish:
               - 'package.json'
@@ -289,6 +337,26 @@ jobs:
               - 'package-lock.json'
               - 'packages/build-cli/**'
               - '.github/workflows/ci.yml'
+            harness:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/harness/**'
+              - '.github/workflows/ci.yml'
+            harness_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/harness/**'
+            focus:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/focus/**'
+              - '.github/workflows/ci.yml'
+            focus_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/focus/**'
             build_cli_publish:
               - 'package.json'
               - 'package-lock.json'
@@ -388,6 +456,27 @@ jobs:
       - name: Pack LLM Mesh
         run: make pack-llm-mesh
 
+  # BR-LB-EX1 — @sentropic/llm-gateway (WP16 Layer-B) CI validation (owner-approved
+  # 2026-06-22). Mirrors validate-llm-mesh; the make targets build the sibling
+  # @sentropic/llm-mesh dist first (the gateway depends on it). No publish job here —
+  # first publish is a manual bootstrap (see BRANCH.md), not steady-state OIDC.
+  validate-llm-gateway:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck LLM Gateway
+        run: make typecheck-llm-gateway
+      - name: Test LLM Gateway
+        run: make test-llm-gateway
+      - name: Build LLM Gateway
+        run: make build-llm-gateway
+      - name: Pack LLM Gateway
+        run: make pack-llm-gateway
+
   validate-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes]
@@ -421,6 +510,40 @@ jobs:
         run: make build-cowork-bridge
       - name: Pack Cowork Bridge
         run: make pack-cowork-bridge
+
+  validate-oauth-verify:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck OAuth Verify
+        run: make typecheck-oauth-verify
+      - name: Test OAuth Verify
+        run: make test-oauth-verify
+      - name: Build OAuth Verify
+        run: make build-oauth-verify
+      - name: Pack OAuth Verify
+        run: make pack-oauth-verify
+
+  validate-mcp-auth:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck MCP Auth
+        run: make typecheck-mcp-auth
+      - name: Test MCP Auth
+        run: make test-mcp-auth
+      - name: Build MCP Auth
+        run: make build-mcp-auth
+      - name: Pack MCP Auth
+        run: make pack-mcp-auth
 
   validate-auth-hono:
     runs-on: ubuntu-latest
@@ -601,6 +724,34 @@ jobs:
       - name: Pack Build CLI
         run: make pack-build-cli
 
+  validate-harness:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Harness
+        run: make typecheck-harness
+      - name: Test Harness
+        run: make test-harness
+      - name: Build Harness
+        run: make build-harness
+      - name: Pack Harness
+        run: make pack-harness
+
+  validate-focus:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.focus == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Validate Focus (typecheck, test, build, pack)
+        run: make typecheck-focus test-focus build-focus pack-focus
+
   validate-cli:
     runs-on: ubuntu-latest
     needs: [changes]
@@ -660,6 +811,15 @@ jobs:
             ai_specs: "chat-tools,company-enrichment-sync,documents-tool,initiative-generation-sync"
           - suite: security
           - suite: limit
+          # BR70-CI1: the foundation data-spine test dirs (BR-52 artifact-store /
+          # BR-59 object-registry / BR-60 outbox) were green-by-absence — no matrix
+          # suite ran them. Each resolves via the test-api-% Makefile pattern to the
+          # per-dir npm script added in api/package.json. (`tests/services/` is a
+          # cross-lane grab-bag — catalog/flow/chat — NOT foundation, routed to its
+          # owning lanes separately, so it is intentionally not wired here.)
+          - suite: artifact-store
+          - suite: object-registry
+          - suite: outbox
           - suite: endpoints
             endpoints_shard: 1
           - suite: endpoints
@@ -673,7 +833,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Download API image artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -786,7 +946,7 @@ jobs:
         continue-on-error: true
       - name: Download API image artifact
         if: steps.check-api-image.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -799,7 +959,7 @@ jobs:
         continue-on-error: true
       - name: Download UI image artifact
         if: steps.check-ui-image.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -838,7 +998,7 @@ jobs:
         continue-on-error: true
       - name: Download API image artifact
         if: steps.check-api-image-vscode.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -851,7 +1011,7 @@ jobs:
         continue-on-error: true
       - name: Download UI image artifact
         if: steps.check-ui-image-vscode.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -876,6 +1036,50 @@ jobs:
           name: e2e-vscode-results
           path: e2e/test-results/
           retention-days: 7
+
+  # BR-39r (L2 guard) — screen-driven SSO smoke for the standalone IdP. Drives
+  # the IdP-SERVED login + consent screens in headless Chromium and clicks the
+  # real Approve button, asserting the native-form POST yields a server 302 to
+  # the RP redirect_uri with an authorization code. This is the guard that was
+  # missing when the JS-dependent consent navigation regressed in prod: a green
+  # API/unit suite never exercised the served consent screen end-to-end.
+  smoke-idp-screens:
+    runs-on: ubuntu-latest
+    needs: [changes, typecheck-lint-api, build-api-image, build-e2e, security-sast-sca]
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    env:
+      DOCKER_USERNAME: nologin
+      DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+      DISABLE_RATE_LIMIT: 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Pull if API image is up to date
+        id: check-api-image-idp
+        run: make pull-api-image
+        continue-on-error: true
+      - name: Download API image artifact
+        if: steps.check-api-image-idp.outcome == 'failure'
+        uses: actions/download-artifact@v7
+        with:
+          name: api-image
+          path: .
+      - name: Load API image from artifact
+        if: steps.check-api-image-idp.outcome == 'failure'
+        run: make load-api
+      - name: Pull e2e image artifact
+        run: make pull-e2e-image
+      - name: Start standalone IdP (screens + API on shared DB)
+        run: make dev-idp
+      - name: Screen-driven SSO smoke (served login + consent screens)
+        run: make smoke-idp-screens
+      - name: IdP logs on failure
+        if: failure()
+        run: make logs-idp-once
+      - name: Tear down IdP overlay
+        if: always()
+        run: make down-idp
 
   # Security: SAST and SCA scans (code and dependencies)
   security-sast-sca:
@@ -949,7 +1153,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Download API image artifact
         if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -958,7 +1162,7 @@ jobs:
         run: make load-api
       - name: Download UI image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -1029,7 +1233,7 @@ jobs:
         continue-on-error: true
       - name: Download UI image artifact
         if: steps.image-check.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
@@ -1051,7 +1255,7 @@ jobs:
 
   publish-api-image:
     runs-on: ubuntu-latest
-    needs: [changes, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    needs: [changes, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
     if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
       DOCKER_USERNAME: nologin
@@ -1065,7 +1269,7 @@ jobs:
         continue-on-error: true
       - name: Download API image artifact
         if: steps.image-check.outcome == 'failure'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: api-image
           path: .
@@ -1099,6 +1303,20 @@ jobs:
       - name: Publish LLM Mesh
         run: make publish-llm-mesh
 
+  publish-llm-gateway:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-llm-gateway]
+    if: needs.changes.outputs.llm_gateway_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish LLM Gateway
+        run: make publish-llm-gateway
+
   publish-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-ui]
@@ -1126,6 +1344,34 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Publish Cowork Bridge
         run: make publish-cowork-bridge
+
+  publish-oauth-verify:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-oauth-verify]
+    if: needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish OAuth Verify
+        run: make publish-oauth-verify
+
+  publish-mcp-auth:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-auth]
+    if: needs.changes.outputs.mcp_auth_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish MCP Auth
+        run: make publish-mcp-auth
 
   publish-auth-hono:
     runs-on: ubuntu-latest
@@ -1281,6 +1527,20 @@ jobs:
       - name: Publish Build CLI
         run: make publish-build-cli
 
+  publish-harness:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-harness]
+    if: needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Harness
+        run: make publish-harness
+
   publish-cli:
     runs-on: ubuntu-latest
     needs: [changes, validate-cli]
@@ -1327,6 +1587,12 @@ jobs:
       - name: Bootstrap publish chat-ui
         if: inputs.bootstrap_publish_target == 'chat-ui' || inputs.bootstrap_publish_target == 'all'
         run: make publish-chat-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish oauth-verify
+        if: inputs.bootstrap_publish_target == 'oauth-verify' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-oauth-verify-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish mcp-auth
+        if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-mcp-auth-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish auth-hono
         if: inputs.bootstrap_publish_target == 'auth-hono' || inputs.bootstrap_publish_target == 'all'
         run: make publish-auth-hono-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
@@ -1351,32 +1617,50 @@ jobs:
       - name: Bootstrap publish cli
         if: inputs.bootstrap_publish_target == 'cli' || inputs.bootstrap_publish_target == 'all'
         run: make publish-cli-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish harness
+        if: inputs.bootstrap_publish_target == 'harness' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-harness-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish llm-gateway
+        if: inputs.bootstrap_publish_target == 'llm-gateway' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-llm-gateway-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish focus
+        if: inputs.bootstrap_publish_target == 'focus' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-focus-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
 
-  # Deploy Kubernetes tenant after api+ui images are published with the main alias.
-  # Triggered on main. Requires GH secret KUBECONFIG_B64
-  # (base64 of ~/.kube/poc.yaml). See deploy/k8s/README.md and BRANCH.md Lot 2.5.
-  deploy-k8s:
+  # BR-55c (ARCH-17): main -> PREPROD continuous deploy. REPLACES the legacy
+  # prod-targeting deploy-k8s job — NO main merge can touch the `sentropic` (prod)
+  # namespace any more. Prod deploys ONLY via the gated release-prod (BR-55d:
+  # GitHub production Environment + rhanka reviewer). This job uses the
+  # preprod-scoped KUBE_CONFIG_DATA_PREPROD (poc-k8s; a namespace-scoped kubeconfig
+  # that can ONLY write the sentropic-preprod ns — the prod ns is RBAC-denied), and
+  # `make k8s-deploy-preprod` pins the immutable content-hash image tags into
+  # overlays/preprod before applying (kills the floating :main staleness, D-c1).
+  deploy-preprod:
     runs-on: ubuntu-latest
     needs: [publish-api-image, publish-ui-image]
-    if: github.ref == 'refs/heads/main'
+    # Deploy on every main merge. Run even when the publish jobs were SKIPPED (no
+    # api/ui content change) so an overlay/manifest-only change still reaches preprod;
+    # only skip if a publish job actually FAILED.
+    if: >-
+      always() && github.ref == 'refs/heads/main' && !cancelled()
+      && needs.publish-api-image.result != 'failure'
+      && needs.publish-ui-image.result != 'failure'
     steps:
       - uses: actions/checkout@v6
-      - name: Decode kubeconfig from secret
+      - name: Decode the preprod kubeconfig from secret
         env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+          KUBE_CONFIG_DATA_PREPROD: ${{ secrets.KUBE_CONFIG_DATA_PREPROD }}
         run: |
           set -eu
-          if [ -z "${KUBECONFIG_B64:-}" ]; then
-            echo "::error::GH secret KUBECONFIG_B64 is missing or empty. See BRANCH.md Lot 2.5 user action item."
+          if [ -z "${KUBE_CONFIG_DATA_PREPROD:-}" ]; then
+            echo "::error::GH secret KUBE_CONFIG_DATA_PREPROD is missing or empty (poc-k8s preprod kubeconfig)."
             exit 1
           fi
-          printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
-          chmod 600 kubeconfig.yaml
-      - name: Apply manifests and verify api + ui on Kubernetes
+          printf '%s' "${KUBE_CONFIG_DATA_PREPROD}" | base64 -d > kubeconfig-preprod.yaml
+          chmod 600 kubeconfig-preprod.yaml
+      - name: Deploy to the sentropic-preprod namespace (immutable image pin)
         env:
-          KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig-preprod.yaml
         run: |
           set -eu
-          make k8s-deploy KUBECONFIG="${KUBECONFIG}" ENV=ci-k8s
-          kubectl -n sentropic rollout status  deployment/api --timeout=300s
-          kubectl -n sentropic rollout status  deployment/ui  --timeout=300s
+          make k8s-deploy-preprod KUBECONFIG="${KUBECONFIG}" ENV=ci-preprod

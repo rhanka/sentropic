@@ -1,15 +1,41 @@
+/**
+ * Generic stream lifecycle event types registered in the package.
+ * Domain-specific event types (organization_update, folder_update, etc.) live
+ * in the app layer and are handled via the open StreamHubEvent member at runtime.
+ * The SSE router in streamHub.ts registers additional event types internally
+ * (ALL_SSE_EVENT_TYPES) so that named server-sent events are still received.
+ */
+export const STREAM_HUB_EVENT_TYPES = [
+  'job_update',
+  'ping',
+  'status',
+  'reasoning_delta',
+  'tool_call_start',
+  'tool_call_delta',
+  'tool_call_result',
+  'content_delta',
+  'error',
+  'done',
+] as const;
+
+/**
+ * Open StreamHub event type — any of the core lifecycle types or an
+ * arbitrary string for host-specific / domain event types. The `(string & {})`
+ * trick preserves IDE autocompletion for the known literals while accepting any value.
+ */
+export type StreamHubEventType = (typeof STREAM_HUB_EVENT_TYPES)[number] | (string & {});
+
+/**
+ * Generic chat stream lifecycle events.
+ * Domain-specific event types (organization_update, folder_update, etc.) are
+ * represented by the open `{ type: string }` member and handled app-side.
+ * Zero sentropic domain strings appear in this union.
+ */
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: unknown }
-  | { type: 'organization_update'; organizationId: string; data: unknown }
-  | { type: 'folder_update'; folderId: string; data: unknown }
-  | { type: 'usecase_update'; useCaseId: string; data: unknown }
-  | { type: 'comment_update'; contextType: string; contextId: string; data: unknown }
-  | { type: 'lock_update'; objectType: string; objectId: string; data: unknown }
-  | { type: 'presence_update'; objectType: string; objectId: string; data: unknown }
-  | { type: 'workspace_update'; workspaceId: string; data: unknown }
-  | { type: 'workspace_membership_update'; workspaceId: string; userId?: string; data: unknown }
   | { type: 'ping'; data: unknown }
-  | { type: string; streamId: string; sequence: number; data: unknown };
+  | { type: string; streamId: string; sequence: number; data: unknown }
+  | { type: string; data: unknown };
 
 export type StreamHubEventHandler = (event: StreamHubEvent) => void;
 
@@ -26,29 +52,11 @@ export type GeneratedFileCard = {
 export type StreamHubSubscription = {
   onEvent: StreamHubEventHandler;
   streamId?: string;
-  onlyType?: 'job_update' | 'organization_update';
+  /** Filter events by type. Accepts any string (open type). */
+  onlyType?: StreamHubEventType;
+  /** Filter events by multiple types. Accepts any strings (open type). */
+  onlyTypes?: StreamHubEventType[];
 };
-
-export const STREAM_HUB_EVENT_TYPES = [
-  'job_update',
-  'organization_update',
-  'folder_update',
-  'usecase_update',
-  'comment_update',
-  'lock_update',
-  'presence_update',
-  'workspace_update',
-  'workspace_membership_update',
-  'status',
-  'reasoning_delta',
-  'tool_call_start',
-  'tool_call_delta',
-  'tool_call_result',
-  'content_delta',
-  'error',
-  'done',
-  'ping',
-] as const;
 
 export type RuntimePortLike = {
   postMessage: (message: unknown) => void;
@@ -84,6 +92,7 @@ export type StreamHubClient = {
   reset(): void;
   clearCaches(): void;
   set(key: string, onEvent: StreamHubEventHandler): void;
+  /** Compatibility alias for `set` that filters to `job_update` events only. */
   setJobUpdates(key: string, onEvent: StreamHubEventHandler): void;
   setStream(key: string, streamId: string, onEvent: StreamHubEventHandler): void;
   delete(key: string): void;

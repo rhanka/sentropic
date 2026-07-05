@@ -154,6 +154,39 @@ interface OauthStateStorePort {
 
 The package never imports Postgres or any persistence library. Sentropic supplies `api/src/services/auth/oauth-state-adapter.ts` (Drizzle/Postgres). Package tests use the in-memory fixture at `packages/auth-hono/tests/__fixtures__/memory-oauth-state-store.ts`.
 
+### Consent persistence — `consentStore` (since 0.7.0)
+
+By default the IdP re-shows the consent screen on every `/authorize`. Provide the **optional**
+`AuthHonoPorts.consentStore` port to remember a user's grant and skip consent when it already
+covers the requested scopes:
+
+```ts
+interface AuthHonoConsentStorePort {
+  getGrant(userId: string, clientId: string): Promise<{ scopes: string[] } | null>;
+  saveGrant(userId: string, clientId: string, scopes: string[]): Promise<void>; // upsert + union
+}
+```
+
+- **Skip rule** (authorize handler): when `consentStore` is wired, `prompt !== 'consent'`, and a
+  stored grant for the exact `(userId, clientId)` is a **superset** of the requested scopes, the
+  handler issues the authorization code directly via the same single-use issuance path as the
+  consent-approve flow (no consent screen).
+- **Scope-escalation guard** (security invariant): coverage is a strict set-superset check. Any
+  requested scope absent from the stored grant re-shows consent. A grant is bound to the exact
+  `(userId, clientId)`; another client's grant never satisfies coverage.
+- **`prompt=consent`** always forces the consent screen, even with a fully covering grant.
+- **`prompt=none`**: covered ⇒ silent code; uncovered ⇒ `consent_required` (unchanged).
+- **Persistence**: the consent-approve path calls `saveGrant(userId, clientId, grantedScopes)`
+  (deny never persists). The adapter upserts per `(user, client)` and **unions** the scopes with
+  any prior grant, so a narrower re-approval never shrinks the grant.
+- **Backward-compatible**: when `consentStore` is **absent**, behavior is unchanged — consent is
+  always shown. Existing `0.6.0` implementors keep compiling and behaving identically.
+- **Revocation** (consent revoke endpoint + connected-apps UI) is deferred to a future WP.
+
+Like the other ports, the package never persists anything itself. Sentropic supplies
+`api/src/services/auth/consent-store-adapter.ts` (Drizzle/Postgres, `oauth_consents` table).
+Package tests use the in-memory fixture in `packages/auth-hono/tests/__fixtures__/oauth-fixtures.ts`.
+
 ### DPoP opt-in (RFC 9449)
 
 Set `dpop_bound_access_tokens: true` on the OAuth client record. Bound clients must send a `DPoP: <proof-jwt>` header on `/token`, `/userinfo`, and `/revoke`. The IdP verifies `htm`, `htu`, `iat` skew, unique proof `jti`, and `ath` on resource calls. Access and ID tokens include `cnf.jkt`.
@@ -245,3 +278,4 @@ This branch ships `0.4.0`:
 - `0.2.1` patches `extractChallenge` (both WebAuthn handlers) to handle `credential.response === null` defensively (returns 400 `invalid_credential` instead of throwing 500).
 - `0.3.0` adds the OAuth2/OIDC IdP surface: `createOAuthRouter`, `createWellKnownRouter`, `createJwksService`, `OauthStateStorePort`, `JwksPort`, Ed25519 signing, DPoP opt-in, and all six OAuth endpoints. Additive; existing WebAuthn/session handler signatures unchanged.
 - `0.4.0` adds the S2S `client_credentials` grant (stateless service tokens), `createRequireServiceAuth` + `ServiceAuthPorts`, the optional `findServiceClient?` on `OauthStateStorePort`, `ServiceClientRecord`, and RFC 8707 resource indicators. Discovery now advertises `client_credentials` and `client_secret_post`. Additive and non-breaking — existing `0.3.0` implementors keep compiling.
+- `0.7.0` adds **consent persistence**: the optional `AuthHonoConsentStorePort` (`AuthHonoPorts.consentStore?`) and `AuthHonoConsentGrant`, the shared `issueAuthorizedCode` helper (single issuance path for both consent-approve and the authorize skip-path), and the authorize-handler skip logic (covered grant + `prompt !== 'consent'` ⇒ issue code directly; scope-escalation re-consents). Additive and non-breaking — when `consentStore` is absent, consent is always shown exactly as before. (`0.5.0`/`0.6.0` were shipped from earlier branches without a README versioning entry.)

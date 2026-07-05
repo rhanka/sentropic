@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { locale } from 'svelte-i18n';
   import AuthLogin from '@sentropic/auth-ui/components/AuthLogin.svelte';
+  import { Link } from '@sentropic/design-system-svelte';
   import type { AuthUiSession } from '@sentropic/auth-ui';
   import { setUser } from '$lib/stores/session';
   import {
@@ -13,6 +14,12 @@
 
   const transport = createSentropicAuthTransport();
   $: labels = resolveAuthUiLabels($locale);
+
+  // BR-39r L4 — OIDC `login_hint`: authorize forwards the hinted email as a plain `login_hint` param
+  // so the login form can pre-scope the passkey challenge to the known user (advisory; passkey login
+  // stays discoverable). Mirror the register page's `window.location.search` read.
+  const loginParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const presetEmail = loginParams.get('login_hint') ?? undefined;
 
   async function handleLoggedIn(session: AuthUiSession): Promise<void> {
     setUser(toSentropicUser(session.user));
@@ -35,12 +42,12 @@
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50">
-  <AuthLogin {transport} {labels} onLoggedIn={handleLoggedIn}>
-    <a slot="no-account" href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+  <AuthLogin {transport} {labels} {presetEmail} onLoggedIn={handleLoggedIn}>
+    <Link slot="no-account" href="/auth/register" variant="standalone">
       {labels.loginNoAccount}
-    </a>
-    <a slot="register-new-device" href="/auth/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+    </Link>
+    <Link slot="register-new-device" href="/auth/register" variant="standalone">
       {labels.loginRegisterNewDevice}
-    </a>
+    </Link>
   </AuthLogin>
 </div>

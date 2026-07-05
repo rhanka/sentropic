@@ -33,7 +33,13 @@
 <div class="px-4 py-10">
   <div class="mx-auto max-w-xl">
     {#if state}
-      <OAuthConsent {state} {transport} {labels} onRedirect={handleRedirect} />
+      <OAuthConsent
+        {state}
+        {transport}
+        {labels}
+        decisionAction="/api/v1/auth/oauth/consent/decision"
+        onRedirect={handleRedirect}
+      />
     {/if}
   </div>
 </div>

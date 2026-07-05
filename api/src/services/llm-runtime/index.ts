@@ -8,13 +8,19 @@ import {
   resolveProviderCredential,
   type ResolvedProviderCredential
 } from '../provider-credentials';
-import { getOpenAITransportMode, resolveConnectedCodexTransport } from '../provider-connections';
+import {
+  getAnthropicTransportMode,
+  getOpenAITransportMode,
+  resolveConnectedClaudeCodeTransport,
+  resolveConnectedCodexTransport,
+} from '../provider-connections';
 import { isProviderId, type ProviderId } from '../provider-runtime';
 import { parseGcpModelId } from '../providers/gcp-provider';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
 import { env } from '../../config/env';
 import {
+  createClaudeCodeAccountAuthInput,
   createCodexAccountAuthInput,
   dispatchMeshGenerateRaw,
   dispatchMeshStreamRaw,
@@ -146,6 +152,7 @@ export interface CallLLMStreamOptions {
   credential?: string;
   userId?: string;
   workspaceId?: string;
+  sessionId?: string | null;
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
@@ -194,6 +201,50 @@ export interface StreamEvent {
   type: StreamEventType;
   data: unknown;
 }
+
+type AccountTransportOutcome = {
+  status: 'success' | 'failed' | 'rate_limited' | 'auth_failed';
+  providerStatusCode?: number | null;
+  retryAfterMs?: number | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+};
+
+const mapAccountTransportErrorOutcome = (error: unknown): AccountTransportOutcome => {
+  const record = error as Record<string, unknown> | null;
+  const status =
+    record && typeof record.status === 'number'
+      ? record.status
+      : record && typeof record.statusCode === 'number'
+        ? record.statusCode
+        : null;
+  const message =
+    (record && typeof record.message === 'string' && record.message) ||
+    (error instanceof Error ? error.message : null);
+  const code = record && typeof record.code === 'string' ? record.code : null;
+  if (status === 401 || status === 403) {
+    return {
+      status: 'auth_failed',
+      providerStatusCode: status,
+      errorCode: code,
+      errorMessage: message,
+    };
+  }
+  if (status === 429) {
+    return {
+      status: 'rate_limited',
+      providerStatusCode: status,
+      errorCode: code,
+      errorMessage: message,
+    };
+  }
+  return {
+    status: 'failed',
+    providerStatusCode: status,
+    errorCode: code,
+    errorMessage: message,
+  };
+};
 
 type GeminiRequestBuildOptions = {
   model?: string;
@@ -982,32 +1033,61 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   if (selection.providerId === 'anthropic') {
     const { system, messages: claudeMessages } = buildClaudeMessages(messages);
     const claudeTools = buildClaudeTools(filteredTools, normalizedToolChoice);
-    const raw = await dispatchMeshGenerateRaw<unknown>({
-      providerId: selection.providerId,
-      model: selection.model,
-      credentialResolution,
-      userId,
-      workspaceId,
-      messages,
-      tools: filteredTools,
-      toolChoice: normalizedToolChoice,
-      responseFormat,
-      maxOutputTokens,
-      signal,
-      runtimeRequest: {
-        mode: 'messages',
-        requestOptions: {
-          model: selection.model,
-          max_tokens: typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-            ? Math.floor(maxOutputTokens)
-            : 4096,
-          ...(system ? { system } : {}),
-          messages: claudeMessages as unknown[],
-          ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
-          // Claude API does not support response_format — JSON output must be requested via prompt
-        } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
-      },
-    });
+    const claudeCodeTransport =
+      typeof userId === 'string' &&
+      userId.trim().length > 0 &&
+      credentialResolution.source === 'none' &&
+      (await getAnthropicTransportMode()) === 'claude-code'
+        ? await resolveConnectedClaudeCodeTransport(userId, {
+            workspaceId,
+            modelId: selection.model,
+            requestId: createId(),
+          })
+        : null;
+    let claudeCodeOutcome: AccountTransportOutcome = { status: 'success' };
+    let raw: unknown;
+    try {
+      raw = await dispatchMeshGenerateRaw<unknown>({
+        providerId: selection.providerId,
+        model: selection.model,
+        credentialResolution,
+        authOverride: claudeCodeTransport ? createClaudeCodeAccountAuthInput(claudeCodeTransport) : undefined,
+        userId,
+        workspaceId,
+        messages,
+        tools: filteredTools,
+        toolChoice: normalizedToolChoice,
+        responseFormat,
+        maxOutputTokens,
+        signal,
+        runtimeRequest: {
+          mode: 'messages',
+          requestOptions: {
+            model: selection.model,
+            max_tokens: typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+              ? Math.floor(maxOutputTokens)
+              : 4096,
+            ...(system ? { system } : {}),
+            messages: claudeMessages as unknown[],
+            ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
+            // Claude API does not support response_format — JSON output must be requested via prompt
+          } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
+          ...(claudeCodeTransport ? { claudeCodeTransport } : {}),
+        },
+      });
+    } catch (error) {
+      claudeCodeOutcome = mapAccountTransportErrorOutcome(error);
+      throw error;
+    } finally {
+      if (claudeCodeTransport) {
+        await claudeCodeTransport.recordOutcome(claudeCodeOutcome).catch((error) => {
+          console.warn(
+            '[llm-runtime] Failed to record Claude Code account transport outcome',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      }
+    }
 
     const text = extractClaudeText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -1187,6 +1267,7 @@ export async function* callLLMStream(
     credential,
     userId,
     workspaceId,
+    sessionId,
     reasoningEffort,
     reasoningSummary,
     tools,
@@ -1228,10 +1309,29 @@ export async function* callLLMStream(
     typeof userId === 'string' &&
     userId.trim().length > 0 &&
     selectedModel === 'gpt-5.5' &&
+    credentialResolution.source !== 'request_override' &&
     (await getOpenAITransportMode()) === 'codex'
-      ? await resolveConnectedCodexTransport(userId)
+      ? await resolveConnectedCodexTransport(userId, {
+          workspaceId,
+          modelId: selectedModel,
+          affinityKey: sessionId ? `chat_session:${sessionId}` : undefined,
+          requestId: createId(),
+        })
       : null;
   const useCodexTransport = Boolean(codexTransport);
+  const claudeCodeTransport =
+    selection.providerId === 'anthropic' &&
+    typeof userId === 'string' &&
+    userId.trim().length > 0 &&
+    credentialResolution.source === 'none' &&
+    (await getAnthropicTransportMode()) === 'claude-code'
+      ? await resolveConnectedClaudeCodeTransport(userId, {
+          workspaceId,
+          modelId: selectedModel,
+          affinityKey: sessionId ? `chat_session:${sessionId}` : undefined,
+          requestId: createId(),
+        })
+      : null;
 
   if (!capabilities.supportsStreaming) {
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
@@ -1432,80 +1532,101 @@ export async function* callLLMStream(
         ? Math.max(claudeBaseMaxTokens, claudeReasoning.minMaxTokens)
         : claudeBaseMaxTokens;
 
-      const stream = await dispatchMeshStreamRaw({
-        providerId: selection.providerId,
-        model: selectedModel,
-        credentialResolution,
-        userId,
-        workspaceId,
-        messages,
-        tools: filteredTools,
-        toolChoice: normalizedToolChoice,
-        responseFormat: effectiveResponseFormat,
-        structuredOutput: effectiveStructuredOutput,
-        reasoningEffort,
-        reasoningSummary,
-        maxOutputTokens,
-        signal,
-        previousResponseId,
-        runtimeRequest: {
-          mode: 'messages',
-          requestOptions: {
-            model: selectedModel,
-            max_tokens: claudeMaxTokens,
-            ...(system ? { system } : {}),
-            messages: claudeMessages as unknown[],
-            ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
-            ...(claudeReasoning?.thinkingParams ?? {}),
-            // Claude API does not support response_format — JSON output must be requested via prompt
-          } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
-        },
-      });
-
-      let emittedContent = false;
-      for await (const chunk of stream) {
-        if (signal?.aborted) {
-          yield { type: 'error', data: { message: 'Stream aborted' } };
-          return;
-        }
-        const event = chunk as Record<string, unknown>;
-        const eventType = typeof event.type === 'string' ? event.type : '';
-
-        if (eventType === 'content_block_delta') {
-          const delta = event.delta as Record<string, unknown> | undefined;
-          if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
-            yield { type: 'reasoning_delta', data: { delta: delta.thinking } };
-          } else if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
-            emittedContent = true;
-            yield { type: 'content_delta', data: { delta: delta.text } };
-          } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-            const contentBlockIndex = typeof event.index === 'number' ? event.index : 0;
-            const toolCallId = `claude_call_${contentBlockIndex}`;
-            yield { type: 'tool_call_delta', data: { tool_call_id: toolCallId, delta: delta.partial_json } };
-          }
-        } else if (eventType === 'content_block_start') {
-          const contentBlock = event.content_block as Record<string, unknown> | undefined;
-          if (contentBlock?.type === 'tool_use') {
-            const contentBlockIndex = typeof event.index === 'number' ? event.index : 0;
-            const toolCallId = `claude_call_${contentBlockIndex}`;
-            const name = typeof contentBlock.name === 'string' ? contentBlock.name : '';
-            yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args: '' } };
-          }
-        } else if (eventType === 'message_stop') {
-          break;
-        }
-      }
-
-      if (!emittedContent && filteredTools && filteredTools.length > 0) {
-        yield {
-          type: 'status',
-          data: {
-            state: 'provider_completed_without_content',
-            provider_id: 'anthropic',
+      let claudeCodeOutcome: AccountTransportOutcome = { status: 'success' };
+      try {
+        const stream = await dispatchMeshStreamRaw({
+          providerId: selection.providerId,
+          model: selectedModel,
+          credentialResolution,
+          authOverride: claudeCodeTransport ? createClaudeCodeAccountAuthInput(claudeCodeTransport) : undefined,
+          userId,
+          workspaceId,
+          messages,
+          tools: filteredTools,
+          toolChoice: normalizedToolChoice,
+          responseFormat: effectiveResponseFormat,
+          structuredOutput: effectiveStructuredOutput,
+          reasoningEffort,
+          reasoningSummary,
+          maxOutputTokens,
+          signal,
+          previousResponseId,
+          runtimeRequest: {
+            mode: 'messages',
+            requestOptions: {
+              model: selectedModel,
+              max_tokens: claudeMaxTokens,
+              ...(system ? { system } : {}),
+              messages: claudeMessages as unknown[],
+              ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
+              ...(claudeReasoning?.thinkingParams ?? {}),
+              // Claude API does not support response_format — JSON output must be requested via prompt
+            } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
+            ...(claudeCodeTransport ? { claudeCodeTransport } : {}),
           },
-        };
+        });
+
+        let emittedContent = false;
+        for await (const chunk of stream) {
+          if (signal?.aborted) {
+            claudeCodeOutcome = {
+              status: 'failed',
+              errorMessage: 'Stream aborted',
+            };
+            yield { type: 'error', data: { message: 'Stream aborted' } };
+            return;
+          }
+          const event = chunk as Record<string, unknown>;
+          const eventType = typeof event.type === 'string' ? event.type : '';
+
+          if (eventType === 'content_block_delta') {
+            const delta = event.delta as Record<string, unknown> | undefined;
+            if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+              yield { type: 'reasoning_delta', data: { delta: delta.thinking } };
+            } else if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+              emittedContent = true;
+              yield { type: 'content_delta', data: { delta: delta.text } };
+            } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+              const contentBlockIndex = typeof event.index === 'number' ? event.index : 0;
+              const toolCallId = `claude_call_${contentBlockIndex}`;
+              yield { type: 'tool_call_delta', data: { tool_call_id: toolCallId, delta: delta.partial_json } };
+            }
+          } else if (eventType === 'content_block_start') {
+            const contentBlock = event.content_block as Record<string, unknown> | undefined;
+            if (contentBlock?.type === 'tool_use') {
+              const contentBlockIndex = typeof event.index === 'number' ? event.index : 0;
+              const toolCallId = `claude_call_${contentBlockIndex}`;
+              const name = typeof contentBlock.name === 'string' ? contentBlock.name : '';
+              yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args: '' } };
+            }
+          } else if (eventType === 'message_stop') {
+            break;
+          }
+        }
+
+        if (!emittedContent && filteredTools && filteredTools.length > 0) {
+          yield {
+            type: 'status',
+            data: {
+              state: 'provider_completed_without_content',
+              provider_id: 'anthropic',
+            },
+          };
+        }
+        yield { type: 'done', data: {} };
+      } catch (error) {
+        claudeCodeOutcome = mapAccountTransportErrorOutcome(error);
+        throw error;
+      } finally {
+        if (claudeCodeTransport) {
+          await claudeCodeTransport.recordOutcome(claudeCodeOutcome).catch((error) => {
+            console.warn(
+              '[llm-runtime] Failed to record Claude Code account transport outcome',
+              error instanceof Error ? error.message : String(error),
+            );
+          });
+        }
       }
-      yield { type: 'done', data: {} };
       return;
     } catch (error) {
       const normalized = normalizeProviderError(selection.providerId, error);
@@ -1996,6 +2117,7 @@ export async function* callLLMStream(
       : {})
   };
 
+  let codexOutcome: AccountTransportOutcome = { status: 'success' };
   try {
     yield { type: 'status', data: { state: 'started' } };
 
@@ -2035,6 +2157,7 @@ export async function* callLLMStream(
 
     for await (const chunk of stream) {
       if (signal?.aborted) {
+        codexOutcome = { status: 'failed', errorMessage: 'Stream aborted' };
         yield { type: 'error', data: { message: 'Stream aborted' } };
         return;
       }
@@ -2180,6 +2303,10 @@ export async function* callLLMStream(
             (typeof (record as Record<string, unknown>).request_id === 'string' && ((record as Record<string, unknown>).request_id as string)) ||
             (errRec && typeof errRec.request_id === 'string' && (errRec.request_id as string)) ||
             '';
+          codexOutcome = {
+            status: 'failed',
+            errorMessage: message,
+          };
           yield { type: 'error', data: { message, ...(requestId ? { request_id: requestId } : {}) } };
           break;
         }
@@ -2194,6 +2321,7 @@ export async function* callLLMStream(
       }
     }
   } catch (error) {
+    codexOutcome = mapAccountTransportErrorOutcome(error);
     const normalized = normalizeProviderError(selection.providerId, error);
     yield {
       type: 'error',
@@ -2203,5 +2331,14 @@ export async function* callLLMStream(
       }
     };
     throw error;
+  } finally {
+    if (codexTransport) {
+      await codexTransport.recordOutcome(codexOutcome).catch((error) => {
+        console.warn(
+          '[llm-runtime] Failed to record Codex account transport outcome',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    }
   }
 }
