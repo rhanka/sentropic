@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-ui",
-  "version": "0.13.0",
+  "version": "0.22.0",
   "description": "Svelte reference UI package for @sentropic/* chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. Consumes @sentropic/chat-core wire contracts over HTTP/SSE only.",
   "type": "module",
   "license": "MIT",
@@ -16,6 +16,17 @@
       "types": "./src/index.ts",
       "svelte": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./theme.css": "./src/theme/chat-ui.css",
+    "./checkpoints": {
+      "types": "./src/checkpoints/index.ts",
+      "svelte": "./src/checkpoints/index.ts",
+      "import": "./src/checkpoints/index.ts"
+    },
+    "./client/chat-core-host": {
+      "types": "./src/client/chat-core-host.ts",
+      "svelte": "./src/client/chat-core-host.ts",
+      "import": "./src/client/chat-core-host.ts"
     },
     "./client/transport": {
       "types": "./src/client/transport.ts",
@@ -56,6 +67,11 @@
       "types": "./src/state/chatProjection.ts",
       "svelte": "./src/state/chatProjection.ts",
       "import": "./src/state/chatProjection.ts"
+    },
+    "./state/chatLoopController": {
+      "types": "./src/state/chatLoopController.ts",
+      "svelte": "./src/state/chatLoopController.ts",
+      "import": "./src/state/chatLoopController.ts"
     },
     "./state/chatWidgetShell": {
       "types": "./src/state/chatWidgetShell.ts",
@@ -206,24 +222,67 @@
       "types": "./src/state/sessionList.ts",
       "svelte": "./src/state/sessionList.ts",
       "import": "./src/state/sessionList.ts"
+    },
+    "./context": {
+      "types": "./src/context/index.ts",
+      "svelte": "./src/context/index.ts",
+      "import": "./src/context/index.ts"
+    },
+    "./documents": {
+      "types": "./src/documents/index.ts",
+      "svelte": "./src/documents/index.ts",
+      "import": "./src/documents/index.ts"
+    },
+    "./documents/AttachmentBand.svelte": {
+      "types": "./src/documents/AttachmentBand.svelte.d.ts",
+      "svelte": "./src/documents/AttachmentBand.svelte",
+      "import": "./src/documents/AttachmentBand.svelte"
+    },
+    "./documents/GeneratedFileCardTray.svelte": {
+      "types": "./src/documents/GeneratedFileCardTray.svelte.d.ts",
+      "svelte": "./src/documents/GeneratedFileCardTray.svelte",
+      "import": "./src/documents/GeneratedFileCardTray.svelte"
+    },
+    "./documents/ImageLightbox.svelte": {
+      "types": "./src/documents/ImageLightbox.svelte.d.ts",
+      "svelte": "./src/documents/ImageLightbox.svelte",
+      "import": "./src/documents/ImageLightbox.svelte"
+    },
+    "./documents/MessageAttachments.svelte": {
+      "types": "./src/documents/MessageAttachments.svelte.d.ts",
+      "svelte": "./src/documents/MessageAttachments.svelte",
+      "import": "./src/documents/MessageAttachments.svelte"
+    },
+    "./comments": {
+      "types": "./src/comments/index.ts",
+      "svelte": "./src/comments/index.ts",
+      "import": "./src/comments/index.ts"
+    },
+    "./comments/CommentsPanel.svelte": {
+      "types": "./src/comments/CommentsPanel.svelte.d.ts",
+      "svelte": "./src/comments/CommentsPanel.svelte",
+      "import": "./src/comments/CommentsPanel.svelte"
     }
   },
   "files": [
     "dist",
     "src",
     "README.md",
+    "THEMING.md",
     "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
   },
   "sideEffects": [
-    "**/*.svelte"
+    "**/*.svelte",
+    "**/*.css"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run tests"
+    "test": "vitest run tests",
+    "prepack": "node scripts/verify-publish-artifacts.mjs"
   },
   "peerDependencies": {
     "@lucide/svelte": "^0.562.0",

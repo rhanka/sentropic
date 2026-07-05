@@ -537,6 +537,63 @@ build-llm-mesh: ## Build @sentropic/llm-mesh dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
+# BR-LB-EX1 — @sentropic/llm-gateway (WP16 Layer-B) CI wiring (owner-approved 2026-06-22).
+# Mirrors the sibling-package symlink pattern used by typecheck-auth-hono/test-auth-hono
+# (which symlinks @sentropic/oauth-verify): the gateway consumes @sentropic/llm-mesh, so it
+# needs the built llm-mesh dist symlinked in + hono. typecheck covers src AND tests.
+.PHONY: typecheck-llm-gateway
+typecheck-llm-gateway: build-llm-mesh ## Run @sentropic/llm-gateway type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 vitest@4.0.18 >/dev/null; mkdir -p node_modules/@sentropic node_modules/@types; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/llm-mesh node_modules/@sentropic/llm-mesh; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.test.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: build-llm-gateway
+build-llm-gateway: build-llm-mesh ## Build @sentropic/llm-gateway dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules/@sentropic node_modules/@types; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/llm-mesh node_modules/@sentropic/llm-mesh; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: pack-llm-gateway
+pack-llm-gateway: build-llm-gateway ## Validate @sentropic/llm-gateway npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: publish-llm-gateway
+publish-llm-gateway: build-llm-gateway ## Publish @sentropic/llm-gateway from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/llm-gateway \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-gateway@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-gateway@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-llm-gateway-token
+publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-llm-gateway in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/llm-gateway \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-gateway@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-gateway@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
 .PHONY: typecheck-flow
 typecheck-flow: ## Run @sentropic/flow type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
@@ -611,15 +668,15 @@ pack-chat-ui: build-chat-ui ## Validate @sentropic/chat-ui npm package contents 
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; echo "--- packed package.json exports (dist-form) ---"; node -e "const p=require(\"./package.json\"); console.log(JSON.stringify({main:p.main,types:p.types,files:p.files,exports_root:p.exports[\".\"]},null,2))"; npm pack --dry-run'
 
 .PHONY: typecheck-auth-hono
-typecheck-auth-hono: ## Run @sentropic/auth-hono type checks
+typecheck-auth-hono: build-oauth-verify ## Run @sentropic/auth-hono type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@3.25.76 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@3.25.76 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: build-auth-hono
-build-auth-hono: ## Build @sentropic/auth-hono dist package
+build-auth-hono: build-oauth-verify ## Build @sentropic/auth-hono dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@3.25.76 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@3.25.76 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: pack-auth-hono
@@ -715,6 +772,124 @@ publish-auth-client-token: build-auth-client ## Publish @sentropic/auth-client u
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/auth-client \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/auth-client@"$$version" version >/dev/null 2>&1; then echo "@sentropic/auth-client@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: typecheck-oauth-verify
+typecheck-oauth-verify: ## Run @sentropic/oauth-verify type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node jose@5.10.0 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: build-oauth-verify
+build-oauth-verify: ## Build @sentropic/oauth-verify dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node jose@5.10.0 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: test-oauth-verify
+test-oauth-verify: ## Run @sentropic/oauth-verify tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/oauth-verify/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node jose@5.10.0 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: pack-oauth-verify
+pack-oauth-verify: build-oauth-verify ## Validate @sentropic/oauth-verify npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/oauth-verify $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: publish-oauth-verify
+publish-oauth-verify: build-oauth-verify ## Publish @sentropic/oauth-verify from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/oauth-verify \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/oauth-verify@"$$version" version >/dev/null 2>&1; then echo "@sentropic/oauth-verify@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-oauth-verify-token
+publish-oauth-verify-token: build-oauth-verify ## Publish @sentropic/oauth-verify using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-oauth-verify in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/oauth-verify \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/oauth-verify@"$$version" version >/dev/null 2>&1; then echo "@sentropic/oauth-verify@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: typecheck-mcp-auth
+typecheck-mcp-auth: build-oauth-verify ## Run @sentropic/mcp-auth type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 jose@5.10.0 >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: build-mcp-auth
+build-mcp-auth: build-oauth-verify ## Build @sentropic/mcp-auth dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 jose@5.10.0 >/dev/null; mkdir -p node_modules/@types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: test-mcp-auth
+test-mcp-auth: build-oauth-verify ## Run @sentropic/mcp-auth tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-auth/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 jose@5.10.0 >/dev/null; mkdir -p node_modules @types node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: pack-mcp-auth
+pack-mcp-auth: build-mcp-auth ## Validate @sentropic/mcp-auth npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-auth $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: publish-mcp-auth
+publish-mcp-auth: build-mcp-auth ## Publish @sentropic/mcp-auth from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/mcp-auth \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/mcp-auth@"$$version" version >/dev/null 2>&1; then echo "@sentropic/mcp-auth@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-mcp-auth-token
+publish-mcp-auth-token: build-mcp-auth ## Publish @sentropic/mcp-auth using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-mcp-auth in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/mcp-auth \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/mcp-auth@"$$version" version >/dev/null 2>&1; then echo "@sentropic/mcp-auth@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
 .PHONY: typecheck-auth-ui
 typecheck-auth-ui: ## Run @sentropic/auth-ui type checks
@@ -881,6 +1056,119 @@ build-build-cli: ## Build @sentropic/build-cli dist package
 .PHONY: pack-build-cli
 pack-build-cli: build-build-cli ## Validate @sentropic/build-cli npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/build-cli $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+# --- @sentropic/harness (BR42h-EX1: additive lane; tooling-only, pure-TS, node test env) ---
+.PHONY: typecheck-harness test-harness build-harness pack-harness
+typecheck-harness: ## Run @sentropic/harness type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+
+test-harness: ## Run @sentropic/harness tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+
+build-harness: ## Build @sentropic/harness dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+
+pack-harness: build-harness ## Validate @sentropic/harness npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+# --- @sentropic/focus (BR-FOCUS-EX (Makefile): focus gained its first real runtime dep
+#     @sentropic/track, so it builds via the WORKSPACE node_modules — the install-internal-packages
+#     + `npx --offline tsc/vitest` pattern used by chat-core/comments — NOT the isolated zero-dep
+#     temp-toolset (which cannot resolve @sentropic/track + its transitive deps). Private, pure-TS
+#     render-core + the /track read binding; node test env. install-internal-packages installs the
+#     packages/focus workspace (incl. @sentropic/track@0.17.0) into node_modules from the lockfile.) ---
+.PHONY: typecheck-focus test-focus build-focus pack-focus publish-focus publish-focus-token
+typecheck-focus: install-internal-packages ## Run @sentropic/focus type checks (requires @sentropic/track in workspace node_modules)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+
+test-focus: install-internal-packages ## Run @sentropic/focus tests (requires @sentropic/track in workspace node_modules)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline vitest run tests --environment node'
+
+build-focus: install-internal-packages ## Build @sentropic/focus dist package (requires @sentropic/track in workspace node_modules)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+
+pack-focus: build-focus ## Validate @sentropic/focus npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/focus $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+publish-focus: build-focus ## Publish @sentropic/focus from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/focus \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/focus@"$$version" version >/dev/null 2>&1; then echo "@sentropic/focus@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+publish-focus-token: build-focus ## Publish @sentropic/focus using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-focus in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/focus \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/focus@"$$version" version >/dev/null 2>&1; then echo "@sentropic/focus@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-harness
+publish-harness: build-harness ## Publish @sentropic/harness from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/harness \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/harness@"$$version" version >/dev/null 2>&1; then echo "@sentropic/harness@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-harness-token
+publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-harness in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/harness \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/harness@"$$version" version >/dev/null 2>&1; then echo "@sentropic/harness@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: scope-check
+scope-check: build-harness ## Advisory C2 scope-check of local changes (staged+unstaged) vs BRANCH.md (BR42h-EX1)
+	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; \
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/harness $(LLM_MESH_NODE_IMAGE) node dist/bin/harness.js check scope --branch-md /workspace/BRANCH.md --staged-files "$$files"
 
 # --- @sentropic/cli (BR42a1-EX1: additive lane; pure-Node, node test env) ---
 .PHONY: typecheck-cli
@@ -1065,8 +1353,8 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 	@echo "✅ Windows .exe packaged in ui/static/cowork-desktop/"
 
 .PHONY: install-internal-packages
-install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow} into node_modules (no api/ui)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --include-workspace-root --ignore-scripts --no-audit --no-fund'
+install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow,focus} into node_modules (no api/ui)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --workspace=packages/focus --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
 .PHONY: build-contracts
 build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
@@ -1088,6 +1376,10 @@ build-chat-server: ## Build @sentropic/chat-server dist package
 .PHONY: build-comments
 build-comments: build-contracts ## Build @sentropic/comments dist package (depends on contracts dist)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+
+.PHONY: build-ubo-contracts
+build-ubo-contracts: ## Build @sentropic/ubo-contracts (private, BR-59) dist package — no @sentropic deps
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/ubo-contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
 
 .PHONY: typecheck-contracts
 typecheck-contracts: install-internal-packages ## Run @sentropic/contracts type checks
@@ -1391,6 +1683,15 @@ test: test-api test-ui test-e2e ## Run all tests
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
+# BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
+# Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
+# vitest into the gateway's node_modules, then run vitest over tests (node env).
+.PHONY: test-llm-gateway
+test-llm-gateway: build-llm-mesh ## Run @sentropic/llm-gateway tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-gateway/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules/@sentropic node_modules/@types; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/llm-mesh node_modules/@sentropic/llm-mesh; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
@@ -1430,15 +1731,15 @@ test-comments: ## Run @sentropic/comments tests
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-auth-hono
-test-auth-hono: ## Run @sentropic/auth-hono tests
+test-auth-hono: build-oauth-verify ## Run @sentropic/auth-hono tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-hono/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@3.25.76 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-hono/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@3.25.76 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-auth-client
 test-auth-client: build-auth-hono ## Run @sentropic/auth-client tests (needs auth-hono dist for the in-process IdP round-trip)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules ../auth-hono/node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-client/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node jose@5.10.0 hono@4.10.7 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic ../auth-hono/node_modules/@hono ../auth-hono/node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/auth-hono node_modules/@sentropic/auth-hono; ln -sfn "$$tool_dir/node_modules/hono" ../auth-hono/node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" ../auth-hono/node_modules/jose; ln -sfn "$$tool_dir/node_modules/zod" ../auth-hono/node_modules/zod; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" ../auth-hono/node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" ../auth-hono/node_modules/@simplewebauthn/server; trap "rm -rf node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-client/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node jose@5.10.0 hono@4.10.7 zod@3.25.76 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic ../auth-hono/node_modules/@hono ../auth-hono/node_modules/@simplewebauthn ../auth-hono/node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/auth-hono node_modules/@sentropic/auth-hono; ln -sfn /workspace/packages/oauth-verify ../auth-hono/node_modules/@sentropic/oauth-verify; ln -sfn "$$tool_dir/node_modules/hono" ../auth-hono/node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" ../auth-hono/node_modules/jose; ln -sfn "$$tool_dir/node_modules/zod" ../auth-hono/node_modules/zod; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" ../auth-hono/node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" ../auth-hono/node_modules/@simplewebauthn/server; trap "rm -rf node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules ../auth-hono/node_modules'
 
 .PHONY: test-auth-ui
@@ -1631,7 +1932,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # Development environment
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
-prepare-node-workspace: build-llm-mesh build-flow build-auth-hono build-auth-client build-comments ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+prepare-node-workspace: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
@@ -1681,7 +1982,7 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test-ci
-up-api-test-ci: build-llm-mesh build-flow build-auth-hono build-auth-client build-comments ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+up-api-test-ci: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
@@ -1864,6 +2165,14 @@ db-generate: ## Generate migration files from schema.ts changes (uses exec if co
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate; \
 	else \
 		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc "npm ci --include=dev && npm run db:generate"; \
+	fi
+
+.PHONY: db-generate-control
+db-generate-control: ## Generate control-schema migration files (control migration stream; BR-60 ARCH-14)
+	@if [ "$$(docker compose -f docker-compose.yml -f docker-compose.dev.yml ps -q api 2>/dev/null | wc -l)" -gt 0 ]; then \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api npm run db:generate-control; \
+	else \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc "npm ci --include=dev && npm run db:generate-control"; \
 	fi
 
 .PHONY: db-migrate
@@ -2367,6 +2676,7 @@ down-maildev: ## Stop MailDev service
 # `make -C ~/src/poc-k8s apply-sentropic` first.
 # All targets honour KUBECONFIG (default ~/.kube/poc.yaml).
 K8S_NAMESPACE ?= sentropic
+K8S_PREPROD_NAMESPACE ?= sentropic-preprod
 K8S_ENV_FILE  ?= .env
 KUBECONFIG    ?= $(HOME)/.kube/poc.yaml
 SCW_REGISTRY_SECRET ?= sentropic-registry
@@ -2384,30 +2694,37 @@ GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: k8s-deploy k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
+.PHONY: k8s-deploy k8s-deploy-preprod k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
-k8s-deploy: ## Apply tenant manifests on the poc cluster (K8S_INGRESS=1 includes 60-ingress.yaml)
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/10-rbac.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/15-networkpolicy.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/20-postgres.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/30-api.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/40-ui.yaml
+k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress is part of the overlay
+	# BR-55a: one kustomize apply (base + overlays/prod). The standalone IdP
+	# (auth.sent-tech.ca) runs from the SAME api image; the api owns migrations on the
+	# shared DB and the IdP runs none of its own. The prod overlay sets
+	# namespace=sentropic and includes the ingress (the old K8S_INGRESS gate is gone).
+	# Image = base default (:main) until the release pipeline pins a tag (BR-55c/d).
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/prod
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
-	@if [ "$(K8S_INGRESS)" = "1" ]; then \
-	  KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/60-ingress.yaml; \
-	fi
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/ui
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api --timeout=300s
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui  --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/auth-idp deployment/ui
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api      --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui       --timeout=300s
+
+k8s-deploy-preprod: ## BR-55c: deploy main->preprod (ns sentropic-preprod) with the immutable content-hash image pin. NEVER touches the prod (sentropic) ns.
+	# BR-55c (D-c1/D-c4): pin the immutable per-content image tags (API_VERSION/UI_VERSION
+	# = content sha1 — the SAME tags publish-{api,ui}-image push) into the preprod overlay,
+	# then apply. This kills the floating :main staleness. The preprod-scoped KUBECONFIG
+	# (poc-k8s, namespace-scoped to sentropic-preprod) can ONLY write this ns — the prod
+	# `sentropic` ns is unreachable. The auth-idp shares the api image, so pinning the api
+	# image covers it. Idempotent: the images: block is appended once per checkout.
+	@grep -q '^images:' deploy/k8s/overlays/preprod/kustomization.yaml || printf '\nimages:\n  - name: %s/%s\n    newTag: "%s"\n  - name: %s/%s\n    newTag: "%s"\n' "$(REGISTRY)" "$(API_IMAGE_NAME)" "$(API_VERSION)" "$(REGISTRY)" "$(UI_IMAGE_NAME)" "$(UI_VERSION)" >> deploy/k8s/overlays/preprod/kustomization.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -k deploy/k8s/overlays/preprod
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/api      --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/ui       --timeout=300s
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/60-ingress.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/40-ui.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/30-api.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/20-postgres.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/15-networkpolicy.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/10-rbac.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl delete -k deploy/k8s/overlays/prod --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete secret sentropic-postgres sentropic-api --ignore-not-found
 
 k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (.env)
@@ -2449,29 +2766,12 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	OPENAI=$$(get OPENAI_API_KEY) ; ANTHROPIC=$$(get ANTHROPIC_API_KEY) ; GEMINI=$$(get GEMINI_API_KEY) ; \
 	MISTRAL=$$(get MISTRAL_API_KEY) ; COHERE=$$(get COHERE_API_KEY) ; TAVILY=$$(get TAVILY_API_KEY) ; \
-	MAIL_HOST=$$(get MAIL_HOST) ; MAIL_PORT=$$(get MAIL_PORT) ; MAIL_SECURE=$$(get MAIL_SECURE) ; \
-	MAIL_USERNAME=$$(get MAIL_USERNAME) ; MAIL_PASSWORD=$$(get MAIL_PASSWORD) ; MAIL_FROM=$$(get MAIL_FROM) ; \
-	[ -n "$$MAIL_USERNAME" ] || MAIL_USERNAME=$$(get_poc_export MAIL_USERNAME) ; \
-	[ -n "$$MAIL_PASSWORD" ] || MAIL_PASSWORD=$$(get_poc_export MAIL_PASSWORD) ; \
-	if [ -z "$$MAIL_HOST" ] && [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then \
-	  MAIL_HOST=smtp.tem.scaleway.com ; MAIL_PORT=465 ; MAIL_SECURE=true ; \
-	fi ; \
-	[ -n "$$MAIL_HOST" ] || MAIL_HOST="" ; [ -n "$$MAIL_PORT" ] || MAIL_PORT=587 ; \
-	[ -n "$$MAIL_SECURE" ] || MAIL_SECURE=false ; [ -n "$$MAIL_FROM" ] || MAIL_FROM=no-reply@sent-tech.ca ; \
-	if [ -n "$$MAIL_HOST" ] && { [ -z "$$MAIL_USERNAME" ] || [ -z "$$MAIL_PASSWORD" ]; }; then \
-	  echo "ERROR: MAIL_USERNAME and MAIL_PASSWORD are required when MAIL_HOST is set in $(K8S_ENV_FILE)" >&2; exit 1; \
-	fi ; \
-	MAIL_AUTH_STATUS=disabled ; \
-	if [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then MAIL_AUTH_STATUS=configured ; fi ; \
-	echo "Mail config: host=$${MAIL_HOST:-disabled} port=$$MAIL_PORT secure=$$MAIL_SECURE from=$$MAIL_FROM auth=$$MAIL_AUTH_STATUS" ; \
-	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
-	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
-	COWORK_DESKTOP_DOWNLOAD_URL=$$(get COWORK_DESKTOP_DOWNLOAD_URL) ; \
-	COWORK_DESKTOP_VERSION=$$(get COWORK_DESKTOP_VERSION) ; \
-	COWORK_DESKTOP_SOURCE=$$(get COWORK_DESKTOP_SOURCE) ; \
-	COWORK_DESKTOP_PRERELEASE_URL=$$(get COWORK_DESKTOP_PRERELEASE_URL) ; \
-	COWORK_DESKTOP_PRERELEASE_VERSION=$$(get COWORK_DESKTOP_PRERELEASE_VERSION) ; \
-	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
+	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; \
+	GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
+	DS_AK=$$(get DOC_STORAGE_ACCESS_KEY) ; DS_SK=$$(get DOC_STORAGE_SECRET_KEY) ; DS_BK=$$(get DOC_STORAGE_BUCKET) ; \
+	DS_EP=$$(get DOC_STORAGE_ENDPOINT) ; DS_RG=$$(get DOC_STORAGE_REGION) ; \
+	SCW_TEM=$$(get SCW_TEM_SECRET_KEY) ; OAUTH_KEK=$$(get OAUTH_SIGNING_KEK) ; \
+	DATABASE_URL=$$(get DATABASE_URL) ; [ -n "$$DATABASE_URL" ] || DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-api \
 	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
 	  --from-literal=OPENAI_API_KEY="$$OPENAI" \
@@ -2480,23 +2780,28 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=MISTRAL_API_KEY="$$MISTRAL" \
 	  --from-literal=COHERE_API_KEY="$$COHERE" \
 	  --from-literal=TAVILY_API_KEY="$$TAVILY" \
-	  --from-literal=MAIL_HOST="$$MAIL_HOST" \
-	  --from-literal=MAIL_PORT="$$MAIL_PORT" \
-	  --from-literal=MAIL_SECURE="$$MAIL_SECURE" \
-	  --from-literal=MAIL_USERNAME="$$MAIL_USERNAME" \
-	  --from-literal=MAIL_PASSWORD="$$MAIL_PASSWORD" \
-	  --from-literal=MAIL_FROM="$$MAIL_FROM" \
+	  --from-literal=DOC_STORAGE_ACCESS_KEY="$$DS_AK" \
+	  --from-literal=DOC_STORAGE_SECRET_KEY="$$DS_SK" \
+	  --from-literal=DOC_STORAGE_BUCKET="$$DS_BK" \
+	  --from-literal=DOC_STORAGE_ENDPOINT="$$DS_EP" \
+	  --from-literal=DOC_STORAGE_REGION="$$DS_RG" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_ID="$$GD_CID" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_SECRET="$$GD_CS" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_API_KEY="$$GD_PK" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
-	  --from-literal=COWORK_DESKTOP_DOWNLOAD_URL="$$COWORK_DESKTOP_DOWNLOAD_URL" \
-	  --from-literal=COWORK_DESKTOP_VERSION="$$COWORK_DESKTOP_VERSION" \
-	  --from-literal=COWORK_DESKTOP_SOURCE="$$COWORK_DESKTOP_SOURCE" \
-	  --from-literal=COWORK_DESKTOP_PRERELEASE_URL="$$COWORK_DESKTOP_PRERELEASE_URL" \
-	  --from-literal=COWORK_DESKTOP_PRERELEASE_VERSION="$$COWORK_DESKTOP_PRERELEASE_VERSION" \
+	  --from-literal=SCW_TEM_SECRET_KEY="$$SCW_TEM" \
+	  --from-literal=OAUTH_SIGNING_KEK="$$OAUTH_KEK" \
+	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
+	S3_AK=$$(get S3_ACCESS_KEY) ; S3_SK=$$(get S3_SECRET_KEY) ; S3_BK=$$(get S3_BUCKET) ; \
+	S3_EP=$$(get S3_ENDPOINT) ; S3_RG=$$(get S3_REGION) ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-pgbackup \
+	  --from-literal=S3_ACCESS_KEY="$$S3_AK" \
+	  --from-literal=S3_SECRET_KEY="$$S3_SK" \
+	  --from-literal=S3_BUCKET="$$S3_BK" \
+	  --from-literal=S3_ENDPOINT="$$S3_EP" \
+	  --from-literal=S3_REGION="$$S3_RG" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
-	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(K8S_NAMESPACE)."
+	@echo "==> Secrets sentropic-postgres + sentropic-api + sentropic-pgbackup ready in $(K8S_NAMESPACE)."
 
 k8s-registry-secret: ## Create/update the SCW Registry pull secret from $(K8S_ENV_FILE)
 	@test -f $(K8S_ENV_FILE) || { echo "missing $(K8S_ENV_FILE)" >&2; exit 1; }
@@ -2609,56 +2914,15 @@ gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_R
 	@test -n "$(GH_DEPLOY_RUN_ID)" || (echo "ERROR: GH_DEPLOY_RUN_ID is required, for example GH_DEPLOY_RUN_ID=26159456218" >&2; exit 1)
 	gh run watch "$(GH_DEPLOY_RUN_ID)" --repo "$(GH_REPO)" --interval 30 --exit-status
 
-# --- Sealed Secrets (BR37b-EX1, append-only; operator-side, live cluster) -----
-# Bitnami Sealed Secrets controller install + sealing helpers. The controller
-# manifest is deploy/k8s/01-sealed-secrets-controller.yaml (pinned v0.37.0,
-# namespace `sealed-secrets`). kubeseal is run from the pinned official image
-# docker.io/bitnami/sealed-secrets-kubeseal:0.37.0 (kubeseal is its entrypoint),
-# so no host install of kubeseal is required. kubeseal fetches the controller's
-# public cert from the live kube API using the mounted $(KUBECONFIG); no secret
-# value is ever hardcoded in a target — `k8s-seal-secret` only transforms
-# SEAL_SRC (plaintext Secret yaml) into SEAL_OUT (SealedSecret yaml).
-SEALED_SECRETS_NAMESPACE  ?= sealed-secrets
-SEALED_SECRETS_CONTROLLER ?= sealed-secrets-controller
-SEALED_SECRETS_MANIFEST   ?= deploy/k8s/01-sealed-secrets-controller.yaml
-KUBESEAL_IMAGE            ?= docker.io/bitnami/sealed-secrets-kubeseal:0.37.0
-SEAL_SRC ?=
-SEAL_OUT ?=
-SEAL_KEY_OUT ?=
-
-.PHONY: k8s-sealed-secrets-install k8s-seal-secret k8s-sealed-secrets-backup-key
-
-k8s-sealed-secrets-install: ## Install the Sealed Secrets controller (v0.37.0) and wait for rollout
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f $(SEALED_SECRETS_MANIFEST)
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) rollout status deploy/$(SEALED_SECRETS_CONTROLLER) --timeout=120s
-	@echo "==> Sealed Secrets controller $(SEALED_SECRETS_CONTROLLER) ready in namespace $(SEALED_SECRETS_NAMESPACE)."
-
-k8s-seal-secret: ## Seal a plaintext Secret yaml into a SealedSecret yaml (SEAL_SRC=... SEAL_OUT=...)
-	@test -n "$(SEAL_SRC)" || { echo "ERROR: set SEAL_SRC=<path to plaintext Secret yaml>" >&2; exit 1; }
-	@test -n "$(SEAL_OUT)" || { echo "ERROR: set SEAL_OUT=<path to write the SealedSecret yaml>" >&2; exit 1; }
-	@test -f "$(SEAL_SRC)" || { echo "ERROR: SEAL_SRC=$(SEAL_SRC) not found" >&2; exit 1; }
-	@test -s "$(KUBECONFIG)" || { echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1; }
-	@command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required to run $(KUBESEAL_IMAGE)" >&2; exit 1; }
-	@docker run --rm -i \
-	  -v "$(KUBECONFIG)":/tmp/kubeconfig:ro \
-	  -e KUBECONFIG=/tmp/kubeconfig \
-	  $(KUBESEAL_IMAGE) \
-	  --controller-name=$(SEALED_SECRETS_CONTROLLER) \
-	  --controller-namespace=$(SEALED_SECRETS_NAMESPACE) \
-	  --format=yaml \
-	  < "$(SEAL_SRC)" > "$(SEAL_OUT)"
-	@echo "==> Sealed $(SEAL_SRC) -> $(SEAL_OUT) (controller $(SEALED_SECRETS_CONTROLLER)/$(SEALED_SECRETS_NAMESPACE))."
-
-k8s-sealed-secrets-backup-key: ## Export the controller sealing key for DR (SEAL_KEY_OUT=...). HIGHLY SENSITIVE.
-	@test -n "$(SEAL_KEY_OUT)" || { echo "ERROR: set SEAL_KEY_OUT=<path to write the sealing key backup>" >&2; exit 1; }
-	@test -s "$(KUBECONFIG)" || { echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1; }
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) get secret \
-	  -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > "$(SEAL_KEY_OUT)"
-	@echo "WARNING: $(SEAL_KEY_OUT) contains the controller master sealing key."
-	@echo "WARNING: store it out-of-band (offline/secret manager), NEVER commit it, and restrict file permissions."
+# --- Secrets provisioning: cluster-only (mode 2) -----------------------------
+# Secrets are provisioned DIRECTLY into the live cluster from a gitignored env
+# file via `make k8s-bundle-secret K8S_ENV_FILE=.env.prod` (target above). No
+# SealedSecrets, no controller, no secret material in git. The prod .env holds
+# 24 keys (api 17 + OAUTH_SIGNING_KEK, postgres POSTGRES_PASSWORD, pgbackup S3_*)
+# and lives ONLY on the operator machine + the live cluster.
 
 # --- Postgres backup (BR37c-EX1, append-only; operator-side, live cluster) ----
-# Manual trigger / restore helpers around deploy/k8s/70-pgbackup-cronjob.yaml.
+# Manual trigger / restore helpers around deploy/k8s/base/70-pgbackup-cronjob.yaml.
 # Backup S3 creds + bucket come from the sentropic-pgbackup SealedSecret; the
 # CronJob dumps with pg_dump (initContainer) and uploads via aws-cli. These
 # targets never hardcode a secret value.

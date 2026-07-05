@@ -1,0 +1,22 @@
+# PREPROD auth-idp ConfigMap overrides (strategic-merge: only these keys change).
+#
+# All host-shaped IdP config resolves to the IdP's OWN preprod origin
+# (preprod.auth.sent-tech.ca): the discovery issuer, the login/consent screens
+# base, and the magic-link callback base. CORS is the explicit preprod origin
+# pair (the `*.sent-tech.ca` single-label wildcard does NOT match nested preprod
+# hosts, so they are listed verbatim).
+#
+# WebAuthn RP-ID isolation (D11R, FORK-2): WebAuthn ceremonies happen at the IdP;
+# RP ID = the IdP's own preprod host, a valid suffix of its origin and fully
+# isolated from prod's RP ID.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-idp
+data:
+  OAUTH_ISSUER_URL: "https://preprod.auth.sent-tech.ca"
+  UI_BASE_URL: "https://preprod.auth.sent-tech.ca"
+  AUTH_CALLBACK_BASE_URL: "https://preprod.auth.sent-tech.ca"
+  CORS_ALLOWED_ORIGINS: "https://preprod.auth.sent-tech.ca,https://preprod.sentropic.sent-tech.ca"
+  WEBAUTHN_RP_ID: "preprod.auth.sent-tech.ca"
+  WEBAUTHN_ORIGIN: "https://preprod.auth.sent-tech.ca"

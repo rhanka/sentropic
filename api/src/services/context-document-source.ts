@@ -1,5 +1,5 @@
 import type { ContextDocumentRow } from '../db/schema';
-import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
+import { getArtifactStore } from './artifact-store';
 import {
   loadGoogleDriveFileContent,
   resolveGoogleDriveFileMetadata,
@@ -238,8 +238,8 @@ export async function loadContextDocumentContent(input: {
   const source = resolveContextDocumentSource(input.document);
 
   if (source.kind === 'local') {
-    const bucket = getDocumentsBucketName();
-    const bytes = await getObjectBytes({ bucket, key: source.storageKey });
+    const store = getArtifactStore();
+    const bytes = await store.getBytes({ bucket: store.defaultBucket(), key: source.storageKey });
     return {
       bytes,
       filename: input.document.filename,

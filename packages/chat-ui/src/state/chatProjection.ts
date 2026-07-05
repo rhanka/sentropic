@@ -34,6 +34,15 @@ export type ChatMessageAttachment = {
 export type ChatProjectionComputation = {
   segments: readonly ProjectedRunSegment[];
   linkedSteerCount: number;
+  /**
+   * Event-derived terminal outcome for the LIVE path (from a `done`/`error`
+   * event in the projected stream). Used as a backstop OR'd into `isTerminal`
+   * so a server-completed run is never left frozen when neither
+   * `_localStatus` nor `content` got set (cousin of chat-core history.ts
+   * getTerminalOutcome, but for live runs). `null`/absent while still
+   * streaming so mid-stream deltas keep rendering.
+   */
+  terminalOutcome?: 'completed' | 'failed' | null;
 };
 
 export type ChatProjectionSteerAck = {
@@ -230,9 +239,16 @@ export const buildProjectedTimeline = <
       }
       return -1;
     })();
-    const isTerminal =
-      (message._localStatus ?? (message.content ? 'completed' : 'processing')) ===
-      'completed';
+    // Backstop: OR in the event-derived terminal outcome (a `done`/`error`
+    // event in the projected stream) so a server-completed run is never left
+    // frozen when neither `_localStatus` nor `content` was set (nano no-delta
+    // runs + short-lived SSE on workspace switch). `terminalOutcome` is null
+    // while still streaming, so mid-stream deltas keep rendering live.
+    const derivedStatus =
+      message._localStatus ??
+      assistantProjection.terminalOutcome ??
+      (message.content ? 'completed' : 'processing');
+    const isTerminal = derivedStatus === 'completed' || derivedStatus === 'failed';
     let steerCursor = 0;
 
     for (let index = 0; index < segments.length; index += 1) {

@@ -73,6 +73,61 @@ import { setLocalToolsAdapter } from '@sentropic/chat-ui/stores/localTools';
 setLocalToolsAdapter(createVsCodeLocalToolsAdapter({ bridge }));
 ```
 
+### Registering a host-owned local tool
+
+External hosts (Diag, OpenERP, a mermaid editor, …) can register their OWN
+local tool — a name + definition — without editing the package's built-in tool
+set. The 16 sentropic built-ins (`tab_*`, `bash`, `ls`, `rg`, `file_*`, `git*`)
+keep working identically; host registration is purely additive.
+
+```ts
+import {
+  registerLocalTool,
+  setLocalToolsAdapter,
+} from '@sentropic/chat-ui/stores/localTools';
+
+// 1. Register the tool name + JSON-schema definition advertised to the model.
+registerLocalTool({
+  name: 'render_mermaid',
+  description: 'Render a Mermaid diagram in the host app.',
+  parameters: {
+    type: 'object',
+    properties: { source: { type: 'string' } },
+    required: ['source'],
+  },
+});
+
+// 2. Wire the host executor (the transport that actually runs the tool).
+setLocalToolsAdapter(createMyHostLocalToolsAdapter({ /* ... */ }));
+```
+
+Once registered:
+
+- `isLocalToolName('render_mermaid')` returns `true`, so the controller (via the
+  `attachLocalToolMachine` `isLocalToolName` hook) recognizes the model's
+  `tool_call` as local and routes it through permission → host executor →
+  tool-result, exactly like the built-ins.
+- `getLocalToolDefinitions()` advertises the registered definition alongside the
+  active runtime built-ins (deduplicated by name; a registered definition for a
+  built-in name overrides that built-in's advertised entry).
+
+API: `registerLocalTool(def)`, `registerLocalTools(defs)`,
+`unregisterLocalTool(name)`, `clearRegisteredLocalTools()`,
+`listRegisteredLocalTools()`, plus the `BUILTIN_LOCAL_TOOL_NAMES` const.
+
+Notes:
+
+- The registry is **module/process scoped** (consistent with `setLocalToolsAdapter`
+  and `localToolsStore`). Multiple chat instances on one page share it. Under SSR
+  or in tests, call `clearRegisteredLocalTools()` to reset between
+  requests/cases.
+- Registration affects **recognition and advertised definitions only**, never
+  transport — executing a registered tool still requires the host-injected
+  executor to handle that name.
+- `LocalToolName` is now `(typeof BUILTIN_LOCAL_TOOL_NAMES)[number] | (string & {})`
+  (mirrors `StreamHubEventType`): additive at runtime, type-widening at compile
+  time.
+
 ## Stream Replay Behavior
 
 `createReplayClient(transport)` opens an `EventSource` from the chat-core endpoint at the supplied `{ sessionId, fromSeq }` cursor and yields each raw `MessageEvent.data` payload through an `AsyncIterable`. Consumers parse the JSON envelope and route it to the projection pipeline.

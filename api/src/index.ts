@@ -8,6 +8,10 @@ import { purgeExpiredAuthData } from './services/challenge-purge';
 import { ensureAdminWorkspaceExists, claimAdminWorkspaceOwner } from './services/workspace-service';
 import { runAdminApprovalSweep } from './services/admin-approval-sweep';
 import { runChatTracePurge } from './services/chat-trace-sweep';
+import { runQueueReaperSweep } from './services/queue-reaper-sweep';
+import { runStreamEventsPurge } from './services/chat/stream-purge-sweep';
+import { outboxDispatcher } from './services/outbox/outbox-dispatcher';
+import { createJwksAdapter } from './services/auth/jwks-adapter';
 import { lt } from 'drizzle-orm';
 
 const port = env.PORT;
@@ -84,6 +88,30 @@ try {
   process.exit(1);
 }
 
+// Ensure an OAuth/OIDC signing key exists at boot (idempotent; mirrors the migration
+// pattern above). The api owns shared-DB initialization; the standalone IdP reads the
+// same JWKS rows. The prod image prunes devDependencies (no `tsx`), so the dev-only
+// `oauth:init-keys` script cannot run in-cluster — boot-time init is the prod path.
+// Guarded by the KEK: signing keys are encrypted at rest with OAUTH_SIGNING_KEK, so
+// when it is absent we skip (OAuth/OIDC simply has no active key) instead of crashing —
+// every non-OAuth route stays up. A failure here is logged but never fatal.
+if (env.OAUTH_SIGNING_KEK) {
+  try {
+    const jwks = createJwksAdapter();
+    const active = await jwks.getActiveKey();
+    if (active) {
+      logger.info({ kid: active.kid }, 'OAuth signing key already present.');
+    } else {
+      const created = await jwks.generateAndStoreNewKey();
+      logger.info({ kid: created.kid }, 'OAuth signing key initialized at startup.');
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'OAuth signing key init failed at startup (OAuth/OIDC unavailable until resolved).');
+  }
+} else {
+  logger.warn('OAUTH_SIGNING_KEK not set — skipping OAuth signing key init (OAuth/OIDC has no active signing key).');
+}
+
 // Purge expired authentication data (challenges, magic links)
 try {
   await purgeExpiredAuthData();
@@ -137,6 +165,44 @@ if (process.env.NODE_ENV !== 'test') {
       logger.error({ err: error }, 'Lock expiry sweep failed');
     });
   }, 30 * 1000);
+
+  // Queue reaper (WI-1): recover stranded `processing` jobs at boot (before any
+  // local jobs start → liveJobIds=[]) then every 5 minutes with live ids excluded.
+  // Boot sweep runs before any local job starts, so no live ids to skip.
+  await runQueueReaperSweep([]);
+  setInterval(() => {
+    // Import queueManager lazily to avoid circular-import at module load time.
+    import('./services/queue-manager').then(({ queueManager }) => {
+      const liveIds = Array.from(queueManager.getLiveJobIds());
+      void runQueueReaperSweep(liveIds);
+    }).catch((error) => {
+      logger.error({ err: error }, 'Queue reaper periodic sweep failed');
+    });
+  }, 5 * 60 * 1000); // every 5 minutes
+
+  // Stream events purge (WI-2): purge old chat_stream_events at boot, then daily.
+  try {
+    await runStreamEventsPurge();
+  } catch {
+    // already logged inside
+  }
+  setInterval(() => {
+    void runStreamEventsPurge();
+  }, 24 * 60 * 60 * 1000);
+
+  // Outbox dispatcher (BR-60 ARCH-14): LISTEN outbox_pending + periodic sweep.
+  // Claims control.event_outbox pending rows and emits via EventBusPort (pg NOTIFY).
+  // Autostart is suppressible (OUTBOX_DISPATCHER_AUTOSTART=false): the api-test stack
+  // runs NODE_ENV=development (not 'test'), so without this flag a background dispatcher
+  // would race the explicit-dispatch outbox unit tests and pre-empt their rows (BR70-CI1
+  // root cause). Prod/dev leave it unset → the dispatcher starts normally.
+  if (process.env.OUTBOX_DISPATCHER_AUTOSTART !== 'false') {
+    try {
+      await outboxDispatcher.start();
+    } catch (error) {
+      logger.error({ err: error }, 'Outbox dispatcher failed to start');
+    }
+  }
 }
 
 const [{ serve }, { app }] = await Promise.all([

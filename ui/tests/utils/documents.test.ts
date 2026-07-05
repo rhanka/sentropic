@@ -2,12 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
-  composerBandItems,
   deleteDocument,
   downloadDocument,
   getDocumentMimeLabel,
   getDownloadUrl,
-  isImageMimeType,
   listDocuments,
   uploadDocument,
 } from '../../src/lib/utils/documents';
@@ -186,65 +184,6 @@ describe('documents utils', () => {
           delete (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL;
         }
       }
-    });
-  });
-
-  describe('isImageMimeType', () => {
-    it('returns true for image mime types and false otherwise', () => {
-      expect(isImageMimeType('image/png')).toBe(true);
-      expect(isImageMimeType('IMAGE/JPEG')).toBe(true);
-      expect(isImageMimeType('application/pdf')).toBe(false);
-      expect(isImageMimeType('')).toBe(false);
-      expect(isImageMimeType(undefined)).toBe(false);
-      expect(isImageMimeType(null)).toBe(false);
-    });
-  });
-
-  describe('composerBandItems', () => {
-    const att = (over: Partial<Record<string, unknown>> = {}) => ({
-      id: 'att_1',
-      kind: 'image' as const,
-      fileName: 'capture.png',
-      mimeType: 'image/png',
-      state: 'uploading',
-      ...over,
-    });
-
-    it('maps a pending image attachment to an image band item carrying its preview', () => {
-      const items = composerBandItems([att({ previewUrl: 'blob:preview-1' })]);
-      expect(items).toHaveLength(1);
-      expect(items[0]).toMatchObject({
-        key: 'att:att_1',
-        kind: 'image',
-        composerAttachmentId: 'att_1',
-        previewUrl: 'blob:preview-1',
-        status: 'uploading',
-      });
-    });
-
-    it('maps a file attachment to a document band item (no preview)', () => {
-      const items = composerBandItems([
-        att({ id: 'att_doc', kind: 'file', fileName: 'rapport.pdf', mimeType: 'application/pdf', state: 'ready' }),
-      ]);
-      expect(items[0]).toMatchObject({
-        kind: 'document',
-        composerAttachmentId: 'att_doc',
-        documentId: undefined,
-      });
-      expect(items[0].previewUrl).toBeUndefined();
-    });
-
-    it('falls back to MIME classification when kind is absent', () => {
-      const items = composerBandItems([
-        { id: 'a', fileName: 'x.webp', mimeType: 'image/webp', state: 'ready' },
-        { id: 'b', fileName: 'y.pdf', mimeType: 'application/pdf', state: 'ready' },
-      ]);
-      expect(items[0].kind).toBe('image');
-      expect(items[1].kind).toBe('document');
-    });
-
-    it('returns an empty band when there are no pending attachments', () => {
-      expect(composerBandItems([])).toEqual([]);
     });
   });
 

@@ -12,19 +12,23 @@
     apiDelete,
     ApiError,
   } from '$lib/utils/api';
-  import { session } from '$lib/stores/session';
+  import { createSentropicChatCoreHost } from '$lib/chat/chat-core-host-adapter';
   import {
-    listComments,
-    createComment,
-    updateComment,
-    closeComment,
-    reopenComment,
-    deleteComment,
-    listMentionMembers,
-    type CommentItem,
-    type CommentContextType,
-    type MentionMember,
-  } from '$lib/utils/comments';
+    createChatLoopController,
+    type ControllerLocalToolPermissionPrompt,
+  } from '@sentropic/chat-ui/state/chatLoopController';
+
+  // ChatCoreHost instance — wraps the existing API utils (auth-aware) with the
+  // ChatCoreHost contract. Zero behavior change: same requests, same error shapes.
+  const chatCoreHost = createSentropicChatCoreHost();
+  // Sentropic CheckpointHost: API fetch/create/restore + domain hooks (isMutatingTool,
+  // isLocalToolName, humanizeMutation) wired to the generic module classifier.
+  const checkpointHost = createCheckpointHost();
+  import { session } from '$lib/stores/session';
+  import type { CommentContextType } from '$lib/utils/comments';
+  import CommentsPanel from '@sentropic/chat-ui/comments/CommentsPanel.svelte';
+  import type { CommentThreadSummary } from '@sentropic/chat-ui/comments';
+  import { createSentropicCommentHost } from '$lib/chat/comment-host-adapter';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import ChatComposerWrapper from '$lib/components/chat/ChatComposerWrapper.svelte';
   import ChatTimelineWrapper from '$lib/components/chat/ChatTimelineWrapper.svelte';
@@ -41,14 +45,24 @@
   import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
-    composerBandItems,
-    deleteDocument,
     getDownloadUrl,
     listDocuments,
     uploadDocument,
     type ContextDocumentItem,
-    type UnifiedAttachmentItem,
   } from '$lib/utils/documents';
+  import AttachmentBand from '@sentropic/chat-ui/documents/AttachmentBand.svelte';
+  import GeneratedFileCardTray from '@sentropic/chat-ui/documents/GeneratedFileCardTray.svelte';
+  import ImageLightbox from '@sentropic/chat-ui/documents/ImageLightbox.svelte';
+  import MessageAttachments from '@sentropic/chat-ui/documents/MessageAttachments.svelte';
+  import {
+    createComposerAttachmentId,
+    buildAttachmentBandItems,
+    buildSentAttachments,
+    handleComposerPasteImages,
+    composerAttachmentListReducer,
+  } from '@sentropic/chat-ui/documents';
+  import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
+  import { createDocumentHostAdapter } from '$lib/chat/documentHostAdapter';
   import {
     attachGoogleDriveDocuments,
     fetchGoogleDrivePickerConfig,
@@ -59,45 +73,26 @@
   import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
-    detectChatRouteContext,
-    selectActiveChatContexts,
-    upsertRouteContextEntry,
-    type ChatContextEntry,
-  } from '$lib/chat/context-provider';
+    createContextModule,
+    type ContextModule,
+  } from '@sentropic/chat-ui/context';
+  import type { ChatContextEntry } from '@sentropic/chat-ui/state/chat-context';
   import {
-    buildCommentThreads as buildChatCommentThreads,
-    findAssignedMentionFromText,
-    formatCommentTimestamp as formatChatCommentTimestamp,
-    getCommentAuthorLabel,
-    getCommentSectionLabel as getChatCommentSectionLabel,
-    getInitials,
-    getMentionCandidate,
-    getMentionLabel,
-    getMentionMatches as getChatMentionMatches,
-    isAiComment,
-    isCommentByUser,
-  } from '$lib/chat/comment-adapter';
+    createContextHost,
+    buildStoreLookup,
+    contextTypeIconKey,
+    type ChatContextType,
+  } from '$lib/chat/context-adapter';
+  // comment-adapter helpers removed — comment logic moved to CommentsPanel/createCommentState
   import {
     createChatSessionCreatePayload,
     createChatSessionDocumentContext,
     createGoogleDriveChatAttachInput,
     extractGeneratedFileCardsFromEvents,
     extractGeneratedFileCardsFromRuntimeSummary as collectGeneratedFileCardsFromRuntimeSummary,
-    getGeneratedFileFormatLabel,
     normalizeGeneratedFileCard,
   } from '$lib/chat/document-adapter';
   import {
-    chatMessageFeedbackUrl,
-    chatMessageRetryUrl,
-    chatMessageStopUrl,
-    chatMessageToolResultsUrl,
-    chatMessageUrl,
-    chatMessagesUrl,
-    chatSessionCheckpointCreateUrl,
-    chatSessionCheckpointRestoreUrl,
-    chatSessionCheckpointsUrl,
-    chatSessionHistoryUrl,
-    chatSessionUrl,
     chatSessionsUrl,
     formatChatApiError,
   } from '$lib/chat/session-adapter';
@@ -109,19 +104,15 @@
     isLocalToolRuntimeAvailable,
     LocalToolPermissionRequiredError,
     type LocalToolPermissionDecision,
-    type LocalToolPermissionRequest,
     type LocalToolName,
   } from '@sentropic/chat-ui/stores/localTools';
   import ModelSelector from '@sentropic/chat-ui/components/ModelSelector.svelte';
   import MessageActions from '@sentropic/chat-ui/components/MessageActions.svelte';
   import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
-  import type { ChatContextEntry as NeutralContextEntry } from '@sentropic/chat-ui/state/chat-context';
+  // ChatContextEntry from @sentropic/chat-ui/state/chat-context imported above via context-adapter chain.
   import {
-    groupModelsByProvider,
     computeModelSelectorWidthCh,
-    coerceSelectionToValidEntry,
     type ModelProviderId,
-    type ModelCatalogProvider,
     type ModelCatalogModel,
     type ModelCatalogGroup,
   } from '@sentropic/chat-ui/utils/model-selection';
@@ -132,9 +123,7 @@
     Check,
     Copy,
     Pencil,
-    X,
     Plus,
-    Download,
     FileText,
     Globe,
     Link2,
@@ -153,7 +142,6 @@
     Eye,
     EyeOff,
     FolderOpen,
-    Image as ImageIcon,
     Trash2,
     ChevronLeft,
     ChevronRight,
@@ -165,39 +153,36 @@
   import { downloadGeneratedFile, type GeneratedFileCard } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { generateInjectedScript } from '$lib/upstream/injected-script';
-  import { postChatSteer } from '@sentropic/chat-ui/utils/chat-steer';
+  // filterPermissionPromptsForPendingStream / parsePendingLocalToolCallsFromStatusPayload /
+  // shouldResetLocalToolStateForFreshRound removed in slice 1E — logic inlined in the controller.
   import {
-    filterPermissionPromptsForPendingStream,
-    parsePendingLocalToolCallsFromStatusPayload,
-    shouldResetLocalToolStateForFreshRound,
-  } from '@sentropic/chat-ui/utils/localToolStreamSync';
-  import {
-    EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
-    VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
     computeEnabledToolIds,
     computeToolToggleDefaults,
     computeVisibleToolToggleIds,
     isExtensionRestrictedToolsetMode as computeIsExtensionRestrictedToolsetMode,
   } from '@sentropic/chat-ui/utils/chat-tool-scope';
   import {
+    EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+    VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
+  } from '$lib/chat/tool-scope-adapter';
+  import {
     USER_AI_SETTINGS_UPDATED_EVENT,
     type UserAISettingsUpdatedPayload,
   } from '$lib/utils/user-ai-settings-events';
   import {
-    getCheckpointMutationPreviewItems,
     hasCheckpointMutationDelta,
-  } from '$lib/utils/checkpointDelta';
+    getCheckpointMutationPreviewItems,
+    applySessionCheckpoints as applySessionCheckpointsFromModule,
+    getCheckpointForUserMessage as getCheckpointForUserMessageFromModule,
+  } from '@sentropic/chat-ui/checkpoints';
+  import { createCheckpointHost } from '$lib/adapters/checkpointHostAdapter';
   import {
-    appendLiveProjectionEvent,
-    countLinkedSteerMessages,
     mergeProjectionHistoryEvents,
-    projectAssistantRunSegments,
     type ProjectedRunSegment,
   } from '@sentropic/chat-ui/utils/chat-run-projection';
-  import {
-    buildProjectedTimeline as buildChatProjectedTimeline,
-    type ChatMessageAttachment,
-    type ChatProjectedTimelineItem,
+  import type {
+    ChatMessageAttachment,
+    ChatProjectedTimelineItem,
   } from '@sentropic/chat-ui/state/chatProjection';
   import {
     createImageAttachmentDraft,
@@ -206,11 +191,8 @@
     type ChatComposerAttachmentDraft,
   } from '@sentropic/chat-ui/state/chatAttachments';
   import {
-    createComposerSteerAck,
-    createOptimisticSteerMessage,
     resolveComposerHeightState,
     resolveComposerPrimaryAction,
-    shouldClearComposerSteerAck,
     shouldShowSteerAction,
     syncDraftFromInput as syncChatDraftFromInput,
     type ComposerPrimaryActionState,
@@ -339,27 +321,14 @@
     message: string;
     createdAtMs: number;
   };
-  type ProjectedAssistantComputation = {
-    signature: string;
-    segments: ProjectedRunSegment[];
-    linkedSteerCount: number;
-  };
-  type LocalToolStreamState = {
-    streamId: string;
-    name: LocalToolName;
-    argsText: string;
-    lastSequence: number;
-    firstSeenAt: number;
-    executed: boolean;
-  };
-  type LocalToolPermissionPrompt = {
-    toolCallId: string;
-    streamId: string;
-    name: LocalToolName;
-    args: unknown;
-    request: LocalToolPermissionRequest;
-    createdAt: number;
-  };
+  // ProjectedAssistantComputation (with signature cache) was removed in slice 1B.
+  // The controller owns the cache internally via ChatProjectionComputation.
+  // LocalToolStreamState and LocalToolPermissionPrompt removed in slice 1E —
+  // replaced by ControllerLocalToolStreamState / ControllerLocalToolPermissionPrompt
+  // from the controller (imported above). AppChatPanel uses the controller's types
+  // so the template remains compatible with $ctrl.pendingLocalToolPermissionPrompts.
+  // LocalToolPermissionPrompt alias kept for template compatibility:
+  type LocalToolPermissionPrompt = ControllerLocalToolPermissionPrompt;
   type IconComponent = typeof FileText;
 
   type ToolToggle = {
@@ -370,110 +339,57 @@
     icon: IconComponent;
   };
 
-  type ModelCatalogPayload = {
-    providers: ModelCatalogProvider[];
-    models: ModelCatalogModel[];
-    defaults: {
-      provider_id: ModelProviderId;
-      model_id: string;
-    };
-  };
+  // ModelCatalogPayload type removed in slice 1F — controller owns catalog fetch.
 
-  const getContextIcon = (type: ChatContextEntry['contextType']) => {
-    if (type === 'organization') return Building2;
-    if (type === 'folder') return Folder;
-    if (type === 'initiative') return Lightbulb;
-    if (type === 'executive_summary') return ScrollText;
+  // ---------------------------------------------------------------------------
+  // Headless projection controller (slice 1B).
+  // Owns: messages, initialEventsByMessageId, projectedStreamEventsById,
+  //       projection signature cache, projectedTimelineItems.
+  // Implements the Svelte store protocol (subscribe) so $ctrl auto-subscribes.
+  // AppChatPanel reads state from $ctrl and routes all mutations through ctrl.*
+  // methods — the template renders identically from controller-backed fields.
+  // ---------------------------------------------------------------------------
+  const ctrl = createChatLoopController<LocalMessage, RuntimeSegmentSummary>();
+  // Slice 1D: inject the host transport so the controller can call sendMessage,
+  // retryMessage, stopMessage, editMessage, setFeedback without knowing the host.
+  ctrl.attachHost({ transport: chatCoreHost });
+
+  const getContextIcon = (type: string) => {
+    const key = contextTypeIconKey(type);
+    if (key === 'organization') return Building2;
+    if (key === 'folder') return Folder;
+    if (key === 'initiative') return Lightbulb;
+    if (key === 'executive_summary') return ScrollText;
     return FileText;
   };
 
-  const contextNameByKey = new Map<string, string>();
-  const contextNameLoading = new Set<string>();
+  // Context module (D3) — replaces contextEntries / lastRouteContextKey / contextNameByKey.
+  // Instantiated with the sentropic ContextHost (context-adapter.ts).
+  // The host callbacks read reactive Svelte store values via closures.
+  // Wrap $_ to satisfy context-adapter's translate signature (svelte-i18n
+  // MessageFormatter uses InterpolationValues; adapter expects Record<string,unknown>).
+  const i18nTranslate = (key: string, opts?: { values?: Record<string, unknown> }) =>
+    $_(key, opts as Parameters<typeof $_>[1]);
 
-  const getContextLabelFromStores = (
-    type: ChatContextEntry['contextType'],
-    contextId: string,
-  ) => {
-    if (!contextId) return '';
-    if (type === 'organization') {
-      const org = $organizationsStore.find((o) => o.id === contextId);
-      return org?.name || '';
-    }
-    if (type === 'folder') {
-      const folder = $foldersStore.find((f) => f.id === contextId);
-      return folder?.name || '';
-    }
-    if (type === 'initiative') {
-      const useCase = $initiativesStore.find((u) => u.id === contextId);
-      return useCase?.data?.name || useCase?.name || '';
-    }
-    if (type === 'executive_summary') {
-      const folder = $foldersStore.find((f) => f.id === contextId);
-      return folder?.name
-        ? $_('chat.context.executiveSummaryPrefix', {
-            values: { name: folder.name },
-          })
-        : '';
-    }
-    return '';
-  };
-
-  const loadContextName = async (
-    type: ChatContextEntry['contextType'],
-    contextId: string,
-  ) => {
-    const key = `${type}:${contextId}`;
-    if (!contextId || contextNameByKey.has(key) || contextNameLoading.has(key))
-      return;
-    contextNameLoading.add(key);
-    try {
-      if (type === 'organization') {
-        const org = await apiGet<{ name?: string }>(
-          `/organizations/${contextId}`,
-        );
-        if (org?.name) contextNameByKey.set(key, org.name);
-      } else if (type === 'folder' || type === 'executive_summary') {
-        const folder = await apiGet<{ name?: string }>(`/folders/${contextId}`);
-        if (folder?.name) {
-          contextNameByKey.set(
-            key,
-            type === 'executive_summary'
-              ? $_('chat.context.executiveSummaryPrefix', {
-                  values: { name: folder.name },
-                })
-              : folder.name,
-          );
-        }
-      } else if (type === 'initiative') {
-        const useCase = await apiGet<{
-          data?: { name?: string };
-          name?: string;
-        }>(`/initiatives/${contextId}`);
-        const name = useCase?.data?.name || useCase?.name;
-        if (name) contextNameByKey.set(key, name);
-      }
-    } catch {
-      // ignore
-    } finally {
-      contextNameLoading.delete(key);
-    }
-  };
-
-  const refreshContextLabels = () => {
-    contextEntries = contextEntries.map((c) => {
-      const key = `${c.contextType}:${c.contextId}`;
-      const fromStore = getContextLabelFromStores(
-        c.contextType,
-        c.contextId || '',
-      );
-      const cached = contextNameByKey.get(key) || '';
-      const nextLabel = fromStore || cached || c.label;
-      if (!nextLabel || nextLabel === c.contextId) {
-        void loadContextName(c.contextType, c.contextId || '');
-      }
-      return { ...c, label: nextLabel };
-    });
-  };
+  const contextHost = createContextHost(
+    () => ({
+      routeId: $contextStore.route.id,
+      params: $contextStore.params,
+      currentFolderId: $currentFolderId,
+    }),
+    (type: string, id: string) =>
+      buildStoreLookup(
+        $organizationsStore,
+        $foldersStore,
+        $initiativesStore,
+        i18nTranslate,
+      )(type, id),
+    i18nTranslate,
+  );
+  const contextModule: ContextModule = createContextModule(contextHost);
+  // Subscribe to the module entries store; keeps contextEntries reactive.
+  let contextEntries: ChatContextEntry[] = [];
+  contextModule.entries.subscribe((v) => { contextEntries = v; });
 
   export let sessions: ChatSession[] = [];
   export let contextStore: Readable<AppContext>;
@@ -488,187 +404,46 @@
   export let commentSectionKey: string | null = null;
   export let commentSectionLabel: string | null = null;
   export let commentThreadId: string | null = null;
-  export let commentThreads: Array<{
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-    createdBy: string;
-  }> = [];
 
-  const getCommentSectionLabel = (type: string | null, key: string | null) =>
-    getChatCommentSectionLabel(type, key, $_);
+  // Comment helpers removed — moved to CommentsPanel / createCommentState / comment-host-adapter.
 
-  const commentAuthorLabel = (comment: CommentItem) =>
-    getCommentAuthorLabel(comment);
+  // Comment state/functions removed — now managed by CommentsPanel + createCommentState.
 
-  const mentionLabelFor = (member: MentionMember) => getMentionLabel(member);
-
-  const isCommentByCurrentUser = (comment: CommentItem) =>
-    isCommentByUser(comment, $session.user);
-
-  const getMentionMatches = (query: string) =>
-    getChatMentionMatches(mentionMembers, query);
-
-  let timeFormatter = new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  let dateFormatter = new Intl.DateTimeFormat('en-US', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-  $: {
-    const intlLocale = $locale === 'fr' ? 'fr-FR' : 'en-US';
-    timeFormatter = new Intl.DateTimeFormat(intlLocale, {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    dateFormatter = new Intl.DateTimeFormat(intlLocale, {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  }
-
-  const formatCommentTimestamp = (value: string | null | undefined) =>
-    formatChatCommentTimestamp({
-      value,
-      now: new Date(),
-      yesterdayLabel: $_('common.yesterday'),
-      timeFormatter,
-      dateFormatter,
-    });
-
-  const findAssignedUserFromText = (text: string) =>
-    findAssignedMentionFromText(text, mentionMembers);
-
-  const loadMentionMembers = async () => {
-    const workspaceId = getScopedWorkspaceIdForUser();
-    if (!workspaceId) return;
-    if (mentionLoading && workspaceId === mentionWorkspaceId) return;
-    mentionLoading = true;
-    mentionError = null;
-    mentionDelayElapsed = false;
-    if (mentionDelayTimer) clearTimeout(mentionDelayTimer);
-    mentionDelayTimer = setTimeout(() => {
-      mentionDelayElapsed = true;
-      mentionDelayTimer = null;
-    }, 500);
-    try {
-      const res = await listMentionMembers(workspaceId);
-      mentionMembers = res.items ?? [];
-      mentionWorkspaceId = workspaceId;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      mentionError = msg;
-    } finally {
-      mentionLoading = false;
-    }
-  };
-
-  const selectMentionMember = (member: MentionMember) => {
-    const candidate = getMentionCandidate(commentInput);
-    if (!candidate) return;
-    const label = mentionLabelFor(member);
-    const nextInput = `${commentInput.slice(0, candidate.start)}@${label} ${commentInput.slice(candidate.end)}`;
-    commentInput = nextInput;
-    assignedToUserId = member.userId;
-    assignedToLabel = label;
-    showMentionMenu = false;
-    mentionQuery = '';
-    mentionMatches = [];
-    mentionSuppressUntilChange = true;
-    mentionSuppressValue = nextInput.trimEnd();
-    void focusComposerEnd();
-  };
-
-  const buildCommentThreads = (items: CommentItem[]) =>
-    buildChatCommentThreads(items);
-
-  let messages: LocalMessage[] = [];
+  // messages is now controller-backed (slice 1B). Mutations go through ctrl.*
+  // The $ctrl auto-subscription fires on every controller notify().
+  $: messages = $ctrl.messages as LocalMessage[];
+  // pendingLocalToolPermissionPrompts is now controller-backed (slice 1E).
+  $: pendingLocalToolPermissionPrompts = $ctrl.pendingLocalToolPermissionPrompts as LocalToolPermissionPrompt[];
   let loadingMessages = false;
   let sending = false;
   let stoppingMessageId: string | null = null;
   let errorMsg: string | null = null;
   let lastShownErrorMsg: string | null = null;
-  let modelCatalogProviders: ModelCatalogProvider[] = [];
-  let modelCatalogModels: ModelCatalogModel[] = [];
-  let modelCatalogGroups: ModelCatalogGroup[] = [];
-  let selectedProviderId: ModelProviderId = 'openai';
-  let selectedModelId = 'gpt-4.1-nano';
-  let defaultProviderIdForNewSession: ModelProviderId = 'openai';
-  let defaultModelIdForNewSession = 'gpt-4.1-nano';
+  // modelCatalogProviders/modelCatalogModels/modelCatalogGroups/selectedProviderId/selectedModelId
+  // defaultProviderIdForNewSession/defaultModelIdForNewSession moved to controller (slice 1F).
+  // Access via $ctrl.modelCatalog*, $ctrl.selectedProviderId, $ctrl.selectedModelId etc.
   let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
   let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
   let composerAttachments: ChatComposerAttachmentDraft[] = [];
   let composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
   let lightboxImage: { src: string; alt: string } | null = null;
-  let commentInput = '';
-  let commentMessages: CommentItem[] = [];
   export let commentLoading = false;
-  const hasCommentContext = () =>
-    Boolean(commentContextType && commentContextId);
-  let commentError: string | null = null;
-  let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
-  let commentHubKey = '';
-  let commentItemsByThread = new Map<string, CommentItem[]>();
-  let lastCommentKey = '';
-  let lastCommentSectionKey: string | null = null;
-  let lastCommentThreadId: string | null = null;
-  let lastCommentMessageCount = 0;
-  let lastSelectedCommentThreadId: string | null = null;
-  let mentionMembers: MentionMember[] = [];
-  let mentionLoading = false;
-  let mentionError: string | null = null;
-  let mentionQuery = '';
-  let mentionMatches: MentionMember[] = [];
-  let showMentionMenu = false;
-  let mentionDelayTimer: ReturnType<typeof setTimeout> | null = null;
-  let mentionDelayElapsed = false;
-  let mentionWorkspaceId: string | null = null;
-  let mentionMenuRef: HTMLDivElement | null = null;
-  let showCommentMenu = false;
-  let commentMenuButtonRef: HTMLButtonElement | null = null;
-  let showResolvedComments = false;
-  let assignedToUserId: string | null = null;
-  let assignedToLabel: string | null = null;
-  let mentionSuppressUntilChange = false;
-  let mentionSuppressValue = '';
-  // eslint-disable-next-line no-unused-vars
-  let handleMentionRefresh: ((_: Event) => void) | null = null;
   let listEl: HTMLDivElement | null = null;
   let historyStageMeasureEl: HTMLDivElement | null = null;
   let composerEl: HTMLDivElement | null = null;
   let panelEl: HTMLDivElement | null = null;
   let followBottom = true;
   let scrollScheduled = false;
-  let commentPlaceholder = '';
-  let commentThreadResolved = false;
-  let commentThreadResolvedAt: string | null = null;
-  let currentCommentRoot: CommentItem | null = null;
-  let activeCommentSectionLabel: string | null = null;
-  let canResolveCurrent = false;
-  let resolvedThreads: typeof commentThreads = [];
-  let resolvedCount = 0;
-  let visibleCommentThreads: typeof commentThreads = [];
-  let commentThreadIndex = -1;
-  let hasPreviousThread = false;
-  let hasNextThread = false;
-  let projectedTimelineItems: ProjectedTimelineItem[] = [];
+  // Comment-specific state removed — now owned by CommentsPanel / createCommentState.
+  // projectedTimelineItems is now controller-owned (slice 1B).
+  $: projectedTimelineItems = $ctrl.projectedTimelineItems as ProjectedTimelineItem[];
   let historyTimelineItems: ProjectedTimelineItem[] = [];
   let stagedHistoryTimelineItems: ProjectedTimelineItem[] = [];
   let historyHydrationInFlight = false;
   let historyHydrationSwapPending = false;
   let historyHydrationStickBottom = false;
-  let optimisticSteerMessages: LocalMessage[] = [];
+  // optimisticSteerMessages moved to controller (slice 1F); access via $ctrl.optimisticSteerMessages.
   let generatedFileCardsByMessageId = new Map<string, GeneratedFileCard[]>();
   let previousAiWorkspaceId: string | null | undefined = undefined;
   let workspaceSessionRescopeInFlight = false;
@@ -693,12 +468,18 @@
   };
   $: activeAssistantMessage =
     [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
+  // projectedTimelineItems is driven by the controller's subscribe() callback
+  // (via $ctrl auto-subscription). Steer-ack + optimistic-steer now controller-owned (slice 1F).
+  // Rebuild the timeline when controller steer state or runtime summaries change.
   $: {
-    projectionEventsVersion;
-    initialEventsByMessageId;
-    composerSteerAck;
-    optimisticSteerMessages;
-    projectedTimelineItems = buildProjectedTimeline(messages);
+    $ctrl.composerSteerAck;
+    $ctrl.optimisticSteerMessages;
+    runtimeSummaryByMessageId;
+    projectedTimelineItems = ctrl.buildTimeline({
+      optimisticSteerMessages: $ctrl.optimisticSteerMessages as LocalMessage[],
+      runtimeSummariesByMessageId: runtimeSummaryByMessageId,
+      composerSteerAck: $ctrl.composerSteerAck,
+    }) as ProjectedTimelineItem[];
   }
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
@@ -708,91 +489,42 @@
     composerSteerStreamId.trim().length > 0;
   $: composerRunInFlight = sending || composerSteerReady;
   $: composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
-  $: attachmentBand = composerBandItems(composerAttachments);
+  $: attachmentBand = buildAttachmentBandItems(composerAttachments);
+  // resolveComposerPrimaryAction: mode==='comments' path removed (now CommentsPanel).
+  // AI-only invocation:
   $: composerPrimaryActionState = resolveComposerPrimaryAction({
-    mode,
+    mode: 'ai',
     input,
-    commentInput,
-    commentContextType,
-    commentContextId,
-    workspaceCanComment: $workspaceCanComment,
-    commentThreadResolved,
+    commentInput: '',
+    commentContextType: null,
+    commentContextId: null,
+    workspaceCanComment: true,
+    commentThreadResolved: false,
     sending,
     composerRunInFlight,
     composerSteerReady,
     composerSteerInFlight,
-    attachments: mode === 'ai' ? composerAttachmentSummary : undefined,
+    attachments: composerAttachmentSummary,
   });
   $: composerPrimaryButtonShowsSteer = shouldShowSteerAction({
     composerRunInFlight,
   });
 
-  const hasAssistantContent = (message: LocalMessage): boolean =>
-    typeof message.content === 'string' && message.content.trim().length > 0;
+  // hasAssistantContent, getLocalToolEligibleStreamIds and isKnownAssistantStream removed in slice 1E —
+  // all three are now owned by the controller's local-tool machine (reads from controller messages).
 
-  const getLocalToolEligibleStreamIds = () =>
-    new Set(
-      messages
-        .filter((message) => {
-          if (message.role !== 'assistant') return false;
-          const status = getMessageStatus(message);
-          if (status === 'failed') return false;
-          if (status === 'processing') return true;
-          return !hasAssistantContent(message);
-        })
-        .map((message) => message._streamId ?? message.id),
-    );
+  // ---------------------------------------------------------------------------
+  // Local-tool machine helpers — kept app-side (slice 1E)
+  // These functions bridge the app-specific ApiError retry and i18n label
+  // resolution with the controller's generic local-tool machine.
+  // ---------------------------------------------------------------------------
 
-  const isKnownAssistantStream = (streamId: string): boolean =>
-    messages.some(
-      (message) =>
-        message.role === 'assistant' &&
-        (message._streamId ?? message.id) === streamId &&
-        getMessageStatus(message) !== 'failed',
-    );
-
-  const clearLocalToolStateForStream = (streamId: string) => {
-    for (const [toolCallId, state] of localToolStatesById.entries()) {
-      if (state.streamId !== streamId) continue;
-      const timerId = localToolExecutionTimersById.get(toolCallId);
-      if (timerId) clearTimeout(timerId);
-      localToolExecutionTimersById.delete(toolCallId);
-      localToolStatesById.delete(toolCallId);
-      localToolInFlight.delete(toolCallId);
-      localToolPermissionRetriesInFlight.delete(toolCallId);
-    }
-    pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-      (prompt) => prompt.streamId !== streamId,
-    );
-  };
-
-  const resetLocalToolInterceptionState = () => {
-    localToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
-    localToolExecutionTimersById.clear();
-    localToolStatesById.clear();
-    localToolInFlight.clear();
-    localToolPermissionRetriesInFlight.clear();
-    pendingLocalToolPermissionPrompts = [];
-  };
-
-  const parseBufferedToolArgs = (
-    rawArgs: string,
-  ): { ready: boolean; value: unknown } => {
-    const trimmed = rawArgs.trim();
-    if (!trimmed) return { ready: true, value: {} };
-    try {
-      return {
-        ready: true,
-        value: JSON.parse(trimmed),
-      };
-    } catch {
-      return {
-        ready: false,
-        value: null,
-      };
-    }
-  };
-
+  /**
+   * App-side result poster: wraps chatCoreHost.postLocalToolResult with
+   * the 12-attempt retry on retryable race conditions (ApiError 400 "not pending").
+   * Injected into the controller via attachLocalToolMachine so the controller
+   * stays transport-agnostic (no ApiError import in the package).
+   */
   const postLocalToolResultWithRetry = async (
     streamId: string,
     toolCallId: string,
@@ -803,10 +535,7 @@
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        await apiPost(chatMessageToolResultsUrl(streamId), {
-          toolCallId,
-          result,
-        });
+        await chatCoreHost.postLocalToolResult(streamId, toolCallId, result);
         return;
       } catch (error) {
         lastError = error;
@@ -826,220 +555,21 @@
       : new Error('Unknown local tool result forwarding error');
   };
 
-  const hasPendingPermissionPromptForStream = (
-    streamId: string,
-    exceptToolCallId?: string,
-  ): boolean =>
-    pendingLocalToolPermissionPrompts.some(
-      (item) =>
-        item.streamId === streamId &&
-        (!exceptToolCallId || item.toolCallId !== exceptToolCallId),
-    );
-
-  const hasInFlightToolForStream = (
-    streamId: string,
-    exceptToolCallId?: string,
-  ): boolean => {
-    for (const inFlightToolCallId of localToolInFlight) {
-      if (exceptToolCallId && inFlightToolCallId === exceptToolCallId) continue;
-      const state = localToolStatesById.get(inFlightToolCallId);
-      if (!state) continue;
-      if (state.streamId === streamId) return true;
-    }
-    return false;
-  };
-
-  const getNextPendingToolCallIdForStream = (
-    streamId: string,
-  ): string | null => {
-    const pending = Array.from(localToolStatesById.entries())
-      .filter(([_, state]) => state.streamId === streamId && !state.executed)
-      .sort(([, a], [, b]) => {
-        if (a.firstSeenAt !== b.firstSeenAt) {
-          return a.firstSeenAt - b.firstSeenAt;
-        }
-        return a.lastSequence - b.lastSequence;
-      });
-    return pending[0]?.[0] ?? null;
-  };
-
-  const scheduleNextToolForStream = (streamId: string, delayMs = 80) => {
-    const nextToolCallId = getNextPendingToolCallIdForStream(streamId);
-    if (!nextToolCallId) return;
-    scheduleBufferedLocalToolExecution(nextToolCallId, delayMs);
-  };
-
-  const tryExecuteBufferedLocalTool = async (toolCallId: string) => {
-    const localToolState = localToolStatesById.get(toolCallId);
-    if (!localToolState || localToolState.executed) return;
-    if (localToolInFlight.has(toolCallId)) return;
-    if (!isLocalToolRuntimeAvailable()) return;
-    const firstPendingToolCallId = getNextPendingToolCallIdForStream(
-      localToolState.streamId,
-    );
-    if (firstPendingToolCallId && firstPendingToolCallId !== toolCallId) return;
-    if (hasPendingPermissionPromptForStream(localToolState.streamId, toolCallId))
-      return;
-    if (hasInFlightToolForStream(localToolState.streamId, toolCallId)) return;
-
-    if (!localToolState.argsText.trim() && localToolState.name === 'tab_type') {
-      const elapsed = Date.now() - localToolState.firstSeenAt;
-      if (elapsed < 1500) {
-        scheduleBufferedLocalToolExecution(toolCallId, 200);
-        return;
-      }
-      localToolState.executed = true;
-      localToolStatesById.set(toolCallId, localToolState);
-      try {
-        await postLocalToolResultWithRetry(localToolState.streamId, toolCallId, {
-          status: 'error',
-          error:
-            'tab_type arguments are missing (expected at least text, and optionally selector/x/y).',
-        });
-      } catch (forwardError) {
-        const reason =
-          forwardError instanceof Error
-            ? forwardError.message
-            : String(forwardError);
-        console.warn(
-          `Failed to forward missing-args error for ${localToolState.name} (${toolCallId}): ${reason}`,
-        );
-      }
-      scheduleNextToolForStream(localToolState.streamId);
-      return;
-    }
-
-    const parsed = parseBufferedToolArgs(localToolState.argsText);
-    if (!parsed.ready) {
-      scheduleBufferedLocalToolExecution(toolCallId, 120);
-      return;
-    }
-
-    localToolState.executed = true;
-    localToolStatesById.set(toolCallId, localToolState);
-    localToolInFlight.add(toolCallId);
-
-    try {
-      const localResult = await executeLocalTool(
-        toolCallId,
-        localToolState.name,
-        parsed.value,
-        { streamId: localToolState.streamId },
-      );
-      await postLocalToolResultWithRetry(
-        localToolState.streamId,
-        toolCallId,
-        localResult,
-      );
-    } catch (error) {
-      if (error instanceof LocalToolPermissionRequiredError) {
-        const prompt: LocalToolPermissionPrompt = {
-          toolCallId,
-          streamId: localToolState.streamId,
-          name: localToolState.name,
-          args: parsed.value,
-          request: error.request,
-          createdAt: Date.now(),
-        };
-        const next = pendingLocalToolPermissionPrompts.filter(
-          (item) => item.toolCallId !== toolCallId,
-        );
-        pendingLocalToolPermissionPrompts = [...next, prompt];
-        return;
-      }
-
-      const reason = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `Failed to execute local tool ${localToolState.name} (${toolCallId}): ${reason}`,
-      );
-      try {
-        await postLocalToolResultWithRetry(
-          localToolState.streamId,
-          toolCallId,
-          { status: 'error', error: reason },
-        );
-      } catch (forwardError) {
-        const forwardReason =
-          forwardError instanceof Error
-            ? forwardError.message
-            : String(forwardError);
-        console.warn(
-          `Failed to forward local tool error for ${localToolState.name} (${toolCallId}): ${forwardReason}`,
-        );
-      }
-    } finally {
-      localToolInFlight.delete(toolCallId);
-      scheduleNextToolForStream(localToolState.streamId);
-    }
-  };
-
+  /**
+   * Thin wrapper so the template can still call handleLocalToolPermissionDecision(prompt, decision).
+   * Delegates to ctrl.decideLocalToolPermission (slice 1E).
+   * Kept app-side because the template imports are Svelte-specific.
+   */
   const handleLocalToolPermissionDecision = async (
     prompt: LocalToolPermissionPrompt,
     decision: LocalToolPermissionDecision,
   ) => {
-    if (localToolPermissionRetriesInFlight.has(prompt.toolCallId)) return;
-    localToolPermissionRetriesInFlight.add(prompt.toolCallId);
-    try {
-      await decideLocalToolPermission(prompt.request.requestId, decision);
-      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-        (item) => item.toolCallId !== prompt.toolCallId,
-      );
-
-      if (decision === 'deny_once' || decision === 'deny_always') {
-        await postLocalToolResultWithRetry(prompt.streamId, prompt.toolCallId, {
-          status: 'error',
-          error: `Permission denied for ${prompt.request.toolName} on ${prompt.request.origin}.`,
-        });
-        return;
-      }
-
-      const localResult = await executeLocalTool(
-        prompt.toolCallId,
-        prompt.name,
-        prompt.args,
-        { streamId: prompt.streamId },
-      );
-      await postLocalToolResultWithRetry(
-        prompt.streamId,
-        prompt.toolCallId,
-        localResult,
-      );
-    } catch (error) {
-      if (error instanceof LocalToolPermissionRequiredError) {
-        const nextPrompt: LocalToolPermissionPrompt = {
-          ...prompt,
-          request: error.request,
-          createdAt: Date.now(),
-        };
-        pendingLocalToolPermissionPrompts = [
-          ...pendingLocalToolPermissionPrompts.filter(
-            (item) => item.toolCallId !== prompt.toolCallId,
-          ),
-          nextPrompt,
-        ];
-        return;
-      }
-      const reason = error instanceof Error ? error.message : String(error);
-      try {
-        await postLocalToolResultWithRetry(prompt.streamId, prompt.toolCallId, {
-          status: 'error',
-          error: reason,
-        });
-      } catch (forwardError) {
-        const forwardReason =
-          forwardError instanceof Error
-            ? forwardError.message
-            : String(forwardError);
-        console.warn(
-          `Failed to forward permission decision error for ${prompt.name} (${prompt.toolCallId}): ${forwardReason}`,
-        );
-      }
-    } finally {
-      localToolPermissionRetriesInFlight.delete(prompt.toolCallId);
-      scheduleNextToolForStream(prompt.streamId);
-    }
+    void ctrl.decideLocalToolPermission(prompt, decision);
   };
 
+  /**
+   * Resolve i18n details for a permission prompt (app-side — uses $_ which is Svelte-only).
+   */
   const resolvePermissionPromptDetails = (
     prompt: LocalToolPermissionPrompt,
   ): Array<{ label: string; value: string }> => {
@@ -1076,204 +606,21 @@
     return rows;
   };
 
-  const scheduleBufferedLocalToolExecution = (
-    toolCallId: string,
-    delayMs = 120,
-  ) => {
-    const existingTimer = localToolExecutionTimersById.get(toolCallId);
-    if (existingTimer) clearTimeout(existingTimer);
-    const timerId = setTimeout(() => {
-      localToolExecutionTimersById.delete(toolCallId);
-      void tryExecuteBufferedLocalTool(toolCallId);
-    }, delayMs);
-    localToolExecutionTimersById.set(toolCallId, timerId);
-  };
+  // handleProjectionStreamEvent removed in slice 1C — logic moved to
+  // ctrl.attachStream({ onProjectionEvent, onTerminal }). The controller now
+  // owns the event routing and message terminal-patching; AppChatPanel only
+  // provides the scroll callbacks via the optional hooks.
+  // handleLocalToolStreamEvent / clearLocalToolStateForStream / resetLocalToolInterceptionState
+  // / parseBufferedToolArgs / hasPendingPermissionPromptForStream / hasInFlightToolForStream
+  // / getNextPendingToolCallIdForStream / scheduleNextToolForStream / tryExecuteBufferedLocalTool
+  // / scheduleBufferedLocalToolExecution / handleLocalToolCallStart / handleLocalToolCallDelta
+  // / handleLocalToolStatusEvent removed in slice 1E — logic moved to the controller.
+  // AppChatPanel now calls ctrl.handleLocalToolStreamEvent(event) from the streamHub handler.
 
-  const handleLocalToolCallStart = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    const toolCallId = String((event as any)?.data?.tool_call_id ?? '').trim();
-    const toolNameRaw = String((event as any)?.data?.name ?? '').trim();
-    const argsChunk =
-      typeof (event as any)?.data?.args === 'string'
-        ? (event as any).data.args
-        : '';
-    const sequenceRaw = Number((event as any)?.sequence);
-    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
-
-    if (!streamId || !toolCallId || !isLocalToolName(toolNameRaw)) return;
-
-    const previous = localToolStatesById.get(toolCallId);
-    if (previous && sequence <= previous.lastSequence) return;
-    const isFreshRound = shouldResetLocalToolStateForFreshRound(
-      previous,
-      sequence,
-    );
-
-    localToolStatesById.set(toolCallId, {
-      streamId,
-      name: toolNameRaw,
-      argsText:
-        previous && !isFreshRound
-          ? `${previous.argsText}${argsChunk}`
-          : argsChunk,
-      lastSequence: sequence,
-      firstSeenAt: previous?.firstSeenAt ?? Date.now(),
-      executed: isFreshRound ? false : (previous?.executed ?? false),
-    });
-    scheduleBufferedLocalToolExecution(toolCallId);
-  };
-
-  const handleLocalToolCallDelta = (event: StreamHubEvent) => {
-    const toolCallId = String((event as any)?.data?.tool_call_id ?? '').trim();
-    if (!toolCallId) return;
-    const previous = localToolStatesById.get(toolCallId);
-    if (!previous) return;
-
-    const sequenceRaw = Number((event as any)?.sequence);
-    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : previous.lastSequence;
-    if (sequence <= previous.lastSequence) return;
-
-    const deltaChunk =
-      typeof (event as any)?.data?.delta === 'string'
-        ? (event as any).data.delta
-        : '';
-    localToolStatesById.set(toolCallId, {
-      ...previous,
-      argsText: `${previous.argsText}${deltaChunk}`,
-      lastSequence: sequence,
-    });
-    scheduleBufferedLocalToolExecution(toolCallId);
-  };
-
-  const handleLocalToolStatusEvent = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId || !isKnownAssistantStream(streamId)) return;
-
-    const data = (event as any)?.data;
-    const state = String(data?.state ?? '').trim();
-    const sequenceRaw = Number((event as any)?.sequence);
-    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
-
-    if (state === 'awaiting_local_tool_results') {
-      const pendingCalls = parsePendingLocalToolCallsFromStatusPayload(
-        streamId,
-        sequence,
-        data,
-        isLocalToolName,
-      );
-      const pendingToolCallIds = new Set(
-        pendingCalls.map((call) => call.toolCallId),
-      );
-      pendingLocalToolPermissionPrompts = filterPermissionPromptsForPendingStream(
-        pendingLocalToolPermissionPrompts,
-        streamId,
-        pendingToolCallIds,
-      );
-
-      for (const call of pendingCalls) {
-        const previous = localToolStatesById.get(call.toolCallId);
-        const isFreshRound = shouldResetLocalToolStateForFreshRound(
-          previous,
-          sequence,
-        );
-        localToolStatesById.set(call.toolCallId, {
-          streamId,
-          name: call.name as LocalToolName,
-          argsText:
-            previous &&
-            !isFreshRound &&
-            previous.argsText.trim().length > 0
-              ? previous.argsText
-              : call.argsText,
-          lastSequence: Math.max(previous?.lastSequence ?? 0, call.sequence),
-          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
-          executed: isFreshRound ? false : (previous?.executed ?? false),
-        });
-      }
-
-      scheduleNextToolForStream(streamId, 0);
-      return;
-    }
-
-    if (state === 'local_tool_result_received') {
-      const toolCallId = String(data?.tool_call_id ?? '').trim();
-      if (!toolCallId) return;
-      const timerId = localToolExecutionTimersById.get(toolCallId);
-      if (timerId) clearTimeout(timerId);
-      localToolExecutionTimersById.delete(toolCallId);
-      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-        (prompt) => prompt.toolCallId !== toolCallId,
-      );
-      localToolStatesById.delete(toolCallId);
-      localToolInFlight.delete(toolCallId);
-      localToolPermissionRetriesInFlight.delete(toolCallId);
-      return;
-    }
-
-    if (state === 'response_created') {
-      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
-        (prompt) => prompt.streamId !== streamId,
-      );
-    }
-  };
-
-  const handleLocalToolStreamEvent = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId) return;
-
-    if (event.type === 'status') {
-      handleLocalToolStatusEvent(event);
-      return;
-    }
-
-    if (event.type === 'done' || event.type === 'error') {
-      clearLocalToolStateForStream(streamId);
-      return;
-    }
-
-    if (event.type !== 'tool_call_start' && event.type !== 'tool_call_delta')
-      return;
-    if (!isLocalToolRuntimeAvailable()) return;
-
-    const localToolEligibleStreamIds = getLocalToolEligibleStreamIds();
-    if (!localToolEligibleStreamIds.has(streamId)) return;
-
-    if (event.type === 'tool_call_start') {
-      handleLocalToolCallStart(event);
-      return;
-    }
-    handleLocalToolCallDelta(event);
-  };
-
-  const handleProjectionStreamEvent = (event: StreamHubEvent) => {
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId || !isTrackedAssistantStreamId(streamId)) return;
-    const sequence = Number((event as any)?.sequence);
-    if (!Number.isFinite(sequence)) return;
-    appendProjectedLiveEvent(streamId, {
-      eventType: String((event as any)?.type ?? '').trim(),
-      data: (event as any)?.data ?? {},
-      sequence,
-      createdAt: undefined,
-    });
-    if (event.type === 'done' || event.type === 'error') {
-      void handleAssistantTerminal(streamId, event.type);
-    }
-    scheduleScrollToBottom();
-  };
-
-  $: commentPlaceholder = !$workspaceCanComment
-    ? $_('chat.comments.placeholder.disabledViewer')
-    : commentThreadResolved
-      ? $_('chat.comments.placeholder.resolved')
-      : $_('chat.comments.placeholder.write');
   let scrollForcePending = false;
   const BOTTOM_THRESHOLD_PX = 96;
   let editingMessageId: string | null = null;
   let editingContent = '';
-  let editingCommentId: string | null = null;
-  let editingCommentContent = '';
-  let lastEditableCommentId: string | null = null;
   const copiedMessageIds = new Set<string>();
   const COMPOSER_BASE_HEIGHT = 40;
   let composerIsMultiline = false;
@@ -1305,22 +652,18 @@
   // eslint-disable-next-line no-unused-vars
   let handleUserAISettingsUpdated: ((_: Event) => void) | null = null;
   let handleGoogleDriveConnectionUpdated: ((_: Event) => void) | null = null;
-  let contextEntries: ChatContextEntry[] = [];
+  // contextEntries declared above via contextModule subscription.
   let sortedContexts: ChatContextEntry[] = [];
   let toolEnabledById: Record<string, boolean> = {};
   let extensionRestrictedToolset = false;
-  let prefsKey = '';
-  let lastRouteContextKey: string | null = null;
+  // prefsKey / lastRouteContextKey now managed by contextModule.
 
-  // Historique batch (Option C): messageId -> events
-  let initialEventsByMessageId = new Map<string, StreamEvent[]>();
+  // Projection/history state (slice 1B) is owned by the controller.
+  // Aliases below make existing references compile without edits to every site.
+  // These getters read from the controller snapshot; mutations use ctrl.* methods.
+  $: initialEventsByMessageId = $ctrl.initialEventsByMessageId as Map<string, StreamEvent[]>;
   let runtimeSummaryByMessageId = new Map<string, RuntimeSegmentSummary>();
-  let projectedStreamEventsById = new Map<string, StreamEvent[]>();
-  let projectedAssistantComputationByMessageId = new Map<
-    string,
-    ProjectedAssistantComputation
-  >();
-  let projectionEventsVersion = 0;
+  $: projectedStreamEventsById = $ctrl.projectedStreamEventsById as Map<string, StreamEvent[]>;
   const loadedRuntimeDetailsMessageIds = new Set<string>();
   const loadingRuntimeDetailsMessageIds = new Set<string>();
   let historyTimelineSessionId: string | null = null;
@@ -1328,107 +671,43 @@
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
   let composerSteerInFlight = false;
-  let composerSteerAck: ComposerSteerAck | null = null;
-  const jobPollInFlight = new Set<string>();
+  // composerSteerAck moved to controller (slice 1F); access via $ctrl.composerSteerAck.
+  // jobPollInFlight removed in slice 1C — tracking moved to the controller.
   let localToolsHubKey = '';
-  const localToolStatesById = new Map<string, LocalToolStreamState>();
-  const localToolInFlight = new Set<string>();
-  const localToolExecutionTimersById = new Map<
-    string,
-    ReturnType<typeof setTimeout>
-  >();
-  let pendingLocalToolPermissionPrompts: LocalToolPermissionPrompt[] = [];
-  const localToolPermissionRetriesInFlight = new Set<string>();
+  // localToolStatesById, localToolInFlight, localToolExecutionTimersById,
+  // pendingLocalToolPermissionPrompts, localToolPermissionRetriesInFlight
+  // removed in slice 1E — local-tool machine moved to the controller.
+  // Access via $ctrl.localToolStatesById / $ctrl.pendingLocalToolPermissionPrompts.
   let extensionActiveTabContext: {
     tabId: number;
     url: string;
     origin: string;
     title: string | null;
   } | null = null;
-  let projectionHubKey = '';
+  // projectionHubKey removed in slice 1C — ctrl.attachStream/detachStream
+  // manages the subscription key internally.
+
+  // ---------------------------------------------------------------------------
+  // Projection functions (slice 1B) — delegate to the controller.
+  // These thin wrappers keep all call-sites unchanged while routing through ctrl.
+  // ---------------------------------------------------------------------------
 
   const isTrackedAssistantStreamId = (streamId: string): boolean =>
-    messages.some(
-      (message) =>
-        message.role === 'assistant' && (message._streamId ?? message.id) === streamId,
-    );
+    ctrl.isTrackedAssistantStreamId(streamId);
 
   const mergeProjectedHistoryForStream = (
     streamId: string,
     events: readonly StreamEvent[],
-  ) => {
-    if (!streamId) return;
-    projectedStreamEventsById = new Map(projectedStreamEventsById);
-    projectedStreamEventsById.set(
-      streamId,
-      mergeProjectionHistoryEvents(
-        projectedStreamEventsById.get(streamId) ?? [],
-        events,
-      ),
-    );
-    projectionEventsVersion += 1;
-  };
+  ) => ctrl.mergeProjectedHistoryForStream(streamId, events as StreamEvent[]);
 
-  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) => {
-    if (!streamId) return;
-    projectedStreamEventsById = new Map(projectedStreamEventsById);
-    projectedStreamEventsById.set(
-      streamId,
-      appendLiveProjectionEvent(
-        projectedStreamEventsById.get(streamId) ?? [],
-        event,
-      ),
-    );
-    projectionEventsVersion += 1;
-  };
+  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) =>
+    ctrl.appendProjectedLiveEvent(streamId, event);
 
-  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] => {
-    const streamId = message._streamId ?? message.id;
-    const projected = projectedStreamEventsById.get(streamId);
-    if (projected && projected.length > 0) return projected;
-    const hydrated = initialEventsByMessageId.get(streamId);
-    if (hydrated && hydrated.length > 0) return hydrated;
-    return [];
-  };
+  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] =>
+    ctrl.getProjectionEventsForMessage(message) as StreamEvent[];
 
-  const buildProjectedAssistantSignature = (
-    message: LocalMessage,
-    events: readonly StreamEvent[],
-  ): string => {
-    const lastSequence =
-      events.length > 0
-        ? Number(events[events.length - 1]?.sequence ?? 0)
-        : 0;
-    return [
-      message._streamId ?? message.id,
-      message._localStatus ?? '',
-      message.content ? message.content.length : 0,
-      events.length,
-      Number.isFinite(lastSequence) ? lastSequence : 0,
-    ].join(':');
-  };
-
-  const getProjectedAssistantComputation = (
-    message: LocalMessage,
-  ): ProjectedAssistantComputation => {
-    const messageId = String(message.id ?? '').trim();
-    const projectionEvents = getProjectionEventsForMessage(message);
-    const signature = buildProjectedAssistantSignature(message, projectionEvents);
-    const cached = projectedAssistantComputationByMessageId.get(messageId);
-    if (cached?.signature === signature) return cached;
-
-    const segments = projectAssistantRunSegments(projectionEvents);
-    const next = {
-      signature,
-      segments,
-      linkedSteerCount: countLinkedSteerMessages(projectionEvents),
-    };
-    projectedAssistantComputationByMessageId = new Map(
-      projectedAssistantComputationByMessageId,
-    );
-    projectedAssistantComputationByMessageId.set(messageId, next);
-    return next;
-  };
+  // getProjectedAssistantComputation is used only by buildTimeline, which is
+  // now routed through ctrl.buildTimeline() (slice 1B). No local wrapper needed.
 
   const loadRuntimeDetailsForMessage = async (
     targetSessionId: string,
@@ -1438,13 +717,7 @@
     if (loadingRuntimeDetailsMessageIds.has(messageId)) return;
     loadingRuntimeDetailsMessageIds.add(messageId);
     try {
-      const response = await apiFetch(
-        chatSessionHistoryUrl(targetSessionId, 'full'),
-        {
-          method: 'GET',
-          headers: { Accept: 'application/x-ndjson' },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(targetSessionId, 'full');
       if (!response.body) return;
       const decoder = new TextDecoder();
       const reader = response.body.getReader();
@@ -1485,37 +758,15 @@
       buffer += decoder.decode();
       if (buffer.trim().length > 0) processLine(buffer);
       if (collectedEvents.length > 0) {
-        initialEventsByMessageId = new Map(initialEventsByMessageId);
-        initialEventsByMessageId.set(
-          messageId,
-          mergeProjectionHistoryEvents(
-            initialEventsByMessageId.get(messageId) ?? [],
-            collectedEvents,
-          ),
-        );
+        // Route through controller (slice 1B): mergeHistoryEvents invalidates cache + notifies.
+        ctrl.mergeHistoryEvents(messageId, collectedEvents);
         scanEventsForGeneratedFileCards(messageId, collectedEvents);
-        projectedAssistantComputationByMessageId = new Map(
-          projectedAssistantComputationByMessageId,
-        );
-        projectedAssistantComputationByMessageId.delete(messageId);
-        projectionEventsVersion += 1;
       }
       loadedRuntimeDetailsMessageIds.add(messageId);
     } finally {
       loadingRuntimeDetailsMessageIds.delete(messageId);
     }
   };
-
-  const buildProjectedTimeline = (
-    timeline: readonly LocalMessage[],
-  ): ProjectedTimelineItem[] =>
-    buildChatProjectedTimeline<LocalMessage, RuntimeSegmentSummary>({
-      timeline,
-      optimisticSteerMessages,
-      runtimeSummariesByMessageId: runtimeSummaryByMessageId,
-      composerSteerAck,
-      getAssistantComputation: getProjectedAssistantComputation,
-    });
 
   let lastDraftApplied = draft;
   $: {
@@ -1550,11 +801,12 @@
     syncDraftFromInput();
   }
 
+  // detectContextFromRoute — delegates to contextHost.detectContext (context-adapter).
   const detectContextFromRoute = () =>
-    detectChatRouteContext({
+    contextHost.detectContext({
       routeId: $contextStore.route.id,
       params: $contextStore.params,
-      currentFolderId: $currentFolderId,
+      folderId: $currentFolderId,
     });
 
   const TOOL_TOGGLES: ToolToggle[] = [
@@ -1742,67 +994,28 @@
       : EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
   };
 
-  const getPrefsKey = (id: string | null) =>
-    `chat_session_prefs:${id || 'new'}`;
-
   const loadPrefs = (id: string | null) => {
-    if (typeof localStorage === 'undefined') return;
-    const key = getPrefsKey(id);
-    prefsKey = key;
     const hasExtensionRuntime = isLocalToolRuntimeAvailable();
     extensionRestrictedToolset = mode === 'ai' && hasExtensionRuntime;
-    try {
-      if (id && !localStorage.getItem(key)) {
-        const draft = localStorage.getItem(getPrefsKey(null));
-        if (draft) {
-          localStorage.setItem(key, draft);
-        }
+    // Delegate context prefs loading to the context module (handles legacy migration).
+    const raw = contextModule.loadPrefs(id) as Record<string, unknown> | null;
+    if (raw) {
+      if (raw['toolEnabledById'] && typeof raw['toolEnabledById'] === 'object') {
+        toolEnabledById = raw['toolEnabledById'] as Record<string, boolean>;
       }
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        contexts?: ChatContextEntry[];
-        toolEnabledById?: Record<string, boolean>;
-        extensionRestrictedToolset?: boolean;
-      };
-      if (Array.isArray(parsed.contexts)) {
-        contextEntries = parsed.contexts
-          .filter((c) => !!c.contextType)
-          .map((c) => ({
-            ...c,
-            // Migrate stale "usecase" context type to "initiative"
-            contextType: c.contextType === ('usecase' as any) ? 'initiative' : c.contextType,
-            used: typeof c.used === 'boolean' ? c.used : true,
-          }));
-      }
-      if (
-        parsed.toolEnabledById &&
-        typeof parsed.toolEnabledById === 'object'
-      ) {
-        toolEnabledById = parsed.toolEnabledById;
-      }
-      if (typeof parsed.extensionRestrictedToolset === 'boolean') {
+      if (typeof raw['extensionRestrictedToolset'] === 'boolean') {
         extensionRestrictedToolset = hasExtensionRuntime
           ? true
-          : parsed.extensionRestrictedToolset;
+          : (raw['extensionRestrictedToolset'] as boolean);
       }
-    } catch {
-      // ignore
     }
   };
 
-  const savePrefs = () => {
-    if (!prefsKey || typeof localStorage === 'undefined') return;
-    const payload = {
-      contexts: contextEntries,
+  const savePrefs = (sessionId: string | null = null) => {
+    contextModule.savePrefs(sessionId, {
       toolEnabledById,
       extensionRestrictedToolset,
-    };
-    try {
-      localStorage.setItem(prefsKey, JSON.stringify(payload));
-    } catch {
-      // ignore
-    }
+    });
   };
 
   const isExtensionNewSessionMode = () =>
@@ -1937,7 +1150,7 @@
     const defaults = getToolToggleDefaults();
     if (Object.keys(toolEnabledById).length === 0) {
       toolEnabledById = defaults;
-      savePrefs();
+      savePrefs(sessionId);
       return;
     }
     const next = { ...toolEnabledById };
@@ -1958,83 +1171,34 @@
     }
     if (changed) {
       toolEnabledById = next;
-      savePrefs();
+      savePrefs(sessionId);
     }
   };
 
+  // updateContextFromRoute / markCurrentContextUsed / toggleContextActive
+  // now delegate to the context module (D3). No more local contextEntries mutation.
+
   const updateContextFromRoute = () => {
-    const context = detectContextFromRoute();
-    const contextType = context?.primaryContextType ?? null;
-    const contextId = context?.primaryContextId ?? '';
-    const label =
-      contextType && contextId
-        ? getContextLabelFromStores(contextType, contextId) ||
-          contextNameByKey.get(`${contextType}:${contextId}`) ||
-          contextId
-        : '';
-    const result = upsertRouteContextEntry({
-      entries: contextEntries,
-      context,
-      label,
-      previousRouteKey: lastRouteContextKey,
-      now: Date.now(),
-      used: false,
+    contextModule.updateFromRoute({
+      routeId: $contextStore.route.id,
+      params: $contextStore.params,
+      folderId: $currentFolderId,
     });
-    contextEntries = result.entries;
-    lastRouteContextKey = result.nextRouteKey;
-    if (result.shouldLoadName && contextType && contextId) {
-      void loadContextName(contextType, contextId);
-    }
-    savePrefs();
+    savePrefs(sessionId);
   };
 
   const markCurrentContextUsed = () => {
-    const context = detectContextFromRoute();
-    if (!context?.primaryContextType || !context.primaryContextId) return;
-    const contextType = context.primaryContextType;
-    const contextId = context.primaryContextId;
-    const label =
-      getContextLabelFromStores(contextType, contextId) ||
-      contextNameByKey.get(`${contextType}:${contextId}`) ||
-      contextId;
-    const result = upsertRouteContextEntry({
-      entries: contextEntries,
-      context,
-      label,
-      previousRouteKey: lastRouteContextKey,
-      now: Date.now(),
-      used: true,
+    contextModule.markUsed({
+      routeId: $contextStore.route.id,
+      params: $contextStore.params,
+      folderId: $currentFolderId,
     });
-    contextEntries = result.entries;
-    lastRouteContextKey = result.nextRouteKey;
-    if (result.shouldLoadName) {
-      void loadContextName(contextType, contextId);
-    }
-    savePrefs();
+    savePrefs(sessionId);
   };
 
   $: sortedContexts = [...contextEntries];
 
-  /**
-   * adaptToNeutral — converts an app ChatContextEntry to the library-neutral shape.
-   * lastUsedAt is a number (epoch ms) in the app; we convert to ISO-8601 for the package.
-   */
-  const adaptToNeutral = (c: ChatContextEntry): NeutralContextEntry => ({
-    type: c.contextType,
-    id: c.contextId,
-    label: c.label,
-    active: c.active,
-    used: c.used,
-    lastUsedAt: c.lastUsedAt > 0 ? new Date(c.lastUsedAt).toISOString() : undefined,
-  });
-
-  /**
-   * findAppEntry — maps a neutral entry back to the app entry for toggleContextActive.
-   */
-  const findAppEntry = (e: NeutralContextEntry): ChatContextEntry =>
-    contextEntries.find((c) => c.contextType === e.type && c.contextId === e.id)!;
-
-  const getActiveContexts = () => selectActiveChatContexts(contextEntries);
+  const getActiveContexts = () => contextModule.getActiveContexts();
 
   const getEnabledToolIds = () => {
     return computeEnabledToolIds({
@@ -2046,23 +1210,14 @@
   };
 
   const toggleContextActive = (entry: ChatContextEntry) => {
-    const now = Date.now();
-    contextEntries = contextEntries.map((c) =>
-      c.contextType === entry.contextType && c.contextId === entry.contextId
-        ? {
-            ...c,
-            active: !c.active,
-            lastUsedAt: !c.active ? now : c.lastUsedAt,
-          }
-        : c,
-    );
-    savePrefs();
+    contextModule.toggleActive(entry.type, entry.id);
+    savePrefs(sessionId);
   };
 
   const toggleTool = (id: string) => {
     const isEnabled = toolEnabledById[id] !== false;
     toolEnabledById = { ...toolEnabledById, [id]: !isEnabled };
-    savePrefs();
+    savePrefs(sessionId);
   };
 
   const isNearBottom = (): boolean => {
@@ -2100,16 +1255,9 @@
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // mode==='comments' KeyDown is now handled inside CommentsPanel.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (mode === 'comments') {
-        if (showMentionMenu && mentionMatches.length > 0) {
-          selectMentionMember(mentionMatches[0]);
-          return;
-        }
-        void sendCommentMessage();
-        return;
-      }
       if (composerSteerReady) {
         void sendComposerSteer();
       } else {
@@ -2138,421 +1286,10 @@
     }
   };
 
-  const loadCommentThreads = async (opts?: { silent?: boolean }) => {
-    if (mode !== 'comments') return;
-    if (!hasCommentContext()) {
-      commentThreads = [];
-      commentMessages = [];
-      commentItemsByThread = new Map();
-      lastCommentThreadId = null;
-      lastCommentMessageCount = 0;
-      return;
-    }
-    const contextType = commentContextType;
-    const contextId = commentContextId;
-    if (!contextType || !contextId) return;
-    const shouldShowLoader = !opts?.silent;
-    if (shouldShowLoader) commentLoading = true;
-    commentError = null;
-    const activeThreadId = commentThreadId;
-    try {
-      const res = await listComments({
-        contextType,
-        contextId,
-      });
-      const items = res.items || [];
-      const { threads, map } = buildCommentThreads(items);
-      commentThreads = threads;
-      commentItemsByThread = new Map(map);
-      if (activeThreadId && commentItemsByThread.has(activeThreadId)) {
-        commentMessages = commentItemsByThread.get(activeThreadId) ?? [];
-        const nextCount = commentMessages.length;
-        const threadChanged = lastCommentThreadId !== activeThreadId;
-        if (threadChanged) {
-          lastCommentThreadId = activeThreadId;
-          lastCommentMessageCount = nextCount;
-          followBottom = true;
-          scheduleScrollToBottom({ force: true });
-        } else if (
-          nextCount > lastCommentMessageCount &&
-          (followBottom || isNearBottom())
-        ) {
-          lastCommentMessageCount = nextCount;
-          scheduleScrollToBottom({ force: true });
-        } else {
-          lastCommentMessageCount = nextCount;
-        }
-      } else if (!opts?.silent) {
-        commentMessages = [];
-        lastCommentThreadId = null;
-        lastCommentMessageCount = 0;
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      commentError = msg;
-    } finally {
-      if (shouldShowLoader) commentLoading = false;
-    }
-  };
+  // All comment functions + reactive statements removed — now owned by CommentsPanel.
 
-  const scheduleCommentReload = () => {
-    if (commentReloadTimer) return;
-    commentReloadTimer = setTimeout(() => {
-      commentReloadTimer = null;
-      void loadCommentThreads({ silent: true });
-    }, 150);
-  };
-
-  const sendCommentMessage = async () => {
-    if (mode !== 'comments') return;
-    if (!$workspaceCanComment || commentThreadResolved) return;
-    if (!commentContextType || !commentContextId) return;
-    const trimmed = commentInput.trim();
-    if (!trimmed) return;
-    try {
-      if (trimmed.includes('@') && mentionMembers.length === 0) {
-        await loadMentionMembers();
-      }
-      if (!assignedToUserId && mentionMembers.length > 0) {
-        const inferred = findAssignedUserFromText(trimmed);
-        if (inferred) {
-          assignedToUserId = inferred.userId;
-          assignedToLabel = mentionLabelFor(inferred);
-        }
-      }
-      if (commentThreadId) {
-        await createComment({
-          contextType: commentContextType,
-          contextId: commentContextId,
-          sectionKey: commentSectionKey || undefined,
-          content: trimmed,
-          threadId: commentThreadId,
-          assignedTo: assignedToUserId ?? undefined,
-        });
-      } else {
-        const nowIso = new Date().toISOString();
-        const currentUser = $session.user;
-        const res = await createComment({
-          contextType: commentContextType,
-          contextId: commentContextId,
-          sectionKey: commentSectionKey || undefined,
-          content: trimmed,
-          assignedTo: assignedToUserId ?? undefined,
-        });
-        commentThreadId = res.thread_id;
-        const assignedUserId = assignedToUserId ?? currentUser?.id ?? null;
-        const assignedMember = assignedToUserId
-          ? (mentionMembers.find((m) => m.userId === assignedToUserId) ?? null)
-          : null;
-        const optimisticComment: CommentItem = {
-          id: res.id,
-          context_type: commentContextType,
-          context_id: commentContextId,
-          section_key: commentSectionKey ?? null,
-          created_by: currentUser?.id ?? '',
-          assigned_to: assignedUserId,
-          status: 'open',
-          thread_id: res.thread_id,
-          content: trimmed,
-          created_at: nowIso,
-          updated_at: null,
-          created_by_user: currentUser
-            ? {
-                id: currentUser.id,
-                email: currentUser.email ?? null,
-                displayName: currentUser.displayName ?? null,
-              }
-            : null,
-          assigned_to_user: assignedMember
-            ? {
-                id: assignedMember.userId,
-                email: assignedMember.email ?? null,
-                displayName: assignedMember.displayName ?? null,
-              }
-            : assignedUserId && currentUser
-              ? {
-                  id: currentUser.id,
-                  email: currentUser.email ?? null,
-                  displayName: currentUser.displayName ?? null,
-                }
-              : null,
-        };
-        commentItemsByThread = new Map(commentItemsByThread);
-        commentItemsByThread.set(res.thread_id, [optimisticComment]);
-        commentMessages = [optimisticComment];
-        const authorLabel =
-          currentUser?.displayName ||
-          currentUser?.email ||
-          currentUser?.id ||
-          'Moi';
-        commentThreads = [
-          {
-            id: res.thread_id,
-            sectionKey: commentSectionKey ?? null,
-            count: 1,
-            lastAt: nowIso,
-            preview: trimmed,
-            authorLabel,
-            status: 'open' as const,
-            assignedTo: assignedUserId,
-            rootId: res.id,
-            createdBy: currentUser?.id ?? '',
-          },
-          ...commentThreads,
-        ].filter((t, idx, arr) => arr.findIndex((x) => x.id === t.id) === idx);
-        lastCommentThreadId = res.thread_id;
-        lastCommentMessageCount = 1;
-      }
-      commentInput = '';
-      assignedToUserId = null;
-      assignedToLabel = null;
-      mentionQuery = '';
-      mentionMatches = [];
-      showMentionMenu = false;
-      followBottom = true;
-      await loadCommentThreads({ silent: true });
-      if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
-        commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
-      }
-      scheduleScrollToBottom({ force: true });
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const selectCommentThread = (thread: (typeof commentThreads)[number]) => {
-    commentThreadId = thread.id;
-    commentSectionKey = thread.sectionKey;
-    showCommentMenu = false;
-  };
-
-  const handleNewCommentThread = () => {
-    commentThreadId = null;
-    showCommentMenu = false;
-  };
-
-  const goToRelativeCommentThread = (direction: -1 | 1) => {
-    if (commentThreadIndex < 0) return;
-    const next = visibleCommentThreads[commentThreadIndex + direction];
-    if (!next) return;
-    commentThreadId = next.id;
-    commentSectionKey = next.sectionKey;
-  };
-
-  const selectNextOpenThreadAfterResolve = (currentThreadId: string, previousOpenThreadOrder: string[]) => {
-    const openThreads = commentThreads.filter((t) => t.status !== 'closed');
-    if (openThreads.length === 0) {
-      commentThreadId = null;
-      return;
-    }
-    const preferredIds = previousOpenThreadOrder.filter((id) => id !== currentThreadId);
-    const next = preferredIds
-      .map((id) => openThreads.find((t) => t.id === id) ?? null)
-      .find(Boolean) ?? openThreads[0];
-    commentThreadId = next?.id ?? null;
-    commentSectionKey = next?.sectionKey ?? null;
-  };
-
-  const handleResolveCommentThread = async () => {
-    if (!currentCommentRoot || !canResolveCurrent) return;
-    try {
-      const currentThreadId = commentThreadId;
-      const previousOpenThreadOrder = commentThreads.filter((t) => t.status !== 'closed').map((t) => t.id);
-      const wasClosed = currentCommentRoot.status === 'closed';
-      if (wasClosed) {
-        await reopenComment(currentCommentRoot.id);
-      } else {
-        await closeComment(currentCommentRoot.id);
-      }
-      await loadCommentThreads({ silent: true });
-      if (!wasClosed && currentThreadId) {
-        selectNextOpenThreadAfterResolve(currentThreadId, previousOpenThreadOrder);
-      }
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const handleDeleteCommentThread = async () => {
-    if (!currentCommentRoot) return;
-    if (!confirm($_('chat.comments.confirmDeleteThread'))) return;
-    try {
-      await deleteComment(currentCommentRoot.id);
-      commentThreadId = null;
-      await loadCommentThreads({ silent: true });
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const saveCommentEdit = async (commentId: string, content: string) => {
-    if (mode !== 'comments') return;
-    const trimmed = content.trim();
-    if (!trimmed) return;
-    try {
-      await updateComment(commentId, { content: trimmed });
-      await loadCommentThreads();
-    } catch (e) {
-      commentError = e instanceof Error ? e.message : String(e);
-    }
-  };
-
-  const startEditComment = (comment: CommentItem) => {
-    editingCommentId = comment.id;
-    editingCommentContent = comment.content;
-  };
-
-  const cancelEditComment = () => {
-    editingCommentId = null;
-    editingCommentContent = '';
-  };
-
-  $: if (mode === 'comments' && editingCommentId && commentThreadId) {
-    const items = commentItemsByThread.get(commentThreadId) ?? [];
-    if (!items.some((c) => c.id === editingCommentId)) {
-      cancelEditComment();
-    }
-  }
-
-  $: if (mode === 'comments' && editingCommentId) {
-    const last =
-      commentMessages.length > 0
-        ? commentMessages[commentMessages.length - 1]
-        : null;
-    if (last && last.id === editingCommentId) {
-      followBottom = true;
-      scheduleScrollToBottom({ force: true });
-    }
-  }
-
-  const commitEditComment = async () => {
-    if (!editingCommentId) return;
-    await saveCommentEdit(editingCommentId, editingCommentContent);
-    cancelEditComment();
-  };
-
-  $: if (mode === 'comments') {
-    if (commentSectionKey !== lastCommentSectionKey) {
-      lastCommentSectionKey = commentSectionKey;
-      commentThreads = [];
-      commentMessages = [];
-      commentItemsByThread = new Map();
-      lastCommentThreadId = null;
-      lastCommentMessageCount = 0;
-    }
-    const key = `${commentContextType || ''}:${commentContextId || ''}:${commentSectionKey || ''}`;
-    if (key !== lastCommentKey) {
-      lastCommentKey = key;
-      void loadCommentThreads();
-    }
-  }
-
-  $: if (mode === 'comments' && commentThreadId) {
-    const root = commentItemsByThread.get(commentThreadId)?.[0] ?? null;
-    currentCommentRoot = root;
-    commentThreadResolved = root?.status === 'closed';
-    commentThreadResolvedAt = (root?.updated_at ?? root?.created_at ?? null) as
-      | string
-      | null;
-  } else {
-    currentCommentRoot = null;
-    commentThreadResolved = false;
-    commentThreadResolvedAt = null;
-  }
-
-  $: canResolveCurrent =
-    Boolean(currentCommentRoot) &&
-    (currentCommentRoot?.created_by === $session.user?.id || $selectedWorkspaceRole === 'admin') &&
-    $workspaceCanComment;
-  $: activeCommentSectionLabel =
-    getCommentSectionLabel(commentContextType, currentCommentRoot?.section_key ?? commentSectionKey) ??
-    commentSectionLabel ??
-    $_('common.general');
-
-  $: resolvedThreads = commentThreads.filter((t) => t.status === 'closed');
-  $: resolvedCount = resolvedThreads.length;
-  $: visibleCommentThreads = showResolvedComments ? commentThreads : commentThreads.filter((t) => t.status !== 'closed');
-  $: commentThreadIndex = commentThreadId ? visibleCommentThreads.findIndex((t) => t.id === commentThreadId) : -1;
-  $: hasPreviousThread = commentThreadIndex > 0;
-  $: hasNextThread = commentThreadIndex >= 0 && commentThreadIndex < visibleCommentThreads.length - 1;
-
-  $: if (mode === 'comments') {
-    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
-      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
-    } else if (!commentLoading) {
-      commentMessages = [];
-    }
-  }
-
-  $: if (mode === 'comments') {
-    const last =
-      commentMessages.length > 0
-        ? commentMessages[commentMessages.length - 1]
-        : null;
-    lastEditableCommentId =
-      commentThreadId && $session.user && last && isCommentByCurrentUser(last)
-        ? last.id
-        : null;
-  }
-
-  $: if (mode === 'comments') {
-    if (
-      mentionSuppressUntilChange &&
-      commentInput.trimEnd() === mentionSuppressValue
-    ) {
-      mentionQuery = '';
-      showMentionMenu = false;
-      mentionMatches = [];
-    } else {
-      if (
-        mentionSuppressUntilChange &&
-        commentInput.trimEnd() !== mentionSuppressValue
-      ) {
-        mentionSuppressUntilChange = false;
-        mentionSuppressValue = '';
-      }
-      const candidate = getMentionCandidate(commentInput);
-      if (candidate) {
-        mentionQuery = candidate.query;
-        showMentionMenu = true;
-        void loadMentionMembers();
-      } else {
-        mentionQuery = '';
-        showMentionMenu = false;
-      }
-      mentionMatches = showMentionMenu ? getMentionMatches(mentionQuery) : [];
-    }
-  }
-
-  $: if (mode === 'comments') {
-    if (commentThreadId !== lastSelectedCommentThreadId) {
-      lastSelectedCommentThreadId = commentThreadId;
-      lastCommentThreadId = commentThreadId;
-      lastCommentMessageCount = commentMessages.length;
-      if (commentThreadId) {
-        followBottom = true;
-        scheduleScrollToBottom({ force: true });
-      }
-    }
-  }
-
-  $: if (mode === 'comments' && commentContextType && commentContextId) {
-    if (!commentHubKey)
-      commentHubKey = `commentThreads:${Math.random().toString(36).slice(2)}`;
-    streamHub.set(commentHubKey, (evt: any) => {
-      if (evt?.type !== 'comment_update') return;
-      if (
-        evt.contextType !== commentContextType ||
-        evt.contextId !== commentContextId
-      )
-        return;
-      scheduleCommentReload();
-    });
-  } else if (commentHubKey) {
-    streamHub.delete(commentHubKey);
-    commentHubKey = '';
-  }
-
+  // commentHost: sentropic-wired CommentHost, instantiated once at mount.
+  const commentHost = createSentropicCommentHost((key: string) => $_(key));
 
   const loadSessionDocs = async () => {
     if (!sessionId) return;
@@ -2611,8 +1348,12 @@
     return res.sessionId;
   };
 
-  const createComposerAttachmentId = () =>
-    `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Document host adapter — wraps REST upload/delete and docx download.
+  // Drive picking stays in AppChatPanel (heavier orchestration).
+  const documentHost = createDocumentHostAdapter({
+    getSessionId: () => sessionId,
+    ensureSessionTarget: ensureSessionDocumentTarget,
+  });
 
   const createComposerAttachmentPreviewUrl = (file: File): string | undefined => {
     try {
@@ -2633,26 +1374,37 @@
     }
   };
 
+  // Attachment list mutations — all routed through composerAttachmentListReducer
+  // from @sentropic/chat-ui/documents. Preview URL lifecycle (blob: revocation)
+  // stays app-side because it touches browser APIs outside the reducer's scope.
+
   const clearComposerAttachments = () => {
     for (const attachment of composerAttachments) {
       revokeComposerAttachmentPreview(attachment);
     }
-    composerAttachments = [];
+    const [next] = composerAttachmentListReducer(composerAttachments, { type: 'clear' });
+    composerAttachments = next as ChatComposerAttachmentDraft[];
   };
 
   const removeComposerAttachment = (attachmentId: string) => {
-    const attachment = composerAttachments.find((item) => item.id === attachmentId);
-    if (attachment) revokeComposerAttachmentPreview(attachment);
-    composerAttachments = composerAttachments.filter((item) => item.id !== attachmentId);
+    const [next, removed] = composerAttachmentListReducer(composerAttachments, {
+      type: 'remove',
+      id: attachmentId,
+    });
+    if (removed) revokeComposerAttachmentPreview(removed);
+    composerAttachments = next as ChatComposerAttachmentDraft[];
   };
 
   const updateComposerAttachment = (
     attachmentId: string,
     patch: Partial<ChatComposerAttachmentDraft>,
   ) => {
-    composerAttachments = composerAttachments.map((attachment) =>
-      attachment.id === attachmentId ? { ...attachment, ...patch } : attachment,
-    );
+    const [next] = composerAttachmentListReducer(composerAttachments, {
+      type: 'update',
+      id: attachmentId,
+      patch,
+    });
+    composerAttachments = next as ChatComposerAttachmentDraft[];
   };
 
   const getAttachmentImageSrc = (attachment: ChatMessageAttachment): string => {
@@ -2667,22 +1419,9 @@
     return '';
   };
 
-  const getBandItemImageSrc = (item: UnifiedAttachmentItem): string => {
-    if (item.previewUrl) return item.previewUrl;
-    if (item.documentId) {
-      return getDownloadUrl({
-        documentId: item.documentId,
-        workspaceId: getScopedWorkspaceIdForUser(),
-      });
-    }
-    return '';
-  };
-
-  const getBandItemStatusLabel = (item: UnifiedAttachmentItem): string => {
-    if (item.status === 'failed') return $_('common.error');
-    if (item.status === 'ready') return item.mimeType;
-    return $_('common.loading');
-  };
+  // Resolve image URL for band item — delegates to documentHost adapter.
+  const getBandItemImageSrc = (item: UnifiedAttachmentItem): string =>
+    documentHost.resolveAttachmentSrc(item) as string;
 
   // Removing a pending attachment also deletes its just-uploaded context
   // document so no orphaned (model-visible) session document is left behind.
@@ -2691,10 +1430,7 @@
     const documentId = item.documentId;
     if (!documentId) return;
     try {
-      await deleteDocument({
-        documentId,
-        workspaceId: getScopedWorkspaceIdForUser(),
-      });
+      await documentHost.deleteUploadedFile(documentId);
       sessionDocs = sessionDocs.filter((d) => d.id !== documentId);
     } catch (err) {
       sessionDocsError = err instanceof Error ? err.message : String(err);
@@ -2708,13 +1444,6 @@
 
   const closeLightbox = () => {
     lightboxImage = null;
-  };
-
-  const handleLightboxKeydown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && lightboxImage) {
-      event.preventDefault();
-      closeLightbox();
-    }
   };
 
   const attachImageFileToComposer = async (
@@ -2809,10 +1538,8 @@
 
   const handleComposerPaste = (event: ClipboardEvent) => {
     if (mode !== 'ai') return;
-    const files = Array.from(event.clipboardData?.files ?? []).filter((file) =>
-      isSupportedImageAttachmentMimeType(file.type),
-    );
-    if (files.length === 0) return;
+    const { handled, files } = handleComposerPasteImages(event);
+    if (!handled) return;
     event.preventDefault();
     for (const file of files) {
       void attachImageFileToComposer(file, 'paste');
@@ -2914,12 +1641,8 @@
     if (!next) return;
     errorMsg = null;
     try {
-      await apiPatch(chatMessageUrl(messageId), {
-        content: next,
-      });
-      messages = messages.map((m) =>
-        m.id === messageId ? { ...m, content: next } : m,
-      );
+      // Delegate host call + content patch to the controller (slice 1D).
+      await ctrl.edit(messageId, next);
       cancelEditMessage();
       await retryMessage(messageId);
     } catch (e) {
@@ -2927,90 +1650,56 @@
     }
   };
 
-  const bootstrapAssistantRun = (input: {
-    sessionId: string;
-    assistantMessageId: string;
-    streamId: string;
-    jobId: string;
-    model: string;
-    userMessage?: LocalMessage;
-    truncateAfterMessageId?: string;
-    checkpointUserMessageId?: string;
-  }) => {
-    const nowIso = new Date().toISOString();
-    const assistantMsg: LocalMessage = {
-      id: input.assistantMessageId,
-      sessionId: input.sessionId,
-      role: 'assistant',
-      content: null,
-      model: input.model,
-      createdAt: nowIso,
-      _localStatus: 'processing',
-      _streamId: input.streamId,
-    };
-    if (input.userMessage) {
-      messages = [...messages, input.userMessage, assistantMsg];
-    } else if (input.truncateAfterMessageId) {
-      const userIndex = messages.findIndex(
-        (m) => m.id === input.truncateAfterMessageId,
-      );
-      messages =
-        userIndex >= 0
-          ? [...messages.slice(0, userIndex + 1), assistantMsg]
-          : [...messages, assistantMsg];
-      const truncatedHistory: ProjectedTimelineItem[] = [];
-      const keptHistoryMessageIds = new Set<string>();
-      for (const item of historyTimelineItems) {
-        truncatedHistory.push(item);
-        keptHistoryMessageIds.add(String(item.message.id ?? '').trim());
-        if (
-          item.kind === 'message' &&
-          String(item.message.id ?? '').trim() === input.truncateAfterMessageId
-        ) {
-          break;
-        }
-      }
-      historyTimelineItems = truncatedHistory;
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          keptHistoryMessageIds.has(messageId),
-        ),
-      );
-    } else {
-      messages = [...messages, assistantMsg];
-    }
-    followBottom = true;
-    scheduleScrollToBottom({ force: true });
-    if (input.checkpointUserMessageId) {
-      void createTurnCheckpoint(input.sessionId, input.checkpointUserMessageId);
-    }
-    void pollJobUntilTerminal(input.jobId, assistantMsg._streamId ?? assistantMsg.id, {
-      timeoutMs: 90_000,
+  /**
+   * Build the standard LocalMessage factory for the assistant slot.
+   * Passed as buildAssistantMessage to ctrl.bootstrapRun / ctrl.send / ctrl.retry.
+   * Stamps model from the closed-over scope; sessionId comes from the base
+   * (the controller passes input.sessionId as base.sessionId in slice 1D).
+   */
+  const makeAssistantMsgFactory =
+    (model: string) =>
+    (base: {
+      id: string;
+      sessionId: string;
+      _streamId: string;
+      _localStatus: 'processing';
+      role: 'assistant';
+      content: null;
+      createdAt: string;
+    }): LocalMessage => ({
+      ...base,
+      model,
     });
-  };
 
   const retryMessage = async (messageId: string) => {
     if (!sessionId) return;
     errorMsg = null;
     try {
-      const res = await apiPost<{
-        sessionId: string;
-        userMessageId: string;
-        assistantMessageId: string;
-        streamId: string;
-        jobId: string;
-      }>(chatMessageRetryUrl(messageId), {
-        providerId: selectedProviderId,
-        model: selectedModelId,
+      // App-side: truncate historyTimelineItems before the controller truncates
+      // the message list (bootstrapRun inside ctrl.retry does that).
+      const truncatedHistory: ProjectedTimelineItem[] = [];
+      for (const item of historyTimelineItems) {
+        truncatedHistory.push(item);
+        if (
+          item.kind === 'message' &&
+          String(item.message.id ?? '').trim() === messageId
+        ) {
+          break;
+        }
+      }
+      historyTimelineItems = truncatedHistory;
+
+      // Delegate host call + message list mutation + job-poll to the controller.
+      await ctrl.retry(messageId, {
+        providerId: $ctrl.selectedProviderId,
+        model: $ctrl.selectedModelId,
+        buildAssistantMessage: makeAssistantMsgFactory($ctrl.selectedModelId),
+        pollTimeoutMs: 90_000,
       });
-      bootstrapAssistantRun({
-        sessionId: res.sessionId,
-        assistantMessageId: res.assistantMessageId,
-        streamId: res.streamId,
-        jobId: res.jobId,
-        model: selectedModelId,
-        truncateAfterMessageId: messageId,
-      });
+
+      // App-side scroll side-effect.
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.retry'));
     }
@@ -3018,21 +1707,16 @@
 
   const getCheckpointForUserMessage = (
     userMessageId: string,
-  ): ChatCheckpoint | null => {
-    const id = String(userMessageId ?? '').trim();
-    if (!id) return null;
-    return checkpointsByAnchorMessageId.get(id) ?? null;
-  };
+  ): ChatCheckpoint | null =>
+    getCheckpointForUserMessageFromModule(checkpointsByAnchorMessageId, userMessageId);
 
   const hasCheckpointRollbackDelta = (
     checkpoint: ChatCheckpoint | null | undefined,
-  ): boolean => {
-    return hasCheckpointMutationDelta(
-      checkpoint,
-      messages,
-      initialEventsByMessageId,
-    );
-  };
+  ): boolean =>
+    hasCheckpointMutationDelta(checkpoint, messages, initialEventsByMessageId, {
+      isMutatingTool: checkpointHost.isMutatingTool,
+      isLocalToolName: checkpointHost.isLocalToolName,
+    });
 
   const getCheckpointPreviewTitle = (userMessageId: string): string => {
     const checkpoint = getCheckpointForUserMessage(userMessageId);
@@ -3042,6 +1726,11 @@
       checkpoint,
       messages,
       initialEventsByMessageId,
+      {
+        isMutatingTool: checkpointHost.isMutatingTool,
+        isLocalToolName: checkpointHost.isLocalToolName,
+        humanizeMutation: checkpointHost.humanizeMutation,
+      },
     );
     if (previewItems.length === 0) return baseTitle;
     return `${baseTitle}\n${previewItems.join('\n')}`;
@@ -3054,7 +1743,7 @@
     checkpointActionInFlight = true;
     errorMsg = null;
     try {
-      await apiPost(chatSessionCheckpointRestoreUrl(sessionId, checkpoint.id), {});
+      await checkpointHost.restoreCheckpoint(sessionId, checkpoint.id);
       await loadMessages(sessionId, { scrollToBottom: true, silent: true });
       return true;
     } catch (e) {
@@ -3262,7 +1951,7 @@
   const resetTodoRuntimePanel = () => {
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
-    composerSteerAck = null;
+    // composerSteerAck moved to controller (slice 1F); cleared by ack timer or sendSteer rollback.
     pendingTodoRuntimeDeleteConfirm = false;
   };
 
@@ -3271,10 +1960,7 @@
   };
 
   const handleComposerPrimaryAction = () => {
-    if (composerPrimaryActionState.action === 'comment_send') {
-      void sendCommentMessage();
-      return;
-    }
+    // comment_send is now handled inside CommentsPanel
     if (composerPrimaryActionState.action === 'steer_send') {
       void sendComposerSteer();
       return;
@@ -3312,22 +1998,8 @@
 
     composerSteerInFlight = true;
     errorMsg = null;
-    const createdAtMs = Date.now();
-    composerSteerAck = createComposerSteerAck({
-      streamId: targetStreamId,
-      message: $_('chat.steer.acknowledgement'),
-      createdAtMs,
-    });
 
-    const localSteerMessage: LocalMessage = createOptimisticSteerMessage({
-      sessionId: sessionId ?? '',
-      content: steerText,
-      targetAssistantMessageId: activeAssistantMessage?.id,
-      targetStreamId,
-      nowMs: createdAtMs,
-      nowIso: new Date(createdAtMs).toISOString(),
-    });
-    optimisticSteerMessages = [...optimisticSteerMessages, localSteerMessage];
+    // App-side: clear input + scroll before the async call (DOM concerns)
     followBottom = true;
     scheduleScrollToBottom({ force: true });
     input = '';
@@ -3335,20 +2007,17 @@
     updateComposerHeight();
 
     try {
-      await postChatSteer(apiPost, targetStreamId, steerText);
+      // Controller owns: optimistic steer message, composerSteerAck, host.postSteer, rollback
+      await ctrl.sendSteer(steerText, targetStreamId, {
+        sessionId: sessionId ?? '',
+        targetAssistantMessageId: activeAssistantMessage?.id,
+        ackMessage: $_('chat.steer.acknowledgement'),
+        ackTimeoutMs: 5000,
+      });
     } catch (e) {
-      optimisticSteerMessages = optimisticSteerMessages.filter(
-        (message) => message.id !== localSteerMessage.id,
-      );
       errorMsg = formatApiError(e, $_('chat.steer.error'));
     } finally {
       composerSteerInFlight = false;
-      const expectedAck = composerSteerAck?.createdAtMs;
-      setTimeout(() => {
-        if (shouldClearComposerSteerAck(composerSteerAck, expectedAck)) {
-          composerSteerAck = null;
-        }
-      }, 5000);
     }
   };
 
@@ -3467,13 +2136,8 @@
 
   const applySessionCheckpoints = (items: ChatCheckpoint[]) => {
     sessionCheckpoints = items;
-    const map = new Map<string, ChatCheckpoint>();
-    for (const checkpoint of sessionCheckpoints) {
-      const anchorId = String(checkpoint.anchorMessageId ?? '').trim();
-      if (!anchorId || map.has(anchorId)) continue;
-      map.set(anchorId, checkpoint);
-    }
-    checkpointsByAnchorMessageId = map;
+    // Delegate indexing to the module — returns Map<anchorMessageId, checkpoint>.
+    checkpointsByAnchorMessageId = applySessionCheckpointsFromModule(items);
   };
 
   const mergeInitialEventsForMessage = (
@@ -3482,12 +2146,8 @@
   ) => {
     const normalizedId = String(messageId ?? '').trim();
     if (!normalizedId || events.length === 0) return;
-    const next = new Map(initialEventsByMessageId);
-    next.set(
-      normalizedId,
-      mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
-    );
-    initialEventsByMessageId = next;
+    // Route through controller (slice 1B): mergeHistoryEvents handles dedup + notify.
+    ctrl.mergeHistoryEvents(normalizedId, events as StreamEvent[]);
     scanEventsForGeneratedFileCards(normalizedId, events);
   };
 
@@ -3547,9 +2207,12 @@
     const shouldRevealAtBottom =
       opts?.revealAtBottom === true && previousScrollHeight <= 0;
 
+    // Build next messages + history lists locally, then commit to controller atomically.
     const nextMessages = [...messages];
-    const nextInitialEvents = new Map(initialEventsByMessageId);
     const nextHistory = [...historyTimelineItems];
+    // Accumulate history events per message id to batch-merge into the controller.
+    const accumulatedHistoryEvents = new Map<string, StreamEvent[]>();
+
     for (const item of chronologicalBlock) {
       const normalizedMessage: LocalMessage = {
         ...item.message,
@@ -3580,13 +2243,11 @@
       }
 
       if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
-        nextInitialEvents.set(
-          item.message.id,
-          mergeProjectionHistoryEvents(
-            nextInitialEvents.get(item.message.id) ?? [],
-            item.segment.events,
-          ),
-        );
+        const msgId = item.message.id;
+        const existing = accumulatedHistoryEvents.get(msgId) ?? [];
+        // Merge segment events into accumulator (deduplicate by sequence)
+        const merged = mergeProjectionHistoryEvents(existing, item.segment.events);
+        accumulatedHistoryEvents.set(msgId, merged);
       }
       if (
         item.kind === 'runtime-segment' &&
@@ -3613,9 +2274,11 @@
 
     historyHydrationSwapPending = shouldRevealAtBottom;
 
-    messages = nextMessages;
-    initialEventsByMessageId = nextInitialEvents;
-    for (const [msgId, events] of nextInitialEvents) {
+    // Commit messages to controller (single notify per block).
+    ctrl.setMessages(nextMessages);
+    // Merge all accumulated history events into the controller.
+    for (const [msgId, events] of accumulatedHistoryEvents) {
+      ctrl.mergeHistoryEvents(msgId, events);
       scanEventsForGeneratedFileCards(msgId, events);
     }
     historyTimelineItems = nextHistory;
@@ -3646,12 +2309,8 @@
       return;
     }
     try {
-      const res = await apiGet<{ checkpoints?: ChatCheckpoint[] }>(
-        chatSessionCheckpointsUrl(id, 20),
-      );
-      applySessionCheckpoints(
-        Array.isArray(res.checkpoints) ? res.checkpoints : [],
-      );
+      const items = await checkpointHost.fetchCheckpoints(id);
+      applySessionCheckpoints(items as ChatCheckpoint[]);
     } catch {
       applySessionCheckpoints([]);
     }
@@ -3663,9 +2322,7 @@
   ) => {
     if (!targetSessionId || !anchorMessageId) return;
     try {
-      await apiPost(chatSessionCheckpointCreateUrl(targetSessionId), {
-        anchorMessageId,
-      });
+      await checkpointHost.createCheckpoint(targetSessionId, anchorMessageId);
       await loadCheckpoints(targetSessionId);
     } catch {
       // checkpoint creation is best-effort and must not block chat flow
@@ -3676,12 +2333,12 @@
     loadingSessions = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{ sessions: ChatSession[] }>(chatSessionsUrl());
-      sessions = res.sessions ?? [];
+      const res = await chatCoreHost.fetchSessions();
+      sessions = (res.sessions ?? []) as ChatSession[];
       // If the current sessionId is stale (e.g. from a different workspace), clear it
       if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {
         sessionId = null;
-        messages = [];
+        ctrl.setMessages([]);
       }
       if (!suppressSessionAutoSelect && !sessionId && sessions.length > 0) {
         void selectSession(sessions[0].id);
@@ -3711,32 +2368,22 @@
         historyHydrationInFlight = true;
         historyHydrationSwapPending = false;
         historyHydrationStickBottom = true;
-        messages = [];
-        optimisticSteerMessages = [];
+        ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on session load
         historyTimelineItems = [];
         stagedHistoryTimelineItems = [];
         historyTimelineSessionId = null;
-        projectedStreamEventsById = new Map();
-        projectedAssistantComputationByMessageId = new Map();
-        projectionEventsVersion += 1;
-        initialEventsByMessageId = new Map();
         runtimeSummaryByMessageId = new Map();
         loadedRuntimeDetailsMessageIds.clear();
         loadingRuntimeDetailsMessageIds.clear();
+        // Reset controller state: clears messages + projection events (slice 1B).
+        ctrl.setMessages([]);
+        ctrl.resetProjectionState();
         applySessionCheckpoints([]);
         sessionDocs = [];
         sessionDocsError = null;
         resetTodoRuntimePanel();
       }
-      const response = await apiFetch(
-        chatSessionHistoryUrl(id, 'summary'),
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/x-ndjson',
-          },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(id, 'summary');
       if (!response.body) {
         throw new Error('Session history stream returned an empty body');
       }
@@ -3794,15 +2441,13 @@
       if (stagedHistoryTimelineItems.length > 0) {
         await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
       }
-      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      ctrl.filterMessages(serverMessageIds);
       historyTimelineItems = historyTimelineItems.filter((item) =>
         serverTimelineKeys.has(item.key),
       );
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          serverEventMessageIds.has(messageId),
-        ),
-      );
+      // Stale entries in initialEventsByMessageId are harmless (unreachable by
+      // getProjectionEventsForMessage since those message ids are no longer in
+      // the message list). They will be cleared on next resetProjectionState.
       historyHydrationStickBottom = false;
       historyHydrationInFlight = false;
 
@@ -3810,12 +2455,11 @@
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
-        const fromCatalog = modelCatalogModels.find(
+        const fromCatalog = $ctrl.modelCatalogModels.find(
           (entry) => entry.model_id === lastAssistantModel,
         );
         if (fromCatalog) {
-          selectedProviderId = fromCatalog.provider_id;
-          selectedModelId = fromCatalog.model_id;
+          ctrl.setModelSelection(fromCatalog.provider_id, fromCatalog.model_id);
         }
       }
       if (opts?.scrollToBottom !== false) {
@@ -3856,34 +2500,26 @@
 
     const performDeferredClear = () => {
       if (!isCurrentHydration()) return false;
-      optimisticSteerMessages = [];
-      projectedStreamEventsById = new Map();
-      projectedAssistantComputationByMessageId = new Map();
-      projectionEventsVersion += 1;
+      ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on deferred session swap
       loadedRuntimeDetailsMessageIds.clear();
       loadingRuntimeDetailsMessageIds.clear();
-      resetLocalToolInterceptionState();
-      messages = [];
+      ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
       historyTimelineItems = [];
-      initialEventsByMessageId = new Map();
       runtimeSummaryByMessageId = new Map();
       sessionDocs = [];
       sessionDocsError = null;
       suppressSessionAutoSelect = false;
       clearComposerAttachments();
       sessionId = id;
+      // Reset controller state: clears messages + projection events (slice 1B).
+      ctrl.setMessages([]);
+      ctrl.resetProjectionState();
       historyHydrationSwapPending = true;
       return true;
     };
 
     try {
-      const response = await apiFetch(
-        chatSessionHistoryUrl(id, 'summary'),
-        {
-          method: 'GET',
-          headers: { Accept: 'application/x-ndjson' },
-        },
-      );
+      const response = await chatCoreHost.fetchSessionHistory(id, 'summary');
       if (!response.body) {
         throw new Error('Session history stream returned an empty body');
       }
@@ -3961,26 +2597,21 @@
         });
       }
 
-      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      ctrl.filterMessages(serverMessageIds);
       historyTimelineItems = historyTimelineItems.filter((item) =>
         serverTimelineKeys.has(item.key),
       );
-      initialEventsByMessageId = new Map(
-        [...initialEventsByMessageId].filter(([messageId]) =>
-          serverEventMessageIds.has(messageId),
-        ),
-      );
+      // Stale entries in initialEventsByMessageId are harmless — see loadMessages comment.
 
       const lastAssistantModel = [...messages]
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
-        const fromCatalog = modelCatalogModels.find(
+        const fromCatalog = $ctrl.modelCatalogModels.find(
           (entry) => entry.model_id === lastAssistantModel,
         );
         if (fromCatalog) {
-          selectedProviderId = fromCatalog.provider_id;
-          selectedModelId = fromCatalog.model_id;
+          ctrl.setModelSelection(fromCatalog.provider_id, fromCatalog.model_id);
         }
       }
     } catch (e) {
@@ -4001,25 +2632,18 @@
     }
   };
 
-  export const refreshCommentThreads = async () => {
-    await loadCommentThreads({ silent: true });
-    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
-      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
-    }
-  };
+  // refreshCommentThreads removed — CommentsPanel owns thread state via createCommentState.
 
   export const newSession = () => {
     sessionHydrationGeneration += 1;
     suppressSessionAutoSelect = true;
     sessionId = null;
-    messages = [];
     historyTimelineItems = [];
     stagedHistoryTimelineItems = [];
     historyTimelineSessionId = null;
     sessionCheckpoints = [];
     sessionDocs = [];
     sessionDocsError = null;
-    initialEventsByMessageId = new Map();
     runtimeSummaryByMessageId = new Map();
     loadedRuntimeDetailsMessageIds.clear();
     loadingRuntimeDetailsMessageIds.clear();
@@ -4027,12 +2651,13 @@
     historyHydrationStickBottom = false;
     historyHydrationSwapPending = false;
     loadingMessages = false;
-    projectedAssistantComputationByMessageId = new Map();
-    optimisticSteerMessages = [];
+    ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on new session
     resetTodoRuntimePanel();
-    resetLocalToolInterceptionState();
-    selectedProviderId = defaultProviderIdForNewSession;
-    selectedModelId = defaultModelIdForNewSession;
+    ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
+    // Reset controller state: clears messages + projection events (slice 1B).
+    ctrl.setMessages([]);
+    ctrl.resetProjectionState();
+    ctrl.resetModelSelectionToDefaults(); // slice 1F: restore default provider/model
     errorMsg = null;
     scheduleScrollToBottom({ force: true });
   };
@@ -4053,112 +2678,40 @@
     if (!sessionId) return;
     errorMsg = null;
     try {
-      await apiDelete(chatSessionUrl(sessionId));
+      await chatCoreHost.deleteSession(sessionId);
       sessionHydrationGeneration += 1;
       suppressSessionAutoSelect = false;
       sessionId = null;
-      messages = [];
       historyTimelineItems = [];
       stagedHistoryTimelineItems = [];
       historyTimelineSessionId = null;
       sessionDocs = [];
       sessionDocsError = null;
-      initialEventsByMessageId = new Map();
-      projectedAssistantComputationByMessageId = new Map();
-      optimisticSteerMessages = [];
+      ctrl.clearOptimisticSteerMessages(); // slice 1F: clear steer messages on session delete
       resetTodoRuntimePanel();
-      resetLocalToolInterceptionState();
+      ctrl.resetLocalToolMachineState(); // slice 1E: clear local-tool state (keeps executor attached)
+      // Reset controller state: clears messages + projection events (slice 1B).
+      ctrl.setMessages([]);
+      ctrl.resetProjectionState();
       await loadSessions();
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.deleteSession'));
     }
   };
 
-  const handleAssistantTerminal = (
-    streamId: string,
-    t: 'done' | 'error',
-  ) => {
-    messages = messages.map((m) =>
-      (m._streamId ?? m.id) === streamId
-        ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' }
-        : m,
-    );
-    scheduleScrollToBottom({ force: true });
-  };
+  // handleAssistantTerminal removed in slice 1C — moved to the controller.
+  // ctrl.attachStream injects onTerminal: (streamId, outcome) =>
+  //   scheduleScrollToBottom({ force: true }) so the DOM scroll still fires.
 
-  const pollJobUntilTerminal = async (
-    jobId: string,
-    streamId: string,
-    opts?: { timeoutMs?: number },
-  ) => {
-    if (!jobId || !streamId) return;
-    if (jobPollInFlight.has(jobId)) return;
-    jobPollInFlight.add(jobId);
-    const timeoutMs = opts?.timeoutMs ?? 60_000;
-    const startedAt = Date.now();
-    try {
-      // Petit délai: si SSE marche, on évite de poller tout de suite
-      await new Promise((r) => setTimeout(r, 750));
-
-      while (Date.now() - startedAt < timeoutMs) {
-        // Si entre-temps le message a été hydraté (contenu final) ou marqué terminal, on stop
-        const current = messages.find(
-          (m) => (m._streamId ?? m.id) === streamId,
-        );
-        if (!current) return;
-        if (current.content && current.content.trim().length > 0) return;
-        if (
-          current._localStatus === 'completed' ||
-          current._localStatus === 'failed'
-        )
-          return;
-
-        // Queue: endpoint user-scopé
-        const job = await apiGet<{ status?: string }>(
-          `/queue/jobs/${encodeURIComponent(jobId)}`,
-        );
-        const status = String((job as any)?.status ?? 'unknown');
-
-        if (status === 'completed') {
-          handleAssistantTerminal(streamId, 'done');
-          return;
-        }
-        if (status === 'failed') {
-          handleAssistantTerminal(streamId, 'error');
-          return;
-        }
-        // pending/processing
-        await new Promise((r) => setTimeout(r, 800));
-      }
-    } catch {
-      // ignore (fallback best-effort)
-    } finally {
-      jobPollInFlight.delete(jobId);
-    }
-  };
+  // pollJobUntilTerminal removed in slice 1C — moved to the controller.
+  // Call ctrl.startJobPoll(jobId, streamId, opts) at each run bootstrap.
+  // jobPollInFlight tracking is now owned by the controller.
 
   const loadModelCatalog = async () => {
     try {
-      const payload = await apiGet<ModelCatalogPayload>('/models/catalog');
-      modelCatalogProviders = Array.isArray(payload.providers)
-        ? payload.providers
-        : [];
-      modelCatalogModels = Array.isArray(payload.models) ? payload.models : [];
-      const initialProviderId =
-        payload.defaults?.provider_id ??
-        modelCatalogProviders[0]?.provider_id ??
-        'openai';
-      const initialModelId =
-        payload.defaults?.model_id ??
-        modelCatalogModels.find((entry) => entry.provider_id === initialProviderId)
-          ?.model_id ??
-        modelCatalogModels[0]?.model_id ??
-        selectedModelId;
-      defaultProviderIdForNewSession = initialProviderId;
-      defaultModelIdForNewSession = initialModelId;
-      selectedProviderId = initialProviderId;
-      selectedModelId = initialModelId;
-      selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+      // Controller owns: catalog fetch, providers/models/groups, selection, defaults (slice 1F).
+      await ctrl.loadModelCatalog(() => chatCoreHost.fetchModelCatalog());
+      selectedModelSelectionKey = `${$ctrl.selectedProviderId}::${$ctrl.selectedModelId}`;
     } catch (error) {
       console.error('Failed to load model catalog for chat:', error);
     }
@@ -4168,91 +2721,27 @@
     providerId: ModelProviderId,
     modelId: string,
   ) => {
-    if (!modelId) return;
-    let nextProviderId: ModelProviderId = providerId;
-    let nextModelId = modelId;
-
-    if (modelCatalogModels.length > 0) {
-      const exactMatch = modelCatalogModels.find(
-        (entry) =>
-          entry.provider_id === providerId && entry.model_id === modelId,
-      );
-      if (!exactMatch) {
-        const modelMatch = modelCatalogModels.find(
-          (entry) => entry.model_id === modelId,
-        );
-        if (modelMatch) {
-          nextProviderId = modelMatch.provider_id;
-          nextModelId = modelMatch.model_id;
-        } else {
-          const providerFallback =
-            modelCatalogModels.find(
-              (entry) => entry.provider_id === providerId,
-            ) ?? modelCatalogModels[0];
-          nextProviderId = providerFallback.provider_id;
-          nextModelId = providerFallback.model_id;
-        }
-      }
-    }
-
-    defaultProviderIdForNewSession = nextProviderId;
-    defaultModelIdForNewSession = nextModelId;
-    if (!sessionId) {
-      selectedProviderId = nextProviderId;
-      selectedModelId = nextModelId;
-    }
+    // Controller owns: catalog resolution + default/current selection update (slice 1F).
+    ctrl.applyUserDefaults(providerId, modelId, { sessionId: sessionId ?? null });
   };
 
   const isGeminiModel = (modelId: string | null | undefined): boolean =>
     typeof modelId === 'string' &&
     modelId.trim().toLowerCase().startsWith('gemini');
 
-  $: modelCatalogGroups = groupModelsByProvider(modelCatalogProviders, modelCatalogModels);
-
-  $: {
-    if (modelCatalogModels.length > 0) {
-      const coerced = coerceSelectionToValidEntry(
-        modelCatalogModels,
-        selectedProviderId,
-        selectedModelId,
-      );
-      if (
-        coerced.providerId !== selectedProviderId ||
-        coerced.modelId !== selectedModelId
-      ) {
-        selectedProviderId = coerced.providerId;
-        selectedModelId = coerced.modelId;
-      }
-    }
-  }
-
-  $: selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+  // modelCatalogGroups, coerceSelectionToValidEntry reactive, selectedProviderId/selectedModelId
+  // are now owned by the controller (slice 1F). Derive locals from $ctrl for template use.
+  $: selectedModelSelectionKey = `${$ctrl.selectedProviderId}::${$ctrl.selectedModelId}`;
   $: selectedModelWidthCh = computeModelSelectorWidthCh(
-    modelCatalogGroups,
-    modelCatalogModels,
-    selectedProviderId,
-    selectedModelId,
+    $ctrl.modelCatalogGroups as ModelCatalogGroup[],
+    $ctrl.modelCatalogModels as ModelCatalogModel[],
+    $ctrl.selectedProviderId,
+    $ctrl.selectedModelId,
   );
 
   const sendMessage = async () => {
     const text = input.trim();
-    const sentAttachments: ChatMessageAttachment[] = composerAttachments
-      .filter(
-        (attachment) =>
-          attachment.state === 'ready' &&
-          (attachment.kind === 'image' || attachment.kind === 'file') &&
-          typeof attachment.documentId === 'string' &&
-          attachment.documentId.trim().length > 0,
-      )
-      .map((attachment) => ({
-        kind: attachment.kind,
-        source: 'context_document',
-        documentId: attachment.documentId,
-        fileName: attachment.fileName,
-        mimeType: attachment.mimeType,
-        sizeBytes: attachment.sizeBytes,
-        state: 'ready' as const,
-      }));
+    const sentAttachments = buildSentAttachments(composerAttachments);
     if ((!text && sentAttachments.length === 0) || (sending && !composerSteerReady)) return;
 
     sending = true;
@@ -4292,24 +2781,24 @@
         content: text,
       };
 
-      if (selectedProviderId) payload.providerId = selectedProviderId;
-      if (selectedModelId) payload.model = selectedModelId;
+      if ($ctrl.selectedProviderId) payload.providerId = $ctrl.selectedProviderId;
+      if ($ctrl.selectedModelId) payload.model = $ctrl.selectedModelId;
 
       if (sessionId) {
         payload.sessionId = sessionId;
       }
 
-      if (focusContext?.contextType && focusContext.contextId) {
-        payload.primaryContextType = focusContext.contextType;
-        payload.primaryContextId = focusContext.contextId;
+      if (focusContext?.type && focusContext.id) {
+        payload.primaryContextType = focusContext.type;
+        payload.primaryContextId = focusContext.id;
       }
 
       if (activeContexts.length > 0) {
         payload.contexts = activeContexts
-          .filter((c) => c.contextType && c.contextId)
+          .filter((c) => c.type && c.id)
           .map((c) => ({
-            contextType: c.contextType,
-            contextId: c.contextId ?? '',
+            contextType: c.type,
+            contextId: c.id ?? '',
           }));
       }
 
@@ -4338,45 +2827,49 @@
         }
       }
 
-      const res = await apiPost<{
-        sessionId: string;
-        userMessageId: string;
-        assistantMessageId: string;
-        streamId: string;
-        jobId: string;
-      }>(chatMessagesUrl(), payload);
+      // Delegate host call + optimistic message insertion + job-poll to the controller.
+      // App-side: captures text + sentAttachments + model in factories for the controller.
+      const capturedText = text;
+      const capturedAttachments = sentAttachments;
+      const capturedModel = $ctrl.selectedModelId;
 
+      const { handle } = await ctrl.send(payload, {
+        buildUserMessage: (runHandle) => {
+          const nowIso = new Date().toISOString();
+          return {
+            id: runHandle.userMessageId,
+            sessionId: runHandle.sessionId,
+            role: 'user',
+            content: capturedText,
+            attachments: capturedAttachments,
+            createdAt: nowIso,
+            _localStatus: 'completed',
+          } as LocalMessage;
+        },
+        // base.sessionId = handle.sessionId (post-host-call, guaranteed real sessionId).
+        buildAssistantMessage: makeAssistantMsgFactory(capturedModel),
+        pollTimeoutMs: 90_000,
+      });
+
+      // App-side scroll + checkpoint (bootstrapRun inside ctrl.send already did message mutations)
+      followBottom = true;
+      scheduleScrollToBottom({ force: true });
+      if (handle.userMessageId) {
+        void createTurnCheckpoint(handle.sessionId, handle.userMessageId);
+      }
+
+      // App-side: clear composer + update session state.
       input = '';
       clearComposerAttachments();
       composerIsMultiline = false;
       updateComposerHeight();
-      if (res.sessionId && res.sessionId !== sessionId) {
+      if (handle.sessionId && handle.sessionId !== sessionId) {
         suppressSessionAutoSelect = false;
-        sessionId = res.sessionId;
-        if (!sessions.some((s) => s.id === res.sessionId)) {
-          sessions = [{ id: res.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
+        sessionId = handle.sessionId;
+        if (!sessions.some((s) => s.id === handle.sessionId)) {
+          sessions = [{ id: handle.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
         }
       }
-
-      const nowIso = new Date().toISOString();
-      const userMsg: LocalMessage = {
-        id: res.userMessageId,
-        sessionId: res.sessionId,
-        role: 'user',
-        content: text,
-        attachments: sentAttachments,
-        createdAt: nowIso,
-        _localStatus: 'completed',
-      };
-      bootstrapAssistantRun({
-        sessionId: res.sessionId,
-        assistantMessageId: res.assistantMessageId,
-        streamId: res.streamId,
-        jobId: res.jobId,
-        model: selectedModelId,
-        userMessage: userMsg,
-        checkpointUserMessageId: userMsg.id,
-      });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.send'));
     } finally {
@@ -4390,7 +2883,8 @@
     stoppingMessageId = activeAssistantMessage.id;
     errorMsg = null;
     try {
-      await apiPost(chatMessageStopUrl(activeAssistantMessage.id));
+      // Delegate host call to the controller (slice 1D).
+      await ctrl.stop(activeAssistantMessage.id);
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.stop'));
     } finally {
@@ -4404,11 +2898,8 @@
   ) => {
     errorMsg = null;
     try {
-      await apiPost(chatMessageFeedbackUrl(messageId), { vote: next });
-      const voteValue = next === 'clear' ? null : next === 'up' ? 1 : -1;
-      messages = messages.map((m) =>
-        m.id === messageId ? { ...m, feedbackVote: voteValue } : m,
-      );
+      // Delegate host call + feedbackVote patch to the controller (slice 1D).
+      await ctrl.setFeedback(messageId, next);
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.feedback'));
     }
@@ -4469,41 +2960,38 @@
     handleDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
-      if (showMentionMenu) {
-        if (mentionMenuRef?.contains(target)) return;
-        showMentionMenu = false;
-      }
+      // mention menu handled inside CommentsPanel
     };
     if (handleDocumentClick) {
       document.addEventListener('click', handleDocumentClick);
     }
-    if (mode === 'comments') {
-      void loadMentionMembers();
-      handleMentionRefresh = (event: Event) => {
-        const detail = (event as CustomEvent<any>).detail as {
-          workspaceId?: string;
-        } | null;
-        const currentWs = getScopedWorkspaceIdForUser();
-        if (
-          !currentWs ||
-          !detail?.workspaceId ||
-          detail.workspaceId !== currentWs
-        )
-          return;
-        void loadMentionMembers();
-      };
-      window.addEventListener(
-        'streamhub:workspace_membership_update',
-        handleMentionRefresh,
-      );
-    }
-    localToolsHubKey = `chat-local-tools:${Math.random().toString(36).slice(2)}`;
-    streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
-      handleLocalToolStreamEvent(event);
+    // Slice 1E: inject the local-tool machine into the controller.
+    // The controller owns state + sequencing; the app supplies extension-specific
+    // executor, decider, and result poster (ApiError retry stays app-side).
+    ctrl.attachLocalToolMachine({
+      executeLocalTool: (toolCallId, name, args, opts) =>
+        executeLocalTool(toolCallId, name as LocalToolName, args, opts),
+      decideLocalToolPermission: (requestId, decision) =>
+        decideLocalToolPermission(requestId, decision as LocalToolPermissionDecision),
+      postLocalToolResult: postLocalToolResultWithRetry,
+      isLocalToolName: (name: string) => isLocalToolName(name),
+      isLocalToolRuntimeAvailable: () => isLocalToolRuntimeAvailable(),
+      isLocalToolPermissionRequired: (error: unknown) =>
+        error instanceof LocalToolPermissionRequiredError,
+      getPermissionRequest: (error: unknown) =>
+        (error as LocalToolPermissionRequiredError).request,
     });
-    projectionHubKey = `chat-projection:${Math.random().toString(36).slice(2)}`;
-    streamHub.set(projectionHubKey, (event: StreamHubEvent) => {
-      handleProjectionStreamEvent(event);
+    localToolsHubKey = `chat-local-tools:${Math.random().toString(36).slice(2)}`;
+    // Route all streamHub local-tool events through the controller (slice 1E).
+    streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
+      ctrl.handleLocalToolStreamEvent(event);
+    });
+    // Slice 1C: controller owns the projection stream subscription.
+    ctrl.attachStream({
+      streamClient: chatCoreHost.streamClient,
+      pollJob: (jobId) => chatCoreHost.pollJob(jobId),
+      onProjectionEvent: () => scheduleScrollToBottom(),
+      onTerminal: () => scheduleScrollToBottom({ force: true }),
     });
     if (mode !== 'ai') return;
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
@@ -4536,16 +3024,14 @@
     });
   });
 
-  $: if (mode === 'ai' && sessionId && prefsKey !== getPrefsKey(sessionId)) {
+  // Track last loaded prefs session to avoid re-loading on every reactive tick.
+  let lastLoadedPrefsSession: string | null | undefined = undefined;
+
+  $: if (mode === 'ai' && sessionId !== undefined && sessionId !== lastLoadedPrefsSession) {
+    lastLoadedPrefsSession = sessionId;
     loadPrefs(sessionId);
     ensureDefaultToolToggles();
-    refreshContextLabels();
-  }
-
-  $: if (mode === 'ai' && !sessionId && prefsKey !== getPrefsKey(null)) {
-    loadPrefs(null);
-    ensureDefaultToolToggles();
-    refreshContextLabels();
+    void contextModule.refreshLabels();
   }
 
   $: if (mode === 'ai' && showComposerMenu) {
@@ -4595,34 +3081,23 @@
     mode === 'ai' &&
     ($organizationsStore || $foldersStore || $initiativesStore)
   ) {
-    refreshContextLabels();
+    // Refresh labels when Svelte stores hydrate (module owns label cache + store patches).
+    void contextModule.refreshLabels();
   }
 
   onDestroy(() => {
-    if (mentionDelayTimer) clearTimeout(mentionDelayTimer);
     if (sessionDocsReloadTimer) clearTimeout(sessionDocsReloadTimer);
     sessionDocsReloadTimer = null;
     if (sessionDocsSseKey) streamHub.delete(sessionDocsSseKey);
     sessionDocsSseKey = '';
     if (sessionTitlesSseKey) streamHub.delete(sessionTitlesSseKey);
     sessionTitlesSseKey = '';
-    if (commentReloadTimer) clearTimeout(commentReloadTimer);
-    commentReloadTimer = null;
-    if (commentHubKey) streamHub.delete(commentHubKey);
-    commentHubKey = '';
     if (localToolsHubKey) streamHub.delete(localToolsHubKey);
     localToolsHubKey = '';
-    if (projectionHubKey) streamHub.delete(projectionHubKey);
-    projectionHubKey = '';
-    resetLocalToolInterceptionState();
+    ctrl.detachStream(); // slice 1C: controller owns projection subscription teardown
+    ctrl.detachLocalToolMachine(); // slice 1E: controller owns local-tool teardown
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
-    }
-    if (handleMentionRefresh) {
-      window.removeEventListener(
-        'streamhub:workspace_membership_update',
-        handleMentionRefresh,
-      );
     }
     if (handleUserAISettingsUpdated) {
       window.removeEventListener(
@@ -4642,406 +3117,146 @@
 
 <div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
   {#if mode === 'comments'}
-    {@const assignedUser = currentCommentRoot?.assigned_to_user ?? null}
-    {@const isAssignedToMe = assignedUser?.id && assignedUser.id === $session.user?.id}
-    <div class="border-b border-slate-100 px-3 py-2 space-y-2">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="min-w-0 text-xs text-slate-500 flex flex-wrap items-center gap-2">
-          <span>{activeCommentSectionLabel}</span>
-          {#if currentCommentRoot?.status === 'closed' && commentThreadResolvedAt}
-            <span class="text-slate-400">•</span>
-            <span>
-              {$_('chat.comments.resolvedAt', {
-                values: { at: formatCommentTimestamp(commentThreadResolvedAt) },
-              })}
-            </span>
-          {:else if assignedUser}
-            <span class="text-slate-400">•</span>
-            <span>
-              {#if isAssignedToMe}
-                {$_('chat.comments.assignedToMe')}
-              {:else}
-                {$_('chat.comments.assignedTo', {
-                  values: {
-                    label:
-                      assignedUser.displayName ||
-                      assignedUser.email ||
-                      assignedUser.id,
-                  },
-                })}
-              {/if}
-            </span>
-          {/if}
-        </div>
-        <div class="flex flex-wrap items-center gap-1">
-          <MenuPopover bind:open={showCommentMenu} bind:triggerRef={commentMenuButtonRef} widthClass="w-72">
-            <svelte:fragment slot="trigger" let:toggle>
-              <button
-                class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={toggle}
-                title={$_('chat.comments.chooseThread')}
-                aria-label={$_('chat.comments.chooseThread')}
-                type="button"
-                bind:this={commentMenuButtonRef}
-              >
-                <List class="w-3.5 h-3.5" />
-              </button>
-            </svelte:fragment>
-            <svelte:fragment slot="menu">
-              {#if resolvedCount > 0}
-                <button
-                  class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 flex items-center gap-2"
-                  type="button"
-                  on:click|stopPropagation={() => (showResolvedComments = !showResolvedComments)}
-                >
-                  {#if showResolvedComments}
-                    <Eye class="w-3.5 h-3.5" />
-                    <span>{$_('chat.comments.hideResolved')}</span>
-                  {:else}
-                    <EyeOff class="w-3.5 h-3.5" />
-                    <span>{$_('chat.comments.showResolved')}</span>
-                  {/if}
-                </button>
-                <div class="border-t border-slate-100 my-1"></div>
-              {/if}
-              <button
-                class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                type="button"
-                on:click={handleNewCommentThread}
-              >
-                {$_('chat.comments.newThread')}
-                {activeCommentSectionLabel ? ` — ${activeCommentSectionLabel}` : ''}
-              </button>
-              <div class="border-t border-slate-100 my-1"></div>
-              {#if visibleCommentThreads.length === 0}
-                <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.comments.none')}</div>
-              {:else}
-                <div class="max-h-56 overflow-auto slim-scroll space-y-1">
-                  {#each visibleCommentThreads as t (t.id)}
-                    <button
-                      class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {commentThreadId === t.id ? 'text-slate-900 font-semibold' : 'text-slate-600'} {t.status === 'closed' ? 'line-through text-slate-400' : ''}"
-                      type="button"
-                      on:click={() => selectCommentThread(t)}
-                    >
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="truncate">
-                          {getCommentSectionLabel(commentContextType, t.sectionKey) || $_('chat.tabs.comments')}
-                        </span>
-                        <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
-                          <MessageCircle class="w-3 h-3" />
-                          {t.count}
-                        </span>
-                      </div>
-                      <div class="text-[10px] text-slate-400 truncate">
-                        {t.authorLabel} — {t.preview}
-                      </div>
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-            </svelte:fragment>
-          </MenuPopover>
+    {#snippet renderComposerInput(p: { value: string; disabled: boolean; placeholder: string; onChange: (v: string) => void; onKeyDown: (e: KeyboardEvent) => void })}
+      <!-- Restore GOLD fidelity: comments composer uses EditableInput (TipTap/contenteditable).
+           The wrapping div captures keydown events from the ProseMirror contenteditable,
+           forwarding them to CommentsPanel's Enter-to-send / @mention handler.
+           role=textbox + aria-label preserve the selector used by e2e spec 04. -->
+      <!-- svelte-ignore a11y-no-static-element-interactions a11y-interactive-supports-focus -->
+      <div
+        class="w-full"
+        role="textbox"
+        aria-label={$_('chat.composer.ariaLabel')}
+        aria-multiline="true"
+        tabindex="0"
+        on:keydown={p.onKeyDown}
+      >
+        <EditableInput
+          markdown={true}
+          value={p.value}
+          placeholder={p.placeholder}
+          disabled={p.disabled}
+          on:change={(e) => p.onChange((e as CustomEvent<{ value: string }>).detail.value)}
+        />
+      </div>
+    {/snippet}
+    {#snippet renderThreadMenuPopover(p: {
+      threads: CommentThreadSummary[];
+      currentThreadId: string | null;
+      resolvedCount: number;
+      showResolvedComments: boolean;
+      onSelect: (t: CommentThreadSummary) => void;
+      onNew: () => void;
+      onToggleShowResolved: () => void;
+      getThreadSectionLabel: (sectionKey: string | null) => string;
+    })}
+      <!-- Thread picker — faithful restore of the pre-extraction comments header
+           menu (MenuPopover + max-h-56 thread list). Lost when CommentsPanel
+           became canonical (host never passed this snippet); e2e 07_comment_assistant
+           selectThreadByLabel depends on it. -->
+      <MenuPopover widthClass="w-72">
+        <svelte:fragment slot="trigger" let:toggle>
           <button
             class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-            on:click={handleNewCommentThread}
-            title={$_('chat.comments.newThread')}
-            aria-label={$_('chat.comments.newThread')}
+            on:click={toggle}
+            title={$_('chat.comments.chooseThread')}
+            aria-label={$_('chat.comments.chooseThread')}
             type="button"
           >
-            <Plus class="w-4 h-4" />
+            <List class="w-3.5 h-3.5" />
           </button>
+        </svelte:fragment>
+        <svelte:fragment slot="menu" let:close>
+          {#if p.resolvedCount > 0}
+            <button
+              class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 flex items-center gap-2"
+              type="button"
+              on:click|stopPropagation={p.onToggleShowResolved}
+            >
+              {#if p.showResolvedComments}
+                <Eye class="w-3.5 h-3.5" />
+                <span>{$_('chat.comments.hideResolved')}</span>
+              {:else}
+                <EyeOff class="w-3.5 h-3.5" />
+                <span>{$_('chat.comments.showResolved')}</span>
+              {/if}
+            </button>
+            <div class="border-t border-slate-100 my-1"></div>
+          {/if}
           <button
-            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-            on:click={() => void handleResolveCommentThread()}
-            title={commentThreadResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
-            aria-label={commentThreadResolved ? $_('chat.comments.reopen') : $_('chat.comments.resolve')}
+            class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
             type="button"
-            disabled={!currentCommentRoot || !canResolveCurrent}
+            on:click={() => {
+              close();
+              p.onNew();
+            }}
           >
-            {#if commentThreadResolved}
-              <FolderOpen class="w-4 h-4" />
-            {:else}
-              <Check class="w-4 h-4" />
-            {/if}
+            {$_('chat.comments.newThread')}
           </button>
-          <button
-            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-            type="button"
-            disabled={!hasPreviousThread}
-            on:click={() => goToRelativeCommentThread(-1)}
-            title={$_('chat.comments.previous')}
-            aria-label={$_('chat.comments.previous')}
-          >
-            <ChevronLeft class="w-4 h-4" />
-          </button>
-          <button
-            class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded disabled:opacity-50"
-            type="button"
-            disabled={!hasNextThread}
-            on:click={() => goToRelativeCommentThread(1)}
-            title={$_('chat.comments.next')}
-            aria-label={$_('chat.comments.next')}
-          >
-            <ChevronRight class="w-4 h-4" />
-          </button>
-          <button
-            class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-            on:click={() => void handleDeleteCommentThread()}
-            title={$_('chat.comments.deleteThread')}
-            aria-label={$_('chat.comments.deleteThread')}
-            type="button"
-            disabled={!currentCommentRoot}
-          >
-            <Trash2 class="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
-
-  <div
-    class="flex-1 min-h-0 relative"
-    style={mode === 'comments' && commentThreadResolved
-      ? 'background-color: #f1f5f9 !important;'
-      : ''}
-  >
-    <div
-      class="h-full overflow-y-auto p-3 space-y-2 slim-scroll"
-      style={mode === 'comments' && commentThreadResolved
-        ? 'scrollbar-gutter: stable; background-color: #f1f5f9 !important;'
-        : 'scrollbar-gutter: stable;'}
-      bind:this={listEl}
-      on:scroll={onListScroll}
-    >
-      {#if mode === 'comments'}
-        {#if commentError}
-          <div
-            class="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2"
-          >
-            {commentError}
-          </div>
-        {/if}
-        {#if commentLoading && commentMessages.length === 0}
-          <div class="text-xs text-slate-500">{$_('common.loading')}</div>
-        {:else if !commentThreadId}
-          {#if commentThreads.length > 0}
-            <div class="text-xs text-slate-500">
-              {$_('chat.comments.selectThreadHint')}
-            </div>
+          <div class="border-t border-slate-100 my-1"></div>
+          {#if p.threads.length === 0}
+            <div class="px-2 py-1 text-[11px] text-slate-500">{$_('chat.comments.none')}</div>
           {:else}
-            <div class="text-xs text-slate-500">
-              {$_('chat.comments.emptyHint')}
+            <div class="max-h-56 overflow-auto slim-scroll space-y-1">
+              {#each p.threads as t (t.id)}
+                <button
+                  class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50 {p.currentThreadId === t.id ? 'text-slate-900 font-semibold' : 'text-slate-600'} {t.status === 'closed' ? 'line-through text-slate-400' : ''}"
+                  type="button"
+                  on:click={() => {
+                    close();
+                    p.onSelect(t);
+                  }}
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate">
+                      {p.getThreadSectionLabel(t.sectionKey) || $_('chat.tabs.comments')}
+                    </span>
+                    <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                      <MessageCircle class="w-3 h-3" />
+                      {t.count}
+                    </span>
+                  </div>
+                  <div class="text-[10px] text-slate-400 truncate">
+                    {t.authorLabel} — {t.preview}
+                  </div>
+                </button>
+              {/each}
             </div>
           {/if}
-        {:else if commentMessages.length === 0}
-          <div class="text-xs text-slate-500">
-            {$_('chat.comments.noMessagesThread')}
-          </div>
-        {:else}
-          {#each commentMessages as c (c.id)}
-            {@const isMine = isCommentByCurrentUser(c)}
-            {@const canEdit =
-              isMine && c.id === lastEditableCommentId && $workspaceCanComment}
-            {#if isMine}
-              <div class="flex flex-col items-end group">
-                {#if isAiComment(c)}
-                  <div class="mb-1 flex items-center justify-end">
-                    <div
-                      class="relative h-7 w-7 rounded-full bg-primary text-white border border-primary/80 flex items-center justify-center text-[11px]"
-                    >
-                      {getInitials(commentAuthorLabel(c))}
-                      <span
-                        class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 flex items-center justify-center"
-                      >
-                        <Brain class="w-2.5 h-2.5 text-slate-700" />
-                      </span>
-                    </div>
-                  </div>
-                {/if}
-                <div
-                  class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
-                >
-                  {#if editingCommentId === c.id}
-                    <div class="space-y-2">
-                      <EditableInput
-                        markdown={true}
-                        bind:value={editingCommentContent}
-                        placeholder={$_('chat.edit.placeholder')}
-                        disabled={!$workspaceCanComment}
-                      />
-                      <div
-                        class="flex items-center justify-end gap-2 text-[11px]"
-                      >
-                        <button
-                          class="chat-edit-action-secondary rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
-                          type="button"
-                          on:click={cancelEditComment}
-                        >
-                          {$_('common.cancel')}
-                        </button>
-                        <button
-                          class="chat-edit-action-primary rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
-                          type="button"
-                          on:click={() => void commitEditComment()}
-                        >
-                          {$_('common.send')}
-                        </button>
-                      </div>
-                    </div>
-                  {:else}
-                    <Streamdown content={c.content ?? ''} />
-                  {/if}
-                </div>
-                <div
-                  class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <button
-                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                    on:click={async () => {
-                      const text = c.content ?? '';
-                      const ok = await copyToClipboard(
-                        text,
-                        renderMarkdownWithRefs(text),
-                      );
-                      if (ok) markCopied(c.id);
-                    }}
-                    type="button"
-                    aria-label={$_('common.copy')}
-                    title={$_('common.copy')}
-                  >
-                    {#if isCopied(c.id)}
-                      <Check class="w-3.5 h-3.5 text-slate-900" />
-                    {:else}
-                      <Copy class="w-3.5 h-3.5" />
-                    {/if}
-                  </button>
-                  {#if canEdit && editingCommentId !== c.id}
-                    <button
-                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                      on:click={() => startEditComment(c)}
-                      type="button"
-                      aria-label="Modifier"
-                      title="Modifier"
-                    >
-                      <Pencil class="w-3.5 h-3.5" />
-                    </button>
-                  {/if}
-                </div>
-              </div>
-            {:else}
-              <div class="flex items-start gap-2 group">
-                <div
-                  class="relative h-7 w-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] text-slate-600"
-                >
-                  {getInitials(commentAuthorLabel(c))}
-                  {#if isAiComment(c)}
-                    <span
-                      class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 flex items-center justify-center"
-                    >
-                      <Brain class="w-2.5 h-2.5 text-slate-700" />
-                    </span>
-                  {/if}
-                </div>
-                <div class="max-w-[85%] w-full">
-                  <div
-                    class="text-[11px] text-slate-500 mb-1 flex items-center gap-2"
-                  >
-                    <span
-                      >{commentAuthorLabel(c)}{isAiComment(c)
-                        ? ', Assistant IA'
-                        : ''}</span
-                    >
-                    {#if c.created_at}
-                      <span>{formatCommentTimestamp(c.created_at)}</span>
-                    {/if}
-                  </div>
-                  <div
-                    class="rounded border border-slate-200 bg-white text-xs px-3 py-2 break-words"
-                  >
-                    <Streamdown content={c.content ?? ''} />
-                  </div>
-                  <div
-                    class="mt-1 flex items-center gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <button
-                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
-                      on:click={async () => {
-                        const text = c.content ?? '';
-                        const ok = await copyToClipboard(
-                          text,
-                          renderMarkdownWithRefs(text),
-                        );
-                        if (ok) markCopied(c.id);
-                      }}
-                      type="button"
-                      aria-label={$_('common.copy')}
-                      title={$_('common.copy')}
-                    >
-                      {#if isCopied(c.id)}
-                        <Check class="w-3.5 h-3.5 text-slate-900" />
-                      {:else}
-                        <Copy class="w-3.5 h-3.5" />
-                      {/if}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            {/if}
-          {/each}
-        {/if}
-        {#if commentLoading && commentMessages.length > 0}
-          <div class="text-[11px] text-slate-400 mt-2">
-            {$_('chat.comments.updating')}
-          </div>
-        {/if}
-      {:else}
+        </svelte:fragment>
+      </MenuPopover>
+    {/snippet}
+    <CommentsPanel
+      host={commentHost}
+      contextType={commentContextType}
+      contextId={commentContextId}
+      sectionKey={commentSectionKey}
+      sectionLabel={commentSectionLabel}
+      bind:commentThreadId
+      bind:commentLoading
+      labels={(key: string, opts?: Record<string, unknown>) => $_(key, opts as Parameters<typeof $_>[1])}
+      {renderComposerInput}
+      {renderThreadMenuPopover}
+    />
+  {:else}
+    <!-- AI mode: full chat panel with timeline, composer, etc. -->
+    <div
+      class="flex-1 min-h-0 relative"
+    >
+      <div
+        class="h-full overflow-y-auto p-3 space-y-2 slim-scroll"
+        style="scrollbar-gutter: stable;"
+        bind:this={listEl}
+        on:scroll={onListScroll}
+      >
         {#snippet renderTimelineMessageAttachments(item: any)}
-          {#if item.kind === 'message' && item.message.role === 'user' && (item.message.attachments?.length ?? 0) > 0}
-            <div class="mt-1 flex justify-end">
-              <div class="grid max-w-[85%] grid-cols-2 gap-1">
-                {#each item.message.attachments as attachment (attachment.id ?? attachment.documentId ?? attachment.url ?? attachment.fileName)}
-                  {#if attachment.kind === 'image'}
-                    {@const imageSrc = getAttachmentImageSrc(attachment)}
-                    <div class="overflow-hidden rounded border border-primary/20 bg-white/10">
-                      {#if imageSrc}
-                        <button
-                          type="button"
-                          class="block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                          aria-label={$_('chat.attachments.enlarge')}
-                          title={$_('chat.attachments.enlarge')}
-                          on:click={() =>
-                            openLightbox(imageSrc, attachment.fileName ?? 'image')}
-                        >
-                          <img
-                            src={imageSrc}
-                            alt={attachment.fileName ?? 'image'}
-                            class="block h-24 w-24 object-cover"
-                            loading="lazy"
-                          />
-                        </button>
-                      {:else}
-                        <div class="flex h-24 w-24 items-center justify-center bg-slate-100 text-slate-500">
-                          <ImageIcon class="h-5 w-5" />
-                        </div>
-                      {/if}
-                    </div>
-                  {:else if attachment.kind === 'file'}
-                    <a
-                      class="col-span-2 flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
-                      href={getAttachmentImageSrc(attachment)}
-                      download={attachment.fileName ?? 'document'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={attachment.fileName ?? 'document'}
-                    >
-                      <FileText class="h-4 w-4 shrink-0 text-primary" />
-                      <span class="truncate">{attachment.fileName ?? 'document'}</span>
-                      <Download class="ml-auto h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    </a>
-                  {/if}
-                {/each}
-              </div>
-            </div>
+          {#if item.kind === 'message' && item.message.role === 'user'}
+            <MessageAttachments
+              attachments={item.message.attachments ?? []}
+              onResolveSrc={getAttachmentImageSrc}
+              onEnlarge={(src: string, alt: string) => openLightbox(src, alt)}
+              enlargeLabel={$_('chat.attachments.enlarge')}
+            />
           {/if}
         {/snippet}
 
@@ -5132,24 +3347,11 @@
                     onGeneratedFile={(card) => handleGeneratedFileCard(m.id, card)}
                   />
                   {#if item.isTerminal && item.isLastAssistantSegment}
-                    {@const generatedFileCards = generatedFileCardsByMessageId.get(m.id) ?? []}
-                    {#each generatedFileCards as card (card.jobId)}
-                      <div class="rounded border border-slate-200 bg-white px-2 py-1.5 flex items-center gap-2 max-w-[14rem] mt-1">
-                        <FileText class="w-4 h-4 text-primary shrink-0" />
-                        <div class="min-w-0 flex-1">
-                          <div class="text-xs font-medium text-slate-900 truncate">{card.fileName}</div>
-                          <div class="text-[10px] text-slate-500">{getGeneratedFileFormatLabel(card.format)}</div>
-                        </div>
-                        <button
-                          class="ml-auto text-primary hover:bg-slate-100 rounded p-1"
-                          type="button"
-                          aria-label={$_('common.download')}
-                          on:click={() => downloadGeneratedFile(card)}
-                        >
-                          <Download class="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    {/each}
+                    <GeneratedFileCardTray
+                      cards={generatedFileCardsByMessageId.get(m.id) ?? []}
+                      onDownload={(card: ChatGeneratedFileCard) => void downloadGeneratedFile(card)}
+                      downloadLabel={$_('common.download')}
+                    />
                   {/if}
                   <MessageActions
                     role="assistant"
@@ -5340,9 +3542,8 @@
             {errorMsg}
           </div>
         {/if}
-      {/if}
+      </div>
     </div>
-  </div>
 
   {#if mode === 'ai' && todoRuntimePanel}
     <div class="w-full border-t border-slate-200 bg-slate-50/70" data-testid="todo-runtime-panel">
@@ -5463,9 +3664,9 @@
       </div>
     </div>
   {/if}
+  {/if}
 
   {#snippet renderComposerSurface()}
-          {#if mode === 'ai'}
             {#if sessionDocsError}
               <div
                 class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
@@ -5480,148 +3681,26 @@
                 {googleDriveConnectionError}
               </div>
             {/if}
-            {#if attachmentBand.length > 0}
-              <div
-                class="mb-2 flex flex-wrap gap-2"
-                data-testid="chat-composer-attachment-band"
-              >
-                {#each attachmentBand as item (item.key)}
-                  {@const imageSrc =
-                    item.kind === 'image' ? getBandItemImageSrc(item) : ''}
-                  <div
-                    class="flex h-14 min-w-0 max-w-[12rem] items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700"
-                  >
-                    {#if item.kind === 'image' && imageSrc}
-                      <button
-                        type="button"
-                        class="h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                        aria-label={$_('chat.attachments.enlarge')}
-                        title={$_('chat.attachments.enlarge')}
-                        on:click={() => openLightbox(imageSrc, item.fileName)}
-                      >
-                        <img
-                          src={imageSrc}
-                          alt={item.fileName}
-                          class="h-10 w-10 object-cover"
-                        />
-                      </button>
-                    {:else}
-                      <div
-                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500"
-                      >
-                        {#if item.kind === 'image'}
-                          <ImageIcon class="h-4 w-4" />
-                        {:else}
-                          <FileText class="h-4 w-4" />
-                        {/if}
-                      </div>
-                    {/if}
-                    <div class="min-w-0 flex-1">
-                      <div class="truncate font-medium">{item.fileName}</div>
-                      <div class="truncate text-slate-400">
-                        {getBandItemStatusLabel(item)}
-                      </div>
-                    </div>
-                    <button
-                      class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      type="button"
-                      aria-label={$_('chat.documents.delete.ariaLabel')}
-                      title={$_('common.delete')}
-                      on:click={() => void removeBandItem(item)}
-                    >
-                      <X class="w-3 h-3" />
-                    </button>
-                  </div>
-                {/each}
-              </div>
-            {/if}
+            <AttachmentBand
+              items={attachmentBand}
+              onResolveSrc={getBandItemImageSrc}
+              onEnlarge={(item: UnifiedAttachmentItem, src: string) => openLightbox(src, item.fileName)}
+              onRemove={(item: UnifiedAttachmentItem) => void removeBandItem(item)}
+              removeLabel={$_('chat.documents.delete.ariaLabel')}
+              enlargeLabel={$_('chat.attachments.enlarge')}
+              loadingLabel={$_('common.loading')}
+              errorLabel={$_('common.error')}
+            />
             <EditableInput
               markdown={true}
               bind:value={input}
               placeholder={$_('chat.composer.placeholder.chat')}
               on:change={handleComposerChange}
             />
-          {:else}
-            {#if (commentThreadResolved || !$workspaceCanComment) && commentInput.trim().length === 0}
-              <div
-                class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400"
-              >
-                {commentPlaceholder}
-              </div>
-            {/if}
-            {#if assignedToLabel}
-              <div
-                class="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600"
-              >
-                <span
-                  >{$_('chat.comments.assignedTo', {
-                    values: { label: assignedToLabel },
-                  })}</span
-                >
-                <button
-                  type="button"
-                  class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200"
-                  on:click={() => {
-                    assignedToUserId = null;
-                    assignedToLabel = null;
-                  }}
-                  aria-label={$_('chat.comments.unassign')}
-                  title={$_('chat.comments.unassign')}
-                >
-                  <X class="w-3 h-3" />
-                </button>
-              </div>
-            {/if}
-            <EditableInput
-              markdown={true}
-              bind:value={commentInput}
-              placeholder={commentPlaceholder}
-              on:change={handleComposerChange}
-              disabled={!$workspaceCanComment || commentThreadResolved}
-            />
-          {/if}
   {/snippet}
 
   {#snippet renderFloatingLayer()}
-        {#if mode === 'comments' && showMentionMenu}
-          <div
-            class="absolute bottom-12 left-0 z-30 w-64 rounded-lg border border-slate-200 bg-white shadow-lg p-2"
-            bind:this={mentionMenuRef}
-          >
-            {#if mentionLoading && mentionDelayElapsed}
-              <div class="px-2 py-1 text-[11px] text-slate-500">
-                {$_('common.loading')}
-              </div>
-            {:else if mentionError}
-              <div class="px-2 py-1 text-[11px] text-red-600">
-                {$_('chat.comments.mention.loadError')}
-              </div>
-            {:else if !mentionLoading && mentionMatches.length === 0}
-              <div class="px-2 py-1 text-[11px] text-slate-500">
-                {$_('chat.comments.mention.none')}
-              </div>
-            {:else}
-              <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
-                {#each mentionMatches as member (member.userId)}
-                  <button
-                    class="w-full text-left rounded px-2 py-1 text-xs hover:bg-slate-50"
-                    type="button"
-                    on:click={() => selectMentionMember(member)}
-                  >
-                    <div class="font-medium text-slate-900 truncate">
-                      {mentionLabelFor(member)}
-                    </div>
-                    {#if member.email}
-                      <div class="text-[10px] text-slate-400 truncate">
-                        {member.email}
-                      </div>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/if}
+        <!-- floating layer: checkpoints panel and other overlays (mention menu moved to CommentsPanel) -->
   {/snippet}
 
   {#snippet renderLeftControls()}
@@ -5669,9 +3748,9 @@
                 </div>
               {:else}
                 <ChatContextPicker
-                  entries={sortedContexts.map(adaptToNeutral)}
-                  iconFor={(e: NeutralContextEntry) => getContextIcon(e.type as ChatContextEntry['contextType'])}
-                  onToggle={(e: NeutralContextEntry) => toggleContextActive(findAppEntry(e))}
+                  entries={sortedContexts}
+                  iconFor={(e: ChatContextEntry) => getContextIcon(e.type)}
+                  onToggle={(e: ChatContextEntry) => toggleContextActive(e)}
                   maxHeightStyle={composerMenuContextsMaxH || 'max-height:10rem'}
                 >
                   <svelte:fragment slot="leading">
@@ -5741,13 +3820,13 @@
           </MenuPopover>
           <ModelSelector
             bind:value={selectedModelSelectionKey}
-            groups={modelCatalogGroups}
-            models={modelCatalogModels}
+            groups={$ctrl.modelCatalogGroups as ModelCatalogGroup[]}
+            models={$ctrl.modelCatalogModels as ModelCatalogModel[]}
             widthCh={selectedModelWidthCh}
             labels={$_}
             onChange={({ providerId, modelId }: { providerId: ModelProviderId; modelId: string }) => {
-              selectedProviderId = providerId;
-              selectedModelId = modelId;
+              ctrl.setModelSelection(providerId, modelId);
+              selectedModelSelectionKey = `${providerId}::${modelId}`;
             }}
           />
         {/if}
@@ -5789,76 +3868,34 @@
         </button>
   {/snippet}
 
-  <ChatComposerWrapper
-    mode={mode}
-    value={mode === 'comments' ? commentInput : input}
-    disabled={mode === 'comments' &&
-      (!$workspaceCanComment || commentThreadResolved)}
-    isMultiline={composerIsMultiline}
-    maxHeight={composerMaxHeight}
-    surfaceEnabled={($workspaceCanComment && !commentThreadResolved) ||
-      mode !== 'comments'}
-    surfaceDisabled={mode === 'comments' &&
-      (!$workspaceCanComment || commentThreadResolved)}
-    ariaLabel={$_('chat.composer.ariaLabel')}
-    tabIndex={mode === 'comments' &&
-    (!$workspaceCanComment || commentThreadResolved)
-      ? -1
-      : 0}
-    bind:composerElement={composerEl}
-    onKeyDown={handleKeyDown}
-    onPaste={handleComposerPaste}
-    {renderComposerSurface}
-    {renderFloatingLayer}
-    {renderLeftControls}
-    {renderRightActions}
-  />
+  {#if mode !== 'comments'}
+    <ChatComposerWrapper
+      mode="ai"
+      value={input}
+      disabled={false}
+      isMultiline={composerIsMultiline}
+      maxHeight={composerMaxHeight}
+      surfaceEnabled={true}
+      surfaceDisabled={false}
+      ariaLabel={$_('chat.composer.ariaLabel')}
+      tabIndex={0}
+      bind:composerElement={composerEl}
+      onKeyDown={handleKeyDown}
+      onPaste={handleComposerPaste}
+      {renderComposerSurface}
+      {renderFloatingLayer}
+      {renderLeftControls}
+      {renderRightActions}
+    />
+  {/if}
 </div>
 
-<svelte:window on:keydown={handleLightboxKeydown} />
-
-{#if lightboxImage}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-    data-testid="chat-image-lightbox"
-  >
-    <button
-      type="button"
-      class="absolute inset-0 h-full w-full cursor-default"
-      aria-label={$_('chat.attachments.lightbox.close')}
-      on:click={closeLightbox}
-    ></button>
-    <div class="relative z-10 flex max-h-full max-w-full flex-col items-center gap-2">
-      <div class="flex items-center gap-2 self-end">
-        <a
-          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-          href={lightboxImage.src}
-          download={lightboxImage.alt}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={$_('chat.attachments.lightbox.download')}
-          title={$_('chat.attachments.lightbox.download')}
-        >
-          <Download class="h-5 w-5" />
-        </a>
-        <button
-          type="button"
-          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-          aria-label={$_('chat.attachments.lightbox.close')}
-          title={$_('chat.attachments.lightbox.close')}
-          on:click={closeLightbox}
-        >
-          <X class="h-5 w-5" />
-        </button>
-      </div>
-      <img
-        src={lightboxImage.src}
-        alt={lightboxImage.alt}
-        class="max-h-[80vh] max-w-[90vw] rounded object-contain shadow-2xl"
-      />
-    </div>
-  </div>
-{/if}
+<ImageLightbox
+  image={lightboxImage}
+  onClose={closeLightbox}
+  closeLabel={$_('chat.attachments.lightbox.close')}
+  downloadLabel={$_('chat.attachments.lightbox.download')}
+/>
 
 <style>
   .composer-rich :global(.markdown-input-wrapper),

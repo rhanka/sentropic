@@ -1,5 +1,6 @@
 import { db, pool } from '../db/client';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { outboxWriter } from './outbox/outbox-writer';
 import {
   buildWorkflowTaskInstanceKey,
   completeWorkflowTask as flowCompleteWorkflowTask,
@@ -536,6 +537,14 @@ export class QueueManager {
 
   constructor() {
     this.loadSettings();
+  }
+
+  /**
+   * Returns the ids of all jobs currently in-flight in this process.
+   * Used by the queue reaper sweep to exclude live jobs from being reaped.
+   */
+  getLiveJobIds(): IterableIterator<string> {
+    return this.jobControllers.keys();
   }
 
   private async notifyJobEvent(jobId: string): Promise<void> {
@@ -1682,26 +1691,53 @@ export class QueueManager {
       maxRetries?: number;
     }
   ): Promise<string> {
-    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
-    postgresJobQueue.setRuntimeHooks({
-      canAcceptJob: (jobType) => {
-        if (this.cancelAllInProgress || this.paused) {
-          console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${jobType}`);
-          return false;
-        }
-        return true;
+    if (this.cancelAllInProgress || this.paused) {
+      console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
+      throw new Error('Queue is paused or cancelling; job not accepted');
+    }
+
+    const { createId } = await import('../utils/id');
+    const jobId = createId();
+    const workspaceId = opts?.workspaceId ?? ADMIN_WORKSPACE_ID;
+    const maxRetries = Number.isFinite(opts?.maxRetries as number)
+      ? Number(opts?.maxRetries)
+      : 0;
+    const payload = {
+      ...(data as unknown as Record<string, unknown>),
+      _retry: {
+        attempt: 0,
+        maxRetries: Math.max(0, Math.floor(maxRetries)),
       },
-      notifyJobEvent: (id) => this.notifyJobEvent(id),
-      startProcessing: () => {
-        if (isVitestRuntime()) {
-          return;
-        }
-        if (!this.isProcessing) {
-          this.processJobs().catch(console.error);
-        }
-      },
+    };
+
+    // BR-60: co-write control.event_outbox in the SAME transaction as the job insert.
+    // The outbox row drives the dispatcher to publish `job_events` NOTIFY.
+    // The existing notifyJobEvent() call below retains the direct NOTIFY for
+    // backward compatibility (existing SSE consumers — snapshot-on-wake, safe under
+    // at-least-once/dup/reorder).
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
+        VALUES (${jobId}, ${type}, ${JSON.stringify(payload)}, 'pending', ${new Date()}, ${workspaceId})
+      `);
+      await outboxWriter.append(tx, {
+        aggregateType: 'job_queue',
+        aggregateId: jobId,
+        envelope: { type: `job.${type}.pending`, jobId, jobType: type },
+        workspaceId,
+        channel: 'job_events',
+      });
     });
-    return postgresJobQueue.enqueue(type, data, opts);
+
+    // Retain direct NOTIFY for backward-compatible SSE consumers (snapshot-on-wake).
+    await this.notifyJobEvent(jobId);
+
+    console.log(`📝 Job ${jobId} (${type}) added to queue`);
+    if (!isVitestRuntime() && !this.isProcessing) {
+      this.processJobs().catch(console.error);
+    }
+
+    return jobId;
   }
 
   /**
@@ -2611,7 +2647,7 @@ export class QueueManager {
           })
           .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
         const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(`Unsupported mime type for summarization: ${doc.mimeType}. ${msg}`);
+        throw new Error(`Failed to extract text from document (${doc.mimeType}): ${msg}`);
       }
 
       const trimmed = text.trim();
@@ -3858,8 +3894,8 @@ export class QueueManager {
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
+      startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
       error: row.error || undefined,
     }));
   }
@@ -3977,8 +4013,8 @@ export class QueueManager {
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,
       createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
+      startedAt: row.startedAt ? row.startedAt.toISOString() : undefined,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : undefined,
       error: row.error || undefined,
     }));
   }

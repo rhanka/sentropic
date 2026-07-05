@@ -4,6 +4,7 @@ import {
   createOAuthAuthorizeHandler,
   createOAuthConsentDecisionHandler,
   createOAuthConsentDetailsHandler,
+  createOAuthEndSessionHandler,
   createOAuthHmacStateCodec,
   createOAuthIntrospectHandler,
   createOAuthRevokeHandler,
@@ -20,8 +21,9 @@ import { jwtVerify, SignJWT } from 'jose';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
-import { emailVerificationCodes, magicLinks, userSessions, users } from '../../db/schema';
+import { emailVerificationCodes, magicLinks, tenantMemberships, userSessions, users } from '../../db/schema';
 import { logger } from '../../logger';
+import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
@@ -45,6 +47,7 @@ oauthRouter.get('/userinfo', withOAuthOptions(createOAuthUserInfoHandler));
 oauthRouter.post('/userinfo', withOAuthOptions(createOAuthUserInfoHandler));
 oauthRouter.post('/revoke', withOAuthOptions(createOAuthRevokeHandler));
 oauthRouter.post('/introspect', withOAuthOptions(createOAuthIntrospectHandler));
+oauthRouter.get('/end_session', withOAuthOptions(createOAuthEndSessionHandler));
 
 let cachedPorts: AuthHonoPorts | null = null;
 
@@ -83,6 +86,9 @@ export const createSentropicOAuthOptions = (request?: Request) => ({
   idTokenTtlSeconds: env.OAUTH_ID_TOKEN_TTL_SEC,
   issuer: resolveOAuthIssuer(request),
   loginUrl: `${resolveOAuthUiBaseUrl(request)}/auth/login`,
+  // BR-39r L4: invitation → device-enrollment deep link target (authorize routes here when a
+  // `sentropic_invite_token` is present and there is no live session).
+  registerUrl: `${resolveOAuthUiBaseUrl(request)}/auth/register`,
   ports: getSentropicOAuthPorts(),
   serviceAccessTokenTtlSeconds: env.OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC,
   stateCodec: createOAuthHmacStateCodec({ secret: resolveOAuthStateSecret() }),
@@ -169,6 +175,9 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
     addSeconds: (date, seconds) => new Date(date.getTime() + seconds * 1000),
     now: () => new Date(),
   },
+  // Consent persistence: lets the IdP skip the consent screen when a stored grant for the
+  // exact (user, client) covers the requested scopes; re-consents on any uncovered scope.
+  consentStore: createConsentStoreAdapter(),
   cookies: authHonoCookiePort,
   credentials: {
     create: unsupportedOAuthPort,
@@ -210,6 +219,31 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
     markUsed: unsupportedOAuthPort,
   },
   oauthStateStore: createOauthStateStoreAdapter(),
+  // BR-39e: tenancy spine. The tenant claim (`tid`) is derived from an `approved` membership
+  // and re-validated at token time; both reads are tenant-scoped to the calling user.
+  tenant: {
+    async listApprovedTenantIds(userId: string) {
+      const rows = await db
+        .select({ tenantId: tenantMemberships.tenantId })
+        .from(tenantMemberships)
+        .where(and(eq(tenantMemberships.userId, userId), eq(tenantMemberships.status, 'approved')));
+      return rows.map((row) => row.tenantId);
+    },
+    async isApprovedMember(userId: string, tenantId: string) {
+      const [row] = await db
+        .select({ userId: tenantMemberships.userId })
+        .from(tenantMemberships)
+        .where(
+          and(
+            eq(tenantMemberships.userId, userId),
+            eq(tenantMemberships.tenantId, tenantId),
+            eq(tenantMemberships.status, 'approved'),
+          ),
+        )
+        .limit(1);
+      return Boolean(row);
+    },
+  },
   random: {
     bytes: (length) => new Uint8Array(randomBytes(length)),
     numericCode: (length) =>

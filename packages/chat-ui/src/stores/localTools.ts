@@ -26,28 +26,55 @@
  *   `listLocalToolPermissionPolicies`, `upsertLocalToolPermissionPolicy`,
  *   `deleteLocalToolPermissionPolicy`.
  * - `LocalToolPermissionRequiredError`, `setLocalToolsAdapter`.
+ *
+ * Host-extensible registration (open local-tool seam):
+ * - `BUILTIN_LOCAL_TOOL_NAMES` — the closed set of sentropic-shipped tool names.
+ * - `registerLocalTool`, `registerLocalTools`, `unregisterLocalTool`,
+ *   `clearRegisteredLocalTools`, `listRegisteredLocalTools` — let an external
+ *   host (Diag, OpenERP, mermaid-editor) register its own tool name + definition
+ *   so `isLocalToolName` recognizes it and `getLocalToolDefinitions` advertises
+ *   it, without editing this package's enum. The executor stays host-injected
+ *   through `attachLocalToolMachine` / `setLocalToolsAdapter`.
  */
 import { writable } from 'svelte/store';
 
 import type { LocalToolsAdapter } from '../hosts/types.js';
 
-export type LocalToolName =
-  | 'tab_read'
-  | 'tab_action'
-  | 'tab_read_dom'
-  | 'tab_screenshot'
-  | 'tab_click'
-  | 'tab_type'
-  | 'tab_scroll'
-  | 'tab_info'
-  | 'bash'
-  | 'ls'
-  | 'rg'
-  | 'file_read'
-  | 'file_edit'
-  | 'git'
-  | 'git_status'
-  | 'git_diff';
+/**
+ * Closed set of local tool names shipped by sentropic (Chrome tab tools +
+ * VSCode workspace tools). External hosts widen the recognized set at runtime
+ * via `registerLocalTool` — they do NOT edit this list.
+ */
+export const BUILTIN_LOCAL_TOOL_NAMES = [
+  'tab_read',
+  'tab_action',
+  'tab_read_dom',
+  'tab_screenshot',
+  'tab_click',
+  'tab_type',
+  'tab_scroll',
+  'tab_info',
+  'bash',
+  'ls',
+  'rg',
+  'file_read',
+  'file_edit',
+  'git',
+  'git_status',
+  'git_diff',
+] as const;
+
+/**
+ * Open local-tool name type. Known built-ins keep IDE autocompletion; the
+ * `(string & {})` member accepts any host-registered tool name (e.g.
+ * `render_mermaid`). Mirrors `StreamHubEventType` in `client/streamTypes.ts`.
+ *
+ * Evolution note: additive at runtime, type-widening at compile time. The 16
+ * built-ins keep working identically; the only compile-time impact is that
+ * `never`-exhaustiveness over `LocalToolName` no longer narrows (the open
+ * member is intentional for the host-extension seam).
+ */
+export type LocalToolName = (typeof BUILTIN_LOCAL_TOOL_NAMES)[number] | (string & {});
 
 export type LocalToolExecutionStatus =
   | 'pending'
@@ -309,24 +336,79 @@ const VSCODE_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
   },
 ];
 
-const LOCAL_TOOL_NAMES: ReadonlySet<LocalToolName> = new Set<LocalToolName>([
-  'tab_read',
-  'tab_action',
-  'tab_read_dom',
-  'tab_screenshot',
-  'tab_click',
-  'tab_type',
-  'tab_scroll',
-  'tab_info',
-  'bash',
-  'ls',
-  'rg',
-  'file_read',
-  'file_edit',
-  'git',
-  'git_status',
-  'git_diff',
-]);
+const BUILTIN_LOCAL_TOOL_NAME_SET: ReadonlySet<string> = new Set<string>(
+  BUILTIN_LOCAL_TOOL_NAMES,
+);
+
+/**
+ * Host-registered local tools, keyed by normalized tool name. Additive to the
+ * built-in Chrome/VSCode sets — a host registers its own tool (e.g.
+ * `render_mermaid`) so the controller recognizes it as local and
+ * `getLocalToolDefinitions` advertises it to the model.
+ *
+ * SCOPE: module-level singleton (process/module scoped), consistent with the
+ * sibling `setLocalToolsAdapter` and `localToolsStore` seams in this file.
+ * Multiple chat instances on one page share it. Under SSR or in tests, call
+ * `clearRegisteredLocalTools()` to reset between requests/cases.
+ *
+ * COLLISION: registration affects RECOGNITION + advertised DEFINITIONS only —
+ * never transport. Actually executing a tool still depends on the
+ * host-injected executor (`attachLocalToolMachine` / `setLocalToolsAdapter`).
+ * A registered definition for a built-in name overrides that built-in's
+ * advertised definition (dedupe by name in `getLocalToolDefinitions`), but
+ * built-in recognition cannot be removed via the registry.
+ *
+ * Insertion order is preserved for deterministic definition ordering.
+ */
+const registeredLocalTools = new Map<string, LocalToolDefinition>();
+
+/**
+ * Normalize a local tool name for registry keying. Trims surrounding
+ * whitespace only — names are case-sensitive (built-ins are lower_snake_case
+ * and matched exactly against the raw stream tool name).
+ */
+const normalizeLocalToolName = (name: unknown): string =>
+  String(name ?? '').trim();
+
+/**
+ * Register a host-provided local tool. Its `name` becomes a recognized local
+ * tool name (`isLocalToolName(name) === true`) and its definition is appended
+ * to `getLocalToolDefinitions()`. Re-registering the same name overwrites the
+ * previous definition. Does NOT shadow built-ins for recognition, but a
+ * registered definition for a built-in name overrides that built-in's
+ * advertised definition.
+ */
+export const registerLocalTool = (definition: LocalToolDefinition): void => {
+  const name = normalizeLocalToolName(definition?.name);
+  if (!name) {
+    throw new TypeError('registerLocalTool requires a non-empty tool name.');
+  }
+  registeredLocalTools.set(name, { ...definition, name });
+};
+
+/** Register multiple host-provided local tools in one call. */
+export const registerLocalTools = (
+  definitions: ReadonlyArray<LocalToolDefinition>,
+): void => {
+  for (const definition of definitions) registerLocalTool(definition);
+};
+
+/**
+ * Remove a previously host-registered local tool. Built-in names are never
+ * affected (this only clears the host registry entry). Returns true if a
+ * registered entry was removed.
+ */
+export const unregisterLocalTool = (name: string): boolean =>
+  registeredLocalTools.delete(normalizeLocalToolName(name));
+
+/** Clear all host-registered local tools. Built-ins are untouched. */
+export const clearRegisteredLocalTools = (): void => {
+  registeredLocalTools.clear();
+};
+
+/** Snapshot of the host-registered local tool definitions (registration order). */
+export const listRegisteredLocalTools = (): LocalToolDefinition[] =>
+  [...registeredLocalTools.values()].map((tool) => ({ ...tool }));
 
 let injectedAdapter: LocalToolsAdapter | null = null;
 
@@ -359,8 +441,14 @@ const hasExtensionRuntimeMessaging = (): boolean => {
   return Boolean(runtime?.id && runtime?.sendMessage);
 };
 
+/**
+ * True when `name` is a recognized local tool: either a sentropic built-in or
+ * a host-registered tool name. The widened return type matches the open
+ * `LocalToolName`. This is the store-level guard the controller consults via
+ * the host-injected `isLocalToolName` hook of `attachLocalToolMachine`.
+ */
 export const isLocalToolName = (name: string): name is LocalToolName =>
-  LOCAL_TOOL_NAMES.has(name as LocalToolName);
+  BUILTIN_LOCAL_TOOL_NAME_SET.has(name) || registeredLocalTools.has(name);
 export const isLocalToolRuntimeAvailable = (): boolean =>
   hasExtensionRuntimeMessaging();
 
@@ -371,8 +459,21 @@ const getRuntimeToolDefinitions = (
     ? VSCODE_LOCAL_TOOL_DEFINITIONS
     : CHROME_LOCAL_TOOL_DEFINITIONS;
 
-export const getLocalToolDefinitions = (): LocalToolDefinition[] =>
-  getRuntimeToolDefinitions(getRuntime()).map((tool) => ({ ...tool }));
+/**
+ * Built-in runtime definitions (Chrome or VSCode, per the active adapter) plus
+ * any host-registered definitions. A host-registered definition for a built-in
+ * name overrides that built-in's advertised entry (deduplicated by name).
+ */
+export const getLocalToolDefinitions = (): LocalToolDefinition[] => {
+  const byName = new Map<string, LocalToolDefinition>();
+  for (const tool of getRuntimeToolDefinitions(getRuntime())) {
+    byName.set(tool.name, { ...tool });
+  }
+  for (const tool of registeredLocalTools.values()) {
+    byName.set(tool.name, { ...tool });
+  }
+  return [...byName.values()];
+};
 
 const now = () => Date.now();
 
