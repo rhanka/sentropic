@@ -1,0 +1,92 @@
+{
+  "name": "@sentropic/cited-source-viewer",
+  "version": "0.1.0",
+  "description": "Shared cited-source viewer (SPEC_WP_CITED_SOURCE_VIZ Lot 2, architect-ratified S.5/S.6): one canonical non-modal frame (citation/doc/entity/page navigation, zoom, scope toggle, honesty footer) with pluggable per-modality body renderers. v1 bodies: markdown/plain-text and PDF text-layer (pdf.js). Pure: zero graphify runtime dependency; seam types are a local mirror of the frozen contract. DS-themed and built on @sentropic/design-system-svelte components.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/cited-source-viewer"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./CitedSourceViewer.svelte": {
+      "types": "./src/CitedSourceViewer.svelte.d.ts",
+      "svelte": "./src/CitedSourceViewer.svelte",
+      "import": "./src/CitedSourceViewer.svelte"
+    },
+    "./bodies/MarkdownBody.svelte": {
+      "types": "./src/bodies/MarkdownBody.svelte.d.ts",
+      "svelte": "./src/bodies/MarkdownBody.svelte",
+      "import": "./src/bodies/MarkdownBody.svelte"
+    },
+    "./bodies/PdfBody.svelte": {
+      "types": "./src/bodies/PdfBody.svelte.d.ts",
+      "svelte": "./src/bodies/PdfBody.svelte",
+      "import": "./src/bodies/PdfBody.svelte"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "svelte": "./src/types.ts",
+      "import": "./src/types.ts"
+    },
+    "./quoteMatch": {
+      "types": "./src/quoteMatch.ts",
+      "svelte": "./src/quoteMatch.ts",
+      "import": "./src/quoteMatch.ts"
+    },
+    "./markdownSource": {
+      "types": "./src/markdownSource.ts",
+      "svelte": "./src/markdownSource.ts",
+      "import": "./src/markdownSource.ts"
+    },
+    "./pdfEngine": {
+      "types": "./src/pdfEngine.ts",
+      "svelte": "./src/pdfEngine.ts",
+      "import": "./src/pdfEngine.ts"
+    },
+    "./bodies/registry": {
+      "types": "./src/bodies/registry.ts",
+      "svelte": "./src/bodies/registry.ts",
+      "import": "./src/bodies/registry.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": [
+    "**/*.svelte"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests --environment node --exclude tests/**/*.dom.spec.ts",
+    "test:dom": "vitest run --config vitest.dom.config.ts"
+  },
+  "peerDependencies": {
+    "@sentropic/design-system-svelte": "^0.34.33",
+    "pdfjs-dist": "^4.10.38 || ^5.0.0",
+    "svelte": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pdfjs-dist": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}
