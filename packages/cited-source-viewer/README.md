@@ -99,11 +99,12 @@ Typed by `CitedSourceViewerProps` in `src/types.ts`.
 | `scope` | `"entity" \| "selection"` | `"selection"` | Initial navigation scope. `entity` clamps ‹ Citation x/y › to the active group; `selection` runs over the whole flattened thread. Toggle + ‹ Entité x/y › render only with 2+ groups. |
 | `activeIndex` | `number` | `0` | Active ref as a GLOBAL index into the flattened thread. With a new `refs`/`groups` identity it retargets an open viewer. |
 | `title` | `string` | `"Cited source"` | Header title. |
-| `resolveSource` | `(ref) => Promise<SourcePayload>` | — (required) | §S.3 byte/text resolver, consumer-owned. |
+| `resolveSource` | `ResolveSource<SourcePayloadBase>` | — (required) | §S.3 byte/text resolver, consumer-owned. A v1 resolver returns the closed `SourcePayload` union (`pdf` \| `markdown`/`text` — full narrowing); a resolver feeding custom bodies widens explicitly (`ResolveSource<SourcePayload \| DocxPayload>`). |
 | `sourceHref` | `(ref) => string \| null` | `null` | Raw-source URL for "Ouvrir ↗" (DS Link, new tab). Null/absent hides it. |
 | `onClose` | `() => void \| null` | `null` | ✕ + Escape. Hidden/inert when absent. |
 | `onFocusChange` | `(focus: CitedSourceFocus) => void` | `null` | Fired on mount and every focus retarget (nav, scope toggle, reopen) with `{ index, ref, scope, groupId, groupIndex, groupRefIndex, docLocator, docIndex, docCount }` — lets the host highlight the matching chip/card (link highlight↔card, §S.4 common behavior). |
 | `labels` | `Partial<CitedSourceViewerLabels>` | `{}` | i18n overrides, merged over the qualified defaults (`Citation`, `Doc`, `Page`, `Entité`, `Sélection`, `Ouvrir ↗`, …). |
+| `class` | `string` | `""` | Extra class(es) appended to the frame's root `<section class="csv">` (host layout hook). |
 
 Events are callback props (Svelte 5 convention — no `createEventDispatcher`).
 No slots in v1: the body region is filled by the body-renderer seam below (an
@@ -120,10 +121,14 @@ entity nav (2+ groups), doc nav (2+ distinct locators in scope), page + zoom
 ### Body-renderer seam (`one UX, many bodies`)
 
 ```ts
-import { registerBodyRenderer } from "@sentropic/cited-source-viewer";
-import DocxBody from "./DocxBody.svelte"; // implements CitedSourceBodyProps
+import { registerBodyRenderer, type CitedSourceBodyComponent } from "@sentropic/cited-source-viewer";
+import DocxBody from "./DocxBody.svelte"; // Component<CitedSourceBodyProps<DocxPayload>>
 
-registerBodyRenderer("docx", DocxBody); // v2 plugs in; the frame NEVER changes
+// v2 plugs in; the frame NEVER changes. The cast is the DOCUMENTED seam
+// boundary: a concrete body is typed against ITS payload, narrower than the
+// base-typed registry slot (Svelte props are contravariant). Runtime safety
+// holds because the frame only mounts the body for its registered `kind`.
+registerBodyRenderer("docx", DocxBody as unknown as CitedSourceBodyComponent);
 ```
 
 The frame routes the resolved payload by `payload.kind`:
@@ -131,7 +136,15 @@ explicit registry entry → built-in (`markdown`/`text` → `MarkdownBody`, `pdf
 `PdfBody`) → "unsupported payload kind" error state. Registering an existing
 kind **overrides** the built-in (consumer swap, e.g. a richer markdown body).
 
-A body is a Svelte component implementing `CitedSourceBodyProps`:
+**Payload typing (architect touch 1)**: `SourcePayload` is the CLOSED v1
+discriminated union (`PdfSourcePayload | TextSourcePayload`) — `payload.kind`
+narrows fully. Custom kinds never widen the union: a v2/v3 body declares its
+own payload type extending `SourcePayloadBase` (`{ kind: string }`), and the
+body props are generic over it.
+
+A body is a Svelte component implementing `CitedSourceBodyProps<P>` (with `P`
+its concrete payload type — `TextSourcePayload` for the markdown body,
+`PdfSourcePayload` for the pdf body):
 
 | Prop | Direction | Role |
 |---|---|---|
@@ -187,6 +200,30 @@ CONSUMER's side of the qualified UX — deliberately not part of this package
 | Static single-file export (`file://`) | ✔ (text inlined by the consumer resolver) | ✖ module workers cannot load over `file://`; the body surfaces a clear load error (sources are not inlined in single-file bundles anyway) |
 | Non-Vite bundler | ✔ | ✔ with `setPdfWorkerSrc(url)` called before the first PDF load (the default worker wiring is a Vite `?url` import) |
 | jsdom (tests) | ✔ (frame + markdown body fully mountable) | engine covered by pure-geometry tests; pdf.js itself never loads in jsdom |
+
+### Markdown body — rendering scope (deliberately PARTIAL)
+
+The v1 markdown body uses a self-contained, escape-safe mini-renderer (zero
+markdown dependency — the interim's qualified behavior). Its feature scope is
+intentionally narrow; everything outside it renders as escaped plain text
+(safe and legible, never broken markup):
+
+| Markdown feature | Rendered? | As |
+|---|---|---|
+| Headings `#`–`######` | ✔ | `<h3>`–`<h6>` (demoted two levels) |
+| `**bold**` / `*italic*` | ✔ | `<strong>` / `<em>` |
+| Paragraphs / line breaks | ✔ | `<p>` / `<br>` |
+| Quote highlight | ✔ | `<mark data-csv-mark>` on the located range |
+| Inline HTML in the source | ✔ escaped | shown literally (XSS-safe, `{@html}`-proof) |
+| Lists (`-`, `1.`) | ✖ | escaped plain text |
+| Links / images | ✖ | escaped plain text (no navigation, no fetch) |
+| Inline code / code blocks | ✖ | escaped plain text |
+| Tables / blockquotes / hr | ✖ | escaped plain text |
+
+Upgrading to a full renderer (`markdown-it`) is an architect-owned v1.x
+decision (Open question #4) and would be a body-internal change — the seam
+does not move. A consumer can also override the `markdown` kind with its own
+richer body via `registerBodyRenderer`.
 
 ## Migration notes
 
