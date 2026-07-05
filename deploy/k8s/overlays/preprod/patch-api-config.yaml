@@ -1,0 +1,20 @@
+# PREPROD api ConfigMap overrides (strategic-merge: only these keys change; all
+# other base `api` ConfigMap keys are preserved).
+#
+# WebAuthn RP-ID isolation (D11R, FORK-2 verdict (b), architect-verified the api
+# runs a LIVE WebAuthn path — webauthn-adapter.ts / webauthn-config.ts): the api's
+# RP ID is the preprod PRODUCT host. It is a registrable suffix of the api's own
+# serving origin AND is fully isolated from prod's RP ID (`sent-tech.ca`), so
+# synthetic preprod passkeys never share scope with prod. Distinct from the IdP's
+# RP ID (preprod.auth.sent-tech.ca) — both isolated from prod; preprod users are
+# synthetic, so cross-surface passkey portability is a non-issue.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api
+data:
+  WEBAUTHN_RP_ID: "preprod.sentropic.sent-tech.ca"
+  WEBAUTHN_ORIGIN: "https://preprod.sentropic.sent-tech.ca"
+  # Public base URL for user-facing callbacks (magic-link login emails + Google
+  # Drive OAuth redirect_uri base) — must be the preprod product host.
+  AUTH_CALLBACK_BASE_URL: "https://preprod.sentropic.sent-tech.ca"

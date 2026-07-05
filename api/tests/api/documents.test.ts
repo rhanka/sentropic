@@ -121,6 +121,35 @@ describe('Documents API', () => {
     expect(jobOpts.workspaceId).toBeTruthy();
   });
 
+  it('POST /documents marks the row failed (never a silent job_id=NULL orphan) when enqueue throws (BUG-4)', async () => {
+    // Simulate the queue refusing the job (paused/cancelling) AFTER the row is persisted.
+    addJobSpy.mockRejectedValueOnce(new Error('Queue is paused or cancelling; job not accepted'));
+
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'AM1020.05.03.01.pdf', { type: 'application/pdf' }));
+
+    const res = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    createdDocId = data.id;
+
+    // The response surfaces the failure with a real error instead of pretending success.
+    expect(data.status).toBe('failed');
+    expect(typeof data.error).toBe('string');
+    expect(data.job_id).toBeUndefined();
+
+    // The persisted row is `failed` (not a silent `uploaded` + job_id=NULL orphan).
+    const [doc] = await db
+      .select()
+      .from(contextDocuments)
+      .where(eq(contextDocuments.id, createdDocId!))
+      .limit(1);
+    expect(doc?.status).toBe('failed');
+    expect(doc?.jobId ?? null).toBeNull();
+  });
+
   it('POST /documents accepts files larger than the previous 25 MB limit', async () => {
     const form = new FormData();
     form.set('context_type', 'folder');

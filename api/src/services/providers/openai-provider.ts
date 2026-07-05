@@ -24,14 +24,14 @@ export type OpenAIStreamGenerateRequest =
       mode: 'chat-completions';
       requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
       credential?: string;
-      codexTransport?: { accessToken: string; accountId?: string | null };
+      codexTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null };
       signal?: AbortSignal;
     }
   | {
       mode: 'responses';
       requestOptions: OpenAI.Responses.ResponseCreateParamsStreaming;
       credential?: string;
-      codexTransport?: { accessToken: string; accountId?: string | null };
+      codexTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null };
       signal?: AbortSignal;
     };
 
@@ -54,13 +54,13 @@ const stripCodexInputIds = (body: string): string => {
 };
 
 const buildCodexFetch =
-  (transport: { accessToken: string; accountId?: string | null }): typeof fetch =>
+  (transport: { accessToken: string; accountId?: string | null; stableSessionId?: string | null }): typeof fetch =>
   async (input, init) => {
     const headers = new Headers(init?.headers ?? {});
     headers.set('authorization', `Bearer ${transport.accessToken}`);
     headers.set('originator', 'opencode');
     headers.set('User-Agent', 'opencode/0.1.0');
-    headers.set('session_id', `codex_${Date.now().toString(36)}`);
+    headers.set('session_id', transport.stableSessionId || `codex_${Date.now().toString(36)}`);
     if (transport.accountId) headers.set('ChatGPT-Account-Id', transport.accountId);
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     return fetch(
@@ -163,7 +163,7 @@ export class OpenAIProviderRuntime implements ProviderRuntime {
 
   private getClient(
     apiKeyOverride?: string,
-    codexTransport?: { accessToken: string; accountId?: string | null },
+    codexTransport?: { accessToken: string; accountId?: string | null; stableSessionId?: string | null },
   ): OpenAI {
     if (codexTransport?.accessToken) {
       return new OpenAI({ apiKey: 'codex_dummy_key', fetch: buildCodexFetch(codexTransport) });

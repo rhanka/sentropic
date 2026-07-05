@@ -7,8 +7,20 @@ export interface OAuthContinuationState {
   createdAt: string;
   dpopJkt: string | null;
   expiresAt: string;
+  /**
+   * BR-39r L3 (C2): set when the authorize flow was forced to re-authenticate by
+   * `prompt=login` or `prompt=select_account`. Carried into the sealed (HMAC-signed → tamper-proof)
+   * continuation so `resumeLoginContinuation` can reject a resume that still resolves to the SAME
+   * pre-existing session id (`forceReauthSessionId`) — only a genuinely fresh login (new session id)
+   * proceeds to consent.
+   */
+  forceReauth?: boolean;
+  /** The current session id (if any) at force-reauth time; the id the resume must differ from. */
+  forceReauthSessionId?: string;
   nonce: string | null;
   redirectUri: string;
+  /** RFC 8707 resource sealed at authorize time (BR-39l Lot 2); carried authorize → consent → code. */
+  resource?: string | null;
   scope: string;
   state: string | null;
   tenantId: string | null;

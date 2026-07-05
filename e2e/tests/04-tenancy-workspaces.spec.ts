@@ -165,6 +165,8 @@ test.describe('Tenancy / cloisonnement workspace', () => {
       await expect(widget).toBeVisible({ timeout: 10_000 });
       await widget.getByRole('button', { name: 'Commentaires', exact: true }).click();
 
+      // CommentsPanel composer uses EditableInput (TipTap/contenteditable).
+      // The outer div has role=textbox; the contenteditable is the inner ProseMirror element.
       const composer = widget.locator('[role="textbox"][aria-label="Composer"]:visible');
       const editable = composer.locator('[contenteditable="true"]');
       await editable.click();

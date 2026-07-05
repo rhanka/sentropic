@@ -33,6 +33,82 @@ export type ChatServerUser = {
   role?: string;
 };
 
+/**
+ * Capability gate for privileged request-body fields.
+ *
+ * `createChatServer` reads a small set of privileged fields straight from the
+ * request body: `providerApiKey`, `localToolDefinitions`, `vscodeCodeAgent`,
+ * and the `tools` allowlist. On a trusted mount (e.g. an authenticated API
+ * behind a session), accepting these from the client is fine. On a PUBLIC
+ * mount, a client could inject its own provider key, arbitrary local-tool
+ * definitions, or a vscode agent.
+ *
+ * This option lets the host opt into a deny-by-default posture per field.
+ *
+ * Semantics:
+ * - The DEFAULT (option omitted, or any field left `undefined`) is PERMISSIVE
+ *   and preserves today's behavior exactly: every accept flag is `true` and
+ *   `allowedTools` is `'all'`. A trusted mount that omits `capabilities` is
+ *   byte-for-byte unchanged.
+ * - When a flag is `false`, the corresponding body field is IGNORED (not
+ *   rejected): the request still succeeds, but the server falls back to its
+ *   own configuration (the provider key the messages/queue ports resolve from
+ *   server config; no local tool definitions; no vscode agent). Ignoring is
+ *   safer than 400-ing — a public client cannot probe the gate by error code,
+ *   and a denied provider key transparently uses the server key.
+ * - `allowedTools` is an allowlist applied to the CLIENT-REQUESTED `tools`
+ *   field only: when set to a string array, any client-requested tool not on
+ *   the list is STRIPPED before reaching the queue. `'all'` disables stripping.
+ *   It does NOT cap server/context/workspace tools that the host's own queue
+ *   or generation layer may add downstream — those are the host's concern.
+ * - Local tools have two independent knobs. `acceptClientLocalToolDefinitions`
+ *   gates the client SOURCE (whether `body.localToolDefinitions` is read at
+ *   all); `allowedLocalTools` is a NAME allowlist applied to the merged result.
+ *   The mount can also DECLARE its own definitions via
+ *   {@link ChatServerOptions.localToolDefinitions} — always advertised, taking
+ *   precedence over a client definition of the same name. A public mount that
+ *   wants exactly one host tool sets `acceptClientLocalToolDefinitions:false`,
+ *   declares it in `localToolDefinitions`, and optionally pins
+ *   `allowedLocalTools` to its name. EXECUTION of local tools is always
+ *   host-side (the browser's local-tool machine); these knobs only control what
+ *   the model is TOLD it can call.
+ */
+export type ChatServerCapabilities = {
+  /** Accept `providerApiKey` from the request body. Default: `true`. */
+  acceptClientProviderApiKey?: boolean;
+  /** Accept `localToolDefinitions` from the request body. Default: `true`. */
+  acceptClientLocalToolDefinitions?: boolean;
+  /** Accept `vscodeCodeAgent` from the request body. Default: `true`. */
+  acceptClientVscodeAgent?: boolean;
+  /**
+   * Allowlist applied to the client-requested `tools` field. `'all'` (default)
+   * accepts any client-requested tool; a string array strips every
+   * client-requested tool not on the list. Does not cap server-side tools the
+   * host adds downstream.
+   */
+  allowedTools?: string[] | 'all';
+  /**
+   * Allowlist applied by NAME to local-tool definitions (both client-supplied
+   * and server-declared via {@link ChatServerOptions.localToolDefinitions}).
+   * `'all'` (default) advertises every definition; a string array drops every
+   * definition whose `name` is not on the list (a definition without a usable
+   * `name` cannot pass a name allowlist and is dropped). This is the local-tool
+   * counterpart of `allowedTools`: a public mount can advertise exactly one
+   * local tool (e.g. `['render_mermaid']`) while ignoring whatever the client
+   * tries to add. Independent of `acceptClientLocalToolDefinitions` — that flag
+   * gates the client SOURCE, this allowlist gates the resulting NAMES.
+   */
+  allowedLocalTools?: string[] | 'all';
+};
+
+type ResolvedCapabilities = {
+  acceptClientProviderApiKey: boolean;
+  acceptClientLocalToolDefinitions: boolean;
+  acceptClientVscodeAgent: boolean;
+  allowedTools: ReadonlySet<string> | 'all';
+  allowedLocalTools: ReadonlySet<string> | 'all';
+};
+
 export type ChatServerOptions = {
   routes: ChatRouteMode;
   basePath?: string;
@@ -41,6 +117,23 @@ export type ChatServerOptions = {
     user: ChatServerUser;
     action: ChatControlAction;
   }) => boolean | Promise<boolean>;
+  /**
+   * Deny-by-default capability gate for privileged request-body fields.
+   * Omit for the permissive default (today's behavior). See
+   * {@link ChatServerCapabilities}.
+   */
+  capabilities?: ChatServerCapabilities;
+  /**
+   * Local-tool definitions DECLARED BY THE MOUNT — always advertised to the
+   * model regardless of the request body. Each entry must carry a string
+   * `name`. Use together with `capabilities.acceptClientLocalToolDefinitions:
+   * false` (and optionally `capabilities.allowedLocalTools`) to expose a fixed
+   * set of local tools on a PUBLIC mount without trusting the client: the host
+   * declares e.g. `render_mermaid` here, the client cannot add others. A
+   * server-declared definition takes precedence over a client definition of the
+   * same `name`. Default: none (client is the only source, as today).
+   */
+  localToolDefinitions?: ReadonlyArray<unknown>;
 };
 
 export type CreatedChatMessage = {
@@ -222,9 +315,21 @@ export type ChatServerDeps = {
   stream: ChatStreamPort;
 };
 
+type InMemoryCreateMessageInput = Parameters<
+  ChatMessagePort['createUserMessageWithAssistantPlaceholder']
+>[0];
+type InMemoryEnqueueInput = Parameters<ChatQueuePort['enqueueChatMessage']>[0];
+
 type InMemoryOptions = {
   assistantReply?: string;
   user?: ChatServerUser;
+  /**
+   * Optional capture hooks so tests can assert exactly what reached the ports
+   * after the capability gate (e.g. that a denied `providerApiKey` did not
+   * reach `createUserMessageWithAssistantPlaceholder`/`enqueueChatMessage`).
+   */
+  onCreateMessage?: (input: InMemoryCreateMessageInput) => void;
+  onEnqueue?: (input: InMemoryEnqueueInput) => void;
 };
 
 function assertDeps(deps: ChatServerDeps): void {
@@ -286,6 +391,93 @@ function parseStringArray(value: unknown): string[] | undefined {
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter((item) => item.length > 0);
   return values.length > 0 ? values : undefined;
+}
+
+function resolveCapabilities(
+  capabilities: ChatServerCapabilities | undefined,
+): ResolvedCapabilities {
+  const allowedTools = capabilities?.allowedTools;
+  const allowedLocalTools = capabilities?.allowedLocalTools;
+  return {
+    acceptClientProviderApiKey: capabilities?.acceptClientProviderApiKey ?? true,
+    acceptClientLocalToolDefinitions:
+      capabilities?.acceptClientLocalToolDefinitions ?? true,
+    acceptClientVscodeAgent: capabilities?.acceptClientVscodeAgent ?? true,
+    allowedTools:
+      allowedTools === undefined || allowedTools === 'all'
+        ? 'all'
+        : new Set(allowedTools),
+    allowedLocalTools:
+      allowedLocalTools === undefined || allowedLocalTools === 'all'
+        ? 'all'
+        : new Set(allowedLocalTools),
+  };
+}
+
+/**
+ * Drops client-requested tools that are not on the allowlist (`'all'` = no
+ * filtering). When the client requested tools but none survive the allowlist,
+ * returns `[]` (an explicit empty set) rather than `undefined`, so a queue
+ * adapter that treats `undefined` as "use default tools" cannot be tricked
+ * into re-adding the very tools the allowlist denied.
+ */
+function gateTools(
+  tools: string[] | undefined,
+  allowedTools: ReadonlySet<string> | 'all',
+): string[] | undefined {
+  if (tools === undefined) return undefined;
+  if (allowedTools === 'all') return tools;
+  return tools.filter((tool) => allowedTools.has(tool));
+}
+
+/** Extract a usable `name` from a local-tool definition, or `undefined`. */
+function localToolDefinitionName(def: unknown): string | undefined {
+  if (def && typeof def === 'object') {
+    const name = (def as { name?: unknown }).name;
+    if (typeof name === 'string' && name.length > 0) return name;
+  }
+  return undefined;
+}
+
+/**
+ * Resolves the local-tool definitions advertised to the model by merging the
+ * mount's server-declared definitions with the (already source-gated) client
+ * definitions, then applying the `allowedLocalTools` name allowlist.
+ *
+ * - Permissive fast-path: when the mount declares no server-side definitions
+ *   AND sets no name allowlist (`'all'`), the client definitions pass through
+ *   BYTE-FOR-BYTE — identical to the pre-0.3.0 behavior (no dedup, no reorder).
+ * - Otherwise: server-declared definitions are canonical and take precedence
+ *   over a client definition of the same `name`; definitions whose name is not
+ *   on the allowlist are dropped; a nameless definition cannot satisfy a name
+ *   allowlist and is dropped. Returns `undefined` when nothing survives, so a
+ *   queue adapter treating `undefined` as "no local tools" is not handed `[]`.
+ */
+function resolveLocalToolDefinitions(
+  serverDefs: ReadonlyArray<unknown>,
+  clientDefs: ReadonlyArray<unknown> | undefined,
+  allowedLocalTools: ReadonlySet<string> | 'all',
+): unknown[] | undefined {
+  if (serverDefs.length === 0 && allowedLocalTools === 'all') {
+    return clientDefs === undefined ? undefined : [...clientDefs];
+  }
+  const passes = (def: unknown): boolean => {
+    if (allowedLocalTools === 'all') return true;
+    const name = localToolDefinitionName(def);
+    return name !== undefined && allowedLocalTools.has(name);
+  };
+  const result: unknown[] = [];
+  const seen = new Set<string>();
+  for (const def of [...serverDefs, ...(clientDefs ?? [])]) {
+    if (!passes(def)) continue;
+    const name = localToolDefinitionName(def);
+    if (name !== undefined) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+    }
+    result.push(def);
+  }
+  return result.length > 0 ? result : undefined;
 }
 
 function numberValue(value: unknown): number | undefined {
@@ -421,6 +613,8 @@ export function createChatServer(
   const basePath = normalizeBasePath(options.basePath);
   const routePath = (suffix: string) => `${basePath}${suffix}`;
   const includeControls = options.includeControls ?? true;
+  const capabilities = resolveCapabilities(options.capabilities);
+  const serverLocalToolDefinitions = options.localToolDefinitions ?? [];
 
   app.use('*', async (c, next) => {
     if (c.req.header('sec-sentropic-wire-version')) {
@@ -454,12 +648,32 @@ export function createChatServer(
       return c.json({ error: 'content or attachments is required' }, 400);
     }
 
+    // Capability gate: privileged body fields are ignored when their flag is
+    // denied (server config takes over), and tools are filtered by allowlist.
+    const clientProviderApiKey = capabilities.acceptClientProviderApiKey
+      ? stringValue(body.providerApiKey)
+      : null;
+    const clientLocalToolDefinitions =
+      capabilities.acceptClientLocalToolDefinitions &&
+      Array.isArray(body.localToolDefinitions)
+        ? body.localToolDefinitions
+        : undefined;
+    const localToolDefinitions = resolveLocalToolDefinitions(
+      serverLocalToolDefinitions,
+      clientLocalToolDefinitions,
+      capabilities.allowedLocalTools,
+    );
+    const clientVscodeAgent = capabilities.acceptClientVscodeAgent
+      ? body.vscodeCodeAgent
+      : undefined;
+    const gatedTools = gateTools(parseStringArray(body.tools), capabilities.allowedTools);
+
     const created = await deps.messages.createUserMessageWithAssistantPlaceholder({
       userId: user.userId,
       sessionId: pathSessionId ?? stringValue(body.sessionId),
       content: content ?? '',
       providerId: stringValue(body.providerId),
-      providerApiKey: stringValue(body.providerApiKey),
+      providerApiKey: clientProviderApiKey,
       model: stringValue(body.model),
       workspaceId: user.workspaceId ?? null,
       primaryContextType: stringValue(body.primaryContextType),
@@ -475,14 +689,12 @@ export function createChatServer(
         sessionId: created.sessionId,
         assistantMessageId: created.assistantMessageId,
         providerId: created.providerId ?? null,
-        providerApiKey: stringValue(body.providerApiKey) ?? undefined,
+        providerApiKey: clientProviderApiKey ?? undefined,
         model: created.model ?? null,
         contexts: parseContexts(body.contexts),
-        tools: parseStringArray(body.tools),
-        localToolDefinitions: Array.isArray(body.localToolDefinitions)
-          ? body.localToolDefinitions
-          : undefined,
-        vscodeCodeAgent: body.vscodeCodeAgent,
+        tools: gatedTools,
+        localToolDefinitions,
+        vscodeCodeAgent: clientVscodeAgent,
         locale: resolveLocale(c),
       },
       { workspaceId: user.workspaceId ?? null },
@@ -623,7 +835,9 @@ export function createChatServer(
           assistantMessageId: created.assistantMessageId,
           providerId: created.providerId ?? null,
           model: created.model ?? null,
-          vscodeCodeAgent: body.vscodeCodeAgent,
+          vscodeCodeAgent: capabilities.acceptClientVscodeAgent
+            ? body.vscodeCodeAgent
+            : undefined,
           locale: resolveLocale(c),
         },
         { workspaceId: user.workspaceId ?? null },
@@ -679,13 +893,19 @@ export function createChatServer(
         });
       }
 
+      // `accepted.*` come from the trusted messages port (not the client body)
+      // and stay ungated; only the `body.vscodeCodeAgent` fallback is
+      // client-sourced and must pass the capability gate.
+      const fallbackVscodeAgent = capabilities.acceptClientVscodeAgent
+        ? body.vscodeCodeAgent
+        : undefined;
       const jobId = await deps.queue.enqueueChatMessage(
         {
           userId: user.userId,
           sessionId: assistant?.sessionId ?? '',
           assistantMessageId,
           localToolDefinitions: accepted.localToolDefinitions,
-          vscodeCodeAgent: accepted.vscodeCodeAgent ?? body.vscodeCodeAgent,
+          vscodeCodeAgent: accepted.vscodeCodeAgent ?? fallbackVscodeAgent,
           resumeFrom: accepted.resumeFrom,
           locale: resolveLocale(c),
         },
@@ -880,8 +1100,10 @@ export function createInMemoryChatServerDeps(
   const deps: ChatServerDeps = {
     getUser: () => user,
     messages: {
-      createUserMessageWithAssistantPlaceholder: (input) =>
-        createAssistantForUserMessage(input),
+      createUserMessageWithAssistantPlaceholder: (input) => {
+        options.onCreateMessage?.(input);
+        return createAssistantForUserMessage(input);
+      },
       async listMessages(input) {
         ensureSession(input.sessionId, { userId: input.userId, workspaceId: null });
         return {
@@ -1001,6 +1223,7 @@ export function createInMemoryChatServerDeps(
     },
     queue: {
       async enqueueChatMessage(input) {
+        options.onEnqueue?.(input);
         const assistant = messages.get(input.assistantMessageId);
         if (assistant) {
           messages.set(input.assistantMessageId, {

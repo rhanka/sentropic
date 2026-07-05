@@ -403,10 +403,40 @@ export const dispatchMeshStreamRaw = async (
 };
 
 export const createCodexAccountAuthInput = (
-  transport: { accessToken: string; accountId?: string | null },
+  transport: { accessToken: string; accountId?: string | null; accountLabel?: string | null; stableSessionId?: string | null },
 ): SecretAuthMaterial => ({
-  type: 'codex-account',
+  type: 'account-transport',
   provider: 'codex',
   accessToken: transport.accessToken,
   accountId: transport.accountId ?? null,
+  ...(transport.accountLabel ? { accountLabel: transport.accountLabel } : {}),
+  descriptor: {
+    metadata: {
+      transportSessionId: transport.stableSessionId ?? null,
+    },
+  },
+});
+
+export const createClaudeCodeAccountAuthInput = (
+  transport: {
+    accessToken: string;
+    refreshToken?: string | null;
+    accountId?: string | null;
+    accountLabel?: string | null;
+    expiresAt?: string | null;
+    stableSessionId?: string | null;
+  },
+): SecretAuthMaterial => ({
+  type: 'account-transport',
+  provider: 'claude-code',
+  accessToken: transport.accessToken,
+  ...(transport.refreshToken ? { refreshToken: transport.refreshToken } : {}),
+  accountId: transport.accountId ?? null,
+  ...(transport.accountLabel ? { accountLabel: transport.accountLabel } : {}),
+  ...(transport.expiresAt ? { expiresAt: transport.expiresAt } : {}),
+  descriptor: {
+    metadata: {
+      transportSessionId: transport.stableSessionId ?? null,
+    },
+  },
 });

@@ -1,6 +1,6 @@
+import { fromJwksPort } from '@sentropic/oauth-verify';
 import {
   decodeProtectedHeader,
-  importJWK,
   jwtVerify,
   SignJWT,
   type JWTVerifyOptions,
@@ -85,17 +85,13 @@ export const createJwksService = ({ clock, jwksPort }: CreateJwksServiceOptions)
 
   async verifyJwt(jwt, options = {}) {
     const protectedHeader = decodeProtectedHeader(jwt);
-    const kid = protectedHeader.kid;
-    if (!kid) {
+    if (!protectedHeader.kid) {
       throw new Error('JWT protected header is missing kid.');
     }
 
-    const key = await jwksPort.findKeyByKid(kid);
-    if (!key) {
-      throw new Error(`Unknown JWKS kid: ${kid}`);
-    }
-
-    const publicKey = await importJWK(key.publicJwk, key.alg);
+    // Key resolution is shared with @sentropic/oauth-verify (single verify core); the
+    // AS-side claim assertions (iss/aud/currentDate) stay here via jose JWTVerifyOptions.
+    const publicKey = await fromJwksPort(jwksPort).resolveKey(protectedHeader);
     return jwtVerify(jwt, publicKey, options);
   },
 });

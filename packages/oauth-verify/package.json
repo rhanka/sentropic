@@ -1,0 +1,38 @@
+{
+  "name": "@sentropic/oauth-verify",
+  "version": "0.1.0",
+  "description": "Framework-free OAuth2/OIDC access-token and DPoP-proof verification core for Sentropic: verify-only primitives, pluggable key source (remote JWKS or in-process), and canonical claim types. No issuer/signing/PRM logic; no MCP scope grammar.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/oauth-verify"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "peerDependencies": {
+    "jose": "^5.10.0"
+  }
+}

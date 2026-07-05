@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/rhanka/sentropic/packages/harness/schema/verification-run.schema.json",
+  "title": "VerificationRun (harness↔track seam v0)",
+  "description": "Neutral verification artifact emitted by @sentropic/harness checks and ingested by a track-side adapter. Frozen v0 per spec/SPEC_DECISION_SEAM_HARNESS_TRACK_V0.md. harness EMITS this artifact and never imports @sentropic/track; the adapter is 100% track-side. Versioning: unknown major/schemaVersion ⇒ fail-closed reject; minor ⇒ additive OPTIONAL fields only; consumers ignore unknown optional fields but MUST NOT route an unknown target-kind / enum value silently.",
+  "type": "object",
+  "$comment": "VERDICT-DERIVATION INVARIANT (DEC-S3, frozen cross-contract): the track-side adapter DERIVES the scope verdict from violations+severity, NEVER from `result`. Predicate: any violation with severity='blocking' ⇒ verdict='violation'; else any violation with severity='advisory' ⇒ verdict='conditional'; else verdict='clean'. The harness does NOT derive the verdict; this predicate is frozen here so it holds cross-contract, not on trust. `acceptance.run.result` uses VerificationRun.result / the check pass flag directly (binary pass|fail).",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "commit",
+    "branch",
+    "env",
+    "runner",
+    "category",
+    "command",
+    "result",
+    "startedAt",
+    "finishedAt",
+    "checks",
+    "violations",
+    "artifactLocator",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "v0 freeze. Unknown schemaVersion ⇒ fail-closed reject."
+    },
+    "runId": {
+      "type": "string",
+      "description": "Stable id per invocation. The track adapter MINTS a globally-unique runId PER EMITTED VERDICT (a per-check/per-target projection id ≠ this physical run id — DEC §7 M1). This physical id lives in the artifact behind artifactLocator."
+    },
+    "commit": { "type": "string" },
+    "branch": { "type": "string" },
+    "env": { "type": "string" },
+    "runner": { "type": "string" },
+    "category": { "$ref": "#/definitions/VerificationCategory" },
+    "command": { "type": "string" },
+    "result": {
+      "enum": ["pass", "fail"],
+      "description": "Run-level binary outcome. NEVER the source of the scope verdict (see the verdict-derivation invariant)."
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/VerificationCheck" }
+    },
+    "violations": {
+      "type": "array",
+      "description": "Flattened union of all check violations (convenience for ingesters).",
+      "items": { "$ref": "#/definitions/Violation" }
+    },
+    "artifactLocator": {
+      "type": "string",
+      "description": "Immutable locator for the full VerificationRun JSON — the CANONICAL evidence (DEC-S2). Immutability is a PRODUCER guarantee the adapter RECORDS, never verifies (OQ-3). REQUIRED."
+    },
+    "artifacts": {
+      "type": "array",
+      "description": "Opaque references to OTHER produced artifacts (paths/urls).",
+      "items": { "type": "string" }
+    }
+  },
+  "definitions": {
+    "VerificationCategory": {
+      "enum": [
+        "none",
+        "static",
+        "unit",
+        "integration",
+        "e2e",
+        "ci",
+        "uat",
+        "security"
+      ],
+      "description": "BR25 D3 verification taxonomy. `security` is a frozen v0 slot reserved NOW (adding an enum value post-freeze would be a major bump); it stays schema-artifact-only / OFF-WIRE in v0 (OQ-7). An unknown category MUST NOT route silently."
+    },
+    "ViolationSeverity": {
+      "enum": ["advisory", "blocking"],
+      "description": "FROZEN v0 enum (DEC §7 SHOULD-FIX). Feeds the verdict-derivation invariant; the freeze pins the predicate cross-contract."
+    },
+    "Violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "severity"],
+      "properties": {
+        "code": { "type": "string" },
+        "path": {
+          "type": "string",
+          "description": "Offending path, when the violation is path-scoped (e.g. C2)."
+        },
+        "message": { "type": "string" },
+        "severity": { "$ref": "#/definitions/ViolationSeverity" }
+      }
+    },
+    "VerificationTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Structured evidence target (DEC-S1, freeze keystone). Carried per-check. The adapter routes from the target, never from category/branch/commit/path globs (DEC-S4). At least one of `scope`|`acceptance` should be present for a track-ingested check; a check with no target FAILS CLOSED at the adapter.",
+      "minProperties": 1,
+      "properties": {
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["wpRef"],
+          "description": "present ⇒ adapter emits scope.verification (verdict derived from violations+severity).",
+          "properties": {
+            "wpRef": {
+              "type": "string",
+              "description": "Exact scope.declare itemId / stable scope key (no inference)."
+            }
+          }
+        },
+        "acceptance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["evidenceId", "kind"],
+          "description": "present ⇒ adapter emits acceptance.run (+ one acceptance.link per criterionId).",
+          "properties": {
+            "evidenceId": {
+              "type": "string",
+              "description": "Caller-supplied DETERMINISTIC evidence key (DEC §7 M2=B) — NOT a server-minted id."
+            },
+            "kind": { "enum": ["unit", "integration", "e2e", "manual"] },
+            "criterionIds": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "VerificationCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "category", "pass", "violations"],
+      "properties": {
+        "code": { "type": "string" },
+        "category": { "$ref": "#/definitions/VerificationCategory" },
+        "pass": { "type": "boolean" },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Violation" }
+        },
+        "target": {
+          "$ref": "#/definitions/VerificationTarget",
+          "description": "≥1 of scope|acceptance required for a track-ingested check; absent ⇒ adapter fail-closed (never auto-itemized, never glob-routed). Optional so producer-local checks stay representable."
+        }
+      }
+    }
+  }
+}

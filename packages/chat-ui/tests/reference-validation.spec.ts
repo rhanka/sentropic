@@ -4,9 +4,12 @@
  * Anti-orphan guard for @sentropic/chat-ui exported components.
  *
  * Rules enforced:
- *   (a) Every exported `./components/*.svelte` subpath MUST be classified in
- *       `chat-ui-reference-validation.json`. Unknown component → FAIL (forces
- *       a conscious decision before a new component can be published).
+ *   (a) Every exported `./<dir>/*.svelte` subpath (components/, documents/,
+ *       comments/, ...) MUST be classified in `chat-ui-reference-validation.json`.
+ *       Unknown component → FAIL (forces a conscious decision before a new
+ *       component can be published).
+ *   (a2) Every single-segment module subpath (`./checkpoints`, `./context`,
+ *       `./documents`, `./comments`, ...) MUST be classified (headless expected).
  *   (b) Every `assembly`'s `composes` entries must each be `primitive` or
  *       `assembly` (NOT `legacy`), and its `assemblyValidatedBy` file must exist.
  *   (c) Best-effort dogfooding: if `ui/src` is reachable from the test sandbox,
@@ -82,17 +85,32 @@ type Manifest = { components: Record<string, ComponentEntry> };
 const pkg = JSON.parse(fs.readFileSync(PKG_JSON_PATH, 'utf8')) as PkgJson;
 const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8')) as Manifest;
 
-/** Extract component names from `./components/*.svelte` export subpaths. */
+/**
+ * Extract component names from `./<dir>/*.svelte` export subpaths
+ * (components/, documents/, comments/, ...). Manifest keys are bare
+ * filenames — exporting the same filename from two dirs is not allowed.
+ */
 function extractExportedComponents(exports: Record<string, PkgExportEntry | string>): string[] {
   const names: string[] = [];
   for (const subpath of Object.keys(exports)) {
-    const m = subpath.match(/^\.\/components\/(.+\.svelte)$/);
+    const m = subpath.match(/^\.\/[^/]+\/([^/]+\.svelte)$/);
     if (m) names.push(m[1]);
   }
   return names.sort();
 }
 
+/** Extract single-segment module subpaths (`./checkpoints` → `checkpoints`). */
+function extractModuleSubpaths(exports: Record<string, PkgExportEntry | string>): string[] {
+  const names: string[] = [];
+  for (const subpath of Object.keys(exports)) {
+    const m = subpath.match(/^\.\/([^/]+)$/);
+    if (m && !m[1].endsWith('.svelte')) names.push(m[1]);
+  }
+  return names.sort();
+}
+
 const exportedComponents = extractExportedComponents(pkg.exports);
+const exportedModules = extractModuleSubpaths(pkg.exports);
 const VALID_CLASSES = new Set<string>(['primitive', 'assembly', 'headless', 'legacy']);
 const CANONICAL_CLASSES = new Set<string>(['primitive', 'assembly', 'headless']);
 
@@ -114,6 +132,17 @@ describe('reference-validation (a): every exported component is classified', () 
     expect(exportedComponents.length).toBeGreaterThan(0);
   });
 
+  it('no duplicate component basenames across export dirs', () => {
+    const seen = new Set<string>();
+    for (const name of exportedComponents) {
+      expect(
+        seen.has(name),
+        `component basename "${name}" is exported from more than one dir — manifest keys are bare filenames and must stay unambiguous`,
+      ).toBe(false);
+      seen.add(name);
+    }
+  });
+
   for (const name of exportedComponents) {
     it(`"${name}" is present in the manifest`, () => {
       expect(
@@ -131,6 +160,29 @@ describe('reference-validation (a): every exported component is classified', () 
       expect(
         VALID_CLASSES.has(entry?.class),
         `"${name}" has class "${entry?.class}" — must be one of: ${[...VALID_CLASSES].join(', ')}`,
+      ).toBe(true);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// (a2) Every module index subpath is classified
+// ---------------------------------------------------------------------------
+
+describe('reference-validation (a2): every module index subpath is classified', () => {
+  for (const name of exportedModules) {
+    it(`module "./${name}" is present in the manifest`, () => {
+      expect(
+        manifest.components[name],
+        `"./${name}" is exported but not classified in chat-ui-reference-validation.json — add it with a valid class (headless expected for TS module indexes)`,
+      ).toBeTruthy();
+    });
+
+    it(`module "./${name}" has a valid class`, () => {
+      const entry = manifest.components[name];
+      expect(
+        VALID_CLASSES.has(entry?.class),
+        `"./${name}" has class "${entry?.class}" — must be one of: ${[...VALID_CLASSES].join(', ')}`,
       ).toBe(true);
     });
   }

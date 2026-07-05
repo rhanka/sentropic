@@ -542,6 +542,7 @@ export class ChatRuntimeRunPrepare {
       lastBudgetAnnouncedPct: -1,
       contextBudgetReplanAttempts: 0,
       continueGenerationLoop: true,
+      toolErrorSignatureCounts: {},
       useCodexTransport: input.useCodexTransport ?? false,
     };
   }
