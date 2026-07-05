@@ -129,9 +129,12 @@ export const jobQueue = pgTable('job_queue', {
   result: text('result'), // JSON string
   error: text('error'),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  startedAt: text('started_at'),
-  completedAt: text('completed_at')
-});
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  attempts: integer('attempts').notNull().default(0),
+}, (table) => ({
+  statusStartedAtIdx: index('job_queue_status_started_at_idx').on(table.status, table.startedAt),
+}));
 
 // WebAuthn Authentication Tables
 export const users = pgTable('users', {
@@ -232,6 +235,22 @@ export const emailVerificationCodes = pgTable('email_verification_codes', {
   verificationTokenIdx: index('email_verification_codes_verification_token_idx').on(table.verificationToken),
 }));
 
+// BR-39r L4: single-use invitation tokens (invitation → direct device enrollment).
+// Token value is opaque high-entropy with prefix `sit_`; only the SHA-256 hash is stored.
+// Consumed ATOMICALLY at registration (UPDATE ... WHERE consumed_at IS NULL AND expires_at>now).
+export const authInviteTokens = pgTable('auth_invite_tokens', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the opaque `sit_` token
+  email: text('email').notNull(),
+  clientId: text('client_id'), // nullable: invite may not be bound to a specific RP
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: false }), // nullable until consumed (single-use)
+  consumedByUserId: text('consumed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
+}, (table) => ({
+  expiresAtIdx: index('auth_invite_tokens_expires_at_idx').on(table.expiresAt),
+}));
+
 export const oauthClients = pgTable('oauth_clients', {
   id: text('id').primaryKey(),
   clientId: text('client_id').notNull().unique(),
@@ -244,7 +263,12 @@ export const oauthClients = pgTable('oauth_clients', {
   tokenEndpointAuthMethod: text('token_endpoint_auth_method').notNull().default('client_secret_basic'),
   dpopBoundAccessTokens: boolean('dpop_bound_access_tokens').notNull().default(false),
   requirePkce: boolean('require_pkce').notNull().default(true),
-  tenantId: text('tenant_id'),
+  // BR-39l Lot 2: RFC 8707 resource-indicator allowlist for the authorization_code flow.
+  // Additive, default-deny ('{}' = no resource permitted ⇒ invalid_target).
+  resourceIndicators: text('resource_indicators').array().notNull().default(sql`'{}'`),
+  // BR-39e Lot 4: a client belongs to a tenant (governance). FK to `tenants`, default to the
+  // public `sentropic` tenant; ON DELETE set null so removing a tenant orphans (not deletes) clients.
+  tenantId: text('tenant_id').references(() => tenants.id, { onDelete: 'set null' }).default('sentropic'),
   ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
@@ -300,6 +324,24 @@ export const oauthTokens = pgTable('oauth_tokens', {
   expiresAtIdx: index('oauth_tokens_expires_at_idx').on(table.expiresAt),
   tenantIdIdx: index('oauth_tokens_tenant_id_idx').on(table.tenantId),
   userIdIdx: index('oauth_tokens_user_id_idx').on(table.userId),
+}));
+
+// Consent persistence: a user's approved grant per exact (user_id, client_id). The IdP skips
+// the consent screen when the stored scopes are a superset of the requested scopes. No row ⇒
+// re-consent (always-consent legacy behavior). Migration 0034.
+export const oauthConsents = pgTable('oauth_consents', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  clientId: text('client_id')
+    .notNull()
+    .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  scopes: text('scopes').array().notNull().default(sql`'{}'`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  userClientUnique: uniqueIndex('oauth_consents_user_id_client_id_unique').on(table.userId, table.clientId),
+  userIdIdx: index('oauth_consents_user_id_idx').on(table.userId),
 }));
 
 export const oauthDpopProofs = pgTable('oauth_dpop_proofs', {
@@ -387,6 +429,121 @@ export const documentConnectorAccounts = pgTable('document_connector_accounts', 
   providerIdx: index('document_connector_accounts_provider_idx').on(table.provider),
 }));
 
+export const llmProviderAccounts = pgTable('llm_provider_accounts', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  scope: text('scope').notNull().default('user'),
+  targetProviderId: text('target_provider_id').notNull(),
+  transportProviderId: text('transport_provider_id').notNull(),
+  externalAccountId: text('external_account_id'),
+  accountLabel: text('account_label'),
+  status: text('status').notNull().default('active'),
+  modelAllowlist: jsonb('model_allowlist').notNull().default(sql`'[]'::jsonb`),
+  priority: integer('priority').notNull().default(0),
+  weight: integer('weight').notNull().default(1),
+  tokenSecret: text('token_secret'),
+  tokenExpiresAt: timestamp('token_expires_at', { withTimezone: false }),
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: false }),
+  connectedAt: timestamp('connected_at', { withTimezone: false }),
+  disconnectedAt: timestamp('disconnected_at', { withTimezone: false }),
+  cooldownUntil: timestamp('cooldown_until', { withTimezone: false }),
+  lastError: text('last_error'),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  ownerTransportExternalUnique: uniqueIndex('llm_provider_accounts_owner_transport_external_unique').on(
+    table.ownerUserId,
+    table.targetProviderId,
+    table.transportProviderId,
+    table.externalAccountId,
+  ).where(sql`${table.externalAccountId} IS NOT NULL`),
+  routingIdx: index('llm_provider_accounts_routing_idx').on(
+    table.ownerUserId,
+    table.targetProviderId,
+    table.transportProviderId,
+    table.status,
+    table.priority,
+  ),
+  workspaceIdx: index('llm_provider_accounts_workspace_idx').on(table.workspaceId),
+  cooldownIdx: index('llm_provider_accounts_cooldown_idx').on(table.cooldownUntil),
+}));
+
+export const llmAccountLeases = pgTable('llm_account_leases', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  affinityKey: text('affinity_key').notNull(),
+  targetProviderId: text('target_provider_id').notNull(),
+  transportProviderId: text('transport_provider_id').notNull(),
+  modelId: text('model_id').notNull().default(''),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => llmProviderAccounts.id, { onDelete: 'cascade' }),
+  stableSessionId: text('stable_session_id').notNull(),
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+  releasedAt: timestamp('released_at', { withTimezone: false }),
+}, (table) => ({
+  activeAffinityUnique: uniqueIndex('llm_account_leases_active_affinity_unique').on(
+    sql`coalesce(${table.workspaceId}, '')`,
+    sql`coalesce(${table.userId}, '')`,
+    table.affinityKey,
+    table.targetProviderId,
+    table.transportProviderId,
+    table.modelId,
+  ).where(sql`${table.status} = 'active'`),
+  accountIdx: index('llm_account_leases_account_idx').on(table.accountId),
+}));
+
+export const llmAccountReservations = pgTable('llm_account_reservations', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => llmProviderAccounts.id, { onDelete: 'cascade' }),
+  leaseId: text('lease_id')
+    .notNull()
+    .references(() => llmAccountLeases.id, { onDelete: 'cascade' }),
+  requestId: text('request_id'),
+  status: text('status').notNull().default('active'),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: false }),
+}, (table) => ({
+  activeAccountIdx: index('llm_account_reservations_active_account_idx')
+    .on(table.accountId, table.expiresAt)
+    .where(sql`${table.status} = 'active'`),
+  leaseIdx: index('llm_account_reservations_lease_idx').on(table.leaseId),
+}));
+
+export const llmAccountQuotaState = pgTable('llm_account_quota_state', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => llmProviderAccounts.id, { onDelete: 'cascade' }),
+  quotaKey: text('quota_key').notNull(),
+  status: text('status').notNull().default('unknown'),
+  utilizationBasisPoints: integer('utilization_basis_points'),
+  remainingCount: integer('remaining_count'),
+  resetAt: timestamp('reset_at', { withTimezone: false }),
+  cooldownUntil: timestamp('cooldown_until', { withTimezone: false }),
+  rawPayload: jsonb('raw_payload').notNull().default(sql`'{}'::jsonb`),
+  version: integer('version').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  accountKeyUnique: uniqueIndex('llm_account_quota_state_account_key_unique').on(
+    table.accountId,
+    table.quotaKey,
+  ),
+  statusIdx: index('llm_account_quota_state_status_idx').on(
+    table.status,
+    table.cooldownUntil,
+  ),
+}));
+
 export type OrganizationRow = typeof organizations.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type InitiativeRow = typeof initiatives.$inferSelect;
@@ -470,6 +627,7 @@ export const chatStreamEvents = pgTable('chat_stream_events', {
   streamIdIdx: index('chat_stream_events_stream_id_idx').on(table.streamId),
   sequenceIdx: index('chat_stream_events_sequence_idx').on(table.streamId, table.sequence),
   streamIdSequenceUnique: uniqueIndex('chat_stream_events_stream_id_sequence_unique').on(table.streamId, table.sequence),
+  createdAtIdx: index('chat_stream_events_created_at_idx').on(table.createdAt),
 }));
 
 export const chatMessageFeedback = pgTable('chat_message_feedback', {
@@ -608,6 +766,10 @@ export type RevokedTokenRow = typeof revokedTokens.$inferSelect;
 export type IdTokenSigningKeyRow = typeof idTokenSigningKeys.$inferSelect;
 export type ServiceClientRow = typeof serviceClients.$inferSelect;
 export type DocumentConnectorAccountRow = typeof documentConnectorAccounts.$inferSelect;
+export type LlmProviderAccountRow = typeof llmProviderAccounts.$inferSelect;
+export type LlmAccountLeaseRow = typeof llmAccountLeases.$inferSelect;
+export type LlmAccountReservationRow = typeof llmAccountReservations.$inferSelect;
+export type LlmAccountQuotaStateRow = typeof llmAccountQuotaState.$inferSelect;
 export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type ChatContextRow = typeof chatContexts.$inferSelect;
@@ -634,6 +796,49 @@ export const workspaceMemberships = pgTable('workspace_memberships', {
 }));
 
 export type WorkspaceMembershipRow = typeof workspaceMemberships.$inferSelect;
+
+// BR-39e: IdP tenancy spine — a `tenant` registry + per-(user,tenant) membership.
+// `tenant` models WHICH ORG a human belongs to (distinct from `oauth_clients.tenant_id`,
+// which only records which client a token was minted for). The tenant claim (`tid`) is
+// derived from a VALIDATED `approved` membership — never a request param.
+// See spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md. No `parent_tenant_id` (nested tenants out of v1).
+export const tenants = pgTable('tenants', {
+  id: text('id').primaryKey(), // immutable slug == the `tid` claim (e.g. 'sentropic')
+  name: text('name').notNull(),
+  status: text('status').notNull().default('active'), // 'active' | 'suspended' | 'offboarded'
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  statusIdx: index('tenants_status_idx').on(table.status),
+}));
+
+export type TenantRow = typeof tenants.$inferSelect;
+
+// Per-(user,tenant) membership, mirroring `workspace_memberships`. A human is ONE `users`
+// row that can hold several memberships (D0/A: `tenant_id` is NOT on `users`; email stays
+// globally unique). Status drives tenant-scoped acceptance (Lot 2).
+export const tenantMemberships = pgTable('tenant_memberships', {
+  tenantId: text('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('requested'), // 'invited'|'requested'|'approved'|'rejected'|'suspended'
+  role: text('role').notNull().default('member'), // tenant-scoped: 'member' | 'admin'
+  approvedByUserId: text('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  requestedAt: timestamp('requested_at', { withTimezone: false }).notNull().defaultNow(),
+  decidedAt: timestamp('decided_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  tenantUserUnique: uniqueIndex('tenant_memberships_tenant_id_user_id_unique').on(table.tenantId, table.userId),
+  tenantIdIdx: index('tenant_memberships_tenant_id_idx').on(table.tenantId),
+  userIdIdx: index('tenant_memberships_user_id_idx').on(table.userId),
+  statusIdx: index('tenant_memberships_status_idx').on(table.status),
+}));
+
+export type TenantMembershipRow = typeof tenantMemberships.$inferSelect;
 
 // Lot 2: Object edition locks (soft locks with TTL, enforced on mutations)
 export const objectLocks = pgTable('object_locks', {
@@ -819,23 +1024,6 @@ export const taskDependencies = pgTable('task_dependencies', {
   workspaceIdIdx: index('task_dependencies_workspace_id_idx').on(table.workspaceId),
 }));
 
-export const taskIoContracts = pgTable('task_io_contracts', {
-  id: text('id').primaryKey(),
-  workspaceId: text('workspace_id')
-    .notNull()
-    .references(() => workspaces.id, { onDelete: 'cascade' }),
-  taskId: text('task_id')
-    .notNull()
-    .references(() => tasks.id, { onDelete: 'cascade' }),
-  schemaFormat: text('schema_format').notNull().default('json_schema'),
-  inputSchema: jsonb('input_schema').notNull().default(sql`'{}'::jsonb`),
-  outputSchema: jsonb('output_schema').notNull().default(sql`'{}'::jsonb`),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
-}, (table) => ({
-  taskIdUnique: uniqueIndex('task_io_contracts_task_id_unique').on(table.taskId),
-  workspaceIdIdx: index('task_io_contracts_workspace_id_idx').on(table.workspaceId),
-}));
 
 export const agentDefinitions = pgTable('agent_definitions', {
   id: text('id').primaryKey(),
@@ -1220,7 +1408,6 @@ export type TodoRow = typeof todos.$inferSelect;
 export type TaskRow = typeof tasks.$inferSelect;
 export type TodoDependencyRow = typeof todoDependencies.$inferSelect;
 export type TaskDependencyRow = typeof taskDependencies.$inferSelect;
-export type TaskIoContractRow = typeof taskIoContracts.$inferSelect;
 export type GuardrailRow = typeof guardrails.$inferSelect;
 export type WorkflowDefinitionRow = typeof workflowDefinitions.$inferSelect;
 export type WorkflowDefinitionTaskRow = typeof workflowDefinitionTasks.$inferSelect;

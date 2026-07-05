@@ -5,6 +5,7 @@ import {
   getAuthDescriptor,
   getSecretAuthMaterial,
   type AuthResolution,
+  type ClaudeCodeAccountAuthMaterial,
   type SecretAuthMaterial,
 } from '../src/auth.js';
 import { validateAdapterAuthSource } from '../src/adapter-auth.js';
@@ -70,12 +71,70 @@ describe('adapter auth validation', () => {
     expect(
       validateAdapterAuthSource({
         type: 'account-transport',
-        provider: 'claude-code',
+        provider: 'gemini-code-assist',
         status: 'planned',
       }),
     ).toEqual({
       ok: false,
-      message: 'claude-code account transport is planned, not executable',
+      message: 'gemini-code-assist account transport is planned, not executable',
     });
+  });
+});
+
+describe('claude-code-account auth material', () => {
+  it('builds a descriptor for ClaudeCodeAccountAuthMaterial', () => {
+    const material: ClaudeCodeAccountAuthMaterial = {
+      type: 'claude-code-account',
+      provider: 'claude-code',
+      accessToken: 'sk-ant-access-token',
+      accountId: 'acct_cc_123',
+      accountLabel: 'Fabien (Claude Code)',
+      expiresAt: '2026-12-31T00:00:00.000Z',
+    };
+
+    expect(describeAuthMaterial(material)).toEqual({
+      sourceType: 'claude-code-account',
+      accountProviderId: 'claude-code',
+      accountId: 'acct_cc_123',
+      accountLabel: 'Fabien (Claude Code)',
+      expiresAt: '2026-12-31T00:00:00.000Z',
+    });
+  });
+
+  it('rejects claude-code-account with an empty access token', () => {
+    expect(
+      validateAdapterAuthSource({
+        type: 'claude-code-account',
+        provider: 'claude-code',
+        accessToken: '   ',
+      }),
+    ).toEqual({ ok: false, message: 'access token is empty' });
+  });
+
+  it('accepts claude-code-account with a valid access token and returns Authorization header', () => {
+    expect(
+      validateAdapterAuthSource({
+        type: 'claude-code-account',
+        provider: 'claude-code',
+        accessToken: 'sk-ant-valid-token',
+      }),
+    ).toEqual({
+      ok: true,
+      headers: {
+        'Authorization': 'Bearer sk-ant-valid-token',
+        'anthropic-version': '2023-06-01',
+      },
+    });
+  });
+
+  it('accepts executable account transport material', () => {
+    expect(
+      validateAdapterAuthSource({
+        type: 'account-transport',
+        provider: 'claude-code',
+        accessToken: 'claude-access-token',
+        accountId: 'acct_claude',
+      }),
+    ).toEqual({ ok: true });
   });
 });

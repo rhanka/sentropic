@@ -111,6 +111,93 @@ describe('buildChatHistoryTimeline', () => {
     expect(items).toHaveLength(1);
     expect(items[0].kind).toBe('runtime-segment');
   });
+
+  it('marks a failed run (error event, null content) as _localStatus failed on projected items', () => {
+    const failed: ChatHistoryMessage = {
+      id: 'msg-a-3',
+      sessionId: 'session',
+      role: 'assistant',
+      content: null,
+    };
+    const events = new Map<string, ChatHistoryStreamEvent[]>([
+      [
+        'msg-a-3',
+        [
+          buildEvent({ sequence: 1, eventType: 'status', data: { state: 'started' } }),
+          buildEvent({ sequence: 2, eventType: 'error', data: { message: 'boom' } }),
+        ],
+      ],
+    ]);
+    const items = buildChatHistoryTimeline([failed], events);
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.message._localStatus).toBe('failed');
+    }
+  });
+
+  it('marks a done run without content as _localStatus completed on projected items', () => {
+    const doneNoContent: ChatHistoryMessage = {
+      id: 'msg-a-4',
+      sessionId: 'session',
+      role: 'assistant',
+      content: null,
+    };
+    const events = new Map<string, ChatHistoryStreamEvent[]>([
+      [
+        'msg-a-4',
+        [
+          buildEvent({ sequence: 1, eventType: 'status', data: { state: 'started' } }),
+          buildEvent({ sequence: 2, eventType: 'done', data: {} }),
+        ],
+      ],
+    ]);
+    const items = buildChatHistoryTimeline([doneNoContent], events);
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.message._localStatus).toBe('completed');
+    }
+  });
+
+  it('does not invent a terminal status for a run without terminal events', () => {
+    const inFlight: ChatHistoryMessage = {
+      id: 'msg-a-5',
+      sessionId: 'session',
+      role: 'assistant',
+      content: null,
+    };
+    const events = new Map<string, ChatHistoryStreamEvent[]>([
+      [
+        'msg-a-5',
+        [buildEvent({ sequence: 1, eventType: 'status', data: { state: 'started' } })],
+      ],
+    ]);
+    const items = buildChatHistoryTimeline([inFlight], events);
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.message._localStatus).toBeUndefined();
+    }
+  });
+
+  it('keeps an explicit _localStatus untouched even when terminal events exist', () => {
+    const explicit: ChatHistoryMessage = {
+      id: 'msg-a-6',
+      sessionId: 'session',
+      role: 'assistant',
+      content: null,
+      _localStatus: 'processing',
+    };
+    const events = new Map<string, ChatHistoryStreamEvent[]>([
+      [
+        'msg-a-6',
+        [buildEvent({ sequence: 1, eventType: 'error', data: { message: 'late' } })],
+      ],
+    ]);
+    const items = buildChatHistoryTimeline([explicit], events);
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.message._localStatus).toBe('processing');
+    }
+  });
 });
 
 describe('compactChatHistoryTimelineForSummary', () => {

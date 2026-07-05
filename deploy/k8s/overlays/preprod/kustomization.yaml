@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# PREPROD tier (SPEC_DECISION_DEPLOYMENT_PLANE.md, RATIFIED). Re-stamps the shared
+# base/ into the isolated `sentropic-preprod` namespace (baseline — Namespace,
+# ResourceQuota, LimitRange, default-deny NetworkPolicy, `sentropic-registry`
+# pull-secret — owned by the poc-k8s operator, k8s-ops #37/#39). The base ships
+# NO Namespace resource and its allow-traefik-to-{ui,auth-idp} NetworkPolicies are
+# namespace-agnostic (namespaceSelector: traefik), so the `namespace:` transformer
+# below is sufficient: no `$patch:delete`, no extra netpol. Postgres is the base
+# StatefulSet re-stamped here → its OWN PVC in this ns (D3, separate preprod DB).
+namespace: sentropic-preprod
+resources:
+  - ../../base
+  - ingress.yaml
+# Images use the base default (:main) today, matching prod. The preprod CD pipeline
+# (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
+#   images:
+#     - name: rg.fr-par.scw.cloud/nc-reg/sentropic-api
+#       newTag: vYYYY.MM.DD.N
+# Per-tier host + isolated WebAuthn RP ID overrides (D4 nested hosts, D11R isolated
+# identity). Strategic-merge patches override only the listed ConfigMap keys; the
+# distinct KEK/DB/signing-key SealedSecrets are operator-authored per ns (D6), not here.
+patches:
+  - path: patch-api-config.yaml
+  - path: patch-auth-idp-config.yaml

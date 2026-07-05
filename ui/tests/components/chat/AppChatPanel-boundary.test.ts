@@ -34,15 +34,26 @@ describe('AppChatPanel boundary', () => {
     expect(source).toContain('addGoogleDriveComposerAttachments');
     expect(source).toContain('payload.attachments');
     expect(source).toContain('kind: attachment.kind');
-    expect(source).toContain('attachments: sentAttachments');
+    // Attachments wired: sentAttachments captured into controller send factory
+    // (capturedAttachments = sentAttachments, then buildUserMessage uses capturedAttachments)
+    expect(source).toContain('capturedAttachments = sentAttachments');
+    expect(source).toContain('attachments: capturedAttachments');
   });
 
   it('renders a pending-only attachment band with click-to-enlarge, not a persistent session-doc band', () => {
     const source = readFileSync(appPanelPath, 'utf8');
-    expect(source).toContain('composerBandItems');
-    expect(source).toContain('chat-composer-attachment-band');
+    // Band items are now built via the @sentropic/chat-ui/documents helper and
+    // rendered by the <AttachmentBand> module component (the data-testid
+    // `chat-composer-attachment-band` now lives inside that component).
+    expect(source).toContain('buildAttachmentBandItems');
+    expect(source).toContain('<AttachmentBand');
     expect(source).toContain('openLightbox');
-    expect(source).toContain('chat-image-lightbox');
+    // The image lightbox + per-message thumbnails now render via the
+    // @sentropic/chat-ui/documents module components (the data-testid
+    // `chat-image-lightbox` lives inside <ImageLightbox>; the per-message
+    // grid lives inside <MessageAttachments>).
+    expect(source).toContain('<ImageLightbox');
+    expect(source).toContain('<MessageAttachments');
     // Documents follow the same per-message model as images.
     expect(source).toContain('attachFileToComposer');
     // The separate bottom attachment tray is removed.

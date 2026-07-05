@@ -145,6 +145,32 @@ export const projectAssistantRunSegments = (
   return projected;
 };
 
+/**
+ * Scan the projected stream events for the run's terminal outcome on the LIVE
+ * path. Mirrors chat-core history.ts getTerminalOutcome: the last terminal
+ * event in sequence order wins ('done' completes, 'error' fails). Returns the
+ * outcome already mapped to the `_localStatus` vocabulary so callers can OR it
+ * directly into their terminal derivation. Returns null while the run is still
+ * streaming (no 'done'/'error' yet) so mid-stream deltas keep rendering.
+ *
+ * Backstop for the freeze where a server-completed run leaves the UI stuck
+ * because neither the SSE `done` callback nor the job-poll `completed` fired
+ * (nano no-delta runs + short-lived SSE on workspace switch) and so
+ * `_localStatus`/`content` were never set.
+ */
+export const getProjectedRunTerminalOutcome = (
+  events: readonly ProjectionStreamEvent[],
+): 'completed' | 'failed' | null => {
+  let terminal: 'done' | 'error' | null = null;
+  for (const event of events) {
+    if (event.eventType === 'done') terminal = 'done';
+    else if (event.eventType === 'error') terminal = 'error';
+  }
+  if (terminal === 'done') return 'completed';
+  if (terminal === 'error') return 'failed';
+  return null;
+};
+
 export const countLinkedSteerMessages = (
   events: readonly ProjectionStreamEvent[],
 ): number =>

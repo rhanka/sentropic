@@ -1234,6 +1234,7 @@
       "pendingTaskLabel": "Tâche en attente"
     },
     "comments": {
+      "assistantLabel": ", Assistant IA",
       "chooseThread": "Liste des commentaires",
       "newThread": "Nouveau commentaire",
       "none": "Aucune conversation",
@@ -1275,7 +1276,8 @@
       "error": "Impossible d’ajouter la précision."
     },
     "edit": {
-      "placeholder": "Modifier le message…"
+      "placeholder": "Modifier le message…",
+      "editLabel": "Modifier"
     },
     "feedback": {
       "useful": "Utile",

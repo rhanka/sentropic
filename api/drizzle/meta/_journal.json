@@ -218,6 +218,48 @@
       "when": 1780531200000,
       "tag": "0030_rename_ai_ideas_to_ai_priorities",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1780617600000,
+      "tag": "0031_tenancy_spine",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1781222400000,
+      "tag": "0032_data_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1781308800000,
+      "tag": "0033_oauth_clients_resource_indicators",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1781395200000,
+      "tag": "0034_llm_account_transports",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1781395200001,
+      "tag": "0035_oauth_consents",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781395200002,
+      "tag": "0036_auth_invite_tokens",
+      "breakpoints": true
     }
   ]
 }

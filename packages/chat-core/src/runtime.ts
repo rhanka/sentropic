@@ -1190,6 +1190,14 @@ export interface AssistantRunLoopState {
   contextBudgetReplanAttempts: number;
   continueGenerationLoop: boolean;
   /**
+   * In-memory tracker for repeated identical server-tool error signatures
+   * during one assistant turn. A signature is computed from the tuple
+   * `(toolName, normalizedArgsSignature, normalizedErrorSignature)`.
+   * Counts persist on the loop state so the same-tool repeated-error
+   * breaker can fire across tool-loop iterations.
+   */
+  toolErrorSignatureCounts?: Record<string, number>;
+  /**
    * BR14b Lot 21c — surfaces the `useCodexTransport` boolean computed by
    * chat-service (`selectedProviderId === 'openai' && selectedModel ===
    * 'gpt-5.5' && (await getOpenAITransportMode()) === 'codex'`) on the
@@ -1318,6 +1326,7 @@ export interface ConsumeAssistantStreamRequest {
   readonly credential?: string;
   readonly userId?: string;
   readonly workspaceId?: string;
+  readonly sessionId?: string | null;
   readonly messages: ReadonlyArray<unknown>;
   readonly tools?: ReadonlyArray<unknown>;
   readonly toolChoice?: 'auto' | 'required' | 'none';

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { Alert, Button, Typography } from '@sentropic/design-system-svelte';
   import {
     createDefaultAuthUiLabels,
     type AuthUiError,
@@ -19,9 +20,15 @@
     onLoggedIn: (session: AuthUiSession) => void | Promise<void>;
     onLostDevice?: () => void;
     onError?: (error: AuthUiError) => void;
+    /**
+     * BR-39r L4 — OIDC `login_hint`: optional email hint forwarded to the authentication-options
+     * request so the IdP can scope the passkey challenge to a known user. Passkey login stays
+     * discoverable; the hint is advisory.
+     */
+    presetEmail?: string;
   }
 
-  let { transport, labels, onLoggedIn, onLostDevice, onError }: Props = $props();
+  let { transport, labels, onLoggedIn, onLostDevice, onError, presetEmail }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
 
@@ -41,7 +48,9 @@
     loading = true;
     error = '';
     try {
-      const optionsResult = await transport.createPasskeyAuthenticationOptions({});
+      const optionsResult = await transport.createPasskeyAuthenticationOptions(
+        presetEmail ? { email: presetEmail } : {}
+      );
       if (!optionsResult.ok) {
         error = optionsResult.error.message;
         onError?.(optionsResult.error);
@@ -82,53 +91,45 @@
 
 <div class="auth-ui-login">
   <header class="auth-ui-header">
-    <h2 class="auth-ui-title">{resolvedLabels.loginTitle}</h2>
-    <p class="auth-ui-subtitle">
+    <Typography variant="h2" align="center">{resolvedLabels.loginTitle}</Typography>
+    <Typography variant="body-sm" tone="muted" align="center">
       {webauthnSupported ? resolvedLabels.loginSupportedHint : resolvedLabels.loginUnavailable}
-    </p>
+    </Typography>
   </header>
 
   {#if !webauthnSupported}
-    <div class="auth-ui-alert auth-ui-alert--error" role="alert">{error}</div>
+    <Alert tone="error" title={error} />
   {:else if !showLostDevice}
     <div class="auth-ui-section">
       {#if error}
-        <div class="auth-ui-alert auth-ui-alert--error" role="alert">{error}</div>
+        <Alert tone="error" title={error} />
       {/if}
-      <button
-        type="button"
-        class="auth-ui-button auth-ui-button--primary"
-        onclick={handleLogin}
-        disabled={loading}
-      >
+      <Button variant="primary" type="button" onclick={handleLogin} disabled={loading}>
         {loading ? resolvedLabels.loginButtonLoading : resolvedLabels.loginButton}
-      </button>
+      </Button>
       <div class="auth-ui-actions">
-        <button type="button" class="auth-ui-link" onclick={handleLostDevice}>
+        <Button variant="ghost" type="button" onclick={handleLostDevice}>
           {resolvedLabels.loginLostDevice}
-        </button>
+        </Button>
       </div>
       <div class="auth-ui-actions">
         <slot name="no-account">
-          <span class="auth-ui-link">{resolvedLabels.loginNoAccount}</span>
+          <Typography variant="body-sm" tone="muted">{resolvedLabels.loginNoAccount}</Typography>
         </slot>
       </div>
     </div>
   {:else}
     <div class="auth-ui-section">
-      <div class="auth-ui-alert auth-ui-alert--info" role="status">
-        <h3 class="auth-ui-alert__title">{resolvedLabels.loginLostDeviceTitle}</h3>
-        <p>{resolvedLabels.webauthnRegisterNotice}</p>
-      </div>
+      <Alert tone="info" title={resolvedLabels.loginLostDeviceTitle} message={resolvedLabels.webauthnRegisterNotice} />
       <div class="auth-ui-actions">
         <slot name="register-new-device">
-          <span class="auth-ui-link">{resolvedLabels.loginRegisterNewDevice}</span>
+          <Typography variant="body-sm" tone="muted">{resolvedLabels.loginRegisterNewDevice}</Typography>
         </slot>
       </div>
       <div class="auth-ui-actions">
-        <button type="button" class="auth-ui-link auth-ui-link--secondary" onclick={() => (showLostDevice = false)}>
+        <Button variant="ghost" type="button" onclick={() => (showLostDevice = false)}>
           {resolvedLabels.loginBackToLogin}
-        </button>
+        </Button>
       </div>
     </div>
   {/if}
@@ -142,21 +143,9 @@
     max-width: 28rem;
     margin: 0 auto;
     padding: 2rem 1rem;
-    font-family: var(--auth-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--auth-text, #111827);
   }
   .auth-ui-header {
     text-align: center;
-  }
-  .auth-ui-title {
-    margin: 0 0 0.5rem;
-    font-size: 1.5rem;
-    font-weight: 700;
-  }
-  .auth-ui-subtitle {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--auth-muted, #6b7280);
   }
   .auth-ui-section {
     display: flex;
@@ -165,58 +154,5 @@
   }
   .auth-ui-actions {
     text-align: center;
-  }
-  .auth-ui-alert {
-    padding: 0.75rem 1rem;
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem;
-  }
-  .auth-ui-alert--error {
-    background: var(--auth-error-bg, #fef2f2);
-    color: var(--auth-error-text, #991b1b);
-  }
-  .auth-ui-alert--info {
-    background: var(--auth-info-bg, #eff6ff);
-    color: var(--auth-info-text, #1e3a8a);
-  }
-  .auth-ui-alert__title {
-    margin: 0 0 0.25rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-  }
-  .auth-ui-button {
-    width: 100%;
-    padding: 0.625rem 1rem;
-    border: none;
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .auth-ui-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .auth-ui-button--primary {
-    background: var(--auth-primary, #4f46e5);
-    color: var(--auth-primary-text, #ffffff);
-  }
-  .auth-ui-button--primary:hover:not(:disabled) {
-    background: var(--auth-primary-hover, #4338ca);
-  }
-  .auth-ui-link {
-    background: none;
-    border: none;
-    color: var(--auth-link, #4f46e5);
-    cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-decoration: none;
-  }
-  .auth-ui-link:hover {
-    text-decoration: underline;
-  }
-  .auth-ui-link--secondary {
-    color: var(--auth-link-secondary, #6b7280);
   }
 </style>

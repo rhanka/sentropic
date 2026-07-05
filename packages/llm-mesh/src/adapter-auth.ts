@@ -11,7 +11,7 @@ const unwrapAuthMaterial = (input?: AuthInput): SecretAuthMaterial | undefined =
 
 export const validateAdapterAuthSource = (
   input?: AuthInput,
-): { ok: boolean; message?: string } => {
+): { ok: boolean; message?: string; headers?: Record<string, string> } => {
   const source = unwrapAuthMaterial(input);
   if (!source || source.type === 'none') {
     return { ok: false, message: 'Provider auth source is not configured' };
@@ -41,8 +41,32 @@ export const validateAdapterAuthSource = (
       : { ok: false, message: 'Codex account access token is empty' };
   }
 
-  return {
-    ok: false,
-    message: `${source.provider} account transport is planned, not executable`,
-  };
+  if (source.type === 'claude-code-account') {
+    if (!source.accessToken?.trim()) {
+      return { ok: false, message: 'access token is empty' };
+    }
+    return {
+      ok: true,
+      headers: {
+        'Authorization': `Bearer ${source.accessToken.trim()}`,
+        'anthropic-version': '2023-06-01',
+      },
+    };
+  }
+
+  if (
+    source.type === 'account-transport'
+    && 'status' in source
+    && source.status === 'planned'
+    && !hasText(source.accessToken)
+  ) {
+    return {
+      ok: false,
+      message: `${source.provider} account transport is planned, not executable`,
+    };
+  }
+
+  return hasText(source.accessToken)
+    ? { ok: true }
+    : { ok: false, message: `${source.provider} account transport access token is empty` };
 };

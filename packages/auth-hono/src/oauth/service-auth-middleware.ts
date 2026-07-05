@@ -1,15 +1,21 @@
+// COMPAT WRAPPER (architect verdict E2/F8). The CANONICAL home of this RS middleware is now
+// `@sentropic/mcp-auth/hono` (`createRequireServiceAuth`). auth-hono keeps this signature-stable
+// wrapper — same behavior, sharing the SAME verification core (`@sentropic/oauth-verify`), no
+// fourth copy of verify code — for ≥1 minor so pinned RPs are not forced to bump; it is dropped
+// at auth-hono 1.0. The wrapper builds on oauth-verify primitives directly (NOT on mcp-auth) to
+// respect the dependency DAG (auth-hono and mcp-auth never import each other).
 import {
-  calculateJwkThumbprint,
-  decodeProtectedHeader,
-  importJWK,
-  jwtVerify,
-  type JWK,
-  type JWTPayload,
-} from 'jose';
+  DpopVerifyError,
+  fromJwksPort,
+  parseScopes,
+  TokenVerifyError,
+  verifyAccessToken,
+  verifyDpopProof,
+  type AccessTokenClaims,
+} from '@sentropic/oauth-verify';
 import type { Context, MiddlewareHandler } from 'hono';
 
 import type { AuthHonoClockPort } from '../ports.js';
-import { sha256Base64url } from './crypto-utils.js';
 import type { JwksPort, OauthStateStorePort } from './state-store-types.js';
 
 /**
@@ -62,7 +68,7 @@ export const createRequireServiceAuth = (
   return async (c, next) => {
     try {
       const { scheme, token } = parseAuthorization(c.req.header('authorization'));
-      const payload = await verifyAccessToken(token, options.ports, issuer, options.resource);
+      const payload = await verifyServiceAccessToken(token, options.ports, issuer, options.resource);
       const scopes = parseScopes(payload.scope);
       assertScopes(scopes, requiredScopes);
 
@@ -98,43 +104,32 @@ const parseAuthorization = (header: string | undefined): { scheme: 'Bearer' | 'D
   throw new ServiceAuthError(401, 'invalid_token', 'Unsupported authorization scheme.');
 };
 
-const verifyAccessToken = async (
+/**
+ * RS-side access-token verification. Delegates to `@sentropic/oauth-verify`'s shared
+ * `verifyAccessToken` over an in-process JWKS key source, mapping any failure onto the
+ * RFC 6750 `invalid_token` 401 the middleware emits.
+ */
+const verifyServiceAccessToken = async (
   token: string,
   ports: ServiceAuthPorts,
   issuer: string,
   resource: string
-): Promise<JWTPayload & { scope?: unknown; client_id?: unknown; cnf?: { jkt?: string } }> => {
-  let kid: string | undefined;
+): Promise<AccessTokenClaims> => {
   try {
-    kid = decodeProtectedHeader(token).kid;
-  } catch {
-    throw new ServiceAuthError(401, 'invalid_token', 'Access token header is invalid.');
-  }
-  if (!kid) {
-    throw new ServiceAuthError(401, 'invalid_token', 'Access token is missing a key id.');
-  }
-
-  const key = await ports.jwks.findKeyByKid(kid);
-  if (!key) {
-    throw new ServiceAuthError(401, 'invalid_token', 'Access token signing key is unknown.');
-  }
-
-  const publicKey = await importJWK(key.publicJwk, key.alg);
-  const currentDate = ports.clock.now();
-  try {
-    const { payload } = await jwtVerify(token, publicKey, {
+    return await verifyAccessToken({
       audience: resource,
-      currentDate,
       issuer,
+      keySource: fromJwksPort(ports.jwks),
+      now: ports.clock.now(),
+      token,
     });
-    return payload;
-  } catch {
-    throw new ServiceAuthError(401, 'invalid_token', 'Access token is invalid, expired, or has the wrong audience.');
+  } catch (error) {
+    if (error instanceof TokenVerifyError) {
+      throw new ServiceAuthError(401, 'invalid_token', 'Access token is invalid, expired, or has the wrong audience.');
+    }
+    throw error;
   }
 };
-
-const parseScopes = (scope: unknown): string[] =>
-  typeof scope === 'string' ? scope.split(/\s+/).filter(Boolean) : [];
 
 const assertScopes = (scopes: string[], requiredScopes: string[]): void => {
   const granted = new Set(scopes);
@@ -146,7 +141,7 @@ const assertScopes = (scopes: string[], requiredScopes: string[]): void => {
 
 const enforceDpop = async (
   c: Context,
-  payload: { cnf?: { jkt?: string } },
+  payload: { cnf?: { jkt: string } },
   accessToken: string,
   scheme: 'Bearer' | 'DPoP',
   options: CreateRequireServiceAuthOptions
@@ -188,53 +183,37 @@ interface VerifyServiceDpopProofOptions {
   proof: string;
 }
 
+/**
+ * RS-side DPoP proof verification. Delegates to `@sentropic/oauth-verify`'s shared
+ * `verifyDpopProof`, wiring the optional RS replay port and remapping failures onto the
+ * RFC 9449 `invalid_dpop_proof` 401. The `jkt`↔`cnf.jkt` binding is enforced by the caller
+ * (`enforceDpop`) AFTER replay recording, preserving the original consume-then-compare order.
+ */
 const verifyServiceDpopProof = async (options: VerifyServiceDpopProofOptions): Promise<string> => {
-  const header = decodeProtectedHeader(options.proof);
-  const publicJwk = header.jwk as JWK | undefined;
-  if (!publicJwk || !header.alg || header.typ !== 'dpop+jwt') {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP proof header is invalid.', 'DPoP');
-  }
-
-  const key = await importJWK(publicJwk, header.alg);
-  let payload: JWTPayload;
+  const iatSkewSec = options.iatSkewSeconds ?? 60;
   try {
-    ({ payload } = await jwtVerify(options.proof, key));
-  } catch {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP proof signature is invalid.', 'DPoP');
-  }
-
-  const skew = options.iatSkewSeconds ?? 60;
-  if (payload.htm !== options.htm.toUpperCase()) {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP htm claim does not match the request method.', 'DPoP');
-  }
-  if (payload.htu !== options.htu) {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP htu claim does not match the request URL.', 'DPoP');
-  }
-  if (!payload.jti || typeof payload.jti !== 'string') {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP jti claim is required.', 'DPoP');
-  }
-  if (typeof payload.iat !== 'number') {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP iat claim is required.', 'DPoP');
-  }
-  const nowSeconds = Math.floor(options.ports.clock.now().getTime() / 1000);
-  if (Math.abs(payload.iat - nowSeconds) > skew) {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP iat claim is outside the allowed skew.', 'DPoP');
-  }
-
-  // RFC 9449 §4.3: bind the proof to the access token (BR39d-D7).
-  if (payload.ath !== (await sha256Base64url(options.accessToken))) {
-    throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP ath claim does not match the access token.', 'DPoP');
-  }
-
-  if (options.ports.dpopReplay) {
-    const expiresAt = options.ports.clock.addSeconds(options.ports.clock.now(), skew);
-    const recorded = await options.ports.dpopReplay.recordDpopJti(payload.jti, expiresAt);
-    if (!recorded) {
-      throw new ServiceAuthError(401, 'invalid_dpop_proof', 'DPoP proof jti was already used.', 'DPoP');
+    const { jkt } = await verifyDpopProof({
+      accessToken: options.accessToken,
+      htm: options.htm,
+      htu: options.htu,
+      iatSkewSec,
+      now: options.ports.clock.now(),
+      proof: options.proof,
+      replay: options.ports.dpopReplay
+        ? (jti) =>
+            options.ports.dpopReplay!.recordDpopJti(
+              jti,
+              options.ports.clock.addSeconds(options.ports.clock.now(), iatSkewSec)
+            )
+        : undefined,
+    });
+    return jkt;
+  } catch (error) {
+    if (error instanceof DpopVerifyError) {
+      throw new ServiceAuthError(401, 'invalid_dpop_proof', error.message, 'DPoP');
     }
+    throw error;
   }
-
-  return calculateJwkThumbprint(publicJwk);
 };
 
 const serviceAuthErrorResponse = (c: Context, error: ServiceAuthError): Response => {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { Alert, Button, Typography } from '@sentropic/design-system-svelte';
   import {
     createDefaultOAuthConsentLabels,
     type AuthUiError,
@@ -10,6 +11,13 @@
   import { createAuthUiError } from '../errors.js';
 
   interface Props {
+    /**
+     * When set, the approve/deny actions render as a native `<form>` POST to this URL, so the
+     * consent decision + the resulting RP redirect (a server 302) no longer depend on JS for
+     * navigation (the prod-regression fix). When unset, the legacy fetch + onRedirect path is used
+     * (backward-compat for programmatic hosts).
+     */
+    decisionAction?: string;
     labels?: Partial<OAuthConsentLabels>;
     onError?: (error: AuthUiError) => void;
     onRedirect?: (url: string) => void;
@@ -17,7 +25,7 @@
     transport: OAuthConsentTransport;
   }
 
-  let { labels, onError, onRedirect, state: consentState, transport }: Props = $props();
+  let { decisionAction, labels, onError, onRedirect, state: consentState, transport }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultOAuthConsentLabels(labels ?? {}));
 
@@ -65,18 +73,18 @@
   {#if loading}
     <div class="auth-ui-loading" role="status">
       <div class="auth-ui-spinner" aria-hidden="true"></div>
-      <p class="auth-ui-loading__label">{resolvedLabels.loading}</p>
+      <Typography variant="body-sm" tone="muted" align="center">{resolvedLabels.loading}</Typography>
     </div>
   {:else if error}
-    <div class="auth-ui-alert auth-ui-alert--error" role="alert">{error}</div>
+    <Alert tone="error" title={error} />
   {:else if details}
     <header class="auth-ui-header">
-      <h2 class="auth-ui-title">{resolvedLabels.title}</h2>
-      <p class="auth-ui-subtitle">{details.clientName}</p>
+      <Typography variant="h2" align="center">{resolvedLabels.title}</Typography>
+      <Typography variant="body" tone="muted" align="center">{details.clientName}</Typography>
     </header>
 
     <section class="auth-ui-section" aria-labelledby="oauth-consent-scopes">
-      <h3 id="oauth-consent-scopes" class="auth-ui-section__title">{resolvedLabels.scopesTitle}</h3>
+      <Typography variant="body-sm" weight="semibold" id="oauth-consent-scopes">{resolvedLabels.scopesTitle}</Typography>
       <ul class="auth-ui-scope-list">
         {#each details.scopes as scope (scope)}
           <li class="auth-ui-scope-list__item">
@@ -90,28 +98,34 @@
     </section>
 
     <section class="auth-ui-section">
-      <h3 class="auth-ui-section__title">{resolvedLabels.redirectUriLabel}</h3>
+      <Typography variant="body-sm" weight="semibold">{resolvedLabels.redirectUriLabel}</Typography>
       <p class="auth-ui-redirect-uri">{details.redirectUri}</p>
     </section>
 
-    <div class="auth-ui-actions">
-      <button
-        type="button"
-        class="auth-ui-button auth-ui-button--primary"
-        disabled={submitting !== null}
-        onclick={() => submit('approve')}
-      >
-        {submitting === 'approve' ? resolvedLabels.approving : resolvedLabels.approve}
-      </button>
-      <button
-        type="button"
-        class="auth-ui-button auth-ui-button--secondary"
-        disabled={submitting !== null}
-        onclick={() => submit('deny')}
-      >
-        {submitting === 'deny' ? resolvedLabels.denying : resolvedLabels.deny}
-      </button>
-    </div>
+    {#if decisionAction}
+      <!-- Native form POST: the browser follows the server 302 to the RP redirect_uri, so the
+           final navigation does not depend on JS (BR-39r prod-regression fix). The consent UI
+           itself is still painted by JS after the details fetch — full no-JS rendering is a
+           later server-render lot, out of scope here. -->
+      <form class="auth-ui-actions" method="POST" action={decisionAction}>
+        <input type="hidden" name="state" value={consentState} />
+        <Button variant="primary" type="submit" name="decision" value="approve">
+          {resolvedLabels.approve}
+        </Button>
+        <Button variant="secondary" type="submit" name="decision" value="deny">
+          {resolvedLabels.deny}
+        </Button>
+      </form>
+    {:else}
+      <div class="auth-ui-actions">
+        <Button variant="primary" type="button" disabled={submitting !== null} onclick={() => submit('approve')}>
+          {submitting === 'approve' ? resolvedLabels.approving : resolvedLabels.approve}
+        </Button>
+        <Button variant="secondary" type="button" disabled={submitting !== null} onclick={() => submit('deny')}>
+          {submitting === 'deny' ? resolvedLabels.denying : resolvedLabels.deny}
+        </Button>
+      </div>
+    {/if}
 
     <slot name="footer"></slot>
   {/if}
@@ -125,8 +139,6 @@
     max-width: 32rem;
     margin: 0 auto;
     padding: 2rem 1rem;
-    font-family: var(--auth-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--auth-text, #111827);
   }
   .auth-ui-header {
     display: flex;
@@ -134,25 +146,10 @@
     gap: 0.25rem;
     text-align: center;
   }
-  .auth-ui-title {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 700;
-  }
-  .auth-ui-subtitle {
-    margin: 0;
-    font-size: 0.95rem;
-    color: var(--auth-muted, #6b7280);
-  }
   .auth-ui-section {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-  }
-  .auth-ui-section__title {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
   }
   .auth-ui-scope-list {
     display: flex;
@@ -167,52 +164,23 @@
     flex-direction: column;
     gap: 0.25rem;
     padding: 0.75rem;
-    border: 1px solid var(--auth-border, #e5e7eb);
-    border-radius: var(--auth-radius, 0.375rem);
+    border: 1px solid var(--st-color-border, #e5e7eb);
+    border-radius: var(--st-radius, 0.375rem);
     font-size: 0.875rem;
   }
   .auth-ui-scope-list__item span {
-    color: var(--auth-muted, #6b7280);
+    color: var(--st-color-text-muted, #6b7280);
   }
   .auth-ui-redirect-uri {
     margin: 0;
     overflow-wrap: anywhere;
     font-size: 0.875rem;
-    color: var(--auth-muted, #6b7280);
+    color: var(--st-color-text-muted, #6b7280);
   }
   .auth-ui-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
-  }
-  .auth-ui-button {
-    padding: 0.625rem 1rem;
-    border: none;
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .auth-ui-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .auth-ui-button--primary {
-    background: var(--auth-primary, #4f46e5);
-    color: var(--auth-primary-text, #ffffff);
-  }
-  .auth-ui-button--secondary {
-    background: var(--auth-surface-muted, #f3f4f6);
-    color: var(--auth-text, #111827);
-  }
-  .auth-ui-alert {
-    padding: 0.75rem 1rem;
-    border-radius: var(--auth-radius, 0.375rem);
-    font-size: 0.875rem;
-  }
-  .auth-ui-alert--error {
-    background: var(--auth-error-bg, #fef2f2);
-    color: var(--auth-error-text, #991b1b);
   }
   .auth-ui-loading {
     text-align: center;
@@ -223,14 +191,10 @@
     width: 3rem;
     height: 3rem;
     border: 2px solid transparent;
-    border-bottom-color: var(--auth-primary, #4f46e5);
+    border-bottom-color: var(--st-color-primary, #4f46e5);
     border-radius: 50%;
     animation: auth-ui-spin 0.75s linear infinite;
-  }
-  .auth-ui-loading__label {
-    margin-top: 1rem;
-    font-size: 0.875rem;
-    color: var(--auth-muted, #6b7280);
+    margin-bottom: 1rem;
   }
   @keyframes auth-ui-spin {
     to {

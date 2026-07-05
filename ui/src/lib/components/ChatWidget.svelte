@@ -99,18 +99,7 @@
   let commentSectionLabel: string | null = null;
   let commentThreadId: string | null = null;
   let commentLoading = false;
-  let commentThreads: Array<{
-    id: string;
-    sectionKey: string | null;
-    count: number;
-    lastAt: string;
-    preview: string;
-    authorLabel: string;
-    status: 'open' | 'closed';
-    assignedTo: string | null;
-    rootId: string;
-    createdBy: string;
-  }> = [];
+  // commentThreads removed — CommentsPanel manages thread list internally
   let pendingCommentAutoSelect = false;
   let pendingCommentAutoSelectReady = false;
   let lastCommentContextKey = '';
@@ -1774,7 +1763,6 @@
       commentThreadId = null;
       commentSectionKey = null;
       commentSectionLabel = null;
-      commentThreads = [];
       pendingCommentAutoSelectReady = false;
     }
   }
@@ -1787,35 +1775,12 @@
       commentThreadId = null;
       commentSectionKey = null;
       commentSectionLabel = null;
-      commentThreads = [];
-      pendingCommentAutoSelect = true;
-      pendingCommentAutoSelectReady = false;
-    }
-  }
-
-  $: if (pendingCommentAutoSelect) {
-    if (commentLoading) {
-      pendingCommentAutoSelectReady = true;
-    } else if (pendingCommentAutoSelectReady || commentThreads.length > 0) {
-      const matches = commentSectionKey
-        ? commentThreads.filter(
-            (t) => t.sectionKey === commentSectionKey && t.status !== 'closed',
-          )
-        : commentThreads.filter((t) => t.status !== 'closed');
-      const next = matches[0] ?? null;
-      commentThreadId = next?.id ?? null;
-      if (next && next.sectionKey !== commentSectionKey) {
-        commentSectionKey = next.sectionKey;
-      }
       pendingCommentAutoSelect = false;
       pendingCommentAutoSelectReady = false;
     }
   }
 
-  $: if (activeTab === 'comments' && commentThreadId && commentThreads.length > 0 && !commentLoading) {
-    const exists = commentThreads.some((t) => t.id === commentThreadId);
-    if (!exists) commentThreadId = null;
-  }
+  // commentThreads autoselect logic removed — CommentsPanel handles initial thread selection internally.
 
   const handleSelectSession = async (id: string) => {
     if (id === chatSessionId) return;
@@ -2964,7 +2929,6 @@
               {#if panelVisibility.showCommentsContext && commentContext?.id}
                 <ChatPanel
                   mode="comments"
-                  bind:commentThreads
                   bind:commentThreadId
                   bind:commentLoading
                   {commentSectionKey}

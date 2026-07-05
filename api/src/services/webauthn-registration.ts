@@ -34,6 +34,12 @@ interface VerifyRegistrationParams {
   credential: RegistrationResponseJSON;
   expectedChallenge: string;
   deviceName?: string;
+  /**
+   * BR-39r L4 — runs AFTER the WebAuthn response is verified but BEFORE the credential is
+   * persisted (atomic single-use invite consume). If it throws, the credential is NOT inserted
+   * (no orphan) and registration fails.
+   */
+  beforePersist?: (input: { userId: string }) => Promise<void> | void;
 }
 
 /**
@@ -127,7 +133,7 @@ export async function generateWebAuthnRegistrationOptions(
 export async function verifyWebAuthnRegistration(
   params: VerifyRegistrationParams
 ): Promise<{ verified: boolean; credentialId?: string }> {
-  const { userId, credential, expectedChallenge, deviceName } = params;
+  const { userId, credential, expectedChallenge, deviceName, beforePersist } = params;
   const config = getWebAuthnConfig();
   
   try {
@@ -190,7 +196,14 @@ export async function verifyWebAuthnRegistration(
     // credentialPublicKey is always a Uint8Array in WebAuthnCredential
     const credentialIdBase64 = credentialID; // Already in base64url format
     const publicKeyBase64 = Buffer.from(credentialPublicKey).toString('base64url');
-    
+
+    // BR-39r L4: pre-persist hook (atomic single-use invite consume). Runs AFTER WebAuthn
+    // verification, BEFORE the credential insert below — if it throws (consume lost the race /
+    // invalid invite), we propagate and NO credential row is created (no orphan, single-use).
+    if (beforePersist) {
+      await beforePersist({ userId });
+    }
+
     // Store credential in database
     await db.insert(webauthnCredentials).values({
       id: crypto.randomUUID(),

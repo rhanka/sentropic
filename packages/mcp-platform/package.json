@@ -1,0 +1,31 @@
+{
+  "name": "@sentropic/mcp-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PRIVATE mock-only scaffold of the generic Sentropic/STP MCP provider platform (manifest/adapter schemas + mock OIDC/MCP harness + per-request authz middleware). Not published. (SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM slices 1+2)",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/mcp-platform"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "5.4.5",
+    "vitest": "4.0.18"
+  }
+}

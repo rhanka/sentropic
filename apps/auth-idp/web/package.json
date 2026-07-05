@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@sentropic/auth-ui": "file:../../../packages/auth-ui",
+    "@sentropic/design-system-svelte": "^0.34.0",
+    "@sentropic/design-system-themes": "^0.11.0",
     "@simplewebauthn/browser": "^13.2.2"
   }
 }

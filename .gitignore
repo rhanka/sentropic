@@ -72,3 +72,5 @@ graphify-out/
 # BR-43 GCP live-UAT service-account key (NEVER commit a GCP SA-key JSON)
 gcp-sa*.json
 .secrets/
+.track/*.lock
+packages/chat-ui/.svelte-kit/

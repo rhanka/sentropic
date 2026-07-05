@@ -1,3 +1,13 @@
+// Canonical verify-core claim types are re-exported for back-compat: the shared
+// verification primitives now live in @sentropic/oauth-verify (the 4 duplicate auth-hono
+// verify paths delegate to it). Consumers may keep importing these from @sentropic/auth-hono.
+export type {
+  AccessTokenClaims,
+  ActClaim,
+  IdentityType,
+  TokenKeySource,
+} from '@sentropic/oauth-verify';
+
 export * from './contracts.js';
 export * from './credential-route-handlers.js';
 export * from './email-verification.js';
@@ -7,9 +17,12 @@ export * from './oauth/authorize-handler.js';
 export * from './oauth/consent-decision-handler.js';
 export * from './oauth/crypto-utils.js';
 export * from './oauth/dpop.js';
+export * from './oauth/end-session-handler.js';
 export * from './oauth/http-utils.js';
 export * from './oauth/introspect-handler.js';
+export * from './oauth/issue-authorized-code.js';
 export * from './oauth/jwks-service.js';
+export * from './oauth/redirect-utils.js';
 export * from './oauth/router.js';
 export * from './oauth/revoke-handler.js';
 export * from './oauth/service-auth-middleware.js';

@@ -13,6 +13,12 @@ Status addendum 2026-06-01: **BR-42a split ratified and launched.** BR-42a0 (`fe
 Status addendum 2026-06-04: **BR-14e DONE — merged (PR #202, merge `c328e6b2`) and deployed to prod.** Full `Top AI Ideas → Sentropic` rebrand (display strings + machine identifiers) and the `ai-ideas` workspace-type → `ai-priorities` rename (api/ui + `@sentropic/flow|chat-ui|skills` + DB migration `0030`) are live on `sentropic.sent-tech.ca`. A blocking repo-wide e2e failure was first fixed on its own branch — **`fix/esbuild-externalize-google-auth` (PR #245)** externalizes `google-auth-library` (+ transitives) from the API esbuild boot bundle (#235 had bundled the CJS lib → `Dynamic require` crash in the prod image). During BR-14e CI a **real regression** surfaced (looked like AI flakiness): migration `0030` renamed row values + Drizzle `.default()` but not the live DB column default, so new workspaces inherited the stale `ai-ideas` and lost initiatives/matrix chat tools (skill `workspaceTypes` gating) — fixed by adding `ALTER COLUMN "type" SET DEFAULT 'ai-priorities'` to `0030`. **BR-14d (transition ops) is CLOSED** (realized via BR-37 lineage; residual-name report delivered: `docs/uat/2026-05-31-br14e-residual-name-report.md`). Both plans archived to `plan/done/`. Verified intact under BR-42b (PR #247, `dd2f8380`) which merged after and refactored foundation-tool resolution without regressing the workspace-type gating (chat-tools green). **Follow-up (non-blocking):** `@sentropic/chat-server@0.1.1` + `@sentropic/comments@0.1.0` now published; their OIDC trusted-publisher attachment is the remaining packaging item.
 Status addendum 2026-06-02: **WP-CHAT registered** as the `@sentropic/chat-ui` ecosystem program (umbrella work package, `spec/SPEC_EVOL_CHAT_ECOSYSTEM.md` v2 + `spec/SPEC_EVOL_CHATUI_WAVE_A.md`). Goal: turn `@sentropic/chat-ui` from "shells + primitives" into a runtime-agnostic, themeable, multi-surface chat ecosystem (the "assistant-ui of sentropic"). Waves: **Wave A** (A0a/A0b safety nets → A1 UI-only core extraction → A2 retrofit gate → A3 radar P1-P3); **Wave B** (ChatConversation turnkey, BR-38c attachment defaults); **Wave C+** (React/Vue bindings — gated; voice own spec; canvas own spec). **Wave A branch series** (7 branches off `main`, all additive and incrementally mergeable): `feat/chatui-a0a-export-contract` (this branch, A0a node-only gates), `feat/chatui-a0a-parity-rung1` (A0a golden fixtures + projection — actually merged into this branch), `feat/chatui-a0b-dom-visual-harness` (A0b, BR-EXn Makefile), `feat/chatui-core-extract` (A1 Tier-1), `feat/chatui-model-selector-p1`, `feat/chatui-message-actions-p2`, `feat/chatui-context-provider-p3` (blocked on radar sign-off). **Risk tiers**: live app consumes chat-ui by source import → no semver buffer; any file touched by `ui/src/**` reaches prod on rebuild (Tier-1, escalation). **Carve-outs** (own specs, NOT WP-CHAT owned): voice (`SPEC_EVOL_CHAT_VOICE`), canvas (`SPEC_EVOL_CHAT_CANVAS`), multi-framework React/Vue pilot. **A0a branch** (`feat/chatui-a0a-export-contract`) launched 2026-06-02: export-manifest.json + export-surface.spec.ts + projection.golden.spec.ts + ndjson fixtures; `make test-chat-ui` green (21 files, 167 tests); WP-CHAT registered here. h2a alignment: radar `neg:chat-librarization-radar-20260602` — P1-P3 land in Wave A; P3 needs radar sign-off on neutral context interface before merge. DS nego `chat-ui × DS` before tokenization (post-A3).
 
+Status addendum 2026-06-07: **Architecture target program registered (ARCH-01..19 → BR-44..BR-67, §8).** Two governing specs merged the same day: `spec/SPEC_EVOL_ARCHITECTURE.md` (PR #268 — app/workspace/PaaS tracker; owner decisions **D1-D11** taken: tenant=org/account with IdP-owned identity-tenants, app templates as DB control-plane resources + catalog projection, guest-as-user-rows, Diag dual-phase with the IdP, UAT previews on a distinct registrable domain behind a stateless edge proxy, internal Postgres quota/cost ledger, flagship retro-modeled as app templates, immo in a separate repo as the B2B2B org-B proof, contract-compat=major-bump) and `spec/SPEC_EVOL_DATA_ARCHITECTURE.md` (PR #273 — data in the agentic era, ARCH-18/19; owner decisions **DD1-DD11** taken: dual storage with ObjectResolverPort, shape-mined warn→enforce validation ladders, OpenERP mapping gate incl. one order→lines→invoice chain, consumer-gated analytics with wal2json fallback, knowledge=LLM-wiki/graph-first via graphify with pgvector as later addition, separate unpublished UBO contract package, typed reference fields, per-row payloadSchemaVersion + supersede-with-v2, composite tenant columns with pre-declared re-key, envelope v0 with binding-defined scope map, admin-approved generated runtime-DDL). Each study branch follows the program cadence: double adversarial review (Opus 4.8 max + Codex 5.5 xhigh) + one batched owner decision packet. Waves H/1a/1b dispatchable now; see §8.
+
+Status addendum 2026-06-09: **Coherence reconciliation + scope/deps registry.** A double coherence audit (Codex 5.5 xhigh + Opus 4.8) over the whole program produced `track/TRACK.md` — the authoritative per-element registry associating a **scope** (packages/app-trees touched, e.g. `@sentropic/chat-ui`, `@sentropic/llm-mesh`) and **dependencies** (internal BRs + external lanes) to every branch. The live `track` MCP sidecar is currently EMPTY (harness BRANCH.md ingestion not yet run) → `track/TRACK.md` + this PLAN are the de-facto source of truth. Audit verdict: **dispatchable for Wave H (BR-44) + Wave 1a (BR-45..48)**; NOT Wave 2/3 until PLAN staleness is reconciled, PR #276 (Resource Plane BR-70/71) is merged, and the chat-ui/chat-core merge-collision cluster is serialized. Gate fixes applied: BR-57 += BR-49+BR-34 Lot 0, BR-65 += BR-60. Status corrections (per `track/TRACK.md` §2): BR-38a MERGED #203, BR-42b MERGED #247, BR-39a/b done, `@sentropic/build-cli@0.2.0` landed (BR-42a1 largely landed). Open-PR gates: #272 (BR-38c documents, **scope-violation flagged**), #257 (chat-loop-guard, chat-core runtime). BR-68/69 RESERVED (numbering gap). Genuine owner decisions remain (chat-ui serialization, BR-70/71 split, parallel-lane count) — see `track/TRACK.md` §5 + §7.
+
+Status addendum 2026-06-09 (b): **BR-42h registered — `@sentropic/harness` follow-ons handed to scale/`stp`.** The BR-25 in-fine deliverable `@sentropic/harness` is DONE/shipped: `@sentropic/harness@0.1.1` on npm (OIDC trusted publisher attached), homogeneous `npm i -g`, 3-host plugin surfaces, C1/C2 → neutral `VerificationRun`, pre-UAT PASSED on claude+codex+gemini, parser bug fixed (PRs #266, #279). The scope-ownership decision (`spec/SPEC_DECISION_SCOPE_OWNERSHIP_HARNESS_TRACK_STP.md`, PR #284, double-reviewed Opus 4.8 + Codex 5.5-xhigh) and the shared BRANCH.md grammar (`spec/SPEC_BRANCH_MD_GRAMMAR.md`, PR #286) are merged. **Remaining harness work is now a scale lot, `plan/42h-BRANCH_feat-harness-followons.md`**: 42h-L1 D7 publish-federation register (harness GATED_D7 in BR-42i's FEDERATION_MANIFEST, ZERO rework — in-process `registry.register(runHarnessCli)`); 42h-L2 `stp scope check` router (track-master/harness-fallback/fail-closed); 42h-L3 harness method-verb layer (`harness brainstorm|test|debug|review --consensus|plan` + `branch|verify|init|audit`, homogeneous `harness <verb>`; `test` not `tdd`; "discipline" term dropped) as the native superpowers-surface replacement (rhanka reframe; **BR-42k DISSOLVED** into it); 42h-L4 genericity G1–G6; 42h-L5 enforcement candidates C5/C7/C8(blocking)/C10; 42h-L6 BRANCH.md grammar conformance. **Attendu**: `track` must ship declarative scope-state + `track scope validate` + `VerificationRun` ingest before agent docs flip authority to track (h2a sent, reply awaited); BR-42i (`@sentropic/cli@0.2.0`, MERGED #261) owns the `stp` wiring (ACK exchanged).
+
 ## 0) Repo merge policy (effective 2026-05-13)
 
 Applied at the GitHub repository level on 2026-05-13 after the PR #141 squash incident (loss of intermediate commit history). Reference: `feedback_never_squash_merge` memory.
@@ -63,7 +69,7 @@ Every PR going forward must be merged via a merge commit and the source branch l
   attachment remains pending as the post-bootstrap security follow-up.
 
 **Pending branches (unblocked or near-unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-20, BR-21, BR-22, BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38b (image-generation-tool), BR-39a (auth-ui-sdk), BR-39b (auth-hono-kit), BR-40b (xlsx-multitab-query), BR-40c (folder-xlsx-export), BR-41a (cowork-desktop-tools), BR-41b (cowork-local-webview), BR-42a1/b/c/d/e/f/g (scale / build-app foundry — see 2026-06-01 addendum + `plan/42-BRANCH_chore-scale-build-app.md`) — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-20, BR-21, BR-22, BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38b (image-generation-tool), BR-39a (auth-ui-sdk), BR-39b (auth-hono-kit), BR-40b (xlsx-multitab-query), BR-40c (folder-xlsx-export), BR-41a (cowork-desktop-tools), BR-41b (cowork-local-webview), BR-42a1/b/c/d/e/f/g/h (scale / build-app foundry — see 2026-06-01 + 2026-06-09(b) addenda + `plan/42-BRANCH_chore-scale-build-app.md`; BR-42h = `@sentropic/harness` follow-ons, `plan/42h-BRANCH_feat-harness-followons.md`) — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Study closed (no code):**
 - BR-31 `chore/make-to-nx-study` — **study closed 2026-05-13**. Recommendation **REJECT** with sub-option (optional power-developer adapt). Deliverable: `spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md`. Commits `681790fa` (BRANCH.md) + `38d8f1d3` (spec). No further lots; PR open for record.
@@ -497,6 +503,7 @@ graph TD
 - **Out of waves — prioritization & sheets trio (registered 2026-05-25)**: BR-40a (`feat/prioritization-matrix-scale`) ∥ BR-40b (`feat/xlsx-multitab-query`) ∥ BR-40c (`feat/folder-xlsx-export`), one parallel wave of three orthogonal capabilities. BR-40a and BR-40c are independent. BR-40b depends on the disposition of `feat/xlsx-gsheet-indexing` (BR40b-Q1). Documentation registered via `chore/priorization-sheets`; implementation begins after framing questions (BR40a-Q1/Q2/Q3, BR40b-Q1/Q2, BR40c-Q1/Q2) are resolved.
 - **Out of waves — scale / build-app foundry (registered 2026-05-31, split 2026-06-01)**: BR-42a0 (`feat/chat-server`) ran first and has merged plus published `@sentropic/chat-server@0.1.0`; BR-42a1 (`feat/build-app-cli`) can now consume it. BR-42b..g remain mostly orthogonal package extensions and can be selected in parallel after their direct prerequisites are available.
 - **Out of waves — closed**: BR-31 (`chore/make-to-nx-study`) study closed, recommendation REJECT.
+- **Architecture target program (registered 2026-06-07)**: BR-44..BR-67 mapped to ARCH-01..19 — full wave plan, gates, and owner items in §8. Waves H/1a/1b dispatchable now.
 
 **Wave in progress (2026-04-21)**: this transition branch (README pair, Sentropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
 **PR-117 release ops**: decide and execute repository rename + public DNS/redirect changes, or explicitly hand off each unchecked item to BR-14d with owner/date.
@@ -581,3 +588,108 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
 - `spec/SPEC_EVOL_RELEASE_QA_PIPELINE.md`
 - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`
+- `spec/SPEC_EVOL_ARCHITECTURE.md` (architecture target tracker, D1-D11 — BR-44..BR-67, §8)
+- `spec/SPEC_EVOL_DATA_ARCHITECTURE.md` (data in the agentic era, DD1-DD11 — ARCH-18/19, §8)
+
+## 8) Architecture target program (ARCH-01..19 → BR-44..BR-67)
+
+Registered 2026-06-07. Governing decisions already taken: D1-D11
+(`spec/SPEC_EVOL_ARCHITECTURE.md` §6.3) and DD1-DD11
+(`spec/SPEC_EVOL_DATA_ARCHITECTURE.md` §7). Branch slugs below are proposals
+pending owner validation (durable-naming rule). Cadence per study branch:
+double adversarial review (Opus 4.8 max + Codex 5.5 xhigh) + ONE batched
+owner decision packet; studies are docs-only (no env/ports); implementation
+branches use the §6 slot convention (slot registered at dispatch).
+
+### Wave H — hardening (dispatch NOW, parallel to Wave 1)
+
+| ID | Branch | Type | Scope | Gates |
+|---|---|---|---|---|
+| BR-44 | `fix/data-hardening` | impl (1 migration max) | job_queue stranded-`processing` recovery (lease/reaper); `chat_stream_events` retention sweep + `created_at` index; fix `packages/flow/src/job-queue.ts` aspirational header comment; drop dead `task_io_contracts` | none — MUST land before BR-60 (outbox) and BR-61 (UBO storage) |
+
+### Wave 1a — framing studies (dispatch NOW, ≤4 parallel)
+
+| ID | Branch | Deliverable | Frame (decided) |
+|---|---|---|---|
+| BR-45 | `chore/arch01-app-control-plane-study` | SPEC_EVOL_APP_CATALOG | ARCH-01 + ARCH-11 folded: D1=B, D2=B; app_templates/app_instances/bindings as `control` resources; flagship retro-model cost estimate (D7) |
+| BR-46 | `chore/arch12-contract-compat-study` | SPEC_EVOL_APP_TEMPLATE_LIFECYCLE | ARCH-12: D11=B; NO published-contract mutation lands before this study frames the policy |
+| BR-47 | `chore/arch13-quota-ledger-study` | SPEC_EVOL_QUOTA_LEDGER | ARCH-13: D6=B ledger + CostContext; carries the owner sub-decision (anonymous budget: who funds, cap, kill-switch); confirms `control` namespace; first analytical consumer candidate (DD4) |
+| BR-48 | `chore/arch14-event-spine-study` | SPEC_EVOL_EVENT_SPINE | ARCH-14: outbox=durable truth / EventBus=wake-up-only; audit table; EventBusPort wrap of the 10 NOTIFY channels; projections |
+
+### Wave 1b — parallel paper + small impl (≤4)
+
+| ID | Branch | Deliverable | Frame |
+|---|---|---|---|
+| BR-49 | `chore/arch07-background-runs-study` | SPEC_EVOL_BACKGROUND_AGENT_RUNS | ARCH-07: run model over existing flow + chat tool loop; budget hook → BR-47 |
+| BR-50 | `chore/arch19-ubo-inventory-study` | UBO inventory annex (Lot 0 of ARCH-19) | shape-mining of production `.data` rows; OpenERP real-schema mapping incl. ≥1 order→lines→invoice chain (DD3, time-boxed, h2a co-design with claude:openerp); standard-set draft — type NAMES to owner sign-off at freeze |
+| BR-51 | `chore/arch10-portability-annex` | 1-page portability annex in the tracker | constrains all Wave-1+ defaults (no Sent-Tech-only deps, pluggable quota/abuse, single-PG self-host) |
+| BR-52 | `feat/artifact-store-port` | impl (small) | `ArtifactStorePort` wrapping storage-s3.ts + metadata/checksum/versioning + local-FS binding (ARCH-20 dissolution residue) |
+
+### Wave 2 — gated studies + first data impl
+
+| ID | Branch | Gates | Deliverable |
+|---|---|---|---|
+| BR-53 | `chore/arch02-public-app-auth-study` | BR-45 frame + BR-39n claim-set decisions (IdP lane) | SPEC_EVOL_PUBLIC_APP_AUTH: guest rows (D3), claim-across-OIDC, app-safe chat DTO, factory extraction of singleton routers |
+| BR-54 | `chore/arch05-code-workspace-remote-study` | BR-45; cowork backend split owner/branch CONFIRMED | SPEC_EVOL_CODE_WORKSPACE_REMOTE: device-pairing/cowork-bridge/S2S reuse; route grants + edge proxy; preview DOMAIN NAME = owner deliverable (D5) |
+| BR-55 | `chore/arch17-deployment-plane-study` | — | SPEC_EVOL_DEPLOYMENT_PLANE: UatEndpoint/AppDeployment desired/observed; k8s-ops contract |
+| BR-56 | `chore/arch15-data-lifecycle-study` | — | SPEC_EVOL_DATA_LIFECYCLE: retention/GDPR/erasure-across-planes (gates Diag) |
+| BR-57 | `chore/arch06-knowledge-study` | graphify fusion `plan/34` Lot 0 (BR-34 fork) **+ BR-49** (run model; ARCH-07 feeds ARCH-06) | SPEC_EVOL_WORKSPACE_KNOWLEDGE: LLM-wiki/graph-first (DD5 rider), entity_resolutions + provenance, snapshot permission semantics |
+| BR-58 | `chore/arch08-h2a-chat-study` | BR-49 | SPEC_EVOL_H2A_CHAT: k8s transport, MANDATE/BINDING anchoring, RFC 8693 |
+| BR-59 | `feat/arch19-registry-v0` | BR-46 policy framed; BR-50 done | `object_type_definitions` (full lineage variant + CHECKs) + envelope contract in a SEPARATE in-repo UNPUBLISHED package (DD6=A, DD10=A); NO storage |
+| BR-60 | `feat/arch14-outbox-v0` | BR-44 landed; BR-48 study | outbox table + first producers (comments, object CRUD) + one projection |
+
+### Wave 3 — proofs + storage
+
+| ID | Branch | Gates | Deliverable |
+|---|---|---|---|
+| BR-61 | `feat/arch19-ubo-storage` | BR-59; BR-60 (or explicit event-less first cut); DD9 re-key accepted | `business_objects` (DD1=B: composite tenant cols, day-1 indexes, ObjectResolverPort, union view) + validation ladders (DD2a/b) + promotion copy/backfill/verify/switch + agent caps/fingerprint dedup |
+| BR-62 | `feat/arch03-diag-app` | BR-53 + BR-56; D9=B documents+S3; D4 dual-phase | diag.sent-tech.ca anonymous-first proof; render_mermaid via execution seam; claim flow phase 2 (IdP A1) |
+| BR-63 | `feat/arch04-immo-app` | BR-54; 39e memberships (IdP lane) | immo client app in a SEPARATE REPO (D8) via published packages + app-foundry — coordination entry here |
+| BR-64 | `chore/arch16-canvas-study` | none (not a Diag gate) | SPEC_EVOL_CHAT_CANVAS: livedoc/CRDT runtime |
+| BR-65 | `feat/analytics-export-v0` | **BR-60 (outbox)** + DD4 consumer COMMITTED (BR-47 ledger-reporting OR BR-66 track) + cost/restore model | outbox → Parquet append + DuckDB-class reader |
+
+### Last
+
+| ID | Branch | Gates | Deliverable |
+|---|---|---|---|
+| BR-66 | `chore/arch09-track-dossiers-study` | BR-48 spine + real event sources | SPEC_EVOL_TRACK_DECISION_DOSSIER |
+| BR-67 | `chore/arch10-self-hosting-study` | BR-45 + BR-63 proof | SPEC_EVOL_SELF_HOSTED_SENTROPIC (full; licensing D10 deferred decision lands here) |
+
+### Owner items still open (not branch work)
+
+- D5: concrete preview-domain NAME (needed by BR-54 UAT routing).
+- D6 rider: anonymous budget ownership (asked inside BR-47's decision packet).
+- DD3 freeze: standard type NAMES sign-off (asked at BR-50 freeze).
+- DD6: UBO package NAME at first publication (asked when BR-59 reaches its
+  first external consumer).
+
+### External lanes this program depends on (coordination, not dispatch)
+
+- BR-39n claim set / 39e memberships (IdP lane) → gates BR-53 / BR-63.
+- Cowork backend tool-driving split (owner/branch to confirm) → BR-54.
+- Graphify fusion `plan/34` Lot 0 (BR-34, npm transfer-vs-republish fork) → BR-57.
+- chat-ui host-tool open extension point (chat lane, OpenERP finding) →
+  BR-62 canvas seam.
+
+### Resource Plane (ARCH-21, registered 2026-06-08, decided RF1-RF11)
+
+`spec/SPEC_EVOL_RESOURCE_FS.md` — a uniform Resource Plane (filesystem-
+presented) over capabilities/data/context/knowledge; a projection over
+already-decided subsystems, NOT a new store. Decided: verb floor
+`ls/read/edit/grep` (grep≡query) + model-selected SKILL.md `accessMethods` →
+typed tool (RF2); invoke distinct from write (RF3); canonical ResourceRef+etag
+(RF1); async via the existing chat resume (RF4); authz-projected namespace
+(RF5); injection boundary on read+list (RF6); MCP tools + URI-preserving
+resources (RF7); `watch` deferred to outbox (RF8); ETag/CAS + app-local-then-
+extract package (RF9); `resource_terminal` (virtual, human/V8, not a default
+LLM tool) + `local_bash`/`remote_bash` (real, gated) (RF10); ToolInteractionTrace
++ chips/terminal + custom-renderer slot (RF11).
+
+| ID | Branch | Type | Gates | Deliverable |
+|---|---|---|---|---|
+| BR-70 | `feat/arch21a-resource-plane` | impl (integrative) | BR-44 queue hardening (for `/proc/jobs`) | ResourceProvider port + verb dispatcher + canonical ResourceRef/etag; catalog mounts `/tools /skills /agents /workflows /canvas`; MCP tools + URI-preserving resources read (one server); `resource_invoke` async via existing chat resume; `/context/session` + minimal `/context/nav`; authz-projected namespace (separate discover/read/invoke, deny-as-missing); LLM discovery→typed-tool grain (RF2); `resource_terminal` human pane; ToolInteractionTrace + file chips (view via read) + terminal pane + custom-renderer slot |
+| BR-71 | `study+feat/arch21b-resource-plane` | gated | ARCH-14 outbox; ARCH-19 resolver; ARCH-06 graphify fusion; ARCH-05 remote sessions; ARCH-16 canvas; ARCH-17 edge | `/workspace` data + `query`; `/knowledge` + freshness (per-partition watermarks); generic `watch`; `/apps`; `local_bash`/`remote_bash` (tmux-attached k8s sessions) + `remote-fs` provider path→ref; canvas edit-back |
+
+Owner items still open from ARCH-21: RF9 package NAME at extraction time
+(gated ARCH-12/D11); RF11 custom-renderer registry+sandbox shape (chat-ui
+deliverable, default ships in BR-70).

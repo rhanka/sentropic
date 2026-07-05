@@ -70,6 +70,7 @@ import type {
   ApplyContextBudgetGateInput,
   ApplyContextBudgetGateResult,
   AssistantRunLoopExecutedTool,
+  AssistantRunLoopState,
   ChatRuntimeDeps,
   ConsumeAssistantStreamInput,
   ConsumeAssistantStreamResult,
@@ -78,6 +79,115 @@ import type {
   ExecuteServerToolInput,
   ExecuteServerToolResult,
 } from './runtime.js';
+
+const TOOL_LOOP_REPEAT_THRESHOLD = 2;
+
+const LOOP_GUARD_NOISE_KEYS = new Set([
+  'request_id',
+  'requestId',
+  'request-id',
+  'trace_id',
+  'traceId',
+  'trace-id',
+  'timestamp',
+  'time',
+  'nonce',
+  'run_id',
+  'run-id',
+]);
+
+const normalizeLoopGuardText = (text: string): string => {
+  return String(text ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(
+      /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+      '<uuid>',
+    )
+    .replace(
+      /\b(?:req|request|run|trace|call|tool|msg|message|stream|session|job|task)_[a-z0-9_-]+\b/gi,
+      '<id>',
+    )
+    .replace(/\b[0-9a-f]{32,}\b/gi, '<id>')
+    .replace(/\b\d{10,}\b/g, '<number>')
+    .replace(/\s+/g, ' ');
+};
+
+const normalizeLoopGuardArgs = (input: unknown): unknown => {
+  if (input === null || typeof input !== 'object') {
+    return input;
+  }
+  if (input instanceof Date) {
+    return input.toISOString();
+  }
+  if (Array.isArray(input)) {
+    return input.map((item) => normalizeLoopGuardArgs(item));
+  }
+  const record = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  const keys = Object.keys(record).sort();
+  for (const key of keys) {
+    if (LOOP_GUARD_NOISE_KEYS.has(key)) continue;
+    out[key] = normalizeLoopGuardArgs(record[key]);
+  }
+  return out;
+};
+
+const buildToolLoopSignature = (
+  toolName: string,
+  args: unknown,
+  errorMessage: string,
+): string => {
+  const normalizedArgs = normalizeLoopGuardArgs(args);
+  const normalizedArgsSig =
+    typeof normalizedArgs === 'string'
+      ? normalizedArgs
+      : JSON.stringify(normalizedArgs) ?? String(normalizedArgs);
+  const normalizedErrorSig = normalizeLoopGuardText(errorMessage);
+  return `${String(toolName || '').trim()}|${normalizedArgsSig}|${normalizedErrorSig}`;
+};
+
+const incrementToolLoopErrorCount = (
+  loopState: AssistantRunLoopState,
+  toolName: string,
+  args: unknown,
+  errorMessage: string,
+): number => {
+  const counts = loopState.toolErrorSignatureCounts ?? {};
+  const key = buildToolLoopSignature(toolName, args, errorMessage);
+  const next = (counts[key] ?? 0) + 1;
+  counts[key] = next;
+  loopState.toolErrorSignatureCounts = counts;
+  return next;
+};
+
+const getReturnedToolErrorMessage = (result: unknown): string | null => {
+  const record = asRecord(result);
+  if (!record) return null;
+  const status = String(record.status ?? '').trim().toLowerCase();
+  if (status !== 'error') return null;
+  const code = typeof record.code === 'string' ? record.code.trim() : '';
+  const error =
+    typeof record.error === 'string'
+      ? record.error.trim()
+      : typeof record.message === 'string'
+        ? record.message.trim()
+        : '';
+  return [code, error].filter(Boolean).join(': ') || 'tool returned status=error';
+};
+
+const buildToolLoopGuardResult = (
+  toolName: string,
+  repeatedCount: number,
+): Record<string, unknown> => ({
+  status: 'error',
+  code: 'tool_loop_repeated_error',
+  error:
+    `Tool '${toolName || 'unknown_tool'}' failed repeatedly with the same arguments and error. ` +
+    'Stop retrying this tool call in this assistant turn. Ask the user to clarify, choose a different approach, or switch to a different tool.',
+  repeat_count: repeatedCount,
+  tool_name: toolName || 'unknown_tool',
+});
 
 export class ChatRuntimeToolDispatch {
   constructor(private readonly deps: ChatRuntimeDeps) {}
@@ -300,6 +410,7 @@ export class ChatRuntimeToolDispatch {
         credential: request.credential,
         userId: request.userId,
         workspaceId: request.workspaceId,
+        sessionId: request.sessionId,
         messages: request.messages,
         tools: request.tools,
         reasoningSummary: request.reasoningSummary,
@@ -646,6 +757,59 @@ export class ChatRuntimeToolDispatch {
     }> = [];
     const executedTools: AssistantRunLoopExecutedTool[] = [];
     const currentMessages = input.currentMessages;
+    const pushToolAccumulator = (
+      toolCall: { id: string; name: string; args: string },
+      args: unknown,
+      result: unknown,
+    ) => {
+      executedTools.push({
+        toolCallId: toolCall.id,
+        name: toolCall.name || 'unknown_tool',
+        args,
+        result,
+      });
+      toolResults.push({
+        role: 'tool',
+        content: JSON.stringify(result),
+        tool_call_id: toolCall.id,
+      });
+      responseToolOutputs.push({
+        type: 'function_call_output',
+        call_id: toolCall.id,
+        output: JSON.stringify(result),
+      });
+    };
+    const emitAndPushLoopGuard = async (
+      toolCall: { id: string; name: string; args: string },
+      args: unknown,
+      repeatedCount: number,
+    ): Promise<ConsumeToolCallsResult> => {
+      loopState.continueGenerationLoop = false;
+      const guardResult = buildToolLoopGuardResult(
+        String(toolCall.name || '').trim(),
+        repeatedCount,
+      );
+      const seq = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'tool_call_result',
+        { tool_call_id: toolCall.id, result: guardResult },
+        seq,
+        streamId,
+      );
+      streamSeq = seq + 1;
+      loopState.streamSeq = streamSeq;
+      pushToolAccumulator(toolCall, args, guardResult);
+      return {
+        toolResults,
+        responseToolOutputs,
+        pendingLocalToolCalls,
+        executedTools,
+        shouldBreakLoop: true,
+        streamSeq,
+        contextBudgetReplanAttempts,
+      };
+    };
     for (const toolCall of loopState.toolCalls) {
       if (signal?.aborted) throw new Error('AbortError');
       const toolName = String(toolCall.name || '').trim();
@@ -670,8 +834,10 @@ export class ChatRuntimeToolDispatch {
         loopState.streamSeq = streamSeq;
         continue;
       }
+      let argsSignatureSeed: unknown = toolCall.args;
       try {
         const args = JSON.parse(toolCall.args || '{}');
+        argsSignatureSeed = args;
         const projectedResultChars = estimateToolResultProjectionChars(
           toolCall.name,
           asRecord(args) ?? {},
@@ -768,30 +934,46 @@ export class ChatRuntimeToolDispatch {
         const result = rRecord.result;
         streamSeq = rRecord.streamSeq;
         loopState.streamSeq = streamSeq;
-        executedTools.push({
-          toolCallId: toolCall.id,
-          name: toolCall.name,
-          args,
-          result,
-        });
-        toolResults.push({
-          role: 'tool',
-          content: JSON.stringify(result),
-          tool_call_id: toolCall.id,
-        });
-        responseToolOutputs.push({
-          type: 'function_call_output',
-          call_id: toolCall.id,
-          output: JSON.stringify(result),
-        });
+        const returnedErrorMessage = getReturnedToolErrorMessage(result);
+        if (returnedErrorMessage) {
+          const repeatedCount = incrementToolLoopErrorCount(
+            loopState,
+            toolCall.name,
+            argsSignatureSeed,
+            returnedErrorMessage,
+          );
+          if (repeatedCount > TOOL_LOOP_REPEAT_THRESHOLD) {
+            return await emitAndPushLoopGuard(
+              toolCall,
+              argsSignatureSeed,
+              repeatedCount,
+            );
+          }
+        }
+        pushToolAccumulator(toolCall, args, result);
       } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
         const errorResult = {
           status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
         };
         const todoErrorCall = toolCall.name === 'plan';
         if (todoErrorCall && todoAutonomousExtensionEnabled) {
           markTodoIterationState(errorResult);
+        }
+        const repeatedCount = incrementToolLoopErrorCount(
+          loopState,
+          toolCall.name,
+          argsSignatureSeed,
+          errorMessage,
+        );
+        if (repeatedCount > TOOL_LOOP_REPEAT_THRESHOLD) {
+          return await emitAndPushLoopGuard(
+            toolCall,
+            argsSignatureSeed,
+            repeatedCount,
+          );
         }
         const seq = await this.deps.streamSequencer.allocate(streamId);
         await this.deps.streamBuffer.append(
@@ -803,30 +985,7 @@ export class ChatRuntimeToolDispatch {
         );
         streamSeq = seq + 1;
         loopState.streamSeq = streamSeq;
-        toolResults.push({
-          role: 'tool',
-          content: JSON.stringify(errorResult),
-          tool_call_id: toolCall.id,
-        });
-        responseToolOutputs.push({
-          type: 'function_call_output',
-          call_id: toolCall.id,
-          output: JSON.stringify(errorResult),
-        });
-        executedTools.push({
-          toolCallId: toolCall.id,
-          name: toolCall.name || 'unknown_tool',
-          args: toolCall.args
-            ? (() => {
-                try {
-                  return JSON.parse(toolCall.args);
-                } catch {
-                  return toolCall.args;
-                }
-              })()
-            : undefined,
-          result: errorResult,
-        });
+        pushToolAccumulator(toolCall, argsSignatureSeed, errorResult);
       }
     }
     return {

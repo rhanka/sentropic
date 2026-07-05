@@ -498,7 +498,7 @@ describe('DOCX API', () => {
           .limit(1);
         if (!pendingDocxJob) return [];
 
-        const startedAt = new Date().toISOString();
+        const startedAt = new Date();
         await db
           .update(jobQueue)
           .set({ status: 'processing', startedAt })
@@ -537,7 +537,7 @@ describe('DOCX API', () => {
             assistantMessageId: createTestId(),
           }),
           createdAt: new Date(Date.now() - 5000),
-          startedAt: new Date(Date.now() - 5000).toISOString(),
+          startedAt: new Date(Date.now() - 5000),
         },
         {
           id: docxPendingJobId,

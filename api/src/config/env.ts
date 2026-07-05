@@ -38,6 +38,10 @@ const envSchema = z.object({
   DOC_STORAGE_REGION: z.string().optional(),
   DOC_STORAGE_ACCESS_KEY: z.string().optional(),
   DOC_STORAGE_SECRET_KEY: z.string().optional(),
+  // Artifact store (BR-52): backend override ('s3' | 'local-fs'); auto-selects S3 when a
+  // DOC_STORAGE_BUCKET is configured, else local-FS. ARTIFACT_FS_ROOT is the local-FS root.
+  ARTIFACT_STORE_BACKEND: z.string().optional(),
+  ARTIFACT_FS_ROOT: z.string().optional(),
   SCW_DEFAULT_ORGANIZATION_ID: z.string().optional(),
   SCW_DEFAULT_PROJECT_ID: z.string().optional(),
   SCW_NAMESPACE_ID: z.string().optional(),
@@ -91,6 +95,12 @@ const envSchema = z.object({
   // Service-to-service (client_credentials) — stateless tokens (BR39d-D5)
   OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC: z.coerce.number().default(900),
   OAUTH_SERVICE_RESOURCE_URI: z.string().optional(),
+  // MCP resource server (BR-39l Lot 3) — activation-by-consumption of @sentropic/mcp-auth.
+  // Default OFF: only the RFC 9728 PRM well-known + a sample guarded /api/v1/mcp/* surface
+  // are mounted when explicitly enabled. MCP_RESOURCE_URI overrides the resource/audience
+  // (defaults to the OAuth issuer URL).
+  MCP_RESOURCE_SERVER_ENABLED: z.string().optional(),
+  MCP_RESOURCE_URI: z.string().optional(),
   // Dev/test self-S2S dogfood client (BR39d-D10)
   OAUTH_SELF_SERVICE_CLIENT_ID: z.string().optional(),
   OAUTH_SELF_SERVICE_CLIENT_SECRET: z.string().optional(),
@@ -103,7 +113,17 @@ const envSchema = z.object({
   // Chat tracing (debug / audit)
   // Store OpenAI payloads + tool calls for troubleshooting loops.
   CHAT_TRACE_ENABLED: z.string().optional(),
-  CHAT_TRACE_RETENTION_DAYS: z.coerce.number().optional()
+  CHAT_TRACE_RETENTION_DAYS: z.coerce.number().optional(),
+
+  // Queue reaper (WI-1) — stranded-processing recovery.
+  // QUEUE_REAPER_STALE_MINUTES: jobs in 'processing' older than this are reaped.
+  // QUEUE_MAX_REDELIVERIES: maximum reap-requeue cycles before a job is marked failed.
+  QUEUE_REAPER_STALE_MINUTES: z.coerce.number().optional(),
+  QUEUE_MAX_REDELIVERIES: z.coerce.number().optional(),
+
+  // Stream events retention (WI-2) — chat_stream_events purge.
+  // STREAM_RETENTION_DAYS: events older than this are deleted in batches.
+  STREAM_RETENTION_DAYS: z.coerce.number().optional()
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

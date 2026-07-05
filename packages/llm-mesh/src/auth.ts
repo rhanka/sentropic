@@ -17,7 +17,7 @@ export const accountTransportProviderIds = [
 
 export type AccountTransportProviderId = (typeof accountTransportProviderIds)[number];
 
-export type AuthSourceType = TokenAuthSourceType | 'codex-account' | 'account-transport' | 'none';
+export type AuthSourceType = TokenAuthSourceType | 'codex-account' | 'claude-code-account' | 'account-transport' | 'none';
 
 export interface AuthDescriptor {
   sourceType: AuthSourceType;
@@ -75,9 +75,31 @@ export interface CodexAccountAuthMaterial extends AuthMaterialBase {
   expiresAt?: string | null;
 }
 
-export interface FutureAccountTransportAuthMaterial extends AuthMaterialBase {
+export interface AccountTransportAuthMaterial extends AuthMaterialBase {
   type: 'account-transport';
-  provider: Exclude<AccountTransportProviderId, 'codex'> | (string & {});
+  provider: AccountTransportProviderId | (string & {});
+  accessToken: string;
+  refreshToken?: string;
+  accountId?: string | null;
+  accountLabel?: string | null;
+  expiresAt?: string | null;
+  headers?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ClaudeCodeAccountAuthMaterial extends AuthMaterialBase {
+  type: 'claude-code-account';
+  provider: 'claude-code';
+  accessToken: string;
+  accountId?: string | null;
+  accountLabel?: string | null;
+  expiresAt?: string | null;
+  // No refreshToken — refresh is gateway-owned (not llm-mesh, not remote)
+}
+
+export interface PlannedAccountTransportAuthMaterial extends AuthMaterialBase {
+  type: 'account-transport';
+  provider: AccountTransportProviderId | (string & {});
   status: 'planned';
   accessToken?: string;
   refreshToken?: string;
@@ -97,7 +119,9 @@ export type SecretAuthMaterial =
   | WorkspaceTokenAuthMaterial
   | EnvironmentTokenAuthMaterial
   | CodexAccountAuthMaterial
-  | FutureAccountTransportAuthMaterial
+  | ClaudeCodeAccountAuthMaterial
+  | AccountTransportAuthMaterial
+  | PlannedAccountTransportAuthMaterial
   | NoAuthMaterial;
 
 export type AuthSource = SecretAuthMaterial;
@@ -125,6 +149,10 @@ export type AuthInput = SecretAuthMaterial | AuthResolution;
 
 export const futureAccountTransportProviderIds = [
   'gemini-code-assist',
+] as const satisfies readonly AccountTransportProviderId[];
+
+export const executableAccountTransportProviderIds = [
+  'codex',
   'claude-code',
 ] as const satisfies readonly AccountTransportProviderId[];
 
@@ -179,12 +207,23 @@ export const describeAuthMaterial = (
         ...baseDescriptor,
       };
 
+    case 'claude-code-account':
+      return {
+        sourceType: material.type,
+        accountProviderId: material.provider,
+        ...(material.accountId ? { accountId: material.accountId } : {}),
+        ...(material.accountLabel ? { accountLabel: material.accountLabel } : {}),
+        ...(material.expiresAt ? { expiresAt: material.expiresAt } : {}),
+        ...baseDescriptor,
+      };
+
     case 'account-transport':
       return {
         sourceType: material.type,
         accountProviderId: material.provider,
         ...(material.accountId ? { accountId: material.accountId } : {}),
         ...(material.accountLabel ? { accountLabel: material.accountLabel } : {}),
+        ...('expiresAt' in material && material.expiresAt ? { expiresAt: material.expiresAt } : {}),
         ...(material.refreshToken ? { hasRefreshToken: true } : {}),
         ...baseDescriptor,
       };
