@@ -7,6 +7,7 @@ import type {
   CitedSourceGroup,
   CitedSourceRef,
   SourcePayload,
+  SourcePayloadBase,
 } from "../src/types.js";
 
 /**
@@ -84,9 +85,12 @@ describe("CitedSourceViewer (markdown body path)", () => {
       resolveSource,
       activeIndex: 0,
       title: "corpus/blue-study.md",
+      class: "host-overlay",
     });
     await settle();
 
+    // `class` pass-through lands on the frame root (host layout hook).
+    expect(el.querySelector("section.csv.host-overlay")).not.toBeNull();
     expect(el.textContent).toContain("corpus/blue-study.md");
     expect(el.textContent).toContain("Citation 1/2");
     expect(el.textContent).toContain("coronet had vanished");
@@ -157,7 +161,8 @@ describe("CitedSourceViewer (markdown body path)", () => {
   it("surfaces an unknown payload kind as unsupported (body seam boundary)", async () => {
     const el = mountViewer({
       refs: REFS,
-      resolveSource: vi.fn(async (): Promise<SourcePayload> => ({ kind: "docx" })),
+      // A custom (v2) kind is typed against the BASE, not the closed v1 union.
+      resolveSource: vi.fn(async (): Promise<SourcePayloadBase> => ({ kind: "docx" })),
       title: "t",
     });
     await settle();
