@@ -201,17 +201,13 @@ const defaultResolveThemeCss = (themeId: string): string => {
 };
 
 /**
- * Default render hooks for the headless CLI. The HTML surface needs a markdown converter + a
- * sanitizer; the headless dogfood does NOT bundle `marked`/DOMPurify (M0 injection rule), so the
- * default emits prose markdown inside a `<pre>` and is a no-op sanitizer — hosts that want rich
- * HTML inject their own hooks. The MD/terminal surfaces never touch these.
+ * Default render hooks for the headless CLI. Since F1 the HTML renderer ships a built-in `marked`
+ * default, so the CLI no longer injects a raw-`<pre>` markdown hook — it OMITS `renderMarkdown` and
+ * lets the default render REAL markdown (headings/bold/lists/code). `sanitizeHtml` stays a no-op: the
+ * CLI reads owner-authored, trusted track dossiers locally; a host rendering untrusted content injects
+ * its own sanitizer. The MD/terminal surfaces never touch these.
  */
 const defaultHtmlHooks: HtmlRenderHooks = {
-  renderMarkdown: (md) =>
-    `<pre class="focus-md-raw">${md
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")}</pre>`,
   sanitizeHtml: (html) => html,
 };
 

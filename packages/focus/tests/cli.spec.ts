@@ -85,6 +85,8 @@ describe("focus CLI — renders a real decision dossier read-only", () => {
     expect(c.out).toContain(`<h1>${TITLE}</h1>`);
     expect(c.out).toContain('class="focus-outcome"');
     expect(c.out).toContain("GO");
+    // F1: the CLI renders REAL markdown via the built-in default — no raw-<pre> hook.
+    expect(c.out).not.toContain("focus-md-raw");
   });
 
   it("defaults to the terminal format when --format is omitted", async () => {
