@@ -6,7 +6,7 @@ Wire `@sentropic/cited-source-viewer` (merged on main at 49a5ec470, v0.1.0) into
 Note: this file also replaces the stale `BRANCH.md` of the merged #385 (its merge-prep removal step was skipped at merge time).
 
 ## Scope / Guardrails
-- Scope limited to `packages/cited-source-viewer/scripts/**`, `Makefile` (package-scoped targets), `.github/workflows/ci.yml` (additive entries), this `BRANCH.md`.
+- Scope limited to `packages/cited-source-viewer/scripts/**`, `Makefile` (package-scoped targets), `.github/workflows/ci.yml` (additive entries), `.gitignore` (one line: the package's `.svelte-kit/` build dir, chat-ui precedent), this `BRANCH.md`.
 - NO publish execution, NO merge — the architect gates the PR.
 - Repo package.json stays src-form; dist-form exists ONLY inside the pack/publish transient rewrite (chat-ui precedent).
 - Make-only workflow; small atomic commits; no Co-Authored-By.
