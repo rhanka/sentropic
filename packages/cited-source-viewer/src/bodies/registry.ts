@@ -8,7 +8,7 @@
  * v2 (docx, pptx) and v3 (image-bbox) plug in HERE without touching the frame:
  *
  *   import { registerBodyRenderer } from "@sentropic/cited-source-viewer";
- *   registerBodyRenderer("docx", DocxBody); // DocxBody implements CitedSourceBodyProps
+ *   registerBodyRenderer("docx", DocxBody as unknown as CitedSourceBodyComponent);
  *
  * A body is a Svelte component implementing the `CitedSourceBodyProps`
  * contract (see `types.ts`): payload in, `onStatus`/`registerCommands`/
@@ -18,14 +18,32 @@
  */
 
 import type { Component } from "svelte";
-import type { CitedSourceBodyProps } from "../types.js";
+import type { CitedSourceBodyProps, SourcePayloadBase } from "../types.js";
 
-/** A Svelte 5 component implementing the body contract. */
-export type CitedSourceBodyComponent = Component<CitedSourceBodyProps>;
+/**
+ * A Svelte 5 component implementing the body contract for payload type `P`.
+ * The registry stores the base-typed form (the frame routes on `kind` only).
+ */
+export type CitedSourceBodyComponent<P extends SourcePayloadBase = SourcePayloadBase> = Component<
+  CitedSourceBodyProps<P>
+>;
 
 const registry = new Map<string, CitedSourceBodyComponent>();
 
-/** Register (or override) the body renderer for a payload `kind`. */
+/**
+ * Register (or override) the body renderer for a payload `kind`.
+ *
+ * DOCUMENTED CAST PATH (architect API review, touch 1): a concrete body is
+ * typed against ITS OWN payload (`Component<CitedSourceBodyProps<DocxPayload>>`),
+ * deliberately narrower than the base-typed registry slot — Svelte component
+ * props are contravariant, so registration requires an explicit, visible cast
+ * at the seam boundary:
+ *
+ *   registerBodyRenderer("docx", DocxBody as unknown as CitedSourceBodyComponent);
+ *
+ * The runtime contract holds because the frame only mounts a body for
+ * payloads whose `kind` matches the registration key.
+ */
 export function registerBodyRenderer(kind: string, component: CitedSourceBodyComponent): void {
   if (!kind || typeof kind !== "string") {
     throw new Error("registerBodyRenderer: kind must be a non-empty string");

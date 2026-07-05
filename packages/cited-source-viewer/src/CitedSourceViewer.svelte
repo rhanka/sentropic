@@ -81,6 +81,7 @@
     onClose = null,
     onFocusChange = null,
     labels = {},
+    class: className = "",
   } = $props();
 
   const L = $derived({ ...DEFAULT_LABELS, ...labels });
@@ -294,7 +295,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<section class="csv" aria-label="Cited source viewer">
+<section class="csv {className}" aria-label="Cited source viewer">
   <header class="csv-head">
     <div class="csv-head-text">
       <p class="csv-kicker">{L.kicker}</p>
