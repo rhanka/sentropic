@@ -78,37 +78,55 @@ export interface OntologyCitation {
   quoteSpan?: [number, number];
   source_location?: string;
   quote?: string;
-  confidence?: CitationConfidence | number;
+  /**
+   * Grounding strength. Mirrors graphify HEAD exactly (string enum only).
+   * NOTE: SPEC_WP_CITED_SOURCE_VIZ §S.1 still shows `| number` (0..1) — the
+   * implemented graphify contract narrowed it to the enum; flagged to the
+   * architect in the Lot-2 attestation (2026-07-05, graphify @ 29689f05).
+   */
+  confidence?: CitationConfidence;
 }
 
 /* ── Source resolution seam (§S.3 — the viewer never reads bytes itself) ── */
 
+/**
+ * The minimal shape the FRAME routes on. Custom (v2/v3) payload types extend
+ * this base; the frame only ever reads `kind` and hands the payload to the
+ * registered body untouched.
+ */
+export interface SourcePayloadBase {
+  kind: string;
+}
+
 /** PDF payload: raw bytes; rendered by the pdf.js text-layer body. */
-export interface PdfSourcePayload {
+export interface PdfSourcePayload extends SourcePayloadBase {
   kind: "pdf";
   data: ArrayBuffer | Uint8Array;
 }
 
 /** Markdown / plain-text payload: raw text; rendered by the markdown body. */
-export interface TextSourcePayload {
+export interface TextSourcePayload extends SourcePayloadBase {
   kind: "markdown" | "text";
   text: string;
 }
 
 /**
- * Forward-compatible payload for future bodies (v2 docx/pptx, v3 image-bbox):
- * a consumer resolver may return any `kind` a registered body renderer knows
- * how to display — the frame routes on `kind` and never inspects the rest.
+ * The CLOSED v1 payload union — a real discriminated union, so body/consumer
+ * code narrows on `payload.kind` (architect API review, touch 1: no generic
+ * catch-all member collapsing the discriminant). Future bodies do NOT widen
+ * this union: a v2/v3 payload type extends {@link SourcePayloadBase} and is
+ * declared BY ITS BODY (see `CitedSourceBodyProps<P>` and the registry docs).
  */
-export interface GenericSourcePayload {
-  kind: string;
-  [key: string]: unknown;
-}
+export type SourcePayload = PdfSourcePayload | TextSourcePayload;
 
-export type SourcePayload = PdfSourcePayload | TextSourcePayload | GenericSourcePayload;
-
-/** Consumer-supplied byte/text resolver (§S.3). */
-export type ResolveSource = (ref: CitedSourceRef) => Promise<SourcePayload>;
+/**
+ * Consumer-supplied byte/text resolver (§S.3). Defaults to the v1 union; a
+ * consumer feeding custom bodies widens the parameter explicitly, e.g.
+ * `ResolveSource<SourcePayload | DocxPayload>`.
+ */
+export type ResolveSource<P extends SourcePayloadBase = SourcePayload> = (
+  ref: CitedSourceRef,
+) => Promise<P>;
 
 /** Consumer-supplied raw-source href ("Ouvrir ↗"); null/undefined hides the button. */
 export type SourceHref = (ref: CitedSourceRef) => string | null | undefined;
@@ -196,8 +214,14 @@ export interface CitedSourceViewerProps {
   activeIndex?: number;
   /** Header title (e.g. the source file or the entity the user clicked). */
   title?: string;
-  resolveSource: ResolveSource;
+  /**
+   * §S.3 resolver. Typed against the BASE so resolvers feeding custom bodies
+   * (v2/v3 kinds) assign without a cast; a plain v1 `ResolveSource` also fits.
+   */
+  resolveSource: ResolveSource<SourcePayloadBase>;
   sourceHref?: SourceHref | null;
+  /** Extra class(es) appended to the frame's root `<section class="csv">`. */
+  class?: string;
   /** Close callback; the ✕ button is hidden when absent (non-modal host owns it). */
   onClose?: (() => void) | null;
   /** Fired on mount and on every focus retarget (nav, scope toggle, reopen). */
@@ -239,15 +263,22 @@ export interface CitedSourceBodyCommands {
 }
 
 /**
- * The props contract EVERY body renderer implements. v2 (docx/pptx) and v3
- * (image-bbox) bodies plug in through `registerBodyRenderer()` with this exact
- * surface — the frame is closed for modification, open for new bodies.
+ * The props contract EVERY body renderer implements — the FROZEN body-facing
+ * seam. v2 (docx/pptx) and v3 (image-bbox) bodies plug in through
+ * `registerBodyRenderer()` with this exact surface — the frame is closed for
+ * modification, open for new bodies.
+ *
+ * `P` is the body's CONCRETE payload type (architect API review, touch 1):
+ * each body declares the payload it renders — `CitedSourceBodyProps<
+ * TextSourcePayload>` for the markdown body, `CitedSourceBodyProps<
+ * PdfSourcePayload>` for the pdf body, `CitedSourceBodyProps<DocxPayload>`
+ * for a custom v2 body — so `payload` is fully narrowed inside the body.
  */
-export interface CitedSourceBodyProps {
+export interface CitedSourceBodyProps<P extends SourcePayloadBase = SourcePayload> {
   /** The active citation ref (locators + quote fields). */
   sourceRef: CitedSourceRef;
   /** The resolved payload for `sourceRef` (the frame already ran `resolveSource`). */
-  payload: SourcePayload;
+  payload: P;
   /** Convenience: the active quote (`excerpt ?? citation ?? null`). */
   quote: string | null;
   /** The frame's scrollable body element (fit-width + scroll-to-highlight). */
