@@ -3383,6 +3383,7 @@
 
 <ChatPanelShell
   {mode}
+  streamClient={streamHub}
   labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
   commentHost={commentHost}
   {commentContextType}
