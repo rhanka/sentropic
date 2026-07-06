@@ -93,6 +93,13 @@
       >
     | undefined = undefined;
 
+  /**
+   * Stream client for live StreamMessage subscriptions (the app's streamHub).
+   * Host-injected — was silently dropped in the first extraction pass (UAT-1/2:
+   * raw label keys + broken stream presentation).
+   */
+  export let streamClient: unknown = undefined;
+
   // --- AI mode: timeline (gold shell S5a2a) ---
   /** Scrollable message list element, bindable for host scroll orchestration. */
   export let listEl: HTMLDivElement | null = null;
@@ -294,17 +301,6 @@
         bind:this={listEl}
         on:scroll={onListScroll}
       >
-        {#snippet renderTimelineMessageAttachments(item: TimelineItem)}
-          {#if item.kind === 'message' && item.message.role === 'user'}
-            <MessageAttachments
-              attachments={item.message.attachments ?? []}
-              onResolveSrc={getAttachmentImageSrc}
-              onEnlarge={(src: string, alt: string) => openLightbox(src, alt)}
-              enlargeLabel={labels('chat.attachments.enlarge')}
-            />
-          {/if}
-        {/snippet}
-
         {#snippet renderTimelineUserMessage(item: TimelineItem)}
             {#if item.kind === 'message' && item.message.role === 'user'}
               {@const m = item.message}
@@ -320,6 +316,12 @@
                     {/if}
                   {/if}
                 </div>
+                <MessageAttachments
+                  attachments={m.attachments ?? []}
+                  onResolveSrc={getAttachmentImageSrc}
+                  onEnlarge={(src: string, alt: string) => openLightbox(src, alt)}
+                  enlargeLabel={labels('chat.attachments.enlarge')}
+                />
                 <div
                   class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
@@ -356,6 +358,8 @@
               <div class="flex justify-start group">
                 <div class="max-w-[85%] w-full">
                   <StreamMessage
+                    streamClient={streamClient as never}
+                    {labels}
                     variant="chat"
                     streamId={item.key}
                     status={item.isTerminal ? 'completed' : 'processing'}
@@ -397,6 +401,8 @@
               <div class="flex justify-start">
                 <div class="max-w-[85%] w-full">
                   <StreamMessage
+                    streamClient={streamClient as never}
+                    {labels}
                     variant="chat"
                     streamId={item.key}
                     status={item.message._localStatus ??
@@ -420,7 +426,6 @@
           <ChatTimeline
             {items}
             renderUserMessage={renderTimelineUserMessage}
-            renderMessageAttachments={renderTimelineMessageAttachments}
             renderAssistantSegment={renderTimelineAssistantSegment}
             renderRuntimeSegment={renderTimelineRuntimeSegment}
           />
