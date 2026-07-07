@@ -150,4 +150,34 @@ describe('OAuth consent persistence (skip re-consent for covered grants)', () =>
     expect(`${location.origin}${location.pathname}`).toBe('http://localhost:5397/auth/oauth/consent');
     expect(location.searchParams.get('code')).toBeNull();
   });
+
+  it('(g) covered grant on the post-login RESUME path ⇒ skips consent and issues a code (prompt=login re-auth ≠ re-consent)', async () => {
+    const consentStore = createMemoryConsentStore([
+      { clientId: CLIENT_ID, scopes: ['openid', 'profile', 'email'], userId: USER_ID },
+    ]);
+    // A no-session first pass seals a login continuation — the SAME resume path a `prompt=login`
+    // re-auth takes. Regression: resumeLoginContinuation previously redirected to consent
+    // unconditionally, ignoring the stored grant, so every re-login re-showed the consent screen.
+    const { ports, store } = await createOauthPorts({ consentStore });
+    const { router, stateCodec } = createOauthRouterForTest({ ports });
+    const initial = await router.request(authorizePath({ nonce: 'nonce-1' }));
+    const continuation = new URL(initial.headers.get('location') ?? '').searchParams.get('continue') ?? '';
+    expect(continuation).toBeTruthy();
+
+    const { ports: authPorts } = await createOauthPorts({ authenticated: true, consentStore, store });
+    const { router: resumeRouter } = createOauthRouterForTest({ ports: authPorts, stateCodec });
+    const resumed = await resumeRouter.request(`/oauth/authorize?continue=${encodeURIComponent(continuation)}`);
+
+    expect(resumed.status).toBe(302);
+    const location = new URL(resumed.headers.get('location') ?? '');
+    // NOT the consent screen — the covering grant means we go straight to the RP callback with a code.
+    expect(`${location.origin}${location.pathname}`).toBe('http://localhost:5397/callback');
+    const code = location.searchParams.get('code') ?? '';
+    expect(code).toBeTruthy();
+    await expect(store.consumeAuthCode(code)).resolves.toMatchObject({
+      clientId: CLIENT_ID,
+      scope: SCOPE,
+      userId: USER_ID,
+    });
+  });
 });
