@@ -440,3 +440,14 @@ export const createClaudeCodeAccountAuthInput = (
     },
   },
 });
+
+export const createClaudeCodeAccountAuthInput = (
+  transport: { accessToken: string; accountId?: string | null; accountLabel?: string | null; expiresAt?: string | null },
+): SecretAuthMaterial => ({
+  type: 'claude-code-account',
+  provider: 'claude-code',
+  accessToken: transport.accessToken,
+  accountId: transport.accountId ?? null,
+  accountLabel: transport.accountLabel ?? null,
+  expiresAt: transport.expiresAt ?? null,
+});

@@ -650,8 +650,9 @@ const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   'gemini-3.5-flash':              1_000_000,
   'gemini-3.1-flash-lite':  1_000_000,
   // Anthropic
-  'claude-sonnet-4-6': 1_000_000,
-  'claude-opus-4-7':   1_000_000,
+  'claude-sonnet-5': 1_000_000,
+  'claude-opus-4-8': 1_000_000,
+  'claude-fable-5':  1_000_000,
   // Mistral
   'mistral-small-2603':     256_000,
   'magistral-medium-2509':  128_000,
