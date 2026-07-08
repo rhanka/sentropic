@@ -63,16 +63,16 @@ describe('ClaudeProviderRuntime', () => {
   describe('listModels', () => {
     it('should return Claude model catalog entries', () => {
       const models = runtime.listModels();
-      expect(models).toHaveLength(2);
+      expect(models).toHaveLength(3);
 
-      const sonnet = models.find((m) => m.modelId === 'claude-sonnet-4-6');
+      const sonnet = models.find((m) => m.modelId === 'claude-sonnet-5');
       expect(sonnet).toBeDefined();
       expect(sonnet!.providerId).toBe('anthropic');
-      expect(sonnet!.reasoningTier).toBe('standard');
+      expect(sonnet!.reasoningTier).toBe('advanced');
       expect(sonnet!.supportsTools).toBe(true);
       expect(sonnet!.supportsStreaming).toBe(true);
 
-      const opus = models.find((m) => m.modelId === 'claude-opus-4-7');
+      const opus = models.find((m) => m.modelId === 'claude-opus-4-8');
       expect(opus).toBeDefined();
       expect(opus!.reasoningTier).toBe('advanced');
     });
@@ -143,7 +143,7 @@ describe('ClaudeProviderRuntime', () => {
       const result = await runtime.generate({
         mode: 'messages',
         requestOptions: {
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5',
           max_tokens: 1024,
           messages: [{ role: 'user', content: 'Hi' }],
         },
@@ -211,7 +211,7 @@ describe('ClaudeProviderRuntime', () => {
       const iterable = await runtime.streamGenerate({
         mode: 'messages',
         requestOptions: {
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5',
           max_tokens: 1024,
           messages: [{ role: 'user', content: 'Hello' }],
         },
