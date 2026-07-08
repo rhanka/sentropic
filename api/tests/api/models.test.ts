@@ -47,14 +47,14 @@ describe('Models API', () => {
 
     expect(modelsByProvider('openai')).toEqual(['gpt-4.1-nano', 'gpt-5.4-nano', 'gpt-5.5']);
     expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite', 'gemini-3.5-flash']);
-    expect(modelsByProvider('anthropic')).toEqual(['claude-opus-4-7', 'claude-sonnet-4-6']);
+    expect(modelsByProvider('anthropic')).toEqual(['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5']);
     expect(modelsByProvider('mistral')).toEqual(['magistral-medium-2509', 'mistral-small-2603']);
     expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-08-2025']);
     expect(modelsByProvider('gcp')).toEqual([
       'google/gemini-3.1-flash-lite@gcp',
       'google/gemini-3.5-flash@gcp',
     ]);
-    expect(data.models).toHaveLength(13);
+    expect(data.models).toHaveLength(14);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');

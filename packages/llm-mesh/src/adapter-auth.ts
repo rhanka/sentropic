@@ -50,6 +50,7 @@ export const validateAdapterAuthSource = (
       headers: {
         'Authorization': `Bearer ${source.accessToken}`,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'oauth-2025-04-20',
       },
     };
   }
