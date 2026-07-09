@@ -176,6 +176,60 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
+  // Anthropic — Claude Fable
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'anthropic',
+    model: 'claude-fable-5',
+    label: 'Claude Fable',
+    chatEvents: [
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' }, index: 0 },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: ' world' }, index: 0 },
+      { type: 'message_stop' },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'tool_use', id: 'toolu_1', name: 'search' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"query":' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '"test"}' },
+      },
+      { type: 'message_stop' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'claude_call_1',
+      deltaCount: 2,
+      deltas: ['{"query":', '"test"}'],
+    },
+    reasoningEvents: [
+      { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Fable thought' }, index: 0 },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' }, index: 1 },
+      { type: 'message_stop' },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Fable thought'],
+      contentCount: 1,
+      contentDeltas: ['Answer'],
+      hasDone: true,
+    },
+    statusEvents: [{ type: 'message_stop' }],
+  },
+
+  // -----------------------------------------------------------------------
   // Anthropic — Claude Opus (with reasoning)
   // -----------------------------------------------------------------------
   {
