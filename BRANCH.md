@@ -48,7 +48,7 @@ Promote Claude Code account transport to a first-class Sentropic llm-mesh/API au
 ## Feedback Loop
 - `clarification`: package source changes require the PR to bump `packages/<pkg>/package.json`; CI enforces the bump and later publishes the declared version, it does not increment the version itself.
 - `separate-branch`: 2026-07-08 h2a urgent gateway/Codex trimming ownership request is acknowledged as a separate branch/PR and is intentionally not implemented here.
-- `blocker`: API Make gates currently fail before typecheck/lint/test execution during `prepare-node-workspace` because the API Docker build runs `npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root` and reports existing production high advisories (`form-data`, `hono`, `ws`, plus moderate advisories). This is not bypassed in this branch.
+- `resolved`: API Make gates are green on PR run `28992129718`; the earlier API failures were resolved by commits `807a5f4fc` and `f50fcf7e5`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -68,11 +68,11 @@ Promote Claude Code account transport to a first-class Sentropic llm-mesh/API au
   - [x] Add/verify first-class `claude-code-account` auth material validation.
   - [x] Add Anthropic OAuth beta header for Claude Code account material.
   - [x] Update Anthropic catalog IDs to current Claude model names.
-  - [x] Bump `@sentropic/llm-mesh` patch version to `0.2.1` and update lockfile.
+  - [x] Bump `@sentropic/llm-mesh` patch version to `0.6.1` and update lockfile.
   - [x] Focused llm-mesh validations:
     - [x] `make typecheck-llm-mesh ENV=test-wp16-layer-a-claude-code-account`
     - [x] `make build-llm-mesh ENV=test-wp16-layer-a-claude-code-account`
-    - [x] `make test-llm-mesh ENV=test-wp16-layer-a-claude-code-account` — 4 files / 24 tests passed.
+    - [x] `make test-llm-mesh ENV=test-wp16-layer-a-claude-code-account` — 6 files / 35 tests passed.
 
 - [x] **Lot 2 — API runtime integration**
   - [x] Add Claude Code connected transport resolution seam.
@@ -84,9 +84,10 @@ Promote Claude Code account transport to a first-class Sentropic llm-mesh/API au
 - [x] **Lot 3 — build-cli generated catalog parity**
   - [x] Update generated chat-app template package pins and golden fixtures impacted by catalog/package version changes.
 
-- [ ] **Lot N — Final validation**
+- [x] **Lot N — Final validation**
   - [x] Scope check run after scope update.
   - [x] llm-mesh package gates passed.
-  - [ ] API typecheck/lint/scoped unit gates: blocked by production audit during API Docker build (see Feedback Loop).
-  - [ ] Commit via `make commit MSG=...` after final owner confirmation.
-  - [ ] Push branch / open or update PR.
+  - [x] API typecheck/lint/scoped unit gates passed on CI run `28992129718`.
+  - [x] `make test-api-unit SCOPE=tests/unit/llm-runtime-stream.test.ts ENV=test-wp16-layer-a-claude-code-account` — 66 passed, 1 skipped.
+  - [x] Final branch commits pushed through `f50fcf7e5`.
+  - [x] PR #387 open, non-draft, `mergeStateStatus=CLEAN`, CI green on run `28992129718`.
