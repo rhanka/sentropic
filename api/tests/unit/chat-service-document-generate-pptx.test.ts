@@ -6,6 +6,7 @@ import {
   chatStreamEvents,
   folders,
   jobQueue,
+  organizations,
   users,
   workspaces,
   workspaceMemberships,
@@ -95,6 +96,7 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     await db.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
     await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
+    await db.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
     vi.clearAllMocks();
@@ -269,6 +271,94 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
         entityId: folderId,
         workspaceId,
         title: 'Fallback presentation',
+      }),
+    );
+  });
+
+  it('generates a minimal pptx when the tool call omits code', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    const freeformMock = generateFreeformPptx as unknown as ReturnType<typeof vi.fn>;
+    const organizationId = createId();
+
+    await db.insert(organizations).values({
+      id: organizationId,
+      workspaceId,
+      name: 'PPTX Source Org',
+      status: 'completed',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    mock.mockImplementation(() =>
+      stream([
+        { type: 'content_delta', data: { delta: 'OK' } },
+        { type: 'done', data: {} },
+      ]),
+    );
+
+    freeformMock.mockResolvedValueOnce({
+      buffer: Buffer.from('fake-pptx'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      fileName: 'minimal-output.pptx',
+    });
+
+    mock.mockImplementationOnce(() =>
+      stream([
+        {
+          type: 'tool_call_start',
+          data: {
+            tool_call_id: 'tool_pptx_minimal_no_code',
+            name: 'document_generate',
+            args: JSON.stringify({
+              action: 'generate',
+              format: 'pptx',
+              entityType: 'organization',
+              entityId: organizationId,
+              title: 'PPTX Source Org',
+            }),
+          },
+        },
+        { type: 'done', data: {} },
+      ]),
+    );
+
+    const { sessionId, assistantMessageId, model } =
+      await chatService.createUserMessageWithAssistantPlaceholder({
+        userId,
+        workspaceId,
+        content: 'Use the document_generate tool with format "pptx"',
+        primaryContextType: 'organization',
+        primaryContextId: organizationId,
+        model: 'gpt-4.1-nano',
+      });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model,
+    });
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, assistantMessageId));
+
+    const resultEvent = events.find(
+      (e: any) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'tool_pptx_minimal_no_code',
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent!.data as any).result.status).toBe('completed');
+
+    expect(freeformMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: expect.stringContaining('const deck = pptx({ title });'),
+        entityType: 'organization',
+        entityId: organizationId,
+        workspaceId,
+        title: 'PPTX Source Org',
       }),
     );
   });

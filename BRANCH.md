@@ -19,6 +19,7 @@ Promote Claude Code account transport to a first-class Sentropic llm-mesh/API au
   - `api/src/services/provider-connections.ts`
   - `api/tests/api/models.test.ts`
   - `api/tests/unit/claude-provider.test.ts`
+  - `api/tests/unit/chat-service-document-generate-pptx.test.ts` (BR16-EX1)
   - `api/tests/unit/llm-runtime-stream.test.ts`
   - `api/tests/unit/model-selection-legacy.test.ts`
   - `packages/llm-mesh/package.json`
@@ -49,6 +50,7 @@ Promote Claude Code account transport to a first-class Sentropic llm-mesh/API au
 - `clarification`: package source changes require the PR to bump `packages/<pkg>/package.json`; CI enforces the bump and later publishes the declared version, it does not increment the version itself.
 - `separate-branch`: 2026-07-08 h2a urgent gateway/Codex trimming ownership request is acknowledged as a separate branch/PR and is intentionally not implemented here.
 - `resolved`: API Make gates are green on PR run `28992129718`; the earlier API failures were resolved by commits `807a5f4fc` and `f50fcf7e5`.
+- `attention` — **BR16-EX1 (focused PPTX unit regression)**: add `api/tests/unit/chat-service-document-generate-pptx.test.ts` to allowed scope for the PR-blocking E2E failure where `gpt-4.1-nano` calls `document_generate` with `format:"pptx"` but omits `code`. Reason: `api/src/services/chat-service.ts` is already in branch scope, and this focused unit test is the narrowest regression guard for the API fallback. Impact: no E2E mutation; product change is limited to an explicit-PPTX minimal-summary fallback in the API tool path. Rollback: remove the test case and this allowed-path line.
 
 ## AI Flaky tests
 - Acceptance rule:
