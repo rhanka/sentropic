@@ -185,14 +185,14 @@ describe('createLlmMesh', () => {
   it('does not mark reasoning catalog models as unsupported', () => {
     const cohereReasoning = getModelProfile('cohere', 'command-a-reasoning-08-2025');
     const geminiFlash = getModelProfile('gemini', 'gemini-3.5-flash');
-    const claudeOpus = getModelProfile('anthropic', 'claude-opus-4-7');
+    const claudeOpus = getModelProfile('anthropic', 'claude-opus-4-8');
     const gcpFlash = getModelProfile('gcp', 'google/gemini-3.5-flash@gcp');
 
     expect(cohereReasoning?.reasoningTier).toBe('advanced');
     expect(cohereReasoning?.capabilities.reasoning.support).not.toBe('unsupported');
     expect(geminiFlash?.reasoningTier).toBe('advanced');
     expect(geminiFlash?.capabilities.reasoning.support).not.toBe('unsupported');
-    expect(claudeOpus?.label).toBe('Opus 4.7');
+    expect(claudeOpus?.label).toBe('Opus 4.8');
     expect(claudeOpus?.reasoningTier).toBe('advanced');
     expect(gcpFlash?.reasoningTier).toBe('advanced');
     expect(gcpFlash?.capabilities.reasoning.support).not.toBe('unsupported');
@@ -201,7 +201,7 @@ describe('createLlmMesh', () => {
   it('advertises image input only for verified vision-capable provider families', () => {
     expect(getModelProfile('openai', 'gpt-5.5')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
-    expect(getModelProfile('anthropic', 'claude-opus-4-7')?.capabilities.modalities.input).toContain('image');
+    expect(getModelProfile('anthropic', 'claude-opus-4-8')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gcp', 'google/gemini-3.5-flash@gcp')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('mistral', 'mistral-small-2603')?.capabilities.modalities.input).not.toContain('image');
     expect(getModelProfile('cohere', 'command-a-03-2025')?.capabilities.modalities.input).not.toContain('image');

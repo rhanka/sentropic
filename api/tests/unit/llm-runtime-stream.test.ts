@@ -25,6 +25,13 @@ vi.mock('../../src/services/provider-credentials', () => ({
   }),
 }));
 
+vi.mock('../../src/services/provider-connections', () => ({
+  getAnthropicTransportMode: vi.fn().mockResolvedValue('token'),
+  getOpenAITransportMode: vi.fn().mockResolvedValue('token'),
+  resolveConnectedClaudeCodeTransport: vi.fn().mockResolvedValue(null),
+  resolveConnectedCodexTransport: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('../../src/config/env', () => ({
   env: {
     ANTHROPIC_API_KEY: 'test-anthropic-key',
@@ -119,7 +126,7 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   // -----------------------------------------------------------------------
   {
     providerId: 'anthropic',
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     label: 'Claude Sonnet',
     chatEvents: [
       { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' }, index: 0 },
@@ -169,11 +176,65 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
+  // Anthropic — Claude Fable
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'anthropic',
+    model: 'claude-fable-5',
+    label: 'Claude Fable',
+    chatEvents: [
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' }, index: 0 },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: ' world' }, index: 0 },
+      { type: 'message_stop' },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'tool_use', id: 'toolu_1', name: 'search' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"query":' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '"test"}' },
+      },
+      { type: 'message_stop' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'claude_call_1',
+      deltaCount: 2,
+      deltas: ['{"query":', '"test"}'],
+    },
+    reasoningEvents: [
+      { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Fable thought' }, index: 0 },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' }, index: 1 },
+      { type: 'message_stop' },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Fable thought'],
+      contentCount: 1,
+      contentDeltas: ['Answer'],
+      hasDone: true,
+    },
+    statusEvents: [{ type: 'message_stop' }],
+  },
+
+  // -----------------------------------------------------------------------
   // Anthropic — Claude Opus (with reasoning)
   // -----------------------------------------------------------------------
   {
     providerId: 'anthropic',
-    model: 'claude-opus-4-7',
+    model: 'claude-opus-4-8',
     label: 'Claude Opus',
     chatEvents: [
       { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' }, index: 0 },
@@ -1288,6 +1349,119 @@ describe('LLM stream event normalization', () => {
     expect(events.some((event) => event.type === 'done')).toBe(true);
   });
 
+  it('should record failed Codex outcome when a Responses stream emits an error and ends', async () => {
+    const providerConnections = await import('../../src/services/provider-connections');
+    const recordOutcome = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(providerConnections.getOpenAITransportMode).mockResolvedValue('codex');
+    vi.mocked(providerConnections.resolveConnectedCodexTransport).mockResolvedValue({
+      accessToken: 'codex-access-token',
+      accountId: 'chatgpt-account-1',
+      stableSessionId: 'codex-stable-session',
+      recordOutcome,
+    });
+
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('openai');
+    vi.spyOn(provider, 'streamGenerate').mockImplementation(async () => {
+      return (async function* () {
+        yield {
+          type: 'response.error',
+          error: { message: 'Codex stream failed', request_id: 'req_codex_failed' },
+        };
+      })();
+    });
+
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callLLMStream({
+        messages: [{ role: 'user', content: 'Hi' }],
+        providerId: 'openai',
+        model: 'gpt-5.5',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      }),
+    );
+
+    expect(events.filter((event) => event.type === 'done')).toHaveLength(0);
+    expect(events).toContainEqual({
+      type: 'error',
+      data: { message: 'Codex stream failed', request_id: 'req_codex_failed' },
+    });
+    expect(recordOutcome).toHaveBeenCalledWith({
+      status: 'failed',
+      errorMessage: 'Codex stream failed',
+    });
+  });
+
+  it('should route Codex OAuth streams through Responses semantics and preserve completed usage', async () => {
+    const providerConnections = await import('../../src/services/provider-connections');
+    vi.mocked(providerConnections.getOpenAITransportMode).mockResolvedValue('codex');
+    vi.mocked(providerConnections.resolveConnectedCodexTransport).mockResolvedValue({
+      accessToken: 'codex-access-token',
+      accountId: 'chatgpt-account-1',
+      stableSessionId: 'codex-stable-session',
+      recordOutcome: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('openai');
+    let capturedRequest: unknown;
+    vi.spyOn(provider, 'streamGenerate').mockImplementation(async (request) => {
+      capturedRequest = request;
+      return (async function* () {
+        yield { type: 'response.created', response: { id: 'resp_codex' } };
+        yield { type: 'response.output_text.delta', delta: 'Codex answer' };
+        yield {
+          type: 'response.completed',
+          response: { usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 } },
+        };
+      })();
+    });
+
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callLLMStream({
+        messages: [
+          { role: 'system', content: [{ type: 'text', text: 'System block' }] },
+          { role: 'developer', content: 'Developer instruction' },
+          { role: 'user', content: 'Hi' },
+        ] as never,
+        providerId: 'openai',
+        model: 'gpt-5.5',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        reasoningEffort: 'xhigh',
+        maxOutputTokens: 123,
+      }),
+    );
+
+    const requestOptions = (capturedRequest as {
+      mode?: string;
+      requestOptions?: {
+        instructions?: string;
+        reasoning?: { effort?: string };
+        max_output_tokens?: number;
+        store?: boolean;
+      };
+      codexTransport?: unknown;
+    }).requestOptions;
+
+    expect((capturedRequest as { mode?: string }).mode).toBe('responses');
+    expect((capturedRequest as { codexTransport?: unknown }).codexTransport).toBeTruthy();
+    expect(requestOptions?.store).toBe(false);
+    expect(requestOptions?.instructions).toBe('System block\n\nDeveloper instruction');
+    expect(requestOptions?.reasoning?.effort).toBe('high');
+    expect(requestOptions?.max_output_tokens).toBeUndefined();
+
+    const doneEvents = events.filter((event) => event.type === 'done');
+    expect(doneEvents).toHaveLength(1);
+    expect(doneEvents[0].data).toEqual({
+      usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 },
+    });
+  });
+
   it('should convert image content parts for OpenAI Responses input without stringifying them', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('openai');
@@ -1373,7 +1547,7 @@ describe('LLM stream event normalization', () => {
           ],
         }] as never,
         providerId: 'anthropic',
-        model: 'claude-opus-4-7',
+        model: 'claude-opus-4-8',
       }),
     );
 
