@@ -5,7 +5,6 @@ import {
   codexDoneEventFromResponseCompleted,
   codexInstructionsText,
   collectCodexInstructions,
-  mapCodexReasoningEffort,
   prepareCodexResponsesRequest,
   stripCodexInputIds,
 } from '../src/index.js';
@@ -30,10 +29,16 @@ describe('Codex OAuth Responses contract', () => {
     );
   });
 
-  it('downgrades xhigh reasoning to Codex-supported high', () => {
-    expect(mapCodexReasoningEffort('xhigh')).toBe('high');
-    expect(mapCodexReasoningEffort('medium')).toBe('medium');
-    expect(mapCodexReasoningEffort(undefined)).toBeUndefined();
+  it('passes xhigh reasoning through unchanged to the Codex backend', () => {
+    const prepared = prepareCodexResponsesRequest({
+      model: 'gpt-5.5',
+      stream: true,
+      input: [{ id: 'item_1', type: 'message', role: 'user', content: 'Hi' }],
+      instructions: 'System',
+      reasoning: { effort: 'xhigh' },
+    });
+
+    expect(prepared.body.reasoning).toEqual({ effort: 'xhigh' });
   });
 
   it('prepares Responses bodies for Codex OAuth transport', () => {
@@ -52,7 +57,7 @@ describe('Codex OAuth Responses contract', () => {
       stream: true,
       store: false,
       instructions: 'System',
-      reasoning: { effort: 'high' },
+      reasoning: { effort: 'xhigh' },
     });
     expect(prepared.body.max_output_tokens).toBeUndefined();
   });
