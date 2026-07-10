@@ -111,7 +111,7 @@ describe('claude-code-account auth material', () => {
     ).toEqual({ ok: false, message: 'access token is empty' });
   });
 
-  it('accepts claude-code-account with a valid access token and returns Authorization header', () => {
+  it('accepts claude-code-account with a valid access token and returns Anthropic OAuth headers', () => {
     expect(
       validateAdapterAuthSource({
         type: 'claude-code-account',
@@ -123,6 +123,7 @@ describe('claude-code-account auth material', () => {
       headers: {
         'Authorization': 'Bearer sk-ant-valid-token',
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'oauth-2025-04-20',
       },
     });
   });

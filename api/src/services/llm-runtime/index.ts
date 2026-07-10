@@ -345,6 +345,17 @@ const buildOpenAIResponsesContent = (
   return out;
 };
 
+const buildCodexInstructionsText = (value: unknown): string => {
+  const parts = normalizeContentParts(value);
+  if (!parts) return stringifyContent(value);
+  const text = parts
+    .filter((part): part is Extract<NormalizedContentPart, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n\n')
+    .trim();
+  return text || stringifyContent(value);
+};
+
 const buildGeminiParts = (value: unknown): Array<Record<string, unknown>> => {
   const parts = normalizeContentParts(value);
   if (!parts) return [{ text: stringifyContent(value) }];
@@ -2036,9 +2047,10 @@ export async function* callLLMStream(
   for (const m of messages) {
     const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
     const contentRaw = (m as unknown as { content?: unknown }).content;
-    const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
+    const content = typeof contentRaw === 'string' ? contentRaw : stringifyContent(contentRaw);
     if (useCodexTransport && (role === 'system' || role === 'developer')) {
-      if (content.trim()) codexInstructions.push(content);
+      const instructionText = buildCodexInstructionsText(contentRaw);
+      if (instructionText.trim()) codexInstructions.push(instructionText);
       continue;
     }
     const responseContent =
@@ -2311,7 +2323,9 @@ export async function* callLLMStream(
           break;
         }
         case 'response.completed': {
-          yield { type: 'done', data: {} };
+          const response = record.response as Record<string, unknown> | undefined;
+          const usage = response && typeof response.usage === 'object' && response.usage !== null ? response.usage : undefined;
+          yield { type: 'done', data: usage ? { usage } : {} };
           return;
         }
         default: {
