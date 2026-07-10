@@ -87,8 +87,8 @@ admin/status/debug.
 > `api.openai.com/v1/chat/completions` because those tokens lack the public API `model.request` scope. The gateway's
 > Codex OAuth transport targets `https://chatgpt.com/backend-api/codex/responses` (Responses API). For that transport,
 > Anthropic/Claude family requests that map to Codex use `gpt-5.5` (not `gpt-5.3-spark`), system/developer
-> `string | block[]` content is flattened into a single `instructions` string, `xhigh` reasoning is downgraded to
-> Codex-supported `high` and documented as a provider-capability downgrade, and Codex `response.completed.response.usage`
+> `string | block[]` content is flattened into a single `instructions` string, `xhigh` reasoning is passed through
+> unchanged to the Codex backend (owner decision, WP16 — no downgrade), and Codex `response.completed.response.usage`
 > is preserved into stream `done.data.usage` for BR-47 settlement. This behavior is exported by `@sentropic/llm-gateway`
 > so remote can consume the published package instead of carrying a provider-semantics mirror.
 
