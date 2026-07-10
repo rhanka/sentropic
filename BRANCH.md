@@ -1,9 +1,11 @@
-# Feature: BR-39e Social/Enterprise Federation — grounded STUDY
+# Feature: BR-39e Social/Enterprise Federation — STUDY + committed EVOL
 
 ## Objective
 Produce a grounded, decision-grade options/trade-offs study for adding upstream social/enterprise
-login federation (Google/GitHub/Microsoft/Apple/Facebook) to the Sentropic IdP. STUDY only — frames
-owner-gated decisions, no implementation.
+login federation (Google/GitHub/Microsoft/Apple/Facebook) to the Sentropic IdP, then consolidate it
+into a COMMITTED design (EVOL) encoding the owner decisions (OD1-OD4, ratified 2026-07-09) and the
+reconciled Opus-4.8 + Codex-5.5xhigh review refinements (R1-R9) as numbered decisions D1..D18, ready
+for harness-plan. Spec only — no implementation, no package/schema/migration edits.
 
 ## Scope / Guardrails
 - Spec artifact only. No code, no package, no auth-hono/api source edits, no migration.
@@ -15,6 +17,7 @@ owner-gated decisions, no implementation.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `spec/SPEC_STUDY_39E_SOCIAL_FEDERATION.md`
+  - `spec/SPEC_EVOL_39E_SOCIAL_FEDERATION.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -45,3 +48,13 @@ owner-gated decisions, no implementation.
   - [x] `## Owner decisions (batched)` D-1..D-8 with inline context.
   - [x] `## Adjacent: DS header on auth screens` (options a/b/c + reco).
   - [x] Lot gate: study committed; no push/PR.
+- [x] **Lot 2 — Consolidate the committed EVOL**
+  - [x] Encode OD1-OD4 (5 providers, SAFE linking, federation port in auth-hono, AppChrome brand) as
+        committed direction.
+  - [x] Fold R1-R9 (flow-state vs sealed continuation, subject-first lookup, no-email challenge,
+        Google-only auto-link, arctic+jose, security round-trip, fixed redirect, lifecycle, Apple lot)
+        as numbered decisions D1..D18.
+  - [x] Broker architecture grounded (token-handler.ts:363 / userinfo-handler.ts:40 no-leak),
+        `identities` shape + federation port contract + transactional linking algorithm.
+  - [x] Per-provider matrix, v1 lot breakdown (Lot 0-6 + Lot A), keystone test matrix, open items.
+  - [x] Lot gate: EVOL committed; no push/PR.
