@@ -34,6 +34,16 @@ const LEGACY_MODEL_CUTOVER_RULES: LegacyModelCutoverRule[] = [
     fromModelId: 'gemini-3.1-pro-preview-customtools',
     toModelId: 'gemini-3.5-flash',
   },
+  {
+    providerId: 'anthropic',
+    fromModelId: 'claude-sonnet-4-6',
+    toModelId: 'claude-sonnet-5',
+  },
+  {
+    providerId: 'anthropic',
+    fromModelId: 'claude-opus-4-7',
+    toModelId: 'claude-opus-4-8',
+  },
 ];
 
 const LEGACY_MODEL_CUTOVER_BY_MODEL = new Map(
