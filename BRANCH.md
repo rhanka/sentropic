@@ -31,9 +31,9 @@ Give the LLM gateway a first-class Claude Code account enrollment flow (OAuth au
 
 ## Lots
 - [x] Lot 1 — `claude-code-provider-auth.ts`: PKCE pair, `startClaudeCodeAuthorization` (authorize URL + verifier + state), `exchangeClaudeCodeAuthorizationCode` (authorization_code grant).
-- [ ] Lot 2 — `provider-connections.ts`: `start/complete/disconnectClaudeCodeEnrollment` + secret/connection helpers + `toAnthropicProviderState`; wire `listProviderConnections`.
-- [ ] Lot 3 — `settings.ts`: `/provider-connections/anthropic/enrollment/{start,complete,disconnect}` routes + zod schemas (complete carries `authorizationCode`).
-- [ ] Lot 4 — Stale `defaultModelId` fix `claude-sonnet-4-6` → `claude-sonnet-5` (`llm-account-transports.ts` + `provider-connections.ts`).
+- [x] Lot 2 — `provider-connections.ts`: `start/complete/disconnectClaudeCodeEnrollment` + secret/connection helpers + `toAnthropicProviderState`; wire `listProviderConnections`.
+- [x] Lot 3 — `settings.ts`: `/provider-connections/anthropic/enrollment/{start,complete,disconnect}` routes + zod schemas (complete carries `authorizationCode`).
+- [x] Lot 4 — Stale `defaultModelId` fix `claude-sonnet-4-6` → `claude-sonnet-5` (`llm-account-transports.ts` + `provider-connections.ts`).
 - [ ] Lot 5 — Unit tests (mocked fetch) for auth + enrollment; `make typecheck-api` + `make test-api` green.
 - [ ] Lot 6 — UAT (with owner): live Claude Code login (paste-code) from root; confirm authorize URL / redirect / scopes; verify pooled account served to a `--gw` subagent without spend-limit.
 
