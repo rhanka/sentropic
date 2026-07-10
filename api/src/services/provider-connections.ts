@@ -12,13 +12,22 @@ import {
 import {
   acquireClaudeCodeAccountTransport,
   acquireOpenAICodexAccountTransport,
+  disconnectClaudeCodeAccountTransports,
   disconnectCodexAccountTransports,
+  getPrimaryClaudeCodeAccountTransport,
   getPrimaryCodexAccountTransport,
+  storeClaudeCodeAccountTransport,
   storeCodexAccountTransport,
   type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
   type LlmAccountTransportPublic,
 } from './llm-account-transports';
+import {
+  exchangeClaudeCodeAuthorizationCode,
+  fetchClaudeCodeProfile,
+  parseClaudeCodeAuthorizationInput,
+  startClaudeCodeAuthorization,
+} from './claude-code-provider-auth';
 import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { settingsService } from './settings';
@@ -69,11 +78,22 @@ type CodexConnectedSecret = {
   expiresAt?: string | null;
 };
 
+type ClaudeCodePendingEnrollmentPayload = {
+  enrollmentId: string;
+  codeVerifier: string;
+  state: string | null;
+  redirectUri: string;
+  expectedAccountLabel: string | null;
+};
+
 const CODEX_CONNECTION_SETTINGS_KEY = 'provider_connection:codex';
 const CODEX_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:codex_pending';
 const CODEX_CONNECTION_SECRET_KEY = 'provider_connection_secret:codex';
 const OPENAI_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:openai';
 const ANTHROPIC_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:anthropic';
+const CLAUDE_CODE_CONNECTION_SETTINGS_KEY = 'provider_connection:claude_code';
+const CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY =
+  'provider_connection_secret:claude_code_pending';
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -187,6 +207,42 @@ const deleteCodexSecrets = async (userId: string): Promise<void> => {
   ]);
 };
 
+const readClaudeCodeConnection = async (
+  userId: string,
+): Promise<CodexConnectionPayload | null> => {
+  const raw = await settingsService.get(CLAUDE_CODE_CONNECTION_SETTINGS_KEY, {
+    userId,
+    fallbackToGlobal: false,
+  });
+  return parseCodexConnectionPayload(raw);
+};
+
+const readPendingClaudeCodeEnrollment = async (
+  userId: string,
+): Promise<ClaudeCodePendingEnrollmentPayload | null> => {
+  const raw = await settingsService.get(CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY, {
+    userId,
+    fallbackToGlobal: false,
+  });
+  return parseSecretPayload<ClaudeCodePendingEnrollmentPayload>(raw);
+};
+
+const writeClaudeCodeConnection = async (
+  userId: string,
+  payload: CodexConnectionPayload,
+): Promise<void> => {
+  await settingsService.set(
+    CLAUDE_CODE_CONNECTION_SETTINGS_KEY,
+    JSON.stringify(payload),
+    'Claude Code provider connection state for the current admin user.',
+    { userId },
+  );
+};
+
+const deleteClaudeCodeSecrets = async (userId: string): Promise<void> => {
+  await deleteUserScopedSetting(userId, CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY);
+};
+
 export const resolveConnectedCodexTransport = async (
   userId: string,
   options: {
@@ -218,7 +274,7 @@ export const resolveConnectedClaudeCodeTransport = async (
   return acquireClaudeCodeAccountTransport({
     userId,
     workspaceId: options.workspaceId,
-    modelId: normalizeOptionalText(options.modelId) ?? 'claude-sonnet-4-6',
+    modelId: normalizeOptionalText(options.modelId) ?? 'claude-sonnet-5',
     affinityKey: options.affinityKey,
     requestId: options.requestId,
   });
@@ -290,6 +346,43 @@ const toCodexProviderState = (
   };
 };
 
+const toAnthropicProviderState = (
+  claudeConnection: CodexConnectionPayload | null,
+  claudeAccount: LlmAccountTransportPublic | null,
+  credential: { credential: string | null; source: ProviderCredentialSource },
+): ProviderConnectionState => {
+  const accountConnected =
+    !!claudeAccount && (claudeAccount.status === 'active' || claudeAccount.status === 'cooldown');
+  const visibleStatus: ProviderConnectionState['connectionStatus'] = accountConnected
+    ? 'connected'
+    : claudeConnection?.status === 'pending'
+      ? 'pending'
+      : credential.credential
+        ? 'connected'
+        : 'disconnected';
+  const ready = accountConnected
+    ? claudeAccount?.status !== 'cooldown'
+    : Boolean(credential.credential);
+  return {
+    providerId: 'anthropic',
+    label: 'Anthropic',
+    ready,
+    connectionStatus: visibleStatus,
+    enrollmentId: claudeConnection?.enrollmentId ?? null,
+    enrollmentUrl: claudeConnection?.enrollmentUrl ?? null,
+    enrollmentCode: claudeConnection?.enrollmentCode ?? null,
+    enrollmentExpiresAt: claudeConnection?.enrollmentExpiresAt ?? null,
+    managedBy:
+      accountConnected || claudeConnection?.status === 'pending'
+        ? 'admin_settings'
+        : toManagedBy(credential.source),
+    accountLabel: claudeAccount?.accountLabel ?? claudeConnection?.accountLabel ?? null,
+    updatedAt: claudeAccount?.updatedAt ?? claudeConnection?.updatedAt ?? null,
+    updatedByUserId: claudeConnection?.updatedByUserId ?? null,
+    canConfigure: true,
+  };
+};
+
 const decodeJwtPayload = (jwt: string): Record<string, unknown> | null => {
   const [, payload] = jwt.split('.');
   if (!payload) return null;
@@ -352,8 +445,20 @@ export const listProviderConnections = async (input?: {
 }): Promise<ProviderConnectionState[]> => {
   const userId = normalizeOptionalText(input?.userId);
   const codexAccount = userId ? await migrateLegacyCodexConnectionIfNeeded(userId) : null;
-  const [codexConnection, openaiCredential, geminiCredential, anthropicCredential, mistralCredential, cohereCredential] = await Promise.all([
+  const claudeAccount = userId
+    ? await getPrimaryClaudeCodeAccountTransport({ ownerUserId: userId })
+    : null;
+  const [
+    codexConnection,
+    claudeConnection,
+    openaiCredential,
+    geminiCredential,
+    anthropicCredential,
+    mistralCredential,
+    cohereCredential,
+  ] = await Promise.all([
     userId ? readCodexConnection(userId) : Promise.resolve(null),
+    userId ? readClaudeCodeConnection(userId) : Promise.resolve(null),
     resolveProviderCredential({
       providerId: 'openai',
       userId,
@@ -400,7 +505,7 @@ export const listProviderConnections = async (input?: {
     toCodexProviderState(codexConnection, codexAccount),
     toSimpleProviderState('openai', 'OpenAI', openaiCredential),
     toSimpleProviderState('gemini', 'Gemini', geminiCredential),
-    toSimpleProviderState('anthropic', 'Anthropic', anthropicCredential),
+    toAnthropicProviderState(claudeConnection, claudeAccount, anthropicCredential),
     toSimpleProviderState('mistral', 'Mistral', mistralCredential),
     toSimpleProviderState('cohere', 'Cohere', cohereCredential),
   ];
@@ -559,4 +664,139 @@ export const disconnectCodexEnrollment = async (input: {
   ]);
 
   return toCodexProviderState(next);
+};
+
+export const startClaudeCodeEnrollment = async (input: {
+  accountLabel?: string | null;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const authorization = startClaudeCodeAuthorization();
+  const enrollmentId = createId();
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+  const now = new Date().toISOString();
+  const visible: CodexConnectionPayload = {
+    status: 'pending',
+    enrollmentId,
+    enrollmentUrl: authorization.authorizeUrl,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+  const secret: ClaudeCodePendingEnrollmentPayload = {
+    enrollmentId,
+    codeVerifier: authorization.codeVerifier,
+    state: authorization.state,
+    redirectUri: authorization.redirectUri,
+    expectedAccountLabel: accountLabel,
+  };
+
+  await Promise.all([
+    deleteClaudeCodeSecrets(input.updatedByUserId),
+    writeClaudeCodeConnection(input.updatedByUserId, visible),
+    writeEncryptedSetting(
+      input.updatedByUserId,
+      CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY,
+      secret,
+      'Pending Claude Code OAuth enrollment secret for the current admin user.',
+    ),
+  ]);
+
+  return toAnthropicProviderState(visible, null, { credential: null, source: 'none' });
+};
+
+export const completeClaudeCodeEnrollment = async (input: {
+  enrollmentId: string;
+  authorizationCode: string;
+  accountLabel?: string | null;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const [current, pending] = await Promise.all([
+    readClaudeCodeConnection(input.updatedByUserId),
+    readPendingClaudeCodeEnrollment(input.updatedByUserId),
+  ]);
+
+  if (!current || current.status !== 'pending' || current.enrollmentId !== input.enrollmentId) {
+    throw new Error('Invalid or expired Claude Code enrollment session.');
+  }
+  if (!pending || pending.enrollmentId !== input.enrollmentId) {
+    throw new Error('Missing pending Claude Code enrollment state.');
+  }
+
+  const parsed = parseClaudeCodeAuthorizationInput(input.authorizationCode);
+  if (pending.state && parsed.state && pending.state !== parsed.state) {
+    throw new Error('Claude Code enrollment state mismatch.');
+  }
+
+  const tokens = await exchangeClaudeCodeAuthorizationCode({
+    authorizationCode: parsed.authorizationCode,
+    codeVerifier: pending.codeVerifier,
+    state: parsed.state ?? pending.state,
+    redirectUri: pending.redirectUri,
+  });
+
+  const profile = await fetchClaudeCodeProfile({ accessToken: tokens.accessToken }).catch(
+    () => null,
+  );
+  const requestedAccountLabel =
+    normalizeOptionalText(input.accountLabel) || pending.expectedAccountLabel;
+  const connectedAccountLabel = profile?.email || profile?.name || requestedAccountLabel;
+  const externalAccountId = profile?.accountUuid ?? connectedAccountLabel ?? createId();
+  const subscriptionType = profile?.hasClaudeMax ? 'max' : profile?.hasClaudePro ? 'pro' : null;
+
+  const now = new Date().toISOString();
+  const visible: CodexConnectionPayload = {
+    status: 'connected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: connectedAccountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  const [, storedAccount] = await Promise.all([
+    deleteUserScopedSetting(input.updatedByUserId, CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY),
+    storeClaudeCodeAccountTransport({
+      ownerUserId: input.updatedByUserId,
+      accountLabel: connectedAccountLabel,
+      externalAccountId,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+      subscriptionType,
+      profile: profile ? (profile as unknown as Record<string, unknown>) : null,
+    }),
+    writeClaudeCodeConnection(input.updatedByUserId, visible),
+  ]);
+
+  return toAnthropicProviderState(visible, storedAccount ?? null, {
+    credential: null,
+    source: 'none',
+  });
+};
+
+export const disconnectClaudeCodeEnrollment = async (input: {
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const next: CodexConnectionPayload = {
+    status: 'disconnected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: null,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  await Promise.all([
+    writeClaudeCodeConnection(input.updatedByUserId, next),
+    deleteClaudeCodeSecrets(input.updatedByUserId),
+    disconnectClaudeCodeAccountTransports({ ownerUserId: input.updatedByUserId }),
+  ]);
+
+  return toAnthropicProviderState(next, null, { credential: null, source: 'none' });
 };
