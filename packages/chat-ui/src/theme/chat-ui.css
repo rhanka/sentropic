@@ -882,6 +882,11 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
   margin-top: calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
 }
+[data-st-chat-theme] .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.75rem * var(--tw-space-y-reverse));
+}
 [data-st-chat-theme] .self-end {
   align-self: flex-end;
 }
@@ -1135,6 +1140,10 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .font-semibold {
   font-weight: 600;
+}
+[data-st-chat-theme] .ordinal {
+  --tw-ordinal: ordinal;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
 }
 [data-st-chat-theme] .leading-none {
   line-height: 1;
