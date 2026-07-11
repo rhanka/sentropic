@@ -56,10 +56,10 @@
   - [ ] Gate: scoped provider unit tests and `make scope-check`.
 
 - [ ] **Lot 2 — POST form callback transport**
-  - [ ] Add pure injectable callback parsing for Apple POST bodies and GET query parsing for non-Apple providers.
-  - [ ] Accept GET and POST callback routes while requiring Apple parameters from `parseBody()`.
-  - [ ] Pass the parsed one-time Apple profile through the broker verification seam for login and manual-link callbacks.
-  - [ ] Preserve bound flow-state cookie consumption on POST.
+  - [x] Add pure injectable callback parsing for Apple POST bodies and GET query parsing for non-Apple providers.
+  - [x] Accept GET and POST callback routes while requiring Apple parameters from `parseBody()`.
+  - [x] Pass the parsed one-time Apple profile through the broker verification seam for login and manual-link callbacks.
+  - [x] Preserve bound flow-state cookie consumption on POST.
   - [ ] Gate: route cookie/form-post unit tests and `make scope-check`.
 
 - [ ] **Lot 3 — Environment and registry**
