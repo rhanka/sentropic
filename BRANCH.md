@@ -1,53 +1,73 @@
-# Feature: Branded AppChrome header on IdP auth screens (BR-39e Lot A)
+# Feature: BR-39e Lot 1 — OAuth federation broker core + Google provider
 
 ## Objective
-Render the real DS-branded header (brand zone SENT logo mark + wordmark) on the standalone IdP auth screens by configuring the design-system-svelte `AppChrome` brand zone (OD4, config-only, reversible), consistent with the main app's canonical header — without duplicating `ui/Header.svelte`.
+Add upstream RP federation to the Sentropic IdP: `/auth/federation/:provider/{start,callback}` broker routes plus a Google OIDC provider, minting the IdP's own session (broker model, D1) with SAFE linking (D6/D7/D8) and full CSRF/nonce/PKCE/session-rotation hardening (D5/D10/D11).
 
 ## Scope / Guardrails
-- Scope limited to `apps/auth-idp/web/**` (config + static asset).
-- No DS-package change: `AppChrome` already exposes `logoSrc`; config only.
+- Scope limited to `api/src/routes/auth/**`, `api/src/services/auth/**`, `api/src/config/env.ts`, `api/package.json`, api tests.
+- No new migration (Lot 0 tables `identities` + `federation_flow_states` suffice).
 - Make-only workflow, no direct Docker commands.
-- Branch development happens in isolated worktree `tmp/auth-brand-header`.
+- Branch development in isolated worktree `tmp/br39e-lot1`.
+- Automated test campaigns on `ENV=feat-br39e-lot1`, never on root `dev`.
+- `ENV=<env>` passed last in every `make` command.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `apps/auth-idp/web/**`
-  - `packages/design-system-svelte/src/**` (only if a brand-zone prop/slot were missing — NOT used; not present in this repo)
+  - `api/src/routes/auth/federation.ts`
+  - `api/src/routes/auth/index.ts`
+  - `api/src/services/auth/federation/**`
+  - `api/src/config/env.ts`
+  - `api/package.json`
+  - `package-lock.json`
+  - `api/package-lock.json`
+  - `api/tests/unit/auth/federation-broker.test.ts`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/auth-hono/**`, `packages/auth-ui/**`, `api/**`, migrations
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
+  - `api/drizzle/**` (no new migration)
+  - `apps/**`, `packages/auth-ui/**`, `packages/design-system*/**`
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `packages/auth-hono/src/**` (only if a broker helper genuinely belongs in the lib — not used; kept api-side)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- `acknowledge`: DS package (`@sentropic/design-system-svelte`) is an external npm dependency (`^0.34.0`, resolves 0.34.48) — its `src/**` is not in this repo. No DS change was needed; `AppChrome` already supports `logoSrc`, so the requirement is met by config alone (preferred outcome).
+- none
+
+## AI Flaky tests
+- none (no AI paths in scope)
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (orthogonal single-file config + asset; one test cycle)
+- [x] **Mono-branch + cherry-pick**
 - [ ] **Multi-branch**
-- Rationale: Single small config change scoped to one app; no independent CI needed.
+- Rationale: single orthogonal lot on the api federation surface; one test cycle.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Ground on `ui/Header.svelte`, `apps/auth-idp/web/+layout.svelte`, DS `AppChrome`, `screen-smoke.ts`.
-  - [x] Confirm isolated worktree `tmp/auth-brand-header`.
+  - [x] Read `spec/SPEC_EVOL_39E_SOCIAL_FEDERATION.md` (D1..D18) + Lot 0 code (ports, resolver, adapter, oauth seam, session).
+  - [x] Confirm isolated worktree `tmp/br39e-lot1` on `feat/br39e-lot1-broker-google`.
+  - [x] Env mapping: `ENV=feat-br39e-lot1`, `API_PORT=9330`, `REGISTRY=local`.
   - [x] Confirm scope and guardrails.
 
-- [x] **Lot 1 — Branded AppChrome brand zone**
-  - [x] Ship `SENT-logo-squared.svg` into `apps/auth-idp/web/static/` (same asset the main app serves).
-  - [x] Configure `AppChrome` with `logoSrc="/SENT-logo-squared.svg"` in `apps/auth-idp/web/src/routes/+layout.svelte` (keep `brandName="SENT"`, `productName="Sentropic ID"`, entropicTheme, locale).
+- [x] **Lot 1 — Broker core + Google**
+  - [x] Add `arctic` to api (`make install-api NPM_LIB=arctic`); use `jose` for id_token verification (no `oslo`).
+  - [x] `federation/types.ts`: `FederationProvider` interface + broker request/result types.
+  - [x] `federation/broker.ts`: `createFederationBroker` — start (state+nonce+PKCE, server-side flow-state, continuation pointer, redirect) + callback (consume flow-state, verify state/nonce/PKCE, resolve+link, session rotation, resume/landing).
+  - [x] `federation/google-provider.ts`: Google OIDC via arctic (auth URL + code exchange) + jose (id_token sig/iss/aud/nonce).
+  - [x] `federation/registry.ts`: provider registry (google only) + env config (feature-off when unconfigured).
+  - [x] `routes/auth/federation.ts`: Hono router wiring broker to host ports; GET start/callback; mount in `routes/auth/index.ts`.
+  - [x] `config/env.ts`: `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_OAUTH_REDIRECT_URI`.
   - [x] Lot gate:
-    - [x] `make typecheck-idp-web` — svelte-check found 0 errors and 0 warnings.
-    - [x] `make build-idp-web` — production build OK; `build/SENT-logo-squared.svg` shipped; root-layout chunk references the logoSrc.
-    - [ ] `make dev-idp` + `make smoke-idp-screens` — screen smoke assertions (login heading / consent Approve / token exchange) are orthogonal to a decorative brand-logo addition; not booted to avoid colliding with a possible live `ENV=dev` shared-DB stack (project footgun). Command recorded for the integration test cycle.
+    - [x] `make typecheck-api` (0 errors) + `make lint-api` (0 errors, pre-existing no-console warnings only)
+    - [x] **API tests**
+      - [x] Add `api/tests/unit/auth/federation-broker.test.ts` (K-STATE, K-FLOW, K-NONCE, K-SEALED, K-NOLEAK, K-AUTOLINK, K-NOMERGE-CRED, K-ROTATE) — 10 tests green.
+      - [x] Scoped run: `make test-api-unit SCOPE=tests/unit/auth/federation-broker.test.ts ENV=test-br39e-lot1`
 
-- [ ] **Lot N — Final validation**
-  - [x] Typecheck (svelte-check) green.
-  - [ ] PR opened; branch CI to run on the PR.
-  - [ ] Merge after CI + UAT sign-off (conductor/owner).
+- [x] **Lot N — Final validation**
+  - [x] Typecheck & Lint (api) — 0 errors
+  - [x] Scoped keystone tests green (10/10)
+  - [ ] PR created with `BRANCH.md` as body
+  - [ ] Remove `BRANCH.md` before push (main has a stale copy — avoid add/add conflict)
