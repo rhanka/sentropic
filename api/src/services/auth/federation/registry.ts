@@ -1,17 +1,26 @@
 import { env } from '../../../config/env';
+import { createGithubProvider } from './github-provider';
 import { createGoogleProvider } from './google-provider';
 import type { FederationProvider } from './types';
 
 /**
- * BR-39e Lot 1 — provider registry. v1 registers ONLY 'google'. A provider present in the registry
- * but missing its env credentials resolves to `null` (feature-OFF): the route answers a clear
- * "provider not configured" instead of crashing. An id absent from the registry is "not supported".
- * Later lots add github/microsoft/apple/facebook behind the same seam.
+ * BR-39e Lot 1/2 — provider registry. v1 registers 'google' (Lot 1) and 'github' (Lot 2). A provider
+ * present in the registry but missing its env credentials resolves to `null` (feature-OFF): the route
+ * answers a clear "provider not configured" instead of crashing. An id absent from the registry is
+ * "not supported". Later lots add microsoft/apple/facebook behind the same seam.
  */
 
 type FederationProviderFactory = (ctx: { defaultRedirectUri: string }) => FederationProvider | null;
 
 const REGISTRY: Record<string, FederationProviderFactory> = {
+  github: ({ defaultRedirectUri }) => {
+    const clientId = env.GITHUB_OAUTH_CLIENT_ID;
+    const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET;
+    // Feature-flag: absent client credentials → provider not configured (never a crash).
+    if (!clientId || !clientSecret) return null;
+    const redirectUri = env.GITHUB_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
+    return createGithubProvider({ clientId, clientSecret, redirectUri });
+  },
   google: ({ defaultRedirectUri }) => {
     const clientId = env.GOOGLE_OAUTH_CLIENT_ID;
     const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET;
