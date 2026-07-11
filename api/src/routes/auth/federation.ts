@@ -11,7 +11,10 @@ import {
   isFederationProviderSupported,
   resolveFederationProvider,
 } from '../../services/auth/federation/registry';
-import type { FederationProvider } from '../../services/auth/federation/types';
+import type {
+  FederationCallbackProfile,
+  FederationProvider,
+} from '../../services/auth/federation/types';
 import { verifyValidationToken } from '../../services/email-verification';
 import { validateSession } from '../../services/session-manager';
 import { ensureWorkspaceForUser } from '../../services/workspace-service';
@@ -51,6 +54,59 @@ const deviceInfoFrom = (c: Context): AuthHonoDeviceInfo => ({
   ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
   userAgent: c.req.header('user-agent'),
 });
+
+interface CallbackParamSource {
+  method: string;
+  parseBody(): Promise<Record<string, unknown>>;
+  query(name: string): string | undefined;
+}
+
+export interface ParsedFederationCallback {
+  code: string | null;
+  error: string | null;
+  profile: FederationCallbackProfile | null;
+  state: string | null;
+}
+
+const stringField = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+const parseAppleProfile = (raw: string | null): FederationCallbackProfile | null => {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    const email = stringField(value.email);
+    const name = value.name && typeof value.name === 'object' ? value.name as Record<string, unknown> : {};
+    const displayName = [stringField(name.firstName), stringField(name.lastName)].filter(Boolean).join(' ') || null;
+    return email || displayName ? { displayName, email } : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Select the callback transport before reading parameters; Apple GET query values are never accepted. */
+export const parseFederationCallback = async (
+  providerId: string,
+  source: CallbackParamSource,
+): Promise<ParsedFederationCallback> => {
+  if (providerId === 'apple' && source.method === 'POST') {
+    const body = await source.parseBody();
+    return {
+      code: stringField(body.code),
+      error: stringField(body.error),
+      profile: parseAppleProfile(stringField(body.user)),
+      state: stringField(body.state),
+    };
+  }
+  if (providerId !== 'apple' && source.method === 'GET') {
+    return {
+      code: source.query('code') ?? null,
+      error: source.query('error') ?? null,
+      profile: null,
+      state: source.query('state') ?? null,
+    };
+  }
+  return { code: null, error: null, profile: null, state: null };
+};
 
 // Resolve the authenticated session's user id (cookie or bearer), or null when unauthenticated.
 const sessionUserId = async (c: Context): Promise<string | null> => {
@@ -150,16 +206,23 @@ federationRouter.get('/:provider/start', async (c) => {
   return c.redirect(result.location, 302);
 });
 
-federationRouter.get('/:provider/callback', async (c) => {
+const callbackHandler = async (c: Context) => {
   const provider = resolveOrRespond(c);
   if (provider instanceof Response) return provider;
 
+  const params = await parseFederationCallback(provider.id, {
+    method: c.req.method,
+    parseBody: () => c.req.parseBody(),
+    query: (name) => c.req.query(name),
+  });
+
   const result = await brokerFor(c, provider).callback({
-    code: c.req.query('code') ?? null,
+    code: params.code,
     deviceInfo: deviceInfoFrom(c),
-    error: c.req.query('error') ?? null,
+    error: params.error,
     flowStateId: getCookie(c, FLOW_COOKIE) ?? null,
-    state: c.req.query('state') ?? null,
+    profile: params.profile,
+    state: params.state,
   });
 
   if (result.kind === 'authenticated') {
@@ -198,7 +261,10 @@ federationRouter.get('/:provider/callback', async (c) => {
 
   if (result.clearFlowCookie) deleteCookie(c, FLOW_COOKIE, { path: '/auth/federation' });
   return c.json(result.body, result.status as 400 | 401 | 409 | 500);
-});
+};
+
+federationRouter.get('/:provider/callback', callbackHandler);
+federationRouter.post('/:provider/callback', callbackHandler);
 
 /**
  * BR-39e Lot 2 — the AUTHENTICATED manual-link flow (D7, §3.3 step 6). This is the ONLY path that
@@ -239,21 +305,27 @@ federationRouter.get('/:provider/link/start', async (c) => {
   return c.redirect(result.location, 302);
 });
 
-federationRouter.get('/:provider/link/callback', async (c) => {
+const linkCallbackHandler = async (c: Context) => {
   const provider = resolveOrRespond(c);
   if (provider instanceof Response) return provider;
 
   // The session at callback time is the link target (K-MANUAL-LINK-AUTH). Unauthenticated ⇒ the broker
   // rejects before consuming the flow-state or verifying anything.
   const userId = await sessionUserId(c);
+  const params = await parseFederationCallback(provider.id, {
+    method: c.req.method,
+    parseBody: () => c.req.parseBody(),
+    query: (name) => c.req.query(name),
+  });
 
   const result = await brokerFor(c, provider).linkCallback({
-    code: c.req.query('code') ?? null,
+    code: params.code,
     deviceInfo: deviceInfoFrom(c),
-    error: c.req.query('error') ?? null,
+    error: params.error,
     flowStateId: getCookie(c, LINK_FLOW_COOKIE) ?? null,
     linkUserId: userId,
-    state: c.req.query('state') ?? null,
+    profile: params.profile,
+    state: params.state,
   });
 
   if (result.kind === 'linked') {
@@ -264,7 +336,10 @@ federationRouter.get('/:provider/link/callback', async (c) => {
 
   if (result.clearFlowCookie) deleteCookie(c, LINK_FLOW_COOKIE, { path: '/auth/federation' });
   return c.json(result.body, result.status as 400 | 401 | 409 | 500);
-});
+};
+
+federationRouter.get('/:provider/link/callback', linkCallbackHandler);
+federationRouter.post('/:provider/link/callback', linkCallbackHandler);
 
 const challengeCompleteSchema = z.object({
   email: z.string().email(),
