@@ -780,6 +780,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .max-w-full {
   max-width: 100%;
 }
+[data-st-chat-theme] .max-w-none {
+  max-width: none;
+}
 [data-st-chat-theme] .flex-1 {
   flex: 1 1 0%;
 }
@@ -1135,6 +1138,10 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .font-semibold {
   font-weight: 600;
+}
+[data-st-chat-theme] .ordinal {
+  --tw-ordinal: ordinal;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
 }
 [data-st-chat-theme] .leading-none {
   line-height: 1;
