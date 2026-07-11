@@ -10,7 +10,6 @@
 export const CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
 
 export type CodexReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-export type CodexMappedReasoningEffort = Exclude<CodexReasoningEffort, 'xhigh'>;
 
 export type CodexContentPart =
   | { type: 'text' | 'input_text'; text?: string }
@@ -81,13 +80,6 @@ export const collectCodexInstructions = (
   return instructions || fallback;
 };
 
-export const mapCodexReasoningEffort = (
-  effort: CodexReasoningEffort | string | undefined,
-): CodexMappedReasoningEffort | string | undefined => {
-  if (!effort) return undefined;
-  return effort === 'xhigh' ? 'high' : effort;
-};
-
 const stripCodexInputIdsFromValue = (value: unknown): unknown => {
   if (!Array.isArray(value)) return value;
   return value.map((item) => {
@@ -110,22 +102,14 @@ export const stripCodexInputIds = (body: string): string => {
 export const prepareCodexResponsesRequest = (
   request: CodexResponsesRequestInput,
 ): CodexPreparedResponsesRequest => {
-  const reasoning = isRecord(request.reasoning)
-    ? {
-        ...request.reasoning,
-        ...(typeof request.reasoning.effort === 'string'
-          ? { effort: mapCodexReasoningEffort(request.reasoning.effort) }
-          : {}),
-      }
-    : request.reasoning;
-
+  // Reasoning (including `xhigh`) is passed through unchanged to the Codex
+  // backend — owner decision: no `xhigh`→`high` downgrade (WP16).
   const { max_output_tokens: _maxOutputTokens, ...rest } = request;
   return {
     url: CODEX_RESPONSES_URL,
     body: {
       ...rest,
       store: false,
-      ...(reasoning ? { reasoning } : {}),
     },
   };
 };
