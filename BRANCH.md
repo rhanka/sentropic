@@ -34,6 +34,7 @@ Add the OpenAI GPT-5.6 family (Sol / Terra / Luna) to the `@sentropic/llm-mesh` 
 - [ ] Lot 5 — h2a pre-integration + real `--gw` test on the RC; then final `0.7.0` release.
 
 ## Feedback Loop
+- BR-EX1: touch `api/tests/api/models.test.ts` (outside `packages/llm-mesh/**`). Reason: the additive GPT-5.6 catalog entries force the consumer's exact-list + count assertions to evolve (openai list +3, total 14→17). Impact: test-only, no runtime code. Rollback: revert the two assertion edits with the catalog change.
 - attendu (h2a): how the existing Codex enrollment is imported (file/format/reader location) — sent `env:1783732123000:a8a7` to `claude:a2a-cli:52ebd45f3fe1`. Lot 2 blocked until reply.
 - Open decision (owner): make `gpt-5.6-sol` the default OpenAI model (add cutover `gpt-5.5 → gpt-5.6-sol`) or keep 5.6 as opt-in options only. Current: opt-in only (no default change).
 

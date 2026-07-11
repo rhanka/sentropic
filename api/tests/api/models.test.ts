@@ -45,7 +45,14 @@ describe('Models API', () => {
         .map((m: { model_id: string }) => m.model_id)
         .sort();
 
-    expect(modelsByProvider('openai')).toEqual(['gpt-4.1-nano', 'gpt-5.4-nano', 'gpt-5.5']);
+    expect(modelsByProvider('openai')).toEqual([
+      'gpt-4.1-nano',
+      'gpt-5.4-nano',
+      'gpt-5.5',
+      'gpt-5.6-luna',
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+    ]);
     expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite', 'gemini-3.5-flash']);
     expect(modelsByProvider('anthropic')).toEqual(['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5']);
     expect(modelsByProvider('mistral')).toEqual(['magistral-medium-2509', 'mistral-small-2603']);
@@ -54,7 +61,7 @@ describe('Models API', () => {
       'google/gemini-3.1-flash-lite@gcp',
       'google/gemini-3.5-flash@gcp',
     ]);
-    expect(data.models).toHaveLength(14);
+    expect(data.models).toHaveLength(17);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
