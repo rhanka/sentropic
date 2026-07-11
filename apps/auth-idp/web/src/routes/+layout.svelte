@@ -16,11 +16,15 @@
 <ThemeProvider theme={entropicTheme}>
   {#snippet children()}
     <div class="min-h-screen bg-gray-50">
-      <!-- Full DS top bar (the assembled design-system.sent-tech.ca chrome): brand + built-in
-           language selector. Replaces the bare AppHeader strip (looked unstyled / "foireux"). -->
+      <!-- Full DS top bar (the assembled design-system.sent-tech.ca chrome): real branded
+           SENT logo mark + wordmark + built-in language selector, consistent with the main
+           app's canonical header. `logoSrc` renders the DS brand-zone mark (the same
+           /SENT-logo-squared.svg asset the main app ships); the mark stays decorative
+           (default empty alt) since the brand link is already labelled "SENT Sentropic ID". -->
       <AppChrome
         brandName="SENT"
         productName="Sentropic ID"
+        logoSrc="/SENT-logo-squared.svg"
         locale={$locale}
         onLocaleChange={setLocale}
       />
