@@ -296,7 +296,7 @@
       class="flex-1 min-h-0 relative"
     >
       <div
-        class="h-full overflow-y-auto p-3 space-y-2 slim-scroll"
+        class="h-full overflow-y-auto p-3 space-y-3 slim-scroll"
         style="scrollbar-gutter: stable;"
         bind:this={listEl}
         on:scroll={onListScroll}
@@ -433,7 +433,7 @@
 
         {#if stagedHistoryTimelineItems.length > 0}
           <div
-            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1] p-3 space-y-2"
+            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1] p-3 space-y-3"
             bind:this={historyStageMeasureEl}
             aria-hidden="true"
           >
