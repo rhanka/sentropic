@@ -118,6 +118,28 @@ describe('createMicrosoftProvider (BR-39e Lot 3)', () => {
     await expect(verify('common', 'wrong-nonce')).rejects.toThrow(/nonce/i);
   });
 
+  it('rejects issuer/tid mismatches and enforces concrete tenant endpoints', async () => {
+    mocks.jwtVerify.mockResolvedValueOnce({
+      payload: payload({ iss: issuer(TENANT_B) }),
+    });
+    await expect(verify()).rejects.toThrow(/issuer/);
+    await expect(verify(TENANT_B)).rejects.toThrow(/configured tenant/);
+  });
+
+  it('accepts an explicit email_verified signal and preferred_username fallback', async () => {
+    mocks.jwtVerify.mockResolvedValueOnce({
+      payload: payload({
+        email: undefined,
+        email_verified: true,
+        preferred_username: 'upn@example.com',
+      }),
+    });
+    await expect(verify()).resolves.toMatchObject({
+      email: 'upn@example.com',
+      emailVerified: true,
+    });
+  });
+
   it('K-MS-SUBJECT: same per-app sub across tenants derives distinct oid subjects and tenant bindings', async () => {
     mocks.jwtVerify
       .mockResolvedValueOnce({

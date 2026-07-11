@@ -44,11 +44,11 @@
   - [x] Register feature-OFF `microsoft` in `api/src/services/auth/federation/registry.ts`.
   - [x] Add optional Microsoft OAuth env configuration in `api/src/config/env.ts`.
   - [x] Keep `AUTO_LINK_PROVIDERS` Google-only and reuse existing GET callbacks and broker logic.
-- [ ] **Lot 2 — Microsoft keystone tests**
-  - [ ] Add `api/tests/unit/auth/federation-microsoft-provider.test.ts` for auth URL, signature/issuer/audience verification, mandatory nonce, `oid` subject, `tid` tenant, unverified email, and token no-leak.
+- [x] **Lot 2 — Microsoft keystone tests**
+  - [x] Add `api/tests/unit/auth/federation-microsoft-provider.test.ts` for auth URL, signature/issuer/audience verification, mandatory nonce, `oid` subject, `tid` tenant, unverified email, and token no-leak.
   - [x] Prove K-MS-SUBJECT across same-`sub` identities in distinct tenants through the shared broker seam.
-  - [ ] Prove Microsoft email collision routes to manual-link and never auto-links.
-  - [ ] Run `make test-api-unit SCOPE="federation-microsoft-provider federation-broker" ENV=br39e-lot3`.
+  - [x] Prove Microsoft email collision routes to manual-link and never auto-links.
+  - [x] Run `make test-api-unit SCOPE="federation-microsoft-provider federation-broker" ENV=br39e-lot3`.
 - [ ] **Lot 3 — Final validation and delivery**
   - [ ] Run `make typecheck-api ENV=br39e-lot3`.
   - [ ] Run `make lint-api ENV=br39e-lot3` or the documented `make exec-api` fallback.
