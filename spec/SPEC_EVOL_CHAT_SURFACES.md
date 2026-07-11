@@ -83,4 +83,4 @@ No DOM, no Svelte imports (framework-neutral, React/Angular/Vue-ready like the r
 - Native DnD in vscode (platform can't).
 
 ## 6. Peer review trail
-- Opus 4.8 (design lead) + Codex 5.5-high (adversarial). Reconciled: DnD is not cross-host → intent API is the substrate (D4); stacked-sticky is a scroll/a11y trap UNLESS single-scroll-owner → owner's D5 design satisfies this; missing authority decision → D6; state-above-surface → D7; a11y first-class → D8. Owner overrode "MVP staged only" → full taxonomy spec'd now (D2/D12) with DS co-review gate (D10).
+- Opus 4.8 (design lead) + Codex 5.5-high (adversarial); **Codex 5.5-xhigh pass PENDING** (usage-limit, retry at reset — pre-plan gate). Reconciled: DnD is not cross-host → intent API is the substrate (D4); stacked-sticky is a scroll/a11y trap UNLESS single-scroll-owner → owner's D5 design satisfies this; missing authority decision → D6; state-above-surface → D7; a11y first-class → D8. Owner overrode "MVP staged only" → full taxonomy spec'd now (D2/D12) with DS co-review gate (D10).
