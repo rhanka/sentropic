@@ -35,7 +35,8 @@ Give the LLM gateway a first-class Claude Code account enrollment flow (OAuth au
 - [x] Lot 3 — `settings.ts`: `/provider-connections/anthropic/enrollment/{start,complete,disconnect}` routes + zod schemas (complete carries `authorizationCode`).
 - [x] Lot 4 — Stale `defaultModelId` fix `claude-sonnet-4-6` → `claude-sonnet-5` (`llm-account-transports.ts` + `provider-connections.ts`).
 - [x] Lot 5 — Unit tests (mocked fetch) for auth + enrollment; `make typecheck-api` PASS; scoped unit `make test-api-unit SCOPE=claude-code-enrollment` PASS (9/9); CI #392 green (one unrelated AI flake, see below).
-- [ ] Lot 6 — UAT (with owner): live Claude Code login (paste-code) from root; confirm authorize URL / redirect / scopes; verify pooled account served to a `--gw` subagent without spend-limit.
+- [x] Lot 5b — Non-interactive import (owner-requested, h2a auto-UAT): `importClaudeCodeEnrollment` + `POST /provider-connections/anthropic/enrollment/import` accepting `{ accessToken, refreshToken, expiresAt?, subscriptionType?, rateLimitTier?, accountLabel? }` from an existing local `~/.claude/.credentials.json` (`claudeAiOauth`) → pooled account, no browser. `typecheck-api` PASS.
+- [ ] Lot 6 — UAT (with owner, non-interactive via h2a): a host reader reads `~/.claude/.credentials.json` and POSTs to the import endpoint; verify the pooled Claude account is served to a `--gw` subagent/host without spend-limit. (Legacy interactive paste-code path stays available for confirming authorize URL / redirect / scopes.)
 
 ## Feedback Loop
 - BRxx-EXn: none yet.
