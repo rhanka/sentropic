@@ -53,7 +53,7 @@
   - [x] Construct Arctic Apple with PKCS#8 bytes, request `name email`, and set `response_mode=form_post` plus nonce.
   - [x] Verify Apple id_token signature, issuer, audience, mandatory nonce, subject, and verified email without returning upstream tokens.
   - [x] Capture the one-time Apple profile name/email and classify private-relay email as provider-scoped.
-  - [ ] Gate: scoped provider unit tests and `make scope-check`.
+  - [x] Gate: scoped provider unit tests and `make scope-check`.
 
 - [ ] **Lot 2 — POST form callback transport**
   - [x] Add pure injectable callback parsing for Apple POST bodies and GET query parsing for non-Apple providers.
@@ -69,7 +69,7 @@
   - [ ] Gate: registry/provider unit tests and `make scope-check`.
 
 - [ ] **Lot 4 — Keystone tests**
-  - [ ] Add K-APPLE-SECRET signing and public-key verification coverage.
+  - [x] Add K-APPLE-SECRET signing and public-key verification coverage.
   - [ ] Add id_token issuer/audience/nonce and private-relay/manual-link coverage.
   - [ ] Add K-APPLE-FORMPOST POST-body parsing, first-auth profile capture, and GET-query-negative coverage.
   - [ ] Gate: `make test-api-unit SCOPE="federation-apple-provider federation-broker federation-route-cookies" ENV=br39e-lot4`.
