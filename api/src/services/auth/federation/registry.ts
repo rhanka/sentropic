@@ -1,4 +1,5 @@
 import { env } from '../../../config/env';
+import { createAppleProvider } from './apple-provider';
 import { createGithubProvider } from './github-provider';
 import { createGoogleProvider } from './google-provider';
 import type { FederationProvider } from './types';
@@ -13,6 +14,15 @@ import type { FederationProvider } from './types';
 type FederationProviderFactory = (ctx: { defaultRedirectUri: string }) => FederationProvider | null;
 
 const REGISTRY: Record<string, FederationProviderFactory> = {
+  apple: ({ defaultRedirectUri }) => {
+    const clientId = env.APPLE_OAUTH_CLIENT_ID;
+    const teamId = env.APPLE_TEAM_ID;
+    const keyId = env.APPLE_KEY_ID;
+    const privateKeyPem = env.APPLE_PRIVATE_KEY;
+    if (!clientId || !teamId || !keyId || !privateKeyPem) return null;
+    const redirectUri = env.APPLE_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
+    return createAppleProvider({ clientId, keyId, privateKeyPem, redirectUri, teamId });
+  },
   github: ({ defaultRedirectUri }) => {
     const clientId = env.GITHUB_OAUTH_CLIENT_ID;
     const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET;
@@ -31,7 +41,7 @@ const REGISTRY: Record<string, FederationProviderFactory> = {
   },
 };
 
-/** True iff `providerId` is a federation provider this build knows about (v1: google only). */
+/** True iff `providerId` is a federation provider this build knows about. */
 export const isFederationProviderSupported = (providerId: string): boolean =>
   Object.prototype.hasOwnProperty.call(REGISTRY, providerId);
 
