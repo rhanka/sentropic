@@ -418,4 +418,26 @@ describe('createFederationBroker (BR-39e Lot 1 broker core)', () => {
     const r2 = await noCont.broker.callback({ flowStateId: c2.flowStateId, ...okCallback });
     if (r2.kind === 'authenticated') expect(r2.location).toBe('https://auth.example.com/');
   });
+
+  it('K-MIXUP: a flow-state minted for a different provider is rejected on this callback', async () => {
+    // The broker's provider is 'google'; mint a flow-state pinned to ANOTHER provider ('microsoft')
+    // with an otherwise-valid state, then replay it onto google's callback. The IdP mix-up guard must
+    // reject it BEFORE any state/code/verify step (defence against a cross-provider flow-state swap).
+    const h = harness();
+    const foreignFlow = await h.federation.port.createFlowState({
+      codeVerifier: 'verifier-123',
+      continuationToken: null,
+      expiresAt: new Date(NOW.getTime() + 600 * 1000),
+      nonce: 'nonce-xyz',
+      now: NOW,
+      provider: 'microsoft',
+      upstreamState: 'state-abc',
+    });
+
+    const res = await h.broker.callback({ flowStateId: foreignFlow.id, ...okCallback });
+    expect(res).toMatchObject({ kind: 'error', status: 400 });
+    if (res.kind === 'error') expect(res.body.error.code).toBe('federation_provider_mismatch');
+    // The mismatch short-circuits before verification / session mint.
+    expect(h.mintSession).not.toHaveBeenCalled();
+  });
 });

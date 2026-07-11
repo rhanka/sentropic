@@ -54,9 +54,10 @@ export const createGoogleProvider = (config: GoogleProviderConfig): FederationPr
         issuer: GOOGLE_ISSUERS,
       });
 
-      // OIDC nonce must match the one bound at start (anti-replay); a mismatch aborts the login.
-      if (typeof nonce === 'string' && payload.nonce !== nonce) {
-        throw new Error('Google id_token nonce mismatch.');
+      // OIDC nonce is MANDATORY (anti-replay): the broker always binds one at start, so a missing
+      // expected nonce OR a value mismatch aborts the login — never trust an unbound id_token.
+      if (!nonce || payload.nonce !== nonce) {
+        throw new Error('Google id_token nonce missing or mismatch.');
       }
 
       const subject = typeof payload.sub === 'string' ? payload.sub : null;
