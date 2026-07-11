@@ -82,9 +82,9 @@ describe('chat-app generator golden', () => {
         expect(pkg.dependencies['@sentropic/chat-ui']).toBe('^0.1.1');
         expect(pkg.dependencies['@sentropic/chat-core']).toBe('^0.1.2');
         expect(pkg.dependencies['@sentropic/llm-mesh']).toBe('^0.1.2');
-        expect(pkg.dependencies['@sentropic/design-system-svelte']).toBe('^0.10.3');
-        expect(pkg.dependencies['@sentropic/design-system-themes']).toBe('^0.10.3');
-        expect(pkg.dependencies['@sentropic/design-system-tokens']).toBe('^0.10.3');
+        expect(pkg.dependencies['@sentropic/design-system-svelte']).toBe('^0.34.69');
+        expect(pkg.dependencies['@sentropic/design-system-themes']).toBe('^0.11.0');
+        expect(pkg.dependencies['@sentropic/design-system-tokens']).toBe('^0.11.0');
     });
 
     it('UI embeds chat-ui via createDefaultTransport pointed at the backend base URL', () => {

@@ -175,7 +175,7 @@ describe('runInit — materialise the REAL chat-app template', () => {
         expect(pkg.name).toBe('demo');
         expect(pkg.dependencies['@sentropic/chat-server']).toBe('^0.1.0');
         expect(pkg.dependencies['@sentropic/chat-ui']).toBe('^0.1.1');
-        expect(pkg.dependencies['@sentropic/design-system-svelte']).toBe('^0.10.3');
+        expect(pkg.dependencies['@sentropic/design-system-svelte']).toBe('^0.34.69');
     });
 
     it('bakes the deterministic assistant reply (offline) into the backend', async () => {
