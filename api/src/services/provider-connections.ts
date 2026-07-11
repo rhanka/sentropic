@@ -778,6 +778,66 @@ export const completeClaudeCodeEnrollment = async (input: {
   });
 };
 
+// Non-interactive import: register an existing local Claude Code login
+// (tokens read from ~/.claude/.credentials.json `claudeAiOauth`) without the
+// browser paste-code flow. This is the h2a-friendly enrollment path.
+export const importClaudeCodeEnrollment = async (input: {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: string | null;
+  subscriptionType?: string | null;
+  rateLimitTier?: string | null;
+  accountLabel?: string | null;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const accessToken = normalizeOptionalText(input.accessToken);
+  const refreshToken = normalizeOptionalText(input.refreshToken);
+  if (!accessToken || !refreshToken) {
+    throw new Error('Claude Code import requires both an access token and a refresh token.');
+  }
+
+  const profile = await fetchClaudeCodeProfile({ accessToken }).catch(() => null);
+  const requestedAccountLabel = normalizeOptionalText(input.accountLabel);
+  const connectedAccountLabel = profile?.email || profile?.name || requestedAccountLabel;
+  const externalAccountId = profile?.accountUuid ?? connectedAccountLabel ?? createId();
+  const subscriptionType =
+    normalizeOptionalText(input.subscriptionType) ??
+    (profile?.hasClaudeMax ? 'max' : profile?.hasClaudePro ? 'pro' : null);
+
+  const now = new Date().toISOString();
+  const visible: CodexConnectionPayload = {
+    status: 'connected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: connectedAccountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  const [, storedAccount] = await Promise.all([
+    deleteClaudeCodeSecrets(input.updatedByUserId),
+    storeClaudeCodeAccountTransport({
+      ownerUserId: input.updatedByUserId,
+      accountLabel: connectedAccountLabel,
+      externalAccountId,
+      accessToken,
+      refreshToken,
+      expiresAt: normalizeOptionalText(input.expiresAt),
+      subscriptionType,
+      rateLimitTier: normalizeOptionalText(input.rateLimitTier),
+      profile: profile ? (profile as unknown as Record<string, unknown>) : null,
+    }),
+    writeClaudeCodeConnection(input.updatedByUserId, visible),
+  ]);
+
+  return toAnthropicProviderState(visible, storedAccount ?? null, {
+    credential: null,
+    source: 'none',
+  });
+};
+
 export const disconnectClaudeCodeEnrollment = async (input: {
   updatedByUserId: string;
 }): Promise<ProviderConnectionState> => {
