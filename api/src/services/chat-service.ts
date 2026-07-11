@@ -659,6 +659,9 @@ const toBudgetString = (value: unknown): string => {
 /** Per-model context window budgets (total tokens including input + output) */
 const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   // OpenAI
+  'gpt-5.6-luna':  1_050_000,
+  'gpt-5.6-sol':   1_050_000,
+  'gpt-5.6-terra': 1_050_000,
   'gpt-5.5':       1_000_000,
   'gpt-5.4-nano':  1_000_000,
   'gpt-4.1':       1_000_000,
