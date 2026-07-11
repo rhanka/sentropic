@@ -19,7 +19,7 @@
   - [ ] `api/src/services/auth/federation/facebook-provider.ts`
   - [ ] `api/src/services/auth/federation/registry.ts`
   - [ ] `api/tests/unit/auth/federation-facebook-provider.test.ts`
-  - [ ] `api/tests/unit/auth/federation-lot5.test.ts`
+  - [ ] `api/tests/unit/auth/federation-broker-facebook.test.ts`
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -61,7 +61,7 @@
   - [x] Lot gate: `make typecheck-api` and `make scope-check` pass before the atomic provider commit.
 
 - [ ] **Lot 2 — Facebook keystones**
-  - [ ] Add pure provider tests for authorization scopes, Graph identity derivation, absent email, failures, and token no-leak.
+  - [x] Add pure provider tests for authorization scopes, Graph identity derivation, absent email, failures, and token no-leak.
   - [ ] Add K-FB-CHALLENGE proving absent email issues the existing challenge with no user, identity, or session created.
   - [ ] Prove Facebook subject-first login, credentialed collision manual-link, and no auto-link for shell collisions.
   - [ ] Run `make test-api-unit SCOPE="federation-facebook-provider federation-broker" ENV=br39e-lot5`.
