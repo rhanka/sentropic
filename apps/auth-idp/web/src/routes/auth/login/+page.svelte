@@ -16,6 +16,15 @@
   const loginParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const presetEmail = loginParams.get('login_hint') ?? undefined;
 
+  // BR-39e Lot 6 (D17) — social federation. Buttons redirect to the IdP federation start route
+  // (`GET /api/v1/auth/federation/:provider/start`); forwarding the current query preserves the
+  // `continue`/`returnUrl` continuation so post-federation login resumes the OAuth flow. Google is
+  // the only live provider (Lot 1); the others land as their broker lots ship.
+  const federationQuery = typeof window !== 'undefined' ? window.location.search : '';
+  const federationProviders = [
+    { id: 'google', label: 'Google', startHref: `/api/v1/auth/federation/google/start${federationQuery}` },
+  ];
+
   // Same continuation contract as the product `ui/` login screen: after a
   // successful login the IdP resumes the OAuth authorize flow (`continue`) it
   // was redirected away from, or honours a plain `returnUrl`. The session
@@ -33,7 +42,7 @@
 </script>
 
 <div class="flex items-center justify-center px-4 pb-16 pt-6">
-  <AuthLogin {transport} {labels} {presetEmail} onLoggedIn={handleLoggedIn}>
+  <AuthLogin {transport} {labels} {presetEmail} {federationProviders} onLoggedIn={handleLoggedIn}>
     <Link slot="no-account" href="/auth/register" variant="standalone">
       {labels.loginNoAccount}
     </Link>
