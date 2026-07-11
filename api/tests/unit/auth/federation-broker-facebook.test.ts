@@ -120,4 +120,44 @@ describe('Facebook federation broker keystones (BR-39e Lot 5)', () => {
     expect(h.mintSession).not.toHaveBeenCalled();
   });
 
+  it('resolves a returning account by Facebook id before challenging its absent email', async () => {
+    const existingUser = user('sentropic-user', 'current@example.com');
+    const existingIdentity = {
+      emailAtLink: null, emailVerifiedByProvider: false, id: 'identity-fb', lastLoginAt: null,
+      linkedAt: NOW, provider: 'facebook', providerSubject: 'fb-stable-id', providerTenant: null,
+      userId: existingUser.id,
+    } satisfies AuthHonoIdentityRecord;
+    const h = harness({
+      existingIdentity,
+      existingUser,
+      identity: { email: null, emailVerified: false, subject: 'fb-stable-id' },
+    });
+
+    const result = await callback(h);
+
+    expect(result.kind).toBe('authenticated');
+    expect(JSON.stringify(result)).not.toContain(SECRET_TOKEN);
+    expect(h.createUser).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('routes a Facebook collision to manual-link when credentialed=%s', async (credentialed) => {
+    const existingUser = user('existing-user', 'taken@example.com');
+    const h = harness({
+      credentialed,
+      existingUser,
+      identity: { email: null, emailVerified: false, subject: 'fb-collision' },
+    });
+
+    const result = await h.broker.completeEmailChallenge({
+      continuation: null,
+      provider: 'facebook',
+      providerSubject: 'fb-collision',
+      providerTenant: null,
+      verifiedEmail: 'taken@example.com',
+    });
+
+    expect(result).toMatchObject({ kind: 'error', status: 409 });
+    expect(h.linkIdentity).not.toHaveBeenCalled();
+    expect(h.mintSession).not.toHaveBeenCalled();
+  });
 });
