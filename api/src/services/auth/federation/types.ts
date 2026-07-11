@@ -4,6 +4,7 @@ import type {
   AuthHonoClockPort,
   AuthHonoDeviceInfo,
   AuthHonoFederationPort,
+  AuthHonoIdentityRecord,
   AuthHonoSessionTokens,
   AuthHonoUserPort,
   AuthHonoUserRecord,
@@ -109,8 +110,44 @@ export interface FederationCallbackRequest {
   deviceInfo?: AuthHonoDeviceInfo;
 }
 
+/**
+ * BR-39e Lot 2 — the AUTHENTICATED manual-link callback (D7, §3.3 step 6). This is the ONLY path
+ * that attaches a provider to a credentialed account: the already-logged-in user re-proves control
+ * of the external account through a FRESH provider round-trip, and the verified identity is bound to
+ * that session's user — never a silent merge. `linkUserId` is the authenticated session's user id
+ * (null ⇒ unauthenticated ⇒ the broker rejects before any linking, K-MANUAL-LINK-AUTH).
+ */
+export interface FederationLinkCallbackRequest extends FederationCallbackRequest {
+  linkUserId: string | null;
+}
+
+/**
+ * BR-39e Lot 2 — the email-verification-challenge completion (D9, §3.3 step 4→5). The user has just
+ * PROVEN an email locally (magic-link / email code); the pending provider identity — stashed at the
+ * challenge (`providerSubject`), NEVER written as a user until now — is resolved with that email
+ * treated as verified, so it re-enters the SAFE resolver at the collision step.
+ */
+export interface FederationEmailChallengeCompletion {
+  provider: string;
+  providerSubject: string;
+  providerTenant?: string | null;
+  /** The email the user just proved via the local challenge (treated as provider-verified, D9). */
+  verifiedEmail: string;
+  /** The sealed OAuth continuation pointer captured at the original callback (D11), or null. */
+  continuation: string | null;
+  deviceInfo?: AuthHonoDeviceInfo;
+}
+
 export interface FederationErrorBody {
   error: { code: string; message: string };
+}
+
+/** A ready-to-return rejection shared by the login callback and the authenticated link callback. */
+export interface FederationErrorResult {
+  kind: 'error';
+  status: number;
+  body: FederationErrorBody;
+  clearFlowCookie: boolean;
 }
 
 export type FederationStartResult =
@@ -119,9 +156,37 @@ export type FederationStartResult =
 
 export type FederationCallbackResult =
   | { kind: 'authenticated'; location: string; session: AuthHonoSessionTokens }
-  | { kind: 'error'; status: number; body: FederationErrorBody; clearFlowCookie: boolean };
+  /**
+   * D9 — the provider gave no usable VERIFIED email; NO user/identity row was written. The route must
+   * drive a local email-verification challenge and then call `completeEmailChallenge` with the pending
+   * identity carried here (K-GH-NOVERIFIED).
+   */
+  | {
+      kind: 'email-challenge';
+      provider: string;
+      providerSubject: string;
+      providerTenant: string | null;
+      /** The sealed OAuth continuation pointer from the flow-state (D11), preserved across the challenge. */
+      continuation: string | null;
+    }
+  | FederationErrorResult;
+
+export type FederationLinkResult =
+  | { kind: 'linked'; userId: string; identity: AuthHonoIdentityRecord }
+  | FederationErrorResult;
 
 export interface FederationBroker {
   start(request: FederationStartRequest): Promise<FederationStartResult>;
   callback(request: FederationCallbackRequest): Promise<FederationCallbackResult>;
+  /**
+   * BR-39e Lot 2 — authenticated manual-link callback (D7). Requires `linkUserId`; runs the same
+   * state/nonce/PKCE + provider-verify preamble as `callback`, then attaches the verified identity to
+   * that user (idempotent if already theirs; rejected if the subject belongs to another account).
+   */
+  linkCallback(request: FederationLinkCallbackRequest): Promise<FederationLinkResult>;
+  /**
+   * BR-39e Lot 2 — finish an email-verification challenge (D9). The pending identity re-enters the
+   * SAFE resolver with the just-proven email; outcome is a fresh session or a manual-link signal.
+   */
+  completeEmailChallenge(input: FederationEmailChallengeCompletion): Promise<FederationCallbackResult>;
 }
