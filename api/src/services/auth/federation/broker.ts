@@ -182,6 +182,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
         code: request.code,
         codeVerifier: flowState.codeVerifier,
         nonce: flowState.nonce,
+        profile: request.profile,
       });
     } catch (error) {
       await audit.record('warn', 'federation.verify_failed', {
