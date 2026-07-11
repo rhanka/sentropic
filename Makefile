@@ -535,7 +535,7 @@ typecheck-skills: ## Run @sentropic/skills type checks
 .PHONY: build-llm-mesh
 build-llm-mesh: ## Build @sentropic/llm-mesh dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 # BR-LB-EX1 — @sentropic/llm-gateway (WP16 Layer-B) CI wiring (owner-approved 2026-06-22).
 # Mirrors the sibling-package symlink pattern used by typecheck-auth-hono/test-auth-hono
