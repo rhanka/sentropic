@@ -5,10 +5,9 @@ import { createGoogleProvider } from './google-provider';
 import type { FederationProvider } from './types';
 
 /**
- * BR-39e Lot 1/2 — provider registry. v1 registers 'google' (Lot 1) and 'github' (Lot 2). A provider
- * present in the registry but missing its env credentials resolves to `null` (feature-OFF): the route
- * answers a clear "provider not configured" instead of crashing. An id absent from the registry is
- * "not supported". Later lots add microsoft/apple/facebook behind the same seam.
+ * BR-39e provider registry. A provider present here but missing its env credentials resolves to
+ * `null` (feature-OFF), so routes return "provider not configured" instead of crashing. An id absent
+ * from the registry is "not supported"; later lots add providers behind the same seam.
  */
 
 type FederationProviderFactory = (ctx: { defaultRedirectUri: string }) => FederationProvider | null;

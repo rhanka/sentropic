@@ -25,9 +25,8 @@ import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } fro
  *
  * `GET /auth/federation/:provider/start`    → build the provider auth URL, set the bound flow-state
  *                                             cookie carrying only the opaque pointer, 302 upstream.
- * `GET /auth/federation/:provider/callback` → consume the flow-state, verify state/nonce/PKCE,
- *                                             resolve+link, mint a FRESH Sentropic session (rotation),
- *                                             then resume the sealed continuation or land internally.
+ * `GET|POST /auth/federation/:provider/callback` → GET for ordinary providers; Apple's `form_post`
+ *                                                  body carries code/state and its one-time profile.
  *
  * This router is the thin HTTP/cookie transport; every security invariant lives in the pure broker
  * (`services/auth/federation/broker.ts`). Active only when the host wires the `federation?` port.
@@ -42,8 +41,8 @@ const CHALLENGE_COOKIE = 'sentropic_fed_challenge';
 const FLOW_TTL_SECONDS = 10 * 60;
 const CHALLENGE_TTL_SECONDS = 15 * 60;
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
-// D8 auto-link allowlist — GOOGLE ONLY in v1. GitHub is deliberately absent: a GitHub verified-email
-// collision NEVER auto-links; it routes to the authenticated manual-link flow below.
+// D8 auto-link allowlist — GOOGLE ONLY in v1. GitHub and Apple are deliberately absent: their
+// verified-email collisions route to the authenticated manual-link flow below.
 const AUTO_LINK_PROVIDERS: ReadonlySet<string> = new Set(['google']);
 
 export const federationRouter = new Hono();
@@ -273,8 +272,8 @@ federationRouter.post('/:provider/callback', callbackHandler);
  *
  * `GET /:provider/link/start`    → require a session, build the provider auth URL, set the DISTINCT
  *                                  link flow-state cookie, 302 upstream.
- * `GET /:provider/link/callback` → require a session, consume the link flow-state, verify, and link
- *                                  the identity to the session's user.
+ * `GET|POST /:provider/link/callback` → require a session, consume the link flow-state, verify, and
+ *                                       link the identity to the session's user (POST for Apple).
  */
 federationRouter.get('/:provider/link/start', async (c) => {
   const provider = resolveOrRespond(c);
