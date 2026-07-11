@@ -57,7 +57,9 @@ describe('google drive picker utils', () => {
       {
         ensureApiLoaded: vi.fn().mockResolvedValue(undefined),
         googlePicker: {
-          DocsView: vi.fn().mockImplementation(() => docsView),
+          DocsView: vi.fn(function () {
+            return docsView;
+          }),
           DocsViewMode: { LIST: 'LIST' },
           Feature: {
             MULTISELECT_ENABLED: 'MULTISELECT_ENABLED',
@@ -70,7 +72,9 @@ describe('google drive picker utils', () => {
           ViewId: {
             DOCS: 'DOCS',
           },
-          PickerBuilder: vi.fn().mockImplementation(() => builder),
+          PickerBuilder: vi.fn(function () {
+            return builder;
+          }),
         },
       },
     );
@@ -127,12 +131,14 @@ describe('google drive picker utils', () => {
       {
         ensureApiLoaded: vi.fn().mockResolvedValue(undefined),
         googlePicker: {
-          DocsView: vi.fn().mockImplementation(() => ({
+          DocsView: vi.fn(function () {
+            return {
             setMimeTypes: vi.fn(),
             setIncludeFolders: vi.fn(),
             setSelectFolderEnabled: vi.fn(),
             setMode: vi.fn(),
-          })),
+          };
+          }),
           DocsViewMode: { LIST: 'LIST' },
           Feature: {
             MULTISELECT_ENABLED: 'MULTISELECT_ENABLED',
@@ -145,7 +151,9 @@ describe('google drive picker utils', () => {
           ViewId: {
             DOCS: 'DOCS',
           },
-          PickerBuilder: vi.fn().mockImplementation(() => builder),
+          PickerBuilder: vi.fn(function () {
+            return builder;
+          }),
         },
       },
     );
