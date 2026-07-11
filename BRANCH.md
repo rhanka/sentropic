@@ -46,6 +46,7 @@
   - [x] Keep `AUTO_LINK_PROVIDERS` Google-only and reuse existing GET callbacks and broker logic.
 - [x] **Lot 2 — Microsoft keystone tests**
   - [x] Add `api/tests/unit/auth/federation-microsoft-provider.test.ts` for auth URL, signature/issuer/audience verification, mandatory nonce, `oid` subject, `tid` tenant, unverified email, and token no-leak.
+  - [x] Add `api/tests/unit/auth/federation-microsoft-provider-registry.test.ts` for feature-OFF and configured tenant/redirect propagation.
   - [x] Prove K-MS-SUBJECT across same-`sub` identities in distinct tenants through the shared broker seam.
   - [x] Prove Microsoft email collision routes to manual-link and never auto-links.
   - [x] Run `make test-api-unit SCOPE="federation-microsoft-provider federation-broker" ENV=br39e-lot3`.
