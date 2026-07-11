@@ -68,6 +68,7 @@
     "@sentropic/ubo-contracts": "file:../packages/ubo-contracts",
     "@simplewebauthn/server": "^13.2.2",
     "@xmldom/xmldom": "0.9.10",
+    "arctic": "^3.7.0",
     "better-queue": "^3.8.12",
     "cohere-ai": "^7.20.0",
     "docx": "^9.5.1",
