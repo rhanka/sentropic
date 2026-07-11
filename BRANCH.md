@@ -30,10 +30,12 @@ Ratify the full surface/placement taxonomy for `@sentropic/chat-ui` (drawer left
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Brainstorm & EVOL**
   - [x] STUDY → Opus+Codex adversarial review → owner batched decisions.
-  - [x] SPEC_EVOL_CHAT_SURFACES.md with D1–D12 + full taxonomy + controller contract.
+  - [x] SPEC_EVOL_CHAT_SURFACES.md with D1–D13 + full taxonomy + controller contract.
+  - [x] Codex 5.5-xhigh hardening pass (verdict needs-revision) reconciled: D13 async prepare/commit protocol, controller contract enriched, taxonomy normalized, D7 corrected (runtime-extraction lot L0), persistence adapter, D5 impl contract, lot re-ordering.
 - [ ] **Lot 1 — Design-system co-review** (attendu)
   - [ ] DS lane reviews D10 (Drawer/DropZone/drag-affordance API + tokens/density).
 - [ ] **Lot 2+ — Implementation** (deferred to harness/plan after DS review)
-  - [ ] L1 controller + capability negotiation + persistence/fallback + "Move to…" + docked→drawer(right).
-  - [ ] L2 DS Drawer/DropZone + left drawer + web DnD.
-  - [ ] L3 floating.{left,center,right} + full ; L4 vscode native mapping ; L5 smart stacked occupancy.
+  - [ ] L0 session-runtime extraction (prerequisite; D7).
+  - [ ] L1 controller + capability negotiation + persistence/fallback + "Move to…" + migrate floating|docked (incl. floating.right + drawer.right.primary).
+  - [ ] L2 DS Drawer/DropZone (entry gate #32) + left drawer + web DnD.
+  - [ ] L3 floating.left/center + full ; L4 vscode native mapping (no stacked before L5) ; L5 smart stacked occupancy.

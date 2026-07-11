@@ -1,81 +1,118 @@
 # SPEC_EVOL — Chat surfaces & placement (drawer / floating / DnD)
 
-Status: EVOL (committed direction, numbered decisions D1–D12). Rung climbed from STUDY after Opus+Codex adversarial review (2026-07-11) and owner batched decisions. Cross-cutting with the design-system lane — DS-owned items flagged 🅳🅢 and gated on DS co-review before implementation.
+Status: EVOL (committed direction, numbered decisions D1–D13). Rung climbed from STUDY after Opus + Codex adversarial review (2026-07-11), owner batched decisions, and a Codex 5.5-**xhigh** hardening pass (verdict was *needs-revision* → this revision reconciles it). Cross-cutting with the design-system lane — DS-owned items flagged 🅳🅢 and gated on DS co-review (sent-tech-design-system#32) before implementation.
 
 Owner (`sentropic-chat` lane) owns the chat-ui parts; the design system owns the canonical `Drawer`/`DropZone` visuals; each host owns its real surfaces.
 
 ---
 
 ## 1. Goal
-A surface/placement model for `@sentropic/chat-ui` that lets the same chat live in, and move between, multiple placements — right/left drawer, floating (left/center/right), full — driven initially by the vscode plugin's drawer need, generalized as a design-system surface option. The chat CONTENT (`ChatPanelShell`) is already placement-agnostic; this spec adds the SURFACE layer above it.
+A surface/placement model for `@sentropic/chat-ui` that lets the same chat live in, and move between, multiple placements — right/left drawer, floating (left/center/right), full — driven initially by the vscode plugin's drawer need, generalized as a design-system surface option. This spec adds the SURFACE layer above the chat content and, critically, extracts the chat SESSION RUNTIME so a placement change never restarts the conversation.
 
 ## 2. Locked decisions
 
-- **D1 — Ownership split.** chat-ui ships a framework-neutral **placement-intent controller** (state machine: requested intent, available placements, effective placement, transition requests). The **host** declares its surfaces and owns the real containers + performs re-parent. The **design system** ships canonical `Drawer` + `DropZone` + drag-affordance visuals as OPTIONAL adapters (a host with its own drawer primitive may skip them). The controller MUST work against arbitrary host containers; the DS Drawer is one adapter, never a prerequisite. Mirrors the existing `ChatPanelShell` host-injection model.
+- **D1 — Ownership split.** chat-ui ships a framework-neutral **placement-intent controller** (pure state machine + async transition protocol, D13). The **host** declares its surfaces, owns the real containers, and performs the physical re-parent/commit. The **design system** ships canonical `Drawer` + `DropZone` + drag-affordance visuals as OPTIONAL adapters. The controller MUST work against arbitrary host containers; the DS Drawer is one adapter, never a prerequisite.
 
-- **D2 — Placement taxonomy (full, ratified up front per owner).**
+- **D2 — Placement taxonomy (normalized).**
   ```ts
   type ChatPlacement =
-    | { kind: 'drawer'; side: 'left' | 'right'; occupancy: 'primary' | 'stacked'; stickiness?: 'top' | 'bottom' }
+    | { kind: 'drawer'; side: 'left' | 'right'; occupancy: 'primary' }
+    | { kind: 'drawer'; side: 'left' | 'right'; occupancy: 'stacked'; stickiness: 'top' | 'bottom' }
     | { kind: 'floating'; anchor: 'left' | 'center' | 'right' }
     | { kind: 'full' };
   ```
-  `drawer.primary` = chat owns the drawer (generalizes today's `docked`, now left|right). `drawer.stacked` = shares an occupied drawer (see D5). `floating.{left,center,right}` = detached window layer. `full` = full-viewport takeover.
+  Every placement has a **canonical string ID** (e.g. `drawer.right.primary`, `drawer.right.stacked.bottom`, `floating.center`, `full`); the controller normalizes objects to IDs (no ambiguous defaulting — `stacked` always carries `stickiness`).
+  Invariants that keep states orthogonal (must hold or the taxonomy collapses on small screens):
+  - `floating.*` = **bounded, non-exclusive**, leaves host content visible.
+  - `full` = **viewport-sized, exclusive** takeover.
+  - `drawer.primary` = chat owns the drawer region. `drawer.stacked` = chat shares an occupied drawer; the concrete **stack topology** (`split-primary` vs `sticky-item`, per D5) is **host-resolved**, not a taxonomy axis — the host exposes it so the DOM/focus/scroll contract is unambiguous.
+  - Open/closed is an **orthogonal surface-lifecycle** state, not a placement.
 
-- **D3 — Host capability set (load-bearing).** Available placements are host-DECLARED, not universal:
+- **D3 — Host capability set (exact, not Cartesian).** Hosts declare the **exact set of supported placement IDs**, plus re-parent semantics — never a boolean product that implies all anchors/sides:
   ```ts
   type HostSurfaces = {
-    drawers: Array<'left' | 'right'>;
-    floating: boolean;
-    full: boolean;
-    reparent: 'dom' | 'command'; // dom = web DnD possible; command = host API only (vscode)
-    supportsStackedDrawer: boolean; // D5 opt-in
+    supported: ChatPlacementId[];      // exact IDs this host can mount
+    reparent: 'dom' | 'command';       // dom = web move (DnD viable); command = host API (vscode)
+    fallbackChain: ChatPlacementId[];   // deterministic redirect order when a target is unavailable
   };
   ```
-  The set of legal placements = taxonomy ∩ HostSurfaces. Examples: web app `{ drawers:['left','right'], floating:true, full:true, reparent:'dom', supportsStackedDrawer:true }`; vscode `{ drawers:['right'], floating:false, full:false, reparent:'command', supportsStackedDrawer:true }`.
+  Legal target set = declared `supported`. Examples: web app supports the full ID set with `reparent:'dom'`; vscode supports only `drawer.right.primary` (+ `drawer.right.stacked.bottom` once L5 ships) with `reparent:'command'`.
 
-- **D4 — Repositioning: intent API + universal "Move to…" menu + web-only DnD (v1).**
-  All movement goes through one API: `requestPlacement(target): 'accepted' | 'rejected' | { redirectedTo }`. Two front-ends over it:
-  1. **"Move chat to…" menu** — keyboard-accessible, present on every host (works in vscode via host command). This is the universal path.
-  2. **Drag-n-drop** — v1, **web-only** (hosts with `reparent:'dom'`), a grab handle on the chat header that ends by calling `requestPlacement`. It is UI sugar over the same API, NOT a separate mechanism, and is silently absent where `reparent:'command'`. Honest framing: DnD is not cross-host; a vscode webview cannot be dragged out of its native ViewContainer.
+- **D4 — Repositioning: one intent API, two front-ends.**
+  Universal path = **"Move chat to…" menu** (keyboard-accessible, every host; in vscode it maps to VS Code commands). Web sugar = **drag-n-drop** (`reparent:'dom'` hosts only), a grab handle whose drop calls the same intent API. DnD pointer/gesture state lives in a **web gesture ADAPTER**, not in the headless controller. DnD is silently absent where `reparent:'command'` — honest framing: a vscode webview cannot be dragged out of its native ViewContainer.
 
-- **D5 — Smart occupancy fallback (owner design; satisfies single-scroll-owner discipline).** When the target drawer is occupied:
-  - **Drawer holds a single content item** → chat coexists: the pre-existing content is wrapped as a **collapsible + independently-scrollable** section, and the chat takes the primary region. One scroll owner per region — no nested-scroll trap.
-  - **Drawer already holds multiple items** → chat becomes **one of the items**, rendered as a **sticky, collapsible** panel, **bottom by default** (to visually differentiate it) or top.
-  - Both behaviors are **configurable** (per host/user). `drawer.stacked` requires `HostSurfaces.supportsStackedDrawer`; otherwise the effective placement redirects (D6).
+- **D5 — Smart occupancy (owner-confirmed intent; host-resolved topology + concrete impl contract).** When a `drawer.stacked` target is requested and the drawer is occupied:
+  - **single existing item** → topology `split-primary`: the existing content is wrapped as a collapsible, independently-scrollable section; chat takes the primary region.
+  - **multiple existing items** → topology `sticky-item`: chat becomes one item, sticky + collapsible, **bottom by default** (top optional). Both configurable per host/user.
+  - Impl contract (non-negotiable to avoid the scroll/focus trap):
+    - Occupancy is an **authoritative host snapshot with stable item IDs, excluding the moving chat** — NEVER inferred from DOM child count (nested drawers/portals/placeholders break it).
+    - Occupancy may change between hover and drop → resolve+commit revalidate atomically on the same revision.
+    - **Single scroll owner**: drawer root is non-scrolling; use fixed flex sizing + `min-height:0` + overscroll containment; the section wrapper is non-scrolling OR the child relinquishes its scroller (a virtualized child keeps its own).
+    - A sticky panel reserves an inset equal to its collapsed/expanded footprint (no covering the other region).
+    - Virtualized message-list scroll restore uses a **semantic anchor (message ID + pixel offset)**, remeasured after the drawer settles — never `scrollTop` alone across width/height change.
+    - A `split-primary → sticky-item` transition (occupancy 1→N) must NOT remount chat or discard the virtualizer cache.
+    - Mobile: `visualViewport` height changes from the keyboard use **hysteresis**; IME-only height changes are not a new placement constraint.
+    - Collapsing a section makes descendants `inert`/unfocusable and restores focus predictably on expand.
 
-- **D6 — Authority & persistence.** Persist the **user INTENT** per host + workspace. The host computes the **effective** placement (accept / redirect / reject) each render; effective placement is transient and host-authoritative. On conflict (viewport too small, drawer removed, capability changed) the controller records the redirect and surfaces it; it never forces an unsupported placement. Deterministic fallback chain, host-declared, e.g. `drawer.stacked → drawer.primary → floating.right → full`.
+- **D6 — Persistence & authority (explicit adapter, monotonic).** A host-injected persistence adapter (no implicit `localStorage`), namespaced and versioned:
+  ```text
+  key = chat-ui/placement/v1/{userId|'anon'}/{hostId}/{workspaceId|'global'}
+  value = { schema: 1, requested: ChatPlacementId }
+  ```
+  `userId` MUST be in the key (no cross-account leak on a shared browser). Define: legacy `chatWidgetDisplayMode` migration, SSR (no-op read), malformed-value discard, logout cleanup, multi-tab update, anon↔auth separation. Authority: persist **user intent immediately**; the host resolves the **latest revision** to an effective placement; `effective` is transient/host-authoritative. Resolution is a **pure function of (intent, environment revision)** — NOT a render side-effect (avoids reactive loops). Environment recompute may change `effective` but must never overwrite a newer `requested`; late acks are `superseded`.
 
-- **D7 — State lives ABOVE the surface (anti-restart).** Conversation, drafts, focus, streaming subscription, scroll position, attachments, and pending tool interactions MUST survive a re-parent/remount. The chat session controller + `ChatPanelShell` state already decouple content from surface; the surface layer must re-mount the SAME controller instance/state, never re-create it. "Move chat" must never become "restart chat".
+- **D7 — Session runtime lives ABOVE the surface (CORRECTED).** Today the chat controller is **component-local**: `const ctrl = createChatLoopController()` is constructed inside `AppChatPanel.svelte:352` (and `ChatConversation.svelte:218`); teardown detaches stream/tool machinery at `AppChatPanel.svelte:3097`; drafts/attachments/scroll/checkpoint prompts are component state. So a remount TODAY = new controller = detached stream, dropped attachments, possibly double- or zero-handled pending tool calls. Therefore D7 REQUIRES a **runtime-extraction lot (L0)**: hoist the session runtime (controller + stream subscription + drafts + attachments + pending tool state) to a **surface-independent owner**, and promise the **same LOGICAL session runtime** across a move — via snapshot + resubscription when a literal instance cannot survive (e.g. a destroyed VS Code webview/process). Tool results must be **idempotently keyed** so a re-attach never re-posts.
 
-- **D8 — Accessibility (first-class, not a v2 patch).** Every DnD affordance has a keyboard equivalent (the "Move to…" menu). Placement transitions restore focus into the chat composer, announce the new placement (aria-live), respect `prefers-reduced-motion`, and keep deterministic tab order. `drawer.stacked` collapse/expand is keyboard-operable with focus restoration.
+- **D8 — Accessibility (first-class).** Every DnD affordance has a keyboard equivalent (the menu). Transitions restore focus to the composer, announce the new placement (aria-live), respect `prefers-reduced-motion`, keep deterministic tab order; `drawer.stacked` collapse/expand is keyboard-operable with focus restoration (D5).
 
-- **D9 — vscode mapping.** vscode uses `reparent:'command'`: chat lives in a native ViewContainer (drawer); the "Move to…" menu maps to VS Code commands (open/focus/move view). No DnD, no floating/full in v1 (`{ floating:false, full:false }`). Honest to the platform; parity via the menu, not fake drag.
+- **D9 — vscode mapping.** `reparent:'command'`: chat in a native ViewContainer; "Move to…" → VS Code commands. No DnD, no floating/full. Declares `supportsStackedDrawer` only from L5 onward (D12).
 
-- **D10 — DS components (🅳🅢, gated on DS co-review).** The design system provides: `Drawer` (left|right, resizable, collapsible, single-scroll-owner sections for stacking), `DropZone` (highlight + hit-target during a placement gesture), and a drag-affordance/grab-handle. These are the visual substrate reused by the web app, vscode webview fallback, and future hosts. Token-driven, theme-aware, density-aware (ties to the "petit" preset). **Ownership + exact API to be co-designed with the design-system lane before implementation.**
+- **D10 — DS components (🅳🅢, gated on DS co-review #32).** `Drawer` (left|right, resizable/persisted width, collapsible, **single-scroll-owner stacked-section contract** per D5), `DropZone` (highlight + hit-target, valid/invalid, hit tolerance), drag-affordance/grab-handle. Token-driven, theme-aware, density-aware ("petit"). DS co-review is an **entry gate** for L2, not merely a note.
 
-- **D11 — Composition with existing components.** `ChatDock` is refactored to consume the placement controller instead of its `floating|docked` binary (that binary becomes two points in the taxonomy: `floating.right`-ish + `drawer.right.primary`). `ChatPanelShell` unchanged (already placement-agnostic). `chatWidgetLayout` store generalized from `DisplayMode` to `ChatPlacement`.
+- **D11 — Composition with existing components.** `ChatDock` consumes the placement controller (its `floating|docked` binary becomes `floating.right` + `drawer.right.primary`). `ChatPanelShell` unchanged. `chatWidgetLayout` store generalized from `DisplayMode` to `ChatPlacement` (+ legacy migration, D6).
 
-- **D12 — Scope staging (design complete now, build staged).** Full taxonomy is SPEC'd here up front (owner). Implementation lots are staged so we never ship an unproven surface: (L1) controller + capability negotiation + persistence/fallback + "Move to…" menu + generalize docked→drawer(right); (L2) DS Drawer/DropZone + left drawer + web DnD; (L3) floating.{left,center,right} + full; (L4) vscode native mapping; (L5) smart stacked occupancy. Each lot adds a taxonomy member only when a real host consumes it.
+- **D12 — Lot staging (design complete now; build ordered by dependency).**
+  - **L0 — Session-runtime extraction** (prerequisite for any move that can remount; D7). No visible change; enables safe re-parent.
+  - **L1 — Controller + capability negotiation + persistence/fallback + "Move to…" menu**; migrate `floating|docked` → include **`floating.right`** and `drawer.right.primary` explicitly.
+  - **L2 — DS `Drawer`/`DropZone`** (entry gate: #32) + **left drawer** + **web DnD** (gesture adapter).
+  - **L3 — `floating.left` + `floating.center` + `full`** (not "all floating"; L1 already owns `floating.right`).
+  - **L4 — vscode native mapping** (`reparent:'command'`; declares NO stacked support until L5).
+  - **L5 — smart stacked occupancy** (`split-primary` / `sticky-item`, D5); depends on the L2 Drawer section contract; only after this may any host advertise `supportsStackedDrawer`.
+
+- **D13 — Atomic async placement-transition protocol (the load-bearing runtime rule).**
+  > A move is a **versioned async prepare/commit transaction**. Valid user intent is persisted immediately. The host resolves and attempts the **latest** revision. `effective` changes **only after successful physical commit**. Redirects preserve the original `requested`. Failure leaves the previous `effective` active with a `reason`. Superseded acknowledgements are ignored. The **logical session runtime stays alive independently of surface instances**.
+  This single rule resolves the controller ambiguity (§3), the D6 races, and D7 stream/tool safety.
 
 ## 3. Controller contract (headless, chat-ui)
 ```ts
+type PlacementReason =
+  | 'unsupported' | 'temporarily-unavailable' | 'occupied' | 'viewport'
+  | 'host-failure' | 'superseded';
+
+type PlacementSnapshot = {
+  requested: ChatPlacement;           // persisted user intent
+  effective: ChatPlacement;           // last successfully committed placement
+  supported: ChatPlacement[];         // permanent host support
+  available: ChatPlacement[];         // presently viable (supported ∧ environment)
+  pending?: { id: number; target: ChatPlacement; resolvedTarget: ChatPlacement };
+  lastResolution?: { status: 'applied' | 'redirected' | 'rejected' | 'failed' | 'superseded'; reason?: PlacementReason };
+};
+
+type PlacementResult = { status: PlacementSnapshot['lastResolution']['status']; placement: ChatPlacement; reason?: PlacementReason };
+
 type PlacementController = {
-  requested: ChatPlacement;              // user intent (persisted)
-  effective: ChatPlacement;              // host-authoritative (transient)
-  available: ChatPlacement[];            // taxonomy ∩ HostSurfaces
-  requestPlacement(target: ChatPlacement): 'accepted' | 'rejected' | { redirectedTo: ChatPlacement };
-  onEffectiveChange(cb: (p: ChatPlacement) => void): void;
-  // DnD sugar (web hosts only): begin/hover/drop map to requestPlacement.
+  snapshot(): PlacementSnapshot;
+  requestPlacement(target: ChatPlacement): Promise<PlacementResult>; // async: DOM one-frame, vscode multi-step
+  subscribe(cb: (s: PlacementSnapshot) => void): () => void;          // returns unsubscribe
 };
 ```
-No DOM, no Svelte imports (framework-neutral, React/Angular/Vue-ready like the rest of chat-ui state).
+Pure, framework-neutral (no DOM, no Svelte). `supported` vs `available` are distinct (permanent vs temporary). DnD begin/hover/drop is NOT here — a web gesture adapter owns pointer state and calls `requestPlacement` on drop. `reparent` is adapter metadata, not part of the domain model.
 
-## 4. Open items for design-system co-review
-- Exact `Drawer` API (resize, min/max, persisted width, stacked-section contract with single scroll owner).
-- `DropZone` visual language (highlight, valid/invalid, hit tolerance) + drag-affordance placement on the chat header.
-- Token/density mapping (the "petit" preset) for drawer chrome.
-- Whether DS owns the drag controller visuals or only static components (chat-ui drives the gesture).
+## 4. Open items for design-system co-review (#32)
+- Exact `Drawer` API (resize min/max, persisted width, the single-scroll-owner stacked-section contract from D5).
+- `DropZone` visual language + drag-affordance placement on the chat header.
+- Token/density mapping ("petit").
+- Ownership boundary: DS static components vs chat-ui-driven gesture.
 
 ## 5. Non-goals / deferred
 - Multiple simultaneous docked chats.
@@ -83,4 +120,7 @@ No DOM, no Svelte imports (framework-neutral, React/Angular/Vue-ready like the r
 - Native DnD in vscode (platform can't).
 
 ## 6. Peer review trail
-- Opus 4.8 (design lead) + Codex 5.5-high (adversarial); **Codex 5.5-xhigh pass PENDING** (usage-limit, retry at reset — pre-plan gate). Reconciled: DnD is not cross-host → intent API is the substrate (D4); stacked-sticky is a scroll/a11y trap UNLESS single-scroll-owner → owner's D5 design satisfies this; missing authority decision → D6; state-above-surface → D7; a11y first-class → D8. Owner overrode "MVP staged only" → full taxonomy spec'd now (D2/D12) with DS co-review gate (D10).
+- **Opus 4.8** (design lead) + **Codex 5.5-high** (round 1) + **Codex 5.5-xhigh** (round 2, hardening).
+- Round 1 reconciled: DnD not cross-host → intent API substrate (D4); stacked-sticky trap unless single-scroll-owner → D5; missing authority → D6; state-above-surface → D7; a11y first-class → D8.
+- Round 2 (xhigh, verdict *needs-revision*, reconciled into THIS revision): added the async prepare/commit protocol (D13); enriched the controller contract (pending/reason-codes/supported-vs-available/unsubscribe/Promise, DnD out of core) §3; normalized the taxonomy (host-resolved stack topology, floating/full invariants, exact host-supported IDs) D2/D3; **corrected D7** (controller is component-local today → runtime-extraction lot L0 required); explicit persistence adapter + monotonic revisions D6; D5 concrete impl contract; fixed lot ordering (L0 first, `floating.right` in L1, vscode no-stacked-before-L5, DS review = entry gate) D12.
+- Owner ratifications: full taxonomy up front + DS co-review gate; D5 occupancy design confirmed.
