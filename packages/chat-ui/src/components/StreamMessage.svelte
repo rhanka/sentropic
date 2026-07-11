@@ -48,6 +48,11 @@
   export let smoothContentStreaming = false;
   export let smoothChunkThreshold = 80;
   export let acknowledgementText: string | undefined = undefined;
+  // Plain assistant surface (assistantLayout='plain'): drop the bubble/card
+  // chrome (border + white background + horizontal padding) so the final
+  // content flows full-width like Claude/ChatGPT/Gemini. Default false keeps
+  // the historical bubble look.
+  export let plainSurface = false;
   export let showRuntimeInlinePreview = true;
   export let deferCollapsedDetails = false;
   export let requestDeferredDetails: (() => Promise<void>) | undefined = undefined;
@@ -988,7 +993,11 @@
 
     {#if variant === 'chat'}
       {#if (finalText && finalText.trim().length > 0) || hasContent}
-        <div class="chatMarkdown rounded bg-white border border-slate-200 text-xs px-3 py-2 break-words text-slate-900">
+        <div
+          class="chatMarkdown text-xs break-words text-slate-900 {plainSurface
+            ? 'py-1'
+            : 'rounded bg-white border border-slate-200 px-3 py-2'}"
+        >
           <Streamdown content={displayContent} />
         </div>
       {:else}
