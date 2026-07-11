@@ -24,6 +24,7 @@ import { db } from '../../db/client';
 import { emailVerificationCodes, magicLinks, tenantMemberships, userSessions, users } from '../../db/schema';
 import { logger } from '../../logger';
 import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
+import { createFederationAdapter } from '../../services/auth/federation-adapter';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
@@ -192,6 +193,10 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
     sendMagicLink: unsupportedOAuthPort,
     sendVerificationCode: unsupportedOAuthPort,
   },
+  // BR-39e Lot 0: social/enterprise federation substrate (identities link table + one-time
+  // server-side flow-state). Inert for the OAuth-server handlers; wired here so the (Lot 1)
+  // federation router consumes the port through the same host ports bag.
+  federation: createFederationAdapter(),
   emailVerification: {
     async countRecent(email, since) {
       const [{ count }] = await db

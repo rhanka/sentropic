@@ -53,6 +53,7 @@
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
+  import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
   import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
@@ -2947,17 +2948,16 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
-              <div class="min-w-0 text-xs text-slate-500 truncate" title={activeChatSession ? formatSessionLabel(activeChatSession) : $_('chat.sessions.none')}>
-                {#if chatLoadingSessions}
-                  {$_('common.loading')}
-                {:else if activeChatSession}
-                  {formatSessionLabel(activeChatSession)}
-                {:else}
-                  {$_('chat.sessions.none')}
-                {/if}
-              </div>
-              <div class="flex items-center gap-1">
+            <!-- Gold shell adoption (S6b): sessions bar renders via the
+                 @sentropic/chat-ui ChatSessionsBar component; the host keeps the
+                 popover menu (MenuPopover) and icons as snippets. -->
+            {#snippet renderChatSessionsMenu(p: {
+              sessions: readonly { id: string; title?: string | null }[];
+              sessionId: string | null;
+              loading: boolean;
+              formatLabel: (s: { id: string; title?: string | null }) => string;
+              onNew: () => void;
+            })}
                 <MenuPopover bind:open={showSessionMenu} bind:triggerRef={sessionMenuButtonRef}>
                   <svelte:fragment slot="trigger" let:toggle>
                     <button
@@ -3005,55 +3005,29 @@
                     {/if}
                   </svelte:fragment>
                 </MenuPopover>
-                <button
-                  class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                  on:click={handleNewSession}
-                  title={$_('chat.sessions.new')}
-                  aria-label={$_('chat.sessions.new')}
-                  type="button"
-                >
-                  <Plus class="w-4 h-4" />
-                </button>
-                <button
-                  class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-                  on:click={() => (pendingChatSessionDeleteConfirm = true)}
-                  title={$_('chat.sessions.delete')}
-                  aria-label={$_('chat.sessions.delete')}
-                  type="button"
-                  disabled={!chatSessionId}
-                >
-                  <Trash2 class="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            {#if pendingChatSessionDeleteConfirm && chatSessionId}
-              <div class="border-b border-slate-100 px-3 py-2">
-                <div class="chat-delete-confirm-surface rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
-                  <div class="text-xs font-semibold text-slate-700">
-                    {$_('chat.sessions.confirmDelete')}
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <button
-                      class="chat-delete-confirm-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
-                      type="button"
-                      on:click={async () => {
-                        pendingChatSessionDeleteConfirm = false;
-                        await chatPanelRef?.deleteCurrentSession?.();
-                      }}
-                    >
-                      {$_('common.delete')}
-                    </button>
-                    <button
-                      class="chat-delete-confirm-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
-                      type="button"
-                      on:click={() => (pendingChatSessionDeleteConfirm = false)}
-                    >
-                      {$_('common.cancel')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            {/if}
+            {/snippet}
+            {#snippet renderSessionsPlusIcon()}<Plus class="w-4 h-4" />{/snippet}
+            {#snippet renderSessionsTrashIcon()}<Trash2 class="w-4 h-4" />{/snippet}
+            <ChatSessionsBar
+              sessions={chatSessions}
+              sessionId={chatSessionId}
+              loading={chatLoadingSessions}
+              barLabels={{
+                none: $_('chat.sessions.none'),
+                loading: $_('common.loading'),
+                defaultTitle: (id: string) => $_('chat.sessions.defaultTitle', { values: { id } }),
+              }}
+              labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
+              onNewSession={handleNewSession}
+              bind:deleteConfirmPending={pendingChatSessionDeleteConfirm}
+              onConfirmDelete={async () => {
+                pendingChatSessionDeleteConfirm = false;
+                await chatPanelRef?.deleteCurrentSession?.();
+              }}
+              renderSessionsMenu={renderChatSessionsMenu}
+              renderPlusIcon={renderSessionsPlusIcon}
+              renderTrashIcon={renderSessionsTrashIcon}
+            />
             <div class="flex-1 min-h-0 overflow-hidden">
               {#if !extensionChatGateState.blockChatPanel}
                 <ChatPanel

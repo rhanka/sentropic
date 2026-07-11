@@ -8,6 +8,7 @@ import {
   parseModelSelectionKey,
   providerGroupLabel,
   resolveFallbackModelOption,
+  resolveHydratedModelSelection,
   type ModelCatalogModel,
   type ModelCatalogProvider,
 } from '../src/utils/model-selection.js';
@@ -264,5 +265,45 @@ describe('providerGroupLabel', () => {
   it('should append the status in parentheses for non-ready providers', () => {
     const p: ModelCatalogProvider = { provider_id: 'gemini', label: 'Gemini', status: 'planned' };
     expect(providerGroupLabel(p)).toBe('Gemini (planned)');
+  });
+});
+
+describe('resolveHydratedModelSelection (gold shell S2)', () => {
+  const CATALOG: ModelCatalogModel[] = [
+    { provider_id: 'openai', model_id: 'gpt-5.5', label: 'GPT-5.5' },
+    { provider_id: 'anthropic', model_id: 'claude-opus', label: 'Claude Opus' },
+  ] as ModelCatalogModel[];
+
+  it('selects the catalog entry of the LAST assistant message carrying a model', () => {
+    const entry = resolveHydratedModelSelection(
+      [
+        { role: 'assistant', model: 'claude-opus' },
+        { role: 'user' },
+        { role: 'assistant', model: 'gpt-5.5' },
+      ],
+      CATALOG,
+    );
+    expect(entry).toMatchObject({ provider_id: 'openai', model_id: 'gpt-5.5' });
+  });
+
+  it('skips assistant messages without a model', () => {
+    const entry = resolveHydratedModelSelection(
+      [
+        { role: 'assistant', model: 'claude-opus' },
+        { role: 'assistant', model: null },
+      ],
+      CATALOG,
+    );
+    expect(entry).toMatchObject({ model_id: 'claude-opus' });
+  });
+
+  it('returns null when the model is absent from the live catalog (dead id never re-selected)', () => {
+    expect(
+      resolveHydratedModelSelection([{ role: 'assistant', model: 'gone-model' }], CATALOG),
+    ).toBeNull();
+  });
+
+  it('returns null when no assistant message carries a model', () => {
+    expect(resolveHydratedModelSelection([{ role: 'user' }], CATALOG)).toBeNull();
   });
 });

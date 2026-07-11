@@ -1,7 +1,9 @@
 # SPEC STUDY — Universal Connector & Account Broker
 
-Status: STUDY (planning/design-only, 2026-07-06). No implementation commitment yet.
-Review state: Codex adversarial review reconciled (NEEDS-REVISION → incorporated). Owner asked not to wait on Opus session-limit reset; Opus re-run is deferred to the irreversible EVOL/API-freeze gate, not required to land this STUDY draft.
+Status: **FROZEN / CONSOLIDATED (2026-07-11)** — this study is now the **locked reference** for the Universal Connector & Account Broker. Its owner decisions are ratified and no longer churn here; new work spawns dedicated `SPEC_EVOL_*` documents, not edits to this study.
+- **First derived EVOL:** `spec/SPEC_EVOL_BANK_CONNECTOR.md` (bank/financial connector — double-consensus Opus 4.8xhigh + Codex 5.5xhigh, owner-ratified B1-b/B4/B5-b/B6-a, merged in PR #396). It instantiates the broker pattern with the `operator`-secret custody tier + the multi-ERP egress model.
+- **Remaining foundations** (ARCH-11 tenant reconciliation, the canonical `AccessGrant` primitive, h2a↔Sentropic sync, P5 registry residence) stay tracked as their **own workstreams** — this study records them as open (§2/§3/§10), it is not re-opened to resolve them.
+Review state: Codex adversarial review reconciled (NEEDS-REVISION → incorporated). Opus re-run remains due only at the irreversible EVOL/API-freeze gate of each derived EVOL (the bank EVOL cleared that gate with a full double-consensus).
 Owner decisions incorporated (2026-07-06): AccessGrant=policy/index referencing lifecycle records; handle-first custody with raw-secret mirroring banned by default; allow early same-human h2a-local descriptor/human-mediated subset; catalog wave = Wave(read-only) → npm → GitHub/Google → cloud/FinOps.
 Owner intent: make Sentropic + h2a a universal, secure broker for connectors and accounts across all CLIs and agents.
 Sequencing choice: **Foundation-first** (owner-selected). We prioritize the stable tenant/authz foundations before cross-agent/cross-user/workspace-atom rollout; reversible mono-user catalog work may proceed in parallel.
