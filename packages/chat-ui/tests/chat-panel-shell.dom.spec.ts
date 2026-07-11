@@ -81,4 +81,50 @@ describe('ChatPanelShell (gold shell assembly)', () => {
     });
     getByText('HTTP 502: Unknown error');
   });
+
+  const assistantItem = {
+    kind: 'assistant-segment',
+    key: 'as:a1:0',
+    message: { id: 'a1', role: 'assistant', content: 'Voici la réponse.', model: null },
+    streamId: 'a1',
+    segment: { id: 'assistant:1', content: 'Voici la réponse.', events: [] },
+    isTerminal: true,
+    isLastAssistantSegment: true,
+  } as never;
+
+  it('keeps the assistant bubble (card + 85% width) by default', () => {
+    const { container } = render(ChatPanelShell, {
+      props: {
+        mode: 'ai',
+        labels: LABELS,
+        messagesCount: 1,
+        projectedTimelineItems: [assistantItem],
+      },
+    });
+    // Left-aligned assistant wrapper is width-constrained to 85%.
+    expect(container.querySelector('.flex.justify-start .max-w-\\[85\\%\\]')).not.toBeNull();
+    // Final content keeps the bubble card chrome.
+    const card = container.querySelector('.chatMarkdown');
+    expect(card?.className).toContain('border-slate-200');
+  });
+
+  it('renders the assistant full-width with no card when assistantLayout=plain', () => {
+    const { container } = render(ChatPanelShell, {
+      props: {
+        mode: 'ai',
+        labels: LABELS,
+        assistantLayout: 'plain',
+        messagesCount: 1,
+        projectedTimelineItems: [assistantItem],
+      },
+    });
+    // No 85% width constraint on the assistant wrapper.
+    expect(container.querySelector('.flex.justify-start .max-w-\\[85\\%\\]')).toBeNull();
+    expect(container.querySelector('.flex.justify-start .max-w-none')).not.toBeNull();
+    // Final content drops the card chrome.
+    const card = container.querySelector('.chatMarkdown');
+    expect(card).not.toBeNull();
+    expect(card?.className).not.toContain('border-slate-200');
+    expect(card?.className).not.toContain('bg-white');
+  });
 });
