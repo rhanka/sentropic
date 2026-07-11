@@ -1,6 +1,7 @@
 import type { Component } from 'svelte';
 import type {
   AuthUiError,
+  AuthUiFederationProvider,
   AuthUiLabels,
   AuthUiSession,
   AuthUiTransport,
@@ -19,6 +20,12 @@ export interface AuthRegisterProps {
   presetEmail?: string;
   presetVerificationToken?: string;
   deviceName?: string;
+  /**
+   * BR-39e Lot 6 (D17) — optional social/enterprise providers rendered as
+   * DS-styled redirect buttons on the initial email step. Empty/absent → no
+   * federation UI (legacy hosts unaffected).
+   */
+  federationProviders?: AuthUiFederationProvider[];
 }
 
 declare const AuthRegister: Component<AuthRegisterProps>;
