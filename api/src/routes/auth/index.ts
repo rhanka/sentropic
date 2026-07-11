@@ -7,6 +7,7 @@ import { magicLinkRouter } from './magic-link';
 import { emailRouter } from './email';
 import { deviceRouter } from './device';
 import { oauthRouter } from './oauth';
+import { federationRouter } from './federation';
 import { serviceS2sRouter } from './service-s2s';
 
 /**
@@ -31,6 +32,7 @@ authRouter.route('/magic-link', magicLinkRouter);
 authRouter.route('/email', emailRouter);
 authRouter.route('/device', deviceRouter);
 authRouter.route('/oauth', oauthRouter);
+authRouter.route('/federation', federationRouter);
 authRouter.route('/s2s', serviceS2sRouter);
 
 // Health check
