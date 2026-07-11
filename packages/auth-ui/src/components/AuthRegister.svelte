@@ -5,6 +5,7 @@
     createDefaultAuthUiLabels,
     normalizeAuthEmail,
     type AuthUiError,
+    type AuthUiFederationProvider,
     type AuthUiLabels,
     type AuthUiSession,
     type AuthUiTransport,
@@ -14,6 +15,7 @@
     startPasskeyRegistration,
     getWebAuthnErrorMessage,
   } from '../webauthn.js';
+  import AuthFederationButtons from './AuthFederationButtons.svelte';
 
   type Step = 'email' | 'code' | 'webauthn' | 'success';
 
@@ -32,6 +34,12 @@
     presetVerificationToken?: string;
     /** Optional default device name passed to the passkey registration. */
     deviceName?: string;
+    /**
+     * BR-39e Lot 6 (D17) — optional social/enterprise providers. Each renders a DS-styled button
+     * that redirects to its `startHref` (`GET /auth/federation/:provider/start`). Empty/absent →
+     * no federation UI (legacy hosts unaffected, K-UI-LEGACY). Only shown on the initial email step.
+     */
+    federationProviders?: AuthUiFederationProvider[];
   }
 
   let {
@@ -43,6 +51,7 @@
     presetEmail,
     presetVerificationToken,
     deviceName,
+    federationProviders = [],
   }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
@@ -280,6 +289,7 @@
           <Typography variant="body-sm" tone="muted">{resolvedLabels.registerAlreadyHaveAccount}</Typography>
         </slot>
       </div>
+      <AuthFederationButtons providers={federationProviders} {labels} />
     </form>
   {:else if step === 'code'}
     <form class="auth-ui-form" onsubmit={handleCodeSubmit}>
