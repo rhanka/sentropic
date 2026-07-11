@@ -150,4 +150,17 @@ export interface AuthUiLabels {
   passkeyAuthenticatorNotSupported: string;
   passkeyRegistrationCancelled: string;
   passkeyAuthenticationCancelled: string;
+  // BR-39e Lot 6 (D17) — social/enterprise federation.
+  federationDividerLabel: string;
+  federationContinueWith: string;
+  identitiesTitle: string;
+  identitiesSubtitle: string;
+  identitiesEmpty: string;
+  identitiesLinkedOn: string;
+  identitiesUnlink: string;
+  identitiesUnlinkLastFactor: string;
+  identitiesConfirmUnlink: string;
+  identitiesErrorUnlink: string;
+  identitiesLinkAnother: string;
+  identitiesLinkButton: string;
 }
