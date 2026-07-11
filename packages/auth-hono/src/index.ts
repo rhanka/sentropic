@@ -10,6 +10,7 @@ export type {
 
 export * from './contracts.js';
 export * from './credential-route-handlers.js';
+export * from './federation/resolve-user.js';
 export * from './email-verification.js';
 export * from './magic-link.js';
 export * from './middleware.js';
