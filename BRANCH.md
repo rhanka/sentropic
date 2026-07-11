@@ -30,7 +30,7 @@ Add the OpenAI GPT-5.6 family (Sol / Terra / Luna) to the `@sentropic/llm-mesh` 
 - [x] Lot 1 — Catalog: add `gpt-5.6-sol` / `gpt-5.6-terra` / `gpt-5.6-luna` (advanced, vision) to `providers.ts` + `catalog.ts`. IDs confirmed against OpenAI dev docs.
 - [ ] Lot 2 — Claude Code IMPORT mode (non-interactive): read existing local Claude credentials and feed the existing `claude-code-account` AuthInput adapter — DESIGN GATED on h2a reply (where the Codex reader lives; helper in llm-mesh vs h2a-runtime).
 - [ ] Lot 3 — Version `0.7.0-rc.0`; publish under npm dist-tag `rc` (NOT `latest`) — verify `publish-llm-mesh` CI supports prerelease dist-tag; add if missing.
-- [ ] Lot 4 — `make typecheck-llm-mesh` + `make test-llm-mesh` green (update any catalog snapshot the additive models force).
+- [x] Lot 4 — `make typecheck-llm-mesh` + `make test-llm-mesh` PASS (6 files / 35 tests); consumer tests evolved (BR-EX1); root lockfile synced; CI #393 green (one unrelated AI flake, see below).
 - [ ] Lot 5 — h2a pre-integration + real `--gw` test on the RC; then final `0.7.0` release.
 
 ## Feedback Loop
@@ -40,6 +40,12 @@ Add the OpenAI GPT-5.6 family (Sol / Terra / Luna) to the `@sentropic/llm-mesh` 
 
 ## AI Flaky tests
 - Accept only non-systematic provider/network nondeterminism as `flaky accepted`, with same-commit success + owner sign-off. No additive timeouts.
+- `flaky accepted` (pending owner sign-off): CI #393 run `29135379059`.
+  - Command: `make test-api-ai` (shard `ai, initiative-generation-async,executive-summary-sync`).
+  - File: `api/tests/ai/initiative-generation-async.test.ts` > "should complete full AI workflow: organization enrichment + initiative generation".
+  - Signature: timeout at 120098ms (120s) — provider-latency nondeterminism on a full AI workflow.
+  - Non-systematic: same-commit `gh run rerun --failed` -> shard PASS (job `86499607929`).
+  - Unrelated to this branch: catalog + fixture changes only; the workflow runs on the unchanged default model `gpt-5.5` (GPT-5.6 added opt-in, not default).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
