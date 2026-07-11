@@ -27,13 +27,13 @@
     "ChatTimeline.svelte": {
       "class": "primitive",
       "dogfoodedBy": [
-        "ui/src/lib/components/chat/ChatTimelineWrapper.svelte"
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
       ]
     },
     "ChatComposer.svelte": {
       "class": "primitive",
       "dogfoodedBy": [
-        "ui/src/lib/components/chat/ChatComposerWrapper.svelte"
+        "ui/src/lib/components/chat/AppChatPanel.svelte"
       ]
     },
     "ModelSelector.svelte": {
@@ -128,6 +128,25 @@
     "theme.css": {
       "class": "headless",
       "note": "Opt-in precompiled theming stylesheet (Mode B consumers without Tailwind); not a component. See THEMING.md."
+    },
+    "ChatPanelShell.svelte": {
+      "class": "assembly",
+      "assemblyValidatedBy": [
+        "tests/chat-panel-shell.dom.spec.ts"
+      ],
+      "composes": [
+        "ChatComposer.svelte",
+        "ChatTimeline.svelte",
+        "ModelSelector.svelte",
+        "MessageActions.svelte",
+        "StreamMessage.svelte"
+      ]
+    },
+    "ChatSessionsBar.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": [
+        "ui/src/lib/components/ChatWidget.svelte"
+      ]
     }
   }
 }

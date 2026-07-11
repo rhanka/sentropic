@@ -530,6 +530,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .visible {
   visibility: visible;
 }
+[data-st-chat-theme] .invisible {
+  visibility: hidden;
+}
 [data-st-chat-theme] .collapse {
   visibility: collapse;
 }
@@ -596,6 +599,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .z-50 {
   z-index: 50;
+}
+[data-st-chat-theme] .z-\[-1\] {
+  z-index: -1;
 }
 [data-st-chat-theme] .col-span-2 {
   grid-column: span 2 / span 2;
@@ -692,6 +698,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .max-h-24 {
   max-height: 6rem;
+}
+[data-st-chat-theme] .max-h-28 {
+  max-height: 7rem;
 }
 [data-st-chat-theme] .max-h-48 {
   max-height: 12rem;
@@ -839,6 +848,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .items-center {
   align-items: center;
 }
+[data-st-chat-theme] .justify-start {
+  justify-content: flex-start;
+}
 [data-st-chat-theme] .justify-end {
   justify-content: flex-end;
 }
@@ -899,6 +911,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .break-words {
   overflow-wrap: break-word;
 }
+[data-st-chat-theme] .break-all {
+  word-break: break-all;
+}
 [data-st-chat-theme] .rounded {
   border-radius: 0.25rem;
 }
@@ -924,6 +939,18 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .border-t {
   border-top-width: 1px;
 }
+[data-st-chat-theme] .border-amber-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(253 230 138 / var(--tw-border-opacity, 1));
+}
+[data-st-chat-theme] .border-emerald-300 {
+  --tw-border-opacity: 1;
+  border-color: rgb(110 231 183 / var(--tw-border-opacity, 1));
+}
+[data-st-chat-theme] .border-emerald-500 {
+  --tw-border-opacity: 1;
+  border-color: rgb(16 185 129 / var(--tw-border-opacity, 1));
+}
 [data-st-chat-theme] .border-gray-200 {
   border-color: var(--st-semantic-border-subtle, #e5e7eb);
 }
@@ -937,11 +964,26 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
   --tw-border-opacity: 1;
   border-color: rgb(254 202 202 / var(--tw-border-opacity, 1));
 }
+[data-st-chat-theme] .border-red-300 {
+  --tw-border-opacity: 1;
+  border-color: rgb(252 165 165 / var(--tw-border-opacity, 1));
+}
 [data-st-chat-theme] .border-slate-100 {
   border-color: var(--st-semantic-border-subtle, #f1f5f9);
 }
 [data-st-chat-theme] .border-slate-200 {
   border-color: var(--st-semantic-border-subtle, #e2e8f0);
+}
+[data-st-chat-theme] .border-slate-300 {
+  --tw-border-opacity: 1;
+  border-color: rgb(203 213 225 / var(--tw-border-opacity, 1));
+}
+[data-st-chat-theme] .border-slate-400 {
+  border-color: var(--st-semantic-text-muted, #94a3b8);
+}
+[data-st-chat-theme] .bg-amber-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 251 235 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .bg-black {
   --tw-bg-opacity: 1;
@@ -949,6 +991,14 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .bg-black\/80 {
   background-color: rgb(0 0 0 / 0.8);
+}
+[data-st-chat-theme] .bg-emerald-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(236 253 245 / var(--tw-bg-opacity, 1));
+}
+[data-st-chat-theme] .bg-emerald-500 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(16 185 129 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .bg-primary {
   --tw-bg-opacity: 1;
@@ -970,7 +1020,11 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
   background-color: rgb(203 213 225 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .bg-slate-50 {
+  --tw-bg-opacity: 1;
   background-color: var(--st-semantic-surface-subtle, #f8fafc);
+}
+[data-st-chat-theme] .bg-slate-50\/70 {
+  background-color: color-mix(in srgb, var(--st-semantic-surface-subtle, #f8fafc) 70%, transparent);
 }
 [data-st-chat-theme] .bg-slate-800 {
   background-color: var(--st-semantic-action-primary, #1e293b);
@@ -1082,9 +1136,20 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .font-semibold {
   font-weight: 600;
 }
+[data-st-chat-theme] .leading-none {
+  line-height: 1;
+}
+[data-st-chat-theme] .text-amber-800 {
+  --tw-text-opacity: 1;
+  color: rgb(146 64 14 / var(--tw-text-opacity, 1));
+}
 [data-st-chat-theme] .text-blue-600 {
   --tw-text-opacity: 1;
   color: rgb(37 99 235 / var(--tw-text-opacity, 1));
+}
+[data-st-chat-theme] .text-emerald-700 {
+  --tw-text-opacity: 1;
+  color: rgb(4 120 87 / var(--tw-text-opacity, 1));
 }
 [data-st-chat-theme] .text-primary {
   --tw-text-opacity: 1;
@@ -1117,8 +1182,14 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .text-slate-900 {
   color: var(--st-semantic-text-primary, #0f172a);
 }
+[data-st-chat-theme] .text-transparent {
+  color: transparent;
+}
 [data-st-chat-theme] .text-white {
   color: var(--st-semantic-action-primaryText, #ffffff);
+}
+[data-st-chat-theme] .line-through {
+  text-decoration-line: line-through;
 }
 [data-st-chat-theme] .opacity-0 {
   opacity: 0;
@@ -1128,6 +1199,11 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .opacity-60 {
   opacity: 0.6;
+}
+[data-st-chat-theme] .shadow {
+  --tw-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --tw-shadow-colored: 0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 [data-st-chat-theme] .shadow-2xl {
   --tw-shadow: var(--st-elevation-3, 0 25px 50px -12px rgb(0 0 0 / 0.25));
@@ -1177,8 +1253,16 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .duration-150 {
   transition-duration: 150ms;
 }
+[data-st-chat-theme] .hover\:bg-emerald-100:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(209 250 229 / var(--tw-bg-opacity, 1));
+}
 [data-st-chat-theme] .hover\:bg-primary\/90:hover {
   background-color: color-mix(in srgb, var(--st-semantic-action-primary, oklch(50% 0.134 242.749)) 90%, transparent);
+}
+[data-st-chat-theme] .hover\:bg-red-100:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 226 226 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .hover\:bg-red-50:hover {
   --tw-bg-opacity: 1;
@@ -1192,6 +1276,7 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
   background-color: rgb(226 232 240 / var(--tw-bg-opacity, 1));
 }
 [data-st-chat-theme] .hover\:bg-slate-50:hover {
+  --tw-bg-opacity: 1;
   background-color: var(--st-semantic-surface-subtle, #f8fafc);
 }
 [data-st-chat-theme] .hover\:bg-white\/20:hover {
