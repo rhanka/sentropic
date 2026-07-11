@@ -53,6 +53,7 @@ export type StreamMessageProps = {
   smoothContentStreaming?: boolean;
   smoothChunkThreshold?: number;
   acknowledgementText?: string | undefined;
+  plainSurface?: boolean;
   showRuntimeInlinePreview?: boolean;
   deferCollapsedDetails?: boolean;
   requestDeferredDetails?: (() => Promise<void>) | undefined;
