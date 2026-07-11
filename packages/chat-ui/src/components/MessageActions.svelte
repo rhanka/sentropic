@@ -149,12 +149,13 @@
 {/if}
 
 <!--
-  Assistant message action row — visible always (not on hover).
+  Assistant message action row — visible on group-hover (owner UAT 2026-07-05:
+  align with the user row; was previously always visible).
   Mirrors AppChatPanel markup lines 5181-5244 on main.
 -->
 {#if role === 'assistant' && (available.copy || available.regenerate || available.feedbackUp)}
   <div
-    class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
+    class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity"
   >
     {#if available.copy}
       <button
