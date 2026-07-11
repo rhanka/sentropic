@@ -260,6 +260,13 @@
       "when": 1781395200002,
       "tag": "0036_auth_invite_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781395200003,
+      "tag": "0037_identities_federation",
+      "breakpoints": true
     }
   ]
 }
