@@ -1,10 +1,11 @@
 import { env } from '../../../config/env';
+import { createFacebookProvider } from './facebook-provider';
 import { createGithubProvider } from './github-provider';
 import { createGoogleProvider } from './google-provider';
 import type { FederationProvider } from './types';
 
 /**
- * BR-39e Lot 1/2 — provider registry. v1 registers 'google' (Lot 1) and 'github' (Lot 2). A provider
+ * BR-39e federation provider registry. A provider
  * present in the registry but missing its env credentials resolves to `null` (feature-OFF): the route
  * answers a clear "provider not configured" instead of crashing. An id absent from the registry is
  * "not supported". Later lots add microsoft/apple/facebook behind the same seam.
@@ -13,6 +14,13 @@ import type { FederationProvider } from './types';
 type FederationProviderFactory = (ctx: { defaultRedirectUri: string }) => FederationProvider | null;
 
 const REGISTRY: Record<string, FederationProviderFactory> = {
+  facebook: ({ defaultRedirectUri }) => {
+    const clientId = env.FACEBOOK_OAUTH_CLIENT_ID;
+    const clientSecret = env.FACEBOOK_OAUTH_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return null;
+    const redirectUri = env.FACEBOOK_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
+    return createFacebookProvider({ clientId, clientSecret, redirectUri });
+  },
   github: ({ defaultRedirectUri }) => {
     const clientId = env.GITHUB_OAUTH_CLIENT_ID;
     const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET;
@@ -31,7 +39,7 @@ const REGISTRY: Record<string, FederationProviderFactory> = {
   },
 };
 
-/** True iff `providerId` is a federation provider this build knows about (v1: google only). */
+/** True iff `providerId` is a federation provider this build knows about. */
 export const isFederationProviderSupported = (providerId: string): boolean =>
   Object.prototype.hasOwnProperty.call(REGISTRY, providerId);
 
