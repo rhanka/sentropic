@@ -1,5 +1,5 @@
 import { Apple } from 'arctic';
-import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from 'jose';
+import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT, type CryptoKey } from 'jose';
 
 import type { FederationProvider, FederationProviderIdentity } from './types';
 
