@@ -63,9 +63,9 @@
   - [ ] Gate: route cookie/form-post unit tests and `make scope-check`.
 
 - [ ] **Lot 3 — Environment and registry**
-  - [ ] Add optional Apple Services ID, team ID, key ID, private key, and redirect URI env values.
-  - [ ] Register Apple feature-OFF unless all four required credentials exist.
-  - [ ] Keep the auto-link allowlist Google-only so Apple and private-relay collisions require manual-link.
+  - [x] Add optional Apple Services ID, team ID, key ID, private key, and redirect URI env values.
+  - [x] Register Apple feature-OFF unless all four required credentials exist.
+  - [x] Keep the auto-link allowlist Google-only so Apple and private-relay collisions require manual-link.
   - [ ] Gate: registry/provider unit tests and `make scope-check`.
 
 - [ ] **Lot 4 — Keystone tests**
