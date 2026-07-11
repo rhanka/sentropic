@@ -18,6 +18,14 @@
   const presetVerificationToken = params.get('sentropic_invite_token') ?? undefined;
   const skipEmailVerification = Boolean(presetVerificationToken);
 
+  // BR-39e Lot 6 (D17) — social federation. Same start route as login; on an unknown provider
+  // identity this enrolls a new account (auto-link into a non-credentialed shell per D7/D8 for
+  // Google). Forwarding the query preserves the OAuth `continue` so invited RP flows resume.
+  const federationQuery = typeof window !== 'undefined' ? window.location.search : '';
+  const federationProviders = [
+    { id: 'google', label: 'Google', startHref: `/api/v1/auth/federation/google/start${federationQuery}` },
+  ];
+
   async function handleRegistered(_session: AuthUiSession): Promise<void> {
     // Mirror the login page: after enrollment, RESUME the OAuth continuation so an invited user
     // returns to the RP. Without this the invited RP flow would dead-end on the IdP.
@@ -39,6 +47,7 @@
     {presetEmail}
     {presetVerificationToken}
     {skipEmailVerification}
+    {federationProviders}
     onRegistered={handleRegistered}
   >
     <a slot="login-link" href="/auth/login" class="font-medium text-primary hover:opacity-80">
