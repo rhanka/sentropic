@@ -58,7 +58,7 @@ describe('ChatTimeline projection stability', () => {
     expect(before.map((item) => item.key)).toEqual(after.map((item) => item.key));
     expect(after.map((item) => item.key)).toEqual([
       'message:user-1',
-      'assistant-1:runtime:1',
+      'assistant-1:runtime#0',
       'assistant-1:assistant:1',
     ]);
   });
@@ -89,7 +89,7 @@ describe('ChatTimeline projection stability', () => {
       'message:user-1',
       'assistant-1:assistant:1',
       'message:steer-1',
-      'assistant-1:runtime:1',
+      'assistant-1:runtime#0',
     ]);
   });
 });
