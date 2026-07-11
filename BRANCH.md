@@ -34,13 +34,14 @@ Add the OpenAI GPT-5.6 family (Sol / Terra / Luna) to the `@sentropic/llm-mesh` 
 - [ ] Lot 5 — h2a pre-integration + real `--gw` test on the RC; then final `0.7.0` release.
 
 ## Feedback Loop
+- BR-EX2: touch api source + tests outside `packages/llm-mesh/**` for the owner-approved OpenAI default cutover to GPT-5.6 Luna: `api/src/services/model-selection-legacy.ts` (repoint `gpt-5.2 → gpt-5.6-luna`, add `gpt-5.5 → gpt-5.6-luna`; `gpt-4.1-nano` stays the base default; `gpt-5.5` stays explicitly selectable — only default resolution migrates) + tests `model-selection-legacy.test.ts` / `models.test.ts` / `ai-settings.test.ts` / `me.test.ts`. Impact: default-resolution behavior + test assertions only; explicit `gpt-5.5` usage unchanged (verified: `normalizeLegacyModelSelection` runs only in settings-set + resolveDefaultSelection, not per-message). Rollback: revert the cutover rules + assertion edits.
 - BR-EX1: touch api consumer tests outside `packages/llm-mesh/**`, forced by the additive GPT-5.6 catalog: `api/tests/api/models.test.ts` (exact openai list + total count 14→17) and `api/tests/unit/llm-runtime-stream.test.ts` (the "stream fixture for every advertised model capability" invariant requires one fixture per new model — 3 verbatim clones of the gpt-5.5 Responses fixture). Impact: test-only, no runtime code. Rollback: revert the fixture/assertion edits with the catalog change.
 - attendu (h2a): how the existing Codex enrollment is imported (file/format/reader location) — sent `env:1783732123000:a8a7` to `claude:a2a-cli:52ebd45f3fe1`. Lot 2 blocked until reply.
 - Open decision (owner): make `gpt-5.6-sol` the default OpenAI model (add cutover `gpt-5.5 → gpt-5.6-sol`) or keep 5.6 as opt-in options only. Current: opt-in only (no default change).
 
 ## AI Flaky tests
 - Accept only non-systematic provider/network nondeterminism as `flaky accepted`, with same-commit success + owner sign-off. No additive timeouts.
-- `flaky accepted` (pending owner sign-off): CI #393 run `29135379059`.
+- `flaky accepted` (OWNER SIGNED OFF 2026-07-11): CI #393 run `29135379059`.
   - Command: `make test-api-ai` (shard `ai, initiative-generation-async,executive-summary-sync`).
   - File: `api/tests/ai/initiative-generation-async.test.ts` > "should complete full AI workflow: organization enrichment + initiative generation".
   - Signature: timeout at 120098ms (120s) — provider-latency nondeterminism on a full AI workflow.

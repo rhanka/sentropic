@@ -142,6 +142,6 @@ describe('Models API', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.defaults.provider_id).toBe('openai');
-    expect(data.defaults.model_id).toBe('gpt-5.5');
+    expect(data.defaults.model_id).toBe('gpt-5.6-luna');
   });
 });
