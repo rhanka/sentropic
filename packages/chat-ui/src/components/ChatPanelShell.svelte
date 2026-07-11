@@ -101,6 +101,14 @@
   export let streamClient: unknown = undefined;
 
   // --- AI mode: timeline (gold shell S5a2a) ---
+  /**
+   * Assistant message layout. 'bubble' (default) keeps the historical
+   * left-aligned card constrained to 85% width. 'plain' renders the assistant
+   * response full-width with no card chrome (Claude/ChatGPT/Gemini style),
+   * while user messages stay right-aligned bubbles. Comments mode is
+   * unaffected (always bubbles). Opt-in; default preserves the current look.
+   */
+  export let assistantLayout: 'bubble' | 'plain' = 'bubble';
   /** Scrollable message list element, bindable for host scroll orchestration. */
   export let listEl: HTMLDivElement | null = null;
   /** Invisible staging block used to measure the first hydration batch. */
@@ -356,11 +364,12 @@
         {#snippet renderTimelineAssistantSegment(item: TimelineItem)}
               {@const m = item.message}
               <div class="flex justify-start group">
-                <div class="max-w-[85%] w-full">
+                <div class="w-full {assistantLayout === 'plain' ? 'max-w-none' : 'max-w-[85%]'}">
                   <StreamMessage
                     streamClient={streamClient as never}
                     {labels}
                     variant="chat"
+                    plainSurface={assistantLayout === 'plain'}
                     streamId={item.key}
                     status={item.isTerminal ? 'completed' : 'processing'}
                     finalContent={item.segment.content}

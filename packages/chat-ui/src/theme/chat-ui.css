@@ -780,6 +780,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .max-w-full {
   max-width: 100%;
 }
+[data-st-chat-theme] .max-w-none {
+  max-width: none;
+}
 [data-st-chat-theme] .flex-1 {
   flex: 1 1 0%;
 }
