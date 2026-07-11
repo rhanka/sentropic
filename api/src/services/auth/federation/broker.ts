@@ -109,6 +109,17 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
       );
     }
 
+    // IdP mix-up guard: a flow-state minted for one provider MUST be consumed on that SAME provider's
+    // callback. Rejects a flow-state minted at provider A being replayed onto provider B's callback
+    // (becomes live once a second provider lands in Lot 2) — an OAuth/OIDC mix-up defence.
+    if (flowState.provider !== provider.id) {
+      await audit.record('warn', 'federation.provider_mismatch', {
+        expected: flowState.provider,
+        provider: provider.id,
+      });
+      return reject(400, 'federation_provider_mismatch', 'Federation provider mismatch.');
+    }
+
     if (request.error) {
       await audit.record('warn', 'federation.provider_error', {
         error: request.error,
