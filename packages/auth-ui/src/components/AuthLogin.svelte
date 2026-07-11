@@ -4,6 +4,7 @@
   import {
     createDefaultAuthUiLabels,
     type AuthUiError,
+    type AuthUiFederationProvider,
     type AuthUiLabels,
     type AuthUiSession,
     type AuthUiTransport,
@@ -13,6 +14,7 @@
     startPasskeyAuthentication,
     getWebAuthnErrorMessage,
   } from '../webauthn.js';
+  import AuthFederationButtons from './AuthFederationButtons.svelte';
 
   interface Props {
     transport: AuthUiTransport;
@@ -26,9 +28,23 @@
      * discoverable; the hint is advisory.
      */
     presetEmail?: string;
+    /**
+     * BR-39e Lot 6 (D17) — optional social/enterprise providers. Each renders a DS-styled button
+     * that redirects to its `startHref` (`GET /auth/federation/:provider/start`). Empty/absent →
+     * no federation UI (legacy hosts unaffected, K-UI-LEGACY).
+     */
+    federationProviders?: AuthUiFederationProvider[];
   }
 
-  let { transport, labels, onLoggedIn, onLostDevice, onError, presetEmail }: Props = $props();
+  let {
+    transport,
+    labels,
+    onLoggedIn,
+    onLostDevice,
+    onError,
+    presetEmail,
+    federationProviders = [],
+  }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultAuthUiLabels(labels ?? {}));
 
@@ -117,6 +133,7 @@
           <Typography variant="body-sm" tone="muted">{resolvedLabels.loginNoAccount}</Typography>
         </slot>
       </div>
+      <AuthFederationButtons providers={federationProviders} {labels} />
     </div>
   {:else}
     <div class="auth-ui-section">
