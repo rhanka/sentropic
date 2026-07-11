@@ -63,6 +63,11 @@ const envSchema = z.object({
   GITHUB_OAUTH_CLIENT_ID: z.string().optional(),
   GITHUB_OAUTH_CLIENT_SECRET: z.string().optional(),
   GITHUB_OAUTH_REDIRECT_URI: z.string().optional(),
+  // BR-39e Lot 5 — Facebook social federation. Missing credentials keep the provider feature-OFF.
+  // The redirect URI defaults to `<issuer>/auth/federation/facebook/callback` when unset.
+  FACEBOOK_OAUTH_CLIENT_ID: z.string().optional(),
+  FACEBOOK_OAUTH_CLIENT_SECRET: z.string().optional(),
+  FACEBOOK_OAUTH_REDIRECT_URI: z.string().optional(),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   AUTH_CALLBACK_BASE_URL: z.string().optional(),
