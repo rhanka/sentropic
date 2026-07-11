@@ -49,10 +49,10 @@
   - [ ] Gate: `make scope-check`.
 
 - [ ] **Lot 1 — Apple provider and client secret**
-  - [ ] Add `apple-provider.ts` with a pure five-minute ES256 `mintAppleClientSecret` helper using `jose`.
-  - [ ] Construct Arctic Apple with PKCS#8 bytes, request `name email`, and set `response_mode=form_post` plus nonce.
-  - [ ] Verify Apple id_token signature, issuer, audience, mandatory nonce, subject, and verified email without returning upstream tokens.
-  - [ ] Capture the one-time Apple profile name/email and classify private-relay email as provider-scoped.
+  - [x] Add `apple-provider.ts` with a pure five-minute ES256 `mintAppleClientSecret` helper using `jose`.
+  - [x] Construct Arctic Apple with PKCS#8 bytes, request `name email`, and set `response_mode=form_post` plus nonce.
+  - [x] Verify Apple id_token signature, issuer, audience, mandatory nonce, subject, and verified email without returning upstream tokens.
+  - [x] Capture the one-time Apple profile name/email and classify private-relay email as provider-scoped.
   - [ ] Gate: scoped provider unit tests and `make scope-check`.
 
 - [ ] **Lot 2 — POST form callback transport**
