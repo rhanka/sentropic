@@ -158,6 +158,11 @@
 
 <header class="border-b border-slate-200 bg-white">
   <div class="mx-auto flex max-w-7xl items-center justify-between px-4 h-14">
+    <!-- Brand zone — always visible -->
+    <a href="/" class="flex items-center gap-2 mr-4 flex-shrink-0">
+      <img src="/SENT-logo-squared.svg" alt="Sentropic" class="h-7 w-7" />
+      <span class="font-semibold text-sm text-slate-800">Sentropic</span>
+    </a>
     <!-- Desktop nav (hidden in compact mode) -->
     <nav class:hidden={showCompactHeader} class="flex flex-1 flex-wrap items-center gap-4 text-sm font-medium">
       {#each navItems as item}
@@ -174,7 +179,7 @@
       {/each}
     </nav>
     <!-- Burger (tablet+ OR forced by docked chat) -->
-    <div class:hidden={!showCompactHeader} class="flex flex-1 items-center justify-start">
+    <div class:hidden={!showCompactHeader} class="flex flex-1 items-center justify-end">
       <button
         class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
         on:click={toggleBurgerMenu}

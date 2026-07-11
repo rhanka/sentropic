@@ -113,7 +113,7 @@ describe('model selection legacy cutovers', () => {
     });
   });
 
-  it('leaves Claude model ids unchanged (no legacy rules)', () => {
+  it('migrates legacy Claude Sonnet and Opus ids', () => {
     expect(
       normalizeLegacyModelSelection({
         providerId: 'anthropic',
@@ -121,8 +121,19 @@ describe('model selection legacy cutovers', () => {
       })
     ).toEqual({
       providerId: 'anthropic',
-      modelId: 'claude-sonnet-4-6',
-      migrated: false,
+      modelId: 'claude-sonnet-5',
+      migrated: true,
+    });
+
+    expect(
+      normalizeLegacyModelSelection({
+        providerId: 'anthropic',
+        modelId: 'claude-opus-4-7',
+      })
+    ).toEqual({
+      providerId: 'anthropic',
+      modelId: 'claude-opus-4-8',
+      migrated: true,
     });
   });
 
