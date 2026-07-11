@@ -52,13 +52,13 @@
   - [x] Confirm the initial worktree is clean and assigned ports are free.
   - [x] Lot gate: leave shared `.track` unchanged in this concurrent worktree; `make scope-check` passes.
 
-- [ ] **Lot 1 — Facebook provider and registration**
-  - [ ] Add `facebook-provider.ts` with Arctic OAuth2, scopes `email public_profile`, and Graph `/me?fields=id,name,email`.
-  - [ ] Derive `subject` from string `id`; expose optional email as unverified; return no token-bearing field.
-  - [ ] Inject `fetchImpl`; fail closed on Graph errors or missing string `id`.
-  - [ ] Register Facebook feature-OFF without client credentials and default its callback from the issuer.
-  - [ ] Add optional Facebook client id, secret, and redirect URI environment keys.
-  - [ ] Lot gate: `make scope-check` and commit provider registration atomically.
+- [x] **Lot 1 — Facebook provider and registration**
+  - [x] Add `facebook-provider.ts` with Arctic OAuth2, scopes `email public_profile`, and Graph `/me?fields=id,name,email`.
+  - [x] Derive `subject` from string `id`; expose optional email as unverified; return no token-bearing field.
+  - [x] Inject `fetchImpl`; fail closed on Graph errors or missing string `id`.
+  - [x] Register Facebook feature-OFF without client credentials and default its callback from the issuer.
+  - [x] Add optional Facebook client id, secret, and redirect URI environment keys.
+  - [x] Lot gate: `make typecheck-api` and `make scope-check` pass before the atomic provider commit.
 
 - [ ] **Lot 2 — Facebook keystones**
   - [ ] Add pure provider tests for authorization scopes, Graph identity derivation, absent email, failures, and token no-leak.
