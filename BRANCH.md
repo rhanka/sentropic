@@ -60,12 +60,12 @@
   - [x] Add optional Facebook client id, secret, and redirect URI environment keys.
   - [x] Lot gate: `make typecheck-api` and `make scope-check` pass before the atomic provider commit.
 
-- [ ] **Lot 2 — Facebook keystones**
+- [x] **Lot 2 — Facebook keystones**
   - [x] Add pure provider tests for authorization scopes, Graph identity derivation, absent email, failures, and token no-leak.
   - [x] Add K-FB-CHALLENGE proving absent email issues the existing challenge with no user, identity, or session created.
-  - [ ] Prove Facebook subject-first login, credentialed collision manual-link, and no auto-link for shell collisions.
-  - [ ] Run `make test-api-unit SCOPE="federation-facebook-provider federation-broker" ENV=br39e-lot5`.
-  - [ ] Lot gate: `make scope-check` and commit keystone tests atomically.
+  - [x] Prove Facebook subject-first login, credentialed collision manual-link, and no auto-link for shell collisions.
+  - [x] Run `make test-api-unit SCOPE="federation-facebook-provider federation-broker" ENV=br39e-lot5` (3 files, 20 tests passed).
+  - [x] Lot gate: `make scope-check` and commit keystone tests atomically.
 
 - [ ] **Lot 3 — Final validation and publication**
   - [ ] Run `make typecheck-api` with zero errors.
