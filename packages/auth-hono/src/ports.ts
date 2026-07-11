@@ -338,6 +338,95 @@ export interface AuthHonoInvitesPort {
   consume(tokenHash: string, now: Date, userId: string): Promise<{ email: string } | null>;
 }
 
+/**
+ * BR-39e Lot 0: a linked external identity (social/enterprise federation).
+ * One external identity `(provider, providerSubject)` maps to EXACTLY ONE Sentropic user (D6).
+ * `providerSubject` is the STABLE upstream subject (Google `sub`, GitHub numeric id, MS `oid`,
+ * Apple `sub`, FB id) — NEVER the email. `emailAtLink` is audit metadata only (D13).
+ */
+export interface AuthHonoIdentityRecord {
+  id: string;
+  userId: string;
+  provider: string;
+  providerSubject: string;
+  emailAtLink: string | null;
+  emailVerifiedByProvider: boolean;
+  providerTenant: string | null;
+  linkedAt: Date;
+  lastLoginAt: Date | null;
+}
+
+export interface AuthHonoLinkIdentityInput {
+  userId: string;
+  provider: string;
+  providerSubject: string;
+  emailAtLink: string | null;
+  emailVerifiedByProvider: boolean;
+  providerTenant?: string | null;
+  now: Date;
+}
+
+/**
+ * One-time, SERVER-SIDE federation flow-state (D5, CRITICAL). Holds the upstream CSRF `state`,
+ * the OIDC `nonce`, the PKCE `codeVerifier`, and a POINTER (`continuationToken`) to the sealed
+ * OAuth continuation. It is referenced by the opaque `id`, which is the ONLY value carried through
+ * the provider round-trip (in a bound `HttpOnly; Secure; SameSite=Lax` cookie). The sealed HMAC
+ * OAuth `continue` is NEVER placed in a browser-visible / provider-visible parameter — it lives
+ * here server-side, dereferenced by pointer. Consumed verify-and-DELETE (single-use + TTL).
+ */
+export interface AuthHonoFederationFlowState {
+  id: string;
+  provider: string;
+  upstreamState: string;
+  nonce: string | null;
+  codeVerifier: string | null;
+  continuationToken: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+export interface AuthHonoCreateFederationFlowStateInput {
+  provider: string;
+  upstreamState: string;
+  nonce?: string | null;
+  codeVerifier?: string | null;
+  continuationToken?: string | null;
+  expiresAt: Date;
+  now: Date;
+}
+
+/**
+ * BR-39e Lot 0 federation substrate. OPTIONAL — when absent, auth-hono keeps its legacy behavior
+ * and no federation routes are mounted. Owns ONLY the `identities` link table + the one-time
+ * flow-state store; user find/upsert stays on the existing `users` port (`create`/`findByEmail`/
+ * `findById`). The SAFE linking algorithm (D6/D7) lives in `resolveOrCreateFederatedUser`, which
+ * composes this port + `users` + `accountPolicy`.
+ */
+export interface AuthHonoFederationPort {
+  /** Resolve by the stable `(provider, providerSubject)` — the FIRST and only linking key (D6). */
+  findIdentityBySubject(provider: string, providerSubject: string): Promise<AuthHonoIdentityRecord | null>;
+  /** List a user's linked identities (settings surface + unlink last-factor lockout check, D12). */
+  findIdentitiesForUser(userId: string): Promise<AuthHonoIdentityRecord[]>;
+  /**
+   * Insert a link. MUST reject a duplicate `(provider, providerSubject)` by throwing
+   * `AuthHonoIdentityConflictError` so the resolver can re-read + log the existing user in
+   * idempotently (concurrent-callback race).
+   */
+  linkIdentity(input: AuthHonoLinkIdentityInput): Promise<AuthHonoIdentityRecord>;
+  unlinkIdentity(userId: string, provider: string, providerSubject: string): Promise<boolean>;
+  touchLogin(identityId: string, now: Date): Promise<void>;
+  /**
+   * True iff the user already holds a COMPLETED sign-in factor (a webauthn credential, an existing
+   * federated identity, or a used magic link). A `false` return marks a "non-credentialed shell"
+   * that MAY be auto-linked (D7); a credentialed account is NEVER silently merged.
+   */
+  isUserCredentialed(userId: string): Promise<boolean>;
+  /** Persist a one-time server-side flow-state; returns the record incl. the opaque `id` pointer. */
+  createFlowState(input: AuthHonoCreateFederationFlowStateInput): Promise<AuthHonoFederationFlowState>;
+  /** Verify-and-DELETE by `id` (single-use + TTL); `null` if missing / expired / already consumed. */
+  consumeFlowState(id: string, now: Date): Promise<AuthHonoFederationFlowState | null>;
+}
+
 export interface AuthHonoPorts {
   users: AuthHonoUserPort;
   credentials: AuthHonoCredentialPort;
@@ -360,4 +449,6 @@ export interface AuthHonoPorts {
   consentStore?: AuthHonoConsentStorePort;
   /** BR-39r L4 single-use invitation tokens (optional; inert when absent). */
   invites?: AuthHonoInvitesPort;
+  /** BR-39e Lot 0 social/enterprise federation substrate (optional; no federation routes when absent). */
+  federation?: AuthHonoFederationPort;
 }
