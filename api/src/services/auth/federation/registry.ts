@@ -8,7 +8,7 @@ import type { FederationProvider } from './types';
  * BR-39e Lot 1–3 — provider registry. v1 registers Google, GitHub, and Microsoft. A provider
  * present in the registry but missing its env credentials resolves to `null` (feature-OFF): the route
  * answers a clear "provider not configured" instead of crashing. An id absent from the registry is
- * "not supported". Later lots add microsoft/apple/facebook behind the same seam.
+ * "not supported". Later lots add Apple and Facebook behind the same seam.
  */
 
 type FederationProviderFactory = (ctx: {

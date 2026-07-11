@@ -51,9 +51,9 @@
   - [x] Prove Microsoft email collision routes to manual-link and never auto-links.
   - [x] Run `make test-api-unit SCOPE="federation-microsoft-provider federation-broker" ENV=br39e-lot3`.
 - [ ] **Lot 3 — Final validation and delivery**
-  - [ ] Run `make typecheck-api ENV=br39e-lot3`.
-  - [ ] Run `make lint-api ENV=br39e-lot3` or the documented `make exec-api` fallback.
-  - [ ] Run `make scope-check` before every commit.
+  - [x] Run `make typecheck-api ENV=br39e-lot3`.
+  - [x] Run `make lint-api ENV=br39e-lot3` or the documented `make exec-api` fallback.
+  - [x] Run `make scope-check` before every commit.
   - [ ] Run harness consensus review and resolve blocking findings.
   - [ ] Push `feat/br39e-lot3-microsoft` and open the requested PR against `main`.
   - [ ] Verify GitHub Actions.
