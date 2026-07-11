@@ -26,7 +26,7 @@ describe('ChatWidget shell state extraction', () => {
     const source = readFileSync(widgetPath, 'utf8');
     expect(source).toContain('const handleNewSession = () => {');
     expect(source).toContain('chatSessionId = null;');
-    expect(source).toContain('on:click={handleNewSession}');
+    expect(source).toContain('onNewSession={handleNewSession}');
     expect(source).not.toContain('on:click={() => chatPanelRef?.newSession?.()}');
   });
 });
