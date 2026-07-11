@@ -46,7 +46,7 @@
   - [x] Inspect Google/GitHub providers, broker, registry, types, pending store, route, env, and unit-test patterns.
   - [x] Inspect installed Arctic 3.7.0 Apple constructor and client-secret behavior.
   - [x] Confirm api-only scope, no migration, no package change, and isolated ports/environment.
-  - [ ] Gate: `make scope-check`.
+  - [x] Gate: `make scope-check`.
 
 - [ ] **Lot 1 — Apple provider and client secret**
   - [x] Add `apple-provider.ts` with a pure five-minute ES256 `mintAppleClientSecret` helper using `jose`.
@@ -60,18 +60,18 @@
   - [x] Accept GET and POST callback routes while requiring Apple parameters from `parseBody()`.
   - [x] Pass the parsed one-time Apple profile through the broker verification seam for login and manual-link callbacks.
   - [x] Preserve bound flow-state cookie consumption on POST.
-  - [ ] Gate: route cookie/form-post unit tests and `make scope-check`.
+  - [x] Gate: route cookie/form-post unit tests and `make scope-check`.
 
 - [ ] **Lot 3 — Environment and registry**
   - [x] Add optional Apple Services ID, team ID, key ID, private key, and redirect URI env values.
   - [x] Register Apple feature-OFF unless all four required credentials exist.
   - [x] Keep the auto-link allowlist Google-only so Apple and private-relay collisions require manual-link.
-  - [ ] Gate: registry/provider unit tests and `make scope-check`.
+  - [x] Gate: registry/provider unit tests and `make scope-check`.
 
 - [ ] **Lot 4 — Keystone tests**
   - [x] Add K-APPLE-SECRET signing and public-key verification coverage.
-  - [ ] Add id_token issuer/audience/nonce and private-relay/manual-link coverage.
-  - [ ] Add K-APPLE-FORMPOST POST-body parsing, first-auth profile capture, and GET-query-negative coverage.
+  - [x] Add id_token issuer/audience/nonce and private-relay/manual-link coverage.
+  - [x] Add K-APPLE-FORMPOST POST-body parsing, first-auth profile capture, and GET-query-negative coverage.
   - [ ] Gate: `make test-api-unit SCOPE="federation-apple-provider federation-broker federation-route-cookies" ENV=br39e-lot4`.
 
 - [ ] **Lot 5 — Final validation and closure**

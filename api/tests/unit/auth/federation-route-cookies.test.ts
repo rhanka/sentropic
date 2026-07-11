@@ -21,9 +21,9 @@ vi.mock('../../../src/services/auth/federation/broker', () => ({
 
 vi.mock('../../../src/services/auth/federation/registry', () => ({
   isFederationProviderSupported: () => true,
-  resolveFederationProvider: () => ({
+  resolveFederationProvider: (providerId: string) => ({
     createAuthorizationUrl: () => 'https://accounts.google.com/o/oauth2/v2/auth',
-    id: 'google',
+    id: providerId,
     verifyCallback: async () => ({ email: null, emailVerified: false, subject: 's' }),
   }),
 }));
@@ -48,7 +48,7 @@ vi.mock('@sentropic/auth-hono', () => ({
   createAuthSessionService: () => ({ createSession: vi.fn() }),
 }));
 
-const { federationRouter } = await import('../../../src/routes/auth/federation');
+const { federationRouter, parseFederationCallback } = await import('../../../src/routes/auth/federation');
 
 interface ParsedCookie {
   name: string;
@@ -150,5 +150,64 @@ describe('federation route Set-Cookie flags (BR-39e Lot 1, N4)', () => {
     expect(cookie.flags.httponly).toBe(true);
     expect(cookie.flags.samesite).toBe('Lax');
     expect(cookie.flags.path).toBe('/');
+  });
+
+  it('K-APPLE-FORMPOST: parses state, code, and first-auth profile only from the POST body', async () => {
+    const parseBody = vi.fn(async () => ({
+      code: 'apple-code',
+      state: 'apple-state',
+      user: JSON.stringify({
+        email: 'ada@privaterelay.appleid.com',
+        name: { firstName: 'Ada', lastName: 'Lovelace' },
+      }),
+    }));
+    const parsed = await parseFederationCallback('apple', {
+      method: 'POST',
+      parseBody,
+      query: () => undefined,
+    });
+
+    expect(parseBody).toHaveBeenCalledOnce();
+    expect(parsed).toEqual({
+      code: 'apple-code',
+      error: null,
+      profile: { displayName: 'Ada Lovelace', email: 'ada@privaterelay.appleid.com' },
+      state: 'apple-state',
+    });
+  });
+
+  it('K-APPLE-FORMPOST: ignores Apple callback parameters supplied only in a GET query', async () => {
+    const parseBody = vi.fn(async () => ({}));
+    const parsed = await parseFederationCallback('apple', {
+      method: 'GET',
+      parseBody,
+      query: (name) => ({ code: 'query-code', state: 'query-state', user: '{}' })[name],
+    });
+
+    expect(parsed).toEqual({ code: null, error: null, profile: null, state: null });
+    expect(parseBody).not.toHaveBeenCalled();
+  });
+
+  it('K-APPLE-FORMPOST: POST callback consumes the bound flow cookie and forwards body parameters', async () => {
+    process.env.NODE_ENV = 'development';
+    const body = new URLSearchParams({
+      code: 'apple-code',
+      state: 'apple-state',
+      user: JSON.stringify({ email: 'ada@example.com', name: { firstName: 'Ada', lastName: 'Lovelace' } }),
+    });
+    const res = await federationRouter.request('/apple/callback', {
+      body,
+      headers: { cookie: 'sentropic_fed_flow=flow-pointer-apple' },
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(302);
+    expect(brokerMock.callback).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'apple-code',
+      flowStateId: 'flow-pointer-apple',
+      profile: { displayName: 'Ada Lovelace', email: 'ada@example.com' },
+      state: 'apple-state',
+    }));
+    expect(findSetCookie(res, 'sentropic_fed_flow').flags['max-age']).toBe('0');
   });
 });
