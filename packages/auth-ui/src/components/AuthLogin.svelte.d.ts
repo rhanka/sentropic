@@ -1,6 +1,7 @@
 import type { Component } from 'svelte';
 import type {
   AuthUiError,
+  AuthUiFederationProvider,
   AuthUiLabels,
   AuthUiSession,
   AuthUiTransport,
@@ -18,6 +19,11 @@ export interface AuthLoginProps {
    * still works). Mirrors the `presetEmail` prop in `AuthLogin.svelte`.
    */
   presetEmail?: string;
+  /**
+   * BR-39e Lot 6 (D17) — optional social/enterprise providers rendered as DS-styled redirect
+   * buttons below the passkey login. Empty/absent → no federation UI (legacy hosts unaffected).
+   */
+  federationProviders?: AuthUiFederationProvider[];
 }
 
 declare const AuthLogin: Component<AuthLoginProps>;
