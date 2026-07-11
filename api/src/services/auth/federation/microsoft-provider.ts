@@ -4,7 +4,9 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import type { FederationProvider, FederationProviderIdentity } from './types';
 
 const MICROSOFT_LOGIN = 'https://login.microsoftonline.com';
-const MICROSOFT_JWKS_URL = new URL(`${MICROSOFT_LOGIN}/common/discovery/v2.0/keys`);
+const MICROSOFT_JWKS_URL = new URL(
+  `${MICROSOFT_LOGIN}/common/discovery/v2.0/keys`
+);
 const MICROSOFT_SCOPES = ['openid', 'profile', 'email'];
 const MICROSOFT_CONSUMER_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad';
 
@@ -14,10 +16,18 @@ const getMicrosoftJwks = (): ReturnType<typeof createRemoteJWKSet> => {
   return microsoftJwks;
 };
 
-export type MicrosoftIdTokenVerifier = (idToken: string, audience: string) => Promise<JWTPayload>;
+export type MicrosoftIdTokenVerifier = (
+  idToken: string,
+  audience: string
+) => Promise<JWTPayload>;
 
-const verifyMicrosoftIdToken: MicrosoftIdTokenVerifier = async (idToken, audience) => {
-  const { payload } = await jwtVerify(idToken, getMicrosoftJwks(), { audience });
+const verifyMicrosoftIdToken: MicrosoftIdTokenVerifier = async (
+  idToken,
+  audience
+) => {
+  const { payload } = await jwtVerify(idToken, getMicrosoftJwks(), {
+    audience,
+  });
   return payload;
 };
 
@@ -38,43 +48,81 @@ const requiredClaim = (payload: JWTPayload, claim: 'oid' | 'tid'): string => {
   return value;
 };
 
-const enforceTenantPolicy = (payload: JWTPayload, configuredTenant: string): string => {
+const enforceTenantPolicy = (
+  payload: JWTPayload,
+  configuredTenant: string
+): string => {
   const tid = requiredClaim(payload, 'tid');
   const expectedIssuer = `${MICROSOFT_LOGIN}/${tid}/v2.0`;
-  if (typeof payload.iss !== 'string' || payload.iss.toLowerCase() !== expectedIssuer.toLowerCase()) {
-    throw new Error('Microsoft id_token issuer does not match its tenant claim.');
+  if (
+    typeof payload.iss !== 'string' ||
+    payload.iss.toLowerCase() !== expectedIssuer.toLowerCase()
+  ) {
+    throw new Error(
+      'Microsoft id_token issuer does not match its tenant claim.'
+    );
   }
 
   const tenant = configuredTenant.trim().toLowerCase();
   const normalizedTid = tid.toLowerCase();
-  if (tenant === 'organizations' && normalizedTid === MICROSOFT_CONSUMER_TENANT) {
-    throw new Error('Microsoft personal accounts are not allowed by the configured tenant policy.');
+  if (
+    tenant === 'organizations' &&
+    normalizedTid === MICROSOFT_CONSUMER_TENANT
+  ) {
+    throw new Error(
+      'Microsoft personal accounts are not allowed by the configured tenant policy.'
+    );
   }
   if (tenant === 'consumers' && normalizedTid !== MICROSOFT_CONSUMER_TENANT) {
-    throw new Error('Microsoft organization accounts are not allowed by the configured tenant policy.');
+    throw new Error(
+      'Microsoft organization accounts are not allowed by the configured tenant policy.'
+    );
   }
-  if (!['common', 'organizations', 'consumers'].includes(tenant) && tenant !== normalizedTid) {
-    throw new Error('Microsoft id_token tenant does not match the configured tenant.');
+  if (
+    !['common', 'organizations', 'consumers'].includes(tenant) &&
+    tenant !== normalizedTid
+  ) {
+    throw new Error(
+      'Microsoft id_token tenant does not match the configured tenant.'
+    );
   }
   return tid;
 };
 
-export const createMicrosoftProvider = (config: MicrosoftProviderConfig): FederationProvider => {
+export const createMicrosoftProvider = (
+  config: MicrosoftProviderConfig
+): FederationProvider => {
   const tenant = config.tenant.trim() || 'common';
-  const microsoft = new MicrosoftEntraId(tenant, config.clientId, config.clientSecret, config.redirectUri);
+  const microsoft = new MicrosoftEntraId(
+    tenant,
+    config.clientId,
+    config.clientSecret,
+    config.redirectUri
+  );
   const verifyIdToken = config.verifyIdToken ?? verifyMicrosoftIdToken;
 
   return {
     id: 'microsoft',
 
     createAuthorizationUrl({ codeVerifier, nonce, state }) {
-      const url = microsoft.createAuthorizationURL(state, codeVerifier, MICROSOFT_SCOPES);
+      const url = microsoft.createAuthorizationURL(
+        state,
+        codeVerifier,
+        MICROSOFT_SCOPES
+      );
       url.searchParams.set('nonce', nonce);
       return url.toString();
     },
 
-    async verifyCallback({ code, codeVerifier, nonce }): Promise<FederationProviderIdentity> {
-      const tokens = await microsoft.validateAuthorizationCode(code, codeVerifier ?? '');
+    async verifyCallback({
+      code,
+      codeVerifier,
+      nonce,
+    }): Promise<FederationProviderIdentity> {
+      const tokens = await microsoft.validateAuthorizationCode(
+        code,
+        codeVerifier ?? ''
+      );
       const payload = await verifyIdToken(tokens.idToken(), config.clientId);
 
       if (!nonce || payload.nonce !== nonce) {

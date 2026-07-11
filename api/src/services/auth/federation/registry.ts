@@ -11,7 +11,9 @@ import type { FederationProvider } from './types';
  * "not supported". Later lots add microsoft/apple/facebook behind the same seam.
  */
 
-type FederationProviderFactory = (ctx: { defaultRedirectUri: string }) => FederationProvider | null;
+type FederationProviderFactory = (ctx: {
+  defaultRedirectUri: string;
+}) => FederationProvider | null;
 
 const REGISTRY: Record<string, FederationProviderFactory> = {
   github: ({ defaultRedirectUri }) => {
@@ -55,7 +57,7 @@ export const isFederationProviderSupported = (providerId: string): boolean =>
  */
 export const resolveFederationProvider = (
   providerId: string,
-  ctx: { defaultRedirectUri: string },
+  ctx: { defaultRedirectUri: string }
 ): FederationProvider | null => {
   const factory = REGISTRY[providerId];
   return factory ? factory(ctx) : null;
