@@ -1,53 +1,48 @@
-# Feature: Branded AppChrome header on IdP auth screens (BR-39e Lot A)
+# Feature: Bank/Financial Connector socle spec (SPEC_EVOL_BANK_CONNECTOR)
 
 ## Objective
-Render the real DS-branded header (brand zone SENT logo mark + wordmark) on the standalone IdP auth screens by configuring the design-system-svelte `AppChrome` brand zone (OD4, config-only, reversible), consistent with the main app's canonical header — without duplicating `ui/Header.svelte`.
+Land the architect-owned socle spec for the bank/financial connector (instance of the Universal Connector & Account Broker pattern), fully double-consensus reviewed (Opus 4.8xhigh + Codex 5.5xhigh) and owner-ratified (B1-b/B4/B5-b/B6-a). Doc-only branch, fast-merge.
 
 ## Scope / Guardrails
-- Scope limited to `apps/auth-idp/web/**` (config + static asset).
-- No DS-package change: `AppChrome` already exposes `logoSrc`; config only.
+- Scope limited to `spec/SPEC_EVOL_BANK_CONNECTOR.md` (documentation only).
+- No code, no migration, no runtime change — nothing to build/test.
 - Make-only workflow, no direct Docker commands.
-- Branch development happens in isolated worktree `tmp/auth-brand-header`.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `apps/auth-idp/web/**`
-  - `packages/design-system-svelte/src/**` (only if a brand-zone prop/slot were missing — NOT used; not present in this repo)
+  - `spec/SPEC_EVOL_BANK_CONNECTOR.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/auth-hono/**`, `packages/auth-ui/**`, `api/**`, migrations
+  - `api/**`, `ui/**`, `packages/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
+  - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- `acknowledge`: DS package (`@sentropic/design-system-svelte`) is an external npm dependency (`^0.34.0`, resolves 0.34.48) — its `src/**` is not in this repo. No DS change was needed; `AppChrome` already supports `logoSrc`, so the requirement is met by config alone (preferred outcome).
+- none
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (orthogonal single-file config + asset; one test cycle)
+- [x] **Mono-branch + cherry-pick** (doc-only, single trivial cycle)
 - [ ] **Multi-branch**
-- Rationale: Single small config change scoped to one app; no independent CI needed.
+- Rationale: single documentation file, double-consensus already complete; no build/test surface.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Ground on `ui/Header.svelte`, `apps/auth-idp/web/+layout.svelte`, DS `AppChrome`, `screen-smoke.ts`.
-  - [x] Confirm isolated worktree `tmp/auth-brand-header`.
-  - [x] Confirm scope and guardrails.
-
-- [x] **Lot 1 — Branded AppChrome brand zone**
-  - [x] Ship `SENT-logo-squared.svg` into `apps/auth-idp/web/static/` (same asset the main app serves).
-  - [x] Configure `AppChrome` with `logoSrc="/SENT-logo-squared.svg"` in `apps/auth-idp/web/src/routes/+layout.svelte` (keep `brandName="SENT"`, `productName="Sentropic ID"`, entropicTheme, locale).
-  - [x] Lot gate:
-    - [x] `make typecheck-idp-web` — svelte-check found 0 errors and 0 warnings.
-    - [x] `make build-idp-web` — production build OK; `build/SENT-logo-squared.svg` shipped; root-layout chunk references the logoSrc.
-    - [ ] `make dev-idp` + `make smoke-idp-screens` — screen smoke assertions (login heading / consent Approve / token exchange) are orthogonal to a decorative brand-logo addition; not booted to avoid colliding with a possible live `ENV=dev` shared-DB stack (project footgun). Command recorded for the integration test cycle.
-
+  - [x] Author spec grounded on STUDY + MCP-platform socle + openerp consumer.
+  - [x] Confirm scope and guardrails (doc-only).
+- [x] **Lot 1 — Spec + double-consensus**
+  - [x] Draft `spec/SPEC_EVOL_BANK_CONNECTOR.md`.
+  - [x] Opus 4.8xhigh adversarial pass reconciled (v2).
+  - [x] Codex 5.5xhigh adversarial pass reconciled (v3).
+  - [x] Owner decisions integrated (B1-b/B4/B5-b/B6-a).
 - [ ] **Lot N — Final validation**
-  - [x] Typecheck (svelte-check) green.
-  - [ ] PR opened; branch CI to run on the PR.
-  - [ ] Merge after CI + UAT sign-off (conductor/owner).
+  - [ ] Final dual confirmation pass (Opus + Codex leg) — PASS.
+  - [ ] Final gate step 1: create PR using `BRANCH.md` as body.
+  - [ ] Final gate step 2: verify CI green (doc-only paths-filter).
+  - [ ] Final gate step 3: remove `BRANCH.md`, push, merge.
