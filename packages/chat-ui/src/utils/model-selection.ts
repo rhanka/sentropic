@@ -223,3 +223,23 @@ export function providerGroupLabel(provider: ModelCatalogProvider): string {
     ? provider.label
     : `${provider.label} (${provider.status})`;
 }
+
+/**
+ * Hydration follow-up (gold shell S2): after a session history finishes
+ * loading, the selector snaps to the model of the LAST assistant message —
+ * but only when that model still exists in the live catalog (a dead model id
+ * must never be re-selected). Returns the catalog entry to select, or `null`
+ * to leave the current selection untouched.
+ */
+export function resolveHydratedModelSelection(
+  messages: ReadonlyArray<{ role: string; model?: string | null }>,
+  catalogModels: ReadonlyArray<ModelCatalogModel>,
+): ModelCatalogModel | null {
+  const lastAssistantModel = [...messages]
+    .reverse()
+    .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
+  if (!lastAssistantModel) return null;
+  return (
+    catalogModels.find((entry) => entry.model_id === lastAssistantModel) ?? null
+  );
+}
