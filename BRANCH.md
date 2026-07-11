@@ -62,7 +62,7 @@
 
 - [ ] **Lot 2 — Facebook keystones**
   - [x] Add pure provider tests for authorization scopes, Graph identity derivation, absent email, failures, and token no-leak.
-  - [ ] Add K-FB-CHALLENGE proving absent email issues the existing challenge with no user, identity, or session created.
+  - [x] Add K-FB-CHALLENGE proving absent email issues the existing challenge with no user, identity, or session created.
   - [ ] Prove Facebook subject-first login, credentialed collision manual-link, and no auto-link for shell collisions.
   - [ ] Run `make test-api-unit SCOPE="federation-facebook-provider federation-broker" ENV=br39e-lot5`.
   - [ ] Lot gate: `make scope-check` and commit keystone tests atomically.
