@@ -10,6 +10,7 @@ import {
   disconnectClaudeCodeEnrollment,
   disconnectCodexEnrollment,
   getAnthropicTransportMode,
+  importClaudeCodeEnrollment,
   getOpenAITransportMode,
   listProviderConnections,
   setOpenAITransportMode,
@@ -39,6 +40,15 @@ const claudeCodeEnrollmentStartSchema = z.object({
 const claudeCodeEnrollmentCompleteSchema = z.object({
   enrollmentId: z.string().trim().min(1),
   authorizationCode: z.string().trim().min(1),
+  accountLabel: z.string().trim().max(120).optional().nullable(),
+});
+
+const claudeCodeEnrollmentImportSchema = z.object({
+  accessToken: z.string().trim().min(1),
+  refreshToken: z.string().trim().min(1),
+  expiresAt: z.string().trim().optional().nullable(),
+  subscriptionType: z.string().trim().max(60).optional().nullable(),
+  rateLimitTier: z.string().trim().max(60).optional().nullable(),
   accountLabel: z.string().trim().max(120).optional().nullable(),
 });
 
@@ -313,6 +323,33 @@ settingsRouter.post('/provider-connections/anthropic/enrollment/disconnect', asy
   });
   return c.json({ provider });
 });
+
+settingsRouter.post(
+  '/provider-connections/anthropic/enrollment/import',
+  zValidator('json', claudeCodeEnrollmentImportSchema),
+  async (c) => {
+    const user = c.get('user') as { userId?: string } | undefined;
+    if (!user?.userId) {
+      return c.json({ message: 'Authentication required' }, 401);
+    }
+    const payload = c.req.valid('json');
+    try {
+      const provider = await importClaudeCodeEnrollment({
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
+        expiresAt: payload.expiresAt ?? null,
+        subscriptionType: payload.subscriptionType ?? null,
+        rateLimitTier: payload.rateLimitTier ?? null,
+        accountLabel: payload.accountLabel ?? null,
+        updatedByUserId: user.userId,
+      });
+      return c.json({ provider });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Import failed';
+      return c.json({ message }, 400);
+    }
+  },
+);
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur
