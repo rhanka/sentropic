@@ -9,6 +9,11 @@ const MICROSOFT_JWKS_URL = new URL(
 );
 const MICROSOFT_SCOPES = ['openid', 'profile', 'email'];
 const MICROSOFT_CONSUMER_TENANT = '9188040d-6c67-4c5b-b112-36a304b66dad';
+// Matches an Entra tenant id (8-4-4-4-12 hex GUID). A configured `MICROSOFT_OAUTH_TENANT` that
+// does not match this — and is not common/organizations/consumers — is a verified-domain form
+// (e.g. "contoso.onmicrosoft.com").
+const TENANT_GUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 let microsoftJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 const getMicrosoftJwks = (): ReturnType<typeof createRemoteJWKSet> => {
@@ -78,14 +83,26 @@ const enforceTenantPolicy = (
       'Microsoft organization accounts are not allowed by the configured tenant policy.'
     );
   }
+  const isSpecialTenant = ['common', 'organizations', 'consumers'].includes(
+    tenant
+  );
   if (
-    !['common', 'organizations', 'consumers'].includes(tenant) &&
+    !isSpecialTenant &&
+    TENANT_GUID_PATTERN.test(tenant) &&
     tenant !== normalizedTid
   ) {
     throw new Error(
       'Microsoft id_token tenant does not match the configured tenant.'
     );
   }
+  // A verified-domain configured tenant (not common/organizations/consumers, and not a GUID —
+  // e.g. "contoso.onmicrosoft.com") is a documented-valid `MICROSOFT_OAUTH_TENANT` value, but
+  // Microsoft's `tid` claim is ALWAYS the tenant GUID, never the domain name. A literal
+  // `tid === tenant` comparison could therefore never succeed for a domain-form tenant, which
+  // would deterministically reject every login. The issuer check above already proves the token
+  // was issued for tenant `tid` (`iss` embeds that GUID) — combined with Microsoft only issuing
+  // tokens off the tenant-scoped authorize endpoint, that is the binding guarantee available for
+  // a domain-form tenant, so the literal comparison is intentionally skipped here.
   return tid;
 };
 
