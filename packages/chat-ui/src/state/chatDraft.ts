@@ -221,3 +221,56 @@ export const shouldClearComposerSteerAck = (
   expectedCreatedAtMs !== null &&
   expectedCreatedAtMs !== undefined &&
   current.createdAtMs === expectedCreatedAtMs;
+
+/**
+ * Composer steer derivation (gold shell S3): while an assistant message is
+ * still in progress, the composer's primary button switches to "steer" and
+ * targets that message's stream. Pure derivation over the message list —
+ * DOM-free, usable from any framework view.
+ */
+export type SteerableMessage = {
+  id: string;
+  role: string;
+  content?: string | null;
+  _streamId?: string | null;
+  _localStatus?: string | null;
+};
+
+export type ComposerSteerState = {
+  activeAssistantIndex: number;
+  steerStreamId: string | null;
+  steerReady: boolean;
+  runInFlight: boolean;
+};
+
+export const isAssistantMessageInProgress = (
+  message: SteerableMessage,
+): boolean => {
+  if (message.role !== 'assistant') return false;
+  if (message._localStatus === 'processing') return true;
+  if (!message._localStatus && !message.content) return true;
+  return false;
+};
+
+export const resolveComposerSteerState = (
+  messages: ReadonlyArray<SteerableMessage>,
+  sending: boolean,
+): ComposerSteerState => {
+  let activeAssistantIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (isAssistantMessageInProgress(messages[i])) {
+      activeAssistantIndex = i;
+      break;
+    }
+  }
+  const active = activeAssistantIndex >= 0 ? messages[activeAssistantIndex] : null;
+  const steerStreamId = active ? (active._streamId ?? active.id ?? null) : null;
+  const steerReady =
+    typeof steerStreamId === 'string' && steerStreamId.trim().length > 0;
+  return {
+    activeAssistantIndex,
+    steerStreamId,
+    steerReady,
+    runInFlight: sending || steerReady,
+  };
+};

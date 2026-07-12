@@ -1,4 +1,5 @@
 export * from './errors.js';
+export * from './federation.js';
 export * from './labels.js';
 export * from './oauth-consent.js';
 export * from './transport.js';

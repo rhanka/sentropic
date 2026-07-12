@@ -250,6 +250,15 @@ export const buildProjectedTimeline = <
       (message.content ? 'completed' : 'processing');
     const isTerminal = derivedStatus === 'completed' || derivedStatus === 'failed';
     let steerCursor = 0;
+    // Runtime-segment ordinal (NOT segment.id). The deferred summary-to-full
+    // hydration swaps the synthetic `runtime:history-summary:${id}` segment for
+    // the real `runtime:${startSeq}` one; keying by segment.id changes the
+    // timeline key mid-life, so ChatTimeline remounts StreamMessage and the
+    // fresh instance re-collapses (the two-click / open-then-close bug). A
+    // per-message runtime ordinal is stable across that upgrade (summary and
+    // the first hydrated runtime both map to ordinal 0), so the instance
+    // persists and the click's expand survives.
+    let runtimeSegmentOrdinal = 0;
 
     for (let index = 0; index < segments.length; index += 1) {
       const segment = segments[index];
@@ -282,7 +291,7 @@ export const buildProjectedTimeline = <
 
         projected.push({
           kind: 'runtime-segment',
-          key: `${message.id}:${segment.id}`,
+          key: `${message.id}:runtime#${runtimeSegmentOrdinal}`,
           message,
           streamId,
           segment,
@@ -292,6 +301,7 @@ export const buildProjectedTimeline = <
               ? composerSteerAck.message
               : undefined,
         });
+        runtimeSegmentOrdinal += 1;
         continue;
       }
 

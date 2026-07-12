@@ -47,6 +47,22 @@ const envSchema = z.object({
   SCW_NAMESPACE_ID: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // BR-39e Lot 1 — social LOGIN federation (RP to Google). DISTINCT from GOOGLE_CLIENT_ID/SECRET
+  // above (those drive Google Drive OAuth / Picker). When client id+secret are absent the
+  // federation provider is feature-OFF (the route answers "provider not configured"). The redirect
+  // URI defaults to `<issuer>/auth/federation/google/callback` when unset; register that exact URL
+  // in the Google console (prod: https://auth.sent-tech.ca/auth/federation/google/callback).
+  GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
+  GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_OAUTH_REDIRECT_URI: z.string().optional(),
+  // BR-39e Lot 2 — social LOGIN federation (RP to GitHub, OAuth2 only). When client id+secret are
+  // absent the federation provider is feature-OFF (the route answers "provider not configured"). The
+  // redirect URI defaults to `<issuer>/auth/federation/github/callback` when unset; register that
+  // exact URL as the GitHub OAuth App callback (prod:
+  // https://auth.sent-tech.ca/auth/federation/github/callback).
+  GITHUB_OAUTH_CLIENT_ID: z.string().optional(),
+  GITHUB_OAUTH_CLIENT_SECRET: z.string().optional(),
+  GITHUB_OAUTH_REDIRECT_URI: z.string().optional(),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   AUTH_CALLBACK_BASE_URL: z.string().optional(),
