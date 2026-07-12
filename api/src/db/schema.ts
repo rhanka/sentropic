@@ -251,6 +251,49 @@ export const authInviteTokens = pgTable('auth_invite_tokens', {
   expiresAtIdx: index('auth_invite_tokens_expires_at_idx').on(table.expiresAt),
 }));
 
+// BR-39e Lot 0: social/enterprise federation substrate.
+// `identities` links a stable external identity `(provider, provider_subject)` to exactly one
+// Sentropic user (D6). `provider_subject` is the STABLE upstream subject (Google `sub`, GitHub
+// numeric id, MS `oid`, Apple `sub`, FB id) — NEVER the email. `email_at_link` is audit-only (D13);
+// `token_secret` stays null in v1 (broker drops the provider token, D1). FK ON DELETE CASCADE from
+// `users` implements GDPR erasure of the linked profile (D14).
+export const identities = pgTable('identities', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(), // 'google'|'github'|'microsoft'|'apple'|'facebook'
+  providerSubject: text('provider_subject').notNull(), // STABLE subject, NOT the email
+  emailAtLink: text('email_at_link'), // provider-asserted email at link time (audit only, D13)
+  emailVerifiedByProvider: boolean('email_verified_by_provider').notNull().default(false),
+  providerTenant: text('provider_tenant'), // MS `tid` (null for others); part of the MS subject policy
+  tokenSecret: text('token_secret'), // nullable; enc:v1: AES-256-GCM if a provider token is ever stored
+  linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+}, (table) => ({
+  // One external identity ↔ exactly one user (D6): duplicate insert is rejected (K-UNIQUE).
+  providerSubjectUnique: uniqueIndex('identities_provider_subject_unique').on(table.provider, table.providerSubject),
+  userIdIdx: index('identities_user_id_idx').on(table.userId),
+}));
+
+// One-time, SERVER-SIDE federation flow-state (D5, CRITICAL). Holds the upstream CSRF `state`, the
+// OIDC `nonce`, the PKCE `code_verifier`, and a POINTER (`continuation_token`) to the sealed OAuth
+// continuation. Referenced by the opaque `id` (the ONLY value carried through the provider round-trip,
+// in a bound HttpOnly cookie). The sealed HMAC `continue` NEVER travels in a browser/provider param —
+// it stays here server-side. Consumed verify-and-DELETE (single-use + TTL; K-FLOW / K-STATE).
+export const federationFlowStates = pgTable('federation_flow_states', {
+  id: text('id').primaryKey(), // opaque pointer carried in the bound cookie
+  provider: text('provider').notNull(),
+  upstreamState: text('upstream_state').notNull(), // CSRF state sent to the provider
+  nonce: text('nonce'), // OIDC nonce (null for pure OAuth2)
+  codeVerifier: text('code_verifier'), // PKCE verifier (null where unsupported)
+  continuationToken: text('continuation_token'), // POINTER to the sealed OAuth continuation (server-side only)
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (table) => ({
+  expiresAtIdx: index('federation_flow_states_expires_at_idx').on(table.expiresAt),
+}));
+
 export const oauthClients = pgTable('oauth_clients', {
   id: text('id').primaryKey(),
   clientId: text('client_id').notNull().unique(),
