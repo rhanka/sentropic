@@ -49,7 +49,11 @@ export const createConsentStoreAdapter = (
         .values({ clientId, createdAt: timestamp, scopes: merged, updatedAt: timestamp, userId })
         .onConflictDoUpdate({
           set: { scopes: merged, updatedAt: timestamp },
-          target: [oauthConsents.userId, oauthConsents.clientId],
+          // ARCH-11 G1a (§1.5): the unique key is now (user_id, client_id, tenant_id). The insert omits
+          // tenant_id so it takes the DEFAULT ('sentropic'); the ON CONFLICT target must match the new
+          // composite index. Single-org behavior is unchanged (tenant is always the default here); real
+          // per-tenant threading of getGrant/saveGrant is G1c.
+          target: [oauthConsents.userId, oauthConsents.clientId, oauthConsents.tenantId],
         });
     },
   };

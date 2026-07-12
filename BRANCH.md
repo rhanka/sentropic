@@ -28,6 +28,7 @@ Add the durable `workspace → tenant` edge and tenantize consent/service-client
   - `api/drizzle/control/0003_arch11_grandfather_rekey.sql`
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/api/tenancy/**` (new tests)
+  - `api/src/services/auth/consent-store-adapter.ts` (BR-G1a-EX1 — minimal ON CONFLICT compat, see Feedback Loop)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -42,7 +43,11 @@ Add the durable `workspace → tenant` edge and tenantize consent/service-client
 - **Exception process**: declare `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- (none)
+- **BR-G1a-EX1** (`attention`, scope exception) — Path: `api/src/services/auth/consent-store-adapter.ts` (1 target-list line).
+  - Reason: re-keying `oauth_consents` unique index to `(user_id, client_id, tenant_id)` (§1.5, packet-mandated) removes the `(user_id, client_id)` unique index that `saveGrant`'s `onConflictDoUpdate({ target: [userId, clientId] })` relied on. PROVEN regression: `insert ... on conflict ("user_id","client_id")` → `there is no unique or exclusion constraint matching the ON CONFLICT specification`; `api/tests/api/auth/oauth-consent-persistence.test.ts` returned 500 (was 200).
+  - Impact: minimal, behavior-preserving — the insert omits `tenant_id` so it takes DEFAULT `'sentropic'`; ON CONFLICT target now matches the composite index. Single-org behavior identical. This is NOT the G1c real-tenant threading of `getGrant`/`saveGrant`/`hasCoveringGrant` (still keyed on `(user,client)` in reads).
+  - Rollback: revert the one-line target change; but then the index re-key must also be reverted (they are coupled).
+  - **ARCHITECT DECISION NEEDED (rolling-deploy)**: G1a "ships alone, DATA-only". But the index re-key is NOT rolling-safe on its own — during a rollout where the migration lands before all pods restart, OLD pods still run the OLD adapter (`ON CONFLICT (user,client)`) against the NEW composite index and hit the same error for the window. Truly rolling-safe requires a TWO-PHASE change: (Phase 1) add the composite index, KEEP the old `(user,client)` index, ship the adapter targeting the composite; (Phase 2, after all pods on new code) DROP the old index to enable multi-org consent. A single-deploy re-key (this branch) has a brief old-pod-break window. Options for the architect: (a) accept the window (short, consent-save only) and ship G1a with this adapter fix; (b) split the index re-key into the two-phase migration spanning G1a→G1c. This branch implements (a); flagging for ratification.
 
 ## AI Flaky tests
 - Not applicable: this branch touches no AI code paths. No AI test in scope.
