@@ -7,6 +7,8 @@ import {
   shouldClearComposerSteerAck,
   shouldShowSteerAction,
   syncDraftFromInput,
+  isAssistantMessageInProgress,
+  resolveComposerSteerState,
 } from '../src/state/chatDraft.js';
 
 describe('chat draft and composer state', () => {
@@ -209,5 +211,62 @@ describe('chat draft and composer state', () => {
     expect(shouldClearComposerSteerAck(ack, 123)).toBe(true);
     expect(shouldClearComposerSteerAck({ ...ack, createdAtMs: 124 }, 123)).toBe(false);
     expect(shouldShowSteerAction({ composerRunInFlight: true })).toBe(true);
+  });
+});
+
+describe('resolveComposerSteerState (gold shell S3)', () => {
+  it('targets the LAST in-progress assistant message (processing status)', () => {
+    const state = resolveComposerSteerState(
+      [
+        { id: 'a1', role: 'assistant', _localStatus: 'processing', _streamId: 's1' },
+        { id: 'u1', role: 'user', content: 'hi' },
+        { id: 'a2', role: 'assistant', _localStatus: 'processing', _streamId: 's2' },
+      ],
+      false,
+    );
+    expect(state.activeAssistantIndex).toBe(2);
+    expect(state.steerStreamId).toBe('s2');
+    expect(state.steerReady).toBe(true);
+    expect(state.runInFlight).toBe(true);
+  });
+
+  it('treats a status-less, content-less assistant message as in progress and falls back to its id', () => {
+    const state = resolveComposerSteerState(
+      [{ id: 'a1', role: 'assistant', content: null }],
+      false,
+    );
+    expect(state.steerStreamId).toBe('a1');
+    expect(state.steerReady).toBe(true);
+  });
+
+  it('ignores completed assistants and user messages; runInFlight follows sending', () => {
+    const idle = resolveComposerSteerState(
+      [
+        { id: 'a1', role: 'assistant', content: 'done', _localStatus: 'completed' },
+        { id: 'u1', role: 'user', content: 'hi' },
+      ],
+      false,
+    );
+    expect(idle.activeAssistantIndex).toBe(-1);
+    expect(idle.steerStreamId).toBeNull();
+    expect(idle.steerReady).toBe(false);
+    expect(idle.runInFlight).toBe(false);
+    expect(resolveComposerSteerState([], true).runInFlight).toBe(true);
+  });
+
+  it('is not steer-ready on a blank stream id', () => {
+    const state = resolveComposerSteerState(
+      [{ id: '  ', role: 'assistant', _localStatus: 'processing', _streamId: '  ' }],
+      false,
+    );
+    expect(state.steerReady).toBe(false);
+    expect(state.runInFlight).toBe(false);
+  });
+
+  it('isAssistantMessageInProgress: content without status means completed', () => {
+    expect(
+      isAssistantMessageInProgress({ id: 'a', role: 'assistant', content: 'x' }),
+    ).toBe(false);
+    expect(isAssistantMessageInProgress({ id: 'u', role: 'user' })).toBe(false);
   });
 });
