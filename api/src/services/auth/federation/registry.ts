@@ -1,16 +1,19 @@
 import { env } from '../../../config/env';
 import { createGithubProvider } from './github-provider';
 import { createGoogleProvider } from './google-provider';
+import { createMicrosoftProvider } from './microsoft-provider';
 import type { FederationProvider } from './types';
 
 /**
- * BR-39e Lot 1/2 — provider registry. v1 registers 'google' (Lot 1) and 'github' (Lot 2). A provider
+ * BR-39e Lot 1–3 — provider registry. v1 registers Google, GitHub, and Microsoft. A provider
  * present in the registry but missing its env credentials resolves to `null` (feature-OFF): the route
  * answers a clear "provider not configured" instead of crashing. An id absent from the registry is
- * "not supported". Later lots add microsoft/apple/facebook behind the same seam.
+ * "not supported". Later lots add Apple and Facebook behind the same seam.
  */
 
-type FederationProviderFactory = (ctx: { defaultRedirectUri: string }) => FederationProvider | null;
+type FederationProviderFactory = (ctx: {
+  defaultRedirectUri: string;
+}) => FederationProvider | null;
 
 const REGISTRY: Record<string, FederationProviderFactory> = {
   github: ({ defaultRedirectUri }) => {
@@ -29,9 +32,21 @@ const REGISTRY: Record<string, FederationProviderFactory> = {
     const redirectUri = env.GOOGLE_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
     return createGoogleProvider({ clientId, clientSecret, redirectUri });
   },
+  microsoft: ({ defaultRedirectUri }) => {
+    const clientId = env.MICROSOFT_OAUTH_CLIENT_ID;
+    const clientSecret = env.MICROSOFT_OAUTH_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return null;
+    const redirectUri = env.MICROSOFT_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
+    return createMicrosoftProvider({
+      clientId,
+      clientSecret,
+      redirectUri,
+      tenant: env.MICROSOFT_OAUTH_TENANT,
+    });
+  },
 };
 
-/** True iff `providerId` is a federation provider this build knows about (v1: google only). */
+/** True iff `providerId` is a federation provider this build knows about. */
 export const isFederationProviderSupported = (providerId: string): boolean =>
   Object.prototype.hasOwnProperty.call(REGISTRY, providerId);
 
@@ -42,7 +57,7 @@ export const isFederationProviderSupported = (providerId: string): boolean =>
  */
 export const resolveFederationProvider = (
   providerId: string,
-  ctx: { defaultRedirectUri: string },
+  ctx: { defaultRedirectUri: string }
 ): FederationProvider | null => {
   const factory = REGISTRY[providerId];
   return factory ? factory(ctx) : null;
