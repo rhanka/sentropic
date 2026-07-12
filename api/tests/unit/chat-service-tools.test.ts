@@ -562,7 +562,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       primaryContextId: folderId,
       model: 'gpt-5.2'
     });
-    expect(msg.model).toBe('gpt-5.5');
+    expect(msg.model).toBe('gpt-5.6-luna');
 
     await chatService.runAssistantGeneration({
       userId,
