@@ -23,7 +23,8 @@
     "LICENSE"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "rc"
   },
   "sideEffects": false,
   "scripts": {
