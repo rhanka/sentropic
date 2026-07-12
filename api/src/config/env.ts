@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NODE_ENV: z
+    .enum(['development', 'test', 'production'])
+    .default('development'),
   PORT: z.coerce.number().default(8787),
   DATABASE_URL: z.string().default('postgres://app:app@postgres:5432/app'),
   // Optional DB TLS knobs (used by db/client.ts)
@@ -68,10 +70,21 @@ const envSchema = z.object({
   FACEBOOK_OAUTH_CLIENT_ID: z.string().optional(),
   FACEBOOK_OAUTH_CLIENT_SECRET: z.string().optional(),
   FACEBOOK_OAUTH_REDIRECT_URI: z.string().optional(),
+  // BR-39e Lot 3 — social LOGIN federation (RP to Microsoft Entra ID). Client credentials absent
+  // means feature-OFF. The redirect URI defaults to `<issuer>/auth/federation/microsoft/callback`;
+  // the tenant endpoint accepts common/organizations/consumers/a concrete tenant id.
+  MICROSOFT_OAUTH_CLIENT_ID: z.string().optional(),
+  MICROSOFT_OAUTH_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_OAUTH_REDIRECT_URI: z.string().optional(),
+  MICROSOFT_OAUTH_TENANT: z.string().default('common'),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   AUTH_CALLBACK_BASE_URL: z.string().optional(),
-  CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*'),
+  CORS_ALLOWED_ORIGINS: z
+    .string()
+    .default(
+      'http://localhost:5173,http://127.0.0.1:5173,http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*'
+    ),
   CHROME_EXTENSION_DOWNLOAD_URL: z.string().optional(),
   CHROME_EXTENSION_VERSION: z.string().optional(),
   CHROME_EXTENSION_SOURCE: z.string().optional(),
@@ -144,7 +157,7 @@ const envSchema = z.object({
 
   // Stream events retention (WI-2) — chat_stream_events purge.
   // STREAM_RETENTION_DAYS: events older than this are deleted in batches.
-  STREAM_RETENTION_DAYS: z.coerce.number().optional()
+  STREAM_RETENTION_DAYS: z.coerce.number().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

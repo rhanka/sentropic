@@ -11,6 +11,9 @@ export type ReasoningTier = 'none' | 'light' | 'standard' | 'advanced';
 export type ModelTaskHint = 'chat' | 'structured' | 'summary' | 'doc';
 
 export const knownModelIds = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
   'gpt-5.5',
   'gpt-5.4-nano',
   'gpt-4.1-nano',
@@ -50,7 +53,14 @@ export type ModelId = KnownModelId | (string & {});
 export type QualifiedModelId = `${ProviderId}:${string}`;
 
 export const knownModelIdsByProvider = {
-  openai: ['gpt-5.5', 'gpt-5.4-nano', 'gpt-4.1-nano'],
+  openai: [
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
+    'gpt-5.6-luna',
+    'gpt-5.5',
+    'gpt-5.4-nano',
+    'gpt-4.1-nano',
+  ],
   gemini: ['gemini-3.5-flash', 'gemini-3.1-flash-lite'],
   anthropic: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-fable-5'],
   mistral: ['mistral-small-2603', 'magistral-medium-2509'],
