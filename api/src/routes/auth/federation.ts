@@ -193,14 +193,18 @@ federationRouter.get('/:provider/start', async (c) => {
   });
   if (result.kind === 'error') return c.json(result.body, result.status as 400 | 500);
 
-  // The bound cookie carries ONLY the opaque flow-state pointer (D5). SameSite=Lax so the top-level
-  // redirect back from the provider still presents it on the callback.
+  // The bound cookie carries ONLY the opaque flow-state pointer (D5). Apple uses `response_mode=
+  // form_post`, so its callback is a CROSS-SITE top-level POST from appleid.apple.com — browsers
+  // (notably Safari) will NOT send a SameSite=Lax cookie on it, so Apple's flow cookie must be
+  // SameSite=None; Secure. The GET-redirect providers keep SameSite=Lax (Secure only in prod), which
+  // is still presented on their same-navigation top-level GET callback.
+  const crossSitePostCallback = provider.id === 'apple';
   setCookie(c, FLOW_COOKIE, result.flowStateId, {
     httpOnly: true,
     maxAge: FLOW_TTL_SECONDS,
     path: '/auth/federation',
-    sameSite: 'Lax',
-    secure: isProduction(),
+    sameSite: crossSitePostCallback ? 'None' : 'Lax',
+    secure: crossSitePostCallback ? true : isProduction(),
   });
   return c.redirect(result.location, 302);
 });
@@ -294,12 +298,15 @@ federationRouter.get('/:provider/link/start', async (c) => {
   });
   if (result.kind === 'error') return c.json(result.body, result.status as 400 | 500);
 
+  // Same cross-site rule as the login flow: Apple's link callback is also a form_post POST, so its
+  // bound cookie must be SameSite=None; Secure. The GET-redirect providers keep SameSite=Lax.
+  const crossSitePostCallback = provider.id === 'apple';
   setCookie(c, LINK_FLOW_COOKIE, result.flowStateId, {
     httpOnly: true,
     maxAge: FLOW_TTL_SECONDS,
     path: '/auth/federation',
-    sameSite: 'Lax',
-    secure: isProduction(),
+    sameSite: crossSitePostCallback ? 'None' : 'Lax',
+    secure: crossSitePostCallback ? true : isProduction(),
   });
   return c.redirect(result.location, 302);
 });
