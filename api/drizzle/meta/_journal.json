@@ -267,6 +267,13 @@
       "when": 1781395200003,
       "tag": "0037_identities_federation",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1782100000000,
+      "tag": "0038_arch11_tenant_data",
+      "breakpoints": true
     }
   ]
 }

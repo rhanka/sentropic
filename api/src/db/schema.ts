@@ -15,6 +15,11 @@ export const workspaces = pgTable('workspaces', {
   ownerUserId: text('owner_user_id'), // nullable; UNIQUE constraint removed to allow multiple workspaces per user
   name: text('name').notNull(),
   type: text('type').notNull().default('ai-priorities'), // 'neutral' | 'ai-priorities' | 'opportunity' | 'code'
+  // ARCH-11 G1a: the single durable `workspace → tenant` edge (one tenant → many workspaces;
+  // one workspace → exactly one tenant). Real FK to `tenants` (D1=B: tenant = org). DEFAULT-safe
+  // for rolling deploys: fast-default 'sentropic' so old + new pods both satisfy NOT NULL during
+  // the roll. `tenantId` is NOT the alias `workspaceId` — G1b wires `resolveTenant`; NO alias here.
+  tenantId: text('tenant_id').notNull().default('sentropic').references(() => tenants.id),
   gateConfig: jsonb('gate_config'), // nullable; gate sequence config per workspace. null = free gates (backward-compatible)
   hiddenAt: timestamp('hidden_at', { withTimezone: false }), // nullable; timestamp when workspace was hidden
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
@@ -22,6 +27,7 @@ export const workspaces = pgTable('workspaces', {
 }, (table) => ({
   typeIdx: index('workspaces_type_idx').on(table.type),
   ownerUserIdIdx: index('workspaces_owner_user_id_idx').on(table.ownerUserId),
+  tenantIdIdx: index('workspaces_tenant_id_idx').on(table.tenantId),
 }));
 
 export const organizations = pgTable('organizations', {
@@ -369,9 +375,13 @@ export const oauthTokens = pgTable('oauth_tokens', {
   userIdIdx: index('oauth_tokens_user_id_idx').on(table.userId),
 }));
 
-// Consent persistence: a user's approved grant per exact (user_id, client_id). The IdP skips
-// the consent screen when the stored scopes are a superset of the requested scopes. No row ⇒
-// re-consent (always-consent legacy behavior). Migration 0034.
+// Consent persistence: a user's approved grant per exact (user_id, client_id, tenant_id). The IdP
+// skips the consent screen when the stored scopes are a superset of the requested scopes. No row ⇒
+// re-consent (always-consent legacy behavior). Migration 0035.
+// ARCH-11 G1a (§1.5, Codex-found cross-tenant consent bypass): the grant is TENANTIZED — a grant in
+// org-A must NOT be reused when the same client authorizes in org-B. `tenant_id` is DEFAULT-safe
+// ('sentropic') so old-pod inserts during the roll still satisfy NOT NULL; the unique key carries
+// the tenant leg. G1a is DATA-only: the getGrant/saveGrant tenant threading is G1c.
 export const oauthConsents = pgTable('oauth_consents', {
   userId: text('user_id')
     .notNull()
@@ -379,11 +389,16 @@ export const oauthConsents = pgTable('oauth_consents', {
   clientId: text('client_id')
     .notNull()
     .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id').notNull().default('sentropic'),
   scopes: text('scopes').array().notNull().default(sql`'{}'`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
 }, (table) => ({
-  userClientUnique: uniqueIndex('oauth_consents_user_id_client_id_unique').on(table.userId, table.clientId),
+  userClientTenantUnique: uniqueIndex('oauth_consents_user_id_client_id_tenant_id_unique').on(
+    table.userId,
+    table.clientId,
+    table.tenantId,
+  ),
   userIdIdx: index('oauth_consents_user_id_idx').on(table.userId),
 }));
 
@@ -431,7 +446,10 @@ export const serviceClients = pgTable('service_clients', {
   allowedScopes: text('allowed_scopes').array().notNull(),
   resourceIndicators: text('resource_indicators').array().notNull().default(sql`'{}'`),
   dpopBoundAccessTokens: boolean('dpop_bound_access_tokens').notNull().default(false),
-  tenantId: text('tenant_id'),
+  // ARCH-11 G1a (§4.1.6): the S2S source of tenant (resolveTenant({clientId}) reads this, NOT
+  // oauth_clients.tenant_id). Stays nullable, but gains a DEFAULT so new single-org clients inherit
+  // a tenant; existing NULL rows are backfilled to 'sentropic' by migration 0038.
+  tenantId: text('tenant_id').default('sentropic'),
   secretRotatedAt: timestamp('secret_rotated_at', { withTimezone: false }),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   revokedAt: timestamp('revoked_at', { withTimezone: false }),
