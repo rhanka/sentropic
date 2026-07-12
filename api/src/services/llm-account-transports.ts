@@ -657,6 +657,49 @@ export const disconnectCodexAccountTransports = async (input: {
   `);
 };
 
+export const disconnectClaudeCodeAccountTransports = async (input: {
+  ownerUserId: string;
+}): Promise<void> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return;
+  const now = new Date();
+  await db.run(sql`
+    UPDATE llm_provider_accounts
+    SET
+      status = 'disconnected',
+      token_secret = NULL,
+      token_expires_at = NULL,
+      disconnected_at = ${now},
+      last_error = NULL,
+      updated_at = ${now}
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${CLAUDE_CODE_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${CLAUDE_CODE_TRANSPORT_PROVIDER_ID}
+  `);
+  await db.run(sql`
+    UPDATE llm_account_leases
+    SET status = 'invalidated', released_at = ${now}, updated_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${CLAUDE_CODE_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${CLAUDE_CODE_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
+  await db.run(sql`
+    UPDATE llm_account_reservations
+    SET status = 'completed', completed_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${CLAUDE_CODE_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${CLAUDE_CODE_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
+};
+
 const supportsModel = (modelAllowlist: unknown, modelId: string): boolean => {
   if (!Array.isArray(modelAllowlist) || modelAllowlist.length === 0) return true;
   return modelAllowlist.some((entry) => typeof entry === 'string' && entry === modelId);
@@ -1088,7 +1131,7 @@ export const acquireClaudeCodeAccountTransport = async (input: {
     ...input,
     targetProviderId: CLAUDE_CODE_TARGET_PROVIDER_ID,
     transportProviderId: CLAUDE_CODE_TRANSPORT_PROVIDER_ID,
-    defaultModelId: 'claude-sonnet-4-6',
+    defaultModelId: 'claude-sonnet-5',
     stableSessionPrefix: 'claude_code',
     parseTokenSecret: parseClaudeCodeTokenSecret,
     refreshTokenIfNeeded: refreshClaudeCodeTokenIfNeeded,

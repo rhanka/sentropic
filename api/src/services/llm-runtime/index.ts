@@ -1319,7 +1319,7 @@ export async function* callLLMStream(
     selection.providerId === 'openai' &&
     typeof userId === 'string' &&
     userId.trim().length > 0 &&
-    selectedModel === 'gpt-5.5' &&
+    selectedModel === 'gpt-5.6-luna' &&
     credentialResolution.source !== 'request_override' &&
     (await getOpenAITransportMode()) === 'codex'
       ? await resolveConnectedCodexTransport(userId, {

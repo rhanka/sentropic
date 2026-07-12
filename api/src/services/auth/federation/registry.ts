@@ -2,16 +2,19 @@ import { env } from '../../../config/env';
 import { createFacebookProvider } from './facebook-provider';
 import { createGithubProvider } from './github-provider';
 import { createGoogleProvider } from './google-provider';
+import { createMicrosoftProvider } from './microsoft-provider';
 import type { FederationProvider } from './types';
 
 /**
- * BR-39e federation provider registry. A provider
+ * BR-39e — provider registry. v1 registers Google, GitHub, Microsoft, and Facebook. A provider
  * present in the registry but missing its env credentials resolves to `null` (feature-OFF): the route
  * answers a clear "provider not configured" instead of crashing. An id absent from the registry is
- * "not supported". Later lots add microsoft/apple/facebook behind the same seam.
+ * "not supported". Later lots add Apple behind the same seam.
  */
 
-type FederationProviderFactory = (ctx: { defaultRedirectUri: string }) => FederationProvider | null;
+type FederationProviderFactory = (ctx: {
+  defaultRedirectUri: string;
+}) => FederationProvider | null;
 
 const REGISTRY: Record<string, FederationProviderFactory> = {
   facebook: ({ defaultRedirectUri }) => {
@@ -37,6 +40,18 @@ const REGISTRY: Record<string, FederationProviderFactory> = {
     const redirectUri = env.GOOGLE_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
     return createGoogleProvider({ clientId, clientSecret, redirectUri });
   },
+  microsoft: ({ defaultRedirectUri }) => {
+    const clientId = env.MICROSOFT_OAUTH_CLIENT_ID;
+    const clientSecret = env.MICROSOFT_OAUTH_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return null;
+    const redirectUri = env.MICROSOFT_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
+    return createMicrosoftProvider({
+      clientId,
+      clientSecret,
+      redirectUri,
+      tenant: env.MICROSOFT_OAUTH_TENANT,
+    });
+  },
 };
 
 /** True iff `providerId` is a federation provider this build knows about. */
@@ -50,7 +65,7 @@ export const isFederationProviderSupported = (providerId: string): boolean =>
  */
 export const resolveFederationProvider = (
   providerId: string,
-  ctx: { defaultRedirectUri: string },
+  ctx: { defaultRedirectUri: string }
 ): FederationProvider | null => {
   const factory = REGISTRY[providerId];
   return factory ? factory(ctx) : null;
