@@ -126,6 +126,15 @@ describe('createMicrosoftProvider (BR-39e Lot 3)', () => {
     await expect(verify(TENANT_B)).rejects.toThrow(/configured tenant/);
   });
 
+  it('accepts a verified-domain configured tenant (tid is always a GUID, never a domain) relying on the issuer binding', async () => {
+    await expect(
+      verify('contoso.onmicrosoft.com')
+    ).resolves.toMatchObject({
+      providerTenant: TENANT_A,
+      subject: 'oid-a',
+    });
+  });
+
   it('accepts an explicit email_verified signal and preferred_username fallback', async () => {
     mocks.jwtVerify.mockResolvedValueOnce({
       payload: payload({
