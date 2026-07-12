@@ -209,8 +209,10 @@ export const appInstances = controlSchema.table(
     id: text('id').primaryKey(),
     templateFamilyId: text('template_family_id').notNull(),
     templateVersion: text('template_version').notNull(),
-    // IdP tenant (grandfather-compatible value until ARCH-11 re-key).
-    tenantId: text('tenant_id').notNull(),
+    // IdP tenant (grandfather-compatible value until ARCH-11 re-key). ARCH-11 G1a (§4.1.5): gains a
+    // DEFAULT-safe default so rolling-deploy inserts satisfy NOT NULL; `identity_tenant_id` is the
+    // real-tenant column backfilled by control migration 0003.
+    tenantId: text('tenant_id').notNull().default('sentropic'),
     identityTenantId: text('identity_tenant_id'),
     environment: text('environment').notNull().default('preview'),
     status: text('status').notNull().default('provisioning'),
@@ -271,7 +273,9 @@ export const appWorkspaceBindings = controlSchema.table(
     id: text('id').primaryKey(),
     appInstanceId: text('app_instance_id').notNull(),
     workspaceId: text('workspace_id').notNull(),
-    tenantId: text('tenant_id').notNull(),
+    // ARCH-11 G1a (§4.1.5): DEFAULT-safe default; `identity_tenant_id` is backfilled from the bound
+    // workspace's real tenant by control migration 0003.
+    tenantId: text('tenant_id').notNull().default('sentropic'),
     identityTenantId: text('identity_tenant_id'),
     allowedWorkspaceTypes: text('allowed_workspace_types').array().notNull().default(sql`'{}'::text[]`),
     defaultWorkspaceTemplate: text('default_workspace_template'),
