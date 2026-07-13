@@ -1,64 +1,49 @@
-# Feature: cited-source-viewer — graphify-iso realignment (behavioral parity, no 3rd UAT)
+# Feature: cited-source-viewer publish wiring (bootstrap → npm 0.2.0)
 
 ## Objective
-Realign the MERGED `@sentropic/cited-source-viewer` (PR #385) so it is behavior/API ISO the graphify-qualified S.6 viewer, preventing a third full UAT. Restore graphify's API + behavior; preserve the architect's neutral refactors. Qualification model = 3.5 total (immo/radar UAT done + graphify UAT done + 0.5 graphify technical non-regression pivot + 1 future immo full UAT). Closure gated on double consensus (architect + graphify + owner).
+Wire the CI/Makefile publish path for `@sentropic/cited-source-viewer` so 0.2.0 (graphify-iso, merged via PR #412) can be published to npm — unblocking the graphify 0.5 non-regression pivot. Owner-authorized publish ("publie", 2026-07-13). Recreates the stale/conflicting PR #386's publish wiring cleanly on current main.
 
 ## Scope / Guardrails
-- Scope limited to `packages/cited-source-viewer/**`.
-- No migration.
-- Make-only workflow; package gates are the pre-existing docker make targets (`make test-cited-source-viewer[-dom]`, `make typecheck-cited-source-viewer`).
-- Automated tests run on a dedicated env (`ENV=test-csv-iso`), never on `dev`.
-- In every `make` command, `ENV=<env>` is passed last.
+- Publish infra only: CI validate+publish jobs, Makefile publish targets, the dist-form package.json rewriter, .gitignore.
+- Package code unchanged (0.2.0 already on main).
+- Publish pattern MIRRORS the current main Svelte-src package pattern (identical to `publish-auth-ui`: OIDC `id-token: write`, `make publish-...`, bootstrap `make publish-...-token`).
 - All new text in English.
-- Merge is BLOCKED until double consensus (architect + graphify) + owner GO — this branch is review-ready, not merge-ready.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cited-source-viewer/**`
+  - `packages/cited-source-viewer/scripts/**`
   - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `Makefile` — `BR-CSVP-EX1`
+  - `.github/workflows/ci.yml` — `BR-CSVP-EX1`
+  - `.gitignore` — `BR-CSVP-EX1`
+- **Forbidden Paths**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
+
+## Scope Exceptions
+- `BR-CSVP-EX1` — touch `Makefile` + `.github/workflows/ci.yml` + `.gitignore` (default-forbidden infra). Rationale: publish wiring for a package that must reach npm (owner-authorized "publie"). Impact: additive publish/validate jobs + Makefile targets + a publish-time package.json rewriter, mirroring the existing per-package publish pattern; no change to other packages' jobs. Rollback: revert this commit (no runtime/app effect; the package code is untouched).
 
 ## Feedback Loop
-- `attention`: closure requires DOUBLE CONSENSUS — architect (consents to restoring graphify behavioral API + keeping neutral refactors, PDF-loading gap fixed) and graphify lane (confirms its qualified API is the frozen target + will run the 0.5 non-regression pivot). Consensus requests deposited to `claude:architect` + `claude:graphify` (dormant). Owner ratifies the 3.5-not-5 qualification model.
-- `acknowledge`: owner directive (rhanka) = package must be the graphify-qualified viewer packaged, NOT a 3rd UX; no new Sentropic full UAT.
+- `acknowledge`: owner GO "publie" (2026-07-13) — first publish requires the one-shot bootstrap (`workflow_dispatch bootstrap_publish_target=cited-source-viewer`, NPM_TOKEN) then attach the OIDC trusted publisher on npmjs.com. Steady-state publishes then run tokenless via OIDC.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [x] **Mono-branch + cherry-pick**
 - [ ] **Multi-branch**
-- Rationale: single package, one behavioral realignment, gated on external consensus.
+- Rationale: single small infra PR recreating PR #386's wiring on current main.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Delta ledger vs graphify qualified viewer (Codex 5.5xhigh, file-grounded): 13 deltas classified BEHAVIORAL / ARCHITECT-INTENTIONAL / NEUTRAL.
-  - [x] Isolated worktree off `origin/main`; ENV mapping `test-csv-iso`.
-  - [x] Scope boundaries confirmed (package-scoped; Makefile untouched).
+- [x] **Lot 1 — Publish wiring**
+  - [x] `ci.yml`: add `cited-source-viewer` to bootstrap options + path filters (validate/publish) + `validate-cited-source-viewer` (typecheck/test/dom/build/pack) + `publish-cited-source-viewer` (OIDC) + bootstrap step (token).
+  - [x] `Makefile`: `build-` (svelte-package), `pack-`, `publish-`, `publish-*-token` targets (BR-CSVP-EX1).
+  - [x] `packages/cited-source-viewer/scripts/make-publish-pkgjson.mjs`: dist-form package.json rewriter (chat-ui pattern).
+  - [x] `.gitignore`: publish artefact ignore.
+  - [x] typecheck green.
+  - [ ] Lot gate: CI `validate-cited-source-viewer` GREEN (proves build + pack).
 
-- [x] **Lot 1 — Behavioral realignment to graphify API**
-  - [x] `scope="entity"` default; `activeGroupIndex` + group-relative `activeIndex`; `(gIndex,rIndex)` focus model; scoped doc/citation nav; scope-eligibility filters groups-with-refs only; selection-only entity navigator with visible label; active-group header title.
-  - [x] Keyboard `n/N` (citation, active scope) + `e/E` (entity, selection scope only) + Esc + ←/→ pages.
-  - [x] `onScopeChange`; primary `onFocusChange(groupId, refIndex)` from in-viewer nav only; enriched snapshot demoted to optional `onFocusDetail`.
-  - [x] Keep body-registry; fix the PDF transient-loading gap (frame stays loading until body status arrives).
-  - [x] Preserve neutral extensions: closed `SourcePayload` union, generic body props, `labels`/`class`, markdown scope. Type-only `region`/`figure_id` added; no rendering (v2/v3 deferred).
-  - [x] `types.ts`, `README.md` updated; `package.json` bumped to `0.2.0`.
-  - [x] Lot gate:
-    - [x] `make typecheck-cited-source-viewer ENV=test-csv-iso` — GREEN.
-    - [x] `make test-cited-source-viewer ENV=test-csv-iso` — GREEN (4 files / 22 tests).
-    - [x] `make test-cited-source-viewer-dom ENV=test-csv-iso` — GREEN (1 file / 21 tests), independently re-run by the coordinator.
-
-- [x] **Lot 2 — Test parity (prove behavioral iso)**
-  - [x] Ported graphify viewer parity cases into `tests/viewer-frame.dom.spec.ts`: entity default; toggle hidden <2 groups-with-refs; entity-scope boundary; Sélection fires `onScopeChange` + global counter + entity indicator; selection crosses boundary + `onFocusChange(groupId,refIndex)`; keyboard n/N + e/E; e/E inert in Entité; flat-refs n/N; grouped `activeGroupIndex`+relative `activeIndex`; `sourceHref` null hide. Purity gates intact.
-
-- [ ] **Lot 3 — Consensus + graphify 0.5 pivot (BLOCKING, external)**
-  - [ ] `attention`: architect consensus (restore graphify API + neutral refactors kept).
-  - [ ] `attention`: graphify consensus (qualified API is the frozen target).
-  - [ ] graphify 0.5 non-regression pivot: `studio/src/App.svelte` imports `@sentropic/cited-source-viewer/CitedSourceViewer.svelte`; delete local `studio/src/components/CitedSourceViewer.svelte` + `studio/src/lib/cited-source/{quoteMatch,markdownSource,pdfEngine}.js`; keep `studio/src/lib/citedSources.js`; run `citedSourceViewer/citedSourceQuoteMatch/citedSourcePdfEngine/citedSourcesThread` tests GREEN.
-  - [ ] Owner GO on the 3.5-not-5 qualification model → merge.
+- [ ] **Lot 2 — Publish (owner-gated infra)**
+  - [ ] Merge this PR.
+  - [ ] Bootstrap: `workflow_dispatch` `bootstrap_publish_target=cited-source-viewer`.
+  - [ ] Attach OIDC trusted publisher on npmjs.com (Playwright).
+  - [ ] Verify `npm view @sentropic/cited-source-viewer version` = 0.2.0.
+  - [ ] Relay to graphify: run the 0.5 non-regression pivot (consume 0.2.0, delete local interim, its 4 viewer test files green).
