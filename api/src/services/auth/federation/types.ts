@@ -28,6 +28,10 @@ export interface FederationProviderIdentity {
   email: string | null;
   /** Whether the provider asserted the email verified. */
   emailVerified: boolean;
+  /** One-time upstream display name, when supplied (Apple first authorization only). */
+  displayName?: string | null;
+  /** Private-relay addresses are verified but scoped to their provider. */
+  emailScope?: 'global' | 'provider';
   /** MS `tid` (null for Google); audit + future subject policy. */
   providerTenant?: string | null;
 }
@@ -50,7 +54,13 @@ export interface FederationProvider {
     code: string;
     codeVerifier: string | null;
     nonce: string | null;
+    profile?: FederationCallbackProfile | null;
   }): Promise<FederationProviderIdentity>;
+}
+
+export interface FederationCallbackProfile {
+  displayName: string | null;
+  email: string | null;
 }
 
 /** Random-secret generators for the per-start state + nonce + PKCE verifier (D10). */
@@ -107,6 +117,8 @@ export interface FederationCallbackRequest {
   code: string | null;
   /** Upstream `error` (user denied / provider failure). */
   error: string | null;
+  /** Apple `user` form field, present only on the first authorization. */
+  profile?: FederationCallbackProfile | null;
   deviceInfo?: AuthHonoDeviceInfo;
 }
 
