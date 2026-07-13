@@ -27,7 +27,7 @@ import { ElicitationManager } from '../src/elicitation.js';
 import { MockSecretStore } from '../src/context.js';
 import { createStpConnectorContext } from '../src/context.js';
 import { SecretRedactor, InMemoryAuditSink } from '../src/audit.js';
-import { assertMutationGate } from '../src/guard.js';
+import { assertMutationGate } from '../src/experimental/mutation-gate.js';
 import { MockOidcIssuer } from '../src/mock/oidc.js';
 import { fakeManifest } from '../src/mock/fake-connector.js';
 import type {
