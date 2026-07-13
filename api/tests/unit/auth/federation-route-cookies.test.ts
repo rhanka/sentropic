@@ -21,9 +21,9 @@ vi.mock('../../../src/services/auth/federation/broker', () => ({
 
 vi.mock('../../../src/services/auth/federation/registry', () => ({
   isFederationProviderSupported: () => true,
-  resolveFederationProvider: () => ({
+  resolveFederationProvider: (providerId: string) => ({
     createAuthorizationUrl: () => 'https://accounts.google.com/o/oauth2/v2/auth',
-    id: 'google',
+    id: providerId,
     verifyCallback: async () => ({ email: null, emailVerified: false, subject: 's' }),
   }),
 }));
@@ -48,7 +48,13 @@ vi.mock('@sentropic/auth-hono', () => ({
   createAuthSessionService: () => ({ createSession: vi.fn() }),
 }));
 
-const { federationRouter } = await import('../../../src/routes/auth/federation');
+// The authenticated manual-link start requires a resolvable session; stub it so a `session` cookie
+// resolves to a fixed user without a real JWT (this router path is what we exercise here).
+vi.mock('../../../src/services/session-manager', () => ({
+  validateSession: vi.fn(async () => ({ role: 'user', sessionId: 'session-1', userId: 'user-1' })),
+}));
+
+const { federationRouter, parseFederationCallback } = await import('../../../src/routes/auth/federation');
 
 interface ParsedCookie {
   name: string;
@@ -150,5 +156,105 @@ describe('federation route Set-Cookie flags (BR-39e Lot 1, N4)', () => {
     expect(cookie.flags.httponly).toBe(true);
     expect(cookie.flags.samesite).toBe('Lax');
     expect(cookie.flags.path).toBe('/');
+  });
+
+  it('K-APPLE-FORMPOST: parses state, code, and first-auth profile only from the POST body', async () => {
+    const parseBody = vi.fn(async () => ({
+      code: 'apple-code',
+      state: 'apple-state',
+      user: JSON.stringify({
+        email: 'ada@privaterelay.appleid.com',
+        name: { firstName: 'Ada', lastName: 'Lovelace' },
+      }),
+    }));
+    const parsed = await parseFederationCallback('apple', {
+      method: 'POST',
+      parseBody,
+      query: () => undefined,
+    });
+
+    expect(parseBody).toHaveBeenCalledOnce();
+    expect(parsed).toEqual({
+      code: 'apple-code',
+      error: null,
+      profile: { displayName: 'Ada Lovelace', email: 'ada@privaterelay.appleid.com' },
+      state: 'apple-state',
+    });
+  });
+
+  it('K-APPLE-FORMPOST: ignores Apple callback parameters supplied only in a GET query', async () => {
+    const parseBody = vi.fn(async () => ({}));
+    const parsed = await parseFederationCallback('apple', {
+      method: 'GET',
+      parseBody,
+      query: (name) => ({ code: 'query-code', state: 'query-state', user: '{}' })[name],
+    });
+
+    expect(parsed).toEqual({ code: null, error: null, profile: null, state: null });
+    expect(parseBody).not.toHaveBeenCalled();
+  });
+
+  it('K-APPLE-FORMPOST: POST callback consumes the bound flow cookie and forwards body parameters', async () => {
+    process.env.NODE_ENV = 'development';
+    const body = new URLSearchParams({
+      code: 'apple-code',
+      state: 'apple-state',
+      user: JSON.stringify({ email: 'ada@example.com', name: { firstName: 'Ada', lastName: 'Lovelace' } }),
+    });
+    const res = await federationRouter.request('/apple/callback', {
+      body,
+      headers: { cookie: 'sentropic_fed_flow=flow-pointer-apple' },
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(302);
+    expect(brokerMock.callback).toHaveBeenCalledWith(expect.objectContaining({
+      code: 'apple-code',
+      flowStateId: 'flow-pointer-apple',
+      profile: { displayName: 'Ada Lovelace', email: 'ada@example.com' },
+      state: 'apple-state',
+    }));
+    expect(findSetCookie(res, 'sentropic_fed_flow').flags['max-age']).toBe('0');
+  });
+
+  it('K-APPLE-XSITE: Apple flow-state cookie from /start is SameSite=None AND Secure (form_post is cross-site)', async () => {
+    // Apple's callback is a cross-site top-level POST (response_mode=form_post); a Lax cookie would
+    // NOT be presented, so the pointer MUST ride a SameSite=None; Secure cookie regardless of env.
+    process.env.NODE_ENV = 'development';
+    const res = await federationRouter.request('/apple/start');
+    expect(res.status).toBe(302);
+
+    const cookie = findSetCookie(res, 'sentropic_fed_flow');
+    expect(cookie.value).toBe('flow-pointer-abc');
+    expect(cookie.flags.samesite).toBe('None');
+    expect(cookie.flags.secure).toBe(true);
+    expect(cookie.flags.httponly).toBe(true);
+    expect(cookie.flags.path).toBe('/auth/federation');
+  });
+
+  it('K-APPLE-XSITE: GET-callback providers keep SameSite=Lax on /start (no blanket None)', async () => {
+    // Guard against the fix leaking to Lax GET-redirect providers, which must stay SameSite=Lax.
+    process.env.NODE_ENV = 'development';
+    const google = findSetCookie(await federationRouter.request('/google/start'), 'sentropic_fed_flow');
+    expect(google.flags.samesite).toBe('Lax');
+    expect(google.flags.secure).toBeUndefined();
+
+    const github = findSetCookie(await federationRouter.request('/github/start'), 'sentropic_fed_flow');
+    expect(github.flags.samesite).toBe('Lax');
+  });
+
+  it('K-APPLE-XSITE: Apple manual-link start sets sentropic_fed_link_flow SameSite=None; Secure', async () => {
+    process.env.NODE_ENV = 'development';
+    const res = await federationRouter.request('/apple/link/start', {
+      headers: { cookie: 'session=sess-token-xyz' },
+    });
+    expect(res.status).toBe(302);
+
+    const cookie = findSetCookie(res, 'sentropic_fed_link_flow');
+    expect(cookie.value).toBe('flow-pointer-abc');
+    expect(cookie.flags.samesite).toBe('None');
+    expect(cookie.flags.secure).toBe(true);
+    expect(cookie.flags.httponly).toBe(true);
+    expect(cookie.flags.path).toBe('/auth/federation');
   });
 });
