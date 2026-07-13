@@ -31,6 +31,9 @@ export type CapabilityGates = {
   requiresElicitation: boolean; // a typed, validated elicitation step MUST complete first
   requiresHumanConfirmation: boolean;
   requiresPrincipalGate: boolean; // owner / PRINCIPAL decision required before invocation
+  // Forward-compat (BR-42l, owner-ratified 2026-07-12): deny-as-missing via a tenant policy
+  // resolver — an unauthorized tool is ABSENT from discovery, not errored. Optional/additive.
+  requiresPolicy?: boolean;
 };
 
 // Auth freshness expectation for a capability or the manifest default (§4.3, §6.5).
@@ -67,6 +70,10 @@ export type CapabilityTool = {
   outputSchema: unknown;
   redactionClass: RedactionClass;
   mutability: Mutability;
+  // Forward-compat (BR-42l, owner-ratified 2026-07-12): coarse write-affordance category,
+  // visible from the read stage so phase-2 write tools don't break the frozen contract (Wave).
+  // Optional/additive; complements `mutability`/`mutatesExternalSystem`.
+  category?: 'read' | 'write' | 'workflow' | 'transaction';
   mutatesExternalSystem: boolean; // generic write flag (replaces connector-specific flags)
   idempotency: IdempotencyRequirement;
   freshness?: AuthFreshnessPolicy;
@@ -94,7 +101,9 @@ export type AppCapability = CapabilityResource | CapabilityTool | CapabilityProm
 // Secret a connector instance requires, declared per scope; always sensitive (§4.3).
 export type ConnectorSecretRequirement = {
   name: string;
-  scope: 'principal' | 'tenant' | 'workspace' | 'connector-instance';
+  // Mirrors SecretStatus.scope — 'operator' added for the bank-connector delta
+  // (SPEC_EVOL_MCP_PLATFORM_ACTIVATION §4; union member only in 0.1.0).
+  scope: 'operator' | 'principal' | 'tenant' | 'workspace' | 'connector-instance';
   sensitive: true; // always treated as secret; never model-visible
   rotation?: 'manual' | 'scheduled' | 'provider-driven';
   description?: string;
@@ -120,46 +129,10 @@ export type ConnectorTenantContext = {
   defaults?: Record<string, unknown>;
 };
 
-// Elicitation interaction modes (mirrors src/elicitation.ts ElicitationMode).
-export type ElicitationPolicyMode = 'form' | 'confirm' | 'consent' | 'url' | 'credential';
-
-/**
- * Elicitation policy declared at manifest level (§4.2 `elicitation?`). Closed
- * shape: a discovery-time default that links a capability to a typed elicitation
- * mode/TTL + the §5 typed request/response and §5.2(b) secret-safety metadata.
- * Per-capability `gates.requiresElicitation` remains authoritative; a policy here
- * never relaxes a stricter per-capability gate.
- *
- * PROVISIONAL (fix F8): the FINAL canonical ElicitationPolicy shape is
- * ARCHITECT-GATED and parked. The §5 fields below are strengthened provisionally
- * to capture typed request/response and secret-safety; they are NOT a frozen
- * contract and MAY change when the architect ratifies the canonical shape.
- */
-export type ElicitationPolicy = {
-  capabilityRef: string; // capability name within the manifest
-  mode: ElicitationPolicyMode;
-  ttlSeconds: number;
-  required: boolean;
-  // §5 typed request/response payloads (JSON Schema, closed at the adapter).
-  requestSchema?: unknown;
-  responseSchema?: unknown;
-  // §5.2(b) secret-safety: `form` mode MUST NOT carry secrets — sensitive
-  // credential entry MUST use `url`/`credential` mode (which does not transit the
-  // MCP client). `carriesSecrets` MUST be false/omitted for `form` mode.
-  carriesSecrets?: boolean;
-  // §5.2(a) anti-phishing binding hints (bind to BOTH MCP client and sub).
-  bindToClient?: boolean;
-  bindToSub?: boolean;
-};
-
-/**
- * Provisional §5.2(b) invariant check: a `form`-mode elicitation MUST NOT carry
- * secrets. Returns false for any policy that violates the secret-safety rule.
- * (Provisional — final canonical validation is architect-gated, see F8.)
- */
-export function elicitationPolicyIsSecretSafe(policy: ElicitationPolicy): boolean {
-  return !(policy.mode === 'form' && policy.carriesSecrets === true);
-}
+// R1b (BR-42l): `ElicitationPolicyMode`, `ElicitationPolicy` and
+// `elicitationPolicyIsSecretSafe` moved OUT of the frozen manifest to
+// `./experimental/manifest-elicitation.ts` — they are provisional/architect-gated
+// (F8) and must not sit on the frozen root surface.
 
 /**
  * Applications/connectors expose capabilities through a manifest (§4.2).
@@ -174,7 +147,10 @@ export type AppMcpProviderManifest = {
   resources: CapabilityResource[];
   tools: CapabilityTool[];
   prompts: CapabilityPrompt[];
-  elicitation?: ElicitationPolicy[];
+  // R1 (BR-42l): `elicitation?` REMOVED from the frozen manifest — a read-only adapter
+  // never declares elicitation policy, and ElicitationPolicy is provisional/architect-gated
+  // (F8). Mutation-capable hosts re-add it via the experimental manifest extension
+  // `AppMcpProviderManifestWithElicitation` (subpath `./experimental`).
   authz: {
     requiredClaims: string[];
     scopes: string[];

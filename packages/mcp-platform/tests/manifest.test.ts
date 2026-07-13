@@ -6,13 +6,15 @@
  * manifest: no domain (Wave/immo) shape is baked in.
  */
 import { describe, expect, it } from 'vitest';
-import { elicitationPolicyIsSecretSafe } from '../src/manifest.js';
+import {
+  elicitationPolicyIsSecretSafe,
+  type ElicitationPolicy,
+} from '../src/experimental/manifest-elicitation.js';
 import type {
   AppMcpProviderManifest,
   CapabilityPrompt,
   CapabilityResource,
   CapabilityTool,
-  ElicitationPolicy,
 } from '../src/manifest.js';
 
 const readOnlyGates = {
