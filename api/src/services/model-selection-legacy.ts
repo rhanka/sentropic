@@ -8,9 +8,17 @@ export type LegacyModelCutoverRule = {
 
 const LEGACY_MODEL_CUTOVER_RULES: LegacyModelCutoverRule[] = [
   {
+    // Owner decision (WP16): the OpenAI default migrates to GPT-5.6 Luna.
+    // gpt-5.2 (legacy) and gpt-5.5 both cut over to Luna for default resolution;
+    // gpt-5.5 remains explicitly selectable in the catalog.
     providerId: 'openai',
     fromModelId: 'gpt-5.2',
-    toModelId: 'gpt-5.5',
+    toModelId: 'gpt-5.6-luna',
+  },
+  {
+    providerId: 'openai',
+    fromModelId: 'gpt-5.5',
+    toModelId: 'gpt-5.6-luna',
   },
   {
     providerId: 'gemini',
