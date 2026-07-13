@@ -102,7 +102,7 @@ describe('Me API', () => {
     expect(openaiResponse.status).toBe(200);
     const openaiData = await openaiResponse.json();
     expect(openaiData.defaultProviderId).toBe('openai');
-    expect(openaiData.defaultModel).toBe('gpt-5.5');
+    expect(openaiData.defaultModel).toBe('gpt-5.6-luna');
 
     await settingsService.set('default_provider_id', 'gemini', 'legacy provider', {
       userId: user.id,
