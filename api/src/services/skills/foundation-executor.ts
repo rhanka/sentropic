@@ -7,6 +7,7 @@ import {
   executeFoundationSearchSkills,
   type ResolveFoundationChatToolsInput,
 } from './catalog';
+import { reconcileTenantId } from '../tenancy/resolve-tenant';
 
 type FoundationToolCall = {
   readonly id: string;
@@ -149,12 +150,20 @@ function requiredStringArg(
   return value;
 }
 
-function buildSearchAuthz(
+async function buildSearchAuthz(
   input: ExecuteFoundationSkillToolInput,
-): ResolveFoundationChatToolsInput {
+): Promise<ResolveFoundationChatToolsInput> {
+  // ARCH-11 G1b (§4.2.2): resolve the tenant upstream and thread it into the sync builder —
+  // legacy workspaceId under alias/shadow (zero behavior change), resolved tenant under strict.
+  const tenantId = await reconcileTenantId({
+    workspaceId: input.sessionWorkspaceId,
+    userId: input.options.userId,
+    path: 'catalog:search-exec',
+  });
   return {
     userId: input.options.userId,
     workspaceId: input.sessionWorkspaceId,
+    tenantId,
     workspaceType: input.workspaceType,
     currentUserRole: input.currentUserRole,
     allowedTools: activeToolNames(input.tools),
@@ -168,7 +177,7 @@ export async function executeFoundationSkillTool(
 
   if (toolCall.name === 'search_skills') {
     const hits = executeFoundationSearchSkills({
-      authz: buildSearchAuthz(input),
+      authz: await buildSearchAuthz(input),
       payload: args as { query: string; limit?: number },
     });
     const result = { status: 'completed', hits };

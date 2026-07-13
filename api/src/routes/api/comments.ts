@@ -13,15 +13,25 @@ import { folders, organizations, initiatives, users, workspaceMemberships } from
 import { requireWorkspaceAccessRole, requireWorkspaceCommenterRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceAdmin } from '../../services/workspace-access';
 import { commentStore, commentEventSink } from '../../services/comments/instance';
+import { reconcileTenantId } from '../../services/tenancy/resolve-tenant';
 
 export const commentsRouter = new Hono();
 
 const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'matrix', 'executive_summary']); // TODO Lot 10: remove 'usecase'
 const statusSchema = z.enum(['open', 'closed']);
 
-/** Build a tenant context from the live session (tenantId := workspaceId). */
-function tenantOf(user: { workspaceId: string; userId: string }): TenantContext {
-  return { tenantId: user.workspaceId, workspaceId: user.workspaceId, userId: user.userId };
+/**
+ * Build a tenant context from the live session. ARCH-11 G1b (spec §4.3): the tenant leg now
+ * flows through `reconcileTenantId` — legacy `workspaceId` under `alias`/`shadow` (zero behavior
+ * change), the resolved real tenant under `strict`. `workspaceId`/`userId` are unchanged.
+ */
+async function tenantOf(user: { workspaceId: string; userId: string }): Promise<TenantContext> {
+  const tenantId = await reconcileTenantId({
+    workspaceId: user.workspaceId,
+    userId: user.userId,
+    path: 'comments',
+  });
+  return { tenantId, workspaceId: user.workspaceId, userId: user.userId };
 }
 
 async function ensureContextExists(contextType: string, contextId: string, workspaceId: string): Promise<boolean> {
@@ -82,7 +92,7 @@ commentsRouter.get('/', requireWorkspaceAccessRole(), async (c) => {
   const ok = await ensureContextExists(context_type, context_id, user.workspaceId);
   if (!ok) return c.json({ message: 'Not found' }, 404);
 
-  const tenant = tenantOf(user);
+  const tenant = await tenantOf(user);
   // The port is context_id-scoped (it ignores the live context_type — every live
   // record context collapses to kind:'record'); filter context_type host-side to
   // preserve the live (workspaceId, contextType, contextId[, sectionKey][, status])
@@ -167,7 +177,7 @@ commentsRouter.post('/', requireWorkspaceCommenterRole(), zValidator('json', cre
   const ok = await ensureContextExists(body.context_type, body.context_id, user.workspaceId);
   if (!ok) return c.json({ message: 'Not found' }, 404);
 
-  const tenant = tenantOf(user);
+  const tenant = await tenantOf(user);
 
   // Resolve the existing thread assignee host-side (the live default chain needs
   // the parent thread's assignee, comments.ts:158-176). The port's add() throws
@@ -239,7 +249,7 @@ commentsRouter.patch('/:id', requireWorkspaceCommenterRole(), zValidator('json',
   const id = c.req.param('id')!;
   const body = c.req.valid('json');
 
-  const tenant = tenantOf(user);
+  const tenant = await tenantOf(user);
   const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
 
@@ -308,7 +318,7 @@ commentsRouter.post('/:id/close', requireWorkspaceCommenterRole(), async (c) => 
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
 
-  const tenant = tenantOf(user);
+  const tenant = await tenantOf(user);
   const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
   const isCreator = row.author.id === user.userId;
@@ -338,7 +348,7 @@ commentsRouter.post('/:id/reopen', requireWorkspaceCommenterRole(), async (c) =>
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
 
-  const tenant = tenantOf(user);
+  const tenant = await tenantOf(user);
   const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
   const isCreator = row.author.id === user.userId;
@@ -368,7 +378,7 @@ commentsRouter.delete('/:id', requireWorkspaceCommenterRole(), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
 
-  const tenant = tenantOf(user);
+  const tenant = await tenantOf(user);
   const row = await commentStore.get(tenant, id);
   if (!row) return c.json({ message: 'Not found' }, 404);
 
