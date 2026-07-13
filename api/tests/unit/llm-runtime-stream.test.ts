@@ -701,6 +701,204 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
+  // OpenAI — GPT-5.6 Sol (flagship reasoning model)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'openai',
+    model: 'gpt-5.6-sol',
+    label: 'GPT-5.6 Sol',
+    chatEvents: [
+      { type: 'response.created', response: { id: 'resp_test_123' } },
+      { type: 'response.output_text.delta', delta: 'Hello' },
+      { type: 'response.output_text.delta', delta: ' world' },
+      { type: 'response.completed' },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      { type: 'response.created', response: { id: 'resp_test_556' } },
+      {
+        type: 'response.output_item.added',
+        item: {
+          type: 'function_call',
+          id: 'fc_item_5',
+          call_id: 'call_5',
+          name: 'search',
+          arguments: '',
+        },
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '{"q":',
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '"reasoning"}',
+      },
+      { type: 'response.completed' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'call_5',
+      deltaCount: 2,
+      deltas: ['{"q":', '"reasoning"}'],
+    },
+    reasoningEvents: [
+      { type: 'response.created', response: { id: 'resp_test_789' } },
+      { type: 'response.reasoning_text.delta', delta: 'Let me think...' },
+      { type: 'response.reasoning_text.delta', delta: ' about this.' },
+      { type: 'response.output_text.delta', delta: 'The answer is 42' },
+      { type: 'response.completed' },
+    ],
+    expectedReasoning: {
+      count: 2,
+      deltas: ['Let me think...', ' about this.'],
+      contentCount: 1,
+      contentDeltas: ['The answer is 42'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { type: 'response.created', response: { id: 'resp_test_000' } },
+      { type: 'response.completed' },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
+  // OpenAI — GPT-5.6 Terra (balanced reasoning model)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'openai',
+    model: 'gpt-5.6-terra',
+    label: 'GPT-5.6 Terra',
+    chatEvents: [
+      { type: 'response.created', response: { id: 'resp_test_123' } },
+      { type: 'response.output_text.delta', delta: 'Hello' },
+      { type: 'response.output_text.delta', delta: ' world' },
+      { type: 'response.completed' },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      { type: 'response.created', response: { id: 'resp_test_556' } },
+      {
+        type: 'response.output_item.added',
+        item: {
+          type: 'function_call',
+          id: 'fc_item_5',
+          call_id: 'call_5',
+          name: 'search',
+          arguments: '',
+        },
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '{"q":',
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '"reasoning"}',
+      },
+      { type: 'response.completed' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'call_5',
+      deltaCount: 2,
+      deltas: ['{"q":', '"reasoning"}'],
+    },
+    reasoningEvents: [
+      { type: 'response.created', response: { id: 'resp_test_789' } },
+      { type: 'response.reasoning_text.delta', delta: 'Let me think...' },
+      { type: 'response.reasoning_text.delta', delta: ' about this.' },
+      { type: 'response.output_text.delta', delta: 'The answer is 42' },
+      { type: 'response.completed' },
+    ],
+    expectedReasoning: {
+      count: 2,
+      deltas: ['Let me think...', ' about this.'],
+      contentCount: 1,
+      contentDeltas: ['The answer is 42'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { type: 'response.created', response: { id: 'resp_test_000' } },
+      { type: 'response.completed' },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
+  // OpenAI — GPT-5.6 Luna (fast reasoning model)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'openai',
+    model: 'gpt-5.6-luna',
+    label: 'GPT-5.6 Luna',
+    chatEvents: [
+      { type: 'response.created', response: { id: 'resp_test_123' } },
+      { type: 'response.output_text.delta', delta: 'Hello' },
+      { type: 'response.output_text.delta', delta: ' world' },
+      { type: 'response.completed' },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      { type: 'response.created', response: { id: 'resp_test_556' } },
+      {
+        type: 'response.output_item.added',
+        item: {
+          type: 'function_call',
+          id: 'fc_item_5',
+          call_id: 'call_5',
+          name: 'search',
+          arguments: '',
+        },
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '{"q":',
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '"reasoning"}',
+      },
+      { type: 'response.completed' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'call_5',
+      deltaCount: 2,
+      deltas: ['{"q":', '"reasoning"}'],
+    },
+    reasoningEvents: [
+      { type: 'response.created', response: { id: 'resp_test_789' } },
+      { type: 'response.reasoning_text.delta', delta: 'Let me think...' },
+      { type: 'response.reasoning_text.delta', delta: ' about this.' },
+      { type: 'response.output_text.delta', delta: 'The answer is 42' },
+      { type: 'response.completed' },
+    ],
+    expectedReasoning: {
+      count: 2,
+      deltas: ['Let me think...', ' about this.'],
+      contentCount: 1,
+      contentDeltas: ['The answer is 42'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { type: 'response.created', response: { id: 'resp_test_000' } },
+      { type: 'response.completed' },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
   // OpenAI — GPT-5.4 Nano (standard reasoning model)
   // -----------------------------------------------------------------------
   {
