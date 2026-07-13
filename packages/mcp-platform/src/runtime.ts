@@ -60,7 +60,7 @@ export type McpSession = {
   id: string; // mcp-session-id (restart-safe lookup key)
   clientId: string;
   client?: string; // external MCP client (claude.ai | claude-code | …)
-  surface: 'chat' | 'vscode' | 'stp' | 'backend';
+  surface: 'chat' | 'vscode' | 'stp' | 'backend' | (string & {});
   principalSub: string;
   tenantRef: string;
   workspaceRef?: string;
@@ -95,9 +95,15 @@ export type ConnectorEnrollment = {
 
 export type SecretStatus = {
   name: string;
-  scope: 'principal' | 'tenant' | 'workspace' | 'connector-instance';
-  state: LifecycleState; // present-and-active vs revoked/expired/suspended
+  // Bank-connector delta (SPEC_EVOL_MCP_PLATFORM_ACTIVATION §4): only the 'operator'
+  // union member ships in 0.1.0 — the SOLE union-widening break-risk. 'operator' =
+  // platform-held, tenant-agnostic secret (e.g. Plaid client_id/secret), usable only
+  // inside the egress boundary, never readable by any tenant/app/agent.
+  scope: 'operator' | 'principal' | 'tenant' | 'workspace' | 'connector-instance';
+  state: LifecycleState; // present-and-active vs revoked/expired/suspended — STATE ONLY, value never disclosed
   rotatedAt?: string;
+  // planned-additive (any later MINOR, no break): operatorRef?: string;
+  //   rotationWindow?: { previousValidUntil: string }
 };
 
 // validateSecrets (§4.4) returns SecretStatus[] and MUST disclose state only.
@@ -164,7 +170,7 @@ export type DurableCallState =
 export type DurableCall = {
   id: string;
   kind: DurableCallKind;
-  requestedBy: { surface: 'chat' | 'vscode' | 'stp' | 'backend'; userId?: string; h2aInstance?: string };
+  requestedBy: { surface: 'chat' | 'vscode' | 'stp' | 'backend' | (string & {}); userId?: string; h2aInstance?: string };
   mandateRef?: string;
   trackRef?: string;
   workflowRunId?: string;
@@ -212,7 +218,7 @@ export interface StpConnectorContext {
   };
 
   // Two axes kept distinct (§4.1): surface = parity axis; mcpClient = authz axis.
-  surface: 'chat' | 'vscode' | 'stp' | 'backend';
+  surface: 'chat' | 'vscode' | 'stp' | 'backend' | (string & {});
   mcpClient?: { clientId: string; client: 'claude.ai' | 'claude-code' | 'codex' | string };
 
   session: { mcpSessionId: string };
@@ -229,13 +235,19 @@ export interface StpConnectorContext {
   mandateRef?: string;
   trackRef?: string;
 
-  // Audited just-in-time secret accessor: every access is per-call audited and
-  // supports rotation/revocation hooks. No bulk secret map is ever exposed.
+  // Audited just-in-time secret accessor: returns the raw secret VALUE for a single use
+  // (Promise<string>) — NOT a sealed handle. Every access is per-call audited and supports
+  // rotation/revocation hooks; no bulk secret map is ever exposed. The caller (connector/
+  // host) is REDACTION-OBLIGATED: the value MUST NOT be logged, echoed into audit/prompts,
+  // or leave the egress boundary.
   getSecret(name: string): Promise<string>;
 
   connectorConfig: Record<string, unknown>;
+  // `audit.emit` accepts an OPEN `unknown` event ON PURPOSE — a connector extends it with
+  // domain fields (e.g. `{ domain, domainMeta }`, invoiceId/transactionId). The host is
+  // REDACTION-OBLIGATED: secret VALUES / raw PII MUST be redacted before emit/log.
   audit: { emit(event: unknown): Promise<void> };
-  logger: unknown;
+  logger: unknown; // host-provided; same redaction obligation as `audit`.
 }
 
 // ---------------------------------------------------------------------------
