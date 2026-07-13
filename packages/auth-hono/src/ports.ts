@@ -301,21 +301,52 @@ export interface AuthHonoTenantPort {
 }
 
 /**
+ * ARCH-11 G1c: S2S on-behalf-of (OBO) tenant resolution for the `client_credentials` grant
+ * (spec §2.2). OPTIONAL — when absent, `issueServiceToken` keeps the legacy behavior (no `tid`
+ * claim, no rejection: byte-identical to the pre-G1c stateless service token).
+ *
+ * The HOST owns the enforcement policy AND the rollout gate: the reference Sentropic adapter is
+ * mode-gated on `TENANT_RESOLUTION_MODE`, returning `{ tid: null }` (no claim, no rejection) in
+ * `alias`/`shadow`, and only under `strict` validating the requested tenant against the client's
+ * authorized set (fixed `service_clients.tenant_id` UNION active `connector_tenant_enrollments`).
+ *
+ * Contract:
+ *  - `{ tid: string }` → sign that `tid` on the minted access token.
+ *  - `{ tid: null }`   → sign NO `tid` (legacy / shadow).
+ *  - `{ error }`       → the mint is rejected `400 invalid_target` (strict fail-closed).
+ */
+export interface AuthHonoServiceTenantPort {
+  resolveOboTenant(input: {
+    /** The authenticated S2S client (`service_clients.client_id`). */
+    clientId: string;
+    /** The client's fixed tenant (`service_clients.tenant_id`), or null when unset. */
+    fixedTenantId: string | null;
+    /** The on-behalf-of `tenant` selector from the token request, or null when omitted. */
+    requestedTenant: string | null;
+  }): Promise<{ tid: string | null } | { error: 'invalid_target'; description: string }>;
+}
+
+/**
  * Consent persistence. OPTIONAL — when absent, auth-hono keeps the legacy behavior of
  * always re-showing the consent screen on every `/authorize`. When present, an approved
  * grant per exact `(userId, clientId)` lets the authorize handler skip consent and issue
  * the auth code directly, provided the stored grant's scopes are a SUPERSET of the
  * requested scopes (scope-escalation re-consents) and `prompt !== 'consent'`.
+ *
+ * ARCH-11 G1c (spec §4.2.5): `getGrant`/`saveGrant` gain an OPTIONAL `tenantId` — the org the
+ * authorize request is scoped to. It is ADDITIVE (a store may ignore it, preserving today's
+ * behavior). The reference Sentropic adapter keys the grant on `(userId, clientId, tenantId)`
+ * ONLY under `strict`, so an org-A consent never skips consent in org-B (the §1.5 bypass fix).
  */
 export interface AuthHonoConsentGrant {
   scopes: string[];
 }
 
 export interface AuthHonoConsentStorePort {
-  /** The user's currently granted scopes for this client, or `null` if no grant exists. */
-  getGrant(userId: string, clientId: string): Promise<AuthHonoConsentGrant | null>;
-  /** Upsert the grant for `(userId, clientId)`, unioning `scopes` with any prior grant. */
-  saveGrant(userId: string, clientId: string, scopes: string[]): Promise<void>;
+  /** The user's currently granted scopes for this client (optionally scoped to `tenantId`), or `null`. */
+  getGrant(userId: string, clientId: string, tenantId?: string): Promise<AuthHonoConsentGrant | null>;
+  /** Upsert the grant for `(userId, clientId[, tenantId])`, unioning `scopes` with any prior grant. */
+  saveGrant(userId: string, clientId: string, scopes: string[], tenantId?: string): Promise<void>;
 }
 
 /**
@@ -445,6 +476,8 @@ export interface AuthHonoPorts {
   jwks: JwksPort;
   /** BR-39e tenancy spine (optional; legacy behavior when absent). */
   tenant?: AuthHonoTenantPort;
+  /** ARCH-11 G1c S2S OBO tenant resolution (optional; no `tid`, no rejection when absent). */
+  serviceTenant?: AuthHonoServiceTenantPort;
   /** Consent persistence (optional; always-consent legacy behavior when absent). */
   consentStore?: AuthHonoConsentStorePort;
   /** BR-39r L4 single-use invitation tokens (optional; inert when absent). */
