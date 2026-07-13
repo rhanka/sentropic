@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { InMemoryAuditSink, SecretRedactor } from '../src/audit.js';
 import { MockSecretStore, createStpConnectorContext } from '../src/context.js';
 import { ElicitationManager } from '../src/elicitation.js';
-import { assertMutationGate, invokeGuardedTool } from '../src/guard.js';
+import { assertMutationGate, invokeGuardedTool } from '../src/experimental/mutation-gate.js';
 import { idempotencyDigest } from '../src/digest.js';
 import { fakeManifest } from '../src/mock/fake-connector.js';
 import type { CapabilityTool } from '../src/manifest.js';
