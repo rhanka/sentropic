@@ -737,6 +737,14 @@
         "PlacementController",
         "createPlacementController"
       ]
+    },
+    "./state/chatPlacementMigration": {
+      "kind": "ts",
+      "file": "dist/state/chatPlacementMigration.js",
+      "exports": [
+        "displayModeToPlacement",
+        "placementToDisplayMode"
+      ]
     }
   }
 }
