@@ -737,6 +737,17 @@
         "PlacementController",
         "createPlacementController"
       ]
+    },
+    "./state/chatPlacementDnd": {
+      "kind": "ts",
+      "file": "dist/state/chatPlacementDnd.js",
+      "exports": [
+        "Rect",
+        "DropZone",
+        "DragSessionConfig",
+        "DragSession",
+        "createDragSession"
+      ]
     }
   }
 }
