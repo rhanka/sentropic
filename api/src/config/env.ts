@@ -166,6 +166,14 @@ const envSchema = z.object({
   // Stream events retention (WI-2) — chat_stream_events purge.
   // STREAM_RETENTION_DAYS: events older than this are deleted in batches.
   STREAM_RETENTION_DAYS: z.coerce.number().optional(),
+
+  // ARCH-11 G1b (spec §4.3) — tenant-resolution rollout mode for the product path.
+  //   'alias'  = pure legacy (`tenantId := workspaceId`); no resolveTenant call, zero cost.
+  //   'shadow' = compute resolveTenant alongside the legacy alias, emit divergence/total
+  //              metrics, but STILL use the legacy value for behavior (ZERO behavior change).
+  //   'strict' = resolveTenant authoritative + fail-closed (owner-signed cutover only).
+  // DEFAULT = 'shadow' — NEVER default 'strict' (a bad flip silently leaks cross-org, §8).
+  TENANT_RESOLUTION_MODE: z.enum(['alias', 'shadow', 'strict']).default('shadow'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
