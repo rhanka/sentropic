@@ -39,11 +39,11 @@ const SECRET_UPSTREAM_TOKEN = 'ya29.SECRET-google-token-must-never-leak-downstre
 const key = (provider: string, subject: string): string => `${provider}::${subject}`;
 
 const createFakeProvider = (
-  options: { identity?: FederationProviderIdentity; verifyThrows?: boolean } = {},
+  options: { identity?: FederationProviderIdentity; providerId?: string; verifyThrows?: boolean } = {},
 ): { provider: FederationProvider; lastAuthUrl: () => string } => {
   let lastAuthUrl = '';
   const provider: FederationProvider = {
-    id: 'google',
+    id: options.providerId ?? 'google',
     createAuthorizationUrl({ codeVerifier, nonce, state }) {
       // A realistic upstream URL carrying ONLY state + nonce + PKCE challenge.
       const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -194,6 +194,7 @@ interface Harness {
 const harness = (
   options: {
     identity?: FederationProviderIdentity;
+    providerId?: string;
     verifyThrows?: boolean;
     config?: Partial<FederationBrokerDeps['config']>;
   } = {},
@@ -202,6 +203,7 @@ const harness = (
   const users = createFakeUsers();
   const { lastAuthUrl, provider } = createFakeProvider({
     identity: options.identity,
+    providerId: options.providerId,
     verifyThrows: options.verifyThrows,
   });
 
@@ -368,6 +370,25 @@ describe('createFederationBroker (BR-39e Lot 1 broker core)', () => {
       expect.objectContaining({ user: expect.objectContaining({ id: 'shell-user' }) }),
     );
     expect(h.provisionWorkspace).toHaveBeenCalledWith('shell-user');
+    expect(h.users.port.create).not.toHaveBeenCalled();
+  });
+
+  it('Apple private-relay email is provider-scoped and never cross-links by email', async () => {
+    const h = harness({
+      identity: {
+        email: 'relay@privaterelay.appleid.com',
+        emailScope: 'provider',
+        emailVerified: true,
+        subject: 'apple-subject',
+      },
+      providerId: 'apple',
+    });
+    h.users.seed({ email: 'relay@privaterelay.appleid.com', id: 'existing-user' });
+    const { flowStateId } = await h.start();
+
+    const res = await h.broker.callback({ flowStateId, ...okCallback });
+    expect(res).toMatchObject({ kind: 'error', status: 409 });
+    expect(await h.federation.port.findIdentityBySubject('apple', 'apple-subject')).toBeNull();
     expect(h.users.port.create).not.toHaveBeenCalled();
   });
 
