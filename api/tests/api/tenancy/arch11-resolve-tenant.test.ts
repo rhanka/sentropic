@@ -44,6 +44,20 @@ async function seedMembership(tenantId: string, userId: string, status = 'approv
   await db.insert(tenantMemberships).values({ tenantId, userId, status, role: 'member' }).onConflictDoNothing();
 }
 
+// Create a test user that is a GOOD CITIZEN of the global G1a orphan invariant
+// (`arch11-tenant-data.test.ts`: every aged user must have a `sentropic` membership row). Under
+// parallel workers our users would otherwise age into that global count and break it. We attach a
+// NON-approved (`suspended`) sentropic membership: it satisfies the existence-based orphan check
+// yet never affects our `approved`-only resolution assertions. It cascade-deletes with the user.
+async function seedUser(displayName: string): Promise<{ id: string }> {
+  const user = await createTestUser({ displayName, withWorkspace: false });
+  await db
+    .insert(tenantMemberships)
+    .values({ tenantId: 'sentropic', userId: user.id, status: 'suspended', role: 'member' })
+    .onConflictDoNothing();
+  return user;
+}
+
 describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   beforeEach(async () => {
     resetResolveTenantCache();
