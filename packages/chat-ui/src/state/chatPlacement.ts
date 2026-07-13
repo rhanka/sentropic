@@ -38,6 +38,10 @@ export function placementId(p: ChatPlacement): ChatPlacementId {
       return `floating.${p.anchor}`;
     case 'full':
       return 'full';
+    default:
+      throw new Error(
+        `Invalid ChatPlacement: ${JSON.stringify(p)}`,
+      );
   }
 }
 
@@ -117,7 +121,16 @@ export type PlacementResult = {
   reason?: PlacementReason;
 };
 
-/** Host performs the physical re-parent; resolves ok, or fails with a reason. */
+/**
+ * Host performs the physical re-parent; resolves ok, or fails with a reason.
+ *
+ * HOST CONTRACT (the controller cannot enforce this — it only sequences intent):
+ * commits MUST be serialized per controller, and a commit for a `revision`
+ * older than the latest MUST be rejected or made a no-op. Otherwise a superseded
+ * move can still land its physical side-effect after a newer one, leaving the
+ * DOM at an older placement than the controller's `effective`. A thrown/rejected
+ * commit is treated by the controller as `{ ok: false, reason: 'host-failure' }`.
+ */
 export type CommitFn = (
   target: ChatPlacement,
   revision: number,
@@ -184,9 +197,34 @@ export function createPlacementController(
     lastResolution,
   });
 
+  // Reentrancy- and exception-safe notification: iterate a stable copy of the
+  // listener set (so subscribe/unsubscribe mid-notify is safe), isolate each
+  // listener's exceptions (one throwing listener never aborts the others or the
+  // caller's transition), and coalesce reentrant notify() calls into one more
+  // pass with a fresh snapshot so listeners always end on the latest state.
+  let notifying = false;
+  let renotify = false;
   const notify = () => {
-    const s = snapshot();
-    for (const cb of listeners) cb(s);
+    if (notifying) {
+      renotify = true;
+      return;
+    }
+    notifying = true;
+    try {
+      do {
+        renotify = false;
+        const s = snapshot();
+        for (const cb of [...listeners]) {
+          try {
+            cb(s);
+          } catch {
+            /* isolate listener failure */
+          }
+        }
+      } while (renotify);
+    } finally {
+      notifying = false;
+    }
   };
 
   /** Resolve a requested target to a viable one, walking the fallback chain. */
@@ -207,25 +245,48 @@ export function createPlacementController(
   const requestPlacement = async (
     target: ChatPlacement,
   ): Promise<PlacementResult> => {
+    // Allocate the monotonic revision FIRST — before any resolution outcome —
+    // so ANY newer request (even one that ends up rejected) supersedes an
+    // older in-flight one. `pending` from a prior in-flight request is cleared;
+    // that request's late ack will see id !== pendingCounter and be superseded.
+    const id = ++pendingCounter;
+    const targetId = placementId(target); // throws on a runtime-invalid object
+
+    if (!supportedSet.has(targetId)) {
+      pending = undefined;
+      lastResolution = { status: 'rejected', reason: 'unsupported' };
+      notify();
+      return { status: 'rejected', placement: effective, reason: 'unsupported' };
+    }
+
+    // D6: persist a SUPPORTED user intent immediately (before commit), even if
+    // it later redirects or the commit fails — intent is preserved separately
+    // from host-authoritative `effective`. Unsupported targets are NOT persisted
+    // (they can never be honored on this host and would poison a reload seed).
+    requested = target;
+    persistence?.write(targetId);
+
     const resolution = resolveTarget(target);
     if ('reason' in resolution) {
+      pending = undefined;
       lastResolution = { status: 'rejected', reason: resolution.reason };
       notify();
       return { status: 'rejected', placement: effective, reason: resolution.reason };
     }
     const resolvedTarget = resolution.resolved;
 
-    // D6: persist intent IMMEDIATELY (before commit), even if it later redirects.
-    requested = target;
-    persistence?.write(placementId(target));
-
-    const id = ++pendingCounter;
     pending = { id, target, resolvedTarget };
     notify();
 
-    const committed = await commit(resolvedTarget, id);
+    let committed: { ok: true } | { ok: false; reason: PlacementReason };
+    try {
+      committed = await commit(resolvedTarget, id);
+    } catch {
+      committed = { ok: false, reason: 'host-failure' };
+    }
 
-    // D13: a newer request superseded this one → ignore this ack entirely.
+    // D13: a newer request superseded this one → ignore this ack entirely
+    // (do NOT clear pending — it belongs to the newer request now).
     if (id !== pendingCounter) {
       return { status: 'superseded', placement: effective, reason: 'superseded' };
     }
@@ -247,14 +308,24 @@ export function createPlacementController(
     };
   };
 
+  // Recompute `available` for a NEWER environment revision (monotonic: a stale/
+  // out-of-order revision is ignored). This never auto-corrects `effective` —
+  // `effective` = last committed, `available` = currently viable; if a viewport
+  // shrink makes `effective` non-viable, the HOST must issue a new
+  // requestPlacement (and revalidate any in-flight `pending` against viability).
   const refreshEnvironment = (revision: number) => {
+    if (revision <= environmentRevision) return;
     environmentRevision = revision;
     notify();
   };
 
   const subscribe = (cb: (s: PlacementSnapshot) => void): (() => void) => {
     listeners.add(cb);
-    cb(snapshot());
+    try {
+      cb(snapshot()); // immediate push — isolated like notify()
+    } catch {
+      /* isolate listener failure */
+    }
     return () => listeners.delete(cb);
   };
 
