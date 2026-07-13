@@ -74,3 +74,4 @@ gcp-sa*.json
 .secrets/
 .track/*.lock
 packages/chat-ui/.svelte-kit/
+packages/cited-source-viewer/.svelte-kit/
