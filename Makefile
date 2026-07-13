@@ -3085,7 +3085,60 @@ test-cited-source-viewer-dom: ## Run @sentropic/cited-source-viewer frame tests 
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.56.4 vite@7.3.6 @sveltejs/vite-plugin-svelte@6.2.4 jsdom@29.1.1 "@sentropic/design-system-svelte@^0.34.33" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@sentropic node_modules/@lucide; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-themes" node_modules/@sentropic/design-system-themes; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
 
+# BR-CSVP-EX1: build-cited-source-viewer produces the PUBLISHABLE dist via svelte-package
+# (transpiled .ts -> .js + .d.ts, copied plain-JS .svelte, copied hand-written .svelte.d.ts).
+# The package svelte.config.js imports @sveltejs/vite-plugin-svelte (test-time preprocess),
+# not installed here — the target swaps in a no-preprocess config during the build (our
+# .svelte sources are plain-JS script, nothing to strip — no chat-ui lang="ts" sed needed),
+# then restores it. Mirrors build-chat-ui (BR-PKG-EX1 precedent).
 .PHONY: build-cited-source-viewer
-build-cited-source-viewer: ## Build @sentropic/cited-source-viewer (tsc dist for the pure modules + declarations; .svelte sources are plain-JS script and ship as-is)
+build-cited-source-viewer: ## Build @sentropic/cited-source-viewer publishable dist via svelte-package (BR-CSVP-EX1)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund "@sveltejs/package@2.3.9" svelte@5.55.7 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sveltejs; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/package" node_modules/@sveltejs/package; trap "cp /tmp/svelte.config.orig.js svelte.config.js; rm -rf node_modules" EXIT; cp svelte.config.js /tmp/svelte.config.orig.js; printf "export default {};\n" > svelte.config.js; "$$tool_dir/node_modules/.bin/svelte-package" -i src -o dist'
+
+# BR-CSVP-EX1: pack validates the dist-form tarball without publishing (transient
+# package.json rewrite via scripts/make-publish-pkgjson.mjs; repo stays src-form).
+.PHONY: pack-cited-source-viewer
+pack-cited-source-viewer: build-cited-source-viewer ## Validate @sentropic/cited-source-viewer npm package contents without publishing (dist-form tarball via transient package.json rewrite — BR-CSVP-EX1)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; echo "--- dist sanity check ---"; test -f dist/index.js || { echo "FAIL: dist/index.js missing"; exit 1; }; test -f dist/index.d.ts || { echo "FAIL: dist/index.d.ts missing"; exit 1; }; test -f dist/CitedSourceViewer.svelte || { echo "FAIL: dist/CitedSourceViewer.svelte missing"; exit 1; }; test -f dist/CitedSourceViewer.svelte.d.ts || { echo "FAIL: dist/CitedSourceViewer.svelte.d.ts missing"; exit 1; }; test -f dist/bodies/PdfBody.svelte || { echo "FAIL: dist/bodies/PdfBody.svelte missing"; exit 1; }; if grep -rl "lang=\"ts\"" dist --include "*.svelte" 2>/dev/null | grep -q .; then echo "FAIL: dist .svelte files contain lang=ts"; exit 1; fi; echo "PASS: dist complete (js + d.ts + plain-JS svelte)"'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; echo "--- packed package.json exports (dist-form) ---"; node -e "const p=require(\"./package.json\"); console.log(JSON.stringify({main:p.main,types:p.types,files:p.files,exports_root:p.exports[\".\"]},null,2))"; npm pack --dry-run'
+
+# BR-CSVP-EX1: publish-cited-source-viewer transiently rewrites package.json to dist-form,
+# runs npm publish (OIDC trusted publishing), then restores the src-form package.json.
+# The committed repo package.json always stays src-form (exports -> ./src/...).
+.PHONY: publish-cited-source-viewer
+publish-cited-source-viewer: build-cited-source-viewer ## Publish @sentropic/cited-source-viewer from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-CSVP-EX1)
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/cited-source-viewer \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cited-source-viewer@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cited-source-viewer@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-cited-source-viewer-token
+publish-cited-source-viewer-token: build-cited-source-viewer ## Publish @sentropic/cited-source-viewer using a token read from NPM_TOKEN_FILE (first-publish bootstrap only; prefer OIDC publish-cited-source-viewer in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/cited-source-viewer \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cited-source-viewer@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cited-source-viewer@$$version already exists; skipping publish"; else npm publish --access public; fi'
