@@ -12,8 +12,9 @@ swaps.
 
 ```
 header   kicker / title / active locator / ✕ close (DS IconButton)
-toolbar  ‹ Citation x/y › · [Entité|Sélection] + ‹ Entité x/y › · ‹ Doc x/y ›
-         · ‹ Page x/y › · − NN% + · Ouvrir ↗          (one compact DS bar)
+toolbar  [Entité|Sélection] · ‹ Citation x/y › · ‹ Entité x/y › (Sélection)
+         · ‹ Doc x/y › · ‹ Page x/y › · − NN% + · Ouvrir ↗
+         (one compact DS bar)
 quote    the active citation quote (blockquote strip)
 body     THE ONLY modality-specific region (markdown <mark> · pdf canvas +
          highlight rects · v2 docx/pptx · v3 image-bbox)
@@ -23,7 +24,13 @@ footer   honesty strip, ONLY when degradation requires it
 
 Non-modal by design: the consumer hosts the component as a **central overlay**
 over its canvas/main view and keeps its side panels live. A new `refs`/`groups`
-array (+ `activeIndex`) **retargets** an open viewer — no stacking.
+array (+ `activeGroupIndex` and group-relative `activeIndex`) **retargets** an
+open viewer — no stacking.
+
+The default behavior is graphify-iso. Sentropic keeps only neutral architecture
+extensions around that behavior: `labels`, `class`, the body registry, the
+closed v1 payload union, and generic body props. With defaults, the visible UX
+and primary callbacks match the Graphify-qualified viewer.
 
 ## Purity contract (§S.5(b), CI-gated)
 
@@ -80,7 +87,7 @@ legible.
       {resolveSource}
       sourceHref={(ref) => `sources/${ref.rawRef}`}
       onClose={() => (open = false)}
-      onFocusChange={(f) => highlightChip(f)}
+      onFocusChange={(groupId, refIndex) => highlightChip(groupId, refIndex)}
     />
   </div>
 {/if}
@@ -96,13 +103,16 @@ Typed by `CitedSourceViewerProps` in `src/types.ts`.
 |---|---|---|---|
 | `refs` | `CitedSourceRef[]` | `[]` | Flat citation thread (v1 seam, ungrouped consumers). |
 | `groups` | `CitedSourceGroup[] \| null` | `null` | Grouped thread — one group per entity (`{ id, label?, refs }`). Supersedes `refs` when set. |
-| `scope` | `"entity" \| "selection"` | `"selection"` | Initial navigation scope. `entity` clamps ‹ Citation x/y › to the active group; `selection` runs over the whole flattened thread. Toggle + ‹ Entité x/y › render only with 2+ groups. |
-| `activeIndex` | `number` | `0` | Active ref as a GLOBAL index into the flattened thread. With a new `refs`/`groups` identity it retargets an open viewer. |
-| `title` | `string` | `"Cited source"` | Header title. |
+| `scope` | `"entity" \| "selection"` | `"entity"` | Initial navigation scope. `entity` clamps ‹ Citation x/y › to the active group; `selection` runs over the whole flattened thread. The toggle renders only when 2+ groups carry refs. |
+| `activeGroupIndex` | `number` | `0` | Active group seed when `groups` is present. |
+| `activeIndex` | `number` | `0` | Active ref seed. In flat mode this indexes `refs`; with `groups`, it is relative to `groups[activeGroupIndex].refs`. |
+| `title` | `string` | `"Cited source"` | Header fallback. In grouped mode the visible title follows the active group label + locator. |
 | `resolveSource` | `ResolveSource<SourcePayloadBase>` | — (required) | §S.3 byte/text resolver, consumer-owned. A v1 resolver returns the closed `SourcePayload` union (`pdf` \| `markdown`/`text` — full narrowing); a resolver feeding custom bodies widens explicitly (`ResolveSource<SourcePayload \| DocxPayload>`). |
 | `sourceHref` | `(ref) => string \| null` | `null` | Raw-source URL for "Ouvrir ↗" (DS Link, new tab). Null/absent hides it. |
 | `onClose` | `() => void \| null` | `null` | ✕ + Escape. Hidden/inert when absent. |
-| `onFocusChange` | `(focus: CitedSourceFocus) => void` | `null` | Fired on mount and every focus retarget (nav, scope toggle, reopen) with `{ index, ref, scope, groupId, groupIndex, groupRefIndex, docLocator, docIndex, docCount }` — lets the host highlight the matching chip/card (link highlight↔card, §S.4 common behavior). |
+| `onScopeChange` | `(scope) => void` | `null` | Fired when the user toggles Entité/Sélection. |
+| `onFocusChange` | `(groupId, refIndex) => void` | `null` | Primary graphify callback. Fired only from in-viewer navigation; `refIndex` is group-relative. It is not fired on mount or prop-driven retarget. |
+| `onFocusDetail` | `(focus: CitedSourceFocus) => void` | `null` | Optional Sentropic extension for the same navigation events, with `{ index, ref, scope, groupId, groupIndex, groupRefIndex, docLocator, docIndex, docCount }`. |
 | `labels` | `Partial<CitedSourceViewerLabels>` | `{}` | i18n overrides, merged over the qualified defaults (`Citation`, `Doc`, `Page`, `Entité`, `Sélection`, `Ouvrir ↗`, …). |
 | `class` | `string` | `""` | Extra class(es) appended to the frame's root `<section class="csv">` (host layout hook). |
 
@@ -111,12 +121,14 @@ No slots in v1: the body region is filled by the body-renderer seam below (an
 explicit architect decision point — see Open questions #3).
 
 Keyboard: `Escape` → `onClose`; `←`/`→` → page prev/next on page-addressable
-bodies. Key events originating in form fields are ignored (non-modal host
-panels stay typable).
+bodies; `n`/`N` → next/previous citation in the active scope; `e`/`E` →
+next/previous entity in Sélection scope only. Key events originating in form
+fields are ignored (non-modal host panels stay typable).
 
-Toolbar segments auto-collapse: citation nav (2+ refs in scope), scope toggle +
-entity nav (2+ groups), doc nav (2+ distinct locators in scope), page + zoom
-(page-addressable body only), Ouvrir (href resolved).
+Toolbar segments auto-collapse: citation nav (2+ refs in scope), scope toggle
+(2+ groups carrying refs), entity nav (Sélection scope only), doc nav (2+
+distinct locators in scope), page + zoom (page-addressable body only), Ouvrir
+(href resolved).
 
 ### Body-renderer seam (`one UX, many bodies`)
 
@@ -186,11 +198,12 @@ CONSUMER's side of the qualified UX — deliberately not part of this package
 - under each citation quote in the host's entity/side panel, a full-width
   affordance labeled `Voir la source · p.N` (or the `source_location` display
   string) opens the central overlay with that citation active
-  (`activeIndex` = its global index);
+  (`activeIndex` = flat index in flat mode, or `activeGroupIndex` +
+  group-relative `activeIndex` in grouped mode);
 - clicking ANOTHER citation while the overlay is open passes a new
-  `refs`/`groups` + `activeIndex` — the open viewer retargets, never stacks;
-- `onFocusChange` flows back so the panel highlights the citation/entity the
-  viewer is on (both directions stay in sync).
+  `refs`/`groups` + active indexes — the open viewer retargets, never stacks;
+- `onFocusChange(groupId, refIndex)` flows back from in-viewer navigation so
+  the panel highlights the citation/entity the viewer is on.
 
 ## Works-where matrix
 
@@ -229,13 +242,15 @@ richer body via `registerBodyRenderer`.
 
 - **graphify-studio** (interim `studio/src/components/CitedSourceViewer.svelte`):
   drop the app-local component + `lib/cited-source/*` and depend on this
-  package. The seam is identical (`refs`/`resolveSource`/`sourceHref`/
-  `activeIndex`/`title`/`onClose` are unchanged); the studio wiring
-  (`citationToCitedSourceRef` projection, bundle `sources/` resolver) stays
-  app-side. Two interim CSS hooks changed: toolbar buttons are now DS
-  `IconButton`/`Button` (assert `st-iconButton` instead of `csv-tb-btn` in
-  UAT scripts). The grouped thread (`groups`, scope toggle, `onFocusChange`)
-  matches graphify increment 2 — wire EntityPanel chips to `onFocusChange`.
+  package. The behavioral seam is graphify-iso: `refs`, `groups`,
+  `activeGroupIndex`, group-relative `activeIndex`, `scope`, `resolveSource`,
+  `sourceHref`, `title`, `onClose`, `onFocusChange(groupId, refIndex)`, and
+  `onScopeChange(scope)`. The studio wiring (`citationToCitedSourceRef`
+  projection, bundle `sources/` resolver) stays app-side. Two interim CSS hooks
+  changed: toolbar buttons are now DS `IconButton`/`Button` (assert
+  `st-iconButton` instead of `csv-tb-btn` in UAT scripts). `labels`, `class`,
+  `onFocusDetail`, and the body registry are package extensions; leaving them
+  unused preserves Graphify's qualified behavior.
 - **immo/radar** (`SignalPdfOverlay.svelte`): this frame is the qualified
   parity target of that overlay (Doc x/y, page nav, − % + zoom with fit-width
   reset, Ouvrir ↗). Replace the bespoke overlay with a thin consumer: resolver
@@ -263,9 +278,10 @@ review passes.
 
 ## Open questions for the architect (API review)
 
-1. **`scope` semantics**: currently an uncontrolled initial value (internal
-   toggle state, reported via `onFocusChange`). Should it be fully controlled
-   (`bind:scope` / `onScopeChange`) so hosts can drive it?
+1. **Scope control beyond graphify-iso**: v1 matches Graphify: `scope` is an
+   initial/retarget prop, internal toolbar toggles call `onScopeChange(scope)`,
+   and `onFocusChange` is not used for scope reporting. A future fully
+   controlled `bind:scope` API would be additive and requires separate review.
 2. **Doc navigator scoping**: ‹ Doc x/y › is computed over the CURRENT scope's
    thread (entity scope → the active group's documents only). Alternative:
    always global. Which reading matches the qualified immo intent?
@@ -276,8 +292,8 @@ review passes.
 4. **Markdown fidelity**: v1 keeps the interim's self-contained escape-safe
    mini-renderer (zero markdown dep). Upgrade to `markdown-it` in v1.x, or is
    the honest-plain rendering the intended baseline?
-5. **`region` fast-path (LM-2c)**: `CitedSourceRef.bbox` is carried but the
-   PDF body still highlights via text-match only. Schedule the geometric
-   `region` overlay as v2 alongside DOCX/PPTX?
-6. **Package name/major**: `0.1.0` until API review; the `enforce-package-bump`
-   CI gate applies from the first publish.
+5. **`region` fast-path (LM-2c)**: `CitedSourceRef.bbox`/`region` are carried
+   but the PDF body still highlights via text-match only. Schedule the
+   geometric `region` overlay as v2 alongside DOCX/PPTX?
+6. **Package name/major**: `0.2.0` carries the graphify-iso API realignment;
+   the `enforce-package-bump` CI gate applies from the first publish.
