@@ -260,6 +260,30 @@ const modelCapabilities = (
 export const modelProfiles = [
   {
     providerId: 'openai',
+    modelId: 'gpt-5.6-sol',
+    label: 'GPT-5.6 Sol',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-5.6-terra',
+    label: 'GPT-5.6 Terra',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-5.6-luna',
+    label: 'GPT-5.6 Luna',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'summary'],
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
+  },
+  {
+    providerId: 'openai',
     modelId: 'gpt-5.5',
     label: 'GPT-5.5',
     reasoningTier: 'advanced',
