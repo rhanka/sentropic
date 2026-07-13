@@ -46,9 +46,11 @@ describe('ARCH-11 G1c — OAuth consent tenant enforcement', () => {
     await db.delete(oauthTokens).where(eq(oauthTokens.clientId, CLIENT_ID));
     await db.delete(revokedTokens).where(eq(revokedTokens.clientId, CLIENT_ID));
     await db.delete(oauthClients).where(eq(oauthClients.clientId, CLIENT_ID));
-    await db.delete(tenantMemberships).where(inArray(tenantMemberships.tenantId, [...TEST_ORGS, 'sentropic']));
-    await db.delete(tenants).where(inArray(tenants.id, TEST_ORGS));
+    // Delete the seeded user FIRST: tenant_memberships cascade on the user FK (never a broad
+    // `delete ... where tenant_id='sentropic'`, which would nuke OTHER parallel tests' memberships
+    // and break the G1a orphan invariant). ORG_A/ORG_B rows cascade-delete their memberships too.
     await cleanupAuthData();
+    await db.delete(tenants).where(inArray(tenants.id, TEST_ORGS));
   });
 
   it('DEFAULT (shadow): byte-identical — a single sentropic row; org-B reuses the org-A grant', async () => {
