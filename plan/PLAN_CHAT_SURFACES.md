@@ -9,7 +9,9 @@ The controller (L1-core) is a **stable, framework-neutral contract** (`requestPl
 | Lot | What | Tier | Why |
 |-----|------|------|-----|
 | **L0-design** | Session-runtime extraction blueprint (what hoists out of `AppChatPanel` 3477 l., ownership boundary, snapshot/resubscribe contract, idempotent tool-result keys) | **Opus** | Highest-blast-radius refactor design; invents the runtime-owner boundary. |
-| **L0-exec** | Mechanically move controller/stream/drafts/attachments/pending-tool state per the L0-design blueprint | **Sonnet** (Opus review) | Mechanical once the blueprint is precise; guarded by "no behavior change" tests. |
+| **L0a** | Runtime state + attachGeneration-idempotent lifecycle + cursor/snapshot contract + tests | **Opus / luna-xhigh** | Subtle lifecycle correctness (per Codex-xhigh review). |
+| **L0b+L0c** | ONE guarded cutover: move stream/tool/draft/checkpoint ownership into the runtime, rewire view to snapshot/command, delete dual path | **Luna / Opus** | NOT Sonnet — reactive coupling, hydration races, source-of-truth deletion (review re-tiered). |
+| **L0d** | Cross-process serialize/restore + cursor replay + tool-result idempotency | **Opus/Luna, BLOCKED** | Needs a NEW backend contract (server-enforced tool-result idempotency on `POST /tool-results` + durable stream replay) — api/** lane, not chat-ui. |
 | **L1c-migrate** | `chatWidgetLayout` + `ChatDock`: relabel `floating\|docked` → `floating.right` + `drawer.right.primary` against the controller; keep current behavior | **Sonnet** | Pure relabel of 2 existing modes, no remount, fully testable. |
 | **L1c-menu** | "Move chat to…" keyboard-accessible menu calling `requestPlacement`; wire `HostSurfaces` + persistence adapter (D6 key `chat-ui/placement/v1/{userId}/{hostId}/{ws}`) | **Sonnet** | UI + adapter wiring against a done API; menu is standard. |
 | **L2-gesture** | Web DnD gesture adapter (headless: pointer state, hit-testing, drop→`requestPlacement`); NO DS visuals | **Sonnet** | Pure logic module + unit tests; independent of AppChatPanel. |
