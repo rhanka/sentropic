@@ -45,5 +45,12 @@ Wave discipline: ≤4 concurrent lanes; each lane = its own branch/worktree + di
 ## Per-lane launch contract (for Sonnet subagents)
 Each lane's launch packet MUST include: the stable contract snippet (`createPlacementController` API from chat-ui 0.25.0), exact Allowed/Forbidden paths, the test-first file list (write tests first, then code), the gate command (`make typecheck-chat-ui` + `make test-chat-ui` [+ `-dom`] ENV=<lane>), commit discipline (make commit, selective add, <150 lines), and "escalate to Opus on any architectural fork — do not invent." Framework-neutral rule: zero Svelte/DOM in `state/*` modules.
 
-## Ratification
-Owner ratifies: (1) the tiering (what stays Opus vs Sonnet), (2) the wave order, (3) whether to start Wave 1 now (S1+S2 Sonnet + O0 Opus design) in parallel. Then harness launches the lanes.
+## Model routing (owner-ratified 2026-07-13)
+- **Build (normal lots)**: Sonnet or Codex 5.3-xhigh.
+- **Hard build**: Codex 5.6-luna-xhigh.
+- **Design**: Codex 5.6-tera-xhigh + **Opus 4.8-xhigh review**.
+- **Final adversarial review**: Opus 4.8-xhigh (+ Codex-xhigh second peer).
+- The "Tier" column above maps: Sonnet-delegable → Sonnet/Codex-5.3; Opus-required design → tera-xhigh draft + Opus review; L5/L0-exec hard slices may escalate to luna-xhigh.
+
+## Ratification — DONE (owner 2026-07-13): launch Wave 1 complete in parallel.
+- **S1** L1c-migrate → Sonnet lane. **S2** L2-gesture → Sonnet lane. **O0** L0-design → Opus draft + Codex-xhigh review.
