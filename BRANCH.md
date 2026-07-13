@@ -32,8 +32,7 @@ Ratify the full surface/placement taxonomy for `@sentropic/chat-ui` (drawer left
   - [x] STUDY → Opus+Codex adversarial review → owner batched decisions.
   - [x] SPEC_EVOL_CHAT_SURFACES.md with D1–D13 + full taxonomy + controller contract.
   - [x] Codex 5.5-xhigh hardening pass (verdict needs-revision) reconciled: D13 async prepare/commit protocol, controller contract enriched, taxonomy normalized, D7 corrected (runtime-extraction lot L0), persistence adapter, D5 impl contract, lot re-ordering.
-- [ ] **Lot 1 — Design-system co-review** (attendu)
-  - [ ] DS lane reviews D10 (Drawer/DropZone/drag-affordance API + tokens/density).
+- [x] **Lot 1 — Design-system co-review** — ENDORSE-with-conditions (#32, 2026-07-13); 5 conditions folded into D10.
 - [ ] **Lot 2+ — Implementation** (deferred to harness/plan after DS review)
   - [ ] L0 session-runtime extraction (prerequisite; D7).
   - [ ] L1 controller + capability negotiation + persistence/fallback + "Move to…" + migrate floating|docked (incl. floating.right + drawer.right.primary).
