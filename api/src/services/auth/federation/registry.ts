@@ -1,4 +1,5 @@
 import { env } from '../../../config/env';
+import { createAppleProvider } from './apple-provider';
 import { createFacebookProvider } from './facebook-provider';
 import { createGithubProvider } from './github-provider';
 import { createGoogleProvider } from './google-provider';
@@ -6,10 +7,10 @@ import { createMicrosoftProvider } from './microsoft-provider';
 import type { FederationProvider } from './types';
 
 /**
- * BR-39e — provider registry. v1 registers Google, GitHub, Microsoft, and Facebook. A provider
+ * BR-39e — provider registry. v1 registers Google, GitHub, Microsoft, Facebook, and Apple. A provider
  * present in the registry but missing its env credentials resolves to `null` (feature-OFF): the route
  * answers a clear "provider not configured" instead of crashing. An id absent from the registry is
- * "not supported". Later lots add Apple behind the same seam.
+ * "not supported".
  */
 
 type FederationProviderFactory = (ctx: {
@@ -17,6 +18,15 @@ type FederationProviderFactory = (ctx: {
 }) => FederationProvider | null;
 
 const REGISTRY: Record<string, FederationProviderFactory> = {
+  apple: ({ defaultRedirectUri }) => {
+    const clientId = env.APPLE_OAUTH_CLIENT_ID;
+    const teamId = env.APPLE_TEAM_ID;
+    const keyId = env.APPLE_KEY_ID;
+    const privateKeyPem = env.APPLE_PRIVATE_KEY;
+    if (!clientId || !teamId || !keyId || !privateKeyPem) return null;
+    const redirectUri = env.APPLE_OAUTH_REDIRECT_URI ?? defaultRedirectUri;
+    return createAppleProvider({ clientId, keyId, privateKeyPem, redirectUri, teamId });
+  },
   facebook: ({ defaultRedirectUri }) => {
     const clientId = env.FACEBOOK_OAUTH_CLIENT_ID;
     const clientSecret = env.FACEBOOK_OAUTH_CLIENT_SECRET;

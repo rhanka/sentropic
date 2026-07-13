@@ -65,6 +65,14 @@ const envSchema = z.object({
   GITHUB_OAUTH_CLIENT_ID: z.string().optional(),
   GITHUB_OAUTH_CLIENT_SECRET: z.string().optional(),
   GITHUB_OAUTH_REDIRECT_URI: z.string().optional(),
+  // BR-39e Lot 4 — Sign in with Apple. The client id is the Services ID; the team/key ids and .p8
+  // PEM are required to mint short-lived ES256 client secrets. Missing credentials keep Apple OFF.
+  // The redirect defaults to `<issuer>/auth/federation/apple/callback` when unset.
+  APPLE_OAUTH_CLIENT_ID: z.string().optional(),
+  APPLE_TEAM_ID: z.string().optional(),
+  APPLE_KEY_ID: z.string().optional(),
+  APPLE_PRIVATE_KEY: z.string().optional(),
+  APPLE_OAUTH_REDIRECT_URI: z.string().optional(),
   // BR-39e Lot 5 — Facebook social federation. Missing credentials keep the provider feature-OFF.
   // The redirect URI defaults to `<issuer>/auth/federation/facebook/callback` when unset.
   FACEBOOK_OAUTH_CLIENT_ID: z.string().optional(),
