@@ -35,6 +35,7 @@ import type { TenantContext } from '@sentropic/contracts';
 import { targetFromLive } from '@sentropic/comments';
 import { createId } from '../utils/id';
 import { commentStore, commentEventSink } from './comments/instance';
+import { reconcileTenantId } from './tenancy/resolve-tenant';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
   generateInitiativeList,
@@ -1447,7 +1448,10 @@ export class QueueManager {
     // the live insert; the live `toolCallId: 'auto_generation:<id>'` is preserved
     // by deriving it from the minted comment id post-add. Host-emit
     // `{created, comment_id}` (origin `auto`) per the SPEC §4 matrix.
-    const tenant: TenantContext = { tenantId: workspaceId, workspaceId, userId: createdBy };
+    // ARCH-11 G1b (§4.3): tenant leg via reconcileTenantId — legacy workspaceId under
+    // alias/shadow (zero behavior change), resolved real tenant under strict.
+    const tenantId = await reconcileTenantId({ workspaceId, userId: createdBy, path: 'queue-manager:auto-generation' });
+    const tenant: TenantContext = { tenantId, workspaceId, userId: createdBy };
     for (const sectionKey of uniqueSectionKeys) {
       const target = targetFromLive({ contextType: opts.contextType, contextId, sectionKey });
       const created = await commentStore.add(tenant, {
