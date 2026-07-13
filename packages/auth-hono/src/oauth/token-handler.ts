@@ -197,8 +197,33 @@ const handleClientCredentials = async (
   const dpopJkt = await resolveServiceDpopJkt(c, options, auth.client);
   if (dpopJkt instanceof Response) return dpopJkt;
 
-  const tokens = await issueServiceToken(options, auth.client, scope, resource, dpopJkt);
+  // ARCH-11 G1c (spec §2.2): S2S on-behalf-of tenant. When no `serviceTenant` port is wired, or the
+  // host policy returns `{ tid: null }` (alias/shadow), NO `tid` is emitted — byte-identical to the
+  // pre-G1c stateless service token. Under strict the host validates `tenant` fail-closed.
+  const oboTid = await resolveServiceObo(c, options, auth.client, form);
+  if (oboTid instanceof Response) return oboTid;
+
+  const tokens = await issueServiceToken(options, auth.client, scope, resource, dpopJkt, oboTid);
   return c.json(tokens);
+};
+
+const resolveServiceObo = async (
+  c: Context,
+  options: OAuthTokenHandlerOptions,
+  client: ServiceClientRecord,
+  form: URLSearchParams
+): Promise<string | null | Response> => {
+  if (!options.ports.serviceTenant) return null;
+  const requested = form.get('tenant');
+  const outcome = await options.ports.serviceTenant.resolveOboTenant({
+    clientId: client.clientId,
+    fixedTenantId: client.tenantId,
+    requestedTenant: requested && requested.length > 0 ? requested : null,
+  });
+  if ('error' in outcome) {
+    return oauthJsonError(c, 400, outcome.error, outcome.description);
+  }
+  return outcome.tid;
 };
 
 const authenticateServiceClient = async (
@@ -296,7 +321,8 @@ const issueServiceToken = async (
   client: ServiceClientRecord,
   scope: string,
   resource: string,
-  dpopJkt: string | null
+  dpopJkt: string | null,
+  oboTid: string | null
 ) => {
   const ttlSeconds = options.serviceAccessTokenTtlSeconds ?? DEFAULT_SERVICE_ACCESS_TOKEN_TTL_SECONDS;
   const now = options.ports.clock.now();
@@ -308,6 +334,9 @@ const issueServiceToken = async (
     {
       client_id: client.clientId,
       ...(cnf ? { cnf } : {}),
+      // ARCH-11 G1c (§2.2): the validated on-behalf-of tenant. Absent (legacy/shadow) ⇒ no claim,
+      // byte-identical to the pre-G1c token; mirrors the human-path `tid` (token-handler.ts:369).
+      ...(oboTid ? { tid: oboTid } : {}),
       scope,
     },
     {
