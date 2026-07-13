@@ -90,7 +90,7 @@ Ship the G1c slice of ARCH-11 (spec §2.1/§2.2/§4.2.5-6/§5): a soft-ref DB-ba
   - [x] Env mapping: `ENV=arch11-g1c API_PORT=9220 UI_PORT=5420 MAILDEV_UI_PORT=1220`; ports free (`make ps-all`).
   - [x] Confirm scope/guardrails; declare `BR-G1c-EX1` cross-lane flag.
 
-- [ ] **Lot 1 — Enrollment table + DB-backed resolver**
+- [x] **Lot 1 — Enrollment table + DB-backed resolver** (done; enrollment-store test green)
   - [ ] Add `connectorTenantEnrollments` table to `api/src/db/control-schema.ts` (soft refs, PK
         `(principal_sub, connector_instance_id, tenant_id)`, `status` CHECK `active|suspended`, timestamps, 2 indexes).
   - [ ] Hand-write `api/drizzle/control/0004_arch11_connector_enrollments.sql` (additive `CREATE TABLE IF NOT EXISTS`,
@@ -106,7 +106,7 @@ Ship the G1c slice of ARCH-11 (spec §2.1/§2.2/§4.2.5-6/§5): a soft-ref DB-ba
           org-C excluded); per-connector scoping.
       - [ ] Scoped: `make test-api SCOPE=tests/api/tenancy/arch11-enrollment-store.test.ts ENV=arch11-g1c`
 
-- [ ] **Lot 2 — S2S OBO mint (`tid`), strict-gated**
+- [x] **Lot 2 — S2S OBO mint (`tid`), strict-gated** (done; auth-hono + api OBO tests green)
   - [ ] `packages/auth-hono/src/ports.ts`: add `AuthHonoServiceTenantPort.resolveOboTenant({clientId, fixedTenantId,
         requestedTenant})` → `{tid: string|null}` | `{error:'invalid_target', description}`; add optional `serviceTenant?` to `AuthHonoPorts`.
   - [ ] `packages/auth-hono/src/oauth/token-handler.ts`: in `handleClientCredentials`, read `tenant` form param, call
@@ -128,7 +128,7 @@ Ship the G1c slice of ARCH-11 (spec §2.1/§2.2/§4.2.5-6/§5): a soft-ref DB-ba
           `tenant=org-C` → 400. NON-VACUOUS ≥2-org.
       - [ ] Scoped: `make test-api SCOPE=tests/api/auth/arch11-service-obo.test.ts ENV=arch11-g1c`
 
-- [ ] **Lot 3 — Consent tenant enforcement, strict-gated**
+- [x] **Lot 3 — Consent tenant enforcement, strict-gated** (done; incl. the G1a-deferred old-index DROP 0039)
   - [ ] `packages/auth-hono/src/ports.ts`: add optional `tenantId?: string` to `getGrant`/`saveGrant` (additive, back-compat).
   - [ ] `packages/auth-hono/src/oauth/authorize-handler.ts`: extract the tenant-derivation (currently inline in
         `sealContinuation`) into a helper `deriveAuthorizeTenantId(c, ports, clientTenantId, userId)`; call it before the two
@@ -147,12 +147,22 @@ Ship the G1c slice of ARCH-11 (spec §2.1/§2.2/§4.2.5-6/§5): a soft-ref DB-ba
       - [ ] Scoped: `make test-api SCOPE=tests/api/auth/arch11-consent-tenant-enforce.test.ts ENV=arch11-g1c`
       - [ ] Non-reg: `make test-api SCOPE=tests/api/auth/oauth-consent-persistence.test.ts ENV=arch11-g1c` (default path unchanged)
 
-- [ ] **Lot 4 — Final validation**
-  - [ ] Bump `packages/auth-hono/package.json` 0.12.0 → 0.13.0 (minor: additive OBO + consent tenant threading).
-  - [ ] `make typecheck-api ENV=arch11-g1c` + `make lint-api ENV=arch11-g1c`
-  - [ ] Full `make test-api ENV=arch11-g1c` green (no regressions; default path byte-identical proven).
-  - [ ] `make down ENV=arch11-g1c` — no remaining services.
+- [x] **Lot 4 — Final validation**
+  - [x] Bumped `packages/auth-hono` 0.12.0 → 0.13.0 + `packages/auth-ui` 0.7.0 → 0.7.1 peer widen (BR-G1c-EX2).
+  - [x] `make typecheck-api` EXIT=0 + `make typecheck-auth-hono` EXIT=0 + `make lint-api` EXIT=0.
+  - [x] `make down ENV=arch11-g1c` — no remaining services.
   - [ ] Report to architect (no PR/merge — architect reviews first).
+
+## Checks (results)
+- auth-hono full suite: 165/165 PASS (incl. new `oauth-service-obo` 5, `oauth-consent-tenant` 2; regressions
+  `oauth-client-credentials` 11, `oauth-consent-persistence` 8, `oauth-token` 6, `oauth-authorize` 7).
+- api `tests/api/auth` dir: 107/107 PASS. api `tests/api/tenancy` dir: 24/24 PASS. api unit suite: 746 PASS / 1 skip.
+- api smoke suite: 6/6 PASS. G1a orphan invariant: 0 orphans.
+- typecheck-api / typecheck-auth-hono / lint-api: all EXIT=0.
+- DEFAULT (shadow) byte-identical PROVEN: OBO mint carries NO tid even with `tenant=`; consent single `'sentropic'`
+  row + org-B reuses (pre-G1c behavior); all pre-existing auth-hono/consent regressions unchanged.
+- Env note: a mid-run `make db-query` transiently corrupted `node_modules/@types/node` (a repo-level workspace-install
+  issue, the root-lockfile-vitest class — NOT G1c) which broke the api boot + smoke once; repaired + re-run all green.
 
 ## Notes
 - E2E / UI tests: N/A (no `ui/**` / browser surface; api + published-lib only).
