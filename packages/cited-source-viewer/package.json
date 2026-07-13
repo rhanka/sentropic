@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cited-source-viewer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared cited-source viewer (SPEC_WP_CITED_SOURCE_VIZ Lot 2, architect-ratified S.5/S.6): one canonical non-modal frame (citation/doc/entity/page navigation, zoom, scope toggle, honesty footer) with pluggable per-modality body renderers. v1 bodies: markdown/plain-text and PDF text-layer (pdf.js). Pure: zero graphify runtime dependency; seam types are a local mirror of the frozen contract. DS-themed and built on @sentropic/design-system-svelte components.",
   "type": "module",
   "license": "MIT",
