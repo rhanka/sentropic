@@ -1,8 +1,7 @@
 {
   "name": "@sentropic/mcp-platform",
-  "version": "0.0.0",
-  "private": true,
-  "description": "PRIVATE mock-only scaffold of the generic Sentropic/STP MCP provider platform (manifest/adapter schemas + mock OIDC/MCP harness + per-request authz middleware). Not published. (SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM slices 1+2)",
+  "version": "0.1.0",
+  "description": "Generic Sentropic/STP MCP provider platform contract: manifest/adapter/context schemas, session/consent/enrollment/secret records, elicitation, per-request authz, discovery/visibility and durable-call refs (SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM). Broker-aware public surface — DRAFT, not frozen. In-memory mocks are a test harness only.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -12,18 +11,47 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "//exports": "TODO(BR-42l): add require/CJS condition (dual-emit) per llm-mesh; ESM-only for now.",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./experimental": {
+      "types": "./dist/experimental.d.ts",
+      "import": "./dist/experimental.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     }
+  },
+  "typesVersions": {
+    "*": {
+      "experimental": [
+        "./dist/experimental.d.ts"
+      ],
+      "testing": [
+        "./dist/testing.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
   },
   "devDependencies": {
+    "@microsoft/api-extractor": "^7.58.9",
     "@types/node": "^22.10.10",
     "typescript": "5.4.5",
     "vitest": "4.1.0"

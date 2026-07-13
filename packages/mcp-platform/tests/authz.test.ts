@@ -13,7 +13,7 @@ import {
   type AuthorizeDeps,
   type AuthzRequest,
 } from '../src/authz.js';
-import { listVisibleCapabilities } from '../src/guard.js';
+import { listVisibleCapabilities } from '../src/visibility.js';
 import { MockOidcIssuer } from '../src/mock/oidc.js';
 import { fakeManifest } from '../src/mock/fake-connector.js';
 import type { AppCapability } from '../src/manifest.js';
