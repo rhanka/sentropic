@@ -1,9 +1,10 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import CitedSourceViewer from "../src/CitedSourceViewer.svelte";
 import type {
-  CitedSourceFocus,
   CitedSourceGroup,
   CitedSourceRef,
   SourcePayload,
@@ -75,6 +76,20 @@ function buttonByLabel(el: HTMLElement, label: string): HTMLButtonElement | unde
   return [...el.querySelectorAll("button")].find(
     (b) => b.getAttribute("aria-label") === label,
   ) as HTMLButtonElement | undefined;
+}
+
+function scopeButton(el: HTMLElement, text: string): HTMLButtonElement | undefined {
+  return [
+    ...el.querySelectorAll(
+      ".st-contentSwitcher__option, .st-contentSwitcher [role='tab'], .st-contentSwitcher button",
+    ),
+  ].find((b) => b.textContent?.trim() === text) as HTMLButtonElement | undefined;
+}
+
+async function pressKey(key: string) {
+  window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  flushSync();
+  await settle();
 }
 
 describe("CitedSourceViewer (markdown body path)", () => {
@@ -235,10 +250,22 @@ describe("CitedSourceViewer qualified toolbar (immo parity)", () => {
     expect(link!.className).toContain("st-link");
   });
 
-  it("hides the Ouvrir link when sourceHref is absent", async () => {
+  it("hides the Ouvrir link when sourceHref is absent or resolves null", async () => {
     const el = mountViewer({ refs: REFS, resolveSource: mdResolver(), title: "t" });
     await settle();
     expect(el.querySelector("a.csv-tb-open")).toBeNull();
+    unmount(instance!);
+    instance = null;
+    host!.remove();
+
+    const nullHref = mountViewer({
+      refs: REFS,
+      resolveSource: mdResolver(),
+      sourceHref: () => null,
+      title: "t",
+    });
+    await settle();
+    expect(nullHref.querySelector("a.csv-tb-open")).toBeNull();
   });
 
   it("uses REAL design-system controls for the toolbar (principal requirement)", async () => {
@@ -257,132 +284,238 @@ describe("CitedSourceViewer qualified toolbar (immo parity)", () => {
   });
 });
 
-describe("CitedSourceViewer grouped thread + scope (S.6 extended API)", () => {
-  const GROUPS: CitedSourceGroup[] = [
-    { id: "ent-holmes", label: "Sherlock Holmes", refs: [REFS[0]!, REFS[1]!] },
-    {
-      id: "ent-notes",
-      label: "Case notes",
-      refs: [
-        {
-          rawRef: "corpus/notes.md",
-          section: "Notes",
-          excerpt: "a passage from the second document",
-        },
-      ],
-    },
-  ];
+describe("CitedSourceViewer grouped thread — graphify scope parity (§S.6.1)", () => {
+  const GROUP_NOTES_TEXT =
+    "# Notes\n\nHere is a passage from the second document indeed.\n\n" +
+    "Later, the doctor wrote his notes by the fire.";
+  const GROUP_A: CitedSourceGroup = {
+    id: "e:holmes",
+    label: "Sherlock Holmes",
+    refs: [
+      {
+        rawRef: "corpus/blue-study.md",
+        section: "Chapter 1",
+        excerpt: "Holmes examined the ledger in silence",
+      },
+      {
+        rawRef: "corpus/notes.md",
+        section: "Notes",
+        excerpt: "a passage from the second document",
+      },
+    ],
+  };
+  const GROUP_B: CitedSourceGroup = {
+    id: "e:watson",
+    label: "John Watson",
+    refs: [
+      {
+        rawRef: "corpus/blue-study.md",
+        section: "Chapter 2",
+        excerpt: "the coronet had vanished from his private safe",
+      },
+      {
+        rawRef: "corpus/notes.md",
+        section: "Notes",
+        excerpt: "the doctor wrote his notes",
+      },
+    ],
+  };
+  const GROUPS = [GROUP_A, GROUP_B];
+  const groupResolver = () =>
+    vi.fn(
+      async (r: CitedSourceRef): Promise<SourcePayload> =>
+        r.rawRef === "corpus/notes.md"
+          ? { kind: "markdown", text: GROUP_NOTES_TEXT }
+          : { kind: "markdown", text: SOURCE_TEXT },
+    );
 
-  it("shows the scope toggle + Entité x/y only when 2+ groups exist", async () => {
-    const flat = mountViewer({ refs: REFS, resolveSource: mdResolver(), title: "t" });
+  it("defaults to Entité scope: toggle shown, per-entity counter, no entity indicator", async () => {
+    const el = mountViewer({ refs: [], groups: GROUPS, resolveSource: groupResolver(), title: "t" });
     await settle();
-    expect(flat.querySelector(".st-contentSwitcher")).toBeNull();
-    expect(flat.textContent).not.toContain("Entité");
-    unmount(instance!);
-    instance = null;
-    host!.remove();
 
-    const grouped = mountViewer({ groups: GROUPS, resolveSource: mdResolver(), title: "t" });
-    await settle();
-    // ContentSwitcher (DS) with the two qualified scope options.
-    const switcher = grouped.querySelector(".st-contentSwitcher");
-    expect(switcher).not.toBeNull();
-    expect(switcher!.textContent).toContain("Entité");
-    expect(switcher!.textContent).toContain("Sélection");
-    expect(grouped.textContent).toContain("Entité 1/2");
+    expect(scopeButton(el, "Entité")).toBeTruthy();
+    expect(scopeButton(el, "Sélection")).toBeTruthy();
+    expect(scopeButton(el, "Entité")?.getAttribute("aria-selected")).toBe("true");
+    expect(el.textContent).toContain("Citation 1/2");
+    expect(el.querySelector('[aria-label="Entity navigator"]')).toBeNull();
+    expect(el.textContent).toContain("Sherlock Holmes");
   });
 
-  it("selection scope (default): the citation thread runs across all groups", async () => {
-    const el = mountViewer({ groups: GROUPS, resolveSource: mdResolver(), title: "t" });
-    await settle();
-    expect(el.textContent).toContain("Citation 1/3");
-    // Walk to the last ref across the group boundary.
-    buttonByLabel(el, "Next citation")!.click();
-    flushSync();
-    await settle();
-    buttonByLabel(el, "Next citation")!.click();
-    flushSync();
-    await settle();
-    expect(el.textContent).toContain("Citation 3/3");
-    expect(el.textContent).toContain("Entité 2/2");
-  });
-
-  it("entity scope: the citation thread is clamped to the active group", async () => {
+  it("hides the scope toggle when only one group carries citations, including an empty second group", async () => {
     const el = mountViewer({
-      groups: GROUPS,
-      scope: "entity",
-      resolveSource: mdResolver(),
+      refs: [],
+      groups: [GROUP_A, { id: "e:empty", label: "Nobody", refs: [] }],
+      resolveSource: groupResolver(),
       title: "t",
     });
     await settle();
-    expect(el.textContent).toContain("Citation 1/2"); // group 1 has 2 refs
-    const next = buttonByLabel(el, "Next citation")!;
-    next.click();
-    flushSync();
-    await settle();
-    expect(el.textContent).toContain("Citation 2/2");
-    // Clamped: next is disabled at the group boundary (does not spill to group 2).
-    expect(buttonByLabel(el, "Next citation")!.disabled).toBe(true);
-    expect(el.textContent).toContain("Entité 1/2");
+    expect(el.querySelector(".csv-tb-scope")).toBeNull();
+    expect(el.textContent).toContain("Citation 1/2");
+    expect(el.querySelector('[aria-label="Entity navigator"]')).toBeNull();
   });
 
-  it("Entité ‹/› jumps to the FIRST ref of the neighbour group", async () => {
-    const resolveSource = mdResolver();
-    const el = mountViewer({ groups: GROUPS, resolveSource, title: "t" });
+  it("Entité scope stops at the entity boundary and keeps the entity navigator hidden", async () => {
+    const el = mountViewer({
+      refs: [],
+      groups: GROUPS,
+      activeGroupIndex: 0,
+      activeIndex: 1,
+      resolveSource: groupResolver(),
+      title: "t",
+    });
     await settle();
-    buttonByLabel(el, "Next entity")!.click();
+    expect(el.textContent).toContain("Citation 2/2");
+    expect(buttonByLabel(el, "Next citation")!.disabled).toBe(true);
+    expect(el.querySelector('[aria-label="Entity navigator"]')).toBeNull();
+  });
+
+  it("switching to Sélection calls onScopeChange, makes the counter global and shows the entity indicator", async () => {
+    const onScopeChange = vi.fn();
+    const el = mountViewer({
+      refs: [],
+      groups: GROUPS,
+      resolveSource: groupResolver(),
+      onScopeChange,
+      title: "t",
+    });
+    await settle();
+
+    scopeButton(el, "Sélection")!.click();
     flushSync();
     await settle();
-    expect(el.textContent).toContain("Entité 2/2");
-    expect(resolveSource).toHaveBeenLastCalledWith(GROUPS[1]!.refs[0]);
+
+    expect(onScopeChange).toHaveBeenCalledWith("selection");
+    expect(el.textContent).toContain("Citation 1/4");
+    const indicator = el.querySelector('[aria-label="Entity navigator"]');
+    expect(indicator).not.toBeNull();
+    expect(indicator!.textContent).toContain("Entité");
+    expect(indicator!.textContent).toContain("1/2");
+    expect(indicator!.textContent).toContain("Sherlock Holmes");
+  });
+
+  it("Sélection scope crosses the entity boundary and fires onFocusChange(groupId, refIndex)", async () => {
+    const onFocusChange = vi.fn();
+    const onFocusDetail = vi.fn();
+    const resolveSource = groupResolver();
+    const el = mountViewer({
+      refs: [],
+      groups: GROUPS,
+      activeGroupIndex: 0,
+      activeIndex: 1,
+      scope: "selection",
+      resolveSource,
+      onFocusChange,
+      onFocusDetail,
+      title: "t",
+    });
+    await settle();
+    expect(onFocusChange).not.toHaveBeenCalled();
+    expect(el.textContent).toContain("Citation 2/4");
+
+    buttonByLabel(el, "Next citation")!.click();
+    flushSync();
+    await settle();
+
+    expect(onFocusChange).toHaveBeenCalledWith("e:watson", 0);
+    expect(onFocusDetail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: "e:watson",
+        groupIndex: 1,
+        groupRefIndex: 0,
+        index: 2,
+        scope: "selection",
+      }),
+    );
+    expect(el.textContent).toContain("Citation 3/4");
+    const indicator = el.querySelector('[aria-label="Entity navigator"]');
+    expect(indicator!.textContent).toContain("2/2");
+    expect(indicator!.textContent).toContain("John Watson");
+    expect(resolveSource).toHaveBeenLastCalledWith(GROUP_B.refs[0]);
+    expect(el.querySelector("[data-csv-mark]")?.textContent).toContain("coronet had vanished");
+  });
+
+  it("keyboard n/N steps the active scope and e/E jumps entities in Sélection scope", async () => {
+    const onFocusChange = vi.fn();
+    const el = mountViewer({
+      refs: [],
+      groups: GROUPS,
+      scope: "selection",
+      resolveSource: groupResolver(),
+      onFocusChange,
+      title: "t",
+    });
+    await settle();
+    expect(el.textContent).toContain("Citation 1/4");
+
+    await pressKey("n");
+    expect(el.textContent).toContain("Citation 2/4");
+    expect(onFocusChange).toHaveBeenLastCalledWith("e:holmes", 1);
+
+    await pressKey("N");
+    expect(el.textContent).toContain("Citation 1/4");
+
+    await pressKey("e");
+    expect(el.textContent).toContain("Citation 3/4");
+    expect(onFocusChange).toHaveBeenLastCalledWith("e:watson", 0);
+
+    await pressKey("E");
+    expect(el.textContent).toContain("Citation 1/4");
+    expect(onFocusChange).toHaveBeenLastCalledWith("e:holmes", 0);
+  });
+
+  it("keyboard e/E is inert in Entité scope", async () => {
+    const el = mountViewer({ refs: [], groups: GROUPS, resolveSource: groupResolver(), title: "t" });
+    await settle();
+    expect(el.textContent).toContain("Citation 1/2");
+
+    await pressKey("e");
+
+    expect(el.textContent).toContain("Citation 1/2");
+    expect(el.textContent).toContain("Sherlock Holmes");
+    expect(el.querySelector('[aria-label="Entity navigator"]')).toBeNull();
+  });
+
+  it("flat refs mode supports n/N as citation stepping", async () => {
+    const el = mountViewer({ refs: REFS, resolveSource: mdResolver(), title: "t" });
+    await settle();
+    expect(el.textContent).toContain("Citation 1/2");
+
+    await pressKey("n");
+    expect(el.textContent).toContain("Citation 2/2");
+
+    await pressKey("N");
+    expect(el.textContent).toContain("Citation 1/2");
+  });
+
+  it("honors activeGroupIndex plus group-relative activeIndex", async () => {
+    const resolveSource = groupResolver();
+    const el = mountViewer({
+      refs: [],
+      groups: GROUPS,
+      activeGroupIndex: 1,
+      activeIndex: 1,
+      resolveSource,
+      title: "t",
+    });
+    await settle();
+
+    expect(el.textContent).toContain("John Watson");
+    expect(el.textContent).toContain("Citation 2/2");
+    expect(resolveSource).toHaveBeenLastCalledWith(GROUP_B.refs[1]);
     expect(el.querySelector("[data-csv-mark]")?.textContent).toContain(
-      "passage from the second document",
+      "the doctor wrote his notes",
     );
   });
 
-  it("emits onFocusChange with group/doc coordinates on mount and on nav", async () => {
-    const focuses: CitedSourceFocus[] = [];
-    const el = mountViewer({
-      groups: GROUPS,
-      resolveSource: mdResolver(),
-      onFocusChange: (f: CitedSourceFocus) => focuses.push(f),
-      title: "t",
-    });
-    await settle();
-    expect(focuses.length).toBe(1);
-    expect(focuses[0]).toMatchObject({
-      index: 0,
-      scope: "selection",
-      groupId: "ent-holmes",
-      groupIndex: 0,
-      groupRefIndex: 0,
-      docLocator: "corpus/blue-study.md",
-    });
-
-    buttonByLabel(el, "Next entity")!.click();
-    flushSync();
-    await settle();
-    expect(focuses.length).toBe(2);
-    expect(focuses[1]).toMatchObject({
-      index: 2,
-      groupId: "ent-notes",
-      groupIndex: 1,
-      groupRefIndex: 0,
-      docLocator: "corpus/notes.md",
-    });
-  });
-
-  it("toggling the scope switch re-scopes the citation counter", async () => {
-    const el = mountViewer({ groups: GROUPS, resolveSource: mdResolver(), title: "t" });
-    await settle();
-    expect(el.textContent).toContain("Citation 1/3"); // selection scope
-    const entityTab = [...el.querySelectorAll(".st-contentSwitcher [role='tab']")].find(
-      (b) => b.textContent?.trim() === "Entité",
-    ) as HTMLButtonElement;
-    expect(entityTab).toBeTruthy();
-    entityTab.click();
-    flushSync();
-    await settle();
-    expect(el.textContent).toContain("Citation 1/2"); // entity scope, group 1
+  it("pins the retarget and callback contract in the package source", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/CitedSourceViewer.svelte"), "utf8");
+    expect(source).toMatch(/groups !== lastGroupsProp \|\|/);
+    expect(source).toMatch(/refs !== lastRefsProp \|\|/);
+    expect(source).toMatch(/activeGroupIndex !== lastActiveGroupProp \|\|/);
+    expect(source).toMatch(/activeIndex !== lastActiveProp/);
+    expect(source).toMatch(/scope !== lastScopeProp/);
+    expect(source).toContain('scope = "entity"');
+    expect(source).toContain("onScopeChange = null");
+    expect(source).toMatch(/onFocusChange\?\.\(normGroups\[gi\]\?\.id \?\? null, ri\)/);
   });
 });
