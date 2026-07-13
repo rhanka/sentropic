@@ -73,97 +73,165 @@
   let {
     refs = [],
     groups = null,
-    scope = "selection",
+    activeGroupIndex = 0,
     activeIndex = 0,
+    scope = "entity",
     title = "Cited source",
     resolveSource,
     sourceHref = null,
     onClose = null,
     onFocusChange = null,
+    onFocusDetail = null,
+    onScopeChange = null,
     labels = {},
     class: className = "",
   } = $props();
 
   const L = $derived({ ...DEFAULT_LABELS, ...labels });
 
-  // ── Thread model: flat refs, or groups flattened in order ───────────────
-  const hasGroups = $derived(Array.isArray(groups) && groups.length > 0);
-  const spans = $derived.by(() => {
-    if (!hasGroups) return [];
-    const out = [];
-    let start = 0;
-    for (const g of groups) {
-      const count = g.refs?.length ?? 0;
-      out.push({ id: g.id, label: g.label ?? g.id, start, count });
-      start += count;
-    }
-    return out;
-  });
-  const thread = $derived(hasGroups ? groups.flatMap((g) => g.refs ?? []) : refs);
-
-  // Active ref index (GLOBAL, into the flattened thread) + scope — internal
-  // state seeded from the props. Tracking the props' identities makes a
-  // re-open with the same index on a new array retarget correctly.
-  let index = $state(0);
-  let scopeState = $state("selection");
+  // Active (group, ref) position — internal state seeded from the props.
+  // Tracking BOTH the groups/refs identity and the index props makes a re-open
+  // with the same indexes on a new thread retarget correctly (no stale focus).
+  let gIndex = $state(0);
+  let rIndex = $state(0);
   let lastActiveProp = -1;
+  let lastActiveGroupProp = -1;
   let lastRefsProp = null;
-  let lastGroupsProp = undefined;
+  let lastGroupsProp = null;
+
+  // Navigation scope (§S.6.1). Seeded from the `scope` prop in its own effect
+  // so a consumer scope echo never re-seeds an internally navigated position.
+  let scopeState = $state("entity");
   let lastScopeProp = null;
 
+  // ── Grouped thread normalization (§S.6.1). Flat `refs` mode is ONE
+  // anonymous group, so every navigator below runs off the same structure.
+  const normGroups = $derived(
+    Array.isArray(groups) && groups.length > 0
+      ? groups
+      : refs.length > 0
+        ? [{ id: null, label: null, refs }]
+        : [],
+  );
+  const groupRefs = (g) => (Array.isArray(g?.refs) ? g.refs : []);
+  const activeGroup = $derived(normGroups[gIndex] ?? null);
+  const ref = $derived(groupRefs(activeGroup)[rIndex] ?? null);
+
+  // The FLAT thread: every (group, ref) position in order. Sélection scope
+  // navigates this list continuously across entity boundaries.
+  const thread = $derived.by(() => {
+    const items = [];
+    normGroups.forEach((g, gi) => {
+      groupRefs(g).forEach((r, ri) => items.push({ gi, ri, ref: r }));
+    });
+    return items;
+  });
+
+  // Scope eligibility is based ONLY on groups that carry refs. Empty groups do
+  // not create a scope toggle or an entity navigator.
+  const entityOrder = $derived(
+    normGroups.map((g, gi) => (groupRefs(g).length > 0 ? gi : -1)).filter((gi) => gi >= 0),
+  );
+  const scopeEligible = $derived(entityOrder.length >= 2);
+  const effectiveScope = $derived(scopeEligible && scopeState === "selection" ? "selection" : "entity");
+  const entityPos = $derived(entityOrder.indexOf(gIndex));
+
+  // The ACTIVE-SCOPE item list drives citation and document navigation.
+  const scopeItems = $derived(
+    effectiveScope === "selection" ? thread : thread.filter((it) => it.gi === gIndex),
+  );
+  const scopePos = $derived(scopeItems.findIndex((it) => it.gi === gIndex && it.ri === rIndex));
+  const scopeCount = $derived(scopeItems.length);
+
   $effect(() => {
-    if (refs !== lastRefsProp || groups !== lastGroupsProp || activeIndex !== lastActiveProp) {
-      lastRefsProp = refs;
+    if (
+      groups !== lastGroupsProp ||
+      refs !== lastRefsProp ||
+      activeGroupIndex !== lastActiveGroupProp ||
+      activeIndex !== lastActiveProp
+    ) {
       lastGroupsProp = groups;
+      lastRefsProp = refs;
+      lastActiveGroupProp = activeGroupIndex;
       lastActiveProp = activeIndex;
-      const clamped = Math.max(0, Math.min(thread.length - 1, activeIndex ?? 0));
-      index = thread.length > 0 ? clamped : 0;
-    }
-    if (scope !== lastScopeProp) {
-      lastScopeProp = scope;
-      scopeState = scope === "entity" ? "entity" : "selection";
+      const gi = Math.max(0, Math.min(normGroups.length - 1, activeGroupIndex ?? 0));
+      const seeded = normGroups.length > 0 ? gi : 0;
+      const count = groupRefs(normGroups[seeded]).length;
+      gIndex = seeded;
+      rIndex = count > 0 ? Math.max(0, Math.min(count - 1, activeIndex ?? 0)) : 0;
     }
   });
 
-  const ref = $derived(thread[index] ?? null);
+  $effect(() => {
+    if (scope !== lastScopeProp) {
+      lastScopeProp = scope;
+      scopeState = scope === "selection" ? "selection" : "entity";
+    }
+  });
+
   const quoteOf = (r) => r?.excerpt ?? r?.citation ?? null;
   const locatorOf = (r) => r?.rawRef ?? r?.sourceUrl ?? r?.docSha ?? "";
 
-  // ── Group (entity) navigator ─────────────────────────────────────────────
-  const groupIndex = $derived.by(() => {
-    if (!hasGroups) return -1;
-    return spans.findIndex((s) => index >= s.start && index < s.start + s.count);
-  });
-  const activeSpan = $derived(groupIndex >= 0 ? spans[groupIndex] : null);
-  const groupCount = $derived(hasGroups ? spans.length : 0);
-  const entityScoped = $derived(hasGroups && scopeState === "entity" && activeSpan !== null);
-  function goGroup(delta) {
-    const target = groupIndex + delta;
-    if (target < 0 || target >= groupCount) return;
-    const span = spans[target];
-    if (span && span.count > 0) index = span.start;
+  function buildFocusDetail(gi, ri) {
+    const nextRef = groupRefs(normGroups[gi])[ri] ?? null;
+    if (!nextRef) return null;
+    const items = effectiveScope === "selection" ? thread : thread.filter((it) => it.gi === gi);
+    const locators = [];
+    for (const it of items) {
+      const loc = locatorOf(it.ref);
+      if (!locators.includes(loc)) locators.push(loc);
+    }
+    const docLocator = locatorOf(nextRef);
+    return {
+      index: thread.findIndex((it) => it.gi === gi && it.ri === ri),
+      ref: nextRef,
+      scope: effectiveScope,
+      groupId: normGroups[gi]?.id ?? null,
+      groupIndex: gi,
+      groupRefIndex: ri,
+      docLocator,
+      docIndex: locators.indexOf(docLocator),
+      docCount: locators.length,
+    };
   }
 
-  // ── Citation navigator (scope-aware) ─────────────────────────────────────
-  const citPos = $derived(entityScoped ? index - activeSpan.start : index);
-  const citCount = $derived(entityScoped ? activeSpan.count : thread.length);
-  function goRef(delta) {
-    const lo = entityScoped ? activeSpan.start : 0;
-    const hi = lo + citCount - 1;
-    const target = index + delta;
-    if (target < lo || target > hi) return;
-    index = target;
+  /** Move the focus and notify the consumer only for in-viewer navigation. */
+  function focusTo(gi, ri) {
+    if (gi === gIndex && ri === rIndex) return;
+    gIndex = gi;
+    rIndex = ri;
+    onFocusChange?.(normGroups[gi]?.id ?? null, ri);
+    const detail = buildFocusDetail(gi, ri);
+    if (detail) onFocusDetail?.(detail);
+  }
+
+  /** Next/prev citation in the ACTIVE scope (toolbar ‹ › and n/N). */
+  function goScopeRef(delta) {
+    const target = scopePos + delta;
+    if (target < 0 || target >= scopeCount) return;
+    const item = scopeItems[target];
+    focusTo(item.gi, item.ri);
+  }
+
+  /** Next/prev entity (Sélection scope): first citation of the neighbour group. */
+  function goEntity(delta) {
+    const target = entityPos + delta;
+    if (target < 0 || target >= entityOrder.length) return;
+    focusTo(entityOrder[target], 0);
+  }
+
+  function setScope(next) {
+    if (next !== "entity" && next !== "selection") return;
+    if (scopeState === next) return;
+    scopeState = next;
+    onScopeChange?.(next);
   }
 
   // ── Document navigator (immo "PDF x/y") over the SCOPED thread ──────────
-  const scopedBase = $derived(entityScoped ? activeSpan.start : 0);
-  const scopedRefs = $derived(
-    entityScoped ? thread.slice(activeSpan.start, activeSpan.start + activeSpan.count) : thread,
-  );
   const docLocators = $derived.by(() => {
     const seen = [];
-    for (const r of scopedRefs) {
-      const loc = locatorOf(r);
+    for (const it of scopeItems) {
+      const loc = locatorOf(it.ref);
       if (!seen.includes(loc)) seen.push(loc);
     }
     return seen;
@@ -174,12 +242,16 @@
     const target = docIndex + delta;
     if (target < 0 || target >= docCount) return;
     const loc = docLocators[target];
-    const first = scopedRefs.findIndex((r) => locatorOf(r) === loc);
-    if (first >= 0) index = scopedBase + first;
+    const first = scopeItems.find((it) => locatorOf(it.ref) === loc);
+    if (first) focusTo(first.gi, first.ri);
   }
 
   const rawHref = $derived(
     ref && typeof sourceHref === "function" ? (sourceHref(ref) ?? null) : null,
+  );
+
+  const displayTitle = $derived(
+    activeGroup?.label ? [activeGroup.label, locatorOf(ref)].filter(Boolean).join(" — ") : title,
   );
 
   /** Human locator label for the header ("p.3", "§ Chapter 2", …). */
@@ -226,7 +298,10 @@
       }
       payload = resolved;
       BodyComponent = body;
-      loading = false;
+      // Markdown/text can show as soon as the payload is resolved. PDF keeps
+      // the frame in loading state until PdfBody reports its first rendered
+      // status, avoiding a transient blank canvas.
+      loading = kind === "pdf";
     } catch (err) {
       if (token !== loadToken) return;
       loading = false;
@@ -236,11 +311,13 @@
 
   function onBodyStatus(status) {
     bodyStatus = status;
+    if (loading) loading = false;
   }
   function setBodyCommands(commands) {
     bodyCommands = commands;
   }
   function onBodyRenderError(message) {
+    loading = false;
     loadError = message;
     payload = null;
     BodyComponent = null;
@@ -256,26 +333,6 @@
     bodyCommands.goToPage((bodyStatus.page ?? 1) + delta);
   }
 
-  // ── Focus events (host sync: highlight the matching chip/card) ──────────
-  let lastFocusKey = null;
-  $effect(() => {
-    if (!ref) return;
-    const key = `${index}|${scopeState}|${thread.length}|${locatorOf(ref)}`;
-    if (key === lastFocusKey) return;
-    lastFocusKey = key;
-    onFocusChange?.({
-      index,
-      ref,
-      scope: scopeState,
-      groupId: activeSpan?.id ?? null,
-      groupIndex,
-      groupRefIndex: hasGroups && activeSpan ? index - activeSpan.start : -1,
-      docLocator: locatorOf(ref),
-      docIndex,
-      docCount,
-    });
-  });
-
   /** True when the key event belongs to a form field. The overlay is NON-modal
    *  (side panels stay interactive), so typing there must never page/close. */
   function isEditableTarget(event) {
@@ -290,6 +347,10 @@
     if (event.key === "Escape" && onClose) onClose();
     else if (event.key === "ArrowLeft" && pageAddressable) goPage(-1);
     else if (event.key === "ArrowRight" && pageAddressable) goPage(1);
+    else if (event.key === "n") goScopeRef(1);
+    else if (event.key === "N") goScopeRef(-1);
+    else if (event.key === "e" && effectiveScope === "selection") goEntity(1);
+    else if (event.key === "E" && effectiveScope === "selection") goEntity(-1);
   }
 </script>
 
@@ -299,7 +360,7 @@
   <header class="csv-head">
     <div class="csv-head-text">
       <p class="csv-kicker">{L.kicker}</p>
-      <h2 class="csv-title" title={locatorOf(ref)}>{title}</h2>
+      <h2 class="csv-title" title={locatorOf(ref)}>{displayTitle}</h2>
       {#if ref}
         <p class="csv-locator">
           <span class="csv-locator-file">{locatorOf(ref) || "(no locator)"}</span>
@@ -315,28 +376,36 @@
   <!-- QUALIFIED TOOLBAR (immo parity): one compact DS bar, generic frame; only
        the Page/Zoom segments are body-gated (page-addressable bodies). -->
   <div class="csv-toolbar" role="toolbar" aria-label="Source navigation">
-    {#if citCount > 1}
-      <div class="csv-tb-group" aria-label="Citation navigator">
-        <IconButton size="sm" aria-label={L.previousCitation} disabled={citPos <= 0} onclick={() => goRef(-1)}>‹</IconButton>
-        <span class="csv-tb-label">{L.citation} <strong>{citPos + 1}/{citCount}</strong></span>
-        <IconButton size="sm" aria-label={L.nextCitation} disabled={citPos >= citCount - 1} onclick={() => goRef(1)}>›</IconButton>
-      </div>
-    {/if}
-
-    {#if groupCount > 1}
+    {#if scopeEligible}
       <ContentSwitcher
         size="sm"
         label={L.scopeToggle}
-        bind:value={scopeState}
+        class="csv-tb-scope"
+        value={effectiveScope}
         items={[
           { value: "entity", label: L.entity },
           { value: "selection", label: L.selection },
         ]}
+        onchange={(value) => setScope(value)}
       />
-      <div class="csv-tb-group" aria-label="Entity navigator" title={activeSpan?.label ?? ""}>
-        <IconButton size="sm" aria-label={L.previousEntity} disabled={groupIndex <= 0} onclick={() => goGroup(-1)}>‹</IconButton>
-        <span class="csv-tb-label">{L.entity} <strong>{groupIndex + 1}/{groupCount}</strong></span>
-        <IconButton size="sm" aria-label={L.nextEntity} disabled={groupIndex >= groupCount - 1} onclick={() => goGroup(1)}>›</IconButton>
+    {/if}
+
+    {#if scopeCount > 1}
+      <div class="csv-tb-group" aria-label="Citation navigator">
+        <IconButton size="sm" aria-label={L.previousCitation} disabled={scopePos <= 0} onclick={() => goScopeRef(-1)}>‹</IconButton>
+        <span class="csv-tb-label">{L.citation} <strong>{scopePos + 1}/{scopeCount}</strong></span>
+        <IconButton size="sm" aria-label={L.nextCitation} disabled={scopePos >= scopeCount - 1} onclick={() => goScopeRef(1)}>›</IconButton>
+      </div>
+    {/if}
+
+    {#if scopeEligible && effectiveScope === "selection"}
+      <div class="csv-tb-group" aria-label="Entity navigator">
+        <IconButton size="sm" aria-label={L.previousEntity} disabled={entityPos <= 0} onclick={() => goEntity(-1)}>‹</IconButton>
+        <span class="csv-tb-label">
+          {L.entity} <strong>{entityPos + 1}/{entityOrder.length}</strong>
+          {#if activeGroup?.label}<span class="csv-tb-entity">— {activeGroup.label}</span>{/if}
+        </span>
+        <IconButton size="sm" aria-label={L.nextEntity} disabled={entityPos >= entityOrder.length - 1} onclick={() => goEntity(1)}>›</IconButton>
       </div>
     {/if}
 
@@ -380,27 +449,32 @@
     <blockquote class="csv-quote">{quoteOf(ref)}</blockquote>
   {/if}
 
-  <div class="csv-body" bind:this={scrollEl}>
-    {#if loading}
-      <p class="csv-status" role="status">{L.loading}</p>
-    {:else if loadError}
+  <div class="csv-body" bind:this={scrollEl} aria-busy={loading}>
+    {#if loadError}
       <div class="csv-error" role="alert">
         <p class="csv-error-title">{L.unavailableTitle}</p>
         <p class="csv-error-detail">{loadError}</p>
         <code class="csv-error-ref">{locatorOf(ref) || "(no locator)"}</code>
       </div>
     {:else if BodyComponent && payload && ref}
-      {#key payload}
-        <BodyComponent
-          sourceRef={ref}
-          {payload}
-          quote={quoteOf(ref)}
-          scrollContainer={scrollEl}
-          onStatus={onBodyStatus}
-          registerCommands={setBodyCommands}
-          onRenderError={onBodyRenderError}
-        />
-      {/key}
+      {#if loading}
+        <p class="csv-status" role="status">{L.loading}</p>
+      {/if}
+      <div class:csv-body-stage-loading={loading}>
+        {#key payload}
+          <BodyComponent
+            sourceRef={ref}
+            {payload}
+            quote={quoteOf(ref)}
+            scrollContainer={scrollEl}
+            onStatus={onBodyStatus}
+            registerCommands={setBodyCommands}
+            onRenderError={onBodyRenderError}
+          />
+        {/key}
+      </div>
+    {:else if loading}
+      <p class="csv-status" role="status">{L.loading}</p>
     {:else}
       <p class="csv-status">{L.noSelection}</p>
     {/if}
@@ -494,6 +568,17 @@
     font-weight: 700;
     color: var(--st-semantic-text-primary, #0f172a);
   }
+  .csv-tb-entity {
+    display: inline-block;
+    vertical-align: bottom;
+    margin-left: 0.3rem;
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--st-semantic-text-primary, #0f172a);
+    font-weight: 600;
+  }
   .csv-toolbar :global(.csv-tb-zoom) {
     min-width: 3rem;
   }
@@ -520,6 +605,11 @@
     overflow: auto;
     padding: 0.75rem 1rem;
     background: var(--st-semantic-surface-sunken, #f1f5f9);
+  }
+  .csv-body-stage-loading {
+    visibility: hidden;
+    max-height: 0;
+    overflow: hidden;
   }
   .csv-status {
     margin: 2rem 0;
