@@ -22,6 +22,7 @@ on:
           - chat-ui
           - oauth-verify
           - mcp-auth
+          - mcp-platform
           - auth-hono
           - auth-client
           - auth-ui
@@ -106,6 +107,7 @@ jobs:
       cowork_desktop_publish: ${{ steps.filter.outputs.cowork_desktop_publish }}
       oauth_verify: ${{ steps.filter.outputs.oauth_verify }}
       mcp_auth: ${{ steps.filter.outputs.mcp_auth }}
+      mcp_platform: ${{ steps.filter.outputs.mcp_platform }}
       auth_hono: ${{ steps.filter.outputs.auth_hono }}
       auth_client: ${{ steps.filter.outputs.auth_client }}
       auth_ui: ${{ steps.filter.outputs.auth_ui }}
@@ -120,6 +122,7 @@ jobs:
       chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
       oauth_verify_publish: ${{ steps.filter.outputs.oauth_verify_publish }}
       mcp_auth_publish: ${{ steps.filter.outputs.mcp_auth_publish }}
+      mcp_platform_publish: ${{ steps.filter.outputs.mcp_platform_publish }}
       auth_hono_publish: ${{ steps.filter.outputs.auth_hono_publish }}
       auth_client_publish: ${{ steps.filter.outputs.auth_client_publish }}
       auth_ui_publish: ${{ steps.filter.outputs.auth_ui_publish }}
@@ -236,6 +239,16 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/mcp-auth/**'
+            mcp_platform:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/mcp-platform/**'
+              - '.github/workflows/ci.yml'
+            mcp_platform_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/mcp-platform/**'
             auth_hono:
               - 'Makefile'
               - 'package.json'
@@ -544,6 +557,25 @@ jobs:
         run: make build-mcp-auth
       - name: Pack MCP Auth
         run: make pack-mcp-auth
+
+  validate-mcp-platform:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck MCP Platform
+        run: make typecheck-mcp-platform
+      - name: Test MCP Platform
+        run: make test-mcp-platform
+      - name: Build MCP Platform
+        run: make build-mcp-platform
+      - name: Pack MCP Platform
+        run: make pack-mcp-platform
+      - name: API Extract MCP Platform
+        run: make api-extract-mcp-platform
 
   validate-auth-hono:
     runs-on: ubuntu-latest
@@ -1373,6 +1405,20 @@ jobs:
       - name: Publish MCP Auth
         run: make publish-mcp-auth
 
+  publish-mcp-platform:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-platform]
+    if: needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish MCP Platform
+        run: make publish-mcp-platform
+
   publish-auth-hono:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-hono]
@@ -1593,6 +1639,9 @@ jobs:
       - name: Bootstrap publish mcp-auth
         if: inputs.bootstrap_publish_target == 'mcp-auth' || inputs.bootstrap_publish_target == 'all'
         run: make publish-mcp-auth-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish mcp-platform
+        if: inputs.bootstrap_publish_target == 'mcp-platform' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-mcp-platform-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish auth-hono
         if: inputs.bootstrap_publish_target == 'auth-hono' || inputs.bootstrap_publish_target == 'all'
         run: make publish-auth-hono-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
