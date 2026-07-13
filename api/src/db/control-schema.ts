@@ -10,7 +10,7 @@
  * - NO published-contract mutation (@sentropic/contracts / @sentropic/comments untouched).
  */
 
-import { bigint, check, index, integer, jsonb, pgSchema, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, check, index, integer, jsonb, pgSchema, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Declare the `control` schema namespace.
@@ -296,3 +296,57 @@ export const appWorkspaceBindings = controlSchema.table(
 
 export type AppWorkspaceBindingRow = typeof appWorkspaceBindings.$inferSelect;
 export type AppWorkspaceBindingInsert = typeof appWorkspaceBindings.$inferInsert;
+
+/**
+ * control.connector_tenant_enrollments — the durable authorized-tenant-set backing (ARCH-11 G1c,
+ * spec §2.1). Scopes, per `(principal_sub, connector_instance_id)`, which real tenant(s) a
+ * principal may act on behalf of. Backs the DB-backed `authorizedTenants` resolver
+ * (`api/src/services/tenancy/enrollment-store.ts`) and, downstream, the broker grant set (G1d).
+ *
+ * SOFT references only (control-namespace rule, spec §2.1): `principal_sub` == the token subject
+ * (for S2S == `service_clients.client_id`) and `tenant_id` == `public.tenants(id)` are SOFT id
+ * refs — NO cross-namespace FK (integrity is service-enforced), matching `app_workspace_bindings`.
+ *
+ * §1.6 fix: a SINGLE-ORG client resolves its fixed `service_clients.tenant_id` WITHOUT a row here;
+ * enrollment rows exist ONLY for multi-org sets. An empty result stays fail-closed upstream.
+ */
+export const connectorTenantEnrollments = controlSchema.table(
+  'connector_tenant_enrollments',
+  {
+    // Token subject; for S2S == service_clients.client_id (SOFT ref — no cross-namespace FK).
+    principalSub: text('principal_sub').notNull(),
+    // Scopes the enrollment per connector instance.
+    connectorInstanceId: text('connector_instance_id').notNull(),
+    // SOFT ref to public.tenants(id) — NO cross-namespace FK.
+    tenantId: text('tenant_id').notNull(),
+    // active | suspended (quarantine on rollback, spec §4.4).
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    // Composite PK: one row per (principal, connector, tenant).
+    pk: primaryKey({
+      columns: [table.principalSub, table.connectorInstanceId, table.tenantId],
+      name: 'connector_tenant_enrollments_pk',
+    }),
+    // Resolver lookup: authorizedTenants(principalSub, connectorInstanceId) filtered by status.
+    principalConnectorIdx: index('connector_tenant_enrollments_principal_connector_idx').on(
+      table.principalSub,
+      table.connectorInstanceId,
+      table.status,
+    ),
+    // Client-level lookup (OBO mint): all active enrollments for a principal across connectors.
+    principalStatusIdx: index('connector_tenant_enrollments_principal_status_idx').on(
+      table.principalSub,
+      table.status,
+    ),
+    statusCheck: check(
+      'connector_tenant_enrollments_status_check',
+      sql`${table.status} IN ('active', 'suspended')`,
+    ),
+  }),
+);
+
+export type ConnectorTenantEnrollmentRow = typeof connectorTenantEnrollments.$inferSelect;
+export type ConnectorTenantEnrollmentInsert = typeof connectorTenantEnrollments.$inferInsert;
