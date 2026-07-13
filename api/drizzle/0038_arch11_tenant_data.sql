@@ -59,10 +59,13 @@ ALTER TABLE "oauth_consents" ALTER COLUMN "tenant_id" SET DEFAULT 'sentropic';
 --> statement-breakpoint
 ALTER TABLE "oauth_consents" ALTER COLUMN "tenant_id" SET NOT NULL;
 --> statement-breakpoint
--- Re-key the unique index to carry the tenant leg (§1.5): closes the cross-tenant consent bypass —
--- an org-A grant no longer collides with / is reused for org-B.
-DROP INDEX IF EXISTS "oauth_consents_user_id_client_id_unique";
---> statement-breakpoint
+-- (§1.5) Add the tenant-carrying composite unique index NOW, but KEEP the old (user_id, client_id)
+-- index — G1a stays rolling-deploy-safe. ARCHITECT RATIFICATION of BR-G1a-EX1 = option (b) two-phase:
+-- dropping the old index in a single deploy would break OLD pods still running
+-- `ON CONFLICT (user_id, client_id)` against the new composite during the roll. G1c drops the old
+-- index (after ALL pods run the composite-targeting adapter) — which is when multi-org consent, and
+-- thus the cross-tenant bypass, actually opens (§4.3). Until then the stricter old index correctly
+-- keeps consent single-org.
 CREATE UNIQUE INDEX IF NOT EXISTS "oauth_consents_user_id_client_id_tenant_id_unique" ON "oauth_consents" USING btree ("user_id","client_id","tenant_id");
 --> statement-breakpoint
 
