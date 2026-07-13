@@ -1,20 +1,30 @@
-# @sentropic/mcp-platform (PRIVATE — mock-only scaffold)
+# @sentropic/mcp-platform
 
-> **Status: PRIVATE, unpublished, reversible scaffold.** This package is
-> `"private": true`, is NOT wired into any publish filter / CI publish job /
-> Makefile target / trusted-publisher config, and MUST NOT be published. It is a
-> mock-only build of **slices 1 + 2 + 3 + 7** of
-> `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md` (track `01KW2MHER6QE9WRW3SAJCNH3T8`).
+> **Status: ACTIVATING (BR-42l) — public `0.1.0`, narrow read-only freeze.**
+> Generic Sentropic/STP MCP **provider** platform contract. Published with a deliberately
+> narrow frozen surface (the read-only pure-adapter contract a federated connector drives);
+> the mutation/elicitation/durable surface ships published-but-unstable under `./experimental`.
+> Authoritative: `spec/SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md` (owner-decided); socle:
+> `spec/SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM.md`.
 
-> **Not in the root lockfile — do NOT root-install/activate (P1, architect/owner-gated).**
-> The root workspace glob (`workspaces: ["packages/*"]`) would auto-enlist this
-> package on the next root `npm install`, but the committed root `package-lock.json`
-> intentionally has **no `mcp-platform` entry** and MUST NOT gain one in this branch.
-> Adding it to the root lock is effectively **package activation (P1)** and is gated
-> on architect/owner approval (see `rules/architecture.md` "Package extraction must
-> be activated by real app consumption"). Until then, verify this package with its
-> own ephemeral toolchain (below), never via a root install. Do not modify root
-> `package.json` or `package-lock.json`.
+## Public API — three tiers
+
+The `exports` map (not discipline) enforces the tiers; only the root `.` carries a compat guarantee.
+
+- **`.` (root) — FROZEN, semver-governed** (§3.1): the read-only pure-adapter contract —
+  manifest & capability classification, read/result envelopes, lifecycle records,
+  `StpConnectorContext`, `AppConnectorProviderAdapter`, `SecretStatus` (incl. the
+  `'operator'` scope) and the dependency-free `listVisibleCapabilities`. A read-only
+  connector imports ONLY this. `1.0.0` deferred (0.x additive-first).
+- **`./experimental` — `@experimental`, NOT frozen, semver-exempt**: the mutation gate,
+  the elicitation state machine + provisional policy (F8), the DurableCall mirror, and the
+  store PORT interfaces. Usable but unstable — do not depend on it in production; pieces get
+  promoted to the frozen root additively once a real consumer proves them.
+- **`./testing` — `@internal`, NOT frozen**: mocks/fixtures/reference (mock OIDC, in-memory
+  MCP transport, fake connector, in-memory audit/secret/tenant/consent/durable stores) that
+  a real host replaces.
+
+_The internal composition below (build slices 1/2/3/7) describes what lives in each tier._
 
 ## What this is
 
@@ -153,13 +163,12 @@ ordering is NOT the spec §12 item numbering. The table below is keyed to the
 | 12. Wave adapter migration guide/probes | **DEFERRED — NOT in this branch** | out of scope; `mcp-wave` MUST NOT be touched here |
 | 13. Domain provider adoption guide | **DOC** | `docs/ADOPTION_GUIDE.md` (with item 11 as the worked example) |
 
-**Whole-scaffold disposition:** this is a **MOCK-ONLY, private, unpublished**
-scaffold — no real network, production credentials, Claude.ai dependency, DB, or
-`mcp-wave` coupling. It is `"private": true`, absent from the root lockfile, and
-NOT wired into any publish filter / CI publish job / Makefile target /
-trusted-publisher config. **Merge, package activation (root-install), publication,
-and any production wiring are owner/architect-gated** (spec §13 / §13.1 parks P1-P6;
-see `docs/ADOPTION_GUIDE.md` "What stays owner/architect-gated").
+**Disposition:** public `0.1.0` under BR-42l, narrow read-only freeze. The frozen root `.`
+carries no real network / production credentials / Claude.ai dependency / DB / `mcp-wave`
+coupling — the in-memory mocks are `./testing` fixtures a real host replaces. The **first
+bootstrap-publish (owner 2FA) and the broker-aware impl-freeze remain owner-gated** (see
+`spec/SPEC_EVOL_MCP_PLATFORM_ACTIVATION.md`); the api-extractor golden-report gate enforces
+the frozen surface before publish.
 
 ## Running the gates (mock, in-memory)
 
