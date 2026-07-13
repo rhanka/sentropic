@@ -282,6 +282,11 @@
       "types": "./src/state/chatPlacement.ts",
       "svelte": "./src/state/chatPlacement.ts",
       "import": "./src/state/chatPlacement.ts"
+    },
+    "./state/chatPlacementMigration": {
+      "types": "./src/state/chatPlacementMigration.ts",
+      "svelte": "./src/state/chatPlacementMigration.ts",
+      "import": "./src/state/chatPlacementMigration.ts"
     }
   },
   "files": [
