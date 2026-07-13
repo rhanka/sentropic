@@ -1,39 +1,29 @@
 /**
- * Slice 2 — Deny-as-missing discovery + mutation gating.
+ * @experimental — mutation gating (published, NOT frozen, semver-exempt).
  *
- * - `listVisibleCapabilities`: authz-projected discovery (§7.1). Capabilities the
- *   principal cannot access are ABSENT from the listing, never shown as "denied"
- *   (deny-as-missing).
  * - `assertMutationGate` / `invokeGuardedTool`: a mutating capability
  *   (`mutatesExternalSystem`) requires an elicitation gate + idempotency key +
  *   audit (§10 parity probes, §11 "Mutation gating").
  *
+ * R1a (BR-42l): this is the mutation half of the former `guard.ts`, relocated to
+ * `./experimental`. `GuardedInvokeDeps.audit` is retyped against the local
+ * `AuditSinkPort` (a minimal audit port) — NOT the mock `InMemoryAuditSink` —
+ * so this surface never structurally imports the `./testing` mock.
+ *
  * MOCK-ONLY: in-memory; no network, no DB.
  */
-import type { ElicitationManager } from './elicitation.js';
-import type { InMemoryAuditSink } from './audit.js';
-import { idempotencyDigest } from './digest.js';
-import type { AppCapability, CapabilityTool } from './manifest.js';
-import type { AppToolInvocation, AppToolResult } from './runtime.js';
+import type { ElicitationManager } from '../elicitation.js';
+import { idempotencyDigest } from '../digest.js';
+import type { CapabilityTool } from '../manifest.js';
+import type { AppToolInvocation, AppToolResult } from '../runtime.js';
 
-export type VisibilityContext = {
-  scopes: string[];
-  claims: string[]; // claim names the principal holds
-  tenantRef: string;
-  accessibleTenants: string[]; // tenants the principal is authorized for
-};
-
-/** Authz-projected, deny-as-missing capability listing (§7.1). */
-export function listVisibleCapabilities(
-  capabilities: AppCapability[],
-  ctx: VisibilityContext,
-): AppCapability[] {
-  if (!ctx.accessibleTenants.includes(ctx.tenantRef)) return []; // tenant not accessible → nothing leaks
-  return capabilities.filter((cap) => {
-    const hasScopes = cap.requiredScopes.every((s) => ctx.scopes.includes(s));
-    const hasClaims = cap.requiredClaims.every((c) => ctx.claims.includes(c));
-    return hasScopes && hasClaims;
-  });
+/**
+ * Minimal audit sink port the guarded mutation path emits through. A host injects
+ * any implementation (DB/KMS-backed audit); the mock `InMemoryAuditSink`
+ * (`./testing`) satisfies it structurally but is never referenced here.
+ */
+export interface AuditSinkPort {
+  emit(event: unknown): Promise<void>;
 }
 
 export type MutationGateReason = 'gate_required' | 'idempotency_required';
@@ -85,7 +75,7 @@ export function assertMutationGate(
 
 export type GuardedInvokeDeps = {
   elicitations: ElicitationManager;
-  audit: InMemoryAuditSink;
+  audit: AuditSinkPort;
   auditId: string;
   // The domain mutation, run only after the gate passes. Returns model-safe output.
   run: (envelope: AppToolInvocation) => Promise<unknown>;
