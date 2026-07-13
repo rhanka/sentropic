@@ -46,8 +46,12 @@ export interface CitedSourceRef {
   section?: string;
   /** Paragraph / text-frame / CSV-row id anchor for non-page modalities. */
   paragraph_id?: string;
+  /** Figure / image anchor for future non-text modalities (v2/v3 rendering). */
+  figure_id?: string;
   /** Normalized top-left page fractions [x0,y0,x1,y1] (pdf/image/pptx). */
   bbox?: [number, number, number, number];
+  /** Geometric region fast-path for future image/PDF bbox renderers. */
+  region?: [number, number, number, number];
   /** Verbatim evidence text used for text-match highlighting. */
   excerpt?: string;
   citation?: string;
@@ -149,12 +153,13 @@ export interface CitedSourceGroup {
  * Navigation scope of the ‹ Citation x/y › thread:
  * - `"entity"`   — the citation navigator runs within the ACTIVE group only;
  * - `"selection"`— it runs over the whole flattened thread (all groups).
- * Only meaningful when `groups` is provided with 2+ groups (the toggle and the
- * ‹ Entité x/y › navigator are hidden otherwise).
+ * Only meaningful when `groups` is provided with 2+ groups carrying refs. The
+ * toggle is hidden otherwise; the ‹ Entité x/y › navigator is visible only in
+ * selection scope.
  */
 export type CitedSourceScope = "entity" | "selection";
 
-/** Focus snapshot emitted through `onFocusChange` on every retarget. */
+/** Focus snapshot emitted through the optional `onFocusDetail` extension. */
 export interface CitedSourceFocus {
   /** Global index of the active ref in the flattened thread. */
   index: number;
@@ -210,9 +215,14 @@ export interface CitedSourceViewerProps {
   groups?: CitedSourceGroup[] | null;
   /** Initial navigation scope (see {@link CitedSourceScope}). */
   scope?: CitedSourceScope;
-  /** Initial active ref, as a GLOBAL index into the flattened thread. */
+  /** Initial active group when `groups` is present. */
+  activeGroupIndex?: number;
+  /**
+   * Initial active ref. In flat `refs` mode this indexes `refs`; when `groups`
+   * is present this is group-relative within `groups[activeGroupIndex].refs`.
+   */
   activeIndex?: number;
-  /** Header title (e.g. the source file or the entity the user clicked). */
+  /** Header fallback. In grouped mode the visible title follows active group + locator. */
   title?: string;
   /**
    * §S.3 resolver. Typed against the BASE so resolvers feeding custom bodies
@@ -224,8 +234,12 @@ export interface CitedSourceViewerProps {
   class?: string;
   /** Close callback; the ✕ button is hidden when absent (non-modal host owns it). */
   onClose?: (() => void) | null;
-  /** Fired on mount and on every focus retarget (nav, scope toggle, reopen). */
-  onFocusChange?: ((focus: CitedSourceFocus) => void) | null;
+  /** Fired only from in-viewer navigation with graphify's primary signature. */
+  onFocusChange?: ((groupId: string | null, refIndex: number) => void) | null;
+  /** Optional package extension: enriched focus details for the same navigation events. */
+  onFocusDetail?: ((focus: CitedSourceFocus) => void) | null;
+  /** Fired when the user toggles the Entité/Sélection scope switch. */
+  onScopeChange?: ((scope: CitedSourceScope) => void) | null;
   /** Label overrides (i18n); merged over the qualified defaults. */
   labels?: Partial<CitedSourceViewerLabels>;
 }
