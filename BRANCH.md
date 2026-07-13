@@ -31,5 +31,5 @@ Implement the framework-neutral **placement-intent controller** for the chat sur
   - [x] `chatPlacement.ts`: taxonomy + canonical IDs (D2), HostSurfaces (D3), controller with async prepare/commit protocol (D13), capability negotiation (supported vs available), fallback-chain redirect, intent persistence + monotonic supersession (D6).
   - [x] `chat-placement.test.ts`: id round-trip/normalization/malformed, capability intersection, applied/redirected/rejected/failed/superseded, intent-persisted-immediately, seed-from-supported, subscribe/unsubscribe.
   - [x] Gate: `make typecheck-chat-ui` + `make test-chat-ui` (840) green.
-- [ ] **L1b — exports + minor bump** (when lot is PR-ready).
+- [x] **L1b — exports + minor bump** — ./state/chatPlacement exported (package.json + export-manifest), chat-ui 0.24.1→0.25.0, version-pin tests bumped. Codex 5.5-xhigh CODE review reconciled (supersede-before-resolve, commit try/catch, notify reentrancy/isolation, monotonic env, guards; +8 hardening tests). 850 green.
 - [ ] **L1c — host wiring**: "Move to…" menu, chatWidgetLayout migration (floating|docked → floating.right + drawer.right.primary).

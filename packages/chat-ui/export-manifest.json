@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-08",
-  "_version": "0.24.1",
+  "_version": "0.25.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -712,6 +712,31 @@
       "file": "dist/state/chatSessionHydration.js",
       "exists": true,
       "_propSnapshot": "Exports: SessionHistoryMetaLine/SessionHistoryTimelineLine/SessionHistoryLine types, parseSessionHistoryLine, createNdjsonSplitter, createHydrationGenerations, shouldFlushHistoryStage, normalizeHydratedMessage, upsertSequencedMessage, getTimelineItemSortSequence/Subsequence, compareTimelineItems, mergeTimelineBlockIntoHistory, HistoryScrollRestore + resolveHistoryScrollRestore"
+    },
+    "./state/chatPlacement": {
+      "kind": "ts",
+      "file": "dist/state/chatPlacement.js",
+      "exports": [
+        "DrawerSide",
+        "FloatingAnchor",
+        "Stickiness",
+        "ChatPlacement",
+        "ChatPlacementId",
+        "placementId",
+        "parsePlacementId",
+        "placementsEqual",
+        "ReparentKind",
+        "HostSurfaces",
+        "PlacementReason",
+        "PlacementResolutionStatus",
+        "PlacementSnapshot",
+        "PlacementResult",
+        "CommitFn",
+        "PlacementPersistence",
+        "PlacementControllerConfig",
+        "PlacementController",
+        "createPlacementController"
+      ]
     }
   }
 }
