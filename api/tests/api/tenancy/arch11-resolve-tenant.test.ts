@@ -97,8 +97,8 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   });
 
   it('{ workspaceId, userId } cross-checks approved membership; a non-member fails closed', async () => {
-    const member = await createTestUser({ displayName: 'Member A', withWorkspace: false });
-    const stranger = await createTestUser({ displayName: 'Stranger', withWorkspace: false });
+    const member = await seedUser('Member A');
+    const stranger = await seedUser('Stranger');
     const wsA = `ws-${ORG_A}-${crypto.randomUUID()}`;
     await seedWorkspace(wsA, ORG_A, member.id);
     await seedMembership(ORG_A, member.id, 'approved');
@@ -111,7 +111,7 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   });
 
   it('{ workspaceId, userId } treats a non-approved (requested) membership as fail-closed', async () => {
-    const pending = await createTestUser({ displayName: 'Pending', withWorkspace: false });
+    const pending = await seedUser('Pending');
     const wsA = `ws-${ORG_A}-${crypto.randomUUID()}`;
     await seedWorkspace(wsA, ORG_A, pending.id);
     await seedMembership(ORG_A, pending.id, 'requested');
@@ -133,9 +133,9 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   });
 
   it('{ userId } resolves a single approved membership; zero = unknown, multiple = ambiguous', async () => {
-    const solo = await createTestUser({ displayName: 'Solo', withWorkspace: false });
-    const dual = await createTestUser({ displayName: 'Dual', withWorkspace: false });
-    const none = await createTestUser({ displayName: 'None', withWorkspace: false });
+    const solo = await seedUser('Solo');
+    const dual = await seedUser('Dual');
+    const none = await seedUser('None');
     await seedMembership(ORG_A, solo.id, 'approved');
     await seedMembership(ORG_A, dual.id, 'approved');
     await seedMembership(ORG_B, dual.id, 'approved');
@@ -150,8 +150,8 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   // ---------------------------------------------------------------------------
 
   it('NON-VACUOUS ≥2-org: org-B workspace/user/client resolve org-B and never org-A', async () => {
-    const userA = await createTestUser({ displayName: 'User A', withWorkspace: false });
-    const userB = await createTestUser({ displayName: 'User B', withWorkspace: false });
+    const userA = await seedUser('User A');
+    const userB = await seedUser('User B');
     const wsA = `ws-${ORG_A}-${crypto.randomUUID()}`;
     const wsB = `ws-${ORG_B}-${crypto.randomUUID()}`;
     await seedWorkspace(wsA, ORG_A, userA.id);
@@ -195,7 +195,7 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   });
 
   it('shadow mode: ZERO behavior change — returns the legacy value even when tenant != workspaceId', async () => {
-    const userA = await createTestUser({ displayName: 'Shadow Member', withWorkspace: false });
+    const userA = await seedUser('Shadow Member');
     const wsA = `ws-${ORG_A}-${crypto.randomUUID()}`;
     await seedWorkspace(wsA, ORG_A, userA.id);
     await seedMembership(ORG_A, userA.id, 'approved');
@@ -212,7 +212,7 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   });
 
   it('shadow mode: a fail-close resolution is recorded as divergence but still returns legacy', async () => {
-    const stranger = await createTestUser({ displayName: 'Shadow Stranger', withWorkspace: false });
+    const stranger = await seedUser('Shadow Stranger');
     const wsA = `ws-${ORG_A}-${crypto.randomUUID()}`;
     await seedWorkspace(wsA, ORG_A);
     // stranger has NO approved membership in ORG_A → resolveTenant → ambiguous_tenant.
@@ -226,8 +226,8 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
   });
 
   it('strict mode: resolveTenant is authoritative and fail-closed', async () => {
-    const userA = await createTestUser({ displayName: 'Strict Member', withWorkspace: false });
-    const stranger = await createTestUser({ displayName: 'Strict Stranger', withWorkspace: false });
+    const userA = await seedUser('Strict Member');
+    const stranger = await seedUser('Strict Stranger');
     const wsA = `ws-${ORG_A}-${crypto.randomUUID()}`;
     await seedWorkspace(wsA, ORG_A, userA.id);
     await seedMembership(ORG_A, userA.id, 'approved');
