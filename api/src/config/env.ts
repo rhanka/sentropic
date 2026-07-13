@@ -65,6 +65,11 @@ const envSchema = z.object({
   GITHUB_OAUTH_CLIENT_ID: z.string().optional(),
   GITHUB_OAUTH_CLIENT_SECRET: z.string().optional(),
   GITHUB_OAUTH_REDIRECT_URI: z.string().optional(),
+  // BR-39e Lot 5 — Facebook social federation. Missing credentials keep the provider feature-OFF.
+  // The redirect URI defaults to `<issuer>/auth/federation/facebook/callback` when unset.
+  FACEBOOK_OAUTH_CLIENT_ID: z.string().optional(),
+  FACEBOOK_OAUTH_CLIENT_SECRET: z.string().optional(),
+  FACEBOOK_OAUTH_REDIRECT_URI: z.string().optional(),
   // BR-39e Lot 3 — social LOGIN federation (RP to Microsoft Entra ID). Client credentials absent
   // means feature-OFF. The redirect URI defaults to `<issuer>/auth/federation/microsoft/callback`;
   // the tenant endpoint accepts common/organizations/consumers/a concrete tenant id.
