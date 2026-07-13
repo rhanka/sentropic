@@ -10,7 +10,8 @@ Ship the G1c slice of ARCH-11 (spec §2.1/§2.2/§4.2.5-6/§5): a soft-ref DB-ba
 ## Scope / Guardrails
 - Scope limited to: the enrollment control table + api-side resolver, the auth-hono S2S OBO mint,
   the auth-hono consent-port tenant threading, and the api-side consent adapter enforcement.
-- One migration max in `api/drizzle/control/*.sql` (control stream; G1a already used `api/drizzle/*.sql`).
+- Two migrations, ONE per stream: `api/drizzle/control/0004_*.sql` (new enrollment table) + `api/drizzle/0039_*.sql`
+  (drops the old `oauth_consents (user_id, client_id)` unique index — a DROP that G1a's 0038 EXPLICITLY deferred to G1c).
 - Make-only workflow, no direct Docker commands.
 - Root workspace reserved for user dev/UAT (`ENV=dev`) — never test there.
 - Branch development in isolated worktree `tmp/arch11-g1c`.
@@ -22,8 +23,9 @@ Ship the G1c slice of ARCH-11 (spec §2.1/§2.2/§4.2.5-6/§5): a soft-ref DB-ba
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/drizzle/control/0004_arch11_connector_enrollments.sql` (the ONE migration)
-  - `api/drizzle/control/meta/_journal.json` (journal entry for the migration)
+  - `api/drizzle/control/0004_arch11_connector_enrollments.sql` (control-stream migration)
+  - `api/drizzle/0039_arch11_drop_oauth_consents_old_unique.sql` (public-stream migration — the G1a-deferred index DROP)
+  - `api/drizzle/control/meta/_journal.json` + `api/drizzle/meta/_journal.json` (journal entries)
   - `api/src/db/control-schema.ts` (add the `connector_tenant_enrollments` table def)
   - `api/src/services/tenancy/enrollment-store.ts` (new — DB-backed resolver)
   - `api/src/services/auth/service-tenant-adapter.ts` (new — OBO port impl, mode-gated)
