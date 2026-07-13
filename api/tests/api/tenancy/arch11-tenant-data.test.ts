@@ -145,27 +145,26 @@ describe('ARCH-11 G1a — tenant DATA reconciliation (DEFAULT-safe, no behavior 
     expect((orphaned.rows[0] as { n: number }).n).toBe(0);
   });
 
-  it('consent unique key is (user_id, client_id, tenant_id): same (user,client) under two orgs coexist', async () => {
-    // The old (user_id, client_id) unique index is gone; the tenant leg is the new key.
+  it('consent key (BR-G1a-EX1 = two-phase): G1a ADDS the (user,client,tenant) composite but KEEPS the old (user,client) index (rolling-safe; old index dropped in G1c)', async () => {
     const indexes = await db.execute(sql`
       SELECT indexname FROM pg_indexes WHERE tablename = 'oauth_consents'
     `);
     const names = (indexes.rows as Array<{ indexname: string }>).map((r) => r.indexname);
+    // Composite index is added now — the future multi-org consent key.
     expect(names).toContain('oauth_consents_user_id_client_id_tenant_id_unique');
-    expect(names).not.toContain('oauth_consents_user_id_client_id_unique');
+    // Old (user,client) index is KEPT in G1a for rolling-deploy safety (BR-G1a-EX1 option b): dropping
+    // it in a single deploy would break old pods' `ON CONFLICT (user,client)`. G1c drops it once all
+    // pods run the composite-targeting adapter and multi-org consent opens.
+    expect(names).toContain('oauth_consents_user_id_client_id_unique');
 
     const user = await createTestUser({ displayName: 'Cross-Org Consent', withWorkspace: false });
-    // Same (user, client) granted under BOTH orgs — must coexist as two distinct rows.
     await db.insert(oauthConsents).values({ userId: user.id, clientId: CLIENT_ID, tenantId: ORG_A, scopes: ['openid'] });
-    await db.insert(oauthConsents).values({ userId: user.id, clientId: CLIENT_ID, tenantId: ORG_B, scopes: ['profile'] });
-
-    const rows = await db
-      .select({ tenantId: oauthConsents.tenantId, scopes: oauthConsents.scopes })
-      .from(oauthConsents)
-      .where(and(eq(oauthConsents.userId, user.id), eq(oauthConsents.clientId, CLIENT_ID)));
-    expect(rows).toHaveLength(2);
-
-    // The same (user, client, tenant) triple conflicts (upsert target) — proving the tenant leg is IN the key.
+    // In G1a the stricter old index still enforces single-org consent — the SAME (user,client) cannot
+    // yet coexist across two orgs (that coexistence is a G1c capability, after the old-index drop).
+    await expect(
+      db.insert(oauthConsents).values({ userId: user.id, clientId: CLIENT_ID, tenantId: ORG_B, scopes: ['profile'] }),
+    ).rejects.toThrow();
+    // Re-inserting the exact (user, client, tenant) triple also conflicts — the tenant leg is IN the new key.
     await expect(
       db.insert(oauthConsents).values({ userId: user.id, clientId: CLIENT_ID, tenantId: ORG_A, scopes: ['email'] }),
     ).rejects.toThrow();
