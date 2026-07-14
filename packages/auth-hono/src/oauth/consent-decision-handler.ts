@@ -73,11 +73,15 @@ export const createOAuthConsentDecisionHandler =
 
     // Persist the grant so subsequent authorize requests for a covered scope set skip consent.
     // Approve-only: a deny never records a grant. Absent consentStore ⇒ legacy (no persistence).
+    // ARCH-11 G1c (§4.2.5): record the grant under the org this authorize is scoped to (the tenant
+    // `sealContinuation` already derived + sealed). Under strict the adapter keys on it; under
+    // alias/shadow it is ignored (byte-identical).
     if (options.ports.consentStore && payload.userId) {
       await options.ports.consentStore.saveGrant(
         payload.userId,
         payload.clientId,
-        payload.scope.split(/\s+/).filter(Boolean)
+        payload.scope.split(/\s+/).filter(Boolean),
+        payload.tenantId ?? undefined
       );
     }
 

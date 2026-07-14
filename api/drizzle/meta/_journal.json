@@ -274,6 +274,13 @@
       "when": 1782100000000,
       "tag": "0038_arch11_tenant_data",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1782200000000,
+      "tag": "0039_arch11_drop_oauth_consents_old_unique",
+      "breakpoints": true
     }
   ]
 }
