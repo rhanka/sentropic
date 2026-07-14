@@ -27,6 +27,7 @@ import { createConsentStoreAdapter } from '../../services/auth/consent-store-ada
 import { createFederationAdapter } from '../../services/auth/federation-adapter';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
+import { createServiceTenantAdapter } from '../../services/auth/service-tenant-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 
@@ -224,6 +225,10 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
     markUsed: unsupportedOAuthPort,
   },
   oauthStateStore: createOauthStateStoreAdapter(),
+  // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint. Mode-gated
+  // on TENANT_RESOLUTION_MODE — no `tid`, no rejection in alias/shadow (byte-identical); strict
+  // validates the `tenant` selector against the client's authorized set (fixed ∪ enrollments).
+  serviceTenant: createServiceTenantAdapter(),
   // BR-39e: tenancy spine. The tenant claim (`tid`) is derived from an `approved` membership
   // and re-validated at token time; both reads are tenant-scoped to the calling user.
   tenant: {
