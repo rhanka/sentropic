@@ -110,12 +110,24 @@ export const createOAuthAuthorizeHandler =
     };
 
     // Consent persistence (optional): skip the consent screen and issue the code directly
-    // when a stored grant for the exact (user, client) covers every requested scope.
+    // when a stored grant for the exact (user, client[, tenant]) covers every requested scope.
     // `prompt=consent` ALWAYS forces the screen; coverage is a strict set-superset check,
     // so any requested scope absent from the grant re-shows consent (scope-escalation guard).
+    const authorizeTenantId = await deriveAuthorizeTenantId(
+      c,
+      options.ports,
+      validation.client.tenantId,
+      session.user.id
+    );
     const skipConsent =
       !prompts.has('consent') &&
-      (await hasCoveringGrant(options.ports, session.user.id, validation.client.clientId, validation.scope));
+      (await hasCoveringGrant(
+        options.ports,
+        session.user.id,
+        validation.client.clientId,
+        validation.scope,
+        authorizeTenantId
+      ));
 
     if (prompts.has('none')) {
       if (!skipConsent) {
@@ -135,18 +147,48 @@ export const createOAuthAuthorizeHandler =
   };
 
 /**
- * True iff `consentStore` is wired AND a stored grant for `(userId, clientId)` covers every
- * requested scope (stored ⊇ requested). No store ⇒ false (legacy always-consent). The
+ * ARCH-11 G1c (spec §4.2.5): derive the org the authorize request is scoped to. This is the SAME
+ * derivation `sealContinuation` seals into the auth code — extracted so the consent skip-check keys
+ * on the same tenant. Legacy (no tenancy spine) ⇒ the client's tenant, byte-identical to pre-G1c:
+ *  - no `tenant` port          → `clientTenantId` (legacy).
+ *  - no session user           → null (no tenant claim).
+ *  - `?tenant=` present        → honored ONLY if an approved membership, else null.
+ *  - exactly one approved org  → that org.
+ *  - 0 or >1 without selection  → null (a multi-tenant selection screen is deferred; RP re-requests).
+ */
+const deriveAuthorizeTenantId = async (
+  c: Context,
+  ports: AuthHonoPorts,
+  clientTenantId: string | null,
+  userId: string | undefined
+): Promise<string | null> => {
+  if (!ports.tenant) return clientTenantId;
+  if (!userId) return null;
+  const approved = await ports.tenant.listApprovedTenantIds(userId);
+  const requested = c.req.query('tenant') ?? null;
+  if (requested) return approved.includes(requested) ? requested : null;
+  if (approved.length === 1) return approved[0];
+  return null;
+};
+
+/**
+ * True iff `consentStore` is wired AND a stored grant for `(userId, clientId[, tenantId])` covers
+ * every requested scope (stored ⊇ requested). No store ⇒ false (legacy always-consent). The
  * superset check is the scope-escalation invariant: a single uncovered scope forces consent.
+ *
+ * ARCH-11 G1c: `tenantId` is the org the request is scoped to. Under strict the adapter keys the
+ * lookup on the tenant leg, so an org-A grant never skips consent in org-B (the §1.5 bypass fix);
+ * under alias/shadow the adapter ignores it (byte-identical).
  */
 const hasCoveringGrant = async (
   ports: AuthHonoPorts,
   userId: string,
   clientId: string,
-  requestedScope: string
+  requestedScope: string,
+  tenantId: string | null
 ): Promise<boolean> => {
   if (!ports.consentStore) return false;
-  const grant = await ports.consentStore.getGrant(userId, clientId);
+  const grant = await ports.consentStore.getGrant(userId, clientId, tenantId ?? undefined);
   if (!grant) return false;
   const granted = new Set(grant.scopes);
   const requested = requestedScope.split(/\s+/).filter(Boolean);
@@ -198,7 +240,8 @@ const resumeLoginContinuation = async (
   // re-auth resume issues the code directly instead of re-showing consent on every login. Note:
   // `prompt=consent` never sets forceReauth, so it never reaches this resume path — no consent
   // override is bypassed, and scope-escalation stays guarded by hasCoveringGrant's superset check.
-  if (await hasCoveringGrant(options.ports, session.user.id, client.clientId, scopeResult)) {
+  const resumeTenantId = await deriveAuthorizeTenantId(c, options.ports, client.tenantId, session.user.id);
+  if (await hasCoveringGrant(options.ports, session.user.id, client.clientId, scopeResult, resumeTenantId)) {
     const codePayload = await options.stateCodec.unseal(sealedState);
     if (codePayload) return issueAuthorizedCode(c, options, codePayload);
   }
@@ -311,21 +354,8 @@ const sealContinuation = async (
   // BR-39e: derive the tenant bound to this auth code from the user's VALIDATED membership,
   // never from the raw client/param. Legacy behavior (client tenant) when no tenancy spine is
   // wired. An explicit `?tenant=` selection is honored ONLY if it is an approved membership.
-  let tenantId: string | null = request.client.tenantId;
-  if (options.ports.tenant) {
-    tenantId = null;
-    if (session?.userId) {
-      const approved = await options.ports.tenant.listApprovedTenantIds(session.userId);
-      const requested = c.req.query('tenant') ?? null;
-      if (requested) {
-        tenantId = approved.includes(requested) ? requested : null;
-      } else if (approved.length === 1) {
-        tenantId = approved[0];
-      }
-      // 0 or >1 approved tenants without a valid explicit selection → no tenant claim
-      // (a multi-tenant selection screen is deferred; the RP may re-request with ?tenant=).
-    }
-  }
+  // ARCH-11 G1c: same derivation as the consent skip-check (`deriveAuthorizeTenantId`).
+  const tenantId = await deriveAuthorizeTenantId(c, options.ports, request.client.tenantId, session?.userId);
 
   return options.stateCodec.seal({
     acr: session?.acr,
