@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import { type AuthInput } from '@sentropic/llm-mesh';
 import { providerRegistry } from '../provider-registry';
 import {
   inferProviderFromModelIdWithLegacy,
@@ -24,7 +23,6 @@ import { env } from '../../config/env';
 import {
   createClaudeCodeAccountAuthInput,
   createCodexAccountAuthInput,
-  createGeminiCodeAssistAccountAuthInput,
   dispatchMeshGenerateRaw,
   dispatchMeshStreamRaw,
 } from './mesh-dispatch';
