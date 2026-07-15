@@ -172,3 +172,22 @@ export const apiKeyHeaders = (
   'content-type': 'application/json',
   ...(correlationId ? { 'x-correlation-id': correlationId } : {}),
 });
+
+/** Fixture defaults for Gemini Code Assist transport testing. */
+export interface GeminiCodeAssistFixture {
+  readonly accessToken: string;
+  readonly projectId: string;
+  readonly modelId: string;
+}
+
+/**
+ * Create a mock transport fixture for Gemini Code Assist with sensible defaults.
+ * Override any field via the optional `overrides` parameter.
+ */
+export const createGeminiCodeAssistFixture = (
+  overrides?: Partial<GeminiCodeAssistFixture>,
+): GeminiCodeAssistFixture => ({
+  accessToken: overrides?.accessToken ?? 'fake-gca-access-token-xyz',
+  projectId: overrides?.projectId ?? 'fake-gca-project-42',
+  modelId: overrides?.modelId ?? 'google/gemini-3.5-flash@gcp',
+});
