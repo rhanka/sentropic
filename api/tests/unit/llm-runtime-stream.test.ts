@@ -1205,41 +1205,52 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // GCP — Claude Sonnet 4.6 on GCP (Anthropic wire format via Vertex AI)
+  // GCP — Claude Sonnet 4.6 on GCP (Gemini SSE wire format via Vertex AI)
+  // Same candidates/parts shape as other GCP models — the runtime reuses
+  // the Gemini SSE→event mapper. Attribution prefix: `gcp_call_…` (M4).
   // -----------------------------------------------------------------------
   {
     providerId: 'gcp',
     model: 'anthropic/claude-sonnet-4-6@gcp',
     label: 'Claude Sonnet 4.6 on GCP',
     chatEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_cs1', type: 'message', role: 'assistant', content: [], model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ' GCP' } },
-      { type: 'message_stop' },
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' GCP' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
     ],
     expectedContentCount: 2,
     expectedContentDeltas: ['Hello', ' GCP'],
     toolEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_cs_t1', type: 'message', role: 'assistant', content: [], model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_gcp_cs1', name: 'search', input: {} } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"query":"test"}' } },
-      { type: 'content_block_stop', index: 0 },
-      { type: 'message_stop' },
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'test' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
     ],
     expectedTools: {
       startCount: 1,
       startName: 'search',
-      startToolCallId: 'toolu_gcp_cs1',
+      startToolCallId: 'gcp_call_1',
       startArgs: '{"query":"test"}',
       deltaCount: 0,
     },
     reasoningEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_cs_r1', type: 'message', role: 'assistant', content: [], model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'GCP sonnet thought' } },
-      { type: 'content_block_stop', index: 0 },
-      { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'GCP sonnet answer' } },
-      { type: 'message_stop' },
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'GCP sonnet thought', thought: true },
+              { text: 'GCP sonnet answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
     ],
     expectedReasoning: {
       count: 1,
@@ -1249,47 +1260,55 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       hasDone: true,
     },
     statusEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_cs_s1', type: 'message', role: 'assistant', content: [], model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'message_stop' },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
     ],
   },
 
   // -----------------------------------------------------------------------
-  // GCP — Claude Opus 4.6 on GCP (Anthropic wire format via Vertex AI)
+  // GCP — Claude Opus 4.6 on GCP (Gemini SSE wire format via Vertex AI)
   // -----------------------------------------------------------------------
   {
     providerId: 'gcp',
     model: 'anthropic/claude-opus-4-6@gcp',
     label: 'Claude Opus 4.6 on GCP',
     chatEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_co1', type: 'message', role: 'assistant', content: [], model: 'claude-opus-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ' Opus' } },
-      { type: 'message_stop' },
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' Opus' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
     ],
     expectedContentCount: 2,
     expectedContentDeltas: ['Hello', ' Opus'],
     toolEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_co_t1', type: 'message', role: 'assistant', content: [], model: 'claude-opus-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_gcp_co1', name: 'search', input: {} } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"query":"opus"}' } },
-      { type: 'content_block_stop', index: 0 },
-      { type: 'message_stop' },
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'opus' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
     ],
     expectedTools: {
       startCount: 1,
       startName: 'search',
-      startToolCallId: 'toolu_gcp_co1',
+      startToolCallId: 'gcp_call_1',
       startArgs: '{"query":"opus"}',
       deltaCount: 0,
     },
     reasoningEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_co_r1', type: 'message', role: 'assistant', content: [], model: 'claude-opus-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'GCP opus thought' } },
-      { type: 'content_block_stop', index: 0 },
-      { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'GCP opus answer' } },
-      { type: 'message_stop' },
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'GCP opus thought', thought: true },
+              { text: 'GCP opus answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
     ],
     expectedReasoning: {
       count: 1,
@@ -1299,8 +1318,7 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       hasDone: true,
     },
     statusEvents: [
-      { type: 'message_start', message: { id: 'msg_gcp_co_s1', type: 'message', role: 'assistant', content: [], model: 'claude-opus-4-6', usage: { input_tokens: 10, output_tokens: 0 } } },
-      { type: 'message_stop' },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
     ],
   },
 ];
