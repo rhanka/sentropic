@@ -7,11 +7,13 @@ import {
   type ProviderAdapter,
 } from '../src/adapters.js';
 import { createProviderRegistry } from '../src/registry.js';
-import { getProviderProfile } from '../src/catalog.js';
+import { getProviderProfile, getModelProfile } from '../src/catalog.js';
 
 const GCP_CATALOG_KEYS = [
   'google/gemini-3.5-flash@gcp',
   'google/gemini-3.1-flash-lite@gcp',
+  'anthropic/claude-sonnet-4-6@gcp',
+  'anthropic/claude-opus-4-6@gcp',
 ] as const;
 
 describe('gcp provider package surface', () => {
@@ -74,5 +76,21 @@ describe('gcp provider package surface', () => {
       ok: true,
     });
     expect(gcp.validateAuth({ type: 'none' }).ok).toBe(false);
+  });
+
+  it('exposes Claude Sonnet 4.6 and Claude Opus 4.6 as GCP-hosted Anthropic models', () => {
+    const sonnet = getModelProfile('gcp', 'anthropic/claude-sonnet-4-6@gcp');
+    const opus = getModelProfile('gcp', 'anthropic/claude-opus-4-6@gcp');
+
+    expect(sonnet).not.toBeNull();
+    expect(opus).not.toBeNull();
+
+    expect(sonnet!.label).toBe('Claude Sonnet 4.6 (GCP)');
+    expect(sonnet!.reasoningTier).toBe('advanced');
+    expect(sonnet!.capabilities.modalities.input).toContain('image');
+
+    expect(opus!.label).toBe('Claude Opus 4.6 (GCP)');
+    expect(opus!.reasoningTier).toBe('advanced');
+    expect(opus!.capabilities.modalities.input).toContain('image');
   });
 });
