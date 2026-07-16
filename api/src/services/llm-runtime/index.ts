@@ -13,6 +13,7 @@ import {
   getOpenAITransportMode,
   resolveConnectedClaudeCodeTransport,
   resolveConnectedCodexTransport,
+  resolveConnectedGeminiCodeAssistTransport,
 } from '../provider-connections';
 import { isProviderId, type ProviderId } from '../provider-runtime';
 import { parseGcpModelId } from '../providers/gcp-provider';
@@ -933,6 +934,31 @@ const mapClaudeReasoningParams = (
   };
 };
 
+const isAnthropicGcpModel = (modelId: string): boolean => {
+  return modelId.startsWith('anthropic/') && modelId.endsWith('@gcp');
+};
+
+const mapAnthropicModelToGcp = (modelId: string): string => {
+  if (modelId.includes('opus')) {
+    return 'claude-opus-4-6';
+  }
+  return 'claude-sonnet-4-6';
+};
+
+const mapModelToGcp = (providerId: string, modelId: string): string => {
+  if (providerId === 'anthropic' || isAnthropicGcpModel(modelId)) {
+    return mapAnthropicModelToGcp(modelId);
+  }
+  if (modelId.startsWith('google/') && modelId.endsWith('@gcp')) {
+    const base = modelId.replace('google/', '').replace('@gcp', '');
+    if (modelId.includes('flash-lite')) {
+      return 'gemini-3.1-flash-lite';
+    }
+    return base;
+  }
+  return modelId;
+};
+
 /**
  * Méthode unique pour tous les appels OpenAI (non-streaming)
  */
@@ -970,6 +996,26 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   // Structured output routing constraint: warn if provider does not support structured output
   if (!capabilities.supportsStructuredOutput && responseFormat) {
     console.warn(`[llm-runtime] Provider ${selection.providerId} does not support structured output — responseFormat ignored`);
+  }
+
+  const anthropicTransportModeNonStream = await getAnthropicTransportMode();
+  const geminiCodeAssistTransportNonStream =
+    typeof userId === 'string' &&
+    userId.trim().length > 0 &&
+    credentialResolution.source === 'none' &&
+    (anthropicTransportModeNonStream === 'gemini-code-assist' || selection.providerId === 'gemini' || selection.providerId === 'gcp')
+      ? await resolveConnectedGeminiCodeAssistTransport(userId, {
+          workspaceId,
+          modelId: selection.model,
+          requestId: createId(),
+        })
+      : null;
+
+  if (geminiCodeAssistTransportNonStream) {
+    selection.providerId = 'gcp' as ProviderId;
+    selection.model = mapModelToGcp(selection.providerId, selection.model);
+    credentialResolution.credential = geminiCodeAssistTransportNonStream.accessToken;
+    credentialResolution.source = 'request_override';
   }
 
   if (!capabilities.supportsStreaming) {
@@ -1343,6 +1389,27 @@ export async function* callLLMStream(
           requestId: createId(),
         })
       : null;
+
+  const anthropicTransportMode = await getAnthropicTransportMode();
+  const geminiCodeAssistTransport =
+    typeof userId === 'string' &&
+    userId.trim().length > 0 &&
+    credentialResolution.source === 'none' &&
+    (anthropicTransportMode === 'gemini-code-assist' || selection.providerId === 'gemini' || selection.providerId === 'gcp')
+      ? await resolveConnectedGeminiCodeAssistTransport(userId, {
+          workspaceId,
+          modelId: selection.model,
+          affinityKey: sessionId ? `chat_session:${sessionId}` : undefined,
+          requestId: createId(),
+        })
+      : null;
+
+  if (geminiCodeAssistTransport) {
+    selection.providerId = 'gcp' as ProviderId;
+    selection.model = mapModelToGcp(selection.providerId, selection.model);
+    credentialResolution.credential = geminiCodeAssistTransport.accessToken;
+    credentialResolution.source = 'request_override';
+  }
 
   if (!capabilities.supportsStreaming) {
     throw new Error(`Provider ${selection.providerId} does not support streaming`);

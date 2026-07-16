@@ -11,6 +11,7 @@ import {
 } from './codex-provider-auth';
 import {
   acquireClaudeCodeAccountTransport,
+  acquireGeminiCodeAssistAccountTransport,
   acquireOpenAICodexAccountTransport,
   disconnectClaudeCodeAccountTransports,
   disconnectCodexAccountTransports,
@@ -20,6 +21,7 @@ import {
   storeCodexAccountTransport,
   type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
+  type GeminiCodeAssistAccountTransportAcquisition,
   type LlmAccountTransportPublic,
 } from './llm-account-transports';
 import {
@@ -280,6 +282,24 @@ export const resolveConnectedClaudeCodeTransport = async (
   });
 };
 
+export const resolveConnectedGeminiCodeAssistTransport = async (
+  userId: string,
+  options: {
+    workspaceId?: string | null;
+    modelId: string;
+    affinityKey?: string | null;
+    requestId?: string | null;
+  },
+): Promise<GeminiCodeAssistAccountTransportAcquisition | null> => {
+  return acquireGeminiCodeAssistAccountTransport({
+    userId,
+    workspaceId: options.workspaceId,
+    modelId: options.modelId,
+    affinityKey: options.affinityKey,
+    requestId: options.requestId,
+  });
+};
+
 export const getOpenAITransportMode = async (): Promise<'codex' | 'token'> =>
   normalizeText(
     await settingsService.get(OPENAI_TRANSPORT_MODE_SETTING_KEY, { fallbackToGlobal: true }),
@@ -299,21 +319,23 @@ export const setOpenAITransportMode = async (
   return normalized;
 };
 
-export const getAnthropicTransportMode = async (): Promise<'claude-code' | 'token'> =>
-  normalizeText(
+export const getAnthropicTransportMode = async (): Promise<'claude-code' | 'gemini-code-assist' | 'token'> => {
+  const raw = normalizeText(
     await settingsService.get(ANTHROPIC_TRANSPORT_MODE_SETTING_KEY, { fallbackToGlobal: true }),
-  ).toLowerCase() === 'claude-code'
-    ? 'claude-code'
-    : 'token';
+  ).toLowerCase();
+  if (raw === 'claude-code') return 'claude-code';
+  if (raw === 'gemini-code-assist') return 'gemini-code-assist';
+  return 'token';
+};
 
 export const setAnthropicTransportMode = async (
-  mode: 'claude-code' | 'token',
-): Promise<'claude-code' | 'token'> => {
-  const normalized = mode === 'claude-code' ? 'claude-code' : 'token';
+  mode: 'claude-code' | 'gemini-code-assist' | 'token',
+): Promise<'claude-code' | 'gemini-code-assist' | 'token'> => {
+  const normalized = mode === 'claude-code' ? 'claude-code' : mode === 'gemini-code-assist' ? 'gemini-code-assist' : 'token';
   await settingsService.set(
     ANTHROPIC_TRANSPORT_MODE_SETTING_KEY,
     normalized,
-    'Anthropic runtime source mode (`token` or `claude-code`).',
+    'Anthropic runtime source mode (`token`, `claude-code`, or `gemini-code-assist`).',
   );
   return normalized;
 };

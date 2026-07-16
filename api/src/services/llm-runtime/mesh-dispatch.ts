@@ -440,3 +440,18 @@ export const createClaudeCodeAccountAuthInput = (
     },
   },
 });
+
+export const createGeminiCodeAssistAccountAuthInput = (
+  transport: { accessToken: string; accountId?: string | null; accountLabel?: string | null; stableSessionId?: string | null },
+): SecretAuthMaterial => ({
+  type: 'account-transport',
+  provider: 'gemini-code-assist',
+  accessToken: transport.accessToken,
+  accountId: transport.accountId ?? null,
+  ...(transport.accountLabel ? { accountLabel: transport.accountLabel } : {}),
+  descriptor: {
+    metadata: {
+      transportSessionId: transport.stableSessionId ?? null,
+    },
+  },
+});
