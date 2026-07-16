@@ -28,6 +28,7 @@ import type { CostContext } from './ports/cost-context.js';
 import type {
   GatewayDispatchRequest,
   GatewayDispatchResponse,
+  GatewayDispatchStream,
   GatewayDispatchStreamEvent,
   GatewayWire,
   ProviderResponseHeaders,
@@ -204,7 +205,8 @@ const reacquire = async (
     modelId: prev.target.model,
     workspaceId: prev.cost.workspaceId ?? null,
     userId: prev.cost.principalId,
-    affinityKey: prev.cost.correlationId,
+    // Omit affinityKey: bypass the sticky lease (the leased account is on
+    // cooldown) so the coordinator selects a FRESH active account.
     requestId: prev.cost.correlationId,
   };
 
