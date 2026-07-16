@@ -47,6 +47,18 @@ export class GatewayError extends Error {
   }
 }
 
+/**
+ * Typed signal thrown by the transport layer when the upstream provider returns
+ * HTTP 429. The flow layer catches this to drive retry-with-rotation. This is
+ * NOT a `GatewayError` — it is an INTERNAL signal, never surfaced to callers.
+ */
+export class ProviderRateLimitError extends Error {
+  constructor(readonly retryAfterMs?: number) {
+    super('upstream provider returned 429 (rate limited)');
+    this.name = 'ProviderRateLimitError';
+  }
+}
+
 export const anthropicError = (
   status: number,
   type: string,
