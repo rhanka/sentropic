@@ -105,4 +105,84 @@ describe('InMemoryAccountTransportCoordinator', () => {
       }),
     ).rejects.toBeInstanceOf(AccountTransportAcquireError);
   });
+
+  it('auto-recovers a rate-limited account after cooldown expires', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator([accounts[0]]);
+
+    const first = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      workspaceId: 'ws_1',
+      affinityKey: 'chat_session:a',
+      requestId: 'req_1',
+      now: '2026-06-16T12:00:00.000Z',
+    });
+
+    // Record rate_limited with a 5-second cooldown
+    await first.recordOutcome({
+      status: 'rate_limited',
+      retryAfterMs: 5000,
+      finishedAt: '2026-06-16T12:00:00.000Z',
+    });
+
+    // During cooldown: no eligible account
+    await expect(
+      coordinator.acquire({
+        targetProviderId: 'openai',
+        transportProviderId: 'codex',
+        modelId: 'gpt-5.5',
+        workspaceId: 'ws_1',
+        affinityKey: 'chat_session:b',
+        requestId: 'req_2',
+        now: '2026-06-16T12:00:03.000Z', // 3s later, still in cooldown
+      }),
+    ).rejects.toBeInstanceOf(AccountTransportAcquireError);
+
+    // After cooldown: account recovers
+    const recovered = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      workspaceId: 'ws_1',
+      affinityKey: 'chat_session:c',
+      requestId: 'req_3',
+      now: '2026-06-16T12:00:06.000Z', // 6s later, cooldown expired
+    });
+
+    expect(recovered.lease.accountId).toBe('codex-a');
+  });
+
+  it('rotates to next account when one is rate-limited', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator(accounts);
+
+    const first = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      workspaceId: 'ws_1',
+      affinityKey: 'chat_session:a',
+      requestId: 'req_1',
+      now: '2026-06-16T12:00:00.000Z',
+    });
+
+    await first.recordOutcome({
+      status: 'rate_limited',
+      retryAfterMs: 60000,
+      finishedAt: '2026-06-16T12:00:00.000Z',
+    });
+
+    // Next acquire should get a different account (rotation)
+    const second = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      workspaceId: 'ws_1',
+      affinityKey: 'chat_session:b',
+      requestId: 'req_2',
+      now: '2026-06-16T12:00:01.000Z',
+    });
+
+    expect(second.lease.accountId).not.toBe(first.lease.accountId);
+  });
 });
