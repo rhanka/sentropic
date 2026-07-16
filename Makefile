@@ -2836,6 +2836,18 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	DS_AK=$$(get DOC_STORAGE_ACCESS_KEY) ; DS_SK=$$(get DOC_STORAGE_SECRET_KEY) ; DS_BK=$$(get DOC_STORAGE_BUCKET) ; \
 	DS_EP=$$(get DOC_STORAGE_ENDPOINT) ; DS_RG=$$(get DOC_STORAGE_REGION) ; \
 	SCW_TEM=$$(get SCW_TEM_SECRET_KEY) ; OAUTH_KEK=$$(get OAUTH_SIGNING_KEK) ; \
+	GOA_CID=$$(get GOOGLE_OAUTH_CLIENT_ID) ; GOA_CS=$$(get GOOGLE_OAUTH_CLIENT_SECRET) ; \
+	GOA_RU=$$(get GOOGLE_OAUTH_REDIRECT_URI) ; \
+	GHOA_CID=$$(get GITHUB_OAUTH_CLIENT_ID) ; GHOA_CS=$$(get GITHUB_OAUTH_CLIENT_SECRET) ; \
+	GHOA_RU=$$(get GITHUB_OAUTH_REDIRECT_URI) ; \
+	MSOA_CID=$$(get MICROSOFT_OAUTH_CLIENT_ID) ; MSOA_CS=$$(get MICROSOFT_OAUTH_CLIENT_SECRET) ; \
+	MSOA_RU=$$(get MICROSOFT_OAUTH_REDIRECT_URI) ; MSOA_TENANT=$$(get MICROSOFT_OAUTH_TENANT) ; \
+	APOA_CID=$$(get APPLE_OAUTH_CLIENT_ID) ; APOA_TEAM=$$(get APPLE_TEAM_ID) ; APOA_KEY=$$(get APPLE_KEY_ID) ; \
+	APOA_RU=$$(get APPLE_OAUTH_REDIRECT_URI) ; \
+	APOA_PK_B64=$$(get APPLE_PRIVATE_KEY_B64) ; \
+	APOA_PK=$$(printf '%s' "$$APOA_PK_B64" | base64 -d; printf x) ; APOA_PK=$${APOA_PK%x} ; \
+	FBOA_CID=$$(get FACEBOOK_OAUTH_CLIENT_ID) ; FBOA_CS=$$(get FACEBOOK_OAUTH_CLIENT_SECRET) ; \
+	FBOA_RU=$$(get FACEBOOK_OAUTH_REDIRECT_URI) ; \
 	DATABASE_URL=$$(get DATABASE_URL) ; [ -n "$$DATABASE_URL" ] || DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-api \
 	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
@@ -2856,6 +2868,24 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
 	  --from-literal=SCW_TEM_SECRET_KEY="$$SCW_TEM" \
 	  --from-literal=OAUTH_SIGNING_KEK="$$OAUTH_KEK" \
+	  --from-literal=GOOGLE_OAUTH_CLIENT_ID="$$GOA_CID" \
+	  --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="$$GOA_CS" \
+	  --from-literal=GOOGLE_OAUTH_REDIRECT_URI="$$GOA_RU" \
+	  --from-literal=GITHUB_OAUTH_CLIENT_ID="$$GHOA_CID" \
+	  --from-literal=GITHUB_OAUTH_CLIENT_SECRET="$$GHOA_CS" \
+	  --from-literal=GITHUB_OAUTH_REDIRECT_URI="$$GHOA_RU" \
+	  --from-literal=MICROSOFT_OAUTH_CLIENT_ID="$$MSOA_CID" \
+	  --from-literal=MICROSOFT_OAUTH_CLIENT_SECRET="$$MSOA_CS" \
+	  --from-literal=MICROSOFT_OAUTH_REDIRECT_URI="$$MSOA_RU" \
+	  --from-literal=MICROSOFT_OAUTH_TENANT="$$MSOA_TENANT" \
+	  --from-literal=APPLE_OAUTH_CLIENT_ID="$$APOA_CID" \
+	  --from-literal=APPLE_TEAM_ID="$$APOA_TEAM" \
+	  --from-literal=APPLE_KEY_ID="$$APOA_KEY" \
+	  --from-literal=APPLE_PRIVATE_KEY="$$APOA_PK" \
+	  --from-literal=APPLE_OAUTH_REDIRECT_URI="$$APOA_RU" \
+	  --from-literal=FACEBOOK_OAUTH_CLIENT_ID="$$FBOA_CID" \
+	  --from-literal=FACEBOOK_OAUTH_CLIENT_SECRET="$$FBOA_CS" \
+	  --from-literal=FACEBOOK_OAUTH_REDIRECT_URI="$$FBOA_RU" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	S3_AK=$$(get S3_ACCESS_KEY) ; S3_SK=$$(get S3_SECRET_KEY) ; S3_BK=$$(get S3_BUCKET) ; \
 	S3_EP=$$(get S3_ENDPOINT) ; S3_RG=$$(get S3_REGION) ; \
