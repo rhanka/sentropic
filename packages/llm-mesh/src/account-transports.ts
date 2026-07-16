@@ -85,6 +85,11 @@ export interface AccountTransportAcquisition {
   recordOutcome(outcome: AccountTransportOutcome): Promise<void>;
 }
 
+/**
+ * Coordinator that manages account selection, leasing, and cooldown lifecycle.
+ * Implementations MUST expire cooldowns (transition `cooldown → active` when
+ * `cooldownUntil` has passed) atomically before eligibility checks in `acquire()`.
+ */
 export interface AccountTransportCoordinator {
   acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition>;
 }
@@ -115,6 +120,8 @@ interface StoredReservation extends AccountTransportReservation {
 }
 
 const DEFAULT_RESERVATION_TTL_MS = 5 * 60 * 1000;
+/** Default cooldown when rate_limited outcome has no retryAfterMs (60 seconds). */
+const DEFAULT_COOLDOWN_MS = 60_000;
 
 const toDate = (value: Date | string | number | undefined): Date => {
   if (value instanceof Date) {
@@ -399,10 +406,11 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
 
     if (outcome.status === 'rate_limited') {
       account.status = 'cooldown';
-      if (typeof outcome.retryAfterMs === 'number' && outcome.retryAfterMs > 0) {
-        const finishedAt = toDate(outcome.finishedAt);
-        account.cooldownUntil = new Date(finishedAt.getTime() + outcome.retryAfterMs).toISOString();
-      }
+      const retryMs = typeof outcome.retryAfterMs === 'number' && outcome.retryAfterMs > 0
+        ? outcome.retryAfterMs
+        : DEFAULT_COOLDOWN_MS;
+      const finishedAt = toDate(outcome.finishedAt);
+      account.cooldownUntil = new Date(finishedAt.getTime() + retryMs).toISOString();
     }
   }
 }
