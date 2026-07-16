@@ -26,6 +26,8 @@ import { openAiErrorChunk, openAiStreamChunks } from './openai.js';
 export interface FixtureTransportOptions {
   /** Non-stream response to return from `send`. */
   readonly jsonResponse?: GatewayDispatchResponse;
+  /** Sequence of JSON responses — each call to `send` pops the next one. When exhausted, falls back to `jsonResponse`. */
+  readonly jsonResponseSequence?: readonly GatewayDispatchResponse[];
   /** Pre-framed SSE frames to yield from `sendStream` (provider-native, incl. its own [DONE]). */
   readonly streamFrames?: readonly string[];
   /** Provider response headers returned by `send` / `sendStream` (#4 passthrough). */
@@ -45,12 +47,21 @@ export class FixtureTransport implements ProviderTransport {
   /** Records every credential the gateway swapped in (for redaction/swap asserts). */
   readonly seenMaterials: ProviderTransportRequest['material'][] = [];
   readonly seenBodies: unknown[] = [];
+  private jsonCallIndex = 0;
 
   constructor(private readonly options: FixtureTransportOptions = {}) {}
 
   async send(request: ProviderTransportRequest): Promise<GatewayDispatchResponse> {
     this.seenMaterials.push(request.material);
     this.seenBodies.push(request.body);
+    const sequence = this.options.jsonResponseSequence;
+    if (sequence && this.jsonCallIndex < sequence.length) {
+      const resp = sequence[this.jsonCallIndex];
+      this.jsonCallIndex++;
+      return this.options.responseHeaders
+        ? { ...resp, headers: this.options.responseHeaders }
+        : resp;
+    }
     const base = this.options.jsonResponse ?? { status: 200, body: { ok: true } };
     return this.options.responseHeaders
       ? { ...base, headers: this.options.responseHeaders }
