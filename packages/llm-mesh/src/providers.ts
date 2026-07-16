@@ -39,6 +39,8 @@ export const knownModelIds = [
   // what routes the id to provider `gcp`.
   'google/gemini-3.5-flash@gcp',
   'google/gemini-3.1-flash-lite@gcp',
+  'anthropic/claude-sonnet-4-6@gcp',
+  'anthropic/claude-opus-4-6@gcp',
   // Local provider: an OpenAI-compatible endpoint on the host (e.g. the
   // Laneformer 2B sidecar on 127.0.0.1:8089). The wire format is OpenAI; the
   // baseURL/transport is configured in the api/gateway layer (the package stays
@@ -65,7 +67,7 @@ export const knownModelIdsByProvider = {
   anthropic: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-fable-5'],
   mistral: ['mistral-small-2603', 'magistral-medium-2509'],
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
-  gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp'],
+  gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],
   local: ['laneformer-2b-it'],
 } as const satisfies Record<ProviderId, readonly KnownModelId[]>;
 

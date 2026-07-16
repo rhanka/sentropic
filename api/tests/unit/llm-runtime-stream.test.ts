@@ -1203,6 +1203,124 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       },
     ],
   },
+
+  // -----------------------------------------------------------------------
+  // GCP — Claude Sonnet 4.6 on GCP (Gemini SSE wire format via Vertex AI)
+  // Same candidates/parts shape as other GCP models — the runtime reuses
+  // the Gemini SSE→event mapper. Attribution prefix: `gcp_call_…` (M4).
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'gcp',
+    model: 'anthropic/claude-sonnet-4-6@gcp',
+    label: 'Claude Sonnet 4.6 on GCP',
+    chatEvents: [
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' GCP' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' GCP'],
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'test' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'gcp_call_1',
+      startArgs: '{"query":"test"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'GCP sonnet thought', thought: true },
+              { text: 'GCP sonnet answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['GCP sonnet thought'],
+      contentCount: 1,
+      contentDeltas: ['GCP sonnet answer'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
+  // GCP — Claude Opus 4.6 on GCP (Gemini SSE wire format via Vertex AI)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'gcp',
+    model: 'anthropic/claude-opus-4-6@gcp',
+    label: 'Claude Opus 4.6 on GCP',
+    chatEvents: [
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' Opus' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' Opus'],
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'opus' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'gcp_call_1',
+      startArgs: '{"query":"opus"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'GCP opus thought', thought: true },
+              { text: 'GCP opus answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['GCP opus thought'],
+      contentCount: 1,
+      contentDeltas: ['GCP opus answer'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
