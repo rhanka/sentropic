@@ -3,6 +3,7 @@
 Status: **FROZEN / CONSOLIDATED (2026-07-11)** — this study is now the **locked reference** for the Universal Connector & Account Broker. Its owner decisions are ratified and no longer churn here; new work spawns dedicated `SPEC_EVOL_*` documents, not edits to this study.
 - **First derived EVOL:** `spec/SPEC_EVOL_BANK_CONNECTOR.md` (bank/financial connector — double-consensus Opus 4.8xhigh + Codex 5.5xhigh, owner-ratified B1-b/B4/B5-b/B6-a, merged in PR #396). It instantiates the broker pattern with the `operator`-secret custody tier + the multi-ERP egress model.
 - **Remaining foundations** (ARCH-11 tenant reconciliation, the canonical `AccessGrant` primitive, h2a↔Sentropic sync, P5 registry residence) stay tracked as their **own workstreams** — this study records them as open (§2/§3/§10), it is not re-opened to resolve them.
+- **Amendment 2026-07-15 (owner-requested, catalog-strategy only):** §8.3 records the external benchmark-source corpus (adds OOMOL `open-connector` as a **taxonomy-only** benchmark) and names the derived **BR-72 connector capability benchmark matrix** (WP-CATALOG). This is a source/strategy record inside the study's own §8 catalog-strategy scope, not a re-opening of the ratified design; the BR-72 matrix itself is the separate deliverable.
 Review state: Codex adversarial review reconciled (NEEDS-REVISION → incorporated). Opus re-run remains due only at the irreversible EVOL/API-freeze gate of each derived EVOL (the bank EVOL cleared that gate with a full double-consensus).
 Owner decisions incorporated (2026-07-06): AccessGrant=policy/index referencing lifecycle records; handle-first custody with raw-secret mirroring banned by default; allow early same-human h2a-local descriptor/human-mediated subset; catalog wave = Wave(read-only) → npm → GitHub/Google → cloud/FinOps.
 Owner intent: make Sentropic + h2a a universal, secure broker for connectors and accounts across all CLIs and agents.
@@ -444,13 +445,54 @@ Rationale and constraints:
 - Cloud/FinOps connectors next because they validate least-privilege and cost observability, but custody risk is higher, so they should follow the simpler proofs.
 - Long-tail SaaS after the adapter/enrollment/grant/sync pattern is proven.
 
-### 8.3 Claude.ai MCP catalog reuse
+### 8.3 External catalog / connector benchmark sources
 
-If a connector is already available as MCP in Claude.ai ecosystem, prefer wrapping/importing its MCP surface through the broker rather than reimplementing from scratch, subject to:
+The broker catalog should be grounded against existing connector ecosystems before Sentropic invents
+new connector shapes. Benchmark sources are **input corpora only unless separately qualified**; they
+are not automatic runtime dependencies, vendored code, or implementation queues. Sentropic-owned
+connectors are recoded against the Sentropic MCP platform contracts.
+
+Source corpus:
+
+- **Claude.ai MCP catalog / ecosystem** — if a connector is already available as MCP, it may be a
+  wrap/import candidate through the broker **only** when license/ToS, custody, stable identity and
+  audit/trace checks pass. This is an MCP-surface reuse option, not a blanket adoption rule.
+- **OOMOL open-connector** — `https://github.com/oomol-lab/open-connector` is a BR-72/WP-CATALOG
+  **benchmark/taxonomy corpus only** (owner clarification 2026-07-15). Use it to harvest a broad
+  practical connector and function/resource taxonomy and compare it against the Sentropic
+  `AppCapability`, `CapabilityResource`, `CapabilityTool`, `ConnectorSecretRequirement.scope`
+  (including `operator` vs per-org custody) and `ResourceRef` / `discover-read-invoke` vocabulary.
+  It is **not** a dependency, vendored source, wrapper target, import plan, runtime adapter target,
+  or implementation queue. Any Sentropic connector inspired by the benchmark must be recoded
+  independently against Sentropic-owned MCP platform contracts after license/ToS/custody review.
+
+**BR-72 connector capability benchmark matrix (WP-CATALOG deliverable, non-product/non-implementation).**
+Before expanding beyond the first-wave catalog, produce a matrix over the external corpus. Rows are
+external connectors/functions/resources. Columns:
+
+- Sentropic `AppCapability` classification;
+- `CapabilityResource` mapping;
+- `CapabilityTool` mapping;
+- `ConnectorSecretRequirement.scope` (incl. `operator`, principal, tenant/workspace, per-org custody);
+- `ResourceRef` / `discover` / `read` / `invoke` mapping;
+- custody class and raw-secret boundary expectations;
+- audit/trace feasibility;
+- license/ToS status;
+- adoption disposition.
+
+Disposition vocabulary is **source-specific**:
+
+- Claude.ai MCP ecosystem rows may use `{wrap/import, adapter candidate, defer, reject}` only when the
+  review permits runtime reuse.
+- OOMOL rows must use taxonomy-only dispositions: `{taxonomy reference, gap identified,
+  Sentropic-owned adapter candidate, defer, reject}`. **`wrap/import` is not permitted for OOMOL rows.**
+
+Per-source adoption checks:
 
 - license and ToS review;
 - stable connector IDs;
 - capability classification;
+- function/resource mapping to Sentropic MCP platform contracts;
 - secret custody compatibility;
 - audit/trace compatibility;
 - deny-as-missing projection.
@@ -464,6 +506,7 @@ If a connector is already available as MCP in Claude.ai ecosystem, prefer wrappi
 - Ratify `@sentropic/mcp-platform` public API surface with broker-aware freeze.
 - Define h2a sync event envelope and threat model.
 - Define 2FA/elicitation reuse contract.
+- Produce the BR-72 connector capability benchmark matrix (§8.3) from the external corpus (including OOMOL `open-connector`) before expanding beyond the first-wave catalog; the matrix guides Sentropic-owned recoding, never reuse/wrapping of OOMOL implementations.
 
 ### Phase 1 — Mono-principal broker + safe local-agent subset
 
