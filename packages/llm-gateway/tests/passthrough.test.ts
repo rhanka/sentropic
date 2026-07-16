@@ -98,9 +98,12 @@ describe('faithful non-stream passthrough', () => {
     });
 
     expect(res.status).toBe(429);
-    // The metering sink should record 'rate_limited', not 'failed'
-    expect(metering.settlements).toHaveLength(1);
-    expect(metering.last?.outcome).toBe('rate_limited');
+    // With retry-with-rotation, both pool accounts are tried (and both return 429).
+    // The pool has 2 Claude-Code accounts: first settles rate_limited, retry
+    // rotates to the second which also gets 429 and settles rate_limited.
+    expect(metering.settlements).toHaveLength(2);
+    expect(metering.settlements[0].outcome).toBe('rate_limited');
+    expect(metering.settlements[1].outcome).toBe('rate_limited');
   });
 });
 
@@ -368,5 +371,62 @@ describe('settlement + metering hook (spec §5)', () => {
     }
     // The account view exposes only a gateway-local opaque correlation id.
     expect(metering.last?.account.correlationId.startsWith('gw_')).toBe(true);
+  });
+});
+
+describe('retry-with-rotation on 429 (pre-stream)', () => {
+  it('retries with a different account on 429 pre-stream (JSON path)', async () => {
+    const transport = new FixtureTransport({
+      jsonResponseSequence: [
+        // First call: 429
+        {
+          status: 429,
+          body: { type: 'error', error: { type: 'rate_limit_error', message: 'rate limited' } },
+        },
+        // Second call (after rotation): 200
+        { status: 200, body: anthropicMessageResponse },
+      ],
+    });
+    const { app, metering } = buildHarness({ transport });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+
+    // Should succeed after retry
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual(anthropicMessageResponse);
+    // Transport was called twice (429 + 200)
+    expect(transport.seenMaterials).toHaveLength(2);
+    // Metering should have two records: rate_limited + success
+    expect(metering.settlements).toHaveLength(2);
+    expect(metering.settlements[0].outcome).toBe('rate_limited');
+    expect(metering.settlements[1].outcome).toBe('success');
+  });
+
+  it('returns 429 after pool exhausted on repeated 429s', async () => {
+    const transport = new FixtureTransport({
+      jsonResponseSequence: [
+        { status: 429, body: { type: 'error', error: { type: 'rate_limit_error', message: 'rate limited' } } },
+        { status: 429, body: { type: 'error', error: { type: 'rate_limit_error', message: 'rate limited' } } },
+        { status: 429, body: { type: 'error', error: { type: 'rate_limit_error', message: 'rate limited' } } },
+      ],
+    });
+    const { app } = buildHarness({ transport });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+
+    // With a 2-account pool: first 429 rotates to the second, second 429 exhausts
+    // the pool (both on cooldown), returns the 429.
+    expect(res.status).toBe(429);
+    // Both accounts were tried.
+    expect(transport.seenMaterials).toHaveLength(2);
   });
 });
