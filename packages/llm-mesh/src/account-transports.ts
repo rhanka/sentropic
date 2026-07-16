@@ -195,6 +195,7 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
   async acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition> {
     const now = toDate(input.now);
     this.releaseExpiredReservations(now);
+    this.expireCooldowns(now);
 
     const leaseKey = buildLeaseKey(input);
     const existingLease = leaseKey ? this.leases.get(leaseKey) : undefined;
@@ -309,12 +310,11 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
   private isEligible(
     account: StoredAccount,
     input: AccountTransportAcquireInput,
-    now: Date,
+    _now: Date,
   ): boolean {
     return account.targetProviderId === input.targetProviderId
       && account.transportProviderId === input.transportProviderId
       && account.status === 'active'
-      && !isCooldownActive(account, now)
       && supportsModel(account, input.modelId);
   }
 
@@ -378,6 +378,15 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     for (const reservation of this.reservations.values()) {
       if (reservation.expiresAtMs <= now.getTime()) {
         this.reservations.delete(reservation.reservationId);
+      }
+    }
+  }
+
+  private expireCooldowns(now: Date): void {
+    for (const account of this.accounts.values()) {
+      if (account.status === 'cooldown' && !isCooldownActive(account, now)) {
+        account.status = 'active';
+        account.cooldownUntil = undefined;
       }
     }
   }
