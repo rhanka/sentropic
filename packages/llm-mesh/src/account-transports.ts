@@ -85,6 +85,11 @@ export interface AccountTransportAcquisition {
   recordOutcome(outcome: AccountTransportOutcome): Promise<void>;
 }
 
+/**
+ * Coordinator that manages account selection, leasing, and cooldown lifecycle.
+ * Implementations MUST expire cooldowns (transition `cooldown → active` when
+ * `cooldownUntil` has passed) atomically before eligibility checks in `acquire()`.
+ */
 export interface AccountTransportCoordinator {
   acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition>;
 }
@@ -115,6 +120,8 @@ interface StoredReservation extends AccountTransportReservation {
 }
 
 const DEFAULT_RESERVATION_TTL_MS = 5 * 60 * 1000;
+/** Default cooldown when rate_limited outcome has no retryAfterMs (60 seconds). */
+const DEFAULT_COOLDOWN_MS = 60_000;
 
 const toDate = (value: Date | string | number | undefined): Date => {
   if (value instanceof Date) {
@@ -195,6 +202,7 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
   async acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition> {
     const now = toDate(input.now);
     this.releaseExpiredReservations(now);
+    this.expireCooldowns(now);
 
     const leaseKey = buildLeaseKey(input);
     const existingLease = leaseKey ? this.leases.get(leaseKey) : undefined;
@@ -309,12 +317,11 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
   private isEligible(
     account: StoredAccount,
     input: AccountTransportAcquireInput,
-    now: Date,
+    _now: Date,
   ): boolean {
     return account.targetProviderId === input.targetProviderId
       && account.transportProviderId === input.transportProviderId
       && account.status === 'active'
-      && !isCooldownActive(account, now)
       && supportsModel(account, input.modelId);
   }
 
@@ -382,6 +389,15 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     }
   }
 
+  private expireCooldowns(now: Date): void {
+    for (const account of this.accounts.values()) {
+      if (account.status === 'cooldown' && !isCooldownActive(account, now)) {
+        account.status = 'active';
+        account.cooldownUntil = undefined;
+      }
+    }
+  }
+
   private applyOutcome(account: StoredAccount, outcome: AccountTransportOutcome): void {
     if (outcome.status === 'auth_failed') {
       account.status = 'reauth_required';
@@ -390,10 +406,11 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
 
     if (outcome.status === 'rate_limited') {
       account.status = 'cooldown';
-      if (typeof outcome.retryAfterMs === 'number' && outcome.retryAfterMs > 0) {
-        const finishedAt = toDate(outcome.finishedAt);
-        account.cooldownUntil = new Date(finishedAt.getTime() + outcome.retryAfterMs).toISOString();
-      }
+      const retryMs = typeof outcome.retryAfterMs === 'number' && outcome.retryAfterMs > 0
+        ? outcome.retryAfterMs
+        : DEFAULT_COOLDOWN_MS;
+      const finishedAt = toDate(outcome.finishedAt);
+      account.cooldownUntil = new Date(finishedAt.getTime() + retryMs).toISOString();
     }
   }
 }
