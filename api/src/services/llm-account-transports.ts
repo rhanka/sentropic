@@ -45,6 +45,7 @@ export type LlmAccountTransportAcquisition = {
 
 export type CodexAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type ClaudeCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
+export type GeminiCodeAssistAccountTransportAcquisition = LlmAccountTransportAcquisition;
 
 export type LlmAccountTransportOutcomeInput = {
   status: 'success' | 'failed' | 'rate_limited' | 'auth_failed';
@@ -77,6 +78,17 @@ export type ClaudeCodeTokenSecretPayload = {
   profile: Record<string, unknown> | null;
 };
 
+export type GeminiCodeAssistTokenSecretPayload = {
+  accessToken: string;
+  refreshToken: string | null;
+  tokenType: 'bearer';
+  obtainedAt: string;
+  expiresAt: string | null;
+  source: 'gemini-code-assist-import' | 'gemini-code-assist-refresh';
+  clientId: string | null;
+  profile: Record<string, unknown> | null;
+};
+
 type AccountSelectionRow = {
   account_id: string;
   external_account_id: string | null;
@@ -104,6 +116,8 @@ const CODEX_TARGET_PROVIDER_ID = 'openai';
 const CODEX_TRANSPORT_PROVIDER_ID = 'codex';
 const CLAUDE_CODE_TARGET_PROVIDER_ID = 'anthropic';
 const CLAUDE_CODE_TRANSPORT_PROVIDER_ID = 'claude-code';
+const GEMINI_CODE_ASSIST_TARGET_PROVIDER_ID = 'gcp';
+const GEMINI_CODE_ASSIST_TRANSPORT_PROVIDER_ID = 'gemini-code-assist';
 const RESERVATION_TTL_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 
@@ -222,6 +236,33 @@ const parseClaudeCodeTokenSecret = (
       clientId: normalizeOptionalText(parsed.clientId),
       subscriptionType: normalizeOptionalText(parsed.subscriptionType),
       rateLimitTier: normalizeOptionalText(parsed.rateLimitTier),
+      profile:
+        parsed.profile && typeof parsed.profile === 'object' && !Array.isArray(parsed.profile)
+          ? parsed.profile as Record<string, unknown>
+          : null,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const parseGeminiCodeAssistTokenSecret = (
+  value: string | null | undefined,
+): GeminiCodeAssistTokenSecretPayload | null => {
+  const decrypted = decryptSecretOrNull(value);
+  if (!decrypted) return null;
+  try {
+    const parsed = JSON.parse(decrypted) as Partial<GeminiCodeAssistTokenSecretPayload> | null;
+    const accessToken = normalizeOptionalText(parsed?.accessToken);
+    if (!parsed || !accessToken) return null;
+    return {
+      accessToken,
+      refreshToken: normalizeOptionalText(parsed.refreshToken),
+      tokenType: 'bearer',
+      obtainedAt: normalizeOptionalText(parsed.obtainedAt) ?? new Date().toISOString(),
+      expiresAt: normalizeOptionalText(parsed.expiresAt),
+      source: parsed.source === 'gemini-code-assist-refresh' ? 'gemini-code-assist-refresh' : 'gemini-code-assist-import',
+      clientId: normalizeOptionalText(parsed.clientId),
       profile:
         parsed.profile && typeof parsed.profile === 'object' && !Array.isArray(parsed.profile)
           ? parsed.profile as Record<string, unknown>
@@ -840,6 +881,24 @@ const refreshClaudeCodeTokenIfNeeded = async (input: {
   return refreshPromise;
 };
 
+const refreshGeminiCodeAssistTokenIfNeeded = async (input: {
+  accountId: string;
+  externalAccountId: string | null;
+  token: GeminiCodeAssistTokenSecretPayload;
+}): Promise<GeminiCodeAssistTokenSecretPayload | null> => {
+  if (!isTokenExpiring(input.token.expiresAt)) return input.token;
+  await db.run(sql`
+    UPDATE llm_provider_accounts
+    SET status = 'reauth_required',
+        token_secret = NULL,
+        token_expires_at = NULL,
+        last_error = 'Gemini Code Assist token expired.',
+        updated_at = ${new Date()}
+    WHERE id = ${input.accountId}
+  `);
+  return null;
+};
+
 type ParsedAccountTransportToken = {
   accessToken: string;
   refreshToken?: string | null;
@@ -1137,6 +1196,25 @@ export const acquireClaudeCodeAccountTransport = async (input: {
     refreshTokenIfNeeded: refreshClaudeCodeTokenIfNeeded,
     invalidTokenMessage: 'Claude Code account token secret is missing or invalid.',
     reauthMessage: 'Claude Code account requires reauthentication.',
+  });
+
+export const acquireGeminiCodeAssistAccountTransport = async (input: {
+  userId: string;
+  workspaceId?: string | null;
+  modelId: string;
+  affinityKey?: string | null;
+  requestId?: string | null;
+}): Promise<GeminiCodeAssistAccountTransportAcquisition | null> =>
+  acquireDbAccountTransport({
+    ...input,
+    targetProviderId: GEMINI_CODE_ASSIST_TARGET_PROVIDER_ID,
+    transportProviderId: GEMINI_CODE_ASSIST_TRANSPORT_PROVIDER_ID,
+    defaultModelId: 'google/gemini-3.5-flash@gcp',
+    stableSessionPrefix: 'gemini_code_assist',
+    parseTokenSecret: parseGeminiCodeAssistTokenSecret,
+    refreshTokenIfNeeded: refreshGeminiCodeAssistTokenIfNeeded,
+    invalidTokenMessage: 'Gemini Code Assist account token secret is missing or invalid.',
+    reauthMessage: 'Gemini Code Assist account requires reauthentication.',
   });
 
 export const recordLlmAccountTransportOutcome = async (
