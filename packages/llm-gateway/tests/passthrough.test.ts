@@ -80,6 +80,28 @@ describe('faithful non-stream passthrough', () => {
     expect(body).toEqual(openAiChatResponse);
     assertNoPoolSecrets(JSON.stringify(body));
   });
+
+  it('settles rate_limited (not failed) when the provider returns 429', async () => {
+    const transport = new FixtureTransport({
+      jsonResponse: {
+        status: 429,
+        body: { type: 'error', error: { type: 'rate_limit_error', message: 'rate limited' } },
+      },
+      responseHeaders: { 'retry-after': '30' },
+    });
+    const { app, metering } = buildHarness({ transport });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+
+    expect(res.status).toBe(429);
+    // The metering sink should record 'rate_limited', not 'failed'
+    expect(metering.settlements).toHaveLength(1);
+    expect(metering.last?.outcome).toBe('rate_limited');
+  });
 });
 
 describe('faithful SSE passthrough framing', () => {
