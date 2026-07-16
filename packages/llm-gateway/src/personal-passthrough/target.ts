@@ -69,3 +69,40 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
     model: 'gpt-5.5',
   },
 };
+
+/**
+ * Gemini Code Assist target resolution. Routes anthropic models (claude) through
+ * Vertex AI and gemini models through the Generative Language API.
+ */
+export interface GeminiCodeAssistTarget {
+  readonly baseUrl: string;
+  readonly headers: Record<string, string>;
+}
+
+export const resolveGeminiCodeAssistTarget = ({
+  modelId,
+  accessToken,
+  projectId,
+}: {
+  modelId: string;
+  accessToken: string;
+  projectId?: string;
+}): GeminiCodeAssistTarget => {
+  if (modelId.includes('claude')) {
+    // Anthropic models route through Vertex AI.
+    const region = 'us-east5';
+    const wireModelId = modelId.replace(/^.*\//, '').replace(/@.*$/, '');
+    const baseUrl = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/anthropic/models/${wireModelId}`;
+    return {
+      baseUrl,
+      headers: { authorization: `Bearer ${accessToken}` },
+    };
+  }
+
+  // Gemini models route through the Generative Language API.
+  const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}`;
+  return {
+    baseUrl,
+    headers: { authorization: `Bearer ${accessToken}` },
+  };
+};

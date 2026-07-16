@@ -399,6 +399,22 @@ export const modelProfiles = [
     defaultTaskHints: [],
     capabilities: modelCapabilities('gcp', 'standard', { vision: true }),
   },
+  {
+    providerId: 'gcp',
+    modelId: 'anthropic/claude-sonnet-4-6@gcp',
+    label: 'Claude Sonnet 4.6 (GCP)',
+    reasoningTier: 'advanced',
+    defaultTaskHints: [],
+    capabilities: modelCapabilities('anthropic', 'advanced', { vision: true }),
+  },
+  {
+    providerId: 'gcp',
+    modelId: 'anthropic/claude-opus-4-6@gcp',
+    label: 'Claude Opus 4.6 (GCP)',
+    reasoningTier: 'advanced',
+    defaultTaskHints: [],
+    capabilities: modelCapabilities('anthropic', 'advanced', { vision: true }),
+  },
   // NOTE: the `local` provider is declared (provider profile above) and wired in
   // the api runtime (LocalProviderRuntime -> the host sidecar), but no static
   // model profile is advertised here yet. The sidecar serves `laneformer-2b-it`
