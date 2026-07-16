@@ -34,7 +34,8 @@ import type {
   ProviderResponseHeaders,
 } from './ports/dispatch.js';
 import type { PoolSelection, PoolSelectionRequest } from './ports/pool.js';
-import { GatewayError, ProviderRateLimitError } from './router/errors.js';
+import { GatewayError } from './router/errors.js';
+import { ProviderRateLimitError } from './internal/provider-rate-limit-error.js';
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
 
 /**
@@ -383,6 +384,8 @@ export const runStreamFlow = async (
     } catch (error) {
       // Pre-first-byte failure: check if it's a 429 for retry.
       if (error instanceof ProviderRateLimitError && attempt < maxRetries) {
+        // Clean up the failed stream iterator to release transport resources.
+        await iterator?.return?.();
         await settle(deps, request, prepared, 'rate_limited', undefined, error.retryAfterMs);
         try {
           prepared = await reacquire(deps, request, prepared);
