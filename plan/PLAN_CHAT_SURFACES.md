@@ -21,26 +21,33 @@ The controller (L1-core) is a **stable, framework-neutral contract** (`requestPl
 | **L5** | Smart stacked occupancy (D5 single-scroll-owner: split-primary/sticky-item, host occupancy snapshot, inert-on-collapse, virtualized anchor) | **Sonnet** (heavy Opus review) | D5 is very precisely spec'd (Codex+DS hardened) → executable; but subtle a11y/scroll → Opus reviews. |
 | **integration + final review** | Cross-lot wiring decisions, adversarial review before each merge | **Opus** | Judgment + quality gate. |
 
-## Dependency graph & waves
+## L0 is NOT a blanket prerequisite — verified in code (2026-07-13)
+The plan originally gated L1c-menu/L3/L4 behind L0-exec, on the assumption that any placement move remounts the view (= session restart). **Verified against the real code — that assumption is only true for a subset:**
+- `packages/chat-ui/src/components/ChatDock.svelte:500-521` renders the dialog as **ONE stable `<div>`**; `docked` vs `floating` is a **`class=`/`style=` ternary on `_isDocked` (l.508-513)**, NOT an `{#if}` branch. `renderContent` is a snippet rendered inside that stable container. The only `{#if !_isDocked}` (l.483) wraps the mobile backdrop alone.
+- `ChatWidget.svelte:36` `{#if renderShell}` tests snippet existence — it is not placement-dependent.
+- `ui/src/lib/components/ChatPanel.svelte:41` mounts `<AppChatPanel` with **no `{#if}`/`{#key}` guard**.
+→ **Today's docked↔floating switch already does NOT remount.** Placement is expressed as CSS on a stable container.
+
+**Consequence (drives the wave order):**
+- **No L0 needed** for placements expressible as a class/style swap on that same stable container: `floating.left|center|right`, `full`, `drawer.right.primary`. Host invariant: keep ONE container, swap classes — never branch the container behind `{#if}`.
+- **L0 required** only where the placement needs a genuinely DIFFERENT DOM parent owned by the host, outside ChatDock's subtree: **left-drawer**, **L4 vscode drawer**, **L5 stacked occupancy**. L0d (cross-process) additionally needs the backend contract.
+
+## Dependency graph & waves (revised)
 ```
-L1-core (DONE) ─┬─ L1c-migrate ───────────────┐
-                ├─ L2-gesture (headless) ──────┤
-                └─ L0-design (Opus) ─ L0-exec ─┼─ L1c-menu ─ L3 ─┐
-                                               ├─ L4            ├─ L2-ds-consume (⟂ DS#32) ─ L5 ─ final
-                                               └────────────────┘
+L1-core (DONE) ─┬─ L1c-migrate (DONE 0.26.0) ──┐
+                ├─ L2-gesture  (DONE 0.26.0) ──┤
+                ├─ L1c-menu ── L3 floating.left/center + full ──┐   (NO L0 — class-swap)
+                └─ L0a ─ L0b+L0c (one guarded cutover) ─┬─ left-drawer ─ L5 stacked ─┐
+                                                        └─ L0d (⟂ backend) ─ L4 vscode ─┴─ L2-ds-consume (⟂ DS#32) ─ final
 ```
 
-- **Wave 1 (parallel Sonnet lanes, no L0 dependency)** — both only touch the stable controller, not the chat runtime:
-  - `S1` L1c-migrate (relabel; behavior-preserving)
-  - `S2` L2-gesture (headless DnD adapter + hit-testing)
-  - `O0` L0-design (Opus, in parallel — produces the blueprint that unblocks Wave 2)
-- **Wave 2 (after L0-exec merges)** — parallel Sonnet lanes:
-  - `S3` L0-exec (Sonnet, Opus-reviewed) — must land first in this wave
-  - then `S4` L1c-menu, `S5` L3 floating/full, `S6` L4 vscode (parallel)
-- **Wave 3**:
-  - `S7` L2-ds-consume (gated on DS #32 formal comment + published DS components)
-  - `S8` L5 stacked occupancy (Opus-reviewed)
-  - Opus final adversarial review + owner UAT before each user-visible merge.
+- **Wave 1 — DONE (chat-ui 0.26.0, PR #418 merged + published)**: `S1` L1c-migrate + `S2` L2-gesture (2 parallel Sonnet lanes, Opus-reviewed, 871 tests green); `O0` L0-design (Opus + Codex-xhigh review, reconciled).
+- **Wave 2 (parallel Sonnet lanes, NO L0 dependency — per the code-verified finding above)**:
+  - `S3` L1c-menu ("Move to…" menu + HostSurfaces + D6 persistence adapter)
+  - `S4` L3 `floating.left|center` + `full` (class-swap placements on the stable container)
+  - Host invariant both lanes MUST honor: ONE stable container, class/style swap only — never branch it behind `{#if}` (that would reintroduce the remount L0 exists to prevent).
+- **Wave 3 (L0 track, Luna/Opus — runs in parallel with Wave 2, different files)**: `L0a` then the `L0b+L0c` guarded cutover. Unblocks left-drawer, L5, and (with the backend contract) L0d→L4.
+- **Wave 4**: `L4` vscode (needs L0d + backend), `L5` stacked occupancy, `L2-ds-consume` (gated on DS #32 formal comment). Opus final adversarial review + owner UAT before each user-visible merge.
 
 Wave discipline: ≤4 concurrent lanes; each lane = its own branch/worktree + distinct ENV/ports; each lane commits atomically, gates green, PR, CI, Opus review, merge. Sonnet lanes get the `AGENT_SIG:7f3a9c2e1b` launch template + exact BRANCH.md scope.
 
