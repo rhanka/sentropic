@@ -33,7 +33,7 @@ import type {
   ProviderResponseHeaders,
 } from './ports/dispatch.js';
 import type { PoolSelection, PoolSelectionRequest } from './ports/pool.js';
-import { GatewayError } from './router/errors.js';
+import { GatewayError, ProviderRateLimitError } from './router/errors.js';
 import { redactSelection, type RedactedSelectionView } from './redaction.js';
 
 /**
@@ -187,6 +187,33 @@ const prepare = async (
   return { cost, target, selection, material, account };
 };
 
+/**
+ * Re-acquire from the pool with a FRESH account (retry-with-rotation).
+ * Auth and target resolution are reused from the original prepare — only
+ * pool selection + secret resolution repeat.
+ */
+const reacquire = async (
+  deps: GatewayFlowDeps,
+  request: GatewayFlowRequest,
+  prev: Awaited<ReturnType<typeof prepare>>,
+): Promise<Awaited<ReturnType<typeof prepare>>> => {
+  const selectionRequest: PoolSelectionRequest = {
+    cost: prev.cost,
+    targetProviderId: prev.target.providerId,
+    transportProviderId: prev.target.transportProviderId,
+    modelId: prev.target.model,
+    workspaceId: prev.cost.workspaceId ?? null,
+    userId: prev.cost.principalId,
+    affinityKey: prev.cost.correlationId,
+    requestId: prev.cost.correlationId,
+  };
+
+  const selection = await deps.config.pool.select(selectionRequest);
+  const material = await deps.config.authResolver.resolve(selection);
+  const account = redactSelection(material.descriptor, material.material);
+  return { ...prev, selection, material, account };
+};
+
 const usageOrEstimate = (
   deps: GatewayFlowDeps,
   request: GatewayFlowRequest,
@@ -247,39 +274,58 @@ export const runJsonFlow = async (
   deps: GatewayFlowDeps,
   request: GatewayFlowRequest,
 ): Promise<GatewayJsonResult> => {
-  const prepared = await prepare(deps, request);
-  const dispatchRequest: GatewayDispatchRequest = {
-    wire: request.wire,
-    providerId: prepared.target.providerId,
-    model: prepared.target.model,
-    material: prepared.material.material,
-    body: request.body,
-    stream: false,
-    ...(request.signal ? { signal: request.signal } : {}),
-  };
+  let prepared = await prepare(deps, request);
+  const maxRetries = 2;
 
-  let response: GatewayDispatchResponse;
-  try {
-    response = await deps.config.dispatch.dispatch(dispatchRequest);
-  } catch {
-    await settle(deps, request, prepared, 'failed', undefined);
-    throw new GatewayError('pooled-account-unavailable', 'dispatch failed');
+  for (let attempt = 0; ; attempt++) {
+    const dispatchRequest: GatewayDispatchRequest = {
+      wire: request.wire,
+      providerId: prepared.target.providerId,
+      model: prepared.target.model,
+      material: prepared.material.material,
+      body: request.body,
+      stream: false,
+      ...(request.signal ? { signal: request.signal } : {}),
+    };
+
+    let response: GatewayDispatchResponse;
+    try {
+      response = await deps.config.dispatch.dispatch(dispatchRequest);
+    } catch {
+      await settle(deps, request, prepared, 'failed', undefined);
+      throw new GatewayError('pooled-account-unavailable', 'dispatch failed');
+    }
+
+    const ok = response.status >= 200 && response.status < 300;
+    const isRateLimited = response.status === 429;
+    const retryAfterMs = isRateLimited
+      ? parseRetryAfterMs(response.headers)
+      : undefined;
+
+    await settle(
+      deps, request, prepared,
+      ok ? 'success' : isRateLimited ? 'rate_limited' : 'failed',
+      extractUsage(request.wire, response.body),
+      retryAfterMs,
+    );
+
+    // Retry-with-rotation on 429 (pre-stream, §2 no-retry-after-stream).
+    if (isRateLimited && attempt < maxRetries) {
+      try {
+        prepared = await reacquire(deps, request, prepared);
+        continue;
+      } catch {
+        // Re-acquisition failed (pool exhausted) — return the 429 as-is.
+      }
+    }
+
+    // Faithful passthrough: provider-native JSON, status code + headers verbatim (#4).
+    return {
+      status: response.status,
+      body: response.body,
+      ...(response.headers ? { headers: response.headers } : {}),
+    };
   }
-
-  const ok = response.status >= 200 && response.status < 300;
-  await settle(
-    deps,
-    request,
-    prepared,
-    ok ? 'success' : 'failed',
-    extractUsage(request.wire, response.body),
-  );
-  // Faithful passthrough: provider-native JSON, status code + headers verbatim (#4).
-  return {
-    status: response.status,
-    body: response.body,
-    ...(response.headers ? { headers: response.headers } : {}),
-  };
 };
 
 /**
@@ -309,35 +355,48 @@ export const runStreamFlow = async (
   deps: GatewayFlowDeps,
   request: GatewayFlowRequest,
 ): Promise<GatewayStreamResult> => {
-  const prepared = await prepare(deps, request);
-  const dispatchRequest: GatewayDispatchRequest = {
-    wire: request.wire,
-    providerId: prepared.target.providerId,
-    model: prepared.target.model,
-    material: prepared.material.material,
-    body: request.body,
-    stream: true,
-    ...(request.signal ? { signal: request.signal } : {}),
-  };
+  let prepared = await prepare(deps, request);
+  const maxRetries = 2;
 
-  // Obtain the provider stream + buffer the FIRST frame eagerly. A pre-first-byte
-  // failure here rejects (caught below) -> provider-shaped error, never empty 200.
-  let dispatchStream;
-  let iterator: AsyncIterator<GatewayDispatchStreamEvent>;
-  let firstResult: IteratorResult<GatewayDispatchStreamEvent>;
-  try {
-    dispatchStream = deps.config.dispatch.dispatchStream(dispatchRequest);
-    iterator = dispatchStream.frames[Symbol.asyncIterator]();
-    firstResult = await iterator.next();
-  } catch {
-    // No byte streamed -> settle failure, then surface a provider-shaped error.
-    await settle(deps, request, prepared, 'failed', undefined);
-    throw new GatewayError('pooled-account-unavailable', 'stream failed before first byte');
+  let dispatchStream: GatewayDispatchStream | undefined;
+  let iterator: AsyncIterator<GatewayDispatchStreamEvent> | undefined;
+  let firstResult: IteratorResult<GatewayDispatchStreamEvent> | undefined;
+
+  for (let attempt = 0; ; attempt++) {
+    const dispatchRequest: GatewayDispatchRequest = {
+      wire: request.wire,
+      providerId: prepared.target.providerId,
+      model: prepared.target.model,
+      material: prepared.material.material,
+      body: request.body,
+      stream: true,
+      ...(request.signal ? { signal: request.signal } : {}),
+    };
+
+    try {
+      dispatchStream = deps.config.dispatch.dispatchStream(dispatchRequest);
+      iterator = dispatchStream.frames[Symbol.asyncIterator]();
+      firstResult = await iterator.next();
+      break; // Success — first byte received (or empty stream)
+    } catch (error) {
+      // Pre-first-byte failure: check if it's a 429 for retry.
+      if (error instanceof ProviderRateLimitError && attempt < maxRetries) {
+        await settle(deps, request, prepared, 'rate_limited', undefined, error.retryAfterMs);
+        try {
+          prepared = await reacquire(deps, request, prepared);
+          continue;
+        } catch {
+          // Re-acquisition failed — surface as provider error.
+        }
+      }
+      await settle(deps, request, prepared, 'failed', undefined);
+      throw new GatewayError('pooled-account-unavailable', 'stream failed before first byte');
+    }
   }
 
-  let usage: SettleUsage | undefined = firstResult.done
+  let usage: SettleUsage | undefined = firstResult!.done
     ? undefined
-    : extractUsageFromFrame(request.wire, firstResult.value.raw);
+    : extractUsageFromFrame(request.wire, firstResult!.value.raw);
 
   const stream = (async function* (): AsyncGenerator<
     GatewayDispatchStreamEvent,
@@ -346,11 +405,11 @@ export const runStreamFlow = async (
   > {
     let failed = false;
     try {
-      if (!firstResult.done) {
-        yield firstResult.value;
+      if (!firstResult!.done) {
+        yield firstResult!.value;
       }
       // Relay the rest verbatim. A throw here is mid-stream (>=1 byte already out).
-      for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
+      for (let next = await iterator!.next(); !next.done; next = await iterator!.next()) {
         const eventUsage = extractUsageFromFrame(request.wire, next.value.raw);
         if (eventUsage) {
           usage = eventUsage;
@@ -371,6 +430,20 @@ export const runStreamFlow = async (
     ...(dispatchStream.headers ? { headers: dispatchStream.headers } : {}),
     stream,
   };
+};
+
+/** Parse `retry-after` header → milliseconds (default 60s if header missing). */
+const parseRetryAfterMs = (
+  headers?: Readonly<Record<string, string>>,
+): number => {
+  const raw = headers?.['retry-after'];
+  if (!raw) {
+    return 60_000; // default 60s cooldown
+  }
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds > 0
+    ? seconds * 1000
+    : 60_000;
 };
 
 /** Extract usage from a non-stream provider-native response body. */
