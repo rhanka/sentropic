@@ -145,6 +145,72 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return prototype === Object.prototype || prototype === null;
 };
 
+const assertJsonSafe = (
+  value: unknown,
+  label: string,
+  ancestors = new Set<object>(),
+): void => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return;
+  }
+  if (typeof value === 'number') {
+    if (Number.isFinite(value)) return;
+    throw new TypeError(`${label} must contain only finite JSON numbers`);
+  }
+  if (typeof value === 'undefined') {
+    throw new TypeError(`${label} must not contain undefined values`);
+  }
+  if (typeof value !== 'object' || !value) {
+    throw new TypeError(`${label} must contain only JSON-safe plain data`);
+  }
+  if (ancestors.has(value)) {
+    throw new TypeError(`${label} must not contain cyclic data`);
+  }
+  if (!Array.isArray(value) && !isPlainObject(value)) {
+    throw new TypeError(
+      `${label} must contain only JSON-safe plain data (Map, Set, class, and host objects are not allowed)`,
+    );
+  }
+  ancestors.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) =>
+      assertJsonSafe(entry, `${label}[${index}]`, ancestors),
+    );
+  } else {
+    Object.entries(value).forEach(([key, entry]) =>
+      assertJsonSafe(entry, `${label}.${key}`, ancestors),
+    );
+  }
+  ancestors.delete(value);
+};
+
+const assertString: (
+  value: unknown,
+  label: string,
+) => asserts value is string = (value, label) => {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${label} must be a string`);
+  }
+};
+
+const assertArray: (
+  value: unknown,
+  label: string,
+) => asserts value is readonly unknown[] = (value, label) => {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${label} must be an array`);
+  }
+};
+
+const assertFiniteNumber: (
+  value: unknown,
+  label: string,
+) => asserts value is number = (value, label) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`${label} must be a finite number`);
+  }
+};
+
 const cloneMutableValue = <T>(value: T): T => {
   if (Array.isArray(value)) {
     return value.map((item) => cloneMutableValue(item)) as T;
@@ -230,17 +296,25 @@ export function createChatSessionRuntime<
   const controller = createChatLoopController<Message, unknown>();
   const listeners = new Set<(s: ChatSessionSnapshot<Message>) => void>();
 
+  assertString(sessionId, 'sessionId');
+  assertString(config.initialDraft ?? '', 'initialDraft');
+  assertJsonSafe(config.initialMessages ?? [], 'initialMessages');
+  assertJsonSafe(config.initialAttachments ?? [], 'initialAttachments');
+  assertJsonSafe(config.initialCheckpoints ?? [], 'initialCheckpoints');
+  assertJsonSafe(config.initialTodo ?? null, 'initialTodo');
+  if (config.initialLastAppliedSequence !== undefined) {
+    assertFiniteNumber(config.initialLastAppliedSequence, 'initialLastAppliedSequence');
+  }
+
+  let currentSessionId = sessionId;
   let draftState = createDraftState(config.initialDraft ?? '');
-  let attachments: unknown[] = cloneMutableValue([
+  let attachments: ChatSessionAttachment[] = cloneMutableValue([
     ...(config.initialAttachments ?? []),
   ]);
-  let checkpoints: unknown[] = cloneMutableValue([
+  let checkpoints: ChatSessionCheckpoint[] = cloneMutableValue([
     ...(config.initialCheckpoints ?? []),
   ]);
-  let todo: unknown | null = cloneMutableValue(config.initialTodo ?? null);
-  let pendingTool: ChatSessionPendingTool | null = cloneMutableValue(
-    config.initialPendingTool ?? null,
-  );
+  let todo: ChatSessionTodo | null = cloneMutableValue(config.initialTodo ?? null);
   let lastAppliedSequence = normalizeSequence(
     config.initialLastAppliedSequence ?? 0,
   );
@@ -279,21 +353,20 @@ export function createChatSessionRuntime<
 
   const buildSnapshot = (): ChatSessionSnapshot<Message> => {
     const loop = controller.getSnapshot();
-    const controllerPendingTool =
-      loop.pendingLocalToolPermissionPrompts[0] ?? null;
-    const effectivePendingTool = pendingTool ?? controllerPendingTool;
 
     return Object.freeze({
-      sessionId,
+      sessionId: currentSessionId,
       messages: cloneSnapshotValue(loop.messages),
       projectedTimelineItems: cloneSnapshotValue(loop.projectedTimelineItems),
       draft: draftState.draft,
       input: draftState.input,
       attachments: cloneSnapshotValue(attachments),
-      attachmentSummary: summarizeAttachments(attachments),
+      attachmentSummary: cloneSnapshotValue(summarizeAttachments(attachments)),
       checkpoints: cloneSnapshotValue(checkpoints),
       todo: cloneSnapshotValue(todo),
-      pendingTool: cloneSnapshotValue(effectivePendingTool),
+      pendingLocalToolPermissionPrompts: cloneSnapshotValue(
+        loop.pendingLocalToolPermissionPrompts,
+      ),
       lastAppliedSequence,
       attachGeneration,
       viewBindings,
@@ -330,6 +403,7 @@ export function createChatSessionRuntime<
 
   const setDraft = (value: string): void => {
     assertActive();
+    assertString(value, 'draft');
     draftState = syncDraftFromInput({
       mode: 'ai',
       direction: 'input',
@@ -340,19 +414,22 @@ export function createChatSessionRuntime<
     notify();
   };
 
-  const setAttachments = (next: readonly unknown[]): void => {
+  const setAttachments = (next: readonly ChatSessionAttachment[]): void => {
     assertActive();
+    assertJsonSafe(next, 'attachments');
     attachments = cloneMutableValue([...next]);
     notify();
   };
 
   const setMessages = (messages: readonly Message[]): void => {
     assertActive();
+    assertJsonSafe(messages, 'messages');
     controller.setMessages(cloneMessages(messages));
   };
 
   const appendMessage = (message: Message): void => {
     assertActive();
+    assertJsonSafe(message, 'message');
     controller.appendMessage(cloneMutableValue(message));
   };
 
