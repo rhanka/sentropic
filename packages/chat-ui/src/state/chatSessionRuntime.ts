@@ -96,12 +96,19 @@ export type ChatSessionSnapshotSerializable<
   sessionId: string;
   messages: readonly Message[];
   draft: string;
-  attachments: readonly unknown[];
-  checkpoints: readonly unknown[];
-  todo: unknown | null;
-  pendingTool: ChatSessionPendingTool | null;
+  attachments: readonly ChatSessionAttachment[];
+  checkpoints: readonly ChatSessionCheckpoint[];
+  todo: ChatSessionTodo | null;
   lastAppliedSequence: number;
 };
+
+type ChatSessionSendOptions<
+  Message extends ChatSessionRuntimeMessage,
+> = Parameters<ChatLoopController<Message, unknown>['send']>[1];
+
+type ChatSessionRetryOptions<
+  Message extends ChatSessionRuntimeMessage,
+> = Parameters<ChatLoopController<Message, unknown>['retry']>[1];
 
 export type ChatSessionRuntime<
   Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
@@ -109,28 +116,37 @@ export type ChatSessionRuntime<
   snapshot(): ChatSessionSnapshot<Message>;
   subscribe(cb: (s: ChatSessionSnapshot<Message>) => void): () => void;
   setDraft(value: string): void;
-  setAttachments(attachments: readonly unknown[]): void;
+  setAttachments(attachments: readonly ChatSessionAttachment[]): void;
   setMessages(messages: readonly Message[]): void;
   appendMessage(message: Message): void;
   hydrateMessages(
     messages: readonly Message[],
     meta?: Pick<SessionHistoryMetaLine, 'checkpoints' | 'todoRuntime'>,
   ): void;
-  setCheckpoints(checkpoints: readonly unknown[]): void;
-  setTodo(todo: unknown | null): void;
-  setPendingTool(pendingTool: ChatSessionPendingTool | null): void;
+  setCheckpoints(checkpoints: readonly ChatSessionCheckpoint[]): void;
+  setTodo(todo: ChatSessionTodo | null): void;
   setLastAppliedSequence(sequence: number): void;
   attach(host: ChatSessionRuntimeHost): void;
   bindView(): () => void;
+  send(payload: ControllerSendPayload, opts: ChatSessionSendOptions<Message>): Promise<void>;
+  retry(messageId: string, opts: ChatSessionRetryOptions<Message>): Promise<void>;
+  stop(messageId: string): Promise<void>;
+  edit(messageId: string, content: string): Promise<void>;
+  setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+  decideLocalToolPermission(
+    prompt: ChatSessionPendingTool,
+    decision: string,
+  ): Promise<void>;
   serialize(): ChatSessionSnapshotSerializable<Message>;
   restore(snapshot: ChatSessionSnapshotSerializable<Message>): void;
   dispose(): void;
 };
 
 type HostRefs = {
-  transport: unknown;
-  streamClient: unknown;
+  transport: ControllerHostTransport;
+  streamClient: ControllerStreamClient | undefined;
   checkpointHost: unknown;
+  localToolMachine: AttachLocalToolMachineOptions | undefined;
 };
 
 const createDraftState = (draft = ''): ChatDraftState => ({
@@ -250,11 +266,8 @@ const cloneMessages = <
 ): Message[] => cloneMutableValue([...messages]);
 
 const summarizeAttachments = (
-  attachments: readonly unknown[],
-): ComposerAttachmentSummary =>
-  summarizeComposerAttachments(
-    attachments as readonly ChatComposerAttachmentDraft[],
-  );
+  attachments: readonly ChatSessionAttachment[],
+): ComposerAttachmentSummary => summarizeComposerAttachments(attachments);
 
 const isControllerStreamClient = (
   value: unknown,
@@ -285,7 +298,8 @@ const sameHostRefs = (
   Boolean(left) &&
   left!.transport === right.transport &&
   left!.streamClient === right.streamClient &&
-  left!.checkpointHost === right.checkpointHost;
+  left!.checkpointHost === right.checkpointHost &&
+  left!.localToolMachine === right.localToolMachine;
 
 export function createChatSessionRuntime<
   Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
@@ -438,41 +452,48 @@ export function createChatSessionRuntime<
     meta?: Pick<SessionHistoryMetaLine, 'checkpoints' | 'todoRuntime'>,
   ): void => {
     assertActive();
-    if (meta?.checkpoints) {
-      checkpoints = cloneMutableValue([...meta.checkpoints]);
+    assertJsonSafe(messages, 'messages');
+    if (meta?.checkpoints !== undefined) {
+      assertJsonSafe(meta.checkpoints, 'checkpoints');
     }
     if (Object.prototype.hasOwnProperty.call(meta ?? {}, 'todoRuntime')) {
-      todo = cloneMutableValue(meta?.todoRuntime ?? null);
+      assertJsonSafe(meta?.todoRuntime ?? null, 'todo');
+    }
+    if (meta?.checkpoints) {
+      checkpoints = cloneMutableValue([
+        ...meta.checkpoints,
+      ]) as ChatSessionCheckpoint[];
+    }
+    if (Object.prototype.hasOwnProperty.call(meta ?? {}, 'todoRuntime')) {
+      todo = cloneMutableValue(meta?.todoRuntime ?? null) as ChatSessionTodo | null;
     }
 
     let next = cloneMessages(controller.getSnapshot().messages);
     for (const message of messages) {
       const normalized = normalizeHydratedMessage(cloneMutableValue(message));
+      assertJsonSafe(normalized, 'messages');
       next = upsertSequencedMessage(next, normalized);
     }
     controller.setMessages(next);
   };
 
-  const setCheckpoints = (next: readonly unknown[]): void => {
+  const setCheckpoints = (next: readonly ChatSessionCheckpoint[]): void => {
     assertActive();
+    assertJsonSafe(next, 'checkpoints');
     checkpoints = cloneMutableValue([...next]);
     notify();
   };
 
-  const setTodo = (next: unknown | null): void => {
+  const setTodo = (next: ChatSessionTodo | null): void => {
     assertActive();
+    assertJsonSafe(next, 'todo');
     todo = cloneMutableValue(next);
-    notify();
-  };
-
-  const setPendingTool = (next: ChatSessionPendingTool | null): void => {
-    assertActive();
-    pendingTool = cloneMutableValue(next);
     notify();
   };
 
   const setLastAppliedSequence = (sequence: number): void => {
     assertActive();
+    assertFiniteNumber(sequence, 'lastAppliedSequence');
     lastAppliedSequence = normalizeSequence(sequence);
     notify();
   };
@@ -481,10 +502,17 @@ export function createChatSessionRuntime<
     assertActive();
     if (sameHostRefs(attachedRefs, host)) return;
 
+    if (host.streamClient !== undefined && !isControllerStreamClient(host.streamClient)) {
+      throw new Error(
+        'ChatSessionRuntime.attach requires streamClient.set/delete',
+      );
+    }
+
     if (streamAttached) {
       controller.detachStream();
       streamAttached = false;
     }
+    if (attachedRefs) controller.detachLocalToolMachine();
 
     attachGeneration += 1;
     const generation = attachGeneration;
