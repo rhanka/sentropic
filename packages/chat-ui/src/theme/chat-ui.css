@@ -588,6 +588,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 [data-st-chat-theme] .top-1\/2 {
   top: 50%;
 }
+[data-st-chat-theme] .isolate {
+  isolation: isolate;
+}
 [data-st-chat-theme] .z-10 {
   z-index: 10;
 }
@@ -788,6 +791,9 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 [data-st-chat-theme] .flex-shrink-0 {
   flex-shrink: 0;
+}
+[data-st-chat-theme] .shrink {
+  flex-shrink: 1;
 }
 [data-st-chat-theme] .shrink-0 {
   flex-shrink: 0;
@@ -1360,6 +1366,14 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
     bottom: 0px;
   }
 
+  [data-st-chat-theme] .sm\:left-0 {
+    left: 0px;
+  }
+
+  [data-st-chat-theme] .sm\:left-1\/2 {
+    left: 50%;
+  }
+
   [data-st-chat-theme] .sm\:right-0 {
     right: 0px;
   }
@@ -1382,6 +1396,11 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 
   [data-st-chat-theme] .sm\:max-w-\[calc\(100vw-2rem\)\] {
     max-width: calc(100vw - 2rem);
+  }
+
+  [data-st-chat-theme] .sm\:-translate-x-1\/2 {
+    --tw-translate-x: -50%;
+    transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
   }
 
   [data-st-chat-theme] .sm\:rounded-lg {
