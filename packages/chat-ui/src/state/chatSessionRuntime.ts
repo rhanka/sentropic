@@ -238,6 +238,9 @@ const cloneMutableValue = <T>(value: T): T => {
     }
     return next as T;
   }
+  if (value !== null && typeof value === 'object') {
+    throw new TypeError('value must contain only JSON-safe plain data');
+  }
   return value;
 };
 
@@ -499,6 +502,11 @@ export function createChatSessionRuntime<
     notify();
   };
 
+  const cloneValidatedMessage = (message: Message, label: string): Message => {
+    assertJsonSafe(message, label);
+    return cloneMutableValue(message);
+  };
+
   const attach = (host: ChatSessionRuntimeHost): void => {
     assertActive();
     if (sameHostRefs(attachedRefs, host)) return;
@@ -628,7 +636,16 @@ export function createChatSessionRuntime<
     opts: ChatSessionSendOptions<Message>,
   ): Promise<void> => {
     assertActive();
-    await controller.send(payload, opts);
+    await controller.send(payload, {
+      ...opts,
+      buildUserMessage: (handle) =>
+        cloneValidatedMessage(opts.buildUserMessage(handle), 'user message'),
+      buildAssistantMessage: (base) =>
+        cloneValidatedMessage(
+          opts.buildAssistantMessage(base),
+          'assistant message',
+        ),
+    });
   };
 
   const retry = async (
@@ -636,7 +653,14 @@ export function createChatSessionRuntime<
     opts: ChatSessionRetryOptions<Message>,
   ): Promise<void> => {
     assertActive();
-    await controller.retry(messageId, opts);
+    await controller.retry(messageId, {
+      ...opts,
+      buildAssistantMessage: (base) =>
+        cloneValidatedMessage(
+          opts.buildAssistantMessage(base),
+          'assistant message',
+        ),
+    });
   };
 
   const stop = async (messageId: string): Promise<void> => {
