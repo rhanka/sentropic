@@ -110,6 +110,8 @@ describe('ChatSessionRuntime', () => {
     runtime.attach(host);
 
     expect(streamClient.set).toHaveBeenCalledTimes(1);
+    expect(streamClient.delete).toHaveBeenCalledTimes(0);
+    expect(streamClient.activeHandlers.size).toBe(1);
     expect(runtime.snapshot().attachGeneration).toBe(1);
   });
 
@@ -227,6 +229,31 @@ describe('ChatSessionRuntime', () => {
     expect(transport.editMessage).toHaveBeenCalledWith('user-1', 'Edited');
     expect(transport.setFeedback).toHaveBeenCalledWith('assistant-1', 'up');
     expect(runtime.snapshot().messages.find((message) => message.id === 'user-1')?.content).toBe('Edited');
+  });
+
+  it('should reject non-JSON-safe messages returned by send builders', async () => {
+    const runtime = createChatSessionRuntime('session-1');
+    runtime.attach({ transport: createTransport() });
+
+    await expect(
+      runtime.send(
+        { content: 'Hello' },
+        {
+          buildUserMessage: (handle) => ({
+            id: handle.userMessageId,
+            role: 'user',
+            content: 'Hello',
+          }),
+          buildAssistantMessage: (base) => ({ ...base, extra: new Map() }),
+        },
+      ),
+    ).rejects.toThrow(/JSON-safe/);
+
+    const snapshot = runtime.snapshot();
+    expect(snapshot.messages).toEqual([]);
+    expect(snapshot.messages).not.toContainEqual(
+      expect.objectContaining({ extra: expect.any(Map) }),
+    );
   });
 
   it('should update the next snapshot through commands', () => {
