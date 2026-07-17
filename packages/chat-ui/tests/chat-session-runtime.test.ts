@@ -53,6 +53,53 @@ const createMessage = () => ({
   sequence: 1,
 });
 
+const createAssistant = (id: string, streamId: string) => ({
+  id,
+  role: 'assistant' as const,
+  content: null,
+  _streamId: streamId,
+  _localStatus: 'processing' as const,
+});
+
+class PermissionRequiredError extends Error {
+  constructor(readonly request: { requestId: string; toolName: string; origin: string }) {
+    super('permission required');
+  }
+}
+
+const createLocalToolMachine = () => {
+  const calls = { execute: [] as string[], decide: [] as string[], post: [] as unknown[] };
+  const attempts = new Map<string, number>();
+  return {
+    calls,
+    options: {
+      executeLocalTool: vi.fn(async (toolCallId: string) => {
+        const attempt = (attempts.get(toolCallId) ?? 0) + 1;
+        attempts.set(toolCallId, attempt);
+        calls.execute.push(toolCallId);
+        if (attempt === 1) {
+          throw new PermissionRequiredError({
+            requestId: `request-${toolCallId}`,
+            toolName: 'tab_read',
+            origin: 'test',
+          });
+        }
+        return { status: 'ok' };
+      }),
+      decideLocalToolPermission: vi.fn(async (requestId: string) => {
+        calls.decide.push(requestId);
+      }),
+      postLocalToolResult: vi.fn(async (_streamId: string, _toolCallId: string, result: unknown) => {
+        calls.post.push(result);
+      }),
+      isLocalToolName: (name: string) => name === 'tab_read',
+      isLocalToolRuntimeAvailable: () => true,
+      isLocalToolPermissionRequired: (error: unknown) => error instanceof PermissionRequiredError,
+      getPermissionRequest: (error: unknown) => (error as PermissionRequiredError).request,
+    },
+  };
+};
+
 describe('ChatSessionRuntime', () => {
   it('should attach live IO idempotently when called twice with the same host', () => {
     const streamClient = createStreamClient();
@@ -64,6 +111,55 @@ describe('ChatSessionRuntime', () => {
 
     expect(streamClient.set).toHaveBeenCalledTimes(1);
     expect(runtime.snapshot().attachGeneration).toBe(1);
+  });
+
+  it('should project registered stream events through the controller state', () => {
+    const streamClient = createStreamClient();
+    const runtime = createChatSessionRuntime('session-1');
+    runtime.setMessages([createAssistant('assistant-1', 'stream-1')]);
+    runtime.attach({ transport: createTransport(), streamClient });
+
+    expect(streamClient.set).toHaveBeenCalledTimes(1);
+    const emit = [...streamClient.activeHandlers.values()][0]!;
+    emit({ streamId: 'stream-1', type: 'content_delta', sequence: 1, data: { delta: 'controller text' } });
+    emit({ streamId: 'stream-1', type: 'done', sequence: 2, data: {} });
+
+    const snapshot = runtime.snapshot();
+    expect(snapshot.messages[0]?._localStatus).toBe('completed');
+    const segment = snapshot.projectedTimelineItems.find(
+      (item) => item.kind === 'assistant-segment',
+    );
+    expect(segment?.kind === 'assistant-segment' ? segment.segment.content : '').toBe('controller text');
+  });
+
+  it('should expose every controller prompt and route permission decisions to its machine', async () => {
+    vi.useFakeTimers();
+    try {
+      const streamClient = createStreamClient();
+      const machine = createLocalToolMachine();
+      const runtime = createChatSessionRuntime('session-1');
+      runtime.setMessages([
+        createAssistant('assistant-1', 'stream-1'),
+        createAssistant('assistant-2', 'stream-2'),
+      ]);
+      runtime.attach({ transport: createTransport(), streamClient, localToolMachine: machine.options });
+      const emit = [...streamClient.activeHandlers.values()][0]!;
+
+      emit({ streamId: 'stream-1', type: 'tool_call_start', sequence: 1, data: { tool_call_id: 'tool-1', name: 'tab_read', args: '{}' } });
+      emit({ streamId: 'stream-2', type: 'tool_call_start', sequence: 1, data: { tool_call_id: 'tool-2', name: 'tab_read', args: '{}' } });
+      await vi.runAllTimersAsync();
+
+      const prompts = runtime.snapshot().pendingLocalToolPermissionPrompts;
+      expect(prompts).toHaveLength(2);
+      await runtime.decideLocalToolPermission(prompts[0]!, 'allow_once');
+
+      expect(machine.calls.decide).toEqual(['request-tool-1']);
+      expect(machine.calls.execute).toEqual(['tool-1', 'tool-2', 'tool-1']);
+      expect(machine.calls.post).toEqual([{ status: 'ok' }]);
+      expect(runtime.snapshot().pendingLocalToolPermissionPrompts).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should update the next snapshot through commands', () => {
