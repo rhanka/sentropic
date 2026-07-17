@@ -6,9 +6,12 @@ import {
 import { syncDraftFromInput, type ChatDraftState } from './chatDraft.js';
 import {
   createChatLoopController,
+  type AttachLocalToolMachineOptions,
+  type ChatLoopController,
   type ControllerHostTransport,
   type ControllerLocalToolPermissionPrompt,
   type ControllerPollJob,
+  type ControllerSendPayload,
   type ControllerStreamClient,
 } from './chatLoopController.js';
 import type {
@@ -28,12 +31,27 @@ export type ChatSessionRuntimeMessage = ChatProjectionMessage & {
   [key: string]: unknown;
 };
 
+export type ChatSessionJsonPrimitive = string | number | boolean | null;
+
+export type ChatSessionJsonValue =
+  | ChatSessionJsonPrimitive
+  | ChatSessionJsonValue[]
+  | { [key: string]: ChatSessionJsonValue };
+
+export type ChatSessionJsonObject = {
+  [key: string]: ChatSessionJsonValue;
+};
+
+export type ChatSessionAttachment = ChatComposerAttachmentDraft;
+export type ChatSessionCheckpoint = ChatSessionJsonObject;
+export type ChatSessionTodo = ChatSessionJsonObject;
 export type ChatSessionPendingTool = ControllerLocalToolPermissionPrompt;
 
 export type ChatSessionRuntimeHost = {
-  transport: unknown;
-  streamClient?: unknown;
+  transport: ControllerHostTransport;
+  streamClient?: ControllerStreamClient;
   checkpointHost?: unknown;
+  localToolMachine?: AttachLocalToolMachineOptions;
 };
 
 export type ChatSessionRuntimeConfig<
@@ -41,10 +59,9 @@ export type ChatSessionRuntimeConfig<
 > = {
   initialMessages?: readonly Message[];
   initialDraft?: string;
-  initialAttachments?: readonly unknown[];
-  initialCheckpoints?: readonly unknown[];
-  initialTodo?: unknown | null;
-  initialPendingTool?: ChatSessionPendingTool | null;
+  initialAttachments?: readonly ChatSessionAttachment[];
+  initialCheckpoints?: readonly ChatSessionCheckpoint[];
+  initialTodo?: ChatSessionTodo | null;
   initialLastAppliedSequence?: number;
   pollJob?: ControllerPollJob;
   pollTimeoutMs?: number;
@@ -62,11 +79,11 @@ export type ChatSessionSnapshot<
   readonly projectedTimelineItems: readonly ChatProjectedTimelineItem<Message, unknown>[];
   readonly draft: string;
   readonly input: string;
-  readonly attachments: readonly unknown[];
+  readonly attachments: readonly Readonly<ChatSessionAttachment>[];
   readonly attachmentSummary: ComposerAttachmentSummary;
-  readonly checkpoints: readonly unknown[];
-  readonly todo: unknown | null;
-  readonly pendingTool: Readonly<ChatSessionPendingTool> | null;
+  readonly checkpoints: readonly Readonly<ChatSessionCheckpoint>[];
+  readonly todo: Readonly<ChatSessionTodo> | null;
+  readonly pendingLocalToolPermissionPrompts: readonly Readonly<ChatSessionPendingTool>[];
   readonly lastAppliedSequence: number;
   readonly attachGeneration: number;
   readonly viewBindings: number;
