@@ -520,18 +520,28 @@ export function createChatSessionRuntime<
       transport: host.transport,
       streamClient: host.streamClient,
       checkpointHost: host.checkpointHost,
+      localToolMachine: host.localToolMachine,
     };
 
-    controller.attachHost({ transport: host.transport as ControllerHostTransport });
+    controller.attachHost({ transport: host.transport });
+    if (host.localToolMachine) {
+      controller.attachLocalToolMachine(host.localToolMachine);
+    }
 
     if (host.streamClient !== undefined) {
-      if (!isControllerStreamClient(host.streamClient)) {
-        throw new Error(
-          'ChatSessionRuntime.attach requires streamClient.set/delete',
-        );
-      }
+      const streamClient = host.streamClient;
       controller.attachStream({
-        streamClient: host.streamClient,
+        streamClient: {
+          set(key, onEvent) {
+            streamClient.set(key, (event: unknown) => {
+              onEvent(event);
+              controller.handleLocalToolStreamEvent(event);
+            });
+          },
+          delete(key) {
+            streamClient.delete(key);
+          },
+        },
         pollJob: resolvePollJob(host.transport, config.pollJob),
         onProjectionEvent: (streamId) => {
           if (attachGeneration === generation) {
@@ -568,35 +578,90 @@ export function createChatSessionRuntime<
 
   const serialize = (): ChatSessionSnapshotSerializable<Message> => {
     const current = buildSnapshot();
-    return cloneMutableValue({
+    const serialized = cloneMutableValue({
       sessionId: current.sessionId,
       messages: current.messages as readonly Message[],
       draft: current.draft,
       attachments: current.attachments,
       checkpoints: current.checkpoints,
       todo: current.todo,
-      pendingTool: current.pendingTool as ChatSessionPendingTool | null,
       lastAppliedSequence: current.lastAppliedSequence,
     });
+    assertJsonSafe(serialized, 'serialized session');
+    return serialized;
   };
 
   const restore = (
     serialized: ChatSessionSnapshotSerializable<Message>,
   ): void => {
     assertActive();
+    assertJsonSafe(serialized, 'restore snapshot');
+    assertString(serialized.sessionId, 'restore snapshot.sessionId');
+    assertArray(serialized.messages, 'restore snapshot.messages');
+    assertString(serialized.draft, 'restore snapshot.draft');
+    assertArray(serialized.attachments, 'restore snapshot.attachments');
+    assertArray(serialized.checkpoints, 'restore snapshot.checkpoints');
+    assertFiniteNumber(
+      serialized.lastAppliedSequence,
+      'restore snapshot.lastAppliedSequence',
+    );
     if (attachedRefs || streamAttached) {
       throw new Error(
         'ChatSessionRuntime.restore requires a quiescent runtime',
       );
     }
 
+    currentSessionId = serialized.sessionId;
     draftState = createDraftState(serialized.draft);
     attachments = cloneMutableValue([...serialized.attachments]);
     checkpoints = cloneMutableValue([...serialized.checkpoints]);
     todo = cloneMutableValue(serialized.todo);
-    pendingTool = cloneMutableValue(serialized.pendingTool);
     lastAppliedSequence = normalizeSequence(serialized.lastAppliedSequence);
+    // Pending-tool cross-process restore is L0d — it needs a controller-owned serializable pending-tool descriptor API (absent today) + the backend tool-result idempotency contract.
+    controller.resetLocalToolMachineState();
     controller.setMessages(cloneMessages(serialized.messages));
+  };
+
+  const send = async (
+    payload: ControllerSendPayload,
+    opts: ChatSessionSendOptions<Message>,
+  ): Promise<void> => {
+    assertActive();
+    await controller.send(payload, opts);
+  };
+
+  const retry = async (
+    messageId: string,
+    opts: ChatSessionRetryOptions<Message>,
+  ): Promise<void> => {
+    assertActive();
+    await controller.retry(messageId, opts);
+  };
+
+  const stop = async (messageId: string): Promise<void> => {
+    assertActive();
+    await controller.stop(messageId);
+  };
+
+  const edit = async (messageId: string, content: string): Promise<void> => {
+    assertActive();
+    await controller.edit(messageId, content);
+  };
+
+  const setFeedback = async (
+    messageId: string,
+    vote: 'up' | 'down' | 'clear',
+  ): Promise<void> => {
+    assertActive();
+    await controller.setFeedback(messageId, vote);
+  };
+
+  const decideLocalToolPermission = async (
+    prompt: ChatSessionPendingTool,
+    decision: string,
+  ): Promise<void> => {
+    assertActive();
+    await controller.decideLocalToolPermission(prompt, decision);
   };
 
   const dispose = (): void => {
@@ -630,10 +695,15 @@ export function createChatSessionRuntime<
     hydrateMessages,
     setCheckpoints,
     setTodo,
-    setPendingTool,
     setLastAppliedSequence,
     attach,
     bindView,
+    send,
+    retry,
+    stop,
+    edit,
+    setFeedback,
+    decideLocalToolPermission,
     serialize,
     restore,
     dispose,
