@@ -32,6 +32,18 @@ import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } fro
  * (`services/auth/federation/broker.ts`). Active only when the host wires the `federation?` port.
  */
 
+// The API is mounted at `/api/v1` (`api/src/app.ts`: `app.route('/api/v1/auth', authRouter)`), and
+// this router is nested at `/federation` under it (`api/src/routes/auth/index.ts`:
+// `authRouter.route('/federation', federationRouter)`) — so the callback is REALLY served at
+// `/api/v1/auth/federation/<provider>/callback`. The default redirect URI (used whenever the
+// provider-specific `*_OAUTH_REDIRECT_URI` env is unset) must carry that full mount prefix, mirroring
+// the OAuth `oauthPathPrefix` convention (`packages/auth-hono/.../wellknown-handler.ts`, default
+// `/api/v1/auth/oauth`). Omitting `/api/v1` here sends the provider redirect to the SPA, not the API.
+const FEDERATION_CALLBACK_PREFIX = '/api/v1/auth/federation';
+
+const federationCallbackUrl = (issuer: string, providerId: string): string =>
+  `${issuer}${FEDERATION_CALLBACK_PREFIX}/${providerId}/callback`;
+
 const FLOW_COOKIE = 'sentropic_fed_flow';
 // BR-39e Lot 2 — the authenticated manual-link flow uses a DISTINCT bound cookie so its callback
 // cannot be reached with a plain login flow-state (and vice-versa).
@@ -172,7 +184,7 @@ const resolveOrRespond = (c: Context): FederationProvider | Response => {
       404,
     );
   }
-  const defaultRedirectUri = `${resolveOAuthIssuer(c.req.raw)}/auth/federation/${providerId}/callback`;
+  const defaultRedirectUri = federationCallbackUrl(resolveOAuthIssuer(c.req.raw), providerId);
   const provider = resolveFederationProvider(providerId, { defaultRedirectUri });
   if (!provider) {
     return c.json(
@@ -403,7 +415,7 @@ federationRouter.post('/challenge/complete', async (c) => {
   if (!isFederationProviderSupported(providerId)) {
     return c.json({ error: { code: 'provider_not_supported', message: `Unknown provider "${providerId}".` } }, 404);
   }
-  const defaultRedirectUri = `${resolveOAuthIssuer(c.req.raw)}/auth/federation/${providerId}/callback`;
+  const defaultRedirectUri = federationCallbackUrl(resolveOAuthIssuer(c.req.raw), providerId);
   const provider = resolveFederationProvider(providerId, { defaultRedirectUri });
   if (!provider) {
     return c.json({ error: { code: 'provider_not_configured', message: `Provider "${providerId}" is not configured.` } }, 503);
