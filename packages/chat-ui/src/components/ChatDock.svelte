@@ -33,6 +33,8 @@
     resolveEffectiveChatWidgetMode,
     type ChatWidgetHostMode,
   } from '../state/chatWidgetShell.js';
+  import { displayModeToPlacement } from '../state/chatPlacementMigration.js';
+  import { placementContainerClasses } from '../state/chatPlacementClasses.js';
 
   // ---------------------------------------------------------------------------
   // Props
@@ -185,6 +187,11 @@
   // Internal dock-mode flag
   let _isDocked = false;
   $: _isDocked = effectiveMode === 'docked';
+  $: effectivePlacement = displayModeToPlacement(effectiveMode);
+  $: containerPlacement = placementContainerClasses(effectivePlacement, {
+    dialogClass,
+    dockWidthCss,
+  });
 
   // Expose derived state for host binding
   export let isOpen: boolean = false;
@@ -507,10 +514,8 @@
       on:keydown={dispatchDialogKeyDown}
       class={isSidePanelHost
         ? `chat-dock-shell h-full w-full bg-white flex flex-col${dialogClass ? ' ' + dialogClass : ''}`
-        : _isDocked
-        ? `chat-dock-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col${dialogClass ? ' ' + dialogClass : ''}`
-        : `chat-dock-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg${dialogClass ? ' ' + dialogClass : ''}`}
-      style={isSidePanelHost ? '' : _isDocked ? `width: ${dockWidthCss};` : ''}
+        : containerPlacement.className}
+      style={isSidePanelHost ? '' : containerPlacement.style}
       class:hidden={!isVisible}
       class:overflow-hidden={!contentOverflowVisible}
       class:overflow-visible={contentOverflowVisible}
