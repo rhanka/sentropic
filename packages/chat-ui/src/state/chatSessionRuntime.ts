@@ -471,6 +471,7 @@ export function createChatSessionRuntime<
     let next = cloneMessages(controller.getSnapshot().messages);
     for (const message of messages) {
       const normalized = normalizeHydratedMessage(cloneMutableValue(message));
+      if (normalized._localStatus === undefined) delete normalized._localStatus;
       assertJsonSafe(normalized, 'messages');
       next = upsertSequencedMessage(next, normalized);
     }
