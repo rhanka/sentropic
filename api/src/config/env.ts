@@ -52,35 +52,36 @@ const envSchema = z.object({
   // BR-39e Lot 1 — social LOGIN federation (RP to Google). DISTINCT from GOOGLE_CLIENT_ID/SECRET
   // above (those drive Google Drive OAuth / Picker). When client id+secret are absent the
   // federation provider is feature-OFF (the route answers "provider not configured"). The redirect
-  // URI defaults to `<issuer>/auth/federation/google/callback` when unset; register that exact URL
-  // in the Google console (prod: https://auth.sent-tech.ca/auth/federation/google/callback).
+  // URI defaults to `<issuer>/api/v1/auth/federation/google/callback` when unset; register that exact
+  // URL in the Google console (prod: https://auth.sent-tech.ca/api/v1/auth/federation/google/callback).
   GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
   GOOGLE_OAUTH_REDIRECT_URI: z.string().optional(),
   // BR-39e Lot 2 — social LOGIN federation (RP to GitHub, OAuth2 only). When client id+secret are
   // absent the federation provider is feature-OFF (the route answers "provider not configured"). The
-  // redirect URI defaults to `<issuer>/auth/federation/github/callback` when unset; register that
-  // exact URL as the GitHub OAuth App callback (prod:
-  // https://auth.sent-tech.ca/auth/federation/github/callback).
+  // redirect URI defaults to `<issuer>/api/v1/auth/federation/github/callback` when unset; register
+  // that exact URL as the GitHub OAuth App callback (prod:
+  // https://auth.sent-tech.ca/api/v1/auth/federation/github/callback).
   GITHUB_OAUTH_CLIENT_ID: z.string().optional(),
   GITHUB_OAUTH_CLIENT_SECRET: z.string().optional(),
   GITHUB_OAUTH_REDIRECT_URI: z.string().optional(),
   // BR-39e Lot 4 — Sign in with Apple. The client id is the Services ID; the team/key ids and .p8
   // PEM are required to mint short-lived ES256 client secrets. Missing credentials keep Apple OFF.
-  // The redirect defaults to `<issuer>/auth/federation/apple/callback` when unset.
+  // The redirect defaults to `<issuer>/api/v1/auth/federation/apple/callback` when unset.
   APPLE_OAUTH_CLIENT_ID: z.string().optional(),
   APPLE_TEAM_ID: z.string().optional(),
   APPLE_KEY_ID: z.string().optional(),
   APPLE_PRIVATE_KEY: z.string().optional(),
   APPLE_OAUTH_REDIRECT_URI: z.string().optional(),
   // BR-39e Lot 5 — Facebook social federation. Missing credentials keep the provider feature-OFF.
-  // The redirect URI defaults to `<issuer>/auth/federation/facebook/callback` when unset.
+  // The redirect URI defaults to `<issuer>/api/v1/auth/federation/facebook/callback` when unset.
   FACEBOOK_OAUTH_CLIENT_ID: z.string().optional(),
   FACEBOOK_OAUTH_CLIENT_SECRET: z.string().optional(),
   FACEBOOK_OAUTH_REDIRECT_URI: z.string().optional(),
   // BR-39e Lot 3 — social LOGIN federation (RP to Microsoft Entra ID). Client credentials absent
-  // means feature-OFF. The redirect URI defaults to `<issuer>/auth/federation/microsoft/callback`;
-  // the tenant endpoint accepts common/organizations/consumers/a concrete tenant id.
+  // means feature-OFF. The redirect URI defaults to
+  // `<issuer>/api/v1/auth/federation/microsoft/callback`; the tenant endpoint accepts
+  // common/organizations/consumers/a concrete tenant id.
   MICROSOFT_OAUTH_CLIENT_ID: z.string().optional(),
   MICROSOFT_OAUTH_CLIENT_SECRET: z.string().optional(),
   MICROSOFT_OAUTH_REDIRECT_URI: z.string().optional(),
