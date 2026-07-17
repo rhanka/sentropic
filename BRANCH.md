@@ -33,7 +33,8 @@ No runtime code changes.
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- (none yet)
+- BRcap-N1 (info, conductor): delegation substitutions — `gpt-5.5-codex` unavailable on ChatGPT account (build ran on `gpt-5.6-terra` xhigh); review on `gpt-5.6-sol` xhigh + Opus 4.8. Gemini CLI returned HTTP 400 (auth/quota) → small-bit qualification fell back to Claude sonnet sub-agents. Rollback: none needed (docs-only).
+- BRcap-N2 (attention, owner): the inventory surfaces 4 P1 owner-decisions/triage (NOT dispatchable builds) — (1) LLM egress direction (gateway vs sanctioned mesh-direct; two overlapping specs); (2) UBO registry BR-59 activate-or-park (after BR-50); (3) mcp-platform activation label conflict BR-72 (live sidecar "PROVIDER activation" vs origin/main broker spec "benchmark matrix"); (4) cited-source-viewer activate-or-park. See docs §6/§7.
 
 ## AI Flaky tests
 - Not applicable (docs-only branch; no test campaign).
@@ -53,7 +54,7 @@ No runtime code changes.
 
 ## Lots
 - [x] Lot 0 — Branch + worktree + BRANCH.md (scope declared)
-- [ ] Lot 1 — Fact-gathering fan-out (capitalised vs integrated, per package cluster)
-- [ ] Lot 2 — Build inventory doc `docs/sentropic-app-capitalisation-inventory.md` (Codex)
-- [ ] Lot 3 — Adversarial review + reconciliation (Codex 5.6-sol + Opus 4.8)
-- [ ] Lot 4 — Final doc commit + track mapping / WP proposal
+- [x] Lot 1 — Fact-gathering fan-out (5 clusters, Claude sonnet sub-agents)
+- [x] Lot 2 — Build inventory doc `docs/sentropic-app-capitalisation-inventory.md` (Codex 5.6-terra)
+- [x] Lot 3 — Adversarial review ×2 (Codex 5.6-sol REWORK + Opus 4.8 SHIP-AFTER-FIXES) + conductor reconciliation
+- [x] Lot 4 — Final doc integrated + committed (track mapping is §6/§7 of the doc; no parallel WP written to track)
