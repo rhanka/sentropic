@@ -256,6 +256,52 @@ describe('ChatSessionRuntime', () => {
     expect(drafts).toEqual(['', 'first']);
   });
 
+  it('should reject non-JSON state values at every plain-state setter', () => {
+    const runtime = createChatSessionRuntime('session-1');
+    class CustomState {}
+    const invalidValues = [
+      new Map(),
+      new Set(),
+      new Date(),
+      new CustomState(),
+      new AbortController(),
+      () => undefined,
+      setTimeout(() => undefined, 10),
+    ];
+
+    try {
+      for (const value of invalidValues) {
+        expect(() => runtime.setAttachments([value as never])).toThrow(/JSON-safe/);
+        expect(() => runtime.setCheckpoints([value as never])).toThrow(/JSON-safe/);
+        expect(() => runtime.setTodo(value as never)).toThrow(/JSON-safe/);
+      }
+      const serialized = runtime.serialize();
+      expect(() => runtime.restore({ ...serialized, attachments: new Map() as never })).toThrow(/JSON-safe/);
+    } finally {
+      clearTimeout(invalidValues.at(-1) as ReturnType<typeof setTimeout>);
+    }
+  });
+
+  it('should return deep-frozen snapshot clones rather than mutable state references', () => {
+    const runtime = createChatSessionRuntime('session-1');
+    const source = { ...attachment };
+    runtime.setAttachments([source]);
+    const snapshot = runtime.snapshot();
+    source.fileName = 'changed outside the runtime';
+
+    expect(snapshot.attachments[0]?.fileName).toBe('image.png');
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.attachments)).toBe(true);
+    expect(Object.isFrozen(snapshot.attachments[0])).toBe(true);
+    expect(Object.isFrozen(snapshot.attachmentSummary)).toBe(true);
+  });
+
+  it('should keep contentless hydrated messages JSON-safe', () => {
+    const runtime = createChatSessionRuntime('session-1');
+    expect(() => runtime.hydrateMessages([{ id: 'history-1', role: 'assistant', content: null }])).not.toThrow();
+    expect(runtime.snapshot().messages[0]).not.toHaveProperty('_localStatus');
+  });
+
   it('should serialize and restore the quiescent session snapshot', () => {
     const runtime = createChatSessionRuntime('session-1');
     const message = createMessage();
@@ -266,11 +312,25 @@ describe('ChatSessionRuntime', () => {
     runtime.setCheckpoints([{ id: 'checkpoint-1', anchorMessageId: 'msg-1' }]);
     runtime.setTodo({ tasks: [{ id: 'todo-1', title: 'Inspect' }] });
     runtime.setLastAppliedSequence(42);
+    const serialized = runtime.serialize();
 
-    const restored = createChatSessionRuntime('session-1');
-    restored.restore(runtime.serialize());
+    expect(Object.keys(serialized).sort()).toEqual([
+      'attachments',
+      'checkpoints',
+      'draft',
+      'lastAppliedSequence',
+      'messages',
+      'sessionId',
+      'todo',
+    ]);
+    expect(serialized).not.toHaveProperty('pendingTool');
+    expect(JSON.parse(JSON.stringify(serialized))).toEqual(serialized);
+
+    const restored = createChatSessionRuntime('other-session');
+    restored.restore(serialized);
 
     const snapshot = restored.snapshot();
+    expect(snapshot.sessionId).toBe('session-1');
     expect(snapshot.messages).toEqual([message]);
     expect(snapshot.draft).toBe('Persist me');
     expect(snapshot.attachments).toEqual([attachment]);
@@ -280,6 +340,7 @@ describe('ChatSessionRuntime', () => {
     expect(snapshot.todo).toEqual({
       tasks: [{ id: 'todo-1', title: 'Inspect' }],
     });
+    expect(snapshot.pendingLocalToolPermissionPrompts).toEqual([]);
     expect(snapshot.lastAppliedSequence).toBe(42);
   });
 
