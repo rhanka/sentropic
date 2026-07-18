@@ -13,6 +13,10 @@ export const accountTransportProviderIds = [
   'codex',
   'gemini-code-assist',
   'claude-code',
+  // Antigravity: unified Google account transport fronting a multi-model fleet
+  // (Cloud Code `cloudcode-pa.googleapis.com`). Replaces the dead classic
+  // gemini-cli Code Assist path (see api/antigravity-provider-auth.ts).
+  'antigravity',
 ] as const;
 
 export type AccountTransportProviderId = (typeof accountTransportProviderIds)[number];
@@ -154,6 +158,7 @@ export const futureAccountTransportProviderIds = [
 export const executableAccountTransportProviderIds = [
   'codex',
   'claude-code',
+  'antigravity',
 ] as const satisfies readonly AccountTransportProviderId[];
 
 export const getSecretAuthMaterial = (
