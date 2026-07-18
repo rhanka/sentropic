@@ -1,0 +1,1091 @@
+service	primaryClass	authTypes	actionCount	asyncActionCount	followUpActionCount	distinctRequiredScopes	top3Verbs
+7_shifts	Business systems	api_key	7	0	0	0	list:5,get:1,retrieve:1
+a_leads	Business systems	api_key	4	0	0	0	find:3,verify:1
+ably	LLM/dev accounts	api_key	11	0	0	0	get:5,batch:2,create:1
+ably_control	LLM/dev accounts	api_key	14	0	0	0	create:3,get:3,list:3
+abstract	Cloud/FinOps	api_key	1	0	0	0	validate:1
+abuseipdb	Cloud/FinOps	api_key	4	0	0	0	check:2,blacklist:1,get:1
+abyssale	Business systems	api_key	9	0	0	0	get:3,list:3,create:2
+accredible_certificates	Business systems	api_key	8	0	0	0	get:2,list:2,search:2
+acculynx	Business systems	api_key	12	0	0	0	list:7,create:2,get:2
+accuweather	Domain connectors	api_key	5	0	0	0	get:4,search:1
+active_trail	LLM/dev accounts	api_key	14	0	0	0	get:3,list:3,create:2
+activecampaign	LLM/dev accounts	api_key	6	0	0	0	list:3,get:2,upsert:1
+adafruit_io	Cloud/FinOps	api_key	5	0	0	0	get:2,list:2,create:1
+addressfinder	Domain connectors	api_key	6	0	2	0	find:2,get:2,verify:2
+addresszen	Domain connectors	api_key	3	0	0	0	find:1,get:1,retrieve:1
+adobe_commerce	Business systems	api_key	4	0	0	0	get:2,list:2
+adyen	Domain connectors	api_key	6	0	0	1	get:3,list:3
+adyntel	Business systems	api_key	6	0	0	0	search:4,get:2
+aeroleads	Business systems	api_key	1	0	0	0	get:1
+affinda	Cloud/FinOps	api_key	6	0	0	0	list:4,create:1,get:1
+affinity	Business systems	api_key	20	0	0	0	list:14,get:6
+aftership	Business systems	api_key	9	0	0	0	list:2,create:1,delete:1
+agent_mail	Communications	api_key	102	0	0	0	get:27,list:20,delete:16
+agentql	Cloud/FinOps	api_key	4	0	0	0	create:1,get:1,list:1
+agenty	Cloud/FinOps	api_key	31	0	0	0	get:10,delete:3,download:3
+agiled	Business systems	api_key	15	0	0	0	create:3,delete:3,get:3
+agility	Business systems	api_key	6	0	0	0	get:5,list:1
+agora	Communications	api_key	7	0	0	0	get:2,create:1,list:1
+ahrefs	Business systems	api_key	4	0	0	0	get:4
+aimfox	LLM/dev accounts	api_key	11	0	0	0	get:4,list:4,add:1
+airbrake	LLM/dev accounts	api_key	8	0	0	0	get:4,list:4
+aircall	Communications	api_key	10	0	0	0	get:5,list:5
+airtable	Business systems	api_key	14	0	12	0	create:4,get:3,update:3
+aivoov	LLM/dev accounts	api_key	2	0	0	0	create:1,list:1
+alchemy	Domain connectors	api_key	5	0	0	0	get:5
+algo_docs	Business systems	api_key	6	0	0	0	list:3,get:2,upload:1
+algolia	Cloud/FinOps	api_key	9	0	0	6	save:2,add:1,browse:1
+aliyun_oss	Cloud/FinOps	custom_credential	6	0	0	0	list:2,delete:1,generate:1
+aliyun_sts	Cloud/FinOps	custom_credential	1	0	0	0	assume:1
+alpaca	Domain connectors	api_key	22	0	0	0	get:14,list:8
+alpha_vantage	Domain connectors	api_key	44	0	0	0	get:42,call:1,search:1
+alt_text_ai	LLM/dev accounts	api_key	7	0	0	0	get:2,create:1,delete:1
+amap	Domain connectors	api_key	15	0	0	0	route:5,search:3,district:1
+amara	Business systems	api_key	33	0	0	0	get:10,list:10,create:3
+ambee	Domain connectors	api_key	5	0	0	0	get:3,geocode:1,reverse:1
+ambient_weather	Domain connectors	api_key	3	0	0	0	get:2,list:1
+amplemarket	Business systems	api_key	11	0	0	0	list:5,get:4,complete:1
+amplitude	Cloud/FinOps	api_key	4	0	0	0	get:2,list:1,search:1
+anchor_browser	LLM/dev accounts	api_key	3	0	0	0	get:2,start:1
+anrok	Domain connectors	api_key	7	0	0	0	list:5,get:2
+anthropic	LLM/dev accounts	api_key	4	0	0	0	count:1,create:1,get:1
+anthropic_admin	LLM/dev accounts	api_key	6	0	0	0	list:5,get:1
+apaleo	Business systems	oauth2	29	0	0	12	create:5,list:5,check:4
+api_bible	Cloud/FinOps	api_key	8	0	0	0	list:4,get:3,search:1
+api_ninjas	Cloud/FinOps	api_key	6	0	0	0	weather:2,air:1,geocode:1
+api_sports	Cloud/FinOps	api_key	14	0	0	0	football:14
+api_void	Cloud/FinOps	api_key	5	0	0	0	check:3,get:1,verify:1
+api2pdf	Business systems	api_key	1	0	0	0	markdown:1
+apiflash	LLM/dev accounts	api_key	3	0	0	0	get:2,capture:1
+apify	Cloud/FinOps	api_key	5	0	0	0	get:4,run:1
+apipie_ai	LLM/dev accounts	api_key	4	0	0	0	create:2,list:2
+apiverve	Cloud/FinOps	api_key	9	0	0	0	get:3,lookup:2,calculate:1
+apollo	Business systems	api_key	5	0	0	0	enrich:2,search:2,get:1
+appdrag	Cloud/FinOps	api_key	1	0	0	0	execute:1
+appstle_subscriptions	Business systems	api_key	4	0	0	0	get:2,list:2
+appveyor	LLM/dev accounts	api_key	6	0	0	0	get:6
+arxiv	Cloud/FinOps	no_auth	8	0	0	0	search:5,get:2,list:1
+asana	Business systems	api_key	10	0	0	0	get:3,list:3,create:2
+ashby	Business systems	api_key	4	0	0	2	list:2,key:1,search:1
+asin_data_api	Business systems	api_key	6	0	0	0	list:2,clear:1,delete:1
+assemblyai	LLM/dev accounts	api_key	6	0	0	0	get:3,create:1,delete:1
+atlas_so	Communications	api_key	10	0	0	0	list:3,get:2,upsert:2
+attention	Communications	api_key	5	0	0	0	list:3,ask:1,get:1
+attio	Business systems	api_key	10	0	0	3	list:3,get:2,create:1
+auth0_management	Cloud/FinOps	api_key	15	0	0	0	list:8,get:2,remove:2
+autobound	Business systems	api_key	6	0	0	0	enrich:2,search:2,get:1
+autom	Business systems	api_key	4	0	0	0	find:3,get:1
+autotask	Business systems	api_key	4	0	0	0	get:3,query:1
+aviationstack	Cloud/FinOps	api_key	9	0	0	0	list:7,search:2
+avoma	Communications	api_key	9	0	0	0	get:6,list:3
+aws_s3	Cloud/FinOps	custom_credential	6	0	0	0	list:2,delete:1,generate:1
+aws_sts	Cloud/FinOps	custom_credential	1	0	0	0	assume:1
+axiom	Cloud/FinOps	api_key	5	0	0	0	create:1,delete:1,get:1
+ayrshare	Business systems	api_key	11	0	0	0	get:3,check:1,delete:1
+baidu_maps	Domain connectors	api_key	14	0	0	0	route:4,search:3,district:1
+balldontlie_worldcup	Cloud/FinOps	api_key	20	0	0	0	list:19,get:1
+bamboohr	Business systems	api_key	4	0	0	0	get:2,list:2
+bannerbear	Business systems	api_key	5	0	0	0	get:3,create:1,list:1
+baremetrics	Domain connectors	api_key	12	0	0	0	list:5,create:3,update:3
+bark	Communications	api_key	4	0	0	0	send:3,get:1
+baselinker	Business systems	api_key	6	0	0	0	list:6
+baserow	Business systems	api_key	7	0	6	0	list:3,create:1,delete:1
+basin	Business systems	api_key	18	0	0	0	delete:4,get:4,list:4
+beaconchain	LLM/dev accounts	api_key	5	0	0	0	get:4,list:1
+beamer	Communications	api_key	4	0	0	0	count:1,create:1,get:1
+beehiiv	Business systems	api_key	6	0	0	0	get:3,list:3
+beeminder	Business systems	api_key	8	0	0	0	list:3,get:2,create:1
+benchmark_email	Communications	api_key	4	0	0	0	get:4
+benzinga	Domain connectors	api_key	4	0	0	0	list:3,get:1
+bestbuy	Cloud/FinOps	api_key	8	0	0	0	get:8
+better_proposals	Communications	api_key	20	0	0	0	list:12,get:8
+better_stack	LLM/dev accounts	api_key	7	0	3	0	list:3,acknowledge:1,create:1
+bettercontact	Business systems	api_key	3	0	0	0	get:2,submit:1
+bidsketch	Business systems	api_key	6	0	0	0	get:3,list:3
+big_commerce	Business systems	api_key	5	0	0	0	create:1,delete:1,get:1
+big_data_cloud	Cloud/FinOps	api_key	4	0	0	0	get:3,reverse:1
+bigmailer	Communications	api_key	13	0	0	0	get:3,list:3,create:2
+bigpicture_io	Business systems	api_key	2	0	0	0	find:2
+bird	Communications	api_key	12	0	0	0	get:3,list:3,send:2
+bitly	Business systems	api_key	6	0	0	0	get:3,list:1,shorten:1
+bitquery	Cloud/FinOps	api_key	1	0	0	0	run:1
+bitrise	LLM/dev accounts	api_key	4	0	0	0	list:2,get:1,trigger:1
+bland_ai	LLM/dev accounts	api_key	5	0	0	0	get:3,list:2
+blaze_meter_functional	LLM/dev accounts	api_key	3	0	0	0	get:2,list:1
+blaze_meter_performance	LLM/dev accounts	api_key	6	0	0	0	list:4,get:2
+blaze_meter_service_virtualization	LLM/dev accounts	api_key	3	0	0	0	get:1,list:1,update:1
+blocknative	Cloud/FinOps	api_key	4	0	0	0	get:2,list:2
+bluesky	Communications	api_key	3	0	0	0	create:1,get:1,search:1
+bolna	Communications	api_key	6	0	0	0	get:4,list:2
+boloforms	Business systems	api_key	4	0	0	0	list:2,get:1,send:1
+bookingmood	Business systems	api_key	3	0	0	0	list:2,query:1
+booqable	Business systems	api_key	10	0	0	0	get:4,list:3,search:3
+bot_star	Communications	api_key	21	0	0	0	create:5,get:4,list:4
+botpress	LLM/dev accounts	api_key	3	0	0	0	list:2,get:1
+botsonic	Communications	api_key	4	0	0	0	list:2,generate:1,get:1
+bouncer	Communications	api_key	13	0	0	0	get:5,verify:3,create:2
+boxhero	Document/storage	api_key	4	0	0	0	get:2,list:2
+brandfetch	Business systems	api_key	2	0	0	0	get:2
+brave_search	Cloud/FinOps	api_key	4	0	0	0	image:1,news:1,video:1
+braze	Business systems	api_key	4	0	0	4	get:2,list:2
+breathe	Business systems	api_key	5	0	0	0	list:3,get:2
+breeze	Communications	api_key	5	0	0	0	list:4,get:1
+brevo	Communications	api_key	12	0	0	0	list:4,create:2,get:2
+brex	Domain connectors	api_key	9	0	0	0	list:5,get:4
+bright_data	Cloud/FinOps	api_key	6	0	0	0	get:4,list:2
+browse_ai	LLM/dev accounts	api_key	6	0	2	0	get:2,list:2,run:1
+browserbase	LLM/dev accounts	api_key	11	0	1	0	get:4,create:2,list:2
+browserless	Cloud/FinOps	api_key	3	0	0	0	fetch:1,generate:1,take:1
+btcpay_server	Domain connectors	api_key	7	0	0	0	get:2,list:2,create:1
+bug_herd	Business systems	api_key	14	0	0	0	list:5,create:4,get:2
+bugbug	LLM/dev accounts	api_key	8	0	1	0	list:4,get:3,run:1
+bugsnag	Cloud/FinOps	api_key	7	0	0	0	list:5,get:2
+builder_io	Business systems	api_key	5	0	0	0	create:1,delete:1,get:1
+buildium	Business systems	api_key	7	0	0	0	list:4,get:3
+buildkite	LLM/dev accounts	api_key	12	0	7	5	get:5,list:4,cancel:1
+builtwith	Cloud/FinOps	api_key	5	0	0	0	lookup:4,get:1
+bunnycdn	Document/storage	api_key	3	0	0	0	get:1,list:1,purge:1
+businessmap	Domain connectors	api_key	10	0	0	0	list:3,create:2,get:2
+buttondown	Communications	api_key	12	0	0	0	get:3,list:3,create:2
+byteforms	Business systems	api_key	3	0	0	0	list:2,get:1
+cal	Communications	oauth2	47	0	0	8	get:9,retrieve:6,update:6
+calendarific	Business systems	api_key	3	0	0	0	list:2,get:1
+calendly	Business systems	oauth2+api_key	37	0	0	10	list:13,get:12,create:6
+callerapi	Communications	api_key	2	0	0	0	get:2
+callingly	Communications	api_key	12	0	0	0	list:5,get:4,create:1
+callpage	Communications	api_key	7	0	0	3	get:3,list:3,create:1
+callrail	Communications	api_key	6	0	0	0	list:4,get:2
+campaign_cleaner	LLM/dev accounts	api_key	7	0	0	0	get:4,delete:1,list:1
+canny	Business systems	api_key	11	0	0	0	list:4,create:3,retrieve:3
+canva	Business systems	oauth2	13	2	0	8	get:6,create:4,list:2
+capsule_crm	Business systems	api_key	25	0	0	0	list:10,get:4,create:3
+carbone	Business systems	api_key	5	0	0	0	list:3,delete:1,update:1
+cardly	Business systems	api_key	7	0	0	0	list:5,echo:1,get:1
+cats	Business systems	api_key	10	0	0	0	get:4,list:3,search:3
+celigo	LLM/dev accounts	api_key	8	0	0	0	get:5,list:3
+census_bureau	Cloud/FinOps	api_key	5	0	0	0	list:3,get:1,query:1
+censys	Cloud/FinOps	api_key	3	0	0	0	get:3
+central_station_crm	Business systems	api_key	19	0	0	0	get:4,create:3,delete:3
+certifier	Communications	api_key	6	0	0	0	list:4,create:1,search:1
+certn	Business systems	api_key	10	0	0	0	list:7,get:3
+chargebee	Domain connectors	api_key	9	0	0	0	get:4,list:4,create:1
+chartmogul	Domain connectors	api_key	5	0	0	0	list:3,get:2
+chaserhq	Domain connectors	api_key	8	0	0	0	get:5,list:3
+chatarmin	Communications	api_key	23	0	0	0	get:6,list:5,create:3
+chatbotkit	Communications	api_key	27	0	0	0	list:7,create:6,fetch:5
+chatpdf	Communications	api_key	3	0	0	0	add:1,chat:1,delete:1
+chattermill	Communications	api_key	22	0	0	0	get:9,list:9,create:1
+chatwork	Communications	api_key	15	0	0	0	get:5,list:5,update:2
+check	Domain connectors	api_key	3	0	0	0	get:1,list:1,validate:1
+checkly	LLM/dev accounts	api_key	7	0	0	0	get:4,list:3
+chorus	Communications	api_key	6	0	0	0	get:3,list:3
+cin7_core	Domain connectors	api_key	5	0	0	0	get:3,list:2
+cincopa	Document/storage	api_key	4	0	0	0	list:4
+circle	Communications	api_key	8	0	0	0	get:4,list:4
+circleci	LLM/dev accounts	api_key	11	0	3	0	get:6,list:4,trigger:1
+claid_ai	LLM/dev accounts	api_key	3	2	1	1	edit:1,get:1,submit:1
+clari_copilot	Business systems	api_key	5	0	0	0	list:4,get:1
+classmarker	Business systems	api_key	5	0	0	0	list:5
+clearout	Business systems	api_key	8	0	0	0	verify:6,get:1,instant:1
+clerk	Cloud/FinOps	api_key	11	0	0	0	update:2,ban:1,count:1
+clickhouse	Cloud/FinOps	custom_credential	5	0	0	0	get:2,list:2,execute:1
+clickmeeting	Communications	api_key	19	0	0	0	list:11,get:2,create:1
+clicksend	Communications	api_key	13	0	0	0	get:3,create:2,delete:2
+clickup	Business systems	oauth2+api_key	68	0	0	2	get:23,create:12,delete:9
+clockify	Business systems	api_key	12	0	5	0	list:4,create:3,get:3
+close	Business systems	api_key	16	0	0	0	create:4,get:4,list:4
+cloudconvert	Cloud/FinOps	api_key	14	0	4	3	get:3,list:3,create:2
+cloudflare_browser_rendering	Cloud/FinOps	api_key	6	0	0	0	get:4,list:1,scrape:1
+cloudflare_dns	Cloud/FinOps	api_key+oauth2	8	0	0	3	list:3,get:2,create:1
+cloudflare_r2	Cloud/FinOps	custom_credential+oauth2	9	0	0	2	delete:2,get:2,list:2
+cloudflare_worker	Cloud/FinOps	custom_credential+oauth2	19	0	0	2	get:4,list:4,delete:3
+cloudinary	Document/storage	api_key	5	0	0	0	get:1,list:1,rename:1
+cloudlayer	Cloud/FinOps	api_key	8	0	0	0	create:3,get:3,list:2
+cockroach_labs	Cloud/FinOps	api_key	7	0	0	0	list:5,get:2
+coda	Business systems	api_key	11	0	0	0	list:5,get:4,create:1
+codacy	LLM/dev accounts	api_key	8	0	0	0	list:5,get:3
+codegen	LLM/dev accounts	api_key	6	0	0	0	list:4,get:2
+codemagic	LLM/dev accounts	api_key	8	0	0	0	list:4,get:2,cancel:1
+coderabbit	LLM/dev accounts	api_key	13	0	0	0	list:4,get:3,update:2
+cohere	LLM/dev accounts	api_key	3	0	0	0	chat:1,embed:1,rerank:1
+coinbase	Domain connectors	api_key	2	0	0	0	get:1,list:1
+coinmarketcal	Domain connectors	api_key	5	0	0	0	list:5
+coinmarketcap	Domain connectors	api_key	6	0	0	0	get:4,convert:1,list:1
+coinranking	Domain connectors	api_key	6	0	0	0	get:4,list:1,search:1
+college_football_data	Cloud/FinOps	api_key	5	0	0	0	list:4,get:1
+collegiate	Cloud/FinOps	api_key	1	0	0	0	lookup:1
+companycam	Business systems	api_key	15	0	0	0	get:5,list:3,create:2
+companyenrich	Business systems	api_key	6	0	0	0	enrich:2,count:1,find:1
+conductor	Business systems	api_key	7	0	0	0	list:5,get:2
+configcat	Business systems	api_key	7	0	0	0	list:5,get:2
+confluence	Business systems	api_key	5	0	0	0	create:1,get:1,list:1
+contactout	Business systems	api_key	15	0	0	0	enrich:4,check:3,get:3
+contentful	Business systems	api_key	8	0	0	0	list:4,get:2,create:1
+contentful_graphql	Business systems	api_key	1	0	0	0	execute:1
+contentstack_content_delivery	Business systems	api_key	5	0	0	0	list:3,get:2
+contentstack_content_management	Business systems	api_key	6	0	0	0	get:2,list:2,create:1
+context7	LLM/dev accounts	api_key	2	0	0	0	get:1,search:1
+control_d	Cloud/FinOps	api_key	8	0	0	0	list:4,get:2,delete:1
+convertapi	Business systems	api_key	1	0	0	0	convert:1
+convex	LLM/dev accounts	oauth2+api_key	23	0	0	13	list:6,delete:4,get:4
+coresignal	Cloud/FinOps	api_key	3	0	1	0	collect:1,preview:1,search:1
+countdown_api	Business systems	api_key	4	0	0	0	get:2,autocomplete:1,search:1
+courier	Communications	api_key	11	0	0	0	delete:2,get:2,list:2
+craftmypdf	Business systems	api_key	4	0	0	0	get:2,create:1,list:1
+crisp	Communications	api_key	5	0	0	0	get:2,list:2,send:1
+cronitor	LLM/dev accounts	api_key	5	0	0	0	create:1,delete:1,get:1
+crowdin	Communications	oauth2+api_key	7	0	0	3	list:4,create:2,upload:1
+crunchbase	Business systems	api_key	3	0	0	0	autocomplete:1,get:1,search:1
+crustdata	Business systems	api_key	4	0	0	0	autocomplete:1,enrich:1,identify:1
+currencyapi	Domain connectors	api_key	5	0	0	0	get:4,convert:1
+currencyscoop	Domain connectors	api_key	5	0	0	0	get:4,convert:1
+currents_api	Domain connectors	api_key	5	0	0	0	list:3,get:1,search:1
+cursor	LLM/dev accounts	api_key	4	0	0	0	get:2,list:2
+customerio	Business systems	custom_credential	7	0	0	0	track:2,delete:1,identify:1
+customgpt	LLM/dev accounts	api_key	7	0	0	0	list:4,create:1,get:1
+cutt_ly	Business systems	api_key	2	0	0	0	get:1,shorten:1
+cyberimpact	Business systems	api_key	15	0	0	0	create:3,delete:3,get:3
+dadata_ru	Domain connectors	api_key	5	0	0	0	suggest:5
+daffy	Domain connectors	api_key	10	0	0	0	get:5,list:4,search:1
+dailybot	LLM/dev accounts	api_key	10	0	0	0	get:4,list:3,send:2
+dart	Business systems	api_key	6	0	0	0	get:2,create:1,delete:1
+data247	Communications	api_key	5	0	0	0	check:2,append:1,get:1
+databar_ai	LLM/dev accounts	api_key	11	0	0	0	get:5,list:2,run:2
+databox	Document/storage	api_key	7	0	0	0	create:2,delete:2,get:1
+databricks	Cloud/FinOps	api_key	36	0	0	0	list:8,workspace:6,get:5
+datadog	Cloud/FinOps	api_key	7	0	0	0	get:2,list:2,query:1
+dataforseo	Business systems	custom_credential	14	0	0	0	backlinks:4,keyword:3,ads:1
+datalust	Cloud/FinOps	api_key	15	0	3	0	get:3,create:2,delete:2
+datascope	Business systems	api_key	9	0	0	0	list:4,create:2,update:2
+deck_co	LLM/dev accounts	api_key	6	0	0	0	get:2,list:2,create:1
+deepgram	LLM/dev accounts	api_key	8	0	0	0	list:5,get:3
+deepl	Business systems	api_key	3	0	0	0	get:1,list:1,translate:1
+deepseek	LLM/dev accounts	api_key	4	0	0	0	create:2,get:1,list:1
+delighted	Business systems	api_key	8	0	0	0	list:4,create:1,delete:1
+demodesk	Business systems	api_key	8	0	0	0	list:4,get:3,batch:1
+desktime	Business systems	api_key	5	0	0	0	get:2,list:2,create:1
+detect_language	Cloud/FinOps	api_key	4	0	0	0	detect:2,get:1,list:1
+devin	LLM/dev accounts	api_key	6	0	0	0	get:2,create:1,list:1
+devto	Domain connectors	api_key	12	0	0	0	list:6,get:4,create:1
+dialpad_wfm	Business systems	api_key	3	0	0	0	list:2,get:1
+dida365	Business systems	oauth2	19	0	0	2	get:5,list:4,create:3
+diffbot	Cloud/FinOps	api_key	1	0	0	0	extract:1
+digital_ocean	Document/storage	api_key	11	0	0	9	list:8,get:2,manage:1
+dingtalk_bot	Communications	api_key	5	0	0	0	send:5
+discolike	Business systems	api_key	7	0	0	0	get:5,count:1,discover:1
+discord	Communications	oauth2	19	0	0	7	get:13,list:3,delete:1
+discordbot	Communications	api_key	15	0	0	0	get:9,list:3,create:1
+discourse	Communications	api_key	7	0	7	0	list:3,create:2,get:1
+dixa	Communications	api_key	7	0	0	0	list:4,get:3
+dns_filter	Cloud/FinOps	api_key	9	0	0	0	list:6,get:3
+docker_hub	LLM/dev accounts	api_key	14	0	0	0	list:5,get:4,remove:2
+docmosis	Business systems	api_key	6	0	0	0	get:3,check:1,list:1
+docparser	Business systems	api_key	10	0	0	0	get:4,fetch:1,list:1
+docraptor	Business systems	api_key	1	0	0	0	create:1
+docsautomator	Business systems	api_key	7	2	1	0	get:3,create:2,list:2
+docsbot_ai	LLM/dev accounts	api_key	6	0	0	0	get:2,list:2,fetch:1
+docsend_2_pdf	Business systems	no_auth	1	0	0	0	convert:1
+docsumo	Business systems	api_key	6	0	0	0	get:4,list:1,upload:1
+docugenerate	Business systems	api_key	7	0	0	0	get:2,list:2,delete:1
+documenso	Communications	api_key	4	0	0	0	get:2,list:2
+document360	Document/storage	api_key	4	0	0	0	list:2,get:1,search:1
+docuseal	Communications	api_key	3	0	0	0	create:1,get:1,list:1
+dokploy	Cloud/FinOps	api_key	524	0	0	0	compose:30,update:25,get:23
+doppler	Cloud/FinOps	api_key	44	0	0	0	get:9,list:9,update:8
+dovetail	LLM/dev accounts	api_key	7	0	0	0	get:2,list:2,create:1
+drata	Business systems	api_key	8	0	0	0	get:4,list:4
+dropbox	Document/storage	oauth2	24	0	0	6	get:6,list:4,create:2
+dropbox_sign	Document/storage	api_key	5	0	0	0	get:3,list:2
+dropcontact	Business systems	api_key	2	2	1	0	get:1,submit:1
+dub	Business systems	api_key	15	0	0	0	create:3,delete:3,list:3
+dune	Cloud/FinOps	api_key	6	1	1	1	get:4,execute:1,list:1
+dynatrace	Cloud/FinOps	api_key	3	0	0	2	list:2,get:1
+e2b	LLM/dev accounts	api_key	4	0	0	0	create:1,delete:1,get:1
+eagle_doc	Business systems	api_key	5	0	0	0	get:2,list:2,process:1
+easypost	Business systems	api_key	6	0	0	0	create:2,get:2,list:2
+ecologi	Cloud/FinOps	api_key	10	0	0	0	get:5,purchase:5
+elasticsearch	Cloud/FinOps	api_key+custom_credential	4	0	0	0	get:1,list:1,ping:1
+elevenlabs	LLM/dev accounts	api_key	14	0	0	0	get:9,text:2,create:1
+elevenreader	LLM/dev accounts	api_key	5	0	0	0	get:3,read:1,search:1
+elevio	Communications	api_key	5	0	0	0	get:2,list:2,search:1
+elorus	Business systems	api_key	12	0	0	0	create:3,get:3,list:3
+emailable	Communications	api_key	4	0	0	0	get:2,verify:2
+emaillistverify	Communications	api_key	8	0	0	0	get:2,verify:2,check:1
+emailoctopus	Communications	api_key	9	0	0	0	get:3,list:3,create:1
+encharge	Communications	api_key	1	0	0	0	send:1
+encodian	Business systems	api_key	5	0	0	0	compress:1,extract:1,get:1
+energy_performance_certificates	Cloud/FinOps	api_key	4	0	0	0	search:3,get:1
+enigma	Cloud/FinOps	api_key	12	0	0	0	get:6,create:2,search:2
+envoy	Business systems	api_key	8	0	0	0	get:4,list:4
+eodhd_apis	Domain connectors	api_key	8	0	0	0	get:6,list:1,search:1
+erpnext	Business systems	api_key	9	0	0	0	get:4,create:1,delete:1
+esignatures_io	Business systems	api_key	8	0	0	0	get:4,create:2,list:1
+espocrm	Business systems	api_key	7	0	0	0	get:3,create:1,delete:1
+evenium	Communications	api_key	6	0	0	0	get:4,list:2
+eventee	Communications	api_key	5	0	0	0	list:4,get:1
+eventzilla	Business systems	api_key	9	0	0	0	list:5,get:4
+everhour	Business systems	api_key	12	0	0	0	get:4,list:4,create:1
+exa	Cloud/FinOps	api_key	4	0	0	0	answer:1,find:1,get:1
+excel	Business systems	oauth2	31	0	0	1	get:5,list:5,add:4
+expofp	Business systems	api_key	7	0	0	0	get:2,list:2,add:1
+fairing	LLM/dev accounts	api_key	1	0	0	0	list:1
+fal_ai	LLM/dev accounts	api_key	8	0	0	0	get:4,queue:2,cancel:1
+faraday	Cloud/FinOps	api_key	12	0	0	0	get:6,list:6
+fathom	Cloud/FinOps	api_key	15	0	0	0	get:5,create:3,list:3
+feathery	Business systems	api_key	13	0	0	0	get:4,create:3,list:3
+featurebase	Business systems	api_key	11	0	0	0	get:3,list:3,delete:2
+feishu	Document/storage	oauth2	7	0	0	2	get:3,list:3,search:1
+feishu_app_bot	Communications	custom_credential	20	0	0	12	list:5,download:2,get:2
+feishu_custom_bot	Communications	api_key	5	0	0	0	send:5
+fellow	Communications	api_key	7	0	0	0	get:3,list:2,archive:1
+felt	Business systems	api_key	12	0	0	0	get:3,create:2,delete:2
+fern	Domain connectors	api_key	7	0	0	4	get:4,list:3
+ffhub	Document/storage	api_key	3	0	1	0	create:1,get:1,list:1
+fiber_ai	LLM/dev accounts	api_key	3	0	0	0	get:2,list:1
+fidel_api	Domain connectors	api_key	6	0	0	0	get:3,list:3
+figma	Business systems	api_key+oauth2	26	0	0	12	get:10,list:8,delete:3
+files_com	Document/storage	api_key	5	0	0	0	create:1,delete:1,get:1
+fillout	Business systems	api_key	6	0	0	0	get:2,list:2,create:1
+finage	Domain connectors	api_key	6	0	0	0	get:5,list:1
+financial_modeling_prep	LLM/dev accounts	api_key	37	0	0	0	get:33,search:3,list:1
+findymail	Communications	api_key	5	0	0	0	search:3,get:1,verify:1
+fireberry	Business systems	api_key	11	0	0	0	create:2,delete:2,get:2
+firecrawl	Cloud/FinOps	api_key	30	0	0	0	crawl:8,batch:4,get:3
+fireflies	Communications	api_key	22	0	0	0	list:7,get:5,update:3
+firehydrant	Business systems	api_key	7	0	0	0	get:3,list:3,create:1
+firstbase	Business systems	api_key	6	0	0	0	list:4,get:2
+fivetran	Cloud/FinOps	custom_credential	6	0	3	0	get:3,list:3
+fixer	Domain connectors	api_key	3	0	0	0	get:3
+flagsmith	LLM/dev accounts	api_key	4	0	0	0	get:2,identify:1,list:1
+float	Business systems	api_key	5	0	0	0	list:5
+flomo	Business systems	api_key+custom_credential	13	0	0	0	memo:4,get:3,tag:3
+flowiseai	LLM/dev accounts	api_key	2	0	0	0	get:1,send:1
+fluxguard	Cloud/FinOps	api_key	12	0	0	0	delete:3,get:3,list:2
+fly	LLM/dev accounts	api_key	9	0	0	0	get:2,list:2,create:1
+folk	Communications	api_key	15	0	0	0	list:5,get:4,create:2
+fomo	Business systems	api_key	5	0	0	0	create:1,delete:1,get:1
+football_data	Cloud/FinOps	api_key	6	0	0	0	list:4,get:2
+forem	Domain connectors	api_key	10	0	0	0	get:4,list:4,create:1
+formbricks	Business systems	api_key	7	0	0	0	create:2,get:2,delete:1
+formcarry	Business systems	api_key	3	0	0	0	create:1,delete:1,list:1
+formsite	Business systems	api_key	7	0	0	0	get:3,list:2,delete:1
+formspree	Business systems	api_key	1	0	0	0	list:1
+foursquare	Domain connectors	api_key	5	0	0	0	get:4,search:1
+fraudlabspro	Cloud/FinOps	api_key	3	0	0	0	feedback:1,get:1,screen:1
+freepik	LLM/dev accounts	api_key	3	0	0	0	download:1,get:1,search:1
+freshdesk	Communications	api_key	4	0	0	0	get:2,list:2
+freshsales	Business systems	api_key	6	0	0	0	list:2,create:1,delete:1
+freshservice	Communications	api_key	6	0	0	0	list:3,create:2,get:1
+freshteam	Business systems	api_key	9	0	0	0	list:7,get:2
+front	Communications	api_key	5	0	0	0	list:2,create:1,get:1
+fullenrich	Business systems	api_key	3	0	0	0	lookup:2,get:1
+fusion-api	LLM/dev accounts	api_key	84	21	21	0	qwen:16,fal:15,wanx:15
+fuxin	Cloud/FinOps	custom_credential	22	0	0	0	get:3,convert:2,create:2
+gamma	Business systems	api_key	8	0	0	0	create:4,list:2,get:1
+geckoboard	Business systems	api_key	4	0	0	0	append:1,delete:1,find:1
+gem	Business systems	api_key	9	0	0	0	list:6,get:3
+gemini	LLM/dev accounts	api_key	8	0	0	0	generate:3,count:1,embed:1
+gender_api	Cloud/FinOps	api_key	5	0	0	0	query:3,get:2
+genderapi_io	Cloud/FinOps	api_key	3	0	0	0	get:3
+genderize	Cloud/FinOps	api_key	2	0	0	0	predict:2
+geoapify	Domain connectors	api_key	5	0	0	0	get:2,address:1,forward:1
+geocodio	Domain connectors	api_key	4	0	0	0	single:2,batch:1,geocode:1
+geokeo	Domain connectors	api_key	2	0	0	0	geocode:2
+getform	Business systems	api_key	2	0	0	0	list:1,submit:1
+getnote	Business systems	api_key	23	2	0	0	list:8,get:4,add:2
+getprospect	Business systems	api_key	5	0	0	0	search:2,find:1,lookup:1
+ghost	Business systems	api_key	9	0	0	0	get:4,list:4,read:1
+gift_up	Business systems	api_key	17	0	0	0	list:6,get:5,redeem:2
+gigasheet	Business systems	api_key	7	0	0	0	get:3,list:2,describe:1
+giphy	Domain connectors	api_key	15	0	0	0	list:6,get:4,search:3
+gist	LLM/dev accounts	oauth2+api_key	20	0	0	1	list:7,get:3,create:2
+gitea	Document/storage	api_key	9	0	8	0	get:3,list:3,create:2
+gitee	Document/storage	oauth2+api_key	3	0	0	2	get:2,list:1
+github	Document/storage	oauth2+api_key	145	0	0	5	list:46,get:22,create:15
+gitlab	Document/storage	api_key	5	0	0	0	get:2,list:2,create:1
+givebutter	Domain connectors	api_key	12	0	0	0	get:6,list:6
+gladia	LLM/dev accounts	api_key	6	0	2	0	delete:1,download:1,get:1
+gleap	Communications	api_key	11	0	0	0	create:3,get:3,list:2
+globalping	Cloud/FinOps	api_key	4	0	1	0	get:2,create:1,list:1
+glyphic	Business systems	api_key	9	0	0	0	get:5,list:4
+gmail	Communications	oauth2	46	0	0	7	get:10,list:6,update:6
+godial	Communications	api_key	5	0	0	0	list:3,create:1,get:1
+gong	Business systems	custom_credential	6	0	0	0	get:3,list:3
+goody	Business systems	api_key	7	0	0	0	list:4,get:3
+google_address_validation	Domain connectors	api_key	2	0	1	0	provide:1,validate:1
+google_analytics	Cloud/FinOps	oauth2	28	0	0	2	run:10,list:6,get:3
+google_bigquery	Cloud/FinOps	oauth2	32	0	0	5	list:7,get:6,delete:4
+google_routes	Domain connectors	api_key	2	0	0	0	compute:2
+google_search_console	Business systems	oauth2	10	0	0	2	delete:2,get:2,list:2
+googleads	Business systems	oauth2	9	0	0	1	get:2,list:2,mutate:2
+googlecalendar	Communications	oauth2	37	0	0	7	get:6,list:6,patch:4
+googledocs	Business systems	oauth2	32	0	0	4	create:7,delete:7,insert:5
+googledrive	Document/storage	oauth2	43	0	0	3	list:10,get:9,delete:6
+googleforms	Business systems	oauth2	7	0	0	3	get:2,list:2,batch:1
+googlephotos	Document/storage	oauth2	18	0	0	4	get:4,batch:3,list:3
+googlesheets	Business systems	oauth2	40	0	0	4	get:5,create:4,spreadsheets:4
+googleslides	Business systems	oauth2	7	0	0	4	presentations:5,create:1,get:1
+googletasks	Business systems	oauth2	16	0	0	2	list:3,update:3,delete:2
+gorgias	Communications	api_key	6	0	0	0	list:4,get:2
+gosquared	Business systems	api_key	4	0	0	0	get:4
+grafana	Cloud/FinOps	api_key	15	0	0	0	create:3,delete:3,get:3
+grafana_cloud	Cloud/FinOps	api_key	4	0	0	0	get:2,list:2
+granola	Business systems	api_key	3	0	0	0	list:2,get:1
+graphhopper	Domain connectors	api_key	5	0	0	0	compute:2,calculate:1,geocode:1
+greenhouse	Business systems	api_key	7	0	0	0	get:3,list:3,add:1
+griptape	LLM/dev accounts	api_key	12	0	0	0	list:4,get:3,create:2
+grist	Business systems	api_key	8	0	5	0	list:4,add:1,delete:1
+groqcloud	Cloud/FinOps	api_key	3	0	0	0	create:1,get:1,list:1
+gtmetrix	Cloud/FinOps	api_key	15	2	3	0	get:8,list:6,start:1
+gumloop	Business systems	api_key	7	1	0	0	list:3,get:2,kill:1
+gumroad	Business systems	api_key	9	0	0	0	get:3,list:3,mark:1
+guru	Business systems	api_key	5	0	0	0	get:3,list:1,search:1
+habitica	Business systems	api_key	11	0	0	0	create:2,delete:2,get:2
+hackernews	Domain connectors	no_auth	14	0	0	0	get:13,search:1
+hackerrank_work	Business systems	api_key	5	0	0	0	get:2,list:2,search:1
+harmonic_ai	LLM/dev accounts	api_key	6	0	0	0	get:4,enrich:2
+harvest	Business systems	oauth2+api_key	15	0	12	0	get:5,list:5,create:1
+hasdata	Cloud/FinOps	api_key	2	0	0	0	scrape:1,search:1
+haveibeenpwned	Cloud/FinOps	api_key	7	0	0	0	get:3,list:3,search:1
+headout	Business systems	api_key	8	0	0	0	list:6,get:2
+healthchecks_io	LLM/dev accounts	api_key	11	0	0	0	list:5,create:1,delete:1
+helloleads	Business systems	api_key	2	0	0	0	get:1,submit:1
+helpscout_docs	Communications	api_key	6	0	0	0	list:4,get:1,search:1
+here	Domain connectors	api_key	6	0	0	0	autocomplete:1,autosuggest:1,discover:1
+hex	Cloud/FinOps	api_key	6	2	1	0	get:2,list:2,cancel:1
+heygen	LLM/dev accounts	api_key	17	2	2	0	get:6,list:6,delete:2
+heyreach	Business systems	api_key	10	0	0	0	get:5,list:4,create:1
+heyy	Communications	api_key	9	0	0	0	list:4,create:3,get:1
+heyzine	Business systems	api_key	9	0	0	0	list:3,set:2,add:1
+higgsfield_ai	LLM/dev accounts	api_key	4	2	2	0	submit:2,cancel:1,get:1
+high_level	Communications	api_key	5	0	0	0	create:1,delete:1,get:1
+highergov	Cloud/FinOps	api_key	4	0	0	0	list:4
+holded	Business systems	api_key	5	0	0	0	get:2,list:2,create:1
+home_assistant	Business systems	api_key	8	0	0	0	list:3,get:2,call:1
+honeybadger	Cloud/FinOps	api_key	5	0	0	0	report:5
+honeycomb	Cloud/FinOps	api_key	7	0	0	0	get:3,list:3,create:1
+hookdeck	LLM/dev accounts	api_key	15	0	0	0	create:3,delete:3,get:3
+hoop	Cloud/FinOps	api_key	3	0	0	3	list:2,get:1
+hotspotsystem	Communications	api_key	7	0	0	0	list:6,get:1
+html_to_image	LLM/dev accounts	api_key	2	0	0	0	capture:1,convert:1
+htmlcsstoimage	LLM/dev accounts	api_key	5	0	0	0	create:2,delete:2,get:1
+hubspot	Business systems	oauth2	26	0	0	11	get:11,search:6,create:3
+huggingface	LLM/dev accounts	oauth2+api_key	14	0	0	4	get:7,list:5,generate:2
+humanitix	Business systems	api_key	3	0	0	0	list:2,get:1
+hunter	Communications	api_key	18	0	0	0	list:3,create:2,account:1
+hyperbrowser	Cloud/FinOps	api_key	5	1	0	0	get:2,fetch:1,search:1
+icypeas	Business systems	api_key	6	3	3	0	submit:3,get:2,reverse:1
+ima	Business systems	custom_credential	17	0	0	0	get:4,list:4,search:3
+imagekit	Document/storage	api_key	7	2	1	0	get:4,delete:1,list:1
+imgbb	Document/storage	api_key	1	0	0	0	upload:1
+imgix	LLM/dev accounts	api_key	4	0	0	0	get:1,list:1,purge:1
+incident_io	Business systems	api_key	6	0	0	0	list:4,get:2
+influxdb_cloud	Cloud/FinOps	api_key	4	0	2	0	get:1,list:1,query:1
+instantly_ai	LLM/dev accounts	api_key	4	0	0	3	list:2,create:1,get:1
+instatus	Business systems	api_key	15	0	0	0	create:3,delete:3,get:3
+intelliprint	Communications	api_key	8	0	0	0	get:4,list:4
+intercom	Communications	oauth2	24	0	0	11	get:10,list:7,search:2
+interzoid	Cloud/FinOps	api_key	7	0	0	0	get:6,standardize:1
+ip2location	Domain connectors	api_key	3	0	0	0	get:2,list:1
+ip2proxy	Domain connectors	api_key	1	0	0	0	lookup:1
+ip2whois	Cloud/FinOps	api_key	2	0	0	0	lookup:2
+ipdata_co	Domain connectors	api_key	30	0	0	0	get:23,lookup:6,bulk:1
+ipgeolocation_io	Domain connectors	api_key	3	0	0	0	get:2,lookup:1
+ipinfo_io	Domain connectors	api_key	27	0	0	0	get:24,batch:2,map:1
+iplocate	Domain connectors	api_key	3	0	0	0	lookup:2,batch:1
+ipqualityscore	Cloud/FinOps	api_key	4	0	0	0	validate:2,check:1,scan:1
+ipregistry	LLM/dev accounts	api_key	5	0	0	0	batch:2,lookup:2,parse:1
+ipstack	Domain connectors	api_key	3	0	0	0	lookup:2,bulk:1
+iqair_airvisual	LLM/dev accounts	api_key	5	0	0	0	list:3,get:2
+it_glue	Business systems	api_key	8	0	0	0	get:4,list:4
+jamie	Business systems	api_key	5	0	0	0	list:3,get:1,search:1
+jazzhr	Business systems	api_key	6	0	0	0	get:3,list:3
+jigsawstack	Cloud/FinOps	api_key	6	0	0	0	check:2,get:1,search:1
+jimeng_ai	LLM/dev accounts	custom_credential	28	0	16	0	submit:16,get:12
+jiminny	Business systems	api_key	16	0	0	0	list:10,get:6
+jin10	Domain connectors	api_key	9	0	0	0	list:4,get:3,search:2
+jira	Business systems	oauth2	7	0	0	3	get:2,list:2,add:1
+jobnimbus	Business systems	api_key	8	0	0	0	create:2,get:2,list:2
+jotform	Business systems	api_key	7	0	0	0	get:3,list:3,create:1
+jsonbin	Document/storage	api_key	4	0	0	0	create:1,delete:1,read:1
+jumpcloud	Cloud/FinOps	api_key	4	0	0	0	get:2,list:2
+jumpserver	Cloud/FinOps	custom_credential	6	0	6	0	assets:2,accounts:1,list:1
+juniper_mist	Cloud/FinOps	api_key	3	0	0	0	list:2,get:1
+kaggle	Cloud/FinOps	api_key	4	0	0	0	list:4
+kaleido	LLM/dev accounts	api_key	12	0	0	0	get:7,list:5
+kandji	Business systems	api_key	4	0	0	0	get:2,list:2
+keen_io	Cloud/FinOps	api_key	3	0	0	0	query:2,add:1
+keeper_scim	Cloud/FinOps	api_key	5	0	0	0	get:3,list:2
+kernel	LLM/dev accounts	api_key	5	0	0	0	create:1,delete:1,get:1
+keygen	Cloud/FinOps	api_key	76	0	0	0	list:12,retrieve:9,update:9
+keyword	Business systems	api_key	6	0	0	0	get:3,list:3
+kickbox	Document/storage	api_key	2	0	0	0	check:1,verify:1
+kie_ai	LLM/dev accounts	api_key	2	0	0	0	get:2
+kintone	Business systems	api_key	6	0	0	0	get:3,list:3
+kit	Communications	api_key	9	0	0	0	list:5,get:2,create:1
+klangio	LLM/dev accounts	api_key	9	0	0	0	create:6,download:2,get:1
+klaviyo	Business systems	api_key	7	0	0	6	list:3,get:2,create:1
+klazify	Business systems	api_key	8	0	0	0	get:7,categorize:1
+klicktipp	Business systems	api_key	3	0	0	0	signin:1,signoff:1,signout:1
+klipfolio	Business systems	api_key	8	0	0	0	get:4,list:4
+knack	Business systems	api_key	5	0	4	0	create:1,delete:1,get:1
+knock	Communications	api_key	5	0	0	0	delete:1,get:1,identify:1
+knowbe4	Cloud/FinOps	api_key	5	0	0	0	get:3,list:2
+kommo	Business systems	api_key	13	0	0	0	get:7,list:6
+kontent_ai	LLM/dev accounts	api_key	6	0	0	0	get:3,list:3
+kraken_io	Business systems	api_key	2	0	0	0	get:1,optimize:1
+kustomer	Business systems	api_key	8	0	0	0	get:4,create:1,list:1
+l2s	Business systems	api_key	3	0	0	0	get:1,shorten:1,update:1
+la_growth_machine	Business systems	api_key	7	0	0	0	create:2,get:2,list:2
+label_studio	Cloud/FinOps	api_key	6	0	4	0	create:2,get:2,list:2
+landbot	Communications	api_key	5	0	0	0	list:2,get:1,send:1
+langbase	Cloud/FinOps	api_key	4	0	0	0	create:1,delete:1,list:1
+langsmith	LLM/dev accounts	api_key	10	0	0	0	list:4,create:3,get:3
+laposta	Communications	api_key	8	0	0	0	create:2,get:2,list:2
+laravel_cloud	Cloud/FinOps	api_key	8	0	0	0	get:4,list:4
+lattice	Business systems	api_key	8	0	0	0	get:4,list:4
+launch_darkly	LLM/dev accounts	api_key	40	0	0	0	get:16,create:6,delete:6
+leadfeeder	Business systems	api_key	7	0	0	0	get:3,enrich:1,list:1
+leadmagic	Business systems	api_key	6	0	0	0	enrich:2,find:2,get:1
+leexi	Communications	api_key	6	0	0	0	list:4,get:2
+leiga	Business systems	api_key	6	0	0	0	get:4,list:2
+lemlist	Business systems	api_key	4	0	0	0	get:2,list:2
+lemon_squeezy	Business systems	api_key	16	0	0	0	list:7,retrieve:4,create:2
+lessonspace	Communications	api_key	4	0	0	0	get:2,create:1,list:1
+lever	Communications	api_key	6	0	0	0	list:3,get:2,create:1
+lexoffice	Business systems	api_key	10	0	0	0	get:3,list:3,create:2
+lifx	LLM/dev accounts	api_key	7	0	0	0	list:2,activate:1,set:1
+lightfield	Business systems	api_key	10	0	0	3	get:5,list:5
+linear	Business systems	oauth2+api_key	34	0	0	4	create:9,list:9,get:7
+linguapop	Business systems	api_key	2	0	0	0	list:1,send:1
+lingvanex_translation_api	Business systems	api_key	3	0	0	0	detect:1,list:1,translate:1
+linkedin	Business systems	oauth2	5	0	0	4	create:3,delete:1,get:1
+linkhut	Business systems	oauth2	5	0	0	3	get:2,add:1,delete:1
+linkly	Business systems	api_key	6	0	0	0	list:2,create:1,delete:1
+linkup	Cloud/FinOps	api_key	5	0	0	0	search:3,fetch:1,get:1
+linux_do	Domain connectors	no_auth	13	0	0	0	list:13
+listennotes	Cloud/FinOps	api_key	9	0	0	0	get:7,search:1,typeahead:1
+livesession	Business systems	api_key	1	0	0	0	list:1
+lob	Business systems	api_key	5	0	0	0	bulk:2,verify:2,autocomplete:1
+lodgify	Business systems	api_key	7	0	0	0	get:4,list:3
+logo_dev	Cloud/FinOps	api_key	7	0	0	0	get:5,describe:1,search:1
+logsnag	Cloud/FinOps	api_key	4	0	0	0	publish:2,identify:1,mutate:1
+lokalise	Business systems	api_key	11	0	0	0	list:4,get:3,update:2
+longbridge	Domain connectors	oauth2	80	0	0	4	list:13,profit:5,screener:5
+loomio	Communications	api_key	2	0	0	0	get:1,list:1
+loop_returns	Business systems	api_key	4	0	0	0	get:2,list:2
+loops	Communications	api_key	8	0	0	0	create:2,list:2,delete:1
+loyverse	Domain connectors	api_key	11	0	0	0	get:6,list:5
+lucid_scim	Business systems	api_key	5	0	0	0	get:3,list:2
+luckin_coffee	Business systems	api_key	8	0	7	0	query:3,cancel:1,create:1
+luma	Business systems	api_key	6	0	0	0	get:4,list:2
+lumos	Business systems	api_key	4	0	0	0	get:2,list:2
+lusha	Business systems	api_key	5	0	0	0	enrich:2,search:2,get:1
+mailbluster	Communications	api_key	5	0	0	0	create:1,delete:1,get:1
+mailbox_validator	Document/storage	api_key	3	0	0	0	check:2,validate:1
+mailboxlayer	Document/storage	api_key	1	0	0	0	check:1
+mailcheck	Communications	api_key	3	0	0	0	get:1,validate:1,verify:1
+mailchimp	Communications	api_key	11	0	0	0	list:4,get:2,update:2
+mailercloud	Communications	api_key	6	0	0	0	create:3,delete:1,list:1
+mailerlite	Communications	api_key	13	0	0	0	list:4,delete:2,update:2
+mailersend	Communications	api_key	12	0	0	0	get:6,list:5,send:1
+mailgun	Communications	api_key	17	0	0	0	get:5,list:5,create:2
+mailjet	Communications	api_key	4	0	0	0	create:1,get:1,list:1
+mailosaur	Communications	api_key	12	0	0	0	delete:3,get:3,list:3
+mails_so	Communications	api_key	3	0	0	0	create:1,get:1,validate:1
+mailtrap	Communications	api_key	50	0	0	0	get:18,list:9,create:7
+maintainx	LLM/dev accounts	api_key	16	0	0	0	create:4,list:4,update:4
+make	Business systems	api_key	9	0	0	0	get:4,list:2,activate:1
+manatal	Business systems	api_key	16	0	0	0	create:4,get:4,list:4
+manus	Business systems	api_key	17	0	3	0	list:7,create:2,get:2
+mapbox	Document/storage	api_key	5	0	0	0	get:2,batch:1,forward:1
+maple_billing	Domain connectors	api_key	12	0	0	0	get:5,find:4,create:2
+marketstack	Domain connectors	api_key	6	0	0	0	get:3,list:3
+mattermost	Communications	api_key	7	0	0	0	get:3,list:3,create:1
+mcdonalds_cn	Domain connectors	custom_credential	7	0	5	0	get:5,search:2
+mediastack	Document/storage	api_key	2	0	0	0	search:2
+meet_geek	Business systems	api_key	8	0	0	0	get:5,list:3
+mem0	Cloud/FinOps	api_key	10	0	0	0	get:6,add:1,delete:1
+memberstack	Cloud/FinOps	api_key	8	0	0	0	add:1,create:1,delete:1
+meta	Business systems	api_key	4	0	0	0	get:2,list:2
+metabase	Business systems	api_key	10	0	0	0	get:5,list:4,search:1
+metaso	Cloud/FinOps	api_key	4	0	0	0	create:2,read:1,search:1
+metatextai	LLM/dev accounts	api_key	4	0	0	0	create:1,evaluate:1,list:1
+metronome	Domain connectors	api_key	5	0	0	0	list:3,get:2
+mezmo	Cloud/FinOps	api_key	5	0	0	0	list:3,get:2
+microsoft_clarity	Cloud/FinOps	api_key	1	0	0	0	export:1
+mindbody	Business systems	api_key	1	0	0	0	list:1
+mineru	Business systems	api_key	4	0	0	0	create:2,get:2
+minimax	LLM/dev accounts	api_key	4	0	0	0	create:1,estimate:1,list:1
+missive	Communications	api_key	8	0	0	0	list:6,get:2
+mistral_ai	LLM/dev accounts	api_key	54	0	0	0	get:14,create:12,list:10
+mixpanel	Business systems	api_key	13	0	9	0	query:9,list:2,export:1
+mocean	Communications	api_key	5	0	0	0	get:2,list:1,lookup:1
+moco	Business systems	api_key	5	0	0	0	get:3,list:2
+modjo_ai	LLM/dev accounts	api_key	20	0	0	0	list:12,get:8
+moesif	Cloud/FinOps	api_key	4	0	0	2	list:3,get:1
+momentum_io	Business systems	api_key	6	0	0	0	list:6
+monday	Business systems	oauth2+api_key	64	0	0	17	list:15,create:10,delete:10
+mongo_db_atlas_administration	Cloud/FinOps	api_key	4	0	0	0	get:2,list:2
+moonclerk	Business systems	api_key	6	0	0	0	get:3,list:3
+moorcheh	Cloud/FinOps	api_key	7	0	0	0	create:1,delete:1,fetch:1
+moosend	Communications	api_key	4	0	0	0	list:2,add:1,get:1
+mopinion	Business systems	custom_credential	11	0	0	0	get:6,list:5
+mother_duck	Cloud/FinOps	api_key	8	0	0	0	create:2,delete:2,list:2
+motion	Business systems	api_key	13	0	0	0	list:6,get:3,create:2
+msg91	Communications	api_key	4	0	0	0	send:2,resend:1,verify:1
+mx_toolbox	Document/storage	api_key	13	0	0	0	lookup:11,monitor:1,usage:1
+n8n	Business systems	api_key	36	0	0	0	list:7,update:7,get:6
+namely	Business systems	api_key	4	0	0	0	get:2,list:2
+nango	Cloud/FinOps	api_key	9	0	0	6	get:3,list:3,delete:1
+nasa	Cloud/FinOps	api_key	27	0	0	0	get:21,list:4,browse:1
+nasdaq	Domain connectors	api_key	7	0	0	0	get:7
+needle	Cloud/FinOps	api_key	7	0	0	0	get:2,list:2,add:1
+neon	Cloud/FinOps	api_key	18	0	0	0	get:5,list:4,create:3
+netease_mail	Communications	custom_credential	12	0	0	0	get:2,mark:2,delete:1
+nethunt	Business systems	api_key	15	0	0	0	list:8,create:3,delete:1
+netlify	LLM/dev accounts	oauth2+api_key	19	0	0	4	get:5,list:5,create:2
+netsuite	Business systems	custom_credential	5	0	0	0	create:1,get:1,list:1
+neutrino	Domain connectors	api_key	5	0	0	0	validate:2,check:1,get:1
+neverbounce	Communications	api_key	8	0	0	0	get:3,create:1,download:1
+new_relic	LLM/dev accounts	api_key	28	0	0	0	create:7,delete:5,get:5
+news_api	Domain connectors	api_key	4	0	0	0	get:4
+newsdata_io	Domain connectors	api_key	4	0	0	0	list:2,get:1,search:1
+next_dns	Cloud/FinOps	api_key	7	0	0	0	get:6,list:1
+ngrok	LLM/dev accounts	api_key	6	0	0	0	list:4,get:2
+ninjapear	Business systems	api_key	8	0	0	0	get:3,list:3,check:1
+ninox	Business systems	api_key	12	0	0	0	get:4,list:4,delete:2
+nocodb	Business systems	api_key	24	0	0	0	create:5,list:5,delete:3
+nocrm_io	Business systems	api_key	9	0	0	0	change:2,add:1,append:1
+northbeam	Business systems	api_key	5	0	0	0	list:5
+northflank	LLM/dev accounts	api_key	4	0	0	0	get:2,list:2
+notion	Document/storage	oauth2+api_key	25	0	0	3	retrieve:7,update:5,create:3
+novu	Communications	api_key	5	0	0	0	create:1,get:1,search:1
+ntfy	Communications	api_key	2	0	0	0	get:1,publish:1
+nylas	Communications	api_key	4	0	0	0	list:3,get:1
+nyne_ai	LLM/dev accounts	api_key	9	8	4	0	get:5,submit:4
+ocrspace	Business systems	api_key	2	0	0	0	extract:1,get:1
+octave	Business systems	api_key	11	0	0	0	run:6,list:3,get:1
+oksign	Business systems	api_key	5	0	0	0	get:3,list:2
+okta	Cloud/FinOps	custom_credential	14	0	0	0	list:3,create:2,delete:2
+omnisend	Communications	api_key	9	0	0	3	get:2,list:2,update:2
+oncehub	Business systems	api_key	3	0	0	0	list:3
+one_drive	Document/storage	oauth2	13	0	0	2	download:3,get:3,update:2
+one_page_crm	Business systems	custom_credential	6	0	0	0	create:2,get:2,list:2
+one_password	Business systems	api_key	6	0	3	0	get:3,list:3
+one_password_events	Cloud/FinOps	api_key	3	0	0	3	list:3
+onedesk	Business systems	api_key	5	0	0	0	get:3,filter:2
+onesignal_rest_api	Communications	api_key	4	0	0	0	cancel:1,create:1,get:1
+ongage	Communications	api_key	7	0	0	0	get:3,change:1,list:1
+oomnitza	Business systems	api_key	5	0	0	0	get:2,list:2,identify:1
+open_exchange_rates	Domain connectors	api_key	5	0	0	0	get:4,convert:1
+open_hands	LLM/dev accounts	api_key	5	2	1	0	get:2,list:1,send:1
+openai	LLM/dev accounts	api_key	15	0	1	0	create:8,get:4,list:2
+openalex	Cloud/FinOps	api_key	5	0	0	0	get:2,list:2,autocomplete:1
+opencage	Domain connectors	api_key	3	0	0	0	geocode:3
+openfootball_worldcup	Cloud/FinOps	no_auth	6	0	0	0	list:6
+opengraph_io	Cloud/FinOps	api_key	4	0	0	0	scrape:2,capture:1,extract:1
+openpagerank	Business systems	api_key	1	0	0	0	get:1
+openrouter	LLM/dev accounts	api_key	13	0	0	0	list:6,get:4,create:3
+opensea	Domain connectors	api_key	9	0	0	0	get:5,list:3,search:1
+openstatus	LLM/dev accounts	api_key	9	0	0	1	get:3,list:2,create:1
+openweather_api	Domain connectors	api_key	21	0	0	0	get:16,add:1,delete:1
+opsgenie	LLM/dev accounts	api_key	7	3	3	0	get:3,acknowledge:1,close:1
+optimoroute	Business systems	api_key	3	0	0	0	create:1,delete:1,get:1
+ordinal	Business systems	api_key	9	0	0	0	list:6,get:3
+ortto	Business systems	api_key	3	0	0	0	get:1,list:1,merge:1
+ossinsight	Cloud/FinOps	no_auth	18	0	0	0	list:12,get:3,rank:3
+otter_ai	LLM/dev accounts	api_key	6	0	0	0	get:3,list:3
+outline	Business systems	api_key	6	0	0	0	list:3,get:2,search:1
+outlook	Communications	oauth2	11	0	0	4	get:3,list:2,send:2
+owl_protocol	Domain connectors	api_key	3	0	0	0	get:2,patch:1
+paddle	Domain connectors	api_key	12	0	0	6	create:3,get:3,list:3
+pagerduty	LLM/dev accounts	api_key	7	0	0	0	get:2,list:2,acknowledge:1
+pandadoc	Communications	api_key	13	0	0	0	create:6,list:3,delete:2
+paperform	Business systems	api_key	14	0	0	0	get:8,list:6
+paradym	Cloud/FinOps	api_key	11	0	0	0	list:7,create:2,get:2
+parallel	Cloud/FinOps	api_key	5	0	0	0	retrieve:2,create:1,extract:1
+parsehub	Cloud/FinOps	api_key	2	0	0	0	get:1,list:1
+parsera	Cloud/FinOps	api_key	5	0	0	0	extract:2,list:2,parse:1
+parseur	Business systems	api_key	5	0	0	0	get:3,list:2
+partner_stack_partner	Business systems	api_key	5	0	0	0	list:4,get:1
+partnerstack	Business systems	api_key	7	0	0	0	list:4,get:2,create:1
+payhip	Domain connectors	api_key	9	0	0	0	create:1,decrease:1,delete:1
+paymo	Business systems	api_key	16	0	0	0	get:4,create:3,delete:3
+paystack	Domain connectors	api_key	8	0	0	0	get:2,list:2,create:1
+pdf_api_io	Business systems	api_key	3	0	0	0	get:1,list:1,render:1
+pdf_co	Business systems	api_key	8	0	0	0	get:2,compress:1,html:1
+pdfless	Business systems	api_key	2	0	0	0	get:1,list:1
+pdfmonkey	Business systems	api_key	7	0	0	0	get:4,list:2,create:1
+pendo	Business systems	api_key	5	0	0	0	get:2,list:2,identify:1
+peopledatalabs	Business systems	api_key	4	0	0	0	enrich:2,search:2
+perdoo	Business systems	api_key	4	0	0	0	execute:1,get:1,list:1
+perigon	Cloud/FinOps	api_key	12	0	0	0	search:8,vector:2,get:1
+permit_io	Cloud/FinOps	api_key	13	0	0	0	list:3,create:2,delete:2
+perplexity	Business systems	api_key	4	0	0	0	create:2,list:1,search:1
+persona	Cloud/FinOps	api_key	4	0	0	0	create:1,get:1,list:1
+personal_ai	LLM/dev accounts	api_key	5	0	0	0	upload:3,send:2
+pexels	Business systems	api_key	9	0	0	0	get:2,search:2,collection:1
+phantombuster	Cloud/FinOps	api_key	7	0	0	0	get:3,list:2,launch:1
+pilvio	Document/storage	api_key	5	0	0	0	list:3,get:2
+pinata	Document/storage	api_key	12	0	1	4	get:2,list:2,update:2
+pinecone	Cloud/FinOps	api_key	12	0	0	0	delete:2,list:2,configure:1
+pingdom	LLM/dev accounts	api_key	4	0	0	0	get:2,list:2
+pipedream	Business systems	api_key	6	0	0	0	get:5,list:1
+pipedrive	Document/storage	api_key	27	0	0	0	get:6,list:6,create:4
+pivotal_tracker	Business systems	api_key	9	0	0	0	get:3,list:3,create:2
+pixellab	LLM/dev accounts	api_key	56	26	34	0	start:27,get:5,delete:3
+placekey	Domain connectors	api_key	4	0	0	0	get:4
+placid	LLM/dev accounts	api_key	5	2	0	0	get:2,create:1,delete:1
+plain	LLM/dev accounts	api_key	4	0	0	0	get:2,search:1,upsert:1
+plane	Business systems	api_key	11	0	0	0	list:5,get:3,create:1
+plasmic	LLM/dev accounts	api_key	2	0	0	0	count:1,list:1
+platerecognizer	Cloud/FinOps	api_key	2	0	0	0	get:1,read:1
+plausible_analytics	Cloud/FinOps	api_key	4	0	3	0	get:2,query:1,record:1
+plisio	Domain connectors	api_key	4	0	0	0	get:2,create:1,list:1
+plunk	Communications	api_key	8	0	0	0	create:1,delete:1,get:1
+podscribe	Business systems	api_key	3	0	0	3	get:2,search:1
+polar	Domain connectors	api_key	13	0	0	0	get:8,list:5
+polygon_io	Domain connectors	api_key	7	0	0	0	get:4,list:3
+positionstack	Domain connectors	api_key	2	0	0	0	forward:1,reverse:1
+postgrid	Communications	api_key	9	0	0	0	create:2,delete:2,get:2
+postgrid_verify	Domain connectors	api_key	4	0	0	0	autocomplete:1,lookup:1,parse:1
+posthog	Cloud/FinOps	oauth2+api_key	57	0	1	0	get:17,list:9,delete:7
+postman	LLM/dev accounts	api_key	135	0	0	0	get:58,create:23,update:18
+postmark	Communications	api_key	12	0	0	0	get:4,send:3,create:1
+precoro	Business systems	api_key	8	0	0	0	list:5,get:3
+prerender	Business systems	api_key	4	0	0	0	add:1,clear:1,get:1
+process_street	Business systems	api_key	10	0	0	0	list:5,get:2,update:2
+productboard	Business systems	api_key	13	0	0	0	list:7,get:6
+productive	Business systems	api_key	8	0	0	0	create:2,list:2,update:2
+projectmanager	Business systems	api_key	3	0	0	0	list:2,get:1
+prospeo	Business systems	api_key	6	0	0	0	search:3,enrich:2,get:1
+proxiedmail	Communications	api_key	5	0	0	0	list:2,create:1,get:1
+prtg_classic	Cloud/FinOps	api_key	2	0	0	0	list:2
+pubmed	Cloud/FinOps	no_auth+api_key	8	0	0	0	get:4,convert:1,find:1
+push_by_techulus	Communications	api_key	2	0	0	0	send:2
+pushbullet	Communications	api_key	14	0	0	0	delete:4,create:3,list:3
+pushover	Communications	api_key	29	0	0	0	get:6,add:2,cancel:2
+pylon	Communications	api_key	13	0	0	0	create:4,get:4,list:2
+qianfan	LLM/dev accounts	api_key	25	2	0	0	create:9,list:5,get:4
+qlty	Cloud/FinOps	api_key	8	0	0	0	get:5,list:3
+qq_mail	Communications	custom_credential	12	0	0	0	get:2,mark:2,delete:1
+quaderno	Domain connectors	api_key	12	0	0	0	get:3,create:2,delete:2
+quentn	Business systems	api_key	15	0	0	0	get:3,list:3,create:2
+quickbase	Business systems	api_key	6	0	0	0	get:2,delete:1,list:1
+quickchart	LLM/dev accounts	no_auth	3	0	0	0	build:2,create:1
+quipteams	Business systems	api_key	11	0	0	6	list:6,get:5
+quo	Communications	api_key	12	0	0	0	get:4,list:4,create:1
+radar	Domain connectors	api_key	5	0	0	0	autocomplete:1,forward:1,ip:1
+ragie	LLM/dev accounts	api_key	19	0	0	0	get:5,create:4,list:4
+railway	LLM/dev accounts	api_key	9	0	0	0	get:4,list:2,deploy:1
+raisely	LLM/dev accounts	api_key	8	0	0	0	list:3,get:2,create:1
+rawg	Cloud/FinOps	api_key	21	0	0	0	list:14,get:7
+raygun	Cloud/FinOps	api_key	10	0	0	0	get:4,list:3,create:1
+razorpay	Business systems	api_key	6	0	0	0	create:2,get:2,list:2
+readme	Business systems	api_key	33	0	0	0	get:8,list:7,delete:6
+readwise	Business systems	api_key	6	0	0	0	list:2,create:1,export:1
+realphonevalidation	Communications	api_key	2	0	0	0	validate:2
+rebrandly	Business systems	api_key	7	0	0	0	get:2,list:2,create:1
+recallai	Communications	api_key	5	0	0	0	create:1,delete:1,get:1
+recharge	Business systems	api_key	10	0	0	0	get:5,list:5
+recruitcrm	Business systems	api_key	8	0	0	0	get:4,list:4
+recruitee	Business systems	api_key	4	0	0	0	create:1,get:1,list:1
+recruiterflow	Business systems	api_key	6	0	0	0	get:3,list:3
+recurly	Domain connectors	api_key	10	0	0	0	create:3,get:3,list:3
+redfox	Domain connectors	api_key	19	0	0	0	search:10,get:7,list:2
+reducto	Business systems	api_key	3	0	0	0	extract:1,parse:1,split:1
+refiner	Business systems	api_key	12	0	0	0	list:4,get:3,add:1
+remove_bg	LLM/dev accounts	api_key	3	0	0	0	get:1,remove:1,submit:1
+render	LLM/dev accounts	api_key	10	0	2	0	list:3,get:2,restart:1
+renderform	LLM/dev accounts	api_key	6	0	0	0	get:2,list:2,render:1
+rentman	Business systems	api_key	8	0	0	0	get:4,list:4
+repairshopr	LLM/dev accounts	api_key	5	0	0	0	get:3,list:2
+replicate	LLM/dev accounts	api_key	11	0	0	0	get:5,list:4,cancel:1
+reply_io	Communications	api_key	9	0	0	0	get:3,list:2,create:1
+resend	Communications	api_key	1	0	0	0	send:1
+retell_ai	LLM/dev accounts	api_key	8	0	0	0	get:4,list:4
+retently	Business systems	api_key	9	0	0	0	get:4,list:4,upsert:1
+revenuecat	Domain connectors	api_key	12	0	0	7	list:7,get:4,search:1
+ringover	Communications	api_key	13	0	0	0	get:7,list:6
+rippling	Business systems	api_key	4	0	0	0	list:3,get:1
+riveter	Cloud/FinOps	api_key	2	0	0	0	get:1,scrape:1
+roam	Communications	api_key	5	0	0	4	list:3,get:1,send:1
+roam_scim	Business systems	api_key	13	0	0	3	get:3,create:2,delete:2
+roboflow	LLM/dev accounts	api_key	12	0	0	0	get:6,run:2,describe:1
+rocket_chat	Communications	custom_credential	8	0	0	0	get:3,list:2,delete:1
+rocket_reach	Communications	api_key	10	0	0	0	get:4,lookup:3,search:2
+rocketlane	Business systems	api_key	6	0	0	0	get:3,list:3
+rollbar	Cloud/FinOps	api_key	8	0	0	1	get:4,list:4
+rootly	Business systems	api_key	5	0	0	0	list:3,get:2
+rosette_text_analytics	Cloud/FinOps	api_key	5	0	0	0	identify:3,analyze:1,extract:1
+route4me	Business systems	api_key	3	0	0	0	create:1,delete:1,list:1
+runpod	LLM/dev accounts	api_key	7	0	0	0	delete:1,get:1,list:1
+runscope	LLM/dev accounts	api_key	7	0	0	0	list:4,get:3
+saas_custom_domains	LLM/dev accounts	api_key	11	0	0	0	list:3,create:2,delete:2
+safetyculture	Business systems	api_key	5	0	0	0	get:2,create:1,list:1
+sage_hr	Business systems	api_key	8	0	0	0	list:6,get:2
+sage_sales_management	Business systems	custom_credential	18	0	0	0	get:6,create:3,delete:3
+salesflare	Business systems	api_key	16	0	0	0	create:4,get:4,list:4
+salesmate	Business systems	api_key	6	0	0	0	create:2,get:2,delete:1
+satismeter	Business systems	api_key	6	0	0	0	get:3,list:3
+scopus	Cloud/FinOps	api_key	7	0	0	0	search:4,get:3
+scrape_do	Cloud/FinOps	api_key	4	0	0	0	fetch:2,get:1,take:1
+scrape_graph_ai	LLM/dev accounts	api_key	6	0	0	0	get:2,extract:1,list:1
+scraperapi	Cloud/FinOps	api_key	3	0	0	0	get:1,scrape:1,submit:1
+scrapfly	Cloud/FinOps	api_key	2	0	0	0	get:1,scrape:1
+scrapingant	Cloud/FinOps	api_key	4	0	0	0	extract:2,get:1,scrape:1
+scrapingbee	Cloud/FinOps	api_key	3	0	0	0	extract:1,fetch:1,get:1
+scrapingdog	Cloud/FinOps	api_key	6	0	0	0	maps:2,fetch:1,get:1
+screenshot_fyi	LLM/dev accounts	api_key	1	0	0	0	take:1
+screenshotone	LLM/dev accounts	api_key	5	0	0	0	take:3,get:1,list:1
+search_api	Domain connectors	api_key	5	0	0	0	get:4,search:1
+securitytrails	Cloud/FinOps	api_key	4	0	0	0	get:3,find:1
+segment	Business systems	api_key	7	0	0	0	alias:1,batch:1,group:1
+semantic_scholar	Cloud/FinOps	api_key	16	0	0	0	get:8,search:3,recommend:2
+semrush	Business systems	api_key	3	0	0	0	list:2,get:1
+sendbird	Communications	api_key	28	0	0	0	list:5,delete:3,update:3
+sender	Communications	api_key	14	0	0	0	list:5,get:4,create:2
+sendfox	Communications	api_key	14	0	0	0	list:3,create:2,delete:2
+sendgrid	Communications	api_key	4	0	0	0	get:2,list:1,send:1
+sendmator	Communications	api_key	5	0	0	0	create:1,delete:1,get:1
+sendspark	Business systems	api_key	5	0	0	0	get:2,add:1,create:1
+sensibo	Business systems	api_key	4	0	0	0	get:2,list:1,set:1
+sentry	Cloud/FinOps	oauth2	19	0	0	5	get:10,list:8,update:1
+seqera	Cloud/FinOps	api_key	8	0	0	0	get:4,list:3,launch:1
+serpapi	Business systems	api_key	3	0	0	0	maps:1,news:1,search:1
+serpdog	Business systems	api_key	5	0	0	0	autocomplete:1,get:1,news:1
+serphouse	Business systems	api_key	5	0	0	0	list:2,search:2,account:1
+serply	Business systems	api_key	4	0	0	0	news:1,scholar:1,search:1
+sevdesk	Business systems	api_key	5	0	0	0	create:1,delete:1,get:1
+sheetdb	Business systems	api_key	8	0	0	0	get:2,count:1,create:1
+ship_bob	Business systems	api_key	5	0	0	0	list:4,get:1
+ship_station	Business systems	api_key	4	0	0	0	list:3,get:1
+shipday	Business systems	api_key	7	0	0	0	get:2,list:2,create:1
+shipengine	Business systems	api_key	6	0	0	0	calculate:1,estimate:1,get:1
+shippo	Business systems	api_key	8	0	0	0	get:3,create:2,list:2
+shodan	Cloud/FinOps	api_key	7	0	0	0	get:3,count:1,resolve:1
+shopify	Business systems	api_key	11	0	0	1	get:4,list:4,count:3
+shopify_admin	Business systems	api_key	15	0	0	0	get:7,list:7,execute:1
+shopify_partner	Business systems	api_key	5	0	0	0	list:3,execute:1,get:1
+shopify_storefront	Business systems	api_key	8	0	0	0	get:4,list:2,add:1
+short_io	Business systems	api_key	8	0	4	0	get:3,list:2,create:1
+short_menu	Business systems	api_key	3	0	0	0	create:1,delete:1,update:1
+shortcut	Business systems	api_key	15	0	0	0	get:5,list:5,create:2
+shorten_rest	Business systems	api_key	6	0	0	0	list:2,create:1,delete:1
+shortpixel	Document/storage	api_key	6	0	0	0	purge:2,add:1,get:1
+shotstack	LLM/dev accounts	api_key	2	2	0	0	get:1,render:1
+signalbase	Business systems	api_key	6	0	0	0	list:6
+signpath	Cloud/FinOps	api_key	3	2	0	0	fast:1,get:1,list:1
+signwell	Communications	api_key	6	0	0	0	get:3,send:2,create:1
+similarweb_digitalrank_api	Document/storage	api_key	3	0	0	0	get:3
+simla	Business systems	api_key	9	0	0	0	get:3,create:2,edit:2
+simple_analytics	Cloud/FinOps	api_key	4	0	0	0	export:1,get:1,list:1
+simplesat	Business systems	api_key	8	0	0	0	list:3,get:2,create:1
+sitespeakai	LLM/dev accounts	api_key	11	0	0	0	list:6,get:2,delete:1
+skio	Business systems	api_key	4	0	0	0	list:4
+skyfire	Domain connectors	api_key	4	0	0	0	get:3,create:1
+slab	Business systems	api_key	17	0	0	0	get:6,create:2,delete:2
+slack	Communications	oauth2	22	0	0	15	get:7,list:4,delete:2
+sling	Business systems	api_key	14	0	0	0	get:8,list:6
+slite	Business systems	api_key	8	0	0	0	get:2,search:2,create:1
+smartlead_ai	LLM/dev accounts	api_key	4	0	0	0	list:3,get:1
+smartrecruiters	Business systems	api_key	4	0	0	0	get:2,list:1,search:1
+smartsheet	Business systems	api_key	5	0	0	0	add:1,delete:1,get:1
+sms_alert	Communications	api_key	6	0	0	0	list:2,generate:1,get:1
+smtp2go	Communications	api_key	8	0	0	0	get:2,list:2,search:2
+smugmug	Document/storage	api_key	23	0	0	0	get:21,list:1,search:1
+snipe_it	Business systems	api_key	6	0	0	0	list:5,get:1
+solcast	Domain connectors	api_key	3	0	0	0	get:3
+speechmatics	LLM/dev accounts	api_key	3	0	0	0	list:2,get:1
+spider	Cloud/FinOps	api_key	4	0	0	0	get:2,scrape:1,search:1
+spotify	Domain connectors	oauth2	88	0	0	15	get:51,check:7,remove:6
+square	Business systems	api_key	6	0	0	0	list:2,create:1,get:1
+sslmate_cert_spotter_api	Cloud/FinOps	api_key	5	0	0	0	list:2,delete:1,get:1
+stabilityai	LLM/dev accounts	api_key	1	0	0	0	text:1
+stack_ai	LLM/dev accounts	custom_credential	2	0	0	0	get:1,run:1
+stannp	Business systems	api_key	11	0	0	0	create:2,delete:2,get:2
+starton	Document/storage	api_key	5	0	0	0	create:1,delete:1,get:1
+statamic	Business systems	api_key	4	0	0	0	create:1,delete:1,list:1
+statista	Cloud/FinOps	api_key	4	0	0	0	search:3,get:1
+statsig	Cloud/FinOps	api_key	7	0	0	0	get:4,list:3
+statuscake	LLM/dev accounts	api_key	9	0	2	0	list:5,create:1,delete:1
+statuspage	Communications	api_key	13	0	0	0	list:4,get:3,create:2
+statuspal	Communications	api_key	6	0	0	0	get:4,list:2
+stay_ai	LLM/dev accounts	api_key	4	0	0	0	get:2,list:2
+store_leads	Business systems	api_key	6	0	0	0	get:3,list:3
+storecensus	Business systems	api_key	4	0	0	0	list:2,get:1,search:1
+stormboard	Business systems	api_key	10	0	0	0	list:7,get:3
+stormglass_io	Domain connectors	api_key	3	0	0	0	get:3
+storyblok	Business systems	api_key	7	0	0	0	list:5,get:2
+strava	Domain connectors	oauth2	34	0	0	5	get:15,list:11,export:2
+streak	Business systems	api_key	4	0	1	0	get:3,list:1
+streamtime	Business systems	api_key	14	0	0	0	get:4,list:4,create:3
+stripe	Domain connectors	api_key	18	0	0	0	create:3,get:3,list:3
+subvisory	Domain connectors	api_key	15	0	0	0	create:3,delete:3,get:3
+sunoapi	LLM/dev accounts	api_key	26	0	0	0	get:9,generate:7,add:2
+supabase	Document/storage	oauth2+api_key	21	0	0	7	list:9,get:5,delete:2
+supadata	Cloud/FinOps	api_key	10	0	0	0	get:5,list:2,map:1
+super_saas	Business systems	api_key	7	0	0	0	list:7
+superchat	Communications	api_key	11	0	0	0	get:3,send:3,list:2
+supervisely	Cloud/FinOps	api_key	7	0	0	0	list:4,get:3
+supportbee	Business systems	api_key	17	0	0	0	list:6,create:4,get:3
+surecontact	Business systems	api_key	23	0	0	0	get:4,create:3,delete:3
+svix	LLM/dev accounts	api_key	16	0	0	0	create:4,get:4,list:4
+swaggerhub	LLM/dev accounts	api_key	14	0	0	0	list:7,get:4,search:3
+systeme_io	Business systems	api_key	24	0	0	0	list:7,create:4,delete:4
+taggun	Cloud/FinOps	api_key	5	0	0	0	extract:2,get:1,list:1
+tailscale	LLM/dev accounts	custom_credential	82	0	0	39	get:19,list:14,set:14
+talenthr	Business systems	api_key	1	0	0	0	change:1
+talentlms	Business systems	api_key	14	0	0	0	get:5,list:5,create:1
+tally	Business systems	api_key	4	0	0	0	get:2,list:2
+tanium	Cloud/FinOps	api_key	1	0	0	0	execute:1
+tapfiliate	Business systems	api_key	11	0	0	0	list:6,create:4,get:1
+tave	Communications	api_key	3	0	0	0	get:2,list:1
+tavily	Cloud/FinOps	api_key	7	2	0	0	get:2,crawl:1,create:1
+taxjar	Domain connectors	api_key	21	0	0	0	list:5,show:4,create:3
+teamcamp	Business systems	api_key	7	0	0	0	list:4,get:2,post:1
+teamtailor	LLM/dev accounts	api_key	4	0	0	0	list:3,retrieve:1
+telegram	Communications	api_key	50	0	0	0	send:14,get:8,delete:4
+telnyx	Communications	api_key	4	0	0	0	retrieve:2,list:1,send:1
+teltel	Communications	api_key	4	0	0	0	get:2,list:1,send:1
+templated	Business systems	api_key	7	0	0	0	get:3,list:2,create:1
+tencent_docs	Document/storage	oauth2	16	0	0	11	get:5,batch:2,list:2
+tencent_maps	Domain connectors	api_key	15	0	0	0	route:4,search:3,distance:1
+terraform	LLM/dev accounts	api_key	8	0	0	0	get:5,list:3
+textcortex	LLM/dev accounts	api_key	3	0	0	0	create:1,list:1,retrieve:1
+textit	Communications	api_key	13	0	0	0	list:4,create:2,delete:2
+textrazor	Cloud/FinOps	api_key	6	0	0	0	account:1,analyze:1,classify:1
+the_cat_api	Cloud/FinOps	api_key	5	0	0	0	get:2,search:2,list:1
+the_colony	Domain connectors	api_key	12	0	0	0	get:4,list:3,create:2
+the_dog_api	Cloud/FinOps	api_key	11	0	0	0	list:3,create:2,delete:2
+the_odds_api	Cloud/FinOps	api_key	7	0	0	0	list:4,get:3
+the_swarm	Domain connectors	api_key	5	0	0	0	fetch:2,search:2,get:1
+theirstack	Business systems	api_key	4	0	0	0	search:2,get:1,list:1
+ticketmaster	Domain connectors	api_key	15	0	0	0	get:14,execute:1
+ticktick	Business systems	oauth2+api_key	20	0	0	2	get:5,create:4,list:4
+tidb	Cloud/FinOps	custom_credential	17	0	0	0	list:8,get:7,show:2
+tikhub	Domain connectors	api_key	30	0	0	7	fetch:20,search:5,get:4
+tiktok_business	Business systems	oauth2+api_key	15	0	0	5	get:9,list:5,check:1
+timecamp	Business systems	api_key	9	0	0	0	list:3,get:2,create:1
+timelink	Business systems	api_key	14	0	0	0	get:7,list:7
+tinybird	Cloud/FinOps	api_key	4	0	3	0	run:2,get:1,list:1
+tinypng	Business systems	api_key	2	0	0	0	output:1,shrink:1
+tinyurl	Business systems	api_key	2	0	0	0	create:1,list:1
+tisane	Cloud/FinOps	api_key	7	0	0	0	analyze:1,calculate:1,compare:1
+tldv	Communications	api_key	5	0	0	0	get:3,import:1,list:1
+todoist	Business systems	oauth2+api_key	19	0	0	2	get:5,list:5,create:4
+together_ai	LLM/dev accounts	api_key	3	0	0	0	create:2,list:1
+toggl	Business systems	api_key	24	0	0	0	get:6,list:5,create:4
+tomba	Business systems	api_key	10	0	0	0	count:1,domain:1,enrich:1
+tomtom	Domain connectors	api_key	5	0	0	0	autocomplete:1,fuzzy:1,geocode:1
+torii	Business systems	api_key	9	0	0	0	list:5,get:4
+tpscheck	Communications	api_key	3	0	0	0	batch:1,check:1,get:1
+trello	Business systems	custom_credential	28	0	0	0	list:7,add:5,create:4
+tremendous	Business systems	api_key	13	0	0	0	list:6,get:5,create:1
+trent	Cloud/FinOps	api_key	1	0	0	0	send:1
+trigger_dev	LLM/dev accounts	api_key	6	0	0	0	get:2,cancel:1,list:1
+tripadvisor	Domain connectors	api_key	4	0	0	0	get:2,search:2
+triple_whale	Business systems	api_key	4	0	0	0	get:2,execute:1,validate:1
+truvera	Cloud/FinOps	api_key	10	4	0	0	get:4,create:2,delete:2
+turbot_pipes	Cloud/FinOps	api_key	1	0	0	0	execute:1
+turso	Cloud/FinOps	api_key	10	0	0	0	list:4,get:3,create:2
+tushare	Domain connectors	api_key	6	0	0	0	get:4,list:1,query:1
+twelve_data	Domain connectors	api_key	12	0	0	0	market:2,earliest:1,eod:1
+twenty_crm	Business systems	api_key	6	0	0	0	list:2,create:1,delete:1
+twilio	Communications	custom_credential	5	0	0	0	get:2,list:2,send:1
+twitter	Business systems	oauth2+custom_credential	71	0	0	17	get:23,create:3,lookup:3
+twitterapi_io	Domain connectors	api_key	39	0	0	0	get:27,add:2,list:2
+twochat	Communications	api_key	5	0	0	0	list:2,create:1,get:1
+typeform	Business systems	oauth2+api_key	6	0	0	4	get:3,list:3
+typefully	Business systems	api_key	8	0	0	0	get:3,list:2,create:1
+u301	Business systems	api_key	3	0	0	0	delete:1,list:1,shorten:1
+umami	Business systems	api_key	8	0	0	0	get:6,list:2
+unifapi	Domain connectors	api_key	220	0	0	0	list:88,get:55,search:28
+unione	Communications	api_key	5	0	0	0	list:3,get:1,send:1
+unipile	Communications	api_key	6	0	0	0	get:3,list:3
+uniswap_api	Domain connectors	api_key	3	0	1	0	check:1,create:1,get:1
+unsplash	Business systems	api_key	6	0	0	0	get:3,list:2,search:1
+updown_io	LLM/dev accounts	api_key	9	0	0	0	list:5,create:1,delete:1
+uploadcare	Document/storage	api_key	7	0	0	0	get:3,list:2,delete:1
+upsales	Business systems	api_key	13	0	8	0	get:4,list:3,create:2
+uptimerobot	LLM/dev accounts	api_key	7	0	0	0	get:2,list:2,create:1
+urlscan	Cloud/FinOps	api_key	3	0	0	0	get:1,search:1,submit:1
+userflow	Business systems	api_key	8	0	0	0	delete:2,get:2,upsert:2
+userlist	Communications	api_key	5	0	0	0	push:3,create:1,send:1
+v0	LLM/dev accounts	api_key	45	0	0	0	get:13,find:11,create:6
+v2ex	Domain connectors	api_key	13	0	0	0	list:5,get:4,boost:1
+valyu	Cloud/FinOps	api_key	1	0	0	0	search:1
+vapi	Communications	api_key	38	0	0	0	list:11,create:9,get:6
+vatlayer	Domain connectors	api_key	5	0	0	0	list:2,calculate:1,get:1
+vectorshift	LLM/dev accounts	api_key	4	0	0	0	bulk:1,get:1,list:1
+vercel	LLM/dev accounts	api_key	23	0	0	0	get:9,list:6,create:3
+verifiedemail	Communications	api_key	6	0	0	0	get:3,list:2,verify:1
+veriphone	Communications	api_key	2	0	0	0	get:1,verify:1
+vestaboard	Communications	api_key	4	0	0	0	get:2,send:1,set:1
+viggle	LLM/dev accounts	api_key	11	0	3	0	get:4,create:2,delete:2
+vimeo	Domain connectors	oauth2	25	0	0	5	list:6,get:5,add:3
+virustotal	Cloud/FinOps	api_key	16	0	0	0	get:10,add:2,rescan:1
+vitally	Business systems	api_key	5	0	0	0	create:1,delete:1,get:1
+voiceflow	Business systems	api_key	4	0	0	0	interact:1,list:1,query:1
+vtex	Business systems	api_key	5	0	0	0	list:3,get:1,search:1
+waboxapp	Document/storage	api_key	5	0	0	0	send:4,get:1
+wachete	Cloud/FinOps	api_key	6	0	0	0	get:2,list:2,create:1
+wakatime	Business systems	api_key	6	0	1	0	get:5,list:1
+wappalyzer	Cloud/FinOps	api_key	4	0	0	0	find:1,get:1,lookup:1
+waterfall	Business systems	api_key	7	0	0	0	get:3,launch:2,check:1
+weatherapi	Domain connectors	api_key	5	0	0	0	get:4,search:1
+weatherbit	Domain connectors	api_key	3	0	0	0	get:3
+weaviate	Cloud/FinOps	api_key	5	0	0	0	get:3,list:2
+web_of_science	Cloud/FinOps	api_key	4	0	0	0	get:2,search:2
+web_of_science_expanded	Cloud/FinOps	api_key	6	0	0	0	list:3,get:2,search:1
+webflow	Business systems	api_key	11	0	0	0	get:3,list:3,publish:2
+webinarjam	Communications	api_key	4	0	0	0	list:2,get:1,register:1
+webscraper_io	Cloud/FinOps	api_key	11	0	0	0	get:3,create:2,delete:2
+webscraping_ai	LLM/dev accounts	api_key	5	0	0	0	select:2,extract:1,fetch:1
+webshare	Cloud/FinOps	api_key	4	0	0	0	get:2,list:2
+webvizio	Business systems	api_key	2	0	0	0	create:1,delete:1
+wecom_bot	Communications	api_key	5	0	0	0	send:5
+wejam_ai	LLM/dev accounts	api_key	1	0	0	0	export:1
+what3words	Domain connectors	api_key	5	0	0	0	convert:2,autosuggest:1,available:1
+whatsapp	Communications	api_key	17	0	1	0	send:8,get:6,create:1
+whoisfreaks	Cloud/FinOps	api_key	5	0	0	0	get:3,check:1,list:1
+whop	Business systems	api_key	8	0	0	0	get:4,list:4
+winston_ai	LLM/dev accounts	api_key	4	0	0	0	check:1,compare:1,detect:1
+wise	Domain connectors	api_key	3	0	0	0	list:2,get:1
+wit_ai	LLM/dev accounts	api_key	20	0	0	0	list:5,create:4,get:4
+wiza	Business systems	api_key	5	0	0	0	get:3,prospect:1,start:1
+wolfram_alpha_api	Cloud/FinOps	api_key	3	0	0	0	get:2,validate:1
+woocommerce	Business systems	custom_credential	26	0	0	0	list:10,get:5,update:5
+woodpecker_co	Communications	api_key	7	0	0	0	list:4,get:3
+wordpress	Business systems	api_key	18	0	0	0	list:5,create:4,delete:3
+workable	Business systems	api_key	4	0	0	0	get:2,list:2
+workday	Business systems	oauth2	7	0	0	3	get:4,list:3
+workiom	Business systems	api_key	5	0	0	0	list:3,create:1,get:1
+workos	LLM/dev accounts	api_key	14	0	0	0	create:3,get:3,list:3
+workpath	Business systems	api_key	8	0	0	0	get:4,list:4
+worksnaps	Business systems	api_key	10	0	0	0	get:5,list:5
+world_news_api	Domain connectors	api_key	5	0	0	0	get:2,search:2,retrieve:1
+wrike	Business systems	api_key	7	0	0	0	list:3,create:2,get:2
+writer	LLM/dev accounts	api_key	2	0	0	0	create:1,list:1
+wttr_in	Domain connectors	no_auth	1	0	0	0	get:1
+x_ai	LLM/dev accounts	api_key	3	0	0	0	create:1,get:1,list:1
+xata	Cloud/FinOps	api_key	7	0	0	0	list:4,get:3
+yelp	Domain connectors	api_key	3	0	0	0	search:2,get:1
+ynab	Domain connectors	api_key	15	0	0	0	get:9,list:6
+you	Cloud/FinOps	api_key	5	0	0	0	fetch:1,finance:1,get:1
+youtube	Domain connectors	oauth2	29	0	0	2	list:10,delete:4,update:4
+yuandian	Cloud/FinOps	api_key	23	0	0	0	get:8,list:6,search:6
+zendesk	Communications	oauth2+api_key	11	0	2	2	get:4,list:3,create:1
+zenrows	Cloud/FinOps	api_key	4	0	0	0	fetch:2,extract:1,get:1
+zenserp	Business systems	api_key	4	0	0	0	image:1,maps:1,news:1
+zeplin	Business systems	oauth2	6	0	0	1	list:4,get:2
+zerobounce	Communications	api_key	6	0	0	0	get:3,create:1,list:1
+zhihu	Cloud/FinOps	api_key	4	0	0	0	global:1,hot:1,zhida:1
+zigpoll	Business systems	api_key	8	0	0	0	list:5,get:2,generate:1
+zipcodebase	Domain connectors	api_key	7	0	0	0	list:3,calculate:1,get:1
+zixflow	Business systems	api_key	16	0	0	0	get:5,list:3,create:2
+zoom	Communications	oauth2	4	0	0	4	create:1,get:1,list:1
+zorus	Cloud/FinOps	api_key	5	0	0	0	search:5
+zyte_api	Cloud/FinOps	api_key	4	0	0	0	extract:3,fetch:1
