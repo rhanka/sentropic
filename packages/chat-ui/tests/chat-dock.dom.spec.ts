@@ -15,9 +15,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { cleanup, render } from '@testing-library/svelte';
+import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import ChatDock from '../src/components/ChatDock.svelte';
+import { createChatPlacementMenu } from '../src/state/chatPlacementMenu';
+import { placementContainerClasses } from '../src/state/chatPlacementClasses';
 
 const chatDockSourcePath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -237,5 +239,170 @@ describe('ChatDock — effective-mode resolution ownership', () => {
     // and call the shared resolveEffectiveChatWidgetMode helper.
     expect(source).toContain('resolveEffectiveChatWidgetMode');
     expect(source).toContain("from '../state/chatWidgetShell");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Placement menu affordance (surfaces L1c-menu)
+// ---------------------------------------------------------------------------
+
+/** In-memory Storage stand-in — deterministic, isolated per test. */
+const createMemoryStorage = (): Storage => {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
+  } as Storage;
+};
+
+const flushAsync = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+describe('ChatDock — placement menu affordance (default-off)', () => {
+  it('does NOT render the "Move to…" trigger when placementMenu is undefined', () => {
+    const { container } = renderDock({ hostMode: 'sidepanel' });
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+  });
+
+  it('leaves the dialog container class identical to today when placementMenu is undefined', () => {
+    // Same props with/without an explicit undefined placementMenu must render
+    // the exact same dialog className (proves the prop is truly opt-in).
+    const a = renderDock({ displayMode: 'floating', hostMode: 'overlay', initialOpen: true, isBrowser: false });
+    const dialogA = a.container.querySelector('[role="dialog"]');
+    cleanup();
+    const b = renderDock({
+      displayMode: 'floating',
+      hostMode: 'overlay',
+      initialOpen: true,
+      isBrowser: false,
+      placementMenu: undefined,
+    });
+    const dialogB = b.container.querySelector('[role="dialog"]');
+    expect(dialogB?.className).toBe(dialogA?.className);
+  });
+});
+
+describe('ChatDock — placement menu affordance (provided)', () => {
+  it('renders the trigger with menu semantics when placementMenu is provided', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+    await flushAsync();
+    const { container } = renderDock({ hostMode: 'sidepanel', placementMenu: menu });
+    const trigger = container.querySelector('[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('lists exactly 4 items (Right/Left/Center/Full) when opened, current one checked', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+    await flushAsync();
+    const { container } = renderDock({ hostMode: 'sidepanel', placementMenu: menu });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+    await fireEvent.click(trigger);
+
+    const items = container.querySelectorAll('[role="menuitemradio"]');
+    expect(items.length).toBe(4);
+    expect(Array.from(items).map((el) => el.textContent?.trim())).toEqual([
+      'Right',
+      'Left',
+      'Center',
+      'Full',
+    ]);
+    const checked = Array.from(items).filter((el) => el.getAttribute('aria-checked') === 'true');
+    expect(checked).toHaveLength(1);
+    expect(checked[0]?.textContent).toContain('Right'); // default placement = floating.right
+  });
+
+  it('activating an item calls request() and switches the OVERLAY dialog className to placementContainerClasses(full)', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+    await flushAsync();
+    const { container } = renderDock({
+      hostMode: 'overlay',
+      initialOpen: true,
+      placementMenu: menu,
+    });
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    const classNameBefore = dialog.className;
+
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+    await fireEvent.click(trigger);
+    const items = Array.from(container.querySelectorAll('[role="menuitemradio"]'));
+    const fullItem = items.find((el) => el.textContent?.includes('Full')) as HTMLElement;
+    await fireEvent.click(fullItem);
+    await flushAsync();
+
+    // The menu model actually transitioned to 'full' ...
+    expect(menu.current()).toEqual({ kind: 'full' });
+    // ... and the dialog's rendered class TOKENS are exactly what
+    // placementContainerClasses computes for 'full' (plus the unrelated
+    // overflow-hidden toggle) — proving ChatDock's container is driven by
+    // the menu's current placement, not the legacy displayMode bridge.
+    expect(dialog.className).not.toBe(classNameBefore);
+    const expected = placementContainerClasses({ kind: 'full' }, { dockWidthCss: '0px' }).className;
+    const actualTokens = new Set(dialog.className.split(/\s+/).filter(Boolean));
+    const expectedTokens = new Set([...expected.split(/\s+/), 'overflow-hidden']);
+    expect(actualTokens).toEqual(expectedTokens);
+  });
+
+  it('Escape closes the menu and returns focus to the trigger', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+    await flushAsync();
+    const { container } = renderDock({ hostMode: 'sidepanel', placementMenu: menu });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+    await fireEvent.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    const list = container.querySelector('[role="menu"]') as HTMLElement;
+    await fireEvent.keyDown(list, { key: 'Escape' });
+
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('roving focus: ArrowDown moves tabindex=0 to the next item', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+    await flushAsync();
+    const { container } = renderDock({ hostMode: 'sidepanel', placementMenu: menu });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+    await fireEvent.click(trigger);
+
+    const list = container.querySelector('[role="menu"]') as HTMLElement;
+    const items = () => Array.from(container.querySelectorAll('[role="menuitemradio"]'));
+    // Right (index 0) starts as the roving tabstop (it's the current placement).
+    expect(items()[0]?.getAttribute('tabindex')).toBe('0');
+    expect(items()[1]?.getAttribute('tabindex')).toBe('-1');
+
+    await fireEvent.keyDown(list, { key: 'ArrowDown' });
+    expect(items()[0]?.getAttribute('tabindex')).toBe('-1');
+    expect(items()[1]?.getAttribute('tabindex')).toBe('0');
   });
 });
