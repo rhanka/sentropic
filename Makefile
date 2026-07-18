@@ -3142,3 +3142,43 @@ publish-cited-source-viewer-token: build-cited-source-viewer ## Publish @sentrop
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cited-source-viewer \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cited-source-viewer@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cited-source-viewer@$$version already exists; skipping publish"; else npm publish --access public; fi'
+# ---- BR-72 Wave-1 connector recoding proofs (read-only, private, not published) ----
+.PHONY: typecheck-mcp-connector-github
+typecheck-mcp-connector-github: ## Run @sentropic/mcp-connector-github type checks (BR-72 read-only benchmark proof)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: test-mcp-connector-github
+test-mcp-connector-github: ## Run @sentropic/mcp-connector-github tests (BR-72 read-only benchmark proof)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-connector-github/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+
+.PHONY: typecheck-mcp-connector-gmail
+typecheck-mcp-connector-gmail: ## Run @sentropic/mcp-connector-gmail type checks (BR-72 Wave-1 read-only proof)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-gmail $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-gmail $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-gmail $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: test-mcp-connector-gmail
+test-mcp-connector-gmail: ## Run @sentropic/mcp-connector-gmail tests (BR-72 Wave-1 read-only proof)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-gmail $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-gmail $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-connector-gmail/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-gmail $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+
+.PHONY: typecheck-mcp-connector-googledrive
+typecheck-mcp-connector-googledrive: ## Run @sentropic/mcp-connector-googledrive type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-googledrive $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-googledrive $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-googledrive $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: test-mcp-connector-googledrive
+test-mcp-connector-googledrive: ## Run @sentropic/mcp-connector-googledrive tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-googledrive $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-googledrive $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-connector-googledrive/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-googledrive $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+
