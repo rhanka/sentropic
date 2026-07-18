@@ -1,0 +1,344 @@
+BR-72 deterministic OOMOL harvest
+corpusCommit=f36dcbf324a3915e5f6e6b97a20f08d2e18c1172
+providers.tsv.sha256=019b61b29345fa11ba9f565886b37c1699e731756867f1efa9f9df3a4f8c173c
+providers=1090
+actions=11136
+asyncActions=100
+followUpActions=262
+followUpReferences=360
+providerPermissionActions=949
+providerPermissionRequiredScopeOverlap=780
+multiAuthProviders=28
+classCounts=Document/storage:40, Communications:162, Business systems:405, Domain connectors:121, Cloud/FinOps:202, LLM/dev accounts:160, Unclassified:0
+authTypeCounts=no_auth:9, api_key:1011, custom_credential:34, oauth2:64
+verbBuckets=Read:6889, Create:977, Update:916, Delete:555, Send:148, Workflow/async:305, Other:1346
+topRawVerbs=get:3219, list:2737, create:883, update:586, delete:552, search:346, send:114, add:98, remove:61, find:55, check:54, fetch:51
+topOtherRawVerbs=upsert:32, compose:30, generate:26, enrich:23, convert:21, save:20, test:18, mariadb:16, mongo:16, mysql:16, postgres:16, redis:16, change:15, football:14, libsql:14, qwen:14, reverse:14, route:13, scrape:13, ai:12, backup:12, clean:12, docker:12, domain:12
+
+VERB_BUCKETS=
+{
+  "read": [
+    "analyze",
+    "calculate",
+    "check",
+    "compare",
+    "count",
+    "decode",
+    "describe",
+    "detect",
+    "download",
+    "estimate",
+    "evaluate",
+    "export",
+    "extract",
+    "fetch",
+    "find",
+    "format",
+    "geocode",
+    "get",
+    "identify",
+    "inspect",
+    "list",
+    "lookup",
+    "parse",
+    "preview",
+    "query",
+    "read",
+    "render",
+    "resolve",
+    "retrieve",
+    "scan",
+    "search",
+    "status",
+    "summarize",
+    "transform",
+    "translate",
+    "validate",
+    "verify",
+    "view"
+  ],
+  "create": [
+    "clone",
+    "copy",
+    "create",
+    "duplicate",
+    "fork",
+    "import",
+    "insert",
+    "invite",
+    "provision",
+    "register",
+    "upload"
+  ],
+  "update": [
+    "add",
+    "archive",
+    "assign",
+    "attach",
+    "clear",
+    "configure",
+    "disable",
+    "enable",
+    "lock",
+    "mark",
+    "move",
+    "patch",
+    "rename",
+    "remove",
+    "replace",
+    "restore",
+    "revoke",
+    "set",
+    "transfer",
+    "unarchive",
+    "unlock",
+    "update"
+  ],
+  "delete": [
+    "delete",
+    "destroy",
+    "purge"
+  ],
+  "send": [
+    "alert",
+    "email",
+    "message",
+    "notify",
+    "post",
+    "publish",
+    "reply",
+    "send"
+  ],
+  "workflow": [
+    "approve",
+    "batch",
+    "cancel",
+    "connect",
+    "deploy",
+    "dispatch",
+    "execute",
+    "launch",
+    "rerun",
+    "run",
+    "start",
+    "stop",
+    "submit",
+    "sync",
+    "trigger"
+  ],
+  "other": []
+}
+SEMANTIC_OVERRIDES=
+{
+  "add": {
+    "create": [
+      "comment",
+      "reaction",
+      "note",
+      "attachment",
+      "file",
+      "member"
+    ],
+    "update": [
+      "assignee",
+      "collaborator",
+      "label",
+      "reviewer",
+      "tag",
+      "topic",
+      "watcher"
+    ]
+  },
+  "remove": {
+    "update": [
+      "assignee",
+      "collaborator",
+      "label",
+      "reviewer",
+      "tag",
+      "topic",
+      "watcher"
+    ]
+  },
+  "clear": {
+    "update": [
+      "label",
+      "assignee",
+      "reviewer",
+      "topic",
+      "watcher"
+    ]
+  },
+  "generate": {
+    "read": [
+      "release_notes",
+      "report",
+      "summary",
+      "preview"
+    ],
+    "create": [
+      "image",
+      "video",
+      "audio",
+      "file",
+      "asset",
+      "document"
+    ]
+  }
+}
+NON_SEMANTIC_PREFIXES=
+[
+  "api",
+  "app",
+  "application",
+  "auth",
+  "connection",
+  "database",
+  "email",
+  "file",
+  "files",
+  "folder",
+  "folders",
+  "google",
+  "mail",
+  "message",
+  "messages",
+  "notification",
+  "notifications",
+  "server",
+  "settings",
+  "user",
+  "users",
+  "v1",
+  "v2",
+  "v3",
+  "workflow",
+  "workflows"
+]
+CLASS_RULES=
+[
+  {
+    "primaryClass": "Document/storage",
+    "keywords": [
+      "box",
+      "cloudinary",
+      "document",
+      "drive",
+      "dropbox",
+      "file",
+      "git",
+      "media",
+      "notion",
+      "sharepoint",
+      "storage"
+    ],
+    "categories": [
+      "Media",
+      "Storage"
+    ]
+  },
+  {
+    "primaryClass": "Communications",
+    "keywords": [
+      "call",
+      "chat",
+      "discord",
+      "email",
+      "gmail",
+      "mail",
+      "message",
+      "slack",
+      "sms",
+      "telegram",
+      "twilio",
+      "whatsapp"
+    ],
+    "categories": [
+      "Communication"
+    ]
+  },
+  {
+    "primaryClass": "Business systems",
+    "keywords": [
+      "airtable",
+      "clickup",
+      "crm",
+      "customer",
+      "erp",
+      "hubspot",
+      "marketing",
+      "odoo",
+      "sales",
+      "support"
+    ],
+    "categories": [
+      "Marketing",
+      "Productivity"
+    ]
+  },
+  {
+    "primaryClass": "Domain connectors",
+    "keywords": [
+      "bank",
+      "billing",
+      "coin",
+      "crypto",
+      "finance",
+      "geo",
+      "hotel",
+      "map",
+      "payment",
+      "realestate",
+      "shipping",
+      "stripe",
+      "travel"
+    ],
+    "categories": [
+      "Finance",
+      "Location",
+      "Social"
+    ]
+  },
+  {
+    "primaryClass": "Cloud/FinOps",
+    "keywords": [
+      "analytics",
+      "aws",
+      "azure",
+      "cloud",
+      "datadog",
+      "database",
+      "gcp",
+      "grafana",
+      "kubernetes",
+      "log",
+      "monitor",
+      "newrelic",
+      "s3",
+      "security"
+    ],
+    "categories": [
+      "Data",
+      "Infrastructure",
+      "Security"
+    ]
+  },
+  {
+    "primaryClass": "LLM/dev accounts",
+    "keywords": [
+      "ai",
+      "anthropic",
+      "developer",
+      "github",
+      "huggingface",
+      "model",
+      "openai",
+      "registry",
+      "sdk"
+    ],
+    "categories": [
+      "AI",
+      "Developer Tools"
+    ]
+  }
+]
