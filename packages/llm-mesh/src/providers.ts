@@ -80,6 +80,24 @@ export const toQualifiedModelId = (model: ModelReference): QualifiedModelId => {
   return `${model.providerId}:${model.modelId}`;
 };
 
+// Antigravity unified gateway fleet. One Google account transport
+// (transportProviderId `antigravity`) serves ALL of these models. Modelled as
+// the account transport's model-allowlist rather than distinct mesh catalog
+// ProviderIds: these are Antigravity-internal wire ids (not sentropic catalog
+// selection keys), and minting new ProviderIds would ripple through every
+// `satisfies Record<ProviderId, …>` map and the api adapter registration while
+// risking the "listed ≠ callable" mis-routing trap. Kept as a plain constant so
+// the transport can key its `modelIds` allowlist off it.
+export const antigravityModelFleet = [
+  'claude-sonnet-4-6',
+  'claude-opus-4-6-thinking',
+  'gemini-3-pro-high',
+  'gemini-3-pro-low',
+  'gpt-oss-120b-medium',
+] as const;
+
+export type AntigravityFleetModelId = (typeof antigravityModelFleet)[number];
+
 export const isProviderId = (value: string): value is ProviderId => {
   return providerIds.includes(value as ProviderId);
 };
