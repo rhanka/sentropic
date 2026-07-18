@@ -192,6 +192,7 @@
   let placementMenuTriggerEl: HTMLButtonElement | null = null;
   let placementMenuItemEls: HTMLButtonElement[] = [];
   let placementMenuActiveIndex = 0;
+  let placementMenuContainerEl: HTMLDivElement | null = null;
 
   // ---------------------------------------------------------------------------
   // Derived
@@ -392,6 +393,26 @@
     closePlacementMenu();
   };
 
+  // Standard menu dismissal: a pointerdown outside the trigger+popup closes
+  // it. A pointerdown INSIDE (e.g. on a menu item) is left alone so it does
+  // not steal focus / interfere with the item's own click handler.
+  const onOutsidePlacementMenuPointerDown = (e: Event) => {
+    if (!placementMenuOpen) return;
+    const target = e.target as Node | null;
+    if (placementMenuContainerEl && target && placementMenuContainerEl.contains(target)) {
+      return;
+    }
+    closePlacementMenu();
+  };
+
+  $: if (typeof window !== 'undefined') {
+    if (placementMenuOpen) {
+      window.addEventListener('pointerdown', onOutsidePlacementMenuPointerDown);
+    } else {
+      window.removeEventListener('pointerdown', onOutsidePlacementMenuPointerDown);
+    }
+  }
+
   const onPlacementMenuTriggerKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -409,16 +430,21 @@
 
   const onPlacementMenuListKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
+      // Must NOT reach the dialog's own keydown handler (dispatchDialogKeyDown):
+      // otherwise Escape closes the whole chat dock instead of just this popup.
+      e.stopPropagation();
       e.preventDefault();
       closePlacementMenu();
       return;
     }
     if (e.key === 'ArrowDown') {
+      e.stopPropagation();
       e.preventDefault();
       movePlacementMenuFocus(1);
       return;
     }
     if (e.key === 'ArrowUp') {
+      e.stopPropagation();
       e.preventDefault();
       movePlacementMenuFocus(-1);
       return;
@@ -561,6 +587,9 @@
     }
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerdown', onOutsidePlacementMenuPointerDown);
+    }
     placementMenuUnsubscribe?.();
     setBodyScrollLocked(false);
     publishLayout();
@@ -635,9 +664,11 @@
         {@render renderContent({ isDocked: _isDocked, isMobileViewport })}
       {/if}
 
-      <!-- "Move to…" placement menu affordance (surfaces L1c-menu) — default-off. -->
-      {#if placementMenu}
-        <div class="absolute top-2 right-2 z-10">
+      <!-- "Move to…" placement menu affordance (surfaces L1c-menu) — default-off.
+           Not rendered in sidepanel mode: the container class branch there
+           ignores effectivePlacement, so the menu could not do anything. -->
+      {#if placementMenu && !isSidePanelHost}
+        <div class="absolute top-2 right-2 z-10" bind:this={placementMenuContainerEl}>
           <button
             type="button"
             class="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
