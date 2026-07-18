@@ -51,6 +51,30 @@ describe('chatPlacementMenu — persistence key (D6)', () => {
   });
 });
 
+describe('chatPlacementMenu — construction does not write persistence (code review)', () => {
+  it('does NOT call storage.setItem during construction (no seed write)', () => {
+    const storage = createMemoryStorage();
+    const setItemSpy = vi.spyOn(storage, 'setItem');
+    createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    expect(setItemSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT write the default placement under an anonymous/no-intent key on construction', () => {
+    const storage = createMemoryStorage();
+    createChatPlacementMenu({ userId: 'anonymous', hostId: 'h1', workspace: 'default', storage });
+    expect(storage.getItem('chat-ui/placement/v1/anonymous/h1/default')).toBeNull();
+  });
+
+  it('request() (explicit user action) DOES call storage.setItem', async () => {
+    const storage = createMemoryStorage();
+    const setItemSpy = vi.spyOn(storage, 'setItem');
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    expect(setItemSpy).not.toHaveBeenCalled();
+    await menu.request({ kind: 'full' });
+    expect(setItemSpy).toHaveBeenCalledWith('chat-ui/placement/v1/u1/h1/w1', 'full');
+  });
+});
+
 describe('chatPlacementMenu — items', () => {
   it('exposes exactly 4 items: Right / Left / Center / Full', () => {
     const menu = createChatPlacementMenu({

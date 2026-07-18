@@ -143,19 +143,22 @@ export function createChatPlacementMenu(
   const defaultPlacement: ChatPlacement =
     opts.defaultPlacement ?? { kind: 'floating', anchor: 'right' };
 
+  // D6: `requested` is seeded from persistence synchronously, and — via
+  // seedEffectiveFromRequested — `effective` (what current() reports) is
+  // ALSO seeded synchronously to that same persisted-supported intent, so a
+  // returning user's chosen placement is active immediately. This does NOT
+  // go through requestPlacement, so construction never issues a persistence
+  // write: only an explicit request() (real user action) persists. Writing
+  // on construction would otherwise persist the default placement (e.g.
+  // floating.right) under an anonymous/pre-auth key and could clobber an
+  // already-stored value on every re-construction.
   const controller = createPlacementController({
     hostSurfaces: WEB_HOST_SURFACES,
     commit: webCommit,
     defaultPlacement,
     persistence,
+    seedEffectiveFromRequested: true,
   });
-
-  // D6: `requested` is seeded from persistence synchronously, but `effective`
-  // (what current() reports) only advances after a successful commit. Restore
-  // any persisted intent immediately so a returning user's chosen placement
-  // becomes active without the host having to know about this protocol detail.
-  const seeded = controller.snapshot().requested;
-  void controller.requestPlacement(seeded);
 
   return {
     items: MENU_ITEMS,
