@@ -15,8 +15,12 @@ import {
   webauthnChallenges,
   webauthnCredentials
 } from '../../db/schema';
+import { getTenantResolutionMetrics } from '../../services/tenancy/tenant-resolution-metrics';
 
 export const adminRouter = new Hono();
+export const tenantResolutionMetricsRouter = new Hono();
+
+tenantResolutionMetricsRouter.get('/', (c) => c.json(getTenantResolutionMetrics()));
 
 const userRoleSchema = z.enum(['admin_app', 'admin_org', 'editor', 'guest']);
 const userStatusSchema = z.enum([
