@@ -1,7 +1,7 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
   "_generated": "2026-06-08",
-  "_version": "0.28.0",
+  "_version": "0.29.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -422,7 +422,7 @@
       "kind": "svelte",
       "file": "dist/components/ChatDock.svelte",
       "exists": true,
-      "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
+      "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), placementMenu? (ChatPlacementMenu, surfaces L1c-menu — renders a 'Move to…' trigger+popup when provided; undefined = zero change), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
     },
     "./components/ChatPanel.svelte": {
       "kind": "svelte",
@@ -777,6 +777,17 @@
         "DragSessionConfig",
         "DragSession",
         "createDragSession"
+      ]
+    },
+    "./state/chatPlacementMenu": {
+      "kind": "ts",
+      "file": "dist/state/chatPlacementMenu.js",
+      "exports": [
+        "ChatPlacementMenuItem",
+        "CreateChatPlacementMenuOptions",
+        "ChatPlacementMenu",
+        "buildChatPlacementPersistenceKey",
+        "createChatPlacementMenu"
       ]
     }
   }
