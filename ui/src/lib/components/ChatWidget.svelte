@@ -7,11 +7,13 @@
   import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import {
+    session,
     isAuthenticated,
     setUser,
     clearUser,
     type User,
   } from '$lib/stores/session';
+  import { workspaceScope } from '$lib/stores/workspaceScope';
   import { streamHub } from '$lib/stores/streamHub';
   import { currentFolderId } from '$lib/stores/folders';
   import {
@@ -55,6 +57,10 @@
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
   import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
+  import {
+    createChatPlacementMenu,
+    type ChatPlacementMenu,
+  } from '@sentropic/chat-ui/state/chatPlacementMenu';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -196,6 +202,16 @@
   // ChatDock manages the dock chrome; ChatWidget binds to its derived state
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let chatDockRef: any = null;
+
+  // "Move chat to…" placement menu (surfaces L1c-menu) — scoped per user +
+  // workspace so each combination remembers its own placement. Falls back to
+  // stable defaults when the session/workspace context isn't known yet.
+  let placementMenu: ChatPlacementMenu | undefined;
+  $: placementMenu = createChatPlacementMenu({
+    userId: $session.user?.id ?? 'anonymous',
+    hostId: 'sentropic-web',
+    workspace: $workspaceScope.selectedId ?? 'default',
+  });
   let isSidePanelHost = false;
   let isExtensionOverlayHost = false;
   let showExtensionConfigMenu = false;
@@ -3062,6 +3078,7 @@
   {hostMode}
   {isExtensionOverlayHost}
   {isBrowser}
+  {placementMenu}
   initialOpen={isSidePanelHost}
   contentOverflowVisible={showExtensionConfigMenu}
   containerClass="queue-monitor"
