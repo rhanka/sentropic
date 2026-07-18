@@ -55,6 +55,7 @@
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
+  import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
   import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
   import {
@@ -2823,6 +2824,12 @@
               </MenuPopover>
             {/if}
             {#if !isSidePanelHost}
+              {#if placementMenu}
+                <ChatPlacementMenuButton
+                  {placementMenu}
+                  class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                />
+              {/if}
               <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
               <button
                 class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"

@@ -422,7 +422,13 @@
       "kind": "svelte",
       "file": "dist/components/ChatDock.svelte",
       "exists": true,
-      "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), placementMenu? (ChatPlacementMenu, surfaces L1c-menu — renders a 'Move to…' trigger+popup when provided; undefined = zero change), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
+      "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), placementMenu? (ChatPlacementMenu, surfaces L1c-menu — drives the dialog container's placement classes from placementMenu.current() when provided; undefined = zero change. ChatDock renders NO trigger/popup UI itself — hosts mount ChatPlacementMenuButton separately, e.g. in their own header toolbar), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
+    },
+    "./components/ChatPlacementMenuButton.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatPlacementMenuButton.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: placementMenu (ChatPlacementMenu, required), class? (string passthrough for the trigger button). Renders the 'Move to…' trigger+popup (Right/Left/Center/Full) — extracted from ChatDock's former absolute overlay (which collided with host header controls) into a normal in-flow icon button the host mounts in its own toolbar. Preserves code-review fixes F1-F5: Escape/Arrow keydowns on the popup stopPropagation (never bubble to an ancestor dialog's Escape-closes handler), outside-pointerdown closes, roving tabindex focus, focus returns to the trigger on close."
     },
     "./components/ChatPanel.svelte": {
       "kind": "svelte",
