@@ -35,6 +35,10 @@
   } from '../state/chatWidgetShell.js';
   import { displayModeToPlacement } from '../state/chatPlacementMigration.js';
   import { placementContainerClasses } from '../state/chatPlacementClasses.js';
+  import { placementId, type ChatPlacement } from '../state/chatPlacement.js';
+  import type { ChatPlacementMenu, ChatPlacementMenuItem } from '../state/chatPlacementMenu.js';
+  import Move from '@lucide/svelte/icons/move';
+  import Check from '@lucide/svelte/icons/check';
 
   // ---------------------------------------------------------------------------
   // Props
@@ -92,6 +96,15 @@
 
   /** Whether the browser context is available (guards localStorage/window). */
   export let isBrowser = false;
+
+  /**
+   * Optional headless placement menu (surfaces L1c-menu). When provided,
+   * ChatDock renders a "Move to…" trigger + popup (Right/Left/Center/Full)
+   * and derives the active placement from `placementMenu.current()` instead
+   * of the legacy displayMode->placement bridge. When undefined (default),
+   * behavior is EXACTLY today's: zero change.
+   */
+  export let placementMenu: ChatPlacementMenu | undefined = undefined;
 
   // ---------------------------------------------------------------------------
   // Snippets
@@ -171,6 +184,15 @@
   let mobileMqlChangeHandler: ((ev: MediaQueryListEvent) => void) | null = null;
   let resizeHandler: (() => void) | null = null;
 
+  // Placement menu affordance (surfaces L1c-menu) — only touched when
+  // `placementMenu` is provided; otherwise stays null/unused.
+  let menuPlacement: ChatPlacement | null = null;
+  let placementMenuUnsubscribe: (() => void) | null = null;
+  let placementMenuOpen = false;
+  let placementMenuTriggerEl: HTMLButtonElement | null = null;
+  let placementMenuItemEls: HTMLButtonElement[] = [];
+  let placementMenuActiveIndex = 0;
+
   // ---------------------------------------------------------------------------
   // Derived
   // ---------------------------------------------------------------------------
@@ -187,11 +209,32 @@
   // Internal dock-mode flag
   let _isDocked = false;
   $: _isDocked = effectiveMode === 'docked';
-  $: effectivePlacement = displayModeToPlacement(effectiveMode);
+
+  // (Re)subscribe whenever the placementMenu prop identity changes. When
+  // undefined, effectivePlacement below falls back to the legacy bridge —
+  // ZERO behavior change from today.
+  $: {
+    placementMenuUnsubscribe?.();
+    placementMenuUnsubscribe = placementMenu
+      ? placementMenu.subscribe((current) => {
+          menuPlacement = current;
+        })
+      : null;
+    if (!placementMenu) menuPlacement = null;
+  }
+
+  $: effectivePlacement = placementMenu
+    ? menuPlacement ?? displayModeToPlacement(effectiveMode)
+    : displayModeToPlacement(effectiveMode);
   $: containerPlacement = placementContainerClasses(effectivePlacement, {
     dialogClass,
     dockWidthCss,
   });
+
+  // A placement-menu popup must extend outside the dialog bounds, same as
+  // any other host-driven popover — combine with the existing prop-driven
+  // contentOverflowVisible pattern rather than adding a second mechanism.
+  $: dialogOverflowVisible = contentOverflowVisible || placementMenuOpen;
 
   // Expose derived state for host binding
   export let isOpen: boolean = false;
@@ -315,6 +358,73 @@
       onDialogKeyDown(e);
     } else {
       handleBaseDialogKeyDown(e);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Placement menu affordance (surfaces L1c-menu)
+  // ---------------------------------------------------------------------------
+
+  const closePlacementMenu = () => {
+    if (!placementMenuOpen) return;
+    placementMenuOpen = false;
+    placementMenuTriggerEl?.focus();
+  };
+
+  const openPlacementMenu = () => {
+    if (!placementMenu || placementMenuOpen) return;
+    const currentIdValue = menuPlacement ? placementId(menuPlacement) : null;
+    const idx = placementMenu.items.findIndex((it) => it.id === currentIdValue);
+    placementMenuActiveIndex = idx >= 0 ? idx : 0;
+    placementMenuOpen = true;
+    void tick().then(() => {
+      placementMenuItemEls[placementMenuActiveIndex]?.focus();
+    });
+  };
+
+  const togglePlacementMenu = () => {
+    if (placementMenuOpen) closePlacementMenu();
+    else openPlacementMenu();
+  };
+
+  const selectPlacementMenuItem = (item: ChatPlacementMenuItem) => {
+    void placementMenu?.request(item.placement);
+    closePlacementMenu();
+  };
+
+  const onPlacementMenuTriggerKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openPlacementMenu();
+    }
+  };
+
+  const movePlacementMenuFocus = (delta: number) => {
+    if (!placementMenu) return;
+    const count = placementMenu.items.length;
+    if (count === 0) return;
+    placementMenuActiveIndex = (placementMenuActiveIndex + delta + count) % count;
+    placementMenuItemEls[placementMenuActiveIndex]?.focus();
+  };
+
+  const onPlacementMenuListKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closePlacementMenu();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      movePlacementMenuFocus(1);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      movePlacementMenuFocus(-1);
+      return;
+    }
+    if (e.key === 'Tab') {
+      closePlacementMenu();
     }
   };
 
@@ -451,6 +561,7 @@
     }
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
+    placementMenuUnsubscribe?.();
     setBodyScrollLocked(false);
     publishLayout();
   });
@@ -513,15 +624,61 @@
       bind:this={dialogEl}
       on:keydown={dispatchDialogKeyDown}
       class={isSidePanelHost
-        ? `chat-dock-shell h-full w-full bg-white flex flex-col${dialogClass ? ' ' + dialogClass : ''}`
+        ? `chat-dock-shell h-full w-full bg-white flex flex-col${placementMenu ? ' relative' : ''}${dialogClass ? ' ' + dialogClass : ''}`
         : containerPlacement.className}
       style={isSidePanelHost ? '' : containerPlacement.style}
       class:hidden={!isVisible}
-      class:overflow-hidden={!contentOverflowVisible}
-      class:overflow-visible={contentOverflowVisible}
+      class:overflow-hidden={!dialogOverflowVisible}
+      class:overflow-visible={dialogOverflowVisible}
     >
       {#if renderContent}
         {@render renderContent({ isDocked: _isDocked, isMobileViewport })}
+      {/if}
+
+      <!-- "Move to…" placement menu affordance (surfaces L1c-menu) — default-off. -->
+      {#if placementMenu}
+        <div class="absolute top-2 right-2 z-10">
+          <button
+            type="button"
+            class="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            aria-haspopup="menu"
+            aria-expanded={placementMenuOpen}
+            aria-label="Move chat to…"
+            bind:this={placementMenuTriggerEl}
+            on:click={togglePlacementMenu}
+            on:keydown={onPlacementMenuTriggerKeyDown}
+          >
+            <Move class="w-4 h-4" aria-hidden="true" />
+          </button>
+
+          {#if placementMenuOpen}
+            <div
+              role="menu"
+              aria-label="Move chat to…"
+              tabindex="-1"
+              class="absolute right-0 mt-1 w-36 rounded border border-gray-200 bg-white shadow-lg py-1"
+              on:keydown={onPlacementMenuListKeyDown}
+            >
+              {#each placementMenu.items as item, i (item.id)}
+                {@const isCurrent = menuPlacement ? placementId(menuPlacement) === item.id : false}
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={isCurrent}
+                  tabindex={i === placementMenuActiveIndex ? 0 : -1}
+                  class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-50"
+                  bind:this={placementMenuItemEls[i]}
+                  on:click={() => selectPlacementMenuItem(item)}
+                >
+                  <span>{item.label}</span>
+                  {#if isCurrent}
+                    <Check class="w-3.5 h-3.5" aria-hidden="true" />
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
       {/if}
     </div>
   {/if}

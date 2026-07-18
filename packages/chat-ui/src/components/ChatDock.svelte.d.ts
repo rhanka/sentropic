@@ -1,6 +1,7 @@
 import type { Component, Snippet } from 'svelte';
 import type { ChatWidgetDisplayMode } from '../stores/chatWidgetLayout.js';
 import type { ChatWidgetHostMode } from '../state/chatWidgetShell.js';
+import type { ChatPlacementMenu } from '../state/chatPlacementMenu.js';
 
 export type ChatDockProps = {
   /** Current display mode (docked | floating). Host should persist changes via onDisplayModeChange. */
@@ -18,6 +19,12 @@ export type ChatDockProps = {
   contentOverflowVisible?: boolean;
   /** Whether the browser context is available (guards localStorage/window access). */
   isBrowser?: boolean;
+  /**
+   * Optional headless placement menu (surfaces L1c-menu). When provided,
+   * ChatDock renders a "Move to…" trigger + popup (Right/Left/Center/Full)
+   * and derives the active placement from it. Undefined (default) = zero change.
+   */
+  placementMenu?: ChatPlacementMenu;
   /**
    * Renders the floating bubble trigger button.
    * Receives { toggle: () => void; isOpen: boolean }.
