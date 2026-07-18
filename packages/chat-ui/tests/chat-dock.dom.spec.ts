@@ -9,13 +9,17 @@
  * - Props: contentOverflowVisible toggles overflow-visible on dialog
  * - containerClass / dialogClass: extra classes are applied to correct elements
  * - dialogId: dialog id attribute matches the provided value
+ * - placementMenu: ChatDock derives ONLY the dialog container's placement
+ *   class from `placementMenu.current()` — it renders no trigger/popup UI
+ *   (that affordance lives in ChatPlacementMenuButton, see
+ *   chat-placement-menu-button.dom.spec.ts, mounted by the HOST separately).
  *
  * Environment: jsdom via vitest.dom.config.ts (target: test-chat-ui-dom).
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { cleanup, fireEvent, render } from '@testing-library/svelte';
+import { cleanup, render } from '@testing-library/svelte';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import ChatDock from '../src/components/ChatDock.svelte';
 import { createChatPlacementMenu } from '../src/state/chatPlacementMenu';
@@ -287,26 +291,8 @@ describe('ChatDock — placement menu affordance (default-off)', () => {
   });
 });
 
-describe('ChatDock — placement menu affordance (provided)', () => {
-  it('renders the trigger with menu semantics when placementMenu is provided', async () => {
-    const menu = createChatPlacementMenu({
-      userId: 'u1',
-      hostId: 'h1',
-      workspace: 'w1',
-      storage: createMemoryStorage(),
-    });
-    await flushAsync();
-    // Overlay + initialOpen (not sidepanel): the affordance is gated off in
-    // sidepanel mode (see "no dead menu in sidepanel mode" below) — overlay
-    // with initialOpen is the mounting convenience that keeps this test
-    // about the menu semantics, not about hostMode.
-    const { container } = renderDock({ hostMode: 'overlay', initialOpen: true, placementMenu: menu });
-    const trigger = container.querySelector('[aria-haspopup="menu"]');
-    expect(trigger).not.toBeNull();
-    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('lists exactly 4 items (Right/Left/Center/Full) when opened, current one checked', async () => {
+describe('ChatDock — container placement driven by placementMenu (provided)', () => {
+  it('renders no "Move to…" trigger/popup even when placementMenu is provided — that UI lives in ChatPlacementMenuButton', async () => {
     const menu = createChatPlacementMenu({
       userId: 'u1',
       hostId: 'h1',
@@ -315,23 +301,23 @@ describe('ChatDock — placement menu affordance (provided)', () => {
     });
     await flushAsync();
     const { container } = renderDock({ hostMode: 'overlay', initialOpen: true, placementMenu: menu });
-    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
-    await fireEvent.click(trigger);
-
-    const items = container.querySelectorAll('[role="menuitemradio"]');
-    expect(items.length).toBe(4);
-    expect(Array.from(items).map((el) => el.textContent?.trim())).toEqual([
-      'Right',
-      'Left',
-      'Center',
-      'Full',
-    ]);
-    const checked = Array.from(items).filter((el) => el.getAttribute('aria-checked') === 'true');
-    expect(checked).toHaveLength(1);
-    expect(checked[0]?.textContent).toContain('Right'); // default placement = floating.right
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+    expect(container.querySelector('[role="menu"]')).toBeNull();
   });
 
-  it('activating an item calls request() and switches the OVERLAY dialog className to placementContainerClasses(full)', async () => {
+  it('renders no trigger in sidepanel mode either (code review F4 — no dead menu in sidepanel)', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+    await flushAsync();
+    const { container } = renderDock({ hostMode: 'sidepanel', placementMenu: menu });
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+  });
+
+  it("dialog container className === placementContainerClasses(placementMenu.current()) and updates when the menu's current changes", async () => {
     const menu = createChatPlacementMenu({
       userId: 'u1',
       hostId: 'h1',
@@ -347,143 +333,19 @@ describe('ChatDock — placement menu affordance (provided)', () => {
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
     const classNameBefore = dialog.className;
 
-    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
-    await fireEvent.click(trigger);
-    const items = Array.from(container.querySelectorAll('[role="menuitemradio"]'));
-    const fullItem = items.find((el) => el.textContent?.includes('Full')) as HTMLElement;
-    await fireEvent.click(fullItem);
+    // Non-tautological proof, WITHOUT a trigger inside ChatDock (there is
+    // none anymore): drive the headless menu model directly — exactly what
+    // a real ChatPlacementMenuButton click would do under the hood — and
+    // assert ChatDock's container class tracks placementContainerClasses(
+    // current), not the legacy displayMode bridge.
+    await menu.request({ kind: 'full' });
     await flushAsync();
 
-    // The menu model actually transitioned to 'full' ...
     expect(menu.current()).toEqual({ kind: 'full' });
-    // ... and the dialog's rendered class TOKENS are exactly what
-    // placementContainerClasses computes for 'full' (plus the unrelated
-    // overflow-hidden toggle) — proving ChatDock's container is driven by
-    // the menu's current placement, not the legacy displayMode bridge.
     expect(dialog.className).not.toBe(classNameBefore);
     const expected = placementContainerClasses({ kind: 'full' }, { dockWidthCss: '0px' }).className;
     const actualTokens = new Set(dialog.className.split(/\s+/).filter(Boolean));
     const expectedTokens = new Set([...expected.split(/\s+/), 'overflow-hidden']);
     expect(actualTokens).toEqual(expectedTokens);
-  });
-
-  it('Escape closes the menu, returns focus to the trigger, and does NOT close the dock (code review F1)', async () => {
-    const menu = createChatPlacementMenu({
-      userId: 'u1',
-      hostId: 'h1',
-      workspace: 'w1',
-      storage: createMemoryStorage(),
-    });
-    await flushAsync();
-    // Overlay + initialOpen, WITH an onClose spy: this is the shipped
-    // configuration where close() is NOT a no-op (unlike sidepanel, where
-    // close() short-circuits to onClose?.() without hiding the dialog — which
-    // is why a sidepanel-hosted test would miss Escape bubbling out of the
-    // popup and closing the whole dock via the dialog's base keydown handler).
-    const onClose = vi.fn();
-    const { container } = renderDock({
-      hostMode: 'overlay',
-      initialOpen: true,
-      placementMenu: menu,
-      onClose,
-    });
-    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
-    await fireEvent.click(trigger);
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
-
-    const list = container.querySelector('[role="menu"]') as HTMLElement;
-    await fireEvent.keyDown(list, { key: 'Escape' });
-
-    // (a) the menu popup is gone.
-    expect(container.querySelector('[role="menu"]')).toBeNull();
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-
-    // (b) the dialog is STILL present and NOT hidden, and onClose was never
-    // called — Escape must not bubble to the dialog's base keydown handler
-    // and close the whole dock.
-    const dialog = container.querySelector('[role="dialog"]');
-    expect(dialog).not.toBeNull();
-    expect(dialog?.classList.contains('hidden')).toBe(false);
-    expect(onClose).not.toHaveBeenCalled();
-
-    // (c) focus returns to the trigger.
-    expect(document.activeElement).toBe(trigger);
-  });
-
-  it('roving focus: ArrowDown moves tabindex=0 to the next item', async () => {
-    const menu = createChatPlacementMenu({
-      userId: 'u1',
-      hostId: 'h1',
-      workspace: 'w1',
-      storage: createMemoryStorage(),
-    });
-    await flushAsync();
-    const { container } = renderDock({ hostMode: 'overlay', initialOpen: true, placementMenu: menu });
-    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
-    await fireEvent.click(trigger);
-
-    const list = container.querySelector('[role="menu"]') as HTMLElement;
-    const items = () => Array.from(container.querySelectorAll('[role="menuitemradio"]'));
-    // Right (index 0) starts as the roving tabstop (it's the current placement).
-    expect(items()[0]?.getAttribute('tabindex')).toBe('0');
-    expect(items()[1]?.getAttribute('tabindex')).toBe('-1');
-
-    await fireEvent.keyDown(list, { key: 'ArrowDown' });
-    expect(items()[0]?.getAttribute('tabindex')).toBe('-1');
-    expect(items()[1]?.getAttribute('tabindex')).toBe('0');
-  });
-
-  it('a pointerdown outside the menu container closes the popup (code review F5)', async () => {
-    const menu = createChatPlacementMenu({
-      userId: 'u1',
-      hostId: 'h1',
-      workspace: 'w1',
-      storage: createMemoryStorage(),
-    });
-    await flushAsync();
-    const { container } = renderDock({ hostMode: 'overlay', initialOpen: true, placementMenu: menu });
-    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
-    await fireEvent.click(trigger);
-    expect(container.querySelector('[role="menu"]')).not.toBeNull();
-
-    await fireEvent.pointerDown(document.body);
-
-    expect(container.querySelector('[role="menu"]')).toBeNull();
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('a pointerdown on a menu item does NOT get swallowed by outside-click dismissal (still selects)', async () => {
-    const menu = createChatPlacementMenu({
-      userId: 'u1',
-      hostId: 'h1',
-      workspace: 'w1',
-      storage: createMemoryStorage(),
-    });
-    await flushAsync();
-    const { container } = renderDock({ hostMode: 'overlay', initialOpen: true, placementMenu: menu });
-    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
-    await fireEvent.click(trigger);
-    const items = Array.from(container.querySelectorAll('[role="menuitemradio"]'));
-    const fullItem = items.find((el) => el.textContent?.includes('Full')) as HTMLElement;
-
-    await fireEvent.pointerDown(fullItem);
-    await fireEvent.click(fullItem);
-    await flushAsync();
-
-    expect(menu.current()).toEqual({ kind: 'full' });
-  });
-});
-
-describe('ChatDock — no dead menu in sidepanel mode (code review F4)', () => {
-  it('does NOT render the "Move to…" trigger in sidepanel mode even when placementMenu is provided', async () => {
-    const menu = createChatPlacementMenu({
-      userId: 'u1',
-      hostId: 'h1',
-      workspace: 'w1',
-      storage: createMemoryStorage(),
-    });
-    await flushAsync();
-    const { container } = renderDock({ hostMode: 'sidepanel', placementMenu: menu });
-    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
   });
 });
