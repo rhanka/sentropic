@@ -206,12 +206,25 @@
   // "Move chat to…" placement menu (surfaces L1c-menu) — scoped per user +
   // workspace so each combination remembers its own placement. Falls back to
   // stable defaults when the session/workspace context isn't known yet.
+  // Memoized on the (userId, hostId, workspace) tuple: $session/$workspaceScope
+  // emit far more often than that tuple actually changes, and re-creating the
+  // controller on every emission would mint a new instance, re-fire the D6
+  // restore, and force ChatDock to resubscribe each time.
   let placementMenu: ChatPlacementMenu | undefined;
-  $: placementMenu = createChatPlacementMenu({
-    userId: $session.user?.id ?? 'anonymous',
-    hostId: 'sentropic-web',
-    workspace: $workspaceScope.selectedId ?? 'default',
-  });
+  let placementMenuTupleKey = '';
+  $: {
+    const placementMenuUserId = $session.user?.id ?? 'anonymous';
+    const placementMenuWorkspace = $workspaceScope.selectedId ?? 'default';
+    const nextPlacementMenuTupleKey = `${placementMenuUserId}::sentropic-web::${placementMenuWorkspace}`;
+    if (nextPlacementMenuTupleKey !== placementMenuTupleKey) {
+      placementMenuTupleKey = nextPlacementMenuTupleKey;
+      placementMenu = createChatPlacementMenu({
+        userId: placementMenuUserId,
+        hostId: 'sentropic-web',
+        workspace: placementMenuWorkspace,
+      });
+    }
+  }
   let isSidePanelHost = false;
   let isExtensionOverlayHost = false;
   let showExtensionConfigMenu = false;
