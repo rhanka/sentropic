@@ -6,7 +6,7 @@ import { healthRouter } from './health';
 import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
 import { analyticsRouter } from './analytics';
-import { adminRouter } from './admin';
+import { adminRouter, tenantResolutionMetricsRouter } from './admin';
 import { tenantsRouter } from './tenants';
 import { meRouter } from './me';
 import { streamsRouter } from './streams';
@@ -192,6 +192,10 @@ apiRouter.route('/prompts', promptsRouter);
 
 apiRouter.use('/ai-settings/*', requireAuth, requireAdmin);
 apiRouter.route('/ai-settings', aiSettingsRouter);
+
+// Tenant-resolution strict-cutover gate (available to both admin roles).
+apiRouter.use('/admin/tenant-resolution-metrics/*', requireAuth, requireAdmin);
+apiRouter.route('/admin/tenant-resolution-metrics', tenantResolutionMetricsRouter);
 
 // Admin app only routes (require admin_app)
 apiRouter.use('/admin/*', requireAuth, requireRole('admin_app'));
