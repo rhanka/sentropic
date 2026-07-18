@@ -21,8 +21,10 @@ export type ChatDockProps = {
   isBrowser?: boolean;
   /**
    * Optional headless placement menu (surfaces L1c-menu). When provided,
-   * ChatDock renders a "Move to…" trigger + popup (Right/Left/Center/Full)
-   * and derives the active placement from it. Undefined (default) = zero change.
+   * ChatDock derives the dialog container's active placement from it.
+   * Undefined (default) = zero change. ChatDock renders NO trigger/popup UI
+   * for this menu — mount ChatPlacementMenuButton separately (e.g. in the
+   * host's own header toolbar) driven by the same menu instance.
    */
   placementMenu?: ChatPlacementMenu;
   /**
