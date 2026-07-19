@@ -7,9 +7,11 @@ import {
   refreshClaudeCodeAccessToken,
 } from '../../src/services/claude-code-provider-auth';
 import {
+  acquireAntigravityAccountTransport,
   acquireClaudeCodeAccountTransport,
   inferCodexAccountIdFromToken,
   inferTokenExpiresAt,
+  storeAntigravityAccountTransport,
   storeClaudeCodeAccountTransport,
 } from '../../src/services/llm-account-transports';
 import {
@@ -185,5 +187,39 @@ describe('llm account transports', () => {
     expect(newSession?.accountTransportAccountId).not.toBe(first?.accountTransportAccountId);
     expect(newSession?.accessToken).toBe('claude-access-b');
     await newSession?.recordOutcome({ status: 'success' });
+  });
+
+  it('acquires an antigravity account carrying its bound project, disjoint from claude-code', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    await storeAntigravityAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'antigravity-sub-1',
+      accountLabel: 'Antigravity Fabien',
+      accessToken: 'ya29-antigravity',
+      refreshToken: 'refresh-antigravity',
+      expiresAt,
+      project: 'proj-antigravity-123',
+    });
+
+    const acquired = await acquireAntigravityAccountTransport({
+      userId: user.id,
+      modelId: 'gemini-3-pro-high',
+      requestId: 'antigravity-req-1',
+    });
+    expect(acquired?.transportProviderId).toBe('antigravity');
+    expect(acquired?.accessToken).toBe('ya29-antigravity');
+    expect((acquired?.metadata as Record<string, unknown> | null)?.project).toBe('proj-antigravity-123');
+    await acquired?.recordOutcome({ status: 'success' });
+
+    // Pool disjointness: a claude-code acquire can NEVER pick the antigravity
+    // account (selection keyed by target `cloudcode-pa` + transport `antigravity`).
+    const claudeAcquire = await acquireClaudeCodeAccountTransport({
+      userId: user.id,
+      modelId: 'claude-sonnet-4-6',
+      requestId: 'antigravity-req-2',
+    });
+    expect(claudeAcquire).toBeNull();
   });
 });
