@@ -28,3 +28,24 @@ split.
 `create_or_update_file` carries a documented UPSERT/COMPOSITE gap: OOMOL treats it as one
 composite action, but the Sentropic `Mutability` enum is closed with no composite member.
 See the comment above its declaration in `src/write-manifest.ts` for the resolution.
+
+## LIVE surface (BR-72 DEPTH Lot 1) — known limitations
+
+`src/live-executors.ts` / `src/live-adapter.ts` / `src/live-broker.ts` prove one connector
+invoking the REAL `https://api.github.com` REST API end-to-end (see the module docblocks for
+scope). Two limitations are DELIBERATELY out of scope for this proof and are documented here
+rather than silently left implicit:
+
+- **N1 — pagination.** `search_repositories` and `get_repository`/`get_file_contents` only
+  ever fetch the FIRST page of a paginated GitHub endpoint. There is no `page`/`per_page`
+  input, and no `Link`-header follow-up. A caller relying on this live surface for a query
+  with more results than fit on one page will silently see a truncated result set (GitHub
+  itself reports `total_count` in the search response; this connector does not act on it).
+- **N5 — unauthenticated smoke, low rate limit.** `make smoke-mcp-connector-github-live`
+  (`scripts/smoke-github-live.mjs`) runs WITHOUT a token unless `GITHUB_TOKEN` is set in the
+  environment, so it shares GitHub's unauthenticated rate limit of **60 requests/hour per
+  source IP** with every other unauthenticated caller from the same network. It is a MANUAL
+  make target only (never wired into CI) for exactly this reason — running it repeatedly in a
+  short window, or alongside other unauthenticated GitHub API usage from the same IP, can
+  exhaust the quota and turn a real failure into a transient 403/429 (see S2 in the fix log
+  below, now correctly reported as `retriable: true`).

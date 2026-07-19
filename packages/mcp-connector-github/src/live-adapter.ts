@@ -4,9 +4,10 @@
  * DELIBERATE deviation from the read-only benchmark proof (`./adapter.ts`):
  * `readResource`/`invokeTool` call the REAL-network executors in
  * `./live-executors.ts` instead of the synthetic fixtures in `./fixtures.ts`.
- * The token is read from `ctx.getSecret('githubToken')`, which may resolve
- * to `''` for public/no-auth capabilities — handled gracefully (the token is
- * simply omitted from the request). The token value is NEVER logged/echoed.
+ * The token is read from `ctx.getSecret('githubAccessToken')` (the MANIFEST
+ * secret name, see `../src/manifest.ts`), which may resolve to `''` for
+ * public/no-auth capabilities — handled gracefully (the token is simply
+ * omitted from the request). The token value is NEVER logged/echoed.
  *
  * Live capability coverage (BR-72 DEPTH Lot 1 scope): `get_repository`,
  * `get_file_contents`, `get_current_user` (resources) and
@@ -114,21 +115,27 @@ export const githubLiveAdapter: AppConnectorProviderAdapter = {
 
   async readResource(req: AppResourceRead): Promise<AppResourceResult> {
     const auditId = nextLiveAuditId('github-live-resource');
-    await req.ctx.audit.emit({
-      domain: 'github-live',
-      capabilityRef: req.capabilityRef,
-      uri: req.input.uri,
-    });
 
-    let token = '';
+    // S5: audit.emit moved INSIDE the try/catch (with the outer catch below)
+    // so a throwing audit sink yields a typed error envelope, not a raw
+    // rejection; the auditId is included in the emitted event for
+    // correlation with the returned envelope.
     try {
-      token = await req.ctx.getSecret('githubToken');
-    } catch {
-      // No token available — public/no-auth capabilities handle '' gracefully.
-      token = '';
-    }
+      await req.ctx.audit.emit({
+        auditId,
+        domain: 'github-live',
+        capabilityRef: req.capabilityRef,
+        uri: req.input.uri,
+      });
 
-    try {
+      let token = '';
+      try {
+        token = await req.ctx.getSecret('githubAccessToken');
+      } catch {
+        // No token available — public/no-auth capabilities handle '' gracefully.
+        token = '';
+      }
+
       switch (req.capabilityRef) {
         case 'get_current_user': {
           const output = await getCurrentUserLive(token);
@@ -161,16 +168,18 @@ export const githubLiveAdapter: AppConnectorProviderAdapter = {
 
   async invokeTool(req: AppToolInvocation): Promise<AppToolResult | DurableCallRef> {
     const auditId = nextLiveAuditId('github-live-tool');
-    await req.ctx.audit.emit({ domain: 'github-live', capabilityRef: req.capabilityRef });
 
-    let token = '';
+    // S5: same audit-inside-try/catch + auditId-correlation fix as readResource above.
     try {
-      token = await req.ctx.getSecret('githubToken');
-    } catch {
-      token = '';
-    }
+      await req.ctx.audit.emit({ auditId, domain: 'github-live', capabilityRef: req.capabilityRef });
 
-    try {
+      let token = '';
+      try {
+        token = await req.ctx.getSecret('githubAccessToken');
+      } catch {
+        token = '';
+      }
+
       if (req.capabilityRef === 'search_repositories') {
         const output = await searchRepositoriesLive(req.input as SearchRepositoriesInput, token);
         return { ok: true, output, auditId, redactionClass: 'none' };
