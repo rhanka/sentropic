@@ -71,12 +71,12 @@ describe('adapter auth validation', () => {
     expect(
       validateAdapterAuthSource({
         type: 'account-transport',
-        provider: 'gemini-code-assist',
+        provider: 'antigravity',
         status: 'planned',
       }),
     ).toEqual({
       ok: false,
-      message: 'gemini-code-assist account transport is planned, not executable',
+      message: 'antigravity account transport is planned, not executable',
     });
   });
 });
