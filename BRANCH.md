@@ -65,20 +65,20 @@ Complete the Antigravity cutover: build the NEW `cloudcode-pa` provider runtime 
   - [ ] `packages/llm-mesh/package.json`: `0.9.0` → `0.10.0`; `make lock-root`.
   - [ ] Lot gate: `make typecheck-llm-mesh` + `make test-llm-mesh`.
 
-- [ ] **Lot 2 — cloudcode-pa runtime + registry (api)**
+- [x] **Lot 2 — cloudcode-pa runtime + registry (api)**
   - [ ] `api/src/services/providers/cloudcode-pa-provider.ts`: NEW `CloudCodePaProviderRuntime` (v1internal generate/stream, project injection, Antigravity headers, bearer, SSE unwrap).
   - [ ] `api/src/services/provider-registry.ts`: register runtime + `RuntimeProviderId` (`ProviderId | 'cloudcode-pa'`); NOT surfaced in listProviders/listModels.
   - [ ] `api/tests/unit/cloudcode-pa-provider.test.ts`: isolation test (URL, headers, project wrapper, SSE unwrap).
   - [ ] Lot gate: `make typecheck-api`; scoped `test-api-unit SCOPE=cloudcode-pa`.
 
-- [ ] **Lot 3 — Antigravity transport pool + enrollment (api); delete gemini-code-assist transport**
+- [x] **Lot 3 — Antigravity transport pool + enrollment (api); delete gemini-code-assist transport**
   - [ ] `api/src/services/llm-account-transports.ts`: add Antigravity store/getPrimary/disconnect/acquire/refresh (real refresh via `refreshAntigravityAccessToken`; project in metadata); DELETE all `GeminiCodeAssist*`.
   - [ ] `api/src/services/provider-connections.ts`: add Antigravity enrollment (start/complete/disconnect/import) + `resolveConnectedAntigravityTransport` + `resolveAntigravityFallbackTransport` + `resolveExplicitAccountGrant` seam; DELETE `resolveConnectedGeminiCodeAssistTransport` + `gemini-code-assist` transport mode.
   - [ ] `api/src/routes/api/settings.ts`: add `/provider-connections/antigravity/enrollment/{start,complete,disconnect,import}`.
   - [ ] `api/src/services/llm-runtime/mesh-dispatch.ts`: DELETE `createGeminiCodeAssistAccountAuthInput`.
   - [ ] Lot gate: `make typecheck-api`.
 
-- [ ] **Lot 4 — routing integration (native-first + antigravity fallback)**
+- [x] **Lot 4 — routing integration (native-first + antigravity fallback)**
   - [ ] `api/src/services/llm-runtime/index.ts`: replace both `geminiCodeAssistTransport*` blocks (non-stream + stream) with Antigravity fallback dispatch to `cloudcode-pa`; remove dead import.
   - [ ] Lot gate: `make typecheck-api`.
 
