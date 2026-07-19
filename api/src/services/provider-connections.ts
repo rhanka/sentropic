@@ -402,6 +402,24 @@ export const deriveProviderFamily = (
   return 'gemini';
 };
 
+// Antigravity serves ONLY the claude / gpt / gemini families (its fleet). A
+// request for mistral/cohere/local must never be routed to Antigravity, even
+// when an Antigravity account is enrolled.
+export const isAntigravityServableFamily = (
+  providerId: string,
+  modelId: string,
+): boolean => {
+  return (
+    providerId === 'anthropic' ||
+    providerId === 'openai' ||
+    providerId === 'gemini' ||
+    providerId === 'gcp' ||
+    modelId.includes('claude') ||
+    modelId.startsWith('gpt') ||
+    modelId.includes('gemini')
+  );
+};
+
 export const mapModelToAntigravityFleet = (
   providerId: string,
   modelId: string,
@@ -478,6 +496,7 @@ export const resolveAntigravityFallbackTransport = async (
 ): Promise<AntigravityFallbackRoute | null> => {
   const ownerUserId = normalizeOptionalText(userId);
   if (!ownerUserId) return null;
+  if (!isAntigravityServableFamily(options.providerId, options.modelId)) return null;
 
   const family = deriveProviderFamily(options.providerId, options.modelId);
   const grant = await resolveExplicitAccountGrant({
