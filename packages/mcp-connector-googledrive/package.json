@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/mcp-connector-googledrive",
   "version": "0.0.0",
-  "description": "Google Drive MCP connector adapter proof (BR-72)",
+  "description": "Google Drive MCP connector adapter proof (BR-72), plus a Wave-2 EXPERIMENTAL write surface gated by @sentropic/mcp-platform's mutation-gate.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -11,6 +11,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./experimental": {
+      "types": "./dist/experimental.d.ts",
+      "import": "./dist/experimental.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "experimental": [
+        "./dist/experimental.d.ts"
+      ]
     }
   },
   "files": [
