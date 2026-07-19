@@ -3,11 +3,12 @@
  *
  * This is the "mount + invoke" seam a real broker will own: constructs an
  * in-memory `StpConnectorContext` (stub principal/tenant/connectorInstanceId/
- * session; `getSecret('githubToken')` resolves `opts.token ??
- * process.env.GITHUB_TOKEN ?? ''`; `audit.emit` writes a REDACTED line to
- * `console.error`; `logger` is `console`) and invokes `./live-adapter.ts`
- * for the given capability, dispatching to `readResource` or `invokeTool`
- * per the capability's declared kind in `../src/manifest.ts`.
+ * session; `getSecret('githubAccessToken')` — the MANIFEST secret name, see
+ * `../src/manifest.ts` — resolves `opts.token ?? process.env.GITHUB_TOKEN ??
+ * ''`; `audit.emit` writes a REDACTED line to `console.error`; `logger` is
+ * `console`) and invokes `./live-adapter.ts` for the given capability,
+ * dispatching to `readResource` or `invokeTool` per the capability's
+ * declared kind in `../src/manifest.ts`.
  *
  * NEVER log or echo the token value — `audit.emit` below only ever receives
  * `{ domain, capabilityRef, uri? }`, never the secret itself.
@@ -63,7 +64,7 @@ function makeLiveConnectorContext(opts?: { token?: string }): StpConnectorContex
     // Audited just-in-time secret accessor — resolves the raw token VALUE for
     // this single call only; never logged/echoed by this broker.
     getSecret: async (name: string) => {
-      if (name === 'githubToken') {
+      if (name === 'githubAccessToken') {
         return token;
       }
       return '';
