@@ -58,7 +58,7 @@ Complete the Antigravity cutover: build the NEW `cloudcode-pa` provider runtime 
   - [x] Env mapping: `ENV=test-antigravity-cutover` API 9210 / UI 5410 / MAILDEV 1210.
   - [x] Design decision: `cloudcode-pa` runtime is an api-local registry provider (NOT a mesh ProviderId) → zero mesh catalog ripple, honors foundation's no-fleet-catalog-keys; Antigravity dispatch is DIRECT (bypasses mesh `selectModel`, which rejects non-catalog fleet ids).
 
-- [ ] **Lot 1 — mesh cutover (delete gemini-code-assist id + bump)**
+- [x] **Lot 1 — mesh cutover (delete gemini-code-assist id + bump)**
   - [ ] `packages/llm-mesh/src/auth.ts`: remove `'gemini-code-assist'` from `accountTransportProviderIds`; delete `futureAccountTransportProviderIds` (empty after cutover).
   - [ ] `packages/llm-mesh/tests/auth.test.ts`: retarget the planned/not-executable test to `antigravity`.
   - [ ] `packages/llm-mesh/tests/antigravity-account-pool.test.ts`: keep disjointness proof; add `cloudcode-pa` target-id variant.
