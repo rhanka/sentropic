@@ -39,11 +39,56 @@ function buildHeaders(token: string): Record<string, string> {
   return headers;
 }
 
+// S4: reject `.`, `..`, and empty segments in owner/repo/path BEFORE building
+// any URL — encodeURIComponent does not encode `.`, and `..` survives it;
+// the WHATWG URL parser collapses dot-segments, which can retarget the
+// endpoint.
+const INVALID_SEGMENT_VALUES = new Set(['', '.', '..']);
+
+function assertValidSegment(kind: string, value: string): void {
+  if (INVALID_SEGMENT_VALUES.has(value)) {
+    throw new GithubLiveApiError(
+      400,
+      'github_invalid_input',
+      `Invalid ${kind} segment: "${value}" is not permitted (empty, "." and ".." are rejected).`,
+      false,
+    );
+  }
+}
+
+// S1 (timeout) + S3 (transport failures): the fetch() call itself (as opposed
+// to a non-2xx response) can throw — AbortSignal.timeout expiring, a raw
+// network failure, a TypeError, etc. Normalize every such throw to a typed
+// GithubLiveApiError with retriable: true, so callers never see a raw
+// rejection for a transient/transport condition.
 async function githubFetch(path: string, token: string): Promise<unknown> {
-  const response = await fetch(`${GITHUB_API_BASE}${path}`, { headers: buildHeaders(token) });
+  let response: Response;
+  try {
+    response = await fetch(`${GITHUB_API_BASE}${path}`, {
+      headers: buildHeaders(token),
+      // S1: 10s request timeout — maps to AbortError/TimeoutError below.
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (err) {
+    const name = err instanceof Error ? err.name : '';
+    const isTimeout = name === 'AbortError' || name === 'TimeoutError';
+    const message = err instanceof Error ? err.message : String(err);
+    throw new GithubLiveApiError(
+      0,
+      isTimeout ? 'github_request_timeout' : 'github_transport_error',
+      `GitHub API ${path} failed: ${message}`,
+      true,
+    );
+  }
   if (!response.ok) {
+    // S2: 429 is always retriable (primary + secondary rate limits); a 403
+    // carrying either `x-ratelimit-remaining: 0` or a `Retry-After` header is
+    // also a rate-limit condition and thus retriable.
+    const hasRetryAfter = response.headers.get('retry-after') !== null;
     const rateLimited =
-      response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0';
+      response.status === 429 ||
+      (response.status === 403 &&
+        (response.headers.get('x-ratelimit-remaining') === '0' || hasRetryAfter));
     const retriable = response.status >= 500 || rateLimited;
     let bodyMessage = response.statusText;
     try {
@@ -68,20 +113,34 @@ export type GetRepositoryInput = { owner: string; repo: string };
 
 /** GET /repos/{owner}/{repo} — public, no auth required. */
 export async function getRepositoryLive(input: GetRepositoryInput, token: string): Promise<unknown> {
+  assertValidSegment('owner', input.owner);
+  assertValidSegment('repo', input.repo);
   return githubFetch(
     `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}`,
     token,
   );
 }
 
-export type SearchRepositoriesInput = { q: string };
+// M2: the manifest declares `search_repositories`'s required input field as
+// `query` (see ../src/manifest.ts) — the executor must read that field, not
+// an undeclared `q` shorthand.
+export type SearchRepositoriesInput = { query: string };
 
-/** GET /search/repositories?q={q} — public, no auth required. */
+/** GET /search/repositories?q={query} — public, no auth required. */
 export async function searchRepositoriesLive(
   input: SearchRepositoriesInput,
   token: string,
 ): Promise<unknown> {
-  const params = new URLSearchParams({ q: input.q });
+  const query = input?.query;
+  if (!query) {
+    throw new GithubLiveApiError(
+      400,
+      'github_invalid_input',
+      'search_repositories requires a non-empty "query" input field.',
+      false,
+    );
+  }
+  const params = new URLSearchParams({ q: query });
   return githubFetch(`/search/repositories?${params.toString()}`, token);
 }
 
@@ -91,7 +150,7 @@ export async function getCurrentUserLive(token: string): Promise<unknown> {
     throw new GithubLiveApiError(
       401,
       'github_missing_token',
-      'get_current_user requires a GitHub token (ctx.getSecret("githubToken")).',
+      'get_current_user requires a GitHub token (ctx.getSecret("githubAccessToken")).',
       false,
     );
   }
@@ -105,11 +164,13 @@ export async function getFileContentsLive(
   input: GetFileContentsInput,
   token: string,
 ): Promise<unknown> {
-  const encodedPath = input.path
-    .split('/')
-    .filter((segment) => segment.length > 0)
-    .map(encodeURIComponent)
-    .join('/');
+  assertValidSegment('owner', input.owner);
+  assertValidSegment('repo', input.repo);
+  const segments = input.path.split('/');
+  for (const segment of segments) {
+    assertValidSegment('path', segment);
+  }
+  const encodedPath = segments.map(encodeURIComponent).join('/');
   return githubFetch(
     `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/contents/${encodedPath}`,
     token,

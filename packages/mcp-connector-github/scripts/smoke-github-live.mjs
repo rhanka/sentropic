@@ -36,8 +36,8 @@ async function main() {
     return;
   }
 
-  console.log('[smoke-github-live] search_repositories(q="sentropic") — REAL api.github.com...');
-  const searchResult = await invokeGithubLive('search_repositories', { q: 'sentropic' });
+  console.log('[smoke-github-live] search_repositories(query="sentropic") — REAL api.github.com...');
+  const searchResult = await invokeGithubLive('search_repositories', { query: 'sentropic' });
   if (!searchResult.ok || !searchResult.output) {
     fail(`search_repositories failed: ${JSON.stringify(searchResult.error)}`);
     return;
