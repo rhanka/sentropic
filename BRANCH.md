@@ -43,7 +43,11 @@ Complete the Antigravity cutover: build the NEW `cloudcode-pa` provider runtime 
 - `BRAG-Q2` (`attention`): D3 explicit-grant binding storage. Implemented as a documented SEAM (`resolveExplicitAccountGrant` returns null → pure native-first/antigravity-fallback). A persistent grant table (composite key userId[,workspaceId][,agentId]) is deferred pending owner decision on storage shape (settings-kv vs new table+migration).
 
 ## AI Flaky tests
-- No AI-generation tests in scope (provider-runtime + routing are deterministic unit-tested). AI flaky allowlist not exercised.
+- Cutover code adds NO AI-generation tests (provider-runtime + routing are deterministic unit-tested; `unit` shard GREEN 784/785).
+- Full-suite CI (`#436` run `29709418997`) red ONLY on AI-generation lanes, cause = **OpenAI account quota exhausted (billing)**, NOT a branch regression:
+  - `test-api-unit-integration (ai, …)` ×3 — reproduced locally `make test-api-ai SCOPE=tests/ai/chat-sync.test.ts ENV=test-agrepro` → signature: `APIError: You exceeded your current quota` → job `failed` → `AssertionError: expected 'failed' to be 'completed'` (4/4).
+  - `test-e2e (group-b 01 04 / group-c 03 / group-d 08)` — every failing group bundles AI/chat/document-generation specs (04-chat-image-paste, 08-chat-*, 08-pptx/xlsx-generation, 03-chat); non-AI groups green. E2E line-by-line confirmation pending GitHub API recovery (outage at merge time).
+- Allowlist basis (testing.md): provider quota = provider nondeterminism → non-blocking WITH owner sign-off. Same OpenAI/Codex account exhaustion documented program-wide.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single orthogonal cutover; single final test cycle)
@@ -82,9 +86,10 @@ Complete the Antigravity cutover: build the NEW `cloudcode-pa` provider runtime 
   - [ ] `api/src/services/llm-runtime/index.ts`: replace both `geminiCodeAssistTransport*` blocks (non-stream + stream) with Antigravity fallback dispatch to `cloudcode-pa`; remove dead import.
   - [ ] Lot gate: `make typecheck-api`.
 
-- [ ] **Lot 5 — tests + final validation**
-  - [ ] `api/tests/**`: Antigravity enrollment + routing precedence tests; verify provider-count assertions unchanged (api-local approach keeps listProviders=7).
-  - [ ] Proof: `grep -rn gemini-code-assist` = 0 refs in scope.
-  - [ ] Full gates: `make typecheck-api` + `make typecheck-llm-mesh` + `make test-llm-mesh` + scoped api-unit on `ENV=test-antigravity-cutover`.
-  - [ ] Bump confirmed (`packages/llm-mesh` 0.10.0) + `make lock-root`.
-  - [ ] PR from BRANCH.md; CI green; remove BRANCH.md; push.
+- [x] **Lot 5 — tests + final validation**
+  - [x] `api/tests/**`: Antigravity enrollment + routing precedence tests (`antigravity-routing.test.ts` 6✓, `antigravity-provider-auth.test.ts` 15✓, `llm-account-transports.test.ts` 8✓); provider-count assertions unchanged.
+  - [x] Proof: `grep -rn gemini-code-assist` = 0 refs in scope.
+  - [x] Full gates: `unit` shard GREEN (784/785) via `make test-api-unit ENV=test-agrepro`; typecheck-api/llm-mesh + test-llm-mesh green.
+  - [x] Bump confirmed (`packages/llm-mesh` 0.10.0) + `make lock-root` (post-merge, no diff).
+  - [x] Merged `origin/main` (BR-72 connectors); conflicts BRANCH.md+lockfile resolved.
+  - [ ] CI: non-AI gates green; AI/E2E lanes red on OpenAI-quota (see `## AI Flaky tests`) → owner sign-off pending. On sign-off: remove BRANCH.md → merge → publish 0.10.0.
