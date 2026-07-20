@@ -1,0 +1,32 @@
+{
+  "name": "@sentropic/mcp-connector-hubspot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "BR-72 read-only connector adapter proof for HubSpot against the @sentropic/mcp-platform AppConnectorProviderAdapter contract. Synthetic fixtures only; NOT the production connector (production connector residence is an architect D4 decision, deferred).",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/mcp-connector-hubspot"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "5.4.5",
+    "vitest": "4.1.0"
+  }
+}
