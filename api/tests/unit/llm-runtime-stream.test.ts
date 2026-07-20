@@ -30,6 +30,7 @@ vi.mock('../../src/services/provider-connections', () => ({
   getOpenAITransportMode: vi.fn().mockResolvedValue('token'),
   resolveConnectedClaudeCodeTransport: vi.fn().mockResolvedValue(null),
   resolveConnectedCodexTransport: vi.fn().mockResolvedValue(null),
+  resolveAntigravityFallbackTransport: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../src/config/env', () => ({
