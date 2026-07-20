@@ -46,7 +46,7 @@ Complete the Antigravity cutover: build the NEW `cloudcode-pa` provider runtime 
 - Cutover code adds NO AI-generation tests (provider-runtime + routing are deterministic unit-tested; `unit` shard GREEN 784/785).
 - Full-suite CI (`#436` run `29709418997`) red ONLY on AI-generation lanes, cause = **OpenAI account quota exhausted (billing)**, NOT a branch regression:
   - `test-api-unit-integration (ai, …)` ×3 — reproduced locally `make test-api-ai SCOPE=tests/ai/chat-sync.test.ts ENV=test-agrepro` → signature: `APIError: You exceeded your current quota` → job `failed` → `AssertionError: expected 'failed' to be 'completed'` (4/4).
-  - `test-e2e (group-b 01 04 / group-c 03 / group-d 08)` — every failing group bundles AI/chat/document-generation specs (04-chat-image-paste, 08-chat-*, 08-pptx/xlsx-generation, 03-chat); non-AI groups green. E2E line-by-line confirmation pending GitHub API recovery (outage at merge time).
+  - `test-e2e` — CONFIRMED all-quota (fetched job logs `29709418997`): group-b `01-organizations-detail:322` + `04-documents-ui-actions:73` → `document_summary failed: Échec: You exceeded your current quota`; group-c `03-chat:269` assistant response never renders (quota-hits=3); group-d all 08 AI/doc-gen specs (chat-heavy, pptx/xlsx-generation, document-summary → status='failed'). Zero non-AI failures. Non-AI E2E groups green.
 - Allowlist basis (testing.md): provider quota = provider nondeterminism → non-blocking WITH owner sign-off. Same OpenAI/Codex account exhaustion documented program-wide.
 
 ## Orchestration Mode (AI-selected)
