@@ -11,10 +11,9 @@ export type TokenAuthSourceType = (typeof tokenAuthSourceTypes)[number];
 
 export const accountTransportProviderIds = [
   'codex',
-  'gemini-code-assist',
   'claude-code',
   // Antigravity: unified Google account transport fronting a multi-model fleet
-  // (Cloud Code `cloudcode-pa.googleapis.com`). Replaces the dead classic
+  // (Cloud Code `cloudcode-pa.googleapis.com`). Replaced the dead classic
   // gemini-cli Code Assist path (see api/antigravity-provider-auth.ts).
   'antigravity',
 ] as const;
@@ -151,10 +150,10 @@ export type AuthResolver = (
 
 export type AuthInput = SecretAuthMaterial | AuthResolution;
 
-export const futureAccountTransportProviderIds = [
-  'gemini-code-assist',
-] as const satisfies readonly AccountTransportProviderId[];
-
+// All enrolled account transports are executable post-cutover (the classic
+// gemini-cli Code Assist "planned/future" transport was removed). This list is
+// the single source of truth for account transports that carry live bearer
+// material through the mesh adapter-auth gate.
 export const executableAccountTransportProviderIds = [
   'codex',
   'claude-code',

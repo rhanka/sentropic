@@ -10,18 +10,21 @@ import {
   type CodexDeviceEnrollmentResult,
 } from './codex-provider-auth';
 import {
+  acquireAntigravityAccountTransport,
   acquireClaudeCodeAccountTransport,
-  acquireGeminiCodeAssistAccountTransport,
   acquireOpenAICodexAccountTransport,
+  disconnectAntigravityAccountTransports,
   disconnectClaudeCodeAccountTransports,
   disconnectCodexAccountTransports,
+  getPrimaryAntigravityAccountTransport,
   getPrimaryClaudeCodeAccountTransport,
   getPrimaryCodexAccountTransport,
+  storeAntigravityAccountTransport,
   storeClaudeCodeAccountTransport,
   storeCodexAccountTransport,
+  type AntigravityAccountTransportAcquisition,
   type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
-  type GeminiCodeAssistAccountTransportAcquisition,
   type LlmAccountTransportPublic,
 } from './llm-account-transports';
 import {
@@ -30,11 +33,19 @@ import {
   parseClaudeCodeAuthorizationInput,
   startClaudeCodeAuthorization,
 } from './claude-code-provider-auth';
+import {
+  exchangeAntigravityAuthorizationCode,
+  fetchAntigravityUserInfo,
+  loadCodeAssist,
+  onboardAntigravityUser,
+  startAntigravityAuthorization,
+} from './antigravity-provider-auth';
+import { env } from '../config/env';
 import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { settingsService } from './settings';
 
-export type ProviderConnectionId = 'codex' | 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
+export type ProviderConnectionId = 'codex' | 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'antigravity';
 
 export type ProviderConnectionState = {
   providerId: ProviderConnectionId;
@@ -88,6 +99,15 @@ type ClaudeCodePendingEnrollmentPayload = {
   expectedAccountLabel: string | null;
 };
 
+type AntigravityPendingEnrollmentPayload = {
+  enrollmentId: string;
+  codeVerifier: string;
+  state: string | null;
+  redirectUri: string;
+  redirectPort: number;
+  expectedAccountLabel: string | null;
+};
+
 const CODEX_CONNECTION_SETTINGS_KEY = 'provider_connection:codex';
 const CODEX_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:codex_pending';
 const CODEX_CONNECTION_SECRET_KEY = 'provider_connection_secret:codex';
@@ -96,6 +116,9 @@ const ANTHROPIC_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:anthropic
 const CLAUDE_CODE_CONNECTION_SETTINGS_KEY = 'provider_connection:claude_code';
 const CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY =
   'provider_connection_secret:claude_code_pending';
+const ANTIGRAVITY_CONNECTION_SETTINGS_KEY = 'provider_connection:antigravity';
+const ANTIGRAVITY_CONNECTION_PENDING_SECRET_KEY =
+  'provider_connection_secret:antigravity_pending';
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -245,6 +268,72 @@ const deleteClaudeCodeSecrets = async (userId: string): Promise<void> => {
   await deleteUserScopedSetting(userId, CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY);
 };
 
+const readAntigravityConnection = async (
+  userId: string,
+): Promise<CodexConnectionPayload | null> => {
+  const raw = await settingsService.get(ANTIGRAVITY_CONNECTION_SETTINGS_KEY, {
+    userId,
+    fallbackToGlobal: false,
+  });
+  return parseCodexConnectionPayload(raw);
+};
+
+const readPendingAntigravityEnrollment = async (
+  userId: string,
+): Promise<AntigravityPendingEnrollmentPayload | null> => {
+  const raw = await settingsService.get(ANTIGRAVITY_CONNECTION_PENDING_SECRET_KEY, {
+    userId,
+    fallbackToGlobal: false,
+  });
+  return parseSecretPayload<AntigravityPendingEnrollmentPayload>(raw);
+};
+
+const writeAntigravityConnection = async (
+  userId: string,
+  payload: CodexConnectionPayload,
+): Promise<void> => {
+  await settingsService.set(
+    ANTIGRAVITY_CONNECTION_SETTINGS_KEY,
+    JSON.stringify(payload),
+    'Antigravity provider connection state for the current admin user.',
+    { userId },
+  );
+};
+
+const deleteAntigravitySecrets = async (userId: string): Promise<void> => {
+  await deleteUserScopedSetting(userId, ANTIGRAVITY_CONNECTION_PENDING_SECRET_KEY);
+};
+
+const toAntigravityProviderState = (
+  antigravityConnection: CodexConnectionPayload | null,
+  antigravityAccount: LlmAccountTransportPublic | null,
+): ProviderConnectionState => {
+  const accountConnected =
+    !!antigravityAccount &&
+    (antigravityAccount.status === 'active' || antigravityAccount.status === 'cooldown');
+  const visibleStatus: ProviderConnectionState['connectionStatus'] = accountConnected
+    ? 'connected'
+    : antigravityConnection?.status === 'pending'
+      ? 'pending'
+      : 'disconnected';
+  const ready = accountConnected && antigravityAccount?.status !== 'cooldown';
+  return {
+    providerId: 'antigravity',
+    label: 'Antigravity',
+    ready,
+    connectionStatus: visibleStatus,
+    enrollmentId: antigravityConnection?.enrollmentId ?? null,
+    enrollmentUrl: antigravityConnection?.enrollmentUrl ?? null,
+    enrollmentCode: antigravityConnection?.enrollmentCode ?? null,
+    enrollmentExpiresAt: antigravityConnection?.enrollmentExpiresAt ?? null,
+    managedBy: visibleStatus === 'disconnected' ? 'none' : 'admin_settings',
+    accountLabel: antigravityAccount?.accountLabel ?? antigravityConnection?.accountLabel ?? null,
+    updatedAt: antigravityAccount?.updatedAt ?? antigravityConnection?.updatedAt ?? null,
+    updatedByUserId: antigravityConnection?.updatedByUserId ?? null,
+    canConfigure: true,
+  };
+};
+
 export const resolveConnectedCodexTransport = async (
   userId: string,
   options: {
@@ -282,7 +371,7 @@ export const resolveConnectedClaudeCodeTransport = async (
   });
 };
 
-export const resolveConnectedGeminiCodeAssistTransport = async (
+export const resolveConnectedAntigravityTransport = async (
   userId: string,
   options: {
     workspaceId?: string | null;
@@ -290,14 +379,163 @@ export const resolveConnectedGeminiCodeAssistTransport = async (
     affinityKey?: string | null;
     requestId?: string | null;
   },
-): Promise<GeminiCodeAssistAccountTransportAcquisition | null> => {
-  return acquireGeminiCodeAssistAccountTransport({
+): Promise<AntigravityAccountTransportAcquisition | null> => {
+  return acquireAntigravityAccountTransport({
     userId,
     workspaceId: options.workspaceId,
     modelId: options.modelId,
     affinityKey: options.affinityKey,
     requestId: options.requestId,
   });
+};
+
+// D3 routing families. Antigravity is a multi-family FALLBACK; the requested
+// catalog model maps to an Antigravity FLEET wire id per family.
+export type ProviderFamily = 'claude' | 'gpt' | 'gemini';
+
+export const deriveProviderFamily = (
+  providerId: string,
+  modelId: string,
+): ProviderFamily => {
+  if (providerId === 'anthropic' || modelId.includes('claude')) return 'claude';
+  if (providerId === 'openai' || modelId.startsWith('gpt')) return 'gpt';
+  return 'gemini';
+};
+
+// Antigravity serves ONLY the claude / gpt / gemini families (its fleet). A
+// request for mistral/cohere/local must never be routed to Antigravity, even
+// when an Antigravity account is enrolled.
+export const isAntigravityServableFamily = (
+  providerId: string,
+  modelId: string,
+): boolean => {
+  return (
+    providerId === 'anthropic' ||
+    providerId === 'openai' ||
+    providerId === 'gemini' ||
+    providerId === 'gcp' ||
+    modelId.includes('claude') ||
+    modelId.startsWith('gpt') ||
+    modelId.includes('gemini')
+  );
+};
+
+export const mapModelToAntigravityFleet = (
+  providerId: string,
+  modelId: string,
+): string => {
+  const family = deriveProviderFamily(providerId, modelId);
+  if (family === 'claude') {
+    return modelId.includes('opus') ? 'claude-opus-4-6-thinking' : 'claude-sonnet-4-6';
+  }
+  if (family === 'gpt') {
+    return 'gpt-oss-120b-medium';
+  }
+  return modelId.includes('lite') || modelId.includes('low')
+    ? 'gemini-3-pro-low'
+    : 'gemini-3-pro-high';
+};
+
+// D3 explicit-grant SEAM (highest precedence). A grant pins a (userId
+// [,workspaceId][,agentId]) + family to a specific account/transport. No grant
+// store exists yet (see BRAG-Q2) → this returns null, so routing is pure
+// native-first with Antigravity as fallback. Wiring the resolver here keeps the
+// precedence ordering explicit and ready for a persisted grant table.
+export type AccountGrantBinding = {
+  transport: 'native' | 'antigravity';
+};
+
+export const resolveExplicitAccountGrant = async (_input: {
+  userId: string;
+  workspaceId?: string | null;
+  family: ProviderFamily;
+}): Promise<AccountGrantBinding | null> => {
+  return null;
+};
+
+const isNativeCredentialAvailable = (
+  family: ProviderFamily,
+  credentialSource: ProviderCredentialSource,
+): boolean => {
+  if (credentialSource !== 'none') return true;
+  // gemini native beyond an API key = GCP ADC (project+location configured).
+  if (family === 'gemini') {
+    return Boolean(
+      normalizeOptionalText(env.GOOGLE_CLOUD_PROJECT) &&
+        normalizeOptionalText(env.GOOGLE_CLOUD_LOCATION),
+    );
+  }
+  return false;
+};
+
+const isActiveAccount = (account: LlmAccountTransportPublic | null): boolean =>
+  !!account && (account.status === 'active' || account.status === 'cooldown');
+
+export type AntigravityFallbackRoute = {
+  acquisition: AntigravityAccountTransportAcquisition;
+  fleetModel: string;
+  project: string | null;
+};
+
+// D3 precedence resolver for the Antigravity multi-family FALLBACK:
+//   (1) explicit grant to native  → null (use native);
+//   (2) native transport/credential enrolled for the family → null;
+//   (3) explicit grant to antigravity OR no native → acquire Antigravity.
+// The enrolled Antigravity account EXECUTES the request (personal-passthrough);
+// the token is never relayed as a generic bearer.
+export const resolveAntigravityFallbackTransport = async (
+  userId: string,
+  options: {
+    providerId: string;
+    modelId: string;
+    credentialSource: ProviderCredentialSource;
+    workspaceId?: string | null;
+    affinityKey?: string | null;
+    requestId?: string | null;
+  },
+): Promise<AntigravityFallbackRoute | null> => {
+  const ownerUserId = normalizeOptionalText(userId);
+  if (!ownerUserId) return null;
+  if (!isAntigravityServableFamily(options.providerId, options.modelId)) return null;
+
+  const family = deriveProviderFamily(options.providerId, options.modelId);
+  const grant = await resolveExplicitAccountGrant({
+    userId: ownerUserId,
+    workspaceId: options.workspaceId,
+    family,
+  });
+  if (grant?.transport === 'native') return null;
+
+  if (grant?.transport !== 'antigravity') {
+    // (2) native preferred: a native credential/transport for the family wins.
+    if (isNativeCredentialAvailable(family, options.credentialSource)) return null;
+    if (family === 'claude' && isActiveAccount(await getPrimaryClaudeCodeAccountTransport({ ownerUserId }))) {
+      return null;
+    }
+    if (family === 'gpt' && isActiveAccount(await getPrimaryCodexAccountTransport({ ownerUserId }))) {
+      return null;
+    }
+  }
+
+  // (3) Antigravity fallback — only when an Antigravity account is enrolled.
+  if (!isActiveAccount(await getPrimaryAntigravityAccountTransport({ ownerUserId }))) {
+    return null;
+  }
+
+  const fleetModel = mapModelToAntigravityFleet(options.providerId, options.modelId);
+  const acquisition = await acquireAntigravityAccountTransport({
+    userId: ownerUserId,
+    workspaceId: options.workspaceId,
+    modelId: fleetModel,
+    affinityKey: options.affinityKey,
+    requestId: options.requestId,
+  });
+  if (!acquisition) return null;
+
+  const project = normalizeOptionalText(
+    (acquisition.metadata as Record<string, unknown> | null)?.project,
+  );
+  return { acquisition, fleetModel, project };
 };
 
 export const getOpenAITransportMode = async (): Promise<'codex' | 'token'> =>
@@ -319,23 +557,22 @@ export const setOpenAITransportMode = async (
   return normalized;
 };
 
-export const getAnthropicTransportMode = async (): Promise<'claude-code' | 'gemini-code-assist' | 'token'> => {
+export const getAnthropicTransportMode = async (): Promise<'claude-code' | 'token'> => {
   const raw = normalizeText(
     await settingsService.get(ANTHROPIC_TRANSPORT_MODE_SETTING_KEY, { fallbackToGlobal: true }),
   ).toLowerCase();
   if (raw === 'claude-code') return 'claude-code';
-  if (raw === 'gemini-code-assist') return 'gemini-code-assist';
   return 'token';
 };
 
 export const setAnthropicTransportMode = async (
-  mode: 'claude-code' | 'gemini-code-assist' | 'token',
-): Promise<'claude-code' | 'gemini-code-assist' | 'token'> => {
-  const normalized = mode === 'claude-code' ? 'claude-code' : mode === 'gemini-code-assist' ? 'gemini-code-assist' : 'token';
+  mode: 'claude-code' | 'token',
+): Promise<'claude-code' | 'token'> => {
+  const normalized = mode === 'claude-code' ? 'claude-code' : 'token';
   await settingsService.set(
     ANTHROPIC_TRANSPORT_MODE_SETTING_KEY,
     normalized,
-    'Anthropic runtime source mode (`token`, `claude-code`, or `gemini-code-assist`).',
+    'Anthropic runtime source mode (`token` or `claude-code`).',
   );
   return normalized;
 };
@@ -470,9 +707,13 @@ export const listProviderConnections = async (input?: {
   const claudeAccount = userId
     ? await getPrimaryClaudeCodeAccountTransport({ ownerUserId: userId })
     : null;
+  const antigravityAccount = userId
+    ? await getPrimaryAntigravityAccountTransport({ ownerUserId: userId })
+    : null;
   const [
     codexConnection,
     claudeConnection,
+    antigravityConnection,
     openaiCredential,
     geminiCredential,
     anthropicCredential,
@@ -481,6 +722,7 @@ export const listProviderConnections = async (input?: {
   ] = await Promise.all([
     userId ? readCodexConnection(userId) : Promise.resolve(null),
     userId ? readClaudeCodeConnection(userId) : Promise.resolve(null),
+    userId ? readAntigravityConnection(userId) : Promise.resolve(null),
     resolveProviderCredential({
       providerId: 'openai',
       userId,
@@ -530,6 +772,7 @@ export const listProviderConnections = async (input?: {
     toAnthropicProviderState(claudeConnection, claudeAccount, anthropicCredential),
     toSimpleProviderState('mistral', 'Mistral', mistralCredential),
     toSimpleProviderState('cohere', 'Cohere', cohereCredential),
+    toAntigravityProviderState(antigravityConnection, antigravityAccount),
   ];
 };
 
@@ -881,4 +1124,209 @@ export const disconnectClaudeCodeEnrollment = async (input: {
   ]);
 
   return toAnthropicProviderState(next, null, { credential: null, source: 'none' });
+};
+
+// ---------------------------------------------------------------------------
+// Antigravity enrollment (mirrors the Claude Code OAuth flow): PKCE authorize +
+// code-exchange complete + non-interactive import. Unlike Claude Code, the
+// complete/import steps also DISCOVER the bound GCP project (loadCodeAssist) and
+// ONBOARD the account (onboardUser) so the cloudcode-pa fleet is callable.
+// ---------------------------------------------------------------------------
+
+const discoverAntigravityAccount = async (
+  accessToken: string,
+): Promise<{ project: string | null; tier: string | null; externalAccountId: string; accountLabel: string | null }> => {
+  const discovery = await loadCodeAssist({ accessToken }).catch(() => null);
+  const userInfo = await fetchAntigravityUserInfo({ accessToken }).catch(() => null);
+  if (discovery?.project) {
+    await onboardAntigravityUser({
+      accessToken,
+      project: discovery.project,
+      ...(discovery.tier ? { tierId: discovery.tier } : {}),
+    }).catch(() => undefined);
+  }
+  const accountLabel = userInfo?.email || userInfo?.name || null;
+  const externalAccountId = userInfo?.sub || accountLabel || createId();
+  return {
+    project: discovery?.project ?? null,
+    tier: discovery?.tier ?? null,
+    externalAccountId,
+    accountLabel,
+  };
+};
+
+export const startAntigravityEnrollment = async (input: {
+  accountLabel?: string | null;
+  redirectPort?: number;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const authorization = startAntigravityAuthorization({ redirectPort: input.redirectPort });
+  const redirectPort = input.redirectPort ?? 0;
+  const enrollmentId = createId();
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+  const now = new Date().toISOString();
+  const visible: CodexConnectionPayload = {
+    status: 'pending',
+    enrollmentId,
+    enrollmentUrl: authorization.authorizeUrl,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+  const secret: AntigravityPendingEnrollmentPayload = {
+    enrollmentId,
+    codeVerifier: authorization.codeVerifier,
+    state: authorization.state,
+    redirectUri: authorization.redirectUri,
+    redirectPort,
+    expectedAccountLabel: accountLabel,
+  };
+
+  await Promise.all([
+    deleteAntigravitySecrets(input.updatedByUserId),
+    writeAntigravityConnection(input.updatedByUserId, visible),
+    writeEncryptedSetting(
+      input.updatedByUserId,
+      ANTIGRAVITY_CONNECTION_PENDING_SECRET_KEY,
+      secret,
+      'Pending Antigravity OAuth enrollment secret for the current admin user.',
+    ),
+  ]);
+
+  return toAntigravityProviderState(visible, null);
+};
+
+export const completeAntigravityEnrollment = async (input: {
+  enrollmentId: string;
+  authorizationCode: string;
+  accountLabel?: string | null;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const [current, pending] = await Promise.all([
+    readAntigravityConnection(input.updatedByUserId),
+    readPendingAntigravityEnrollment(input.updatedByUserId),
+  ]);
+
+  if (!current || current.status !== 'pending' || current.enrollmentId !== input.enrollmentId) {
+    throw new Error('Invalid or expired Antigravity enrollment session.');
+  }
+  if (!pending || pending.enrollmentId !== input.enrollmentId) {
+    throw new Error('Missing pending Antigravity enrollment state.');
+  }
+
+  const tokens = await exchangeAntigravityAuthorizationCode({
+    authorizationCode: input.authorizationCode,
+    codeVerifier: pending.codeVerifier,
+    redirectUri: pending.redirectUri,
+  });
+
+  const discovered = await discoverAntigravityAccount(tokens.accessToken);
+  const requestedAccountLabel =
+    normalizeOptionalText(input.accountLabel) || pending.expectedAccountLabel;
+  const connectedAccountLabel = discovered.accountLabel || requestedAccountLabel;
+
+  const now = new Date().toISOString();
+  const visible: CodexConnectionPayload = {
+    status: 'connected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: connectedAccountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  const [, storedAccount] = await Promise.all([
+    deleteUserScopedSetting(input.updatedByUserId, ANTIGRAVITY_CONNECTION_PENDING_SECRET_KEY),
+    storeAntigravityAccountTransport({
+      ownerUserId: input.updatedByUserId,
+      accountLabel: connectedAccountLabel,
+      externalAccountId: discovered.externalAccountId,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+      project: discovered.project,
+      tier: discovered.tier,
+    }),
+    writeAntigravityConnection(input.updatedByUserId, visible),
+  ]);
+
+  return toAntigravityProviderState(visible, storedAccount ?? null);
+};
+
+// Non-interactive import: register existing Antigravity tokens (e.g. from a
+// local login) without the browser flow. Discovers project/label if absent.
+export const importAntigravityEnrollment = async (input: {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: string | null;
+  project?: string | null;
+  accountLabel?: string | null;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const accessToken = normalizeOptionalText(input.accessToken);
+  const refreshToken = normalizeOptionalText(input.refreshToken);
+  if (!accessToken || !refreshToken) {
+    throw new Error('Antigravity import requires both an access token and a refresh token.');
+  }
+
+  const discovered = await discoverAntigravityAccount(accessToken);
+  const project = normalizeOptionalText(input.project) ?? discovered.project;
+  const requestedAccountLabel = normalizeOptionalText(input.accountLabel);
+  const connectedAccountLabel = discovered.accountLabel || requestedAccountLabel;
+
+  const now = new Date().toISOString();
+  const visible: CodexConnectionPayload = {
+    status: 'connected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: connectedAccountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  const [, storedAccount] = await Promise.all([
+    deleteAntigravitySecrets(input.updatedByUserId),
+    storeAntigravityAccountTransport({
+      ownerUserId: input.updatedByUserId,
+      accountLabel: connectedAccountLabel,
+      externalAccountId: discovered.externalAccountId,
+      accessToken,
+      refreshToken,
+      expiresAt: normalizeOptionalText(input.expiresAt),
+      project,
+      tier: discovered.tier,
+    }),
+    writeAntigravityConnection(input.updatedByUserId, visible),
+  ]);
+
+  return toAntigravityProviderState(visible, storedAccount ?? null);
+};
+
+export const disconnectAntigravityEnrollment = async (input: {
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const next: CodexConnectionPayload = {
+    status: 'disconnected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: null,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  await Promise.all([
+    writeAntigravityConnection(input.updatedByUserId, next),
+    deleteAntigravitySecrets(input.updatedByUserId),
+    disconnectAntigravityAccountTransports({ ownerUserId: input.updatedByUserId }),
+  ]);
+
+  return toAntigravityProviderState(next, null);
 };
