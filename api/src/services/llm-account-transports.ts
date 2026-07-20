@@ -6,6 +6,7 @@ import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { refreshClaudeCodeAccessToken } from './claude-code-provider-auth';
 import { refreshCodexAccessToken } from './codex-provider-auth';
+import { refreshAntigravityAccessToken } from './antigravity-provider-auth';
 
 export type LlmAccountTransportStatus =
   | 'active'
@@ -45,7 +46,7 @@ export type LlmAccountTransportAcquisition = {
 
 export type CodexAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type ClaudeCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
-export type GeminiCodeAssistAccountTransportAcquisition = LlmAccountTransportAcquisition;
+export type AntigravityAccountTransportAcquisition = LlmAccountTransportAcquisition;
 
 export type LlmAccountTransportOutcomeInput = {
   status: 'success' | 'failed' | 'rate_limited' | 'auth_failed';
@@ -78,14 +79,17 @@ export type ClaudeCodeTokenSecretPayload = {
   profile: Record<string, unknown> | null;
 };
 
-export type GeminiCodeAssistTokenSecretPayload = {
+export type AntigravityTokenSecretPayload = {
   accessToken: string;
   refreshToken: string | null;
   tokenType: 'bearer';
   obtainedAt: string;
   expiresAt: string | null;
-  source: 'gemini-code-assist-import' | 'gemini-code-assist-refresh';
-  clientId: string | null;
+  source: 'antigravity-import' | 'antigravity-refresh';
+  // GCP project bound to the Google account (discovered via loadCodeAssist);
+  // injected into every cloudcode-pa v1internal request body.
+  project: string | null;
+  tier: string | null;
   profile: Record<string, unknown> | null;
 };
 
@@ -116,13 +120,17 @@ const CODEX_TARGET_PROVIDER_ID = 'openai';
 const CODEX_TRANSPORT_PROVIDER_ID = 'codex';
 const CLAUDE_CODE_TARGET_PROVIDER_ID = 'anthropic';
 const CLAUDE_CODE_TRANSPORT_PROVIDER_ID = 'claude-code';
-const GEMINI_CODE_ASSIST_TARGET_PROVIDER_ID = 'gcp';
-const GEMINI_CODE_ASSIST_TRANSPORT_PROVIDER_ID = 'gemini-code-assist';
+// Antigravity is a genuinely distinct 3rd endpoint (cloudcode-pa). It targets
+// its OWN provider id so the account pool stays disjoint from codex/claude-code
+// (selection is keyed by BOTH target + transport provider ids).
+const ANTIGRAVITY_TARGET_PROVIDER_ID = 'cloudcode-pa';
+const ANTIGRAVITY_TRANSPORT_PROVIDER_ID = 'antigravity';
 const RESERVATION_TTL_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 
 const codexRefreshes = new Map<string, Promise<CodexTokenSecretPayload | null>>();
 const claudeCodeRefreshes = new Map<string, Promise<ClaudeCodeTokenSecretPayload | null>>();
+const antigravityRefreshes = new Map<string, Promise<AntigravityTokenSecretPayload | null>>();
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -246,13 +254,13 @@ const parseClaudeCodeTokenSecret = (
   }
 };
 
-const parseGeminiCodeAssistTokenSecret = (
+const parseAntigravityTokenSecret = (
   value: string | null | undefined,
-): GeminiCodeAssistTokenSecretPayload | null => {
+): AntigravityTokenSecretPayload | null => {
   const decrypted = decryptSecretOrNull(value);
   if (!decrypted) return null;
   try {
-    const parsed = JSON.parse(decrypted) as Partial<GeminiCodeAssistTokenSecretPayload> | null;
+    const parsed = JSON.parse(decrypted) as Partial<AntigravityTokenSecretPayload> | null;
     const accessToken = normalizeOptionalText(parsed?.accessToken);
     if (!parsed || !accessToken) return null;
     return {
@@ -261,8 +269,9 @@ const parseGeminiCodeAssistTokenSecret = (
       tokenType: 'bearer',
       obtainedAt: normalizeOptionalText(parsed.obtainedAt) ?? new Date().toISOString(),
       expiresAt: normalizeOptionalText(parsed.expiresAt),
-      source: parsed.source === 'gemini-code-assist-refresh' ? 'gemini-code-assist-refresh' : 'gemini-code-assist-import',
-      clientId: normalizeOptionalText(parsed.clientId),
+      source: parsed.source === 'antigravity-refresh' ? 'antigravity-refresh' : 'antigravity-import',
+      project: normalizeOptionalText(parsed.project),
+      tier: normalizeOptionalText(parsed.tier),
       profile:
         parsed.profile && typeof parsed.profile === 'object' && !Array.isArray(parsed.profile)
           ? parsed.profile as Record<string, unknown>
@@ -272,6 +281,26 @@ const parseGeminiCodeAssistTokenSecret = (
     return null;
   }
 };
+
+const buildAntigravityTokenPayload = (input: {
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: string | null;
+  source: AntigravityTokenSecretPayload['source'];
+  project?: string | null;
+  tier?: string | null;
+  profile?: Record<string, unknown> | null;
+}): AntigravityTokenSecretPayload => ({
+  accessToken: input.accessToken,
+  refreshToken: input.refreshToken ?? null,
+  tokenType: 'bearer',
+  obtainedAt: new Date().toISOString(),
+  expiresAt: input.expiresAt ?? null,
+  source: input.source,
+  project: normalizeOptionalText(input.project),
+  tier: normalizeOptionalText(input.tier),
+  profile: input.profile ?? null,
+});
 
 const isTokenExpiring = (expiresAt: string | null | undefined): boolean => {
   if (!expiresAt) return false;
@@ -741,6 +770,214 @@ export const disconnectClaudeCodeAccountTransports = async (input: {
   `);
 };
 
+export const storeAntigravityAccountTransport = async (input: {
+  ownerUserId: string;
+  accountLabel?: string | null;
+  externalAccountId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt?: string | null;
+  project?: string | null;
+  tier?: string | null;
+  profile?: Record<string, unknown> | null;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  const externalAccountId = normalizeOptionalText(input.externalAccountId);
+  const accessToken = normalizeOptionalText(input.accessToken);
+  const refreshToken = normalizeOptionalText(input.refreshToken);
+  if (!ownerUserId || !externalAccountId || !accessToken || !refreshToken) return null;
+
+  const token = buildAntigravityTokenPayload({
+    accessToken,
+    refreshToken,
+    expiresAt: normalizeOptionalText(input.expiresAt),
+    source: 'antigravity-import',
+    project: input.project,
+    tier: input.tier,
+    profile: input.profile,
+  });
+  const now = new Date();
+  const accountId = createId();
+  const tokenSecret = encryptSecret(JSON.stringify(token));
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+  // `project` lives in metadata (read at acquire time and injected into every
+  // cloudcode-pa v1internal request body); it survives token refresh because
+  // refresh only rewrites token_secret + token_expires_at.
+  const metadata = {
+    source: token.source,
+    credentialSchemaVersion: 1,
+    productAccountSource: 'antigravity',
+    endpointFamily: 'cloudcode-pa-v1internal',
+    project: token.project,
+    tier: token.tier,
+    profile: token.profile,
+  };
+
+  await db.run(sql`
+    INSERT INTO llm_provider_accounts (
+      id,
+      owner_user_id,
+      scope,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id,
+      account_label,
+      status,
+      token_secret,
+      token_expires_at,
+      connected_at,
+      disconnected_at,
+      last_error,
+      metadata,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${accountId},
+      ${ownerUserId},
+      'user',
+      ${ANTIGRAVITY_TARGET_PROVIDER_ID},
+      ${ANTIGRAVITY_TRANSPORT_PROVIDER_ID},
+      ${externalAccountId},
+      ${accountLabel},
+      'active',
+      ${tokenSecret},
+      ${token.expiresAt ? new Date(token.expiresAt) : null},
+      ${now},
+      NULL,
+      NULL,
+      ${JSON.stringify(metadata)}::jsonb,
+      ${now},
+      ${now}
+    )
+    ON CONFLICT (
+      owner_user_id,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id
+    )
+    WHERE external_account_id IS NOT NULL
+    DO UPDATE SET
+      account_label = COALESCE(EXCLUDED.account_label, llm_provider_accounts.account_label),
+      status = 'active',
+      token_secret = EXCLUDED.token_secret,
+      token_expires_at = EXCLUDED.token_expires_at,
+      connected_at = EXCLUDED.connected_at,
+      disconnected_at = NULL,
+      last_error = NULL,
+      metadata = EXCLUDED.metadata,
+      updated_at = EXCLUDED.updated_at
+  `);
+
+  return getPrimaryAntigravityAccountTransport({ ownerUserId });
+};
+
+export const getPrimaryAntigravityAccountTransport = async (input: {
+  ownerUserId: string;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return null;
+  const rows = await db.all(sql`
+    SELECT
+      id,
+      target_provider_id as "targetProviderId",
+      transport_provider_id as "transportProviderId",
+      external_account_id as "externalAccountId",
+      account_label as "accountLabel",
+      status,
+      connected_at as "connectedAt",
+      disconnected_at as "disconnectedAt",
+      token_expires_at as "tokenExpiresAt",
+      last_error as "lastError",
+      updated_at as "updatedAt"
+    FROM llm_provider_accounts
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${ANTIGRAVITY_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${ANTIGRAVITY_TRANSPORT_PROVIDER_ID}
+      AND status <> 'disconnected'
+    ORDER BY
+      CASE status
+        WHEN 'active' THEN 0
+        WHEN 'cooldown' THEN 1
+        WHEN 'reauth_required' THEN 2
+        ELSE 3
+      END,
+      connected_at DESC NULLS LAST,
+      updated_at DESC NULLS LAST
+    LIMIT 1
+  `) as Array<{
+    id: string;
+    targetProviderId: string;
+    transportProviderId: string;
+    externalAccountId: string | null;
+    accountLabel: string | null;
+    status: LlmAccountTransportStatus;
+    connectedAt: Date | string | null;
+    disconnectedAt: Date | string | null;
+    tokenExpiresAt: Date | string | null;
+    lastError: string | null;
+    updatedAt: Date | string | null;
+  }>;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    targetProviderId: row.targetProviderId,
+    transportProviderId: row.transportProviderId,
+    externalAccountId: row.externalAccountId,
+    accountLabel: row.accountLabel,
+    status: row.status,
+    connectedAt: toIso(row.connectedAt),
+    disconnectedAt: toIso(row.disconnectedAt),
+    tokenExpiresAt: toIso(row.tokenExpiresAt),
+    lastError: row.lastError,
+    updatedAt: toIso(row.updatedAt),
+  };
+};
+
+export const disconnectAntigravityAccountTransports = async (input: {
+  ownerUserId: string;
+}): Promise<void> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return;
+  const now = new Date();
+  await db.run(sql`
+    UPDATE llm_provider_accounts
+    SET
+      status = 'disconnected',
+      token_secret = NULL,
+      token_expires_at = NULL,
+      disconnected_at = ${now},
+      last_error = NULL,
+      updated_at = ${now}
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${ANTIGRAVITY_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${ANTIGRAVITY_TRANSPORT_PROVIDER_ID}
+  `);
+  await db.run(sql`
+    UPDATE llm_account_leases
+    SET status = 'invalidated', released_at = ${now}, updated_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${ANTIGRAVITY_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${ANTIGRAVITY_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
+  await db.run(sql`
+    UPDATE llm_account_reservations
+    SET status = 'completed', completed_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${ANTIGRAVITY_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${ANTIGRAVITY_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
+};
+
 const supportsModel = (modelAllowlist: unknown, modelId: string): boolean => {
   if (!Array.isArray(modelAllowlist) || modelAllowlist.length === 0) return true;
   return modelAllowlist.some((entry) => typeof entry === 'string' && entry === modelId);
@@ -881,22 +1118,68 @@ const refreshClaudeCodeTokenIfNeeded = async (input: {
   return refreshPromise;
 };
 
-const refreshGeminiCodeAssistTokenIfNeeded = async (input: {
+const refreshAntigravityTokenIfNeeded = async (input: {
   accountId: string;
   externalAccountId: string | null;
-  token: GeminiCodeAssistTokenSecretPayload;
-}): Promise<GeminiCodeAssistTokenSecretPayload | null> => {
+  token: AntigravityTokenSecretPayload;
+}): Promise<AntigravityTokenSecretPayload | null> => {
   if (!isTokenExpiring(input.token.expiresAt)) return input.token;
-  await db.run(sql`
-    UPDATE llm_provider_accounts
-    SET status = 'reauth_required',
-        token_secret = NULL,
-        token_expires_at = NULL,
-        last_error = 'Gemini Code Assist token expired.',
-        updated_at = ${new Date()}
-    WHERE id = ${input.accountId}
-  `);
-  return null;
+  if (!input.token.refreshToken) {
+    await db.run(sql`
+      UPDATE llm_provider_accounts
+      SET status = 'reauth_required',
+          token_secret = NULL,
+          token_expires_at = NULL,
+          last_error = 'Antigravity token expired and no refresh token is available.',
+          updated_at = ${new Date()}
+      WHERE id = ${input.accountId}
+    `);
+    return null;
+  }
+
+  const existing = antigravityRefreshes.get(input.accountId);
+  if (existing) return existing;
+
+  const refreshPromise = (async () => {
+    try {
+      const refreshed = await refreshAntigravityAccessToken({
+        refreshToken: input.token.refreshToken!,
+      });
+      const next = buildAntigravityTokenPayload({
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken ?? input.token.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        source: 'antigravity-refresh',
+        project: input.token.project,
+        tier: input.token.tier,
+        profile: input.token.profile,
+      });
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET token_secret = ${encryptSecret(JSON.stringify(next))},
+            token_expires_at = ${next.expiresAt ? new Date(next.expiresAt) : null},
+            status = 'active',
+            last_error = NULL,
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return next;
+    } catch (error) {
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET status = 'reauth_required',
+            last_error = ${error instanceof Error ? error.message : 'Antigravity token refresh failed.'},
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return null;
+    } finally {
+      antigravityRefreshes.delete(input.accountId);
+    }
+  })();
+
+  antigravityRefreshes.set(input.accountId, refreshPromise);
+  return refreshPromise;
 };
 
 type ParsedAccountTransportToken = {
@@ -1198,23 +1481,23 @@ export const acquireClaudeCodeAccountTransport = async (input: {
     reauthMessage: 'Claude Code account requires reauthentication.',
   });
 
-export const acquireGeminiCodeAssistAccountTransport = async (input: {
+export const acquireAntigravityAccountTransport = async (input: {
   userId: string;
   workspaceId?: string | null;
   modelId: string;
   affinityKey?: string | null;
   requestId?: string | null;
-}): Promise<GeminiCodeAssistAccountTransportAcquisition | null> =>
+}): Promise<AntigravityAccountTransportAcquisition | null> =>
   acquireDbAccountTransport({
     ...input,
-    targetProviderId: GEMINI_CODE_ASSIST_TARGET_PROVIDER_ID,
-    transportProviderId: GEMINI_CODE_ASSIST_TRANSPORT_PROVIDER_ID,
-    defaultModelId: 'google/gemini-3.5-flash@gcp',
-    stableSessionPrefix: 'gemini_code_assist',
-    parseTokenSecret: parseGeminiCodeAssistTokenSecret,
-    refreshTokenIfNeeded: refreshGeminiCodeAssistTokenIfNeeded,
-    invalidTokenMessage: 'Gemini Code Assist account token secret is missing or invalid.',
-    reauthMessage: 'Gemini Code Assist account requires reauthentication.',
+    targetProviderId: ANTIGRAVITY_TARGET_PROVIDER_ID,
+    transportProviderId: ANTIGRAVITY_TRANSPORT_PROVIDER_ID,
+    defaultModelId: 'gemini-3-pro-high',
+    stableSessionPrefix: 'antigravity',
+    parseTokenSecret: parseAntigravityTokenSecret,
+    refreshTokenIfNeeded: refreshAntigravityTokenIfNeeded,
+    invalidTokenMessage: 'Antigravity account token secret is missing or invalid.',
+    reauthMessage: 'Antigravity account requires reauthentication.',
   });
 
 export const recordLlmAccountTransportOutcome = async (

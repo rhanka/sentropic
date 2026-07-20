@@ -5,15 +5,19 @@ import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
 import { createSession, revokeSession } from '../../services/session-manager';
 import {
+  completeAntigravityEnrollment,
   completeClaudeCodeEnrollment,
   completeCodexEnrollment,
+  disconnectAntigravityEnrollment,
   disconnectClaudeCodeEnrollment,
   disconnectCodexEnrollment,
   getAnthropicTransportMode,
+  importAntigravityEnrollment,
   importClaudeCodeEnrollment,
   getOpenAITransportMode,
   listProviderConnections,
   setOpenAITransportMode,
+  startAntigravityEnrollment,
   startClaudeCodeEnrollment,
   startCodexEnrollment,
 } from '../../services/provider-connections';
@@ -49,6 +53,25 @@ const claudeCodeEnrollmentImportSchema = z.object({
   expiresAt: z.string().trim().optional().nullable(),
   subscriptionType: z.string().trim().max(60).optional().nullable(),
   rateLimitTier: z.string().trim().max(60).optional().nullable(),
+  accountLabel: z.string().trim().max(120).optional().nullable(),
+});
+
+const antigravityEnrollmentStartSchema = z.object({
+  accountLabel: z.string().trim().max(120).optional().nullable(),
+  redirectPort: z.number().int().min(0).max(65535).optional(),
+});
+
+const antigravityEnrollmentCompleteSchema = z.object({
+  enrollmentId: z.string().trim().min(1),
+  authorizationCode: z.string().trim().min(1),
+  accountLabel: z.string().trim().max(120).optional().nullable(),
+});
+
+const antigravityEnrollmentImportSchema = z.object({
+  accessToken: z.string().trim().min(1),
+  refreshToken: z.string().trim().min(1),
+  expiresAt: z.string().trim().optional().nullable(),
+  project: z.string().trim().max(200).optional().nullable(),
   accountLabel: z.string().trim().max(120).optional().nullable(),
 });
 
@@ -340,6 +363,85 @@ settingsRouter.post(
         expiresAt: payload.expiresAt ?? null,
         subscriptionType: payload.subscriptionType ?? null,
         rateLimitTier: payload.rateLimitTier ?? null,
+        accountLabel: payload.accountLabel ?? null,
+        updatedByUserId: user.userId,
+      });
+      return c.json({ provider });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Import failed';
+      return c.json({ message }, 400);
+    }
+  },
+);
+
+settingsRouter.post(
+  '/provider-connections/antigravity/enrollment/start',
+  zValidator('json', antigravityEnrollmentStartSchema),
+  async (c) => {
+    const user = c.get('user') as { userId?: string } | undefined;
+    if (!user?.userId) {
+      return c.json({ message: 'Authentication required' }, 401);
+    }
+    const payload = c.req.valid('json');
+    const provider = await startAntigravityEnrollment({
+      accountLabel: payload.accountLabel ?? null,
+      ...(typeof payload.redirectPort === 'number' ? { redirectPort: payload.redirectPort } : {}),
+      updatedByUserId: user.userId,
+    });
+    return c.json({ provider });
+  },
+);
+
+settingsRouter.post(
+  '/provider-connections/antigravity/enrollment/complete',
+  zValidator('json', antigravityEnrollmentCompleteSchema),
+  async (c) => {
+    const user = c.get('user') as { userId?: string } | undefined;
+    if (!user?.userId) {
+      return c.json({ message: 'Authentication required' }, 401);
+    }
+    const payload = c.req.valid('json');
+    try {
+      const provider = await completeAntigravityEnrollment({
+        enrollmentId: payload.enrollmentId,
+        authorizationCode: payload.authorizationCode,
+        accountLabel: payload.accountLabel ?? null,
+        updatedByUserId: user.userId,
+      });
+      return c.json({ provider });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Enrollment completion failed';
+      return c.json({ message }, 400);
+    }
+  },
+);
+
+settingsRouter.post('/provider-connections/antigravity/enrollment/disconnect', async (c) => {
+  const user = c.get('user') as { userId?: string } | undefined;
+  if (!user?.userId) {
+    return c.json({ message: 'Authentication required' }, 401);
+  }
+  const provider = await disconnectAntigravityEnrollment({
+    updatedByUserId: user.userId,
+  });
+  return c.json({ provider });
+});
+
+settingsRouter.post(
+  '/provider-connections/antigravity/enrollment/import',
+  zValidator('json', antigravityEnrollmentImportSchema),
+  async (c) => {
+    const user = c.get('user') as { userId?: string } | undefined;
+    if (!user?.userId) {
+      return c.json({ message: 'Authentication required' }, 401);
+    }
+    const payload = c.req.valid('json');
+    try {
+      const provider = await importAntigravityEnrollment({
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
+        expiresAt: payload.expiresAt ?? null,
+        project: payload.project ?? null,
         accountLabel: payload.accountLabel ?? null,
         updatedByUserId: user.userId,
       });

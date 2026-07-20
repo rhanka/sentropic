@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/llm-mesh",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Provider-agnostic LLM access runtime SDK for Sentropic.",
   "type": "module",
   "license": "MIT",

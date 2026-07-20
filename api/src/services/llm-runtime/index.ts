@@ -11,12 +11,14 @@ import {
 import {
   getAnthropicTransportMode,
   getOpenAITransportMode,
+  resolveAntigravityFallbackTransport,
   resolveConnectedClaudeCodeTransport,
   resolveConnectedCodexTransport,
-  resolveConnectedGeminiCodeAssistTransport,
+  type AntigravityFallbackRoute,
 } from '../provider-connections';
 import { isProviderId, type ProviderId } from '../provider-runtime';
 import { parseGcpModelId } from '../providers/gcp-provider';
+import { CLOUDCODE_PA_PROVIDER_ID } from '../providers/cloudcode-pa-provider';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
 import { env } from '../../config/env';
@@ -58,6 +60,44 @@ const buildGcpRuntimeRequest = (input: {
     requestOptions: { project, location, publisher, model, body: input.body },
   };
 };
+
+// Antigravity fallback dispatch — DIRECT to the cloudcode-pa runtime (bypasses
+// the mesh `selectModel`, which rejects the non-catalog Antigravity fleet ids).
+// The enrolled account's own bearer executes the request (personal-passthrough);
+// the token is carried per-request and never relayed as a generic bearer. The
+// runtime UNWRAPS the Cloud Code `{ response }` envelope, so callers reuse the
+// identical Gemini-shaped extraction / SSE loop.
+const dispatchAntigravityGenerate = async (input: {
+  route: AntigravityFallbackRoute;
+  body: Record<string, unknown>;
+  signal?: AbortSignal;
+}): Promise<unknown> =>
+  providerRegistry.requireProvider(CLOUDCODE_PA_PROVIDER_ID).generate({
+    mode: 'antigravity-generate-content',
+    requestOptions: {
+      model: input.route.fleetModel,
+      project: input.route.project ?? '',
+      body: input.body,
+    },
+    credential: input.route.acquisition.accessToken,
+    ...(input.signal ? { signal: input.signal } : {}),
+  });
+
+const dispatchAntigravityStream = async (input: {
+  route: AntigravityFallbackRoute;
+  body: Record<string, unknown>;
+  signal?: AbortSignal;
+}): Promise<AsyncIterable<unknown>> =>
+  (await providerRegistry.requireProvider(CLOUDCODE_PA_PROVIDER_ID).streamGenerate({
+    mode: 'antigravity-stream-generate-content',
+    requestOptions: {
+      model: input.route.fleetModel,
+      project: input.route.project ?? '',
+      body: input.body,
+    },
+    credential: input.route.acquisition.accessToken,
+    ...(input.signal ? { signal: input.signal } : {}),
+  })) as AsyncIterable<unknown>;
 
 type RuntimeSelection = {
   providerId: ProviderId;
@@ -934,31 +974,6 @@ const mapClaudeReasoningParams = (
   };
 };
 
-const isAnthropicGcpModel = (modelId: string): boolean => {
-  return modelId.startsWith('anthropic/') && modelId.endsWith('@gcp');
-};
-
-const mapAnthropicModelToGcp = (modelId: string): string => {
-  if (modelId.includes('opus')) {
-    return 'claude-opus-4-6';
-  }
-  return 'claude-sonnet-4-6';
-};
-
-const mapModelToGcp = (providerId: string, modelId: string): string => {
-  if (providerId === 'anthropic' || isAnthropicGcpModel(modelId)) {
-    return mapAnthropicModelToGcp(modelId);
-  }
-  if (modelId.startsWith('google/') && modelId.endsWith('@gcp')) {
-    const base = modelId.replace('google/', '').replace('@gcp', '');
-    if (modelId.includes('flash-lite')) {
-      return 'gemini-3.1-flash-lite';
-    }
-    return base;
-  }
-  return modelId;
-};
-
 /**
  * Méthode unique pour tous les appels OpenAI (non-streaming)
  */
@@ -998,25 +1013,19 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
     console.warn(`[llm-runtime] Provider ${selection.providerId} does not support structured output — responseFormat ignored`);
   }
 
-  const anthropicTransportModeNonStream = await getAnthropicTransportMode();
-  const geminiCodeAssistTransportNonStream =
-    typeof userId === 'string' &&
-    userId.trim().length > 0 &&
-    credentialResolution.source === 'none' &&
-    (anthropicTransportModeNonStream === 'gemini-code-assist' || selection.providerId === 'gemini' || selection.providerId === 'gcp')
-      ? await resolveConnectedGeminiCodeAssistTransport(userId, {
-          workspaceId,
+  // D3 routing: native-family-first with Antigravity as the multi-family
+  // fallback (only when no native transport/credential is enrolled for the
+  // family, and no explicit grant pins to native). Returns null → native path.
+  const antigravityRoute =
+    typeof userId === 'string' && userId.trim().length > 0
+      ? await resolveAntigravityFallbackTransport(userId, {
+          providerId: selection.providerId,
           modelId: selection.model,
+          credentialSource: credentialResolution.source,
+          workspaceId,
           requestId: createId(),
         })
       : null;
-
-  if (geminiCodeAssistTransportNonStream) {
-    selection.providerId = 'gcp' as ProviderId;
-    selection.model = mapModelToGcp(selection.providerId, selection.model);
-    credentialResolution.credential = geminiCodeAssistTransportNonStream.accessToken;
-    credentialResolution.source = 'request_override';
-  }
 
   if (!capabilities.supportsStreaming) {
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
@@ -1027,47 +1036,65 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   // runtimeRequest transport mode differs (URL+auth, built by the runtime), and
   // the response attribution prefix is parameterized by the active provider
   // (M4): `gemini_` for gemini, `gcp_` for gcp.
-  if (selection.providerId === 'gemini' || selection.providerId === 'gcp') {
+  if (selection.providerId === 'gemini' || selection.providerId === 'gcp' || antigravityRoute) {
     const geminiBody = buildGeminiRequestBody({
-      model: selection.model,
+      model: antigravityRoute ? antigravityRoute.fleetModel : selection.model,
       messages,
       tools: filteredTools,
       toolChoice: normalizedToolChoice,
       responseFormat,
       maxOutputTokens,
     });
-    const raw = await dispatchMeshGenerateRaw<unknown>({
-      providerId: selection.providerId,
-      model: selection.model,
-      credentialResolution,
-      userId,
-      workspaceId,
-      messages,
-      tools: filteredTools,
-      toolChoice: normalizedToolChoice,
-      responseFormat,
-      maxOutputTokens,
-      signal,
-      runtimeRequest:
-        selection.providerId === 'gcp'
-          ? buildGcpRuntimeRequest({
-              stream: false,
-              modelId: selection.model,
-              body: geminiBody,
-            })
-          : {
-              mode: 'generate-content',
-              requestOptions: {
-                model: selection.model,
+    let raw: unknown;
+    if (antigravityRoute) {
+      let antigravityOutcome: AccountTransportOutcome = { status: 'success' };
+      try {
+        raw = await dispatchAntigravityGenerate({ route: antigravityRoute, body: geminiBody, signal });
+      } catch (error) {
+        antigravityOutcome = mapAccountTransportErrorOutcome(error);
+        throw error;
+      } finally {
+        await antigravityRoute.acquisition.recordOutcome(antigravityOutcome).catch((error) => {
+          console.warn(
+            '[llm-runtime] Failed to record Antigravity account transport outcome',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      }
+    } else {
+      raw = await dispatchMeshGenerateRaw<unknown>({
+        providerId: selection.providerId,
+        model: selection.model,
+        credentialResolution,
+        userId,
+        workspaceId,
+        messages,
+        tools: filteredTools,
+        toolChoice: normalizedToolChoice,
+        responseFormat,
+        maxOutputTokens,
+        signal,
+        runtimeRequest:
+          selection.providerId === 'gcp'
+            ? buildGcpRuntimeRequest({
+                stream: false,
+                modelId: selection.model,
                 body: geminiBody,
+              })
+            : {
+                mode: 'generate-content',
+                requestOptions: {
+                  model: selection.model,
+                  body: geminiBody,
+                },
               },
-            },
-    });
+      });
+    }
 
     const text = extractGeminiText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
     return {
-      id: `${selection.providerId}_${createId()}`,
+      id: `${antigravityRoute ? 'antigravity' : selection.providerId}_${createId()}`,
       object: 'chat.completion',
       created: nowSeconds,
       model: selection.model,
@@ -1390,26 +1417,20 @@ export async function* callLLMStream(
         })
       : null;
 
-  const anthropicTransportMode = await getAnthropicTransportMode();
-  const geminiCodeAssistTransport =
-    typeof userId === 'string' &&
-    userId.trim().length > 0 &&
-    credentialResolution.source === 'none' &&
-    (anthropicTransportMode === 'gemini-code-assist' || selection.providerId === 'gemini' || selection.providerId === 'gcp')
-      ? await resolveConnectedGeminiCodeAssistTransport(userId, {
-          workspaceId,
+  // D3 routing: native-family-first with Antigravity as the multi-family
+  // fallback (only when no native transport/credential is enrolled for the
+  // family, and no explicit grant pins to native). Returns null → native path.
+  const antigravityRoute =
+    typeof userId === 'string' && userId.trim().length > 0
+      ? await resolveAntigravityFallbackTransport(userId, {
+          providerId: selection.providerId,
           modelId: selection.model,
+          credentialSource: credentialResolution.source,
+          workspaceId,
           affinityKey: sessionId ? `chat_session:${sessionId}` : undefined,
           requestId: createId(),
         })
       : null;
-
-  if (geminiCodeAssistTransport) {
-    selection.providerId = 'gcp' as ProviderId;
-    selection.model = mapModelToGcp(selection.providerId, selection.model);
-    credentialResolution.credential = geminiCodeAssistTransport.accessToken;
-    credentialResolution.source = 'request_override';
-  }
 
   if (!capabilities.supportsStreaming) {
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
@@ -1420,11 +1441,14 @@ export async function* callLLMStream(
   // The response/tool-call ids and the status provider_id are parameterized by
   // the active provider (M4): `gemini_`/`gemini_call_`/`'gemini'` for gemini,
   // `gcp_`/`gcp_call_`/`'gcp'` for gcp.
-  if (selection.providerId === 'gemini' || selection.providerId === 'gcp') {
-    const activeProviderId = selection.providerId;
+  if (selection.providerId === 'gemini' || selection.providerId === 'gcp' || antigravityRoute) {
+    // When Antigravity serves the request, attribution + wire model switch to
+    // the fleet (cloudcode-pa), but the Gemini-shaped SSE loop below is reused.
+    const activeProviderId = antigravityRoute ? 'antigravity' : selection.providerId;
+    const wireModel = antigravityRoute ? antigravityRoute.fleetModel : selectedModel;
     const responseId = previousResponseId || `${activeProviderId}_${createId()}`;
     const requestBody = buildGeminiRequestBody({
-      model: selectedModel,
+      model: wireModel,
       messages,
       tools: filteredTools,
       toolChoice: normalizedToolChoice,
@@ -1435,6 +1459,7 @@ export async function* callLLMStream(
       reasoningEffort,
     });
 
+    let antigravityOutcome: AccountTransportOutcome = { status: 'success' };
     try {
       yield { type: 'status', data: { state: 'started' } };
       yield {
@@ -1442,37 +1467,39 @@ export async function* callLLMStream(
         data: { state: 'response_created', response_id: responseId },
       };
 
-      const stream = await dispatchMeshStreamRaw({
-        providerId: selection.providerId,
-        model: selectedModel,
-        credentialResolution,
-        userId,
-        workspaceId,
-        messages,
-        tools: filteredTools,
-        toolChoice: normalizedToolChoice,
-        responseFormat: effectiveResponseFormat,
-        structuredOutput: effectiveStructuredOutput,
-        reasoningEffort,
-        reasoningSummary,
-        maxOutputTokens,
-        signal,
-        previousResponseId,
-        runtimeRequest:
-          activeProviderId === 'gcp'
-            ? buildGcpRuntimeRequest({
-                stream: true,
-                modelId: selectedModel,
-                body: requestBody,
-              })
-            : {
-                mode: 'stream-generate-content',
-                requestOptions: {
-                  model: selectedModel,
-                  body: requestBody,
-                },
-              },
-      });
+      const stream = antigravityRoute
+        ? await dispatchAntigravityStream({ route: antigravityRoute, body: requestBody, signal })
+        : await dispatchMeshStreamRaw({
+            providerId: selection.providerId,
+            model: selectedModel,
+            credentialResolution,
+            userId,
+            workspaceId,
+            messages,
+            tools: filteredTools,
+            toolChoice: normalizedToolChoice,
+            responseFormat: effectiveResponseFormat,
+            structuredOutput: effectiveStructuredOutput,
+            reasoningEffort,
+            reasoningSummary,
+            maxOutputTokens,
+            signal,
+            previousResponseId,
+            runtimeRequest:
+              selection.providerId === 'gcp'
+                ? buildGcpRuntimeRequest({
+                    stream: true,
+                    modelId: selectedModel,
+                    body: requestBody,
+                  })
+                : {
+                    mode: 'stream-generate-content',
+                    requestOptions: {
+                      model: selectedModel,
+                      body: requestBody,
+                    },
+                  },
+          });
 
       let toolCallIndex = 0;
       let emittedContent = false;
@@ -1541,6 +1568,7 @@ export async function* callLLMStream(
       yield { type: 'done', data: {} };
       return;
     } catch (error) {
+      if (antigravityRoute) antigravityOutcome = mapAccountTransportErrorOutcome(error);
       const normalized = normalizeProviderError(selection.providerId, error);
       yield {
         type: 'error',
@@ -1550,6 +1578,15 @@ export async function* callLLMStream(
         },
       };
       throw error;
+    } finally {
+      if (antigravityRoute) {
+        await antigravityRoute.acquisition.recordOutcome(antigravityOutcome).catch((error) => {
+          console.warn(
+            '[llm-runtime] Failed to record Antigravity account transport outcome',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      }
     }
   }
 
