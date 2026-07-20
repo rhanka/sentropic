@@ -47,7 +47,7 @@ ARCH-13 Q2b (app mesh-dispatch) and gateway §5. Design: `spec/SPEC_EVOL_LLM_MET
 
 ## Lots
 - [x] Lot 0 — Branch + worktree + BRANCH.md + design specs committed
-- [ ] Lot 1 — `control.cost_ledger` schema + one drizzle migration (observe-only shape: provider/model/usage_raw/input+output tokens/cost_micro_usd nullable/idempotency_key/credential_source/agent_id/created_at)
+- [x] Lot 1 — `control.cost_ledger` schema + one drizzle migration (observe-only shape: provider/model/usage_raw/input+output tokens/cost_micro_usd nullable/idempotency_key/credential_source/agent_id/created_at)
 - [ ] Lot 2 — `api/src/services/llm-metering/` observe-only sink + wire `hooks:{onResponse}` into `createLlmMesh` (mesh-dispatch.ts); normalized usage → ledger row
 - [ ] Lot 3 — usage-envelope plumbing: surface normalized usage on provider paths currently dropping it (as far as additive/safe; flag any path needing mesh-lane coordination)
 - [ ] Lot 4 — Tests (unit sink + integration hook→ledger; existing chat/llm-runtime green) + typecheck + lint + UAT with owner
