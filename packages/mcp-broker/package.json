@@ -1,0 +1,32 @@
+{
+  "name": "@sentropic/mcp-broker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "BR-72 DEPTH Lot 2 proof: a minimal, connector-AGNOSTIC MCP provider broker (ConnectorRegistry + McpProviderBroker) generalizing the mount+invoke seam proven per-connector in @sentropic/mcp-connector-github's live broker (Lot 1), against the @sentropic/mcp-platform AppConnectorProviderAdapter contract. Not the production connector, NOT published; production residence is an architect D4 decision, deferred.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/mcp-broker"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "5.4.5",
+    "vitest": "4.1.0"
+  }
+}
