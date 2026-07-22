@@ -38,6 +38,7 @@ import {
   fetchAntigravityUserInfo,
   loadCodeAssist,
   onboardAntigravityUser,
+  refreshAntigravityAccessToken,
   startAntigravityAuthorization,
 } from './antigravity-provider-auth';
 import { env } from '../config/env';
@@ -1136,20 +1137,25 @@ export const disconnectClaudeCodeEnrollment = async (input: {
 const discoverAntigravityAccount = async (
   accessToken: string,
 ): Promise<{ project: string | null; tier: string | null; externalAccountId: string; accountLabel: string | null }> => {
-  const discovery = await loadCodeAssist({ accessToken }).catch(() => null);
-  const userInfo = await fetchAntigravityUserInfo({ accessToken }).catch(() => null);
-  if (discovery?.project) {
-    await onboardAntigravityUser({
-      accessToken,
-      project: discovery.project,
-      ...(discovery.tier ? { tierId: discovery.tier } : {}),
-    }).catch(() => undefined);
+  // Project discovery and onboarding are required for a usable Cloud Code
+  // account. Do not persist a misleading "connected" state when either fails.
+  const discovery = await loadCodeAssist({ accessToken });
+  if (!discovery.project) {
+    throw new Error('Antigravity project discovery returned no Cloud Code project.');
   }
+  await onboardAntigravityUser({
+    accessToken,
+    project: discovery.project,
+    ...(discovery.tier ? { tierId: discovery.tier } : {}),
+  });
+  // Profile metadata is cosmetic; its unavailability must not hide a valid,
+  // already discovered and onboarded account.
+  const userInfo = await fetchAntigravityUserInfo({ accessToken }).catch(() => null);
   const accountLabel = userInfo?.email || userInfo?.name || null;
   const externalAccountId = userInfo?.sub || accountLabel || createId();
   return {
-    project: discovery?.project ?? null,
-    tier: discovery?.tier ?? null,
+    project: discovery.project,
+    tier: discovery.tier,
     externalAccountId,
     accountLabel,
   };
@@ -1273,8 +1279,19 @@ export const importAntigravityEnrollment = async (input: {
     throw new Error('Antigravity import requires both an access token and a refresh token.');
   }
 
-  const discovered = await discoverAntigravityAccount(accessToken);
+  // Imported CLI credentials can carry an expired access token while retaining a
+  // valid refresh token. Refresh before discovery/onboarding: loadCodeAssist
+  // needs a live token to bind the Cloud Code project.
+  const refreshed = await refreshAntigravityAccessToken({ refreshToken });
+  const activeAccessToken = refreshed.accessToken;
+  const activeRefreshToken = refreshed.refreshToken || refreshToken;
+  const discovered = await discoverAntigravityAccount(activeAccessToken);
   const project = normalizeOptionalText(input.project) ?? discovered.project;
+  if (!project) {
+    throw new Error(
+      'Antigravity project discovery failed. Re-authenticate with Antigravity or provide a valid project.',
+    );
+  }
   const requestedAccountLabel = normalizeOptionalText(input.accountLabel);
   const connectedAccountLabel = discovered.accountLabel || requestedAccountLabel;
 
@@ -1296,9 +1313,9 @@ export const importAntigravityEnrollment = async (input: {
       ownerUserId: input.updatedByUserId,
       accountLabel: connectedAccountLabel,
       externalAccountId: discovered.externalAccountId,
-      accessToken,
-      refreshToken,
-      expiresAt: normalizeOptionalText(input.expiresAt),
+      accessToken: activeAccessToken,
+      refreshToken: activeRefreshToken,
+      expiresAt: refreshed.expiresAt,
       project,
       tier: discovered.tier,
     }),

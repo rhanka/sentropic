@@ -429,6 +429,61 @@ describe('provider connections admin API', () => {
     expect(connectedSecret).toBeUndefined();
   });
 
+  it('refreshes an imported Antigravity credential before project discovery', async () => {
+    fetchMock
+      .mockResolvedValueOnce(createJsonResponse({
+        access_token: 'fresh-antigravity-access-token',
+        expires_in: 3600,
+      }))
+      .mockResolvedValueOnce(createJsonResponse({
+        cloudaicompanionProject: 'agy-project',
+        currentTier: { id: 'free-tier' },
+      }))
+      .mockResolvedValueOnce(createJsonResponse({}))
+      .mockResolvedValueOnce(createJsonResponse({
+        sub: 'agy-user-1',
+        email: 'agy@example.com',
+      }));
+
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/antigravity/enrollment/import',
+      admin.sessionToken!,
+      {
+        accessToken: 'expired-antigravity-access-token',
+        refreshToken: 'antigravity-refresh-token',
+        expiresAt: '2026-07-17T00:00:00.000Z',
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      provider: {
+        providerId: 'antigravity',
+        ready: true,
+        connectionStatus: 'connected',
+        accountLabel: 'agy@example.com',
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+
+    const [refreshUrl, refreshRequest] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(refreshUrl).toBe('https://oauth2.googleapis.com/token');
+    expect(refreshRequest.body).toBeInstanceOf(URLSearchParams);
+    expect((refreshRequest.body as URLSearchParams).get('grant_type')).toBe('refresh_token');
+    expect((refreshRequest.body as URLSearchParams).get('refresh_token')).toBe('antigravity-refresh-token');
+
+    const [, discoveryRequest] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(discoveryRequest.headers).toMatchObject({
+      Authorization: 'Bearer fresh-antigravity-access-token',
+    });
+    const [, onboardingRequest] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(onboardingRequest.headers).toMatchObject({
+      Authorization: 'Bearer fresh-antigravity-access-token',
+    });
+  });
+
   it('rejects codex enrollment start for non-admin users', async () => {
     const response = await authenticatedRequest(
       app,
