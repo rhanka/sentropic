@@ -7,6 +7,8 @@ import {
   type GenerateRequest,
   type GenerateResponse,
   type LlmMeshMessage,
+  type LlmMeshResponseEvent,
+  type LlmMeshRequestMetadata,
   type ProviderAdapterClient,
   type ProviderRuntimeContext,
   type ResponseFormat,
@@ -19,6 +21,8 @@ import {
 } from '@sentropic/llm-mesh';
 import type OpenAI from 'openai';
 
+import { recordLlmUsage } from '../llm-metering';
+import { logger } from '../logger';
 import { providerRegistry } from '../provider-registry';
 import type { ProviderId } from '../provider-runtime';
 import type { ResolvedProviderCredential } from '../provider-credentials';
@@ -335,6 +339,65 @@ class ApplicationProviderMeshClient implements ProviderAdapterClient {
 
 const applicationProviderClient = new ApplicationProviderMeshClient();
 
+const METERING_CALL_ID_ATTRIBUTE = 'sentropic.metering.callId';
+const METERING_CREDENTIAL_SOURCE_ATTRIBUTE = 'sentropic.metering.credentialSource';
+
+type MeshMeteringMetadata = LlmMeshRequestMetadata & {
+  attributes: Record<string, unknown> & {
+    [METERING_CALL_ID_ATTRIBUTE]: string;
+    [METERING_CREDENTIAL_SOURCE_ATTRIBUTE]: string;
+  };
+};
+
+const createMeteringMetadata = (options: MeshDispatchOptions): MeshMeteringMetadata => ({
+  correlationId: createId(),
+  userId: options.userId,
+  workspaceId: options.workspaceId,
+  attributes: {
+    [METERING_CALL_ID_ATTRIBUTE]: createId(),
+    [METERING_CREDENTIAL_SOURCE_ATTRIBUTE]: options.credentialResolution.source,
+  },
+});
+
+const isMeteringMetadata = (metadata: LlmMeshRequestMetadata | undefined): metadata is MeshMeteringMetadata => {
+  const attributes = metadata?.attributes;
+  return typeof attributes?.[METERING_CALL_ID_ATTRIBUTE] === 'string'
+    && typeof attributes[METERING_CREDENTIAL_SOURCE_ATTRIBUTE] === 'string';
+};
+
+const recordMeshResponseUsage = async (event: LlmMeshResponseEvent): Promise<void> => {
+  if (!isMeteringMetadata(event.metadata)) {
+    logger.warn(
+      { operation: event.operation, providerId: event.providerId, modelId: event.modelId },
+      'LLM metering response was missing dispatch attribution',
+    );
+    return;
+  }
+
+  const { metadata } = event;
+  const callId = metadata.attributes[METERING_CALL_ID_ATTRIBUTE];
+
+  try {
+    await recordLlmUsage({
+      callId,
+      operation: event.operation,
+      providerId: event.providerId,
+      modelId: event.modelId,
+      credentialSource: metadata.attributes[METERING_CREDENTIAL_SOURCE_ATTRIBUTE],
+      userId: metadata.userId ?? undefined,
+      workspaceId: metadata.workspaceId ?? undefined,
+      finishReason: event.finishReason,
+      responseId: event.responseId,
+      usage: event.usage,
+    });
+  } catch (error) {
+    logger.error(
+      { err: error, callId, operation: event.operation, providerId: event.providerId, modelId: event.modelId },
+      'Failed to record LLM usage observation',
+    );
+  }
+};
+
 const applicationLlmMesh = createLlmMesh({
   registry: createProviderRegistry(
     createDefaultProviderAdapters({
@@ -346,6 +409,9 @@ const applicationLlmMesh = createLlmMesh({
       gcp: applicationProviderClient,
     }),
   ),
+  hooks: {
+    onResponse: recordMeshResponseUsage,
+  },
 });
 
 const toMeshReasoning = (
@@ -379,10 +445,7 @@ const buildMeshRequest = async (options: MeshDispatchOptions): Promise<StreamReq
     maxOutputTokens: options.maxOutputTokens,
     signal: options.signal,
     previousResponseId: options.previousResponseId,
-    metadata: {
-      userId: options.userId,
-      workspaceId: options.workspaceId,
-    },
+    metadata: createMeteringMetadata(options),
     providerOptions: {
       runtimeRequest: options.runtimeRequest,
     },
