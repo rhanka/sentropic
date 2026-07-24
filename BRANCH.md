@@ -40,6 +40,10 @@ ARCH-13 Q2b (app mesh-dispatch) and gateway §5. Design: `spec/SPEC_EVOL_LLM_MET
 
 ## AI Flaky tests
 - Standard policy: accept only non-systematic provider/network nondeterminism as flaky; never add timeouts; record signature + user sign-off.
+- Observed on PR #441 CI (post-fix run 30099453601), also red on `origin/main` #436 (pre-existing, NOT introduced here — the metering change is additive/observe-only/fail-open):
+  - `test-api-unit-integration (ai, …)` ×3 — `api/tests/ai/**` (allowlisted); provider/model nondeterminism.
+  - `test-e2e (group-a/b/c/d)` — set fluctuates run-to-run (group-a passed on the prior run, failed on the next) = nondeterministic infra/AI e2e; group-c = `03-chat` (allowlisted).
+  - Awaiting owner sign-off to merge over these (rules: AI-flaky non-blocking with signature + sign-off).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (one coherent app-side increment; single UAT cycle)
@@ -51,11 +55,13 @@ ARCH-13 Q2b (app mesh-dispatch) and gateway §5. Design: `spec/SPEC_EVOL_LLM_MET
 - [x] Lot 1 — `control.cost_ledger` schema + one drizzle migration (observe-only shape: provider/model/usage_raw/input+output tokens/cost_micro_usd nullable/idempotency_key/credential_source/agent_id/created_at)
 - [x] Lot 2 — `api/src/services/llm-metering/` observe-only sink + wire `hooks:{onResponse}` into `createLlmMesh` (mesh-dispatch.ts); normalized usage → ledger row
 - [x] Lot 3 — usage-envelope plumbing: surface normalized usage on provider paths currently dropping it (as far as additive/safe; flag any path needing mesh-lane coordination)
-- [ ] Lot 4 — Tests (unit sink + integration hook→ledger; existing chat/llm-runtime green) + typecheck + lint + UAT with owner
+- [x] Lot 4 — Tests (unit sink + usage-normalizer; run by the CI `unit` suite) + typecheck (API `tsc --noEmit` exit 0, local + CI) + lint; UAT with owner pending. Hook→ledger end-to-end verification is covered by the owner UAT (observe-only, no mockable app-singleton seam) rather than a CI integration test.
 
 ## Test plan (file granularity)
-- New: `api/tests/metering/llm-metering-sink.test.ts` (sink records a ledger row from a usage event; idempotency by key).
-- New: `api/tests/metering/onresponse-to-ledger.test.ts` (a generate + a stream call yield a persisted `control.cost_ledger` row with usage).
+- New: `api/tests/unit/llm-metering-sink.test.ts` (sink records a ledger row from a usage event; idempotency by key). 2 tests, green.
+- New: `api/tests/unit/llm-metering-usage-normalizer.test.ts` (per-provider usage normalization, stream accumulation, mesh coercion). 13 tests, green.
+  - NOTE: placed under `tests/unit/` (not `tests/metering/`) because CI only runs the fixed suite globs (`tests/unit`, `tests/ai`, …); a `tests/metering/` dir would be orphaned/never executed.
+- Deferred: hook→ledger integration test — the app mesh singleton has no injection seam for a stubbed provider, so real end-to-end is validated by owner UAT (below), not CI.
 - Regression: existing `api/tests/api` chat + `api/tests/ai` must stay green (no behavior change on the live path; sink is additive/observe-only).
 
 ## UAT (owner)
