@@ -207,9 +207,6 @@
     displayMode,
   });
 
-  // Internal dock-mode flag
-  let _isDocked = false;
-  $: _isDocked = effectiveMode === 'docked';
 
   // (Re)subscribe whenever the placementMenu prop identity changes. When
   // undefined, effectivePlacement below falls back to the legacy bridge —
@@ -219,6 +216,7 @@
     placementMenuUnsubscribe = placementMenu
       ? placementMenu.subscribe((current) => {
           menuPlacement = current;
+          if (isBrowserReady) publishLayout();
         })
       : null;
     if (!placementMenu) menuPlacement = null;
@@ -227,6 +225,14 @@
   $: effectivePlacement = placementMenu
     ? menuPlacement ?? displayModeToPlacement(effectiveMode)
     : displayModeToPlacement(effectiveMode);
+
+  // A supplied menu owns both placement and dock semantics. The legacy path
+  // deliberately retains its original effectiveMode comparison unchanged.
+  let _isDocked = false;
+  $: _isDocked = placementMenu
+    ? effectivePlacement.kind === 'drawer'
+    : effectiveMode === 'docked';
+
   $: containerPlacement = placementContainerClasses(effectivePlacement, {
     dialogClass,
     dockWidthCss,
@@ -267,12 +273,18 @@
   // ---------------------------------------------------------------------------
 
   const publishLayout = () => {
-    const modeNow = resolveEffectiveChatWidgetMode({
-      hostMode,
-      isExtensionOverlayHost,
-      isMobileViewport,
-      displayMode,
-    });
+    // The subscription callback invokes this before Svelte's reactive
+    // assignments have necessarily recalculated `_isDocked`; read the menu
+    // value directly so layout publication always describes the committed move.
+    const placementNow = menuPlacement ?? placementMenu?.current();
+    const modeNow = placementNow
+      ? (placementNow.kind === 'drawer' ? 'docked' : 'floating')
+      : resolveEffectiveChatWidgetMode({
+          hostMode,
+          isExtensionOverlayHost,
+          isMobileViewport,
+          displayMode,
+        });
     chatWidgetLayout.set({
       mode: modeNow,
       isOpen: isVisible,

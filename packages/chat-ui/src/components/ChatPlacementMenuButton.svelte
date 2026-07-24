@@ -30,6 +30,9 @@
   /** The headless placement menu model (owns intent + the 4-item menu surface). */
   export let placementMenu: ChatPlacementMenu;
 
+  /** Called after a selected placement has settled. */
+  export let onPlacementChange: ((placement: ChatPlacement) => void) | undefined = undefined;
+
   /** Extra class(es) appended to the trigger button (host styling passthrough). */
   let className = '';
   export { className as class };
@@ -81,7 +84,9 @@
   };
 
   const selectPlacementMenuItem = (item: ChatPlacementMenuItem) => {
-    void placementMenu.request(item.placement);
+    void placementMenu.request(item.placement).then(() => {
+      onPlacementChange?.(placementMenu.current());
+    });
     closePlacementMenu();
   };
 
