@@ -23,7 +23,7 @@ import {
 import type OpenAI from 'openai';
 
 import { normalizeProviderUsage, recordLlmUsage, toMeshTokenUsage } from '../llm-metering';
-import { logger } from '../logger';
+import { logger } from '../../logger';
 import { providerRegistry } from '../provider-registry';
 import type { ProviderId } from '../provider-runtime';
 import type { ResolvedProviderCredential } from '../provider-credentials';
