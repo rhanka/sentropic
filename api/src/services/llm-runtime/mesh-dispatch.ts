@@ -13,6 +13,7 @@ import {
   type ProviderRuntimeContext,
   type ResponseFormat,
   type SecretAuthMaterial,
+  type StreamEvent,
   type StreamRequest,
   type StreamResult,
   type ToolChoice,
@@ -21,7 +22,7 @@ import {
 } from '@sentropic/llm-mesh';
 import type OpenAI from 'openai';
 
-import { recordLlmUsage } from '../llm-metering';
+import { normalizeProviderUsage, recordLlmUsage, toMeshTokenUsage } from '../llm-metering';
 import { logger } from '../logger';
 import { providerRegistry } from '../provider-registry';
 import type { ProviderId } from '../provider-runtime';
@@ -318,6 +319,10 @@ class ApplicationProviderMeshClient implements ProviderAdapterClient {
       '';
     const provider = providerRegistry.requireProvider(providerId);
     const raw = await provider.generate(buildProviderRuntimeRequest(request, context));
+    // Lot 3 — usage envelope. The app runtime keeps returning the provider `raw` payload to its
+    // own callers; surfacing normalized usage here is what lets the mesh `onResponse` hook meter
+    // non-stream calls, which previously carried no usage at all.
+    const usage = normalizeProviderUsage(raw);
     return {
       id: `${providerId}_${createId()}`,
       providerId,
@@ -326,6 +331,7 @@ class ApplicationProviderMeshClient implements ProviderAdapterClient {
       text: '',
       toolCalls: [],
       finishReason: 'unknown',
+      ...(usage ? { usage } : {}),
       providerMetadata: { raw },
     };
   }
@@ -333,7 +339,24 @@ class ApplicationProviderMeshClient implements ProviderAdapterClient {
   async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
     const providerId = request.providerId as ProviderId;
     const provider = providerRegistry.requireProvider(providerId);
-    return await provider.streamGenerate(buildProviderRuntimeRequest(request, context)) as StreamResult;
+    const stream = await provider.streamGenerate(
+      buildProviderRuntimeRequest(request, context),
+    ) as StreamResult;
+
+    // Lot 3 — usage envelope. Provider loops report their terminal usage in their own shape
+    // (raw for the OpenAI-responses path, already-normalized elsewhere); coerce it once here so
+    // the mesh `onResponse` hook always observes the same `TokenUsage`. Events are otherwise
+    // forwarded untouched.
+    return (async function* (): AsyncGenerator<StreamEvent> {
+      for await (const event of stream) {
+        if (event.type !== 'done') {
+          yield event;
+          continue;
+        }
+        const usage = toMeshTokenUsage(event.data?.usage);
+        yield { ...event, data: { ...event.data, ...(usage ? { usage } : {}) } };
+      }
+    })();
   }
 }
 
