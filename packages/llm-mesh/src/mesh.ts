@@ -1,6 +1,12 @@
 import { getAuthDescriptor, type AuthDescriptor, type AuthInput, type AuthResolver } from './auth.js';
 import type { ModelProfile } from './catalog.js';
-import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
+import type {
+  GenerateRequest,
+  GenerateResponse,
+  LlmMeshRequestMetadata,
+  StreamRequest,
+  StreamResult,
+} from './generation.js';
 import type { FinishReason, StreamEvent, TokenUsage } from './streaming.js';
 import type { ProviderAdapter, ProviderRegistry } from './registry.js';
 import { isProviderId, type ModelReference, type ProviderId } from './providers.js';
@@ -16,6 +22,12 @@ export interface LlmMeshRequestEvent {
   providerId: ProviderId;
   modelId: string;
   auth?: AuthDescriptor;
+  /**
+   * Request-scoped, caller-owned metadata. It is returned unchanged on all
+   * lifecycle hooks so hosts can safely correlate streamed completion events.
+   * Auth material is never part of this field.
+   */
+  metadata?: LlmMeshRequestMetadata;
 }
 
 export interface LlmMeshResponseEvent extends LlmMeshRequestEvent {
@@ -133,6 +145,7 @@ export const createLlmMesh = ({ registry, authResolver, hooks }: CreateLlmMeshOp
       providerId: selection.providerId,
       modelId: selection.modelId,
       ...(auth ? { auth: getAuthDescriptor(auth) } : {}),
+      ...(request.metadata ? { metadata: request.metadata } : {}),
     };
     await emit(eventBase, 'onRequest');
     return { adapter, auth, eventBase, request: normalizeRequest(request, selection, auth) };
