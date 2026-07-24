@@ -291,6 +291,70 @@ describe('ChatDock — placement menu affordance (default-off)', () => {
   });
 });
 
+describe('ChatDock — menu/legacy coexistence', () => {
+  // Regression guard for the coexistence divergence: when a menu is provided,
+  // dock semantics (aria-modal + backdrop) MUST follow the menu's effective
+  // placement, NOT the legacy displayMode. Here displayMode is 'floating' but
+  // the menu commits a drawer placement — the dialog must therefore be
+  // non-modal with no backdrop. Under the pre-fix `_isDocked = effectiveMode
+  // === 'docked'` derivation this FAILS (floating displayMode ⇒ modal+backdrop
+  // over a drawer). Non-vacuous: it fixes only when _isDocked is menu-driven.
+  it('drives docked semantics from a drawer menu even when legacy displayMode is floating', () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'drawer', side: 'right', occupancy: 'primary' },
+    });
+    const { container } = renderDock({
+      displayMode: 'floating', hostMode: 'overlay', initialOpen: true, placementMenu: menu,
+    });
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dialog.className).toContain('right-0');
+    expect(dialog.getAttribute('aria-modal')).toBe('false');
+    expect(container.querySelector('.fixed.inset-0.z-40')).toBeNull();
+  });
+
+  it('uses a legacy-docked menu seed for both drawer placement and docked semantics', () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'drawer', side: 'right', occupancy: 'primary' },
+    });
+    const { container } = renderDock({
+      displayMode: 'docked', hostMode: 'overlay', initialOpen: true, placementMenu: menu,
+    });
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dialog.className).toContain('right-0');
+    expect(dialog.getAttribute('aria-modal')).toBe('false');
+    expect(container.querySelector('.fixed.inset-0.z-40')).toBeNull();
+  });
+
+  it('tracks drawer/floating menu transitions in both placement and docked semantics', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'drawer', side: 'right', occupancy: 'primary' },
+    });
+    const { container } = renderDock({ initialOpen: true, placementMenu: menu });
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    await menu.request({ kind: 'floating', anchor: 'right' });
+    await flushAsync();
+    expect(dialog.className).toContain('sm:right-0');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(container.querySelector('.fixed.inset-0.z-40')).not.toBeNull();
+  });
+
+  it('makes a Move selection from legacy docked state floating without changing its placement', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'drawer', side: 'right', occupancy: 'primary' },
+    });
+    const { container } = renderDock({ initialOpen: true, placementMenu: menu });
+    await menu.request({ kind: 'floating', anchor: 'left' });
+    await flushAsync();
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dialog.className).toContain('sm:left-0');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+  });
+});
+
 describe('ChatDock — container placement driven by placementMenu (provided)', () => {
   it('renders no "Move to…" trigger/popup even when placementMenu is provided — that UI lives in ChatPlacementMenuButton', async () => {
     const menu = createChatPlacementMenu({
