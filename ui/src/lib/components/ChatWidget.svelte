@@ -62,6 +62,8 @@
     createChatPlacementMenu,
     type ChatPlacementMenu,
   } from '@sentropic/chat-ui/state/chatPlacementMenu';
+  import { displayModeToPlacement } from '@sentropic/chat-ui/state/chatPlacementMigration';
+  import type { ChatPlacement } from '@sentropic/chat-ui/state/chatPlacement';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -219,10 +221,21 @@
     const nextPlacementMenuTupleKey = `${placementMenuUserId}::sentropic-web::${placementMenuWorkspace}`;
     if (nextPlacementMenuTupleKey !== placementMenuTupleKey) {
       placementMenuTupleKey = nextPlacementMenuTupleKey;
+      // Seed the controller from the legacy preference on its first mount.
+      // The later legacy restore reactive statement may run after this one, so
+      // using `displayMode` alone would briefly (and permanently) seed a
+      // legacy-docked user as floating.
+      const legacyMode =
+        isBrowser && localStorage.getItem(DISPLAY_MODE_STORAGE_KEY) === 'docked'
+          ? 'docked'
+          : displayMode;
       placementMenu = createChatPlacementMenu({
         userId: placementMenuUserId,
         hostId: 'sentropic-web',
         workspace: placementMenuWorkspace,
+        defaultPlacement: displayModeToPlacement(
+          isSidePanelHost ? 'docked' : legacyMode,
+        ),
       });
     }
   }
@@ -1519,6 +1532,10 @@
     );
   };
 
+  const syncDisplayModeFromPlacement = (placement: ChatPlacement) => {
+    setDisplayMode(placement.kind === 'drawer' ? 'docked' : 'floating');
+  };
+
   const toggleDisplayMode = async () => {
     if (isExtensionOverlayHost) {
       const opened = await requestOpenSidePanel();
@@ -1527,6 +1544,16 @@
     }
     if (isSidePanelHost) {
       requestOpenOverlay();
+      return;
+    }
+    if (placementMenu) {
+      const dockedNow = placementMenu.current().kind === 'drawer';
+      await placementMenu.request(
+        dockedNow
+          ? { kind: 'floating', anchor: 'right' }
+          : { kind: 'drawer', side: 'right', occupancy: 'primary' },
+      );
+      syncDisplayModeFromPlacement(placementMenu.current());
       return;
     }
     setDisplayMode(displayMode === 'docked' ? 'floating' : 'docked');
@@ -2827,6 +2854,7 @@
               {#if placementMenu}
                 <ChatPlacementMenuButton
                   {placementMenu}
+                  onPlacementChange={syncDisplayModeFromPlacement}
                   class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                 />
               {/if}
