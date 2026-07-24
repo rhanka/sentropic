@@ -7,3 +7,4 @@
 
 export { recordLlmUsage } from './cost-ledger-sink';
 export type { MeteringObservation } from './cost-ledger-sink';
+export { mergeStreamUsage, normalizeProviderUsage, toMeshTokenUsage } from './usage-normalizer';
