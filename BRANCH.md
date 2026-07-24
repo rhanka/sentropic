@@ -23,19 +23,20 @@ ARCH-13 Q2b (app mesh-dispatch) and gateway §5. Design: `spec/SPEC_EVOL_LLM_MET
   - `spec/SPEC_EVOL_LLM_METERING_OBSERVABILITY.md`, `spec/DECISION_LLM_EGRESS_STANDARD_PATH.md`
   - `api/src/services/llm-metering/**` (new sink module)
   - `api/src/services/llm-runtime/mesh-dispatch.ts` (wire `hooks:{onResponse}`)
+  - `packages/llm-mesh/src/mesh.ts`, `packages/llm-mesh/tests/facade.test.ts`, `packages/llm-mesh/package.json` (BRmet-EX1 only)
   - `api/db/control-schema.ts` (cost_ledger table)
   - `api/tests/**` (metering tests)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
-  - `ui/**`, `packages/**` (mesh `onResponse` seam is already published — no package change), `apps/**`
+  - `ui/**`, `packages/**`, `apps/**`
 - **Conditional Paths (allowed only with explicit exception)**:
   - `api/drizzle/control/*.sql` (max 1 migration file)
   - `api/src/services/llm-runtime/index.ts` (usage-envelope plumbing — mesh-lane-adjacent; declare BRmet-EXn if changes go beyond additive usage surfacing)
 - **Exception process**: declare `BRmet-EXn` in `## Feedback Loop` (reason, impact, rollback) before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- (none yet)
+- BRmet-EX1 — Additive `packages/llm-mesh/**` metadata propagation for `onResponse` hooks. Reason: the published hook does not return request attribution, so the app singleton cannot safely associate a stream completion with its dispatch without AsyncLocalStorage. Impact: backward-compatible public event field plus a patch release of `@sentropic/llm-mesh`; no persistence or secret material crosses the package boundary. Rollback: remove the optional metadata field and app hook wiring; existing callers remain compatible.
 
 ## AI Flaky tests
 - Standard policy: accept only non-systematic provider/network nondeterminism as flaky; never add timeouts; record signature + user sign-off.
