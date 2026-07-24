@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
+import type { TokenUsage } from '@sentropic/llm-mesh';
 import { providerRegistry } from '../provider-registry';
+import { mergeStreamUsage } from '../llm-metering/usage-normalizer';
 import {
   inferProviderFromModelIdWithLegacy,
   resolveDefaultSelection,
@@ -1503,12 +1505,15 @@ export async function* callLLMStream(
 
       let toolCallIndex = 0;
       let emittedContent = false;
+      // Lot 3 — usage envelope: Gemini repeats a growing `usageMetadata` on every chunk.
+      let streamUsage: TokenUsage | undefined;
       for await (const chunk of stream) {
         if (signal?.aborted) {
           yield { type: 'error', data: { message: 'Stream aborted' } };
           return;
         }
 
+        streamUsage = mergeStreamUsage(streamUsage, chunk);
         const record = chunk as Record<string, unknown>;
         const candidates = Array.isArray(record.candidates)
           ? (record.candidates as Array<Record<string, unknown>>)
@@ -1565,7 +1570,7 @@ export async function* callLLMStream(
           },
         };
       }
-      yield { type: 'done', data: {} };
+      yield { type: 'done', data: streamUsage ? { usage: streamUsage } : {} };
       return;
     } catch (error) {
       if (antigravityRoute) antigravityOutcome = mapAccountTransportErrorOutcome(error);
@@ -1682,6 +1687,9 @@ export async function* callLLMStream(
         });
 
         let emittedContent = false;
+        // Lot 3 — usage envelope: Anthropic splits the counters across `message_start`
+        // (input tokens) and `message_delta` (output tokens).
+        let streamUsage: TokenUsage | undefined;
         for await (const chunk of stream) {
           if (signal?.aborted) {
             claudeCodeOutcome = {
@@ -1691,6 +1699,7 @@ export async function* callLLMStream(
             yield { type: 'error', data: { message: 'Stream aborted' } };
             return;
           }
+          streamUsage = mergeStreamUsage(streamUsage, chunk);
           const event = chunk as Record<string, unknown>;
           const eventType = typeof event.type === 'string' ? event.type : '';
 
@@ -1728,7 +1737,7 @@ export async function* callLLMStream(
             },
           };
         }
-        yield { type: 'done', data: {} };
+        yield { type: 'done', data: streamUsage ? { usage: streamUsage } : {} };
       } catch (error) {
         claudeCodeOutcome = mapAccountTransportErrorOutcome(error);
         throw error;
@@ -1845,6 +1854,8 @@ export async function* callLLMStream(
 
       let emittedContent = false;
       const mistralToolCallsInProgress = new Map<string, { id: string; name: string; args: string }>();
+      // Lot 3 — usage envelope: Mistral attaches `usage` to its terminal chunk only.
+      let streamUsage: TokenUsage | undefined;
 
       for await (const chunk of stream) {
         if (signal?.aborted) {
@@ -1853,6 +1864,7 @@ export async function* callLLMStream(
         }
         const record = chunk as Record<string, unknown>;
         const data = (record.data ?? record) as Record<string, unknown>;
+        streamUsage = mergeStreamUsage(streamUsage, data);
         const choices = Array.isArray(data.choices)
           ? (data.choices as Array<Record<string, unknown>>)
           : [];
@@ -1933,7 +1945,7 @@ export async function* callLLMStream(
           },
         };
       }
-      yield { type: 'done', data: {} };
+      yield { type: 'done', data: streamUsage ? { usage: streamUsage } : {} };
       return;
     } catch (error) {
       const normalized = normalizeProviderError(selection.providerId, error);
@@ -2045,11 +2057,14 @@ export async function* callLLMStream(
 
       let emittedContent = false;
       let currentCohereToolCallId = '';
+      // Lot 3 — usage envelope: Cohere reports `usage.tokens` on its `message-end` event.
+      let streamUsage: TokenUsage | undefined;
       for await (const chunk of stream) {
         if (signal?.aborted) {
           yield { type: 'error', data: { message: 'Stream aborted' } };
           return;
         }
+        streamUsage = mergeStreamUsage(streamUsage, chunk);
         const event = chunk as Record<string, unknown>;
         const eventType = typeof event.type === 'string' ? event.type : '';
         if (eventType === 'tool-plan-delta') {
@@ -2111,7 +2126,7 @@ export async function* callLLMStream(
           },
         };
       }
-      yield { type: 'done', data: {} };
+      yield { type: 'done', data: streamUsage ? { usage: streamUsage } : {} };
       return;
     } catch (error) {
       const normalized = normalizeProviderError(selection.providerId, error);
