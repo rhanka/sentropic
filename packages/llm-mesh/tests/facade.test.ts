@@ -67,6 +67,54 @@ describe('createLlmMesh', () => {
     expect(onRequest.mock.calls[0][0].auth.token).toBeUndefined();
   });
 
+  it('propagates request metadata to generate and stream response hooks', async () => {
+    const model = {
+      providerId: 'openai' as const,
+      modelId: 'gpt-5.5',
+      label: 'GPT-5.5',
+      reasoningTier: 'advanced' as const,
+      defaultTaskHints: ['chat'] as const,
+      capabilities: {
+        ...getProviderProfile('openai').capabilities,
+        streaming: { ...getProviderProfile('openai').capabilities.streaming, support: 'supported' as const },
+      },
+    };
+    const adapter = buildAdapter(model);
+    const onResponse = vi.fn();
+    const mesh = createLlmMesh({
+      registry: createProviderRegistry([adapter]),
+      hooks: { onResponse },
+    });
+    const metadata = {
+      correlationId: 'call_1',
+      userId: 'user_1',
+      workspaceId: 'workspace_1',
+      attributes: { credentialSource: 'user_byok' },
+    };
+    const request = {
+      providerId: 'openai' as const,
+      modelId: 'gpt-5.5',
+      messages: userMessage,
+      auth: { type: 'environment-token' as const, envVar: 'OPENAI_API_KEY' },
+      metadata,
+    };
+
+    await mesh.generate(request);
+    for await (const _event of await mesh.stream(request)) {
+      // Consume the returned iterable so its done hook is emitted.
+    }
+
+    expect(onResponse).toHaveBeenCalledTimes(2);
+    expect(onResponse).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      operation: 'generate',
+      metadata,
+    }));
+    expect(onResponse).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      operation: 'stream',
+      metadata,
+    }));
+  });
+
   it('supports explicit provider/model selection pairs', async () => {
     const model = {
       providerId: 'gemini' as const,
