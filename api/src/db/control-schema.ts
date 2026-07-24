@@ -350,3 +350,70 @@ export const connectorTenantEnrollments = controlSchema.table(
 
 export type ConnectorTenantEnrollmentRow = typeof connectorTenantEnrollments.$inferSelect;
 export type ConnectorTenantEnrollmentInsert = typeof connectorTenantEnrollments.$inferInsert;
+
+/**
+ * control.cost_ledger — LLM egress usage/cost record (BR-47 / SPEC_EVOL_LLM_METERING_OBSERVABILITY).
+ *
+ * Observe-only v0: one row per LLM call, fed by the `@sentropic/llm-mesh` `onResponse` hook via the
+ * app-side metering sink (`api/src/services/llm-metering/`). Persistence is app/control-plane owned
+ * (ACCOUNT_TRANSPORTS D2: llm-mesh stays DB-agnostic).
+ *
+ * Guardrails:
+ * - Control namespace, NO cross-namespace FK — `userId`/`workspaceId`/`tenantId`/`agentId` etc. are
+ *   soft id refs (plain `text`, no `.references()`).
+ * - Idempotency: one row per call. `idempotency_key` UNIQUE → the sink inserts with
+ *   `ON CONFLICT DO NOTHING`, so a double-fire (retry/replay) is a no-op.
+ * - Money: exact micro-USD stored as `bigint` integer (never float); nullable until pricing lands.
+ * - Usage columns are all nullable — absent on most provider paths until the usage-envelope lot.
+ * - `tenant_id`/`agent_id`/`session_id`/`run_id` are reserved columns; not populated in the MVP
+ *   (attribution does not reach the dispatch boundary yet).
+ */
+export const costLedger = controlSchema.table(
+  'cost_ledger',
+  {
+    id: text('id').primaryKey(),                          // createId()
+
+    // Idempotency — one row per LLM call. UNIQUE → ON CONFLICT DO NOTHING.
+    idempotencyKey: text('idempotency_key').notNull(),
+
+    // Attribution (soft refs; nullable = not-in-scope at the dispatch boundary today).
+    userId: text('user_id'),
+    workspaceId: text('workspace_id'),
+    tenantId: text('tenant_id'),                          // reserved; not populated in MVP
+    agentId: text('agent_id'),                            // reserved; not populated in MVP
+    sessionId: text('session_id'),                        // reserved
+    runId: text('run_id'),                                // reserved
+
+    // Call descriptor.
+    operation: text('operation').notNull(),               // 'generate' | 'stream'
+    providerId: text('provider_id').notNull(),
+    modelId: text('model_id').notNull(),
+    credentialSource: text('credential_source'),          // ResolvedProviderCredential.source
+    finishReason: text('finish_reason'),
+    responseId: text('response_id'),                      // provider/app response id (unreliable as key)
+
+    // Usage (all nullable — absent on most paths until the usage-envelope lot).
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    reasoningTokens: integer('reasoning_tokens'),
+    totalTokens: integer('total_tokens'),
+    usageRaw: jsonb('usage_raw'),                         // TokenUsage.providerRawUsage passthrough
+
+    // Cost (exact micro-USD; nullable until model_pricing exists — later lot).
+    costMicroUsd: bigint('cost_micro_usd', { mode: 'number' }),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    idempotencyUnique: uniqueIndex('cost_ledger_idempotency_key_unique').on(table.idempotencyKey),
+    userWorkspaceIdx: index('cost_ledger_user_workspace_idx').on(table.userId, table.workspaceId),
+    createdAtIdx: index('cost_ledger_created_at_idx').on(table.createdAt),
+    operationCheck: check(
+      'cost_ledger_operation_check',
+      sql`${table.operation} IN ('generate', 'stream')`,
+    ),
+  }),
+);
+
+export type CostLedgerRow = typeof costLedger.$inferSelect;
+export type CostLedgerInsert = typeof costLedger.$inferInsert;
