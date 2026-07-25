@@ -74,6 +74,12 @@ export interface ResolvedTarget {
   readonly providerId: string;
   readonly transportProviderId: string;
   readonly model: string;
+  /**
+   * Optional reasoning effort the resolved alias implies (e.g. a launch alias
+   * `*-xhigh`). Carried on the target so the routing knowledge stays in the
+   * gateway target-map (single source of truth); the dispatch impl applies it.
+   */
+  readonly effort?: string;
 }
 
 /**
@@ -288,6 +294,7 @@ export const runJsonFlow = async (
       material: prepared.material.material,
       body: request.body,
       stream: false,
+      ...(prepared.target.effort ? { effort: prepared.target.effort } : {}),
       ...(request.signal ? { signal: request.signal } : {}),
     };
 
@@ -373,6 +380,7 @@ export const runStreamFlow = async (
       material: prepared.material.material,
       body: request.body,
       stream: true,
+      ...(prepared.target.effort ? { effort: prepared.target.effort } : {}),
       ...(request.signal ? { signal: request.signal } : {}),
     };
 
