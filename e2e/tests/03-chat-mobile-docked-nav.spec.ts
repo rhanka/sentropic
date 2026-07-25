@@ -41,4 +41,43 @@ test.describe('Chat (mobile docked) — navigation closes chat', () => {
   });
 });
 
+test.describe('Chat placement menu — desktop geometry', () => {
+  test('places Left, Center, and Right against the desktop viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
 
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 10_000 });
+    await chatButton.click();
+
+    const chatDialog = page.locator('#chat-widget-dialog');
+    await expect(chatDialog).toBeVisible({ timeout: 10_000 });
+    const moveTrigger = chatDialog.getByRole('button', { name: 'Move chat to…' });
+    await expect(moveTrigger).toBeVisible();
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error('Desktop viewport is unavailable');
+
+    const selectPlacement = async (label: 'Left' | 'Center' | 'Right', className: RegExp) => {
+      await moveTrigger.click();
+      const menu = page.getByRole('menu', { name: 'Move chat to…' });
+      await menu.getByRole('menuitemradio', { name: label, exact: true }).click();
+      await expect(chatDialog).toHaveClass(className);
+      const box = await chatDialog.boundingBox();
+      if (!box) throw new Error(`Chat dialog has no bounding box after selecting ${label}`);
+      return box;
+    };
+
+    const left = await selectPlacement('Left', /sm:left-4/);
+    expect(left.x).toBeGreaterThanOrEqual(0);
+    expect(left.x).toBeLessThanOrEqual(24);
+    expect(left.x + left.width).toBeLessThanOrEqual(viewport.width);
+
+    const center = await selectPlacement('Center', /sm:left-1\/2/);
+    expect(Math.abs(center.x + center.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(1);
+
+    const right = await selectPlacement('Right', /sm:right-4/);
+    expect(viewport.width - (right.x + right.width)).toBeGreaterThanOrEqual(0);
+    expect(viewport.width - (right.x + right.width)).toBeLessThanOrEqual(24);
+  });
+});
