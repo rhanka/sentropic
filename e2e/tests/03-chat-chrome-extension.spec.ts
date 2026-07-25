@@ -215,6 +215,20 @@ test.describe('Chat extension evolutions', () => {
     await expect(menu.locator('button', { hasText: 'Dossier (lecture)' })).toHaveCount(0);
   });
 
+  test('does not expose the placement trigger in an extension overlay', async ({ page }) => {
+    await mockExtensionRuntime(page);
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator(chatButtonSelector);
+    await expect(chatButton).toBeVisible({ timeout: 10_000 });
+    await chatButton.click();
+
+    const chatDialog = page.locator('#chat-widget-dialog');
+    await expect(chatDialog).toBeVisible({ timeout: 10_000 });
+    await expect(chatDialog.getByRole('button', { name: 'Move chat to…' })).toHaveCount(0);
+  });
+
   test('localToolDefinitions follows tab_read/tab_action toggles in extension runtime', async ({ page }) => {
     await mockExtensionRuntime(page);
     await page.goto('/folders');
