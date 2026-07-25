@@ -81,3 +81,56 @@ test.describe('Chat placement menu — desktop geometry', () => {
     expect(viewport.width - (right.x + right.width)).toBeLessThanOrEqual(24);
   });
 });
+
+test.describe('Chat placement menu — host ownership', () => {
+  test('renders only in an ordinary desktop overlay', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 10_000 });
+    await chatButton.click();
+
+    const chatDialog = page.locator('#chat-widget-dialog');
+    await expect(chatDialog).toBeVisible({ timeout: 10_000 });
+    const moveTrigger = chatDialog.getByRole('button', { name: 'Move chat to…' });
+    await expect(moveTrigger).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(moveTrigger).toHaveCount(0);
+  });
+});
+
+test.describe('Chat placement menu — legacy display-mode integration', () => {
+  test('seeds a legacy docked preference and mirrors a floating menu choice back to legacy storage', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('chatWidgetDisplayMode', 'docked');
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('chat-ui/placement/v1/')) localStorage.removeItem(key);
+      }
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 10_000 });
+    await chatButton.click();
+
+    const chatDialog = page.locator('#chat-widget-dialog');
+    await expect(chatDialog).toBeVisible({ timeout: 10_000 });
+    await expect(chatDialog).toHaveClass(/right-0/);
+    await expect(chatDialog).not.toHaveClass(/sm:inset-auto/);
+
+    await chatDialog.getByRole('button', { name: 'Move chat to…' }).click();
+    const menu = page.getByRole('menu', { name: 'Move chat to…' });
+    await menu.getByRole('menuitemradio', { name: 'Left', exact: true }).click();
+
+    await expect(chatDialog).toHaveClass(/sm:left-4/);
+    await expect(chatDialog).toHaveClass(/sm:inset-auto/);
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('chatWidgetDisplayMode')))
+      .toBe('floating');
+  });
+});
