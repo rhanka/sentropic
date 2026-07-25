@@ -155,6 +155,10 @@ jobs:
               - 'docker-compose.test.yml'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
+            # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
+            # in the Makefile. Those shas are the immutable image tags that publish-{api,ui}-image
+            # push and that deploy-preprod pins. A path that feeds the sha but is missing here
+            # bumps the pinned tag without ever building it -> ImagePullBackOff on preprod.
             api:
               - 'api/**'
               - 'apps/auth-idp/**'
@@ -166,8 +170,12 @@ jobs:
               - 'packages/chat-core/**'
               - 'packages/events/**'
               - 'packages/contracts/**'
+              - 'packages/comments/**'
             ui:
               - 'ui/**'
+              - 'packages/chat-ui/**'
+              - 'packages/cowork-desktop/**'
+              - 'packages/cowork-bridge/**'
             llm_mesh:
               - 'Makefile'
               - 'package.json'
