@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
-import { rateLimiter } from 'hono-rate-limiter';
 import { apiRouter } from './routes/api';
 import { authRouter } from './routes/auth';
 import { wellKnownRouter } from './routes/well-known';
 import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
+import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
 import { logger } from './logger';
 
 export const app = new Hono();
@@ -113,82 +113,9 @@ app.use('*', async (c, next) => {
   }
 });
 
-// Rate limiting for auth routes
-const authSessionRateLimiter = rateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  limit: 30, // 30 requests per minute (very permissive for session checks)
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
-});
-
-const authLoginRateLimiter = rateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  limit: 10, // 10 login attempts per minute (reasonable for login attempts)
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
-});
-
-const authRateLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10, // 10 requests per window
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
-});
-
-const authRegisterRateLimiter = rateLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  limit: 3, // 3 registrations per hour
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
-});
-
-const magicLinkRateLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 3, // 3 magic links per 15 minutes
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => {
-    // Rate limit by IP (body parsing is async and cannot be used in keyGenerator)
-    return c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-  },
-});
-
-const oauthTokenRateLimiter = rateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  limit: 20,
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => {
-    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-    return `${c.req.query('client_id') || 'unknown-client'}:${ip}`;
-  },
-});
-
-const oauthIntrospectRateLimiter = rateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  limit: 60,
-  standardHeaders: 'draft-7',
-  keyGenerator: (c) => {
-    const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-    return `${c.req.query('client_id') || 'unknown-client'}:${ip}`;
-  },
-});
-
-// Apply rate limiters to auth routes (order matters!)
-// Skip rate limiting in test environment
-if (!env.DISABLE_RATE_LIMIT) {
-  // 1. Most specific routes first
-  app.use('/api/v1/auth/session*', authSessionRateLimiter);
-  app.use('/api/v1/auth/login/*', authLoginRateLimiter);
-  app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
-  app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
-  app.use('/api/v1/auth/oauth/token', oauthTokenRateLimiter);
-  app.use('/api/v1/auth/oauth/introspect', oauthIntrospectRateLimiter);
-  // Device-code enrollment is polled at `interval` (default 5s) while pending,
-  // so it needs a permissive limiter (the general one is 10/15min). Per-code
-  // throttling/single-use/expiry is enforced in the device-code store.
-  app.use('/api/v1/auth/device/*', authSessionRateLimiter);
-  // 2. General auth routes last (excludes already matched routes)
-  app.use('/api/v1/auth/*', authRateLimiter);
-}
+// Auth rate limiters are shared with the standalone IdP (apps/auth-idp) — see
+// api/src/middleware/auth-rate-limiters.ts. Order matters; the helper owns it.
+applyAuthRateLimiters(app);
 
 app.route('/.well-known', wellKnownRouter);
 app.route('/api/v1', apiRouter);

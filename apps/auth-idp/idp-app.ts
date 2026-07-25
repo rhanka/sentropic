@@ -30,6 +30,7 @@ import { secureHeaders } from 'hono/secure-headers';
 
 import { env } from '../../api/src/config/env';
 import { authRouter } from '../../api/src/routes/auth';
+import { applyAuthRateLimiters } from '../../api/src/middleware/auth-rate-limiters';
 import { wellKnownRouter } from '../../api/src/routes/well-known';
 import { isOriginAllowed, parseAllowedOrigins } from '../../api/src/utils/cors';
 
@@ -60,10 +61,14 @@ const readSpaFallback = (): string | null => {
  *   - *    /api/v1/auth/oauth/*        (authorize, token, userinfo, consent, revoke, introspect)
  *   - *    /api/v1/auth/{register,login,session,credentials,magic-link,email,device}/*
  *
- * Rate limiting is intentionally NOT re-declared here: in Phase A0 the IdP is
- * run from the existing api image/entrypoint and the per-route limiters in
- * `api/src/app.ts` apply. Public-IdP abuse posture (trusted-proxy/XFF, tighter
- * limits) is a deploy-time concern tracked in the spec (§5.3) for `k8s-ops`.
+ * Rate limiting: this app builds its OWN `new Hono()` and mounts `authRouter`
+ * directly, so the limiters declared on the product app in `api/src/app.ts` were
+ * NEVER applied here — a previous comment claimed otherwise and was wrong. Since
+ * `auth.sent-tech.ca` is a PUBLIC host serving
+ * `/api/v1/auth/{login,register,magic-link}/*` against the same `users` table,
+ * that left it with unlimited brute-force exposure. The limiters now live in
+ * `api/src/middleware/auth-rate-limiters.ts` and are applied by BOTH apps, so the
+ * two surfaces cannot drift apart again.
  */
 export const createIdpApp = (): Hono => {
   const app = new Hono();
@@ -148,6 +153,10 @@ export const createIdpApp = (): Hono => {
 
   // Reuse the EXISTING routers — no new auth code, no forked handlers.
   // Mounted BEFORE the static front so the API/discovery surface always wins.
+  // Same limiters as the product API (shared module, not a copy) — this public
+  // host had none at all before.
+  applyAuthRateLimiters(app);
+
   app.route('/.well-known', wellKnownRouter);
   app.route('/api/v1/auth', authRouter);
 
