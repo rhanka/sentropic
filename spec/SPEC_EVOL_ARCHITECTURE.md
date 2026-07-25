@@ -73,8 +73,18 @@ Corrected after round-2 falsification against `origin/main`.
   supplied (`packages/chat-server/src/index.ts:360`); the standalone IdP
   `apps/auth-idp` (BR-39m A0 + A0-bis) is merged and DEPLOYED — deploy
   artifacts re-landed via PR #254 (2026-06-06) and `auth.sent-tech.ca` serves
-  OIDC discovery live — but it emits NO tenant/role/membership claims yet
-  (live `claims_supported` confirms; claim set = BR-39n).
+  OIDC discovery live. **CORRECTED 2026-07-25:** this paragraph previously read
+  "emits NO tenant/role/membership claims yet (claim set = BR-39n)". That is
+  STALE — BR-39e landed the `tid` binding. Live `claims_supported` at
+  `auth.sent-tech.ca` (verified 2026-07-25) is `[sub, aud, iss, exp, iat, nonce,
+  auth_time, acr, email, email_verified, name, tid]`. `tid` is bound at token
+  time to a still-`approved` `tenant_memberships` row and dropped if the
+  membership was suspended between authorize and token
+  (`packages/auth-hono/src/oauth/token-handler.ts:376-383`); `?tenant=` is
+  honoured at authorize only for an approved membership, 0-or->1 resolving to
+  null (`authorize-handler.ts:152-172`). Still NOT emitted: a `role` claim, a
+  membership-LIST claim, any product-scoped authorization claim — those remain
+  BR-39n. Consequence: BR-39n no longer gates ARCH-02/BR-53 (see PLAN.md).
 - Route factory reality: only chat is a host-parameterized factory
   (`createChatServer(deps.getUser)`). The workspaces/documents/comments routers
   are module singletons hard-bound to `requireAuth` and direct `db` imports.
