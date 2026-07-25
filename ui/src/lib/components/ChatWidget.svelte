@@ -46,6 +46,7 @@
     resolveExtensionChatGateState,
   } from '$lib/utils/extension-auth-ui';
   import {
+    canChatPlacementMenuOwnPlacement,
     coerceChatWidgetTab,
     resolveChatWidgetJobBadge,
     resolveChatWidgetPanelVisibility,
@@ -2854,7 +2855,11 @@
               </MenuPopover>
             {/if}
             {#if !isSidePanelHost}
-              {#if placementMenu}
+              {#if placementMenu && canChatPlacementMenuOwnPlacement({
+                hostMode,
+                isExtensionOverlayHost,
+                isMobileViewport,
+              })}
                 <ChatPlacementMenuButton
                   {placementMenu}
                   onPlacementChange={syncDisplayModeFromPlacement}

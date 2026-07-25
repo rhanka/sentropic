@@ -4,6 +4,7 @@ import {
   createChatPlacementMenu,
 } from '../src/state/chatPlacementMenu';
 import { placementId, type ChatPlacement } from '../src/state/chatPlacement';
+import { canChatPlacementMenuOwnPlacement } from '../src/state/chatWidgetShell';
 
 /** In-memory Storage stand-in — deterministic, no jsdom/global leakage. */
 const createMemoryStorage = (): Storage => {
@@ -22,6 +23,31 @@ const createMemoryStorage = (): Storage => {
 
 /** Flush the fire-and-forget restore commit issued at construction time. */
 const flushAsync = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('chat placement menu ownership', () => {
+  it('allows placement changes only in an ordinary desktop overlay', () => {
+    expect(canChatPlacementMenuOwnPlacement({
+      hostMode: 'overlay',
+      isExtensionOverlayHost: false,
+      isMobileViewport: false,
+    })).toBe(true);
+    expect(canChatPlacementMenuOwnPlacement({
+      hostMode: 'sidepanel',
+      isExtensionOverlayHost: false,
+      isMobileViewport: false,
+    })).toBe(false);
+    expect(canChatPlacementMenuOwnPlacement({
+      hostMode: 'overlay',
+      isExtensionOverlayHost: true,
+      isMobileViewport: false,
+    })).toBe(false);
+    expect(canChatPlacementMenuOwnPlacement({
+      hostMode: 'overlay',
+      isExtensionOverlayHost: false,
+      isMobileViewport: true,
+    })).toBe(false);
+  });
+});
 
 describe('chatPlacementMenu — persistence key (D6)', () => {
   it('builds the exact key format chat-ui/placement/v1/${userId}/${hostId}/${workspace}', () => {
