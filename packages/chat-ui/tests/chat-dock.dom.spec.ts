@@ -24,33 +24,39 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import ChatDock from '../src/components/ChatDock.svelte';
 import { createChatPlacementMenu } from '../src/state/chatPlacementMenu';
 import { placementContainerClasses } from '../src/state/chatPlacementClasses';
+import { chatWidgetLayout } from '../src/stores/chatWidgetLayout';
 
 const chatDockSourcePath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../src/components/ChatDock.svelte',
 );
 
-// jsdom does not implement window.matchMedia — provide a minimal stub so
-// ChatDock's MQL guard does not throw during SSR-less component mounting.
+let mobileViewport = false;
+
+// jsdom does not implement window.matchMedia — provide a controllable stub so
+// forced-mobile behavior can be exercised during component mounting.
 beforeAll(() => {
-  if (typeof window !== 'undefined' && !window.matchMedia) {
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      value: vi.fn((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
-  }
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => ({
+      matches: query === '(max-width: 639px)' && mobileViewport,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  mobileViewport = false;
+  cleanup();
+  chatWidgetLayout.set({ mode: 'floating', isOpen: false, dockWidthCss: '0px' });
+});
 
 // ---------------------------------------------------------------------------
 // Helper: render ChatDock with common test props
@@ -211,13 +217,8 @@ describe('ChatDock — sidepanel mode', () => {
   it('should open automatically in sidepanel mode', () => {
     const { container } = renderDock({ hostMode: 'sidepanel' });
     const dialog = container.querySelector('[role="dialog"]');
-    // In sidepanel mode ChatDock sets initialOpen=true behavior; isBrowser=false
-    // means the onMount won't fully run, but the sidepanel check in onMount
-    // sets isVisible=true before browser check — so the dialog renders.
-    // Accept both possible behaviors (test is illustrative for the prop surface)
-    // The key contract: dialog element exists OR null depending on onMount execution
-    // With isBrowser:false the onMount won't trigger. This is a constraint of the test env.
-    expect(dialog !== null || dialog === null).toBe(true); // structural smoke
+    expect(dialog).not.toBeNull();
+    expect(dialog?.classList.contains('hidden')).toBe(false);
   });
 });
 
@@ -336,7 +337,8 @@ describe('ChatDock — menu/legacy coexistence', () => {
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
     await menu.request({ kind: 'floating', anchor: 'right' });
     await flushAsync();
-    expect(dialog.className).toContain('sm:right-0');
+    expect(dialog.className).toContain('sm:fixed');
+    expect(dialog.className).toContain('sm:right-4');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(container.querySelector('.fixed.inset-0.z-40')).not.toBeNull();
   });
@@ -350,8 +352,70 @@ describe('ChatDock — menu/legacy coexistence', () => {
     await menu.request({ kind: 'floating', anchor: 'left' });
     await flushAsync();
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
-    expect(dialog.className).toContain('sm:left-0');
+    expect(dialog.className).toContain('sm:fixed');
+    expect(dialog.className).toContain('sm:left-4');
+    expect(dialog.className).not.toContain('sm:absolute');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('keeps sidepanel forced-docked semantics when a supplied menu prefers floating', () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'floating', anchor: 'left' },
+    });
+    const { container } = renderDock({ hostMode: 'sidepanel', placementMenu: menu });
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+
+    expect(dialog.className).toContain('h-full');
+    expect(dialog.getAttribute('aria-modal')).toBe('false');
+    expect(container.querySelector('.fixed.inset-0.z-40')).toBeNull();
+  });
+
+  it('keeps extension-overlay forced-floating semantics when a supplied menu prefers a drawer', () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'drawer', side: 'right', occupancy: 'primary' },
+    });
+    const { container } = renderDock({
+      displayMode: 'docked', initialOpen: true, isExtensionOverlayHost: true, placementMenu: menu,
+    });
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+
+    expect(dialog.className).toContain('sm:right-4');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(container.querySelector('.fixed.inset-0.z-40')).not.toBeNull();
+  });
+
+  it('keeps mobile forced-docked semantics when a supplied menu prefers floating', async () => {
+    mobileViewport = true;
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'floating', anchor: 'left' },
+    });
+    const { container } = renderDock({ initialOpen: true, placementMenu: menu });
+    await flushAsync();
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+
+    expect(dialog.className).toContain('top-0');
+    expect(dialog.getAttribute('aria-modal')).toBe('false');
+    expect(container.querySelector('.fixed.inset-0.z-40')).toBeNull();
+  });
+
+  it('publishes the menu-owned layout mode after a placement change', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'drawer', side: 'right', occupancy: 'primary' },
+    });
+    const published: Array<{ mode: string; isOpen: boolean; dockWidthCss: string }> = [];
+    const unsubscribe = chatWidgetLayout.subscribe((layout) => published.push(layout));
+    renderDock({ initialOpen: true, placementMenu: menu });
+    await flushAsync();
+    expect(published.at(-1)).toMatchObject({ mode: 'docked', isOpen: true });
+
+    await menu.request({ kind: 'floating', anchor: 'center' });
+    await flushAsync();
+    expect(published.at(-1)).toMatchObject({ mode: 'floating', isOpen: true });
+    unsubscribe();
   });
 });
 

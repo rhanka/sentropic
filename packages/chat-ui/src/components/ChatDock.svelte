@@ -222,14 +222,20 @@
     if (!placementMenu) menuPlacement = null;
   }
 
-  $: effectivePlacement = placementMenu
+  // A menu owns placement only in an ordinary desktop overlay. Hosts and the
+  // mobile viewport remain authoritative, exactly as in the legacy path.
+  $: menuOwnsPlacement = Boolean(placementMenu)
+    && !isSidePanelHost
+    && !isExtensionOverlayHost
+    && !isMobileViewport;
+
+  $: effectivePlacement = menuOwnsPlacement
     ? menuPlacement ?? displayModeToPlacement(effectiveMode)
     : displayModeToPlacement(effectiveMode);
 
-  // A supplied menu owns both placement and dock semantics. The legacy path
-  // deliberately retains its original effectiveMode comparison unchanged.
+  // Keep docking semantics in lockstep with the single ownership decision.
   let _isDocked = false;
-  $: _isDocked = placementMenu
+  $: _isDocked = menuOwnsPlacement
     ? effectivePlacement.kind === 'drawer'
     : effectiveMode === 'docked';
 
@@ -273,11 +279,12 @@
   // ---------------------------------------------------------------------------
 
   const publishLayout = () => {
-    // The subscription callback invokes this before Svelte's reactive
-    // assignments have necessarily recalculated `_isDocked`; read the menu
-    // value directly so layout publication always describes the committed move.
-    const placementNow = menuPlacement ?? placementMenu?.current();
-    const modeNow = placementNow
+    // The subscription callback can run before reactive assignments settle;
+    // read the menu value directly, but only when it owns placement.
+    const placementNow = menuOwnsPlacement
+      ? menuPlacement ?? placementMenu?.current()
+      : undefined;
+    const modeNow = menuOwnsPlacement && placementNow
       ? (placementNow.kind === 'drawer' ? 'docked' : 'floating')
       : resolveEffectiveChatWidgetMode({
           hostMode,
