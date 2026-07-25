@@ -1370,28 +1370,28 @@ Constrain images and videos to the parent width and preserve their intrinsic asp
 }
 @media (min-width: 640px) {
 
-  [data-st-chat-theme] .sm\:absolute {
-    position: absolute;
+  [data-st-chat-theme] .sm\:fixed {
+    position: fixed;
   }
 
   [data-st-chat-theme] .sm\:inset-auto {
     inset: auto;
   }
 
-  [data-st-chat-theme] .sm\:bottom-0 {
-    bottom: 0px;
+  [data-st-chat-theme] .sm\:bottom-4 {
+    bottom: 1rem;
   }
 
-  [data-st-chat-theme] .sm\:left-0 {
-    left: 0px;
+  [data-st-chat-theme] .sm\:left-4 {
+    left: 1rem;
   }
 
   [data-st-chat-theme] .sm\:left-1\/2 {
     left: 50%;
   }
 
-  [data-st-chat-theme] .sm\:right-0 {
-    right: 0px;
+  [data-st-chat-theme] .sm\:right-4 {
+    right: 1rem;
   }
 
   [data-st-chat-theme] .sm\:hidden {
