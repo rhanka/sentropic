@@ -119,6 +119,22 @@ which BOTH returned DO-NOT-SHIP on the first cut of this branch; this is the rew
   the damage (`apple-provider.ts` TS2305 on `jose`) is NOT from this branch: the container had `jose`
   5.10.0 while `api/package.json` pins `^6.1.0` — a stale-workspace artifact.
 - `make down ENV=test-xff` — stack removed.
+- **CI (PR #456, run 30172076188)**: `typecheck-lint-api` PASS, `typecheck-lint-ui` PASS,
+  `build-api-image` PASS, `build-ui` PASS, `security-sast-sca` PASS, `security-container` PASS,
+  `smoke-idp-screens` PASS, and **`test-api-unit-integration (unit)` PASS** — which VERIFIES the extended
+  18-case `client-ip` suite that could not be run locally (`BR-XFF-N5`). The first attempt of that job
+  failed in 27s inside `Setup Docker` (`registry-1.docker.io` context deadline exceeded) without ever
+  starting vitest; it passed on rerun.
+- **Remaining CI failures are NOT introduced by this branch — verified, not assumed.** Main's own run
+  `30105439353` (commit `853e4688`) fails on the IDENTICAL job set: the three
+  `test-api-unit-integration (ai, …)` suites plus `test-e2e (group-b, 01 04)`, `(group-c, 03)` and
+  `(group-d, 08)`. The three `ai` suites are on the documented AI-flaky allowlist
+  (`rules/testing.md` — "API: `make test-api-ai`, `api/tests/ai/**`"), and `03-chat` is on the E2E
+  allowlist. **`01`/`04`/`08` are NOT on any allowlist**, so main carries a real unowned regression —
+  observed failure: `e2e/tests/04-documents-ui-actions.spec.ts:73` ("suppression via UI supprime vraiment
+  le document"), failing on the initial run and both retries. That is out of scope here (this branch
+  touches only auth rate limiting and client-IP resolution; document routes are not behind either) but it
+  should be owned by a dedicated branch rather than left silently red.
 
 ## Notes
 - Two atomic commits: the client-IP trust fix, then the IdP limiter fix — two distinct defects.
