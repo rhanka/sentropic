@@ -1795,6 +1795,11 @@ test-comments: ## Run @sentropic/comments tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
+.PHONY: test-annotate
+test-annotate: ## Run @sentropic/annotate tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/annotate $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/annotate $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+
 .PHONY: test-auth-hono
 test-auth-hono: build-oauth-verify ## Run @sentropic/auth-hono tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
