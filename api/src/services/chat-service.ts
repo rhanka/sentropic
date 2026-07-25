@@ -672,6 +672,7 @@ const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   'gemini-3.1-flash-lite':  1_000_000,
   // Anthropic
   'claude-sonnet-5': 1_000_000,
+  'claude-opus-5':   1_000_000,
   'claude-opus-4-8': 1_000_000,
   'claude-fable-5':  1_000_000,
   // Mistral
