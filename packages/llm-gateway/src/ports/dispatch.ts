@@ -28,6 +28,12 @@ export interface GatewayDispatchRequest {
   /** Provider-native request JSON, passed through verbatim. */
   readonly body: unknown;
   readonly stream: boolean;
+  /**
+   * Reasoning effort implied by the resolved target/alias (e.g. a `*-xhigh`
+   * launch alias). Optional; the dispatch impl applies it to the provider
+   * request. Absent = honor whatever the verbatim body already carries.
+   */
+  readonly effort?: string;
   readonly signal?: AbortSignal;
 }
 

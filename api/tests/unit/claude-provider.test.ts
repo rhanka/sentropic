@@ -63,7 +63,7 @@ describe('ClaudeProviderRuntime', () => {
   describe('listModels', () => {
     it('should return Claude model catalog entries', () => {
       const models = runtime.listModels();
-      expect(models).toHaveLength(3);
+      expect(models).toHaveLength(4);
 
       const sonnet = models.find((m) => m.modelId === 'claude-sonnet-5');
       expect(sonnet).toBeDefined();
@@ -71,6 +71,14 @@ describe('ClaudeProviderRuntime', () => {
       expect(sonnet!.reasoningTier).toBe('advanced');
       expect(sonnet!.supportsTools).toBe(true);
       expect(sonnet!.supportsStreaming).toBe(true);
+
+      // Opus 5 is the default Opus; 4.8 stays explicitly selectable.
+      const opus5 = models.find((m) => m.modelId === 'claude-opus-5');
+      expect(opus5).toBeDefined();
+      expect(opus5!.providerId).toBe('anthropic');
+      expect(opus5!.reasoningTier).toBe('advanced');
+      expect(opus5!.supportsTools).toBe(true);
+      expect(opus5!.supportsStreaming).toBe(true);
 
       const opus = models.find((m) => m.modelId === 'claude-opus-4-8');
       expect(opus).toBeDefined();
