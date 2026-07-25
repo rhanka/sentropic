@@ -1,6 +1,6 @@
 {
   "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
-  "_generated": "2026-06-08",
+  "_generated": "2026-07-25",
   "_version": "0.29.0",
   "subpaths": {
     ".": {
@@ -428,7 +428,7 @@
       "kind": "svelte",
       "file": "dist/components/ChatPlacementMenuButton.svelte",
       "exists": true,
-      "_propSnapshot": "Props: placementMenu (ChatPlacementMenu, required), class? (string passthrough for the trigger button). Renders the 'Move to…' trigger+popup (Right/Left/Center/Full) — extracted from ChatDock's former absolute overlay (which collided with host header controls) into a normal in-flow icon button the host mounts in its own toolbar. Preserves code-review fixes F1-F5: Escape/Arrow keydowns on the popup stopPropagation (never bubble to an ancestor dialog's Escape-closes handler), outside-pointerdown closes, roving tabindex focus, focus returns to the trigger on close."
+      "_propSnapshot": "Props: placementMenu (ChatPlacementMenu, required), onPlacementChange? ((placement: ChatPlacement) => void), class? (string passthrough for the trigger button). Renders the 'Move to…' trigger+popup (Right/Left/Center/Full) — extracted from ChatDock's former absolute overlay (which collided with host header controls) into a normal in-flow icon button the host mounts in its own toolbar. Preserves code-review fixes F1-F5: Escape/Arrow keydowns on the popup stopPropagation (never bubble to an ancestor dialog's Escape-closes handler), outside-pointerdown closes, roving tabindex focus, focus returns to the trigger on close."
     },
     "./components/ChatPanel.svelte": {
       "kind": "svelte",
@@ -771,7 +771,8 @@
       "file": "dist/state/chatPlacementMigration.js",
       "exports": [
         "displayModeToPlacement",
-        "placementToDisplayMode"
+        "placementToDisplayMode",
+        "placementToLegacyDisplayMode"
       ]
     },
     "./state/chatPlacementDnd": {

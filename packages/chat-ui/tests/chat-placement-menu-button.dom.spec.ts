@@ -126,6 +126,25 @@ describe('ChatPlacementMenuButton — activation', () => {
     expect(container.querySelector('[role="menu"]')).toBeNull();
   });
 
+  it('calls onPlacementChange with the settled placement after selection', async () => {
+    const menu = createMenu();
+    const onPlacementChange = vi.fn();
+    const { container } = render(ChatPlacementMenuButton, {
+      props: { placementMenu: menu, onPlacementChange },
+    });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+    await fireEvent.click(trigger);
+
+    const centerItem = Array.from(container.querySelectorAll('[role="menuitemradio"]')).find(
+      (el) => el.textContent?.includes('Center'),
+    ) as HTMLElement;
+    await fireEvent.click(centerItem);
+    await flushAsync();
+
+    expect(onPlacementChange).toHaveBeenCalledTimes(1);
+    expect(onPlacementChange).toHaveBeenCalledWith({ kind: 'floating', anchor: 'center' });
+  });
+
   it('a pointerdown on a menu item does NOT get swallowed by outside-click dismissal (still selects)', async () => {
     const menu = createMenu();
     await flushAsync();
