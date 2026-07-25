@@ -1,33 +1,43 @@
-# Feature: llm-gateway Terra launch-alias target-map + drop gemini-code-assist
+# Feature: Opus 5 default + launch-alias target-map + route discovery
 
 ## Objective
-Make `@sentropic/llm-gateway` the single source of truth for the Claude-compat launch-alias routing (`claude-opus-4-8` and `claude-opus-4-8-xhigh` -> `openai:gpt-5.6-terra`, effort `xhigh`), remove the deprecated `resolveGeminiCodeAssistTarget` (the claude->gemini/Vertex cross-pool leak the mesh 0.10.0 cutover retired on the mesh side), and bump the package — so h2a becomes a thin consumer and deletes its duplicated `model-catalog.ts`/`resolveModelRoute`. The `@sentropic/llm-mesh` dep pin bump `^0.8.0` -> `^0.10.0` is DEFERRED (not functionally required: the target-map routes by string model id, not mesh catalog resolution; forcing it triggers a repo-wide lockfile relock of main's pre-existing drift, which belongs in a dedicated lockfile-hygiene branch, not this routing PR).
+Make **Opus 5** the default Opus across `@sentropic/llm-mesh` and `@sentropic/llm-gateway`, and fix the ROOT CAUSE of h2a's duplicated routing table: the gateway had no way to EXPOSE its alias→target mapping, so consumers copied it. Ship (1) `claude-opus-5` in the mesh catalog + a `max` reasoning-effort rung, (2) a DECLARATIVE launch-alias config + a `describeTargetRoutes()` discovery API in the gateway, (3) removal of the deprecated `resolveGeminiCodeAssistTarget` (the claude->gemini/Vertex cross-pool leak retired on the mesh side by the 0.10.0 cutover).
+
+Owner-ratified mapping (2026-07-25): `claude-opus-5-high|-xhigh` -> `gpt-5.6-terra` (same effort); `claude-fable-5-high|-xhigh|-max` -> `gpt-5.6-sol` (same effort). SUFFIXED aliases only — bare ids stay provider-faithful.
 
 ## Scope / Guardrails
-- `@sentropic/llm-gateway` package only (routing target-map + dispatch effort contract + version/pin). No mesh catalog change (mesh stays provider-faithful).
-- No silent cross-pool fallback: unknown alias -> `undefined` -> router provider-shaped 400 (already the `createStaticTargetResolver` behavior).
-- Make-only; branch in `tmp/fix-gw-terra-alias`; `ENV=test-*` last argument; `make commit` only; English.
+- Two published packages: `llm-mesh` (0.11.0 -> **0.12.0**; 0.11.0 is already ON npm, bumping to it would silently skip the publish) and `llm-gateway` (0.9.0 -> **0.10.0**).
+- No silent cross-pool fallback: unknown id -> `undefined` -> router provider-shaped 400.
+- The FROZEN v1 wire (ARCH-12, `/v1/messages`, `/v1/chat/completions`, `/v1/models`) is NOT touched; discovery is a programmatic package API, not a new route.
+- Make-only; `ENV=test-*` last; `make commit` only; English.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths**: `packages/llm-gateway/src/personal-passthrough/target.ts`, `packages/llm-gateway/src/flow.ts`, `packages/llm-gateway/src/ports/dispatch.ts`, `packages/llm-gateway/tests/**`, `packages/llm-gateway/package.json`, `package-lock.json`, `tmp/fix-gw-terra-alias/BRANCH.md`.
-- **Forbidden**: `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `packages/llm-mesh/**`, any `api/**`, other `plan/NN-BRANCH_*.md`.
-- **Conditional**: `.github/workflows/**` (not expected).
+- **Allowed Paths**: `packages/llm-gateway/src/**`, `packages/llm-gateway/tests/**`, `packages/llm-gateway/package.json`, `packages/llm-mesh/src/{providers,catalog,generation}.ts`, `packages/llm-mesh/package.json`, `package-lock.json`, `tmp/fix-gw-terra-alias/BRANCH.md`.
+- **Forbidden**: `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, other `plan/NN-BRANCH_*.md`, `api/src/**` and `api/tests/**` beyond `BRGW-EX1`.
+- **Conditional**: `.github/workflows/**` (untouched).
+- **`BRGW-EX1`** (scope exception): two MECHANICAL api consequences of adding a catalog model, needed to keep CI green — `api/tests/api/models.test.ts` (the exact anthropic model-list assertion) and `api/src/services/chat-service.ts` (`MODEL_CONTEXT_BUDGETS` entry for `claude-opus-5`, else it silently falls back to the default budget). Rationale: they are consequences of MY package change, not product decisions. Impact: 2 files, 6 lines. Rollback: revert both hunks. The PRODUCT default migration for client apps is explicitly NOT in scope (see Feedback Loop).
 
 ## Feedback Loop
-- Cross-owner coordination with h2a conductor `claude:a2a-cli:5236a0213b83`: split CONFIRMED (alias routing lives in the gateway target-map, NOT the mesh catalog). h2a deletes `model-catalog.ts`/`resolveModelRoute` in the same PR that consumes the published gateway version.
-- Consumer entry point: `createStaticTargetResolver({ mappings: { ...DEFAULT_TARGET_MAPPINGS, ...LAUNCH_ALIAS_TARGET_MAPPINGS } })` returning `ResolvedTarget { providerId, transportProviderId, model, effort? }`.
+- Owner decisions (2026-07-25, Q&A): (1) suffixed aliases only — bare `claude-opus-5` stays the real Anthropic model, so the gateway can still serve it under its own name; (2) add `max` to the mesh effort ladder (real rung, not a lie); (3) keep `claude-opus-4-8` selectable in the catalog, migrate only the DEFAULT for client apps; (4) ship mesh + gateway together in this PR.
+- Owner steer: "il faut que llm-mesh et llm-gateway aient des méthodes d'exposition des catalogues et configurations de mapping pour permettre aux skills de s'y retrouver" -> hence `defineLaunchAliases()` (declare, don't hardcode) + `describeTargetRoutes()` (discover, don't duplicate). The mesh catalog was ALREADY exposed (`listModelProfiles`/`getModelProfile`); the gateway routing was NOT — that was the actual gap behind h2a's copy.
+- **attendu (`claude:sentropic-app`)**: migrate the CLIENT-APP default Opus to `claude-opus-5` for sentropic.sent-tech.ca (product default / user choice simplification). Deliberately not done here — it is a product default, not a package concern.
+- **attendu (`claude:a2a-cli`)**: the launch alias changed from `claude-opus-4-8[-xhigh]` to `claude-opus-5-{high,xhigh}` (+ fable/sol). h2a must consume `describeTargetRoutes()` and delete `model-catalog.ts`/`resolveModelRoute` rather than re-hardcode.
+- Deferred: gateway dep pin `@sentropic/llm-mesh` `^0.8.0` -> `^0.12.0`. Not functionally required (the target-map routes by string id, not mesh catalog resolution) and forcing it triggers a repo-wide relock of main's pre-existing lockfile drift — belongs in a dedicated lockfile-hygiene branch.
 
 ## AI Flaky tests
-- No AI-generation tests in scope (pure routing/contract unit tests; deterministic).
+- None in scope: pure routing/catalog unit tests, deterministic.
 
 ## Orchestration Mode
-- [x] Mono-branch. Rationale: single package routing change, one test cycle.
+- [x] Mono-branch. Rationale: one coherent contract change across two packages; single test cycle.
 
 ## Plan / Todo
-- [x] Add `effort?` to `ResolvedTarget` (flow) + `GatewayDispatchRequest` (dispatch port); thread `target.effort` into both dispatch requests.
-- [x] `target.ts`: add `effort?` to `TargetMapping`; expose it in `createStaticTargetResolver`; refresh `DEFAULT_TARGET_MAPPINGS` to cutover ids (faithful); add `LAUNCH_ALIAS_TARGET_MAPPINGS` (terra launch aliases); DELETE `resolveGeminiCodeAssistTarget` + `GeminiCodeAssistTarget`.
-- [x] Remove the unused `createGeminiCodeAssistFixture` test remnant.
-- [x] `tests/target.test.ts`: alias -> terra xhigh, unknown -> undefined, faithful DEFAULT preserved.
-- [x] `package.json`: `0.9.0` -> `0.10.0` (minimal 1-line lockfile version bump; pin stays `^0.8.0`, see Objective).
-- [x] Gates: `typecheck-llm-gateway` + `test-llm-gateway` (79 tests green).
-- [ ] Double-review + PR; owner confirm; publish `@sentropic/llm-gateway@0.10.0`; hand version to h2a conductor.
+- [x] mesh: add `claude-opus-5` (`providers.ts` known ids + anthropic map, `catalog.ts` profile "Opus 5"); keep 4.8 selectable with a comment.
+- [x] mesh: add `max` to the effort ladder (`ReasoningEffort` type + `ReasoningOptions.effort`); verified no exhaustive effort switch exists in adapters.
+- [x] mesh: bump 0.11.0 -> 0.12.0 + align the lockfile entry (main's lockfile still said 0.10.0 — pre-existing drift).
+- [x] gateway: `effort?` on `TargetMapping`/`ResolvedTarget`/`GatewayDispatchRequest`, threaded into both dispatch paths.
+- [x] gateway: `defineLaunchAliases()` declarative builder + owner-ratified preset (opus-5 -> terra, fable-5 -> sol) + faithful DEFAULT map incl. `claude-opus-5`/`claude-fable-5`/`gpt-5.6-sol`.
+- [x] gateway: `describeTargetRoutes()` discovery API (faithful vs alias, effort, no credential data).
+- [x] gateway: DELETE `resolveGeminiCodeAssistTarget` + `GeminiCodeAssistTarget` + the unused test fixture remnant.
+- [x] `BRGW-EX1`: api model-list assertion + `claude-opus-5` context budget.
+- [x] Gates: `typecheck-llm-mesh`, `test-llm-mesh` (45), `typecheck-llm-gateway`, `test-llm-gateway` (83) — all green.
+- [ ] CI green; double-review; owner confirm; publish `llm-mesh@0.12.0` + `llm-gateway@0.10.0`; hand versions + discovery contract to h2a; relay the client-app default to `claude:sentropic-app`.
