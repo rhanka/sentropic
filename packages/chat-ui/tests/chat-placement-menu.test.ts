@@ -124,11 +124,10 @@ describe('chatPlacementMenu — request -> current + persistence write', () => {
 });
 
 describe('chatPlacementMenu — construction reads persisted intent (D6)', () => {
-  it('restores a previously persisted placement as current after construction settles', async () => {
+  it('restores a previously persisted placement as current synchronously at construction', () => {
     const storage = createMemoryStorage();
     storage.setItem('chat-ui/placement/v1/u1/h1/w1', 'floating.left');
     const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
-    await flushAsync();
     expect(menu.current()).toEqual({ kind: 'floating', anchor: 'left' });
   });
 
