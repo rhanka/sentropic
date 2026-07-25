@@ -108,10 +108,37 @@ Two namespace-scoped Secrets must exist before applying the manifests:
 - `sentropic-postgres` — `POSTGRES_PASSWORD`.
 - `sentropic-api` — `DATABASE_URL`, every `*_API_KEY`, `MAIL_HOST`,
   `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`,
-  `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`, and optional
+  `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`, optional
   Cowork desktop download metadata (`COWORK_DESKTOP_DOWNLOAD_URL`,
   `COWORK_DESKTOP_VERSION`, `COWORK_DESKTOP_SOURCE`,
-  `COWORK_DESKTOP_PRERELEASE_URL`, `COWORK_DESKTOP_PRERELEASE_VERSION`).
+  `COWORK_DESKTOP_PRERELEASE_URL`, `COWORK_DESKTOP_PRERELEASE_VERSION`), and
+  the BR-39e social-login federation credentials consumed by `auth-idp`
+  (same `sentropic-api` Secret, via `secretRef` — see
+  `deploy/k8s/base/35-auth-idp.yaml`): `GOOGLE_OAUTH_CLIENT_ID`,
+  `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`,
+  `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`,
+  `GITHUB_OAUTH_REDIRECT_URI`, `MICROSOFT_OAUTH_CLIENT_ID`,
+  `MICROSOFT_OAUTH_CLIENT_SECRET`, `MICROSOFT_OAUTH_REDIRECT_URI`,
+  `MICROSOFT_OAUTH_TENANT`, `APPLE_OAUTH_CLIENT_ID`, `APPLE_TEAM_ID`,
+  `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `APPLE_OAUTH_REDIRECT_URI`,
+  `FACEBOOK_OAUTH_CLIENT_ID`, `FACEBOOK_OAUTH_CLIENT_SECRET`, and
+  `FACEBOOK_OAUTH_REDIRECT_URI`. All of these are individually optional
+  (each provider is feature-OFF — 503 `provider_not_configured` — until its
+  full credential set is present); a var missing from `K8S_ENV_FILE` is
+  bundled as an empty string, never fabricated, which keeps that provider
+  off rather than half-enabling it.
+
+  `APPLE_PRIVATE_KEY` is a multi-line PKCS#8 PEM (the Apple `.p8` key), which
+  the plain `KEY=value` `.env` parser used by `k8s-bundle-secret` cannot read
+  safely. Store it in `.env` as a **single-line base64** value under
+  `APPLE_PRIVATE_KEY_B64` (`base64 -w0 AuthKey_XXXXXXXXXX.p8`, or `base64 <
+  file.p8 | tr -d '\n'`); the target base64-decodes it and writes the
+  resulting PEM verbatim into the Secret's `APPLE_PRIVATE_KEY` key, so the
+  pod always receives a byte-for-byte copy of the original `.p8` file (the
+  federation code calls `importPKCS8` on it — see
+  `api/src/services/auth/federation/apple-provider.ts`). Only the base64
+  form is ever read from `.env`; there is no plain multi-line
+  `APPLE_PRIVATE_KEY` fallback.
 
 Maildev is intentionally not deployed in Kubernetes. The POC uses the checked
 `sent-tech.ca` domain in Scaleway Transactional Email, with SMTP settings read
@@ -135,8 +162,10 @@ digest without any imperative `kubectl set image`.
 `make k8s-bundle-secret`
 reads `~/src/sentropic/.env` and creates both Secrets in-cluster,
 replacing the previous version. Re-run after rotating a key or updating a
-download URL. Secret changes are picked up by the API only after the pod is
-restarted; run `make k8s-deploy ... ENV=<env>` after updating the bundle.
+download URL. Secret changes (including federation credentials) are picked
+up only after the consuming pods restart — both `api` and `auth-idp` mount
+`sentropic-api` via `envFrom.secretRef`; run `make k8s-deploy ... ENV=<env>`
+(which rolls all three deployments) after updating the bundle.
 
 ## GitHub deploy secret (operator side, once)
 
