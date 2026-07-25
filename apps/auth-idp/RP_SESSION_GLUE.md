@@ -96,11 +96,18 @@ if (payload.nonce !== storedNonce) throw new Error('nonce_mismatch');
 // `exp` is enforced by jwtVerify. `payload.sub` is the stable user id.
 ```
 
-> **Phase A0 claim set (fork F6 deferred).** The id_token/userinfo carry only
-> `sub`, `name`, `email` today — NO `tenant`, NO `role`, NO membership. That is
-> sufficient for `design-system` free auth. Any tenant-scoped RP must wait for
-> Phase A1 (BR-39n) which adds the claim set. Do NOT hand-roll tenant/role from
-> A0 claims.
+> **Claim set — CORRECTED 2026-07-25.** This note previously said the tokens
+> carry only `sub`, `name`, `email` and that any tenant-scoped RP "must wait for
+> Phase A1 (BR-39n)". That is STALE: BR-39e landed the `tid` binding, and live
+> discovery at `auth.sent-tech.ca` (verified 2026-07-25) advertises
+> `claims_supported = [sub, aud, iss, exp, iat, nonce, auth_time, acr, email,
+> email_verified, name, tid]`. `tid` is emitted on both id_token and
+> access_token when an approved `tenant_memberships` row resolves, and is
+> dropped if that membership was suspended between authorize and token.
+> Still NOT emitted: `role`, a membership-LIST claim, or any product-scoped
+> authorization claim — do NOT hand-roll those. An RP that only needs to
+> identify the account needs `sub` alone (stable `users.id`), which A0 already
+> emitted; it does not need to wait for anything.
 
 Optionally fetch fresh profile data with the access token:
 
