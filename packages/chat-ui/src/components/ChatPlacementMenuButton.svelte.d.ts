@@ -1,9 +1,12 @@
 import type { Component } from 'svelte';
+import type { ChatPlacement } from '../state/chatPlacement.js';
 import type { ChatPlacementMenu } from '../state/chatPlacementMenu.js';
 
 export type ChatPlacementMenuButtonProps = {
   /** The headless placement menu model (required) — owns intent + the 4-item menu surface. */
   placementMenu: ChatPlacementMenu;
+  /** Called after a selected placement has settled. */
+  onPlacementChange?: (placement: ChatPlacement) => void;
   /** Extra class(es) appended to the trigger button (host styling passthrough). */
   class?: string;
 };

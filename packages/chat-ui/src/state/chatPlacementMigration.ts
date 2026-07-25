@@ -31,3 +31,11 @@ export function placementToDisplayMode(p: ChatPlacement): ChatWidgetDisplayMode 
       return null;
   }
 }
+
+/**
+ * Maps every menu placement to the legacy two-mode preference used by hosts
+ * while they progressively adopt the placement controller.
+ */
+export function placementToLegacyDisplayMode(p: ChatPlacement): ChatWidgetDisplayMode {
+  return p.kind === 'drawer' ? 'docked' : 'floating';
+}
