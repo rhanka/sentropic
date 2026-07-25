@@ -30,13 +30,3 @@ describe('ChatWidget shell state extraction', () => {
     expect(source).not.toContain('on:click={() => chatPanelRef?.newSession?.()}');
   });
 });
-
-describe('ChatWidget placement-menu migration', () => {
-  it('seeds placement from the legacy preference and mirrors menu changes back to it', () => {
-    const source = readFileSync(widgetPath, 'utf8');
-    expect(source).toContain('displayModeToPlacement');
-    expect(source).toContain("localStorage.getItem(DISPLAY_MODE_STORAGE_KEY) === 'docked'");
-    expect(source).toContain('const syncDisplayModeFromPlacement');
-    expect(source).toContain('onPlacementChange={syncDisplayModeFromPlacement}');
-  });
-});

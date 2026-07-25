@@ -62,7 +62,10 @@
     createChatPlacementMenu,
     type ChatPlacementMenu,
   } from '@sentropic/chat-ui/state/chatPlacementMenu';
-  import { displayModeToPlacement } from '@sentropic/chat-ui/state/chatPlacementMigration';
+  import {
+    displayModeToPlacement,
+    placementToLegacyDisplayMode,
+  } from '@sentropic/chat-ui/state/chatPlacementMigration';
   import type { ChatPlacement } from '@sentropic/chat-ui/state/chatPlacement';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
@@ -1533,7 +1536,7 @@
   };
 
   const syncDisplayModeFromPlacement = (placement: ChatPlacement) => {
-    setDisplayMode(placement.kind === 'drawer' ? 'docked' : 'floating');
+    setDisplayMode(placementToLegacyDisplayMode(placement));
   };
 
   const toggleDisplayMode = async () => {
