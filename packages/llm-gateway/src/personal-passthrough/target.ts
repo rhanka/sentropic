@@ -162,6 +162,19 @@ export const LAUNCH_ALIAS_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping
     { alias: 'claude-fable-5-max', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'max' },
   ]);
 
+/**
+ * THE canonical servable set: provider-faithful models + the owner-ratified
+ * launch aliases, already composed. A consumer that only wants to SERVE or READ
+ * the routing uses this and DECLARES NOTHING — composing the two maps is itself
+ * routing knowledge, and duplicating that rule is how copies drift.
+ * Hosts with their own extra aliases still merge `defineLaunchAliases([...])`
+ * over it; that is an opt-in, never a prerequisite.
+ */
+export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
+  ...DEFAULT_TARGET_MAPPINGS,
+  ...LAUNCH_ALIAS_TARGET_MAPPINGS,
+};
+
 /** One discoverable route: what a caller may ask for, and what actually serves it. */
 export interface TargetRouteDescription {
   /** The id a caller puts in the request body `model`. */
@@ -199,3 +212,19 @@ export const describeTargetRoutes = (
       kind: (requestedId === m.model ? 'faithful' : 'alias') as 'faithful' | 'alias',
     }))
     .sort((a, b) => a.requestedId.localeCompare(b.requestedId));
+
+/**
+ * Zero-argument discovery over `CANONICAL_TARGET_MAPPINGS` — the pure-reader
+ * entry point. Declares nothing, owns nothing, carries no credential data.
+ */
+export const describeCanonicalTargetRoutes = (): readonly TargetRouteDescription[] =>
+  describeTargetRoutes(CANONICAL_TARGET_MAPPINGS);
+
+/**
+ * Zero-argument resolver over `CANONICAL_TARGET_MAPPINGS` — for a host that
+ * serves the canonical set without owning any routing knowledge:
+ *
+ *   createGatewayRouter({ config, resolveTarget: createCanonicalTargetResolver(), … })
+ */
+export const createCanonicalTargetResolver = (): TargetResolver =>
+  createStaticTargetResolver({ mappings: CANONICAL_TARGET_MAPPINGS });
