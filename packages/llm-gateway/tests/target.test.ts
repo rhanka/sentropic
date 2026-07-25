@@ -11,9 +11,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createCanonicalTargetResolver,
   createStaticTargetResolver,
   defineLaunchAliases,
+  describeCanonicalTargetRoutes,
   describeTargetRoutes,
+  CANONICAL_TARGET_MAPPINGS,
   DEFAULT_TARGET_MAPPINGS,
   LAUNCH_ALIAS_TARGET_MAPPINGS,
 } from '../src/index.js';
@@ -119,6 +122,19 @@ describe('describeTargetRoutes (discovery)', () => {
       model: 'claude-opus-5',
       kind: 'faithful',
     });
+  });
+
+  it('gives a pure reader the same view with ZERO declaration (canonical entry points)', () => {
+    // A consumer that declares nothing must see exactly the canonical set:
+    // composing DEFAULT + LAUNCH_ALIAS is itself routing knowledge and must not
+    // be re-implemented downstream.
+    expect(CANONICAL_TARGET_MAPPINGS).toEqual(MERGED);
+    expect(describeCanonicalTargetRoutes()).toEqual(describeTargetRoutes(MERGED));
+
+    const resolve = createCanonicalTargetResolver();
+    expect(resolve('claude-opus-5-xhigh')?.model).toBe('gpt-5.6-terra');
+    expect(resolve('claude-opus-5')?.model).toBe('claude-opus-5');
+    expect(resolve('claude-opus-4-8-xhigh')).toBeUndefined();
   });
 
   it('describes every servable id exactly once, sorted, with no credential data', () => {
