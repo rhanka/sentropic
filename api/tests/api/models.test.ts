@@ -68,7 +68,7 @@ describe('Models API', () => {
       'google/gemini-3.1-flash-lite@gcp',
       'google/gemini-3.5-flash@gcp',
     ]);
-    expect(data.models).toHaveLength(19);
+    expect(data.models).toHaveLength(20);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
