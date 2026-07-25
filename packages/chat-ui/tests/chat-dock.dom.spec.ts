@@ -32,6 +32,15 @@ const chatDockSourcePath = resolve(
 );
 
 let mobileViewport = false;
+const mobileViewportChangeListeners = new Set<
+  (event: MediaQueryListEvent) => void
+>();
+
+const setMobileViewport = (matches: boolean) => {
+  mobileViewport = matches;
+  const event = { matches } as MediaQueryListEvent;
+  for (const listener of mobileViewportChangeListeners) listener(event);
+};
 
 // jsdom does not implement window.matchMedia — provide a controllable stub so
 // forced-mobile behavior can be exercised during component mounting.
@@ -40,21 +49,32 @@ beforeAll(() => {
     configurable: true,
     writable: true,
     value: vi.fn((query: string) => ({
-      matches: query === '(max-width: 639px)' && mobileViewport,
+      get matches() {
+        return query === '(max-width: 639px)' && mobileViewport;
+      },
       media: query,
       onchange: null,
       addListener: vi.fn(),
       removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
+      addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+        if (type === 'change' && typeof listener === 'function') {
+          mobileViewportChangeListeners.add(listener as (event: MediaQueryListEvent) => void);
+        }
+      }),
+      removeEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+        if (type === 'change' && typeof listener === 'function') {
+          mobileViewportChangeListeners.delete(listener as (event: MediaQueryListEvent) => void);
+        }
+      }),
       dispatchEvent: vi.fn(),
     })),
   });
 });
 
 afterEach(() => {
-  mobileViewport = false;
   cleanup();
+  mobileViewport = false;
+  mobileViewportChangeListeners.clear();
   chatWidgetLayout.set({ mode: 'floating', isOpen: false, dockWidthCss: '0px' });
 });
 
@@ -415,6 +435,41 @@ describe('ChatDock — menu/legacy coexistence', () => {
     await menu.request({ kind: 'floating', anchor: 'center' });
     await flushAsync();
     expect(published.at(-1)).toMatchObject({ mode: 'floating', isOpen: true });
+    unsubscribe();
+  });
+
+  it('publishes docked layout on an initial mobile mount even when the menu prefers floating', async () => {
+    mobileViewport = true;
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'floating', anchor: 'right' },
+    });
+    const published: Array<{ mode: string; isOpen: boolean; dockWidthCss: string }> = [];
+    const unsubscribe = chatWidgetLayout.subscribe((layout) => published.push(layout));
+
+    renderDock({ isBrowser: true, initialOpen: true, placementMenu: menu });
+    await flushAsync();
+
+    expect(published.at(-1)).toMatchObject({ mode: 'docked', isOpen: true });
+    unsubscribe();
+  });
+
+  it('republishes docked layout when the viewport crosses from desktop to mobile', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'floating', anchor: 'right' },
+    });
+    const published: Array<{ mode: string; isOpen: boolean; dockWidthCss: string }> = [];
+    const unsubscribe = chatWidgetLayout.subscribe((layout) => published.push(layout));
+
+    renderDock({ isBrowser: true, initialOpen: true, placementMenu: menu });
+    await flushAsync();
+    expect(published.at(-1)).toMatchObject({ mode: 'floating', isOpen: true });
+
+    setMobileViewport(true);
+    await flushAsync();
+
+    expect(published.at(-1)).toMatchObject({ mode: 'docked', isOpen: true });
     unsubscribe();
   });
 });
