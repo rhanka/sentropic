@@ -29,6 +29,7 @@
     type ChatWidgetDisplayMode,
   } from '../stores/chatWidgetLayout.js';
   import {
+    canChatPlacementMenuOwnPlacement,
     computeChatWidgetDockWidthCss,
     resolveEffectiveChatWidgetMode,
     type ChatWidgetHostMode,
@@ -224,10 +225,11 @@
 
   // A menu owns placement only in an ordinary desktop overlay. Hosts and the
   // mobile viewport remain authoritative, exactly as in the legacy path.
-  $: menuOwnsPlacement = Boolean(placementMenu)
-    && !isSidePanelHost
-    && !isExtensionOverlayHost
-    && !isMobileViewport;
+  $: menuOwnsPlacement = Boolean(placementMenu) && canChatPlacementMenuOwnPlacement({
+    hostMode,
+    isExtensionOverlayHost,
+    isMobileViewport,
+  });
 
   $: effectivePlacement = menuOwnsPlacement
     ? menuPlacement ?? displayModeToPlacement(effectiveMode)
@@ -280,11 +282,17 @@
 
   const publishLayout = () => {
     // The subscription callback can run before reactive assignments settle;
-    // read the menu value directly, but only when it owns placement.
-    const placementNow = menuOwnsPlacement
+    // derive ownership from live inputs before reading the menu value.
+    const menuOwnsPlacementNow = Boolean(placementMenu)
+      && canChatPlacementMenuOwnPlacement({
+        hostMode,
+        isExtensionOverlayHost,
+        isMobileViewport,
+      });
+    const placementNow = menuOwnsPlacementNow
       ? menuPlacement ?? placementMenu?.current()
       : undefined;
-    const modeNow = menuOwnsPlacement && placementNow
+    const modeNow = menuOwnsPlacementNow && placementNow
       ? (placementNow.kind === 'drawer' ? 'docked' : 'floating')
       : resolveEffectiveChatWidgetMode({
           hostMode,
@@ -298,6 +306,11 @@
       dockWidthCss,
     });
   };
+
+  // Republish after reactive ownership or forced-mode changes settle.
+  let layoutPublicationKey = '';
+  $: layoutPublicationKey = `${menuOwnsPlacement}:${effectiveMode}`;
+  $: if (isBrowserReady && layoutPublicationKey) publishLayout();
 
   const computeDockWidthCssValue = (): string =>
     computeChatWidgetDockWidthCss({
