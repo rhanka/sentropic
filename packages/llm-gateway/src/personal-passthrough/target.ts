@@ -18,6 +18,8 @@ export interface TargetMapping {
   readonly transportProviderId: string;
   /** Canonical runtime model id (alias-free — display aliases never key a lease). */
   readonly model: string;
+  /** Optional reasoning effort the alias implies (e.g. a `*-xhigh` launch alias). */
+  readonly effort?: string;
 }
 
 export interface StaticTargetResolverOptions {
@@ -43,6 +45,7 @@ export const createStaticTargetResolver = (
       providerId: mapping.providerId,
       transportProviderId: mapping.transportProviderId,
       model: mapping.model,
+      ...(mapping.effort ? { effort: mapping.effort } : {}),
     };
   };
 };
@@ -53,56 +56,56 @@ export const createStaticTargetResolver = (
  * with their enrolled pool's models.
  */
 export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
-  'claude-sonnet-4-6': {
+  'claude-sonnet-5': {
     providerId: 'anthropic',
     transportProviderId: 'claude-code',
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
   },
-  'claude-opus-4-7': {
+  'claude-opus-4-8': {
     providerId: 'anthropic',
     transportProviderId: 'claude-code',
-    model: 'claude-opus-4-7',
+    model: 'claude-opus-4-8',
   },
-  'gpt-5.5': {
+  'gpt-5.6-luna': {
     providerId: 'openai',
     transportProviderId: 'codex',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-luna',
+  },
+  'gpt-5.6-terra': {
+    providerId: 'openai',
+    transportProviderId: 'codex',
+    model: 'gpt-5.6-terra',
+    effort: 'xhigh',
   },
 };
 
 /**
- * Gemini Code Assist target resolution. Routes anthropic models (claude) through
- * Vertex AI and gemini models through the Generative Language API.
+ * Launch-alias target-map — the single source of truth for Claude-compat LAUNCH
+ * aliases that the owner routes to a different pooled upstream. This is a routing
+ * POLICY (a launch name served by another provider's model), NOT a provider-
+ * faithful identity, so it lives here and NOT in the llm-mesh catalog (where
+ * `claude-opus-4-8` stays the real Anthropic model). Merge it OVER
+ * `DEFAULT_TARGET_MAPPINGS` to enable the preset:
+ *
+ *   createStaticTargetResolver({
+ *     mappings: { ...DEFAULT_TARGET_MAPPINGS, ...LAUNCH_ALIAS_TARGET_MAPPINGS },
+ *   })
+ *
+ * No silent cross-pool fallback: any id absent from the merged map resolves to
+ * `undefined` (router -> provider-shaped 400). Consumers MUST NOT re-implement
+ * this routing in a duplicated model-route catalog.
  */
-export interface GeminiCodeAssistTarget {
-  readonly baseUrl: string;
-  readonly headers: Record<string, string>;
-}
-
-export const resolveGeminiCodeAssistTarget = ({
-  modelId,
-  accessToken,
-  projectId,
-}: {
-  modelId: string;
-  accessToken: string;
-  projectId?: string;
-}): GeminiCodeAssistTarget => {
-  if (modelId.includes('claude')) {
-    // Anthropic models route through Vertex AI.
-    const region = 'us-east5';
-    const wireModelId = modelId.replace(/^.*\//, '').replace(/@.*$/, '');
-    const baseUrl = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/anthropic/models/${wireModelId}`;
-    return {
-      baseUrl,
-      headers: { authorization: `Bearer ${accessToken}` },
-    };
-  }
-
-  // Gemini models route through the Generative Language API.
-  const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}`;
-  return {
-    baseUrl,
-    headers: { authorization: `Bearer ${accessToken}` },
-  };
+export const LAUNCH_ALIAS_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
+  'claude-opus-4-8-xhigh': {
+    providerId: 'openai',
+    transportProviderId: 'codex',
+    model: 'gpt-5.6-terra',
+    effort: 'xhigh',
+  },
+  'claude-opus-4-8': {
+    providerId: 'openai',
+    transportProviderId: 'codex',
+    model: 'gpt-5.6-terra',
+    effort: 'xhigh',
+  },
 };
