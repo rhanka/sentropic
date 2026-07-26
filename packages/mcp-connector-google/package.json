@@ -1,0 +1,32 @@
+{
+  "name": "@sentropic/mcp-connector-google",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hermetic Google Drive and Gmail read-only adapter proofs against the frozen @sentropic/mcp-platform contract.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/mcp-connector-google"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "5.4.5",
+    "vitest": "4.1.0"
+  }
+}
