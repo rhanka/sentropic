@@ -294,21 +294,38 @@ describe('ChatDock — placement menu affordance (default-off)', () => {
     expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
   });
 
-  it('leaves the dialog container class identical to today when placementMenu is undefined', () => {
-    // Same props with/without an explicit undefined placementMenu must render
-    // the exact same dialog className (proves the prop is truly opt-in).
-    const a = renderDock({ displayMode: 'floating', hostMode: 'overlay', initialOpen: true, isBrowser: false });
-    const dialogA = a.container.querySelector('[role="dialog"]');
-    cleanup();
-    const b = renderDock({
+  it('leaves the dialog container class identical to the pre-branch legacy rendering', () => {
+    // Comparing "prop omitted" with "prop explicitly undefined" proves nothing:
+    // both take the same code path by construction, so that assertion holds
+    // even if the legacy rendering changes. Freeze the ACTUAL pre-branch class
+    // strings instead — this fails the moment the menu-less path is altered.
+    const { container } = renderDock({
       displayMode: 'floating',
       hostMode: 'overlay',
       initialOpen: true,
       isBrowser: false,
-      placementMenu: undefined,
     });
-    const dialogB = b.container.querySelector('[role="dialog"]');
-    expect(dialogB?.className).toBe(dialogA?.className);
+    const className = container.querySelector('[role="dialog"]')?.className ?? '';
+    // Legacy floating resolves to floating.right, which stays anchored inside
+    // the host's bottom-4/right-4 container via `sm:absolute`.
+    expect(className).toContain('sm:absolute');
+    expect(className).toContain('sm:bottom-0');
+    expect(className).toContain('sm:right-0');
+    expect(className).not.toContain('sm:fixed');
+    expect(className).not.toContain('sm:right-4');
+  });
+
+  it('publishes no drawer side on the legacy path', () => {
+    // The published payload must stay exactly what hosts saw before this
+    // branch: a menu-less dock never emits the new `drawerSide` field.
+    let published: Record<string, unknown> | null = null;
+    const unsubscribe = chatWidgetLayout.subscribe((layout) => {
+      published = layout as unknown as Record<string, unknown>;
+    });
+    renderDock({ displayMode: 'floating', hostMode: 'overlay', initialOpen: true, isBrowser: true });
+    expect(published).not.toBeNull();
+    expect(published?.drawerSide).toBeUndefined();
+    unsubscribe();
   });
 });
 
@@ -357,8 +374,9 @@ describe('ChatDock — menu/legacy coexistence', () => {
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
     await menu.request({ kind: 'floating', anchor: 'right' });
     await flushAsync();
-    expect(dialog.className).toContain('sm:fixed');
-    expect(dialog.className).toContain('sm:right-4');
+    // floating.right keeps the legacy container-anchored positioning.
+    expect(dialog.className).toContain('sm:absolute');
+    expect(dialog.className).toContain('sm:right-0');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(container.querySelector('.fixed.inset-0.z-40')).not.toBeNull();
   });
@@ -401,7 +419,7 @@ describe('ChatDock — menu/legacy coexistence', () => {
     });
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
 
-    expect(dialog.className).toContain('sm:right-4');
+    expect(dialog.className).toContain('sm:right-0');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(container.querySelector('.fixed.inset-0.z-40')).not.toBeNull();
   });
