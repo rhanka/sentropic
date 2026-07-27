@@ -441,7 +441,7 @@ const toAuthHonoSessionRecord = (row: typeof userSessions.$inferSelect): AuthHon
 });
 
 const resolveOAuthStateSecret = (): string => {
-  const secret = env.JWT_SECRET ?? env.OAUTH_SIGNING_KEK;
+  const secret = env.OAUTH_SIGNING_KEK ?? env.JWT_SECRET;
   if (!secret && requiresOAuthProductionSecrets()) {
     throw new Error('JWT_SECRET or OAUTH_SIGNING_KEK is required for OAuth state sealing in production.');
   }
