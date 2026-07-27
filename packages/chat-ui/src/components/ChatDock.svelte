@@ -300,10 +300,14 @@
           isMobileViewport,
           displayMode,
         });
+    const drawerSideNow = menuOwnsPlacementNow && placementNow?.kind === 'drawer'
+      ? placementNow.side
+      : 'right';
     chatWidgetLayout.set({
       mode: modeNow,
       isOpen: isVisible,
       dockWidthCss,
+      drawerSide: drawerSideNow,
     });
   };
 
