@@ -3201,6 +3201,10 @@ test-mcp-connector-google: ## Run @sentropic/mcp-connector-google tests (BR-72 G
 smoke-mcp-connector-github-live: ## Run the REAL live-network GitHub smoke (BR-72 DEPTH Lot 1, BR72-EX1) — hits https://api.github.com, not hermetic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-github-live.mjs'
 
+.PHONY: smoke-mcp-connector-google-live
+smoke-mcp-connector-google-live: ## Run the opt-in REAL Google API smoke (BR-72, BR72-EX1) — skips without GOOGLE_OAUTH_ACCESS_TOKEN
+	@docker run --rm -e GOOGLE_OAUTH_ACCESS_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-google-live.mjs'
+
 
 .PHONY: typecheck-mcp-connector-gmail
 typecheck-mcp-connector-gmail: ## Run @sentropic/mcp-connector-gmail type checks (BR-72 Wave-1 read-only proof)
@@ -3372,4 +3376,3 @@ test-mcp-broker: ## Run @sentropic/mcp-broker tests (BR-72 DEPTH Lot 2 broker pr
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-broker-github.mjs'
-

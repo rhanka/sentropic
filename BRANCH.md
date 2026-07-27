@@ -1,11 +1,11 @@
 # Feature: Google Drive and Gmail MCP adapter proofs
 
 ## Objective
-Deliver one private, hermetic `@sentropic/mcp-connector-google` benchmark package containing Google Drive and Gmail read-only provider adapters against the frozen `@sentropic/mcp-platform` contract.
+Deliver Google Drive and Gmail read-only provider adapters against the frozen `@sentropic/mcp-platform` contract, preserving fixture proofs and adding an opt-in live API execution path.
 
 ## Scope / Guardrails
 - Scope is limited to the new connector package, this branch plan, and the two requested Makefile targets.
-- Synthetic fixtures only; no real network, OAuth runtime, API import, migration, gateway, or mesh work.
+- Fixture adapters and tests remain hermetic; the opt-in live smoke alone performs real Google API calls. No OAuth runtime, API import, migration, gateway, or mesh work.
 - Connector access is by `ctx.getSecret('googleOAuthAccessToken')`; secret values are never logged, emitted, or returned.
 - Make-only workflow; test only with `ENV=test-mcp-google` as the last argument.
 - All new text is English.
@@ -25,7 +25,7 @@ Deliver one private, hermetic `@sentropic/mcp-connector-google` benchmark packag
   - `Makefile`
 
 ## Feedback Loop
-- [x] `BR72-EX1` — Makefile touch is required solely to add the two private-package quality targets; impact is limited to invoking the existing hermetic Docker pattern, and rollback is removal of those two targets.
+- [x] `BR72-EX1` — Makefile touch is required solely to add the private-package quality and opt-in live-smoke targets; impact is limited to the existing Docker pattern, and rollback is removal of those targets.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -47,3 +47,8 @@ Deliver one private, hermetic `@sentropic/mcp-connector-google` benchmark packag
   - [x] Verify no real network call, API import, or secret logging occurs in the package source.
   - [x] Run `make scope-check` before commit.
   - [x] Commit the bounded change via `make commit` and verify a clean worktree.
+- [ ] **Lot 3 — Opt-in Google live execution**
+  - [ ] Add real Google Drive and Gmail read-only executors, adapters, and broker that reuse the existing manifests and resolve only `googleOAuthAccessToken` by reference.
+  - [ ] Add hermetic fetch-mocked coverage for every live capability, typed failures, token redaction, and unsafe identifier rejection.
+  - [ ] Add the opt-in Docker smoke target and verify its no-token skip path.
+  - [ ] Run package typecheck, full package tests, scope check, and commit the bounded change.
