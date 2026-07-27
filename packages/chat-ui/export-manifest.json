@@ -1,5 +1,5 @@
 {
-  "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
+  "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes.",
   "_generated": "2026-07-25",
   "_version": "0.29.0",
   "subpaths": {
@@ -95,6 +95,7 @@
         "CreateWebHostInput",
         "createWebHost",
         "ChatWidgetDisplayMode",
+        "ChatWidgetDrawerSide",
         "ChatWidgetLayoutState",
         "chatWidgetLayout",
         "BUILTIN_LOCAL_TOOL_NAMES",
@@ -326,6 +327,7 @@
       "file": "dist/stores/chatWidgetLayout.js",
       "exports": [
         "ChatWidgetDisplayMode",
+        "ChatWidgetDrawerSide",
         "ChatWidgetLayoutState",
         "chatWidgetLayout"
       ],
@@ -430,7 +432,7 @@
       "kind": "svelte",
       "file": "dist/components/ChatPlacementMenuButton.svelte",
       "exists": true,
-      "_propSnapshot": "Props: placementMenu (ChatPlacementMenu, required), onPlacementChange? ((placement: ChatPlacement) => void), class? (string passthrough for the trigger button). Renders the 'Move to…' trigger+popup (Right/Left/Center/Full) — extracted from ChatDock's former absolute overlay (which collided with host header controls) into a normal in-flow icon button the host mounts in its own toolbar. Preserves code-review fixes F1-F5: Escape/Arrow keydowns on the popup stopPropagation (never bubble to an ancestor dialog's Escape-closes handler), outside-pointerdown closes, roving tabindex focus, focus returns to the trigger on close."
+      "_propSnapshot": "Props: placementMenu (ChatPlacementMenu, required), onPlacementChange? ((placement: ChatPlacement) => void), dragCallbacks? ({ start, move, end, cancel }), class? (string passthrough for the trigger button). Renders a grouped Mode + Side trigger/popup: Panel / Floating / Full screen, then Right / Center / Left for Floating or Right / Left for Panel; Side is absent in Full screen. It is an in-flow host-toolbar control, not a ChatDock overlay. Escape/Arrow keydowns stop propagation, outside-pointerdown closes, roving tabindex returns focus to the trigger, drag callbacks drive host-owned placement requests."
     },
     "./components/ChatPanel.svelte": {
       "kind": "svelte",
@@ -809,7 +811,8 @@
     "./components/ChatPlacementDropZones.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatPlacementDropZones.svelte",
-      "exists": true
+      "exists": true,
+      "_propSnapshot": "Props: zones? (DropZone[]), hovered? (ChatPlacement | null), labelForPlacement (required callback). Renders a pointer-events-none, reduced-motion-safe viewport overlay of host-computed drop zones; the hovered zone uses the active highlight."
     }
   }
 }
