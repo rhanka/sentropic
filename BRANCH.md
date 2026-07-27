@@ -47,8 +47,8 @@ Deliver Google Drive and Gmail read-only provider adapters against the frozen `@
   - [x] Verify no real network call, API import, or secret logging occurs in the package source.
   - [x] Run `make scope-check` before commit.
   - [x] Commit the bounded change via `make commit` and verify a clean worktree.
-- [ ] **Lot 3 — Opt-in Google live execution**
-  - [ ] Add real Google Drive and Gmail read-only executors, adapters, and broker that reuse the existing manifests and resolve only `googleOAuthAccessToken` by reference.
-  - [ ] Add hermetic fetch-mocked coverage for every live capability, typed failures, token redaction, and unsafe identifier rejection.
-  - [ ] Add the opt-in Docker smoke target and verify its no-token skip path.
-  - [ ] Run package typecheck, full package tests, scope check, and commit the bounded change.
+- [x] **Lot 3 — Opt-in Google live execution**
+  - [x] Add real Google Drive and Gmail read-only executors, adapters, and broker that reuse the existing manifests and resolve only `googleOAuthAccessToken` by reference.
+  - [x] Add hermetic fetch-mocked coverage for every live capability, typed failures, token redaction, and unsafe identifier rejection.
+  - [x] Add the opt-in Docker smoke target and verify its no-token skip path.
+  - [x] Run package typecheck, full package tests, scope check, and commit the bounded change.
