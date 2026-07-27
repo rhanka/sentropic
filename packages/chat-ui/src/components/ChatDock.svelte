@@ -300,9 +300,12 @@
           isMobileViewport,
           displayMode,
         });
+    // Only a menu-owned drawer publishes a side. The legacy path must emit the
+    // exact payload it emitted before this branch, so hosts that never supply a
+    // menu see no new field at all.
     const drawerSideNow = menuOwnsPlacementNow && placementNow?.kind === 'drawer'
       ? placementNow.side
-      : 'right';
+      : undefined;
     chatWidgetLayout.set({
       mode: modeNow,
       isOpen: isVisible,
