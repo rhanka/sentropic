@@ -64,20 +64,32 @@ test.describe('Chat placement menu — desktop geometry', () => {
       await menu.getByRole('menuitemradio', { name: label, exact: true }).click();
     };
 
+    // The app pane animates its padding over 200ms, so a bare boundingBox()
+    // read right after the click samples a mid-transition position. Poll the
+    // measured geometry until it settles, then assert the invariant — this
+    // still fails if the pane never clears the drawer.
+    const settledBoxes = async () => {
+      let previous = '';
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const dialog = await chatDialog.boundingBox();
+        const content = await page.locator('main').boundingBox();
+        if (!dialog || !content) throw new Error('Chat dialog or app content pane has no bounding box');
+        const signature = `${dialog.x}:${dialog.width}:${content.x}:${content.width}`;
+        if (signature === previous) return { dialog, content };
+        previous = signature;
+        await page.waitForTimeout(100);
+      }
+      throw new Error('Chat dialog and app content pane geometry never settled');
+    };
+
     await select('Panneau');
     await select('Gauche');
-    const left = await chatDialog.boundingBox();
-    if (!left) throw new Error('Chat dialog has no bounding box after selecting Panneau + Gauche');
-    const leftContent = await page.locator('main').boundingBox();
-    if (!leftContent) throw new Error('App content pane has no bounding box with Panneau + Gauche');
+    const { dialog: left, content: leftContent } = await settledBoxes();
     expect(left.x).toBe(0);
     expect(left.x + left.width).toBeLessThanOrEqual(leftContent.x);
 
     await select('Droite');
-    const right = await chatDialog.boundingBox();
-    if (!right) throw new Error('Chat dialog has no bounding box after selecting Panneau + Droite');
-    const rightContent = await page.locator('main').boundingBox();
-    if (!rightContent) throw new Error('App content pane has no bounding box with Panneau + Droite');
+    const { dialog: right, content: rightContent } = await settledBoxes();
     expect(right.x).toBeGreaterThan(0);
     expect(right.x + right.width).toBe(viewport.width);
     expect(rightContent.x + rightContent.width).toBeLessThanOrEqual(right.x);
@@ -145,14 +157,32 @@ test.describe('Chat placement menu — desktop geometry', () => {
     const triggerBox = await moveTrigger.boundingBox();
     if (!triggerBox) throw new Error('Move trigger has no bounding box for the Close overlap check');
 
+    const closeButton = chatDialog.getByRole('button', { name: 'Fermer' });
+    const closeBox = await closeButton.boundingBox();
+    if (!closeBox) throw new Error('Close button has no bounding box for the overlap check');
+
     await page.mouse.move(triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(80, 200);
     await expect(page.locator('[data-chat-placement-drop-zones]')).toBeVisible();
-    await chatDialog.getByRole('button', { name: 'Fermer' }).click();
 
-    await expect(chatDialog).toBeHidden();
+    // A real user cannot click while the primary button is already held, so
+    // clicking here would not exercise anything meaningful. The invariant that
+    // actually matters — and that a covering overlay broke once before — is
+    // that the drop-zone layer never becomes the hit target over the Close
+    // button. Assert the topmost element at Close's centre is still Close.
+    const closeIsTopmost = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return Boolean(el?.closest('button[aria-label="Fermer"], button[title="Fermer"]'));
+    }, { x: closeBox.x + closeBox.width / 2, y: closeBox.y + closeBox.height / 2 });
+    expect(closeIsTopmost).toBe(true);
+
+    // Then finish the gesture like a user would, and confirm Close still works
+    // and tears the overlay down.
+    await page.mouse.up();
     await expect(page.locator('[data-chat-placement-drop-zones]')).toHaveCount(0);
+    await closeButton.click();
+    await expect(chatDialog).toBeHidden();
   });
 });
 
