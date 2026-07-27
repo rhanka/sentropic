@@ -7,6 +7,13 @@ export type ChatPlacementMenuButtonProps = {
   placementMenu: ChatPlacementMenu;
   /** Called after a selected placement has settled. */
   onPlacementChange?: (placement: ChatPlacement) => void;
+  /** Optional host-owned drag lifecycle for the Move trigger. */
+  dragCallbacks?: {
+    start: (clientX: number, clientY: number) => void;
+    move: (clientX: number, clientY: number) => void;
+    end: (clientX: number, clientY: number) => void;
+    cancel: () => void;
+  };
   /** Extra class(es) appended to the trigger button (host styling passthrough). */
   class?: string;
 };

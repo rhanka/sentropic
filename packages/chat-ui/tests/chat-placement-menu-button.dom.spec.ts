@@ -20,6 +20,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ChatPlacementMenuButton from '../src/components/ChatPlacementMenuButton.svelte';
+import ChatPlacementDropZones from '../src/components/ChatPlacementDropZones.svelte';
 import { createChatPlacementMenu } from '../src/state/chatPlacementMenu';
 
 afterEach(() => cleanup());
@@ -62,6 +63,7 @@ describe('ChatPlacementMenuButton — trigger', () => {
     expect(trigger).not.toBeNull();
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');
     expect(trigger?.getAttribute('aria-label')).toBe('Move chat to…');
+    expect(trigger?.getAttribute('title')).toBe('Move chat to…');
   });
 
   it('applies the passed class prop to the trigger (host styling passthrough)', async () => {
@@ -80,7 +82,7 @@ describe('ChatPlacementMenuButton — trigger', () => {
 // ---------------------------------------------------------------------------
 
 describe('ChatPlacementMenuButton — popup contents', () => {
-  it('lists exactly 4 items (Right/Left/Center/Full) when opened, current one checked', async () => {
+  it('renders MODE and SIDE groups separated by a real separator when opened', async () => {
     const menu = createMenu();
     await flushAsync();
     const { container } = render(ChatPlacementMenuButton, { props: { placementMenu: menu } });
@@ -88,17 +90,35 @@ describe('ChatPlacementMenuButton — popup contents', () => {
     await fireEvent.click(trigger);
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
 
-    const items = container.querySelectorAll('[role="menuitemradio"]');
-    expect(items.length).toBe(4);
-    expect(Array.from(items).map((el) => el.textContent?.trim())).toEqual([
-      'Right',
-      'Left',
-      'Center',
-      'Full',
+    const groups = container.querySelectorAll('[role="group"]');
+    expect(groups).toHaveLength(2);
+    expect(Array.from(groups).map((group) => group.getAttribute('aria-label'))).toEqual(['Mode', 'Side']);
+    expect(container.querySelectorAll('[role="separator"]')).toHaveLength(1);
+    expect(Array.from(groups[0]?.querySelectorAll('[role="menuitemradio"]') ?? []).map((el) => el.textContent?.trim())).toEqual([
+      'Panel',
+      'Floating',
+      'Full screen',
     ]);
-    const checked = Array.from(items).filter((el) => el.getAttribute('aria-checked') === 'true');
-    expect(checked).toHaveLength(1);
-    expect(checked[0]?.textContent).toContain('Right'); // default placement = floating.right
+    expect(Array.from(groups[1]?.querySelectorAll('[role="menuitemradio"]') ?? []).map((el) => el.textContent?.trim())).toEqual([
+      'Right',
+      'Center',
+      'Left',
+    ]);
+    expect(groups[0]?.querySelector('[aria-checked="true"]')?.textContent).toContain('Floating');
+    expect(groups[1]?.querySelector('[aria-checked="true"]')?.textContent).toContain('Right');
+  });
+
+  it('renders only the MODE group in full screen', async () => {
+    const menu = createMenu();
+    await menu.request({ kind: 'full' });
+    const { container } = render(ChatPlacementMenuButton, { props: { placementMenu: menu } });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+    await fireEvent.click(trigger);
+
+    expect(container.querySelectorAll('[role="group"]')).toHaveLength(1);
+    expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Mode');
+    expect(container.querySelectorAll('[role="separator"]')).toHaveLength(0);
+    expect(container.querySelectorAll('[role="menuitemradio"]')).toHaveLength(3);
   });
 });
 
@@ -116,7 +136,7 @@ describe('ChatPlacementMenuButton — activation', () => {
     await fireEvent.click(trigger);
 
     const items = Array.from(container.querySelectorAll('[role="menuitemradio"]'));
-    const fullItem = items.find((el) => el.textContent?.includes('Full')) as HTMLElement;
+    const fullItem = items.find((el) => el.textContent?.includes('Full screen')) as HTMLElement;
     await fireEvent.click(fullItem);
     await flushAsync();
 
@@ -215,13 +235,13 @@ describe('ChatPlacementMenuButton — keyboard (code review F1)', () => {
 
     const list = container.querySelector('[role="menu"]') as HTMLElement;
     const items = () => Array.from(container.querySelectorAll('[role="menuitemradio"]'));
-    // Right (index 0) starts as the roving tabstop (it's the current placement).
-    expect(items()[0]?.getAttribute('tabindex')).toBe('0');
-    expect(items()[1]?.getAttribute('tabindex')).toBe('-1');
-
-    await fireEvent.keyDown(list, { key: 'ArrowDown' });
+    // Floating (index 1) starts as the roving tabstop because it is the active mode.
     expect(items()[0]?.getAttribute('tabindex')).toBe('-1');
     expect(items()[1]?.getAttribute('tabindex')).toBe('0');
+
+    await fireEvent.keyDown(list, { key: 'ArrowDown' });
+    expect(items()[1]?.getAttribute('tabindex')).toBe('-1');
+    expect(items()[2]?.getAttribute('tabindex')).toBe('0');
     expect(ancestorKeyDown).not.toHaveBeenCalled();
   });
 });
@@ -243,5 +263,23 @@ describe('ChatPlacementMenuButton — outside-click dismissal (code review F5)',
 
     expect(container.querySelector('[role="menu"]')).toBeNull();
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
+describe('ChatPlacementDropZones', () => {
+  it('renders host-computed destinations and highlights the hovered placement', () => {
+    const left = { kind: 'drawer', side: 'left', occupancy: 'primary' } as const;
+    const { container, getByText } = render(ChatPlacementDropZones, {
+      props: {
+        zones: [{ placement: left, rect: { x: 0, y: 0, width: 200, height: 600 } }],
+        hovered: left,
+        labelForPlacement: () => 'Panel Left',
+      },
+    });
+
+    expect(container.querySelector('[data-chat-placement-drop-zones]')).not.toBeNull();
+    // `toHaveClass` is a jest-dom matcher and is NOT registered in this vitest
+    // setup; use the classList idiom already used throughout this suite.
+    expect(getByText('Panel Left').classList.contains('bg-primary/20')).toBe(true);
   });
 });
