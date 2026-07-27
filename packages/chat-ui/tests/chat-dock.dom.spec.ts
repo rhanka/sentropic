@@ -323,8 +323,11 @@ describe('ChatDock — placement menu affordance (default-off)', () => {
       published = layout as unknown as Record<string, unknown>;
     });
     renderDock({ displayMode: 'floating', hostMode: 'overlay', initialOpen: true, isBrowser: true });
-    expect(published).not.toBeNull();
-    expect(published?.drawerSide).toBeUndefined();
+    // Svelte stores emit synchronously on subscribe, so `published` is already
+    // set from the afterEach reset. Assert the RENDER's own payload (open +
+    // floating) so this cannot pass if ChatDock stopped publishing entirely.
+    expect(published).toMatchObject({ mode: 'floating', isOpen: true });
+    expect(published).not.toHaveProperty('drawerSide');
     unsubscribe();
   });
 });

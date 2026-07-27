@@ -97,10 +97,12 @@
   export let isBrowser = false;
 
   /**
-   * Optional headless placement menu (surfaces L1c-menu). When provided,
-   * ChatDock derives the active placement from `placementMenu.current()`
-   * instead of the legacy displayMode->placement bridge. When undefined
-   * (default), behavior is EXACTLY today's: zero change.
+   * Optional headless placement menu (surfaces L1c-menu). It drives the active
+   * placement ONLY where it may legitimately own it — see
+   * `canChatPlacementMenuOwnPlacement`: a sidepanel host, a Chrome extension
+   * overlay and a mobile viewport each force their own mode and ignore it.
+   * Everywhere else the legacy displayMode->placement bridge applies. When
+   * undefined (default), behavior is EXACTLY today's: zero change.
    *
    * ChatDock renders NO trigger/popup UI for this menu — that affordance
    * lives in ChatPlacementMenuButton, which the HOST mounts separately
@@ -250,7 +252,11 @@
   export let isOpen: boolean = false;
   $: isOpen = isVisible;
 
-  /** Bindable: true when effectiveMode === 'docked'. */
+  /**
+   * Bindable: true when the dock renders as a side panel — derived from the
+   * effective placement when a menu owns it (a drawer is docked), otherwise
+   * from the legacy `effectiveMode === 'docked'`.
+   */
   export let isDocked: boolean = false;
   $: isDocked = _isDocked;
 
@@ -300,9 +306,10 @@
           isMobileViewport,
           displayMode,
         });
-    // Only a menu-owned drawer publishes a side. The legacy path must emit the
-    // exact payload it emitted before this branch, so hosts that never supply a
-    // menu see no new field at all.
+    // Only a menu-owned drawer publishes a side. Spread it conditionally so the
+    // legacy payload has no `drawerSide` KEY at all — a present-but-undefined
+    // key still shows up in Object.keys / structural comparisons on the host
+    // side, which would not be the pre-branch shape.
     const drawerSideNow = menuOwnsPlacementNow && placementNow?.kind === 'drawer'
       ? placementNow.side
       : undefined;
@@ -310,7 +317,7 @@
       mode: modeNow,
       isOpen: isVisible,
       dockWidthCss,
-      drawerSide: drawerSideNow,
+      ...(drawerSideNow ? { drawerSide: drawerSideNow } : {}),
     });
   };
 
