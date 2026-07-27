@@ -10,11 +10,18 @@
  * The design system owns the visual DropZone; this is the host-side hit-testing.
  */
 
-import type { ChatPlacement } from './chatPlacement.js';
+import { placementId, type ChatPlacement } from './chatPlacement.js';
 
 export type Rect = { x: number; y: number; width: number; height: number };
 
 export type DropZone = { placement: ChatPlacement; rect: Rect };
+
+export type Viewport = { width: number; height: number };
+
+export type CreateViewportDropZonesOptions = {
+  viewport: Viewport;
+  supported: ChatPlacement[];
+};
 
 export type DragSessionConfig = {
   zones: DropZone[];
@@ -44,6 +51,28 @@ const containsPoint = (rect: Rect, x: number, y: number): boolean =>
   x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
 
 const area = (rect: Rect): number => rect.width * rect.height;
+
+/**
+ * Partition the viewport into placement destinations. A host passes only its
+ * supported placements, so the gesture cannot advertise an unreachable drop.
+ */
+export function createViewportDropZones(
+  opts: CreateViewportDropZonesOptions,
+): DropZone[] {
+  const { width, height } = opts.viewport;
+  const rects: Record<string, Rect> = {
+    'drawer.left.primary': { x: 0, y: 0, width: width * 0.24, height },
+    'drawer.right.primary': { x: width * 0.76, y: 0, width: width * 0.24, height },
+    'full': { x: width * 0.24, y: 0, width: width * 0.52, height: height * 0.5 },
+    'floating.left': { x: 0, y: height * 0.5, width: width / 3, height: height * 0.5 },
+    'floating.center': { x: width / 3, y: height * 0.5, width: width / 3, height: height * 0.5 },
+    'floating.right': { x: (width * 2) / 3, y: height * 0.5, width: width / 3, height: height * 0.5 },
+  };
+  return opts.supported.flatMap((placement) => {
+    const rect = rects[placementId(placement)];
+    return rect ? [{ placement, rect }] : [];
+  });
+}
 
 export function createDragSession(config: DragSessionConfig): DragSession {
   const tolerance = config.hitTolerancePx ?? DEFAULT_HIT_TOLERANCE_PX;
