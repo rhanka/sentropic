@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildChatPlacementPersistenceKey,
   createChatPlacementMenu,
+  createFrenchChatPlacementMenuLabels,
 } from '../src/state/chatPlacementMenu';
 import { placementId, type ChatPlacement } from '../src/state/chatPlacement';
 import { canChatPlacementMenuOwnPlacement } from '../src/state/chatWidgetShell';
@@ -102,21 +103,100 @@ describe('chatPlacementMenu — construction does not write persistence (code re
 });
 
 describe('chatPlacementMenu — items', () => {
-  it('exposes exactly 4 items: Right / Left / Center / Full', () => {
+  it('exposes mode and side groups with default English labels', () => {
     const menu = createChatPlacementMenu({
       userId: 'u1',
       hostId: 'h1',
       workspace: 'w1',
       storage: createMemoryStorage(),
     });
-    expect(menu.items.map((i) => i.id)).toEqual([
-      'floating.right',
-      'floating.left',
-      'floating.center',
-      'full',
+    expect(menu.groups().map((group) => group.id)).toEqual(['mode', 'side']);
+    expect(menu.groups()[0]?.items.map((item) => item.label)).toEqual([
+      'Panel',
+      'Floating',
+      'Full screen',
     ]);
-    expect(menu.items.map((i) => i.label)).toEqual(['Right', 'Left', 'Center', 'Full']);
-    expect(menu.items.find((i) => i.id === 'full')?.placement).toEqual({ kind: 'full' });
+    expect(menu.groups()[1]?.items.map((item) => item.label)).toEqual(['Right', 'Center', 'Left']);
+    expect(menu.groups()[0]?.items.find((item) => item.id === 'full')?.placement).toEqual({ kind: 'full' });
+  });
+
+  it('hides the side group in full screen and restores the remembered floating side', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+
+    await menu.request({ kind: 'floating', anchor: 'left' });
+    await menu.request({ kind: 'full' });
+    expect(menu.groups().map((group) => group.id)).toEqual(['mode']);
+
+    const floating = menu.groups()[0]?.items.find((item) => item.id === 'floating');
+    expect(floating?.placement).toEqual({ kind: 'floating', anchor: 'left' });
+  });
+
+  it('exposes a left drawer and remembers its side after full screen', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+    });
+
+    await menu.request({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    await menu.request({ kind: 'full' });
+
+    const panel = menu.groups()[0]?.items.find((item) => item.id === 'panel');
+    expect(panel?.placement).toEqual({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    expect(menu.snapshot().supported.map(placementId)).toContain('drawer.left.primary');
+  });
+
+  it('restores the last drawer side after a full-screen preference is reloaded', async () => {
+    const storage = createMemoryStorage();
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage,
+    });
+
+    await menu.request({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    await menu.request({ kind: 'full' });
+
+    const reloaded = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage,
+    });
+    expect(reloaded.current()).toEqual({ kind: 'full' });
+    expect(reloaded.groups()[0]?.items.find((item) => item.id === 'panel')?.placement).toEqual({
+      kind: 'drawer',
+      side: 'left',
+      occupancy: 'primary',
+    });
+  });
+
+  it('provides the French preset without hardcoding French into the reusable default', () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1',
+      hostId: 'h1',
+      workspace: 'w1',
+      storage: createMemoryStorage(),
+      labels: createFrenchChatPlacementMenuLabels(),
+    });
+
+    expect(menu.groups()[0]?.items.map((item) => item.label)).toEqual([
+      'Panneau',
+      'Libre',
+      'Plein écran',
+    ]);
+    expect(menu.groups()[1]?.items.map((item) => item.label)).toEqual([
+      'Droite',
+      'Centre',
+      'Gauche',
+    ]);
   });
 });
 
@@ -168,28 +248,12 @@ describe('chatPlacementMenu — construction reads persisted intent (D6)', () =>
     expect(menu.current()).toEqual({ kind: 'floating', anchor: 'right' });
   });
 
-  it('ignores a persisted value that is unsupported/malformed for this host', async () => {
+  it('restores a persisted left drawer placement', async () => {
     const storage = createMemoryStorage();
     storage.setItem('chat-ui/placement/v1/u1/h1/w1', 'drawer.left.primary');
     const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
     await flushAsync();
-    expect(menu.current()).toEqual({ kind: 'floating', anchor: 'right' });
-  });
-});
-
-describe('chatPlacementMenu — fallback / rejection for an unsupported target', () => {
-  it('leaves current() unchanged when the requested placement is unsupported', async () => {
-    const menu = createChatPlacementMenu({
-      userId: 'u1',
-      hostId: 'h1',
-      workspace: 'w1',
-      storage: createMemoryStorage(),
-    });
-    await flushAsync();
-    const before = menu.current();
-    const unsupported: ChatPlacement = { kind: 'drawer', side: 'left', occupancy: 'primary' };
-    await menu.request(unsupported);
-    expect(menu.current()).toEqual(before);
+    expect(menu.current()).toEqual({ kind: 'drawer', side: 'left', occupancy: 'primary' });
   });
 });
 
