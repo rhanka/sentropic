@@ -15,6 +15,7 @@ type ManifestSubpath = {
   exists?: boolean;
   exports?: string[];
   storeShape?: Record<string, string[]>;
+  _propSnapshot?: string;
 };
 type Manifest = { subpaths: Record<string, ManifestSubpath> };
 
@@ -81,6 +82,53 @@ describe('export-surface (c): store-shape — subscribe/set/update', () => {
     expect(typeof store['set']).toBe('function');
     expect(typeof store['update']).toBe('function');
   });
+});
+
+describe('export-surface (c2): placement component contracts stay synchronized', () => {
+  const contracts = [
+    {
+      subpath: './components/ChatDock.svelte',
+      source: 'src/components/ChatDock.svelte',
+      dts: 'src/components/ChatDock.svelte.d.ts',
+      runtimeProps: ['containerStyle', 'dialogId', 'dialogAriaLabel'],
+      dtsProps: ['containerStyle?: string', 'dialogId?: string', 'dialogAriaLabel?: string'],
+      snapshotTerms: ['containerStyle?', 'dialogId?', 'dialogAriaLabel?'],
+    },
+    {
+      subpath: './components/ChatPlacementMenuButton.svelte',
+      source: 'src/components/ChatPlacementMenuButton.svelte',
+      dts: 'src/components/ChatPlacementMenuButton.svelte.d.ts',
+      runtimeProps: ['dragCallbacks', 'placementMenu', 'onPlacementChange'],
+      dtsProps: ['dragCallbacks?', 'placementMenu:', 'onPlacementChange?'],
+      snapshotTerms: ['dragCallbacks?', 'Mode + Side', 'Side is absent in Full screen'],
+    },
+    {
+      subpath: './components/ChatPlacementDropZones.svelte',
+      source: 'src/components/ChatPlacementDropZones.svelte',
+      dts: 'src/components/ChatPlacementDropZones.svelte.d.ts',
+      runtimeProps: ['zones', 'hovered', 'labelForPlacement'],
+      dtsProps: ['zones?:', 'hovered?:', 'labelForPlacement:'],
+      snapshotTerms: ['zones?', 'hovered?', 'labelForPlacement'],
+    },
+  ];
+
+  for (const contract of contracts) {
+    it(`${contract.subpath} has matching runtime props, declaration props, and manifest snapshot`, () => {
+      const source = fs.readFileSync(path.join(PACKAGE_ROOT, contract.source), 'utf8');
+      const dts = fs.readFileSync(path.join(PACKAGE_ROOT, contract.dts), 'utf8');
+      const snapshot = manifest.subpaths[contract.subpath]?._propSnapshot ?? '';
+
+      for (const prop of contract.runtimeProps) {
+        expect(source, `${contract.subpath} runtime is missing ${prop}`).toContain(prop);
+      }
+      for (const prop of contract.dtsProps) {
+        expect(dts, `${contract.subpath} declaration is missing ${prop}`).toContain(prop);
+      }
+      for (const term of contract.snapshotTerms) {
+        expect(snapshot, `${contract.subpath} manifest snapshot is missing ${term}`).toContain(term);
+      }
+    });
+  }
 });
 
 describe('export-surface (d): consumer scan — all used subpaths declared in exports', () => {

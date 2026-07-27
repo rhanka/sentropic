@@ -17,6 +17,12 @@ export type ChatDockProps = {
    * Set to true when a popover menu must extend outside the dialog bounds.
    */
   contentOverflowVisible?: boolean;
+  /** Inline style string for the outer container div. */
+  containerStyle?: string;
+  /** Override the dialog element id. */
+  dialogId?: string;
+  /** aria-label for the dialog element. */
+  dialogAriaLabel?: string;
   /** Whether the browser context is available (guards localStorage/window access). */
   isBrowser?: boolean;
   /**
