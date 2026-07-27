@@ -15,7 +15,7 @@
   $: isDockedOpen = $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen;
   $: isFloatingOpen = $chatWidgetLayout.mode === 'floating' && $chatWidgetLayout.isOpen;
   $: rightOffset = (() => {
-    if (isDockedOpen) {
+    if (isDockedOpen && $chatWidgetLayout.drawerSide === 'right') {
       if ($chatWidgetLayout.dockWidthCss === '100vw') return '1rem';
       return `calc(${$chatWidgetLayout.dockWidthCss} + ${TOAST_CHAT_GAP_CSS})`;
     }

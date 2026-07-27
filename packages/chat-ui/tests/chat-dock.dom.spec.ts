@@ -438,6 +438,23 @@ describe('ChatDock — menu/legacy coexistence', () => {
     unsubscribe();
   });
 
+  it('publishes the active drawer side from the same menu-owned placement', async () => {
+    const menu = createChatPlacementMenu({
+      userId: 'u1', hostId: 'h1', workspace: 'w1', storage: createMemoryStorage(),
+      defaultPlacement: { kind: 'drawer', side: 'left', occupancy: 'primary' },
+    });
+    const published: Array<{ mode: string; drawerSide?: string }> = [];
+    const unsubscribe = chatWidgetLayout.subscribe((layout) => published.push(layout));
+    renderDock({ initialOpen: true, placementMenu: menu });
+    await flushAsync();
+    expect(published.at(-1)).toMatchObject({ mode: 'docked', drawerSide: 'left' });
+
+    await menu.request({ kind: 'drawer', side: 'right', occupancy: 'primary' });
+    await flushAsync();
+    expect(published.at(-1)).toMatchObject({ mode: 'docked', drawerSide: 'right' });
+    unsubscribe();
+  });
+
   it('publishes docked layout on an initial mobile mount even when the menu prefers floating', async () => {
     mobileViewport = true;
     const menu = createChatPlacementMenu({
