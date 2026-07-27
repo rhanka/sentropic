@@ -1,54 +1,70 @@
-# Feature: Google Drive and Gmail MCP adapter proofs
+# Feature: Multi-account document connector accounts
 
 ## Objective
-Deliver Google Drive and Gmail read-only provider adapters against the frozen `@sentropic/mcp-platform` contract, preserving fixture proofs and adding an opt-in live API execution path.
+Enable multiple distinct connector accounts per workspace, user, and provider, subject to a globally admin-configurable maximum with a default of five.
 
 ## Scope / Guardrails
-- Scope is limited to the new connector package, this branch plan, and the two requested Makefile targets.
-- Fixture adapters and tests remain hermetic; the opt-in live smoke alone performs real Google API calls. No OAuth runtime, API import, migration, gateway, or mesh work.
-- Connector access is by `ctx.getSecret('googleOAuthAccessToken')`; secret values are never logged, emitted, or returned.
-- Make-only workflow; test only with `ENV=test-mcp-google` as the last argument.
-- All new text is English.
+- Scope limited to the API plane for `document_connector_accounts` and its Google Drive account lifecycle.
+- One migration in `api/drizzle/*.sql`.
+- Make-only workflow, no direct Docker commands.
+- Work only in `tmp/connector-accounts-multi`.
+- Automated test campaigns use `ENV=test-connector-accounts-multi`, never `ENV=dev`.
+- Every Make command passes `ENV` last.
+- Preserve encrypted token custody and existing Google Drive route behavior.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/mcp-connector-google/**`
   - `BRANCH.md`
-  - `Makefile` under `BR72-EX1`
+  - `api/drizzle/0040_connector_accounts_multi_account.sql`
+  - `api/drizzle/meta/**`
+  - `api/src/config/env.ts`
+  - `api/src/db/schema.ts`
+  - `api/src/routes/api/settings.ts`
+  - `api/src/services/google-drive-connector-accounts.ts`
+  - `api/src/services/settings.ts`
+  - `api/tests/**`
 - **Forbidden Paths (must not change in this branch)**:
-  - `api/**`
-  - `packages/mcp-platform/**`
-  - `packages/mcp-connector-*/**` except `packages/mcp-connector-google/**`
-  - `package-lock.json`
-  - migrations, gateways, and mesh code
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `api/drizzle/control/**`
+  - `api/src/services/tenancy/**`
+  - `packages/**`
+  - `gateway/**`
+  - `mesh/**`
+  - `ui/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (one public migration only)
+- **Exception process**:
+  - Declare exceptions in `## Feedback Loop` before touching conditional paths.
 
 ## Feedback Loop
-- [x] `BR72-EX1` — Makefile touch is required solely to add the private-package quality and opt-in live-smoke targets; impact is limited to the existing Docker pattern, and rollback is removal of those targets.
+- BRCA-EX1 `acknowledge`: add one public migration at `api/drizzle/0040_connector_accounts_multi_account.sql` to change the provider check and account identity unique constraint. Impact: existing rows remain valid; rollback is a down migration restoring the previous constraint. Owner-directed in task statement.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: one bounded adapter package against a frozen contract.
+- [x] **Mono-branch + cherry-pick**
+- [ ] **Multi-branch**
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Frozen-contract baseline**
-  - [x] Verify the branch with `harness check branch` and `git branch --show-current`.
-  - [x] Read the frozen runtime and manifest contracts, Google Drive API reference, and GitHub benchmark pattern.
-  - [x] Confirm package-only scope and declare `BR72-EX1` before changing `Makefile`.
-- [x] **Lot 1 — Private Google adapter package**
-  - [x] Add separate Google Drive and Gmail read-only manifests and provider adapters.
-  - [x] Add synthetic capability fixtures, account-mount documentation, and a public package entry point.
-  - [x] Add hermetic Vitest coverage for read-only declarations, discovery, fixtures, audit IDs, secret-by-reference, and state-only secret status.
-  - [x] Lot gate: `make typecheck-mcp-connector-google`.
-  - [x] Lot gate: `make test-mcp-connector-google ENV=test-mcp-google`.
-- [x] **Lot 2 — Scope and handoff validation**
-  - [x] Verify no real network call, API import, or secret logging occurs in the package source.
-  - [x] Run `make scope-check` before commit.
-  - [x] Commit the bounded change via `make commit` and verify a clean worktree.
-- [x] **Lot 3 — Opt-in Google live execution**
-  - [x] Add real Google Drive and Gmail read-only executors, adapters, and broker that reuse the existing manifests and resolve only `googleOAuthAccessToken` by reference.
-  - [x] Add hermetic fetch-mocked coverage for every live capability, typed failures, token redaction, and unsafe identifier rejection.
-  - [x] Add the opt-in Docker smoke target and verify its no-token skip path.
-  - [x] Run package typecheck, full package tests, scope check, and commit the bounded change.
+- [ ] **Lot 0 — Baseline and constraints**
+  - [x] Verify `feat/connector-accounts-multi-account` with `harness check branch`.
+  - [x] Read project rules, connector, settings, and ARCH-11 boundaries.
+  - [x] Declare BRCA-EX1 before the migration.
+- [ ] **Lot 1 — Database account identity**
+  - [ ] Add `0040_connector_accounts_multi_account.sql` and update Drizzle metadata.
+  - [ ] Change the `documentConnectorAccounts` unique index to include `accountSubject`.
+  - [ ] Validate migration generation and schema metadata consistency.
+- [ ] **Lot 2 — Account lifecycle and configured limit**
+  - [ ] Add global default and environment fallback for `connector_accounts_max_per_provider`.
+  - [ ] Add admin settings GET/PUT for the connector-account maximum using the existing settings route gate.
+  - [ ] List connector accounts, preserve reconnect upsert behavior, and reject only a new subject at the configured limit.
+  - [ ] Preserve token encryption and existing most-recent Google Drive account behavior.
+- [ ] **Lot 3 — API tests and validation**
+  - [ ] Update `api/tests/unit/google-drive-connector-accounts.test.ts` for multiple accounts, reconnect, and typed limit failure.
+  - [ ] Add or update focused settings-route tests for admin read/update and effective limit changes.
+  - [ ] Verify Gmail is accepted by the table schema/migration test coverage.
+  - [ ] Run focused API tests, `make typecheck-api`, `make lint-api`, and migration generation validation with `ENV=test-connector-accounts-multi`.
+- [ ] **Lot 4 — Final validation**
+  - [ ] Run required API typecheck and focused connector-account/settings tests.
+  - [ ] Run `make scope-check` before every commit.
+  - [ ] Stop the isolated environment with `make down ENV=test-connector-accounts-multi`.
