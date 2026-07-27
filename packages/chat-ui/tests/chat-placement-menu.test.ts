@@ -294,6 +294,23 @@ describe('chatPlacementMenu — side-memory persistence', () => {
     });
   });
 
+  it('survives syntactically malformed side-memory JSON', () => {
+    const storage = createMemoryStorage();
+    // The sibling test stores VALID json holding invalid enum values, so it
+    // passes even without the JSON.parse guard. This one is unparseable: it
+    // fails if the parse is not defended.
+    storage.setItem('chat-ui/placement/v1/u1/h1/w1/sides', '{"drawerSide":');
+
+    expect(() =>
+      createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage }),
+    ).not.toThrow();
+
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    expect(menu.groups()[0]?.items.find((item) => item.id === 'panel')?.placement).toEqual({
+      kind: 'drawer', side: 'right', occupancy: 'primary',
+    });
+  });
+
   it('isolates side memory across user, host, and workspace persistence tuples', async () => {
     const storage = createMemoryStorage();
     const primary = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });

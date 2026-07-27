@@ -3,7 +3,12 @@ import type { ChatPlacement } from '../state/chatPlacement.js';
 import type { ChatPlacementMenu } from '../state/chatPlacementMenu.js';
 
 export type ChatPlacementMenuButtonProps = {
-  /** The headless placement menu model (required) — owns intent + the 4-item menu surface. */
+  /**
+   * The headless placement menu model (required) — owns the placement intent
+   * and the contextual MODE (panel / floating / full screen) + SIDE groups.
+   * The side group is omitted entirely in full screen, and the centre entry is
+   * offered for floating placements only.
+   */
   placementMenu: ChatPlacementMenu;
   /** Called after a selected placement has settled. */
   onPlacementChange?: (placement: ChatPlacement) => void;
@@ -19,11 +24,12 @@ export type ChatPlacementMenuButtonProps = {
 };
 
 /**
- * ChatPlacementMenuButton — "Move chat to…" placement menu affordance
- * (surfaces L1c-menu). Mount this in the HOST's own header toolbar (next to
- * a display-mode toggle / Close button); it renders as a normal in-flow icon
- * button, not an overlay. ChatDock does not render this — hosts compose it
- * alongside ChatDock, both driven by the same `placementMenu` instance.
+ * ChatPlacementMenuButton — the SINGLE placement control (surfaces L1c-menu).
+ * Mount it in the HOST's own header toolbar next to the Close button; it
+ * renders as a normal in-flow icon button, not an overlay. It replaces any
+ * separate display-mode toggle: mode and side are both chosen from its one
+ * grouped menu. ChatDock does not render it — hosts compose the two, driven
+ * by the same `placementMenu` instance.
  */
 declare const ChatPlacementMenuButton: Component<ChatPlacementMenuButtonProps>;
 
