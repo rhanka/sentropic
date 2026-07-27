@@ -118,11 +118,24 @@ describe('export-surface (c2): placement component contracts stay synchronized',
       const dts = fs.readFileSync(path.join(PACKAGE_ROOT, contract.dts), 'utf8');
       const snapshot = manifest.subpaths[contract.subpath]?._propSnapshot ?? '';
 
+      // A bare `toContain(prop)` is tautological here: the identifier also
+      // appears in comments and call sites, so deleting the declaration would
+      // still pass. Anchor on the actual declaration syntax instead.
       for (const prop of contract.runtimeProps) {
-        expect(source, `${contract.subpath} runtime is missing ${prop}`).toContain(prop);
+        expect(
+          new RegExp(`export\\s+let\\s+${prop}\\b`).test(source),
+          `${contract.subpath} runtime no longer declares \`export let ${prop}\``,
+        ).toBe(true);
       }
+      // `dtsProps` entries already carry their declaration syntax (e.g.
+      // `containerStyle?: string`), so anchor them at the start of a line
+      // rather than accepting a match anywhere (comments, nested types).
       for (const prop of contract.dtsProps) {
-        expect(dts, `${contract.subpath} declaration is missing ${prop}`).toContain(prop);
+        const literal = prop.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        expect(
+          new RegExp(`(^|\\n)\\s*${literal}`).test(dts),
+          `${contract.subpath} declaration no longer declares \`${prop}\``,
+        ).toBe(true);
       }
       for (const term of contract.snapshotTerms) {
         expect(snapshot, `${contract.subpath} manifest snapshot is missing ${term}`).toContain(term);

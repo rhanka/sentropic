@@ -374,7 +374,7 @@
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
   <div
-    class="box-border transition-[padding-right,width] duration-200 h-[100dvh] overflow-y-auto slim-scroll"
+    class="box-border transition-[padding-left,padding-right,width] duration-200 h-[100dvh] overflow-y-auto slim-scroll"
     style:padding-left={chatDockPaddingLeft === '0px' ? undefined : chatDockPaddingLeft}
     style:padding-right={lockBodyScrollForDock ? '0px' : chatDockPaddingRight}
     style:width={lockBodyScrollForDock ? chatDockLeftWidth : '100%'}
