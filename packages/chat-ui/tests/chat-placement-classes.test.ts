@@ -9,6 +9,11 @@ const DOCKED_RIGHT_PRIMARY: ChatPlacement = {
   side: 'right',
   occupancy: 'primary',
 };
+const DOCKED_LEFT_PRIMARY: ChatPlacement = {
+  kind: 'drawer',
+  side: 'left',
+  occupancy: 'primary',
+};
 
 const FLOATING_RIGHT: ChatPlacement = {
   kind: 'floating',
@@ -25,6 +30,15 @@ describe('chatPlacementClasses — dialog container class/style mapping', () => 
     expect(result).toEqual({
       className:
         'chat-dock-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col',
+      style: `width: ${DOCK_WIDTH_CSS};`,
+    });
+  });
+
+  it('maps drawer.left.primary to the left edge with a right border at the configured dock width', () => {
+    const result = placementContainerClasses(DOCKED_LEFT_PRIMARY, { dockWidthCss: DOCK_WIDTH_CSS });
+    expect(result).toEqual({
+      className:
+        'chat-dock-shell fixed top-0 left-0 bottom-0 z-50 bg-white border-r border-gray-200 flex flex-col',
       style: `width: ${DOCK_WIDTH_CSS};`,
     });
   });
@@ -72,6 +86,8 @@ describe('chatPlacementClasses — dialog container class/style mapping', () => 
     const right = placementContainerClasses(FLOATING_RIGHT).className;
     const docked = placementContainerClasses(DOCKED_RIGHT_PRIMARY, { dockWidthCss: DOCK_WIDTH_CSS }).className;
 
-    expect(new Set([left, center, full, right, docked]).size).toBe(5);
+    const dockedLeft = placementContainerClasses(DOCKED_LEFT_PRIMARY, { dockWidthCss: DOCK_WIDTH_CSS }).className;
+
+    expect(new Set([left, center, full, right, docked, dockedLeft]).size).toBe(6);
   });
 });

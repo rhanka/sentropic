@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createDragSession, type DropZone } from '../src/state/chatPlacementDnd';
+import {
+  createDragSession,
+  createViewportDropZones,
+  type DropZone,
+} from '../src/state/chatPlacementDnd';
 import type { ChatPlacement } from '../src/state/chatPlacement';
 
 const drawerRight: ChatPlacement = { kind: 'drawer', side: 'right', occupancy: 'primary' };
@@ -94,5 +98,20 @@ describe('chatPlacementDnd — hit-testing', () => {
     const zones: DropZone[] = [{ placement: drawerLeft, rect: { x: 0, y: 0, width: 50, height: 200 } }];
     const session = createDragSession({ zones });
     expect(session.zones()).toEqual(zones);
+  });
+});
+
+describe('chatPlacementDnd — viewport wiring', () => {
+  it('creates only supported viewport zones and routes a left-edge drop to drawer.left.primary', () => {
+    const zones = createViewportDropZones({
+      viewport: { width: 1200, height: 800 },
+      supported: [drawerLeft, drawerRight, floatingCenter, full],
+    });
+    const session = createDragSession({ zones, hitTolerancePx: 0 });
+
+    expect(zones.map((zone) => zone.placement)).toContainEqual(drawerLeft);
+    expect(zones.map((zone) => zone.placement)).not.toContainEqual({ kind: 'floating', anchor: 'left' });
+    expect(session.hover(80, 200)).toEqual(drawerLeft);
+    expect(session.end()).toEqual(drawerLeft);
   });
 });
