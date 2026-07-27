@@ -1,16 +1,18 @@
 # @sentropic/mcp-connector-google
 
-Private, hermetic benchmark adapters for Google Drive and Gmail against the frozen
-`@sentropic/mcp-platform` contract. They contain read-only manifests, synthetic fixtures,
-and no OAuth runtime, real token, network call, API dependency, gateway, or migration.
+Private Google Drive and Gmail read-only adapters against the frozen
+`@sentropic/mcp-platform` contract. The fixture adapters remain hermetic; separate live
+adapters use a token resolved only by `ctx.getSecret('googleOAuthAccessToken')` to call the
+real Google APIs. There is no OAuth runtime, API dependency, gateway, or migration.
 
 ## Providers
 
 - Google Drive: resources `about.get`, `files.get`; tools `files.list`, `files.export`, `permissions.list`.
 - Gmail: resources `messages.get`, `threads.get`; tools `messages.list`, `labels.list`.
 
-Every fetch path invokes `ctx.getSecret('googleOAuthAccessToken')` as the audited
-secret-by-reference seam, but fixture execution never logs, emits, or returns the resolved value.
+Every live fetch path invokes `ctx.getSecret('googleOAuthAccessToken')` as the audited
+secret-by-reference seam. Fixture execution makes no network requests. Neither adapter logs,
+emits, or returns the resolved secret value.
 
 ## Account and workspace mounting
 
