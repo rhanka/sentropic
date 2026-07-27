@@ -42,7 +42,7 @@ test.describe('Chat (mobile docked) — navigation closes chat', () => {
 });
 
 test.describe('Chat placement menu — desktop geometry', () => {
-  test('places Left, Center, and Right against the desktop viewport', async ({ page }) => {
+  test('places Panneau + Gauche flush left and Panneau + Droite flush right', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
@@ -53,32 +53,57 @@ test.describe('Chat placement menu — desktop geometry', () => {
 
     const chatDialog = page.locator('#chat-widget-dialog');
     await expect(chatDialog).toBeVisible({ timeout: 10_000 });
-    const moveTrigger = chatDialog.getByRole('button', { name: 'Move chat to…' });
+    const moveTrigger = chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' });
     await expect(moveTrigger).toBeVisible();
     const viewport = page.viewportSize();
     if (!viewport) throw new Error('Desktop viewport is unavailable');
 
-    const selectPlacement = async (label: 'Left' | 'Center' | 'Right', className: RegExp) => {
+    const select = async (label: 'Panneau' | 'Gauche' | 'Droite') => {
       await moveTrigger.click();
-      const menu = page.getByRole('menu', { name: 'Move chat to…' });
+      const menu = page.getByRole('menu', { name: 'Déplacer le chat vers…' });
       await menu.getByRole('menuitemradio', { name: label, exact: true }).click();
-      await expect(chatDialog).toHaveClass(className);
-      const box = await chatDialog.boundingBox();
-      if (!box) throw new Error(`Chat dialog has no bounding box after selecting ${label}`);
-      return box;
     };
 
-    const left = await selectPlacement('Left', /sm:left-4/);
-    expect(left.x).toBeGreaterThanOrEqual(0);
-    expect(left.x).toBeLessThanOrEqual(24);
-    expect(left.x + left.width).toBeLessThanOrEqual(viewport.width);
+    await select('Panneau');
+    await select('Gauche');
+    const left = await chatDialog.boundingBox();
+    if (!left) throw new Error('Chat dialog has no bounding box after selecting Panneau + Gauche');
+    expect(left.x).toBe(0);
+    expect(left.x + left.width).toBeLessThan(viewport.width);
 
-    const center = await selectPlacement('Center', /sm:left-1\/2/);
-    expect(Math.abs(center.x + center.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(1);
+    await select('Droite');
+    const right = await chatDialog.boundingBox();
+    if (!right) throw new Error('Chat dialog has no bounding box after selecting Panneau + Droite');
+    expect(right.x).toBeGreaterThan(0);
+    expect(right.x + right.width).toBe(viewport.width);
+  });
 
-    const right = await selectPlacement('Right', /sm:right-4/);
-    expect(viewport.width - (right.x + right.width)).toBeGreaterThanOrEqual(0);
-    expect(viewport.width - (right.x + right.width)).toBeLessThanOrEqual(24);
+  test('drags the header Move control to the left panel drop zone', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 10_000 });
+    await chatButton.click();
+
+    const chatDialog = page.locator('#chat-widget-dialog');
+    const moveTrigger = chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' });
+    await expect(moveTrigger).toBeVisible();
+    const triggerBox = await moveTrigger.boundingBox();
+    if (!triggerBox) throw new Error('Move trigger has no bounding box');
+
+    await page.mouse.move(triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(80, 200);
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toBeVisible();
+    await page.mouse.up();
+
+    const box = await chatDialog.boundingBox();
+    if (!box) throw new Error('Chat dialog has no bounding box after a left-panel drag');
+    expect(box.x).toBe(0);
+
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toHaveCount(0);
   });
 });
 
@@ -94,7 +119,7 @@ test.describe('Chat placement menu — host ownership', () => {
 
     const chatDialog = page.locator('#chat-widget-dialog');
     await expect(chatDialog).toBeVisible({ timeout: 10_000 });
-    const moveTrigger = chatDialog.getByRole('button', { name: 'Move chat to…' });
+    const moveTrigger = chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' });
     await expect(moveTrigger).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -120,15 +145,21 @@ test.describe('Chat placement menu — legacy display-mode integration', () => {
 
     const chatDialog = page.locator('#chat-widget-dialog');
     await expect(chatDialog).toBeVisible({ timeout: 10_000 });
-    await expect(chatDialog).toHaveClass(/right-0/);
-    await expect(chatDialog).not.toHaveClass(/sm:inset-auto/);
+    const seededBox = await chatDialog.boundingBox();
+    if (!seededBox) throw new Error('Chat dialog has no bounding box for the legacy docked seed');
+    expect(seededBox.x + seededBox.width).toBe(1440);
 
-    await chatDialog.getByRole('button', { name: 'Move chat to…' }).click();
-    const menu = page.getByRole('menu', { name: 'Move chat to…' });
-    await menu.getByRole('menuitemradio', { name: 'Left', exact: true }).click();
+    await chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' }).click();
+    const menu = page.getByRole('menu', { name: 'Déplacer le chat vers…' });
+    await menu.getByRole('menuitemradio', { name: 'Libre', exact: true }).click();
+    await chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' }).click();
+    await page.getByRole('menu', { name: 'Déplacer le chat vers…' })
+      .getByRole('menuitemradio', { name: 'Gauche', exact: true }).click();
 
-    await expect(chatDialog).toHaveClass(/sm:left-4/);
-    await expect(chatDialog).toHaveClass(/sm:inset-auto/);
+    const floatingLeftBox = await chatDialog.boundingBox();
+    if (!floatingLeftBox) throw new Error('Chat dialog has no bounding box after selecting Libre + Gauche');
+    expect(floatingLeftBox.x).toBeGreaterThanOrEqual(0);
+    expect(floatingLeftBox.x).toBeLessThanOrEqual(24);
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem('chatWidgetDisplayMode')))
       .toBe('floating');
