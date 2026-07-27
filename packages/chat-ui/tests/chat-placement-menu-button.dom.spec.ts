@@ -309,10 +309,22 @@ describe('ChatPlacementMenuButton — outside-click dismissal (code review F5)',
     const { container } = render(ChatPlacementMenuButton, { props: { placementMenu: menu } });
     const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
 
+    // Asserting "was called with any function" would pass on a duplicate add
+    // or on removing a DIFFERENT function (leaking the real one). Count the
+    // pointerdown registrations and compare the exact handler identity.
+    const pointerAdds = () =>
+      addListener.mock.calls.filter(([type]) => type === 'pointerdown');
+    const pointerRemoves = () =>
+      removeListener.mock.calls.filter(([type]) => type === 'pointerdown');
+
     await fireEvent.click(trigger);
-    expect(addListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+    expect(pointerAdds()).toHaveLength(1);
+    const registered = pointerAdds()[0]?.[1];
+
     await fireEvent.click(trigger);
-    expect(removeListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+    expect(pointerRemoves()).toHaveLength(1);
+    expect(pointerRemoves()[0]?.[1]).toBe(registered);
+    expect(pointerAdds()).toHaveLength(1);
   });
 });
 

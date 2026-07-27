@@ -167,11 +167,19 @@
     closePlacementMenu();
   };
 
+  // This reactive block can re-run while the menu stays open (other state in
+  // the same flush invalidates it). Re-adding the SAME handler is a DOM no-op,
+  // but track attachment explicitly so the listener is registered exactly once
+  // and torn down with the identical reference.
+  let outsideListenerAttached = false;
+
   $: if (typeof window !== 'undefined') {
-    if (placementMenuOpen) {
+    if (placementMenuOpen && !outsideListenerAttached) {
       window.addEventListener('pointerdown', onOutsidePlacementMenuPointerDown);
-    } else {
+      outsideListenerAttached = true;
+    } else if (!placementMenuOpen && outsideListenerAttached) {
       window.removeEventListener('pointerdown', onOutsidePlacementMenuPointerDown);
+      outsideListenerAttached = false;
     }
   }
 
@@ -225,6 +233,7 @@
   onDestroy(() => {
     if (typeof window !== 'undefined') {
       window.removeEventListener('pointerdown', onOutsidePlacementMenuPointerDown);
+      outsideListenerAttached = false;
     }
     placementMenuUnsubscribe?.();
     cancelPlacementDrag();
