@@ -588,6 +588,27 @@
     return ext.chrome?.runtime;
   };
 
+  const requestOpenSidePanel = async (): Promise<boolean> => {
+    if (!isBrowser || !isExtensionOverlayHost) return false;
+    const runtime = getExtensionRuntime();
+    if (!runtime?.sendMessage) return false;
+    try {
+      const response = await runtime.sendMessage({ type: 'open_side_panel' });
+      if (!response?.ok) {
+        console.error(
+          'Failed to request side panel opening:',
+          response?.error ?? 'unknown reason',
+        );
+        return false;
+      }
+      publishHandoffStateIfChanged();
+      return true;
+    } catch (error) {
+      console.error('Failed to request side panel opening.', error);
+      return false;
+    }
+  };
+
   const isExtensionConfigAvailable = () => {
     const runtime = getExtensionRuntime();
     return Boolean(runtime?.id && runtime?.sendMessage);
@@ -2858,7 +2879,20 @@
               </MenuPopover>
             {/if}
             {#if !isSidePanelHost}
-              {#if placementMenu && placementMenuOwnsPlacement}
+              {#if isExtensionOverlayHost}
+                <button
+                  class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                  on:click={() =>
+                    void requestOpenSidePanel().then((opened) => {
+                      if (opened) close();
+                    })}
+                  title={$_('chat.widget.switchToPanel')}
+                  aria-label={$_('chat.widget.switchToPanel')}
+                  type="button"
+                >
+                  <List class="w-4 h-4" aria-hidden="true" />
+                </button>
+              {:else if placementMenu && placementMenuOwnsPlacement}
                 <ChatPlacementMenuButton
                   {placementMenu}
                   onPlacementChange={syncDisplayModeFromPlacement}
