@@ -130,8 +130,8 @@ chat lane: a `requireUser:true` option that 401s instead of falling through.
 Chat is ALREADY a host-parameterized factory (`createChatServer(deps.getUser)`,
 `api/src/routes/api/chat.ts:369-371`), so the public app needs a SECOND MOUNT, not an extraction. What
 actually blocks reuse is the route-group `requireAuth` at the mount site, not the router shape:
-`api/src/routes/api/index.ts:158` (`/chat/*`), `:161` (`/documents/*`), `:169` (`/comments/*`),
-`:119` (`/workspaces/*`).
+`api/src/routes/api/index.ts:158` (`/chat/*`), `:162` (`/documents/*`), `:170` (`/comments/*`),
+`:118` (`/workspaces/*`).
 **Drop `workspaces` from ARCH-02 entirely** — a public app must never expose the console workspace API
 (`spec/SPEC_EVOL_ARCHITECTURE.md:237`). **`comments` is phase 2**, blocked behind the `contextType` enum
 extension to `canvas|artifact` (`spec/SPEC_EVOL_ARCHITECTURE.md:497-499`; live enums at
