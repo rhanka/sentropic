@@ -6,7 +6,7 @@ divergences named explicitly below). Owner decisions taken 2026-07-25 are marked
 Decision-oriented; every technical claim is grounded in live code with `path:line`, not inferred.
 After this → detailed `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` for the implementation lots.
 Owner: `chore/arch15-data-lifecycle-study` (BR-56, `PLAN.md:635`).
-Registry: `spec/SPEC_EVOL_ARCHITECTURE.md:720` (ARCH-15 — "Data residency, retention, export/deletion").
+Registry: `spec/SPEC_EVOL_ARCHITECTURE.md:730` (ARCH-15 — "Data residency, retention, export/deletion").
 Assigned to ARCH-15 by ARCH-18: `spec/SPEC_EVOL_DATA_ARCHITECTURE.md:425-426`
 (retention/GDPR/erasure-across-planes + PII classification).
 
@@ -14,7 +14,7 @@ Assigned to ARCH-15 by ARCH-18: `spec/SPEC_EVOL_DATA_ARCHITECTURE.md:425-426`
 
 BR-56 is the **retention / erasure / residency contract** across every data plane, and it is one of the
 two registered gates on **BR-62** (`PLAN.md:646`, diag.sent-tech.ca anonymous-first proof;
-`spec/SPEC_EVOL_ARCHITECTURE.md:775` — ARCH-15 "gates Diag's GDPR posture").
+`spec/SPEC_EVOL_ARCHITECTURE.md:786` — ARCH-15 "gates Diag's GDPR posture").
 
 **IN scope**: guest lifecycle contract (status, expiry clock, disposition at expiry, survivorship of
 content in a claimed scope); the cross-plane erasure contract and its enumerator; lawful basis +
@@ -52,19 +52,19 @@ anonymous visitor indistinguishable from a suspended real account and silently g
 **DL-2 — At expiry, an unclaimed guest scope is DELETED, not anonymised.**
 Anonymising leaves free-text chat/document content — which routinely carries third-party personal data —
 alive with no remaining purpose and no controller basis. That is the WORSE posture, not the safer one.
-`spec/SPEC_EVOL_ARCHITECTURE.md:288-289` already names `ON DELETE CASCADE` on the guest user row as the
+`spec/SPEC_EVOL_ARCHITECTURE.md:298-299` already names `ON DELETE CASCADE` on the guest user row as the
 baseline. Duration = **O-TTL (30d sliding)**.
 
 **DL-3 — One clock, not two.** A guest scope is claimable for its whole life; expiry is the single
 clock. A separate, shorter "claim window" guarantees a state where a workspace is alive but
 unclaimable — user-hostile and untestable. The claim MECHANISM is ARCH-02
-(`spec/SPEC_EVOL_ARCHITECTURE.md:275-280`).
+(`spec/SPEC_EVOL_ARCHITECTURE.md:285-290`).
 
 **DL-4 — Content inside a CLAIMED scope outlives its guest author.**
 Authorship transfers to a sentinel principal (or to the claiming account) BEFORE the guest row is
 deleted. **This is broken in schema today:** `comments.created_by` is `ON DELETE CASCADE` to `users.id`
 (`api/src/db/schema.ts:938-940`), so guest cleanup silently destroys comments inside workspaces someone
-else claimed — precisely the hazard `spec/SPEC_EVOL_ARCHITECTURE.md:285-287` warns about. ARCH-15 owns
+else claimed — precisely the hazard `spec/SPEC_EVOL_ARCHITECTURE.md:295-297` warns about. ARCH-15 owns
 the RULE; ARCH-02 owns the FK re-key mechanism.
 
 **DL-5 — Lawful basis for quota identifiers = Art. 6(1)(f) legitimate interest, with a WRITTEN LIA.**
@@ -90,7 +90,7 @@ ePrivacy Art. 5(3) is a separate gate from Art. 6 and applies to any storage/acc
 equipment. A strictly-necessary first-party value is defensibly exemptible; a canvas/UA-entropy
 fingerprint used for quota enforcement is not comfortably exemptible and would drag consent — and a
 banner — onto an anonymous-first app. ARCH-15 ASSERTS this as a constraint on ARCH-13's `browserIdHash`
-(`spec/SPEC_EVOL_ARCHITECTURE.md:262-266`); it does not redesign the quota key.
+(`spec/SPEC_EVOL_ARCHITECTURE.md:272-276`); it does not redesign the quota key.
 
 **DL-8 — ONE scope enumerator, TWO consumers.** Define a single
 `ScopeEnumerator(scope: tenant | workspace | principal)` that lists every table/object family in scope
@@ -129,7 +129,7 @@ tenant/workspace-scoped control-plane table, a documents manifest plus the S3 ob
 when ARCH-19 storage lands — UBO envelopes, with per-family schema/`payloadSchemaVersion` in the
 manifest). Hard-delete = the SAME enumeration executed as delete + S3 sweep + ledger principal
 anonymisation + a deletion-certificate record. **Not a Diag gate** (phase 1 has no tenants,
-`spec/SPEC_EVOL_ARCHITECTURE.md:483-486`).
+`spec/SPEC_EVOL_ARCHITECTURE.md:493-496`).
 
 **DL-14 — Residency is PINNED, not merely defaulted.** Storage residency is already EU by default —
 `DOC_STORAGE_REGION` defaults to `fr-par-1` (`api/src/services/storage-s3.ts:25`) — and ARCH-15 pins it
@@ -205,10 +205,10 @@ branch, NOT a Diag gate.**
   (`api/src/routes/api/me.ts:204-296`) and the admin deletion path (`api/src/routes/api/admin.ts:332`)
   already exist but delete `workspaces` without first clearing `context_documents`, whose FK has no
   `onDelete` (`api/src/db/schema.ts:766-769`) → **both are FK-BLOCKED today for any user who uploaded a
-  document**. Fix that first (matrix rows 1 and 2), then the DL-4 over-cascade, then extend to the guest
-  scope + S3 sweep. BR-56 ships the CONTRACT and the enumerated scope; the implementation lot may live in
-  BR-62. **The broken account-deletion route should not wait on BR-62** — it is a live user-facing defect
-  and warrants its own fix branch.
+  document**. **Split explicitly (resolves the ownership question):** repairing the two EXISTING routes is
+  a live user-facing defect and ships in its OWN fix branch, NOT gated on BR-62 (DL-19); EXTENDING the
+  primitive to the guest scope + S3 sweep is BR-62 work. BR-56 ships the CONTRACT and the enumerated
+  scope in both cases. Order: fix matrix rows 1-2, then the DL-4 over-cascade, then the guest extension.
 - **G4 — Diag-scoped PII register** (DL-16, restricted to the surfaces Diag actually writes: guest
   `users`, chat session/message/stream rows, `context_documents` + their S3 objects, `comments`,
   quota/ledger identifiers, `user_sessions.ip_address`).
