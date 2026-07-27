@@ -24,7 +24,9 @@ export function placementContainerClasses(
     case 'drawer':
       return {
         className: appendDialogClass(
-          'chat-dock-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col',
+          placement.side === 'left'
+            ? 'chat-dock-shell fixed top-0 left-0 bottom-0 z-50 bg-white border-r border-gray-200 flex flex-col'
+            : 'chat-dock-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col',
           dialogClass,
         ),
         style: `width: ${dockWidthCss};`,
