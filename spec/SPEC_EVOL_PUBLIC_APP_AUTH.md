@@ -6,7 +6,7 @@ load-bearing decision; where they differed, the better-grounded position is adop
 is recorded in §6). Decision-oriented; every technical claim carries a `path:line` read from live code.
 After this → detailed `BRANCH.md` from `plan/BRANCH_TEMPLATE.md` for the implementation lots.
 Owner: `chore/arch02-public-app-auth-study` (BR-53, `PLAN.md:632`).
-Registry: `spec/SPEC_EVOL_ARCHITECTURE.md:707` (ARCH-02).
+Registry: `spec/SPEC_EVOL_ARCHITECTURE.md:717` (ARCH-02).
 Gates BR-62 (`PLAN.md:646`) — the `diag.sent-tech.ca` anonymous-first proof, i.e. the owner's
 "mode no-auth + opt-in auth".
 
@@ -24,8 +24,9 @@ established that ARCH-02 needs no new IdP claim**, and production verification c
   `redirect_uri` (`packages/auth-hono/src/oauth/issue-authorized-code.ts:51`), so the app keys the claim
   ticket SERVER-SIDE by its own `state`/`nonce` and redeems it at its own callback. Nothing needs to
   survive the redirect inside an IdP-controlled field → no new claim, no new scope, no IdP knowledge of
-  claiming. `spec/SPEC_EVOL_ARCHITECTURE.md:276-280` ("co-owned with BR-39n") is satisfiable purely RP-side.
-- **Root cause of the false gate:** `spec/SPEC_EVOL_ARCHITECTURE.md:76-77` and
+  claiming. `spec/SPEC_EVOL_ARCHITECTURE.md:286-290` ("co-owned with BR-39n") is satisfiable purely RP-side.
+- **Root cause of the false gate:** the baseline paragraph at `spec/SPEC_EVOL_ARCHITECTURE.md:74-86`
+  (since CORRECTED in place by PR #453) and
   `apps/auth-idp/RP_SESSION_GLUE.md:99-103` were written BEFORE BR-39e landed the `tid` binding, and the
   plan inherited their stale premise. **Verified in production 2026-07-25:** `auth.sent-tech.ca`
   discovery returns `claims_supported = [sub, aud, iss, exp, iat, nonce, auth_time, acr, email,
@@ -78,18 +79,18 @@ column. `account_status` is already the lifecycle/disable axis and already the f
 Payload = signed `{gid, appInstanceId, iat}`, HMAC'd server-side, opaque to the browser; `__Host-`
 prefixed. The existing session cookie is already `HttpOnly; Secure(prod); SameSite=Lax; Path=/` with NO
 `Domain` (`api/src/services/auth/session-adapter.ts:46-48`) — i.e. already host-only, satisfying
-`spec/SPEC_EVOL_ARCHITECTURE.md:231`. Reusing it would route the guest through
+`spec/SPEC_EVOL_ARCHITECTURE.md:241`. Reusing it would route the guest through
 `validateSessionToken` (`api/src/middleware/auth.ts:66-73`) and require a fake `user_sessions` row.
 
 **A3 — `requireAuth` NEVER downgrades to a guest.**
 It stays byte-identical (401 on missing/invalid, `api/src/middleware/auth.ts:60-73`). The guest principal
 is resolved by a SEPARATE `resolveAppPrincipal` middleware mounted only under the app route family.
-This implements `spec/SPEC_EVOL_ARCHITECTURE.md:261` ("invalid auth tokens fail instead of silently
+This implements `spec/SPEC_EVOL_ARCHITECTURE.md:271` ("invalid auth tokens fail instead of silently
 becoming guest sessions") and leaves the console plane untouched.
 
 **A4 — CSRF = `SameSite=Lax` + a MANDATORY fail-closed `Origin`/`Sec-Fetch-Site` check** against the
 resolved `Host` (the same host-authoritative check that 404s on slug mismatch,
-`spec/SPEC_EVOL_ARCHITECTURE.md:229-230`). A double-submit token only if an embed/iframe mode is ever
+`spec/SPEC_EVOL_ARCHITECTURE.md:239-240`). A double-submit token only if an embed/iframe mode is ever
 requested: with a host-only cookie, a same-origin API and `Lax`, it adds ceremony without a threat.
 Precedent in-repo: `SameSite=None` is used ONLY for cross-site POST callback providers
 (`api/src/routes/auth/federation.ts:210-218,314-320`).
@@ -99,15 +100,15 @@ The PUBLISHED default transport passes NO `credentials` on `fetch`
 (`packages/chat-ui/src/client/transport.ts:163-171,173-180`) and constructs `new EventSource(target)`
 with NO `withCredentials` (`transport.ts:159`). A cross-origin API host therefore **silently drops the
 guest cookie on both the POST and the SSE leg, with no error**, and would additionally make the guest
-cookie third-party (`spec/SPEC_EVOL_ARCHITECTURE.md:231-232`).
+cookie third-party (`spec/SPEC_EVOL_ARCHITECTURE.md:241-242`).
 *Recorded discrepancy:* the separate `streamHub` path DOES set `withCredentials:true`
 (`packages/chat-ui/src/client/streamHub.ts:366-370`). **The codebase contradicts itself — do not
 generalise from streamHub.** Same-origin is mandatory either way; this is the mechanical proof of the
-host-authoritative default at `spec/SPEC_EVOL_ARCHITECTURE.md:227-230`.
+host-authoritative default at `spec/SPEC_EVOL_ARCHITECTURE.md:237-240`.
 
 **A6 — The "app-safe chat DTO" is a MOUNT CONFIGURATION, and the capability gate is ALREADY SHIPPED.**
 `@sentropic/chat-server@0.3.0` carries a deny-capable gate over exactly the privileged knobs
-`spec/SPEC_EVOL_ARCHITECTURE.md:83-86` names — `acceptClientProviderApiKey`,
+`spec/SPEC_EVOL_ARCHITECTURE.md:93-96` names — `acceptClientProviderApiKey`,
 `acceptClientLocalToolDefinitions`, `acceptClientVscodeAgent`, `allowedTools`, `allowedLocalTools`, plus
 mount-DECLARED `localToolDefinitions` (`packages/chat-server/src/index.ts:76-102,112-137`), applied in
 `postMessage` (`:653-668`). `render_mermaid` is the documented worked example (`:96-97,126-134`).
@@ -123,7 +124,7 @@ guest's OWN workspace; (b) an attachment size/count cap. The response side needs
 The package default `user ?? {userId:'anonymous', workspaceId:null}`
 (`packages/chat-server/src/index.ts:551-552`) is a dev/harness convenience. ARCH-02 does not need it
 removed (that would be breaking under D11) but MUST NOT depend on it — satisfying
-`spec/SPEC_EVOL_ARCHITECTURE.md:252-253` with zero package surgery. Optional additive follow-up for the
+`spec/SPEC_EVOL_ARCHITECTURE.md:262-263` with zero package surgery. Optional additive follow-up for the
 chat lane: a `requireUser:true` option that 401s instead of falling through.
 
 **A8 — Factory extraction is scoped to `documents` ONLY.**
@@ -133,8 +134,8 @@ actually blocks reuse is the route-group `requireAuth` at the mount site, not th
 `api/src/routes/api/index.ts:158` (`/chat/*`), `:162` (`/documents/*`), `:170` (`/comments/*`),
 `:118` (`/workspaces/*`).
 **Drop `workspaces` from ARCH-02 entirely** — a public app must never expose the console workspace API
-(`spec/SPEC_EVOL_ARCHITECTURE.md:237`). **`comments` is phase 2**, blocked behind the `contextType` enum
-extension to `canvas|artifact` (`spec/SPEC_EVOL_ARCHITECTURE.md:497-499`; live enums at
+(`spec/SPEC_EVOL_ARCHITECTURE.md:247`). **`comments` is phase 2**, blocked behind the `contextType` enum
+extension to `canvas|artifact` (`spec/SPEC_EVOL_ARCHITECTURE.md:507-509`; live enums at
 `api/src/routes/api/documents.ts:23` and `api/src/routes/api/comments.ts:20`) — anonymous commenting is
 not a phase-1 requirement (`:490-491`).
 
@@ -144,7 +145,7 @@ not a phase-1 requirement (`:490-491`).
 `workspace_memberships(workspace_id,user_id,role)` with `UNIQUE(workspace_id,user_id)` (`:844-854`).
 Claim = `INSERT ... ON CONFLICT (workspace_id,user_id) DO UPDATE role` + `UPDATE workspaces SET
 owner_user_id`. Deleting the guest row cascades the guest's own membership away but does not touch the
-workspace — so `spec/SPEC_EVOL_ARCHITECTURE.md:281` ("claim moves ownership without changing artifact
+workspace — so `spec/SPEC_EVOL_ARCHITECTURE.md:291` ("claim moves ownership without changing artifact
 ids") is mechanically true here.
 
 **A10 — Claim token: single-use, double-bound, consumed in the merge transaction.**
@@ -161,13 +162,13 @@ Idempotent on `(guestUserId, targetUserId)`; `pg_advisory_xact_lock` on both use
 Steps: (1) re-key the ARTIFACT plane (§3A); (2) `ON CONFLICT DO NOTHING` + drop-the-guest-row on the six
 UNIQUE-collision sites; (3) NEVER re-key the identity/session plane (§3B); (4) DELETE the guest `users`
 row LAST, so cascade cleanup happens only after authorship transfer
-(`spec/SPEC_EVOL_ARCHITECTURE.md:286-287`). Failure modes covered: partial merge (single tx),
+(`spec/SPEC_EVOL_ARCHITECTURE.md:296-297`). Failure modes covered: partial merge (single tx),
 double-claim (advisory lock + `jti`), replay (`jti` consumed in-tx), concurrent claim of the same guest
 by two accounts (lock ordering; the guest row is gone after the first).
 
 **A12 — TTL mechanism here, duration and erasure basis in ARCH-15.**
 ARCH-02 owns `guest_expires_at` + a reaper that deletes the `users` row and lets cascade clean up
-(`spec/SPEC_EVOL_ARCHITECTURE.md:288-289`). The DURATION (30d, ratified) and the lawful-basis/erasure
+(`spec/SPEC_EVOL_ARCHITECTURE.md:298-299`). The DURATION (30d, ratified) and the lawful-basis/erasure
 story belong to BR-56 (`spec/SPEC_EVOL_DATA_LIFECYCLE.md`). Do not design retention here.
 
 **A13 — ARCH-02 does not own the anonymous quota; it EMITS the principal.**
@@ -215,7 +216,7 @@ forgotten UPDATE leaves a dangling guest id forever with **no referential error*
 **§3D — NO re-key needed (material simplification for D9)**
 `context_documents` has **NO user column at all** — only `workspace_id` / `context_type` / `context_id` /
 `storage_key` (`:764-796`), likewise `context_document_versions` (`:799-813`). Since D9 scopes Diag
-phase-1 persistence to **documents + S3** (`spec/SPEC_EVOL_ARCHITECTURE.md:497`), **the entire phase-1
+phase-1 persistence to **documents + S3** (`spec/SPEC_EVOL_ARCHITECTURE.md:507`), **the entire phase-1
 artifact plane carries ZERO user FKs and requires ZERO merge work.** The merge engine is needed only
 once chat sessions and comments become claimable — i.e. phase 2.
 
