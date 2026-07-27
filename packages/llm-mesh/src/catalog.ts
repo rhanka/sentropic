@@ -332,6 +332,17 @@ export const modelProfiles = [
   },
   {
     providerId: 'anthropic',
+    modelId: 'claude-opus-5',
+    label: 'Opus 5',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('anthropic', 'advanced', { vision: true }),
+  },
+  {
+    // Superseded by Opus 5 as the default Opus, but still explicitly selectable
+    // (owner decision 2026-07-25: keep 4.8 callable; client apps migrate their
+    // DEFAULT to Opus 5 to simplify the user choice).
+    providerId: 'anthropic',
     modelId: 'claude-opus-4-8',
     label: 'Opus 4.8',
     reasoningTier: 'advanced',

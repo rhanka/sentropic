@@ -231,12 +231,63 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // Anthropic — Claude Opus (with reasoning)
+  // Anthropic — Claude Opus 5 (default Opus, with reasoning)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'anthropic',
+    model: 'claude-opus-5',
+    label: 'Claude Opus 5',
+    chatEvents: [
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' }, index: 0 },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: ' world' }, index: 0 },
+      { type: 'message_stop' },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'tool_use', id: 'toolu_1', name: 'search' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"query":' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '"test"}' },
+      },
+      { type: 'message_stop' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'claude_call_1',
+      deltaCount: 2,
+      deltas: ['{"query":', '"test"}'],
+    },
+    reasoningEvents: [
+      { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Let me think...' }, index: 0 },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' }, index: 1 },
+      { type: 'message_stop' },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Let me think...'],
+    },
+    statusEvents: [{ type: 'message_stop' }],
+  },
+
+  // -----------------------------------------------------------------------
+  // Anthropic — Claude Opus 4.8 (superseded, still selectable)
   // -----------------------------------------------------------------------
   {
     providerId: 'anthropic',
     model: 'claude-opus-4-8',
-    label: 'Claude Opus',
+    label: 'Claude Opus 4.8',
     chatEvents: [
       { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' }, index: 0 },
       { type: 'content_block_delta', delta: { type: 'text_delta', text: ' world' }, index: 0 },
