@@ -155,6 +155,10 @@ test.describe('Chat extension evolutions', () => {
           return { ok: true, result: { status: 'completed' } };
         }
         if (type === 'open_side_panel') {
+          (globalThis as any).__sentropicOpenSidePanelRequests = [
+            ...((globalThis as any).__sentropicOpenSidePanelRequests ?? []),
+            type,
+          ];
           return { ok: true };
         }
         return { ok: true };
@@ -215,7 +219,7 @@ test.describe('Chat extension evolutions', () => {
     await expect(menu.locator('button', { hasText: 'Dossier (lecture)' })).toHaveCount(0);
   });
 
-  test('does not expose the placement trigger in an extension overlay', async ({ page }) => {
+  test('opens the Chrome side panel from the only extension-overlay header control without offering placement', async ({ page }) => {
     await mockExtensionRuntime(page);
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
@@ -226,7 +230,13 @@ test.describe('Chat extension evolutions', () => {
 
     const chatDialog = page.locator('#chat-widget-dialog');
     await expect(chatDialog).toBeVisible({ timeout: 10_000 });
+    const sidePanelControl = chatDialog.getByRole('button', { name: 'Basculer en panneau' });
+    await expect(sidePanelControl).toBeVisible();
     await expect(chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' })).toHaveCount(0);
+    await sidePanelControl.click();
+    await expect
+      .poll(() => page.evaluate(() => (globalThis as any).__sentropicOpenSidePanelRequests?.length ?? 0))
+      .toBe(1);
   });
 
   test('localToolDefinitions follows tab_read/tab_action toggles in extension runtime', async ({ page }) => {
