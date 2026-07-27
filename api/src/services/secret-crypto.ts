@@ -5,7 +5,7 @@ const SECRET_PREFIX = 'enc:v1:';
 const GCM_AUTH_TAG_LENGTH = 16;
 
 const resolveSecretKey = (): Buffer => {
-  const seed = env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+  const seed = env.CREDENTIAL_ENCRYPTION_KEY || 'dev-secret-key-change-in-production-please';
   return createHash('sha256').update(seed).digest();
 };
 
