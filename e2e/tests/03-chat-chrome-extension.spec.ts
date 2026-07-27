@@ -226,7 +226,7 @@ test.describe('Chat extension evolutions', () => {
 
     const chatDialog = page.locator('#chat-widget-dialog');
     await expect(chatDialog).toBeVisible({ timeout: 10_000 });
-    await expect(chatDialog.getByRole('button', { name: 'Move chat to…' })).toHaveCount(0);
+    await expect(chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' })).toHaveCount(0);
   });
 
   test('localToolDefinitions follows tab_read/tab_action toggles in extension runtime', async ({ page }) => {
