@@ -277,6 +277,45 @@ describe('chatPlacementMenu — storage-absent safety', () => {
   });
 });
 
+describe('chatPlacementMenu — side-memory persistence', () => {
+  it('ignores malformed side-memory values and keeps the default sides', () => {
+    const storage = createMemoryStorage();
+    storage.setItem(
+      'chat-ui/placement/v1/u1/h1/w1/sides',
+      JSON.stringify({ drawerSide: 'top', floatingAnchor: 'diagonal' }),
+    );
+
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    expect(menu.groups()[0]?.items.find((item) => item.id === 'panel')?.placement).toEqual({
+      kind: 'drawer', side: 'right', occupancy: 'primary',
+    });
+    expect(menu.groups()[0]?.items.find((item) => item.id === 'floating')?.placement).toEqual({
+      kind: 'floating', anchor: 'right',
+    });
+  });
+
+  it('isolates side memory across user, host, and workspace persistence tuples', async () => {
+    const storage = createMemoryStorage();
+    const primary = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    await primary.request({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    await primary.request({ kind: 'floating', anchor: 'center' });
+
+    for (const isolated of [
+      { userId: 'u2', hostId: 'h1', workspace: 'w1' },
+      { userId: 'u1', hostId: 'h2', workspace: 'w1' },
+      { userId: 'u1', hostId: 'h1', workspace: 'w2' },
+    ]) {
+      const menu = createChatPlacementMenu({ ...isolated, storage });
+      expect(menu.groups()[0]?.items.find((item) => item.id === 'panel')?.placement).toEqual({
+        kind: 'drawer', side: 'right', occupancy: 'primary',
+      });
+      expect(menu.groups()[0]?.items.find((item) => item.id === 'floating')?.placement).toEqual({
+        kind: 'floating', anchor: 'right',
+      });
+    }
+  });
+});
+
 describe('chatPlacementMenu — snapshot()', () => {
   it('exposes the full underlying controller snapshot', () => {
     const menu = createChatPlacementMenu({

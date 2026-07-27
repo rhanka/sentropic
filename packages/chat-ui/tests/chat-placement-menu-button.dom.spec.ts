@@ -23,7 +23,10 @@ import ChatPlacementMenuButton from '../src/components/ChatPlacementMenuButton.s
 import ChatPlacementDropZones from '../src/components/ChatPlacementDropZones.svelte';
 import { createChatPlacementMenu } from '../src/state/chatPlacementMenu';
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 /** In-memory Storage stand-in — deterministic, isolated per test. */
 const createMemoryStorage = (): Storage => {
@@ -120,6 +123,39 @@ describe('ChatPlacementMenuButton — popup contents', () => {
     expect(container.querySelectorAll('[role="separator"]')).toHaveLength(0);
     expect(container.querySelectorAll('[role="menuitemradio"]')).toHaveLength(3);
   });
+
+  it('updates rendered checkmarks and removes Centre after a Panel mode transition', async () => {
+    const menu = createMenu();
+    await flushAsync();
+    const { container } = render(ChatPlacementMenuButton, { props: { placementMenu: menu } });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+
+    await fireEvent.click(trigger);
+    const panel = Array.from(container.querySelectorAll('[role="menuitemradio"]')).find(
+      (item) => item.textContent?.includes('Panel'),
+    ) as HTMLElement;
+    await fireEvent.click(panel);
+    await flushAsync();
+
+    await fireEvent.click(trigger);
+    const sideItems = Array.from(
+      container.querySelectorAll('[role="group"]:nth-of-type(3) [role="menuitemradio"]'),
+    );
+    expect(sideItems.map((item) => item.textContent?.trim())).toEqual(['Right', 'Left']);
+    expect(container.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent).toContain('Panel');
+    expect(Array.from(container.querySelectorAll('[role="menuitemradio"]')).some(
+      (item) => item.textContent?.includes('Center'),
+    )).toBe(false);
+
+    const left = sideItems.find((item) => item.textContent?.includes('Left')) as HTMLElement;
+    await fireEvent.click(left);
+    await flushAsync();
+    await fireEvent.click(trigger);
+    expect(container.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent).toContain('Panel');
+    expect(Array.from(container.querySelectorAll('[role="menuitemradio"][aria-checked="true"]')).some(
+      (item) => item.textContent?.includes('Left'),
+    )).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -140,6 +176,7 @@ describe('ChatPlacementMenuButton — activation', () => {
     await fireEvent.click(fullItem);
     await flushAsync();
 
+    expect(requestSpy).toHaveBeenCalledTimes(1);
     expect(requestSpy).toHaveBeenCalledWith({ kind: 'full' });
     expect(menu.current()).toEqual({ kind: 'full' });
     // Selecting an item closes the popup.
@@ -264,6 +301,56 @@ describe('ChatPlacementMenuButton — outside-click dismissal (code review F5)',
     expect(container.querySelector('[role="menu"]')).toBeNull();
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
+
+  it('adds one outside-pointer listener while open and removes it when closed', async () => {
+    const addListener = vi.spyOn(window, 'addEventListener');
+    const removeListener = vi.spyOn(window, 'removeEventListener');
+    const menu = createMenu();
+    const { container } = render(ChatPlacementMenuButton, { props: { placementMenu: menu } });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+
+    await fireEvent.click(trigger);
+    expect(addListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+    await fireEvent.click(trigger);
+    expect(removeListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+  });
+});
+
+describe('ChatPlacementMenuButton — drag lifecycle', () => {
+  it('cancels an active drag on Escape without committing an end callback', async () => {
+    const dragCallbacks = { start: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() };
+    const { container } = render(ChatPlacementMenuButton, {
+      props: { placementMenu: createMenu(), dragCallbacks },
+    });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+
+    await fireEvent.pointerDown(trigger, { button: 0, pointerId: 7, clientX: 10, clientY: 10 });
+    await fireEvent.pointerMove(trigger, { pointerId: 7, clientX: 20, clientY: 10 });
+    expect(dragCallbacks.start).toHaveBeenCalledOnce();
+    expect(dragCallbacks.move).toHaveBeenCalledOnce();
+
+    await fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(dragCallbacks.cancel).toHaveBeenCalledOnce();
+    await fireEvent.pointerUp(trigger, { pointerId: 7, clientX: 20, clientY: 10 });
+    expect(dragCallbacks.end).not.toHaveBeenCalled();
+  });
+
+  it('starts only after the movement threshold and ends exactly once', async () => {
+    const dragCallbacks = { start: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() };
+    const { container } = render(ChatPlacementMenuButton, {
+      props: { placementMenu: createMenu(), dragCallbacks },
+    });
+    const trigger = container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement;
+
+    await fireEvent.pointerDown(trigger, { button: 0, pointerId: 8, clientX: 10, clientY: 10 });
+    await fireEvent.pointerMove(trigger, { pointerId: 8, clientX: 14, clientY: 10 });
+    expect(dragCallbacks.start).not.toHaveBeenCalled();
+    await fireEvent.pointerMove(trigger, { pointerId: 8, clientX: 20, clientY: 10 });
+    await fireEvent.pointerUp(trigger, { pointerId: 8, clientX: 20, clientY: 10 });
+    expect(dragCallbacks.start).toHaveBeenCalledOnce();
+    expect(dragCallbacks.end).toHaveBeenCalledOnce();
+    expect(dragCallbacks.cancel).not.toHaveBeenCalled();
+  });
 });
 
 describe('ChatPlacementDropZones', () => {
@@ -281,5 +368,8 @@ describe('ChatPlacementDropZones', () => {
     // `toHaveClass` is a jest-dom matcher and is NOT registered in this vitest
     // setup; use the classList idiom already used throughout this suite.
     expect(getByText('Panel Left').classList.contains('bg-primary/20')).toBe(true);
+    const overlay = container.querySelector('[data-chat-placement-drop-zones]') as HTMLElement;
+    expect(overlay.classList.contains('pointer-events-none')).toBe(true);
+    expect(getByText('Panel Left').classList.contains('motion-reduce:transition-none')).toBe(true);
   });
 });

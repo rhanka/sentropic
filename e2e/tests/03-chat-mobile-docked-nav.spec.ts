@@ -42,7 +42,7 @@ test.describe('Chat (mobile docked) — navigation closes chat', () => {
 });
 
 test.describe('Chat placement menu — desktop geometry', () => {
-  test('places Panneau + Gauche flush left and Panneau + Droite flush right', async ({ page }) => {
+  test('keeps the app content pane clear of Panneau + Gauche and Panneau + Droite', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
@@ -68,14 +68,19 @@ test.describe('Chat placement menu — desktop geometry', () => {
     await select('Gauche');
     const left = await chatDialog.boundingBox();
     if (!left) throw new Error('Chat dialog has no bounding box after selecting Panneau + Gauche');
+    const leftContent = await page.locator('main').boundingBox();
+    if (!leftContent) throw new Error('App content pane has no bounding box with Panneau + Gauche');
     expect(left.x).toBe(0);
-    expect(left.x + left.width).toBeLessThan(viewport.width);
+    expect(left.x + left.width).toBeLessThanOrEqual(leftContent.x);
 
     await select('Droite');
     const right = await chatDialog.boundingBox();
     if (!right) throw new Error('Chat dialog has no bounding box after selecting Panneau + Droite');
+    const rightContent = await page.locator('main').boundingBox();
+    if (!rightContent) throw new Error('App content pane has no bounding box with Panneau + Droite');
     expect(right.x).toBeGreaterThan(0);
     expect(right.x + right.width).toBe(viewport.width);
+    expect(rightContent.x + rightContent.width).toBeLessThanOrEqual(right.x);
   });
 
   test('drags the header Move control to the left panel drop zone', async ({ page }) => {
@@ -105,6 +110,50 @@ test.describe('Chat placement menu — desktop geometry', () => {
 
     await expect(page.locator('[data-chat-placement-drop-zones]')).toHaveCount(0);
   });
+
+  test('cancels a drag with Escape without closing the chat', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await chatButton.click();
+    const chatDialog = page.locator('#chat-widget-dialog');
+    const moveTrigger = chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' });
+    const triggerBox = await moveTrigger.boundingBox();
+    if (!triggerBox) throw new Error('Move trigger has no bounding box for Escape cancellation');
+
+    await page.mouse.move(triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(80, 200);
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toHaveCount(0);
+    await expect(chatDialog).toBeVisible();
+  });
+
+  test('keeps Close clickable while the drop-zone overlay is visible', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await chatButton.click();
+    const chatDialog = page.locator('#chat-widget-dialog');
+    const moveTrigger = chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' });
+    const triggerBox = await moveTrigger.boundingBox();
+    if (!triggerBox) throw new Error('Move trigger has no bounding box for the Close overlap check');
+
+    await page.mouse.move(triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(80, 200);
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toBeVisible();
+    await chatDialog.getByRole('button', { name: 'Fermer' }).click();
+
+    await expect(chatDialog).toBeHidden();
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toHaveCount(0);
+  });
 });
 
 test.describe('Chat placement menu — host ownership', () => {
@@ -124,6 +173,20 @@ test.describe('Chat placement menu — host ownership', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(moveTrigger).toHaveCount(0);
+  });
+
+  test('renders exactly one header placement-mode control', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await chatButton.click();
+    const chatDialog = page.locator('#chat-widget-dialog');
+    const headerModeControls = chatDialog.locator(
+      'button[aria-label="Déplacer le chat vers…"], button[aria-label="Basculer en widget"], button[aria-label="Basculer en panneau"]',
+    );
+    await expect(headerModeControls).toHaveCount(1);
   });
 });
 
@@ -160,6 +223,13 @@ test.describe('Chat placement menu — legacy display-mode integration', () => {
     if (!floatingLeftBox) throw new Error('Chat dialog has no bounding box after selecting Libre + Gauche');
     expect(floatingLeftBox.x).toBeGreaterThanOrEqual(0);
     expect(floatingLeftBox.x).toBeLessThanOrEqual(24);
+
+    await chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' }).click();
+    await page.getByRole('menu', { name: 'Déplacer le chat vers…' })
+      .getByRole('menuitemradio', { name: 'Centre', exact: true }).click();
+    const floatingCenterBox = await chatDialog.boundingBox();
+    if (!floatingCenterBox) throw new Error('Chat dialog has no bounding box after selecting Libre + Centre');
+    expect(Math.abs(floatingCenterBox.x + floatingCenterBox.width / 2 - 720)).toBeLessThanOrEqual(1);
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem('chatWidgetDisplayMode')))
       .toBe('floating');
