@@ -143,6 +143,11 @@
       "svelte": "./src/components/ChatPlacementMenuButton.svelte",
       "import": "./src/components/ChatPlacementMenuButton.svelte"
     },
+    "./components/ChatPlacementDropZones.svelte": {
+      "types": "./src/components/ChatPlacementDropZones.svelte.d.ts",
+      "svelte": "./src/components/ChatPlacementDropZones.svelte",
+      "import": "./src/components/ChatPlacementDropZones.svelte"
+    },
     "./components/ChatPanel.svelte": {
       "types": "./src/components/ChatPanel.svelte.d.ts",
       "svelte": "./src/components/ChatPanel.svelte",
