@@ -156,6 +156,15 @@ replayable deletion log, so a restore cannot resurrect erased data
 (`spec/SPEC_EVOL_DATA_ARCHITECTURE.md:399-400`). Non-blocking for Diag; must be written before the first
 real DSAR.
 
+**DL-19 — The live account-deletion defect is fixed FIRST, and outside BR-62.**
+`DELETE /me` (`api/src/routes/api/me.ts:204-296`) and the admin deletion path
+(`api/src/routes/api/admin.ts:332`) delete `workspaces` without first clearing `context_documents`,
+whose FK carries no `onDelete` (`api/src/db/schema.ts:766-769`). Both therefore raise a foreign-key
+violation for any user who has ever uploaded a document: the "delete my account" action is inoperative
+for precisely the users with the most data to erase — a data-subject-rights problem as much as a bug.
+ARCH-15 states the rule (an erasure entrypoint MUST enumerate every dependent family, DL-9); the fix is
+small and belongs in its own branch, NOT gated behind the Diag proof.
+
 **DL-18 — Pre-existing raw-IP exposure (orthogonal to Diag, must not be silently inherited).**
 `user_sessions.ip_address` stores the RAW client IP (`api/src/db/schema.ts:193`; confirmed by
 `spec/SPEC_EVOL_QUOTA_LEDGER.md:11` — "raw, no `ipHash`") and there is NO time-based purge: expired
@@ -170,7 +179,7 @@ branch, NOT a Diag gate.**
 
 | # | Plane | Capability today | Gap |
 |---|---|---|---|
-| 1 | PG core rows via FK cascade (`users`→sessions/comments/chat) | real delete | **No entrypoint exists**: no account-deletion route and no `deleteWorkspace` anywhere in `api/src`. Cascade also OVER-deletes (DL-4, `schema.ts:938-940`). |
+| 1 | PG core rows via FK cascade (`users`→sessions/comments/chat) | real delete, **and it is BROKEN in production today** | Two entrypoints DO exist — `DELETE /me` ("Immediate account suppression: delete user + workspace + all owned data", `api/src/routes/api/me.ts:204-296`, deleting `workspaces` at `:289` and `users` at `:292`) and the admin path (`api/src/routes/api/admin.ts:332`). **But neither clears `context_documents` first**, and that FK has no `onDelete` (row 2) → **account self-deletion fails with a foreign-key violation for any user who has ever uploaded a document.** The user-facing "delete my account" action is therefore inoperative for exactly the users with the most data to erase. This is a LIVE defect, not future work: the erasure primitive (G3) is a REPAIR of two existing transactions, not greenfield. Cascade also OVER-deletes (DL-4, `schema.ts:938-940`). |
 | 2 | `context_documents` under a workspace | **none** | `workspace_id` references `workspaces.id` with **NO `onDelete`** (`schema.ts:766-769`) → default NO ACTION → a workspace delete is **FK-BLOCKED today**. Must be fixed before any erasure primitive can run. |
 | 3 | Polymorphic refs (`comments.context_type/context_id` `:935-936`; `context_documents` `:770-771`) | none (no FK) | Orphan sweep required (`spec/SPEC_EVOL_DATA_ARCHITECTURE.md:394-395`). |
 | 4 | S3 documents/artifacts | real delete (`api/src/services/storage-s3.ts:229`, `artifact-store/s3-artifact-store.ts:71`) | Reachable only per-document (`api/src/routes/api/documents.ts:376`). No scope-level sweep, no orphan reconciliation, no delete on teardown. |
@@ -178,7 +187,7 @@ branch, NOT a Diag gate.**
 | 6 | `user_sessions.ip_address` (raw IP, `schema.ts:193`) | real delete on explicit action only | No time-based purge → indefinite raw-IP retention (DL-18). |
 | 7 | `control.event_outbox` (`control-schema.ts:33`, `envelope jsonb` `:46`) | none in practice | `spec/SPEC_EVOL_EVENT_SPINE.md:7,52` assert dispatched rows are pruned; **no prune/DELETE exists** in `api/src/services/outbox/*`. Envelope payload may carry personal data with no retention. |
 | 8 | `control.event_audit` | does not exist | Append-only by design → tombstone-only, honest ONLY if payload minimisation is designed in now (DL-10). |
-| 9 | `control.cost_ledger` | not built; design = anonymise `principal_key`, keep aggregate | Tombstone. Already specified (`spec/SPEC_EVOL_QUOTA_LEDGER.md:45`). |
+| 9 | `control.cost_ledger` | **BUILT and writing** — table `api/src/db/control-schema.ts:371-416` (carries `user_id` `:380`, `workspace_id` `:381`), migration `api/drizzle/control/0005_clumsy_spacker_dave.sql`, live insert `api/src/services/llm-metering/cost-ledger-sink.ts:49` | Tombstone (anonymise the principal, keep the monetary aggregate — `spec/SPEC_EVOL_QUOTA_LEDGER.md:45`). **A live plane carrying user/workspace attribution with NO retention rule**: DL-6's 30-day window applies to it TODAY, not when it is built. The narrower accurate claim is that the anonymous `principal_kind`/`principal_key` columns are not yet present. |
 | 10 | Analytics / Parquet export | does not exist (DD4-gated, BR-65) | When built: rewrite or crypto-shred (`spec/SPEC_EVOL_DATA_ARCHITECTURE.md:396-398`). Not a Diag gate. |
 | 11 | Knowledge / vector index | does not exist (ARCH-06 / BR-57) | Embeddings derived from erased text are DERIVED personal data; the rebuild-on-erasure rule must be set before ARCH-06 builds. Not a Diag gate. |
 | 12 | **LLM provider egress** (Anthropic/Google/OpenAI) | **none** | **No technical erasure recourse whatsoever**; contractual/retention terms only. Must be disclosed (DL-14/DL-15). The honest weak point of an anonymous-first public app. |
@@ -192,10 +201,14 @@ branch, NOT a Diag gate.**
 - **G2 — Quota-identifier legal posture**: DL-5 (LIA, signed by Sent-Tech) + DL-6 (still personal data;
   30d window, 90d pepper rotation) + DL-7 (cookie, not fingerprint).
 - **G3 — ONE working erasure primitive** reaching PG **and** S3 for the guest scope, per DL-8/DL-9.
-  **The only item with real build content.** Prerequisite inside it: fix matrix row 2
-  (`context_documents.workspace_id` has no `onDelete`, so workspace delete is FK-blocked today) and
-  matrix row 1 (DL-4 over-cascade). BR-56 ships the CONTRACT and the enumerated scope; the
-  implementation lot may live in BR-62.
+  **The only item with real build content — and it starts as a BUG FIX, not greenfield.** `DELETE /me`
+  (`api/src/routes/api/me.ts:204-296`) and the admin deletion path (`api/src/routes/api/admin.ts:332`)
+  already exist but delete `workspaces` without first clearing `context_documents`, whose FK has no
+  `onDelete` (`api/src/db/schema.ts:766-769`) → **both are FK-BLOCKED today for any user who uploaded a
+  document**. Fix that first (matrix rows 1 and 2), then the DL-4 over-cascade, then extend to the guest
+  scope + S3 sweep. BR-56 ships the CONTRACT and the enumerated scope; the implementation lot may live in
+  BR-62. **The broken account-deletion route should not wait on BR-62** — it is a live user-facing defect
+  and warrants its own fix branch.
 - **G4 — Diag-scoped PII register** (DL-16, restricted to the surfaces Diag actually writes: guest
   `users`, chat session/message/stream rows, `context_documents` + their S3 objects, `comments`,
   quota/ledger identifiers, `user_sessions.ip_address`).
