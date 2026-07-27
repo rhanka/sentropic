@@ -73,8 +73,18 @@ Corrected after round-2 falsification against `origin/main`.
   supplied (`packages/chat-server/src/index.ts:360`); the standalone IdP
   `apps/auth-idp` (BR-39m A0 + A0-bis) is merged and DEPLOYED — deploy
   artifacts re-landed via PR #254 (2026-06-06) and `auth.sent-tech.ca` serves
-  OIDC discovery live — but it emits NO tenant/role/membership claims yet
-  (live `claims_supported` confirms; claim set = BR-39n).
+  OIDC discovery live. **CORRECTED 2026-07-25:** this paragraph previously read
+  "emits NO tenant/role/membership claims yet (claim set = BR-39n)". That is
+  STALE — BR-39e landed the `tid` binding. Live `claims_supported` at
+  `auth.sent-tech.ca` (verified 2026-07-25) is `[sub, aud, iss, exp, iat, nonce,
+  auth_time, acr, email, email_verified, name, tid]`. `tid` is bound at token
+  time to a still-`approved` `tenant_memberships` row and dropped if the
+  membership was suspended between authorize and token
+  (`packages/auth-hono/src/oauth/token-handler.ts:376-383`); `?tenant=` is
+  honoured at authorize only for an approved membership, 0-or->1 resolving to
+  null (`authorize-handler.ts:152-172`). Still NOT emitted: a `role` claim, a
+  membership-LIST claim, any product-scoped authorization claim — those remain
+  BR-39n. Consequence: BR-39n no longer gates ARCH-02/BR-53 (see PLAN.md).
 - Route factory reality: only chat is a host-parameterized factory
   (`createChatServer(deps.getUser)`). The workspaces/documents/comments routers
   are module singletons hard-bound to `requireAuth` and direct `db` imports.
@@ -704,7 +714,7 @@ the round-3 audit and answered by the owner on 2026-06-07.
 | ID | Study | Output | Key questions |
 |---|---|---|---|
 | ARCH-01 | App control-plane model + catalog projection | SPEC_EVOL_APP_CATALOG | Control-plane model FIRST, projection second; `app_templates`/`app_instances`/`tenants` resources; build-cli manifest reuse; which DB owns them (product vs IdP seam, with D1); migration cost estimate for flagship retro-modeling (D7) |
-| ARCH-02 | Public app auth and anonymous quotas | SPEC_EVOL_PUBLIC_APP_AUTH | Guest principal rows (D3); guest-to-existing-account merge policy (FK re-key + authorship transfer); claim-across-OIDC-redirect with BR-39n; cookie/CSRF/origin model; app-safe chat DTO + factory extraction of workspaces/documents/comments routers |
+| ARCH-02 | Public app auth and anonymous quotas | SPEC_EVOL_PUBLIC_APP_AUTH | Guest principal rows (D3); guest-to-existing-account merge policy (FK re-key + authorship transfer); claim-across-OIDC-redirect **RP-side, needing no BR-39n claim** (the IdP round-trips `state` verbatim — `packages/auth-hono/src/oauth/issue-authorized-code.ts:51`); cookie/CSRF/origin model; app-safe chat DTO + factory extraction of the **`documents`** router (NOT `workspaces` — never publicly exposed; `comments` is phase 2, behind the `contextType` `canvas|artifact` extension) |
 | ARCH-03 | Diag public app proof | SPEC_EVOL_DIAG_APP | Mermaid tool via execution seam; documents+S3 persistence (D9); comments `contextType` extension; chat-ui modular-core composition; open host-tool extension point (OpenERP consumer finding); claim UX; retention |
 | ARCH-04 | Immo e2e app proof | SPEC_EVOL_IMMO_APP | IdP Phase B membership gate; org-B residence (D8); app-foundry generation via build-cli; UAT-to-published lifecycle; B2B2B disclosure boundaries |
 | ARCH-05 | Code workspace + remote UAT routing | SPEC_EVOL_CODE_WORKSPACE_REMOTE | Repo binding; remote registration on device-pairing/cowork-bridge/S2S; confirm cowork backend split owner/branch; route-grant + edge proxy protocol; preview domain; personal-remote isolation |
@@ -771,7 +781,8 @@ Dispatch order, corrected rounds 2-3:
 - Wave 1 study: ARCH-01 (with ARCH-11 folded or parallel), ARCH-07 (promoted —
   depends only on flow + chat tool loop, both exist), ARCH-12 (no
   published-contract mutation lands before it), ARCH-13, ARCH-14.
-- Wave 2 study: ARCH-02 (gated on BR-39n/39e decisions), ARCH-05 (coordinate
+- Wave 2 study: ARCH-02 (**no longer gated on BR-39n** — struck 2026-07-25, see PLAN.md; only
+  BR-63 keeps that dependency), ARCH-05 (coordinate
   with the planned cowork backend split), ARCH-15 (gates Diag's GDPR posture),
   ARCH-17, ARCH-06 (gated on graphify-fusion Lot 0, consumes the ARCH-07 run
   model), ARCH-08 (after ARCH-07).
