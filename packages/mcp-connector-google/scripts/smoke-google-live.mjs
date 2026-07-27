@@ -19,15 +19,17 @@ async function main() {
     fail(drive.error?.code ?? 'drive-about-get-failed');
     return;
   }
-  const user = drive.output.user;
-  console.log('[smoke-google-live] Drive about.get:', { emailAddress: user?.emailAddress ?? null });
+  const driveOutput = typeof drive.output === 'object' && drive.output !== null ? drive.output : {};
+  const user = typeof driveOutput.user === 'object' && driveOutput.user !== null ? driveOutput.user : {};
+  console.log('[smoke-google-live] Drive about.get:', { emailAddress: user.emailAddress ?? null });
 
   const gmail = await invokeGmailLive('labels.list', {}, token);
   if (!gmail.ok || !gmail.output) {
     fail(gmail.error?.code ?? 'gmail-labels-list-failed');
     return;
   }
-  const labels = gmail.output.labels;
+  const gmailOutput = typeof gmail.output === 'object' && gmail.output !== null ? gmail.output : {};
+  const labels = gmailOutput.labels;
   console.log('[smoke-google-live] Gmail labels.list:', { labelCount: Array.isArray(labels) ? labels.length : 0 });
 }
 
