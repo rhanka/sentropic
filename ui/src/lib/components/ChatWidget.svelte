@@ -23,8 +23,6 @@
     X,
     Plus,
     Trash2,
-    Maximize2,
-    Minimize2,
     Menu,
     List,
     Settings,
@@ -56,11 +54,13 @@
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
+  import ChatPlacementDropZones from '@sentropic/chat-ui/components/ChatPlacementDropZones.svelte';
   import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
   import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
   import {
     createChatPlacementMenu,
+    createFrenchChatPlacementMenuLabels,
     type ChatPlacementMenu,
   } from '@sentropic/chat-ui/state/chatPlacementMenu';
   import {
@@ -68,6 +68,12 @@
     placementToLegacyDisplayMode,
   } from '@sentropic/chat-ui/state/chatPlacementMigration';
   import type { ChatPlacement } from '@sentropic/chat-ui/state/chatPlacement';
+  import {
+    createDragSession,
+    createViewportDropZones,
+    type DragSession,
+    type DropZone,
+  } from '@sentropic/chat-ui/state/chatPlacementDnd';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -164,8 +170,6 @@
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
   const HANDOFF_EVENT = 'sentropic:chatwidget-handoff-state';
   const HANDOFF_STORAGE_KEY = 'sentropic:chatwidget-handoff-state';
-  const OPEN_SIDEPANEL_EVENT = 'sentropic:open-sidepanel';
-  const OPEN_OVERLAY_EVENT = 'sentropic:open-overlay';
   const OPEN_CHAT_EVENT = 'sentropic:open-chat';
   const EXTENSION_CONFIG_UPDATED_EVENT = 'sentropic:extension-config-updated';
   const DEFAULT_EXTENSION_CONFIGS: Record<
@@ -240,6 +244,7 @@
         defaultPlacement: displayModeToPlacement(
           isSidePanelHost ? 'docked' : legacyMode,
         ),
+        labels: createFrenchChatPlacementMenuLabels(),
       });
     }
   }
@@ -428,6 +433,17 @@
   let bubbleButtonEl: HTMLButtonElement | null = null;
   let isDocked = false;
   let isMobileViewport = false;
+  let placementMenuOwnsPlacement = false;
+  let placementDragSession: DragSession | null = null;
+  let placementDragZones: DropZone[] = [];
+  let placementDragHovered: ChatPlacement | null = null;
+
+  $: placementMenuOwnsPlacement = Boolean(placementMenu)
+    && canChatPlacementMenuOwnPlacement({
+      hostMode,
+      isExtensionOverlayHost,
+      isMobileViewport,
+    });
   let closeButtonEl: HTMLButtonElement | null = null;
   let isBrowserReady = false;
 
@@ -558,38 +574,6 @@
         detail: payload,
       }),
     );
-  };
-
-  const requestOpenSidePanel = async (): Promise<boolean> => {
-    if (!isBrowser || !isExtensionOverlayHost) return false;
-    const runtime = (globalThis as typeof globalThis & {
-      chrome?: { runtime?: any };
-    }).chrome?.runtime;
-
-    if (runtime?.sendMessage) {
-      try {
-        const response = await runtime.sendMessage({
-          type: 'open_side_panel',
-        });
-        if (response?.ok) {
-          publishHandoffStateIfChanged();
-          return true;
-        }
-        console.error(
-          'Failed to request side panel opening:',
-          response?.error ?? 'unknown reason',
-        );
-        return false;
-      } catch (error) {
-        console.error('Failed to request side panel opening.', error);
-        return false;
-      }
-    }
-
-    // Legacy fallback (should not happen in normal extension runtime).
-    publishHandoffStateIfChanged();
-    window.dispatchEvent(new CustomEvent(OPEN_SIDEPANEL_EVENT));
-    return false;
   };
 
   type RuntimeWithMessaging = {
@@ -1526,42 +1510,58 @@
     extensionConfigMenuWasOpen = showExtensionConfigMenu;
   }
 
-  const requestOpenOverlay = () => {
-    if (!isBrowser || !isSidePanelHost) return;
-    publishHandoffStateIfChanged();
-    window.dispatchEvent(
-      new CustomEvent<{ activeTab: Tab }>(OPEN_OVERLAY_EVENT, {
-        detail: { activeTab },
-      }),
-    );
-  };
-
   const syncDisplayModeFromPlacement = (placement: ChatPlacement) => {
     setDisplayMode(placementToLegacyDisplayMode(placement));
   };
 
-  const toggleDisplayMode = async () => {
-    if (isExtensionOverlayHost) {
-      const opened = await requestOpenSidePanel();
-      if (opened) close();
-      return;
-    }
-    if (isSidePanelHost) {
-      requestOpenOverlay();
-      return;
-    }
-    if (placementMenu) {
-      const dockedNow = placementMenu.current().kind === 'drawer';
-      await placementMenu.request(
-        dockedNow
-          ? { kind: 'floating', anchor: 'right' }
-          : { kind: 'drawer', side: 'right', occupancy: 'primary' },
-      );
-      syncDisplayModeFromPlacement(placementMenu.current());
-      return;
-    }
-    setDisplayMode(displayMode === 'docked' ? 'floating' : 'docked');
+  const cancelPlacementDrag = () => {
+    placementDragSession = null;
+    placementDragZones = [];
+    placementDragHovered = null;
   };
+
+  const startPlacementDrag = (clientX: number, clientY: number) => {
+    if (!placementMenuOwnsPlacement || !placementMenu || typeof window === 'undefined') return;
+    placementDragZones = createViewportDropZones({
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      supported: placementMenu.snapshot().supported,
+    });
+    placementDragSession = createDragSession({ zones: placementDragZones });
+    placementDragHovered = placementDragSession.hover(clientX, clientY);
+  };
+
+  const movePlacementDrag = (clientX: number, clientY: number) => {
+    if (!placementDragSession) return;
+    placementDragHovered = placementDragSession.hover(clientX, clientY);
+  };
+
+  const endPlacementDrag = (clientX: number, clientY: number) => {
+    const session = placementDragSession;
+    if (!session || !placementMenu) return;
+    const target = session.hover(clientX, clientY) ?? session.end();
+    cancelPlacementDrag();
+    if (!target) return;
+    void placementMenu.request(target).then(() => {
+      syncDisplayModeFromPlacement(placementMenu?.current() ?? target);
+    });
+  };
+
+  const onPlacementDragKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || !placementDragSession) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancelPlacementDrag();
+  };
+
+  const placementDragZoneLabel = (placement: ChatPlacement): string => {
+    const labels = placementMenu?.labels;
+    if (!labels) return '';
+    if (placement.kind === 'drawer') return `${labels.panel} ${placement.side === 'left' ? labels.left : labels.right}`;
+    if (placement.kind === 'floating') return `${labels.floating} ${labels[placement.anchor]}`;
+    return labels.full;
+  };
+
+  $: if (!placementMenuOwnsPlacement && placementDragSession) cancelPlacementDrag();
 
   $: if (isBrowserReady) {
     activeTab;
@@ -1889,6 +1889,7 @@
     window.addEventListener('resize', () => {
       if (showExtensionConfigMenu) updateExtensionConfigMenuMaxHeight();
     });
+    window.addEventListener('keydown', onPlacementDragKeyDown);
     window.addEventListener('sentropic:close-chat', onExternalCloseChat as any);
     window.addEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     handleCommentSectionClick = (event: MouseEvent) => {
@@ -2007,6 +2008,8 @@
   };
 
   onDestroy(() => {
+    window.removeEventListener('keydown', onPlacementDragKeyDown);
+    cancelPlacementDrag();
     window.removeEventListener('sentropic:close-chat', onExternalCloseChat as any);
     window.removeEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
     if (handleCommentSectionClick)
@@ -2855,35 +2858,19 @@
               </MenuPopover>
             {/if}
             {#if !isSidePanelHost}
-              {#if placementMenu && canChatPlacementMenuOwnPlacement({
-                hostMode,
-                isExtensionOverlayHost,
-                isMobileViewport,
-              })}
+              {#if placementMenu && placementMenuOwnsPlacement}
                 <ChatPlacementMenuButton
                   {placementMenu}
                   onPlacementChange={syncDisplayModeFromPlacement}
+                  dragCallbacks={{
+                    start: startPlacementDrag,
+                    move: movePlacementDrag,
+                    end: endPlacementDrag,
+                    cancel: cancelPlacementDrag,
+                  }}
                   class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
                 />
               {/if}
-              <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
-              <button
-                class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
-                on:click={toggleDisplayMode}
-                title={isDocked
-                  ? $_('chat.widget.switchToWidget')
-                  : $_('chat.widget.switchToPanel')}
-                aria-label={isDocked
-                  ? $_('chat.widget.switchToWidget')
-                  : $_('chat.widget.switchToPanel')}
-                type="button"
-              >
-                {#if isDocked}
-                  <Minimize2 class="w-4 h-4" aria-hidden="true" />
-                {:else}
-                  <Maximize2 class="w-4 h-4" aria-hidden="true" />
-                {/if}
-              </button>
               <button
                 class="text-gray-400 hover:text-gray-600"
                 on:click={close}
@@ -3152,3 +3139,11 @@
   bind:dialogEl={dialogEl}
   bind:bubbleButtonEl={bubbleButtonEl}
 />
+
+{#if placementDragSession}
+  <ChatPlacementDropZones
+    zones={placementDragZones}
+    hovered={placementDragHovered}
+    labelForPlacement={placementDragZoneLabel}
+  />
+{/if}

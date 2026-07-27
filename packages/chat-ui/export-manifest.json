@@ -783,9 +783,12 @@
       "exports": [
         "Rect",
         "DropZone",
+        "Viewport",
+        "CreateViewportDropZonesOptions",
         "DragSessionConfig",
         "DragSession",
-        "createDragSession"
+        "createDragSession",
+        "createViewportDropZones"
       ]
     },
     "./state/chatPlacementMenu": {
@@ -793,11 +796,20 @@
       "file": "dist/state/chatPlacementMenu.js",
       "exports": [
         "ChatPlacementMenuItem",
+        "ChatPlacementMenuGroup",
+        "ChatPlacementMenuLabels",
         "CreateChatPlacementMenuOptions",
         "ChatPlacementMenu",
         "buildChatPlacementPersistenceKey",
+        "createDefaultChatPlacementMenuLabels",
+        "createFrenchChatPlacementMenuLabels",
         "createChatPlacementMenu"
       ]
+    },
+    "./components/ChatPlacementDropZones.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatPlacementDropZones.svelte",
+      "exists": true
     }
   }
 }
