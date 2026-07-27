@@ -13,9 +13,12 @@
 import {
   createPlacementController,
   parsePlacementId,
+  placementId,
   type ChatPlacement,
   type ChatPlacementId,
   type CommitFn,
+  type DrawerSide,
+  type FloatingAnchor,
   type HostSurfaces,
   type PlacementPersistence,
   type PlacementSnapshot,
@@ -26,6 +29,7 @@ import {
 const WEB_HOST_SURFACES: HostSurfaces = {
   supported: [
     'drawer.right.primary',
+    'drawer.left.primary',
     'floating.right',
     'floating.left',
     'floating.center',
@@ -40,33 +44,62 @@ const WEB_HOST_SURFACES: HostSurfaces = {
 // real DOM re-parent to perform here, so the commit always succeeds.
 const webCommit: CommitFn = async () => ({ ok: true });
 
-// --- Menu items (Right/Left/Center/Full) --------------------------------------
+// --- Menu groups + labels -----------------------------------------------------
 
-const MENU_ITEM_IDS: ChatPlacementId[] = [
-  'floating.right',
-  'floating.left',
-  'floating.center',
-  'full',
-];
-
-const MENU_ITEM_LABELS: Record<ChatPlacementId, string> = {
-  'floating.right': 'Right',
-  'floating.left': 'Left',
-  'floating.center': 'Center',
-  full: 'Full',
+export type ChatPlacementMenuLabels = {
+  menuLabel: string;
+  modeGroupLabel: string;
+  sideGroupLabel: string;
+  panel: string;
+  floating: string;
+  full: string;
+  right: string;
+  center: string;
+  left: string;
 };
+
+export const createDefaultChatPlacementMenuLabels = (
+  overrides: Partial<ChatPlacementMenuLabels> = {},
+): ChatPlacementMenuLabels => ({
+  menuLabel: 'Move chat to…',
+  modeGroupLabel: 'Mode',
+  sideGroupLabel: 'Side',
+  panel: 'Panel',
+  floating: 'Floating',
+  full: 'Full screen',
+  right: 'Right',
+  center: 'Center',
+  left: 'Left',
+  ...overrides,
+});
+
+export const createFrenchChatPlacementMenuLabels = (
+  overrides: Partial<ChatPlacementMenuLabels> = {},
+): ChatPlacementMenuLabels => createDefaultChatPlacementMenuLabels({
+  menuLabel: 'Déplacer le chat vers…',
+  modeGroupLabel: 'Mode',
+  sideGroupLabel: 'Côté',
+  panel: 'Panneau',
+  floating: 'Libre',
+  full: 'Plein écran',
+  right: 'Droite',
+  center: 'Centre',
+  left: 'Gauche',
+  ...overrides,
+});
 
 export type ChatPlacementMenuItem = {
-  id: ChatPlacementId;
+  id: 'panel' | 'floating' | 'full' | 'right' | 'center' | 'left';
   label: string;
   placement: ChatPlacement;
+  checked: boolean;
 };
 
-const MENU_ITEMS: ChatPlacementMenuItem[] = MENU_ITEM_IDS.map((id) => ({
-  id,
-  label: MENU_ITEM_LABELS[id],
-  placement: parsePlacementId(id),
-}));
+export type ChatPlacementMenuGroup = {
+  id: 'mode' | 'side';
+  label: string;
+  items: ChatPlacementMenuItem[];
+};
 
 // --- D6 persistence: chat-ui/placement/v1/${userId}/${hostId}/${workspace} ---
 
@@ -75,6 +108,9 @@ export const buildChatPlacementPersistenceKey = (opts: {
   hostId: string;
   workspace: string;
 }): string => `chat-ui/placement/v1/${opts.userId}/${opts.hostId}/${opts.workspace}`;
+
+const buildChatPlacementSideMemoryKey = (persistenceKey: string): string =>
+  `${persistenceKey}/sides`;
 
 const resolveDefaultStorage = (): Storage | undefined => {
   try {
@@ -109,6 +145,33 @@ const createLocalStoragePersistence = (
   },
 });
 
+type ChatPlacementSideMemory = {
+  drawerSide: DrawerSide;
+  floatingAnchor: FloatingAnchor;
+};
+
+const readSideMemory = (
+  storage: Storage | undefined,
+  key: string,
+): Partial<ChatPlacementSideMemory> => {
+  if (!storage) return {};
+  try {
+    const parsed = JSON.parse(storage.getItem(key) ?? 'null') as Partial<ChatPlacementSideMemory> | null;
+    return {
+      ...(parsed?.drawerSide === 'left' || parsed?.drawerSide === 'right'
+        ? { drawerSide: parsed.drawerSide }
+        : {}),
+      ...(parsed?.floatingAnchor === 'left'
+        || parsed?.floatingAnchor === 'center'
+        || parsed?.floatingAnchor === 'right'
+        ? { floatingAnchor: parsed.floatingAnchor }
+        : {}),
+    };
+  } catch {
+    return {};
+  }
+};
+
 // --- Public factory ------------------------------------------------------------
 
 export type CreateChatPlacementMenuOptions = {
@@ -119,11 +182,15 @@ export type CreateChatPlacementMenuOptions = {
   storage?: Storage;
   /** Defaults to the legacy floating-right placement. */
   defaultPlacement?: ChatPlacement;
+  /** Localised menu copy. Defaults to the reusable English preset. */
+  labels?: Partial<ChatPlacementMenuLabels>;
 };
 
 export type ChatPlacementMenu = {
-  /** The 4 selectable menu entries: Right / Left / Center / Full. */
-  items: ChatPlacementMenuItem[];
+  /** Resolved localised labels used by the visual host. */
+  labels: ChatPlacementMenuLabels;
+  /** The contextual MODE and SIDE groups rendered by a visual host. */
+  groups(): ChatPlacementMenuGroup[];
   /** The currently active (last committed) placement. */
   current(): ChatPlacement;
   /** Request a placement change; resolves once the transition settles. */
@@ -142,6 +209,15 @@ export function createChatPlacementMenu(
   const persistence = createLocalStoragePersistence(persistenceKey, storage);
   const defaultPlacement: ChatPlacement =
     opts.defaultPlacement ?? { kind: 'floating', anchor: 'right' };
+  const labels = createDefaultChatPlacementMenuLabels(opts.labels);
+
+  const storedSideMemory = readSideMemory(storage, buildChatPlacementSideMemoryKey(persistenceKey));
+  let drawerSide: DrawerSide = storedSideMemory.drawerSide ?? (defaultPlacement.kind === 'drawer'
+    ? defaultPlacement.side
+    : 'right');
+  let floatingAnchor: FloatingAnchor = storedSideMemory.floatingAnchor ?? (defaultPlacement.kind === 'floating'
+    ? defaultPlacement.anchor
+    : 'right');
 
   // D6: `requested` is seeded from persistence synchronously, and — via
   // seedEffectiveFromRequested — `effective` (what current() reports) is
@@ -160,10 +236,66 @@ export function createChatPlacementMenu(
     seedEffectiveFromRequested: true,
   });
 
+  const rememberSide = (placement: ChatPlacement) => {
+    if (placement.kind === 'drawer' && placement.occupancy === 'primary') {
+      drawerSide = placement.side;
+    }
+    if (placement.kind === 'floating') floatingAnchor = placement.anchor;
+  };
+
+  const writeSideMemory = () => {
+    if (!storage) return;
+    try {
+      storage.setItem(
+        buildChatPlacementSideMemoryKey(persistenceKey),
+        JSON.stringify({ drawerSide, floatingAnchor }),
+      );
+    } catch {
+      // Persistence is best-effort, matching the placement intent adapter.
+    }
+  };
+
+  rememberSide(controller.snapshot().effective);
+
+  const groups = (): ChatPlacementMenuGroup[] => {
+    const current = controller.snapshot().effective;
+    const panelPlacement: ChatPlacement = {
+      kind: 'drawer', side: drawerSide, occupancy: 'primary',
+    };
+    const floatingPlacement: ChatPlacement = { kind: 'floating', anchor: floatingAnchor };
+    const mode: ChatPlacementMenuGroup = {
+      id: 'mode',
+      label: labels.modeGroupLabel,
+      items: [
+        { id: 'panel', label: labels.panel, placement: panelPlacement, checked: current.kind === 'drawer' },
+        { id: 'floating', label: labels.floating, placement: floatingPlacement, checked: current.kind === 'floating' },
+        { id: 'full', label: labels.full, placement: { kind: 'full' }, checked: current.kind === 'full' },
+      ],
+    };
+    if (current.kind === 'full') return [mode];
+    const sideItems: ChatPlacementMenuItem[] = current.kind === 'drawer'
+      ? (['right', 'left'] as DrawerSide[]).map((side) => ({
+          id: side,
+          label: labels[side],
+          placement: { kind: 'drawer', side, occupancy: 'primary' },
+          checked: current.side === side,
+        }))
+      : (['right', 'center', 'left'] as FloatingAnchor[]).map((anchor) => ({
+          id: anchor,
+          label: labels[anchor],
+          placement: { kind: 'floating', anchor },
+          checked: current.anchor === anchor,
+        }));
+    return [mode, { id: 'side', label: labels.sideGroupLabel, items: sideItems }];
+  };
+
   return {
-    items: MENU_ITEMS,
+    labels,
+    groups,
     current: () => controller.snapshot().effective,
     request: async (placement) => {
+      rememberSide(placement);
+      writeSideMemory();
       await controller.requestPlacement(placement);
     },
     subscribe: (cb) => controller.subscribe((s) => cb(s.effective)),
