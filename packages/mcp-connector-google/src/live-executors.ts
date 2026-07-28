@@ -8,13 +8,21 @@ export class GoogleLiveApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly retriable: boolean;
+  readonly detail?: Record<string, unknown>;
 
-  constructor(status: number, code: string, message: string, retriable: boolean) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    retriable: boolean,
+    detail: Record<string, unknown> | undefined = undefined,
+  ) {
     super(message);
     this.name = 'GoogleLiveApiError';
     this.status = status;
     this.code = code;
     this.retriable = retriable;
+    this.detail = detail;
   }
 }
 
