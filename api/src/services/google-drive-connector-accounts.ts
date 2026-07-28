@@ -6,6 +6,7 @@ import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { settingsService } from './settings';
 import {
   GOOGLE_DRIVE_PROVIDER,
+  GoogleDriveTokenEndpointError,
   refreshGoogleDriveAccessToken,
   resolveGoogleDriveOAuthConfig,
   type GoogleDriveAccountIdentity,
@@ -153,10 +154,20 @@ const refreshStoredGoogleDriveTokenSecret = async (input: {
 
     return merged;
   } catch (error) {
+    // Erase the stored refresh token ONLY when Google itself declares the grant dead
+    // (`invalid_grant`: user revoked access, password change, token expired by policy). In that case
+    // the secret is genuinely worthless and keeping it would only mislead.
+    //
+    // Every OTHER failure — network outage, Google 5xx, rate limit, a misconfigured client secret —
+    // is TRANSIENT or OURS. Erasing on those turned a temporary hiccup into permanent credential
+    // loss: the refresh token is not recoverable, so the user had to re-authorize even though their
+    // grant was still perfectly valid. The account is still marked in error and surfaces the
+    // reconnect message; we simply keep the secret so a later attempt can succeed.
+    const grantIsDead = error instanceof GoogleDriveTokenEndpointError && error.isUnrecoverableGrant;
     await markGoogleDriveConnectorTokenError({
       accountId: input.accountId,
       message: error instanceof Error ? error.message : GOOGLE_DRIVE_RECONNECT_REQUIRED_MESSAGE,
-      clearTokenSecret: true,
+      clearTokenSecret: grantIsDead,
     });
     return null;
   }
