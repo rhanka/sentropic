@@ -8,6 +8,7 @@ import {
   encryptSecret,
   getLegacyPlaintextReadCount,
   resetLegacyPlaintextReadCount,
+  SecretEnvelopeError,
 } from '../../src/services/secret-crypto';
 
 const LEGACY_LITERAL = 'dev-secret-key-change-in-production-please';
@@ -87,6 +88,17 @@ describe('secret encryption — key separation and versioned keyring', () => {
     const forwardEnvelope = 'enc:v2:aaaa:bbbb:cccc';
 
     expect(() => decryptSecret(forwardEnvelope)).toThrow(/Unsupported encrypted secret version: v2/);
+
+    // Failing loud is correct; failing ANONYMOUSLY is not. This throw reaches every consumer
+    // uncaught, so during a key rotation it must be attributable rather than an opaque 500.
+    try {
+      decryptSecret(forwardEnvelope);
+      throw new Error('expected decryptSecret to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(SecretEnvelopeError);
+      expect((error as SecretEnvelopeError).reason).toBe('unsupported_version');
+      expect((error as SecretEnvelopeError).version).toBe('v2');
+    }
 
     // The precise property that matters: it must never come back AS A VALUE.
     let returned: string | null = null;

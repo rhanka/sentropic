@@ -46,6 +46,29 @@ const KEYRING: Record<string, () => Buffer> = {
 };
 
 /**
+ * A refusal to read a stored envelope, raised with a RECOGNISABLE type.
+ *
+ * Failing loud is correct; failing ANONYMOUSLY is not. This throw propagates uncaught to every
+ * consumer (Drive, llm-account-transports, provider-connections, provider-credentials), so during a
+ * key rotation an inconsistent key would surface as an unattributable 500. A named type lets callers
+ * and operators tell "the at-rest key does not match this envelope" apart from any other failure.
+ */
+export class SecretEnvelopeError extends Error {
+  readonly reason: 'unsupported_version' | 'malformed_payload';
+  readonly version: string | null;
+
+  constructor(
+    message: string,
+    options: { reason: 'unsupported_version' | 'malformed_payload'; version: string | null },
+  ) {
+    super(message);
+    this.name = 'SecretEnvelopeError';
+    this.reason = options.reason;
+    this.version = options.version;
+  }
+}
+
+/**
  * Legacy PLAINTEXT rows read so far, process-lifetime.
  *
  * Unencrypted legacy values are still a legitimate migration path, so they must pass — but silently
@@ -53,6 +76,14 @@ const KEYRING: Record<string, () => Buffer> = {
  * that hides an empty result. Counting them turns that claim into something measurable.
  */
 let legacyPlaintextReads = 0;
+
+/**
+ * Log brake. The counter is the measurement; the log is only the alert. Emitting a line on EVERY
+ * read would drown the journal on a hot path — and a drowned journal is one people stop reading,
+ * which defeats the point of alerting at all. Log the first few, then geometrically.
+ */
+const shouldLogPlaintextRead = (count: number): boolean =>
+  count <= 3 || count === 10 || count === 100 || count % 1000 === 0;
 
 /** Observability hook: how many legacy plaintext secrets this process has read. */
 export const getLegacyPlaintextReadCount = (): number => legacyPlaintextReads;
@@ -75,10 +106,12 @@ export const decryptSecret = (value: string): string => {
   // Legacy plaintext: passes, but is COUNTED and logged. Never silent.
   if (!value.startsWith(ENVELOPE_NAMESPACE)) {
     legacyPlaintextReads += 1;
-    logger.warn(
-      { legacyPlaintextReads },
-      'secret-crypto: read a legacy PLAINTEXT secret (not encrypted at rest)',
-    );
+    if (shouldLogPlaintextRead(legacyPlaintextReads)) {
+      logger.warn(
+        { legacyPlaintextReads },
+        'secret-crypto: read a legacy PLAINTEXT secret (not encrypted at rest)',
+      );
+    }
     return value;
   }
 
@@ -91,10 +124,16 @@ export const decryptSecret = (value: string): string => {
   // has to exist BEFORE any newer version can ever be written, not alongside it.
   const resolveKey = version ? KEYRING[version] : undefined;
   if (!resolveKey) {
-    throw new Error(`Unsupported encrypted secret version: ${version || '<empty>'}`);
+    throw new SecretEnvelopeError(`Unsupported encrypted secret version: ${version || '<empty>'}`, {
+      reason: 'unsupported_version',
+      version: version || null,
+    });
   }
   if (!ivRaw || !tagRaw || !bodyRaw) {
-    throw new Error('Invalid encrypted secret payload.');
+    throw new SecretEnvelopeError('Invalid encrypted secret payload.', {
+      reason: 'malformed_payload',
+      version,
+    });
   }
 
   const decipher = createDecipheriv('aes-256-gcm', resolveKey(), Buffer.from(ivRaw, 'base64url'), {
