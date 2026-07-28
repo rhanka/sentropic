@@ -41,27 +41,48 @@ describe('secret encryption key separation', () => {
   });
 
   it('still decrypts values written under JWT_SECRET when the new key is UNSET', () => {
-    // THE migration invariant. Before the split the seed was `JWT_SECRET || <literal>`, so any
-    // environment with JWT_SECRET set has its stored secrets keyed on sha256(JWT_SECRET). If this
-    // deployment rolls out before an operator copies that value into CREDENTIAL_ENCRYPTION_KEY, the
-    // key must NOT silently change — every enc:v1: value would become undecryptable at once, and GCM
-    // only reveals it on read, long after the deploy looked healthy.
+    // THE deployed-environment invariant, and the one the suite previously could not see. Deployed
+    // containers receive NEITHER variable (JWT_SECRET is absent from the secret bundle, and
+    // CREDENTIAL_ENCRYPTION_KEY is not plumbed yet), so the live at-rest key is sha256 of the legacy
+    // literal below. Nothing may change that until the key is deliberately rotated.
     //
-    // This must hold BY CONSTRUCTION, not by procedure: the live production environment could not be
-    // inspected from here, so we cannot know whether JWT_SECRET is set there.
-    const jwtSecret = randomBytes(48).toString('base64url');
+    // Written with the literal SPELLED OUT rather than imported: the point is to pin the exact bytes
+    // production is keyed on. Editing the literal in the source must break this test, because that
+    // edit would silently make every stored enc:v1: value undecryptable.
     const plaintext = randomBytes(24).toString('base64url');
-    const envelopeWrittenBeforeTheSplit = encryptWithLegacyDerivation(plaintext, jwtSecret);
+    const envelopeKeyedOnTheLiteral = encryptWithLegacyDerivation(
+      plaintext,
+      'dev-secret-key-change-in-production-please'
+    );
 
-    securityEnv.JWT_SECRET = jwtSecret;
     securityEnv.CREDENTIAL_ENCRYPTION_KEY = undefined;
+    securityEnv.JWT_SECRET = randomBytes(48).toString('base64url');
 
-    expect(decryptSecret(envelopeWrittenBeforeTheSplit)).toBe(plaintext);
+    // JWT_SECRET is set to a random value on purpose: this module must NOT read it. If a
+    // `|| env.JWT_SECRET` term were reintroduced into the chain, the seed would become that random
+    // value and this decryption would fail — which is exactly the regression to prevent, because
+    // step 2 of the remediation provisions a fresh JWT_SECRET in production.
+    expect(decryptSecret(envelopeKeyedOnTheLiteral)).toBe(plaintext);
   });
 
-  it('lets CREDENTIAL_ENCRYPTION_KEY override JWT_SECRET, so rotating JWT_SECRET is safe', () => {
-    // The other half of the decoupling, and the reason step 2 (rotate JWT_SECRET) stops being
-    // destructive: once the dedicated variable is set, JWT_SECRET no longer reaches the cipher.
+  it('treats an EMPTY CREDENTIAL_ENCRYPTION_KEY as absent, not as the key', () => {
+    // The delivery mechanism emits present-but-empty keys: `--from-literal=VAR="$VAR"` produces
+    // VAR="" whenever the source env file omits the variable, so the container sees an empty string
+    // rather than an absent one. `||` falls through, `??` would not — and with `??` the seed would
+    // become '' and brick every stored secret. This pins the choice of operator.
+    const plaintext = randomBytes(24).toString('base64url');
+    const envelopeKeyedOnTheLiteral = encryptWithLegacyDerivation(
+      plaintext,
+      'dev-secret-key-change-in-production-please'
+    );
+
+    securityEnv.CREDENTIAL_ENCRYPTION_KEY = '';
+    expect(decryptSecret(envelopeKeyedOnTheLiteral)).toBe(plaintext);
+  });
+
+  it('uses CREDENTIAL_ENCRYPTION_KEY once set, and ignores JWT_SECRET rotation entirely', () => {
+    // The decoupling itself, and the reason step 2 (rotate JWT_SECRET) stops being destructive:
+    // the dedicated variable is the only input, so JWT_SECRET never reaches the cipher.
     const credentialKey = randomBytes(48).toString('base64url');
     const plaintext = randomBytes(24).toString('base64url');
     const envelope = encryptWithLegacyDerivation(plaintext, credentialKey);
@@ -70,7 +91,6 @@ describe('secret encryption key separation', () => {
     securityEnv.JWT_SECRET = randomBytes(48).toString('base64url');
     expect(decryptSecret(envelope)).toBe(plaintext);
 
-    // Rotating JWT_SECRET again must not disturb the at-rest key.
     securityEnv.JWT_SECRET = randomBytes(48).toString('base64url');
     expect(decryptSecret(envelope)).toBe(plaintext);
   });

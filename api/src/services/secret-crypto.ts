@@ -5,26 +5,25 @@ const SECRET_PREFIX = 'enc:v1:';
 const GCM_AUTH_TAG_LENGTH = 16;
 
 /**
- * At-rest key derivation. `CREDENTIAL_ENCRYPTION_KEY` is the key's OWN variable; `JWT_SECRET` is kept
- * as an intermediate fallback ONLY so that this decoupling is byte-identical in EVERY environment, not
- * merely in the ones we were able to measure.
+ * At-rest key derivation. This module reads `CREDENTIAL_ENCRYPTION_KEY` and the legacy literal ONLY —
+ * deliberately NOT `JWT_SECRET`, which is what decouples encryption-at-rest from token signing.
  *
- * Why the middle term is load-bearing: before this change the seed was `JWT_SECRET || <literal>`. In any
- * environment where `JWT_SECRET` IS set, dropping straight to the literal would re-key the cipher and
- * make every stored `enc:v1:` value undecryptable at once — silently, since GCM failure surfaces only on
- * read. We could not verify the live production environment (its cluster is not reachable from here), so
- * "the operator will carry the old value across" is an assumption, not a guarantee. This chain removes
- * the need for the assumption.
+ * DO NOT re-introduce a `|| env.JWT_SECRET` middle term. It looks safer and is the opposite. Deployed
+ * environments do not carry `JWT_SECRET` (it is absent from the secret bundle, so containers never
+ * receive it), which means the live seed is the literal below. Step 2 of this remediation PROVISIONS a
+ * fresh `JWT_SECRET`. With the chain `CEK || JWT || literal`, that provisioning would flip the at-rest
+ * seed from the literal to sha256(new JWT_SECRET) and make every stored `enc:v1:` value undecryptable
+ * at once — silently, since GCM fails only on read. With the chain as written, provisioning
+ * `JWT_SECRET` is a no-op here, which is precisely the property step 2 depends on.
  *
- * It still achieves the decoupling: once `CREDENTIAL_ENCRYPTION_KEY` is set, `JWT_SECRET` no longer
- * influences the at-rest key, which is exactly what makes rotating `JWT_SECRET` (step 2) safe.
+ * The `||` (not `??`) is load-bearing: a Secret delivered as a present-but-EMPTY key would otherwise
+ * become the seed. Empty must fall through.
  *
- * Do not "simplify" this by trimming, normalising, or base64-decoding the seed: each of those changes the
- * sha256 and bricks every stored secret.
+ * Do not "simplify" by trimming, normalising, or base64-decoding the seed: each changes the sha256 and
+ * bricks every stored secret.
  */
 const resolveSecretKey = (): Buffer => {
-  const seed =
-    env.CREDENTIAL_ENCRYPTION_KEY || env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+  const seed = env.CREDENTIAL_ENCRYPTION_KEY || 'dev-secret-key-change-in-production-please';
   return createHash('sha256').update(seed).digest();
 };
 
