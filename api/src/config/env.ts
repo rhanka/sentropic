@@ -129,7 +129,7 @@ const envSchema = z.object({
   WEBAUTHN_ATTESTATION: z.enum(['none', 'indirect', 'direct']).optional(),
   // JWT Configuration
   JWT_SECRET: z.string().optional(),
-  CREDENTIAL_ENCRYPTION_KEY: z.string().optional(),
+  SECRET_ENCRYPTION_KEY: z.string().optional(),
   // OAuth2 / OIDC IdP Configuration
   OAUTH_SIGNING_KEK: z.string().optional(),
   OAUTH_ISSUER_URL: z.string().optional(),
