@@ -8,7 +8,13 @@
 </script>
 
 <div data-chat-placement-drop-zones class="fixed inset-0 z-[60] pointer-events-none" aria-hidden="true">
-  {#each zones as zone (placementId(zone.placement))}
+  <!--
+    A placement may own SEVERAL rects (the floating columns cover both the
+    central block and the bottom strip), so the key must include the index —
+    keying on the placement alone duplicates keys and Svelte then renders
+    nothing at all.
+  -->
+  {#each zones as zone, i (`${placementId(zone.placement)}#${i}`)}
     {@const isHovered = hovered && placementId(hovered) === placementId(zone.placement)}
     <div
       class={isHovered
