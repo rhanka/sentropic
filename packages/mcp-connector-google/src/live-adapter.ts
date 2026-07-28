@@ -39,6 +39,10 @@ import { gmailManifest, googleDriveManifest } from './manifest.js';
 
 type LiveProvider = 'googleDrive' | 'gmail';
 
+type GoogleLiveErrorEnvelope = AppResultEnvelope<unknown> & {
+  error: NonNullable<AppResultEnvelope<unknown>['error']> & { detail?: Record<string, unknown> };
+};
+
 let liveAuditSequence = 0;
 
 function nextLiveAuditId(provider: LiveProvider, kind: 'resource' | 'tool'): string {
@@ -56,40 +60,58 @@ function capabilityRedactionClass(
 }
 
 function liveErrorEnvelope(
-  error: unknown,
+  error: GoogleLiveApiError,
   auditId: string,
   redactionClass: RedactionClass,
-): AppResultEnvelope<unknown> {
-  if (error instanceof GoogleLiveApiError) {
-    return {
-      ok: false,
-      auditId,
-      redactionClass,
-      error: { code: error.code, message: error.message, retriable: error.retriable },
-    };
-  }
+): GoogleLiveErrorEnvelope {
   return {
     ok: false,
     auditId,
     redactionClass,
     error: {
-      code: 'google_live_error',
-      message: 'Google live adapter request failed.',
-      retriable: false,
+      code: error.code,
+      message: error.message,
+      retriable: error.retriable,
+      ...(error.detail === undefined ? {} : { detail: error.detail }),
     },
   };
+}
+
+function secretEnvelopeDetail(error: unknown): Record<string, unknown> | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+
+  const detail: Record<string, unknown> = {};
+  const source = error as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(error, 'reason')) detail.reason = source.reason;
+  if (Object.prototype.hasOwnProperty.call(error, 'version')) detail.version = source.version;
+  return Object.keys(detail).length === 0 ? undefined : detail;
 }
 
 async function getAccessToken(ctx: StpConnectorContext): Promise<string> {
   try {
     return await ctx.getSecret('googleOAuthAccessToken');
-  } catch {
-    throw new GoogleLiveApiError(
-      0,
-      'google_secret_unavailable',
-      'Google OAuth access token is unavailable.',
-      true,
-    );
+  } catch (error) {
+    const name = typeof error === 'object' && error !== null
+      ? (error as { name?: unknown }).name
+      : undefined;
+    if (name === 'SecretEnvelopeError') {
+      throw new GoogleLiveApiError(
+        0,
+        'connector_secret_unreadable',
+        'Google OAuth access token cannot be read.',
+        true,
+        secretEnvelopeDetail(error),
+      );
+    }
+    if (name === 'SecretAccessError') {
+      throw new GoogleLiveApiError(
+        0,
+        'connector_secret_unavailable',
+        'Google OAuth access token is unavailable.',
+        false,
+      );
+    }
+    throw error;
   }
 }
 
@@ -199,7 +221,10 @@ function createGoogleLiveAdapter(
         }
         return unknownCapability('resource', req.capabilityRef, auditId, redactionClass);
       } catch (error) {
-        return liveErrorEnvelope(error, auditId, redactionClass);
+        if (error instanceof GoogleLiveApiError) {
+          return liveErrorEnvelope(error, auditId, redactionClass);
+        }
+        throw error;
       }
     },
 
@@ -252,7 +277,10 @@ function createGoogleLiveAdapter(
         }
         return unknownCapability('tool', req.capabilityRef, auditId, redactionClass);
       } catch (error) {
-        return liveErrorEnvelope(error, auditId, redactionClass);
+        if (error instanceof GoogleLiveApiError) {
+          return liveErrorEnvelope(error, auditId, redactionClass);
+        }
+        throw error;
       }
     },
 
