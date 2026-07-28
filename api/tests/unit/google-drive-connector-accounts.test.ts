@@ -3,10 +3,16 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import { documentConnectorAccounts } from '../../src/db/schema';
 import {
+  CONNECTOR_ACCOUNT_LIMIT_REACHED,
   getGoogleDriveConnection,
+  listConnectorAccounts,
   resolveGoogleDriveTokenSecret,
   storeGoogleDriveTokenMaterial,
 } from '../../src/services/google-drive-connector-accounts';
+import {
+  CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
+  settingsService,
+} from '../../src/services/settings';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 
 describe('Google Drive connector account storage', () => {
@@ -30,8 +36,100 @@ describe('Google Drive connector account storage', () => {
     delete process.env.GOOGLE_DRIVE_CLIENT_ID;
     delete process.env.GOOGLE_DRIVE_CLIENT_SECRET;
     delete process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL;
+    await settingsService.set(CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING, '5');
     vi.unstubAllGlobals();
     await cleanupAuthData();
+  });
+
+  const storeAccount = async (accountSubject: string, accessToken = `access-${accountSubject}`) =>
+    storeGoogleDriveTokenMaterial({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+      identity: {
+        accountEmail: `${accountSubject}@example.com`,
+        accountSubject,
+      },
+      token: {
+        accessToken,
+        refreshToken: `refresh-${accountSubject}`,
+        idToken: `id-${accountSubject}`,
+        tokenType: 'Bearer',
+        expiresIn: 3600,
+        scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+        scopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file'],
+        obtainedAt: '2099-05-01T10:00:00.000Z',
+        expiresAt: '2099-05-01T11:00:00.000Z',
+      },
+    });
+
+  it('accepts Gmail provider rows', async () => {
+    const now = new Date();
+    await db.insert(documentConnectorAccounts).values({
+      id: crypto.randomUUID(),
+      workspaceId: String(user.workspaceId),
+      userId: user.id,
+      provider: 'gmail',
+      status: 'connected',
+      accountEmail: 'gmail@example.com',
+      accountSubject: 'gmail-subject-1',
+      scopes: [],
+      tokenSecret: null,
+      tokenExpiresAt: null,
+      connectedAt: now,
+      disconnectedAt: null,
+      lastError: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const accounts = await listConnectorAccounts(String(user.workspaceId), user.id, 'gmail');
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]?.provider).toBe('gmail');
+  });
+
+  it('stores distinct accounts up to the configured maximum and rejects the next account', async () => {
+    await settingsService.set(CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING, '2');
+
+    await storeAccount('google-subject-1');
+    await storeAccount('google-subject-2');
+
+    await expect(storeAccount('google-subject-3')).rejects.toMatchObject({
+      code: CONNECTOR_ACCOUNT_LIMIT_REACHED,
+    });
+
+    const accounts = await listConnectorAccounts(
+      String(user.workspaceId),
+      user.id,
+      'google_drive',
+    );
+    expect(accounts.map((account) => account.accountSubject).sort()).toEqual([
+      'google-subject-1',
+      'google-subject-2',
+    ]);
+  });
+
+  it('allows reconnecting an existing account when the configured maximum is reached', async () => {
+    await settingsService.set(CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING, '1');
+
+    await storeAccount('google-subject-1', 'initial-access-token');
+    await storeAccount('google-subject-1', 'reconnected-access-token');
+
+    const accounts = await listConnectorAccounts(
+      String(user.workspaceId),
+      user.id,
+      'google_drive',
+    );
+    expect(accounts).toHaveLength(1);
+
+    const secret = await resolveGoogleDriveTokenSecret({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+    });
+    expect(secret?.accessToken).toBe('reconnected-access-token');
+
+    await expect(storeAccount('google-subject-2')).rejects.toMatchObject({
+      code: CONNECTOR_ACCOUNT_LIMIT_REACHED,
+    });
   });
 
   it('refreshes an expired Google Drive access token before returning it', async () => {
