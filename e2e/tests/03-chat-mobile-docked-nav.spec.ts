@@ -265,3 +265,107 @@ test.describe('Chat placement menu — legacy display-mode integration', () => {
       .toBe('floating');
   });
 });
+
+test.describe('Chat placement menu — header drag grammar', () => {
+  const openChat = async (page: import('@playwright/test').Page) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+    const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
+    await expect(chatButton).toBeVisible({ timeout: 10_000 });
+    await chatButton.click();
+    const chatDialog = page.locator('#chat-widget-dialog');
+    await expect(chatDialog).toBeVisible({ timeout: 10_000 });
+    return chatDialog;
+  };
+
+  /** Drag the header grip to an absolute viewport point and release. */
+  const dragHeaderTo = async (
+    page: import('@playwright/test').Page,
+    chatDialog: import('@playwright/test').Locator,
+    x: number,
+    y: number,
+  ) => {
+    const grip = chatDialog.locator('[data-chat-header-grip="true"]');
+    const box = await grip.boundingBox();
+    if (!box) throw new Error('Header grip has no bounding box');
+    // The grip deliberately ignores presses that land on the header's own
+    // controls, and the bar is narrow once docked — so scan its midline for a
+    // point that is genuinely empty instead of assuming the centre is.
+    const midY = box.y + box.height / 2;
+    const grabX = await page.evaluate(
+      ({ left, right, y }) => {
+        for (let x = left + 4; x < right - 4; x += 6) {
+          const el = document.elementFromPoint(x, y);
+          if (el && !el.closest('button, a, input, select, textarea, [role="menu"]')) return x;
+        }
+        return null;
+      },
+      { left: box.x, right: box.x + box.width, y: midY },
+    );
+    if (grabX === null) throw new Error('No draggable empty spot found on the header bar');
+    await page.mouse.move(grabX, midY);
+    await page.mouse.down();
+    await page.mouse.move(x, y, { steps: 8 });
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toBeVisible();
+    await page.mouse.up();
+    await expect(page.locator('[data-chat-placement-drop-zones]')).toHaveCount(0);
+    // The commit is async and the container animates; let the geometry settle
+    // before the caller measures it or starts another gesture, otherwise the
+    // next press lands while the dialog is still being re-rendered.
+    let previous = '';
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const box = await chatDialog.boundingBox();
+      const signature = box ? `${box.x}:${box.y}:${box.width}:${box.height}` : 'none';
+      if (signature === previous) return;
+      previous = signature;
+      await page.waitForTimeout(100);
+    }
+  };
+
+  test('docks to a panel when the header is dragged to a side edge', async ({ page }) => {
+    const chatDialog = await openChat(page);
+    await dragHeaderTo(page, chatDialog, 40, 400); // left edge band
+    const box = await chatDialog.boundingBox();
+    if (!box) throw new Error('Chat dialog has no bounding box after docking left');
+    expect(box.x).toBe(0);
+    expect(box.height).toBeGreaterThan(700); // a full-height panel, not a floating card
+  });
+
+  test('maximises when the header is dragged to the top middle', async ({ page }) => {
+    const chatDialog = await openChat(page);
+    await dragHeaderTo(page, chatDialog, 720, 40);
+    const box = await chatDialog.boundingBox();
+    if (!box) throw new Error('Chat dialog has no bounding box after maximising');
+    expect(box.width).toBeGreaterThan(1300);
+    expect(box.height).toBeGreaterThan(800);
+  });
+
+  test('detaches a docked panel dragged straight down out of its band', async ({ page }) => {
+    const chatDialog = await openChat(page);
+    // Dock through the MENU rather than a first drag: this test is about the
+    // detach GESTURE, and chaining two drags back to back is a separate,
+    // currently unreliable path (see BRANCH.md — the grip disarms between the
+    // press and the threshold when a drag immediately follows another).
+    // Docking by drag is covered on its own above.
+    await chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' }).click();
+    await page.getByRole('menu', { name: 'Déplacer le chat vers…' })
+      .getByRole('menuitemradio', { name: 'Panneau', exact: true }).click();
+    await page.waitForTimeout(400);
+    const docked = await chatDialog.boundingBox();
+    if (!docked) throw new Error('Chat dialog has no bounding box once docked');
+    expect(docked.height).toBeGreaterThan(700);
+
+    await dragHeaderTo(page, chatDialog, 1400, 820); // same edge, below the band
+    const floating = await chatDialog.boundingBox();
+    if (!floating) throw new Error('Chat dialog has no bounding box after detaching');
+    // A floating card, no longer a full-height panel.
+    expect(floating.height).toBeLessThan(docked.height);
+  });
+
+  test('a plain click on a header button is not swallowed by the grip', async ({ page }) => {
+    const chatDialog = await openChat(page);
+    await chatDialog.getByRole('button', { name: 'Déplacer le chat vers…' }).click();
+    await expect(page.getByRole('menu', { name: 'Déplacer le chat vers…' })).toBeVisible();
+  });
+});
