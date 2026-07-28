@@ -19,6 +19,7 @@ export const GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY =
 
 const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+const GOOGLE_REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 const GOOGLE_USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo';
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -499,4 +500,57 @@ export const appendGoogleDriveOAuthResultToReturnPath = (
   const baseUrl = normalizeOptionalText(options.baseUrl);
   if (!baseUrl) return relativePath;
   return new URL(relativePath, trimTrailingSlash(baseUrl)).toString();
+};
+
+/**
+ * Ask Google to REVOKE a grant upstream.
+ *
+ * Deleting our stored copy of a token is not revocation: the grant stays live at Google, so a copy
+ * that leaked elsewhere keeps working. That gap is why "disconnect" could not contain an exposure —
+ * we forgot the token, the attacker did not.
+ *
+ * Revoking a REFRESH token revokes the whole grant (Google invalidates the refresh token and its
+ * derived access tokens); revoking an access token alone only kills that one token. So pass the
+ * refresh token when there is one.
+ *
+ * Best-effort BY DESIGN: the caller has been asked to disconnect, and must still forget the token
+ * locally even if Google is unreachable. Returning a result rather than throwing lets the caller
+ * record what actually happened instead of assuming success — "we tried" is not "it is revoked".
+ */
+export const revokeGoogleOAuthToken = async (input: {
+  token: string;
+  fetchImpl?: FetchImpl;
+}): Promise<{ revoked: boolean; status: number | null; error: string | null }> => {
+  const token = (input.token || '').trim();
+  if (!token) return { revoked: false, status: null, error: 'no token to revoke' };
+
+  const fetcher = input.fetchImpl ?? fetch;
+  try {
+    const response = await fetcher(GOOGLE_REVOKE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }),
+    });
+
+    // Google answers 200 on success. A 400 with `invalid_token` means it is ALREADY unusable —
+    // which is the outcome we wanted, so it counts as revoked rather than as a failure.
+    if (response.ok) return { revoked: true, status: response.status, error: null };
+
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const code = normalizeOptionalText(payload.error);
+    if (response.status === 400 && code === 'invalid_token') {
+      return { revoked: true, status: response.status, error: null };
+    }
+    return {
+      revoked: false,
+      status: response.status,
+      error: normalizeOptionalText(payload.error_description) || code || 'Google token revocation failed.',
+    };
+  } catch (error) {
+    return {
+      revoked: false,
+      status: null,
+      error: error instanceof Error ? error.message : 'Google token revocation failed.',
+    };
+  }
 };
