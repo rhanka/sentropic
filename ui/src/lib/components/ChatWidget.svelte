@@ -1567,6 +1567,71 @@
     });
   };
 
+  // --- Header bar as a drag grip -------------------------------------------
+  // The whole header behaves like a window title bar. A drag only begins past
+  // a small threshold, so a plain click on the header's own buttons (Move,
+  // Close, sessions, burger) still reaches them untouched.
+  const PLACEMENT_DRAG_THRESHOLD_PX = 5;
+  let headerGripOrigin: { x: number; y: number; pointerId: number } | null = null;
+  let headerGripDragging = false;
+
+  const isInteractiveHeaderTarget = (target: EventTarget | null): boolean =>
+    target instanceof Element
+    && target.closest('button, a, input, select, textarea, [role="menu"], [contenteditable="true"]') !== null;
+
+  const onHeaderPointerDown = (event: PointerEvent) => {
+    if (event.button !== 0) return;
+    if (!placementMenuOwnsPlacement) return;
+    if (isInteractiveHeaderTarget(event.target)) return;
+    headerGripOrigin = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    headerGripDragging = false;
+    // The gesture deliberately travels far outside the header (to a screen
+    // edge, to the top band), so the header alone cannot see it through.
+    // `setPointerCapture` is not reliable here either — the dialog re-renders
+    // as the placement previews, and a capture held by a replaced node is
+    // dropped mid-gesture. Listen on the window for the duration instead.
+    if (typeof window === 'undefined') return;
+    window.addEventListener('pointermove', onHeaderPointerMove);
+    window.addEventListener('pointerup', endHeaderGrip);
+    window.addEventListener('pointercancel', onHeaderPointerCancel);
+  };
+
+  const releaseHeaderGrip = () => {
+    if (typeof window === 'undefined') return;
+    window.removeEventListener('pointermove', onHeaderPointerMove);
+    window.removeEventListener('pointerup', endHeaderGrip);
+    window.removeEventListener('pointercancel', onHeaderPointerCancel);
+  };
+
+  const onHeaderPointerMove = (event: PointerEvent) => {
+    if (!headerGripOrigin || event.pointerId !== headerGripOrigin.pointerId) return;
+    if (!headerGripDragging) {
+      const dx = event.clientX - headerGripOrigin.x;
+      const dy = event.clientY - headerGripOrigin.y;
+      if (Math.hypot(dx, dy) < PLACEMENT_DRAG_THRESHOLD_PX) return;
+      headerGripDragging = true;
+      startPlacementDrag(headerGripOrigin.x, headerGripOrigin.y);
+    }
+    movePlacementDrag(event.clientX, event.clientY);
+  };
+
+  const endHeaderGrip = (event: PointerEvent) => {
+    if (!headerGripOrigin || event.pointerId !== headerGripOrigin.pointerId) return;
+    const wasDragging = headerGripDragging;
+    headerGripOrigin = null;
+    headerGripDragging = false;
+    releaseHeaderGrip();
+    if (wasDragging) endPlacementDrag(event.clientX, event.clientY);
+  };
+
+  const onHeaderPointerCancel = (event: PointerEvent) => {
+    if (!headerGripOrigin || event.pointerId !== headerGripOrigin.pointerId) return;
+    headerGripOrigin = null;
+    headerGripDragging = false;
+    releaseHeaderGrip();
+    cancelPlacementDrag();
+  };
+
   const onPlacementDragKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || !placementDragSession) return;
     event.preventDefault();
@@ -2030,6 +2095,7 @@
 
   onDestroy(() => {
     window.removeEventListener('keydown', onPlacementDragKeyDown);
+    releaseHeaderGrip();
     cancelPlacementDrag();
     window.removeEventListener('sentropic:close-chat', onExternalCloseChat as any);
     window.removeEventListener(OPEN_CHAT_EVENT, onExternalOpenChat as any);
@@ -2094,8 +2160,15 @@
 
 {#snippet renderAppChatWidgetShell()}
       <!-- Dialog body: header + content area (backdrop and dialog container are in ChatDock) -->
-      <!-- Header commun (tabs) -->
-      <div class="px-4 h-14 border-b border-gray-200 flex items-center">
+      <!-- Header commun (tabs) — doubles as the placement drag grip -->
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <div
+        class="px-4 h-14 border-b border-gray-200 flex items-center"
+        class:cursor-grab={placementMenuOwnsPlacement && !headerGripDragging}
+        class:cursor-grabbing={headerGripDragging}
+        data-chat-header-grip={placementMenuOwnsPlacement ? 'true' : undefined}
+        on:pointerdown={onHeaderPointerDown}
+      >
         <div class="flex w-full items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             {#if isDocked && isMobileViewport && !isSidePanelHost}
