@@ -1,8 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { documentConnectorAccounts, type DocumentConnectorAccountRow } from '../db/schema';
 import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
+import { settingsService } from './settings';
 import {
   GOOGLE_DRIVE_PROVIDER,
   refreshGoogleDriveAccessToken,
@@ -12,6 +13,17 @@ import {
 } from './google-drive-oauth';
 
 export type GoogleDriveConnectionStatus = 'connected' | 'disconnected' | 'error';
+
+export const CONNECTOR_ACCOUNT_LIMIT_REACHED = 'connector_account_limit_reached' as const;
+
+export class ConnectorAccountLimitError extends Error {
+  readonly code = CONNECTOR_ACCOUNT_LIMIT_REACHED;
+
+  constructor() {
+    super('Connector account limit reached for this provider.');
+    this.name = 'ConnectorAccountLimitError';
+  }
+}
 
 export type GoogleDriveConnectionPublic = {
   id: string | null;
@@ -187,21 +199,35 @@ export const toPublicGoogleDriveConnection = (
   };
 };
 
-export const getGoogleDriveConnectorAccount = async (input: {
-  userId: string;
-  workspaceId: string;
-}): Promise<DocumentConnectorAccountRow | null> => {
-  const [row] = await db
+export const listConnectorAccounts = async (
+  workspaceId: string,
+  userId: string,
+  provider: string,
+): Promise<DocumentConnectorAccountRow[]> =>
+  db
     .select()
     .from(documentConnectorAccounts)
     .where(
       and(
-        eq(documentConnectorAccounts.userId, input.userId),
-        eq(documentConnectorAccounts.workspaceId, input.workspaceId),
-        eq(documentConnectorAccounts.provider, GOOGLE_DRIVE_PROVIDER),
+        eq(documentConnectorAccounts.userId, userId),
+        eq(documentConnectorAccounts.workspaceId, workspaceId),
+        eq(documentConnectorAccounts.provider, provider),
       ),
     )
-    .limit(1);
+    .orderBy(
+      sql`${documentConnectorAccounts.connectedAt} DESC NULLS LAST`,
+      desc(documentConnectorAccounts.updatedAt),
+    );
+
+export const getGoogleDriveConnectorAccount = async (input: {
+  userId: string;
+  workspaceId: string;
+}): Promise<DocumentConnectorAccountRow | null> => {
+  const [row] = await listConnectorAccounts(
+    input.workspaceId,
+    input.userId,
+    GOOGLE_DRIVE_PROVIDER,
+  );
   return row ?? null;
 };
 
@@ -226,6 +252,22 @@ export const storeGoogleDriveTokenMaterial = async (input: {
   token: GoogleDriveTokenResponse;
   identity: GoogleDriveAccountIdentity;
 }): Promise<GoogleDriveConnectionPublic> => {
+  const accounts = await listConnectorAccounts(
+    input.workspaceId,
+    input.userId,
+    GOOGLE_DRIVE_PROVIDER,
+  );
+  const isExistingSubject = accounts.some(
+    (account) => account.accountSubject === input.identity.accountSubject,
+  );
+  if (!isExistingSubject) {
+    const maxPerProvider = await settingsService.getConnectorAccountsMaxPerProvider();
+    const distinctAccountCount = accounts.filter((account) => account.accountSubject !== null).length;
+    if (distinctAccountCount >= maxPerProvider) {
+      throw new ConnectorAccountLimitError();
+    }
+  }
+
   const now = new Date();
   const tokenSecretPayload: GoogleDriveTokenSecretPayload = {
     accessToken: input.token.accessToken,
@@ -263,6 +305,7 @@ export const storeGoogleDriveTokenMaterial = async (input: {
         documentConnectorAccounts.workspaceId,
         documentConnectorAccounts.userId,
         documentConnectorAccounts.provider,
+        documentConnectorAccounts.accountSubject,
       ],
       set: {
         status: 'connected',
