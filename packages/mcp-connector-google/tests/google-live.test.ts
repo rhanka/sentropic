@@ -60,6 +60,26 @@ type LiveCase = {
   url: string;
 };
 
+type SecretFailureOperation = {
+  label: string;
+  execute: (ctx: StpConnectorContext) => Promise<unknown>;
+};
+
+const secretFailureOperations: SecretFailureOperation[] = [
+  {
+    label: 'resource reads',
+    execute: (ctx) => googleDriveLiveAdapter.readResource({
+      capabilityRef: 'about.get',
+      input: { uri: 'google-drive://about' },
+      ctx,
+    }),
+  },
+  {
+    label: 'tool invocations',
+    execute: (ctx) => gmailLiveAdapter.invokeTool({ capabilityRef: 'labels.list', input: {}, ctx }),
+  },
+];
+
 const liveCases: LiveCase[] = [
   {
     label: 'Drive about.get',
@@ -178,6 +198,80 @@ describe('Google live adapters (mocked global fetch; no real network)', () => {
     expect(getSecret).toHaveBeenCalledWith('googleOAuthAccessToken');
     expect(init.headers).toEqual({ Accept: 'application/json' });
     expect(JSON.stringify({ result, auditEvents })).not.toContain(testToken);
+  });
+
+  it('maps SecretAccessError failures to non-retriable secret-unavailable envelopes without egress', async () => {
+    const secretValue = 'secret-access-error-value';
+
+    for (const operation of secretFailureOperations) {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const cause = Object.assign(new Error(secretValue), { name: 'SecretAccessError' });
+      const { ctx, getSecret, auditEvents } = makeCtx();
+      getSecret.mockRejectedValueOnce(cause);
+
+      const result = await operation.execute(ctx);
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: { code: 'connector_secret_unavailable', retriable: false },
+      });
+      expect((result as { error?: Record<string, unknown> }).error).not.toHaveProperty('detail');
+      expect(getSecret).toHaveBeenCalledOnce();
+      expect(getSecret).toHaveBeenCalledWith('googleOAuthAccessToken');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(JSON.stringify({ result, auditEvents })).not.toContain(secretValue);
+    }
+  });
+
+  it('maps SecretEnvelopeError failures to retriable unreadable-secret envelopes without values', async () => {
+    const encryptedValue = 'encrypted-secret-envelope-value';
+    const decryptedValue = 'decrypted-secret-envelope-value';
+
+    for (const operation of secretFailureOperations) {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const cause = Object.assign(new Error(encryptedValue), {
+        name: 'SecretEnvelopeError',
+        reason: 'unknown-version',
+        version: 'v99',
+        encryptedValue,
+        decryptedValue,
+      });
+      const { ctx, getSecret, auditEvents } = makeCtx();
+      getSecret.mockRejectedValueOnce(cause);
+
+      const result = await operation.execute(ctx);
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: {
+          code: 'connector_secret_unreadable',
+          retriable: true,
+          detail: { reason: 'unknown-version', version: 'v99' },
+        },
+      });
+      expect(getSecret).toHaveBeenCalledOnce();
+      expect(getSecret).toHaveBeenCalledWith('googleOAuthAccessToken');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(JSON.stringify({ result, auditEvents })).not.toContain(encryptedValue);
+      expect(JSON.stringify({ result, auditEvents })).not.toContain(decryptedValue);
+    }
+  });
+
+  it('propagates unrelated getSecret failures unchanged instead of converting them to connector envelopes', async () => {
+    for (const operation of secretFailureOperations) {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const cause = new TypeError('unrelated secret access failure');
+      const { ctx, getSecret } = makeCtx();
+      getSecret.mockRejectedValueOnce(cause);
+
+      await expect(operation.execute(ctx)).rejects.toBe(cause);
+      expect(getSecret).toHaveBeenCalledOnce();
+      expect(getSecret).toHaveBeenCalledWith('googleOAuthAccessToken');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    }
   });
 
   it('maps non-2xx responses to typed errors with the correct retriable state', async () => {
