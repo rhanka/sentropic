@@ -250,6 +250,71 @@ describe('Google Drive connector account storage', () => {
     expect(row.tokenExpiresAt).toBeNull();
   });
 
+  it('KEEPS the refresh token when Google fails transiently (5xx), and only reports the error', async () => {
+    // The grant is still valid — Google was simply unavailable. Erasing the stored secret here made
+    // a momentary outage permanently destroy a working connection: refresh tokens cannot be
+    // recovered, so the user had to re-authorize for nothing. Only `invalid_grant` (asserted by the
+    // sibling test above) means the grant is genuinely dead.
+    process.env.GOOGLE_DRIVE_CLIENT_ID = 'google-client-id';
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'google-client-secret';
+    process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = 'http://localhost:8787';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ error: 'backendError' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await storeGoogleDriveTokenMaterial({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+      identity: {
+        accountEmail: 'user@example.com',
+        accountSubject: 'google-subject-transient',
+      },
+      token: {
+        accessToken: 'expired-access-token',
+        refreshToken: 'refresh-token',
+        idToken: 'id-token',
+        tokenType: 'Bearer',
+        expiresIn: 3600,
+        scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+        scopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file'],
+        obtainedAt: '2026-04-21T10:00:00.000Z',
+        expiresAt: '2026-04-21T11:00:00.000Z',
+      },
+    });
+
+    const account = await getGoogleDriveConnection(
+      {
+        userId: user.id,
+        workspaceId: String(user.workspaceId),
+      },
+      { validateToken: true },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(account).toMatchObject({ status: 'error', connected: false });
+
+    const [row] = await db
+      .select()
+      .from(documentConnectorAccounts)
+      .where(
+        and(
+          eq(documentConnectorAccounts.userId, user.id),
+          eq(documentConnectorAccounts.workspaceId, String(user.workspaceId)),
+        ),
+      )
+      .limit(1);
+
+    // The whole point: the secret SURVIVES a transient failure, still as a sealed envelope.
+    expect(row.tokenSecret).not.toBeNull();
+    expect(row.tokenSecret).toMatch(/^enc:/);
+    expect(row.tokenSecret).not.toContain('refresh-token');
+  });
+
   it('stores Google Drive access and refresh tokens as encrypted payloads', async () => {
     const account = await storeGoogleDriveTokenMaterial({
       userId: user.id,

@@ -67,6 +67,32 @@ const normalizeText = (value: unknown): string => {
   return value.trim();
 };
 
+/**
+ * A token-endpoint rejection from Google, carrying the MACHINE-READABLE OAuth error code.
+ *
+ * Callers must be able to tell "Google says this grant is dead" (`invalid_grant`) apart from
+ * "Google was unreachable / returned 5xx / we are misconfigured". Both used to arrive as a bare
+ * `Error` whose message was a human description, so the only way to distinguish them was string
+ * matching — and the caller consequently treated EVERY failure as a dead grant and erased the
+ * stored refresh token. A transient outage then cost the user their connection permanently.
+ */
+export class GoogleDriveTokenEndpointError extends Error {
+  readonly code: string | null;
+  readonly status: number;
+
+  constructor(message: string, options: { code: string | null; status: number }) {
+    super(message);
+    this.name = 'GoogleDriveTokenEndpointError';
+    this.code = options.code;
+    this.status = options.status;
+  }
+
+  /** True only when Google itself declares the grant no longer usable — the one unrecoverable case. */
+  get isUnrecoverableGrant(): boolean {
+    return this.code === 'invalid_grant';
+  }
+}
+
 const normalizeOptionalText = (value: unknown): string | null => {
   const normalized = normalizeText(value);
   return normalized.length > 0 ? normalized : null;
@@ -390,7 +416,10 @@ export const refreshGoogleDriveAccessToken = async (input: {
       normalizeOptionalText(payload.error_description) ||
       normalizeOptionalText(payload.error) ||
       'Google token refresh failed.';
-    throw new Error(description);
+    throw new GoogleDriveTokenEndpointError(description, {
+      code: normalizeOptionalText(payload.error),
+      status: response.status,
+    });
   }
 
   const accessToken = normalizeOptionalText(payload.access_token);
