@@ -115,3 +115,54 @@ describe('chatPlacementDnd — viewport wiring', () => {
     expect(session.end()).toEqual(drawerLeft);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The gesture grammar the owner specified: side edges dock, top middle
+// maximises, everywhere else floats — and a docked panel detaches by being
+// dragged straight down out of its own band.
+// ---------------------------------------------------------------------------
+
+describe('chatPlacementDnd — viewport gesture grammar', () => {
+  const W = 1200;
+  const H = 800;
+  const floatingLeft: ChatPlacement = { kind: 'floating', anchor: 'left' };
+  const floatingRight: ChatPlacement = { kind: 'floating', anchor: 'right' };
+  const all = [drawerLeft, drawerRight, floatingLeft, floatingCenter, floatingRight, full];
+
+  const at = (x: number, y: number) =>
+    createDragSession({
+      zones: createViewportDropZones({ viewport: { width: W, height: H }, supported: all }),
+      hitTolerancePx: 0,
+    }).hover(x, y);
+
+  it('docks to a panel when dragged onto either side edge', () => {
+    expect(at(W * 0.05, H * 0.4)).toEqual(drawerLeft);
+    expect(at(W * 0.95, H * 0.4)).toEqual(drawerRight);
+  });
+
+  it('maximises when dragged to the top middle', () => {
+    expect(at(W * 0.5, H * 0.05)).toEqual(full);
+  });
+
+  it('detaches a docked panel dragged straight down out of its band', () => {
+    // Same x as the right edge band, but below it: the panel becomes floating.
+    expect(at(W * 0.95, H * 0.4)).toEqual(drawerRight);
+    expect(at(W * 0.95, H * 0.9)).toEqual(floatingRight);
+  });
+
+  it('floats in the column under the pointer everywhere else', () => {
+    expect(at(W * 0.2, H * 0.5)).toEqual(floatingLeft);
+    expect(at(W * 0.5, H * 0.5)).toEqual(floatingCenter);
+    expect(at(W * 0.8, H * 0.5)).toEqual(floatingRight);
+    expect(at(W * 0.1, H * 0.9)).toEqual(floatingLeft);
+    expect(at(W * 0.9, H * 0.9)).toEqual(floatingRight);
+  });
+
+  it('leaves no point of the viewport without a destination', () => {
+    for (let fx = 0.02; fx < 1; fx += 0.07) {
+      for (let fy = 0.02; fy < 1; fy += 0.07) {
+        expect(at(W * fx, H * fy), `no zone at ${fx.toFixed(2)},${fy.toFixed(2)}`).not.toBeNull();
+      }
+    }
+  });
+});
