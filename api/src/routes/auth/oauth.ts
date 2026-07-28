@@ -440,12 +440,22 @@ const toAuthHonoSessionRecord = (row: typeof userSessions.$inferSelect): AuthHon
   userId: row.userId,
 });
 
+/**
+ * OAuth state sealing secret. `OAUTH_SIGNING_KEK` takes precedence over `JWT_SECRET` so that
+ * provisioning `JWT_SECRET` (step 2 of the secret-separation remediation) cannot silently move state
+ * sealing onto the signing key.
+ *
+ * `||`, not `??`: the secret bundle emits present-but-EMPTY keys (`--from-literal=VAR="$VAR"` yields
+ * `VAR=""` when the source env file omits the variable). With `??` an empty `OAUTH_SIGNING_KEK` would
+ * short-circuit both the fallback and the production guard, return `''`, and make the state codec throw
+ * on every /authorize, /consent and /token request — a total OAuth outage where it previously worked.
+ */
 const resolveOAuthStateSecret = (): string => {
-  const secret = env.OAUTH_SIGNING_KEK ?? env.JWT_SECRET;
+  const secret = env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
   if (!secret && requiresOAuthProductionSecrets()) {
     throw new Error('JWT_SECRET or OAUTH_SIGNING_KEK is required for OAuth state sealing in production.');
   }
-  return secret ?? 'dev-secret-key-change-in-production-please';
+  return secret || 'dev-secret-key-change-in-production-please';
 };
 
 const resolveRequestOrigin = (request: Request): string => {
