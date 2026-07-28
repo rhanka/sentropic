@@ -145,7 +145,20 @@ const createLocalStoragePersistence = (
   },
 });
 
+/**
+ * ONE side is shared by the panel and the floating placements, so changing
+ * MODE never moves the chat sideways — only an explicit side choice does.
+ * `floatingCentered` is the single exception: the centre exists in floating
+ * only, has no panel equivalent, and is therefore remembered on its own
+ * without disturbing the shared left/right.
+ */
 type ChatPlacementSideMemory = {
+  side: DrawerSide;
+  floatingCentered: boolean;
+};
+
+/** Legacy payload written before the side became shared across modes. */
+type LegacySideMemory = {
   drawerSide: DrawerSide;
   floatingAnchor: FloatingAnchor;
 };
@@ -156,16 +169,30 @@ const readSideMemory = (
 ): Partial<ChatPlacementSideMemory> => {
   if (!storage) return {};
   try {
-    const parsed = JSON.parse(storage.getItem(key) ?? 'null') as Partial<ChatPlacementSideMemory> | null;
+    const parsed = JSON.parse(storage.getItem(key) ?? 'null') as
+      | (Partial<ChatPlacementSideMemory> & Partial<LegacySideMemory>)
+      | null;
+    if (!parsed) return {};
+
+    if (parsed.side === 'left' || parsed.side === 'right') {
+      return {
+        side: parsed.side,
+        ...(typeof parsed.floatingCentered === 'boolean'
+          ? { floatingCentered: parsed.floatingCentered }
+          : {}),
+      };
+    }
+
+    // Migrate the two-memory payload: the drawer side wins as the shared side
+    // (a floating left/right is used only when no drawer side was stored).
+    const legacySide = parsed.drawerSide === 'left' || parsed.drawerSide === 'right'
+      ? parsed.drawerSide
+      : parsed.floatingAnchor === 'left' || parsed.floatingAnchor === 'right'
+        ? parsed.floatingAnchor
+        : undefined;
     return {
-      ...(parsed?.drawerSide === 'left' || parsed?.drawerSide === 'right'
-        ? { drawerSide: parsed.drawerSide }
-        : {}),
-      ...(parsed?.floatingAnchor === 'left'
-        || parsed?.floatingAnchor === 'center'
-        || parsed?.floatingAnchor === 'right'
-        ? { floatingAnchor: parsed.floatingAnchor }
-        : {}),
+      ...(legacySide ? { side: legacySide } : {}),
+      ...(parsed.floatingAnchor === 'center' ? { floatingCentered: true } : {}),
     };
   } catch {
     return {};
@@ -212,12 +239,14 @@ export function createChatPlacementMenu(
   const labels = createDefaultChatPlacementMenuLabels(opts.labels);
 
   const storedSideMemory = readSideMemory(storage, buildChatPlacementSideMemoryKey(persistenceKey));
-  let drawerSide: DrawerSide = storedSideMemory.drawerSide ?? (defaultPlacement.kind === 'drawer'
+  const defaultSide: DrawerSide = defaultPlacement.kind === 'drawer'
     ? defaultPlacement.side
-    : 'right');
-  let floatingAnchor: FloatingAnchor = storedSideMemory.floatingAnchor ?? (defaultPlacement.kind === 'floating'
-    ? defaultPlacement.anchor
-    : 'right');
+    : defaultPlacement.kind === 'floating' && defaultPlacement.anchor !== 'center'
+      ? defaultPlacement.anchor
+      : 'right';
+  let side: DrawerSide = storedSideMemory.side ?? defaultSide;
+  let floatingCentered: boolean = storedSideMemory.floatingCentered
+    ?? (defaultPlacement.kind === 'floating' && defaultPlacement.anchor === 'center');
 
   // D6: `requested` is seeded from persistence synchronously, and — via
   // seedEffectiveFromRequested — `effective` (what current() reports) is
@@ -237,10 +266,20 @@ export function createChatPlacementMenu(
   });
 
   const rememberSide = (placement: ChatPlacement) => {
+    // A panel side sets the SHARED side. It deliberately leaves
+    // `floatingCentered` alone: the centre stays the remembered floating
+    // position until the user overrides it from the floating group itself.
     if (placement.kind === 'drawer' && placement.occupancy === 'primary') {
-      drawerSide = placement.side;
+      side = placement.side;
     }
-    if (placement.kind === 'floating') floatingAnchor = placement.anchor;
+    if (placement.kind === 'floating') {
+      if (placement.anchor === 'center') {
+        floatingCentered = true;
+      } else {
+        side = placement.anchor;
+        floatingCentered = false;
+      }
+    }
   };
 
   const writeSideMemory = () => {
@@ -248,21 +287,32 @@ export function createChatPlacementMenu(
     try {
       storage.setItem(
         buildChatPlacementSideMemoryKey(persistenceKey),
-        JSON.stringify({ drawerSide, floatingAnchor }),
+        JSON.stringify({ side, floatingCentered }),
       );
     } catch {
       // Persistence is best-effort, matching the placement intent adapter.
     }
   };
 
-  rememberSide(controller.snapshot().effective);
+  // Align the memory with the placement restored at construction — but ONLY
+  // when nothing was stored. With a stored side memory and no stored placement
+  // intent, the effective placement is merely the default, and seeding from it
+  // would silently overwrite the side the user actually chose last.
+  if (storedSideMemory.side === undefined) {
+    rememberSide(controller.snapshot().effective);
+  }
 
   const groups = (): ChatPlacementMenuGroup[] => {
     const current = controller.snapshot().effective;
+    // Both mode entries reuse the SHARED side, so switching mode keeps the chat
+    // on the same edge; only the remembered centre overrides it, for floating.
     const panelPlacement: ChatPlacement = {
-      kind: 'drawer', side: drawerSide, occupancy: 'primary',
+      kind: 'drawer', side, occupancy: 'primary',
     };
-    const floatingPlacement: ChatPlacement = { kind: 'floating', anchor: floatingAnchor };
+    const floatingPlacement: ChatPlacement = {
+      kind: 'floating',
+      anchor: floatingCentered ? 'center' : side,
+    };
     const mode: ChatPlacementMenuGroup = {
       id: 'mode',
       label: labels.modeGroupLabel,

@@ -277,6 +277,70 @@ describe('chatPlacementMenu — storage-absent safety', () => {
   });
 });
 
+describe('chatPlacementMenu — the side is shared across modes', () => {
+  const menuFor = (storage: Storage) =>
+    createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+  const modeItem = (menu: ReturnType<typeof menuFor>, id: 'panel' | 'floating') =>
+    menu.groups()[0]?.items.find((item) => item.id === id)?.placement;
+
+  it('keeps the side when switching from panel to floating', async () => {
+    const menu = menuFor(createMemoryStorage());
+    await menu.request({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    // Switching MODE must not move the chat sideways.
+    expect(modeItem(menu, 'floating')).toEqual({ kind: 'floating', anchor: 'left' });
+    await menu.request({ kind: 'floating', anchor: 'left' });
+    expect(menu.current()).toEqual({ kind: 'floating', anchor: 'left' });
+  });
+
+  it('keeps the side when switching from floating to panel', async () => {
+    const menu = menuFor(createMemoryStorage());
+    await menu.request({ kind: 'floating', anchor: 'left' });
+    expect(modeItem(menu, 'panel')).toEqual({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+  });
+
+  it('falls back to the shared side for the panel while floating is centred', async () => {
+    const menu = menuFor(createMemoryStorage());
+    await menu.request({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    await menu.request({ kind: 'floating', anchor: 'center' });
+    // The centre has no panel equivalent, so the panel keeps the shared side…
+    expect(modeItem(menu, 'panel')).toEqual({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    // …and coming back to floating restores the centre, which is remembered
+    // as a floating position in its own right.
+    expect(modeItem(menu, 'floating')).toEqual({ kind: 'floating', anchor: 'center' });
+  });
+
+  it('lets an explicit floating side clear the remembered centre', async () => {
+    const menu = menuFor(createMemoryStorage());
+    await menu.request({ kind: 'floating', anchor: 'center' });
+    await menu.request({ kind: 'floating', anchor: 'right' });
+    expect(modeItem(menu, 'floating')).toEqual({ kind: 'floating', anchor: 'right' });
+    expect(modeItem(menu, 'panel')).toEqual({ kind: 'drawer', side: 'right', occupancy: 'primary' });
+  });
+
+  it('migrates the legacy two-memory payload onto the shared side', () => {
+    const storage = createMemoryStorage();
+    storage.setItem(
+      'chat-ui/placement/v1/u1/h1/w1/sides',
+      JSON.stringify({ drawerSide: 'left', floatingAnchor: 'right' }),
+    );
+    const menu = menuFor(storage);
+    // The drawer side wins as the shared side; floating no longer diverges.
+    expect(modeItem(menu, 'panel')).toEqual({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    expect(modeItem(menu, 'floating')).toEqual({ kind: 'floating', anchor: 'left' });
+  });
+
+  it('migrates a legacy centred floating anchor into the centred flag', () => {
+    const storage = createMemoryStorage();
+    storage.setItem(
+      'chat-ui/placement/v1/u1/h1/w1/sides',
+      JSON.stringify({ drawerSide: 'left', floatingAnchor: 'center' }),
+    );
+    const menu = menuFor(storage);
+    expect(modeItem(menu, 'panel')).toEqual({ kind: 'drawer', side: 'left', occupancy: 'primary' });
+    expect(modeItem(menu, 'floating')).toEqual({ kind: 'floating', anchor: 'center' });
+  });
+});
+
 describe('chatPlacementMenu — side-memory persistence', () => {
   it('ignores malformed side-memory values and keeps the default sides', () => {
     const storage = createMemoryStorage();
