@@ -19,6 +19,15 @@ export interface OAuthContinuationState {
   forceReauthSessionId?: string;
   nonce: string | null;
   redirectUri: string;
+  /**
+   * ARCH-11 §4.2.4: the RAW `?tenant=` selection as the RP sent it, sealed at authorize time and
+   * carried across the login round-trip. It is an unvalidated user intent, NOT an authorization —
+   * `deriveAuthorizeTenantId` re-checks it against approved memberships on every use, and the HMAC
+   * signature only makes it tamper-proof in transit. Without it, a multi-org user's explicit
+   * selection is lost at resume (the resume URL carries `continue` alone), the derivation falls
+   * through to "0 or >1 approved ⇒ null", and the token silently loses its `tid`.
+   */
+  requestedTenant?: string | null;
   /** RFC 8707 resource sealed at authorize time (BR-39l Lot 2); carried authorize → consent → code. */
   resource?: string | null;
   scope: string;
