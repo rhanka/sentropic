@@ -1,0 +1,22 @@
+# Preprod runs on OVH (BHS5) since 2026-07-28. Its live StatefulSet was created
+# with `block-standard` (the cinder-backed class), and `volumeClaimTemplates` is
+# immutable, so the base's provider-neutral template (no storageClassName, #471)
+# can never converge against it: kubectl's three-way merge computes the update
+# half against the LIVE object, so an atomic list that differs is always sent,
+# and always rejected. Pinning the live class here is what the base's own
+# comment prescribes -- "a tier that needs a specific class patches it in its
+# own overlay" -- and it converges WITHOUT destroying the volume.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: block-standard
