@@ -65,6 +65,11 @@ An entry carries: `id`, `kind`, `title`, `status`, `workspaceId` + `workspaceLab
 | …but its view-model is **only** `{ id, title, lastActivity }` — **no status, no kind, no workspace, no pending question** | `state/sessionList.ts:38–46` |
 | Sorting is a single `lastActivity` desc | `state/sessionList.ts:56–62` |
 | chat-ui is 100% hardcoded Tailwind, **0 `--st-*` tokens** | `SPEC_EVOL_CHAT_ECOSYSTEM.md` §3.1 |
+| `ChatWidgetTab` and `ChatWidgetPanelVisibility.showQueuePanel` are **public exports** | `src/index.ts:19` → `state/chatWidgetShell.ts:3,13` |
+| `cowork-bridge` **re-declares** the same union instead of importing it → drift is compiler-invisible | `packages/cowork-bridge/src/core/chatwidget-handoff.ts:1` |
+| Tab labels are host-injected props, and the app carries `queue*` i18n keys | `ChatWidget.svelte:9–11`; `ui/src/locales/{en,fr}.json` |
+| `PlacementPersistence` is a single-slot placement adapter, **not** a generic KV store | `state/chatPlacement.ts:139–142` |
+| Forced host modes override layout (sidepanel→docked, extension→floating) | `state/chatWidgetShell.ts:27–37` |
 
 **Not existing today** (each is a dependency, not an oversight):
 - no "agent" entity in the API — perennial identity lives in the h2a bus (presence/instances), and BR-39l is **blocked precisely on "no feed source in api"**;
@@ -77,18 +82,24 @@ An entry carries: `id`, `kind`, `title`, `status`, `workspaceId` + `workspaceLab
 
 ## 4. Decisions **[lane]**
 
-**D1 — Tabs.** `ChatWidgetTab` becomes `'agents' | 'chats' | 'comments'`, in that render order. `'queue'` is **removed**, not aliased: no legacy fallback (MASTER rule). The app's `coerceChatWidgetTab` migrates persisted `'chat'→'agents'` and `'queue'→'agents'` **once**, at read time.
+**D1 — Tabs.** `ChatWidgetTab` becomes `'agents' | 'chats' | 'comments'`, in that render order. `'queue'` is **removed**, not aliased: no legacy fallback (MASTER rule). Migration of persisted user state happens inside the **existing** `coerceChatWidgetTab` seam (`state/chatWidgetShell.ts:19–25`), which already normalises unknown values — `'chat'→'agents'`, `'queue'→'agents'`, at read time.
+
+**D1a — This is a BREAKING change to a published contract, and it is escalated, not self-merged.** `ChatWidgetTab` is public API: `src/index.ts:19` re-exports `./state/chatWidgetShell.js`, which declares the union at line 3; `ChatWidgetPanelVisibility.showQueuePanel` (line 13) is public too. `@sentropic/chat-ui` is consumed by radar and by the Chrome/VSCode surfaces, so narrowing the union breaks type-level consumers. The lane's standing authority covers *additive minor* merges only — a breaking surface change requires an explicit owner GO and a declared BREAKING note in the bump. No deprecated-alias window: MASTER forbids legacy fallback, so the break is taken once, deliberately, with the owner's GO.
+
+**D1b — `cowork-bridge` is a second consumer, and the coupling is invisible to the compiler.** `packages/cowork-bridge/src/core/chatwidget-handoff.ts:1` **re-declares** `type ChatWidgetTab = 'chat' | 'queue' | 'comments'` instead of importing it. TypeScript will therefore *not* flag the drift: the handoff payload keeps compiling against the old literals after chat-ui has moved, and the handoff silently carries a tab that no longer exists. Fix, in the same lot as D1: cowork-bridge imports the type from `@sentropic/chat-ui`, plus a test asserting the two unions are identical — a duplicated union with no assertion is a bug waiting for a release.
 
 **D2 — Feed port, not a feed.** chat-ui owns the **view-model and the components**, and consumes an injected `AgentsFeedPort` (`list(scope) → AgentsEntry[]`, plus an optional `subscribe` for live status). It does **not** reach for HTTP, h2a, or the queue itself. Consequence: **the whole surface is buildable and testable before any backend exists**, and every source (sessions, jobs, remote, h2a presence) is wired host-side, incrementally. This is the same lever that let the placement system ship ahead of the DS: *integrable without the dependency*.
 
-**D3 — Ordering is a lexicographic comparator**, pure and unit-tested: `(urgencyBucket, kindBucket, recency)`.
-Buckets: `1` = `awaiting-input` *(recommended — see O1)*, `2` = `running` (any kind), `3` = perennial `agent` not running, `4` = everything else. Within a bucket: `lastViewedAt` desc, `lastActivityAt` desc as tiebreak.
+**D3 — Ordering is a lexicographic comparator**, pure and unit-tested: `(urgencyBucket, recency)`.
+Buckets: `1` = `awaiting-input` *(recommended — see O1)*, `2` = `running` (any kind), `3` = perennial `agent` not running, `4` = everything else.
+**The recency key differs per bucket, deliberately:** buckets 1–2 sort by `lastActivityAt` desc (a working item is ranked by what it is doing, not by when I last looked at it — and the reference screenshot ranks by elapsed activity: `1m, 20m, 26m, 29m…`), buckets 3–4 sort by `lastViewedAt` desc, which is R9's "age of last consultation". Direction is **most-recent-first**, established by the reference screenshot's ascending elapsed times, not assumed.
 
 **D4 — Status rendering.** `running` → spinning wheel; `awaiting-input` → the special tag + the `pendingPrompt` excerpt card; `failed` → error affordance. New components use **DS `--st-*` tokens** (status semantics: info/warning/error), not the ad-hoc Tailwind palette that the rest of chat-ui still carries. This makes the agents surface the **tokenization beachhead** for chat-ui rather than adding to the debt.
 
 **D5 — Jobs are a projection, not a migration.** Queue tables and endpoints are untouched; a pure adapter projects a job row into an `AgentsEntry{kind:'job'}`. The `Purge` action moves from the tab header into the list's overflow menu.
 
-**D6 — Last consultation is real state that does not exist yet.** R9's "age of last consultation" is per-`(principal, entry)` and is **not** `updatedAt`. Two-step: **(a)** client-local `lastViewedAt` (persisted through the existing chat-ui persistence adapter) so R9 works immediately; **(b)** API-backed `lastViewedAt` so it is coherent across devices. (b) is an api-lane dependency, not a chat-ui one.
+**D6 — Last consultation is real state that does not exist yet.** R9's "age of last consultation" is per-`(principal, entry)` and is **not** `updatedAt`. Two-step: **(a)** client-local `lastViewedAt` so R9 works immediately; **(b)** API-backed `lastViewedAt` so it is coherent across devices. (b) is an api-lane dependency, not a chat-ui one.
+There is **no existing adapter to reuse for (a)**: `PlacementPersistence` (`state/chatPlacement.ts:139–142`) is a single-slot `ChatPlacementId` read/write, not a generic key-value store. (a) therefore ships a **new, narrow `ViewMarkersPort`** (`read(): Record<entryId, epochMs>` / `write(entryId, epochMs)`), host-implemented — same injection discipline as D2, so chat-ui still touches no browser storage directly.
 
 **D7 — Scope toggle is a backend parameter, not a client filter.** R10's "all workspaces" cannot be a client-side `filter()` over a workspace-scoped payload — it needs the API to authorize per workspace and project **only** what the principal may see, deny-as-missing (Resource Plane RF decisions). Until that endpoint exists, the toggle is **rendered disabled with a reason**, never silently lying by showing one workspace while claiming all.
 
@@ -102,7 +113,8 @@ Buckets: `1` = `awaiting-input` *(recommended — see O1)*, `2` = `running` (any
 
 **D12 — Side memory is reused, not reinvented.** The left/right choice for the session column reuses the shared side-memory already shipped in `chatPlacementMenu.ts` (`ChatPlacementSideMemory`), so the chat panel and its session column stay on the same side — the exact coherence the owner asked for on placement.
 
-**D13 — One default view per tab.** R8 makes the **list** the default landing view of a tab, and the conversation a **push** on top of it. That is a navigation-state change (`list | entry`) in `chatWidgetShell`, with the current session restored as `entry` when the user returns mid-conversation.
+**D13 — One default view per tab, but not in every host.** R8 makes the **list** the default landing view of a tab, and the conversation a **push** on top of it — a navigation-state change (`list | entry`) in `chatWidgetShell`, with the current session restored as `entry` when the user returns mid-conversation.
+**Forced host modes are excluded.** `resolveEffectiveChatWidgetMode` (`chatWidgetShell.ts:27–37`) forces `docked` in a sidepanel and `floating` in the extension overlay; landing those narrow surfaces on a list instead of the conversation the user just opened would be a regression of exactly the kind the placement work already hit. So D13 gets the same shared-predicate treatment as `canChatPlacementMenuOwnPlacement`: a single `canAgentsListBeDefaultView(hostMode, isExtensionOverlayHost, isMobileViewport)` predicate, used by both the component and its tests — one place to be right.
 
 **D14 — Every lot is test-first and fail-first-verified.** Comparator, migration, projection and status mapping are pure functions with node-testable unit tests; the list/rail get semantic DOM tests; the tab migration gets an e2e assertion on the persisted-state path. No assertion that cannot fail.
 
@@ -112,7 +124,7 @@ Buckets: `1` = `awaiting-input` *(recommended — see O1)*, `2` = `running` (any
 
 | Lot | Content | Depends on | Shippable without backend |
 |---|---|---|---|
-| **L-A** | `AgentsEntry` types + `AgentsFeedPort` + comparator (D3) + `lastViewedAt` local store (D6a) + tab rename & migration (D1) | — | **yes** |
+| **L-A** | `AgentsEntry` types + `AgentsFeedPort` (D2) + comparator (D3) + `ViewMarkersPort` (D6a) + tab rename & migration (D1) + **`cowork-bridge` union re-import & equality test (D1b)** + i18n key rename in `ui/` | owner GO on the breaking bump (D1a) | **yes** |
 | **L-B** | `AgentsList` component: item row (icon/name/elapsed/connection/workspace), spinner, pending tag + excerpt card, DS tokens (D4), expansion of an agent into its sessions (D3/§2) | L-A | **yes** (fixture feed) |
 | **L-C** | Host wiring in `ui/`: sessions adapter + **jobs projection** (D5) + list-as-default navigation (D13) + purge relocation | L-A, L-B | **yes** |
 | **L-D** | Scope menu (R10) — rendered **disabled with reason** until the api endpoint exists (D7) | L-C | partially |
@@ -136,6 +148,8 @@ L-A → L-C are self-contained and are the ones that make the surface real. L-E/
 | `PanelStack` exported by the DS | R11 side column | `design-system` | published version | L-F |
 | Inter-user threads + participants + notifications | R6 | `auth` + api + event spine | thread model & wire | L-G |
 | Agent-as-participant authority (MANDATE scope in a user thread) | R6 safely | `h2a` + `auth` | decision | L-G |
+| **GO on a breaking `chat-ui` surface change** (D1a) | R1 at all | **owner** | explicit GO + BREAKING-noted bump | L-A, and therefore everything |
+| `cowork-bridge` migrated in lockstep (D1b) | R1 without a silent handoff break | this lane (in L-A) | union re-import + equality test | L-A |
 
 ---
 
@@ -161,3 +175,12 @@ L-A → L-C are self-contained and are the ones that make the surface real. L-E/
 - A tab switch lands on the **list**; selecting an entry pushes the conversation; returning restores the list (e2e).
 - The scope toggle either lists across workspaces **or** is disabled with a stated reason — never claims a scope it does not have (unit + e2e).
 - No app-local reimplementation: every piece of the surface is consumed from `@sentropic/chat-ui` by `ui/` (no-orphan gate).
+
+---
+
+## 9. Review log
+
+**Round 1 — lane self-review (Opus), 2026-07-29.** Findings folded into D1a, D1b, D3, D6, D13 and the §3 fact table. Four of them invalidated a first-draft claim: `ChatWidgetTab` is public (so R1 is a breaking change, not a rename); `cowork-bridge` duplicates the union (so the break is compiler-invisible); there is no reusable persistence adapter for `lastViewedAt`; and list-as-default would regress the forced host modes. All five are grounded on file:line, none on inference.
+
+**Round 2 — independent adversarial peer (Codex `gpt-5.6-sol`, xhigh): pending.** Its mandate is to refute §3's facts against the code, attack D1–D14, and find undeclared dependencies. Its verdict and the reconciliation land here before any owner decision packet.
+
