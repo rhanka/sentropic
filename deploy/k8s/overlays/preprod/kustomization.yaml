@@ -23,3 +23,4 @@ resources:
 patches:
   - path: patch-api-config.yaml
   - path: patch-auth-idp-config.yaml
+  - path: patch-postgres-storageclass.yaml
