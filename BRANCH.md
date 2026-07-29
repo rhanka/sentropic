@@ -82,8 +82,17 @@
     - [x] The target appears in no `.github/workflows/**` job (`grep -c` = 0 in `ci.yml`).
 
 - [ ] **Lot 3 — Handover to `claude:poc-k8s`**
-  - [ ] Deliver the recreation runbook: delete Service + StatefulSet, re-apply the overlay, restore prod data.
+  - [x] Deliver the recreation runbook (below). Runs against the OVH PREPROD kubeconfig only — the prod namespace `sentropic` is never touched.
   - [ ] `blocked` until poc-k8s executes it on the OVH preprod cluster.
+  - [ ] Runbook step 1 — dump prod: `make db-backup-prod KUBECONFIG=<prod-ovh-kubeconfig>`
+  - [ ] Runbook step 2 — drop the immutable trio in preprod (the PVC must go too, otherwise the old StorageClass binding survives):
+    - [ ] `kubectl -n sentropic-preprod delete statefulset postgres`
+    - [ ] `kubectl -n sentropic-preprod delete service postgres`
+    - [ ] `kubectl -n sentropic-preprod delete pvc data-postgres-0`
+  - [ ] Runbook step 3 — re-apply the overlay from this branch (or let the next main push run `deploy-preprod`): `kubectl apply -k deploy/k8s/overlays/preprod`
+  - [ ] Runbook step 4 — wait for `deploy/api` to roll out; the api owns the migrations on this DB.
+  - [ ] Runbook step 5 — seed with prod data: `make k8s-db-restore-preprod KUBECONFIG=<preprod-ovh-kubeconfig> BACKUP_FILE=prod-<timestamp>.dump`
+  - [ ] Runbook step 6 — report back the StorageClass the new PVC actually bound to, so it can be recorded.
 
 - [ ] **Lot N — Docs consolidation**
   - [ ] Record the remaining Scaleway residue in `deploy/k8s/base` (image registry, LoadBalancer, TEM) as follow-up scope.
