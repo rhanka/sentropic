@@ -72,12 +72,14 @@
     - [x] `kubectl kustomize deploy/k8s/overlays/prod` renders without error.
     - [x] The rendered preprod StatefulSet carries no `storageClassName`.
 
-- [ ] **Lot 2 — prod→preprod restore path**
-  - [ ] Add `k8s-db-restore-preprod` restoring a prod dump into the preprod namespace postgres.
-  - [ ] Manual-only, `SKIP_CONFIRM`-gated, and hard-refuses to run against the prod namespace.
-  - [ ] Lot gate:
-    - [ ] `make -n k8s-db-restore-preprod` expands without error.
-    - [ ] The target appears in no `.github/workflows/**` job.
+- [x] **Lot 2 — prod→preprod restore path**
+  - [x] Add `k8s-db-restore-preprod` restoring a prod dump into the preprod namespace postgres.
+  - [x] Manual-only, `SKIP_CONFIRM`-gated, and hard-refuses to run against the prod namespace.
+  - [x] Lot gate:
+    - [x] `make -n k8s-db-restore-preprod` expands without error.
+    - [x] Namespace guard executed: `K8S_PREPROD_NAMESPACE=sentropic` exits 1 with "Refusing", before any `kubectl`.
+    - [x] Missing `BACKUP_FILE` exits 1 with the available-backups hint.
+    - [x] The target appears in no `.github/workflows/**` job (`grep -c` = 0 in `ci.yml`).
 
 - [ ] **Lot 3 — Handover to `claude:poc-k8s`**
   - [ ] Deliver the recreation runbook: delete Service + StatefulSet, re-apply the overlay, restore prod data.
