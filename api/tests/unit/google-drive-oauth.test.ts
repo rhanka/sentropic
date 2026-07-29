@@ -201,3 +201,68 @@ describe('Google Drive OAuth helpers', () => {
     expect(token.scopes).toContain('https://www.googleapis.com/auth/drive.file');
   });
 });
+
+describe('Google Drive OAuth state sealing key', () => {
+  const stateInput = { userId: 'u1', workspaceId: 'w1', returnPath: '/documents' };
+
+  it('REFUSES the public literal in production instead of sealing with it', async () => {
+    // Deployed containers receive no JWT_SECRET, so this used to seal production state with a constant
+    // that is readable in a public repository — integrity resting on a value anyone can look up.
+    // Sealing with a public constant is indistinguishable from not sealing at all, so refusing to
+    // operate is the correct outcome; a fallback that is only wrong in production is the kind that
+    // survives every review.
+    const { env } = await import('../../src/config/env');
+    const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
+    const kek = mutable.OAUTH_SIGNING_KEK;
+    const jwt = mutable.JWT_SECRET;
+    const nodeEnv = mutable.NODE_ENV;
+    try {
+      mutable.OAUTH_SIGNING_KEK = undefined;
+      mutable.JWT_SECRET = undefined;
+      (mutable as { NODE_ENV: string }).NODE_ENV = 'production';
+      expect(() => createGoogleDriveOAuthState(stateInput)).toThrow(/required to seal/i);
+    } finally {
+      mutable.OAUTH_SIGNING_KEK = kek;
+      mutable.JWT_SECRET = jwt;
+      (mutable as { NODE_ENV: string }).NODE_ENV = nodeEnv;
+    }
+  });
+
+  it('prefers OAUTH_SIGNING_KEK over JWT_SECRET, so provisioning JWT_SECRET cannot move the key', async () => {
+    // Same precedence as the IdP state sealer. Both seal OAuth state; they must not drift onto
+    // different keys, and a later JWT_SECRET rollout must not silently re-key either of them.
+    const { env } = await import('../../src/config/env');
+    const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
+    const kek = mutable.OAUTH_SIGNING_KEK;
+    const jwt = mutable.JWT_SECRET;
+    try {
+      mutable.OAUTH_SIGNING_KEK = 'the-kek-value';
+      mutable.JWT_SECRET = undefined;
+      const sealed = createGoogleDriveOAuthState(stateInput);
+
+      // Introducing JWT_SECRET afterwards must NOT invalidate state sealed under the KEK.
+      mutable.JWT_SECRET = 'a-freshly-provisioned-jwt-secret';
+      expect(verifyGoogleDriveOAuthState(sealed.state)).toMatchObject({ userId: 'u1' });
+    } finally {
+      mutable.OAUTH_SIGNING_KEK = kek;
+      mutable.JWT_SECRET = jwt;
+    }
+  });
+
+  it('treats an EMPTY key as absent rather than sealing with an empty string', async () => {
+    // The secret bundle emits present-but-empty values; `||` must fall through where `??` would not.
+    const { env } = await import('../../src/config/env');
+    const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
+    const kek = mutable.OAUTH_SIGNING_KEK;
+    const jwt = mutable.JWT_SECRET;
+    try {
+      mutable.OAUTH_SIGNING_KEK = '';
+      mutable.JWT_SECRET = 'the-jwt-value';
+      const sealed = createGoogleDriveOAuthState(stateInput);
+      expect(verifyGoogleDriveOAuthState(sealed.state)).toMatchObject({ userId: 'u1' });
+    } finally {
+      mutable.OAUTH_SIGNING_KEK = kek;
+      mutable.JWT_SECRET = jwt;
+    }
+  });
+});
