@@ -2759,7 +2759,7 @@ GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: k8s-deploy k8s-deploy-preprod k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
+.PHONY: k8s-deploy k8s-deploy-preprod k8s-db-restore-preprod k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
 k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress is part of the overlay
 	# BR-55a: one kustomize apply (base + overlays/prod). The standalone IdP
@@ -2786,6 +2786,35 @@ k8s-deploy-preprod: ## BR-55c: deploy main->preprod (ns sentropic-preprod) with 
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/ui       --timeout=300s
+
+k8s-db-restore-preprod: ## Seed the preprod DB from a prod dump [BACKUP_FILE=prod-*.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
+	# MANUAL ONLY — never wire this into a push-triggered job. It copies real
+	# production data into the less-protected preprod namespace (owner-requested,
+	# 2026-07-29). Produce the dump with `make db-backup-prod KUBECONFIG=<prod>`,
+	# then run this with the PREPROD kubeconfig. The namespace guard below refuses
+	# to run when K8S_PREPROD_NAMESPACE has been pointed at the prod namespace, so
+	# a copy/paste of the prod kubeconfig cannot silently overwrite production.
+	@test "$(K8S_PREPROD_NAMESPACE)" != "$(K8S_NAMESPACE)" || { echo "❌ Refusing: K8S_PREPROD_NAMESPACE equals the prod namespace ($(K8S_NAMESPACE))"; exit 1; }
+	@if [ -z "$(KUBECONFIG)" ]; then echo "❌ Error: KUBECONFIG must be set (preprod kubeconfig)"; exit 1; fi
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: BACKUP_FILE must be specified (e.g. BACKUP_FILE=prod-2026-07-29T04-00-00.dump)"; \
+		echo "Available backups:"; \
+		ls -1 data/backup/prod-*.dump 2>/dev/null | awk '{print "BACKUP_FILE=" $$1}' || echo "  No prod backups found"; \
+		exit 1; \
+	fi
+	@test -f "data/backup/$(BACKUP_FILE)" || { echo "❌ Error: backup file not found: data/backup/$(BACKUP_FILE)"; exit 1; }
+	@echo "⚠️  WARNING: this REPLACES all data in the $(K8S_PREPROD_NAMESPACE) database with production data."
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
+	@set -eu ; \
+	POD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres -o jsonpath='{.items[0].metadata.name}'); \
+	test -n "$$POD" || { echo "❌ Error: no postgres pod found in namespace $(K8S_PREPROD_NAMESPACE)"; exit 1; }; \
+	echo "▶ Restoring data/backup/$(BACKUP_FILE) into $(K8S_PREPROD_NAMESPACE)/$$POD..."; \
+	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
+		pg_restore -h 127.0.0.1 -U app -d app --clean --if-exists --no-owner --no-privileges < "data/backup/$(BACKUP_FILE)"; \
+	echo "✅ Preprod database restored from data/backup/$(BACKUP_FILE)"
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
