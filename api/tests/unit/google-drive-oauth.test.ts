@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
   appendGoogleDriveOAuthResultToReturnPath,
@@ -245,41 +246,61 @@ describe('Google Drive OAuth state sealing key', () => {
     }
   });
 
-  it('prefers OAUTH_SIGNING_KEK over JWT_SECRET, so provisioning JWT_SECRET cannot move the key', async () => {
-    // Same precedence as the IdP state sealer. Both seal OAuth state; they must not drift onto
-    // different keys, and a later JWT_SECRET rollout must not silently re-key either of them.
+  it('seals with OAUTH_SIGNING_KEK — asserted on the HMAC itself, not on a roundtrip', async () => {
+    // A sign-then-verify roundtrip with the same key passes for ANY key, including the public
+    // literal — an adversarial review proved by execution that a mutant always returning the
+    // literal kept every earlier version of these tests green. So assert WHICH key was used, by
+    // recomputing the HMAC independently.
     const { env } = await import('../../src/config/env');
     const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
-    const kek = mutable.OAUTH_SIGNING_KEK;
-    const jwt = mutable.JWT_SECRET;
+    const saved = { kek: mutable.OAUTH_SIGNING_KEK, jwt: mutable.JWT_SECRET };
     try {
       mutable.OAUTH_SIGNING_KEK = 'the-kek-value';
-      mutable.JWT_SECRET = undefined;
+      mutable.JWT_SECRET = 'a-jwt-that-must-not-be-used';
       const sealed = createGoogleDriveOAuthState(stateInput);
 
-      // Introducing JWT_SECRET afterwards must NOT invalidate state sealed under the KEK.
-      mutable.JWT_SECRET = 'a-freshly-provisioned-jwt-secret';
-      expect(verifyGoogleDriveOAuthState(sealed.state)).toMatchObject({ userId: 'u1' });
+      const [encodedPayload, signature] = sealed.state.split('.');
+      const expected = createHmac('sha256', 'the-kek-value').update(encodedPayload).digest('base64url');
+      expect(signature).toBe(expected);
+
+      // And the two keys that must NOT have been used produce a different signature.
+      const withJwt = createHmac('sha256', 'a-jwt-that-must-not-be-used').update(encodedPayload).digest('base64url');
+      const withLiteral = createHmac('sha256', 'dev-secret-key-change-in-production-please')
+        .update(encodedPayload)
+        .digest('base64url');
+      expect(signature).not.toBe(withJwt);
+      expect(signature).not.toBe(withLiteral);
     } finally {
-      mutable.OAUTH_SIGNING_KEK = kek;
-      mutable.JWT_SECRET = jwt;
+      mutable.OAUTH_SIGNING_KEK = saved.kek;
+      mutable.JWT_SECRET = saved.jwt;
     }
   });
 
-  it('treats an EMPTY key as absent rather than sealing with an empty string', async () => {
-    // The secret bundle emits present-but-empty values; `||` must fall through where `??` would not.
+  it('treats an EMPTY OAUTH_SIGNING_KEK as absent and falls through to JWT_SECRET', async () => {
+    // The deployment emits present-but-empty values (`--from-literal=VAR="$VAR"` with the variable
+    // missing), so this is the case production actually produces. `||` falls through; `??` would
+    // keep '' and seal with the public literal instead. A roundtrip cannot tell those apart —
+    // assert the HMAC.
     const { env } = await import('../../src/config/env');
     const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
-    const kek = mutable.OAUTH_SIGNING_KEK;
-    const jwt = mutable.JWT_SECRET;
+    const saved = { kek: mutable.OAUTH_SIGNING_KEK, jwt: mutable.JWT_SECRET };
     try {
       mutable.OAUTH_SIGNING_KEK = '';
       mutable.JWT_SECRET = 'the-jwt-value';
       const sealed = createGoogleDriveOAuthState(stateInput);
-      expect(verifyGoogleDriveOAuthState(sealed.state)).toMatchObject({ userId: 'u1' });
+
+      const [encodedPayload, signature] = sealed.state.split('.');
+      expect(signature).toBe(
+        createHmac('sha256', 'the-jwt-value').update(encodedPayload).digest('base64url'),
+      );
+      expect(signature).not.toBe(
+        createHmac('sha256', 'dev-secret-key-change-in-production-please')
+          .update(encodedPayload)
+          .digest('base64url'),
+      );
     } finally {
-      mutable.OAUTH_SIGNING_KEK = kek;
-      mutable.JWT_SECRET = jwt;
+      mutable.OAUTH_SIGNING_KEK = saved.kek;
+      mutable.JWT_SECRET = saved.jwt;
     }
   });
 });
