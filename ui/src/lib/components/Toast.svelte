@@ -15,7 +15,10 @@
   $: isDockedOpen = $chatWidgetLayout.mode === 'docked' && $chatWidgetLayout.isOpen;
   $: isFloatingOpen = $chatWidgetLayout.mode === 'floating' && $chatWidgetLayout.isOpen;
   $: rightOffset = (() => {
-    if (isDockedOpen) {
+    // `drawerSide` is published only by a menu-owned drawer; the legacy path
+    // emits nothing and has always been a right-hand panel, so an absent side
+    // must keep the historical right-edge clearance.
+    if (isDockedOpen && $chatWidgetLayout.drawerSide !== 'left') {
       if ($chatWidgetLayout.dockWidthCss === '100vw') return '1rem';
       return `calc(${$chatWidgetLayout.dockWidthCss} + ${TOAST_CHAT_GAP_CSS})`;
     }
