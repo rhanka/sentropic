@@ -342,42 +342,48 @@ export const storeGoogleDriveTokenMaterial = async (input: {
  * Returns nothing — the outcome is logged, so an operator can tell a revoked grant from a forgotten
  * one when reconstructing what an incident actually contained.
  */
-const revokeStoredGoogleDriveGrant = async (account: {
-  id: string;
-  tokenSecret: string | null;
-}): Promise<void> => {
-  if (!account.tokenSecret) return;
-
-  let refreshToken: string | null = null;
+/**
+ * Extract the token to revoke from a stored secret. Returns null when nothing usable is stored.
+ *
+ * Prefer the REFRESH token: revoking it kills the whole grant, whereas revoking an access token
+ * kills one session. `||` (not `??`) because a stored empty string must fall through to the access
+ * token rather than be treated as a usable token.
+ *
+ * Never throws: an undecryptable or malformed secret must not prevent the user from disconnecting.
+ */
+const readRevocableGoogleDriveToken = (tokenSecret: string | null): string | null => {
+  if (!tokenSecret) return null;
   try {
-    const decrypted = decryptSecretOrNull(account.tokenSecret);
-    if (decrypted) {
-      const parsed = JSON.parse(decrypted) as Partial<GoogleDriveTokenSecretPayload> | null;
-      // Prefer the refresh token: revoking it kills the whole grant. Fall back to the access token,
-      // which at least invalidates the live session.
-      refreshToken =
-        (typeof parsed?.refreshToken === 'string' ? parsed.refreshToken : null) ??
-        (typeof parsed?.accessToken === 'string' ? parsed.accessToken : null);
-    }
+    const decrypted = decryptSecretOrNull(tokenSecret);
+    if (!decrypted) return null;
+    const parsed = JSON.parse(decrypted) as Partial<GoogleDriveTokenSecretPayload> | null;
+    const refresh = typeof parsed?.refreshToken === 'string' ? parsed.refreshToken : '';
+    const access = typeof parsed?.accessToken === 'string' ? parsed.accessToken : '';
+    return refresh || access || null;
   } catch {
-    refreshToken = null;
+    return null;
   }
+};
 
-  if (!refreshToken) {
-    logger.warn({ accountId: account.id }, 'google-drive: disconnect could not read a token to revoke upstream');
-    return;
-  }
-
-  const result = await revokeGoogleOAuthToken({ token: refreshToken });
+/**
+ * Tell Google to revoke a grant. Best-effort, and deliberately called AFTER the local row is
+ * cleared — see the ordering note in `disconnectGoogleDriveConnectorAccount`.
+ *
+ * The outcome is LOGGED rather than assumed: "we called revoke" is not "the grant is revoked", and
+ * during an incident an operator must be able to tell a revoked grant from a merely forgotten one.
+ */
+const revokeGoogleDriveGrantUpstream = async (accountId: string, token: string): Promise<void> => {
+  const result = await revokeGoogleOAuthToken({ token });
   if (result.revoked) {
-    logger.info({ accountId: account.id }, 'google-drive: grant revoked upstream at Google');
+    logger.info({ accountId }, 'google-drive: grant revoked upstream at Google');
   } else {
     logger.warn(
-      { accountId: account.id, status: result.status, error: result.error },
+      { accountId, status: result.status, error: result.error },
       'google-drive: upstream revocation FAILED — the grant may still be live at Google',
     );
   }
 };
+
 
 export const disconnectGoogleDriveConnectorAccount = async (input: {
   userId: string;
@@ -386,15 +392,23 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
   const existing = await getGoogleDriveConnectorAccount(input);
   if (!existing) return toPublicGoogleDriveConnection(null);
 
-  // Revoke UPSTREAM before forgetting locally. Nulling `tokenSecret` alone leaves the grant alive at
-  // Google: the user believes they revoked access and they did not, and any copy of the token that
-  // leaked keeps working. Revoke the REFRESH token — that kills the whole grant, not just one access
-  // token.
+  // ORDERING IS THE WHOLE DESIGN HERE.
   //
-  // Best-effort on purpose, and in this order: the user asked to disconnect, so we must forget the
-  // token even if Google is unreachable. But the outcome is LOGGED rather than assumed — "we called
-  // revoke" is not "the grant is revoked", and during an incident that difference is the whole point.
-  await revokeStoredGoogleDriveGrant(existing);
+  // Nulling `tokenSecret` alone leaves the grant alive at Google: the user believes they revoked
+  // access and they did not, and any copy of the token that leaked keeps working. So we must also
+  // tell Google.
+  //
+  // But revoking BEFORE the local write puts an unbounded outbound HTTP call in front of the only
+  // step that is guaranteed to succeed. If egress to Google is blackholed — dropped rather than
+  // refused, which is exactly what a network incident looks like — the request hangs and the row is
+  // never cleared. Disconnect would then fail precisely under the conditions that make people want
+  // to disconnect.
+  //
+  // So: read the token into memory, clear the row, THEN revoke upstream with the in-memory copy.
+  // The local disconnect is unconditional and immediate; the remote call can take as long as it
+  // likes without holding it hostage. That also removes the crash window in which a revoked grant
+  // was still stored locally as "connected".
+  const revocableToken = readRevocableGoogleDriveToken(existing.tokenSecret);
 
   await db
     .update(documentConnectorAccounts)
@@ -407,6 +421,15 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
       updatedAt: new Date(),
     })
     .where(eq(documentConnectorAccounts.id, existing.id));
+
+  if (revocableToken) {
+    await revokeGoogleDriveGrantUpstream(existing.id, revocableToken);
+  } else {
+    logger.warn(
+      { accountId: existing.id },
+      'google-drive: disconnected locally but found no token to revoke upstream — the grant may still be live at Google',
+    );
+  }
 
   return getGoogleDriveConnection(input);
 };
