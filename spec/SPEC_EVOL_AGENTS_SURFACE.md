@@ -109,7 +109,7 @@ There is **no existing adapter to reuse for (a)**: `PlacementPersistence` (`stat
 
 **D10 — Remote-control sessions are read-only in this surface (first cut).** The `agents` list *surfaces* them (status, workspace, elapsed); attaching/controlling stays in the cowork surface. Prevents this lane from absorbing the remote-session control plane.
 
-**D11 — Full-screen left rail (R11) lands on step B.** The rail + repositionable side column are exactly the `AppShell` + `PanelStack` composition already sequenced with the architect: **step A** = app migrates to `AppShell` (`sentropic:app` lane), **step B** = chat migrates to `PanelStack` (this lane). R11 is therefore **scheduled after step A**, and the non-full-screen surface (R1–R10) must be complete and shippable **without** it.
+**D11 — Full-screen left rail (R11) lands on step B.** The rail + repositionable side column are exactly the `AppShell` + `PanelStack` composition already sequenced with the architect: **step A** = app migrates to `AppShell` (`sentropic:app` lane), **step B** = chat migrates to `PanelStack` (this lane). R11 is therefore **scheduled after step A**, and the non-full-screen surface (R1–R10) must be complete and shippable **without** it. The DS half is no longer the constraint — `PanelStack`/`PanelSection` were reported published on 2026-07-28 (§6). The single remaining gate is step A, whose relay to the architect was sent 2026-07-29T04:20Z and is awaiting organisation.
 
 **D12 — Side memory is reused, not reinvented.** The left/right choice for the session column reuses the shared side-memory already shipped in `chatPlacementMenu.ts` (`ChatPlacementSideMemory`), so the chat panel and its session column stay on the same side — the exact coherence the owner asked for on placement.
 
@@ -145,7 +145,7 @@ L-A → L-C are self-contained and are the ones that make the surface real. L-E/
 | Per-principal `lastViewedAt` persistence | R9 across devices | `api` | read-marker write + read | D6b (D6a unblocks locally) |
 | Remote-control session inventory | R4 | `cowork` | list + status + connection state | L-E |
 | **AppShell migration of the app** | R11 left rail | `sentropic:app` (step A, organised by `architect`) | app on `AppShell` | L-F |
-| `PanelStack` exported by the DS | R11 side column | `design-system` | published version | L-F |
+| ~~`PanelStack` exported by the DS~~ | R11 side column | `design-system` | **reported delivered** 2026-07-28: `PanelStack` + `PanelSection` exported from all 4 framework indexes, `@sentropic/design-system-svelte@0.34.73` (DS lane h2a event; version not independently verified by this lane yet — confirm at L-F entry) | ~~L-F~~ — no longer blocking |
 | Inter-user threads + participants + notifications | R6 | `auth` + api + event spine | thread model & wire | L-G |
 | Agent-as-participant authority (MANDATE scope in a user thread) | R6 safely | `h2a` + `auth` | decision | L-G |
 | **GO on a breaking `chat-ui` surface change** (D1a) | R1 at all | **owner** | explicit GO + BREAKING-noted bump | L-A, and therefore everything |
