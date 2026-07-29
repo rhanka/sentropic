@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { env } from '../config/env';
+import { env, requiresOAuthProductionSecrets } from '../config/env';
 import { decryptSecretOrNull } from './secret-crypto';
 import { settingsService } from './settings';
 
@@ -223,7 +223,34 @@ export const resolveGoogleDriveOAuthConfig = async (
   };
 };
 
-const stateSecret = (): string => env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+/**
+ * HMAC key sealing the Drive OAuth `state`.
+ *
+ * This was `env.JWT_SECRET || '<public literal>'`. Deployed containers do not receive `JWT_SECRET`, so
+ * production has been sealing its Drive authorization state with a constant that is readable in a
+ * PUBLIC repository — the integrity of the state parameter rested on a value anyone can look up.
+ *
+ * Two changes:
+ *  - `OAUTH_SIGNING_KEK` takes precedence, matching `resolveOAuthStateSecret` in routes/auth/oauth.ts.
+ *    Both seal OAuth state; they must not drift onto different keys, and provisioning `JWT_SECRET`
+ *    later must not silently move either of them.
+ *  - In production the literal fallback is REFUSED rather than used. Failing to start is the correct
+ *    outcome: sealing with a public constant is indistinguishable from not sealing at all, and a
+ *    fallback that is only wrong in production is the kind that survives every review.
+ *
+ * `||` (not `??`) is deliberate: the secret bundle emits present-but-EMPTY values, and an empty string
+ * must fall through to the next candidate instead of becoming the key.
+ */
+const stateSecret = (): string => {
+  const secret = env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
+  if (secret) return secret;
+  if (requiresOAuthProductionSecrets()) {
+    throw new Error(
+      'OAUTH_SIGNING_KEK or JWT_SECRET is required to seal Google Drive OAuth state in production.',
+    );
+  }
+  return 'dev-secret-key-change-in-production-please';
+};
 
 const encodeBase64Url = (value: string): string => Buffer.from(value, 'utf8').toString('base64url');
 
