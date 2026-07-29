@@ -20,6 +20,7 @@ export const GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY =
 const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
+const REVOKE_TIMEOUT_MS = 5_000;
 const GOOGLE_USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo';
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -530,6 +531,10 @@ export const revokeGoogleOAuthToken = async (input: {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ token }),
+      // Bounded on purpose. Without it the ceiling is undici's default (~300s), which is not a
+      // choice this codebase made. Blackholed egress — dropped rather than refused — would
+      // otherwise hold the request open for minutes.
+      signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
     });
 
     // Google answers 200 on success. A 400 with `invalid_token` means it is ALREADY unusable —
