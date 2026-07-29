@@ -512,6 +512,10 @@ publish-e2e-image: docker-login
 	@echo "▶ Pushing e2e image to registry "
 	@docker push $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)
 
+.PHONY: check-ci-version-filters
+check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every API_VERSION/UI_VERSION hash input
+	@./scripts/check-ci-version-filters.sh
+
 
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
