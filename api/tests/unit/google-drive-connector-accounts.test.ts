@@ -395,8 +395,11 @@ describe('Google Drive connector account storage', () => {
       userId: user.id, workspaceId: String(user.workspaceId),
     });
 
-    const revoke = calls.find((c) => c.url.includes('/revoke'));
-    expect(revoke, 'disconnect must call Google revoke').toBeTruthy();
+    // Assert the EXACT endpoint, not merely that some URL contains "/revoke": pointing the constant
+    // at any other host would otherwise keep this test green while reinstating "disconnect never
+    // tells Google".
+    const revoke = calls.find((c) => c.url === 'https://oauth2.googleapis.com/revoke');
+    expect(revoke, 'disconnect must POST to Google revoke endpoint').toBeTruthy();
     // The REFRESH token, not the access token: revoking it kills the whole grant.
     expect(revoke?.body).toContain('the-refresh-token');
 
@@ -424,6 +427,43 @@ describe('Google Drive connector account storage', () => {
         expiresAt: '2099-05-01T11:00:00.000Z',
       },
     });
+
+    await expect(
+      disconnectGoogleDriveConnectorAccount({ userId: user.id, workspaceId: String(user.workspaceId) }),
+    ).resolves.toBeTruthy();
+
+    const [row] = await db.select().from(documentConnectorAccounts)
+      .where(and(eq(documentConnectorAccounts.userId, user.id),
+        eq(documentConnectorAccounts.workspaceId, String(user.workspaceId)))).limit(1);
+    expect(row.status).toBe('disconnected');
+    expect(row.tokenSecret).toBeNull();
+  });
+
+  it('disconnects locally even when the stored secret cannot be decrypted', async () => {
+    // A secret sealed under a different key throws from GCM `final()`. That must never prevent a
+    // user from disconnecting — otherwise a key problem would trap people in a connected state they
+    // cannot exit. Nothing can be revoked upstream here, and the log says so rather than implying
+    // the grant is gone.
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await storeGoogleDriveTokenMaterial({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+      identity: { accountEmail: 'user@example.com', accountSubject: 'google-subject-undecryptable' },
+      token: {
+        accessToken: 'access-token', refreshToken: 'the-refresh-token', idToken: 'id-token',
+        tokenType: 'Bearer', expiresIn: 3600, scope: 'openid email',
+        scopes: ['openid', 'email'], obtainedAt: '2026-04-21T10:00:00.000Z',
+        expiresAt: '2099-05-01T11:00:00.000Z',
+      },
+    });
+
+    // Corrupt the stored envelope so decryption fails.
+    await db.update(documentConnectorAccounts)
+      .set({ tokenSecret: 'enc:v1:AAAA:BBBB:CCCC' })
+      .where(and(eq(documentConnectorAccounts.userId, user.id),
+        eq(documentConnectorAccounts.workspaceId, String(user.workspaceId))));
 
     await expect(
       disconnectGoogleDriveConnectorAccount({ userId: user.id, workspaceId: String(user.workspaceId) }),
