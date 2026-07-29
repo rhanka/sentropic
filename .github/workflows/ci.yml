@@ -145,6 +145,13 @@ jobs:
       cli_publish: ${{ steps.filter.outputs.cli_publish }}
     steps:
       - uses: actions/checkout@v6
+      # Enforces the "Keep `api` and `ui` in sync with API_VERSION / UI_VERSION"
+      # note below. That invariant was a comment, so nothing caught a drift: a
+      # path feeding the content-sha but missing from the filter skips publish
+      # while moving the deployed tag. Runs in `changes` (always executed, already
+      # checked out) so it costs no extra runner.
+      - name: Assert change-filters cover the image content-hash inputs
+        run: make check-ci-version-filters
       - uses: dorny/paths-filter@v4
         id: filter
         with:
