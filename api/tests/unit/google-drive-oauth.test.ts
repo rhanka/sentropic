@@ -212,19 +212,36 @@ describe('Google Drive OAuth state sealing key', () => {
     // operate is the correct outcome; a fallback that is only wrong in production is the kind that
     // survives every review.
     const { env } = await import('../../src/config/env');
-    const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
-    const kek = mutable.OAUTH_SIGNING_KEK;
-    const jwt = mutable.JWT_SECRET;
-    const nodeEnv = mutable.NODE_ENV;
+    const mutable = env as typeof env & {
+      OAUTH_SIGNING_KEK?: string;
+      DISABLE_RATE_LIMIT?: string;
+      ADMIN_EMAIL?: string;
+    };
+    const saved = {
+      kek: mutable.OAUTH_SIGNING_KEK,
+      jwt: mutable.JWT_SECRET,
+      nodeEnv: mutable.NODE_ENV,
+      rateLimit: mutable.DISABLE_RATE_LIMIT,
+      adminEmail: mutable.ADMIN_EMAIL,
+    };
     try {
       mutable.OAUTH_SIGNING_KEK = undefined;
       mutable.JWT_SECRET = undefined;
       (mutable as { NODE_ENV: string }).NODE_ENV = 'production';
+      // `requiresOAuthProductionSecrets` is switched OFF by `isE2eProductionImageRuntime`, which is
+      // true when NODE_ENV=production AND DISABLE_RATE_LIMIT='true' AND ADMIN_EMAIL is the e2e admin.
+      // CI sets those last two, so merely forcing NODE_ENV would satisfy that escape hatch and
+      // silently disable the very guard under test — the test would then pass locally and fail in CI
+      // for reasons having nothing to do with the code. Pin all three inputs.
+      mutable.DISABLE_RATE_LIMIT = 'false';
+      mutable.ADMIN_EMAIL = 'not-the-e2e-admin@example.com';
       expect(() => createGoogleDriveOAuthState(stateInput)).toThrow(/required to seal/i);
     } finally {
-      mutable.OAUTH_SIGNING_KEK = kek;
-      mutable.JWT_SECRET = jwt;
-      (mutable as { NODE_ENV: string }).NODE_ENV = nodeEnv;
+      mutable.OAUTH_SIGNING_KEK = saved.kek;
+      mutable.JWT_SECRET = saved.jwt;
+      (mutable as { NODE_ENV: string }).NODE_ENV = saved.nodeEnv;
+      mutable.DISABLE_RATE_LIMIT = saved.rateLimit;
+      mutable.ADMIN_EMAIL = saved.adminEmail;
     }
   });
 
