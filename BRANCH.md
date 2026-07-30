@@ -86,6 +86,6 @@
   - [x] Own export subpath + `.svelte.d.ts`, deliberately NOT re-exported from `src/index.ts` (that entrypoint stays DS-free).
   - [ ] Lot gate: DOM/ARIA tests written but NOT RUNNING — blocked upstream, see `CHAT-AGENTS-BLK1`.
 
-- [ ] **Lot 6 — Side-preference accessor**
-  - [ ] Additive public accessor on the placement menu, unblocking R11's repositionable column.
-  - [ ] Lot gate: unit test on read/write and full-mode behaviour.
+- [x] **Lot 6 — Side-preference accessor**
+  - [x] Additive public accessor on the placement menu, unblocking R11's repositionable column.
+  - [x] Lot gate: unit test on read/write and full-mode behaviour.
