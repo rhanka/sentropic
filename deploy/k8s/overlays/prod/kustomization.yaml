@@ -9,3 +9,7 @@ resources:
 #   images:
 #     - name: rg.fr-par.scw.cloud/nc-reg/sentropic-api
 #       newTag: vYYYY.MM.DD.N
+# Pins the live OVH storage class on the postgres StatefulSet, mirroring
+# overlays/preprod (#474). Without it the prod overlay cannot converge at all.
+patches:
+  - path: patch-postgres-storageclass.yaml
