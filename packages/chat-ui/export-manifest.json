@@ -839,6 +839,7 @@
         "ChatPlacementMenuItem",
         "ChatPlacementMenuGroup",
         "ChatPlacementMenuLabels",
+        "ChatPlacementSideMemory",
         "CreateChatPlacementMenuOptions",
         "ChatPlacementMenu",
         "buildChatPlacementPersistenceKey",
