@@ -153,11 +153,6 @@
       "svelte": "./src/components/ChatDock.svelte",
       "import": "./src/components/ChatDock.svelte"
     },
-    "./components/AgentsList.svelte": {
-      "types": "./src/components/AgentsList.svelte.d.ts",
-      "svelte": "./src/components/AgentsList.svelte",
-      "import": "./src/components/AgentsList.svelte"
-    },
     "./components/ChatPlacementMenuButton.svelte": {
       "types": "./src/components/ChatPlacementMenuButton.svelte.d.ts",
       "svelte": "./src/components/ChatPlacementMenuButton.svelte",
