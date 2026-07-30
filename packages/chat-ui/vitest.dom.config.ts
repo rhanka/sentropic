@@ -25,8 +25,13 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
+import { preprocessDependencySvelteTypeScript } from './vitest-dep-svelte-ts.js';
+
 export default defineConfig({
   plugins: [
+    // CHAT-AGENTS-BLK1: must run BEFORE the Svelte plugin — dependency .svelte
+    // files ship as TypeScript source and the plugin does not preprocess them.
+    preprocessDependencySvelteTypeScript(),
     svelte({
       // Remove the default node_modules exclusion so that
       // @testing-library/svelte-core/src/props.svelte.js is Svelte-compiled.
@@ -49,6 +54,10 @@ export default defineConfig({
       '@testing-library/svelte-core',
       '@lucide/svelte',
       'svelte-streamdown',
+      // CHAT-AGENTS: AgentsList renders design-system components, whose dist
+      // ships uncompiled .svelte files. Same treatment as
+      // packages/cited-source-viewer/vitest.dom.config.ts.
+      '@sentropic/design-system-svelte',
     ],
   },
   test: {
@@ -61,7 +70,12 @@ export default defineConfig({
         // Inline these packages so vitest processes them through vite transforms
         // (the Svelte plugin must compile .svelte and .svelte.js files from these).
         // BR-CONV-EX1: svelte-streamdown inlined so StreamMessage compiles cleanly.
-        inline: [/@testing-library\/svelte/, /@lucide\/svelte/, /svelte-streamdown/],
+        inline: [
+          /@testing-library\/svelte/,
+          /@lucide\/svelte/,
+          /svelte-streamdown/,
+          /@sentropic\/design-system-svelte/,
+        ],
       },
     },
   },
