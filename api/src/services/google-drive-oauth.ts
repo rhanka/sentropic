@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { env } from '../config/env';
+import { env, requiresOAuthProductionSecrets } from '../config/env';
 import { decryptSecretOrNull } from './secret-crypto';
 import { settingsService } from './settings';
 
@@ -225,7 +225,42 @@ export const resolveGoogleDriveOAuthConfig = async (
   };
 };
 
-const stateSecret = (): string => env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+/**
+ * HMAC key sealing the Drive OAuth `state`.
+ *
+ * This was `env.JWT_SECRET || '<public literal>'`. Deployed containers do not receive `JWT_SECRET`, so
+ * production has been sealing its Drive authorization state with a constant that is readable in a
+ * PUBLIC repository — the integrity of the state parameter rested on a value anyone can look up.
+ *
+ * Two changes:
+ *  - `OAUTH_SIGNING_KEK` takes precedence, so provisioning `JWT_SECRET` later cannot silently move
+ *    this sealer onto the signing key.
+ *    NOTE, and do not misread this as parity: the sibling sealer `resolveOAuthStateSecret` in
+ *    routes/auth/oauth.ts is currently `JWT_SECRET ?? OAUTH_SIGNING_KEK` — the OPPOSITE order, and
+ *    `??` rather than `||`. So while both vars are set the two sealers use DIFFERENT keys. Aligning
+ *    them belongs to the branch that touches that file; it is deliberately not done here.
+ *  - In production the literal fallback is REFUSED rather than used, because sealing with a public
+ *    constant is indistinguishable from not sealing at all. This is a PER-REQUEST refusal, not a
+ *    boot-time one: nothing runs at module scope, so a misconfigured pod starts healthy and the two
+ *    Drive OAuth endpoints return 503/400. Fail-closed, but it presents as a Drive outage.
+ *
+ * Residual hole, stated rather than papered over: `requiresOAuthProductionSecrets` is switched OFF
+ * by `isE2eProductionImageRuntime` (NODE_ENV=production AND DISABLE_RATE_LIMIT='true' AND the e2e
+ * admin address). In that configuration this still seals with the public literal.
+ *
+ * `||` (not `??`) is deliberate: the secret bundle emits present-but-EMPTY values, and an empty string
+ * must fall through to the next candidate instead of becoming the key.
+ */
+const stateSecret = (): string => {
+  const secret = env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
+  if (secret) return secret;
+  if (requiresOAuthProductionSecrets()) {
+    throw new Error(
+      'OAUTH_SIGNING_KEK or JWT_SECRET is required to seal Google Drive OAuth state in production.',
+    );
+  }
+  return 'dev-secret-key-change-in-production-please';
+};
 
 const encodeBase64Url = (value: string): string => Buffer.from(value, 'utf8').toString('base64url');
 
