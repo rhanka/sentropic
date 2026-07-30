@@ -461,12 +461,6 @@
       "exists": true,
       "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), placementMenu? (ChatPlacementMenu, surfaces L1c-menu — drives the dialog container's placement classes from placementMenu.current() ONLY where the menu may own placement per canChatPlacementMenuOwnPlacement; a sidepanel host, a Chrome extension overlay and a mobile viewport force their own mode and ignore it. Undefined = zero change. ChatDock renders NO trigger/popup UI itself — hosts mount ChatPlacementMenuButton separately, e.g. in their own header toolbar), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
     },
-    "./components/AgentsList.svelte": {
-      "kind": "svelte",
-      "file": "dist/components/AgentsList.svelte",
-      "exists": true,
-      "_propSnapshot": "Props: rows? (AgentsListRow[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn), onAction? (fn), formatRelative? (fn). Renders design-system components (SelectableList/SelectableRow/StatusDot/Tag/Badge/Avatar/OverflowMenu/EmptyState) imported from @sentropic/design-system-svelte, which is an OPTIONAL peerDependency: only this subpath needs it, so a host that never mounts the agents list does not have to provide the DS."
-    },
     "./components/ChatPlacementMenuButton.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatPlacementMenuButton.svelte",

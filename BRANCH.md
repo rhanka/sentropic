@@ -46,8 +46,10 @@
 
 - `blocked` — `CHAT-AGENTS-BLK1` — **the design system cannot be compiled by any Svelte-aware bundler at `@sentropic/design-system-svelte@0.34.73`.** Its published `dist/Accordion.svelte` contains `function toggle(id, disabled?)`: the build strips the type annotations AND the `lang="ts"` marker but leaves the optional-parameter `?`, producing a file that declares itself JavaScript while holding TypeScript-only syntax. Evidence: `RollupError: Parse failure: Expected ',', got '?'` at `dist/Accordion.svelte:50:29`. The DS source is correct (`function toggle(id: string, disabled?: boolean)`), so this is a publish-pipeline defect, not a source one. No consumer-side remedy exists: an explicit `vitePreprocess()` changes nothing (nothing marks the script as TS), the package exposes a single `.` export so the broken file cannot be avoided by a deep import, and the failure occurs at IMPORT time so `describe.skip` does not help. The suite is therefore excluded by one line in `vitest.dom.config.ts`; delete that line — nothing else — once a fixed version ships. Reported to the design-system lane.
 
+- `blocked` — `CHAT-AGENTS-BLK2` — **the `AgentsList` export subpath is withheld until the component can be honestly classified.** `tests/reference-validation.spec.ts` requires every exported component to carry one of four classes: `primitive` (needs a real `dogfoodedBy` app consumer), `assembly` (needs `composes` entries that are themselves classified IN THIS manifest), `headless`, or `legacy`. `AgentsList` is none of them today: it is not yet mounted by the app (that is the host-wiring lot), its DOM validation is suspended by `CHAT-AGENTS-BLK1`, and it composes EXTERNAL design-system primitives that this manifest does not classify. Rather than invent a classification to make the gate pass, the export is removed from `package.json` and `export-manifest.json`; the component, its `.d.ts` and its tests stay on the branch. Restore the export in the lot where it becomes either DOM-validated (DS fixed) or dogfooded (host wiring) — whichever lands first. NOTE: the delegated agent reported this failure as a "pre-existing baseline"; it was not — it was caused by adding the export.
+
 ## AI Flaky tests
-- Not applicable: no AI-backed test is touched.
+- `test-e2e (group-c, 03)` failed once on commit `ff6935e55` — `tests/03-chat.spec.ts:269` ("ouvrir le chat, envoyer un message et recevoir une réponse"), `Timeout 60000ms exceeded while waiting on the predicate`, on all three attempts. The same job then PASSED on the two following commits (`e3e7a92cd`, `87273b370`) with no fix in between, and passed on the last `main` run that executed it (`30468421532`). Signature matches the known AI round-trip nondeterminism family. Recorded rather than dismissed: this is NOT a same-commit success, so it does not strictly meet the "non-systematic" bar — re-open if it recurs.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
@@ -83,7 +85,8 @@
 
 - [x] **Lot 5 — `AgentsList` component** (delegated to Codex `gpt-5.6-terra` xhigh)
   - [x] Built on `SelectableList`/`SelectableRow`/`StatusDot`/`Tag`/`Badge`/`Avatar`/`OverflowMenu`/`EmptyState` — no hand-written equivalent, no ad-hoc colour.
-  - [x] Own export subpath + `.svelte.d.ts`, deliberately NOT re-exported from `src/index.ts` (that entrypoint stays DS-free).
+  - [x] `.svelte.d.ts` written; deliberately NOT re-exported from `src/index.ts` (that entrypoint stays DS-free).
+  - [ ] Export subpath WITHHELD on purpose — see `CHAT-AGENTS-BLK2`.
   - [ ] Lot gate: DOM/ARIA tests written but NOT RUNNING — blocked upstream, see `CHAT-AGENTS-BLK1`.
 
 - [x] **Lot 6 — Side-preference accessor**
