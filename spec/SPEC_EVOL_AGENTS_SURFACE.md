@@ -91,6 +91,12 @@ An entry carries: `id`, `kind`, `title`, `status`, `workspaceId` + `workspaceLab
 
 ## 4. Decisions **[lane]**
 
+**Owner ratifications, 2026-07-29** (these close the corresponding forks; the decisions below are amended accordingly):
+- **D1a = GO.** The atomic breaking major release is authorised: one union source, all 6 sites, `chat-ui` **major** + `cowork-bridge` in lockstep. Remaining sub-question routed to the plugin lanes / architect: whether this lane performs the Chrome/VSCode edits itself.
+- **D1c = the app returns the shell to the package.** Not "mount inside the app shell" — the full `renderShell` takeover is removed so that "shipped in chat-ui" means "visible in sentropic". Cost, measured rather than assumed: the app's `renderAppChatWidgetShell` snippet is **1014 lines** (`ui/src/lib/components/ChatWidget.svelte:2161–3175`), of which **~833 are the header alone** — the part that owns the tab bar. That is a sub-program, not a lot, and it cannot be one commit under the 150-line rule. So the handover is **incremental and header-first**: the package takes the tab bar and the list; the app keeps injecting its remaining header controls through named slots that shrink slice by slice. Each slice is independently shippable, and the tab bar genuinely moves in the first one — no façade.
+- **O1 = an awaiting-input entry ranks above running ones.** So D3's bucket 1 is now decided, `awaitingInputFirst` is `true`, and the badge propagation of D19 is what makes a question buried in a delegated run reach the top of the list.
+- **Sequencing consequence:** the shell handover lands **before** the rename. Renaming first would change a tab bar the user never sees (D1c), so L-C-shell precedes L-A′ — otherwise the release ships an invisible rename and a second, app-local rename has to follow.
+
 **D1 — Tabs.** `ChatWidgetTab` becomes `'agents' | 'chats' | 'comments'`, in that render order. `'queue'` is **removed**, not aliased: no legacy fallback (MASTER rule). Migration of persisted user state happens inside the **existing** `coerceChatWidgetTab` seam (`state/chatWidgetShell.ts:19–25`), which already normalises unknown values — `'chat'→'agents'`, `'queue'→'agents'`, at read time.
 
 **D1a — This is a BREAKING change to a published contract: a MAJOR bump, escalated, never self-merged.** `ChatWidgetTab` is public API (`src/index.ts:19` re-exports `state/chatWidgetShell.js`, union at line 3), and `ChatWidgetPanelVisibility.showQueuePanel` (line 13) with it. `rules/workflow.md` mandates **major for breaking** — for a 0.x package that means `@sentropic/chat-ui@1.0.0`, not a minor. The lane's standing authority covers *additive minor* only, so this needs an explicit owner GO. No deprecated-alias window: MASTER forbids legacy fallback, so the break is taken once, deliberately.
@@ -158,7 +164,8 @@ Buckets: `1` = `awaiting-input` *(recommended — see O1)*, `2` = `running` (any
 | Lot | Content | Depends on | Shippable without backend |
 |---|---|---|---|
 | **L-A** | `AgentsEntry` types + `AgentsFeedPort` (D2) + comparator (D3 — O1-gated, hierarchical) + view markers over `ChatUiStorageAdapter` (D6a) + **public side-preference accessor** (D12) — all **additive**, no rename | — | **yes** |
-| **L-A′** | The **atomic breaking release** (D1/D1a/D1b/D1c): one union source, all 6 declaration/usage sites migrated (package, `.d.ts`, cowork-bridge, Chrome ×2, VSCode), equality assertions, i18n keys, `chat-ui` **major** + `cowork-bridge` lockstep | **owner GO** + Chrome/VSCode lane confirmation | yes, but gated |
+| **L-C-shell** | **Incremental shell handover** (D1c, owner-ratified): the package owns the tab bar + list; the app's 1014-line `renderShell` takeover is dismantled header-first into named slots, one shippable slice per commit | L-A, L-B | **yes** |
+| **L-A′** | The **atomic breaking release** (D1/D1a/D1b): one union source, all 6 declaration/usage sites migrated (package, `.d.ts`, cowork-bridge, Chrome ×2, VSCode), equality assertions, i18n keys, `chat-ui` **major** + `cowork-bridge` lockstep — **after** L-C-shell so the rename is visible | owner GO ✅ ; Chrome/VSCode lane confirmation | yes |
 | **L-B** | `AgentsList` component: item row (icon/name/elapsed/connection/workspace), spinner, pending tag + excerpt card, theme-generator extension (D4), expansion of an agent into its sessions (D3/§2) | L-A | **yes** (fixture feed) |
 | **L-C** | Host wiring in `ui/`: the **shell-boundary decision** (D1c) + sessions adapter + **jobs projection with actions preserved** (D5) + per-tab view state & transition table (D13) | L-A, L-B | **yes** |
 | **L-D** | Scope menu (R10) — rendered **disabled with reason** until the api endpoint exists (D7) | L-C | partially |
@@ -197,7 +204,7 @@ L-A → L-C are self-contained and are the ones that make the surface real. L-E/
 
 ## 7. Open forks — for the owner (batched)
 
-**O1 — Does a pending question outrank a running item?** R9 lists "running at the top" and R8 says a pending question gets a special tag, but not whether it re-sorts. *Recommendation: yes — an item blocked on you is more urgent than one that is working. It would sit above the running ones.*
+**O1 — CLOSED 2026-07-29: yes, a pending question outranks a running item.** Folded into D3 (`awaitingInputFirst = true`).
 
 **O2 — Perennial-agent history: one continuous thread or a list of sessions?** R3 leaves it open. *Recommendation: the agent row expands into its sessions (newest first) and its "accumulated history" is a virtual continuous view across them — no data migration, no loss of session boundaries.*
 
