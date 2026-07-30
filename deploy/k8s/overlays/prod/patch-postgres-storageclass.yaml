@@ -1,0 +1,35 @@
+# Prod runs on OVH since 2026-07-28, exactly like preprod. Its live StatefulSet
+# was created with `block-standard` (cinder.csi.openstack.org), and
+# `volumeClaimTemplates` is immutable, so the base's provider-neutral template
+# (no storageClassName, #471) can never converge against it: kubectl's three-way
+# merge computes the update half against the LIVE object, so an atomic list that
+# differs is always sent, and always rejected. Pinning the live class here is
+# what the base's own comment prescribes -- "a tier that needs a specific class
+# patches it in its own overlay" -- and it converges WITHOUT destroying the volume.
+#
+# This mirrors overlays/preprod/patch-postgres-storageclass.yaml (#474), which
+# turned deploy-preprod green. The live prod class was measured by claude:poc-k8s
+# on ns `sentropic`: block-standard / cinder.csi.openstack.org. The headless
+# Service half of the blocker was already fixed cluster-side (clusterIP
+# 10.3.83.73 -> None, endpoints unchanged, zero pod restart); this patch is the
+# remaining repo-side half.
+#
+# Why it matters beyond deployment: while the prod overlay does not converge, the
+# `pgbackup` CronJob is never created -- prod currently has NO working scheduled
+# backup on either cluster. This patch is what lets that CronJob exist. It still
+# needs the `sentropic-pgbackup` Secret (S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET,
+# S3_REGION, S3_ENDPOINT), which exists on neither cluster and is owner-blocked.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: block-standard
