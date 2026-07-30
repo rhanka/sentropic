@@ -355,11 +355,17 @@
     "prepack": "node scripts/verify-publish-artifacts.mjs"
   },
   "peerDependencies": {
+    "@sentropic/design-system-svelte": "^0.34.0",
     "@lucide/svelte": "^0.562.0",
     "svelte": "^5.0.0",
     "svelte-streamdown": "^3.0.1"
   },
   "devDependencies": {
     "typescript": "5.4.5"
+  },
+  "peerDependenciesMeta": {
+    "@sentropic/design-system-svelte": {
+      "optional": true
+    }
   }
 }
