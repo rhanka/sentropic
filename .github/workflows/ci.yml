@@ -145,6 +145,13 @@ jobs:
       cli_publish: ${{ steps.filter.outputs.cli_publish }}
     steps:
       - uses: actions/checkout@v6
+      # Enforces the "Keep `api` and `ui` in sync with API_VERSION / UI_VERSION"
+      # note below. That invariant was a comment, so nothing caught a drift: a
+      # path feeding the content-sha but missing from the filter skips publish
+      # while moving the deployed tag. Runs in `changes` (always executed, already
+      # checked out) so it costs no extra runner.
+      - name: Assert change-filters cover the image content-hash inputs
+        run: make check-ci-version-filters
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -155,6 +162,10 @@ jobs:
               - 'docker-compose.test.yml'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
+            # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
+            # in the Makefile. Those shas are the immutable image tags that publish-{api,ui}-image
+            # push and that deploy-preprod pins. A path that feeds the sha but is missing here
+            # bumps the pinned tag without ever building it -> ImagePullBackOff on preprod.
             api:
               - 'api/**'
               - 'apps/auth-idp/**'
@@ -166,8 +177,12 @@ jobs:
               - 'packages/chat-core/**'
               - 'packages/events/**'
               - 'packages/contracts/**'
+              - 'packages/comments/**'
             ui:
               - 'ui/**'
+              - 'packages/chat-ui/**'
+              - 'packages/cowork-desktop/**'
+              - 'packages/cowork-bridge/**'
             llm_mesh:
               - 'Makefile'
               - 'package.json'
@@ -1756,6 +1771,20 @@ jobs:
           fi
           printf '%s' "${KUBE_CONFIG_DATA_PREPROD}" | base64 -d > kubeconfig-preprod.yaml
           chmod 600 kubeconfig-preprod.yaml
+      - name: Assert both images exist at the registry before deploy (fail loud, never ImagePullBackOff)
+        env:
+          DOCKER_USERNAME: nologin
+          DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+        run: |
+          set -eu
+          # k8s-deploy-preprod (next step) pins the immutable content-hash tags
+          # sentropic-api:$(API_VERSION) + sentropic-ui:$(UI_VERSION) into overlays/preprod.
+          # If either tag was never pushed (publish skipped/failed, or a tag mismatch), a
+          # kubectl apply would leave preprod in ImagePullBackOff and the cluster is the
+          # first to notice. This is a control that PREVENTS: assert both manifests exist
+          # in the registry first (docker manifest inspect via check-{api,ui}-image) and
+          # fail this job with a clear error, rather than deploying an unverified reference.
+          make check-api-image check-ui-image
       - name: Deploy to the sentropic-preprod namespace (immutable image pin)
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-preprod.yaml

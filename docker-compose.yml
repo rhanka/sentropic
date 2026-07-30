@@ -9,6 +9,12 @@ services:
     environment:
       - NODE_ENV=${TARGET:-development}
       - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
+      # At-rest encryption seed for stored secrets (BYOK connections, drive tokens).
+      # MUST default to empty: the api falls back to a literal seed when this is
+      # unset OR empty, and any non-empty value here would derive a DIFFERENT
+      # sha256 key, making every secret already sealed with the literal
+      # undecryptable. Setting a real value is a data migration, not a config edit.
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       # GCP (Gemini-on-GCP / Model Garden) — native passthrough like GEMINI_API_KEY.

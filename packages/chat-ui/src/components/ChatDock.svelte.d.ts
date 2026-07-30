@@ -1,6 +1,7 @@
 import type { Component, Snippet } from 'svelte';
 import type { ChatWidgetDisplayMode } from '../stores/chatWidgetLayout.js';
 import type { ChatWidgetHostMode } from '../state/chatWidgetShell.js';
+import type { ChatPlacementMenu } from '../state/chatPlacementMenu.js';
 
 export type ChatDockProps = {
   /** Current display mode (docked | floating). Host should persist changes via onDisplayModeChange. */
@@ -16,8 +17,24 @@ export type ChatDockProps = {
    * Set to true when a popover menu must extend outside the dialog bounds.
    */
   contentOverflowVisible?: boolean;
+  /** Inline style string for the outer container div. */
+  containerStyle?: string;
+  /** Override the dialog element id. */
+  dialogId?: string;
+  /** aria-label for the dialog element. */
+  dialogAriaLabel?: string;
   /** Whether the browser context is available (guards localStorage/window access). */
   isBrowser?: boolean;
+  /**
+   * Optional headless placement menu (surfaces L1c-menu). It drives the dialog
+   * container's placement ONLY where it can legitimately own it — see
+   * `canChatPlacementMenuOwnPlacement`: a sidepanel host, a Chrome extension
+   * overlay and a mobile viewport all force their own mode and ignore the menu.
+   * Undefined (default) = zero change. ChatDock renders NO trigger/popup UI
+   * for this menu — mount ChatPlacementMenuButton separately (e.g. in the
+   * host's own header toolbar) driven by the same menu instance.
+   */
+  placementMenu?: ChatPlacementMenu;
   /**
    * Renders the floating bubble trigger button.
    * Receives { toggle: () => void; isOpen: boolean }.
@@ -53,7 +70,11 @@ export type ChatDockProps = {
   bubbleButtonEl?: HTMLButtonElement | null;
   /** Bindable: current open state. */
   isOpen?: boolean;
-  /** Bindable: true when effectiveMode === 'docked'. */
+  /**
+   * Bindable: true when the dock renders as a side panel. Derived from the
+   * effective placement when a menu owns it (a drawer placement is docked),
+   * otherwise from the legacy `effectiveMode === 'docked'`.
+   */
   isDocked?: boolean;
   /** Bindable: true when the viewport is ≤639px (mobile bottom-sheet mode). */
   isMobileViewportBound?: boolean;
