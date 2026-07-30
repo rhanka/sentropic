@@ -25,8 +25,13 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
+import { preprocessDependencySvelteTypeScript } from './vitest-dep-svelte-ts.js';
+
 export default defineConfig({
   plugins: [
+    // CHAT-AGENTS-BLK1: must run BEFORE the Svelte plugin — dependency .svelte
+    // files ship as TypeScript source and the plugin does not preprocess them.
+    preprocessDependencySvelteTypeScript(),
     svelte({
       // Remove the default node_modules exclusion so that
       // @testing-library/svelte-core/src/props.svelte.js is Svelte-compiled.
@@ -60,20 +65,6 @@ export default defineConfig({
     environment: 'jsdom',
     // Only run *.dom.spec.ts files through this config
     include: ['tests/**/*.dom.spec.ts'],
-    // BLOCKED on an upstream design-system defect, not on this package.
-    // @sentropic/design-system-svelte@0.34.73 ships dist/Accordion.svelte with
-    // `function toggle(id, disabled?)`: its build strips the type annotations
-    // AND the lang="ts" marker but leaves the optional-parameter `?`, so the
-    // file claims to be JavaScript while holding TypeScript-only syntax:
-    //   RollupError: Parse failure: Expected ',', got '?'  (Accordion.svelte:50:29)
-    // No consumer-side fix exists — an explicit vitePreprocess() changes
-    // nothing (nothing marks the script as TS), and the package exposes a
-    // single "." export so the broken file cannot be side-stepped by a deep
-    // import. The failure happens at IMPORT time, so describe.skip does not
-    // help either; the file has to leave the glob entirely.
-    // Reported to the design-system lane. Delete this exclusion — nothing
-    // else — once a fixed version is published.
-    exclude: ['tests/agents-list.dom.spec.ts'],
     server: {
       deps: {
         // Inline these packages so vitest processes them through vite transforms

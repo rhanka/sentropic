@@ -105,7 +105,10 @@ describe('AgentsList', () => {
     const child = container.querySelector('[data-agent-entry-id="running"]');
     expect(child?.getAttribute('data-depth')).toBe('1');
     expect(child?.getAttribute('style')).toContain('--agents-list-depth: 1');
-    expect(screen.getByLabelText('label:chat.agents.children')).toHaveTextContent('2');
+    // Plain assertion on purpose: jest-dom matchers (toHaveTextContent) are NOT
+    // registered in this vitest setup and fail as "Invalid Chai property",
+    // which errors instead of asserting.
+    expect(screen.getByLabelText('label:chat.agents.children').textContent).toContain('2');
   });
 
   it('should resolve every component-owned string through labels', () => {
@@ -113,7 +116,9 @@ describe('AgentsList', () => {
     renderList({ labels: resolve, formatRelative: undefined });
 
     expect(screen.getByText('label:chat.agents.kind.agent')).not.toBeNull();
-    expect(screen.getByText('label:chat.agents.activity.unknown')).not.toBeNull();
+    // Every row without a formatter renders this fallback, so the match is not
+    // unique — assert the count rather than a single element.
+    expect(screen.getAllByText('label:chat.agents.activity.unknown').length).toBe(ROWS.length);
     expect(resolve).toHaveBeenCalledWith('chat.agents.list.label');
     expect(resolve).toHaveBeenCalledWith('chat.agents.status.running');
     expect(resolve).toHaveBeenCalledWith('chat.agents.connection.unknown');
