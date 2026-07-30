@@ -19,6 +19,7 @@ export * from './state/chatProjection.js';
 export * from './state/chatWidgetShell.js';
 export * from './state/agentsEntry.js';
 export * from './state/agentsSort.js';
+export * from './state/agentsViewMarkers.js';
 export * from './state/streamMessageProjection.js';
 export * from './state/streamMessageSmoothing.js';
 export * from './renderers/registry.js';

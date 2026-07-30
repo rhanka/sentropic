@@ -283,6 +283,16 @@
         "buildAgentsListRows"
       ]
     },
+    "./state/agentsViewMarkers": {
+      "kind": "ts",
+      "file": "dist/state/agentsViewMarkers.js",
+      "exports": [
+        "AgentsViewMarkersConfig",
+        "AgentsViewMarkers",
+        "buildAgentsViewMarkersKey",
+        "createAgentsViewMarkers"
+      ]
+    },
     "./state/streamMessageProjection": {
       "kind": "ts",
       "file": "dist/state/streamMessageProjection.js",
