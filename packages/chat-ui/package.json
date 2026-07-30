@@ -88,6 +88,11 @@
       "svelte": "./src/state/agentsSort.ts",
       "import": "./src/state/agentsSort.ts"
     },
+    "./state/agentsViewMarkers": {
+      "types": "./src/state/agentsViewMarkers.ts",
+      "svelte": "./src/state/agentsViewMarkers.ts",
+      "import": "./src/state/agentsViewMarkers.ts"
+    },
     "./state/streamMessageProjection": {
       "types": "./src/state/streamMessageProjection.ts",
       "svelte": "./src/state/streamMessageProjection.ts",
