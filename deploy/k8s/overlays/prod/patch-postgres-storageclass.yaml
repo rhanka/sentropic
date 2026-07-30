@@ -14,11 +14,23 @@
 # 10.3.83.73 -> None, endpoints unchanged, zero pod restart); this patch is the
 # remaining repo-side half.
 #
-# Why it matters beyond deployment: while the prod overlay does not converge, the
-# `pgbackup` CronJob is never created -- prod currently has NO working scheduled
-# backup on either cluster. This patch is what lets that CronJob exist. It still
-# needs the `sentropic-pgbackup` Secret (S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET,
-# S3_REGION, S3_ENDPOINT), which exists on neither cluster and is owner-blocked.
+# Why it matters beyond deployment: prod has NO CronJob `pgbackup` at all (measured
+# by poc-k8s on ns `sentropic`), so it has no working scheduled backup. The prod
+# overlay not converging since the OVH move is the reason it was never applied
+# there. Note the causal chain is NOT "a rejected StatefulSet blocks the CronJob":
+# `kubectl apply` is not transactional, so a sibling object can still be applied.
+# Once the overlay is applied successfully, the CronJob exists; it then needs the
+# `sentropic-pgbackup` Secret, which `make k8s-bundle-secret K8S_ENV_FILE=.env.prod`
+# already provisions correctly -- `.env.prod` carries the five S3_* keys.
+#
+# RESIDUAL RISK -- the server-side dry-run in Lot 2 is MANDATORY, not a formality.
+# `volumeClaimTemplates` has no patch merge key, so this strategic merge REPLACES
+# the whole list. It therefore asserts three values at once: storageClassName,
+# accessModes and the 1Gi request. If the LIVE prod template differs on ANY of the
+# three -- e.g. the volume was recreated larger during the OVH move -- the apply is
+# still rejected with the same "forbidden" error and this patch is a no-op. Confirm
+# the live template with `get sts postgres -o jsonpath='{.spec.volumeClaimTemplates}'`
+# BEFORE relying on it.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
