@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { env } from '../config/env';
+import { env, requiresOAuthProductionSecrets } from '../config/env';
 import { decryptSecretOrNull } from './secret-crypto';
 import { settingsService } from './settings';
 
@@ -19,6 +19,8 @@ export const GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY =
 
 const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+const GOOGLE_REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
+const REVOKE_TIMEOUT_MS = 5_000;
 const GOOGLE_USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo';
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -223,7 +225,42 @@ export const resolveGoogleDriveOAuthConfig = async (
   };
 };
 
-const stateSecret = (): string => env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+/**
+ * HMAC key sealing the Drive OAuth `state`.
+ *
+ * This was `env.JWT_SECRET || '<public literal>'`. Deployed containers do not receive `JWT_SECRET`, so
+ * production has been sealing its Drive authorization state with a constant that is readable in a
+ * PUBLIC repository — the integrity of the state parameter rested on a value anyone can look up.
+ *
+ * Two changes:
+ *  - `OAUTH_SIGNING_KEK` takes precedence, so provisioning `JWT_SECRET` later cannot silently move
+ *    this sealer onto the signing key.
+ *    NOTE, and do not misread this as parity: the sibling sealer `resolveOAuthStateSecret` in
+ *    routes/auth/oauth.ts is currently `JWT_SECRET ?? OAUTH_SIGNING_KEK` — the OPPOSITE order, and
+ *    `??` rather than `||`. So while both vars are set the two sealers use DIFFERENT keys. Aligning
+ *    them belongs to the branch that touches that file; it is deliberately not done here.
+ *  - In production the literal fallback is REFUSED rather than used, because sealing with a public
+ *    constant is indistinguishable from not sealing at all. This is a PER-REQUEST refusal, not a
+ *    boot-time one: nothing runs at module scope, so a misconfigured pod starts healthy and the two
+ *    Drive OAuth endpoints return 503/400. Fail-closed, but it presents as a Drive outage.
+ *
+ * Residual hole, stated rather than papered over: `requiresOAuthProductionSecrets` is switched OFF
+ * by `isE2eProductionImageRuntime` (NODE_ENV=production AND DISABLE_RATE_LIMIT='true' AND the e2e
+ * admin address). In that configuration this still seals with the public literal.
+ *
+ * `||` (not `??`) is deliberate: the secret bundle emits present-but-EMPTY values, and an empty string
+ * must fall through to the next candidate instead of becoming the key.
+ */
+const stateSecret = (): string => {
+  const secret = env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
+  if (secret) return secret;
+  if (requiresOAuthProductionSecrets()) {
+    throw new Error(
+      'OAUTH_SIGNING_KEK or JWT_SECRET is required to seal Google Drive OAuth state in production.',
+    );
+  }
+  return 'dev-secret-key-change-in-production-please';
+};
 
 const encodeBase64Url = (value: string): string => Buffer.from(value, 'utf8').toString('base64url');
 
@@ -499,4 +536,61 @@ export const appendGoogleDriveOAuthResultToReturnPath = (
   const baseUrl = normalizeOptionalText(options.baseUrl);
   if (!baseUrl) return relativePath;
   return new URL(relativePath, trimTrailingSlash(baseUrl)).toString();
+};
+
+/**
+ * Ask Google to REVOKE a grant upstream.
+ *
+ * Deleting our stored copy of a token is not revocation: the grant stays live at Google, so a copy
+ * that leaked elsewhere keeps working. That gap is why "disconnect" could not contain an exposure —
+ * we forgot the token, the attacker did not.
+ *
+ * Revoking a REFRESH token revokes the whole grant (Google invalidates the refresh token and its
+ * derived access tokens); revoking an access token alone only kills that one token. So pass the
+ * refresh token when there is one.
+ *
+ * Best-effort BY DESIGN: the caller has been asked to disconnect, and must still forget the token
+ * locally even if Google is unreachable. Returning a result rather than throwing lets the caller
+ * record what actually happened instead of assuming success — "we tried" is not "it is revoked".
+ */
+export const revokeGoogleOAuthToken = async (input: {
+  token: string;
+  fetchImpl?: FetchImpl;
+}): Promise<{ revoked: boolean; status: number | null; error: string | null }> => {
+  const token = (input.token || '').trim();
+  if (!token) return { revoked: false, status: null, error: 'no token to revoke' };
+
+  const fetcher = input.fetchImpl ?? fetch;
+  try {
+    const response = await fetcher(GOOGLE_REVOKE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }),
+      // Bounded on purpose. Without it the ceiling is undici's default (~300s), which is not a
+      // choice this codebase made. Blackholed egress — dropped rather than refused — would
+      // otherwise hold the request open for minutes.
+      signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
+    });
+
+    // Google answers 200 on success. A 400 with `invalid_token` means it is ALREADY unusable —
+    // which is the outcome we wanted, so it counts as revoked rather than as a failure.
+    if (response.ok) return { revoked: true, status: response.status, error: null };
+
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const code = normalizeOptionalText(payload.error);
+    if (response.status === 400 && code === 'invalid_token') {
+      return { revoked: true, status: response.status, error: null };
+    }
+    return {
+      revoked: false,
+      status: response.status,
+      error: normalizeOptionalText(payload.error_description) || code || 'Google token revocation failed.',
+    };
+  } catch (error) {
+    return {
+      revoked: false,
+      status: null,
+      error: error instanceof Error ? error.message : 'Google token revocation failed.',
+    };
+  }
 };
