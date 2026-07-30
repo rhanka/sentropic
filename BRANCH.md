@@ -44,6 +44,8 @@
 - `attention` — **a stale `BRANCH.md` from the infra secret-key lane is committed on `main`** (its "Lot N — Handover" is still unchecked). This branch replaces it per the one-BRANCH.md-per-branch convention, and the convention deletes `BRANCH.md` before merge — which would also remove that residue from `main`. Flagged so it is a decision, not an accident.
 - `attention` — arbitration requested from conductor + architect (owner instruction, 2026-07-30): (1) who edits the Chrome/VSCode surfaces for the atomic breaking release, (2) the egress boundary for foreign CLI transcripts. Envelopes deposited and verified on disk; both arbiters were dormant at send time.
 
+- `blocked` — `CHAT-AGENTS-BLK1` — **the design system cannot be compiled by any Svelte-aware bundler at `@sentropic/design-system-svelte@0.34.73`.** Its published `dist/Accordion.svelte` contains `function toggle(id, disabled?)`: the build strips the type annotations AND the `lang="ts"` marker but leaves the optional-parameter `?`, producing a file that declares itself JavaScript while holding TypeScript-only syntax. Evidence: `RollupError: Parse failure: Expected ',', got '?'` at `dist/Accordion.svelte:50:29`. The DS source is correct (`function toggle(id: string, disabled?: boolean)`), so this is a publish-pipeline defect, not a source one. No consumer-side remedy exists: an explicit `vitePreprocess()` changes nothing (nothing marks the script as TS), the package exposes a single `.` export so the broken file cannot be avoided by a deep import, and the failure occurs at IMPORT time so `describe.skip` does not help. The suite is therefore excluded by one line in `vitest.dom.config.ts`; delete that line — nothing else — once a fixed version ships. Reported to the design-system lane.
+
 ## AI Flaky tests
 - Not applicable: no AI-backed test is touched.
 
@@ -79,10 +81,10 @@
   - [x] Declare `CHAT-AGENTS-EX1` and add the DS to the DOM-test sandbox.
   - [x] Lot gate: 189 pre-existing DOM tests still green with the DS installed.
 
-- [ ] **Lot 5 — `AgentsList` component**
-  - [ ] Build on `SelectableList`/`SelectableRow`/`StatusDot`/`Tag`/`Avatar`/`OverflowMenu`.
-  - [ ] Own export subpath so hosts that never mount it never need the DS.
-  - [ ] Lot gate: DOM/ARIA tests — listbox roles, status tone per state, pending-question tag, depth indentation.
+- [x] **Lot 5 — `AgentsList` component** (delegated to Codex `gpt-5.6-terra` xhigh)
+  - [x] Built on `SelectableList`/`SelectableRow`/`StatusDot`/`Tag`/`Badge`/`Avatar`/`OverflowMenu`/`EmptyState` — no hand-written equivalent, no ad-hoc colour.
+  - [x] Own export subpath + `.svelte.d.ts`, deliberately NOT re-exported from `src/index.ts` (that entrypoint stays DS-free).
+  - [ ] Lot gate: DOM/ARIA tests written but NOT RUNNING — blocked upstream, see `CHAT-AGENTS-BLK1`.
 
 - [ ] **Lot 6 — Side-preference accessor**
   - [ ] Additive public accessor on the placement menu, unblocking R11's repositionable column.
