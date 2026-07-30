@@ -2924,6 +2924,23 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	S3_AK=$$(get S3_ACCESS_KEY) ; S3_SK=$$(get S3_SECRET_KEY) ; S3_BK=$$(get S3_BUCKET) ; \
 	S3_EP=$$(get S3_ENDPOINT) ; S3_RG=$$(get S3_REGION) ; \
+	: 'Fall back to the object-store keys the .env actually carries. The pgbackup' ; \
+	: 'CronJob consumed S3_* names that exist in NO .env, so the secret was always' ; \
+	: 'created EMPTY -> CreateContainerConfigError, and prod had no working backup' ; \
+	: 'at all. The store is Scaleway Object Storage (s3.fr-par.scw.cloud), which is' ; \
+	: 'independent of the k8s provider and stayed valid across the OVH move. The' ; \
+	: 'bucket is the already-declared PG_BACKUP_BUCKET, distinct from the documents' ; \
+	: 'bucket. Explicit S3_* still wins, so a dedicated write-only credential can be' ; \
+	: 'introduced later without touching this target.' ; \
+	[ -n "$$S3_AK" ] || S3_AK=$$(get DOC_STORAGE_ACCESS_KEY_PROD) ; \
+	[ -n "$$S3_SK" ] || S3_SK=$$(get DOC_STORAGE_SECRET_KEY_PROD) ; \
+	[ -n "$$S3_BK" ] || S3_BK=$$(get PG_BACKUP_BUCKET) ; \
+	[ -n "$$S3_EP" ] || S3_EP=$$(get DOC_STORAGE_ENDPOINT_PROD) ; \
+	[ -n "$$S3_RG" ] || S3_RG=$$(get DOC_STORAGE_REGION_PROD) ; \
+	for v in S3_AK S3_SK S3_BK S3_EP S3_RG ; do \
+	  eval "val=\$$$$v" ; \
+	  [ -n "$$val" ] || { echo "❌ Refusing to create an EMPTY sentropic-pgbackup secret: $$v resolved to nothing. The pgbackup CronJob would fail in CreateContainerConfigError and prod would silently have no backup." >&2 ; exit 1 ; } ; \
+	done ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-pgbackup \
 	  --from-literal=S3_ACCESS_KEY="$$S3_AK" \
 	  --from-literal=S3_SECRET_KEY="$$S3_SK" \
