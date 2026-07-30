@@ -83,6 +83,11 @@
       "svelte": "./src/state/agentsEntry.ts",
       "import": "./src/state/agentsEntry.ts"
     },
+    "./state/agentsSort": {
+      "types": "./src/state/agentsSort.ts",
+      "svelte": "./src/state/agentsSort.ts",
+      "import": "./src/state/agentsSort.ts"
+    },
     "./state/streamMessageProjection": {
       "types": "./src/state/streamMessageProjection.ts",
       "svelte": "./src/state/streamMessageProjection.ts",

@@ -274,6 +274,15 @@
         "aggregateAgentsEntryStatus"
       ]
     },
+    "./state/agentsSort": {
+      "kind": "ts",
+      "file": "dist/state/agentsSort.js",
+      "exports": [
+        "AgentsListRow",
+        "AgentsSortOptions",
+        "buildAgentsListRows"
+      ]
+    },
     "./state/streamMessageProjection": {
       "kind": "ts",
       "file": "dist/state/streamMessageProjection.js",
