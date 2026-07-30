@@ -17,8 +17,15 @@ export type ResponseFormat =
       strict?: boolean;
     };
 
+/**
+ * Reasoning effort ladder, ascending. `max` is the top rung (owner decision
+ * 2026-07-25) — some upstreams expose a tier above `xhigh`; a provider that
+ * does not support it should clamp to its own maximum rather than fail.
+ */
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface ReasoningOptions {
-  effort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  effort?: ReasoningEffort;
   summary?: 'auto' | 'concise' | 'detailed';
 }
 

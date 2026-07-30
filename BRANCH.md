@@ -1,144 +1,64 @@
-# Fix: trusted-proxy client IP + auth rate limiters on the standalone IdP
+# Fix: pin the live OVH storage class in the prod overlay
 
 ## Objective
-Close two live security defects found while chasing the XFF/trusted-proxy prerequisite named at
-`spec/SPEC_EVOL_QUOTA_LEDGER.md:11,42`:
-1. All seven auth rate limiters keyed on a RAW `X-Forwarded-For` read while `ui/nginx/default.conf`
-   never set that header — so the key was caller-controlled and every limiter was bypassable.
-2. The standalone IdP (`auth.sent-tech.ca`, public, live) had NO rate limiting at all, and a comment
-   asserted the opposite.
-Both were confirmed by two independent adversarial reviews (Opus 4.8 xhigh + Codex 5.6-terra xhigh),
-which BOTH returned DO-NOT-SHIP on the first cut of this branch; this is the reworked version.
+- [ ] Make `overlays/prod` converge. It is blocked exactly as preprod was: the live prod StatefulSet carries `block-standard` while the base template (post-#471) carries none, and `volumeClaimTemplates` is immutable. Mirrors #474, which turned `deploy-preprod` green.
+- [ ] Unblock the consequence that matters more than the deploy: while the prod overlay does not converge, the `pgbackup` CronJob is never created, so **prod has no working scheduled backup on either cluster**.
 
 ## Scope / Guardrails
-- Security fix only. No schema, no migration, no product feature change.
-- Make-only workflow; `ENV=<env>` last. Tests on `ENV=test-xff`, never on root `dev`.
-- All new text in English.
-- Deploy-side values (hop counts / trusted CIDRs) are NOT guessed here — see `BR-XFF-N1`.
+- [ ] Two files in `deploy/k8s/overlays/prod/`. No base change, no app code, no Makefile, no CI.
+- [ ] Copies `overlays/preprod/patch-postgres-storageclass.yaml` line for line, same `block-standard` value.
+- [ ] Repo-side only. No cluster action from this branch, and no `make k8s-*` with a `KUBECONFIG` override.
+- [ ] Merging cannot deploy PROD: there is no `deploy-prod` job in `ci.yml` (verified) — prod deploys are manual. It does trigger CI and `deploy-preprod` on the main push, but the rendered preprod overlay is BYTE-IDENTICAL to main (verified by diff), so that job is inert here.
+- [ ] All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/utils/client-ip.ts` (new — trusted-proxy client IP resolver)
-  - `api/src/middleware/auth-rate-limiters.ts` (new — limiters shared by both apps)
-  - `api/src/app.ts` (consume the shared limiters)
-  - `api/src/config/env.ts` (`TRUSTED_PROXY_CIDRS`, `TRUSTED_PROXY_HOPS`)
-  - `apps/auth-idp/idp-app.ts` (apply the limiters; correct the false comment)
-  - `ui/nginx/default.conf` (set `X-Real-IP` / `X-Forwarded-For` / `X-Forwarded-Proto`)
-  - `api/tests/unit/client-ip.test.ts` (new)
   - `BRANCH.md`
+  - `deploy/k8s/overlays/prod/patch-postgres-storageclass.yaml`
+  - `deploy/k8s/overlays/prod/kustomization.yaml`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/**`
-  - `api/drizzle/**`, `api/src/db/**`, `ui/src/**`, `packages/**`, `spec/**`, `PLAN.md`
-  - `deploy/**` — see `BR-XFF-N1`; the hop/CIDR values are not mine to invent
-- **Conditional Paths (allowed only with explicit exception)**: none.
-- **Exception process**: declare `BR-XFF-EXn` in `## Feedback Loop` first.
+  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
+  - `deploy/k8s/base/**`, `deploy/k8s/overlays/preprod/**`
+  - `api/**`, `ui/**`, `packages/**`, `.github/workflows/**`
+- **Conditional Paths**: none. No exception needed.
 
 ## Feedback Loop
-- `BR-XFF-N1` (`blocked`, deploy-side): `TRUSTED_PROXY_HOPS` appears NOWHERE in `deploy/` (verified),
-  so production would inherit the code default. The two public paths have DIFFERENT chains —
-  `sentropic.sent-tech.ca` = Traefik → ui/nginx → api, `auth.sent-tech.ca` = Traefik → pod — so a single
-  implicit default is wrong for one of them. Opus showed that a wrong-low hop count returns the Traefik
-  pod IP for EVERY client, collapsing all limiters into one bucket (`authSessionRateLimiter` is 30/min
-  and fires on every page load → cluster-wide 429s). **This branch must NOT be deployed until the real
-  topology is supplied.** Asked to `claude:poc-k8s` (envelope `msg-xff-topology-20260725-01`): exact
-  append behaviour per host, trusted proxy CIDRs, and whether the SCW LoadBalancer preserves client IP.
-  Owner routed this to the k8s lane on 2026-07-25.
-- `BR-XFF-N2` (`attention`): both reviewers converged that hop-counting ALONE is unsafe — it holds only
-  if every counted proxy appends exactly one entry; a non-appending proxy plus an attacker-padded header
-  makes an over-high count select forged data. Hence `TRUSTED_PROXY_CIDRS` (peer-trust mode) is the
-  PREFERRED path and hop-counting is the documented fallback. Once the k8s lane supplies CIDRs, prefer
-  mode 1 and pin the values explicitly per overlay rather than relying on any default.
-- `BR-XFF-N3` (`attention`, deferred, NOT fixed here): seven call sites still write a raw
-  `X-Forwarded-For` into `user_sessions.ip_address` — `api/src/routes/auth/{login.ts:87, register.ts:366,
-  federation.ts:65, magic-link.ts:155, magic-link.ts:203, session.ts:123, device.ts:87}`. After this
-  branch the limiter keys on the true IP while the audit row still records a forgeable one, which both
-  reviewers flagged. Each is a one-line swap to `resolveClientIp(c)`; deferred to keep this commit's
-  blast radius to the security-critical path.
-- `BR-XFF-N4` (`attention`, pre-existing, explains the miss): `api/src/app.ts` treats ANY non-empty
-  `DISABLE_RATE_LIMIT` as "disabled", while `api/tests/limit/rate-limiting.test.ts` treats `'false'`/`'0'`
-  as "enabled". The only end-to-end rate-limit assertions in the repo therefore never execute
-  meaningfully — plausibly why this whole defect class went unnoticed. Not fixed here; deserves its own
-  branch.
-- `BR-XFF-N5` (`attention`, environment, NOT caused by this branch): `make install-internal-packages`
-  fails with an npm cache permission error inside the container, which removes `api/node_modules/@types/node`
-  and then breaks `build-llm-mesh` with TS2688. Codex hit the SAME TS2688 independently while reviewing.
-  Consequence for this branch: the extended vitest suite could not be re-run locally after that damage —
-  see `## Checks`.
+- `clarification` — **my earlier root cause was wrong in the detail that decided everything.** I reported that the live cluster carried `scw-bssd`. `claude:poc-k8s` measured it: the live preprod StatefulSet carried `block-standard` (its port had already rewritten the class on 2026-07-28), and the live prod one carries `block-standard` too. The divergence was REPO-vs-LIVE, not Scaleway-vs-OVH. Consequence: #471 alone did not unblock preprod — a server-side dry-run against `main` still failed on both the Service and the StatefulSet.
+- `attention` — the destructive runbook I relayed (delete StatefulSet + Service + PVC, then restore from a prod dump) would have destroyed the preprod database for a fix that was insufficient. poc-k8s measured before executing and declined it. The non-destructive remedy is this overlay pin. Do not re-propose the recreation path.
+- `acknowledge` — the headless Service half was already fixed cluster-side by poc-k8s on both namespaces (prod `clusterIP 10.3.83.73 -> None`, endpoints unchanged, zero pod restart, integrity checked before/after). This patch is the remaining repo-side half.
+- `clarification` — **the S3 credentials were never missing.** `.env.prod` (present since 2026-07-25) carries all five `S3_*` keys, and `Makefile:2984-2986` documents prod provisioning as `make k8s-bundle-secret K8S_ENV_FILE=.env.prod`. I had claimed they existed nowhere and opened PR #477 to map them from other names; that PR was a no-op on the documented prod path and is CLOSED. My `find` matched the literal name `.env` and never saw `.env.prod`. No Makefile change is needed for the backup.
+- `attention` — **residual risk gating this patch.** `volumeClaimTemplates` has no patch merge key, so the strategic merge REPLACES the whole list and asserts `storageClassName` + `accessModes` + `1Gi` together. If the live prod template differs on any of the three, the apply is still rejected and this patch is a no-op. The Lot 2 server-side dry-run is mandatory, not a formality.
+- `attention` — **a separate, pre-existing hazard found during review, worth its own branch.** The guard-free `k8s-bundle-secret` applies `sentropic-postgres` and the 38-key `sentropic-api` Secret before validating anything. The root `.env` has `DATABASE_URL`, `OAUTH_SIGNING_KEK`, `POSTGRES_PASSWORD` and `SCW_TEM_SECRET_KEY` EMPTY. An operator running the target against prod without `K8S_ENV_FILE=.env.prod` blanks the api Secret — a blank `OAUTH_SIGNING_KEK` bricks every stored `enc:v1:` envelope — and resets the postgres password to `app`. Needs a precondition guard over the full required key set, before the first `kubectl apply`. Not in this branch's scope.
+- `attention` — the `pgbackup` object key carries no tier prefix (`s3://$S3_BUCKET/pg/<ts>.sql.gz`) and both tiers share `schedule: 15 2 * * *`. If both tiers ever point at the same bucket, a preprod dump becomes indistinguishable from a prod one and could be restored into prod. Follow-up scope.
 
 ## AI Flaky tests
-- No AI generation surface touched. N/A.
+- Not applicable: Kubernetes manifests only.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single final test cycle)
+- [x] **Mono-branch + cherry-pick**
 - [ ] **Multi-branch**
-- Rationale: one orthogonal security fix across two apps that must move together.
+- Rationale: two files, one concern, mirrors an already-merged and already-proven patch.
 
 ## UAT Management (in orchestration context)
-- No UI surface. UAT = review of the diff + CI, then a deploy-side verification that a real request
-  yields ONE bucket per real client (not one global bucket). The deploy verification cannot happen
-  before `BR-XFF-N1` is answered.
+- **Mono-branch**: no UI change. Acceptance = `claude:poc-k8s` runs a server-side dry-run of `overlays/prod` against ns `sentropic` and gets 0 error, then the manual prod deploy converges and `cronjob.batch/pgbackup` reports `created`.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Establish the defects**
-  - [x] Verify the seven limiters read `X-Forwarded-For` raw (`api/src/app.ts`, pre-fix).
-  - [x] Verify `ui/nginx/default.conf` never set it.
-  - [x] Verify `rateLimiter` exists ONLY in `api/src/app.ts`, and that `apps/auth-idp/idp-app.ts:69`
-        builds its own `new Hono()` and mounts `authRouter` at `:152` — so the IdP had none.
-  - [x] Verify `TRUSTED_PROXY_HOPS` is absent from `deploy/`.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read poc-k8s's two measurement reports rather than re-deriving.
+  - [x] Confirm #474 is on `main` and read its patch verbatim.
+  - [x] Confirm `overlays/prod` has no `patches:` block at all.
+  - [x] Confirm no `deploy-prod` job exists in `ci.yml`, so merging is inert.
+  - [x] Create isolated worktree `tmp/infra-prod-storageclass`.
 
-- [x] **Lot 1 — Client IP from trusted proxies**
-  - [x] `api/src/utils/client-ip.ts`: peer-trust CIDR mode (preferred) + hop-count fallback,
-        IPv4-mapped-IPv6 normalization, socket-peer fallback wrapped so it cannot throw.
-  - [x] `api/src/config/env.ts`: `TRUSTED_PROXY_CIDRS` + `TRUSTED_PROXY_HOPS`, both documented with
-        the failure mode of setting them wrong.
-  - [x] `ui/nginx/default.conf`: set `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`.
-  - [x] `api/tests/unit/client-ip.test.ts` (18 cases).
+- [x] **Lot 1 — The prod pin**
+  - [x] Add `deploy/k8s/overlays/prod/patch-postgres-storageclass.yaml`, mirroring preprod with `block-standard`.
+  - [x] Reference it from a `patches:` block in the prod kustomization.
+  - [x] Document in-file the three-way-merge reason and the backup consequence.
+  - [x] Lot gate:
+    - [x] `kubectl kustomize deploy/k8s/overlays/prod` renders without error.
+    - [x] The rendered prod StatefulSet carries `storageClassName: block-standard`.
+    - [x] `kubectl kustomize deploy/k8s/overlays/preprod` still renders (no cross-tier regression).
 
-- [x] **Lot 2 — Rate limiters shared with the IdP**
-  - [x] `api/src/middleware/auth-rate-limiters.ts`: the seven limiters + `applyAuthRateLimiters`.
-  - [x] `api/src/app.ts` consumes the shared module (no behaviour change on the product API).
-  - [x] `apps/auth-idp/idp-app.ts` applies them; the false comment is replaced by the real explanation.
-
-- [ ] **Lot 3 — Deploy-side + close**
-  - [ ] `BR-XFF-N1` answered by the k8s lane; pin the values explicitly per overlay.
-  - [ ] CI green.
-  - [ ] Deploy-side verification that a real client maps to its own bucket.
-
-## Checks (results)
-- `make test-api SCOPE=tests/unit/client-ip.test.ts ENV=test-xff` — **9/9 PASS** on the Lot-1 suite,
-  including the non-vacuous property test: four different forged `X-Forwarded-For` prefixes from the same
-  real client yield exactly ONE bucket (a bypass would yield four).
-- The suite was extended to 18 cases in Lot 2 (CIDR mode, direct-peer rejection, throwing conn-info,
-  IPv6). **That extended run is NOT locally verified**: `BR-XFF-N5` broke the workspace install before it
-  could be re-run, and repair attempts failed the same way. **CI is the gate for the extended suite.**
-- To avoid pushing the hand-written parser unverified, the pure CIDR/IPv6 algorithm was extracted from
-  the REAL source (types stripped, logic untouched) and exercised under node: **19/19 assertions PASS**,
-  covering v4/v6 prefixes, boundaries, cross-family rejection, malformed IPs, out-of-range prefixes and
-  IPv4-mapped normalization.
-- `make typecheck-api` could not complete for the same `BR-XFF-N5` reason. The one error observed before
-  the damage (`apple-provider.ts` TS2305 on `jose`) is NOT from this branch: the container had `jose`
-  5.10.0 while `api/package.json` pins `^6.1.0` — a stale-workspace artifact.
-- `make down ENV=test-xff` — stack removed.
-- **CI (PR #456, run 30172076188)**: `typecheck-lint-api` PASS, `typecheck-lint-ui` PASS,
-  `build-api-image` PASS, `build-ui` PASS, `security-sast-sca` PASS, `security-container` PASS,
-  `smoke-idp-screens` PASS, and **`test-api-unit-integration (unit)` PASS** — which VERIFIES the extended
-  18-case `client-ip` suite that could not be run locally (`BR-XFF-N5`). The first attempt of that job
-  failed in 27s inside `Setup Docker` (`registry-1.docker.io` context deadline exceeded) without ever
-  starting vitest; it passed on rerun.
-- **Remaining CI failures are NOT introduced by this branch — verified, not assumed.** Main's own run
-  `30105439353` (commit `853e4688`) fails on the IDENTICAL job set: the three
-  `test-api-unit-integration (ai, …)` suites plus `test-e2e (group-b, 01 04)`, `(group-c, 03)` and
-  `(group-d, 08)`. The three `ai` suites are on the documented AI-flaky allowlist
-  (`rules/testing.md` — "API: `make test-api-ai`, `api/tests/ai/**`"), and `03-chat` is on the E2E
-  allowlist. **`01`/`04`/`08` are NOT on any allowlist**, so main carries a real unowned regression —
-  observed failure: `e2e/tests/04-documents-ui-actions.spec.ts:73` ("suppression via UI supprime vraiment
-  le document"), failing on the initial run and both retries. That is out of scope here (this branch
-  touches only auth rate limiting and client-IP resolution; document routes are not behind either) but it
-  should be owned by a dedicated branch rather than left silently red.
-
-## Notes
-- Two atomic commits: the client-IP trust fix, then the IdP limiter fix — two distinct defects.
-- `packages/cli/bin/stp.mjs` had its file mode flipped to 755 by a container run; reverted, as it is
-  outside this branch's scope.
-- The IdP and the product API now share ONE limiter module, so the two auth surfaces cannot silently
-  drift apart again — which is how the IdP ended up unprotected in the first place.
+- [ ] **Lot 2 — Handover**
+  - [ ] Ask poc-k8s for a server-side dry-run of `overlays/prod` before any real apply.
+  - [ ] Escalate the five S3 values to the owner — the backup gap outlives this patch.

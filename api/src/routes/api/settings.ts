@@ -5,6 +5,10 @@ import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
 import { createSession, revokeSession } from '../../services/session-manager';
 import {
+  CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
+  settingsService,
+} from '../../services/settings';
+import {
   completeAntigravityEnrollment,
   completeClaudeCodeEnrollment,
   completeCodexEnrollment,
@@ -76,6 +80,10 @@ const antigravityEnrollmentImportSchema = z.object({
 });
 
 const openaiTransportModeSchema = z.object({ mode: z.enum(['codex', 'token']) });
+
+const connectorAccountsMaxPerProviderSchema = z.object({
+  maxPerProvider: z.number().int().min(1),
+});
 
 export const settingsRouter = new Hono();
 
@@ -237,6 +245,26 @@ settingsRouter.get('/provider-connections', async (c) => {
   ]);
   return c.json({ providers, openaiTransportMode, anthropicTransportMode });
 });
+
+settingsRouter.get('/connector-accounts/max-per-provider', async (c) => {
+  return c.json({
+    maxPerProvider: await settingsService.getConnectorAccountsMaxPerProvider(),
+  });
+});
+
+settingsRouter.put(
+  '/connector-accounts/max-per-provider',
+  zValidator('json', connectorAccountsMaxPerProviderSchema),
+  async (c) => {
+    const { maxPerProvider } = c.req.valid('json');
+    await settingsService.set(
+      CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
+      maxPerProvider.toString(),
+      'Maximum connector accounts per provider',
+    );
+    return c.json({ maxPerProvider });
+  },
+);
 
 settingsRouter.post(
   '/provider-connections/openai/mode',

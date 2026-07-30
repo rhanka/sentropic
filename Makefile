@@ -512,6 +512,10 @@ publish-e2e-image: docker-login
 	@echo "▶ Pushing e2e image to registry "
 	@docker push $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)
 
+.PHONY: check-ci-version-filters
+check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every API_VERSION/UI_VERSION hash input
+	@./scripts/check-ci-version-filters.sh
+
 
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
@@ -2759,7 +2763,7 @@ GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: k8s-deploy k8s-deploy-preprod k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
+.PHONY: k8s-deploy k8s-deploy-preprod k8s-db-restore-preprod k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
 k8s-deploy: ## Apply the prod overlay (kustomize) on the poc cluster — ingress is part of the overlay
 	# BR-55a: one kustomize apply (base + overlays/prod). The standalone IdP
@@ -2786,6 +2790,35 @@ k8s-deploy-preprod: ## BR-55c: deploy main->preprod (ns sentropic-preprod) with 
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/api      --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/auth-idp --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) rollout status deploy/ui       --timeout=300s
+
+k8s-db-restore-preprod: ## Seed the preprod DB from a prod dump [BACKUP_FILE=prod-*.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
+	# MANUAL ONLY — never wire this into a push-triggered job. It copies real
+	# production data into the less-protected preprod namespace (owner-requested,
+	# 2026-07-29). Produce the dump with `make db-backup-prod KUBECONFIG=<prod>`,
+	# then run this with the PREPROD kubeconfig. The namespace guard below refuses
+	# to run when K8S_PREPROD_NAMESPACE has been pointed at the prod namespace, so
+	# a copy/paste of the prod kubeconfig cannot silently overwrite production.
+	@test "$(K8S_PREPROD_NAMESPACE)" != "$(K8S_NAMESPACE)" || { echo "❌ Refusing: K8S_PREPROD_NAMESPACE equals the prod namespace ($(K8S_NAMESPACE))"; exit 1; }
+	@if [ -z "$(KUBECONFIG)" ]; then echo "❌ Error: KUBECONFIG must be set (preprod kubeconfig)"; exit 1; fi
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: BACKUP_FILE must be specified (e.g. BACKUP_FILE=prod-2026-07-29T04-00-00.dump)"; \
+		echo "Available backups:"; \
+		ls -1 data/backup/prod-*.dump 2>/dev/null | awk '{print "BACKUP_FILE=" $$1}' || echo "  No prod backups found"; \
+		exit 1; \
+	fi
+	@test -f "data/backup/$(BACKUP_FILE)" || { echo "❌ Error: backup file not found: data/backup/$(BACKUP_FILE)"; exit 1; }
+	@echo "⚠️  WARNING: this REPLACES all data in the $(K8S_PREPROD_NAMESPACE) database with production data."
+	@if [ "$(SKIP_CONFIRM)" != "true" ]; then \
+		read -p "Type 'RESTORE' to confirm: " confirm && [ "$$confirm" = "RESTORE" ] || (echo "❌ Operation cancelled" && exit 1); \
+	fi
+	@set -eu ; \
+	POD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres -o jsonpath='{.items[0].metadata.name}'); \
+	test -n "$$POD" || { echo "❌ Error: no postgres pod found in namespace $(K8S_PREPROD_NAMESPACE)"; exit 1; }; \
+	echo "▶ Restoring data/backup/$(BACKUP_FILE) into $(K8S_PREPROD_NAMESPACE)/$$POD..."; \
+	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
+		pg_restore -h 127.0.0.1 -U app -d app --clean --if-exists --no-owner --no-privileges < "data/backup/$(BACKUP_FILE)"; \
+	echo "✅ Preprod database restored from data/backup/$(BACKUP_FILE)"
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
@@ -2836,6 +2869,7 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	DS_AK=$$(get DOC_STORAGE_ACCESS_KEY) ; DS_SK=$$(get DOC_STORAGE_SECRET_KEY) ; DS_BK=$$(get DOC_STORAGE_BUCKET) ; \
 	DS_EP=$$(get DOC_STORAGE_ENDPOINT) ; DS_RG=$$(get DOC_STORAGE_REGION) ; \
 	SCW_TEM=$$(get SCW_TEM_SECRET_KEY) ; OAUTH_KEK=$$(get OAUTH_SIGNING_KEK) ; \
+	SECRET_ENC_KEY=$$(get SECRET_ENCRYPTION_KEY) ; \
 	GOA_CID=$$(get GOOGLE_OAUTH_CLIENT_ID) ; GOA_CS=$$(get GOOGLE_OAUTH_CLIENT_SECRET) ; \
 	GOA_RU=$$(get GOOGLE_OAUTH_REDIRECT_URI) ; \
 	GHOA_CID=$$(get GITHUB_OAUTH_CLIENT_ID) ; GHOA_CS=$$(get GITHUB_OAUTH_CLIENT_SECRET) ; \
@@ -2868,6 +2902,7 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
 	  --from-literal=SCW_TEM_SECRET_KEY="$$SCW_TEM" \
 	  --from-literal=OAUTH_SIGNING_KEK="$$OAUTH_KEK" \
+	  --from-literal=SECRET_ENCRYPTION_KEY="$$SECRET_ENC_KEY" \
 	  --from-literal=GOOGLE_OAUTH_CLIENT_ID="$$GOA_CID" \
 	  --from-literal=GOOGLE_OAUTH_CLIENT_SECRET="$$GOA_CS" \
 	  --from-literal=GOOGLE_OAUTH_REDIRECT_URI="$$GOA_RU" \
@@ -3185,9 +3220,25 @@ test-mcp-connector-github: ## Run @sentropic/mcp-connector-github tests (BR-72 r
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-connector-github/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
+.PHONY: typecheck-mcp-connector-google
+typecheck-mcp-connector-google: ## Run @sentropic/mcp-connector-google type checks (BR-72 Google read-only benchmark proof)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
+.PHONY: test-mcp-connector-google
+test-mcp-connector-google: ## Run @sentropic/mcp-connector-google tests (BR-72 Google read-only benchmark proof)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-connector-google/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+
 .PHONY: smoke-mcp-connector-github-live
 smoke-mcp-connector-github-live: ## Run the REAL live-network GitHub smoke (BR-72 DEPTH Lot 1, BR72-EX1) — hits https://api.github.com, not hermetic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-github $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-github-live.mjs'
+
+.PHONY: smoke-mcp-connector-google-live
+smoke-mcp-connector-google-live: ## Run the opt-in REAL Google API smoke (BR-72, BR72-EX1) — skips without GOOGLE_OAUTH_ACCESS_TOKEN
+	@docker run --rm -e GOOGLE_OAUTH_ACCESS_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-google-live.mjs'
 
 
 .PHONY: typecheck-mcp-connector-gmail
@@ -3360,5 +3411,3 @@ test-mcp-broker: ## Run @sentropic/mcp-broker tests (BR-72 DEPTH Lot 2 broker pr
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-broker-github.mjs'
-
-

@@ -1,7 +1,10 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import { env } from '../config/env';
 import { db } from '../db/client';
 import { settings } from '../db/schema';
 import { normalizeLegacyModelSelection } from './model-selection-legacy';
+
+export const CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING = 'connector_accounts_max_per_provider';
 
 export interface Setting {
   key: string;
@@ -22,6 +25,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   default_provider_id: 'openai',
   default_model: 'gpt-4.1-nano',
   queue_processing_interval: '1000',
+  [CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING]: String(env.CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER),
 };
 
 export class SettingsService {
@@ -132,6 +136,13 @@ export class SettingsService {
   ): Promise<boolean> {
     const value = await this.get(key, options);
     return value ? value.toLowerCase() === 'true' : defaultValue;
+  }
+
+  async getConnectorAccountsMaxPerProvider(): Promise<number> {
+    return this.getNumber(
+      CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
+      env.CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER,
+    );
   }
 
   /**

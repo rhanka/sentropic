@@ -29,12 +29,15 @@
     type ChatWidgetDisplayMode,
   } from '../stores/chatWidgetLayout.js';
   import {
+    canChatPlacementMenuOwnPlacement,
     computeChatWidgetDockWidthCss,
     resolveEffectiveChatWidgetMode,
     type ChatWidgetHostMode,
   } from '../state/chatWidgetShell.js';
   import { displayModeToPlacement } from '../state/chatPlacementMigration.js';
   import { placementContainerClasses } from '../state/chatPlacementClasses.js';
+  import type { ChatPlacement } from '../state/chatPlacement.js';
+  import type { ChatPlacementMenu } from '../state/chatPlacementMenu.js';
 
   // ---------------------------------------------------------------------------
   // Props
@@ -92,6 +95,22 @@
 
   /** Whether the browser context is available (guards localStorage/window). */
   export let isBrowser = false;
+
+  /**
+   * Optional headless placement menu (surfaces L1c-menu). It drives the active
+   * placement ONLY where it may legitimately own it — see
+   * `canChatPlacementMenuOwnPlacement`: a sidepanel host, a Chrome extension
+   * overlay and a mobile viewport each force their own mode and ignore it.
+   * Everywhere else the legacy displayMode->placement bridge applies. When
+   * undefined (default), behavior is EXACTLY today's: zero change.
+   *
+   * ChatDock renders NO trigger/popup UI for this menu — that affordance
+   * lives in ChatPlacementMenuButton, which the HOST mounts separately
+   * (e.g. in its own header toolbar, alongside a display-mode toggle /
+   * Close button) so it participates in normal in-flow layout instead of
+   * floating as an overlay on top of host chrome.
+   */
+  export let placementMenu: ChatPlacementMenu | undefined = undefined;
 
   // ---------------------------------------------------------------------------
   // Snippets
@@ -171,6 +190,13 @@
   let mobileMqlChangeHandler: ((ev: MediaQueryListEvent) => void) | null = null;
   let resizeHandler: (() => void) | null = null;
 
+  // Placement menu (surfaces L1c-menu) — only touched when `placementMenu`
+  // is provided; otherwise stays null/unused. ChatDock only subscribes to
+  // read the current placement (for container class derivation); the
+  // trigger/popup UI lives in the host-mounted ChatPlacementMenuButton.
+  let menuPlacement: ChatPlacement | null = null;
+  let placementMenuUnsubscribe: (() => void) | null = null;
+
   // ---------------------------------------------------------------------------
   // Derived
   // ---------------------------------------------------------------------------
@@ -184,10 +210,39 @@
     displayMode,
   });
 
-  // Internal dock-mode flag
+
+  // (Re)subscribe whenever the placementMenu prop identity changes. When
+  // undefined, effectivePlacement below falls back to the legacy bridge —
+  // ZERO behavior change from today.
+  $: {
+    placementMenuUnsubscribe?.();
+    placementMenuUnsubscribe = placementMenu
+      ? placementMenu.subscribe((current) => {
+          menuPlacement = current;
+          if (isBrowserReady) publishLayout();
+        })
+      : null;
+    if (!placementMenu) menuPlacement = null;
+  }
+
+  // A menu owns placement only in an ordinary desktop overlay. Hosts and the
+  // mobile viewport remain authoritative, exactly as in the legacy path.
+  $: menuOwnsPlacement = Boolean(placementMenu) && canChatPlacementMenuOwnPlacement({
+    hostMode,
+    isExtensionOverlayHost,
+    isMobileViewport,
+  });
+
+  $: effectivePlacement = menuOwnsPlacement
+    ? menuPlacement ?? displayModeToPlacement(effectiveMode)
+    : displayModeToPlacement(effectiveMode);
+
+  // Keep docking semantics in lockstep with the single ownership decision.
   let _isDocked = false;
-  $: _isDocked = effectiveMode === 'docked';
-  $: effectivePlacement = displayModeToPlacement(effectiveMode);
+  $: _isDocked = menuOwnsPlacement
+    ? effectivePlacement.kind === 'drawer'
+    : effectiveMode === 'docked';
+
   $: containerPlacement = placementContainerClasses(effectivePlacement, {
     dialogClass,
     dockWidthCss,
@@ -197,7 +252,11 @@
   export let isOpen: boolean = false;
   $: isOpen = isVisible;
 
-  /** Bindable: true when effectiveMode === 'docked'. */
+  /**
+   * Bindable: true when the dock renders as a side panel — derived from the
+   * effective placement when a menu owns it (a drawer is docked), otherwise
+   * from the legacy `effectiveMode === 'docked'`.
+   */
   export let isDocked: boolean = false;
   $: isDocked = _isDocked;
 
@@ -228,18 +287,44 @@
   // ---------------------------------------------------------------------------
 
   const publishLayout = () => {
-    const modeNow = resolveEffectiveChatWidgetMode({
-      hostMode,
-      isExtensionOverlayHost,
-      isMobileViewport,
-      displayMode,
-    });
+    // The subscription callback can run before reactive assignments settle;
+    // derive ownership from live inputs before reading the menu value.
+    const menuOwnsPlacementNow = Boolean(placementMenu)
+      && canChatPlacementMenuOwnPlacement({
+        hostMode,
+        isExtensionOverlayHost,
+        isMobileViewport,
+      });
+    const placementNow = menuOwnsPlacementNow
+      ? menuPlacement ?? placementMenu?.current()
+      : undefined;
+    const modeNow = menuOwnsPlacementNow && placementNow
+      ? (placementNow.kind === 'drawer' ? 'docked' : 'floating')
+      : resolveEffectiveChatWidgetMode({
+          hostMode,
+          isExtensionOverlayHost,
+          isMobileViewport,
+          displayMode,
+        });
+    // Only a menu-owned drawer publishes a side. Spread it conditionally so the
+    // legacy payload has no `drawerSide` KEY at all — a present-but-undefined
+    // key still shows up in Object.keys / structural comparisons on the host
+    // side, which would not be the pre-branch shape.
+    const drawerSideNow = menuOwnsPlacementNow && placementNow?.kind === 'drawer'
+      ? placementNow.side
+      : undefined;
     chatWidgetLayout.set({
       mode: modeNow,
       isOpen: isVisible,
       dockWidthCss,
+      ...(drawerSideNow ? { drawerSide: drawerSideNow } : {}),
     });
   };
+
+  // Republish after reactive ownership or forced-mode changes settle.
+  let layoutPublicationKey = '';
+  $: layoutPublicationKey = `${menuOwnsPlacement}:${effectiveMode}`;
+  $: if (isBrowserReady && layoutPublicationKey) publishLayout();
 
   const computeDockWidthCssValue = (): string =>
     computeChatWidgetDockWidthCss({
@@ -451,6 +536,7 @@
     }
     if (resizeHandler) window.removeEventListener('resize', resizeHandler);
     window.removeEventListener('keydown', globalShortcutHandler);
+    placementMenuUnsubscribe?.();
     setBodyScrollLocked(false);
     publishLayout();
   });
