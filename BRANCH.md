@@ -1,64 +1,89 @@
-# Fix: pin the live OVH storage class in the prod overlay
+# Feature: Agents Surface — chat-ui tabs `agents | chats | comments`
 
 ## Objective
-- [ ] Make `overlays/prod` converge. It is blocked exactly as preprod was: the live prod StatefulSet carries `block-standard` while the base template (post-#471) carries none, and `volumeClaimTemplates` is immutable. Mirrors #474, which turned `deploy-preprod` green.
-- [ ] Unblock the consequence that matters more than the deploy: while the prod overlay does not converge, the `pgbackup` CronJob is never created, so **prod has no working scheduled backup on either cluster**.
+- [ ] Sediment the owner's `agents | chats | comments` intention (R1-R15) in `spec/SPEC_EVOL_AGENTS_SURFACE.md`.
+- [ ] Ship the additive half of the surface: entry contract, R9 ordering, last-consultation markers, and a design-system-based list component.
 
 ## Scope / Guardrails
-- [ ] Two files in `deploy/k8s/overlays/prod/`. No base change, no app code, no Makefile, no CI.
-- [ ] Copies `overlays/preprod/patch-postgres-storageclass.yaml` line for line, same `block-standard` value.
-- [ ] Repo-side only. No cluster action from this branch, and no `make k8s-*` with a `KUBECONFIG` override.
-- [ ] Merging cannot deploy PROD: there is no `deploy-prod` job in `ci.yml` (verified) — prod deploys are manual. It does trigger CI and `deploy-preprod` on the main push, but the rendered preprod overlay is BYTE-IDENTICAL to main (verified by diff), so that job is inert here.
+- [ ] Scope limited to `packages/chat-ui/**`, `spec/**`, and the chat-ui Make targets.
+- [ ] Make-only workflow, no direct Docker commands.
+- [ ] Root workspace reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- [ ] Branch development happens in isolated worktree `tmp/chat-agents-surface`.
+- [ ] Test campaigns run on `ENV=test-agents`, never on root `dev`.
+- [ ] In every `make` command, `ENV=<env>` is passed as the last argument.
+- [ ] The breaking tab rename is OUT of this branch: owner GO obtained, but it is an atomic multi-package release scheduled after the shell handover.
 - [ ] All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `packages/chat-ui/src/state/agents*.ts`
+  - `packages/chat-ui/src/components/Agents*.svelte`
+  - `packages/chat-ui/tests/agents-*`
+  - `packages/chat-ui/src/index.ts`
+  - `packages/chat-ui/package.json`
+  - `packages/chat-ui/export-manifest.json`
+  - `spec/SPEC_EVOL_AGENTS_SURFACE.md`
   - `BRANCH.md`
-  - `deploy/k8s/overlays/prod/patch-postgres-storageclass.yaml`
-  - `deploy/k8s/overlays/prod/kustomization.yaml`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
-  - `deploy/k8s/base/**`, `deploy/k8s/overlays/preprod/**`
-  - `api/**`, `ui/**`, `packages/**`, `.github/workflows/**`
-- **Conditional Paths**: none. No exception needed.
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `ui/**`
+  - `api/**`
+  - `packages/cowork-bridge/**`
+  - `plan/NN-BRANCH_*.md`
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `Makefile` — covered by `CHAT-AGENTS-EX1`
+  - `.github/workflows/**`
 
 ## Feedback Loop
-- `clarification` — **my earlier root cause was wrong in the detail that decided everything.** I reported that the live cluster carried `scw-bssd`. `claude:poc-k8s` measured it: the live preprod StatefulSet carried `block-standard` (its port had already rewritten the class on 2026-07-28), and the live prod one carries `block-standard` too. The divergence was REPO-vs-LIVE, not Scaleway-vs-OVH. Consequence: #471 alone did not unblock preprod — a server-side dry-run against `main` still failed on both the Service and the StatefulSet.
-- `attention` — the destructive runbook I relayed (delete StatefulSet + Service + PVC, then restore from a prod dump) would have destroyed the preprod database for a fix that was insufficient. poc-k8s measured before executing and declined it. The non-destructive remedy is this overlay pin. Do not re-propose the recreation path.
-- `acknowledge` — the headless Service half was already fixed cluster-side by poc-k8s on both namespaces (prod `clusterIP 10.3.83.73 -> None`, endpoints unchanged, zero pod restart, integrity checked before/after). This patch is the remaining repo-side half.
-- `clarification` — **the S3 credentials were never missing.** `.env.prod` (present since 2026-07-25) carries all five `S3_*` keys, and `Makefile:2984-2986` documents prod provisioning as `make k8s-bundle-secret K8S_ENV_FILE=.env.prod`. I had claimed they existed nowhere and opened PR #477 to map them from other names; that PR was a no-op on the documented prod path and is CLOSED. My `find` matched the literal name `.env` and never saw `.env.prod`. No Makefile change is needed for the backup.
-- `attention` — **residual risk gating this patch.** `volumeClaimTemplates` has no patch merge key, so the strategic merge REPLACES the whole list and asserts `storageClassName` + `accessModes` + `1Gi` together. If the live prod template differs on any of the three, the apply is still rejected and this patch is a no-op. The Lot 2 server-side dry-run is mandatory, not a formality.
-- `attention` — **a separate, pre-existing hazard found during review, worth its own branch.** The guard-free `k8s-bundle-secret` applies `sentropic-postgres` and the 38-key `sentropic-api` Secret before validating anything. The root `.env` has `DATABASE_URL`, `OAUTH_SIGNING_KEK`, `POSTGRES_PASSWORD` and `SCW_TEM_SECRET_KEY` EMPTY. An operator running the target against prod without `K8S_ENV_FILE=.env.prod` blanks the api Secret — a blank `OAUTH_SIGNING_KEK` bricks every stored `enc:v1:` envelope — and resets the postgres password to `app`. Needs a precondition guard over the full required key set, before the first `kubectl apply`. Not in this branch's scope.
-- `attention` — the `pgbackup` object key carries no tier prefix (`s3://$S3_BUCKET/pg/<ts>.sql.gz`) and both tiers share `schedule: 15 2 * * *`. If both tiers ever point at the same bucket, a preprod dump becomes indistinguishable from a prod one and could be restored into prod. Follow-up scope.
+- `CHAT-AGENTS-EX1` — **Makefile** (default Forbidden Path).
+  - Reason: the owner ratified building the list items on real design-system components, exposed on their own export subpath with the DS as an OPTIONAL peer dependency. `test-chat-ui-dom` installs a fixed package list into a temp dir, so without adding `@sentropic/design-system-svelte` to it the new component cannot be DOM-tested at all. The nearest precedent (`auth-ui`) ships DS-based components with NO DOM coverage; that is below this package's own bar of 13 DOM suites / 189 tests.
+  - Impact: one package added to the `test-chat-ui-dom` install list plus one symlink. No other target, no runtime code, no CI workflow, no compose file.
+  - Verified: the DS resolves inside the sandbox and the 189 pre-existing DOM tests stay green.
+  - Rollback: revert the single Makefile hunk; the component then falls back to the auth-ui precedent (no DOM coverage, since `tsc` does not parse `.svelte`).
+- `attention` — **a stale `BRANCH.md` from the infra secret-key lane is committed on `main`** (its "Lot N — Handover" is still unchecked). This branch replaces it per the one-BRANCH.md-per-branch convention, and the convention deletes `BRANCH.md` before merge — which would also remove that residue from `main`. Flagged so it is a decision, not an accident.
+- `attention` — arbitration requested from conductor + architect (owner instruction, 2026-07-30): (1) who edits the Chrome/VSCode surfaces for the atomic breaking release, (2) the egress boundary for foreign CLI transcripts. Envelopes deposited and verified on disk; both arbiters were dormant at send time.
 
 ## AI Flaky tests
-- Not applicable: Kubernetes manifests only.
+- Not applicable: no AI-backed test is touched.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
 - [ ] **Multi-branch**
-- Rationale: two files, one concern, mirrors an already-merged and already-proven patch.
+- Rationale: one package, one capability. The cross-surface work (rename, shell handover, api feed) is deliberately deferred to its own lots and lanes.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: no UI change. Acceptance = `claude:poc-k8s` runs a server-side dry-run of `overlays/prod` against ns `sentropic` and gets 0 error, then the manual prod deploy converges and `cronjob.batch/pgbackup` reports `created`.
+- **Mono-branch**: the list is not yet mounted in the app, so acceptance here is package-level (DOM/ARIA + unit). Owner UAT comes with the host wiring lot.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read poc-k8s's two measurement reports rather than re-deriving.
-  - [x] Confirm #474 is on `main` and read its patch verbatim.
-  - [x] Confirm `overlays/prod` has no `patches:` block at all.
-  - [x] Confirm no `deploy-prod` job exists in `ci.yml`, so merging is inert.
-  - [x] Create isolated worktree `tmp/infra-prod-storageclass`.
+- [x] **Lot 0 — Sedimentation**
+  - [x] Write `spec/SPEC_EVOL_AGENTS_SURFACE.md` (R1-R15, D1-D21, dependency declination, lots L-A..L-J).
+  - [x] Round-1 self-review (Opus) folded in.
+  - [x] Round-2 independent adversarial review (Codex `gpt-5.6-sol` xhigh) — verdict RECONSIDER, 11 findings reconciled.
+  - [x] Record owner ratifications: breaking major GO, shell returned to the package, awaiting-input sorts first.
 
-- [x] **Lot 1 — The prod pin**
-  - [x] Add `deploy/k8s/overlays/prod/patch-postgres-storageclass.yaml`, mirroring preprod with `block-standard`.
-  - [x] Reference it from a `patches:` block in the prod kustomization.
-  - [x] Document in-file the three-way-merge reason and the backup consequence.
-  - [x] Lot gate:
-    - [x] `kubectl kustomize deploy/k8s/overlays/prod` renders without error.
-    - [x] The rendered prod StatefulSet carries `storageClassName: block-standard`.
-    - [x] `kubectl kustomize deploy/k8s/overlays/preprod` still renders (no cross-tier regression).
+- [x] **Lot 1 — Entry contract**
+  - [x] `AgentsEntry` union (`agent|session|remote|job|run`), status ladder, `AgentsFeedPort`.
+  - [x] Status aggregation across the containment tree.
+  - [x] Lot gate: `make test-chat-ui ENV=test-agents`, sabotage-verified (4/7 fail when urgency is inverted).
 
-- [ ] **Lot 2 — Handover**
-  - [ ] Ask poc-k8s for a server-side dry-run of `overlays/prod` before any real apply.
-  - [ ] Escalate the five S3 values to the owner — the backup gap outlives this patch.
+- [x] **Lot 2 — R9 ordering**
+  - [x] Buckets, per-bucket recency key, hierarchical sort, malformed-feed tolerance.
+  - [x] Lot gate: 15 tests; a `parentId` cycle bug was caught and fixed.
+
+- [x] **Lot 3 — Last-consultation markers**
+  - [x] Built over the existing async `ChatUiStorageAdapter`, principal+workspace namespaced, bounded, monotonic.
+  - [x] Lot gate: 12 tests, sabotage-verified (3 fail).
+
+- [x] **Lot 4 — Design-system wiring**
+  - [x] Declare `CHAT-AGENTS-EX1` and add the DS to the DOM-test sandbox.
+  - [x] Lot gate: 189 pre-existing DOM tests still green with the DS installed.
+
+- [ ] **Lot 5 — `AgentsList` component**
+  - [ ] Build on `SelectableList`/`SelectableRow`/`StatusDot`/`Tag`/`Avatar`/`OverflowMenu`.
+  - [ ] Own export subpath so hosts that never mount it never need the DS.
+  - [ ] Lot gate: DOM/ARIA tests — listbox roles, status tone per state, pending-question tag, depth indentation.
+
+- [ ] **Lot 6 — Side-preference accessor**
+  - [ ] Additive public accessor on the placement menu, unblocking R11's repositionable column.
+  - [ ] Lot gate: unit test on read/write and full-mode behaviour.
