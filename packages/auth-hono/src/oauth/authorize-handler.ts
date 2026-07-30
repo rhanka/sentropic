@@ -114,10 +114,10 @@ export const createOAuthAuthorizeHandler =
     // `prompt=consent` ALWAYS forces the screen; coverage is a strict set-superset check,
     // so any requested scope absent from the grant re-shows consent (scope-escalation guard).
     const authorizeTenantId = await deriveAuthorizeTenantId(
-      c,
       options.ports,
       validation.client.tenantId,
-      session.user.id
+      session.user.id,
+      c.req.query('tenant') ?? null
     );
     const skipConsent =
       !prompts.has('consent') &&
@@ -152,21 +152,24 @@ export const createOAuthAuthorizeHandler =
  * on the same tenant. Legacy (no tenancy spine) ⇒ the client's tenant, byte-identical to pre-G1c:
  *  - no `tenant` port          → `clientTenantId` (legacy).
  *  - no session user           → null (no tenant claim).
- *  - `?tenant=` present        → honored ONLY if an approved membership, else null.
+ *  - `requestedTenant` present → honored ONLY if an approved membership, else null.
  *  - exactly one approved org  → that org.
  *  - 0 or >1 without selection  → null (a multi-tenant selection screen is deferred; RP re-requests).
+ *
+ * `requestedTenant` is passed IN rather than read from the request: on the post-login resume the
+ * URL carries `continue` alone, so the caller sources it from the sealed continuation instead of
+ * the query string. Taking it as a parameter keeps both call paths on one derivation.
  */
 const deriveAuthorizeTenantId = async (
-  c: Context,
   ports: AuthHonoPorts,
   clientTenantId: string | null,
-  userId: string | undefined
+  userId: string | undefined,
+  requestedTenant: string | null
 ): Promise<string | null> => {
   if (!ports.tenant) return clientTenantId;
   if (!userId) return null;
   const approved = await ports.tenant.listApprovedTenantIds(userId);
-  const requested = c.req.query('tenant') ?? null;
-  if (requested) return approved.includes(requested) ? requested : null;
+  if (requestedTenant) return approved.includes(requestedTenant) ? requestedTenant : null;
   if (approved.length === 1) return approved[0];
   return null;
 };
@@ -224,14 +227,58 @@ const resumeLoginContinuation = async (
     return c.redirect(appendParams(options.loginUrl, { continue: continuation }, c.req.url), 302);
   }
 
+  // ARCH-11 §4.2.4: the continuation was sealed BEFORE login, so `deriveAuthorizeTenantId` ran with
+  // no `userId` and necessarily returned null (`if (!userId) return null`). Re-derive it HERE, now
+  // that the session identifies the principal, and seal THAT value. Spreading `...payload` alone
+  // carries the stale null into the auth code, and every token minted from this (dominant)
+  // cold-start flow then carries no `tid` at all — a tenancy hole that fails quietly rather than
+  // loudly. §4.2.4 requires every emitted `tid` to be the output of an explicit resolution for the
+  // authenticated principal; a value inherited through a spread is not one.
+  // The resume URL carries `continue` ALONE — no `?tenant=` — so the selection must come from the
+  // sealed continuation, not the request. Reading the query here would silently drop a multi-org
+  // user's explicit choice and fall through to "0 or >1 approved ⇒ null".
+  const resumeTenantId = await deriveAuthorizeTenantId(
+    options.ports,
+    client.tenantId,
+    session.user.id,
+    payload.requestedTenant ?? null
+  );
+
   const expiresAt = options.ports.clock.addSeconds(now, options.stateTtlSeconds ?? 10 * 60);
+
+  // Every field whose correct value depends on the now-established session is destructured OUT of
+  // `payload` here, so it cannot ride the spread with its stale pre-login value; `restFromRequest`
+  // holds only request-scoped fields. Do not collapse this back into `{...payload, <named fields>}`:
+  // that form is a positive enumeration with no completeness guarantee, and it is what let
+  // `tenantId` be forgotten in the first place.
+  //
+  // HOW MUCH THE COMPILER ACTUALLY GUARANTEES — read this before trusting it. `tenantId`,
+  // `createdAt`, `expiresAt` and `scope` are REQUIRED members, so once excluded from the spread,
+  // omitting them from the rebuild below is a type error. `acr`, `authTime` and `userId` are
+  // OPTIONAL: omitting those compiles fine and silently yields `undefined`. And a BRAND-NEW
+  // session-dependent field added to OAuthContinuationState gets no check at all — absent from
+  // this exclusion list it simply rides `restFromRequest` with its stale value, structurally
+  // satisfying the interface. So: review this list BY HAND whenever a session-dependent field is
+  // added to the state type. The compiler backstops four fields; it will not remind you.
+  const {
+    acr: _preLoginAcr,
+    authTime: _preLoginAuthTime,
+    createdAt: _preLoginCreatedAt,
+    expiresAt: _preLoginExpiresAt,
+    scope: _preValidationScope,
+    tenantId: _preLoginTenantId,
+    userId: _preLoginUserId,
+    ...restFromRequest
+  } = payload;
+
   const sealedState = await options.stateCodec.seal({
-    ...payload,
+    ...restFromRequest,
     acr: resolveOAuthAcr(session.sessionRecord),
     authTime: session.sessionRecord.createdAt.toISOString(),
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
     scope: scopeResult,
+    tenantId: resumeTenantId,
     userId: session.user.id,
   });
 
@@ -240,7 +287,9 @@ const resumeLoginContinuation = async (
   // re-auth resume issues the code directly instead of re-showing consent on every login. Note:
   // `prompt=consent` never sets forceReauth, so it never reaches this resume path — no consent
   // override is bypassed, and scope-escalation stays guarded by hasCoveringGrant's superset check.
-  const resumeTenantId = await deriveAuthorizeTenantId(c, options.ports, client.tenantId, session.user.id);
+  // `resumeTenantId` is the SAME value sealed above, so the grant this check READS and the grant
+  // the consent handler later WRITES are keyed on one tenant. When they diverged, the write passed
+  // `undefined` and Postgres applied the `oauth_consents` column default.
   if (await hasCoveringGrant(options.ports, session.user.id, client.clientId, scopeResult, resumeTenantId)) {
     const codePayload = await options.stateCodec.unseal(sealedState);
     if (codePayload) return issueAuthorizedCode(c, options, codePayload);
@@ -355,7 +404,13 @@ const sealContinuation = async (
   // never from the raw client/param. Legacy behavior (client tenant) when no tenancy spine is
   // wired. An explicit `?tenant=` selection is honored ONLY if it is an approved membership.
   // ARCH-11 G1c: same derivation as the consent skip-check (`deriveAuthorizeTenantId`).
-  const tenantId = await deriveAuthorizeTenantId(c, options.ports, request.client.tenantId, session?.userId);
+  const requestedTenant = c.req.query('tenant') ?? null;
+  const tenantId = await deriveAuthorizeTenantId(
+    options.ports,
+    request.client.tenantId,
+    session?.userId,
+    requestedTenant
+  );
 
   return options.stateCodec.seal({
     acr: session?.acr,
@@ -370,6 +425,7 @@ const sealContinuation = async (
     forceReauthSessionId: forceReauth?.forceReauthSessionId,
     nonce: request.nonce,
     redirectUri: request.redirectUri,
+    requestedTenant,
     resource: request.resource,
     scope: request.scope,
     state: request.state,

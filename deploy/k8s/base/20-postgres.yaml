@@ -82,12 +82,19 @@ spec:
             - name: data
               mountPath: /var/lib/postgresql/data
               subPath: pgdata
+  # No storageClassName: the cluster's default StorageClass binds the PVC. The
+  # base is shared by every tier and the tiers no longer live on the same cloud
+  # (preprod moved to OVH on 2026-07-28), so a hardcoded provider class —
+  # previously `scw-bssd` — pins the base to one provider and makes the manifest
+  # unappliable everywhere else. `volumeClaimTemplates` is immutable on a live
+  # StatefulSet, so a mismatch is not a warning: every `kubectl apply -k` fails
+  # with "updates to statefulset spec ... are forbidden" and the whole CD stalls.
+  # A tier that genuinely needs a specific class patches it in its own overlay.
   volumeClaimTemplates:
     - metadata:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: scw-bssd
         resources:
           requests:
             storage: 1Gi

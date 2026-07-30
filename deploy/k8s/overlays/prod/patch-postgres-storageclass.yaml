@@ -1,0 +1,47 @@
+# Prod runs on OVH since 2026-07-28, exactly like preprod. Its live StatefulSet
+# was created with `block-standard` (cinder.csi.openstack.org), and
+# `volumeClaimTemplates` is immutable, so the base's provider-neutral template
+# (no storageClassName, #471) can never converge against it: kubectl's three-way
+# merge computes the update half against the LIVE object, so an atomic list that
+# differs is always sent, and always rejected. Pinning the live class here is
+# what the base's own comment prescribes -- "a tier that needs a specific class
+# patches it in its own overlay" -- and it converges WITHOUT destroying the volume.
+#
+# This mirrors overlays/preprod/patch-postgres-storageclass.yaml (#474), which
+# turned deploy-preprod green. The live prod class was measured by claude:poc-k8s
+# on ns `sentropic`: block-standard / cinder.csi.openstack.org. The headless
+# Service half of the blocker was already fixed cluster-side (clusterIP
+# 10.3.83.73 -> None, endpoints unchanged, zero pod restart); this patch is the
+# remaining repo-side half.
+#
+# Why it matters beyond deployment: prod has NO CronJob `pgbackup` at all (measured
+# by poc-k8s on ns `sentropic`), so it has no working scheduled backup. The prod
+# overlay not converging since the OVH move is the reason it was never applied
+# there. Note the causal chain is NOT "a rejected StatefulSet blocks the CronJob":
+# `kubectl apply` is not transactional, so a sibling object can still be applied.
+# Once the overlay is applied successfully, the CronJob exists; it then needs the
+# `sentropic-pgbackup` Secret, which `make k8s-bundle-secret K8S_ENV_FILE=.env.prod`
+# already provisions correctly -- `.env.prod` carries the five S3_* keys.
+#
+# RESIDUAL RISK -- the server-side dry-run in Lot 2 is MANDATORY, not a formality.
+# `volumeClaimTemplates` has no patch merge key, so this strategic merge REPLACES
+# the whole list. It therefore asserts three values at once: storageClassName,
+# accessModes and the 1Gi request. If the LIVE prod template differs on ANY of the
+# three -- e.g. the volume was recreated larger during the OVH move -- the apply is
+# still rejected with the same "forbidden" error and this patch is a no-op. Confirm
+# the live template with `get sts postgres -o jsonpath='{.spec.volumeClaimTemplates}'`
+# BEFORE relying on it.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: block-standard

@@ -37,6 +37,16 @@ export const resolveEffectiveChatWidgetMode = (input: {
   return input.displayMode;
 };
 
+/** A placement menu can act only in an ordinary desktop overlay. */
+export const canChatPlacementMenuOwnPlacement = (input: {
+  hostMode: ChatWidgetHostMode;
+  isExtensionOverlayHost: boolean;
+  isMobileViewport: boolean;
+}): boolean =>
+  input.hostMode !== 'sidepanel' &&
+  !input.isExtensionOverlayHost &&
+  !input.isMobileViewport;
+
 export const computeChatWidgetDockWidthCss = (input: {
   isBrowser: boolean;
   viewportWidth: number;

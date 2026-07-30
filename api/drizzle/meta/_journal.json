@@ -281,6 +281,13 @@
       "when": 1782200000000,
       "tag": "0039_arch11_drop_oauth_consents_old_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785024000000,
+      "tag": "0040_connector_accounts_multi_account",
+      "breakpoints": true
     }
   ]
 }

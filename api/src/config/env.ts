@@ -49,6 +49,7 @@ const envSchema = z.object({
   SCW_NAMESPACE_ID: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER: z.coerce.number().default(5),
   // BR-39e Lot 1 — social LOGIN federation (RP to Google). DISTINCT from GOOGLE_CLIENT_ID/SECRET
   // above (those drive Google Drive OAuth / Picker). When client id+secret are absent the
   // federation provider is feature-OFF (the route answers "provider not configured"). The redirect

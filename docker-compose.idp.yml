@@ -36,6 +36,8 @@ services:
       # explicit dev default keeps local boot deterministic. Prod injects real
       # values via the deploy environment (k8s-ops), never these.
       - OAUTH_SIGNING_KEK=${OAUTH_SIGNING_KEK:-dev-idp-signing-kek-change-in-production}
+      # See docker-compose.yml: empty default is load-bearing, not laziness.
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY:-}
       - JWT_SECRET=${JWT_SECRET:-dev-idp-jwt-secret-change-in-production}
       # BR-39m A0-bis: the IdP serves its OWN login/register/consent screens
       # same-origin. The authorize handler's UI base (loginUrl/consentUrl) and the
