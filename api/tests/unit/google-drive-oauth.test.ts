@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
   appendGoogleDriveOAuthResultToReturnPath,
@@ -199,5 +200,107 @@ describe('Google Drive OAuth helpers', () => {
     expect(token.accessToken).toBe('access-token');
     expect(token.refreshToken).toBe('refresh-token');
     expect(token.scopes).toContain('https://www.googleapis.com/auth/drive.file');
+  });
+});
+
+describe('Google Drive OAuth state sealing key', () => {
+  const stateInput = { userId: 'u1', workspaceId: 'w1', returnPath: '/documents' };
+
+  it('REFUSES the public literal in production instead of sealing with it', async () => {
+    // Deployed containers receive no JWT_SECRET, so this used to seal production state with a constant
+    // that is readable in a public repository — integrity resting on a value anyone can look up.
+    // Sealing with a public constant is indistinguishable from not sealing at all, so refusing to
+    // operate is the correct outcome; a fallback that is only wrong in production is the kind that
+    // survives every review.
+    const { env } = await import('../../src/config/env');
+    const mutable = env as typeof env & {
+      OAUTH_SIGNING_KEK?: string;
+      DISABLE_RATE_LIMIT?: string;
+      ADMIN_EMAIL?: string;
+    };
+    const saved = {
+      kek: mutable.OAUTH_SIGNING_KEK,
+      jwt: mutable.JWT_SECRET,
+      nodeEnv: mutable.NODE_ENV,
+      rateLimit: mutable.DISABLE_RATE_LIMIT,
+      adminEmail: mutable.ADMIN_EMAIL,
+    };
+    try {
+      mutable.OAUTH_SIGNING_KEK = undefined;
+      mutable.JWT_SECRET = undefined;
+      (mutable as { NODE_ENV: string }).NODE_ENV = 'production';
+      // `requiresOAuthProductionSecrets` is switched OFF by `isE2eProductionImageRuntime`, which is
+      // true when NODE_ENV=production AND DISABLE_RATE_LIMIT='true' AND ADMIN_EMAIL is the e2e admin.
+      // CI sets those last two, so merely forcing NODE_ENV would satisfy that escape hatch and
+      // silently disable the very guard under test — the test would then pass locally and fail in CI
+      // for reasons having nothing to do with the code. Pin all three inputs.
+      mutable.DISABLE_RATE_LIMIT = 'false';
+      mutable.ADMIN_EMAIL = 'not-the-e2e-admin@example.com';
+      expect(() => createGoogleDriveOAuthState(stateInput)).toThrow(/required to seal/i);
+    } finally {
+      mutable.OAUTH_SIGNING_KEK = saved.kek;
+      mutable.JWT_SECRET = saved.jwt;
+      (mutable as { NODE_ENV: string }).NODE_ENV = saved.nodeEnv;
+      mutable.DISABLE_RATE_LIMIT = saved.rateLimit;
+      mutable.ADMIN_EMAIL = saved.adminEmail;
+    }
+  });
+
+  it('seals with OAUTH_SIGNING_KEK — asserted on the HMAC itself, not on a roundtrip', async () => {
+    // A sign-then-verify roundtrip with the same key passes for ANY key, including the public
+    // literal — an adversarial review proved by execution that a mutant always returning the
+    // literal kept every earlier version of these tests green. So assert WHICH key was used, by
+    // recomputing the HMAC independently.
+    const { env } = await import('../../src/config/env');
+    const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
+    const saved = { kek: mutable.OAUTH_SIGNING_KEK, jwt: mutable.JWT_SECRET };
+    try {
+      mutable.OAUTH_SIGNING_KEK = 'the-kek-value';
+      mutable.JWT_SECRET = 'a-jwt-that-must-not-be-used';
+      const sealed = createGoogleDriveOAuthState(stateInput);
+
+      const [encodedPayload, signature] = sealed.state.split('.');
+      const expected = createHmac('sha256', 'the-kek-value').update(encodedPayload).digest('base64url');
+      expect(signature).toBe(expected);
+
+      // And the two keys that must NOT have been used produce a different signature.
+      const withJwt = createHmac('sha256', 'a-jwt-that-must-not-be-used').update(encodedPayload).digest('base64url');
+      const withLiteral = createHmac('sha256', 'dev-secret-key-change-in-production-please')
+        .update(encodedPayload)
+        .digest('base64url');
+      expect(signature).not.toBe(withJwt);
+      expect(signature).not.toBe(withLiteral);
+    } finally {
+      mutable.OAUTH_SIGNING_KEK = saved.kek;
+      mutable.JWT_SECRET = saved.jwt;
+    }
+  });
+
+  it('treats an EMPTY OAUTH_SIGNING_KEK as absent and falls through to JWT_SECRET', async () => {
+    // The deployment emits present-but-empty values (`--from-literal=VAR="$VAR"` with the variable
+    // missing), so this is the case production actually produces. `||` falls through; `??` would
+    // keep '' and seal with the public literal instead. A roundtrip cannot tell those apart —
+    // assert the HMAC.
+    const { env } = await import('../../src/config/env');
+    const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
+    const saved = { kek: mutable.OAUTH_SIGNING_KEK, jwt: mutable.JWT_SECRET };
+    try {
+      mutable.OAUTH_SIGNING_KEK = '';
+      mutable.JWT_SECRET = 'the-jwt-value';
+      const sealed = createGoogleDriveOAuthState(stateInput);
+
+      const [encodedPayload, signature] = sealed.state.split('.');
+      expect(signature).toBe(
+        createHmac('sha256', 'the-jwt-value').update(encodedPayload).digest('base64url'),
+      );
+      expect(signature).not.toBe(
+        createHmac('sha256', 'dev-secret-key-change-in-production-please')
+          .update(encodedPayload)
+          .digest('base64url'),
+      );
+    } finally {
+      mutable.OAUTH_SIGNING_KEK = saved.kek;
+      mutable.JWT_SECRET = saved.jwt;
+    }
   });
 });
