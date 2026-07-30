@@ -1,7 +1,7 @@
 {
-  "_comment": "Committed baseline snapshot of @sentropic/chat-ui export surface. Generated manually from package.json exports + source grep. Prop-name snapshot for Svelte components is DEFERRED to A0b (requires svelte-check / compile step — noted below). Regenerate by reading src/** exports and updating this file on any export change.",
-  "_generated": "2026-06-08",
-  "_version": "0.28.0",
+  "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes.",
+  "_generated": "2026-07-25",
+  "_version": "0.29.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -57,6 +57,7 @@
         "ChatWidgetPanelVisibility",
         "coerceChatWidgetTab",
         "resolveEffectiveChatWidgetMode",
+        "canChatPlacementMenuOwnPlacement",
         "computeChatWidgetDockWidthCss",
         "resolveChatWidgetJobBadge",
         "shouldAutoCloseChatWidget",
@@ -94,6 +95,7 @@
         "CreateWebHostInput",
         "createWebHost",
         "ChatWidgetDisplayMode",
+        "ChatWidgetDrawerSide",
         "ChatWidgetLayoutState",
         "chatWidgetLayout",
         "BUILTIN_LOCAL_TOOL_NAMES",
@@ -251,6 +253,7 @@
         "ChatWidgetPanelVisibility",
         "coerceChatWidgetTab",
         "resolveEffectiveChatWidgetMode",
+        "canChatPlacementMenuOwnPlacement",
         "computeChatWidgetDockWidthCss",
         "resolveChatWidgetJobBadge",
         "shouldAutoCloseChatWidget",
@@ -324,6 +327,7 @@
       "file": "dist/stores/chatWidgetLayout.js",
       "exports": [
         "ChatWidgetDisplayMode",
+        "ChatWidgetDrawerSide",
         "ChatWidgetLayoutState",
         "chatWidgetLayout"
       ],
@@ -422,7 +426,13 @@
       "kind": "svelte",
       "file": "dist/components/ChatDock.svelte",
       "exists": true,
-      "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
+      "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), placementMenu? (ChatPlacementMenu, surfaces L1c-menu — drives the dialog container's placement classes from placementMenu.current() ONLY where the menu may own placement per canChatPlacementMenuOwnPlacement; a sidepanel host, a Chrome extension overlay and a mobile viewport force their own mode and ignore it. Undefined = zero change. ChatDock renders NO trigger/popup UI itself — hosts mount ChatPlacementMenuButton separately, e.g. in their own header toolbar), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
+    },
+    "./components/ChatPlacementMenuButton.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatPlacementMenuButton.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: placementMenu (ChatPlacementMenu, required), onPlacementChange? ((placement: ChatPlacement) => void), dragCallbacks? ({ start, move, end, cancel }), class? (string passthrough for the trigger button). Renders a grouped Mode + Side trigger/popup: Panel / Floating / Full screen, then Right / Center / Left for Floating or Right / Left for Panel; Side is absent in Full screen. It is an in-flow host-toolbar control, not a ChatDock overlay. Escape/Arrow keydowns stop propagation, outside-pointerdown closes, roving tabindex returns focus to the trigger, drag callbacks drive host-owned placement requests."
     },
     "./components/ChatPanel.svelte": {
       "kind": "svelte",
@@ -765,7 +775,8 @@
       "file": "dist/state/chatPlacementMigration.js",
       "exports": [
         "displayModeToPlacement",
-        "placementToDisplayMode"
+        "placementToDisplayMode",
+        "placementToLegacyDisplayMode"
       ]
     },
     "./state/chatPlacementDnd": {
@@ -774,10 +785,34 @@
       "exports": [
         "Rect",
         "DropZone",
+        "Viewport",
+        "CreateViewportDropZonesOptions",
         "DragSessionConfig",
         "DragSession",
-        "createDragSession"
+        "createDragSession",
+        "createViewportDropZones"
       ]
+    },
+    "./state/chatPlacementMenu": {
+      "kind": "ts",
+      "file": "dist/state/chatPlacementMenu.js",
+      "exports": [
+        "ChatPlacementMenuItem",
+        "ChatPlacementMenuGroup",
+        "ChatPlacementMenuLabels",
+        "CreateChatPlacementMenuOptions",
+        "ChatPlacementMenu",
+        "buildChatPlacementPersistenceKey",
+        "createDefaultChatPlacementMenuLabels",
+        "createFrenchChatPlacementMenuLabels",
+        "createChatPlacementMenu"
+      ]
+    },
+    "./components/ChatPlacementDropZones.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatPlacementDropZones.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: zones? (DropZone[]), hovered? (ChatPlacement | null), labelForPlacement (required callback). Renders a pointer-events-none, reduced-motion-safe viewport overlay of host-computed drop zones; the hovered zone uses the active highlight."
     }
   }
 }

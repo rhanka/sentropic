@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   displayModeToPlacement,
+  placementToLegacyDisplayMode,
   placementToDisplayMode,
 } from '../src/state/chatPlacementMigration';
 import type { ChatWidgetDisplayMode } from '../src/stores/chatWidgetLayout';
@@ -47,6 +48,27 @@ describe('chatPlacementMigration — placementToDisplayMode', () => {
       expect(placementToDisplayMode(p)).toBeNull();
     }
   });
+});
+
+describe('chatPlacementMigration — placementToLegacyDisplayMode', () => {
+  it('mirrors a drawer choice to the legacy docked preference', () => {
+    expect(
+      placementToLegacyDisplayMode({ kind: 'drawer', side: 'right', occupancy: 'primary' }),
+    ).toBe('docked');
+  });
+
+  const floatingLikeMenuPlacements: ChatPlacement[] = [
+    { kind: 'floating', anchor: 'right' },
+    { kind: 'floating', anchor: 'left' },
+    { kind: 'floating', anchor: 'center' },
+    { kind: 'full' },
+  ];
+
+  for (const placement of floatingLikeMenuPlacements) {
+    it(`mirrors ${JSON.stringify(placement)} to the legacy floating preference`, () => {
+      expect(placementToLegacyDisplayMode(placement)).toBe('floating');
+    });
+  }
 });
 
 describe('chatPlacementMigration — round-trip', () => {

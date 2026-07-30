@@ -6,6 +6,18 @@
         "ui/src/lib/components/ChatWidget.svelte"
       ]
     },
+    "ChatPlacementMenuButton.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": [
+        "ui/src/lib/components/ChatWidget.svelte"
+      ]
+    },
+    "ChatPlacementDropZones.svelte": {
+      "class": "primitive",
+      "dogfoodedBy": [
+        "ui/src/lib/components/ChatWidget.svelte"
+      ]
+    },
     "ChatPanel.svelte": {
       "class": "primitive",
       "dogfoodedBy": [

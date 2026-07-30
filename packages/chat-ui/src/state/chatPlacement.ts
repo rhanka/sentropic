@@ -149,6 +149,16 @@ export type PlacementControllerConfig = {
   persistence?: PlacementPersistence;
   /** Temporary viability gate (viewport, occupancy). Defaults to always viable. */
   isViable?: (id: ChatPlacementId, environmentRevision: number) => boolean;
+  /**
+   * When true, `effective` is seeded directly (synchronously, on construction)
+   * from the persisted-supported intent (falling back to `defaultPlacement`)
+   * WITHOUT going through `requestPlacement` — so construction never issues a
+   * commit or a persistence write. Only an explicit `requestPlacement()` call
+   * (i.e. real user/host action) persists. Defaults to false, preserving the
+   * existing behavior where `effective` starts at `defaultPlacement` until the
+   * host explicitly requests the seeded intent.
+   */
+  seedEffectiveFromRequested?: boolean;
 };
 
 export type PlacementController = {
@@ -178,7 +188,10 @@ export function createPlacementController(
 
   let environmentRevision = 0;
   let requested = initialRequested;
-  let effective = defaultPlacement; // not yet committed to the seeded intent
+  // Not yet committed to the seeded intent — UNLESS the host opted into
+  // synchronous seeding (seedEffectiveFromRequested), in which case `effective`
+  // starts at the persisted-supported intent directly, with no commit/write.
+  let effective = config.seedEffectiveFromRequested ? initialRequested : defaultPlacement;
   let pending: PlacementSnapshot['pending'] | undefined;
   let lastResolution: PlacementSnapshot['lastResolution'] | undefined;
   let pendingCounter = 0;
