@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-ui",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "description": "Svelte reference UI package for @sentropic/* chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. Consumes @sentropic/chat-core wire contracts over HTTP/SSE only.",
   "type": "module",
   "license": "MIT",
@@ -77,6 +77,21 @@
       "types": "./src/state/chatWidgetShell.ts",
       "svelte": "./src/state/chatWidgetShell.ts",
       "import": "./src/state/chatWidgetShell.ts"
+    },
+    "./state/agentsEntry": {
+      "types": "./src/state/agentsEntry.ts",
+      "svelte": "./src/state/agentsEntry.ts",
+      "import": "./src/state/agentsEntry.ts"
+    },
+    "./state/agentsSort": {
+      "types": "./src/state/agentsSort.ts",
+      "svelte": "./src/state/agentsSort.ts",
+      "import": "./src/state/agentsSort.ts"
+    },
+    "./state/agentsViewMarkers": {
+      "types": "./src/state/agentsViewMarkers.ts",
+      "svelte": "./src/state/agentsViewMarkers.ts",
+      "import": "./src/state/agentsViewMarkers.ts"
     },
     "./state/streamMessageProjection": {
       "types": "./src/state/streamMessageProjection.ts",
@@ -340,11 +355,17 @@
     "prepack": "node scripts/verify-publish-artifacts.mjs"
   },
   "peerDependencies": {
+    "@sentropic/design-system-svelte": "^0.34.0",
     "@lucide/svelte": "^0.562.0",
     "svelte": "^5.0.0",
     "svelte-streamdown": "^3.0.1"
   },
   "devDependencies": {
     "typescript": "5.4.5"
+  },
+  "peerDependenciesMeta": {
+    "@sentropic/design-system-svelte": {
+      "optional": true
+    }
   }
 }

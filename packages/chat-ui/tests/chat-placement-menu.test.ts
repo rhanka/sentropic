@@ -24,6 +24,8 @@ const createMemoryStorage = (): Storage => {
 
 /** Flush the fire-and-forget restore commit issued at construction time. */
 const flushAsync = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const sideMemoryKey = (opts: { userId: string; hostId: string; workspace: string }) =>
+  `${buildChatPlacementPersistenceKey(opts)}/sides`;
 
 describe('chat placement menu ownership', () => {
   it('allows placement changes only in an ordinary desktop overlay', () => {
@@ -355,6 +357,59 @@ describe('chatPlacementMenu — side-memory persistence', () => {
     });
     expect(menu.groups()[0]?.items.find((item) => item.id === 'floating')?.placement).toEqual({
       kind: 'floating', anchor: 'right',
+    });
+  });
+
+  it('reads the default remembered side when nothing is stored', () => {
+    const storage = createMemoryStorage();
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    expect(menu.sidePreference()).toBe('right');
+  });
+
+  it('reads a previously stored remembered side', () => {
+    const storage = createMemoryStorage();
+    const key = sideMemoryKey({ userId: 'u1', hostId: 'h1', workspace: 'w1' });
+    storage.setItem(key, JSON.stringify({ side: 'left', floatingCentered: false }));
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    expect(menu.sidePreference()).toBe('left');
+  });
+
+  it('persists a side preference update through the existing side-memory key', () => {
+    const storage = createMemoryStorage();
+    const setItemSpy = vi.spyOn(storage, 'setItem');
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    menu.setSidePreference('left');
+    expect(setItemSpy).toHaveBeenCalledWith(
+      sideMemoryKey({ userId: 'u1', hostId: 'h1', workspace: 'w1' }),
+      JSON.stringify({ side: 'left', floatingCentered: false }),
+    );
+    expect(menu.sidePreference()).toBe('left');
+  });
+
+  it('sets side preference while in full mode', async () => {
+    const storage = createMemoryStorage();
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    await menu.request({ kind: 'full' });
+    menu.setSidePreference('left');
+
+    expect(menu.current()).toEqual({ kind: 'full' });
+    expect(menu.groups().map((group) => group.id)).toEqual(['mode']);
+    expect(menu.groups()[0]?.items.find((item) => item.id === 'floating')?.placement)
+      .toEqual({ kind: 'floating', anchor: 'left' });
+  });
+
+  it('keeps floatingCentered=true when changing side preference', async () => {
+    const storage = createMemoryStorage();
+    const key = sideMemoryKey({ userId: 'u1', hostId: 'h1', workspace: 'w1' });
+    const menu = createChatPlacementMenu({ userId: 'u1', hostId: 'h1', workspace: 'w1', storage });
+    await menu.request({ kind: 'floating', anchor: 'center' });
+    menu.setSidePreference('left');
+
+    expect(menu.groups()[0]?.items.find((item) => item.id === 'floating')?.placement)
+      .toEqual({ kind: 'floating', anchor: 'center' });
+    expect(JSON.parse(storage.getItem(key) ?? '{}')).toEqual({
+      side: 'left',
+      floatingCentered: true,
     });
   });
 
