@@ -17,6 +17,7 @@ export * from './client/streamHub.js';
 export * from './state/chatDraft.js';
 export * from './state/chatProjection.js';
 export * from './state/chatWidgetShell.js';
+export * from './state/agentsEntry.js';
 export * from './state/streamMessageProjection.js';
 export * from './state/streamMessageSmoothing.js';
 export * from './renderers/registry.js';
