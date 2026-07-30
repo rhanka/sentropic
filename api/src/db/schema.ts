@@ -479,10 +479,11 @@ export const documentConnectorAccounts = pgTable('document_connector_accounts', 
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
-  workspaceUserProviderUnique: uniqueIndex('document_connector_accounts_workspace_user_provider_unique').on(
+  workspaceUserProviderAccountSubjectUnique: uniqueIndex('document_connector_accounts_workspace_user_provider_subject_unique').on(
     table.workspaceId,
     table.userId,
     table.provider,
+    table.accountSubject,
   ),
   workspaceIdIdx: index('document_connector_accounts_workspace_id_idx').on(table.workspaceId),
   userIdIdx: index('document_connector_accounts_user_id_idx').on(table.userId),

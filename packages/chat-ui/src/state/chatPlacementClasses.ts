@@ -24,7 +24,9 @@ export function placementContainerClasses(
     case 'drawer':
       return {
         className: appendDialogClass(
-          'chat-dock-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col',
+          placement.side === 'left'
+            ? 'chat-dock-shell fixed top-0 left-0 bottom-0 z-50 bg-white border-r border-gray-200 flex flex-col'
+            : 'chat-dock-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col',
           dialogClass,
         ),
         style: `width: ${dockWidthCss};`,
@@ -32,16 +34,22 @@ export function placementContainerClasses(
     case 'floating':
       if (placement.anchor === 'left') {
         return { className: appendDialogClass(
-          'chat-dock-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:left-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg',
+          'chat-dock-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:fixed sm:inset-auto sm:bottom-4 sm:left-4 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg',
           dialogClass), style: '' };
       }
       if (placement.anchor === 'center') {
         return { className: appendDialogClass(
-          'chat-dock-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:left-1/2 sm:-translate-x-1/2 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg',
+          'chat-dock-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:fixed sm:inset-auto sm:bottom-4 sm:left-1/2 sm:-translate-x-1/2 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg',
           dialogClass), style: '' };
       }
       return {
         className: appendDialogClass(
+          // Right keeps the ORIGINAL `sm:absolute … bottom-0 right-0` inside the
+          // host's `bottom-4 right-4` container: this is the placement the legacy
+          // (menu-less) path resolves to, so its rendering — and its behaviour for
+          // a consumer that repositions that container — must stay untouched.
+          // Only left/centre need viewport anchoring, because `sm:absolute` there
+          // would resolve against that same bottom-right box and land off-screen.
           'chat-dock-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg',
           dialogClass,
         ),

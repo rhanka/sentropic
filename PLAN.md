@@ -629,7 +629,7 @@ branches use the §6 slot convention (slot registered at dispatch).
 
 | ID | Branch | Gates | Deliverable |
 |---|---|---|---|
-| BR-53 | `chore/arch02-public-app-auth-study` | BR-45 frame + BR-39n claim-set decisions (IdP lane) | SPEC_EVOL_PUBLIC_APP_AUTH: guest rows (D3), claim-across-OIDC, app-safe chat DTO, factory extraction of singleton routers |
+| BR-53 | `chore/arch02-public-app-auth-study` | BR-45 frame (satisfied) — **BR-39n gate STRUCK 2026-07-25**, see note below | SPEC_EVOL_PUBLIC_APP_AUTH: guest rows (D3), claim-across-OIDC, app-safe chat DTO, factory extraction of the `documents` router (NOT `workspaces`; `comments` is phase 2) |
 | BR-54 | `chore/arch05-code-workspace-remote-study` | BR-45; cowork backend split owner/branch CONFIRMED | SPEC_EVOL_CODE_WORKSPACE_REMOTE: device-pairing/cowork-bridge/S2S reuse; route grants + edge proxy; preview DOMAIN NAME = owner deliverable (D5) |
 | BR-55 | `chore/arch17-deployment-plane-study` | — | SPEC_EVOL_DEPLOYMENT_PLANE: UatEndpoint/AppDeployment desired/observed; k8s-ops contract |
 | BR-56 | `chore/arch15-data-lifecycle-study` | — | SPEC_EVOL_DATA_LIFECYCLE: retention/GDPR/erasure-across-planes (gates Diag) |
@@ -665,7 +665,22 @@ branches use the §6 slot convention (slot registered at dispatch).
 
 ### External lanes this program depends on (coordination, not dispatch)
 
-- BR-39n claim set / 39e memberships (IdP lane) → gates BR-53 / BR-63.
+- BR-39n claim set / 39e memberships (IdP lane) → gates BR-63 only.
+  **BR-53 STRUCK from this dependency (2026-07-25, double adversarial review —
+  Opus 4.8 xhigh + Codex 5.6-terra xhigh, CONVERGED, both high confidence).**
+  ARCH-02 needs NO new claim: phase 1 (anonymous-first) needs ZERO IdP claims,
+  and phase 2 (opt-in claim/recovery) needs a verified stable `sub` ONLY —
+  emitted since A0 (`packages/auth-hono/src/oauth/token-handler.ts:449`).
+  The claim ticket never traverses the IdP: the IdP round-trips the RP's
+  `state` verbatim (`packages/auth-hono/src/oauth/issue-authorized-code.ts:51`),
+  so the app keys the ticket server-side and redeems it at its own callback —
+  no new claim, no new scope, no IdP knowledge of claiming.
+  VERIFIED IN PRODUCTION 2026-07-25: `auth.sent-tech.ca` discovery returns
+  `claims_supported = [sub, aud, iss, exp, iat, nonce, auth_time, acr, email,
+  email_verified, name, tid]` — `tid` IS live (BR-39e landed the binding), so
+  the "no tenant claim yet" premise this gate rested on is FALSIFIED.
+  Residual IdP-lane work for BR-53 phase 2 is NOT claims: a Diag `oauth_clients`
+  row + the RP session-glue last mile (~40 lines of `jose`, product-side).
 - Cowork backend tool-driving split (owner/branch to confirm) → BR-54.
 - Graphify fusion `plan/34` Lot 0 (BR-34, npm transfer-vs-republish fork) → BR-57.
 - chat-ui host-tool open extension point (chat lane, OpenERP finding) →
