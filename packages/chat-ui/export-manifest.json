@@ -1,7 +1,7 @@
 {
   "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes.",
   "_generated": "2026-07-25",
-  "_version": "0.29.0",
+  "_version": "0.30.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -258,6 +258,39 @@
         "resolveChatWidgetJobBadge",
         "shouldAutoCloseChatWidget",
         "resolveChatWidgetPanelVisibility"
+      ]
+    },
+    "./state/agentsEntry": {
+      "kind": "ts",
+      "file": "dist/state/agentsEntry.js",
+      "exports": [
+        "AgentsEntryKind",
+        "AgentsEntryStatus",
+        "AgentsEntryConnection",
+        "AgentsEntry",
+        "AgentsFeedScope",
+        "AgentsFeedPort",
+        "agentsEntryStatusUrgency",
+        "aggregateAgentsEntryStatus"
+      ]
+    },
+    "./state/agentsSort": {
+      "kind": "ts",
+      "file": "dist/state/agentsSort.js",
+      "exports": [
+        "AgentsListRow",
+        "AgentsSortOptions",
+        "buildAgentsListRows"
+      ]
+    },
+    "./state/agentsViewMarkers": {
+      "kind": "ts",
+      "file": "dist/state/agentsViewMarkers.js",
+      "exports": [
+        "AgentsViewMarkersConfig",
+        "AgentsViewMarkers",
+        "buildAgentsViewMarkersKey",
+        "createAgentsViewMarkers"
       ]
     },
     "./state/streamMessageProjection": {
@@ -800,6 +833,7 @@
         "ChatPlacementMenuItem",
         "ChatPlacementMenuGroup",
         "ChatPlacementMenuLabels",
+        "ChatPlacementSideMemory",
         "CreateChatPlacementMenuOptions",
         "ChatPlacementMenu",
         "buildChatPlacementPersistenceKey",

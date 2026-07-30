@@ -152,7 +152,7 @@ const createLocalStoragePersistence = (
  * only, has no panel equivalent, and is therefore remembered on its own
  * without disturbing the shared left/right.
  */
-type ChatPlacementSideMemory = {
+export type ChatPlacementSideMemory = {
   side: DrawerSide;
   floatingCentered: boolean;
 };
@@ -226,6 +226,10 @@ export type ChatPlacementMenu = {
   subscribe(cb: (current: ChatPlacement) => void): () => void;
   /** Full underlying controller snapshot, for hosts that need more than `current()`. */
   snapshot(): PlacementSnapshot;
+  /** Reads the remembered side preference (used for both panel + floating, when centered is not active). */
+  sidePreference(): DrawerSide;
+  /** Updates the remembered side preference while preserving the centered floating flag. */
+  setSidePreference(side: DrawerSide): void;
 };
 
 export function createChatPlacementMenu(
@@ -294,6 +298,11 @@ export function createChatPlacementMenu(
     }
   };
 
+  const setSidePreference = (nextSide: DrawerSide) => {
+    side = nextSide;
+    writeSideMemory();
+  };
+
   // Align the memory with the placement restored at construction — but ONLY
   // when nothing was stored. With a stored side memory and no stored placement
   // intent, the effective placement is merely the default, and seeding from it
@@ -348,6 +357,8 @@ export function createChatPlacementMenu(
       writeSideMemory();
       await controller.requestPlacement(placement);
     },
+    sidePreference: () => side,
+    setSidePreference,
     subscribe: (cb) => controller.subscribe((s) => cb(s.effective)),
     snapshot: () => controller.snapshot(),
   };
