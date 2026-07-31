@@ -27,7 +27,8 @@
   - `packages/chat-ui/tests/chat-core-host.spec.ts` (version pin only)
   - `BRANCH.md`
 - **Allowed Paths (e2e evolution — owner GO 2026-07-31)**:
-  - `e2e/tests/03-chat.spec.ts`, `e2e/tests/09-run-steering-core.spec.ts` (session-bar title selector → stable `[data-chat-sessions-heading]`)
+  - `e2e/tests/03-chat.spec.ts` (session-bar title selector → stable `[data-chat-sessions-heading]`; chooser popover → agents list Back→list→select/New-session, tests 846/891/972)
+  - `e2e/tests/09-run-steering-core.spec.ts` (session-bar title selector → stable `[data-chat-sessions-heading]`)
   - `e2e/tests/08-chat-workspace-switch.spec.ts`, `e2e/tests/08-chat-checkpoint-restore.spec.ts` (session switch evolves from the removed chooser popover → Back→list→select)
 - **Forbidden Paths**:
   - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
@@ -39,6 +40,8 @@
 ## Feedback Loop
 - `attention` — the api feed gap (perennial agents, CLI transcripts R12, cross-workspace R10) is NOT closed here; those parts render disabled/absent with a stated reason, never faked. This is the honest boundary of the first UAT.
 - `fixed` — the delegated mount (Codex gpt-5.6-terra) shipped a DEAD D5 merge: it passed `$queueStore.jobs` raw, but the store types job `data` as `any` and only `chat_message` jobs carry `data.sessionId` (api `ChatMessageJobData`), which `loadJobs()` deliberately keeps in the store. Raw jobs → no top-level `sessionId` → the merge no-ops → a chat turn would appear twice. Its wiring test was a source-grep that PINNED the buggy line and could not catch it. Fixed with `queueJobsToAppJobs` (lifts `data.sessionId`, unit-tested + an end-to-end no-duplication test in `ui/tests/chat/agents-feed-queue-jobs.test.ts`); the wiring test now asserts the fixed plumbing and rejects the raw form. Fail-first re-proven. Caught by reading the code, not the report.
+- `fixed` — CI group-c (03) was red because the pager host removed the session chooser popover but `03-chat.spec.ts` still opened it via `ensureSessionMenuOpen` (tests 846/891/972, serial-skipped after 846). Migrated to the agents list (`goToAgentsList`, mirroring the green 08 pattern): 846 asserts the created `data-agent-entry-id` row, 891 uses the always-visible conversation-bar delete then checks the list stays operable + the row is gone, 972 starts fresh via the list's New-session action. Verified locally on `ENV=e2e-lc` (real OpenAI): **846 ✓ 891 ✓ (3/3 attempts each)**.
+- `attention` (allowlist, non-blocking) — `03-chat.spec.ts:985` "attache une image … vision (BR38a-FB2)" failed locally at `expect(uploadRes.ok())` (line 1046): API `POST /api/v1/documents → 500`, cause `XMinioStorageFull` (HTTP 507) — the local host `/` was 100% full so e2e-lc MinIO refused the write. This is a LOCAL disk artifact, not my change (the migrated setup at 997-999 passed and the test reached the upload) and not AI nondeterminism. CI provisions a fresh MinIO volume, so the upload succeeds there. 03-chat is on the AI-flaky allowlist; the residual vision assertion remains allowlisted. Owner sign-off tracked at merge.
 
 ## Plan / Todo (lot-based)
 - [x] **Slice 1 — host-side feed adapter (pure, testable)**
