@@ -31,9 +31,24 @@ import { createServiceTenantAdapter } from '../../services/auth/service-tenant-a
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 
-const JWT_SECRET = new TextEncoder().encode(
-  env.JWT_SECRET ?? 'dev-secret-key-change-in-production-please',
-);
+/**
+ * HS256 key for the session and verification tokens this host signs and verifies.
+ *
+ * `||`, not `??`, and the distinction is not cosmetic here. Today production carries no `JWT_SECRET`
+ * at all, so both operators yield the literal and this is byte-identical — the change is inert. It
+ * stops being inert the moment the JWT rotation step delivers the variable: the secret bundle emits
+ * every key it knows about as `--from-literal=VAR="$VAR"`, so an environment whose source env file
+ * omits the value receives `JWT_SECRET=""` rather than no variable. `??` preserves that empty string
+ * and this becomes a ZERO-LENGTH HMAC key for real authentication material; `||` falls through to the
+ * documented fallback instead. Fixing it here, before any pipeline emits the key, is what keeps the
+ * rotation step from arming a landmine it cannot see.
+ *
+ * Exported so the empty-string case is measurable rather than asserted.
+ */
+export const resolveSessionTokenSecret = (): string =>
+  env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
+
+const JWT_SECRET = new TextEncoder().encode(resolveSessionTokenSecret());
 
 const unsupportedOAuthPort = async (): Promise<never> => {
   throw new Error('This AuthHono port is not used by the Sentropic OAuth host routes.');
@@ -440,12 +455,22 @@ const toAuthHonoSessionRecord = (row: typeof userSessions.$inferSelect): AuthHon
   userId: row.userId,
 });
 
+/**
+ * OAuth state sealing secret. `OAUTH_SIGNING_KEK` takes precedence over `JWT_SECRET` so that
+ * provisioning `JWT_SECRET` (step 2 of the secret-separation remediation) cannot silently move state
+ * sealing onto the signing key.
+ *
+ * `||`, not `??`: the secret bundle emits present-but-EMPTY keys (`--from-literal=VAR="$VAR"` yields
+ * `VAR=""` when the source env file omits the variable). With `??` an empty `OAUTH_SIGNING_KEK` would
+ * short-circuit both the fallback and the production guard, return `''`, and make the state codec throw
+ * on every /authorize, /consent and /token request — a total OAuth outage where it previously worked.
+ */
 const resolveOAuthStateSecret = (): string => {
-  const secret = env.JWT_SECRET ?? env.OAUTH_SIGNING_KEK;
+  const secret = env.OAUTH_SIGNING_KEK || env.JWT_SECRET;
   if (!secret && requiresOAuthProductionSecrets()) {
     throw new Error('JWT_SECRET or OAUTH_SIGNING_KEK is required for OAuth state sealing in production.');
   }
-  return secret ?? 'dev-secret-key-change-in-production-please';
+  return secret || 'dev-secret-key-change-in-production-please';
 };
 
 const resolveRequestOrigin = (request: Request): string => {
