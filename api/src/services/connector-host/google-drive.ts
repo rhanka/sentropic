@@ -140,6 +140,7 @@ const hintedPrincipal = (hints: Record<string, unknown> | undefined): unknown =>
 export const createSessionTenantWorkspaceResolver = (
   sessionUser: SessionUser,
   checkWorkspaceAccess: WorkspaceAccess = requireWorkspaceAccess,
+  capabilityIds: readonly string[] = GOOGLE_DRIVE_P1_CAPABILITY_IDS,
 ): TenantWorkspaceResolver => ({
   async resolve(input: Parameters<TenantWorkspaceResolver['resolve']>[0]) {
     const requestedPrincipal = hintedPrincipal(input.hints);
@@ -162,7 +163,7 @@ export const createSessionTenantWorkspaceResolver = (
       principalSub: sessionUser.userId,
       tenantRef: workspaceRef,
       workspaceRef,
-      exposure: { capabilityIds: [...GOOGLE_DRIVE_P1_CAPABILITY_IDS] },
+      exposure: { capabilityIds: [...capabilityIds] },
     };
   },
 });
