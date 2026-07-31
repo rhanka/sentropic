@@ -4,7 +4,7 @@
 Implement the API-side P1 ports and the deny-by-default Google Drive host mount for `@sentropic/connector-host`.
 
 ## Scope / Guardrails
-- Scope limited to `api/**`, `package-lock.json`, and this branch plan.
+- Scope limited to `api/**`, `Makefile`, `package-lock.json`, and this branch plan.
 - No schema or migration changes.
 - Consume, but do not modify, `packages/connector-host/**`, `packages/mcp-platform/**`, and `packages/mcp-connector-google/**`.
 - Do not modify `api/src/services/secret-crypto.ts` or the public `resolveGoogleDriveTokenSecret` null-return contract.
@@ -15,10 +15,10 @@ Implement the API-side P1 ports and the deny-by-default Google Drive host mount 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `api/**`
+  - `Makefile`
   - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `packages/connector-host/**`
@@ -33,6 +33,7 @@ Implement the API-side P1 ports and the deny-by-default Google Drive host mount 
 
 ## Feedback Loop
 - [x] `BR480-ACK1` — The owner reassigned API host wiring to this lane and authorized the API plus root-lockfile scope. No schema change is required because migration 0040 already permits Gmail rows.
+- [x] `BR480-EX2` — Owner authorized the Makefile CI repair: add the three workspace-package build targets and wire them into `prepare-node-workspace`. Impact: API CI prepares the published-package exports before typecheck and unit tests. Rollback: remove the targets and their prerequisite wiring.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
@@ -66,6 +67,7 @@ Implement the API-side P1 ports and the deny-by-default Google Drive host mount 
 
 - [ ] **Lot 4 — Hermetic proof and validation**
   - [x] Wire the API image to install and build the three new workspace dependencies.
+  - [x] Build the three workspace-package exports during node-workspace preparation for API CI.
   - [x] Add `api/tests/unit/connector-host.test.ts` for secret classification, account ambiguity, session/workspace denial, and mounted Drive behavior.
   - [ ] Run scoped API unit tests: `make test-api-unit SCOPE=tests/unit/connector-host.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-connector-host-api`.
   - [ ] Run `make typecheck-lint-api ENV=test-connector-host-api`.
