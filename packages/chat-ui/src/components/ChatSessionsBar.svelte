@@ -10,6 +10,7 @@
    * the host injects i18n labels, the popover menu and the icon set.
    */
   import type { Snippet } from 'svelte';
+  import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 
   import {
     resolveSessionsBar,
@@ -27,6 +28,10 @@
   ) => k;
 
   export let onNewSession: () => void = () => {};
+  /** Optional host-owned return navigation. Omit it when no parent list exists. */
+  export let onBack: (() => void) | undefined = undefined;
+  /** Visible label for the optional return navigation. */
+  export let backLabel = 'Back';
   export let onConfirmDelete: () => void | Promise<void> = () => {};
   export let deleteConfirmPending = false;
   export let deleteInFlight = false;
@@ -66,8 +71,26 @@
 </script>
 
 <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
-  <div class="min-w-0 text-xs text-slate-500 truncate" title={bar.label}>
-    {bar.label}
+  <div class="min-w-0 flex items-center gap-2">
+    {#if onBack}
+      <button
+        class="inline-flex shrink-0 items-center gap-1 rounded px-1 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-700"
+        type="button"
+        on:click={onBack}
+        aria-label={backLabel}
+      >
+        <ArrowLeft class="h-4 w-4" aria-hidden="true" />
+        <span>{backLabel}</span>
+      </button>
+    {/if}
+    <h2
+      class="min-w-0 truncate text-xs text-slate-500"
+      title={bar.label}
+      tabindex="-1"
+      data-chat-sessions-heading
+    >
+      {bar.label}
+    </h2>
   </div>
   <div class="flex items-center gap-1">
     {#if renderSessionsMenu}
