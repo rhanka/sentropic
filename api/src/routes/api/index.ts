@@ -31,6 +31,7 @@ import { docxRouter } from './docx';
 import { pptxRouter } from './pptx';
 import { xlsxRouter } from './xlsx';
 import { googleDriveRouter } from './google-drive';
+import { gmailRouter } from './gmail';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { coworkDesktopRouter } from './cowork-desktop';
@@ -165,6 +166,10 @@ apiRouter.route('/documents', documentsRouter);
 // Google Drive connector routes: authenticated; workspace checks are enforced per endpoint.
 apiRouter.use('/google-drive/*', requireAuth);
 apiRouter.route('/google-drive', googleDriveRouter);
+
+// Gmail connector routes: authenticated; workspace checks are enforced per endpoint.
+apiRouter.use('/gmail/*', requireAuth);
+apiRouter.route('/gmail', gmailRouter);
 
 // Comments routes: allow reads for any authenticated user. Mutations are gated inside the router by workspace role.
 apiRouter.use('/comments/*', requireAuth);
