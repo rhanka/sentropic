@@ -5,14 +5,12 @@ import type {
   AppResourceResult,
   AppToolInvocation,
   AppToolResult,
-  ConnectorSecretStatus,
-} from '../../mcp-platform/src/runtime.js';
-import type {
   AppCapability,
   AppMcpProviderManifest,
   ConnectorTenantContext,
   ConnectorTenantResolutionInput,
-} from '../../mcp-platform/src/manifest.js';
+  ConnectorSecretStatus,
+} from '@sentropic/mcp-platform';
 import {
   createFakeConnector,
   createStpConnectorContext,
@@ -21,7 +19,7 @@ import {
   MockSecretStore,
   SecretAccessError,
   SecretRedactor,
-} from '../../mcp-platform/src/testing.js';
+} from '@sentropic/mcp-platform/testing';
 import { mountConnectorHost } from '../src/mount.js';
 import type {
   AccountResolution,

@@ -1,4 +1,4 @@
-import type { StpConnectorContext } from '../../mcp-platform/src/runtime.js';
+import type { StpConnectorContext } from '@sentropic/mcp-platform';
 
 export type SecretPortRequest = {
   connectorInstanceId: string;
