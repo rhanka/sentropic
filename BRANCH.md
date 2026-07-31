@@ -42,8 +42,8 @@
   - [x] Scope toggle rendered disabled-with-reason (D7).
   - [x] `ui/tests/components/chat/ChatWidget-agents-list.test.ts`: source wiring covers adapter rows, default view, selection, actions, labels, relative time, and disabled scope.
   - [x] `make test-ui` FULL — green.
-- [ ] **Slice 3 — restore the export + classify**
-  - [ ] Re-add `./components/AgentsList.svelte` to `package.json` + `export-manifest.json`; add a `primitive` entry to `chat-ui-reference-validation.json` with `dogfoodedBy: ["ui/src/lib/components/ChatWidget.svelte"]` (now a real consumer). Bump chat-ui minor.
-  - [ ] `make test-chat-ui ENV=test-lc` — reference-validation green.
+- [x] **Slice 3 — restore the export + classify**
+  - [x] Re-add `./components/AgentsList.svelte` to `package.json` + `export-manifest.json`; add a `primitive` entry to `chat-ui-reference-validation.json` with `dogfoodedBy: ["ui/src/lib/components/ChatWidget.svelte"]` (now a real consumer). Bump chat-ui minor.
+  - [x] `make test-chat-ui ENV=test-lc` — reference-validation green.
 - [ ] **Slice 4 — UAT prep**
   - [ ] Integrate on root `ENV=dev` with the owner's data, give the UAT objectives (the visible surface: renamed-or-not tab, list items, status wheel, pending tag, R9 order, scope toggle disabled-with-reason). Real UAT is WITH the owner.
