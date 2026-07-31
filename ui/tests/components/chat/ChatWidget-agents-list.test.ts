@@ -28,12 +28,32 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain(
       "chatSessionId != null || chatSessions.length === 0 ? 'conversation' : 'list'",
     );
-    expect(source).toContain("{#if canAgentsListBeDefaultView && agentsView === 'list'}");
+    expect(source).toContain('{#if canAgentsListBeDefaultView}');
     expect(source).toContain('<AgentsList');
     expect(source).toContain('rows={agentsRows}');
     expect(source).toContain('onSelect={handleSelectAgentsEntry}');
     expect(source).toContain('onAction={handleAgentsAction}');
     expect(source).toContain('formatRelative={formatAgentsRelative}');
     expect(source).toContain('disabled');
+  });
+
+  it('uses the pager-gated sessions-bar Back control instead of a duplicate chooser', () => {
+    const source = readFileSync(widgetPath, 'utf8');
+
+    expect(source).toContain('class:chat-agents-pager={canAgentsListBeDefaultView}');
+    expect(source).toContain(
+      "class:chat-agents-pager__track--conversation={canAgentsListBeDefaultView && agentsView === 'conversation'}",
+    );
+    expect(source).toContain('onBack={canAgentsListBeDefaultView ? returnToAgentsList : undefined}');
+    expect(source).toContain("backLabel={$_('chat.agents.back')}");
+    expect(source).toContain(
+      'renderSessionsMenu={canAgentsListBeDefaultView ? undefined : renderChatSessionsMenu}',
+    );
+    expect(source).not.toContain('on:click={() => (agentsView = \'list\')}');
+    expect(source).toContain('aria-live="polite"');
+    expect(source).toContain('focusConversationHeading');
+    expect(source).toContain('focusAgentsListRow');
+    expect(source).toContain('prefers-reduced-motion: reduce');
+    expect(source).toContain(':global(:dir(rtl))');
   });
 });

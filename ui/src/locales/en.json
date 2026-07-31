@@ -1106,7 +1106,11 @@
         "allWorkspaces": "All workspaces",
         "unavailable": "The all-workspaces view is unavailable until the cross-workspace API feed exists."
       },
-      "back": "Back to conversations"
+      "back": "Back to conversations",
+      "view": {
+        "conversation": "Conversation opened",
+        "list": "Conversations list opened"
+      }
     },
     "checkpoints": {
       "create": "Create checkpoint",
