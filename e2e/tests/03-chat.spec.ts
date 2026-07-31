@@ -26,7 +26,7 @@ test.describe('Chat', () => {
       .first();
 
   const sessionHeaderLabel = (page: any) =>
-    page.locator('#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate').first();
+    page.locator('#chat-widget-dialog [data-chat-sessions-heading]').first();
 
   async function gotoFoldersPage(page: any) {
     await page.goto('/folders');
