@@ -1,7 +1,6 @@
 # SPEC_EVOL — Secret key separation
 
 > Status: DECIDED. Security remediation. The dependency order is owner-ratified and must not be weakened. No live, candidate, or historical secret value belongs in this document, logs, tests, or migration reports. The three already-public legacy fallback literals in Step 4 are reproduced only as an exhaustive deletion manifest and must never be used as test material.
-
 > **Amendment 2026-07-31 — variable name, and what has since shipped.** The at-rest variable is `SECRET_ENCRYPTION_KEY`, ratified by the architect after verifying that code (`api/src/config/env.ts`, `api/src/services/secret-crypto.ts`), the delivery plane (`Makefile` `k8s-bundle-secret`, `docker-compose.yml`, `docker-compose.idp.yml`) and the env schema were already consistent on that spelling while only this document diverged. Earlier revisions said `CREDENTIAL_ENCRYPTION_KEY`; provisioning under that spelling would have made the resolver fall back to the legacy literal — and `spec:163` would still have passed, because the literal is the live production seed. That criterion is satisfiable by the *wrong* configuration; only `spec:166`, which proves the input is ACTIVE rather than merely declared, discriminates. Treat `spec:166` as the gate that counts.
 >
 > This document was untracked until now, so its mandate had no auditable source. It is committed as written, with one exception: the citation in D1 for the initial byte-identical value was retargeted from `secret-crypto.ts:8` to `:33`, because Step 1A moved that line and D1 rests on it. **Every other code citation below predates the merges listed here and should be read as the state at analysis time, not as current line numbers** — in particular the Step 4 deletion manifest, whose census of the public literal was taken before Steps 1A/1B landed.
@@ -375,8 +374,8 @@ Change:
 >
 > Each hit is either a site to strip or a deliberate exception to justify in the Step 4 record. Two classes of hit are expected and must be handled, not merely deleted:
 >
-> - **Byte-identity tests that spell a literal out on purpose.** `api/tests/unit/secret-crypto.test.ts` writes the at-rest literal verbatim so that editing it in the source breaks the test — that is the guard protecting the byte-identical mandate. Step 4 retires the literal and must retire that pinning in the same change, or Step 4 breaks its own tests.
-> - **Local-only compose smoke targets.** The `Makefile` `JWT_SECRET` occurrences belong to `smoke-idp` / `smoke-idp-screens` and carry the *third* spelling, not the first. They never reach a deployed runtime and are a separate decision from the production fallbacks.
+> - **Byte-identity tests that spell a literal out on purpose** — see the atomicity constraint below.
+> - **Local-only compose smoke targets** — see the runtime-reach constraint below.
 >
 > The snapshot as taken at analysis time, kept for the record only:
 >
@@ -385,6 +384,12 @@ Change:
 > | `dev-secret-key-change-in-production-please` | `secret-crypto.ts:8`, `session-manager.ts:49`, `oauth.ts:35`, `llm-account-transports.ts:293`, `google-drive-oauth.ts:200`, `jwks-adapter.ts:157` |
 > | `default-secret-change-in-production` | `email-verification.ts:175,228` |
 > | `dev-idp-jwt-secret-change-in-production` | `docker-compose.idp.yml:39` |
+
+Two constraints govern how those hits are handled. They are normative for Step 4, not advisory.
+
+**S4-C1 — atomicity of literal retirement and its pinning.** `api/tests/unit/secret-crypto.test.ts` writes the at-rest literal out verbatim, deliberately, so that editing it in the source breaks the test. That pinning is the guard protecting the byte-identical mandate of Step 1A — it is why a silent seed change cannot pass. Step 4 retires the literal, which retires the property that pinning asserts. The two must therefore move in **one change**: retiring the seed while leaving the pinning in place makes Step 4 break its own tests, and retiring the pinning first removes the guard while the literal is still live. Neither half may land alone, and no intermediate commit may exist in which one is done and the other is not.
+
+**S4-C2 — runtime reach decides, not the string.** The `Makefile` occurrences of the third spelling belong to `smoke-idp` and `smoke-idp-screens`: local Docker Compose smoke targets, whose default never leaves a developer machine. They must be judged separately from the production fallbacks and are explicitly **not** part of the `k8s-bundle-secret` delivery path — that target never emits `JWT_SECRET` at all, so no deployed runtime has ever received this spelling. Removing them is a developer-ergonomics decision with no production security content; conflating the two under a single "delete every occurrence of the literal" sweep is how a local-only default gets treated as a production exposure, and how a production exposure gets excused as "just a dev default".
 
 The only permitted current-tree occurrences after implementation are the ones the derivation above deliberately keeps, recorded with a justification. They are retired public literals, not valid test fixtures, defaults, examples, or allowlisted runtime material.
 
