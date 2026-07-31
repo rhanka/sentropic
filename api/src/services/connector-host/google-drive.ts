@@ -61,10 +61,12 @@ export const createGoogleDriveSecretPort = (
   dependencies: {
     loadAccounts?: GoogleDriveAccountLoader;
     resolveToken?: GoogleDriveTokenResolver;
+    connectorInstanceIdOf?: (account: Pick<GoogleDriveConnectorAccount, 'id'>) => string;
   } = {},
 ): SecretPort => {
   const loadAccounts = dependencies.loadAccounts ?? loadGoogleDriveAccounts;
   const resolveToken = dependencies.resolveToken ?? resolveGoogleDriveToken;
+  const connectorInstanceIdOf = dependencies.connectorInstanceIdOf ?? toGoogleDriveConnectorInstanceId;
 
   return {
     async resolve(request: SecretPortRequest): Promise<string> {
@@ -77,7 +79,7 @@ export const createGoogleDriveSecretPort = (
         workspaceId: request.workspaceRef,
       });
       const account = accounts.find(
-        (candidate) => toGoogleDriveConnectorInstanceId(candidate) === request.connectorInstanceId,
+        (candidate) => connectorInstanceIdOf(candidate) === request.connectorInstanceId,
       );
       if (!account) throw new SecretAccessError('not_enrolled');
       if (account.status !== 'connected' || !account.tokenSecret) {
