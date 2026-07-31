@@ -4,11 +4,11 @@ import type {
   AppResourceResult,
   AppToolInvocation,
   AppToolResult,
+  ConnectorTenantContext,
   StpConnectorContext,
-} from '../../mcp-platform/src/runtime.js';
-import { listVisibleCapabilities } from '../../mcp-platform/src/visibility.js';
-import type { VisibilityContext } from '../../mcp-platform/src/visibility.js';
-import type { ConnectorTenantContext } from '../../mcp-platform/src/manifest.js';
+  VisibilityContext,
+} from '@sentropic/mcp-platform';
+import { listVisibleCapabilities } from '@sentropic/mcp-platform';
 import type {
   AccountResolution,
   ConnectorHostPorts,
