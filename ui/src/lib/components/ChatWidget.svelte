@@ -2066,10 +2066,15 @@
     void focusAgentsListRow();
   };
 
-  const handleSelectAgentsEntry = (entryId: string) => {
+  const handleSelectAgentsEntry = async (entryId: string) => {
     if (!chatSessions.some((session) => session.id === entryId)) return;
     showAgentsConversation(entryId);
-    void handleSelectSession(entryId);
+    // Single-active-view unmounts ChatPanel while the list is shown, so
+    // `chatPanelRef` is null until the conversation view re-mounts. Await that
+    // mount before selecting, or the imperative selectSession() no-ops and the
+    // panel stays on the previously-open session (silent switch failure).
+    await tick();
+    await handleSelectSession(entryId);
     void focusConversationHeading();
   };
 
@@ -2097,6 +2102,7 @@
     if (action === 'delete') {
       showAgentsConversation(entryId);
       pendingChatSessionDeleteConfirm = true;
+      await tick();
       await handleSelectSession(entryId);
       await focusConversationHeading();
     }
