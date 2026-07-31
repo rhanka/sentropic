@@ -389,8 +389,20 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
   userId: string;
   workspaceId: string;
 }): Promise<GoogleDriveConnectionPublic> => {
-  const existing = await getGoogleDriveConnectorAccount(input);
-  if (!existing) return toPublicGoogleDriveConnection(null);
+  // EVERY account, not the first one.
+  //
+  // The uniqueness constraint is on (workspace, user, provider, accountSubject), so one user may
+  // legitimately hold several connected Google accounts. `POST /disconnect` carries no account
+  // identifier — it only knows the authenticated user — so its meaning to the user is "disconnect
+  // Google Drive", not "disconnect whichever account happens to sort first". Acting on a single row
+  // returned a success while leaving the other accounts' refresh tokens stored locally AND their
+  // grants live at Google: the exact silent failure this revocation work exists to remove.
+  const existing = await listConnectorAccounts(
+    input.workspaceId,
+    input.userId,
+    GOOGLE_DRIVE_PROVIDER,
+  );
+  if (existing.length === 0) return toPublicGoogleDriveConnection(null);
 
   // ORDERING IS THE WHOLE DESIGN HERE.
   //
@@ -404,12 +416,17 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
   // never cleared. Disconnect would then fail precisely under the conditions that make people want
   // to disconnect.
   //
-  // So: read the token into memory, clear the row, THEN revoke upstream with the in-memory copy.
-  // The local disconnect is unconditional and immediate; the remote call can take as long as it
-  // likes without holding it hostage. That also removes the crash window in which a revoked grant
+  // So: read the tokens into memory, clear the rows, THEN revoke upstream with the in-memory copies.
+  // The local disconnect is unconditional and immediate; the remote calls can take as long as they
+  // like without holding it hostage. That also removes the crash window in which a revoked grant
   // was still stored locally as "connected".
-  const revocableToken = readRevocableGoogleDriveToken(existing.tokenSecret);
+  const revocable = existing.map((row) => ({
+    accountId: row.id,
+    token: readRevocableGoogleDriveToken(row.tokenSecret),
+  }));
 
+  // One statement over the whole (workspace, user, provider) set rather than a loop over ids: a
+  // partial clear is worse than none, because it reports success while leaving live tokens behind.
   await db
     .update(documentConnectorAccounts)
     .set({
@@ -420,16 +437,30 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
       lastError: null,
       updatedAt: new Date(),
     })
-    .where(eq(documentConnectorAccounts.id, existing.id));
-
-  if (revocableToken) {
-    await revokeGoogleDriveGrantUpstream(existing.id, revocableToken);
-  } else {
-    logger.warn(
-      { accountId: existing.id },
-      'google-drive: disconnected locally but found no token to revoke upstream — the grant may still be live at Google',
+    .where(
+      and(
+        eq(documentConnectorAccounts.userId, input.userId),
+        eq(documentConnectorAccounts.workspaceId, input.workspaceId),
+        eq(documentConnectorAccounts.provider, GOOGLE_DRIVE_PROVIDER),
+      ),
     );
-  }
+
+  // Concurrently, and never sequentially: each revocation is already bounded by its own timeout, so
+  // a serial loop would make the worst case scale with the number of connected accounts for no gain.
+  // `revokeGoogleDriveGrantUpstream` is best-effort and never throws, so nothing here can fail the
+  // disconnect that has already been committed above.
+  await Promise.all(
+    revocable.map(async ({ accountId, token }) => {
+      if (token) {
+        await revokeGoogleDriveGrantUpstream(accountId, token);
+        return;
+      }
+      logger.warn(
+        { accountId },
+        'google-drive: disconnected locally but found no token to revoke upstream — the grant may still be live at Google',
+      );
+    }),
+  );
 
   return getGoogleDriveConnection(input);
 };
