@@ -21,7 +21,13 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('jobs: queueJobsToAppJobs($queueStore.jobs)');
     expect(source).not.toContain('jobs: $queueStore.jobs })');
     expect(source).toContain('buildAgentsListRows(');
-    expect(source).toContain("let agentsView: 'list' | 'conversation' = 'list';");
+    // Option 3 (owner 2026-07-30): default to conversation, land on the list
+    // only when there are sessions to choose from but none is active. A derived
+    // value would fight the back button, so the default is set on the open edge.
+    expect(source).toContain("let agentsView: 'list' | 'conversation' = 'conversation';");
+    expect(source).toContain(
+      "chatSessionId != null || chatSessions.length === 0 ? 'conversation' : 'list'",
+    );
     expect(source).toContain("{#if canAgentsListBeDefaultView && agentsView === 'list'}");
     expect(source).toContain('<AgentsList');
     expect(source).toContain('rows={agentsRows}');
