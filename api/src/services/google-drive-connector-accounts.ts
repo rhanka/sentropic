@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { documentConnectorAccounts, type DocumentConnectorAccountRow } from '../db/schema';
 import { logger } from '../logger';
@@ -425,8 +425,18 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
     token: readRevocableGoogleDriveToken(row.tokenSecret),
   }));
 
-  // One statement over the whole (workspace, user, provider) set rather than a loop over ids: a
-  // partial clear is worse than none, because it reports success while leaving live tokens behind.
+  // Scoped to the ids we actually captured, and in ONE statement.
+  //
+  // Not a loop over ids — a partial clear reports success while leaving live tokens behind. But not
+  // a blanket `(workspace, user, provider)` predicate either, which looks equivalent and is not: an
+  // account connected between the read above and this write would be cleared WITHOUT its token ever
+  // having been captured, so its grant would stay live at Google with no local copy left to revoke
+  // it with, and not even a warning, since it never entered `revocable`. Silent and unrecoverable —
+  // the exact failure mode this whole change exists to remove.
+  //
+  // Restricting to the captured ids leaves such a row untouched instead. The user then still sees
+  // one account connected and can disconnect again: visible and recoverable beats silent and
+  // unrecoverable, which is the trade this codebase makes everywhere else in the revocation path.
   await db
     .update(documentConnectorAccounts)
     .set({
@@ -438,10 +448,9 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
       updatedAt: new Date(),
     })
     .where(
-      and(
-        eq(documentConnectorAccounts.userId, input.userId),
-        eq(documentConnectorAccounts.workspaceId, input.workspaceId),
-        eq(documentConnectorAccounts.provider, GOOGLE_DRIVE_PROVIDER),
+      inArray(
+        documentConnectorAccounts.id,
+        revocable.map((entry) => entry.accountId),
       ),
     );
 
