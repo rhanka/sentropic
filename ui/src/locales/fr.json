@@ -1106,7 +1106,11 @@
         "allWorkspaces": "Tous les espaces de travail",
         "unavailable": "La vue de tous les espaces de travail sera disponible lorsque l’API inter-espaces existera."
       },
-      "back": "Retour aux conversations"
+      "back": "Retour aux conversations",
+      "view": {
+        "conversation": "Conversation ouverte",
+        "list": "Liste des conversations ouverte"
+      }
     },
     "checkpoints": {
       "create": "Créer un checkpoint",
