@@ -63,6 +63,43 @@ export type AgentsFeedInput = {
 };
 
 /**
+ * The raw queue-store job shape (ui/src/lib/stores/queue.ts). `data` is typed
+ * `any` there; only `chat_message` jobs carry `data.sessionId`
+ * (api `ChatMessageJobData`), and `loadJobs()` deliberately keeps those in the
+ * store.
+ */
+export type QueueJob = {
+  readonly id: string;
+  readonly type: string;
+  readonly status: AppJobStatus;
+  readonly createdAt: string;
+  readonly startedAt?: string;
+  readonly completedAt?: string;
+  readonly data?: unknown;
+};
+
+/**
+ * Lift `data.sessionId` to the top level so `projectAgentsFeed`'s D5 merge can
+ * fire. Without this the store's session-bound jobs arrive with no top-level
+ * `sessionId`, the merge is a silent no-op, and a chat turn shows twice — once
+ * as its session, once as a job. The lift is the app's job because the coupling
+ * to the queue `data` shape lives here, not in the pure projection.
+ */
+export const queueJobsToAppJobs = (jobs: readonly QueueJob[]): AppJob[] =>
+  jobs.map((job) => {
+    const sessionId = (job.data as { sessionId?: unknown } | null)?.sessionId;
+    return {
+      id: job.id,
+      type: job.type,
+      status: job.status,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      sessionId: typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null,
+    };
+  });
+
+/**
  * Project the app's sessions and jobs into `AgentsEntry[]`.
  *
  * Sessions become `kind: 'session'` (status `idle` — the app model carries no
