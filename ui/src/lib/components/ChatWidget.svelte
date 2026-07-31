@@ -1,9 +1,18 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import type { ContextProvider } from '@sentropic/cowork-bridge/core';
-  import { _ } from 'svelte-i18n';
+  import { _, locale } from 'svelte-i18n';
   import { initApiClient } from '@sentropic/cowork-bridge/core';
-  import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
+  import {
+    queueStore,
+    loadJobs,
+    updateJob,
+    addJob,
+    cancelJob,
+    retryJob,
+    deleteJob,
+  } from '$lib/stores/queue';
+  import { projectAgentsFeed } from '$lib/chat/agents-feed-adapter';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import {
@@ -54,9 +63,14 @@
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
+  import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte';
   import ChatPlacementDropZones from '@sentropic/chat-ui/components/ChatPlacementDropZones.svelte';
   import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
+  import {
+    buildAgentsListRows,
+    type AgentsListRow,
+  } from '@sentropic/chat-ui/state/agentsSort';
   import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
   import {
     createChatPlacementMenu,
@@ -91,6 +105,8 @@
     title?: string | null;
     primaryContextType?: string | null;
     primaryContextId?: string | null;
+    createdAt?: string;
+    updatedAt?: string | null;
   };
   let chatPanelRef: any = null;
   let chatSessions: ChatSession[] = [];
@@ -98,6 +114,9 @@
   let chatLoadingSessions = false;
   let activeChatSession: ChatSession | null = null;
   let pendingChatSessionDeleteConfirm = false;
+  let agentsView: 'list' | 'conversation' = 'list';
+  let agentsRows: AgentsListRow[] = [];
+  let canAgentsListBeDefaultView = false;
   let commentContext: {
     type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
@@ -444,6 +463,14 @@
       isExtensionOverlayHost,
       isMobileViewport,
     });
+  $: canAgentsListBeDefaultView = canChatPlacementMenuOwnPlacement({
+    hostMode,
+    isExtensionOverlayHost,
+    isMobileViewport,
+  });
+  $: agentsRows = buildAgentsListRows(
+    projectAgentsFeed({ sessions: chatSessions, jobs: $queueStore.jobs }),
+  );
   let closeButtonEl: HTMLButtonElement | null = null;
   let isBrowserReady = false;
 
@@ -1942,6 +1969,60 @@
     chatSessionId = null;
   };
 
+  const formatAgentsRelative = (epochMs: number): string => {
+    if (!Number.isFinite(epochMs) || epochMs <= 0) {
+      return $_('chat.agents.activity.unknown');
+    }
+
+    const deltaMs = epochMs - Date.now();
+    const magnitude = Math.abs(deltaMs);
+    const [value, unit] = magnitude < 60_000
+      ? [deltaMs / 1_000, 'second']
+      : magnitude < 3_600_000
+        ? [deltaMs / 60_000, 'minute']
+        : magnitude < 86_400_000
+          ? [deltaMs / 3_600_000, 'hour']
+          : [deltaMs / 86_400_000, 'day'];
+
+    return new Intl.RelativeTimeFormat($locale ?? undefined, {
+      numeric: 'auto',
+    }).format(Math.round(value), unit as Intl.RelativeTimeFormatUnit);
+  };
+
+  const handleSelectAgentsEntry = (entryId: string) => {
+    if (!chatSessions.some((session) => session.id === entryId)) return;
+    agentsView = 'conversation';
+    void handleSelectSession(entryId);
+  };
+
+  const handleAgentsAction = async (entryId: string, action: string) => {
+    if (entryId.startsWith('job:')) {
+      const jobId = entryId.slice('job:'.length);
+      try {
+        if (action === 'cancel') await cancelJob(jobId);
+        else if (action === 'retry') await retryJob(jobId);
+        else if (action === 'delete') await deleteJob(jobId);
+        else return;
+        await loadJobs();
+      } catch (error) {
+        console.error('Unable to update agents list job:', error);
+        addToast({
+          type: 'error',
+          message: $_('chat.agents.action.failed', {
+            values: { action: $_(`chat.agents.action.${action}`) },
+          }),
+        });
+      }
+      return;
+    }
+
+    if (action === 'delete') {
+      agentsView = 'conversation';
+      pendingChatSessionDeleteConfirm = true;
+      await handleSelectSession(entryId);
+    }
+  };
+
   const onJobUpdate = (evt: any) => {
     if (evt?.type !== 'job_update') return;
     const data = evt.data ?? {};
@@ -3114,10 +3195,59 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            <!-- Gold shell adoption (S6b): sessions bar renders via the
-                 @sentropic/chat-ui ChatSessionsBar component; the host keeps the
-                 popover menu (MenuPopover) and icons as snippets. -->
-            {#snippet renderChatSessionsMenu(p: {
+            {#if canAgentsListBeDefaultView && agentsView === 'list'}
+              <div class="h-full min-h-0 overflow-y-auto p-3">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <label class="flex items-center gap-2 text-xs text-slate-500" title={$_('chat.agents.scope.unavailable')}>
+                    <input
+                      type="checkbox"
+                      disabled
+                      aria-describedby="agents-all-workspaces-reason"
+                    />
+                    {$_('chat.agents.scope.allWorkspaces')}
+                  </label>
+                  <button
+                    class="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    type="button"
+                    on:click={() => {
+                      agentsView = 'conversation';
+                      handleNewSession();
+                    }}
+                  >
+                    {$_('chat.sessions.new')}
+                  </button>
+                </div>
+                <p id="agents-all-workspaces-reason" class="mb-3 text-xs text-slate-500">
+                  {$_('chat.agents.scope.unavailable')}
+                </p>
+                <AgentsList
+                  rows={agentsRows}
+                  activeId={chatSessionId ?? undefined}
+                  onSelect={handleSelectAgentsEntry}
+                  onAction={handleAgentsAction}
+                  labels={(key: string) => $_(key)}
+                  formatRelative={formatAgentsRelative}
+                />
+              </div>
+            {:else if canAgentsListBeDefaultView}
+              <div class="border-b border-slate-100 px-3 py-2">
+                <button
+                  class="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  type="button"
+                  on:click={() => (agentsView = 'list')}
+                >
+                  {$_('chat.agents.back')}
+                </button>
+              </div>
+            {/if}
+            <div
+              class="h-full min-h-0 flex flex-col"
+              class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}
+            >
+              <!-- Gold shell adoption (S6b): sessions bar renders via the
+                   @sentropic/chat-ui ChatSessionsBar component; the host keeps the
+                   popover menu (MenuPopover) and icons as snippets. -->
+              {#snippet renderChatSessionsMenu(p: {
               sessions: readonly { id: string; title?: string | null }[];
               sessionId: string | null;
               loading: boolean;
@@ -3205,6 +3335,7 @@
                   {contextStore}
                 />
               {/if}
+            </div>
             </div>
           </div>
         {/if}
