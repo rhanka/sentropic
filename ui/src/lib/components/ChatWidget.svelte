@@ -12,7 +12,7 @@
     retryJob,
     deleteJob,
   } from '$lib/stores/queue';
-  import { projectAgentsFeed } from '$lib/chat/agents-feed-adapter';
+  import { projectAgentsFeed, queueJobsToAppJobs } from '$lib/chat/agents-feed-adapter';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import {
@@ -469,7 +469,10 @@
     isMobileViewport,
   });
   $: agentsRows = buildAgentsListRows(
-    projectAgentsFeed({ sessions: chatSessions, jobs: $queueStore.jobs }),
+    projectAgentsFeed({
+      sessions: chatSessions,
+      jobs: queueJobsToAppJobs($queueStore.jobs),
+    }),
   );
   let closeButtonEl: HTMLButtonElement | null = null;
   let isBrowserReady = false;

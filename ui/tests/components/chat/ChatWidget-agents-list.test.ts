@@ -12,8 +12,14 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain(
       "import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte'",
     );
-    expect(source).toContain("import { projectAgentsFeed } from '$lib/chat/agents-feed-adapter'");
-    expect(source).toContain('projectAgentsFeed({ sessions: chatSessions, jobs: $queueStore.jobs })');
+    expect(source).toContain(
+      "import { projectAgentsFeed, queueJobsToAppJobs } from '$lib/chat/agents-feed-adapter'",
+    );
+    // Jobs MUST go through queueJobsToAppJobs so data.sessionId is lifted and the
+    // D5 merge fires; passing $queueStore.jobs raw silently duplicates chat turns
+    // (behaviourally covered in agents-feed-queue-jobs.test.ts).
+    expect(source).toContain('jobs: queueJobsToAppJobs($queueStore.jobs)');
+    expect(source).not.toContain('jobs: $queueStore.jobs })');
     expect(source).toContain('buildAgentsListRows(');
     expect(source).toContain("let agentsView: 'list' | 'conversation' = 'list';");
     expect(source).toContain("{#if canAgentsListBeDefaultView && agentsView === 'list'}");
