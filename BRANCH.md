@@ -65,7 +65,7 @@ Deliver L3 of `SPEC_EVOL_CONNECTOR_HOST`: a separate Gmail `gmail.readonly` OAut
   - [ ] Lot gate: `make scope-check`.
 
 - [ ] **Lot 3 — Hermetic Gmail proof and validation**
-  - [ ] Add `api/tests/unit/gmail-oauth.test.ts` for exact Gmail scope, real-secret state HMAC, production refusal, and separate encrypted account rows.
+- [x] Add `api/tests/unit/gmail-oauth.test.ts` for exact Gmail scope, real-secret state HMAC, production refusal, and separate encrypted account rows.
 - [x] Add `api/tests/unit/gmail-connector-host.test.ts` for allowed Gmail reads, deny-as-missing writes, both secret codes, and name-only audit events.
   - [ ] Run `make test-api-unit SCOPE=tests/unit/gmail-oauth.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=cam`.
   - [ ] Run `make test-api-unit SCOPE=tests/unit/gmail-connector-host.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=cam`.
