@@ -114,7 +114,15 @@
   let chatLoadingSessions = false;
   let activeChatSession: ChatSession | null = null;
   let pendingChatSessionDeleteConfirm = false;
-  let agentsView: 'list' | 'conversation' = 'list';
+  // Default-on-open view (owner decision 2026-07-30, "option 3"): land on the
+  // conversation for continuity, and only land on the LIST when there are
+  // sessions to choose from but none is active. A fresh open with no sessions
+  // goes straight to the composer — an empty list would be a dead end, and it
+  // preserves the established "open chat → type" flow the whole app relies on.
+  // NOTE: how the user RETURNS to the list (Claude-style top-left arrow +
+  // left/right slide) is an open design point, in consensus — not built here.
+  let agentsView: 'list' | 'conversation' = 'conversation';
+  let agentsViewInitializedForOpen = false;
   let agentsRows: AgentsListRow[] = [];
   let canAgentsListBeDefaultView = false;
   let commentContext: {
@@ -468,6 +476,19 @@
     isExtensionOverlayHost,
     isMobileViewport,
   });
+  // Rising-edge initializer: pick the default view ONCE each time the dialog
+  // opens, then leave agentsView entirely to user navigation (select / back).
+  // A derived value would fight the back button (chatSessionId stays set), so
+  // this must be an edge, not a continuous binding.
+  $: if (isVisible) {
+    if (!agentsViewInitializedForOpen) {
+      agentsViewInitializedForOpen = true;
+      agentsView =
+        chatSessionId != null || chatSessions.length === 0 ? 'conversation' : 'list';
+    }
+  } else {
+    agentsViewInitializedForOpen = false;
+  }
   $: agentsRows = buildAgentsListRows(
     projectAgentsFeed({
       sessions: chatSessions,
