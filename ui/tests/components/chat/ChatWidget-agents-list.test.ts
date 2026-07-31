@@ -28,9 +28,7 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain(
       "chatSessionId != null || chatSessions.length === 0 ? 'conversation' : 'list'",
     );
-    expect(source).toContain(
-      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
-    );
+    expect(source).toContain('{#if canAgentsListBeDefaultView}');
     expect(source).toContain('<AgentsList');
     expect(source).toContain('rows={agentsRows}');
     expect(source).toContain('onSelect={handleSelectAgentsEntry}');
@@ -39,38 +37,43 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('disabled');
   });
 
-  it('renders one active view with directional motion and sessions-bar Back navigation', () => {
+  it('keeps the conversation mounted while display-toggling the list with CSS motion', () => {
     const source = readFileSync(widgetPath, 'utf8');
-    const activeViewStart = source.indexOf(
-      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
-    );
-    const activeViewEnd = source.indexOf(
+    const viewsStart = source.indexOf('{#if canAgentsListBeDefaultView}');
+    const viewsEnd = source.indexOf(
       '<div class="sr-only" aria-live="polite" aria-atomic="true">',
-      activeViewStart,
+      viewsStart,
     );
-    const activeView = source.slice(activeViewStart, activeViewEnd);
+    const views = source.slice(viewsStart, viewsEnd);
 
-    expect(activeViewStart).toBeGreaterThan(-1);
-    expect(activeViewEnd).toBeGreaterThan(activeViewStart);
-    expect(activeView).toContain(
-      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
+    expect(viewsStart).toBeGreaterThan(-1);
+    expect(viewsEnd).toBeGreaterThan(viewsStart);
+    expect(views).toContain('<section');
+    expect(views).toContain("class:hidden={agentsView !== 'list'}");
+    expect(views).toContain(
+      "class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}",
     );
-    expect(activeView).toContain('{:else}');
-    expect(activeView).toContain("in:fly={agentsViewFly('inline-start')}");
-    expect(activeView).toContain("out:fly={agentsViewFly('inline-start')}");
-    expect(activeView).toContain("in:fly={agentsViewFly('inline-end')}");
-    expect(activeView).toContain("out:fly={agentsViewFly('inline-end')}");
-    expect(activeView).not.toContain('chat-agents-pager');
-    expect(activeView).not.toContain('aria-hidden');
-    expect(activeView).not.toContain('inert');
+    expect(views).toContain(
+      "class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}",
+    );
+    expect(views).toContain(
+      "class:chat-agents-view-slide-from-inline-end={canAgentsListBeDefaultView && agentsView === 'conversation'}",
+    );
+    expect(views).toContain('bind:this={chatPanelRef}');
+    expect(views).not.toContain("{#if canAgentsListBeDefaultView && agentsView === 'list'}");
+    expect(views).not.toContain('in:fly=');
+    expect(views).not.toContain('out:fly=');
+    expect(views).not.toContain('chat-agents-pager');
+    expect(views).not.toContain('aria-hidden');
+    expect(views).not.toContain('inert');
 
-    expect(source).toContain("import { fly } from 'svelte/transition'");
-    expect(source).toContain("window.matchMedia('(prefers-reduced-motion: reduce)')");
-    expect(source).toContain('x: agentsViewReducedMotion ? 0 : x');
-    expect(source).toContain(
-      'duration: agentsViewReducedMotion ? 0 : AGENTS_VIEW_SLIDE_DURATION_MS',
-    );
-    expect(source).toContain("document.documentElement.dir === 'rtl'");
+    expect(source).not.toContain("import { fly } from 'svelte/transition'");
+    expect(source).toContain('@keyframes chat-agents-view-slide-from-inline-start');
+    expect(source).toContain('@keyframes chat-agents-view-slide-from-inline-end');
+    expect(source).toContain('inset-inline-start: -24px');
+    expect(source).toContain('inset-inline-end: -24px');
+    expect(source).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(source).toContain('animation: none');
     expect(source).toContain('onBack={canAgentsListBeDefaultView ? returnToAgentsList : undefined}');
     expect(source).toContain("backLabel={$_('chat.agents.back')}");
     expect(source).toContain(
@@ -80,5 +83,18 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('aria-live="polite"');
     expect(source).toContain('focusConversationHeading');
     expect(source).toContain('focusAgentsListRow');
+
+    const selectHandler = source.slice(
+      source.indexOf('const handleSelectAgentsEntry'),
+      source.indexOf('const handleAgentsAction'),
+    );
+    const actionHandler = source.slice(
+      source.indexOf('const handleAgentsAction'),
+      source.indexOf('const onJobUpdate'),
+    );
+    expect(selectHandler).toContain('await handleSelectSession(entryId);');
+    expect(selectHandler).not.toContain('await tick();');
+    expect(actionHandler).toContain('await handleSelectSession(entryId);');
+    expect(actionHandler).not.toContain('await tick();');
   });
 });

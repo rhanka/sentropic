@@ -52,10 +52,10 @@
 - [x] **Slice 3 — restore the export + classify**
   - [x] Re-add `./components/AgentsList.svelte` to `package.json` + `export-manifest.json`; add a `primitive` entry to `chat-ui-reference-validation.json` with `dogfoodedBy: ["ui/src/lib/components/ChatWidget.svelte"]` (now a real consumer). Bump chat-ui minor.
   - [x] `make test-chat-ui ENV=test-lc` — reference-validation green.
-- [x] **Slice 4 — return-to-list pager navigation**
+- [x] **Slice 4 — return-to-list pager navigation (both views mounted)**
   - [x] Add optional `ChatSessionsBar` Back callback + visible ArrowLeft label; bump the additive package API to 0.32.0.
-  - [x] Replace the interim outer Back row with a single-active view and short logical Svelte slide, omit the session chooser only in pager hosts, and keep `sidePreference()` out of navigation.
+  - [x] Replace the interim outer Back row with display-toggled, both-mounted views and a short logical CSS slide, omit the session chooser only in pager hosts, and keep `sidePreference()` out of navigation.
   - [x] Restore focus to the conversation heading/list row and announce pager view changes; cover the package DOM contract and host wiring.
-  - [x] Run the chat-ui, DOM, typecheck, and full UI gates; prove the single-active conditional fails first when the conversation toggle is broken.
+  - [x] Run the chat-ui, DOM, typecheck, and full UI gates; prove the display toggle fails first when the list is not hidden.
 - [ ] **Slice 5 — UAT prep**
   - [ ] Integrate on root `ENV=dev` with the owner's data, give the UAT objectives (the visible surface: renamed-or-not tab, list items, status wheel, pending tag, R9 order, scope toggle disabled-with-reason). Real UAT is WITH the owner.
