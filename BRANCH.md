@@ -60,7 +60,7 @@ Deliver L3 of `SPEC_EVOL_CONNECTOR_HOST`: a separate Gmail `gmail.readonly` OAut
 
 - [ ] **Lot 2 — Gmail API routes and deny-by-default host mount**
   - [ ] Add `POST /api/v1/gmail/oauth/start`, `GET /api/v1/gmail/oauth/callback`, `GET /api/v1/gmail/connection`, and `POST /api/v1/gmail/disconnect` with the authenticated session/workspace guard.
-  - [ ] Add `createGmailConnectorHost()` using `gmailLiveAdapter`, `provider='gmail'`, `googleOAuthAccessToken`, and only `messages.get`, `threads.get`, `messages.list`, and `labels.list`.
+- [x] Add `createGmailConnectorHost()` using `gmailLiveAdapter`, `provider='gmail'`, `googleOAuthAccessToken`, and only `messages.get`, `threads.get`, `messages.list`, and `labels.list`.
   - [ ] Preserve `connector_secret_unavailable` and `connector_secret_unreadable` through the existing secret-port contract.
   - [ ] Lot gate: `make scope-check`.
 
