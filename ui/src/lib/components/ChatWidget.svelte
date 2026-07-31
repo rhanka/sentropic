@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
-  import { fly } from 'svelte/transition';
   import type { ContextProvider } from '@sentropic/cowork-bridge/core';
   import { _, locale } from 'svelte-i18n';
   import { initApiClient } from '@sentropic/cowork-bridge/core';
@@ -129,11 +128,6 @@
   let canAgentsListBeDefaultView = false;
   let agentsListReturnFocusId: string | null = null;
   let agentsViewAnnouncement = '';
-  const AGENTS_VIEW_SLIDE_DURATION_MS = 180;
-  const AGENTS_VIEW_SLIDE_DISTANCE_PX = 24;
-  let agentsViewReducedMotion = false;
-  let agentsViewIsRtl = false;
-  let agentsViewMotionQuery: MediaQueryList | null = null;
   let commentContext: {
     type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
@@ -2036,24 +2030,6 @@
     row?.querySelector<HTMLElement>('[role="option"]')?.focus();
   };
 
-  const syncAgentsViewMotion = () => {
-    agentsViewReducedMotion = agentsViewMotionQuery?.matches ?? false;
-    agentsViewIsRtl = document.documentElement.dir === 'rtl';
-  };
-
-  const agentsViewFly = (edge: 'inline-start' | 'inline-end') => {
-    const inlineStartX = agentsViewIsRtl
-      ? AGENTS_VIEW_SLIDE_DISTANCE_PX
-      : -AGENTS_VIEW_SLIDE_DISTANCE_PX;
-    const x = edge === 'inline-start' ? inlineStartX : -inlineStartX;
-
-    return {
-      x: agentsViewReducedMotion ? 0 : x,
-      duration: agentsViewReducedMotion ? 0 : AGENTS_VIEW_SLIDE_DURATION_MS,
-      opacity: 1,
-    };
-  };
-
   const showAgentsConversation = (returnFocusId?: string) => {
     if (returnFocusId) agentsListReturnFocusId = returnFocusId;
     agentsView = 'conversation';
@@ -2069,11 +2045,6 @@
   const handleSelectAgentsEntry = async (entryId: string) => {
     if (!chatSessions.some((session) => session.id === entryId)) return;
     showAgentsConversation(entryId);
-    // Single-active-view unmounts ChatPanel while the list is shown, so
-    // `chatPanelRef` is null until the conversation view re-mounts. Await that
-    // mount before selecting, or the imperative selectSession() no-ops and the
-    // panel stays on the previously-open session (silent switch failure).
-    await tick();
     await handleSelectSession(entryId);
     void focusConversationHeading();
   };
@@ -2102,7 +2073,6 @@
     if (action === 'delete') {
       showAgentsConversation(entryId);
       pendingChatSessionDeleteConfirm = true;
-      await tick();
       await handleSelectSession(entryId);
       await focusConversationHeading();
     }
@@ -2127,9 +2097,6 @@
 
   onMount(async () => {
     isBrowserReady = true;
-    agentsViewMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    syncAgentsViewMotion();
-    agentsViewMotionQuery.addEventListener('change', syncAgentsViewMotion);
     applyInitialState(initialState ?? readPersistedHandoffState());
     // displayMode initial state handled in ChatDock via its initialOpen / isSidePanelHost logic;
     // We still set displayMode here so ChatDock picks it up via prop reactivity.
@@ -2263,7 +2230,6 @@
   };
 
   onDestroy(() => {
-    agentsViewMotionQuery?.removeEventListener('change', syncAgentsViewMotion);
     window.removeEventListener('keydown', onPlacementDragKeyDown);
     releaseHeaderGrip();
     cancelPlacementDrag();
@@ -3284,11 +3250,11 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            {#if canAgentsListBeDefaultView && agentsView === 'list'}
-              <div
+            {#if canAgentsListBeDefaultView}
+              <section
                 class="h-full min-h-0 overflow-y-auto p-3"
-                in:fly={agentsViewFly('inline-start')}
-                out:fly={agentsViewFly('inline-start')}
+                class:hidden={agentsView !== 'list'}
+                class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}
               >
                 <div class="mb-3 flex items-center justify-between gap-3">
                   <label class="flex items-center gap-2 text-xs text-slate-500" title={$_('chat.agents.scope.unavailable')}>
@@ -3321,14 +3287,14 @@
                   labels={(key: string) => $_(key)}
                   formatRelative={formatAgentsRelative}
                 />
-              </div>
-            {:else}
-              <div
-                class="h-full min-h-0 flex flex-col"
-                in:fly={agentsViewFly('inline-end')}
-                out:fly={agentsViewFly('inline-end')}
-              >
-                <!-- Gold shell adoption (S6b): sessions bar renders via the
+              </section>
+            {/if}
+            <div
+              class="h-full min-h-0 flex flex-col"
+              class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}
+              class:chat-agents-view-slide-from-inline-end={canAgentsListBeDefaultView && agentsView === 'conversation'}
+            >
+              <!-- Gold shell adoption (S6b): sessions bar renders via the
                        @sentropic/chat-ui ChatSessionsBar component; the host keeps the
                        popover menu (MenuPopover) and icons as snippets. -->
               {#snippet renderChatSessionsMenu(p: {
@@ -3422,8 +3388,7 @@
                 />
               {/if}
             </div>
-              </div>
-            {/if}
+            </div>
             <div class="sr-only" aria-live="polite" aria-atomic="true">
               {agentsViewAnnouncement}
             </div>
@@ -3475,3 +3440,47 @@
     labelForPlacement={placementDragZoneLabel}
   />
 {/if}
+
+<style>
+  .chat-agents-view-slide-from-inline-start,
+  .chat-agents-view-slide-from-inline-end {
+    position: relative;
+    animation-duration: 180ms;
+    animation-timing-function: ease-out;
+  }
+
+  .chat-agents-view-slide-from-inline-start {
+    animation-name: chat-agents-view-slide-from-inline-start;
+  }
+
+  .chat-agents-view-slide-from-inline-end {
+    animation-name: chat-agents-view-slide-from-inline-end;
+  }
+
+  @keyframes chat-agents-view-slide-from-inline-start {
+    from {
+      inset-inline-start: -24px;
+    }
+
+    to {
+      inset-inline-start: 0;
+    }
+  }
+
+  @keyframes chat-agents-view-slide-from-inline-end {
+    from {
+      inset-inline-end: -24px;
+    }
+
+    to {
+      inset-inline-end: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-agents-view-slide-from-inline-start,
+    .chat-agents-view-slide-from-inline-end {
+      animation: none;
+    }
+  }
+</style>
