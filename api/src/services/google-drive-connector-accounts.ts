@@ -14,6 +14,7 @@ import {
   type GoogleDriveAccountIdentity,
   type GoogleDriveTokenResponse,
 } from './google-drive-oauth';
+import type { GoogleConnectorProvider } from './gmail-oauth';
 
 export type GoogleDriveConnectionStatus = 'connected' | 'disconnected' | 'error';
 
@@ -30,7 +31,7 @@ export class ConnectorAccountLimitError extends Error {
 
 export type GoogleDriveConnectionPublic = {
   id: string | null;
-  provider: typeof GOOGLE_DRIVE_PROVIDER;
+  provider: GoogleConnectorProvider;
   status: GoogleDriveConnectionStatus;
   connected: boolean;
   accountEmail: string | null;
@@ -177,11 +178,12 @@ const refreshStoredGoogleDriveTokenSecret = async (input: {
 
 export const toPublicGoogleDriveConnection = (
   row: DocumentConnectorAccountRow | null | undefined,
+  provider: GoogleConnectorProvider = GOOGLE_DRIVE_PROVIDER,
 ): GoogleDriveConnectionPublic => {
   if (!row) {
     return {
       id: null,
-      provider: GOOGLE_DRIVE_PROVIDER,
+      provider,
       status: 'disconnected',
       connected: false,
       accountEmail: null,
@@ -198,7 +200,7 @@ export const toPublicGoogleDriveConnection = (
   const status = row.status === 'connected' || row.status === 'error' ? row.status : 'disconnected';
   return {
     id: row.id,
-    provider: GOOGLE_DRIVE_PROVIDER,
+    provider,
     status,
     connected: status === 'connected',
     accountEmail: row.accountEmail ?? null,
@@ -232,14 +234,17 @@ export const listConnectorAccounts = async (
       desc(documentConnectorAccounts.updatedAt),
     );
 
-export const getGoogleDriveConnectorAccount = async (input: {
-  userId: string;
-  workspaceId: string;
-}): Promise<DocumentConnectorAccountRow | null> => {
+export const getGoogleDriveConnectorAccount = async (
+  input: {
+    userId: string;
+    workspaceId: string;
+  },
+  provider: GoogleConnectorProvider = GOOGLE_DRIVE_PROVIDER,
+): Promise<DocumentConnectorAccountRow | null> => {
   const [row] = await listConnectorAccounts(
     input.workspaceId,
     input.userId,
-    GOOGLE_DRIVE_PROVIDER,
+    provider,
   );
   return row ?? null;
 };
@@ -249,14 +254,15 @@ export const getGoogleDriveConnection = async (
     userId: string;
     workspaceId: string;
   },
-  options: { validateToken?: boolean } = {},
+  options: { validateToken?: boolean; provider?: GoogleConnectorProvider } = {},
 ): Promise<GoogleDriveConnectionPublic> => {
-  let account = await getGoogleDriveConnectorAccount(input);
+  const provider = options.provider ?? GOOGLE_DRIVE_PROVIDER;
+  let account = await getGoogleDriveConnectorAccount(input, provider);
   if (options.validateToken && account && account.status !== 'disconnected') {
-    await resolveGoogleDriveTokenSecret(input);
-    account = await getGoogleDriveConnectorAccount(input);
+    await resolveGoogleDriveTokenSecret({ ...input, provider });
+    account = await getGoogleDriveConnectorAccount(input, provider);
   }
-  return toPublicGoogleDriveConnection(account);
+  return toPublicGoogleDriveConnection(account, provider);
 };
 
 export const storeGoogleDriveTokenMaterial = async (input: {
@@ -264,11 +270,13 @@ export const storeGoogleDriveTokenMaterial = async (input: {
   workspaceId: string;
   token: GoogleDriveTokenResponse;
   identity: GoogleDriveAccountIdentity;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveConnectionPublic> => {
+  const provider = input.provider ?? GOOGLE_DRIVE_PROVIDER;
   const accounts = await listConnectorAccounts(
     input.workspaceId,
     input.userId,
-    GOOGLE_DRIVE_PROVIDER,
+    provider,
   );
   const isExistingSubject = accounts.some(
     (account) => account.accountSubject === input.identity.accountSubject,
@@ -296,7 +304,7 @@ export const storeGoogleDriveTokenMaterial = async (input: {
     id: createId(),
     workspaceId: input.workspaceId,
     userId: input.userId,
-    provider: GOOGLE_DRIVE_PROVIDER,
+    provider,
     status: 'connected',
     accountEmail: input.identity.accountEmail,
     accountSubject: input.identity.accountSubject,
@@ -334,7 +342,7 @@ export const storeGoogleDriveTokenMaterial = async (input: {
       },
     });
 
-  return getGoogleDriveConnection(input);
+  return getGoogleDriveConnection(input, { provider });
 };
 
 /**
@@ -388,21 +396,25 @@ const revokeGoogleDriveGrantUpstream = async (accountId: string, token: string):
 export const disconnectGoogleDriveConnectorAccount = async (input: {
   userId: string;
   workspaceId: string;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveConnectionPublic> => {
+  const provider = input.provider ?? GOOGLE_DRIVE_PROVIDER;
+
   // EVERY account, not the first one.
   //
   // The uniqueness constraint is on (workspace, user, provider, accountSubject), so one user may
   // legitimately hold several connected Google accounts. `POST /disconnect` carries no account
   // identifier — it only knows the authenticated user — so its meaning to the user is "disconnect
-  // Google Drive", not "disconnect whichever account happens to sort first". Acting on a single row
-  // returned a success while leaving the other accounts' refresh tokens stored locally AND their
-  // grants live at Google: the exact silent failure this revocation work exists to remove.
+  // this Google connection", not "disconnect whichever account happens to sort first". Acting on a
+  // single row returned a success while leaving the other accounts' refresh tokens stored locally
+  // AND their grants live at Google: the exact silent failure this revocation work exists to remove.
+  // Scoped to `provider` so a Gmail disconnect never touches a Drive grant, and vice versa.
   const existing = await listConnectorAccounts(
     input.workspaceId,
     input.userId,
-    GOOGLE_DRIVE_PROVIDER,
+    provider,
   );
-  if (existing.length === 0) return toPublicGoogleDriveConnection(null);
+  if (existing.length === 0) return toPublicGoogleDriveConnection(null, provider);
 
   // ORDERING IS THE WHOLE DESIGN HERE.
   //
@@ -471,22 +483,24 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
     }),
   );
 
-  return getGoogleDriveConnection(input);
+  return getGoogleDriveConnection(input, { provider });
 };
 
 export const markGoogleDriveConnectorError = async (input: {
   userId: string;
   workspaceId: string;
   message: string;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveConnectionPublic> => {
-  const existing = await getGoogleDriveConnectorAccount(input);
+  const provider = input.provider ?? GOOGLE_DRIVE_PROVIDER;
+  const existing = await getGoogleDriveConnectorAccount(input, provider);
   const now = new Date();
   if (!existing) {
     await db.insert(documentConnectorAccounts).values({
       id: createId(),
       workspaceId: input.workspaceId,
       userId: input.userId,
-      provider: GOOGLE_DRIVE_PROVIDER,
+      provider,
       status: 'error',
       accountEmail: null,
       accountSubject: null,
@@ -499,7 +513,7 @@ export const markGoogleDriveConnectorError = async (input: {
       createdAt: now,
       updatedAt: now,
     });
-    return getGoogleDriveConnection(input);
+    return getGoogleDriveConnection(input, { provider });
   }
 
   await db
@@ -513,14 +527,15 @@ export const markGoogleDriveConnectorError = async (input: {
     })
     .where(eq(documentConnectorAccounts.id, existing.id));
 
-  return getGoogleDriveConnection(input);
+  return getGoogleDriveConnection(input, { provider });
 };
 
 export const resolveGoogleDriveTokenSecret = async (input: {
   userId: string;
   workspaceId: string;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveTokenSecretPayload | null> => {
-  const account = await getGoogleDriveConnectorAccount(input);
+  const account = await getGoogleDriveConnectorAccount(input, input.provider);
   if (!account || (account.status !== 'connected' && account.status !== 'error')) return null;
   const decrypted = decryptSecretOrNull(account.tokenSecret);
   if (!decrypted) return null;
