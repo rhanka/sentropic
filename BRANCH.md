@@ -65,8 +65,9 @@ Implement the API-side P1 ports and the deny-by-default Google Drive host mount 
   - [x] Commit resolvers and mount factory via `make commit`.
 
 - [ ] **Lot 4 — Hermetic proof and validation**
-  - [ ] Add `api/tests/unit/connector-host.test.ts` for secret classification, account ambiguity, session/workspace denial, and mounted Drive behavior.
+  - [x] Wire the API image to install and build the three new workspace dependencies.
+  - [x] Add `api/tests/unit/connector-host.test.ts` for secret classification, account ambiguity, session/workspace denial, and mounted Drive behavior.
   - [ ] Run scoped API unit tests: `make test-api-unit SCOPE=tests/unit/connector-host.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-connector-host-api`.
   - [ ] Run `make typecheck-lint-api ENV=test-connector-host-api`.
   - [ ] Run `make scope-check` before every commit and confirm a clean worktree after the final commit.
-  - [ ] Commit tests via `make commit`.
+  - [x] Commit tests via `make commit`.
