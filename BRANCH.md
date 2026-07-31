@@ -22,12 +22,15 @@ Build the pure, provider-agnostic `@sentropic/connector-host` mount that exposes
   - `.cursor/rules/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
+  - `package-lock.json`
   - `.github/workflows/**`
 - **Exception process**:
   - `BR478-EX1` is declared below before changing the root `Makefile`.
+  - `BR480-EX1` is declared below before regenerating the root `package-lock.json`.
 
 ## Feedback Loop
 - [x] `BR478-EX1` — Root `Makefile` needs additive `typecheck-connector-host` and `test-connector-host` targets. Impact: only the new private package has an executable containerized gate. Rollback: remove those two targets.
+- [x] `BR480-EX1` — Root `package-lock.json` must record connector-host's published `@sentropic/mcp-platform` workspace dependency. Impact: lockfile resolution stays reproducible. Rollback: remove the dependency and regenerate the lockfile.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
