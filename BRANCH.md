@@ -32,11 +32,12 @@
 
 ## Feedback Loop
 - `attention` — the api feed gap (perennial agents, CLI transcripts R12, cross-workspace R10) is NOT closed here; those parts render disabled/absent with a stated reason, never faked. This is the honest boundary of the first UAT.
+- `fixed` — the delegated mount (Codex gpt-5.6-terra) shipped a DEAD D5 merge: it passed `$queueStore.jobs` raw, but the store types job `data` as `any` and only `chat_message` jobs carry `data.sessionId` (api `ChatMessageJobData`), which `loadJobs()` deliberately keeps in the store. Raw jobs → no top-level `sessionId` → the merge no-ops → a chat turn would appear twice. Its wiring test was a source-grep that PINNED the buggy line and could not catch it. Fixed with `queueJobsToAppJobs` (lifts `data.sessionId`, unit-tested + an end-to-end no-duplication test in `ui/tests/chat/agents-feed-queue-jobs.test.ts`); the wiring test now asserts the fixed plumbing and rejects the raw form. Fail-first re-proven. Caught by reading the code, not the report.
 
 ## Plan / Todo (lot-based)
-- [ ] **Slice 1 — host-side feed adapter (pure, testable)**
-  - [ ] `agents-feed-adapter.ts`: map app `ChatSession[]` + queue `Job[]` → `AgentsEntry[]`; status mapping (job processing→running, pending→idle, completed→done, failed→failed; sessions→idle); `lastActivityAt` from job `completedAt??startedAt??createdAt`; `chat_message` jobs merged into their session, not shown as their own row (D5).
-  - [ ] `ui/tests/agents-feed-adapter.spec.ts`: mapping, the chat_message merge, and buildAgentsListRows integration on the projected entries. Fail-first verified.
+- [x] **Slice 1 — host-side feed adapter (pure, testable)**
+  - [x] `agents-feed-adapter.ts`: map app `ChatSession[]` + queue `Job[]` → `AgentsEntry[]`; status mapping; `lastActivityAt` from job `completedAt??startedAt??createdAt`; `chat_message` jobs merged into their session, not shown as their own row (D5).
+  - [x] `ui/tests/chat/agents-feed-adapter.test.ts`: mapping, the chat_message merge, and buildAgentsListRows integration. Fail-first verified.
 - [x] **Slice 2 — mount + list-as-default nav**
   - [x] Mount `AgentsList` in `ChatWidget.svelte` behind the host-mode predicate (D13); selecting a row opens the session; the list is the default landing view where allowed.
   - [x] Scope toggle rendered disabled-with-reason (D7).
