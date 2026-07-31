@@ -129,7 +129,9 @@ describe('Google Drive connector host ports', () => {
       sessionUser: user, loadAccounts: async () => [selected], resolveToken: async () => token(),
       checkWorkspaceAccess: async (_userId, workspaceId) => { if (workspaceId !== user.workspaceId) throw new Error('denied'); },
     });
-    await expect(driver.invoke(hostRequest({ capabilityRef: 'files.list', input: {} }))).resolves.toMatchObject({
+    // A capability outside the finite read-only P1 allowlist (a write op) is denied as missing
+    // before any adapter or network call — this is the deny-by-default boundary, not an API result.
+    await expect(driver.invoke(hostRequest({ capabilityRef: 'files.delete', input: {} }))).resolves.toMatchObject({
       error: { code: 'connector_not_found' },
     });
     await expect(driver.readResource(hostRequest({ requestedWorkspaceRef: 'workspace-2' }))).resolves.toMatchObject({
