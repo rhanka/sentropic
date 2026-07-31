@@ -15,10 +15,13 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths**:
   - `ui/src/lib/chat/agents-feed-adapter.ts` (new — host-side `AgentsFeedPort` impl)
-  - `ui/src/lib/components/ChatWidget.svelte` (mount point + list-as-default nav)
+  - `ui/src/lib/components/ChatWidget.svelte` (mount point + agents-list pager navigation)
   - `ui/tests/agents-feed-adapter.spec.ts` (new)
+  - `ui/tests/components/chat/ChatWidget-agents-list.test.ts` (pager wiring contract)
   - `ui/src/locales/en.json`, `ui/src/locales/fr.json` (agents-surface labels)
-  - `packages/chat-ui/package.json`, `packages/chat-ui/export-manifest.json`, `packages/chat-ui/chat-ui-reference-validation.json` (restore the export + classify)
+  - `packages/chat-ui/src/components/ChatSessionsBar.svelte`, `packages/chat-ui/src/components/ChatSessionsBar.svelte.d.ts` (optional host Back navigation)
+  - `packages/chat-ui/package.json`, `packages/chat-ui/export-manifest.json`, `packages/chat-ui/chat-ui-reference-validation.json` (public contract)
+  - `packages/chat-ui/tests/chat-sessions-bar.dom.spec.ts` (Back control DOM contract)
   - `packages/chat-ui/tests/chat-conversation.spec.ts` (version pin only)
   - `packages/chat-ui/tests/documents-module.spec.ts` (version pin only)
   - `packages/chat-ui/tests/chat-core-host.spec.ts` (version pin only)
@@ -26,7 +29,7 @@
 - **Forbidden Paths**:
   - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
   - `api/**` (no api change — the feed gap is a separate lane)
-  - `packages/chat-ui/src/**` (the package code is already shipped in 0.30.0; this lot only restores an export)
+  - `packages/chat-ui/src/components/AgentsList.svelte` (frozen)
   - `packages/cowork-bridge/**`
 - **Conditional Paths**: `.github/workflows/**` (none expected)
 
@@ -46,5 +49,10 @@
 - [x] **Slice 3 — restore the export + classify**
   - [x] Re-add `./components/AgentsList.svelte` to `package.json` + `export-manifest.json`; add a `primitive` entry to `chat-ui-reference-validation.json` with `dogfoodedBy: ["ui/src/lib/components/ChatWidget.svelte"]` (now a real consumer). Bump chat-ui minor.
   - [x] `make test-chat-ui ENV=test-lc` — reference-validation green.
-- [ ] **Slice 4 — UAT prep**
+- [ ] **Slice 4 — return-to-list pager navigation**
+  - [x] Add optional `ChatSessionsBar` Back callback + visible ArrowLeft label; bump the additive package API to 0.32.0.
+  - [ ] Replace the interim outer Back row with a pager-gated logical slide, omit the session chooser only in pager hosts, and keep `sidePreference()` out of navigation.
+  - [ ] Restore focus to the conversation heading/list row and announce pager view changes; cover the package DOM contract and host wiring.
+  - [ ] Run the chat-ui, DOM, typecheck, and full UI gates; prove the Back test fails when the callback is broken.
+- [ ] **Slice 5 — UAT prep**
   - [ ] Integrate on root `ENV=dev` with the owner's data, give the UAT objectives (the visible surface: renamed-or-not tab, list items, status wheel, pending tag, R9 order, scope toggle disabled-with-reason). Real UAT is WITH the owner.
