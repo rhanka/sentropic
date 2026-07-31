@@ -138,4 +138,35 @@ describe('secret encryption — key separation and versioned keyring', () => {
     expect(sealed).not.toContain(plaintext);
     expect(decryptSecret(sealed)).toBe(plaintext);
   });
+
+  it('does NOT normalise the seed: a trailing newline is a DIFFERENT key (spec:164 canary)', () => {
+    // This is what makes the deployment gate falsifiable at all.
+    //
+    // spec:164 requires that the exact injected bytes succeed AND that a canary injection carrying an
+    // added trailing newline FAILS the reference-envelope check. That canary is the only half of the
+    // gate that can actually come back negative — spec:163 passes even when the variable is not read
+    // at all, because the legacy literal is the live production seed and decrypts regardless.
+    //
+    // But the canary can only fail if the resolver feeds the raw bytes to SHA-256. Add a `.trim()`,
+    // a `.normalize()`, or a base64 decode "for robustness" and a newline-polluted value silently
+    // becomes the correct key: the gate then reports success on a misconfigured deployment, which is
+    // strictly worse than having no gate. Every other test in this file still passes under that
+    // change — this one does not, which is precisely why it exists.
+    const exactSeed = randomBytes(48).toString('base64url');
+    const plaintext = randomBytes(24).toString('base64url');
+    const sealed = sealWithSeed(plaintext, exactSeed);
+
+    securityEnv.SECRET_ENCRYPTION_KEY = exactSeed;
+    expect(decryptSecret(sealed), 'the exact bytes must decrypt').toBe(plaintext);
+
+    // The canary. GCM authentication fails on a key mismatch, so this must throw rather than return
+    // anything at all — and it must NEVER return the plaintext.
+    securityEnv.SECRET_ENCRYPTION_KEY = `${exactSeed}\n`;
+    expect(() => decryptSecret(sealed)).toThrow();
+
+    // Surrounding whitespace is the same hazard from the other side: an env file written with a
+    // trailing space, or a copy-paste that picks one up, must not resolve to the same key either.
+    securityEnv.SECRET_ENCRYPTION_KEY = ` ${exactSeed}`;
+    expect(() => decryptSecret(sealed)).toThrow();
+  });
 });
