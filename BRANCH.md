@@ -52,9 +52,10 @@
 - [x] **Slice 3 — restore the export + classify**
   - [x] Re-add `./components/AgentsList.svelte` to `package.json` + `export-manifest.json`; add a `primitive` entry to `chat-ui-reference-validation.json` with `dogfoodedBy: ["ui/src/lib/components/ChatWidget.svelte"]` (now a real consumer). Bump chat-ui minor.
   - [x] `make test-chat-ui ENV=test-lc` — reference-validation green.
-- [x] **Slice 4 — return-to-list pager navigation (both views mounted)**
+- [x] **Slice 4 — return-to-list pager navigation (hybrid view mounting)**
   - [x] Add optional `ChatSessionsBar` Back callback + visible ArrowLeft label; bump the additive package API to 0.32.0.
-  - [x] Replace the interim outer Back row with display-toggled, both-mounted views and a short logical CSS slide, omit the session chooser only in pager hosts, and keep `sidePreference()` out of navigation.
+  - [x] Replace the interim outer Back row with a short logical CSS slide, omit the session chooser only in pager hosts, and keep `sidePreference()` out of navigation.
+  - [x] Remount the list on each show to refresh its design-system row registry while keeping the conversation and `ChatPanel` mounted; lock the hybrid structure with a fail-first regression test.
   - [x] Restore focus to the conversation heading/list row and announce pager view changes; cover the package DOM contract and host wiring.
   - [x] Run the chat-ui, DOM, typecheck, and full UI gates; prove the display toggle fails first when the list is not hidden.
 - [ ] **Slice 5 — UAT prep**

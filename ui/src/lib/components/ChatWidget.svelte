@@ -3250,10 +3250,9 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            {#if canAgentsListBeDefaultView}
+            {#if canAgentsListBeDefaultView && agentsView === 'list'}
               <section
                 class="h-full min-h-0 overflow-y-auto p-3"
-                class:hidden={agentsView !== 'list'}
                 class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}
               >
                 <div class="mb-3 flex items-center justify-between gap-3">

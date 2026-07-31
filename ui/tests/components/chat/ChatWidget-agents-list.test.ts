@@ -28,7 +28,9 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain(
       "chatSessionId != null || chatSessions.length === 0 ? 'conversation' : 'list'",
     );
-    expect(source).toContain('{#if canAgentsListBeDefaultView}');
+    expect(source).toContain(
+      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
+    );
     expect(source).toContain('<AgentsList');
     expect(source).toContain('rows={agentsRows}');
     expect(source).toContain('onSelect={handleSelectAgentsEntry}');
@@ -37,22 +39,40 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('disabled');
   });
 
-  it('keeps the conversation mounted while display-toggling the list with CSS motion', () => {
+  it('remounts the list while keeping the conversation mounted with CSS motion', () => {
     const source = readFileSync(widgetPath, 'utf8');
-    const viewsStart = source.indexOf('{#if canAgentsListBeDefaultView}');
+    const listMountStart = source.indexOf(
+      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
+    );
+    const listSectionStart = source.indexOf('<section', listMountStart);
+    const listSectionEnd = source.indexOf('</section>', listSectionStart);
+    const listMountEnd = source.indexOf('{/if}', listSectionEnd);
+    const conversationStart = source.indexOf(
+      '<div\n              class="h-full min-h-0 flex flex-col"',
+      listMountEnd,
+    );
     const viewsEnd = source.indexOf(
       '<div class="sr-only" aria-live="polite" aria-atomic="true">',
-      viewsStart,
+      conversationStart,
     );
-    const views = source.slice(viewsStart, viewsEnd);
+    const listMount = source.slice(listMountStart, listMountEnd);
+    const conversationLead = source.slice(
+      listMountEnd + '{/if}'.length,
+      conversationStart,
+    );
+    const views = source.slice(listMountStart, viewsEnd);
 
-    expect(viewsStart).toBeGreaterThan(-1);
-    expect(viewsEnd).toBeGreaterThan(viewsStart);
-    expect(views).toContain('<section');
-    expect(views).toContain("class:hidden={agentsView !== 'list'}");
-    expect(views).toContain(
+    expect(listMountStart).toBeGreaterThan(-1);
+    expect(listSectionStart).toBeGreaterThan(listMountStart);
+    expect(listSectionEnd).toBeGreaterThan(listSectionStart);
+    expect(listMountEnd).toBeGreaterThan(listSectionEnd);
+    expect(conversationStart).toBeGreaterThan(listMountEnd);
+    expect(viewsEnd).toBeGreaterThan(conversationStart);
+    expect(listMount).not.toContain("class:hidden={agentsView !== 'list'}");
+    expect(listMount).toContain(
       "class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}",
     );
+    expect(conversationLead.trim()).toBe('');
     expect(views).toContain(
       "class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}",
     );
@@ -60,7 +80,6 @@ describe('ChatWidget agents list wiring', () => {
       "class:chat-agents-view-slide-from-inline-end={canAgentsListBeDefaultView && agentsView === 'conversation'}",
     );
     expect(views).toContain('bind:this={chatPanelRef}');
-    expect(views).not.toContain("{#if canAgentsListBeDefaultView && agentsView === 'list'}");
     expect(views).not.toContain('in:fly=');
     expect(views).not.toContain('out:fly=');
     expect(views).not.toContain('chat-agents-pager');
