@@ -53,7 +53,7 @@ Deliver L3 of `SPEC_EVOL_CONNECTOR_HOST`: a separate Gmail `gmail.readonly` OAut
   - [x] Define the dedicated validation environment: API `9080`, UI `5280`, Maildev `1180`, `ENV=cam`.
 
 - [ ] **Lot 1 — Separate Gmail OAuth and connector-account lifecycle**
-  - [ ] Add Gmail provider/scope OAuth helpers that read the shared Google client secret only through exported `resolveClientSecret` and use `createGoogleDriveOAuthState`/`verifyGoogleDriveOAuthState` unchanged.
+- [x] Add Gmail provider/scope OAuth helpers that read the shared Google client secret only through exported `resolveClientSecret` and use `createGoogleDriveOAuthState`/`verifyGoogleDriveOAuthState` unchanged.
   - [ ] Parameterize connector-account creation, connection lookup, error, token validation, and disconnect by provider with Google Drive as the default.
   - [ ] Prove the Gmail path stores an encrypted `provider='gmail'` row without mutating a Drive row.
   - [ ] Lot gate: `make scope-check`.
