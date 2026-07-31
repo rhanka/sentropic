@@ -12,6 +12,7 @@ import { listConnectorAccounts } from '../google-drive-connector-accounts';
 import { GMAIL_PROVIDER } from '../gmail-oauth';
 import {
   GOOGLE_DRIVE_ACCESS_TOKEN_SECRET,
+  SecretAccessError,
   createGoogleConnectorHostAuditPort,
   createGoogleDriveSecretPort,
   createSessionTenantWorkspaceResolver,
@@ -21,6 +22,7 @@ import {
 } from './google-drive';
 
 export const GMAIL_ACCESS_TOKEN_SECRET = GOOGLE_DRIVE_ACCESS_TOKEN_SECRET;
+export { SecretAccessError };
 export type GmailConnectorAccount = GoogleDriveConnectorAccount;
 export type GmailAccountLoader = GoogleDriveAccountLoader;
 export type GmailTokenResolver = GoogleDriveTokenResolver;
