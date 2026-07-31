@@ -41,20 +41,26 @@ test.describe('Chat session/workspace switch', () => {
   // Session switching now goes through the agents list, not the old chooser
   // popover: from a conversation, the ChatSessionsBar Back control returns to
   // the list, where each session is a listbox option carrying its title.
+  // Only the active view is rendered, so these selectors can target the dialog
+  // directly without matching an off-screen inactive row.
+  const activePage = '#chat-widget-dialog';
+
+  async function goToAgentsList(page: import('@playwright/test').Page) {
+    const backToList = page.locator(
+      `${activePage} button[aria-label="Retour aux conversations"], ${activePage} button[aria-label="Back to conversations"]`,
+    ).first();
+    if (await backToList.isVisible().catch(() => false)) {
+      await backToList.click();
+    }
+  }
+
   async function selectSessionByMarker(
     page: import('@playwright/test').Page,
     marker: string,
   ) {
-    const backToList = page
-      .locator(
-        '#chat-widget-dialog button[aria-label="Retour aux conversations"], #chat-widget-dialog button[aria-label="Back to conversations"]',
-      )
-      .first();
-    if (await backToList.isVisible().catch(() => false)) {
-      await backToList.click();
-    }
+    await goToAgentsList(page);
     const sessionRow = page
-      .locator('#chat-widget-dialog [role="option"]')
+      .locator(`${activePage} [role="option"]`)
       .filter({ hasText: marker })
       .first();
     await expect(sessionRow).toBeVisible({ timeout: 10_000 });
@@ -222,24 +228,16 @@ test.describe('Chat session/workspace switch', () => {
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       await openChat(page);
-      // Reach the agents list (from a conversation, use the Back control).
-      const backToList = page
-        .locator(
-          '#chat-widget-dialog button[aria-label="Retour aux conversations"], #chat-widget-dialog button[aria-label="Back to conversations"]',
-        )
-        .first();
-      if (await backToList.isVisible().catch(() => false)) {
-        await backToList.click();
-      }
+      await goToAgentsList(page);
 
       await expect(
-        page.locator('#chat-widget-dialog [role="option"]').filter({ hasText: sessionBPrompt }).first(),
+        page.locator(`${activePage} [role="option"]`).filter({ hasText: sessionBPrompt }).first(),
       ).toBeVisible({ timeout: 10_000 });
       await expect(
-        page.locator('#chat-widget-dialog [role="option"]').filter({ hasText: sessionAOnePrompt }),
+        page.locator(`${activePage} [role="option"]`).filter({ hasText: sessionAOnePrompt }),
       ).toHaveCount(0);
       await expect(
-        page.locator('#chat-widget-dialog [role="option"]').filter({ hasText: sessionATwoPrompt }),
+        page.locator(`${activePage} [role="option"]`).filter({ hasText: sessionATwoPrompt }),
       ).toHaveCount(0);
     } finally {
       await context.close();

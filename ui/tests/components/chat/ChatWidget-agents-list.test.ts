@@ -28,7 +28,9 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain(
       "chatSessionId != null || chatSessions.length === 0 ? 'conversation' : 'list'",
     );
-    expect(source).toContain('{#if canAgentsListBeDefaultView}');
+    expect(source).toContain(
+      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
+    );
     expect(source).toContain('<AgentsList');
     expect(source).toContain('rows={agentsRows}');
     expect(source).toContain('onSelect={handleSelectAgentsEntry}');
@@ -37,13 +39,38 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('disabled');
   });
 
-  it('uses the pager-gated sessions-bar Back control instead of a duplicate chooser', () => {
+  it('renders one active view with directional motion and sessions-bar Back navigation', () => {
     const source = readFileSync(widgetPath, 'utf8');
-
-    expect(source).toContain('class:chat-agents-pager={canAgentsListBeDefaultView}');
-    expect(source).toContain(
-      "class:chat-agents-pager__track--conversation={canAgentsListBeDefaultView && agentsView === 'conversation'}",
+    const activeViewStart = source.indexOf(
+      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
     );
+    const activeViewEnd = source.indexOf(
+      '<div class="sr-only" aria-live="polite" aria-atomic="true">',
+      activeViewStart,
+    );
+    const activeView = source.slice(activeViewStart, activeViewEnd);
+
+    expect(activeViewStart).toBeGreaterThan(-1);
+    expect(activeViewEnd).toBeGreaterThan(activeViewStart);
+    expect(activeView).toContain(
+      "{#if canAgentsListBeDefaultView && agentsView === 'list'}",
+    );
+    expect(activeView).toContain('{:else}');
+    expect(activeView).toContain("in:fly={agentsViewFly('inline-start')}");
+    expect(activeView).toContain("out:fly={agentsViewFly('inline-start')}");
+    expect(activeView).toContain("in:fly={agentsViewFly('inline-end')}");
+    expect(activeView).toContain("out:fly={agentsViewFly('inline-end')}");
+    expect(activeView).not.toContain('chat-agents-pager');
+    expect(activeView).not.toContain('aria-hidden');
+    expect(activeView).not.toContain('inert');
+
+    expect(source).toContain("import { fly } from 'svelte/transition'");
+    expect(source).toContain("window.matchMedia('(prefers-reduced-motion: reduce)')");
+    expect(source).toContain('x: agentsViewReducedMotion ? 0 : x');
+    expect(source).toContain(
+      'duration: agentsViewReducedMotion ? 0 : AGENTS_VIEW_SLIDE_DURATION_MS',
+    );
+    expect(source).toContain("document.documentElement.dir === 'rtl'");
     expect(source).toContain('onBack={canAgentsListBeDefaultView ? returnToAgentsList : undefined}');
     expect(source).toContain("backLabel={$_('chat.agents.back')}");
     expect(source).toContain(
@@ -53,7 +80,5 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('aria-live="polite"');
     expect(source).toContain('focusConversationHeading');
     expect(source).toContain('focusAgentsListRow');
-    expect(source).toContain('prefers-reduced-motion: reduce');
-    expect(source).toContain(':global(:dir(rtl))');
   });
 });

@@ -271,16 +271,19 @@ test.describe('Chat checkpoint restore', () => {
       // through the list (the old chooser popover was removed in pager hosts):
       // from a conversation, the Back control returns to the list where each
       // session is a listbox option carrying its title (here USER1_TEXT).
+      // Only the active view is rendered, so these selectors can target the
+      // dialog directly without matching an off-screen inactive row.
+      const activePage = '#chat-widget-dialog';
       const backToList = page
         .locator(
-          '#chat-widget-dialog button[aria-label="Retour aux conversations"], #chat-widget-dialog button[aria-label="Back to conversations"]',
+          `${activePage} button[aria-label="Retour aux conversations"], ${activePage} button[aria-label="Back to conversations"]`,
         )
         .first();
       if (await backToList.isVisible().catch(() => false)) {
         await backToList.click();
       }
       const sessionItem = page
-        .locator('#chat-widget-dialog [role="option"]')
+        .locator(`${activePage} [role="option"]`)
         .filter({ hasText: USER1_TEXT })
         .first();
       await expect(sessionItem).toBeVisible({ timeout: 10_000 });
