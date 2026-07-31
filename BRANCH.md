@@ -19,6 +19,9 @@
   - `ui/tests/agents-feed-adapter.spec.ts` (new)
   - `ui/src/locales/en.json`, `ui/src/locales/fr.json` (agents-surface labels)
   - `packages/chat-ui/package.json`, `packages/chat-ui/export-manifest.json`, `packages/chat-ui/chat-ui-reference-validation.json` (restore the export + classify)
+  - `packages/chat-ui/tests/chat-conversation.spec.ts` (version pin only)
+  - `packages/chat-ui/tests/documents-module.spec.ts` (version pin only)
+  - `packages/chat-ui/tests/chat-core-host.spec.ts` (version pin only)
   - `BRANCH.md`
 - **Forbidden Paths**:
   - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
@@ -34,10 +37,11 @@
 - [ ] **Slice 1 — host-side feed adapter (pure, testable)**
   - [ ] `agents-feed-adapter.ts`: map app `ChatSession[]` + queue `Job[]` → `AgentsEntry[]`; status mapping (job processing→running, pending→idle, completed→done, failed→failed; sessions→idle); `lastActivityAt` from job `completedAt??startedAt??createdAt`; `chat_message` jobs merged into their session, not shown as their own row (D5).
   - [ ] `ui/tests/agents-feed-adapter.spec.ts`: mapping, the chat_message merge, and buildAgentsListRows integration on the projected entries. Fail-first verified.
-- [ ] **Slice 2 — mount + list-as-default nav**
-  - [ ] Mount `AgentsList` in `ChatWidget.svelte` behind the host-mode predicate (D13); selecting a row opens the session; the list is the default landing view where allowed.
-  - [ ] Scope toggle rendered disabled-with-reason (D7).
-  - [ ] `make test-ui` FULL — green.
+- [x] **Slice 2 — mount + list-as-default nav**
+  - [x] Mount `AgentsList` in `ChatWidget.svelte` behind the host-mode predicate (D13); selecting a row opens the session; the list is the default landing view where allowed.
+  - [x] Scope toggle rendered disabled-with-reason (D7).
+  - [x] `ui/tests/components/chat/ChatWidget-agents-list.test.ts`: source wiring covers adapter rows, default view, selection, actions, labels, relative time, and disabled scope.
+  - [x] `make test-ui` FULL — green.
 - [ ] **Slice 3 — restore the export + classify**
   - [ ] Re-add `./components/AgentsList.svelte` to `package.json` + `export-manifest.json`; add a `primitive` entry to `chat-ui-reference-validation.json` with `dogfoodedBy: ["ui/src/lib/components/ChatWidget.svelte"]` (now a real consumer). Bump chat-ui minor.
   - [ ] `make test-chat-ui ENV=test-lc` — reference-validation green.
