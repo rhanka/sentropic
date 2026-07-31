@@ -58,14 +58,19 @@ const renderList = (props: Partial<{
   });
 
 describe('AgentsList', () => {
-  it('should render one listbox option per row and mark the active row selected', () => {
-    renderList({ activeId: 'running' });
+  it('should render one listbox option per row and mark the active row with aria-current', () => {
+    const { container } = renderList({ activeId: 'running' });
 
     expect(screen.getByRole('listbox', { name: 'label:chat.agents.list.label' })).not.toBeNull();
     const options = screen.getAllByRole('option');
     expect(options).toHaveLength(ROWS.length);
-    expect(options[1]?.getAttribute('aria-selected')).toBe('true');
-    expect(options[0]?.getAttribute('aria-selected')).toBe('false');
+    // The active-row highlight is carried by the row wrapper (aria-current),
+    // NOT the DS selection (`aria-selected`) — that is pinned off so a re-click
+    // navigates instead of toggling.
+    const active = container.querySelector('[data-agent-entry-id="running"]');
+    expect(active?.getAttribute('aria-current')).toBe('true');
+    const inactive = container.querySelector('[data-agent-entry-id="waiting"]');
+    expect(inactive?.getAttribute('aria-current')).toBeNull();
   });
 
   it('should call onSelect from click and keyboard activation', async () => {
@@ -77,6 +82,23 @@ describe('AgentsList', () => {
     await fireEvent.keyDown(options[1]!, { key: 'Enter' });
 
     expect(onSelect).toHaveBeenNthCalledWith(1, 'waiting');
+    expect(onSelect).toHaveBeenNthCalledWith(2, 'running');
+  });
+
+  it('should still call onSelect when the ALREADY-active row is re-clicked', async () => {
+    // Regression: the DS single-select toggles off on re-click of the selected
+    // row. If navigation were tied to that, returning to the session you just
+    // left would dead-end. onSelect must fire on every activation.
+    const onSelect = vi.fn();
+    renderList({ activeId: 'running', onSelect });
+    const running = screen
+      .getAllByRole('option')
+      .find((el) => el.closest('[data-agent-entry-id="running"]'));
+
+    await fireEvent.click(running!);
+    await fireEvent.click(running!);
+
+    expect(onSelect).toHaveBeenNthCalledWith(1, 'running');
     expect(onSelect).toHaveBeenNthCalledWith(2, 'running');
   });
 
