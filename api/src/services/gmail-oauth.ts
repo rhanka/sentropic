@@ -1,5 +1,6 @@
 import {
   GOOGLE_AUTHORIZATION_ENDPOINT,
+  GOOGLE_DRIVE_PROVIDER,
   createGoogleDriveOAuthState,
   resolveCallbackBaseUrl,
   resolveClientSecret,
@@ -12,6 +13,7 @@ import {
 export const GMAIL_PROVIDER = 'gmail' as const;
 export const GMAIL_OAUTH_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'] as const;
 
+export type GoogleConnectorProvider = typeof GOOGLE_DRIVE_PROVIDER | typeof GMAIL_PROVIDER;
 export type GmailOAuthConfig = GoogleDriveOAuthConfig;
 export type GmailOAuthStartResult = GoogleDriveOAuthStartResult;
 
