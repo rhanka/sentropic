@@ -1,0 +1,32 @@
+{
+  "name": "@sentropic/connector-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure provider-agnostic mount for @sentropic/mcp-platform connector adapters with injected deny-by-default host ports.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/connector-host"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "5.4.5",
+    "vitest": "4.1.0"
+  }
+}
