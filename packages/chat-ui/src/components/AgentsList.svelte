@@ -72,9 +72,18 @@
     message={resolveLabel('chat.agents.empty.message')}
   />
 {:else}
+  <!--
+    value is pinned to null on purpose. This is a NAVIGATION list (open on every
+    click), not a selection model: a controlled `value={activeId}` makes the DS
+    single-select TOGGLE OFF when the already-active row is re-clicked, emitting
+    `onchange(null)` and swallowing the navigation — so returning to a session
+    you just left would dead-end. With value=null every activation emits the
+    row's id and navigates. The active row's highlight is carried by a class
+    below, decoupled from the DS selection state.
+  -->
   <SelectableList
     label={resolveLabel('chat.agents.list.label')}
-    value={activeId ?? null}
+    value={null}
     onchange={selectEntry}
     class="chat-agents-list"
   >
@@ -84,8 +93,10 @@
       {@const hasPendingQuestion = row.entry.status === 'awaiting-input'}
       <div
         class="chat-agents-list-row"
+        class:chat-agents-list-row--active={activeId != null && activeId === row.entry.id}
         data-agent-entry-id={row.entry.id}
         data-depth={row.depth}
+        aria-current={activeId != null && activeId === row.entry.id ? 'true' : undefined}
         style={`--agents-list-depth: ${row.depth};`}
       >
         <SelectableRow value={row.entry.id} accentBar>
@@ -151,6 +162,13 @@
   .chat-agents-list-row {
     margin-inline-start: calc(var(--agents-list-depth) * var(--st-spacing-4, 1rem));
     min-width: 0;
+    border-radius: var(--st-radius-2, 0.375rem);
+  }
+
+  /* Active-session highlight — carried here rather than by the DS selection
+     state, which is pinned off so re-clicking navigates instead of toggling. */
+  .chat-agents-list-row--active {
+    background-color: var(--st-semantic-surface-selected, rgba(37, 99, 235, 0.08));
   }
 
   .chat-agents-list-row__summary,
