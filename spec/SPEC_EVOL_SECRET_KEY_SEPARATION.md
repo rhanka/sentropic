@@ -355,15 +355,38 @@ Change:
 - Delete the `?? JWT_SECRET`/`?? env.JWT_SECRET` fallback arms from OAuth-state resolution in `oauth.ts` and JWKS-KEK resolution in `jwks-adapter.ts`; both consumers resolve only `OAUTH_SIGNING_KEK`.
 - Remove the at-rest fallback, the protected-call-site plaintext compatibility path, and the previous-key code path after escrow destruction.
 - Keep hard failure for every unrecognized `^enc:` version.
-- Remove all three already-public fallback spellings from active source/configuration:
+- Remove all three already-public fallback spellings from active source/configuration.
 
-| Retired literal spelling | Active locations that must lose it |
-|---|---|
-| `dev-secret-key-change-in-production-please` | `secret-crypto.ts:8`, `session-manager.ts:49`, `oauth.ts:35`, `llm-account-transports.ts:293`, `google-drive-oauth.ts:200`, `jwks-adapter.ts:157` |
-| `default-secret-change-in-production` | `email-verification.ts:175,228` |
-| `dev-idp-jwt-secret-change-in-production` | `docker-compose.idp.yml:39` |
+> **STALE SNAPSHOT — REGENERATE AGAINST `main` AT EXECUTION TIME. Do not act on the table below.**
+>
+> Unlike the descriptive citations elsewhere in this document, which are a dated analysis snapshot and harmless as such, this table is a **normative action list**: it says what must be deleted. A wrong action list is dangerous where a stale citation is merely inert. It was taken before Steps 1A/1B landed and is already false — `secret-crypto.ts` no longer carries the literal on that line or reads `JWT_SECRET` at all, and the `oauth.ts` / `google-drive-oauth.ts` resolvers have both moved and changed shape.
+>
+> Refreshing it now would only re-stale it at every Step 2 and Step 3 merge. The list must be **derived at use, not stored** — which is the through-line of this whole remediation: never trust a stored snapshot of a living state.
+>
+> Derivation, to re-run when Step 4 is actually executed:
+>
+> ```sh
+> git grep -n -F 'dev-secret-key-change-in-production-please' -- ':!spec/'
+> git grep -n -F 'default-secret-change-in-production'        -- ':!spec/'
+> git grep -n -F 'dev-idp-jwt-secret-change-in-production'    -- ':!spec/'
+> ```
+>
+> Run against `main` on 2026-07-31, the derivation already finds sites the stored table never contained at all — not merely at different line numbers: a **second** occurrence in `oauth.ts` (both `:49` and `:473`, where the table carried one), and **two `Makefile` occurrences** of the IdP spelling that the table omitted entirely while listing only the compose file. Acting on the stored list would therefore have left public literals in place at Step 4. That is the concrete reason this list is derived and not stored.
+>
+> Each hit is either a site to strip or a deliberate exception to justify in the Step 4 record. Two classes of hit are expected and must be handled, not merely deleted:
+>
+> - **Byte-identity tests that spell a literal out on purpose.** `api/tests/unit/secret-crypto.test.ts` writes the at-rest literal verbatim so that editing it in the source breaks the test — that is the guard protecting the byte-identical mandate. Step 4 retires the literal and must retire that pinning in the same change, or Step 4 breaks its own tests.
+> - **Local-only compose smoke targets.** The `Makefile` `JWT_SECRET` occurrences belong to `smoke-idp` / `smoke-idp-screens` and carry the *third* spelling, not the first. They never reach a deployed runtime and are a separate decision from the production fallbacks.
+>
+> The snapshot as taken at analysis time, kept for the record only:
+>
+> | Retired literal spelling | Locations at analysis time (NOT current) |
+> |---|---|
+> | `dev-secret-key-change-in-production-please` | `secret-crypto.ts:8`, `session-manager.ts:49`, `oauth.ts:35`, `llm-account-transports.ts:293`, `google-drive-oauth.ts:200`, `jwks-adapter.ts:157` |
+> | `default-secret-change-in-production` | `email-verification.ts:175,228` |
+> | `dev-idp-jwt-secret-change-in-production` | `docker-compose.idp.yml:39` |
 
-The only permitted current-tree occurrences after implementation are this deletion manifest. They are retired public literals, not valid test fixtures, defaults, examples, or allowlisted runtime material.
+The only permitted current-tree occurrences after implementation are the ones the derivation above deliberately keeps, recorded with a justification. They are retired public literals, not valid test fixtures, defaults, examples, or allowlisted runtime material.
 
 - Add and run a repository-owned, Docker-first Make target for the redacted Gitleaks current-tree/artifact scan (for example, `make test-security-secrets`), with its exact Gitleaks version and ruleset recorded. Its allowlist may identify only the three exact manifest occurrences above; it may not allow any active-code/configuration occurrence.
 - Explicitly roll both API and `auth-idp` after the Secret/schema/config changes.
