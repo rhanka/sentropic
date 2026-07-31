@@ -58,11 +58,11 @@ Implement the API-side P1 ports and the deny-by-default Google Drive host mount 
   - [x] Reuse the existing per-account refresh resolver without changing its public null contract.
   - [x] Commit the secret port via `make commit`.
 
-- [ ] **Lot 3 — Resolvers and single mount**
-  - [ ] Resolve enrolled Google Drive accounts to opaque connector instances and deny ambiguous selection.
-  - [ ] Bind principal and workspace to the server-authenticated session with `requireWorkspaceAccess`.
-  - [ ] Apply the finite P1 Drive capability allowlist and mount `googleDriveLiveAdapter` through `mountConnectorHost`.
-  - [ ] Commit resolvers and mount factory via `make commit`.
+- [x] **Lot 3 — Resolvers and single mount**
+  - [x] Resolve enrolled Google Drive accounts to opaque connector instances and deny ambiguous selection.
+  - [x] Bind principal and workspace to the server-authenticated session with `requireWorkspaceAccess`.
+  - [x] Apply the finite P1 Drive capability allowlist and mount `googleDriveLiveAdapter` through `mountConnectorHost`.
+  - [x] Commit resolvers and mount factory via `make commit`.
 
 - [ ] **Lot 4 — Hermetic proof and validation**
   - [ ] Add `api/tests/unit/connector-host.test.ts` for secret classification, account ambiguity, session/workspace denial, and mounted Drive behavior.
