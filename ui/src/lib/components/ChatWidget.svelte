@@ -119,12 +119,15 @@
   // sessions to choose from but none is active. A fresh open with no sessions
   // goes straight to the composer — an empty list would be a dead end, and it
   // preserves the established "open chat → type" flow the whole app relies on.
-  // NOTE: how the user RETURNS to the list (Claude-style top-left arrow +
-  // left/right slide) is an open design point, in consensus — not built here.
+  // Full screen uses this pager as an interim. R11 will replace it with a
+  // persistent repositionable side column; sidePreference() belongs there,
+  // never in this navigation direction.
   let agentsView: 'list' | 'conversation' = 'conversation';
   let agentsViewInitializedForOpen = false;
   let agentsRows: AgentsListRow[] = [];
   let canAgentsListBeDefaultView = false;
+  let agentsListReturnFocusId: string | null = null;
+  let agentsViewAnnouncement = '';
   let commentContext: {
     type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
@@ -2013,10 +2016,37 @@
     }).format(Math.round(value), unit as Intl.RelativeTimeFormatUnit);
   };
 
+  const focusConversationHeading = async () => {
+    await tick();
+    dialogEl?.querySelector<HTMLElement>('[data-chat-sessions-heading]')?.focus();
+  };
+
+  const focusAgentsListRow = async () => {
+    await tick();
+    if (!agentsListReturnFocusId || !dialogEl) return;
+    const row = Array.from(
+      dialogEl.querySelectorAll<HTMLElement>('[data-agent-entry-id]'),
+    ).find((entry) => entry.dataset.agentEntryId === agentsListReturnFocusId);
+    row?.querySelector<HTMLElement>('[role="option"]')?.focus();
+  };
+
+  const showAgentsConversation = (returnFocusId?: string) => {
+    if (returnFocusId) agentsListReturnFocusId = returnFocusId;
+    agentsView = 'conversation';
+    agentsViewAnnouncement = $_('chat.agents.view.conversation');
+  };
+
+  const returnToAgentsList = () => {
+    agentsView = 'list';
+    agentsViewAnnouncement = $_('chat.agents.view.list');
+    void focusAgentsListRow();
+  };
+
   const handleSelectAgentsEntry = (entryId: string) => {
     if (!chatSessions.some((session) => session.id === entryId)) return;
-    agentsView = 'conversation';
+    showAgentsConversation(entryId);
     void handleSelectSession(entryId);
+    void focusConversationHeading();
   };
 
   const handleAgentsAction = async (entryId: string, action: string) => {
@@ -2041,9 +2071,10 @@
     }
 
     if (action === 'delete') {
-      agentsView = 'conversation';
+      showAgentsConversation(entryId);
       pendingChatSessionDeleteConfirm = true;
       await handleSelectSession(entryId);
+      await focusConversationHeading();
     }
   };
 
@@ -3219,8 +3250,21 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            {#if canAgentsListBeDefaultView && agentsView === 'list'}
-              <div class="h-full min-h-0 overflow-y-auto p-3">
+            <div
+              class="h-full min-h-0"
+              class:chat-agents-pager={canAgentsListBeDefaultView}
+            >
+              <div
+                class="h-full min-h-0"
+                class:chat-agents-pager__track={canAgentsListBeDefaultView}
+                class:chat-agents-pager__track--conversation={canAgentsListBeDefaultView && agentsView === 'conversation'}
+              >
+                {#if canAgentsListBeDefaultView}
+                  <section
+                    class="chat-agents-pager__page h-full min-h-0 overflow-y-auto p-3"
+                    aria-hidden={agentsView !== 'list'}
+                    inert={agentsView !== 'list'}
+                  >
                 <div class="mb-3 flex items-center justify-between gap-3">
                   <label class="flex items-center gap-2 text-xs text-slate-500" title={$_('chat.agents.scope.unavailable')}>
                     <input
@@ -3234,7 +3278,7 @@
                     class="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     type="button"
                     on:click={() => {
-                      agentsView = 'conversation';
+                      showAgentsConversation(chatSessionId ?? undefined);
                       handleNewSession();
                     }}
                   >
@@ -3252,25 +3296,17 @@
                   labels={(key: string) => $_(key)}
                   formatRelative={formatAgentsRelative}
                 />
-              </div>
-            {:else if canAgentsListBeDefaultView}
-              <div class="border-b border-slate-100 px-3 py-2">
-                <button
-                  class="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  type="button"
-                  on:click={() => (agentsView = 'list')}
+                  </section>
+                {/if}
+                <section
+                  class="h-full min-h-0 flex flex-col"
+                  class:chat-agents-pager__page={canAgentsListBeDefaultView}
+                  aria-hidden={canAgentsListBeDefaultView && agentsView !== 'conversation'}
+                  inert={canAgentsListBeDefaultView && agentsView !== 'conversation'}
                 >
-                  {$_('chat.agents.back')}
-                </button>
-              </div>
-            {/if}
-            <div
-              class="h-full min-h-0 flex flex-col"
-              class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}
-            >
-              <!-- Gold shell adoption (S6b): sessions bar renders via the
-                   @sentropic/chat-ui ChatSessionsBar component; the host keeps the
-                   popover menu (MenuPopover) and icons as snippets. -->
+                  <!-- Gold shell adoption (S6b): sessions bar renders via the
+                       @sentropic/chat-ui ChatSessionsBar component; the host keeps the
+                       popover menu (MenuPopover) and icons as snippets. -->
               {#snippet renderChatSessionsMenu(p: {
               sessions: readonly { id: string; title?: string | null }[];
               sessionId: string | null;
@@ -3339,12 +3375,14 @@
               }}
               labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
               onNewSession={handleNewSession}
+              onBack={canAgentsListBeDefaultView ? returnToAgentsList : undefined}
+              backLabel={$_('chat.agents.back')}
               bind:deleteConfirmPending={pendingChatSessionDeleteConfirm}
               onConfirmDelete={async () => {
                 pendingChatSessionDeleteConfirm = false;
                 await chatPanelRef?.deleteCurrentSession?.();
               }}
-              renderSessionsMenu={renderChatSessionsMenu}
+              renderSessionsMenu={canAgentsListBeDefaultView ? undefined : renderChatSessionsMenu}
               renderPlusIcon={renderSessionsPlusIcon}
               renderTrashIcon={renderSessionsTrashIcon}
             />
@@ -3360,6 +3398,11 @@
                 />
               {/if}
             </div>
+                </section>
+              </div>
+              <div class="sr-only" aria-live="polite" aria-atomic="true">
+                {agentsViewAnnouncement}
+              </div>
             </div>
           </div>
         {/if}
@@ -3409,3 +3452,48 @@
     labelForPlacement={placementDragZoneLabel}
   />
 {/if}
+
+<style>
+  .chat-agents-pager {
+    overflow: hidden;
+  }
+
+  .chat-agents-pager__track {
+    display: flex;
+    block-size: 100%;
+    inline-size: 200%;
+    transition: translate 180ms ease-out;
+  }
+
+  .chat-agents-pager__track--conversation {
+    translate: -50% 0;
+  }
+
+  :global(:dir(rtl)) .chat-agents-pager__track--conversation {
+    translate: 50% 0;
+  }
+
+  .chat-agents-pager__page {
+    flex: 0 0 50%;
+    min-inline-size: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-agents-pager__track {
+      inline-size: 100%;
+      transition: none;
+    }
+
+    .chat-agents-pager__track--conversation {
+      translate: none;
+    }
+
+    .chat-agents-pager__page {
+      flex-basis: 100%;
+    }
+
+    .chat-agents-pager__page[aria-hidden='true'] {
+      display: none;
+    }
+  }
+</style>
