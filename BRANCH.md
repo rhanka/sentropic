@@ -52,11 +52,11 @@ Implement the API-side P1 ports and the deny-by-default Google Drive host mount 
   - [x] Confirm API resolves `@sentropic/connector-host` through the root workspace lockfile.
   - [x] Commit dependencies and lockfile via `make commit`.
 
-- [ ] **Lot 2 — Google Drive secret port**
-  - [ ] Add `api/src/services/connector-host/google-drive.ts` with a `SecretAccessError`-shaped unavailable path.
-  - [ ] Preflight encrypted account material through throwing `decryptSecret` so `SecretEnvelopeError` propagates unchanged.
-  - [ ] Reuse the existing per-account refresh resolver without changing its public null contract.
-  - [ ] Commit the secret port via `make commit`.
+- [x] **Lot 2 — Google Drive secret port**
+  - [x] Add `api/src/services/connector-host/google-drive.ts` with a `SecretAccessError`-shaped unavailable path.
+  - [x] Preflight encrypted account material through throwing `decryptSecret` so `SecretEnvelopeError` propagates unchanged.
+  - [x] Reuse the existing per-account refresh resolver without changing its public null contract.
+  - [x] Commit the secret port via `make commit`.
 
 - [ ] **Lot 3 — Resolvers and single mount**
   - [ ] Resolve enrolled Google Drive accounts to opaque connector instances and deny ambiguous selection.
