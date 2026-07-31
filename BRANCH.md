@@ -51,7 +51,7 @@
   - [x] `make test-chat-ui ENV=test-lc` — reference-validation green.
 - [ ] **Slice 4 — return-to-list pager navigation**
   - [x] Add optional `ChatSessionsBar` Back callback + visible ArrowLeft label; bump the additive package API to 0.32.0.
-  - [ ] Replace the interim outer Back row with a pager-gated logical slide, omit the session chooser only in pager hosts, and keep `sidePreference()` out of navigation.
+  - [x] Replace the interim outer Back row with a pager-gated logical slide, omit the session chooser only in pager hosts, and keep `sidePreference()` out of navigation.
   - [ ] Restore focus to the conversation heading/list row and announce pager view changes; cover the package DOM contract and host wiring.
   - [ ] Run the chat-ui, DOM, typecheck, and full UI gates; prove the Back test fails when the callback is broken.
 - [ ] **Slice 5 — UAT prep**
