@@ -26,6 +26,9 @@
   - `packages/chat-ui/tests/documents-module.spec.ts` (version pin only)
   - `packages/chat-ui/tests/chat-core-host.spec.ts` (version pin only)
   - `BRANCH.md`
+- **Allowed Paths (e2e evolution — owner GO 2026-07-31)**:
+  - `e2e/tests/03-chat.spec.ts`, `e2e/tests/09-run-steering-core.spec.ts` (session-bar title selector → stable `[data-chat-sessions-heading]`)
+  - `e2e/tests/08-chat-workspace-switch.spec.ts`, `e2e/tests/08-chat-checkpoint-restore.spec.ts` (session switch evolves from the removed chooser popover → Back→list→select)
 - **Forbidden Paths**:
   - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
   - `api/**` (no api change — the feed gap is a separate lane)

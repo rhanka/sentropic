@@ -267,20 +267,22 @@ test.describe('Chat checkpoint restore', () => {
       await expect(page.locator('#chat-widget-dialog')).toBeVisible({ timeout: 10_000 });
       await expect(page.locator(composerSelector)).toBeVisible({ timeout: 10_000 });
 
-      // Open the session from the picker.
-      const sessionMenuButton = page
+      // Open the session from the agents list. Session switching now goes
+      // through the list (the old chooser popover was removed in pager hosts):
+      // from a conversation, the Back control returns to the list where each
+      // session is a listbox option carrying its title (here USER1_TEXT).
+      const backToList = page
         .locator(
-          '#chat-widget-dialog button[aria-label="Choisir une conversation"]:visible, #chat-widget-dialog button[aria-label="Choose a conversation"]:visible',
+          '#chat-widget-dialog button[aria-label="Retour aux conversations"], #chat-widget-dialog button[aria-label="Back to conversations"]',
         )
         .first();
-      await expect(sessionMenuButton).toBeVisible({ timeout: 5_000 });
-      const sessionItems = page.locator(
-        'button.w-full.text-left.rounded:not([aria-label="Nouvelle session"]):not([aria-label="New session"])',
-      );
-      if (!(await sessionItems.first().isVisible().catch(() => false))) {
-        await sessionMenuButton.click();
+      if (await backToList.isVisible().catch(() => false)) {
+        await backToList.click();
       }
-      const sessionItem = sessionItems.filter({ hasText: USER1_TEXT }).first();
+      const sessionItem = page
+        .locator('#chat-widget-dialog [role="option"]')
+        .filter({ hasText: USER1_TEXT })
+        .first();
       await expect(sessionItem).toBeVisible({ timeout: 10_000 });
       await sessionItem.click();
 
