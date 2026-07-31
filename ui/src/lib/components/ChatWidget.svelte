@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
+  import { fly } from 'svelte/transition';
   import type { ContextProvider } from '@sentropic/cowork-bridge/core';
   import { _, locale } from 'svelte-i18n';
   import { initApiClient } from '@sentropic/cowork-bridge/core';
@@ -128,6 +129,11 @@
   let canAgentsListBeDefaultView = false;
   let agentsListReturnFocusId: string | null = null;
   let agentsViewAnnouncement = '';
+  const AGENTS_VIEW_SLIDE_DURATION_MS = 180;
+  const AGENTS_VIEW_SLIDE_DISTANCE_PX = 24;
+  let agentsViewReducedMotion = false;
+  let agentsViewIsRtl = false;
+  let agentsViewMotionQuery: MediaQueryList | null = null;
   let commentContext: {
     type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
@@ -2030,6 +2036,24 @@
     row?.querySelector<HTMLElement>('[role="option"]')?.focus();
   };
 
+  const syncAgentsViewMotion = () => {
+    agentsViewReducedMotion = agentsViewMotionQuery?.matches ?? false;
+    agentsViewIsRtl = document.documentElement.dir === 'rtl';
+  };
+
+  const agentsViewFly = (edge: 'inline-start' | 'inline-end') => {
+    const inlineStartX = agentsViewIsRtl
+      ? AGENTS_VIEW_SLIDE_DISTANCE_PX
+      : -AGENTS_VIEW_SLIDE_DISTANCE_PX;
+    const x = edge === 'inline-start' ? inlineStartX : -inlineStartX;
+
+    return {
+      x: agentsViewReducedMotion ? 0 : x,
+      duration: agentsViewReducedMotion ? 0 : AGENTS_VIEW_SLIDE_DURATION_MS,
+      opacity: 1,
+    };
+  };
+
   const showAgentsConversation = (returnFocusId?: string) => {
     if (returnFocusId) agentsListReturnFocusId = returnFocusId;
     agentsView = 'conversation';
@@ -2097,6 +2121,9 @@
 
   onMount(async () => {
     isBrowserReady = true;
+    agentsViewMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    syncAgentsViewMotion();
+    agentsViewMotionQuery.addEventListener('change', syncAgentsViewMotion);
     applyInitialState(initialState ?? readPersistedHandoffState());
     // displayMode initial state handled in ChatDock via its initialOpen / isSidePanelHost logic;
     // We still set displayMode here so ChatDock picks it up via prop reactivity.
@@ -2230,6 +2257,7 @@
   };
 
   onDestroy(() => {
+    agentsViewMotionQuery?.removeEventListener('change', syncAgentsViewMotion);
     window.removeEventListener('keydown', onPlacementDragKeyDown);
     releaseHeaderGrip();
     cancelPlacementDrag();
@@ -3250,21 +3278,12 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            <div
-              class="h-full min-h-0"
-              class:chat-agents-pager={canAgentsListBeDefaultView}
-            >
+            {#if canAgentsListBeDefaultView && agentsView === 'list'}
               <div
-                class="h-full min-h-0"
-                class:chat-agents-pager__track={canAgentsListBeDefaultView}
-                class:chat-agents-pager__track--conversation={canAgentsListBeDefaultView && agentsView === 'conversation'}
+                class="h-full min-h-0 overflow-y-auto p-3"
+                in:fly={agentsViewFly('inline-start')}
+                out:fly={agentsViewFly('inline-start')}
               >
-                {#if canAgentsListBeDefaultView}
-                  <section
-                    class="chat-agents-pager__page h-full min-h-0 overflow-y-auto p-3"
-                    aria-hidden={agentsView !== 'list'}
-                    inert={agentsView !== 'list'}
-                  >
                 <div class="mb-3 flex items-center justify-between gap-3">
                   <label class="flex items-center gap-2 text-xs text-slate-500" title={$_('chat.agents.scope.unavailable')}>
                     <input
@@ -3296,15 +3315,14 @@
                   labels={(key: string) => $_(key)}
                   formatRelative={formatAgentsRelative}
                 />
-                  </section>
-                {/if}
-                <section
-                  class="h-full min-h-0 flex flex-col"
-                  class:chat-agents-pager__page={canAgentsListBeDefaultView}
-                  aria-hidden={canAgentsListBeDefaultView && agentsView !== 'conversation'}
-                  inert={canAgentsListBeDefaultView && agentsView !== 'conversation'}
-                >
-                  <!-- Gold shell adoption (S6b): sessions bar renders via the
+              </div>
+            {:else}
+              <div
+                class="h-full min-h-0 flex flex-col"
+                in:fly={agentsViewFly('inline-end')}
+                out:fly={agentsViewFly('inline-end')}
+              >
+                <!-- Gold shell adoption (S6b): sessions bar renders via the
                        @sentropic/chat-ui ChatSessionsBar component; the host keeps the
                        popover menu (MenuPopover) and icons as snippets. -->
               {#snippet renderChatSessionsMenu(p: {
@@ -3398,11 +3416,10 @@
                 />
               {/if}
             </div>
-                </section>
               </div>
-              <div class="sr-only" aria-live="polite" aria-atomic="true">
-                {agentsViewAnnouncement}
-              </div>
+            {/if}
+            <div class="sr-only" aria-live="polite" aria-atomic="true">
+              {agentsViewAnnouncement}
             </div>
           </div>
         {/if}
@@ -3452,48 +3469,3 @@
     labelForPlacement={placementDragZoneLabel}
   />
 {/if}
-
-<style>
-  .chat-agents-pager {
-    overflow: hidden;
-  }
-
-  .chat-agents-pager__track {
-    display: flex;
-    block-size: 100%;
-    inline-size: 200%;
-    transition: translate 180ms ease-out;
-  }
-
-  .chat-agents-pager__track--conversation {
-    translate: -50% 0;
-  }
-
-  :global(:dir(rtl)) .chat-agents-pager__track--conversation {
-    translate: 50% 0;
-  }
-
-  .chat-agents-pager__page {
-    flex: 0 0 50%;
-    min-inline-size: 0;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .chat-agents-pager__track {
-      inline-size: 100%;
-      transition: none;
-    }
-
-    .chat-agents-pager__track--conversation {
-      translate: none;
-    }
-
-    .chat-agents-pager__page {
-      flex-basis: 100%;
-    }
-
-    .chat-agents-pager__page[aria-hidden='true'] {
-      display: none;
-    }
-  }
-</style>
