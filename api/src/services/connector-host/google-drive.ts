@@ -3,7 +3,9 @@ import {
   type AccountResolver,
   type AuditPort,
   type ConnectorHostDriver,
+  type ConnectorHostExposurePolicy,
   type SecretPort,
+  type SecretPortRequest,
   type TenantWorkspaceResolver,
 } from '@sentropic/connector-host';
 import { googleDriveLiveAdapter } from '@sentropic/mcp-connector-google';
@@ -65,7 +67,7 @@ export const createGoogleDriveSecretPort = (
   const resolveToken = dependencies.resolveToken ?? resolveGoogleDriveToken;
 
   return {
-    async resolve(request): Promise<string> {
+    async resolve(request: SecretPortRequest): Promise<string> {
       if (request.secretName !== GOOGLE_DRIVE_ACCESS_TOKEN_SECRET) {
         throw new SecretAccessError('unsupported_secret');
       }
@@ -110,7 +112,7 @@ const deny = (reason: string) => ({ deny: true as const, reason });
 export const createGoogleDriveAccountResolver = (
   loadAccounts: GoogleDriveAccountLoader = loadGoogleDriveAccounts,
 ): AccountResolver => ({
-  async resolve(input) {
+  async resolve(input: Parameters<AccountResolver['resolve']>[0]) {
     if (input.connectorId !== googleDriveLiveAdapter.connectorId) return deny('connector_not_found');
     const accounts = (await loadAccounts({ userId: input.principalSub, workspaceId: input.workspaceRef }))
       .filter((account) => account.status === 'connected' && !!account.tokenSecret);
@@ -139,7 +141,7 @@ export const createSessionTenantWorkspaceResolver = (
   sessionUser: SessionUser,
   checkWorkspaceAccess: WorkspaceAccess = requireWorkspaceAccess,
 ): TenantWorkspaceResolver => ({
-  async resolve(input) {
+  async resolve(input: Parameters<TenantWorkspaceResolver['resolve']>[0]) {
     const requestedPrincipal = hintedPrincipal(input.hints);
     if (
       !sessionUser.userId ||
@@ -186,7 +188,9 @@ export const createGoogleConnectorHost = (options: {
       audit: options.audit ?? createGoogleConnectorHostAuditPort(),
     },
     exposurePolicy: {
-      isCapabilityAllowed: ({ capabilityRef }) =>
+      isCapabilityAllowed: (
+        { capabilityRef }: Parameters<NonNullable<ConnectorHostExposurePolicy['isCapabilityAllowed']>>[0],
+      ) =>
         (GOOGLE_DRIVE_P1_CAPABILITY_IDS as readonly string[]).includes(capabilityRef),
     },
   });
