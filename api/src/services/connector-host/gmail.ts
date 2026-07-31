@@ -33,7 +33,10 @@ export const toGmailConnectorInstanceId = (account: Pick<GmailConnectorAccount, 
 export const loadGmailAccounts: GmailAccountLoader = ({ userId, workspaceId }) =>
   listConnectorAccounts(workspaceId, userId, GMAIL_PROVIDER);
 
-export const createGmailSecretPort = createGoogleDriveSecretPort;
+export const createGmailSecretPort = (
+  dependencies: { loadAccounts?: GmailAccountLoader; resolveToken?: GmailTokenResolver } = {},
+): SecretPort =>
+  createGoogleDriveSecretPort({ ...dependencies, connectorInstanceIdOf: toGmailConnectorInstanceId });
 
 export const GMAIL_P1_CAPABILITY_IDS = [
   'messages.get',
