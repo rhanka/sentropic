@@ -240,8 +240,13 @@ async function resolveInvocation(
     connectorInstanceId: account.connectorInstanceId,
   });
 
+  // Project the connector's consented authorization scopes into discovery. A backend mount only
+  // exists for an enrolled, consented connection, so the adapter manifest's declared scopes are the
+  // granted scope set for this principal. Without this, every scope-gated capability is denied as
+  // missing (an empty scope set matches nothing). The explicit exposure allowlist and policy above
+  // remain the real per-request narrowing; this only governs deny-as-missing discovery.
   const visibility: VisibilityContext = {
-    scopes: [],
+    scopes: adapter.manifest.authz.scopes,
     claims: [],
     tenantRef: resolution.tenantRef,
     accessibleTenants: [resolution.tenantRef],

@@ -34,6 +34,7 @@ Implement the API-side P1 ports and the deny-by-default Google Drive host mount 
 ## Feedback Loop
 - [x] `BR480-ACK1` — The owner reassigned API host wiring to this lane and authorized the API plus root-lockfile scope. No schema change is required because migration 0040 already permits Gmail rows.
 - [x] `BR480-EX2` — Owner authorized the Makefile CI repair: add the three workspace-package build targets and wire them into `prepare-node-workspace`. Impact: API CI prepares the published-package exports before typecheck and unit tests. Rollback: remove the targets and their prerequisite wiring.
+- [x] `BR480-EX3` — L1 defect surfaced by the first real adapter: `mountConnectorHost` built its capability-visibility `VisibilityContext` with a hardcoded empty `scopes`, so `listVisibleCapabilities` denied every scope-gated adapter as missing (all Google capabilities require `drive.readonly`/`gmail.readonly`; the L1 fake connector declares no required scopes, which hid the defect). Fix: source visibility scopes from the mounted adapter's `manifest.authz.scopes`; the explicit exposure allowlist and policy remain the real per-request narrowing (deny-as-missing discovery only). Impact: `packages/connector-host/src/mount.ts` only (private package `@sentropic/connector-host` v0.0.0 — no version/publish change); the Drive mount end-to-end unit test now returns `ok:true`. Rollback: restore `scopes: []`. Flagged to architect for L1 contract review.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
