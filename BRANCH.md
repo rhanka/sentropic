@@ -34,11 +34,11 @@
 - `attention` — the current `listForUser` (current-workspace path) is UNBOUNDED (pre-existing). This branch bounds only the new all-ws path; do not change the current-ws behaviour.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — server: additive own-principal all-ws scope**
+- [x] **Lot 1 — server: additive own-principal all-ws scope**
   - [x] `listForUser(userId, workspaceId?, limit?)`: apply `.limit(limit)` when provided; keep `desc(updatedAt), desc(createdAt)`.
   - [x] `listSessions(userId, workspaceId?, limit?)`: passthrough.
   - [x] `GET /sessions`: read `scope` query. `scope=all` -> `listSessions(user.userId, null, DEFAULT_ALL_WS_LIMIT)`. Else unchanged.
-  - [ ] `api/tests`: `scope=all` returns cross-workspace own sessions; NEVER another user's; bounded default applied (seed > limit, get limit).
+  - [x] `api/tests`: `scope=all` returns cross-workspace own sessions; NEVER another user's; bounded default applied (seed > limit, get limit).
 - [ ] **Lot 2 — client: functional toggle + per-session labels**
   - [ ] Restore the toggle in `ChatWidget.svelte` (DS control), no dev message. On -> fetch `/sessions?scope=all`; off -> current workspace.
   - [ ] Adapter: for all-ws, resolve each session label from its `workspaceId` via `$workspaceScope.items` (id->name), not the single current label.
