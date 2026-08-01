@@ -1,6 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createJwksService } from '@sentropic/auth-hono';
+import { and, eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { app } from '../../src/app';
+import { db } from '../../src/db/client';
+import { documentConnectorAccounts } from '../../src/db/schema';
+import { GMAIL_PROVIDER } from '../../src/services/gmail-oauth';
+import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
+import { createJwksAdapter, type JwksAdapter } from '../../src/services/auth/jwks-adapter';
+import { cleanupAuthData, createTestUser, type TestUser } from '../utils/auth-helper';
+
+const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+
+const ensureActiveSigningKey = async (): Promise<JwksAdapter> => {
+  const jwks = createJwksAdapter();
+  if (await jwks.getActiveKey()) return jwks;
+  try {
+    await jwks.generateAndStoreNewKey({ kid: 'mcp-resource-server-test-kid' });
+  } catch (error) {
+    if (!String(error).includes('duplicate key value')) throw error;
+  }
+  return createJwksAdapter();
+};
 
 // BR-39l Lot 3 — first real consumption of @sentropic/mcp-auth (activation-by-consumption).
 // These integration tests exercise the unauthenticated surface of the sample MCP resource
@@ -67,4 +88,109 @@ describe('MCP resource server (BR-39l Lot 3)', () => {
       expect(res.headers.get('WWW-Authenticate')).toContain('Bearer');
     });
   });
+});
+
+describe('MCP connector-host routes', () => {
+  const originalEnabled = process.env.MCP_RESOURCE_SERVER_ENABLED;
+  let issuer: string;
+  let resource: string;
+  let user: TestUser;
+  let jwks: JwksAdapter;
+  let gmailAccessToken: string;
+
+  beforeEach(async () => {
+    process.env.MCP_RESOURCE_SERVER_ENABLED = 'true';
+    const metadata = await app.request('/api/v1/mcp/.well-known/oauth-protected-resource');
+    const document = await metadata.json() as { authorization_servers: string[]; resource: string };
+    issuer = document.authorization_servers[0]!;
+    resource = document.resource;
+    jwks = await ensureActiveSigningKey();
+    user = await createTestUser({ role: 'editor' });
+    gmailAccessToken = `gmail-route-token-${crypto.randomUUID()}`;
+    await storeGoogleDriveTokenMaterial({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+      provider: GMAIL_PROVIDER,
+      identity: { accountEmail: 'mcp-gmail@example.test', accountSubject: `gmail-${user.id}` },
+      token: {
+        accessToken: gmailAccessToken,
+        refreshToken: 'gmail-route-refresh-token',
+        idToken: null,
+        tokenType: 'Bearer',
+        scope: GMAIL_READONLY_SCOPE,
+        scopes: [GMAIL_READONLY_SCOPE],
+        obtainedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      },
+    });
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    if (user) {
+      await db.delete(documentConnectorAccounts).where(and(
+        eq(documentConnectorAccounts.userId, user.id),
+        eq(documentConnectorAccounts.provider, GMAIL_PROVIDER),
+      ));
+    }
+    await cleanupAuthData();
+    if (originalEnabled === undefined) delete process.env.MCP_RESOURCE_SERVER_ENABLED;
+    else process.env.MCP_RESOURCE_SERVER_ENABLED = originalEnabled;
+  });
+
+  const issueToken = async (scopes: string[]): Promise<string> => {
+    const now = new Date();
+    return createJwksService({
+      clock: { now: () => now, addSeconds: (date, seconds) => new Date(date.getTime() + seconds * 1000) },
+      jwksPort: jwks,
+    }).signJwt(
+      { client_id: 'mcp-route-test-client', scope: scopes.join(' ') },
+      {
+        audience: resource,
+        expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+        issuer,
+        jti: crypto.randomUUID(),
+        subject: user.id,
+        type: 'JWT',
+      },
+    );
+  };
+
+  const installFetch = async (gmailResponse = new Response(JSON.stringify({ messages: [] }), { status: 200 })) => {
+    const keys = await jwks.listPublicKeys();
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+      if (href === `${issuer}/.well-known/jwks.json`) {
+        return new Response(JSON.stringify({ keys: keys.map((key) => key.publicJwk) }), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        });
+      }
+      if (href.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/')) return gmailResponse;
+      throw new Error(`Unexpected network request: ${href}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  };
+
+  const invoke = (token: string, body: Record<string, unknown>) => app.request('/api/v1/mcp/invoke', {
+    body: JSON.stringify(body),
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  it('invokes Gmail messages.list end-to-end without exposing the connector token', async () => {
+    const fetchMock = await installFetch(new Response(JSON.stringify({ messages: [{ id: 'message-1' }] }), { status: 200 }));
+    const token = await issueToken(['mcp:tools:invoke']);
+
+    const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, output: { messages: [{ id: 'message-1' }] } });
+    const googleCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('https://gmail.googleapis.com/'));
+    expect((googleCall?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${gmailAccessToken}` });
+    expect(JSON.stringify(body)).not.toContain(gmailAccessToken);
+  });
+
 });
