@@ -59,9 +59,9 @@ export type AuthzResult =
 const TENANT_HINT_KEYS = ['tenantId', 'tid', 'tenant', 'orgId', 'workspaceId', 'businessId'];
 
 export interface TenantResolver {
-  authorizedTenants(principalSub: string, connectorInstanceId: string): string[];
+  authorizedTenants(principalSub: string, connectorInstanceId: string): Promise<string[]>;
   // Map a domain id hint (e.g. businessId) to its owning tenant, if known.
-  tenantOfDomainHint?(key: string, value: string): string | undefined;
+  tenantOfDomainHint?(key: string, value: string): Promise<string | undefined>;
 }
 
 export interface ConsentResolver {
@@ -105,28 +105,32 @@ type TenantOutcome =
  * principal MUST be enrolled on this connector for the token's tenant. An empty
  * enrollment set is NOT a wildcard — it denies (`no_enrollment`).
  */
-export function resolveAuthorizedTenant(
+export async function resolveAuthorizedTenant(
   claims: MockTokenClaims,
   hints: Record<string, unknown>,
   deps: { tenantResolver: TenantResolver; connectorInstanceId: string },
-): TenantOutcome {
+): Promise<TenantOutcome> {
   const authoritative = claims.tid;
   if (!authoritative) return { ok: false, reason: 'ambiguous_tenant' };
 
-  const resolvedHintTenants = new Set<string>();
-  for (const key of TENANT_HINT_KEYS) {
+  const hintLookups = TENANT_HINT_KEYS.flatMap((key) => {
     const raw = hints[key];
-    if (typeof raw !== 'string' || raw.length === 0) continue;
-    const direct = key === 'tenantId' || key === 'tid' || key === 'tenant';
-    const mapped = direct ? raw : deps.tenantResolver.tenantOfDomainHint?.(key, raw);
-    if (mapped) resolvedHintTenants.add(mapped);
-  }
+    if (typeof raw !== 'string' || raw.length === 0) return [];
+    if (key === 'tenantId' || key === 'tid' || key === 'tenant') return [Promise.resolve(raw)];
+    const lookup = deps.tenantResolver.tenantOfDomainHint;
+    return lookup ? [lookup.call(deps.tenantResolver, key, raw)] : [];
+  });
+  const [authorized, ...mappedHints] = await Promise.all([
+    deps.tenantResolver.authorizedTenants(claims.sub, deps.connectorInstanceId),
+    ...hintLookups,
+  ]);
+
+  const resolvedHintTenants = new Set(mappedHints.filter((tenant): tenant is string => Boolean(tenant)));
   if (resolvedHintTenants.size > 1) return { ok: false, reason: 'ambiguous_tenant' };
   for (const hintTenant of resolvedHintTenants) {
     if (hintTenant !== authoritative) return { ok: false, reason: 'cross_tenant' };
   }
 
-  const authorized = deps.tenantResolver.authorizedTenants(claims.sub, deps.connectorInstanceId);
   // Fail-closed: an unenrolled principal (empty set) is denied, never broadly
   // accepted. Enrollment that does not cover the token tenant is cross-tenant.
   if (authorized.length === 0) return { ok: false, reason: 'no_enrollment' };
@@ -146,7 +150,7 @@ function freshnessDeny(
 }
 
 /** Authorize a single request. Fail-closed: any failed check denies. */
-export function authorizeRequest(req: AuthzRequest, deps: AuthorizeDeps): AuthzResult {
+export async function authorizeRequest(req: AuthzRequest, deps: AuthorizeDeps): Promise<AuthzResult> {
   const v = deps.issuer.verify(req.token, {
     expectedAudience: deps.resourceAudience,
     expectedIssuer: deps.expectedIssuer,
@@ -195,7 +199,7 @@ export function authorizeRequest(req: AuthzRequest, deps: AuthorizeDeps): AuthzR
     }
   }
 
-  const tenant = resolveAuthorizedTenant(claims, req.selectorHints ?? {}, {
+  const tenant = await resolveAuthorizedTenant(claims, req.selectorHints ?? {}, {
     tenantResolver: deps.tenantResolver,
     connectorInstanceId: req.connectorInstanceId,
   });
@@ -276,14 +280,14 @@ export class InMemoryTenantRegistry implements TenantResolver {
     this.#domainHints.set(`${key}:${value}`, tenantRef);
   }
 
-  authorizedTenants(principalSub: string, connectorInstanceId: string): string[] {
+  async authorizedTenants(principalSub: string, connectorInstanceId: string): Promise<string[]> {
     return this.#enrollments
       .forPrincipal(principalSub, connectorInstanceId)
       .filter((e) => e.state === 'active')
       .map((e) => e.tenantRef);
   }
 
-  tenantOfDomainHint(key: string, value: string): string | undefined {
+  async tenantOfDomainHint(key: string, value: string): Promise<string | undefined> {
     return this.#domainHints.get(`${key}:${value}`);
   }
 
