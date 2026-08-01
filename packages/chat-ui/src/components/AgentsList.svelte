@@ -1,14 +1,13 @@
 <script lang="ts">
   import {
-    Avatar,
     Badge,
     EmptyState,
+    Icon,
     OverflowMenu,
     SelectableList,
     SelectableRow,
     StatusDot,
     Tag,
-    type AvatarTone,
     type OverflowMenuItem,
   } from '@sentropic/design-system-svelte';
 
@@ -28,17 +27,18 @@
   const STATUS_TONES: Record<AgentsEntryStatus, StatusTone> = {
     'awaiting-input': 'warning',
     running: 'info',
+    active: 'neutral',
     failed: 'error',
     done: 'success',
     idle: 'neutral',
   };
 
-  const AVATAR_TONES: Record<AgentsEntryKind, AvatarTone> = {
-    agent: 'category1',
-    session: 'category2',
-    remote: 'category3',
-    job: 'category4',
-    run: 'category5',
+  const ICON_BY_KIND: Record<AgentsEntryKind, 'layers' | 'settings' | 'target'> = {
+    agent: 'target',
+    session: 'layers',
+    remote: 'target',
+    job: 'settings',
+    run: 'layers',
   };
 
   const ACTIONS: Record<AgentsEntryKind, readonly string[]> = {
@@ -54,6 +54,12 @@
     row.entry.title ?? resolveLabel(`chat.agents.kind.${row.entry.kind}`);
   const activityFor = (epochMs: number): string =>
     formatRelative?.(epochMs) ?? resolveLabel('chat.agents.activity.unknown');
+  const displayStatusFor = (row: AgentsListRow): AgentsEntryStatus =>
+    row.entry.kind === 'session' &&
+    row.aggregateStatus !== 'running' &&
+    row.aggregateStatus !== 'awaiting-input'
+      ? 'active'
+      : row.aggregateStatus;
   const menuItemsFor = (kind: AgentsEntryKind): OverflowMenuItem[] =>
     ACTIONS[kind].map((action) => ({
       value: action,
@@ -88,8 +94,8 @@
     class="chat-agents-list"
   >
     {#each rows as row (row.entry.id)}
-      {@const statusTone = STATUS_TONES[row.aggregateStatus]}
-      {@const kindLabel = resolveLabel(`chat.agents.kind.${row.entry.kind}`)}
+      {@const displayStatus = displayStatusFor(row)}
+      {@const statusTone = STATUS_TONES[displayStatus]}
       {@const hasPendingQuestion = row.entry.status === 'awaiting-input'}
       <div
         class="chat-agents-list-row"
@@ -101,7 +107,7 @@
       >
         <SelectableRow value={row.entry.id} accentBar>
           {#snippet leading()}
-            <Avatar name={kindLabel} size="sm" tone={AVATAR_TONES[row.entry.kind]} />
+            <Icon name={ICON_BY_KIND[row.entry.kind]} size={18} />
           {/snippet}
 
           <span class="chat-agents-list-row__summary">
@@ -120,10 +126,12 @@
               <span>{row.entry.workspaceLabel ?? resolveLabel('chat.agents.workspace.unknown')}</span>
               <StatusDot
                 tone={statusTone}
-                pulse={row.aggregateStatus === 'running'}
-                label={resolveLabel(`chat.agents.status.${row.aggregateStatus}`)}
+                pulse={displayStatus === 'running'}
+                label={resolveLabel(`chat.agents.status.${displayStatus}`)}
               />
-              <span>{resolveLabel(`chat.agents.connection.${row.entry.connection ?? 'unknown'}`)}</span>
+              {#if row.entry.kind === 'remote'}
+                <span>{resolveLabel(`chat.agents.connection.${row.entry.connection ?? 'unknown'}`)}</span>
+              {/if}
             </span>
           {/snippet}
 
@@ -146,6 +154,7 @@
                   items={menuItemsFor(row.entry.kind)}
                   label={resolveLabel('chat.agents.actions.label')}
                   triggerLabel={resolveLabel('chat.agents.actions.trigger')}
+                  placement="bottom-end"
                   dense
                   onselect={(action) => onAction?.(row.entry.id, action)}
                 />
@@ -193,6 +202,15 @@
   .chat-agents-list-row__metadata,
   .chat-agents-list-row__prompt {
     color: var(--st-semantic-text-secondary);
+  }
+
+  :global(.chat-agents-list-row .st-selectableRow__leading) {
+    align-self: flex-start;
+  }
+
+  .chat-agents-list-row__activity {
+    color: var(--st-semantic-text-muted, var(--st-semantic-text-secondary));
+    font-size: var(--st-component-selectableRow-captionFontSize, 0.75rem);
   }
 
   .chat-agents-list-row__prompt {
