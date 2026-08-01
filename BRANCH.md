@@ -1,50 +1,25 @@
-# Feature: ARCH-11 G1c asynchronous tenant authorization contract
+# Feature: Enable MCP resource server in preprod (rollout condition A)
 
 ## Objective
-- [ ] Make the mcp-platform tenant resolver contract asynchronous while preserving fail-closed authorization and concurrent resolver calls.
+Rollout condition A for owner UAT of the Gmail/Drive MCP resource server (L4, PR #489): set `MCP_RESOURCE_SERVER_ENABLED: "true"` in the preprod api ConfigMap so the surface (OFF by default, `api/src/routes/api/mcp.ts`) is exposed in preprod only. Overlay-only change — API_VERSION stays `b98669`, no new image publish required.
 
 ## Scope / Guardrails
-- [ ] Scope limited to `packages/mcp-platform/src/authz.ts`, `packages/mcp-platform/tests/authz.test.ts`, package metadata, and this branch file.
-- [ ] Make-only workflow; no API changes.
+- Scope limited to `deploy/k8s/overlays/preprod/patch-api-config.yaml` (one ConfigMap key) + `BRANCH.md`.
+- No app code, no image, no prod change. Prod stays default-off.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**:
-  - `packages/mcp-platform/src/authz.ts`
-  - `packages/mcp-platform/tests/authz.test.ts`
-  - `packages/mcp-platform/tests/persistence.test.ts`
-  - `packages/mcp-platform/package.json`
-  - `packages/mcp-platform/etc/mcp-platform.api.md`
+- **Allowed Paths (implementation scope)**:
+  - `deploy/k8s/overlays/preprod/patch-api-config.yaml`
   - `BRANCH.md`
-- [ ] **Forbidden Paths (must not change in this branch)**:
-  - `api/**`
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql`
-  - `.github/workflows/**`
+- **Forbidden Paths (must not change in this branch)**:
+  - `deploy/k8s/base/**`, `deploy/k8s/overlays/prod/**`
+  - `api/**`, `ui/**`, `packages/**`, `Makefile`, `docker-compose*.yml`
 
 ## Feedback Loop
-- [ ] None.
+- `BR-MCP-FLAG-NOTE1` (deploy-plane): overlay-only ConfigMap change. `kubectl apply -k deploy/k8s/overlays/preprod` updates the ConfigMap but does NOT restart the api pods (Deployment spec unchanged; ConfigMap referenced by name, api image tag stays `b98669`). poc-k8s must run a one-time `kubectl rollout restart deploy/api -n sentropic-preprod` (preprod-scoped KUBECONFIG) to apply. Verify: `GET https://preprod.sentropic.sent-tech.ca/api/v1/mcp/.well-known/oauth-protected-resource` returns 200 (was 404). Status: acknowledge.
 
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-
-## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read governing rules, the ARCH-11 G1c contract, implementation, and authorization tests.
-  - [x] Verify the isolated branch and Make targets.
-- [x] **Lot 1 — Async resolver contract**
-  - [x] Change `TenantResolver`, tenant resolution, request authorization, and in-memory registry to promises.
-  - [x] Initiate enrollment and every present domain-hint lookup concurrently after token verification.
-  - [x] Update all mcp-platform authorization test call sites and add verify-order and concurrent-hint tests.
-  - [x] Bump `@sentropic/mcp-platform` patch version and verify the public API report.
-- [ ] **Lot 2 — Validation and commit**
-  - [x] Run `make test-mcp-platform ENV=arch11-async-authz`.
-  - [x] Run `make typecheck-mcp-platform ENV=arch11-async-authz` (passes).
-  - [x] Run `make test-mcp-platform ENV=arch11-async-authz` (89 tests pass).
-  - [x] Run `make api-extract-mcp-platform` and `make pack-mcp-platform` (pass).
-  - [x] Regenerate the root lockfile with `make lock-root`.
-  - [ ] Global `make lint` is blocked by missing Docker buildx while starting the unrelated UI image; targeted MCP gates pass.
-  - [x] Commit the atomic change with `make commit`.
+## Lot 1 — enable the flag
+- [x] Add `MCP_RESOURCE_SERVER_ENABLED: "true"` to the preprod api ConfigMap patch (with rollout-restart note)
+- [ ] Merge (conductor gates) → poc-k8s `kubectl apply -k` + `rollout restart deploy/api -n sentropic-preprod`
+- [ ] Verify PRM well-known 200 in preprod
