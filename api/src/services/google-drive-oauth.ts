@@ -17,7 +17,7 @@ export const GOOGLE_DRIVE_OAUTH_CLIENT_SECRET_SETTING_KEY = 'google_drive_oauth_
 export const GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY =
   'google_drive_oauth_callback_base_url';
 
-const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
+export const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 const REVOKE_TIMEOUT_MS = 5_000;
@@ -149,7 +149,7 @@ export const resolveGoogleDriveOAuthClientId = async (): Promise<string | null> 
     ),
   );
 
-const resolveCallbackBaseUrl = async (
+export const resolveCallbackBaseUrl = async (
   options: { requestApiBaseUrl?: string | null } = {},
 ): Promise<string | null> => {
   const setting = await settingsService.get(GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY, {
@@ -195,7 +195,7 @@ export const resolveGoogleDriveAppReturnBaseUrl = (
   return derived && isLoopbackCallbackBaseUrl(normalized) ? derived : normalized;
 };
 
-const resolveClientSecret = async (): Promise<string | null> => {
+export const resolveClientSecret = async (): Promise<string | null> => {
   const envSecret =
     normalizeOptionalText(process.env.GOOGLE_DRIVE_CLIENT_SECRET) ||
     normalizeOptionalText(env.GOOGLE_CLIENT_SECRET);
