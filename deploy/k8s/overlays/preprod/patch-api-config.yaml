@@ -18,3 +18,13 @@ data:
   # Public base URL for user-facing callbacks (magic-link login emails + Google
   # Drive OAuth redirect_uri base) — must be the preprod product host.
   AUTH_CALLBACK_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
+  # Rollout condition A for owner UAT of the Gmail/Drive MCP resource server (L4,
+  # PR #489). The surface is OFF by default (api/src/routes/api/mcp.ts reads this
+  # flag at request time and 404s the whole /api/v1/mcp/* prefix while disabled);
+  # enabling it exposes the RFC 9728 PRM well-known + the guarded /invoke and
+  # /resources/read routes. PREPROD ONLY — prod stays default-off.
+  # NOTE: this is an overlay-only (ConfigMap) change, so API_VERSION is unchanged
+  # (b98669) and no new image publish is required. `kubectl apply -k` updates the
+  # ConfigMap but does NOT restart the api pods on its own — a one-time
+  # `kubectl rollout restart deploy/api -n sentropic-preprod` is required to apply.
+  MCP_RESOURCE_SERVER_ENABLED: "true"
