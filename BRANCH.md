@@ -22,10 +22,10 @@ Deliver the public MCP resource-server route for Gmail and Google Drive P1 read 
   - `api/src/services/secret-crypto.ts`
   - `api/drizzle/**`
   - `drizzle/**`
-  - `Makefile`
   - `docker-compose*.yml`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+  - `Makefile` (target `up-api-test-ci` prereqs only — see BR-MCP-GMAIL-EX2)
 - **Exception process**:
   - Declare `BR-MCP-GMAIL-EXn` with reason, impact, and rollback before touching a conditional or forbidden path.
 
@@ -34,6 +34,7 @@ Deliver the public MCP resource-server route for Gmail and Google Drive P1 read 
 - [x] `BR-MCP-GMAIL-ACK2` — The co-located resource server reuses the existing JWKS port, avoiding a loopback JWKS fetch while retaining real signed-token verification.
 - [x] `BR-MCP-GMAIL-ACK3` — `make scope-check` reports only an unrelated executable-bit change to `packages/cli/bin/stp.mjs`; it is unstaged and untouched by this branch.
 - [ ] `BR-MCP-GMAIL-REVIEW1` — Completion-review selection failed: the runtime does not expose the exact author model and effort required by `harness review`, and the allowed paths prohibit a separate review dossier. No peer consensus is claimed.
+- [x] `BR-MCP-GMAIL-EX2` (Makefile `up-api-test-ci` prereqs) — This branch is the first to import the connector-host chain at api boot, so the CI api integration stack (`make up-api-test-ci`, ci.yml) must build the private-package dists it now resolves at runtime. `up-api-test-ci` prereqs had drifted from `prepare-node-workspace`, omitting `build-mcp-platform build-connector-host build-mcp-connector-google` (connector-host + mcp-connector-google are `private:true`, so unlike the published mcp-auth/mcp-platform their dist is not installed from the registry and must be built locally). Without them, `tsx src/index.ts` fails `ERR_MODULE_NOT_FOUND @sentropic/connector-host/dist/index.js` and every integration shard fails at boot. Fix: append those three build targets to the `up-api-test-ci` prereq list (mirroring `prepare-node-workspace` / the working `up-api-test`). Folded here rather than a separate PR because it is only exercisable through this branch's integration CI. Impact: CI api-test bring-up only; no runtime/app change. Rollback: revert the prereq addition. Status: acknowledge.
 
 ## AI Flaky tests
 - [ ] No AI test is in scope.
