@@ -39,10 +39,10 @@
   - [x] `listSessions(userId, workspaceId?, limit?)`: passthrough.
   - [x] `GET /sessions`: read `scope` query. `scope=all` -> `listSessions(user.userId, null, DEFAULT_ALL_WS_LIMIT)`. Else unchanged.
   - [x] `api/tests`: `scope=all` returns cross-workspace own sessions; NEVER another user's; bounded default applied (seed > limit, get limit).
-- [ ] **Lot 2 — client: functional toggle + per-session labels**
-  - [ ] Restore the toggle in `ChatWidget.svelte` (DS control), no dev message. On -> fetch `/sessions?scope=all`; off -> current workspace.
-  - [ ] Adapter: for all-ws, resolve each session label from its `workspaceId` via `$workspaceScope.items` (id->name), not the single current label.
-  - [ ] `ui/tests`: adapter per-session label; toggle->fetch wiring.
+- [x] **Lot 2 — client: functional toggle + per-session labels**
+  - [x] Restore the toggle in `ChatWidget.svelte` (DS control), no dev message. On -> fetch `/sessions?scope=all`; off -> current workspace.
+  - [x] Adapter: for all-ws, resolve each session label from its `workspaceId` via `$workspaceScope.items` (id->name), not the single current label.
+  - [x] `ui/tests`: adapter per-session label; toggle->fetch wiring.
 - [ ] **Lot 3 — gates + PR**
   - [ ] `make test-api` + `make test-ui` green; typecheck + lint.
   - [ ] PR; ping `s-archi` for co-sign against the 3 criteria.

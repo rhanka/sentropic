@@ -45,6 +45,25 @@ describe('projectAgentsFeed — sessions', () => {
     });
     expect(entry?.workspaceLabel).toBe('Acme HQ');
   });
+
+  it('resolves each session workspace label from its own workspace id (F1)', () => {
+    const entries = projectAgentsFeed({
+      sessions: [
+        session({ id: 's1', workspaceId: 'ws-a' }),
+        session({ id: 's2', workspaceId: 'ws-b' }),
+      ],
+      jobs: [],
+      workspaceLabelsById: new Map([
+        ['ws-a', 'Acme HQ'],
+        ['ws-b', 'Customer workspace'],
+      ]),
+    });
+
+    expect(entries.map((entry) => entry.workspaceLabel)).toEqual([
+      'Acme HQ',
+      'Customer workspace',
+    ]);
+  });
 });
 
 describe('projectAgentsFeed — jobs', () => {
