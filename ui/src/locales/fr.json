@@ -1079,6 +1079,9 @@
       "workspace": {
         "unknown": "Espace de travail inconnu"
       },
+      "scope": {
+        "allWorkspaces": "Tous les espaces de travail"
+      },
       "activity": {
         "unknown": "Activité inconnue",
         "compact": {

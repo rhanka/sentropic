@@ -12,7 +12,7 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain(
       "import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte'",
     );
-    expect(source).toContain("import { IconButton } from '@sentropic/design-system-svelte'");
+    expect(source).toContain("import { IconButton, Toggle } from '@sentropic/design-system-svelte'");
     expect(source).toContain("from '$lib/chat/agents-feed-adapter'");
     expect(source).toContain('projectAgentsFeed,');
     expect(source).toContain('queueJobsToAppJobs,');
@@ -43,6 +43,23 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('title={$_(\'chat.sessions.new\')}');
     expect(source).toContain('class="min-h-0 flex-1 overflow-y-auto p-3"');
     expect(source).toContain('disabled');
+  });
+
+  it('loads the all-workspaces session scope through the DS toggle', () => {
+    const source = readFileSync(widgetPath, 'utf8');
+
+    expect(source).toContain(
+      "import { IconButton, Toggle } from '@sentropic/design-system-svelte'",
+    );
+    expect(source).toContain('let showAllWorkspaceSessions = false;');
+    expect(source).toContain("allWorkspaces ? '/chat/sessions?scope=all' : '/chat/sessions'");
+    expect(source).toContain('const handleAllWorkspaceScopeChange');
+    expect(source).toContain('<Toggle');
+    expect(source).toContain("label={$_('chat.agents.scope.allWorkspaces')}");
+    expect(source).toContain('onchange={handleAllWorkspaceScopeChange}');
+    expect(source).toContain('workspaceLabelsById: showAllWorkspaceSessions');
+    expect(source).not.toContain('Interim: no toggle');
+    expect(source).not.toContain('dedicated branch, architect-co-signed');
   });
 
   it('remounts the list while keeping the conversation mounted with CSS motion', () => {
