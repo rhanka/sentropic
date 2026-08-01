@@ -3270,15 +3270,10 @@
                 class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}
               >
                 <div class="shrink-0 p-3">
-                  <div class="flex items-center justify-between gap-3">
-                    <label class="flex items-center gap-2 text-xs text-slate-500" title={$_('chat.agents.scope.unavailable')}>
-                      <input
-                        type="checkbox"
-                        disabled
-                        aria-describedby="agents-all-workspaces-reason"
-                      />
-                      {$_('chat.agents.scope.allWorkspaces')}
-                    </label>
+                  <!-- F1: the working "all workspaces" toggle ships with the additive
+                       GET /sessions?scope=all endpoint (dedicated branch, architect-co-signed).
+                       Interim: no toggle, and NEVER a dev-state message in an end-user surface. -->
+                  <div class="flex items-center justify-end gap-3">
                     <IconButton
                       size="sm"
                       aria-label={$_('chat.sessions.new')}
@@ -3291,9 +3286,6 @@
                       <Plus class="w-4 h-4" />
                     </IconButton>
                   </div>
-                  <p id="agents-all-workspaces-reason" class="mt-2 text-xs text-slate-500">
-                    {$_('chat.agents.scope.unavailable')}
-                  </p>
                 </div>
                 <div class="min-h-0 flex-1 overflow-y-auto p-3">
                   <AgentsList
