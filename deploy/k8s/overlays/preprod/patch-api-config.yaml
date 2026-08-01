@@ -68,3 +68,18 @@ data:
   # fetch. Pointing `authorization_servers` at preprod.auth.sent-tech.ca would advertise an issuer
   # that does not mint these tokens, and the `iss` claim would no longer match.
   API_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
+  # The authorization server the MCP resource server trusts — the standalone IdP, NOT this api.
+  #
+  # Measured, not assumed: `preprod.auth.sent-tech.ca` answers 200 on both
+  # /.well-known/openid-configuration and /.well-known/oauth-authorization-server, while the
+  # product host answers 404 on every /.well-known path. The reason is the ingress topology:
+  # `preprod.sentropic.sent-tech.ca` routes `/` to the `ui` service (overlays/preprod/ingress.yaml),
+  # and that nginx proxies ONLY `^/api/v1/.*` to the api (`ui/nginx/default.conf:22`). The api's
+  # own well-known router is therefore unreachable on the product host, so pointing MCP clients
+  # there gives them nothing to discover.
+  #
+  # This value is also the expected `iss` of every MCP access token (mcp-auth core.ts:158), which
+  # is consistent: the IdP mints them. Verification still uses the api's LOCAL key port — the IdP
+  # runs the same image against the same database and shares the JWKS rows and OAUTH_SIGNING_KEK
+  # (deploy/k8s/base/35-auth-idp.yaml), so those are the keys that signed the token.
+  MCP_AUTHORIZATION_SERVER_URL: "https://preprod.auth.sent-tech.ca"
