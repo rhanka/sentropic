@@ -78,7 +78,7 @@
         size="sm"
         aria-label={backLabel}
         title={backLabel}
-        on:click={onBack}
+        onclick={onBack}
       >
         <ArrowLeft class="h-4 w-4" aria-hidden="true" />
       </IconButton>
@@ -105,7 +105,7 @@
     <IconButton
       size="sm"
       variant="ghost"
-      on:click={onNewSession}
+      onclick={onNewSession}
       title={labels('chat.sessions.new')}
       aria-label={labels('chat.sessions.new')}
     >
@@ -114,7 +114,7 @@
     <IconButton
       size="sm"
       variant="danger"
-      on:click={() => (deleteConfirmPending = true)}
+      onclick={() => (deleteConfirmPending = true)}
       title={labels('chat.sessions.delete')}
       aria-label={labels('chat.sessions.delete')}
       disabled={!bar.canDelete}

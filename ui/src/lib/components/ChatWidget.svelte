@@ -3282,7 +3282,7 @@
                       size="sm"
                       aria-label={$_('chat.sessions.new')}
                       title={$_('chat.sessions.new')}
-                      on:click={() => {
+                      onclick={() => {
                         showAgentsConversation(chatSessionId ?? undefined);
                         handleNewSession();
                       }}
