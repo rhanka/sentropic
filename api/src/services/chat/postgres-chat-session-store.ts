@@ -48,12 +48,13 @@ export class PostgresChatSessionStore implements SessionStore {
   async listForUser(
     userId: string,
     workspaceId?: string | null,
+    limit?: number,
   ): Promise<ChatSessionRow[]> {
     const normalizedWorkspaceId =
       typeof workspaceId === 'string' && workspaceId.trim().length > 0
         ? workspaceId.trim()
         : null;
-    const rows = await db
+    const query = db
       .select()
       .from(chatSessions)
       .where(
@@ -65,6 +66,7 @@ export class PostgresChatSessionStore implements SessionStore {
           : eq(chatSessions.userId, userId),
       )
       .orderBy(desc(chatSessions.updatedAt), desc(chatSessions.createdAt));
+    const rows = limit === undefined ? await query : await query.limit(limit);
     return rows as ChatSessionRow[];
   }
 
