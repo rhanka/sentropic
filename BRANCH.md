@@ -47,10 +47,10 @@ Deliver the public MCP resource-server route for Gmail and Google Drive P1 read 
   - [x] Confirm the target route’s disabled guard and RFC 9728 metadata route must remain byte-for-byte unchanged.
 
 - [ ] **Lot 1 — Route through the connector-host mount**
-  - [ ] Parse the shared invoke/resource-read body without exposing schema internals.
-  - [ ] Resolve one `(userId, workspaceId)`, select only Gmail or Google Drive hosts, and pass `sessionPrincipalSub === userId`.
-  - [ ] Preserve mount envelopes and map typed connector outcomes to stable HTTP statuses.
-  - [ ] Add the resources-read guarded route without changing the existing invoke guard, disabled guard, or PRM route.
+  - [x] Parse the shared invoke/resource-read body without exposing schema internals.
+  - [x] Resolve one `(userId, workspaceId)`, select only Gmail or Google Drive hosts, and pass `sessionPrincipalSub === userId`.
+  - [x] Preserve mount envelopes and map typed connector outcomes to stable HTTP statuses.
+  - [x] Add the resources-read guarded route without changing the existing invoke guard, disabled guard, or PRM route.
   - [ ] Lot gate: `make typecheck-api`, `make lint-api`, and scoped MCP resource-server tests.
 
 - [ ] **Lot 2 — Hermetic route coverage**
