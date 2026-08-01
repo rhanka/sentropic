@@ -28,3 +28,20 @@ data:
   # ConfigMap but does NOT restart the api pods on its own — a one-time
   # `kubectl rollout restart deploy/api -n sentropic-preprod` is required to apply.
   MCP_RESOURCE_SERVER_ENABLED: "true"
+  # RFC 8707 resource identifier for the MCP resource server. It MUST be pinned, and it MUST
+  # be byte-identical to the `resource_indicators` entry of the claude.ai connector's
+  # `oauth_clients` row — a mismatch is an `invalid_target` denial at the token endpoint.
+  #
+  # Pinned rather than left to the default, and NOT for the reason one would expect. The
+  # default (api/src/routes/api/mcp.ts:40) is `${resolveOAuthIssuer(request)}/api/v1/mcp`. The
+  # `api` ConfigMap does not set OAUTH_ISSUER_URL — only the separate auth-idp one does — so
+  # `resolveOAuthIssuer` falls through to the REQUEST origin (x-forwarded-host, oauth.ts:476).
+  # Behind the ingress that already yields the right host, so the default is not simply wrong.
+  #
+  # The hazard is that `getMcpAuth` memoises into `cachedMcp` on the FIRST call and never
+  # recomputes: the resource identifier of a pod is frozen to whatever the first request that
+  # touched the route happened to carry. A first request without x-forwarded-host — an internal
+  # probe, a direct ClusterIP call, a different ingress host — freezes a wrong identifier for
+  # the whole pod lifetime, and the failure is then intermittent across restarts rather than
+  # reproducible. Pinning the value makes it deterministic and independent of call order.
+  MCP_RESOURCE_URI: "https://preprod.sentropic.sent-tech.ca/api/v1/mcp"
