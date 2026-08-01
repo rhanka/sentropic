@@ -7,10 +7,11 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatSessions, chatMessages, jobQueue } from '../../src/db/schema';
+import { chatSessions, chatMessages, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
 import { chatService } from '../../src/services/chat-service';
+import { DEFAULT_ALL_WS_LIMIT } from '../../src/routes/api/chat';
 
 describe('Chat API Endpoints', () => {
   let user: any;
@@ -671,6 +672,109 @@ describe('Chat API Endpoints', () => {
       for (const session of data.sessions) {
         expect(session.userId).toBe(user.id);
       }
+    });
+
+    it('should list only the user\'s sessions across workspaces when scope is all', async () => {
+      const secondWorkspaceId = crypto.randomUUID();
+      await db.insert(workspaces).values({
+        id: secondWorkspaceId,
+        ownerUserId: user.id,
+        name: `Second workspace ${createTestId()}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await db.insert(workspaceMemberships).values({
+        workspaceId: secondWorkspaceId,
+        userId: user.id,
+        role: 'editor',
+        createdAt: new Date(),
+      });
+      const otherUser = await createAuthenticatedUser('editor');
+      const ownCurrentWorkspaceSessionId = crypto.randomUUID();
+      const ownSecondWorkspaceSessionId = crypto.randomUUID();
+      const otherUserSessionId = crypto.randomUUID();
+
+      await db.insert(chatSessions).values([
+        {
+          id: ownCurrentWorkspaceSessionId,
+          userId: user.id,
+          workspaceId: user.workspaceId,
+          title: 'Own current workspace session',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: ownSecondWorkspaceSessionId,
+          userId: user.id,
+          workspaceId: secondWorkspaceId,
+          title: 'Own second workspace session',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: otherUserSessionId,
+          userId: otherUser.id,
+          workspaceId: otherUser.workspaceId,
+          title: 'Other user session',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const allResponse = await authenticatedRequest(
+        app,
+        'GET',
+        '/api/v1/chat/sessions?scope=all',
+        user.sessionToken!,
+      );
+      const allSessions = (await allResponse.json()).sessions as Array<{
+        id: string;
+        userId: string;
+      }>;
+
+      expect(allResponse.status).toBe(200);
+      expect(allSessions.map((session) => session.id)).toEqual(
+        expect.arrayContaining([ownCurrentWorkspaceSessionId, ownSecondWorkspaceSessionId]),
+      );
+      expect(allSessions.map((session) => session.id)).not.toContain(otherUserSessionId);
+      expect(allSessions.every((session) => session.userId === user.id)).toBe(true);
+
+      const currentScopeResponse = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/sessions?scope=current&workspace_id=${encodeURIComponent(user.workspaceId!)}`,
+        user.sessionToken!,
+      );
+      const currentScopeSessions = (await currentScopeResponse.json()).sessions as Array<{ id: string }>;
+
+      expect(currentScopeResponse.status).toBe(200);
+      expect(currentScopeSessions.map((session) => session.id)).toContain(ownCurrentWorkspaceSessionId);
+      expect(currentScopeSessions.map((session) => session.id)).not.toContain(ownSecondWorkspaceSessionId);
+    });
+
+    it('should apply the bounded default when scope is all', async () => {
+      await db.insert(chatSessions).values(
+        Array.from({ length: DEFAULT_ALL_WS_LIMIT + 3 }, (_, index) => ({
+          id: crypto.randomUUID(),
+          userId: user.id,
+          workspaceId: user.workspaceId,
+          title: `Bounded session ${index}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      );
+
+      const response = await authenticatedRequest(
+        app,
+        'GET',
+        '/api/v1/chat/sessions?scope=all',
+        user.sessionToken!,
+      );
+      const sessions = (await response.json()).sessions as Array<{ userId: string }>;
+
+      expect(response.status).toBe(200);
+      expect(sessions).toHaveLength(DEFAULT_ALL_WS_LIMIT);
+      expect(sessions.every((session) => session.userId === user.id)).toBe(true);
     });
 
     it('should return 401 without authentication', async () => {
