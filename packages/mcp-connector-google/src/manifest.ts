@@ -7,7 +7,7 @@ import type {
   CapabilityGates,
   CapabilityResource,
   CapabilityTool,
-} from '../../mcp-platform/src/manifest.js';
+} from '@sentropic/mcp-platform';
 
 const googleDriveReadScope = 'https://www.googleapis.com/auth/drive.readonly';
 const gmailReadScope = 'https://www.googleapis.com/auth/gmail.readonly';
