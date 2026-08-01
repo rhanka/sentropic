@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
   import type { ContextProvider } from '@sentropic/cowork-bridge/core';
-  import { _, locale } from 'svelte-i18n';
+  import { _ } from 'svelte-i18n';
   import { initApiClient } from '@sentropic/cowork-bridge/core';
   import {
     queueStore,
@@ -12,7 +12,11 @@
     retryJob,
     deleteJob,
   } from '$lib/stores/queue';
-  import { projectAgentsFeed, queueJobsToAppJobs } from '$lib/chat/agents-feed-adapter';
+  import {
+    compactAgentsActivity,
+    projectAgentsFeed,
+    queueJobsToAppJobs,
+  } from '$lib/chat/agents-feed-adapter';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import {
@@ -36,6 +40,7 @@
     List,
     Settings,
   } from '@lucide/svelte';
+  import { IconButton } from '@sentropic/design-system-svelte';
   import type { ChatWidgetDisplayMode } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
   import {
@@ -496,6 +501,7 @@
     projectAgentsFeed({
       sessions: chatSessions,
       jobs: queueJobsToAppJobs($queueStore.jobs),
+      jobLabel: agentsJobLabel,
     }),
   );
   let closeButtonEl: HTMLButtonElement | null = null;
@@ -1996,24 +2002,31 @@
     chatSessionId = null;
   };
 
+  const agentsJobLabel = (job: { type: string }): string => {
+    const labelKey = {
+      organization_batch_create: 'queueMonitor.type.organizationBatchCreate',
+      organization_enrich: 'queueMonitor.type.organizationEnrich',
+      organization_targets_join: 'queueMonitor.type.organizationTargetsJoin',
+      matrix_generate: 'queueMonitor.type.matrixGenerate',
+      usecase_list: 'queueMonitor.type.usecaseList',
+      initiative_list: 'queueMonitor.type.usecaseList',
+      usecase_detail: 'queueMonitor.type.usecaseDetail',
+      initiative_detail: 'queueMonitor.type.usecaseDetail',
+      executive_summary: 'queueMonitor.type.executiveSummary',
+      document_summary: 'queueMonitor.type.documentSummary',
+      chat_message: 'queueMonitor.type.chatMessage',
+      docx_generate: 'queueMonitor.type.docxGenerate',
+    }[job.type];
+
+    return labelKey ? $_(labelKey) : job.type;
+  };
+
   const formatAgentsRelative = (epochMs: number): string => {
-    if (!Number.isFinite(epochMs) || epochMs <= 0) {
-      return $_('chat.agents.activity.unknown');
-    }
-
-    const deltaMs = epochMs - Date.now();
-    const magnitude = Math.abs(deltaMs);
-    const [value, unit] = magnitude < 60_000
-      ? [deltaMs / 1_000, 'second']
-      : magnitude < 3_600_000
-        ? [deltaMs / 60_000, 'minute']
-        : magnitude < 86_400_000
-          ? [deltaMs / 3_600_000, 'hour']
-          : [deltaMs / 86_400_000, 'day'];
-
-    return new Intl.RelativeTimeFormat($locale ?? undefined, {
-      numeric: 'auto',
-    }).format(Math.round(value), unit as Intl.RelativeTimeFormatUnit);
+    const activity = compactAgentsActivity(epochMs);
+    if (!activity) return $_('chat.agents.activity.unknown');
+    return $_(`chat.agents.activity.compact.${activity.unit}`, {
+      values: { value: activity.value },
+    });
   };
 
   const focusConversationHeading = async () => {
@@ -3252,40 +3265,45 @@
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
             {#if canAgentsListBeDefaultView && agentsView === 'list'}
               <section
-                class="h-full min-h-0 overflow-y-auto p-3"
+                class="h-full min-h-0 flex flex-col"
                 class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}
               >
-                <div class="mb-3 flex items-center justify-between gap-3">
-                  <label class="flex items-center gap-2 text-xs text-slate-500" title={$_('chat.agents.scope.unavailable')}>
-                    <input
-                      type="checkbox"
-                      disabled
-                      aria-describedby="agents-all-workspaces-reason"
-                    />
-                    {$_('chat.agents.scope.allWorkspaces')}
-                  </label>
-                  <button
-                    class="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    type="button"
-                    on:click={() => {
-                      showAgentsConversation(chatSessionId ?? undefined);
-                      handleNewSession();
-                    }}
-                  >
-                    {$_('chat.sessions.new')}
-                  </button>
+                <div class="shrink-0 p-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <label class="flex items-center gap-2 text-xs text-slate-500" title={$_('chat.agents.scope.unavailable')}>
+                      <input
+                        type="checkbox"
+                        disabled
+                        aria-describedby="agents-all-workspaces-reason"
+                      />
+                      {$_('chat.agents.scope.allWorkspaces')}
+                    </label>
+                    <IconButton
+                      size="sm"
+                      aria-label={$_('chat.sessions.new')}
+                      title={$_('chat.sessions.new')}
+                      on:click={() => {
+                        showAgentsConversation(chatSessionId ?? undefined);
+                        handleNewSession();
+                      }}
+                    >
+                      <Plus class="w-4 h-4" />
+                    </IconButton>
+                  </div>
+                  <p id="agents-all-workspaces-reason" class="mt-2 text-xs text-slate-500">
+                    {$_('chat.agents.scope.unavailable')}
+                  </p>
                 </div>
-                <p id="agents-all-workspaces-reason" class="mb-3 text-xs text-slate-500">
-                  {$_('chat.agents.scope.unavailable')}
-                </p>
-                <AgentsList
-                  rows={agentsRows}
-                  activeId={chatSessionId ?? undefined}
-                  onSelect={handleSelectAgentsEntry}
-                  onAction={handleAgentsAction}
-                  labels={(key: string) => $_(key)}
-                  formatRelative={formatAgentsRelative}
-                />
+                <div class="min-h-0 flex-1 overflow-y-auto p-3">
+                  <AgentsList
+                    rows={agentsRows}
+                    activeId={chatSessionId ?? undefined}
+                    onSelect={handleSelectAgentsEntry}
+                    onAction={handleAgentsAction}
+                    labels={(key: string) => $_(key)}
+                    formatRelative={formatAgentsRelative}
+                  />
+                </div>
               </section>
             {/if}
             <div

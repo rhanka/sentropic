@@ -70,4 +70,4 @@
   - [x] Adapter: translated job names, resumeable-session semantics, compact activity formatter.
   - [x] Chat UI list: DS icons/actions/menu/status/relative-time polish.
   - [x] Chat UI sessions bar: icon-only Back control.
-  - [ ] Host: fixed scope header, DS new-session action, translated job labels, FR/EN compact-time labels.
+  - [x] Host: fixed scope header, DS new-session action, translated job labels, FR/EN compact-time labels.
