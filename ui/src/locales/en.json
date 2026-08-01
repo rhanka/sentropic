@@ -541,6 +541,22 @@
         "connectedAs": "Connected as {email}",
         "disconnectedHint": "Connect your Google account here before importing Drive files elsewhere in the app.",
         "disconnectedToast": "Google Drive disconnected."
+      },
+      "gmail": {
+        "title": "Gmail",
+        "subtitle": "Read Gmail messages in the app (gmail.readonly).",
+        "connect": "Connect Gmail",
+        "disconnect": "Disconnect Gmail",
+        "loading": "Connecting Gmail…",
+        "connectedAs": "Connected as {email}",
+        "connectedAccount": "Gmail account",
+        "disconnectedHint": "Connect your Google account here to read Gmail messages (gmail.readonly).",
+        "loadError": "Unable to load Gmail connection.",
+        "connectError": "Unable to start Gmail connection.",
+        "disconnectError": "Unable to disconnect Gmail.",
+        "connectedToast": "Gmail connected.",
+        "disconnectedToast": "Gmail disconnected.",
+        "errorToast": "Gmail connection failed."
       }
     },
     "chromeExtension": {
