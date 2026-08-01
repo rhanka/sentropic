@@ -158,15 +158,8 @@ describe('MCP connector-host routes', () => {
   };
 
   const installFetch = async (gmailResponse = new Response(JSON.stringify({ messages: [] }), { status: 200 })) => {
-    const keys = await jwks.listPublicKeys();
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
-      if (href === `${issuer}/.well-known/jwks.json`) {
-        return new Response(JSON.stringify({ keys: keys.map((key) => key.publicJwk) }), {
-          headers: { 'content-type': 'application/json' },
-          status: 200,
-        });
-      }
       if (href.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/')) return gmailResponse;
       throw new Error(`Unexpected network request: ${href}`);
     });
