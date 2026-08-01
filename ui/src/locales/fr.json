@@ -1066,6 +1066,7 @@
       "status": {
         "awaiting-input": "En attente de votre réponse",
         "running": "En cours",
+        "active": "Active",
         "failed": "En échec",
         "done": "Terminée",
         "idle": "Inactive"
@@ -1079,7 +1080,13 @@
         "unknown": "Espace de travail inconnu"
       },
       "activity": {
-        "unknown": "Activité inconnue"
+        "unknown": "Activité inconnue",
+        "compact": {
+          "second": "{value}s",
+          "minute": "{value}min",
+          "hour": "{value}h",
+          "day": "{value}j"
+        }
       },
       "list": {
         "label": "Conversations et tâches"

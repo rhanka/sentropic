@@ -1066,6 +1066,7 @@
       "status": {
         "awaiting-input": "Awaiting your input",
         "running": "Running",
+        "active": "Active",
         "failed": "Failed",
         "done": "Completed",
         "idle": "Idle"
@@ -1079,7 +1080,13 @@
         "unknown": "Workspace unknown"
       },
       "activity": {
-        "unknown": "Activity unknown"
+        "unknown": "Activity unknown",
+        "compact": {
+          "second": "{value}s",
+          "minute": "{value}min",
+          "hour": "{value}h",
+          "day": "{value}d"
+        }
       },
       "list": {
         "label": "Conversations and jobs"

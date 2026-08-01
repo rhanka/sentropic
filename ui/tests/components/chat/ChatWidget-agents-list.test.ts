@@ -12,9 +12,10 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain(
       "import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte'",
     );
-    expect(source).toContain(
-      "import { projectAgentsFeed, queueJobsToAppJobs } from '$lib/chat/agents-feed-adapter'",
-    );
+    expect(source).toContain("import { IconButton } from '@sentropic/design-system-svelte'");
+    expect(source).toContain("from '$lib/chat/agents-feed-adapter'");
+    expect(source).toContain('projectAgentsFeed,');
+    expect(source).toContain('queueJobsToAppJobs,');
     // Jobs MUST go through queueJobsToAppJobs so data.sessionId is lifted and the
     // D5 merge fires; passing $queueStore.jobs raw silently duplicates chat turns
     // (behaviourally covered in agents-feed-queue-jobs.test.ts).
@@ -36,6 +37,11 @@ describe('ChatWidget agents list wiring', () => {
     expect(source).toContain('onSelect={handleSelectAgentsEntry}');
     expect(source).toContain('onAction={handleAgentsAction}');
     expect(source).toContain('formatRelative={formatAgentsRelative}');
+    expect(source).toContain('jobLabel: agentsJobLabel');
+    expect(source).toContain('<IconButton');
+    expect(source).toContain('aria-label={$_(\'chat.sessions.new\')}');
+    expect(source).toContain('title={$_(\'chat.sessions.new\')}');
+    expect(source).toContain('class="min-h-0 flex-1 overflow-y-auto p-3"');
     expect(source).toContain('disabled');
   });
 
