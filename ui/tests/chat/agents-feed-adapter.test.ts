@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildAgentsListRows } from '@sentropic/chat-ui/state/agentsSort';
 import {
+  compactAgentsActivity,
   projectAgentsFeed,
   type AppChatSession,
   type AppJob,
@@ -19,12 +20,12 @@ const job = (over: Partial<AppJob> & { id: string }): AppJob => ({
 });
 
 describe('projectAgentsFeed — sessions', () => {
-  it('projects a session as an idle session entry with its activity time', () => {
+  it('projects a session as an active, resumeable entry with its activity time', () => {
     const [entry] = projectAgentsFeed({
       sessions: [session({ id: 's1', updatedAt: '2026-07-30T12:00:00.000Z' })],
       jobs: [],
     });
-    expect(entry).toMatchObject({ id: 's1', kind: 'session', status: 'idle' });
+    expect(entry).toMatchObject({ id: 's1', kind: 'session', status: 'active' });
     expect(entry?.lastActivityAt).toBe(Date.parse('2026-07-30T12:00:00.000Z'));
   });
 
@@ -48,6 +49,16 @@ describe('projectAgentsFeed — jobs', () => {
   it('renders a standalone job as its own row, prefixed to avoid id collision', () => {
     const [entry] = projectAgentsFeed({ sessions: [], jobs: [job({ id: 'j1' })] });
     expect(entry).toMatchObject({ id: 'job:j1', kind: 'job' });
+  });
+
+  it('uses the host-provided translated job label instead of the technical job type', () => {
+    const [entry] = projectAgentsFeed({
+      sessions: [],
+      jobs: [job({ id: 'j1', type: 'document_summary' })],
+      jobLabel: (job) => (job.type === 'document_summary' ? 'Document summary' : job.type),
+    });
+
+    expect(entry?.title).toBe('Document summary');
   });
 
   it('dates a job by completedAt, then startedAt, then createdAt', () => {
@@ -77,7 +88,7 @@ describe('projectAgentsFeed — D5 session-bound job merge', () => {
     expect(entry?.status).toBe('running');
   });
 
-  it('a failed session-bound job surfaces on the session over a terminal done', () => {
+  it('does not surface terminal job states on a resumeable session', () => {
     const [entry] = projectAgentsFeed({
       sessions: [session({ id: 's1' })],
       jobs: [
@@ -85,7 +96,7 @@ describe('projectAgentsFeed — D5 session-bound job merge', () => {
         job({ id: 'b', sessionId: 's1', status: 'failed' }),
       ],
     });
-    expect(entry?.status).toBe('failed');
+    expect(entry?.status).toBe('active');
   });
 
   it('detects the binding by sessionId, not by the job type string', () => {
@@ -100,6 +111,16 @@ describe('projectAgentsFeed — D5 session-bound job merge', () => {
     });
     expect(entries.map((e) => e.id).sort()).toEqual(['job:orphan', 's1']);
     expect(entries.find((e) => e.id === 's1')?.status).toBe('running');
+  });
+});
+
+describe('compactAgentsActivity', () => {
+  it('returns abbreviated whole-unit activity for display', () => {
+    const now = Date.parse('2026-08-01T12:00:00.000Z');
+
+    expect(compactAgentsActivity(now - 72 * 86_400_000, now)).toEqual({ value: 72, unit: 'day' });
+    expect(compactAgentsActivity(now - 5 * 3_600_000, now)).toEqual({ value: 5, unit: 'hour' });
+    expect(compactAgentsActivity(now - 3 * 60_000, now)).toEqual({ value: 3, unit: 'minute' });
   });
 });
 

@@ -60,6 +60,35 @@ const isSessionBoundJob = (job: AppJob): boolean =>
 export type AgentsFeedInput = {
   readonly sessions: readonly AppChatSession[];
   readonly jobs: readonly AppJob[];
+  /** Host i18n resolves the same human job labels used by the Jobs panel. */
+  readonly jobLabel?: (job: AppJob) => string;
+};
+
+export type CompactAgentsActivity = {
+  readonly value: number;
+  readonly unit: 'second' | 'minute' | 'hour' | 'day';
+};
+
+/**
+ * Return the compact, locale-neutral activity parts. The host translates the
+ * unit template so the same projection stays pure and testable.
+ */
+export const compactAgentsActivity = (
+  epochMs: number,
+  now = Date.now(),
+): CompactAgentsActivity | null => {
+  if (!Number.isFinite(epochMs) || epochMs <= 0) return null;
+
+  const magnitude = Math.abs(epochMs - now);
+  const [value, unit] = magnitude < 60_000
+    ? [magnitude / 1_000, 'second'] as const
+    : magnitude < 3_600_000
+      ? [magnitude / 60_000, 'minute'] as const
+      : magnitude < 86_400_000
+        ? [magnitude / 3_600_000, 'hour'] as const
+        : [magnitude / 86_400_000, 'day'] as const;
+
+  return { value: Math.round(value), unit };
 };
 
 /**
@@ -102,8 +131,8 @@ export const queueJobsToAppJobs = (jobs: readonly QueueJob[]): AppJob[] =>
 /**
  * Project the app's sessions and jobs into `AgentsEntry[]`.
  *
- * Sessions become `kind: 'session'` (status `idle` — the app model carries no
- * live-run signal yet; that arrives with the api feed). Jobs become
+ * Sessions become `kind: 'session'` (status `active` when no turn is running:
+ * a conversation is always resumeable, never terminal). Jobs become
  * `kind: 'job'`, EXCEPT session-bound jobs, whose status is merged UP into their
  * session so a running turn shows as the session running rather than as a second
  * row.
@@ -128,20 +157,23 @@ export const projectAgentsFeed = (input: AgentsFeedInput): AgentsEntry[] => {
     }
   }
 
-  const sessionEntries: AgentsEntry[] = sessions.map((session) => ({
-    id: session.id,
-    kind: 'session',
-    title: session.title ?? null,
-    status: sessionRunStatus.get(session.id) ?? 'idle',
-    lastActivityAt: toMs(session.updatedAt ?? session.createdAt),
-  }));
+  const sessionEntries: AgentsEntry[] = sessions.map((session) => {
+    const jobStatus = sessionRunStatus.get(session.id);
+    return {
+      id: session.id,
+      kind: 'session',
+      title: session.title ?? null,
+      status: jobStatus === 'running' || jobStatus === 'awaiting-input' ? jobStatus : 'active',
+      lastActivityAt: toMs(session.updatedAt ?? session.createdAt),
+    };
+  });
 
   const jobEntries: AgentsEntry[] = jobs
     .filter((job) => !isSessionBoundJob(job))
     .map((job) => ({
       id: `job:${job.id}`,
       kind: 'job',
-      title: job.type,
+      title: input.jobLabel?.(job) ?? job.type,
       status: JOB_STATUS[job.status],
       lastActivityAt: toMs(job.completedAt ?? job.startedAt ?? job.createdAt),
     }));
