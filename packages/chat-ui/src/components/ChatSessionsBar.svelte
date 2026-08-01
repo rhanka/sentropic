@@ -11,6 +11,7 @@
    */
   import type { Snippet } from 'svelte';
   import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+  import { IconButton } from '@sentropic/design-system-svelte';
 
   import {
     resolveSessionsBar,
@@ -73,15 +74,14 @@
 <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
   <div class="min-w-0 flex items-center gap-2">
     {#if onBack}
-      <button
-        class="inline-flex shrink-0 items-center gap-1 rounded px-1 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-700"
-        type="button"
-        on:click={onBack}
+      <IconButton
+        size="sm"
         aria-label={backLabel}
+        title={backLabel}
+        on:click={onBack}
       >
         <ArrowLeft class="h-4 w-4" aria-hidden="true" />
-        <span>{backLabel}</span>
-      </button>
+      </IconButton>
     {/if}
     <h2
       class="min-w-0 truncate text-xs text-slate-500"
@@ -102,25 +102,25 @@
         onNew: onNewSession,
       })}
     {/if}
-    <button
-      class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+    <IconButton
+      size="sm"
+      variant="ghost"
       on:click={onNewSession}
       title={labels('chat.sessions.new')}
       aria-label={labels('chat.sessions.new')}
-      type="button"
     >
       {#if renderPlusIcon}{@render renderPlusIcon()}{/if}
-    </button>
-    <button
-      class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+    </IconButton>
+    <IconButton
+      size="sm"
+      variant="danger"
       on:click={() => (deleteConfirmPending = true)}
       title={labels('chat.sessions.delete')}
       aria-label={labels('chat.sessions.delete')}
-      type="button"
       disabled={!bar.canDelete}
     >
       {#if renderTrashIcon}{@render renderTrashIcon()}{/if}
-    </button>
+    </IconButton>
   </div>
 </div>
 {#if bar.deleteConfirmPending && sessionId}
