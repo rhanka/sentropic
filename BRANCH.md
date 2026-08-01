@@ -63,6 +63,6 @@ Add a read-only Gmail (`gmail.readonly`) enrollment card to Settings by faithful
 - [ ] **Lot 2 — Validation and PR**
   - [x] Attempt `make test-ui ENV=test-gmailui`; Docker buildx and the local registry image reference prevent the test runner from starting.
   - [x] Attempt `make typecheck-ui` and `make lint-ui`; the same Docker prerequisite prevents both commands from starting.
-  - [ ] Run `make scope-check` before committing.
+  - [x] Run `make scope-check` before committing.
   - [x] Review the final diff to confirm it only adds Gmail siblings and Settings wiring; Google Drive card and utility remain untouched.
   - [ ] Create and push a PR to `main` using this file as its body; do not merge.
