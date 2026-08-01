@@ -32,12 +32,13 @@ describe('ChatSessionsBar — optional Back navigation', () => {
     expect(screen.queryByRole('button', { name: 'Back to conversations' })).toBeNull();
   });
 
-  it('renders Back as an accessible button with its visible host label', () => {
+  it('renders Back as an accessible icon-only DS button', () => {
     renderBar({ onBack: vi.fn(), backLabel: 'Back to conversations' });
 
     const back = screen.getByRole('button', { name: 'Back to conversations' });
     expect(back.tagName).toBe('BUTTON');
-    expect(back.textContent).toContain('Back to conversations');
+    expect(back.className).toContain('st-iconButton');
+    expect(back.textContent).not.toContain('Back to conversations');
   });
 
   it('calls the host Back callback when activated', async () => {
