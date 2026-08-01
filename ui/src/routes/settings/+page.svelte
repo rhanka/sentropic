@@ -38,6 +38,12 @@
     type GoogleDriveConnection,
   } from '$lib/utils/google-drive';
   import {
+    disconnectGmail,
+    fetchGmailConnection,
+    startGmailOAuth,
+    type GmailConnection,
+  } from '$lib/utils/gmail';
+  import {
     emitGoogleDriveConnectionUpdated,
     GOOGLE_DRIVE_CONNECTORS_HASH,
     GOOGLE_DRIVE_CONNECTORS_ROUTE,
@@ -49,6 +55,7 @@
     type ThemePreference,
   } from '$lib/stores/themePreference';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
+  import GmailConnectorCard from '$lib/components/GmailConnectorCard.svelte';
   import GoogleDriveConnectorCard from '$lib/components/GoogleDriveConnectorCard.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import TodoRuntimeConfigPanel from '$lib/components/TodoRuntimeConfigPanel.svelte';
@@ -130,6 +137,10 @@
   let isSavingGoogleDriveConnection = false;
   let googleDriveConnectionError = '';
   let googleDriveConnection: GoogleDriveConnection | null = null;
+  let gmailLoading = false;
+  let gmailActionInFlight = false;
+  let gmailError = '';
+  let gmailConnection: GmailConnection | null = null;
   
   // Configuration IA
   let aiSettings = {
@@ -189,6 +200,8 @@
     await loadModelCatalog();
     await loadUserAISettings();
     await syncGoogleDriveConnection();
+    await loadGmailConnection();
+    handleGmailOAuthCallback();
     await revealGoogleDriveConnectors();
     // Download cards (chrome/cowork/vscode) are display-gated by {#if isAdmin()} in the template;
     // fetch their metadata unconditionally so it is populated by the time the card renders (isAdmin()
@@ -249,6 +262,10 @@
 
   const googleDriveReturnPath = () => {
     return GOOGLE_DRIVE_CONNECTORS_ROUTE;
+  };
+
+  const gmailReturnPath = () => {
+    return '/settings#gmail-connectors';
   };
 
   const loadGoogleDriveConnection = async () => {
@@ -315,6 +332,86 @@
         error instanceof Error ? error.message : get(_)('chat.documents.googleDrive.disconnectError');
     } finally {
       isSavingGoogleDriveConnection = false;
+    }
+  };
+
+  const loadGmailConnection = async () => {
+    if (gmailLoading) return;
+    gmailLoading = true;
+    gmailError = '';
+    try {
+      gmailConnection = await fetchGmailConnection();
+    } catch (error) {
+      gmailConnection = null;
+      gmailError =
+        error instanceof Error ? error.message : get(_)('settings.connectors.gmail.loadError');
+    } finally {
+      gmailLoading = false;
+    }
+  };
+
+  const handleGmailOAuthCallback = () => {
+    const gmailStatus = get(page).url.searchParams.get('gmail');
+    if (gmailStatus !== 'connected' && gmailStatus !== 'error') return;
+
+    if (gmailStatus === 'connected') {
+      addToast({
+        type: 'success',
+        message: get(_)('settings.connectors.gmail.connectedToast'),
+      });
+    } else {
+      gmailError = get(_)('settings.connectors.gmail.errorToast');
+      addToast({
+        type: 'error',
+        message: gmailError,
+      });
+    }
+
+    const url = new URL(get(page).url);
+    url.searchParams.delete('gmail');
+    void goto(`${url.pathname}${url.search}${url.hash}`, {
+      replaceState: true,
+      keepFocus: true,
+      noScroll: true,
+    });
+  };
+
+  const connectGmailFromSettings = async () => {
+    if (gmailActionInFlight) return;
+    gmailActionInFlight = true;
+    gmailError = '';
+    try {
+      const authorizationUrl = await startGmailOAuth({
+        returnPath: gmailReturnPath(),
+      });
+      if (typeof window !== 'undefined') {
+        window.location.assign(authorizationUrl);
+      }
+    } catch (error) {
+      gmailError =
+        error instanceof Error ? error.message : get(_)('settings.connectors.gmail.connectError');
+      gmailActionInFlight = false;
+      return;
+    }
+    gmailActionInFlight = false;
+  };
+
+  const disconnectGmailFromSettings = async () => {
+    if (gmailActionInFlight) return;
+    gmailActionInFlight = true;
+    gmailError = '';
+    try {
+      await disconnectGmail();
+      await loadGmailConnection();
+      addToast({
+        type: 'success',
+        message: get(_)('settings.connectors.gmail.disconnectedToast'),
+      });
+    } catch (error) {
+      gmailError =
+        error instanceof Error ? error.message : get(_)('settings.connectors.gmail.disconnectError');
+    } finally {
+      gmailActionInFlight = false;
     }
   };
 
@@ -1455,6 +1552,15 @@
     error={googleDriveConnectionError}
     on:connect={connectGoogleDriveFromSettings}
     on:disconnect={disconnectGoogleDriveFromSettings}
+  />
+
+  <GmailConnectorCard
+    connection={gmailConnection}
+    loading={gmailLoading}
+    actionInFlight={gmailActionInFlight}
+    error={gmailError}
+    on:connect={connectGmailFromSettings}
+    on:disconnect={disconnectGmailFromSettings}
   />
 
   {#if !isAdmin()}

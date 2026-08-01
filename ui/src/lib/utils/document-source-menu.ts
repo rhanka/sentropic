@@ -1,4 +1,5 @@
 import type { GoogleDriveConnection } from './google-drive';
+import type { GmailConnection } from './gmail';
 
 export type DocumentSourceGoogleDriveMode = 'connected' | 'loading' | 'manage';
 
@@ -19,6 +20,19 @@ export const resolveDocumentSourceGoogleDriveMode = (input: {
 
 export const resolveGoogleDriveConnectorCardState = (
   connection: GoogleDriveConnection | null | undefined,
+): {
+  connected: boolean;
+  accountLabel: string | null;
+} => ({
+  connected: Boolean(connection?.connected),
+  accountLabel: resolveGoogleDriveAccountLabel({
+    accountEmail: connection?.accountEmail,
+    accountSubject: connection?.accountSubject,
+  }),
+});
+
+export const resolveGmailConnectorCardState = (
+  connection: GmailConnection | null | undefined,
 ): {
   connected: boolean;
   accountLabel: string | null;
