@@ -1,9 +1,11 @@
 import { createMcpAuth, MCP_SCOPES, type McpAuth } from '@sentropic/mcp-auth';
 import { mcpAuthRoutes, requireMcpAuth, getMcpAuthContext } from '@sentropic/mcp-auth/hono';
+import { fromJwksPort } from '@sentropic/oauth-verify';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { env } from '../../config/env';
+import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createGmailConnectorHost } from '../../services/connector-host/gmail';
 import { createGoogleConnectorHost } from '../../services/connector-host/google-drive';
 import { resolveDefaultWorkspaceId } from '../../services/workspace-access';
@@ -39,6 +41,9 @@ const getMcpAuth = (request?: Request): McpAuth => {
   cachedMcp = createMcpAuth({
     resource,
     authorizationServers: [issuer],
+    // The resource server and authorization server are co-located in this API. Reuse the
+    // existing signing-key port rather than making a loopback JWKS request for every verifier.
+    keySource: fromJwksPort(createJwksAdapter()),
     scopesSupported: [MCP_SCOPES.DISCOVER, MCP_SCOPES.RESOURCES_READ, MCP_SCOPES.TOOLS_INVOKE],
   });
   return cachedMcp;

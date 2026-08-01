@@ -31,6 +31,8 @@ Deliver the public MCP resource-server route for Gmail and Google Drive P1 read 
 
 ## Feedback Loop
 - [x] `BR-MCP-GMAIL-ACK1` — OAuth subject mapping is proven by the issuer and app user adapter; no subject lookup or new query is required.
+- [x] `BR-MCP-GMAIL-ACK2` — The co-located resource server reuses the existing JWKS port, avoiding a loopback JWKS fetch while retaining real signed-token verification.
+- [x] `BR-MCP-GMAIL-ACK3` — `make scope-check` reports only an unrelated executable-bit change to `packages/cli/bin/stp.mjs`; it is unstaged and untouched by this branch.
 
 ## AI Flaky tests
 - [ ] No AI test is in scope.
@@ -46,18 +48,19 @@ Deliver the public MCP resource-server route for Gmail and Google Drive P1 read 
   - [x] Verify OAuth `sub === users.id` and locate `resolveDefaultWorkspaceId` for the fallback workspace.
   - [x] Confirm the target route’s disabled guard and RFC 9728 metadata route must remain byte-for-byte unchanged.
 
-- [ ] **Lot 1 — Route through the connector-host mount**
+- [x] **Lot 1 — Route through the connector-host mount**
   - [x] Parse the shared invoke/resource-read body without exposing schema internals.
   - [x] Resolve one `(userId, workspaceId)`, select only Gmail or Google Drive hosts, and pass `sessionPrincipalSub === userId`.
   - [x] Preserve mount envelopes and map typed connector outcomes to stable HTTP statuses.
   - [x] Add the resources-read guarded route without changing the existing invoke guard, disabled guard, or PRM route.
-  - [ ] Lot gate: `make typecheck-api`, `make lint-api`, and scoped MCP resource-server tests.
+  - [x] Lot gate: API typecheck and lint passed through Make-managed Docker fallbacks; the standard targets require unavailable local Docker buildx and remain CI-owned. The scoped MCP resource-server tests passed.
 
-- [ ] **Lot 2 — Hermetic route coverage**
-  - [ ] Extend `api/tests/api/mcp-resource-server.test.ts` with real signed MCP tokens, connected Gmail account seeding, mocked JWKS and Google egress, no-token assertions, scope rejection, allowlist denial, principal binding, and both secret outcomes.
-  - [ ] Add the opt-in `GMAIL_SMOKE_READONLY_TOKEN` smoke case, skipped unless explicitly supplied.
-  - [ ] Lot gate: run the scoped API suite on `ENV=test-mcp-gmail-invoke-surface` and record exact outcomes.
+- [x] **Lot 2 — Hermetic route coverage**
+  - [x] Extend `api/tests/api/mcp-resource-server.test.ts` with real signed MCP tokens, connected Gmail account seeding, mocked Google egress, no-token assertions, scope rejection, allowlist denial, principal binding, and both secret outcomes.
+  - [x] Add the opt-in `GMAIL_SMOKE_READONLY_TOKEN` smoke case, skipped unless explicitly supplied.
+  - [x] Lot gate: `tests/api/mcp-resource-server.test.ts` passed 12/12 and `tests/unit/gmail-connector-host.test.ts` passed 4/4 with 1 expected smoke skip under `ENV=test-mcp-gmail-invoke-surface`.
 
 - [ ] **Lot 3 — Final validation and PR**
-  - [ ] Run `make typecheck-api`, `make lint-api`, `make scope-check`, and the focused API suite with `ENV=test-mcp-gmail-invoke-surface`.
+  - [x] Run API typecheck, API lint, and focused suites with `ENV=test-mcp-gmail-invoke-surface`; use the Docker-only Make fallback locally because the standard API targets require Docker buildx.
+  - [x] Run `make scope-check` (the sole advisory is the unrelated, unstaged `packages/cli/bin/stp.mjs` mode change).
   - [ ] Create and push a PR to `main` with this file as the body; do not merge.
