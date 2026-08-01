@@ -38,6 +38,7 @@ const ROWS: AgentsListRow[] = [
   { entry: { id: 'failed', kind: 'remote', title: 'Remote', status: 'failed', lastActivityAt: 30 }, depth: 0, aggregateStatus: 'failed', childCount: 0 },
   { entry: { id: 'done', kind: 'job', title: 'Job', status: 'done', lastActivityAt: 40 }, depth: 0, aggregateStatus: 'done', childCount: 0 },
   { entry: { id: 'idle', kind: 'run', title: 'Run', status: 'idle', lastActivityAt: 50 }, depth: 0, aggregateStatus: 'idle', childCount: 0 },
+  { entry: { id: 'resumeable', kind: 'session', title: 'Resumeable', status: 'done', lastActivityAt: 60 }, depth: 0, aggregateStatus: 'done', childCount: 0 },
 ];
 
 const renderList = (props: Partial<{
@@ -110,7 +111,38 @@ describe('AgentsList', () => {
     expect(container.querySelector('.st-statusDot__dot--error')).not.toBeNull();
     expect(container.querySelector('.st-statusDot__dot--success')).not.toBeNull();
     expect(container.querySelector('.st-statusDot__dot--neutral')).not.toBeNull();
+    expect(container.querySelectorAll('.st-statusDot__dot--neutral')).toHaveLength(2);
     expect(container.querySelectorAll('.st-statusDot__dot--pulse')).toHaveLength(1);
+  });
+
+  it('should render a session terminal status as neutral active rather than done', () => {
+    const { container } = renderList();
+    const session = container.querySelector('[data-agent-entry-id="resumeable"]');
+
+    expect(session?.textContent).toContain('label:chat.agents.status.active');
+    expect(session?.textContent).not.toContain('label:chat.agents.status.done');
+  });
+
+  it('should render connection state only for remote rows', () => {
+    const { container } = renderList();
+
+    expect(container.querySelector('[data-agent-entry-id="waiting"]')?.textContent).not.toContain(
+      'label:chat.agents.connection.connected',
+    );
+    expect(container.querySelector('[data-agent-entry-id="running"]')?.textContent).not.toContain(
+      'label:chat.agents.connection.unknown',
+    );
+    expect(container.querySelector('[data-agent-entry-id="failed"]')?.textContent).toContain(
+      'label:chat.agents.connection.unknown',
+    );
+  });
+
+  it('should use DS icons instead of initial avatars and keep activity compact', () => {
+    const { container } = renderList({ formatRelative: () => '72j' });
+
+    expect(container.querySelector('.st-avatar')).toBeNull();
+    expect(container.querySelectorAll('.st-icon')).toHaveLength(ROWS.length);
+    expect(screen.getAllByText('72j')).toHaveLength(ROWS.length);
   });
 
   it('should show the pending tag and excerpt only for an awaiting-input row', () => {
