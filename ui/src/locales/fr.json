@@ -541,6 +541,22 @@
         "connectedAs": "Connecté avec {email}",
         "disconnectedHint": "Connectez votre compte Google ici avant d’importer des fichiers Drive ailleurs dans l’application.",
         "disconnectedToast": "Google Drive déconnecté."
+      },
+      "gmail": {
+        "title": "Gmail",
+        "subtitle": "Consultez vos messages Gmail dans l’application (gmail.readonly).",
+        "connect": "Connecter Gmail",
+        "disconnect": "Déconnecter Gmail",
+        "loading": "Connexion à Gmail…",
+        "connectedAs": "Connecté avec {email}",
+        "connectedAccount": "Compte Gmail",
+        "disconnectedHint": "Connectez votre compte Google ici pour consulter vos messages Gmail (gmail.readonly).",
+        "loadError": "Impossible de charger la connexion Gmail.",
+        "connectError": "Impossible de lancer la connexion Gmail.",
+        "disconnectError": "Impossible de déconnecter Gmail.",
+        "connectedToast": "Gmail connecté.",
+        "disconnectedToast": "Gmail déconnecté.",
+        "errorToast": "La connexion Gmail a échoué."
       }
     },
     "chromeExtension": {
