@@ -30,6 +30,11 @@ import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeu
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 import { getDefaultGateConfig } from '../../services/gate-service';
 import { todoOrchestrationService } from '../../services/todo-orchestration';
+import {
+  captureConnectorGrantsForTeardown,
+  recordConnectorGrantTombstones,
+  revokeCapturedConnectorGrants,
+} from '../../services/connector-grant-teardown';
 
 export const workspacesRouter = new Hono();
 
@@ -272,7 +277,15 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     .where(eq(workspaceMemberships.workspaceId, workspaceId));
   const memberUserIds = members.map((m) => m.userId);
 
+  // Capture external grants BEFORE the deletion. This path deletes a workspace only, but connector
+  // rows cascade from `workspaces` too, and they belong to EVERY member — not just the caller — so
+  // the scope here is the workspace, not the acting user. See services/connector-grant-teardown.ts.
+  const capturedGrants = await captureConnectorGrantsForTeardown({ workspaceId });
+
   await db.transaction(async (tx) => {
+    // Atomic with the destruction.
+    await recordConnectorGrantTombstones(tx, capturedGrants);
+
     // Detach traces that use workspace FK (optional; keep history)
     await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
 
@@ -314,6 +327,9 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     // Finally delete workspace
     await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
   });
+
+  // Only after a successful commit.
+  await revokeCapturedConnectorGrants(capturedGrants);
 
   await notifyWorkspaceEvent(workspaceId, { action: 'deleted' }, memberUserIds);
 
