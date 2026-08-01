@@ -502,6 +502,7 @@
       sessions: chatSessions,
       jobs: queueJobsToAppJobs($queueStore.jobs),
       jobLabel: agentsJobLabel,
+      workspaceLabel: $workspaceScope.items.find((w) => w.id === $workspaceScope.selectedId)?.name,
     }),
   );
   let closeButtonEl: HTMLButtonElement | null = null;
