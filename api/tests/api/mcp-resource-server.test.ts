@@ -1,6 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createJwksService } from '@sentropic/auth-hono';
+import { and, eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { app } from '../../src/app';
+import { db } from '../../src/db/client';
+import { documentConnectorAccounts } from '../../src/db/schema';
+import { GMAIL_PROVIDER } from '../../src/services/gmail-oauth';
+import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
+import { createJwksAdapter, type JwksAdapter } from '../../src/services/auth/jwks-adapter';
+import { cleanupAuthData, createTestUser, type TestUser } from '../utils/auth-helper';
+import { encryptSecret } from '../../src/services/secret-crypto';
+
+const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+
+const ensureActiveSigningKey = async (): Promise<JwksAdapter> => {
+  const jwks = createJwksAdapter();
+  if (await jwks.getActiveKey()) return jwks;
+  try {
+    await jwks.generateAndStoreNewKey({ kid: 'mcp-resource-server-test-kid' });
+  } catch (error) {
+    if (!String(error).includes('duplicate key value')) throw error;
+  }
+  return createJwksAdapter();
+};
 
 // BR-39l Lot 3 — first real consumption of @sentropic/mcp-auth (activation-by-consumption).
 // These integration tests exercise the unauthenticated surface of the sample MCP resource
@@ -67,4 +89,201 @@ describe('MCP resource server (BR-39l Lot 3)', () => {
       expect(res.headers.get('WWW-Authenticate')).toContain('Bearer');
     });
   });
+});
+
+describe('MCP connector-host routes', () => {
+  const originalEnabled = process.env.MCP_RESOURCE_SERVER_ENABLED;
+  let issuer: string;
+  let resource: string;
+  let user: TestUser;
+  let jwks: JwksAdapter;
+  let gmailAccessToken: string;
+
+  beforeEach(async () => {
+    process.env.MCP_RESOURCE_SERVER_ENABLED = 'true';
+    const metadata = await app.request('/api/v1/mcp/.well-known/oauth-protected-resource');
+    const document = await metadata.json() as { authorization_servers: string[]; resource: string };
+    issuer = document.authorization_servers[0]!;
+    resource = document.resource;
+    jwks = await ensureActiveSigningKey();
+    user = await createTestUser({ role: 'editor' });
+    gmailAccessToken = `gmail-route-token-${crypto.randomUUID()}`;
+    await storeGoogleDriveTokenMaterial({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+      provider: GMAIL_PROVIDER,
+      identity: { accountEmail: 'mcp-gmail@example.test', accountSubject: `gmail-${user.id}` },
+      token: {
+        accessToken: gmailAccessToken,
+        refreshToken: 'gmail-route-refresh-token',
+        idToken: null,
+        tokenType: 'Bearer',
+        scope: GMAIL_READONLY_SCOPE,
+        scopes: [GMAIL_READONLY_SCOPE],
+        obtainedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      },
+    });
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    if (user) {
+      await db.delete(documentConnectorAccounts).where(and(
+        eq(documentConnectorAccounts.userId, user.id),
+        eq(documentConnectorAccounts.provider, GMAIL_PROVIDER),
+      ));
+    }
+    await cleanupAuthData();
+    if (originalEnabled === undefined) delete process.env.MCP_RESOURCE_SERVER_ENABLED;
+    else process.env.MCP_RESOURCE_SERVER_ENABLED = originalEnabled;
+  });
+
+  const issueToken = async (scopes: string[]): Promise<string> => {
+    const now = new Date();
+    return createJwksService({
+      clock: { now: () => now, addSeconds: (date, seconds) => new Date(date.getTime() + seconds * 1000) },
+      jwksPort: jwks,
+    }).signJwt(
+      { client_id: 'mcp-route-test-client', scope: scopes.join(' ') },
+      {
+        audience: resource,
+        expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+        issuer,
+        jti: crypto.randomUUID(),
+        subject: user.id,
+        type: 'JWT',
+      },
+    );
+  };
+
+  const installFetch = async (gmailResponse = new Response(JSON.stringify({ messages: [] }), { status: 200 })) => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+      if (href.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/')) return gmailResponse;
+      throw new Error(`Unexpected network request: ${href}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  };
+
+  const invoke = (token: string, body: Record<string, unknown>) => app.request('/api/v1/mcp/invoke', {
+    body: JSON.stringify(body),
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  const readResource = (token: string, body: Record<string, unknown>) => app.request('/api/v1/mcp/resources/read', {
+    body: JSON.stringify(body),
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  const replaceGmailSecret = (tokenSecret: string) => db
+    .update(documentConnectorAccounts)
+    .set({ tokenSecret, updatedAt: new Date() })
+    .where(and(eq(documentConnectorAccounts.userId, user.id), eq(documentConnectorAccounts.provider, GMAIL_PROVIDER)));
+
+  it('invokes Gmail messages.list end-to-end without exposing the connector token', async () => {
+    const fetchMock = await installFetch(new Response(JSON.stringify({ messages: [{ id: 'message-1' }] }), { status: 200 }));
+    const token = await issueToken(['mcp:tools:invoke']);
+
+    const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, output: { messages: [{ id: 'message-1' }] } });
+    const googleCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('https://gmail.googleapis.com/'));
+    expect((googleCall?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${gmailAccessToken}` });
+    expect(JSON.stringify(body)).not.toContain(gmailAccessToken);
+  });
+
+  it('rejects a token missing mcp:tools:invoke before the connector mount reaches Google', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:resources:read']);
+
+    const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+
+    expect(response.status).toBe(401);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
+  });
+
+  it('denies unallowlisted Gmail capabilities and unknown connectors without Google egress', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+
+    const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.send', input: {} });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'connector_not_found' } });
+    const unknown = await invoke(token, { connectorId: 'other', capabilityRef: 'messages.list', input: {} });
+    expect(unknown.status).toBe(404);
+    await expect(unknown.json()).resolves.toMatchObject({ error: { code: 'connector_not_found' } });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
+  });
+
+  it('binds the host principal to the verified token instead of request input', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+
+    const response = await invoke(token, {
+      connectorId: 'gmail',
+      capabilityRef: 'messages.list',
+      input: { query: 'from:me', sessionPrincipalSub: 'another-user' },
+    });
+
+    expect(response.status).toBe(200);
+    const googleCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('https://gmail.googleapis.com/'));
+    expect((googleCall?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${gmailAccessToken}` });
+  });
+
+  it('surfaces unavailable and unreadable connector secrets distinctly', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+    await replaceGmailSecret(encryptSecret(JSON.stringify({
+      accessToken: '', refreshToken: null, idToken: null, tokenType: 'Bearer', scope: GMAIL_READONLY_SCOPE,
+      scopes: [GMAIL_READONLY_SCOPE], obtainedAt: new Date().toISOString(), expiresAt: null,
+    })));
+
+    const unavailable = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+    expect(unavailable.status).toBe(409);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      error: { code: 'connector_secret_unavailable', retriable: false },
+    });
+
+    await replaceGmailSecret('enc:v2:iv:tag:body');
+    const unreadable = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+    expect(unreadable.status).toBe(502);
+    await expect(unreadable.json()).resolves.toMatchObject({
+      error: {
+        code: 'connector_secret_unreadable', retriable: true,
+        detail: { reason: 'unsupported_version', version: 'v2' },
+      },
+    });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
+  });
+
+  it('reads Gmail resources through the resources-read scope guard', async () => {
+    await installFetch(new Response(JSON.stringify({ id: 'message-1', threadId: 'thread-1' }), { status: 200 }));
+    const token = await issueToken(['mcp:resources:read']);
+
+    const response = await readResource(token, {
+      connectorId: 'gmail', capabilityRef: 'messages.get', input: { uri: 'gmail://messages/message-1' },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true, output: { id: 'message-1' } });
+  });
+
+  it('returns a non-descriptive 400 for a malformed connector request', async () => {
+    const token = await issueToken(['mcp:tools:invoke']);
+
+    const response = await invoke(token, { connectorId: 'gmail' });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'invalid_request', message: 'Request body is invalid.' },
+    });
+  });
+
 });
