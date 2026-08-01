@@ -69,5 +69,5 @@
 - [ ] **Slice 6 — UAT-1 agents-surface polish (F2–F7, F9–F11 only)**
   - [x] Adapter: translated job names, resumeable-session semantics, compact activity formatter.
   - [x] Chat UI list: DS icons/actions/menu/status/relative-time polish.
-  - [ ] Chat UI sessions bar: icon-only Back control.
+  - [x] Chat UI sessions bar: icon-only Back control.
   - [ ] Host: fixed scope header, DS new-session action, translated job labels, FR/EN compact-time labels.
