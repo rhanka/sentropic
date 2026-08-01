@@ -1,76 +1,73 @@
-# Feature: Connector Host API Ports L2
+# Feature: Gmail Read-Only Connector Connection
 
 ## Objective
-Implement the API-side P1 ports and the deny-by-default Google Drive host mount for `@sentropic/connector-host`.
+Deliver L3 of `SPEC_EVOL_CONNECTOR_HOST`: a separate Gmail `gmail.readonly` OAuth connection and connector-host mount that reuses the existing Google OAuth security primitives without altering the Drive grant.
 
 ## Scope / Guardrails
-- Scope limited to `api/**`, `Makefile`, `package-lock.json`, and this branch plan.
-- No schema or migration changes.
-- Consume, but do not modify, `packages/connector-host/**`, `packages/mcp-platform/**`, and `packages/mcp-connector-google/**`.
-- Do not modify `api/src/services/secret-crypto.ts` or the public `resolveGoogleDriveTokenSecret` null-return contract.
+- Scope limited to `api/**` and `BRANCH.md`.
+- No schema or migration changes; migration 0040 already permits `provider='gmail'` rows.
+- Consume but do not modify `packages/connector-host/**`, `packages/mcp-platform/**`, or `packages/mcp-connector-google/**`.
+- Do not modify `api/src/services/secret-crypto.ts` or Google Drive OAuth behavior; only additive exports may expose its existing helpers.
+- Gmail uses the existing Google client secret resolver and state sealer, with `OAUTH_SIGNING_KEK` before `JWT_SECRET` through the existing Drive state helpers.
+- Gmail must create, load, update, and disconnect only `provider='gmail'` connector-account rows; Drive rows and grants remain untouched.
 - Make-only workflow, no direct Docker commands.
-- Automated tests run only on `ENV=test-connector-host-api` with `API_PORT=9080`, `UI_PORT=5280`, and `MAILDEV_UI_PORT=1180`.
+- Automated tests use `API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=cam`.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `api/**`
-  - `Makefile`
-  - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/connector-host/**`
-  - `packages/mcp-platform/**`
-  - `packages/mcp-connector-google/**`
+  - `packages/**`
   - `api/src/services/secret-crypto.ts`
+  - `api/drizzle/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql`
   - `.github/workflows/**`
 - **Exception process**:
-  - Declare exception ID `BR480-EXn` in `## Feedback Loop` before touching any conditional or forbidden path.
+  - Declare exception ID `BR483-EXn` in `## Feedback Loop` before touching any conditional or forbidden path.
+  - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [x] `BR480-ACK1` — The owner reassigned API host wiring to this lane and authorized the API plus root-lockfile scope. No schema change is required because migration 0040 already permits Gmail rows.
-- [x] `BR480-EX2` — Owner authorized the Makefile CI repair: add the three workspace-package build targets and wire them into `prepare-node-workspace`. Impact: API CI prepares the published-package exports before typecheck and unit tests. Rollback: remove the targets and their prerequisite wiring.
-- [x] `BR480-EX3` — L1 defect surfaced by the first real adapter: `mountConnectorHost` built its capability-visibility `VisibilityContext` with a hardcoded empty `scopes`, so `listVisibleCapabilities` denied every scope-gated adapter as missing (all Google capabilities require `drive.readonly`/`gmail.readonly`; the L1 fake connector declares no required scopes, which hid the defect). Fix: source visibility scopes from the mounted adapter's `manifest.authz.scopes`; the explicit exposure allowlist and policy remain the real per-request narrowing (deny-as-missing discovery only). Impact: `packages/connector-host/src/mount.ts` only (private package `@sentropic/connector-host` v0.0.0 — no version/publish change); the Drive mount end-to-end unit test now returns `ok:true`. Rollback: restore `scopes: []`. Flagged to architect for L1 contract review.
+- [x] `BR483-ACK1` — Architect ratified provider-parametrized OAuth ownership for the integration lane. The separate Gmail authorization must reuse the Drive client-secret resolver and signed-state helpers, not create credentials, scopes, or sealers.
+
+## AI Flaky tests
+- [ ] No AI test is in scope.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
 - [ ] **Multi-branch**
-- Rationale: one bounded API integration lane with a single final test cycle.
+- Rationale: one bounded API integration lane with one final validation cycle.
+
+## UAT Management (in orchestration context)
+- [x] No UI surface changes; OAuth browser UAT is deferred until the configured Google client has the Gmail callback URI.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and contract review**
-  - [x] Verify `feat/connector-host-api-ports` with `harness check branch`.
-  - [x] Verify scope before edits with `harness check scope`.
-  - [x] Read connector-host ports/mount, Google adapter exports, secret crypto, account lifecycle, Drive route, and L2 specification.
-  - [x] Confirm no migration is needed and define the isolated test environment and ports.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Verify `feat/gmail-readonly-connection` with `harness check branch`.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `SPEC_EVOL_CONNECTOR_HOST.md` §§6, 7, and 10, the Drive OAuth/account/route/host seams, and unit-test conventions.
+  - [x] Confirm migration 0040 already permits Gmail rows and no migration is needed.
+  - [x] Define the dedicated validation environment: API `9080`, UI `5280`, Maildev `1180`, `ENV=cam`.
 
-- [x] **Lot 1 — Workspace dependencies**
-  - [x] Add API file dependencies for connector host, MCP platform, and Google connector adapters in `api/package.json`.
-  - [x] Regenerate root `package-lock.json` with `make lock-root`.
-  - [x] Confirm API resolves `@sentropic/connector-host` through the root workspace lockfile.
-  - [x] Commit dependencies and lockfile via `make commit`.
+- [ ] **Lot 1 — Separate Gmail OAuth and connector-account lifecycle**
+- [x] Add Gmail provider/scope OAuth helpers that read the shared Google client secret only through exported `resolveClientSecret` and use `createGoogleDriveOAuthState`/`verifyGoogleDriveOAuthState` unchanged.
+- [x] Parameterize connector-account creation, connection lookup, error, token validation, and disconnect by provider with Google Drive as the default.
+  - [ ] Prove the Gmail path stores an encrypted `provider='gmail'` row without mutating a Drive row.
+  - [ ] Lot gate: `make scope-check`.
 
-- [x] **Lot 2 — Google Drive secret port**
-  - [x] Add `api/src/services/connector-host/google-drive.ts` with a `SecretAccessError`-shaped unavailable path.
-  - [x] Preflight encrypted account material through throwing `decryptSecret` so `SecretEnvelopeError` propagates unchanged.
-  - [x] Reuse the existing per-account refresh resolver without changing its public null contract.
-  - [x] Commit the secret port via `make commit`.
+- [ ] **Lot 2 — Gmail API routes and deny-by-default host mount**
+- [x] Add `POST /api/v1/gmail/oauth/start`, `GET /api/v1/gmail/oauth/callback`, `GET /api/v1/gmail/connection`, and `POST /api/v1/gmail/disconnect` with the authenticated session/workspace guard.
+- [x] Add `createGmailConnectorHost()` using `gmailLiveAdapter`, `provider='gmail'`, `googleOAuthAccessToken`, and only `messages.get`, `threads.get`, `messages.list`, and `labels.list`.
+  - [ ] Preserve `connector_secret_unavailable` and `connector_secret_unreadable` through the existing secret-port contract.
+  - [ ] Lot gate: `make scope-check`.
 
-- [x] **Lot 3 — Resolvers and single mount**
-  - [x] Resolve enrolled Google Drive accounts to opaque connector instances and deny ambiguous selection.
-  - [x] Bind principal and workspace to the server-authenticated session with `requireWorkspaceAccess`.
-  - [x] Apply the finite P1 Drive capability allowlist and mount `googleDriveLiveAdapter` through `mountConnectorHost`.
-  - [x] Commit resolvers and mount factory via `make commit`.
-
-- [ ] **Lot 4 — Hermetic proof and validation**
-  - [x] Wire the API image to install and build the three new workspace dependencies.
-  - [x] Build the three workspace-package exports during node-workspace preparation for API CI.
-  - [x] Add `api/tests/unit/connector-host.test.ts` for secret classification, account ambiguity, session/workspace denial, and mounted Drive behavior.
-  - [ ] Run scoped API unit tests: `make test-api-unit SCOPE=tests/unit/connector-host.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-connector-host-api`.
-  - [ ] Run `make typecheck-lint-api ENV=test-connector-host-api`.
-  - [ ] Run `make scope-check` before every commit and confirm a clean worktree after the final commit.
-  - [x] Commit tests via `make commit`.
+- [ ] **Lot 3 — Hermetic Gmail proof and validation**
+- [x] Add `api/tests/unit/gmail-oauth.test.ts` for exact Gmail scope, real-secret state HMAC, production refusal, and separate encrypted account rows.
+- [x] Add `api/tests/unit/gmail-connector-host.test.ts` for allowed Gmail reads, deny-as-missing writes, both secret codes, and name-only audit events.
+  - [ ] Run `make test-api-unit SCOPE=tests/unit/gmail-oauth.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=cam`.
+  - [ ] Run `make test-api-unit SCOPE=tests/unit/gmail-connector-host.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=cam`.
+  - [ ] Run `make typecheck-lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=cam`.
+  - [ ] Confirm `make scope-check` and a clean worktree after each commit.
