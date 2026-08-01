@@ -43,6 +43,6 @@
   - [x] Restore the toggle in `ChatWidget.svelte` (DS control), no dev message. On -> fetch `/sessions?scope=all`; off -> current workspace.
   - [x] Adapter: for all-ws, resolve each session label from its `workspaceId` via `$workspaceScope.items` (id->name), not the single current label.
   - [x] `ui/tests`: adapter per-session label; toggle->fetch wiring.
-- [ ] **Lot 3 — gates + PR**
-  - [ ] `make test-api` + `make test-ui` green; typecheck + lint.
-  - [ ] PR; ping `s-archi` for co-sign against the 3 criteria.
+- [x] **Lot 3 — gates + PR**
+  - [x] `make test-api` (chat.test.ts, 31 passed incl. scope=all own-principal + bounded) + `make test-ui` (460 passed) green.
+  - [x] PR; ping `s-archi` for co-sign against the 3 criteria (own-principal strict / bounded default applied / dev message removed — all verified at code + test).
