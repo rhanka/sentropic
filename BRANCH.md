@@ -33,6 +33,7 @@ Deliver the public MCP resource-server route for Gmail and Google Drive P1 read 
 - [x] `BR-MCP-GMAIL-ACK1` — OAuth subject mapping is proven by the issuer and app user adapter; no subject lookup or new query is required.
 - [x] `BR-MCP-GMAIL-ACK2` — The co-located resource server reuses the existing JWKS port, avoiding a loopback JWKS fetch while retaining real signed-token verification.
 - [x] `BR-MCP-GMAIL-ACK3` — `make scope-check` reports only an unrelated executable-bit change to `packages/cli/bin/stp.mjs`; it is unstaged and untouched by this branch.
+- [ ] `BR-MCP-GMAIL-REVIEW1` — Completion-review selection failed: the runtime does not expose the exact author model and effort required by `harness review`, and the allowed paths prohibit a separate review dossier. No peer consensus is claimed.
 
 ## AI Flaky tests
 - [ ] No AI test is in scope.
