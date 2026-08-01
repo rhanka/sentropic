@@ -1,14 +1,14 @@
 # Feature: F1 — cross-workspace agents list (all-workspaces session scope)
 
 ## Objective
-- [ ] Make the agents-surface "Tous les espaces de travail" toggle WORK (UAT-1 F1): list the user's own sessions across ALL their workspaces, via an additive own-principal API scope.
-- [ ] Restore the interim-hidden toggle: functional, on a DS control, no dev message.
+- [x] Make the agents-surface "Tous les espaces de travail" toggle WORK (UAT-1 F1): list the user's own sessions across ALL their workspaces, via an additive own-principal API scope.
+- [x] Restore the interim-hidden toggle: functional, on a DS control, no dev message.
 
 ## Scope / Guardrails
-- [ ] Additive-minor, own-principal, backward-compatible. `GET /sessions` current behaviour unchanged; a new `?scope=all` path lists all-workspaces.
-- [ ] Own-principal STRICT: `scope=all` filters `user_id = self` only — it can NEVER list another user's sessions (already true in `listForUser`'s `WHERE userId`).
-- [ ] Bounded default APPLIED in the all-ws variant (the current list is unbounded — pre-existing; the variant must not inherit it): a sensible default limit, ordering preserved.
-- [ ] Workspace labels are client-side: each session carries `workspaceId`; map to name via `$workspaceScope.items`. NO per-workspace labels API.
+- [x] Additive-minor, own-principal, backward-compatible. `GET /sessions` current behaviour unchanged; a new `?scope=all` path lists all-workspaces.
+- [x] Own-principal STRICT: `scope=all` filters `user_id = self` only — it can NEVER list another user's sessions (already true in `listForUser`'s `WHERE userId`).
+- [x] Bounded default APPLIED in the all-ws variant (the current list is unbounded — pre-existing; the variant must not inherit it): a sensible default limit, ordering preserved.
+- [x] Workspace labels are client-side: each session carries `workspaceId`; map to name via `$workspaceScope.items`. NO per-workspace labels API.
 - [ ] Every UI element on a DS component. i18n FR+EN. Make-only, Docker-first, `ENV` last, never `ENV=dev`.
 - [ ] Architect (`s-archi`) CO-SIGNS the PR on 3 criteria: own-principal strict / bounded-default-applied / dev-message fully removed.
 
