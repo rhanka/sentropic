@@ -62,6 +62,11 @@ export type AgentsFeedInput = {
   readonly jobs: readonly AppJob[];
   /** Host i18n resolves the same human job labels used by the Jobs panel. */
   readonly jobLabel?: (job: AppJob) => string;
+  /**
+   * Current workspace label from the host `$workspaceScope`. All current-scope
+   * entries belong to it (F8). Cross-workspace per-session labels arrive with F1.
+   */
+  readonly workspaceLabel?: string;
 };
 
 export type CompactAgentsActivity = {
@@ -165,6 +170,7 @@ export const projectAgentsFeed = (input: AgentsFeedInput): AgentsEntry[] => {
       title: session.title ?? null,
       status: jobStatus === 'running' || jobStatus === 'awaiting-input' ? jobStatus : 'active',
       lastActivityAt: toMs(session.updatedAt ?? session.createdAt),
+      workspaceLabel: input.workspaceLabel,
     };
   });
 
@@ -176,6 +182,7 @@ export const projectAgentsFeed = (input: AgentsFeedInput): AgentsEntry[] => {
       title: input.jobLabel?.(job) ?? job.type,
       status: JOB_STATUS[job.status],
       lastActivityAt: toMs(job.completedAt ?? job.startedAt ?? job.createdAt),
+      workspaceLabel: input.workspaceLabel,
     }));
 
   return [...sessionEntries, ...jobEntries];

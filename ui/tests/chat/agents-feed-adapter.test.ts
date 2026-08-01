@@ -36,6 +36,15 @@ describe('projectAgentsFeed — sessions', () => {
     });
     expect(entry?.lastActivityAt).toBe(Date.parse('2026-07-30T09:00:00.000Z'));
   });
+
+  it('carries the host current-workspace label onto the entry (F8)', () => {
+    const [entry] = projectAgentsFeed({
+      sessions: [session({ id: 's1' })],
+      jobs: [],
+      workspaceLabel: 'Acme HQ',
+    });
+    expect(entry?.workspaceLabel).toBe('Acme HQ');
+  });
 });
 
 describe('projectAgentsFeed — jobs', () => {
