@@ -34,6 +34,8 @@ export type AgentsEntryKind =
 export type AgentsEntryStatus =
   | 'awaiting-input'
   | 'running'
+  /** Resumeable conversation with no live work; never a terminal state. */
+  | 'active'
   | 'idle'
   | 'failed'
   | 'done';
@@ -89,8 +91,9 @@ const STATUS_URGENCY: Record<AgentsEntryStatus, number> = {
   'awaiting-input': 0,
   running: 1,
   failed: 2,
-  idle: 3,
-  done: 4,
+  active: 3,
+  idle: 4,
+  done: 5,
 };
 
 export const agentsEntryStatusUrgency = (status: AgentsEntryStatus): number =>
