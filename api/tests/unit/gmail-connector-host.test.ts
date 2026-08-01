@@ -38,7 +38,7 @@ const hostRequest = (overrides: Record<string, unknown> = {}) => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Gmail connector host', () => {
-  it('mounts Gmail messages.list with a token that never reaches the audit event', async () => {
+  it('does not leak a Gmail token to driver output or audit events', async () => {
     const accessToken = 'gmail-live-token-never-audit';
     const audit: unknown[] = [];
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ messages: [] }), { status: 200 }));
@@ -51,10 +51,12 @@ describe('Gmail connector host', () => {
       audit: { emit: async (event) => { audit.push(event); } },
     });
 
-    await expect(driver.invoke(hostRequest())).resolves.toMatchObject({ ok: true });
+    const result = await driver.invoke(hostRequest());
+    expect(result).toMatchObject({ ok: true });
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({
       Authorization: `Bearer ${accessToken}`,
     });
+    expect(JSON.stringify(result)).not.toContain(accessToken);
     expect(JSON.stringify(audit)).not.toContain(accessToken);
   });
 
@@ -113,5 +115,19 @@ describe('Gmail connector host', () => {
       principalSub: user.userId,
       workspaceRef: user.workspaceId,
     })).resolves.toBe('resolved-gmail-token');
+  });
+
+  const smoke = process.env.GMAIL_SMOKE_READONLY_TOKEN ? it : it.skip;
+
+  smoke('reads Gmail messages.list with GMAIL_SMOKE_READONLY_TOKEN through the host', async () => {
+    const accessToken = process.env.GMAIL_SMOKE_READONLY_TOKEN!;
+    const driver = createGmailConnectorHost({
+      sessionUser: user,
+      loadAccounts: async () => [account()],
+      resolveToken: async () => token(accessToken),
+      checkWorkspaceAccess: async () => undefined,
+    });
+
+    await expect(driver.invoke(hostRequest())).resolves.toMatchObject({ ok: true });
   });
 });
