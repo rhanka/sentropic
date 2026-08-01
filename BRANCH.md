@@ -25,7 +25,8 @@
   - `packages/chat-ui/package.json`, `packages/chat-ui/export-manifest.json`, `packages/chat-ui/chat-ui-reference-validation.json` (public contract)
 - `packages/chat-ui/tests/chat-sessions-bar.dom.spec.ts` (Back control DOM contract)
 - `packages/chat-ui/tests/agents-list.dom.spec.ts`, `packages/chat-ui/tests/agents-list-source.test.ts` (UAT-1 list contracts)
-- `packages/chat-ui/tests/agents-entry.test.ts` (session status ladder)
+  - `packages/chat-ui/tests/agents-entry.test.ts` (session status ladder)
+  - `UAT1_REVIEW.md` (completion-review selection dossier)
   - `packages/chat-ui/tests/chat-conversation.spec.ts` (version pin only)
   - `packages/chat-ui/tests/documents-module.spec.ts` (version pin only)
   - `packages/chat-ui/tests/chat-core-host.spec.ts` (version pin only)
@@ -71,3 +72,4 @@
   - [x] Chat UI list: DS icons/actions/menu/status/relative-time polish.
   - [x] Chat UI sessions bar: icon-only Back control.
   - [x] Host: fixed scope header, DS new-session action, translated job labels, FR/EN compact-time labels.
+  - [x] Completion review: selection failed because this session lacks declared author model/effort; no peers dispatched.
