@@ -40,7 +40,7 @@
     List,
     Settings,
   } from '@lucide/svelte';
-  import { IconButton } from '@sentropic/design-system-svelte';
+  import { IconButton, Toggle } from '@sentropic/design-system-svelte';
   import type { ChatWidgetDisplayMode } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
   import {
@@ -110,6 +110,7 @@
     title?: string | null;
     primaryContextType?: string | null;
     primaryContextId?: string | null;
+    workspaceId?: string | null;
     createdAt?: string;
     updatedAt?: string | null;
   };
@@ -117,6 +118,7 @@
   let chatSessions: ChatSession[] = [];
   let chatSessionId: string | null = null;
   let chatLoadingSessions = false;
+  let showAllWorkspaceSessions = false;
   let activeChatSession: ChatSession | null = null;
   let pendingChatSessionDeleteConfirm = false;
   // Default-on-open view (owner decision 2026-07-30, "option 3"): land on the
@@ -502,7 +504,12 @@
       sessions: chatSessions,
       jobs: queueJobsToAppJobs($queueStore.jobs),
       jobLabel: agentsJobLabel,
-      workspaceLabel: $workspaceScope.items.find((w) => w.id === $workspaceScope.selectedId)?.name,
+      workspaceLabel: showAllWorkspaceSessions
+        ? undefined
+        : $workspaceScope.items.find((w) => w.id === $workspaceScope.selectedId)?.name,
+      workspaceLabelsById: showAllWorkspaceSessions
+        ? new Map($workspaceScope.items.map((workspace) => [workspace.id, workspace.name]))
+        : undefined,
     }),
   );
   let closeButtonEl: HTMLButtonElement | null = null;
@@ -2003,6 +2010,34 @@
     chatSessionId = null;
   };
 
+  const loadAgentsSessions = async (allWorkspaces: boolean) => {
+    chatLoadingSessions = true;
+    try {
+      const response = await apiGet<{ sessions: ChatSession[] }>(
+        allWorkspaces ? '/chat/sessions?scope=all' : '/chat/sessions',
+      );
+      chatSessions = response.sessions ?? [];
+      if (
+        !allWorkspaces &&
+        chatSessionId &&
+        !chatSessions.some((session) => session.id === chatSessionId)
+      ) {
+        chatPanelRef?.newSession?.();
+        chatSessionId = null;
+      }
+    } catch (error) {
+      console.error('Failed to load chat sessions:', error);
+      addToast({ type: 'error', message: $_('chat.errors.loadSessions') });
+    } finally {
+      chatLoadingSessions = false;
+    }
+  };
+
+  const handleAllWorkspaceScopeChange = (event: Event) => {
+    showAllWorkspaceSessions = (event.currentTarget as HTMLInputElement).checked;
+    void loadAgentsSessions(showAllWorkspaceSessions);
+  };
+
   const agentsJobLabel = (job: { type: string }): string => {
     const labelKey = {
       organization_batch_create: 'queueMonitor.type.organizationBatchCreate',
@@ -3270,10 +3305,12 @@
                 class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}
               >
                 <div class="shrink-0 p-3">
-                  <!-- F1: the working "all workspaces" toggle ships with the additive
-                       GET /sessions?scope=all endpoint (dedicated branch, architect-co-signed).
-                       Interim: no toggle, and NEVER a dev-state message in an end-user surface. -->
                   <div class="flex items-center justify-end gap-3">
+                    <Toggle
+                      label={$_('chat.agents.scope.allWorkspaces')}
+                      checked={showAllWorkspaceSessions}
+                      onchange={handleAllWorkspaceScopeChange}
+                    />
                     <IconButton
                       size="sm"
                       aria-label={$_('chat.sessions.new')}
