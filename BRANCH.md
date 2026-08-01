@@ -60,7 +60,7 @@ Deliver the public MCP resource-server route for Gmail and Google Drive P1 read 
   - [x] Add the opt-in `GMAIL_SMOKE_READONLY_TOKEN` smoke case, skipped unless explicitly supplied.
   - [x] Lot gate: `tests/api/mcp-resource-server.test.ts` passed 12/12 and `tests/unit/gmail-connector-host.test.ts` passed 4/4 with 1 expected smoke skip under `ENV=test-mcp-gmail-invoke-surface`.
 
-- [ ] **Lot 3 — Final validation and PR**
+- [x] **Lot 3 — Final validation and PR**
   - [x] Run API typecheck, API lint, and focused suites with `ENV=test-mcp-gmail-invoke-surface`; use the Docker-only Make fallback locally because the standard API targets require Docker buildx.
   - [x] Run `make scope-check` (the sole advisory is the unrelated, unstaged `packages/cli/bin/stp.mjs` mode change).
-  - [ ] Create and push a PR to `main` with this file as the body; do not merge.
+  - [x] Create and push draft PR #489 to `main` with this file as the body; do not merge.
