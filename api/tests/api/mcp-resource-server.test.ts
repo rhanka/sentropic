@@ -1,5 +1,6 @@
 import { createJwksService } from '@sentropic/auth-hono';
 import { and, eq } from 'drizzle-orm';
+import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { app } from '../../src/app';
@@ -286,4 +287,51 @@ describe('MCP connector-host routes', () => {
     });
   });
 
+});
+
+/**
+ * `authorization_servers` is not decoration. mcp-auth uses it TWICE: it is published in the PRM so
+ * a client knows where to fetch the RFC 8414 metadata, and it is the expected `iss` of every access
+ * token (`core.ts:158`). Naming a host that issues nothing, or serves no metadata, breaks the flow
+ * in two different ways at once.
+ *
+ * The PRM test above asserts only that the array is non-empty — a criterion the exact wrong value
+ * satisfies: preprod shipped `["http://localhost:8787"]` and that assertion stayed green. This one
+ * names the value.
+ */
+describe('MCP authorization server selection', () => {
+  const originalEnabled = process.env.MCP_RESOURCE_SERVER_ENABLED;
+  const originalAuthorizationServer = process.env.MCP_AUTHORIZATION_SERVER_URL;
+
+  afterEach(() => {
+    if (originalEnabled === undefined) delete process.env.MCP_RESOURCE_SERVER_ENABLED;
+    else process.env.MCP_RESOURCE_SERVER_ENABLED = originalEnabled;
+    if (originalAuthorizationServer === undefined) delete process.env.MCP_AUTHORIZATION_SERVER_URL;
+    else process.env.MCP_AUTHORIZATION_SERVER_URL = originalAuthorizationServer;
+    vi.resetModules();
+  });
+
+  it('advertises the configured authorization server rather than this api', async () => {
+    process.env.MCP_RESOURCE_SERVER_ENABLED = 'true';
+    process.env.MCP_AUTHORIZATION_SERVER_URL = 'https://idp.example.test';
+
+    // A FRESH module graph is required, and that is the point: `getMcpAuth` memoises into a
+    // module-level `cachedMcp` on its first call, and `env` is parsed at import time. Nothing set
+    // after import can be observed — which is exactly why the wrong value survived a pod's whole
+    // lifetime in preprod. The statically imported `app` above is untouched by resetModules, so
+    // the other suites in this file keep their own instance.
+    //
+    // Only the MCP router is re-imported, never `src/app`: re-running the full app's import-time
+    // side effects (the skill registry parses SKILL.md files, among others) fails for reasons that
+    // have nothing to do with what is under test here.
+    vi.resetModules();
+    const { mcpRouter } = await import('../../src/routes/api/mcp');
+    const freshApp = new Hono();
+    freshApp.route('/api/v1/mcp', mcpRouter);
+
+    const res = await freshApp.request('/api/v1/mcp/.well-known/oauth-protected-resource');
+    expect(res.status).toBe(200);
+    const doc = (await res.json()) as { authorization_servers: string[] };
+    expect(doc.authorization_servers).toEqual(['https://idp.example.test']);
+  });
 });
