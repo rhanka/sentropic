@@ -5,8 +5,6 @@ import type {
   ConnectorTenantContext,
   ConnectorTenantResolutionInput,
   RedactionClass,
-} from '../../mcp-platform/src/manifest.js';
-import type {
   AppConnectorProviderAdapter,
   AppResourceRead,
   AppResourceResult,
@@ -16,7 +14,7 @@ import type {
   ConnectorSecretStatus,
   DurableCallRef,
   StpConnectorContext,
-} from '../../mcp-platform/src/runtime.js';
+} from '@sentropic/mcp-platform';
 import {
   exportDriveFileLive,
   getDriveAboutLive,
