@@ -45,3 +45,26 @@ data:
   # the whole pod lifetime, and the failure is then intermittent across restarts rather than
   # reproducible. Pinning the value makes it deterministic and independent of call order.
   MCP_RESOURCE_URI: "https://preprod.sentropic.sent-tech.ca/api/v1/mcp"
+  # Issuer used ONLY when `resolveOAuthIssuer` is called with NO request (oauth.ts:79). Today the
+  # single request-less caller in the whole api is `getMcpAuth()` at mcp.ts:133,142 — invoked at
+  # ROUTE-REGISTRATION time, before any request exists — which memoises `cachedMcp` for the pod's
+  # lifetime. Without this key that call reaches the last fallback, `http://localhost:${PORT}`, and
+  # the PRM then advertises `authorization_servers: ["http://localhost:8787"]` — a dev-loopback
+  # address no external client (claude.ai) can reach. Verified live on preprod.
+  #
+  # WHY NOT `OAUTH_ISSUER_URL`, the obvious-looking knob: it sits at the TOP of the precedence
+  # chain (oauth.ts:77) and so overrides the issuer for EVERY consumer, not just MCP — including
+  # `federationCallbackUrl(resolveOAuthIssuer(c.req.raw), providerId)` (federation.ts:44,187,418),
+  # which builds the social-login `redirect_uri`. Setting it here would rewrite the Google/GitHub/
+  # Microsoft/Apple/Facebook callbacks to a host that is neither registered at those providers nor
+  # routed to this api: it would break social federation on preprod to fix MCP. `API_BASE_URL` is
+  # consulted ONLY on the request-less branch, so every request-bearing consumer keeps deriving the
+  # issuer from the request origin exactly as today.
+  #
+  # WHY THE PRODUCT HOST AND NOT THE auth-idp HOST: this api is itself an authorization server —
+  # it mounts `/.well-known` (well-known.ts:12 serves the RFC 8414 document) and `/api/v1/auth`
+  # (app.ts:193,195), and it owns the `oauth_clients` rows. `mcp.ts` states the co-location
+  # explicitly and validates tokens with a LOCAL key source (`fromJwksPort`), not a remote JWKS
+  # fetch. Pointing `authorization_servers` at preprod.auth.sent-tech.ca would advertise an issuer
+  # that does not mint these tokens, and the `iss` claim would no longer match.
+  API_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
