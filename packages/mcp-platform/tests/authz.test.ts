@@ -58,15 +58,15 @@ function tokenFor(issuer: MockOidcIssuer, scope: string[], tid = 'tenant-a', aut
 }
 
 describe('authorizeRequest — tenant isolation & freshness', () => {
-  it('allows a valid, scoped, consented, tenant-matched read', () => {
+  it('allows a valid, scoped, consented, tenant-matched read', async () => {
     const { deps, issuer } = buildDeps();
     const req: AuthzRequest = { token: tokenFor(issuer, ['widgets:read']), capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T };
-    const r = authorizeRequest(req, deps);
+    const r = await authorizeRequest(req, deps);
     expect(r.allowed).toBe(true);
     if (r.allowed) expect(r.tenantContext.tenantRef).toBe('tenant-a');
   });
 
-  it('derives tenant from the TOKEN, ignoring a benign same-tenant hint', () => {
+  it('derives tenant from the TOKEN, ignoring a benign same-tenant hint', async () => {
     const { deps, issuer } = buildDeps();
     const req: AuthzRequest = {
       token: tokenFor(issuer, ['widgets:read']),
@@ -75,12 +75,70 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
       selectorHints: { tenantId: 'tenant-a' },
       now: T,
     };
-    const r = authorizeRequest(req, deps);
+    const r = await authorizeRequest(req, deps);
     expect(r.allowed).toBe(true);
     if (r.allowed) expect(r.tenantContext.tenantRef).toBe('tenant-a');
   });
 
-  it('denies a spoofed cross-tenant id hint (token tenant-a, hint tenant-b)', () => {
+  it('verifies the token before invoking the tenant resolver', async () => {
+    const { deps } = buildDeps();
+    let resolverCalled = false;
+    deps.tenantResolver = {
+      authorizedTenants: async () => {
+        resolverCalled = true;
+        return [];
+      },
+      tenantOfDomainHint: async () => {
+        resolverCalled = true;
+        return undefined;
+      },
+    };
+
+    const result = await authorizeRequest(
+      { token: 'invalid', capabilityRef: 'list_widgets', connectorInstanceId: CONN, selectorHints: { businessId: 'B-other' }, now: T },
+      deps,
+    );
+    expect(result).toMatchObject({ allowed: false, reason: 'invalid_token' });
+    expect(resolverCalled).toBe(false);
+  });
+
+  it('initiates enrollment and all present domain-hint resolutions concurrently', async () => {
+    const { deps, issuer } = buildDeps();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls: string[] = [];
+    deps.tenantResolver = {
+      authorizedTenants: async () => {
+        calls.push('authorized');
+        await gate;
+        return ['tenant-a'];
+      },
+      tenantOfDomainHint: async (key, value) => {
+        calls.push(`${key}:${value}`);
+        await gate;
+        return 'tenant-a';
+      },
+    };
+
+    const authorization = authorizeRequest(
+      {
+        token: tokenFor(issuer, ['widgets:read']),
+        capabilityRef: 'list_widgets',
+        connectorInstanceId: CONN,
+        selectorHints: { businessId: 'business-1', workspaceId: 'workspace-1' },
+        now: T,
+      },
+      deps,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual(['workspaceId:workspace-1', 'businessId:business-1', 'authorized']);
+    release();
+    expect((await authorization).allowed).toBe(true);
+  });
+
+  it('denies a spoofed cross-tenant id hint (token tenant-a, hint tenant-b)', async () => {
     const { deps, issuer } = buildDeps();
     const req: AuthzRequest = {
       token: tokenFor(issuer, ['widgets:read']),
@@ -89,12 +147,12 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
       selectorHints: { tenantId: 'tenant-b' },
       now: T,
     };
-    const r = authorizeRequest(req, deps);
+    const r = await authorizeRequest(req, deps);
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.reason).toBe('cross_tenant');
   });
 
-  it('denies a spoofed cross-tenant DOMAIN hint (businessId mapped to another tenant)', () => {
+  it('denies a spoofed cross-tenant DOMAIN hint (businessId mapped to another tenant)', async () => {
     const { deps, issuer } = buildDeps();
     const req: AuthzRequest = {
       token: tokenFor(issuer, ['widgets:read']),
@@ -103,12 +161,12 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
       selectorHints: { businessId: 'B-other' },
       now: T,
     };
-    const r = authorizeRequest(req, deps);
+    const r = await authorizeRequest(req, deps);
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.reason).toBe('cross_tenant');
   });
 
-  it('fails closed on ambiguous mapping (conflicting tenant hints)', () => {
+  it('fails closed on ambiguous mapping (conflicting tenant hints)', async () => {
     const { deps, issuer } = buildDeps();
     const req: AuthzRequest = {
       token: tokenFor(issuer, ['widgets:read']),
@@ -117,15 +175,15 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
       selectorHints: { tenantId: 'tenant-a', businessId: 'B-other' }, // a vs b
       now: T,
     };
-    const r = authorizeRequest(req, deps);
+    const r = await authorizeRequest(req, deps);
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.reason).toBe('ambiguous_tenant');
   });
 
-  it('denies missing scope with insufficient_scope (scope step-up)', () => {
+  it('denies missing scope with insufficient_scope (scope step-up)', async () => {
     const { deps, issuer } = buildDeps();
     const req: AuthzRequest = { token: tokenFor(issuer, ['widgets:read']), capabilityRef: 'create_widget', connectorInstanceId: CONN, now: T };
-    const r = authorizeRequest(req, deps);
+    const r = await authorizeRequest(req, deps);
     expect(r.allowed).toBe(false);
     if (!r.allowed) {
       expect(r.reason).toBe('insufficient_scope');
@@ -134,13 +192,13 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
     }
   });
 
-  it('allows a fresh write but denies a stale one with an auth step-up', () => {
+  it('allows a fresh write but denies a stale one with an auth step-up', async () => {
     const { deps, issuer } = buildDeps();
     const freshReq: AuthzRequest = { token: tokenFor(issuer, ['widgets:write'], 'tenant-a', T), capabilityRef: 'create_widget', connectorInstanceId: CONN, now: T + 100_000 };
-    expect(authorizeRequest(freshReq, deps).allowed).toBe(true);
+    expect((await authorizeRequest(freshReq, deps)).allowed).toBe(true);
 
     const staleReq: AuthzRequest = { token: tokenFor(issuer, ['widgets:write'], 'tenant-a', T), capabilityRef: 'create_widget', connectorInstanceId: CONN, now: T + 400_000 };
-    const r = authorizeRequest(staleReq, deps);
+    const r = await authorizeRequest(staleReq, deps);
     expect(r.allowed).toBe(false);
     if (!r.allowed) {
       expect(r.reason).toBe('stale_auth');
@@ -148,31 +206,31 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
     }
   });
 
-  it('denies revoked consent and missing consent', () => {
+  it('denies revoked consent and missing consent', async () => {
     const { deps, consents, tenants, issuer } = buildDeps();
     consents.setState('grant-1', 'revoked');
-    const revoked = authorizeRequest({ token: tokenFor(issuer, ['widgets:read']), capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
+    const revoked = await authorizeRequest({ token: tokenFor(issuer, ['widgets:read']), capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
     expect(revoked.allowed).toBe(false);
     if (!revoked.allowed) expect(revoked.reason).toBe('consent_revoked');
 
     // A different principal, enrolled in the tenant but never consented.
     tenants.enroll('user-2', CONN, 'tenant-a');
     const t2 = issuer.issue({ sub: 'user-2', aud: AUD, scope: ['widgets:read'], tid: 'tenant-a', now: T }).token;
-    const missing = authorizeRequest({ token: t2, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
+    const missing = await authorizeRequest({ token: t2, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
     expect(missing.allowed).toBe(false);
     if (!missing.allowed) expect(missing.reason).toBe('no_consent');
   });
 
-  it('F1: an unenrolled principal (empty authorized set) is denied fail-closed (no broad fallback)', () => {
+  it('F1: an unenrolled principal (empty authorized set) is denied fail-closed (no broad fallback)', async () => {
     const { deps, issuer } = buildDeps();
     // 'stranger' is never enrolled on this connector → authorizedTenants() is empty.
     const tok = issuer.issue({ sub: 'stranger', aud: AUD, scope: ['widgets:read'], tid: 'tenant-a', now: T }).token;
-    const r = authorizeRequest({ token: tok, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
+    const r = await authorizeRequest({ token: tok, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.reason).toBe('no_enrollment');
   });
 
-  it('F2: a claim-gated capability is allowed with the claim and denied without it', () => {
+  it('F2: a claim-gated capability is allowed with the claim and denied without it', async () => {
     const { deps, issuer } = buildDeps();
     const claimGated: AppCapability = { ...fakeManifest.resources[0], name: 'list_secure', requiredClaims: ['mfa'] };
     const depsClaim = { ...deps, capabilities: new Map(deps.capabilities).set('list_secure', claimGated) };
@@ -181,19 +239,19 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
       sub: 'user-1', aud: AUD, scope: ['widgets:read'], tid: 'tenant-a', claims: { mfa: true }, now: T,
     }).token;
     expect(
-      authorizeRequest({ token: withClaim, capabilityRef: 'list_secure', connectorInstanceId: CONN, now: T }, depsClaim).allowed,
+      (await authorizeRequest({ token: withClaim, capabilityRef: 'list_secure', connectorInstanceId: CONN, now: T }, depsClaim)).allowed,
     ).toBe(true);
 
     const withoutClaim = tokenFor(issuer, ['widgets:read']);
-    const r = authorizeRequest({ token: withoutClaim, capabilityRef: 'list_secure', connectorInstanceId: CONN, now: T }, depsClaim);
+    const r = await authorizeRequest({ token: withoutClaim, capabilityRef: 'list_secure', connectorInstanceId: CONN, now: T }, depsClaim);
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.reason).toBe('missing_claims');
   });
 
-  it('rejects a non-audience-bound token and never passes it through (token no-passthrough §6.6)', () => {
+  it('rejects a non-audience-bound token and never passes it through (token no-passthrough §6.6)', async () => {
     const { deps, issuer } = buildDeps();
     const wrongAud = issuer.issue({ sub: 'user-1', aud: 'https://elsewhere.test', scope: ['widgets:read'], tid: 'tenant-a', now: T }).token;
-    const r = authorizeRequest({ token: wrongAud, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
+    const r = await authorizeRequest({ token: wrongAud, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
     expect(r.allowed).toBe(false);
     if (!r.allowed) {
       expect(r.reason).toBe('invalid_token');
@@ -204,10 +262,10 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
     expect(JSON.stringify(r)).not.toContain(wrongAud);
   });
 
-  it('F7: the authorized decision structurally omits the bearer token (no passthrough §6.6)', () => {
+  it('F7: the authorized decision structurally omits the bearer token (no passthrough §6.6)', async () => {
     const { deps, issuer } = buildDeps();
     const token = tokenFor(issuer, ['widgets:read']);
-    const r = authorizeRequest({ token, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
+    const r = await authorizeRequest({ token, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T }, deps);
     expect(r.allowed).toBe(true);
     // The token field is structurally absent from the result (and the principal),
     // not merely missing on the deny path.
