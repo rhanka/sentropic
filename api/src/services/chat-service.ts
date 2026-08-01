@@ -1706,8 +1706,8 @@ export class ChatService {
     return postgresChatSessionStore.create(input);
   }
 
-  async listSessions(userId: string, workspaceId?: string | null) {
-    return postgresChatSessionStore.listForUser(userId, workspaceId);
+  async listSessions(userId: string, workspaceId?: string | null, limit?: number) {
+    return postgresChatSessionStore.listForUser(userId, workspaceId, limit);
   }
 
   async deleteSession(sessionId: string, userId: string): Promise<void> {
