@@ -38,11 +38,24 @@ const getMcpAuth = (request?: Request): McpAuth => {
   if (cachedMcp) return cachedMcp;
   const issuer = resolveOAuthIssuer(request);
   const resource = env.MCP_RESOURCE_URI ?? `${issuer}/api/v1/mcp`;
+  // The authorization server is NOT always this api. `authorizationServers` is used twice: it is
+  // published in the RFC 9728 PRM, where a client reads it to find the RFC 8414 metadata it must
+  // fetch, AND it is the expected `iss` of every access token (mcp-auth `core.ts:158`). Both only
+  // work if it names the host that actually issues the tokens and serves the metadata.
+  //
+  // Where a standalone IdP is deployed on its own host, that IdP is the AS and this api is only
+  // the resource server. Defaulting to this api's issuer then advertises a host that serves no
+  // AS metadata at all — on preprod the product host proxies ONLY `^/api/v1/.*` to the api
+  // (`ui/nginx/default.conf:22`), so `/.well-known/*` never reaches this router and answers 404.
+  // Absent ⇒ the co-located shape (dev/test), which is what the fallback preserves.
+  const authorizationServer = env.MCP_AUTHORIZATION_SERVER_URL ?? issuer;
   cachedMcp = createMcpAuth({
     resource,
-    authorizationServers: [issuer],
-    // The resource server and authorization server are co-located in this API. Reuse the
-    // existing signing-key port rather than making a loopback JWKS request for every verifier.
+    authorizationServers: [authorizationServer],
+    // Verify with the LOCAL signing-key port rather than a loopback JWKS request. This stays
+    // correct when the AS is the standalone IdP: it runs the same image against the same database
+    // and shares the JWKS rows and OAUTH_SIGNING_KEK (`deploy/k8s/base/35-auth-idp.yaml`), so the
+    // keys resolved here are the very keys that signed the token.
     keySource: fromJwksPort(createJwksAdapter()),
     scopesSupported: [MCP_SCOPES.DISCOVER, MCP_SCOPES.RESOURCES_READ, MCP_SCOPES.TOOLS_INVOKE],
   });
