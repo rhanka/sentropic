@@ -54,7 +54,7 @@ Add a read-only Gmail (`gmail.readonly`) enrollment card to Settings by faithful
 
 - [ ] **Lot 1 — Gmail connector implementation**
   - [ ] Add `GmailConnectorCard.svelte` as the Google Drive card's visual mirror with the `Mail` icon and Gmail-specific identifiers and keys.
-  - [ ] Add `gmail.ts` GET/start/disconnect helpers for `/gmail` endpoints and the Gmail connection type.
+  - [x] Add `gmail.ts` GET/start/disconnect helpers for `/gmail` endpoints and the Gmail connection type.
   - [ ] Add the Gmail connector-state resolver and wire the card lifecycle, OAuth callback status, toasts, and reload in Settings.
   - [ ] Add complete parallel `settings.connectors.gmail.*` entries to English and French locales, with `gmail.readonly` framing.
   - [ ] Add Gmail utility and resolver coverage in `ui/tests/utils/gmail.test.ts` and `ui/tests/utils/document-source-menu.test.ts`.
