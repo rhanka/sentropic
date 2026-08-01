@@ -14,14 +14,18 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths**:
-  - `ui/src/lib/chat/agents-feed-adapter.ts` (new — host-side `AgentsFeedPort` impl)
-  - `ui/src/lib/components/ChatWidget.svelte` (mount point + agents-list pager navigation)
-  - `ui/tests/agents-feed-adapter.spec.ts` (new)
-  - `ui/tests/components/chat/ChatWidget-agents-list.test.ts` (pager wiring contract)
+- `ui/src/lib/chat/agents-feed-adapter.ts` (new — host-side `AgentsFeedPort` impl)
+- `ui/src/lib/components/ChatWidget.svelte` (mount point + agents-list pager navigation)
+- `ui/tests/chat/agents-feed-adapter.test.ts` (agents feed projection regressions)
+- `ui/tests/components/chat/ChatWidget-agents-list.test.ts` (pager wiring contract)
   - `ui/src/locales/en.json`, `ui/src/locales/fr.json` (agents-surface labels)
-  - `packages/chat-ui/src/components/ChatSessionsBar.svelte`, `packages/chat-ui/src/components/ChatSessionsBar.svelte.d.ts` (optional host Back navigation)
+- `packages/chat-ui/src/components/AgentsList.svelte` (UAT-1 list presentation)
+- `packages/chat-ui/src/components/ChatSessionsBar.svelte`, `packages/chat-ui/src/components/ChatSessionsBar.svelte.d.ts` (optional host Back navigation)
+- `packages/chat-ui/src/state/agentsEntry.ts` (UAT-1 session status semantics)
   - `packages/chat-ui/package.json`, `packages/chat-ui/export-manifest.json`, `packages/chat-ui/chat-ui-reference-validation.json` (public contract)
-  - `packages/chat-ui/tests/chat-sessions-bar.dom.spec.ts` (Back control DOM contract)
+- `packages/chat-ui/tests/chat-sessions-bar.dom.spec.ts` (Back control DOM contract)
+- `packages/chat-ui/tests/agents-list.dom.spec.ts`, `packages/chat-ui/tests/agents-list-source.test.ts` (UAT-1 list contracts)
+- `packages/chat-ui/tests/agents-entry.test.ts` (session status ladder)
   - `packages/chat-ui/tests/chat-conversation.spec.ts` (version pin only)
   - `packages/chat-ui/tests/documents-module.spec.ts` (version pin only)
   - `packages/chat-ui/tests/chat-core-host.spec.ts` (version pin only)
@@ -33,8 +37,7 @@
 - **Forbidden Paths**:
   - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
   - `api/**` (no api change — the feed gap is a separate lane)
-  - `packages/chat-ui/src/components/AgentsList.svelte` (frozen)
-  - `packages/cowork-bridge/**`
+- `packages/cowork-bridge/**`
 - **Conditional Paths**: `.github/workflows/**` (none expected)
 
 ## Feedback Loop
@@ -63,3 +66,7 @@
   - [x] Run the chat-ui, DOM, typecheck, and full UI gates; prove the display toggle fails first when the list is not hidden.
 - [ ] **Slice 5 — UAT prep**
   - [ ] Integrate on root `ENV=dev` with the owner's data, give the UAT objectives (the visible surface: renamed-or-not tab, list items, status wheel, pending tag, R9 order, scope toggle disabled-with-reason). Real UAT is WITH the owner.
+- [ ] **Slice 6 — UAT-1 agents-surface polish (F2–F7, F9–F11 only)**
+  - [x] Adapter: translated job names, resumeable-session semantics, compact activity formatter.
+  - [ ] Chat UI: DS icons/actions/menu/status/relative-time polish and icon-only Back control.
+  - [ ] Host: fixed scope header, DS new-session action, translated job labels, FR/EN compact-time labels.
