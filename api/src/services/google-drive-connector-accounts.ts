@@ -374,6 +374,34 @@ const readRevocableGoogleDriveToken = (tokenSecret: string | null): string | nul
 };
 
 /**
+ * What a stored connector secret tells us about the grant behind it.
+ *
+ * `readRevocableGoogleDriveToken` collapses two very different states into `null`: "there is no
+ * stored secret" and "there is a secret we cannot read". For `disconnect` that collapse is harmless
+ * — the row survives, so a mistake is visible and retryable. For a DESTRUCTIVE teardown it is not:
+ * the row is about to cease to exist, so "nothing to revoke" and "a live grant we cannot revoke"
+ * must lead to different outcomes. Collapsing them would silently strand grants at Google forever.
+ */
+export type ConnectorGrantClassification =
+  /** No stored secret: the account is already disconnected. Nothing exists to revoke. */
+  | { kind: 'none' }
+  /** A usable token was recovered. Revoke it upstream. */
+  | { kind: 'token'; token: string }
+  /**
+   * A secret IS stored but cannot be decoded — wrong at-rest key, or a malformed payload. A grant
+   * therefore very likely exists at Google and we have permanently lost the means to revoke it.
+   * This is not hypothetical: rows encrypted under a since-lost key are known to exist in
+   * production (2026-07-27). Such a grant must leave a durable trace before its row is destroyed.
+   */
+  | { kind: 'unreadable' };
+
+export const classifyConnectorGrant = (tokenSecret: string | null): ConnectorGrantClassification => {
+  if (!tokenSecret) return { kind: 'none' };
+  const token = readRevocableGoogleDriveToken(tokenSecret);
+  return token ? { kind: 'token', token } : { kind: 'unreadable' };
+};
+
+/**
  * Tell Google to revoke a grant. Best-effort, and deliberately called AFTER the local row is
  * cleared — see the ordering note in `disconnectGoogleDriveConnectorAccount`.
  *
