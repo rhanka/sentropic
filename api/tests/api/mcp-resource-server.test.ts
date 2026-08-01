@@ -193,4 +193,40 @@ describe('MCP connector-host routes', () => {
     expect(JSON.stringify(body)).not.toContain(gmailAccessToken);
   });
 
+  it('rejects a token missing mcp:tools:invoke before the connector mount reaches Google', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:resources:read']);
+
+    const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+
+    expect(response.status).toBe(401);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
+  });
+
+  it('denies Gmail capabilities outside the P1 allowlist without Google egress', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+
+    const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.send', input: {} });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'connector_not_found' } });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
+  });
+
+  it('binds the host principal to the verified token instead of request input', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+
+    const response = await invoke(token, {
+      connectorId: 'gmail',
+      capabilityRef: 'messages.list',
+      input: { query: 'from:me', sessionPrincipalSub: 'another-user' },
+    });
+
+    expect(response.status).toBe(200);
+    const googleCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('https://gmail.googleapis.com/'));
+    expect((googleCall?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${gmailAccessToken}` });
+  });
+
 });
