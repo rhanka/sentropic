@@ -61,6 +61,8 @@ describe('Gmail connector host', () => {
   });
 
   it('denies capabilities outside the finite Gmail read-only allowlist as missing', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
     const driver = createGmailConnectorHost({
       sessionUser: user,
       loadAccounts: async () => [account()],
@@ -70,6 +72,7 @@ describe('Gmail connector host', () => {
     await expect(driver.invoke(hostRequest({ capabilityRef: 'messages.send' }))).resolves.toMatchObject({
       error: { code: 'connector_not_found' },
     });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('keeps unavailable and unreadable Gmail secrets as distinct connector errors', async () => {
