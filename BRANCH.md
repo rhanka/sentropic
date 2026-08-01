@@ -1,36 +1,63 @@
-# Feature: mcp-connector-google flat resolvable dist
+# Feature: Gmail MCP Invoke Surface
 
 ## Objective
-Make `@sentropic/mcp-connector-google` emit a real flat `dist/index.js` from its own `tsc` build, so any consumer (api Docker bundle, Makefile, publish) resolves it identically — removing the Makefile-only symlink workaround. Unblocks the api image build once a route consumes the connector-host mount.
+Deliver the public MCP resource-server route for Gmail and Google Drive P1 read capabilities, backed only by the existing connector-host mount and its secret boundary.
 
 ## Scope / Guardrails
-- Scope limited to `packages/mcp-connector-google/**` and one `Makefile` target (`build-mcp-connector-google`).
-- Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/fix-mcp-connector-google-flat`.
-- Automated tests run on dedicated env (`ENV=test-mcpcg`), never on root `dev`.
-- In every `make` command, `ENV=<env>` is passed as the last argument.
-- All new text in English.
+- Scope limited to the MCP route, existing connector-host helpers only when a thin dispatcher is required, API tests, and this plan.
+- No new egress, token decryption, refresh, secret store, database schema, migration, package, Makefile, or Compose change.
+- The route maps the verified OAuth `sub` directly to the app `userId`: `packages/auth-hono/src/oauth/token-handler.ts` issues user access-token `sub` from `codePayload.userId`, and `api/src/routes/auth/oauth.ts` maps that value to `users.id`.
+- The route resolves the default workspace with `resolveDefaultWorkspaceId(userId)` only when the request provides no `workspaceRef`; the mount still enforces workspace access.
+- `GMAIL_SMOKE_READONLY_TOKEN` enables the opt-in real Gmail readonly smoke test; it is skipped when unset and must never be committed or used with `ENV=dev`.
+- All commands use Make targets, automated tests use `ENV=test-mcp-gmail-invoke-surface`, and all new text is English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/mcp-connector-google/src/**`
-  - `packages/mcp-connector-google/tests/**`
-  - `Makefile` (target `build-mcp-connector-google` only — see BR-MCPCG-EX1)
+  - `api/src/routes/api/mcp.ts`
+  - `api/src/services/connector-host/**`
+  - `api/tests/**`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
+  - `packages/**`
+  - `api/src/services/secret-crypto.ts`
+  - `api/drizzle/**`
+  - `drizzle/**`
+  - `Makefile`
   - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - any other `packages/**`, `api/**`, `ui/**`
-- **Conditional Paths (allowed only with explicit exception)**:
-  - `Makefile` — covered by BR-MCPCG-EX1
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare `BR-MCP-GMAIL-EXn` with reason, impact, and rollback before touching a conditional or forbidden path.
 
 ## Feedback Loop
-- `BR-MCPCG-EX1` (Makefile): the `build-mcp-connector-google` target carried a post-`tsc` `ln -sfn mcp-connector-google/src/index.js dist/index.js` hack compensating for a nested `tsc` emit. Root cause: `src` imported mcp-platform via deep relative paths (`../../mcp-platform/src/*.js`), so `tsc` pulled mcp-platform source into the program and nested the emit under `dist/mcp-connector-google/src/`. Fix: import mcp-platform through its package specifier (`@sentropic/mcp-platform`, its public `.` contract) so `tsc` resolves to the built `.d.ts` and emits a flat `dist/index.js`; the now-wrong symlink is removed. Impact: build target only, no runtime change. Rollback: restore the two `ln -sfn` steps and revert the import changes. Status: acknowledge.
+- [x] `BR-MCP-GMAIL-ACK1` — OAuth subject mapping is proven by the issuer and app user adapter; no subject lookup or new query is required.
 
-## Lot 1 — flat resolvable dist
-- [x] `src/{manifest,live-adapter,adapter,live-broker}.ts`: mcp-platform deep-relative type imports -> `@sentropic/mcp-platform` (public `.` contract)
-- [x] `tests/{google,google-live}.test.ts`: same import normalization
-- [x] `Makefile`: remove the `ln -sfn ...dist/index.{js,d.ts}` symlink hack from `build-mcp-connector-google` (BR-MCPCG-EX1)
-- [x] `make build-mcp-connector-google` emits a real flat `dist/index.js` (no nesting, no symlink) — verified
-- [x] `make test-mcp-connector-google ENV=test-mcpcg` green (2 files / 32 tests) — verified
-- [ ] CI green on PR (typecheck-lint-api, build-api-image, unit shards)
+## AI Flaky tests
+- [ ] No AI test is in scope.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick**
+- [ ] **Multi-branch**
+- Rationale: one public route and one hermetic API integration lane share the same principal and secret boundary.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline and principal mapping**
+  - [x] Confirm `feat/mcp-gmail-invoke-surface` is based on current `origin/main` and passes `harness check branch`.
+  - [x] Verify OAuth `sub === users.id` and locate `resolveDefaultWorkspaceId` for the fallback workspace.
+  - [x] Confirm the target route’s disabled guard and RFC 9728 metadata route must remain byte-for-byte unchanged.
+
+- [ ] **Lot 1 — Route through the connector-host mount**
+  - [ ] Parse the shared invoke/resource-read body without exposing schema internals.
+  - [ ] Resolve one `(userId, workspaceId)`, select only Gmail or Google Drive hosts, and pass `sessionPrincipalSub === userId`.
+  - [ ] Preserve mount envelopes and map typed connector outcomes to stable HTTP statuses.
+  - [ ] Add the resources-read guarded route without changing the existing invoke guard, disabled guard, or PRM route.
+  - [ ] Lot gate: `make typecheck-api`, `make lint-api`, and scoped MCP resource-server tests.
+
+- [ ] **Lot 2 — Hermetic route coverage**
+  - [ ] Extend `api/tests/api/mcp-resource-server.test.ts` with real signed MCP tokens, connected Gmail account seeding, mocked JWKS and Google egress, no-token assertions, scope rejection, allowlist denial, principal binding, and both secret outcomes.
+  - [ ] Add the opt-in `GMAIL_SMOKE_READONLY_TOKEN` smoke case, skipped unless explicitly supplied.
+  - [ ] Lot gate: run the scoped API suite on `ENV=test-mcp-gmail-invoke-surface` and record exact outcomes.
+
+- [ ] **Lot 3 — Final validation and PR**
+  - [ ] Run `make typecheck-api`, `make lint-api`, `make scope-check`, and the focused API suite with `ENV=test-mcp-gmail-invoke-surface`.
+  - [ ] Create and push a PR to `main` with this file as the body; do not merge.
