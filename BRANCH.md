@@ -35,6 +35,7 @@ Restore Gmail OAuth in preproduction without changing the shared Google client's
 
 ## Feedback Loop
 - [x] `BR-GMAIL-REDIRECT-ROOT1` — Evidence confirms the shared Google client has only the Drive callback registered while Gmail emits its own callback URI; provider dispatch in sealed state is the smallest app-side fix.
+- [x] `BR-GMAIL-REDIRECT-TEST1` — Local isolated API test commands cannot execute Vitest because `make up-api-test ENV=test-gmailredir` leaves no `api` service running; CI must run the focused API suites.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests are in scope.
@@ -55,10 +56,10 @@ Restore Gmail OAuth in preproduction without changing the shared Google client's
   - [x] Seal an optional OAuth-state provider, defaulting missing or unknown values to `google-drive` during verification.
   - [x] Seal `gmail` for Gmail starts and use `/api/v1/google-drive/oauth/callback` for Gmail authorization and token exchange.
   - [x] Extract Gmail callback completion and dispatch verified Gmail states from the Drive callback without changing Drive completion.
-  - [ ] Add Gmail authorization/config, legacy-state, and Drive-callback Gmail end-to-end API coverage.
+  - [x] Add Gmail authorization/config, legacy-state, and Drive-callback Gmail end-to-end API coverage.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-gmailredir`
-    - [ ] `make lint-api ENV=test-gmailredir`
+    - [x] `make typecheck-api ENV=test-gmailredir`
+    - [x] `make lint-api ENV=test-gmailredir`
     - [ ] `make test-api-unit SCOPE=tests/unit/gmail-oauth.test.ts ENV=test-gmailredir`
     - [ ] `make test-api-unit SCOPE=tests/unit/google-drive-oauth.test.ts ENV=test-gmailredir`
     - [ ] `make test-api-endpoints SCOPE=tests/api/google-drive-oauth.test.ts ENV=test-gmailredir`
