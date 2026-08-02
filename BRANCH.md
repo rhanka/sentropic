@@ -1,48 +1,47 @@
-# Feature: F1 — cross-workspace agents list (all-workspaces session scope)
+# Feature: D6 slice (a) — Agents-Surface Cross-Host Fusion Contract
 
 ## Objective
-- [x] Make the agents-surface "Tous les espaces de travail" toggle WORK (UAT-1 F1): list the user's own sessions across ALL their workspaces, via an additive own-principal API scope.
-- [x] Restore the interim-hidden toggle: functional, on a DS control, no dev message.
+Pose the design-only contract by which cowork agents and plugins become entries on the ONE agents surface (`AgentsFeedPort`), I1/I3/I4-clean, as a standalone D6 slice. No lane, no build (storm-gate 0.90.1; no build before owner signature).
 
 ## Scope / Guardrails
-- [x] Additive-minor, own-principal, backward-compatible. `GET /sessions` current behaviour unchanged; a new `?scope=all` path lists all-workspaces.
-- [x] Own-principal STRICT: `scope=all` filters `user_id = self` only — it can NEVER list another user's sessions (already true in `listForUser`'s `WHERE userId`).
-- [x] Bounded default APPLIED in the all-ws variant (the current list is unbounded — pre-existing; the variant must not inherit it): a sensible default limit, ordering preserved.
-- [x] Workspace labels are client-side: each session carries `workspaceId`; map to name via `$workspaceScope.items`. NO per-workspace labels API.
-- [ ] Every UI element on a DS component. i18n FR+EN. Make-only, Docker-first, `ENV` last, never `ENV=dev`.
-- [ ] Architect (`s-archi`) CO-SIGNS the PR on 3 criteria: own-principal strict / bounded-default-applied / dev-message fully removed.
+- Scope limited to `spec/**` (a single new design spec) — design-only, no code, no build.
+- No migration, no Docker, Make-only workflow.
+- Root workspace `~/src/sentropic` reserved for user dev/UAT (`ENV=dev`); must remain stable.
+- Branch development happens in isolated worktree `tmp/d6a-fusion`.
+- No automated test campaign (spec-only branch).
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths**:
-  - `api/src/routes/api/chat.ts`
-  - `api/src/services/chat-service.ts`
-  - `api/src/services/chat/postgres-chat-session-store.ts`
-  - `api/tests/**`
-  - `ui/src/lib/components/ChatWidget.svelte`
-  - `ui/src/lib/chat/agents-feed-adapter.ts`
-  - `ui/src/lib/stores/**`
-  - `ui/src/lib/api/**`
-  - `ui/src/locales/en.json`, `ui/src/locales/fr.json`
-  - `ui/tests/**`
-  - `packages/chat-ui/src/components/AgentsList.svelte`, `packages/chat-ui/package.json`
+- **Allowed Paths (implementation scope)**:
+  - `spec/SPEC_EVOL_AGENTS_SURFACE_FUSION.md`
   - `BRANCH.md`
-- **Forbidden Paths**:
-  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
-- **Conditional Paths**: `.github/workflows/**` (none expected)
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `api/**`
+  - `ui/**`
+  - `packages/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - none
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path (reason, impact, rollback).
+
+## Lots
+- [x] Lot 1 — Author `spec/SPEC_EVOL_AGENTS_SURFACE_FUSION.md`: cross-host fusion contract; pins I1-I5 verbatim; I1/I3/I4 compliance; LIB/INTEGRATION split + acceptance-grid mapping; dependency/gate table.
+- [ ] Lot 2 — h2a-architect evaluation against the 6' surface contract (external review; not a code lot).
 
 ## Feedback Loop
-- `attention` — the current `listForUser` (current-workspace path) is UNBOUNDED (pre-existing). This branch bounds only the new all-ws path; do not change the current-ws behaviour.
+- `acknowledge` (2026-08-02): owner GO = slice (a) now — source `tmp/D6_SLICE_A_OWNER_GO_conductor.md`.
+- `attention` (2026-08-02): orientations 1-4 not yet transmitted; provisional mapping volet (b) -> orientation 3 (remote); does not block this slice.
 
-## Plan / Todo (lot-based)
-- [x] **Lot 1 — server: additive own-principal all-ws scope**
-  - [x] `listForUser(userId, workspaceId?, limit?)`: apply `.limit(limit)` when provided; keep `desc(updatedAt), desc(createdAt)`.
-  - [x] `listSessions(userId, workspaceId?, limit?)`: passthrough.
-  - [x] `GET /sessions`: read `scope` query. `scope=all` -> `listSessions(user.userId, null, DEFAULT_ALL_WS_LIMIT)`. Else unchanged.
-  - [x] `api/tests`: `scope=all` returns cross-workspace own sessions; NEVER another user's; bounded default applied (seed > limit, get limit).
-- [x] **Lot 2 — client: functional toggle + per-session labels**
-  - [x] Restore the toggle in `ChatWidget.svelte` (DS control), no dev message. On -> fetch `/sessions?scope=all`; off -> current workspace.
-  - [x] Adapter: for all-ws, resolve each session label from its `workspaceId` via `$workspaceScope.items` (id->name), not the single current label.
-  - [x] `ui/tests`: adapter per-session label; toggle->fetch wiring.
-- [x] **Lot 3 — gates + PR**
-  - [x] `make test-api` (chat.test.ts, 31 passed incl. scope=all own-principal + bounded) + `make test-ui` (460 passed) green.
-  - [x] PR; ping `s-archi` for co-sign against the 3 criteria (own-principal strict / bounded default applied / dev message removed — all verified at code + test).
+## AI Flaky tests
+- N/A — spec-only branch, no test campaign.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (single design artifact; no sub-workstreams)
+- [ ] **Multi-branch**
+- Rationale: one design spec, no CI, no parallel workstreams.
+
+## UAT Management (in orchestration context)
+- N/A — design-only, no UI change. Review gate = h2a-architect evaluation -> conductor consolidation -> owner signature (not UAT).
