@@ -4,6 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import { documentConnectorAccounts } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
+import { gmailRouter } from '../../src/routes/api/gmail';
 import { googleDriveRouter } from '../../src/routes/api/google-drive';
 import {
   GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY,
@@ -27,6 +28,8 @@ async function createMountedGoogleDriveApp() {
   const app = new Hono();
   app.use('/api/v1/google-drive/*', requireAuth);
   app.route('/api/v1/google-drive', googleDriveRouter);
+  app.use('/api/v1/gmail/*', requireAuth);
+  app.route('/api/v1/gmail', gmailRouter);
   return app;
 }
 
@@ -141,6 +144,78 @@ describe('Google Drive OAuth API router', () => {
     expect(url.searchParams.get('redirect_uri')).toBe(
       'https://api.example.test/api/v1/google-drive/oauth/callback',
     );
+  });
+
+  it('dispatches Gmail state through the registered Drive callback and stores a Gmail connection', async () => {
+    const idToken = encodeJwtPayload({
+      sub: 'gmail-google-subject',
+      email: 'gmail@example.com',
+    });
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          access_token: 'gmail-access-token',
+          refresh_token: 'gmail-refresh-token',
+          token_type: 'Bearer',
+          expires_in: 3600,
+          scope: 'https://www.googleapis.com/auth/gmail.readonly',
+          id_token: idToken,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const start = await app.request('/api/v1/gmail/oauth/start', {
+      method: 'POST',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ returnPath: '/settings/connectors' }),
+    });
+
+    expect(start.status).toBe(200);
+    const startPayload = await start.json();
+    const authorizationUrl = new URL(startPayload.authorizationUrl);
+    const state = String(authorizationUrl.searchParams.get('state'));
+    expect(authorizationUrl.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/gmail.readonly');
+    expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(
+      'https://api.example.test/api/v1/google-drive/oauth/callback',
+    );
+    expect(verifyGoogleDriveOAuthState(state).provider).toBe('gmail');
+
+    const callback = await app.request(
+      `/api/v1/google-drive/oauth/callback?state=${encodeURIComponent(state)}&code=gmail-code`,
+      {
+        method: 'GET',
+        headers: { Cookie: `session=${user.sessionToken}` },
+        redirect: 'manual',
+      },
+    );
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toBe(
+      'https://app.example.test/settings/connectors?gmail=connected',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, tokenExchange] = fetchMock.mock.calls[0];
+    expect(new URLSearchParams(String(tokenExchange?.body)).get('redirect_uri')).toBe(
+      'https://api.example.test/api/v1/google-drive/oauth/callback',
+    );
+
+    const connection = await app.request('/api/v1/gmail/connection', {
+      method: 'GET',
+      headers: { Cookie: `session=${user.sessionToken}` },
+    });
+    expect(connection.status).toBe(200);
+    expect((await connection.json()).account).toMatchObject({
+      provider: 'gmail',
+      status: 'connected',
+      connected: true,
+      accountEmail: 'gmail@example.com',
+      accountSubject: 'gmail-google-subject',
+    });
   });
 
   it('uses the public API origin from forwarded headers when production callback config is loopback', async () => {

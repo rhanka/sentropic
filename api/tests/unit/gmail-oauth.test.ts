@@ -14,6 +14,7 @@ import {
   GMAIL_PROVIDER,
   buildGmailAuthorizationUrl,
   createGmailOAuthState,
+  resolveGmailOAuthConfig,
 } from '../../src/services/gmail-oauth';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
 
@@ -32,14 +33,22 @@ const token = (accessToken: string) => ({
 });
 
 describe('Gmail OAuth security primitives', () => {
-  it('uses only gmail.readonly and seals state with OAUTH_SIGNING_KEK', async () => {
+  it('uses gmail.readonly and the registered Drive callback for Gmail authorization and exchange', async () => {
     const { env } = await import('../../src/config/env');
     const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
     const saved = { kek: mutable.OAUTH_SIGNING_KEK, jwt: mutable.JWT_SECRET };
+    const previousGoogleDriveEnv = {
+      GOOGLE_DRIVE_CLIENT_ID: process.env.GOOGLE_DRIVE_CLIENT_ID,
+      GOOGLE_DRIVE_CLIENT_SECRET: process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+      GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL: process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL,
+    };
     try {
       mutable.OAUTH_SIGNING_KEK = 'gmail-state-kek';
       mutable.JWT_SECRET = 'jwt-that-must-not-seal-gmail-state';
-      const { state } = createGmailOAuthState(stateInput);
+      process.env.GOOGLE_DRIVE_CLIENT_ID = 'shared-google-client';
+      process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'shared-google-client-secret';
+      process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = 'https://api.example.test';
+      const { state, payload } = createGmailOAuthState(stateInput);
       const [encodedPayload, signature] = state.split('.');
       expect(signature).toBe(
         createHmac('sha256', 'gmail-state-kek').update(encodedPayload).digest('base64url'),
@@ -48,19 +57,30 @@ describe('Gmail OAuth security primitives', () => {
         createHmac('sha256', 'dev-secret-key-change-in-production-please')
           .update(encodedPayload).digest('base64url'),
       );
+      expect(payload.provider).toBe('gmail');
+
+      const config = await resolveGmailOAuthConfig();
+      expect(config?.redirectUri).toBe(
+        'https://api.example.test/api/v1/google-drive/oauth/callback',
+      );
+      if (!config) throw new Error('Expected Gmail OAuth configuration.');
 
       const url = new URL(buildGmailAuthorizationUrl({
-        config: {
-          clientId: 'shared-google-client',
-          clientSecret: 'not-exposed-to-the-url',
-          redirectUri: 'https://api.example.test/api/v1/gmail/oauth/callback',
-        },
+        config,
         state,
       }));
       expect(url.searchParams.get('scope')).toBe(GMAIL_OAUTH_SCOPES[0]);
       expect(url.searchParams.get('scope')).not.toContain('drive.file');
       expect(url.searchParams.get('client_id')).toBe('shared-google-client');
+      expect(url.searchParams.get('redirect_uri')).toBe(config.redirectUri);
     } finally {
+      for (const [key, value] of Object.entries(previousGoogleDriveEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
       mutable.OAUTH_SIGNING_KEK = saved.kek;
       mutable.JWT_SECRET = saved.jwt;
     }
