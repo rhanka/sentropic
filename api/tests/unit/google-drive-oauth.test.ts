@@ -132,6 +132,7 @@ describe('Google Drive OAuth helpers', () => {
       userId: 'user-1',
       workspaceId: 'workspace-1',
       returnPath: '/documents',
+      provider: 'google-drive',
     });
 
     expect(() => verifyGoogleDriveOAuthState(`${state.slice(0, -2)}xx`)).toThrow(
@@ -140,6 +141,38 @@ describe('Google Drive OAuth helpers', () => {
     expect(() =>
       verifyGoogleDriveOAuthState(state, { now: new Date('2026-04-21T10:11:00.000Z') }),
     ).toThrow('Expired Google Drive OAuth state.');
+  });
+
+  it('defaults legacy and unknown OAuth state providers to Google Drive', async () => {
+    const { env } = await import('../../src/config/env');
+    const mutable = env as typeof env & { OAUTH_SIGNING_KEK?: string };
+    const saved = { kek: mutable.OAUTH_SIGNING_KEK, jwt: mutable.JWT_SECRET };
+    const payload = {
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      nonce: 'legacy-nonce',
+      returnPath: '/documents',
+      iat: new Date('2026-04-21T10:00:00.000Z').getTime(),
+      exp: new Date('2099-04-21T10:10:00.000Z').getTime(),
+    };
+    const sealState = (statePayload: Record<string, unknown>): string => {
+      const encodedPayload = Buffer.from(JSON.stringify(statePayload), 'utf8').toString('base64url');
+      const signature = createHmac('sha256', 'legacy-state-kek')
+        .update(encodedPayload)
+        .digest('base64url');
+      return `${encodedPayload}.${signature}`;
+    };
+
+    try {
+      mutable.OAUTH_SIGNING_KEK = 'legacy-state-kek';
+      mutable.JWT_SECRET = 'jwt-that-must-not-seal-state';
+      expect(verifyGoogleDriveOAuthState(sealState(payload)).provider).toBe('google-drive');
+      expect(verifyGoogleDriveOAuthState(sealState({ ...payload, provider: 'unknown-provider' })).provider)
+        .toBe('google-drive');
+    } finally {
+      mutable.OAUTH_SIGNING_KEK = saved.kek;
+      mutable.JWT_SECRET = saved.jwt;
+    }
   });
 
   it('refreshes an access token through the Google token endpoint', async () => {
