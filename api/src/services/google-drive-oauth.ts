@@ -30,6 +30,8 @@ export type GoogleDriveOAuthConfig = {
   redirectUri: string;
 };
 
+export type GoogleOAuthStateProvider = 'google-drive' | 'gmail';
+
 export type GoogleDriveOAuthStatePayload = {
   userId: string;
   workspaceId: string;
@@ -37,6 +39,7 @@ export type GoogleDriveOAuthStatePayload = {
   returnPath: string;
   iat: number;
   exp: number;
+  provider?: GoogleOAuthStateProvider;
 };
 
 export type GoogleDriveOAuthStartResult = {
@@ -113,6 +116,9 @@ const normalizeReturnPath = (value: unknown): string => {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
   return raw;
 };
+
+const normalizeOAuthStateProvider = (value: unknown): GoogleOAuthStateProvider =>
+  normalizeText(value) === 'gmail' ? 'gmail' : 'google-drive';
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
@@ -273,6 +279,7 @@ export const createGoogleDriveOAuthState = (input: {
   userId: string;
   workspaceId: string;
   returnPath?: string | null;
+  provider?: GoogleOAuthStateProvider;
   now?: Date;
 }): { state: string; payload: GoogleDriveOAuthStatePayload } => {
   const now = input.now ?? new Date();
@@ -284,6 +291,7 @@ export const createGoogleDriveOAuthState = (input: {
     returnPath: normalizeReturnPath(input.returnPath),
     iat,
     exp: iat + STATE_TTL_MS,
+    provider: normalizeOAuthStateProvider(input.provider),
   };
   const encodedPayload = encodeBase64Url(JSON.stringify(payload));
   return {
@@ -336,6 +344,7 @@ export const verifyGoogleDriveOAuthState = (
     returnPath: normalizeReturnPath(parsed?.returnPath),
     iat,
     exp,
+    provider: normalizeOAuthStateProvider(parsed?.provider),
   };
 };
 

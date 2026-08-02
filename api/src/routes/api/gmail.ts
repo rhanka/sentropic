@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AuthUser } from '../../middleware/auth';
 import {
@@ -12,6 +12,7 @@ import {
   exchangeGoogleDriveOAuthCode,
   resolveGoogleDriveAccountIdentity,
   resolveGoogleDriveAppReturnBaseUrl,
+  type GoogleDriveOAuthStatePayload,
 } from '../../services/google-drive-oauth';
 import {
   GMAIL_PROVIDER,
@@ -69,6 +70,57 @@ const gmailReturnRedirect = (
   baseUrl: resolveGoogleDriveAppReturnBaseUrl({ requestApiBaseUrl }),
 });
 
+type GmailOAuthCompletionInput = {
+  c: Context;
+  user: AuthUser;
+  state: GoogleDriveOAuthStatePayload;
+  requestApiBaseUrl: string;
+  json: boolean;
+};
+
+export const completeGmailOAuthCallback = async ({
+  c,
+  user,
+  state,
+  requestApiBaseUrl,
+  json,
+}: GmailOAuthCompletionInput) => {
+  if (state.userId !== user.userId || !(await ensureWorkspace(user, state.workspaceId))) {
+    return c.json({ message: 'Gmail OAuth state does not match this session' }, 403);
+  }
+
+  const googleError = c.req.query('error');
+  if (googleError) {
+    const account = await markGoogleDriveConnectorError({
+      userId: user.userId, workspaceId: state.workspaceId, message: googleError, provider: GMAIL_PROVIDER,
+    });
+    if (json) return c.json({ account, message: googleError }, 400);
+    return c.redirect(gmailReturnRedirect(state.returnPath, { gmail: 'error' }, requestApiBaseUrl));
+  }
+
+  const code = c.req.query('code')?.trim();
+  if (!code) return c.json({ message: 'Missing Gmail OAuth code' }, 400);
+
+  try {
+    const config = await resolveGmailOAuthConfig({ requestApiBaseUrl });
+    if (!config) throw new Error('Gmail OAuth is not configured.');
+    const token = await exchangeGoogleDriveOAuthCode({ code, config });
+    const identity = await resolveGoogleDriveAccountIdentity({ token });
+    const account = await storeGoogleDriveTokenMaterial({
+      userId: user.userId, workspaceId: state.workspaceId, token, identity, provider: GMAIL_PROVIDER,
+    });
+    if (json) return c.json({ account, returnPath: state.returnPath });
+    return c.redirect(gmailReturnRedirect(state.returnPath, { gmail: 'connected' }, requestApiBaseUrl));
+  } catch (error) {
+    const message = errorMessage(error, 'Gmail OAuth callback failed');
+    const account = await markGoogleDriveConnectorError({
+      userId: user.userId, workspaceId: state.workspaceId, message, provider: GMAIL_PROVIDER,
+    });
+    if (json) return c.json({ account, message }, 400);
+    return c.redirect(gmailReturnRedirect(state.returnPath, { gmail: 'error' }, requestApiBaseUrl));
+  }
+};
+
 gmailRouter.get('/connection', async (c) => {
   const user = getAuthenticatedUser(c.get('user'));
   if (!user) return c.json({ message: 'Authentication required' }, 401);
@@ -105,37 +157,7 @@ gmailRouter.get('/oauth/callback', async (c) => {
   } catch (error) {
     return c.json({ message: errorMessage(error, 'Invalid Gmail OAuth state') }, 400);
   }
-  if (state.userId !== user.userId || !(await ensureWorkspace(user, state.workspaceId))) {
-    return c.json({ message: 'Gmail OAuth state does not match this session' }, 403);
-  }
-  const googleError = c.req.query('error');
-  if (googleError) {
-    const account = await markGoogleDriveConnectorError({
-      userId: user.userId, workspaceId: state.workspaceId, message: googleError, provider: GMAIL_PROVIDER,
-    });
-    if (json) return c.json({ account, message: googleError }, 400);
-    return c.redirect(gmailReturnRedirect(state.returnPath, { gmail: 'error' }, requestApiBaseUrl));
-  }
-  const code = c.req.query('code')?.trim();
-  if (!code) return c.json({ message: 'Missing Gmail OAuth code' }, 400);
-  try {
-    const config = await resolveGmailOAuthConfig({ requestApiBaseUrl });
-    if (!config) throw new Error('Gmail OAuth is not configured.');
-    const token = await exchangeGoogleDriveOAuthCode({ code, config });
-    const identity = await resolveGoogleDriveAccountIdentity({ token });
-    const account = await storeGoogleDriveTokenMaterial({
-      userId: user.userId, workspaceId: state.workspaceId, token, identity, provider: GMAIL_PROVIDER,
-    });
-    if (json) return c.json({ account, returnPath: state.returnPath });
-    return c.redirect(gmailReturnRedirect(state.returnPath, { gmail: 'connected' }, requestApiBaseUrl));
-  } catch (error) {
-    const message = errorMessage(error, 'Gmail OAuth callback failed');
-    const account = await markGoogleDriveConnectorError({
-      userId: user.userId, workspaceId: state.workspaceId, message, provider: GMAIL_PROVIDER,
-    });
-    if (json) return c.json({ account, message }, 400);
-    return c.redirect(gmailReturnRedirect(state.returnPath, { gmail: 'error' }, requestApiBaseUrl));
-  }
+  return completeGmailOAuthCallback({ c, user, state, requestApiBaseUrl, json });
 });
 
 gmailRouter.post('/disconnect', async (c) => {
