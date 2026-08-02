@@ -17,7 +17,9 @@ export type GoogleConnectorProvider = typeof GOOGLE_DRIVE_PROVIDER | typeof GMAI
 export type GmailOAuthConfig = GoogleDriveOAuthConfig;
 export type GmailOAuthStartResult = GoogleDriveOAuthStartResult;
 
-export const createGmailOAuthState = createGoogleDriveOAuthState;
+export const createGmailOAuthState = (
+  input: Omit<Parameters<typeof createGoogleDriveOAuthState>[0], 'provider'>,
+) => createGoogleDriveOAuthState({ ...input, provider: GMAIL_PROVIDER });
 export const verifyGmailOAuthState = verifyGoogleDriveOAuthState;
 
 export const resolveGmailOAuthConfig = async (
@@ -33,7 +35,7 @@ export const resolveGmailOAuthConfig = async (
   return {
     clientId,
     clientSecret,
-    redirectUri: `${callbackBaseUrl}/api/v1/gmail/oauth/callback`,
+    redirectUri: `${callbackBaseUrl}/api/v1/google-drive/oauth/callback`,
   };
 };
 
