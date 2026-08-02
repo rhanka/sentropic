@@ -52,9 +52,9 @@ Restore Gmail OAuth in preproduction without changing the shared Google client's
   - [x] Confirm allowed and forbidden paths; no scope exception is needed.
 
 - [ ] **Lot 1 — Registered callback and provider dispatch**
-  - [ ] Seal an optional OAuth-state provider, defaulting missing or unknown values to `google-drive` during verification.
-  - [ ] Seal `gmail` for Gmail starts and use `/api/v1/google-drive/oauth/callback` for Gmail authorization and token exchange.
-  - [ ] Extract Gmail callback completion and dispatch verified Gmail states from the Drive callback without changing Drive completion.
+  - [x] Seal an optional OAuth-state provider, defaulting missing or unknown values to `google-drive` during verification.
+  - [x] Seal `gmail` for Gmail starts and use `/api/v1/google-drive/oauth/callback` for Gmail authorization and token exchange.
+  - [x] Extract Gmail callback completion and dispatch verified Gmail states from the Drive callback without changing Drive completion.
   - [ ] Add Gmail authorization/config, legacy-state, and Drive-callback Gmail end-to-end API coverage.
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-gmailredir`
