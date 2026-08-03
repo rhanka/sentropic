@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cowork-bridge",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Portable client bridge for Sentropic Cowork: shared client core (ApiClient/ContextProvider/NavigationAdapter), transport/storage-agnostic auth (token lifecycle behind a StorageAdapter + injected fetch), and local-tool protocol types + portable permission schema. Reuses @sentropic/chat-ui for SSE.",
   "type": "module",
   "license": "MIT",
