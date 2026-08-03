@@ -73,7 +73,10 @@ describe('DeviceCodeClient — start', () => {
                     deviceName: 'Lab PC',
                     deviceId: deviceIdentity.deviceId,
                     devicePublicKey: deviceIdentity.publicKey,
-                    capabilities: ['screen_capture', 'input_action'],
+                    capabilities: {
+                        capabilityIds: ['screen_capture', 'input_action'],
+                        isolatedVmTarget: false,
+                    },
                 }),
             }),
         );
