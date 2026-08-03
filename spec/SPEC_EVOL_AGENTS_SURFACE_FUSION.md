@@ -63,7 +63,7 @@ Fresh-main field state measured in `packages/chat-ui/src/state/agentsEntry.ts` f
 ### surface/I2 / surface/I5 — reserved, honored at feed time (gated)
 Slice (a) is load-bearing for surface/I1, surface/I3, and surface/I4; surface/I2 and surface/I5 bind at operation/feed time, which is gated. The contract **reserves their places** so the later feed cannot bypass them:
 - **surface/I2:** an entry's `status` distinguishes a **measured** presence signal from a last-known guess (a `measuredAt` vs assumed marker on the status). The port contract requires the source to say which.
-- **surface/I5:** the existing `connection` field carries reachability. An operation on an unreachable counterpart must never look like success: it is **DÉPOSÉ-EN-ATTENTE** (deposited dormant for wake) or refused as **PAS-FAIT**, never reported as a silent best-effort success.
+- **surface/I5:** the existing `connection` field carries reachability. An operation on an unreachable counterpart must never look like success: it is **DÉPOSÉ-EN-ATTENTE** (deposited dormant for wake) or refused as **PAS-FAIT**, never reported as a silent success.
 
 ## 5. Capitalization split & acceptance-grid mapping
 
