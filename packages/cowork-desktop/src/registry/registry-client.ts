@@ -18,6 +18,8 @@ export interface RegistryClientDeps {
     getAccessToken: () => Promise<string | null>;
     /** Device display name shown in the chat target selector. */
     deviceName?: string;
+    /** Stable, PoP-enrolled Cowork device id. */
+    deviceId: string;
     /** Keepalive interval (ms). Defaults to 15s. */
     keepaliveIntervalMs?: number;
     /** Injected interval scheduler (for tests). Defaults to `setInterval`. */
@@ -31,6 +33,7 @@ export class RegistryClient {
     private readonly apiBaseUrl: string;
     private readonly getAccessToken: () => Promise<string | null>;
     private readonly deviceName: string;
+    private readonly deviceId: string;
     private readonly keepaliveIntervalMs: number;
     private readonly setIntervalFn: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
     private readonly clearIntervalFn: (handle: ReturnType<typeof setInterval>) => void;
@@ -43,6 +46,7 @@ export class RegistryClient {
         this.apiBaseUrl = deps.apiBaseUrl.replace(/\/$/, '');
         this.getAccessToken = deps.getAccessToken;
         this.deviceName = deps.deviceName ?? 'Sentropic Cowork';
+        this.deviceId = deps.deviceId;
         this.keepaliveIntervalMs = deps.keepaliveIntervalMs ?? KEEPALIVE_INTERVAL_MS;
         this.setIntervalFn = deps.setIntervalFn ?? ((fn, ms) => setInterval(fn, ms));
         this.clearIntervalFn = deps.clearIntervalFn ?? ((h) => clearInterval(h));
@@ -67,6 +71,7 @@ export class RegistryClient {
             headers: await this.authHeaders(),
             body: JSON.stringify({
                 source: DESKTOP_SOURCE,
+                device_id: this.deviceId,
                 url: 'desktop://cowork',
                 title: this.deviceName,
             }),
@@ -74,11 +79,12 @@ export class RegistryClient {
         if (!response.ok) {
             throw new Error(`registry register failed with HTTP ${response.status}`);
         }
-        const data = (await response.json()) as { ok?: boolean; tab_id?: string };
-        if (!data.ok || !data.tab_id) {
+        const data = (await response.json()) as { ok?: boolean; tab_id?: string; device_id?: string };
+        const registeredDeviceId = data.device_id ?? data.tab_id;
+        if (!data.ok || registeredDeviceId !== this.deviceId) {
             throw new Error('registry register returned an invalid payload');
         }
-        this.tabId = data.tab_id;
+        this.tabId = registeredDeviceId;
         this.startKeepalive();
         return this.tabId;
     }
@@ -96,7 +102,7 @@ export class RegistryClient {
         await this.fetch(`${this.apiBaseUrl}/chrome-extension/tabs/keepalive`, {
             method: 'POST',
             headers: await this.authHeaders(),
-            body: JSON.stringify({ tab_id: this.tabId }),
+            body: JSON.stringify({ device_id: this.tabId }),
         }).catch(() => {
             // Keepalive is best-effort; eviction will re-register on next launch.
         });
