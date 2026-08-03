@@ -93,11 +93,12 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [ ] Activate BR-COWORK-EX1 only if one migration is approved; otherwise stop as blocked.
   - [ ] Re-run `harness check branch` and `make scope-check` before implementation.
 - [ ] **Lot 1 — Embedded chat and Sentropic session join (Features 1/2)**
-  - [ ] Add local-only WebView2 shell, published chat-ui composition, conversation list/selection, history hydration, send/stop and session switching.
-  - [ ] Add narrow native RPC + authenticated StreamHub proxy; keep bearer/refresh tokens out of webview JavaScript.
-  - [ ] Wire refresh-first `SessionAuthClient`, with device-code only as fallback; separate controller chat SSE from target lease delivery.
-  - [ ] Tests: route/method allowlist, token non-disclosure, session projection/switch race, NDJSON error, SSE reconnect, refresh/re-enroll fallback.
-  - [ ] Gate: `make typecheck-cowork-bridge ENV=test-cowork-connector`; `make test-cowork-bridge ENV=test-cowork-connector`; `make typecheck-cowork-desktop ENV=test-cowork-connector`; `make test-cowork-desktop ENV=test-cowork-connector`.
+  - [x] Add local-only WebView2 shell, published chat-ui composition, conversation list/selection, history hydration, send/stop and session switching.
+  - [x] Add narrow native RPC + authenticated StreamHub proxy; keep bearer/refresh tokens out of webview JavaScript.
+  - [x] Wire refresh-first `SessionAuthClient`, with device-code only as fallback; separate controller chat SSE from target lease delivery.
+  - [x] Tests: route/method allowlist, token non-disclosure, session projection/switch race, NDJSON error, SSE reconnect, refresh/re-enroll fallback.
+  - [x] Gate: `make typecheck-cowork-bridge ENV=test-cowork-connector`; `make test-cowork-bridge ENV=test-cowork-connector`; `make typecheck-cowork-desktop ENV=test-cowork-connector`; `make test-cowork-desktop ENV=test-cowork-connector`.
+  - [ ] Windows VM UAT: attach the CoreWebView2 host adapter, package the local Svelte assets, then prove session list/history/live stream and navigation/download/new-window denial on the isolated VM.
 - [ ] **Lot 2 — Cowork connector-host adapter and chat mount**
   - [ ] Register `cowork-desktop` manifest with `screen_capture`/`input_action`; no resources, prompts or secrets.
   - [ ] Implement strict tenant/exposure/account/audit ports and adapter-injected broker; trusted UI selection maps durable device to connector instance.
