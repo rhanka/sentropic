@@ -11,6 +11,7 @@ import { hydrateInitiative } from './initiatives';
 import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
+import { listIssuedLeases } from '../../services/cowork/device-lease-service';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import {
   ADMIN_WORKSPACE_ID,
@@ -170,6 +171,20 @@ function sseCommentEvent(contextType: string, contextId: string, data: unknown):
   return `event: comment_update\nid: comment:${contextType}:${contextId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
+function sseCoworkLeaseEvent(lease: {
+  id: string;
+  nonce: string;
+  scope: unknown;
+  expiresAt: Date;
+}): string {
+  return `event: cowork_lease\nid: cowork_lease:${lease.id}\ndata: ${JSON.stringify({
+    leaseId: lease.id,
+    nonce: lease.nonce,
+    scope: lease.scope,
+    expiresAt: lease.expiresAt.toISOString(),
+  })}\n\n`;
+}
+
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
   if (value == null) return null;
   if (typeof value === 'object') return value as Record<string, unknown>;
@@ -236,6 +251,90 @@ streamsRouter.get('/active', async (c) => {
     limit: Number.isFinite(limit) ? limit : 200
   });
   return c.json({ streamIds });
+});
+
+/**
+ * Low-latency notification over the durable lease queue. A connection is
+ * scoped to one active, owned device; Lot 4 is the only place allowed to act
+ * on an acknowledged lease, so delivery here never invokes a desktop tool.
+ */
+streamsRouter.get('/cowork-devices/:deviceId/leases/sse', async (c) => {
+  const user = c.get('user') as { userId: string };
+  const deviceId = c.req.param('deviceId');
+  if (!(await listIssuedLeases(user.userId, deviceId, 1))) {
+    return c.json({ message: 'Cowork device not found.' }, 404);
+  }
+
+  const encoder = new TextEncoder();
+  let cleanup: (() => Promise<void>) | null = null;
+  const readable = new ReadableStream<Uint8Array>({
+    start: async (controller) => {
+      let closed = false;
+      let client: Awaited<ReturnType<typeof pool.connect>> | null = null;
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const emitted = new Set<string>();
+      const push = (text: string) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(text));
+        } catch {
+          closed = true;
+        }
+      };
+      const emitPending = async () => {
+        const leases = await listIssuedLeases(user.userId, deviceId, 50);
+        if (!leases) return;
+        for (const lease of leases) {
+          if (emitted.has(lease.id)) continue;
+          emitted.add(lease.id);
+          push(sseCoworkLeaseEvent(lease));
+        }
+      };
+      const onNotification = (message: Notification) => {
+        if (message.channel !== 'cowork_device_lease_events' || !message.payload) return;
+        try {
+          const payload = JSON.parse(message.payload) as { device_id?: unknown };
+          if (payload.device_id === deviceId) void emitPending().catch(() => {});
+        } catch {
+          // Ignore malformed notifications; the durable poll route remains authoritative.
+        }
+      };
+      cleanup = async () => {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        if (client) {
+          try {
+            client.removeListener('notification', onNotification);
+            await client.query('UNLISTEN cowork_device_lease_events');
+          } catch {
+            // Connection teardown is best-effort.
+          } finally {
+            client.release();
+          }
+        }
+        try { controller.close(); } catch { /* already closed */ }
+      };
+
+      try {
+        client = await pool.connect();
+        client.on('notification', onNotification);
+        await client.query('LISTEN cowork_device_lease_events');
+        heartbeat = setInterval(() => push(': heartbeat\n\n'), 25_000);
+        await emitPending();
+        c.req.raw.signal.addEventListener('abort', () => { void cleanup?.(); });
+      } catch {
+        await cleanup();
+      }
+    },
+    cancel: () => { void cleanup?.(); },
+  });
+
+  c.header('Content-Type', 'text/event-stream; charset=utf-8');
+  c.header('Cache-Control', 'no-cache, no-transform');
+  c.header('Connection', 'keep-alive');
+  c.header('X-Accel-Buffering', 'no');
+  return c.newResponse(readable, 200);
 });
 
 // GET /streams/sse?streamIds=a&streamIds=b&cursor=base64url(json)
