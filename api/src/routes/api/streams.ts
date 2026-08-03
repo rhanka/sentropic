@@ -12,6 +12,7 @@ import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
 import { listIssuedLeases } from '../../services/cowork/device-lease-service';
+import { verifyCoworkDeliveryProof } from '../../services/cowork/device-identity';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import {
   ADMIN_WORKSPACE_ID,
@@ -261,6 +262,14 @@ streamsRouter.get('/active', async (c) => {
 streamsRouter.get('/cowork-devices/:deviceId/leases/sse', async (c) => {
   const user = c.get('user') as { userId: string };
   const deviceId = c.req.param('deviceId');
+  const deviceProof = await verifyCoworkDeliveryProof({
+    userId: user.userId,
+    deviceId,
+    method: 'GET',
+    issuedAtMs: Number(c.req.header('x-cowork-device-proof-at')),
+    signature: c.req.header('x-cowork-device-proof') ?? '',
+  });
+  if (!deviceProof) return c.json({ message: 'Cowork device proof is required for lease delivery.' }, 401);
   if (!(await listIssuedLeases(user.userId, deviceId, 1))) {
     return c.json({ message: 'Cowork device not found.' }, 404);
   }
