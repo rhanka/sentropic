@@ -20,7 +20,7 @@ import { openBrowser } from './open-browser.js';
 import { createFileStore } from '../storage/index.js';
 import { createWindowsCapabilityProvider } from '../capability/index.js';
 import { prepareNativeModules } from '../native/index.js';
-import { DeviceCodeClient } from '../enroll/index.js';
+import { DeviceCodeClient, loadOrCreateDeviceIdentity } from '../enroll/index.js';
 import { SessionAuthClient } from '@sentropic/cowork-bridge/auth';
 import { RegistryClient } from '../registry/index.js';
 import { ConsentManager } from '../consent/index.js';
@@ -61,6 +61,7 @@ export async function runCli(): Promise<void> {
     }
 
     const store = createFileStore(APP_DIR);
+    const deviceIdentity = await loadOrCreateDeviceIdentity(store);
     // In the single-file exe the native deps are extracted from the embedded
     // payload to a cache and resolved by absolute file:// URL; from npm they
     // resolve from node_modules (identity).
@@ -79,6 +80,7 @@ export async function runCli(): Promise<void> {
         storage: store,
         apiBaseUrl,
         deviceName: DEVICE_NAME,
+        deviceIdentity,
     });
 
     const noOpen = process.argv.includes('--no-open');
@@ -114,6 +116,7 @@ export async function runCli(): Promise<void> {
         apiBaseUrl,
         getAccessToken,
         deviceName: DEVICE_NAME,
+        deviceId: deviceIdentity.deviceId,
     });
     await registry.register();
     process.stdout.write(`Registered device ${registry.registeredTabId}.\n`);
