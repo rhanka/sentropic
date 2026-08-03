@@ -66,7 +66,9 @@ export class ConsentManager {
         toolName: string,
         details?: Record<string, unknown>,
     ): Promise<ConsentVerdict> {
-        const persisted = await this.resolvePersisted(toolName);
+        // Remote hands are always Allow once.  A durable input grant would let
+        // a later model turn act without a foreground human decision.
+        const persisted = toolName === 'input_action' ? null : await this.resolvePersisted(toolName);
         if (persisted) {
             return persisted.policy === 'allow'
                 ? { decision: 'allow', source: 'allow_always' }
@@ -87,6 +89,9 @@ export class ConsentManager {
             case 'allow_once':
                 return { decision: 'allow', source: 'allow_once' };
             case 'allow_always':
+                if (toolName === 'input_action') {
+                    return { decision: 'deny', source: 'default' };
+                }
                 await this.persistDecision(toolName, 'allow');
                 return { decision: 'allow', source: 'allow_always' };
             case 'deny_always':
