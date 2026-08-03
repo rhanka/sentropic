@@ -1,8 +1,8 @@
 import { and, eq, gt, inArray, lte } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { coworkDeviceLeases } from '../../db/schema';
-import { verifyLeaseAckV2, type LeaseAckV2, type SignedLeaseV2 } from './lease-v2';
+import { coworkDeviceLeases, coworkDevices } from '../../db/schema';
+import { createServerLeaseV2KeyPort, verifyLeaseAckV2, verifyLeaseV2, type LeaseAckV2, type LeaseV2KeyPort, type SignedLeaseV2 } from './lease-v2';
 
 type GeneralLeaseScope = { protocol: 'cowork-general-lease-v2'; signed: SignedLeaseV2; ack?: LeaseAckV2 };
 const inFlight = ['issued', 'acknowledged'] as const;
@@ -10,6 +10,27 @@ const inFlight = ['issued', 'acknowledged'] as const;
 export function isGeneralLeaseV2(scope: unknown): scope is GeneralLeaseScope {
   const candidate = scope as Partial<GeneralLeaseScope> | null;
   return candidate?.protocol === 'cowork-general-lease-v2' && candidate.signed?.envelope?.version === 2;
+}
+
+/** Persists only a server-signed v2 envelope; deposit itself never creates a lease. */
+export async function storeGeneralLeaseV2(input: { userId: string; signed: SignedLeaseV2; keys?: LeaseV2KeyPort }): Promise<boolean> {
+  const keys = input.keys ?? createServerLeaseV2KeyPort();
+  const envelope = input.signed.envelope;
+  if (envelope.version !== 2 || envelope.principalId !== input.userId || !await verifyLeaseV2(input.signed, keys, {
+    principalId: input.userId, targetDeviceId: envelope.targetDeviceId, targetPepKeyId: envelope.targetPepKeyId,
+  })) return false;
+  const [device] = await db.select({ id: coworkDevices.id, pepKeyId: coworkDevices.pepKeyId }).from(coworkDevices).where(and(
+    eq(coworkDevices.id, envelope.targetDeviceId), eq(coworkDevices.userId, input.userId), eq(coworkDevices.status, 'active'),
+  )).limit(1);
+  if (!device || device.pepKeyId !== envelope.targetPepKeyId) return false;
+  const turnRef = envelope.durableCallRef ?? envelope.invocationId;
+  const [created] = await db.insert(coworkDeviceLeases).values({
+    id: envelope.leaseId, deviceId: envelope.targetDeviceId, userId: input.userId, turnRef, nonce: envelope.nonce,
+    scope: { protocol: 'cowork-general-lease-v2', signed: input.signed }, issuedAt: new Date(envelope.issuedAt), expiresAt: new Date(envelope.expiresAt),
+  }).onConflictDoNothing().returning();
+  if (created) return true;
+  const [existing] = await db.select().from(coworkDeviceLeases).where(and(eq(coworkDeviceLeases.deviceId, envelope.targetDeviceId), eq(coworkDeviceLeases.turnRef, turnRef), inArray(coworkDeviceLeases.status, inFlight))).limit(1);
+  return Boolean(existing && isGeneralLeaseV2(existing.scope) && existing.scope.signed.envelope.leaseId === envelope.leaseId);
 }
 
 /** GENERAL refuses every v1 scope/ack; MVP v1 remains isolated in its old routes. */
