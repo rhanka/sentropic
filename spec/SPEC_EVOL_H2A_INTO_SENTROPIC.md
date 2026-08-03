@@ -43,9 +43,9 @@ h2a submits the existing decision dossier to Sentropic's Focus decision surface 
 
 ## 3. Placement and sequencing
 
-Orientation #3 is remote: Sentropic owns durable workspace, exposure, agents-surface, Focus, and Track primitives; h2a remains holder of remote CLI presence and submits integrations into those surfaces. Parts 1 and 3 are the nearer-term designs because their primitives already exist. Part 2 waits for the BR-39l api/h2a join and listing endpoint.
+Orientation #3 is remote: Sentropic owns durable workspace, exposure, agents-surface, Focus, and Track primitives; h2a remains holder of remote CLI presence and submits integrations into those surfaces. **Part 3 is the priority-first design and build because it becomes the owner's signature mechanism.** Today #502 is ratified via an artifact only as a STOPGAP; once Part 3 lands, decisions are presented under Sentropic through Focus and their acceptance is recorded in Track. Part 1 remains near-term, while Part 2 waits for the BR-39l api/h2a join and listing endpoint.
 
-Dependencies remain: #502 for the fused surface; #439 for async tenant authorization and the L6 resolver chain; #492 for revoke-before-cascade teardown; h2a PR #152 for the invariant publisher; Focus/Track for decisions. No implementation starts before both runtime 0.90.1 and owner signature. After both gates open, Codex TERRA may build across the app/chat/agents lanes under separately approved branch scopes.
+Part 3's concrete first build item is the currently deferred Focus live-write driver (`FocusLiveSession` / the live write path): close that reuse/composition gap so the existing Focus dossier records a real signature in Track, **not** by creating a new signature UI. Dependencies remain: #502 for the fused surface; #439 for async tenant authorization and the L6 resolver chain; #492 for revoke-before-cascade teardown; h2a PR #152 for the invariant publisher; Focus/Track for decisions. No implementation starts before both runtime 0.90.1 and owner signature; for this pre-Focus bootstrap only, the ratified artifact is the stopgap signature record. After both gates open, Codex TERRA starts with Part 3, then builds across the approved app/chat/agents lane scopes.
 
 ## 4. LIB/INTEGRATION split and acceptance grid
 
