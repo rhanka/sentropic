@@ -118,6 +118,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Send the stable key-bound identity in enrollment and presence mutations instead of accepting a server-minted desktop id.
   - [x] Add durable active/revoked ownership checks for Cowork presence mutations.
   - [x] Route only `desktop_cowork` register, keepalive, and unregister through durable ownership checks; preserve browser tab handling.
+  - [x] Add durable short-TTL lease issuance, idempotency, signature acknowledgement, replay protection, and pre-execution revocation primitives.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.
