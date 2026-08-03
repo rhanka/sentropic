@@ -21,9 +21,11 @@ import { createFileStore } from '../storage/index.js';
 import { createWindowsCapabilityProvider } from '../capability/index.js';
 import { prepareNativeModules } from '../native/index.js';
 import { DeviceCodeClient } from '../enroll/index.js';
+import { SessionAuthClient } from '@sentropic/cowork-bridge/auth';
 import { RegistryClient } from '../registry/index.js';
 import { ConsentManager } from '../consent/index.js';
 import { createToolResultsPoster, CoworkRunner } from '../runner/index.js';
+import { resolveCoworkAccessToken } from './auth-bootstrap.js';
 
 const APP_DIR = process.env.SENTROPIC_COWORK_DIR ?? join(homedir(), '.sentropic', 'cowork');
 const DEVICE_NAME = process.env.SENTROPIC_DEVICE_NAME ?? 'Sentropic Cowork';
@@ -67,6 +69,11 @@ export async function runCli(): Promise<void> {
         resolveNativeModule: (name) => nativeResolver.resolve(name),
     });
 
+    const auth = new SessionAuthClient({
+        storage: store,
+        fetch: globalThis.fetch,
+        config: { apiBaseUrl },
+    });
     const enroller = new DeviceCodeClient({
         fetch: globalThis.fetch,
         storage: store,
@@ -75,9 +82,11 @@ export async function runCli(): Promise<void> {
     });
 
     const noOpen = process.argv.includes('--no-open');
-    const existing = await store.readSession();
-    if (!existing) {
-        const outcome = await enroller.enroll((start) => {
+    try {
+        const authResult = await resolveCoworkAccessToken({
+            auth,
+            deviceCode: enroller,
+            onDeviceCode: (start) => {
             // Build a full, clickable pairing URL ourselves — the server's
             // `verification_uri` is host-less for headless callers, so we ignore it.
             const pairingUrl = buildPairingUrl(start.userCode);
@@ -89,16 +98,16 @@ export async function runCli(): Promise<void> {
             if (!noOpen && openBrowser(pairingUrl)) {
                 process.stdout.write('  Opening your browser…\n\n');
             }
+            },
         });
-        if (outcome.status !== 'approved') {
-            process.stderr.write(`enrollment failed: ${outcome.status}\n`);
-            process.exitCode = 1;
-            return;
-        }
-        process.stdout.write(`Enrolled as ${outcome.user.email ?? outcome.user.id}.\n`);
+        if (authResult.source === 'device-code') process.stdout.write('Enrolled Cowork with device code.\n');
+    } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : 'enrollment failed'}\n`);
+        process.exitCode = 1;
+        return;
     }
 
-    const getAccessToken = async () => (await store.readSession())?.sessionToken ?? null;
+    const getAccessToken = async () => auth.getValidAccessToken();
 
     const registry = new RegistryClient({
         fetch: globalThis.fetch,
