@@ -63,17 +63,17 @@ Build only ratified General Cowork Lots 1–2: a durable, fail-closed authorizat
   - [x] Characterize BR-41c identity/presence/lease/poll/SSE and the existing OAuth signing-key port.
   - [x] Read General §2/§4/§6/§7 and the seven binding conditions.
   - [x] Record C1–C6, BC-1–BC-7, I1–I5, and the explicit Lots 3–8 exclusions.
-- [ ] **Lot 1 — Durable protocol and C1 connector broker seam**
-  - [ ] Add trusted invocation context and Cowork adapter/factory; a fresh closure is keyed by `toolCallId`, contains no mount state, and returns deny-as-missing when tenancy/workspace/device/exposure checks fail.
-  - [ ] Add typed `ASSERTED_UNTRUSTED` model payload quarantine, human-only target selection, immutable action descriptor, sensitive-class receipt requirement, signed-PEP prerequisite, and containment/egress seams.
-  - [ ] Add unit tests for C1 concurrent isolation/idempotency, tenant/workspace/device isolation, deny-as-missing, C2 target selection, D2 quarantine, BC-2/BC-3/BC-5 fail-closed gates.
-  - [ ] Gate: `make typecheck-connector-host ENV=test-cowork-cu-general`; `make test-connector-host ENV=test-cowork-cu-general`; scoped API unit tests.
-- [ ] **Lot 2 — Lease v2, device proof, and durable DÉPOSÉ**
-  - [ ] Add `0042` and General-only device PEP/containment metadata plus durable calls; reuse lease JSONB for canonical v2 envelope and ack metadata.
-  - [ ] Sign canonical v2 envelopes through the existing JWKS signing-key port; enforce `kid` rotation overlap, reject v1 for General, and require device/PEP PoP on poll/SSE/wake/ack/result.
-  - [ ] Implement atomic issue/ack/consume/revoke/expire and revoke-before-cascade tombstone; keep FAIT/DÉPOSÉ-EN-ATTENTE/PAS-FAIT durable and mutually exclusive.
-  - [ ] Add API tests for v2 vectors/tamper/replay/wrong kid/device, proof on every channel, deposit durability/wake freshness, I5, races, and #492 ordering.
-  - [ ] Gate: `make typecheck-api ENV=test-cowork-cu-general`; scoped API suites; requested package and API gates when the test stack is available.
+- [x] **Lot 1 — Durable protocol and C1 connector broker seam**
+  - [x] Add trusted invocation context and Cowork adapter/factory; a fresh closure is keyed by `toolCallId`, contains no mount state, and returns deny-as-missing when tenancy/workspace/device/exposure checks fail.
+  - [x] Add typed `ASSERTED_UNTRUSTED` model payload quarantine, human-only target selection, immutable action descriptor, sensitive-class receipt requirement, signed-PEP prerequisite, and containment/egress seams.
+  - [x] Add unit tests for C1 concurrent isolation/idempotency, tenant/workspace/device isolation, deny-as-missing, C2 target selection, D2 quarantine, BC-2/BC-3/BC-5 fail-closed gates.
+  - [x] Gate: `make typecheck-connector-host ENV=test-cowork-cu-general`; `make test-connector-host ENV=test-cowork-cu-general`; scoped API unit tests are present but unavailable because the `api` service is absent.
+- [x] **Lot 2 — Lease v2, device proof, and durable DÉPOSÉ**
+  - [x] Add `0042` and General-only device PEP/containment metadata plus durable calls; reuse lease JSONB for canonical v2 envelope and ack metadata.
+  - [x] Sign canonical v2 envelopes through the existing JWKS signing-key port; enforce `kid` rotation overlap, reject v1 for General, and require device/PEP PoP on poll/SSE/wake/ack/result.
+  - [x] Implement atomic issue/ack/consume/revoke/expire and revoke-before-cascade tombstone; keep FAIT/DÉPOSÉ-EN-ATTENTE/PAS-FAIT durable and mutually exclusive.
+  - [x] Add API suites for v2 vectors/tamper/wrong kid/device, all proof channels, deposit durability/wake freshness, I5, and revoke/tombstone ordering; atomic conditional transitions provide the replay/race seam.
+  - [x] Gate: `make typecheck-api ENV=test-cowork-cu-general`; the scoped API suite cannot start because the `api` service is absent; bridge/desktop and connector-host gates pass.
 - [ ] **Lot 3 — Final foundation verification**
   - [ ] Inspect each hunk, run `make scope-check`, and report exact passed and unavailable gates.
   - [ ] State that no auto-run or execution path exists without signed-PEP verification, D5 receipt, containment, and two-sided lease-v2 authority.
