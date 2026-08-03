@@ -3,12 +3,17 @@ import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
 import { coworkDeviceLeases, coworkDevices } from '../../db/schema';
 import { findActiveCoworkDevice, verifyCoworkSignature } from './device-identity';
+import { isNarrowCoworkKioskTarget } from './device-capabilities';
+import { signLeaseEnvelope, type ServerSignedLeaseEnvelope } from './lease-envelope';
 
 const LEASE_TTL_MS = 45_000;
 const PRESENCE_FRESHNESS_MS = 45_000;
 const IN_FLIGHT_STATUSES = ['issued', 'acknowledged'] as const;
 
-type LeaseScope = Record<string, unknown> | null;
+export type LeaseScope = {
+  capability: 'screen_capture' | 'input_action';
+  serverEnvelope: ServerSignedLeaseEnvelope;
+} | null;
 type LeaseStatus = 'issued' | 'acknowledged' | 'consumed' | 'expired' | 'revoked';
 
 export type LeaseResult =
@@ -35,8 +40,29 @@ export async function issueLease(input: {
   turnRef: string;
   scope: LeaseScope;
 }): Promise<LeaseResult> {
+  // C5a: no server-signed executable lease exists outside the isolated benign
+  // kiosk MVP.  This is the authoritative Option-B safety boundary.
+  if (process.env.NODE_ENV === 'production') return { ok: false, reason: 'not_issuable' };
+  const requestedCapability = input.scope?.capability;
+  if (requestedCapability !== 'screen_capture' && requestedCapability !== 'input_action') {
+    return { ok: false, reason: 'not_issuable' };
+  }
   const now = new Date();
   const expiresAt = new Date(now.getTime() + LEASE_TTL_MS);
+  const leaseId = crypto.randomUUID();
+  const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
+  let envelope: ServerSignedLeaseEnvelope;
+  try {
+    envelope = await signLeaseEnvelope({
+      leaseId,
+      capability: requestedCapability,
+      targetDeviceId: input.deviceId,
+      nonce,
+      expiry: expiresAt.toISOString(),
+    });
+  } catch {
+    return { ok: false, reason: 'not_issuable' };
+  }
 
   const result = await db.transaction(async (tx) => {
     await tx
@@ -52,7 +78,7 @@ export async function issueLease(input: {
     // concurrent revoke waits for this transaction rather than slipping between
     // eligibility and issuance.
     const eligibility = await tx.execute(sql`
-      SELECT d.id
+      SELECT d.id, d.capabilities
       FROM cowork_devices d
       JOIN cowork_device_presence p ON p.device_id = d.id
       WHERE d.id = ${input.deviceId}
@@ -63,7 +89,9 @@ export async function issueLease(input: {
         AND p.last_seen_at > ${new Date(now.getTime() - PRESENCE_FRESHNESS_MS)}
       FOR UPDATE OF d
     `);
-    if (eligibility.rows.length === 0) return { ok: false, reason: 'ineligible' } as LeaseResult;
+    if (eligibility.rows.length === 0 || !isNarrowCoworkKioskTarget(eligibility.rows[0]?.capabilities)) {
+      return { ok: false, reason: 'ineligible' } as LeaseResult;
+    }
 
     const [existing] = await tx
       .select()
@@ -79,12 +107,12 @@ export async function issueLease(input: {
     const [lease] = await tx
       .insert(coworkDeviceLeases)
       .values({
-        id: crypto.randomUUID(),
+        id: leaseId,
         deviceId: input.deviceId,
         userId: input.userId,
         turnRef: input.turnRef,
-        nonce: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url'),
-        scope: input.scope,
+        nonce,
+        scope: { capability: requestedCapability, serverEnvelope: envelope },
         status: 'issued',
         issuedAt: now,
         expiresAt,
