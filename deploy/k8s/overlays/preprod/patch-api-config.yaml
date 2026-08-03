@@ -18,3 +18,68 @@ data:
   # Public base URL for user-facing callbacks (magic-link login emails + Google
   # Drive OAuth redirect_uri base) — must be the preprod product host.
   AUTH_CALLBACK_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
+  # Rollout condition A for owner UAT of the Gmail/Drive MCP resource server (L4,
+  # PR #489). The surface is OFF by default (api/src/routes/api/mcp.ts reads this
+  # flag at request time and 404s the whole /api/v1/mcp/* prefix while disabled);
+  # enabling it exposes the RFC 9728 PRM well-known + the guarded /invoke and
+  # /resources/read routes. PREPROD ONLY — prod stays default-off.
+  # NOTE: this is an overlay-only (ConfigMap) change, so API_VERSION is unchanged
+  # (b98669) and no new image publish is required. `kubectl apply -k` updates the
+  # ConfigMap but does NOT restart the api pods on its own — a one-time
+  # `kubectl rollout restart deploy/api -n sentropic-preprod` is required to apply.
+  MCP_RESOURCE_SERVER_ENABLED: "true"
+  # RFC 8707 resource identifier for the MCP resource server. It MUST be pinned, and it MUST
+  # be byte-identical to the `resource_indicators` entry of the claude.ai connector's
+  # `oauth_clients` row — a mismatch is an `invalid_target` denial at the token endpoint.
+  #
+  # Pinned rather than left to the default, and NOT for the reason one would expect. The
+  # default (api/src/routes/api/mcp.ts:40) is `${resolveOAuthIssuer(request)}/api/v1/mcp`. The
+  # `api` ConfigMap does not set OAUTH_ISSUER_URL — only the separate auth-idp one does — so
+  # `resolveOAuthIssuer` falls through to the REQUEST origin (x-forwarded-host, oauth.ts:476).
+  # Behind the ingress that already yields the right host, so the default is not simply wrong.
+  #
+  # The hazard is that `getMcpAuth` memoises into `cachedMcp` on the FIRST call and never
+  # recomputes: the resource identifier of a pod is frozen to whatever the first request that
+  # touched the route happened to carry. A first request without x-forwarded-host — an internal
+  # probe, a direct ClusterIP call, a different ingress host — freezes a wrong identifier for
+  # the whole pod lifetime, and the failure is then intermittent across restarts rather than
+  # reproducible. Pinning the value makes it deterministic and independent of call order.
+  MCP_RESOURCE_URI: "https://preprod.sentropic.sent-tech.ca/api/v1/mcp"
+  # Issuer used ONLY when `resolveOAuthIssuer` is called with NO request (oauth.ts:79). Today the
+  # single request-less caller in the whole api is `getMcpAuth()` at mcp.ts:133,142 — invoked at
+  # ROUTE-REGISTRATION time, before any request exists — which memoises `cachedMcp` for the pod's
+  # lifetime. Without this key that call reaches the last fallback, `http://localhost:${PORT}`, and
+  # the PRM then advertises `authorization_servers: ["http://localhost:8787"]` — a dev-loopback
+  # address no external client (claude.ai) can reach. Verified live on preprod.
+  #
+  # WHY NOT `OAUTH_ISSUER_URL`, the obvious-looking knob: it sits at the TOP of the precedence
+  # chain (oauth.ts:77) and so overrides the issuer for EVERY consumer, not just MCP — including
+  # `federationCallbackUrl(resolveOAuthIssuer(c.req.raw), providerId)` (federation.ts:44,187,418),
+  # which builds the social-login `redirect_uri`. Setting it here would rewrite the Google/GitHub/
+  # Microsoft/Apple/Facebook callbacks to a host that is neither registered at those providers nor
+  # routed to this api: it would break social federation on preprod to fix MCP. `API_BASE_URL` is
+  # consulted ONLY on the request-less branch, so every request-bearing consumer keeps deriving the
+  # issuer from the request origin exactly as today.
+  #
+  # WHY THE PRODUCT HOST AND NOT THE auth-idp HOST: this api is itself an authorization server —
+  # it mounts `/.well-known` (well-known.ts:12 serves the RFC 8414 document) and `/api/v1/auth`
+  # (app.ts:193,195), and it owns the `oauth_clients` rows. `mcp.ts` states the co-location
+  # explicitly and validates tokens with a LOCAL key source (`fromJwksPort`), not a remote JWKS
+  # fetch. Pointing `authorization_servers` at preprod.auth.sent-tech.ca would advertise an issuer
+  # that does not mint these tokens, and the `iss` claim would no longer match.
+  API_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
+  # The authorization server the MCP resource server trusts — the standalone IdP, NOT this api.
+  #
+  # Measured, not assumed: `preprod.auth.sent-tech.ca` answers 200 on both
+  # /.well-known/openid-configuration and /.well-known/oauth-authorization-server, while the
+  # product host answers 404 on every /.well-known path. The reason is the ingress topology:
+  # `preprod.sentropic.sent-tech.ca` routes `/` to the `ui` service (overlays/preprod/ingress.yaml),
+  # and that nginx proxies ONLY `^/api/v1/.*` to the api (`ui/nginx/default.conf:22`). The api's
+  # own well-known router is therefore unreachable on the product host, so pointing MCP clients
+  # there gives them nothing to discover.
+  #
+  # This value is also the expected `iss` of every MCP access token (mcp-auth core.ts:158), which
+  # is consistent: the IdP mints them. Verification still uses the api's LOCAL key port — the IdP
+  # runs the same image against the same database and shares the JWKS rows and OAUTH_SIGNING_KEK
+  # (deploy/k8s/base/35-auth-idp.yaml), so those are the keys that signed the token.
+  MCP_AUTHORIZATION_SERVER_URL: "https://preprod.auth.sent-tech.ca"

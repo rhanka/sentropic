@@ -54,6 +54,30 @@ describe('OAuth well-known routes', () => {
     expect(payload.registration_endpoint).toBeUndefined();
   });
 
+  it('advertises the MCP scope grammar it can actually grant', async () => {
+    const res = await app.request(
+      'http://localhost:9197/.well-known/oauth-authorization-server',
+      { headers: { Origin: allowedOrigin } },
+    );
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { scopes_supported: string[] };
+
+    // A client that cross-checks its requested scopes against this list refuses one that is
+    // missing, even though `authorize` would have granted it — the grant is gated on the client's
+    // own allowlist (`authorize-handler.ts:358`), not on this document. Advertising a scope the AS
+    // can grant is what keeps the two consistent.
+    expect(payload.scopes_supported).toEqual(
+      expect.arrayContaining(['mcp:discover', 'mcp:resources:read', 'mcp:tools:invoke']),
+    );
+    // The OIDC core is still there — the MCP scopes are additive, not a replacement.
+    expect(payload.scopes_supported).toEqual(
+      expect.arrayContaining(['openid', 'profile', 'email']),
+    );
+    // No duplicates: the union is deduplicated, so a repeated value would signal the merge broke.
+    expect(new Set(payload.scopes_supported).size).toBe(payload.scopes_supported.length);
+  });
+
   it('mounts the advertised end_session endpoint (route reachable, not 404)', async () => {
     // The discovery doc advertises /api/v1/auth/oauth/end_session; assert the host actually wires
     // the GET route. An unauthenticated, navigation-style request returns the logged-out page (200),

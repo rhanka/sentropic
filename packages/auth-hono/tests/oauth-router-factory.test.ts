@@ -27,6 +27,36 @@ describe('OAuth router factories', () => {
     expect((await noPrefix.request('/oauth/token', { method: 'POST' })).status).toBe(404);
   });
 
+  it('advertises host-supplied scopes on top of the OIDC core, deduplicated', async () => {
+    const { ports } = await createOauthPorts();
+    const router = createWellKnownRouter({
+      issuer: 'http://localhost:9197',
+      ports,
+      // Deliberately repeats `openid` to pin the union behaviour: a host that lists a core scope
+      // must not produce a duplicate entry.
+      additionalScopesSupported: ['widget:read', 'openid'],
+    });
+
+    const payload = (await (await router.request('/openid-configuration')).json()) as {
+      scopes_supported: string[];
+    };
+
+    expect(payload.scopes_supported).toEqual(['openid', 'profile', 'email', 'widget:read']);
+  });
+
+  it('advertises only the OIDC core when the host supplies nothing', async () => {
+    const { ports } = await createOauthPorts();
+    const router = createWellKnownRouter({ issuer: 'http://localhost:9197', ports });
+
+    const payload = (await (await router.request('/openid-configuration')).json()) as {
+      scopes_supported: string[];
+    };
+
+    // This package is the generic OAuth core: it must never enumerate a resource server's scope
+    // vocabulary on its own. Only a host can add to this list.
+    expect(payload.scopes_supported).toEqual(['openid', 'profile', 'email']);
+  });
+
   it('keeps well-known routes separate from the OAuth subrouter', async () => {
     const { ports } = await createOauthPorts();
     const wellKnown = createWellKnownRouter({ issuer: 'http://localhost:9197', ports });

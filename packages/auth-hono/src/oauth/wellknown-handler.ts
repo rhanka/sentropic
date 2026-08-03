@@ -3,10 +3,24 @@ import { Hono } from 'hono';
 import type { AuthHonoPorts } from '../ports.js';
 import { createJwksService } from './jwks-service.js';
 
+/** The OIDC core scopes every deployment of this authorization server can grant. */
+export const DEFAULT_SCOPES_SUPPORTED: readonly string[] = Object.freeze(['openid', 'profile', 'email']);
+
 export interface CreateWellKnownRouterOptions {
   issuer: string;
   oauthPathPrefix?: string;
   ports: AuthHonoPorts;
+  /**
+   * Scope values this authorization server can grant, beyond the OIDC core (RFC 8414
+   * `scopes_supported`). Supplied by the HOST, never enumerated here: this package is the generic
+   * OAuth core and must not know the vocabularies of the resource servers built on top of it —
+   * the same separation `@sentropic/mcp-auth` keeps for its own scope grammar.
+   *
+   * A client that cross-checks the scopes it requests against this list is refused when a
+   * grantable scope is missing from it, so anything a deployment's clients are allowlisted for
+   * belongs here. Deduplicated, order preserved.
+   */
+  additionalScopesSupported?: readonly string[];
 }
 
 /**
@@ -19,6 +33,7 @@ export interface CreateWellKnownRouterOptions {
 export const buildAuthorizationServerMetadata = (
   issuer: string,
   oauthPrefix: string,
+  additionalScopesSupported: readonly string[] = [],
 ): Record<string, unknown> => ({
   authorization_endpoint: `${issuer}${oauthPrefix}/authorize`,
   // RFC 9207 (authorization-response `iss`): advertised so a mix-up-defending client (claude.ai)
@@ -36,7 +51,7 @@ export const buildAuthorizationServerMetadata = (
   prompt_values_supported: ['none', 'login', 'consent', 'select_account'],
   response_types_supported: ['code'],
   revocation_endpoint: `${issuer}${oauthPrefix}/revoke`,
-  scopes_supported: ['openid', 'profile', 'email'],
+  scopes_supported: [...new Set([...DEFAULT_SCOPES_SUPPORTED, ...additionalScopesSupported])],
   subject_types_supported: ['public'],
   token_endpoint: `${issuer}${oauthPrefix}/token`,
   token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
@@ -47,7 +62,11 @@ export const createWellKnownRouter = (options: CreateWellKnownRouterOptions): Ho
   const router = new Hono();
   const issuer = trimTrailingSlash(options.issuer);
   const oauthPrefix = normalizePathPrefix(options.oauthPathPrefix ?? '/api/v1/auth/oauth');
-  const metadata = buildAuthorizationServerMetadata(issuer, oauthPrefix);
+  const metadata = buildAuthorizationServerMetadata(
+    issuer,
+    oauthPrefix,
+    options.additionalScopesSupported ?? [],
+  );
 
   // OIDC Discovery + the RFC 8414 alias resolve to the identical metadata document.
   router.get('/openid-configuration', (c) => c.json(metadata));
