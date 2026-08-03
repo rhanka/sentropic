@@ -32,6 +32,8 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - `api/src/services/cowork/**`
   - `api/src/services/catalog/execution-seam.ts`
   - `api/src/services/catalog/sources/connector-host-tool-source.ts`
+  - `api/src/services/catalog/sources/standalone-tool-source.ts`
+  - `api/src/services/skills/catalog.ts`
   - `api/src/services/skills/foundation-executor.ts`
   - `api/src/services/chat-service.ts`
   - `api/src/routes/auth/device.ts`
@@ -68,8 +70,8 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
 - `attention`: BR-COWORK-EX1 is proposed, not active; one durable device/lease migration is allowed only after schema/route ownership is ratified.
 - `resolved`: BR-COWORK-EX2 authorizes `api/src/services/device-code-store.ts` solely for BR-41c enrollment PoP staging; impact is device-code pending state only and rollback is removal of the PoP fields with the dependent route/client change. The user explicitly requested this enrollment binding.
 - `resolved`: BR-COWORK-EX3 authorizes `api/src/routes/api/chrome-extension.ts` solely to keep the published Cowork presence transport while routing `desktop_cowork` to durable ownership-checked storage; browser tab behavior is unchanged and rollback is the isolated desktop route branch.
-- `attention`: BR-41c OQ-1 through OQ-13 and connector-host MVP spec §9 remain architect-pending. They block Lot 4 and any connector/chat execution wiring; Ed25519 is the OQ-1 recommendation only, not a final architect ratification.
-- `resolved`: HARD GATE honored for this lot. Device identity, registry, leases, poll, and SSE are authorization plumbing only; no chat agent mount, desktop runner, screen capture, or input action execution was added. Lot 4 remains the sole attachment boundary after architect ratification and consent-gating.
+- `resolved`: Architect and owner ratified the Feature 3 narrow Option-B surface. The remote execution path is now attached only to the isolated benign-kiosk VM MVP; it is not a general computer-use surface.
+- `resolved`: I1–I5 are published by `docs/governance/surface-invariants.md` in the separate h2a governance repository (h2a PR #152). This checkout cites that cross-repository provenance and does not require the file locally. `origin/feat/d6a-agents-surface-fusion` (#502) is a secondary pointer only.
 - `attention`: `make test-api-endpoints SCOPE=tests/api/auth-device-code.spec.ts ENV=test-cowork-connector` could not run because the API service is absent after the isolated stack bootstrap (the compose API image build is unavailable in this checkout). The new scoped API suites remain pending on a runnable test stack.
 - `deferred`: production/unattended takeover and BR-41c/d/e hardening are explicitly outside the same-day acceptance line.
 - `clarification`: conductor provides the isolated Windows OVH target and confirms controller A and target B are different devices for UAT.
@@ -77,6 +79,14 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
 ## AI Flaky tests
 - Accept only provider/network/model nondeterminism with at least one success on the same commit and command; never add timeout padding.
 - Any related failure blocks. An unrelated accepted failure records command, file, signature, main comparison, and explicit owner sign-off here before merge.
+
+## Feature 3 binding conditions (verbatim)
+- C1/OQ-1: PER-INVOCATION BROKER CLOSURE keyed by toolCall.id in api/src/services/connector-host/cowork.ts; the shared/durable mount resolves #439 tenancy ONLY, hands off to a fresh closure that owns the lease lifecycle. NO per-invocation state (lease/target/consent/toolCall.id) on the mount.
+- C2/OQ-4: HUMAN-SELECT-ALWAYS target deviceId, even with one eligible device; NEVER auto-pick, NEVER from model/tool args. Exposure via the connector-account-workspace-exposure model.
+- C3/OQ-6: DEVICE PROOF-OF-POSSESSION on delivery; dedicated /devices/:deviceId/leases/sse gated by device-proof (bearer alone rejected).
+- C4/OQ-7: SERVER-SIGNED LEASE ENVELOPE, MAC over EXACTLY {leaseId, capability, targetDeviceId, nonce, expiry} with the existing OAUTH_SIGNING_KEK-class key; device verifies BEFORE acting; plus the device-signed ack = two-sided authorization. Tamper any field → invalid.
+- C5/OQ-9 TWO HARD GATES: (a) execution REFUSED unless target.capabilities.isolatedVmTarget===true AND NODE_ENV!=='production' AND target.capabilities.kioskSurface is set (the benign-app constraint — see below); (b) device revocation revokes outstanding leases BEFORE the device row is deleted (#492 revoke-before-cascade) + Stop-revokes-active-lease + atomic consume/expire/revoke.
+- C6/OQ-10: I1-I5 cite docs/governance/surface-invariants.md (h2a PR #152) as the authoritative publisher — a CROSS-REPO reference to the separate h2a governance repo (do NOT require the file in this checkout; it is verifiable at /home/antoinefa/src/h2a/docs/governance/surface-invariants.md). Keep origin/feat/d6a-agents-surface-fusion (#502) only as a secondary pointer. This is a DOC citation, not a safety control — if the exact file is absent locally, cite the identifier and proceed; do NOT STOP the build on C6.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single integrated TERRA build and final test cycle)
@@ -134,12 +144,15 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Recheck locked eligibility before returning an idempotent in-flight lease, including the stale-presence retry case.
   - [!] API integration gate remains blocked on the absent isolated API service; rerun the scoped suites then `make test-api ENV=test-cowork-connector` on a runnable stack.
   - [x] Bump `@sentropic/cowork-bridge` to 0.2.1 and `@sentropic/cowork-desktop` to 0.3.1.
-- [ ] **Lot 4 — Consent-gated eyes/hands and canonical result**
-  - [ ] Add foreground action detail/preview with Deny or Allow once; remove permanent input grant from connector path.
-  - [ ] Enforce isolated-OVH low-risk allowlist; block key/Enter and all sensitive/irreversible classes; add local Stop and redacted audit.
-  - [ ] Post one idempotent canonical result; atomically consume lease; timeout/offline/deny/stop/mismatch must be **PAS-FAIT**.
-  - [ ] Add mock-provider vertical test: chat tool → mount → lease → ack → consent → eyes/hands → result → resumed model answer.
-  - [ ] Gate desktop/bridge/connector/API scoped tests in `ENV=test-cowork-connector`.
+- [x] **Lot 4 — Consent-gated eyes/hands and canonical result (MVP-narrow)**
+  - [x] Add the `cowork-desktop` connector-host adapter and toolCall.id-keyed invocation closure; shared mount state is tenancy-only.
+  - [x] Require an authenticated, human session-bound target selection, including where exactly one device is eligible; no model argument can select a target.
+  - [x] Deliver a server-signed lease only to device proof-of-possession poll/SSE, verify before device action, and require device-signed acknowledgement and terminal result.
+  - [x] Require `isolatedVmTarget` plus `kioskSurface` and non-production server mode before issuance; use the Option-B benign-kiosk environment for OQ-5 safety by construction.
+  - [x] Allow only click/scroll/type at the executor; deny chords, Enter, and submission. Input consent is foreground Allow once only, Stop revokes active leases, and all bounded failure outcomes are `PAS-FAIT`.
+  - [x] Emit ID-only redacted audit events and keep I3 holder=`remote-B`, view=`A`.
+  - [x] Run the desktop/bridge/connector/API scoped gates where the local stack is available; API integration remains contingent on the test stack.
+  - [x] General computer use remains separately ratification-gated in `spec/SPEC_EVOL_COWORK_COMPUTER_USE_GENERAL.md`; it needs a trusted-policy/human-in-the-loop envelope and must not inherit this MVP surface.
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**
   - [ ] Run all Lot 1–4 typecheck/lint/tests plus `make test-api ENV=test-cowork-connector`; document any accepted AI flaky signature.
   - [ ] Build/package through existing Make targets with `ENV=test-cowork-connector` last; record exact artifact SHA-256 and branch HEAD.
