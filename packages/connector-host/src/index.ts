@@ -1,4 +1,5 @@
 export { mountConnectorHost } from './mount.js';
+export { createCoworkGeneralAdapter, coworkGeneralManifest } from './cowork.js';
 export type {
   ConnectorHostDriver,
   ConnectorHostExposurePolicy,
@@ -17,3 +18,4 @@ export type {
   TenantWorkspaceResolutionDeny,
   TenantWorkspaceResolver,
 } from './ports.js';
+export type { CoworkBrokerClosure, CoworkBrokerFactory, CoworkBrokerResult, CoworkTrustedInvocation } from './cowork.js';

@@ -14,6 +14,7 @@ import type {
   ConnectorHostPorts,
   TenantWorkspaceResolution,
 } from './ports.js';
+import type { CoworkTrustedInvocation } from './cowork.js';
 
 export type ConnectorHostRequest = {
   sessionPrincipalSub: string;
@@ -22,6 +23,8 @@ export type ConnectorHostRequest = {
   capabilityRef: string;
   input: unknown;
   hints?: Record<string, unknown>;
+  /** Server-created context, never derived from tool arguments or hints. */
+  coworkTrustedInvocation?: CoworkTrustedInvocation;
 };
 
 export type ConnectorHostExposurePolicy = {
@@ -113,6 +116,7 @@ function createHostContext(
   ports: ConnectorHostPorts,
   resolution: TenantWorkspaceResolution,
   account: AccountResolution,
+  coworkTrustedInvocation?: CoworkTrustedInvocation,
 ): StpConnectorContext {
   const auditId = `connector-host:${account.enrollmentRef}`;
   const requestId = auditId;
@@ -137,7 +141,7 @@ function createHostContext(
     connectorInstanceId: account.connectorInstanceId,
     consentRefs: [],
     grantRefs: [],
-    connectorConfig: {},
+    connectorConfig: coworkTrustedInvocation ? { coworkTrustedInvocation } : {},
     audit: ports.audit,
     logger: { log: () => undefined },
     async getSecret(name: string): Promise<string> {
@@ -224,7 +228,7 @@ async function resolveInvocation(
   });
   if (isDenied(account)) return { missing: true };
 
-  const ctx = createHostContext(options.ports, resolution, account);
+  const ctx = createHostContext(options.ports, resolution, account, request.coworkTrustedInvocation);
 
   const tenantContext = await adapter.resolveTenant({
     principalSub: resolution.principalSub,
