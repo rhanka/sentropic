@@ -131,6 +131,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Implement BR-41c foundation: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [x] Implement device-filtered notify and ownership-checked device-scoped poll fallback; connector bounded await remains deferred to Lot 4.
   - [x] Add tests for restart-safe DB reads, wrong owner/device, stale presence, duplicate/replay, expiry/revoke, and filtered poll/SSE delivery.
+  - [x] Recheck locked eligibility before returning an idempotent in-flight lease, including the stale-presence retry case.
   - [!] API integration gate remains blocked on the absent isolated API service; rerun the scoped suites then `make test-api ENV=test-cowork-connector` on a runnable stack.
   - [x] Bump `@sentropic/cowork-bridge` to 0.2.1 and `@sentropic/cowork-desktop` to 0.3.1.
 - [ ] **Lot 4 — Consent-gated eyes/hands and canonical result**

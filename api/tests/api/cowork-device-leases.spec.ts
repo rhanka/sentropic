@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
-import { coworkDeviceLeases, coworkDevices } from '../../src/db/schema';
+import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../src/db/schema';
 import { listIssuedLeases } from '../../src/services/cowork/device-lease-service';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { seedCoworkDevice } from '../utils/cowork-device';
@@ -56,6 +56,14 @@ describe('Cowork device authorization leases', () => {
     expect(rows).toHaveLength(1);
     const reopenedRead = await listIssuedLeases(user.id, device.deviceId);
     expect(reopenedRead?.map((row) => row.id)).toContain(first.payload.lease.leaseId);
+  });
+
+  it('fails closed on an idempotent retry after presence becomes stale', async () => {
+    const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    expect((await issue(device.deviceId, 'turn-stale-retry')).response.status).toBe(201);
+    await db.update(coworkDevicePresence).set({ lastSeenAt: new Date(Date.now() - 46_000) })
+      .where(eq(coworkDevicePresence.deviceId, device.deviceId));
+    expect((await issue(device.deviceId, 'turn-stale-retry')).response.status).toBe(403);
   });
 
   it('rejects cross-device, expired, replayed, and revoked acknowledgements', async () => {
