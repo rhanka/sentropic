@@ -1071,6 +1071,70 @@
       "defaultTitle": "Conversation {id}",
       "confirmDelete": "Supprimer cette conversation ?"
     },
+    "agents": {
+      "kind": {
+        "agent": "Agent",
+        "session": "Conversation",
+        "remote": "Connexion distante",
+        "job": "Tâche",
+        "run": "Exécution"
+      },
+      "status": {
+        "awaiting-input": "En attente de votre réponse",
+        "running": "En cours",
+        "active": "Active",
+        "failed": "En échec",
+        "done": "Terminée",
+        "idle": "Inactive"
+      },
+      "connection": {
+        "connected": "Connecté",
+        "disconnected": "Déconnecté",
+        "unknown": "Connexion inconnue"
+      },
+      "workspace": {
+        "unknown": "Espace de travail inconnu"
+      },
+      "activity": {
+        "unknown": "Activité inconnue",
+        "compact": {
+          "second": "{value}s",
+          "minute": "{value}min",
+          "hour": "{value}h",
+          "day": "{value}j"
+        }
+      },
+      "list": {
+        "label": "Conversations et tâches"
+      },
+      "pending-question": "En attente de votre réponse",
+      "children": "Éléments enfants",
+      "empty": {
+        "title": "Aucune conversation ni tâche",
+        "message": "Vos conversations et vos tâches apparaîtront ici."
+      },
+      "actions": {
+        "label": "Actions",
+        "trigger": "Ouvrir le menu des actions"
+      },
+      "action": {
+        "stop": "Arrêter",
+        "delete": "Supprimer",
+        "view": "Afficher",
+        "cancel": "Annuler",
+        "retry": "Réessayer",
+        "failed": "Impossible de {action} la tâche."
+      },
+      "scope": {
+        "allWorkspaces": "Tous les espaces de travail",
+        "unavailable": "La vue de tous les espaces de travail sera disponible lorsque l’API inter-espaces existera."
+      },
+      "back": "Retour aux conversations",
+      "view": {
+        "conversation": "Conversation ouverte",
+        "list": "Liste des conversations ouverte"
+      }
+    },
     "checkpoints": {
       "create": "Créer un checkpoint",
       "restoreLatest": "Restaurer le dernier checkpoint",

@@ -1,7 +1,7 @@
 {
   "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes.",
   "_generated": "2026-07-25",
-  "_version": "0.30.0",
+  "_version": "0.33.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -461,6 +461,12 @@
       "exists": true,
       "_propSnapshot": "Props: displayMode? (ChatWidgetDisplayMode), hostMode? (ChatWidgetHostMode), isExtensionOverlayHost? (boolean), initialOpen? (boolean), contentOverflowVisible? (boolean), isBrowser? (boolean), placementMenu? (ChatPlacementMenu, surfaces L1c-menu — drives the dialog container's placement classes from placementMenu.current() ONLY where the menu may own placement per canChatPlacementMenuOwnPlacement; a sidepanel host, a Chrome extension overlay and a mobile viewport force their own mode and ignore it. Undefined = zero change. ChatDock renders NO trigger/popup UI itself — hosts mount ChatPlacementMenuButton separately, e.g. in their own header toolbar), containerClass? (string), containerStyle? (string), dialogClass? (string), dialogId? (string), dialogAriaLabel? (string), renderBubble? (Snippet<[{toggle,isOpen}]>), renderContent? (Snippet<[{isDocked,isMobileViewport}]>), onClose? (fn), onDialogKeyDown? (fn), onOpenChange? (fn), onDisplayModeChange? (fn). Bindable: dialogEl, bubbleButtonEl, isOpen, isDocked, isMobileViewportBound. Instance methods: toggle(), open(), close()."
     },
+    "./components/AgentsList.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/AgentsList.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: rows? (AgentsListRow[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn), onAction? (fn), formatRelative? (fn)."
+    },
     "./components/ChatPlacementMenuButton.svelte": {
       "kind": "svelte",
       "file": "dist/components/ChatPlacementMenuButton.svelte",
@@ -748,7 +754,7 @@
       "kind": "svelte",
       "file": "dist/components/ChatSessionsBar.svelte",
       "exists": true,
-      "_propSnapshot": "Props: sessions? (ChatWidgetSession[]), sessionId? (string|null), loading? (boolean), barLabels (SessionsBarLabels), labels? (translator), onNewSession?/onConfirmDelete? (callbacks), deleteConfirmPending? (bindable boolean), deleteInFlight? (boolean), renderSessionsMenu? (Snippet), renderPlusIcon?/renderTrashIcon? (Snippets)"
+      "_propSnapshot": "Props: sessions? (ChatWidgetSession[]), sessionId? (string|null), loading? (boolean), barLabels (SessionsBarLabels), labels? (translator), onNewSession?/onBack?/onConfirmDelete? (callbacks), backLabel? (string), deleteConfirmPending? (bindable boolean), deleteInFlight? (boolean), renderSessionsMenu? (Snippet), renderPlusIcon?/renderTrashIcon? (Snippets)"
     },
     "./state/chatSessionHydration": {
       "kind": "ts",

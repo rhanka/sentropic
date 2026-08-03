@@ -3,7 +3,20 @@
   import type { ContextProvider } from '@sentropic/cowork-bridge/core';
   import { _ } from 'svelte-i18n';
   import { initApiClient } from '@sentropic/cowork-bridge/core';
-  import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
+  import {
+    queueStore,
+    loadJobs,
+    updateJob,
+    addJob,
+    cancelJob,
+    retryJob,
+    deleteJob,
+  } from '$lib/stores/queue';
+  import {
+    compactAgentsActivity,
+    projectAgentsFeed,
+    queueJobsToAppJobs,
+  } from '$lib/chat/agents-feed-adapter';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import {
@@ -27,6 +40,7 @@
     List,
     Settings,
   } from '@lucide/svelte';
+  import { IconButton } from '@sentropic/design-system-svelte';
   import type { ChatWidgetDisplayMode } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
   import {
@@ -54,9 +68,14 @@
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
+  import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte';
   import ChatPlacementDropZones from '@sentropic/chat-ui/components/ChatPlacementDropZones.svelte';
   import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
+  import {
+    buildAgentsListRows,
+    type AgentsListRow,
+  } from '@sentropic/chat-ui/state/agentsSort';
   import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
   import {
     createChatPlacementMenu,
@@ -91,6 +110,8 @@
     title?: string | null;
     primaryContextType?: string | null;
     primaryContextId?: string | null;
+    createdAt?: string;
+    updatedAt?: string | null;
   };
   let chatPanelRef: any = null;
   let chatSessions: ChatSession[] = [];
@@ -98,6 +119,20 @@
   let chatLoadingSessions = false;
   let activeChatSession: ChatSession | null = null;
   let pendingChatSessionDeleteConfirm = false;
+  // Default-on-open view (owner decision 2026-07-30, "option 3"): land on the
+  // conversation for continuity, and only land on the LIST when there are
+  // sessions to choose from but none is active. A fresh open with no sessions
+  // goes straight to the composer — an empty list would be a dead end, and it
+  // preserves the established "open chat → type" flow the whole app relies on.
+  // Full screen uses this pager as an interim. R11 will replace it with a
+  // persistent repositionable side column; sidePreference() belongs there,
+  // never in this navigation direction.
+  let agentsView: 'list' | 'conversation' = 'conversation';
+  let agentsViewInitializedForOpen = false;
+  let agentsRows: AgentsListRow[] = [];
+  let canAgentsListBeDefaultView = false;
+  let agentsListReturnFocusId: string | null = null;
+  let agentsViewAnnouncement = '';
   let commentContext: {
     type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
@@ -444,6 +479,32 @@
       isExtensionOverlayHost,
       isMobileViewport,
     });
+  $: canAgentsListBeDefaultView = canChatPlacementMenuOwnPlacement({
+    hostMode,
+    isExtensionOverlayHost,
+    isMobileViewport,
+  });
+  // Rising-edge initializer: pick the default view ONCE each time the dialog
+  // opens, then leave agentsView entirely to user navigation (select / back).
+  // A derived value would fight the back button (chatSessionId stays set), so
+  // this must be an edge, not a continuous binding.
+  $: if (isVisible) {
+    if (!agentsViewInitializedForOpen) {
+      agentsViewInitializedForOpen = true;
+      agentsView =
+        chatSessionId != null || chatSessions.length === 0 ? 'conversation' : 'list';
+    }
+  } else {
+    agentsViewInitializedForOpen = false;
+  }
+  $: agentsRows = buildAgentsListRows(
+    projectAgentsFeed({
+      sessions: chatSessions,
+      jobs: queueJobsToAppJobs($queueStore.jobs),
+      jobLabel: agentsJobLabel,
+      workspaceLabel: $workspaceScope.items.find((w) => w.id === $workspaceScope.selectedId)?.name,
+    }),
+  );
   let closeButtonEl: HTMLButtonElement | null = null;
   let isBrowserReady = false;
 
@@ -1942,6 +2003,95 @@
     chatSessionId = null;
   };
 
+  const agentsJobLabel = (job: { type: string }): string => {
+    const labelKey = {
+      organization_batch_create: 'queueMonitor.type.organizationBatchCreate',
+      organization_enrich: 'queueMonitor.type.organizationEnrich',
+      organization_targets_join: 'queueMonitor.type.organizationTargetsJoin',
+      matrix_generate: 'queueMonitor.type.matrixGenerate',
+      usecase_list: 'queueMonitor.type.usecaseList',
+      initiative_list: 'queueMonitor.type.usecaseList',
+      usecase_detail: 'queueMonitor.type.usecaseDetail',
+      initiative_detail: 'queueMonitor.type.usecaseDetail',
+      executive_summary: 'queueMonitor.type.executiveSummary',
+      document_summary: 'queueMonitor.type.documentSummary',
+      chat_message: 'queueMonitor.type.chatMessage',
+      docx_generate: 'queueMonitor.type.docxGenerate',
+    }[job.type];
+
+    return labelKey ? $_(labelKey) : job.type;
+  };
+
+  const formatAgentsRelative = (epochMs: number): string => {
+    const activity = compactAgentsActivity(epochMs);
+    if (!activity) return $_('chat.agents.activity.unknown');
+    return $_(`chat.agents.activity.compact.${activity.unit}`, {
+      values: { value: activity.value },
+    });
+  };
+
+  const focusConversationHeading = async () => {
+    await tick();
+    dialogEl?.querySelector<HTMLElement>('[data-chat-sessions-heading]')?.focus();
+  };
+
+  const focusAgentsListRow = async () => {
+    await tick();
+    if (!agentsListReturnFocusId || !dialogEl) return;
+    const row = Array.from(
+      dialogEl.querySelectorAll<HTMLElement>('[data-agent-entry-id]'),
+    ).find((entry) => entry.dataset.agentEntryId === agentsListReturnFocusId);
+    row?.querySelector<HTMLElement>('[role="option"]')?.focus();
+  };
+
+  const showAgentsConversation = (returnFocusId?: string) => {
+    if (returnFocusId) agentsListReturnFocusId = returnFocusId;
+    agentsView = 'conversation';
+    agentsViewAnnouncement = $_('chat.agents.view.conversation');
+  };
+
+  const returnToAgentsList = () => {
+    agentsView = 'list';
+    agentsViewAnnouncement = $_('chat.agents.view.list');
+    void focusAgentsListRow();
+  };
+
+  const handleSelectAgentsEntry = async (entryId: string) => {
+    if (!chatSessions.some((session) => session.id === entryId)) return;
+    showAgentsConversation(entryId);
+    await handleSelectSession(entryId);
+    void focusConversationHeading();
+  };
+
+  const handleAgentsAction = async (entryId: string, action: string) => {
+    if (entryId.startsWith('job:')) {
+      const jobId = entryId.slice('job:'.length);
+      try {
+        if (action === 'cancel') await cancelJob(jobId);
+        else if (action === 'retry') await retryJob(jobId);
+        else if (action === 'delete') await deleteJob(jobId);
+        else return;
+        await loadJobs();
+      } catch (error) {
+        console.error('Unable to update agents list job:', error);
+        addToast({
+          type: 'error',
+          message: $_('chat.agents.action.failed', {
+            values: { action: $_(`chat.agents.action.${action}`) },
+          }),
+        });
+      }
+      return;
+    }
+
+    if (action === 'delete') {
+      showAgentsConversation(entryId);
+      pendingChatSessionDeleteConfirm = true;
+      await handleSelectSession(entryId);
+      await focusConversationHeading();
+    }
+  };
+
   const onJobUpdate = (evt: any) => {
     if (evt?.type !== 'job_update') return;
     const data = evt.data ?? {};
@@ -3114,10 +3264,50 @@
             </div>
           {/if}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
-            <!-- Gold shell adoption (S6b): sessions bar renders via the
-                 @sentropic/chat-ui ChatSessionsBar component; the host keeps the
-                 popover menu (MenuPopover) and icons as snippets. -->
-            {#snippet renderChatSessionsMenu(p: {
+            {#if canAgentsListBeDefaultView && agentsView === 'list'}
+              <section
+                class="h-full min-h-0 flex flex-col"
+                class:chat-agents-view-slide-from-inline-start={agentsView === 'list'}
+              >
+                <div class="shrink-0 p-3">
+                  <!-- F1: the working "all workspaces" toggle ships with the additive
+                       GET /sessions?scope=all endpoint (dedicated branch, architect-co-signed).
+                       Interim: no toggle, and NEVER a dev-state message in an end-user surface. -->
+                  <div class="flex items-center justify-end gap-3">
+                    <IconButton
+                      size="sm"
+                      aria-label={$_('chat.sessions.new')}
+                      title={$_('chat.sessions.new')}
+                      onclick={() => {
+                        showAgentsConversation(chatSessionId ?? undefined);
+                        handleNewSession();
+                      }}
+                    >
+                      <Plus class="w-4 h-4" />
+                    </IconButton>
+                  </div>
+                </div>
+                <div class="min-h-0 flex-1 overflow-y-auto p-3">
+                  <AgentsList
+                    rows={agentsRows}
+                    activeId={chatSessionId ?? undefined}
+                    onSelect={handleSelectAgentsEntry}
+                    onAction={handleAgentsAction}
+                    labels={(key: string) => $_(key)}
+                    formatRelative={formatAgentsRelative}
+                  />
+                </div>
+              </section>
+            {/if}
+            <div
+              class="h-full min-h-0 flex flex-col"
+              class:hidden={canAgentsListBeDefaultView && agentsView === 'list'}
+              class:chat-agents-view-slide-from-inline-end={canAgentsListBeDefaultView && agentsView === 'conversation'}
+            >
+              <!-- Gold shell adoption (S6b): sessions bar renders via the
+                       @sentropic/chat-ui ChatSessionsBar component; the host keeps the
+                       popover menu (MenuPopover) and icons as snippets. -->
+              {#snippet renderChatSessionsMenu(p: {
               sessions: readonly { id: string; title?: string | null }[];
               sessionId: string | null;
               loading: boolean;
@@ -3185,12 +3375,14 @@
               }}
               labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
               onNewSession={handleNewSession}
+              onBack={canAgentsListBeDefaultView ? returnToAgentsList : undefined}
+              backLabel={$_('chat.agents.back')}
               bind:deleteConfirmPending={pendingChatSessionDeleteConfirm}
               onConfirmDelete={async () => {
                 pendingChatSessionDeleteConfirm = false;
                 await chatPanelRef?.deleteCurrentSession?.();
               }}
-              renderSessionsMenu={renderChatSessionsMenu}
+              renderSessionsMenu={canAgentsListBeDefaultView ? undefined : renderChatSessionsMenu}
               renderPlusIcon={renderSessionsPlusIcon}
               renderTrashIcon={renderSessionsTrashIcon}
             />
@@ -3205,6 +3397,10 @@
                   {contextStore}
                 />
               {/if}
+            </div>
+            </div>
+            <div class="sr-only" aria-live="polite" aria-atomic="true">
+              {agentsViewAnnouncement}
             </div>
           </div>
         {/if}
@@ -3254,3 +3450,47 @@
     labelForPlacement={placementDragZoneLabel}
   />
 {/if}
+
+<style>
+  .chat-agents-view-slide-from-inline-start,
+  .chat-agents-view-slide-from-inline-end {
+    position: relative;
+    animation-duration: 180ms;
+    animation-timing-function: ease-out;
+  }
+
+  .chat-agents-view-slide-from-inline-start {
+    animation-name: chat-agents-view-slide-from-inline-start;
+  }
+
+  .chat-agents-view-slide-from-inline-end {
+    animation-name: chat-agents-view-slide-from-inline-end;
+  }
+
+  @keyframes chat-agents-view-slide-from-inline-start {
+    from {
+      inset-inline-start: -24px;
+    }
+
+    to {
+      inset-inline-start: 0;
+    }
+  }
+
+  @keyframes chat-agents-view-slide-from-inline-end {
+    from {
+      inset-inline-end: -24px;
+    }
+
+    to {
+      inset-inline-end: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-agents-view-slide-from-inline-start,
+    .chat-agents-view-slide-from-inline-end {
+      animation: none;
+    }
+  }
+</style>
