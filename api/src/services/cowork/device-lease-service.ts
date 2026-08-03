@@ -48,17 +48,6 @@ export async function issueLease(input: {
         eq(coworkDeviceLeases.status, 'issued'),
         lte(coworkDeviceLeases.expiresAt, now),
       ));
-    const [existing] = await tx
-      .select()
-      .from(coworkDeviceLeases)
-      .where(and(
-        eq(coworkDeviceLeases.deviceId, input.deviceId),
-        eq(coworkDeviceLeases.turnRef, input.turnRef),
-        inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
-      ))
-      .limit(1);
-    if (existing) return { ok: true, lease: toLease(existing) } as LeaseResult;
-
     // Lock the device while checking presence and inserting the lease. A
     // concurrent revoke waits for this transaction rather than slipping between
     // eligibility and issuance.
@@ -75,6 +64,17 @@ export async function issueLease(input: {
       FOR UPDATE OF d
     `);
     if (eligibility.rows.length === 0) return { ok: false, reason: 'ineligible' } as LeaseResult;
+
+    const [existing] = await tx
+      .select()
+      .from(coworkDeviceLeases)
+      .where(and(
+        eq(coworkDeviceLeases.deviceId, input.deviceId),
+        eq(coworkDeviceLeases.turnRef, input.turnRef),
+        inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
+      ))
+      .limit(1);
+    if (existing) return { ok: true, lease: toLease(existing) } as LeaseResult;
 
     const [lease] = await tx
       .insert(coworkDeviceLeases)
