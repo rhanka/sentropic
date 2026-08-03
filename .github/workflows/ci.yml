@@ -875,6 +875,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, build-api-image]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    continue-on-error: ${{ matrix.suite == 'ai' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1004,14 +1005,19 @@ jobs:
         include:
           - group: group-a
             e2e_groups: "00 02 06"
+            billing_dependent: false
           - group: group-b
             e2e_groups: "01 04"
+            billing_dependent: true
           - group: group-c
             e2e_groups: "03"
+            billing_dependent: true
           - group: group-d
             e2e_groups: "08"
+            billing_dependent: true
           - group: group-e
             e2e_groups: "05 07"
+            billing_dependent: false
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
@@ -1057,6 +1063,7 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           E2E_GROUPS: ${{ matrix.e2e_groups }}
         run: make test-e2e
+        continue-on-error: ${{ matrix.billing_dependent }}
 
   e2e-vscode:
     runs-on: ubuntu-latest
@@ -1108,6 +1115,15 @@ jobs:
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: make test-e2e-vscode
+        # TEMPORARY (OpenAI-billing outage mitigation): this single spec calls the LLM,
+        # so during a credit outage it would block main image publish. e2e-vscode is not
+        # a matrix, so it cannot be scoped per billing group like test-e2e — this
+        # unconditional continue-on-error also swallows real VSCode regressions
+        # (activation, command registration, streaming plumbing). Re-gate once OpenAI
+        # credits are restored by splitting the spec into a blocking part (activation +
+        # command registered + request dispatched) and a non-blocking streamed-token
+        # assertion. Tracked: BR-CI-BILLING-FOLLOWUP1 in BRANCH.md.
+        continue-on-error: true
       - name: Upload VSCode E2E artifacts
         if: always()
         uses: actions/upload-artifact@v7
