@@ -16,6 +16,7 @@ import {
   resolveGoogleDriveFileMetadata,
 } from '../../services/google-drive-client';
 import { buildGoogleDrivePickerConfig } from '../../services/google-drive-picker';
+import { completeGmailOAuthCallback } from './gmail';
 import {
   appendGoogleDriveOAuthResultToReturnPath,
   exchangeGoogleDriveOAuthCode,
@@ -234,6 +235,10 @@ googleDriveRouter.get('/oauth/callback', async (c) => {
     state = verifyGoogleDriveOAuthState(rawState);
   } catch (error) {
     return c.json({ message: toErrorMessage(error, 'Invalid Google Drive OAuth state') }, 400);
+  }
+
+  if (state.provider === 'gmail') {
+    return completeGmailOAuthCallback({ c, user, state, requestApiBaseUrl, json });
   }
 
   if (state.userId !== user.userId || !(await ensureWorkspace(user, state.workspaceId))) {

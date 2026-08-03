@@ -131,21 +131,21 @@ describe('§11 Consent persistence (§6.3)', () => {
 });
 
 describe('§11 Enrollment persistence (§6.3, fix F1 across restart)', () => {
-  it('a revoked enrollment persists → authorizeRequest denies no_enrollment after restart', () => {
+  it('a revoked enrollment persists → authorizeRequest denies no_enrollment after restart', async () => {
     const path = tmpPath();
     const tenants = new InMemoryTenantRegistry({ store: new PersistentEnrollmentStore(new FileRecordStore<ConnectorEnrollment>(path)) });
     tenants.enroll('user-1', CONN, 'tenant-a');
     tenants.setEnrollmentState('user-1', CONN, 'tenant-a', 'revoked');
 
     const restartedTenants = new InMemoryTenantRegistry({ store: new PersistentEnrollmentStore(new FileRecordStore<ConnectorEnrollment>(path)) });
-    expect(restartedTenants.authorizedTenants('user-1', CONN)).toEqual([]); // fail-closed
+    await expect(restartedTenants.authorizedTenants('user-1', CONN)).resolves.toEqual([]); // fail-closed
 
     const issuer = new MockOidcIssuer();
     const consents = new InMemoryConsentRegistry();
     consents.grant(grant());
     const caps = new Map<string, AppCapability>([[fakeManifest.resources[0].name, fakeManifest.resources[0]]]);
     const token = issuer.issue({ sub: 'user-1', aud: 'https://rs.mcp.test', scope: ['widgets:read'], tid: 'tenant-a', now: T }).token;
-    const r = authorizeRequest(
+    const r = await authorizeRequest(
       { token, capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T },
       { issuer, resourceAudience: 'https://rs.mcp.test', expectedIssuer: issuer.issuer, capabilities: caps, tenantResolver: restartedTenants, consentResolver: consents },
     );

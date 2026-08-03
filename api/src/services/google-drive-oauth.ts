@@ -17,7 +17,7 @@ export const GOOGLE_DRIVE_OAUTH_CLIENT_SECRET_SETTING_KEY = 'google_drive_oauth_
 export const GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY =
   'google_drive_oauth_callback_base_url';
 
-const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
+export const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 const REVOKE_TIMEOUT_MS = 5_000;
@@ -30,6 +30,8 @@ export type GoogleDriveOAuthConfig = {
   redirectUri: string;
 };
 
+export type GoogleOAuthStateProvider = 'google-drive' | 'gmail';
+
 export type GoogleDriveOAuthStatePayload = {
   userId: string;
   workspaceId: string;
@@ -37,6 +39,7 @@ export type GoogleDriveOAuthStatePayload = {
   returnPath: string;
   iat: number;
   exp: number;
+  provider?: GoogleOAuthStateProvider;
 };
 
 export type GoogleDriveOAuthStartResult = {
@@ -114,6 +117,9 @@ const normalizeReturnPath = (value: unknown): string => {
   return raw;
 };
 
+const normalizeOAuthStateProvider = (value: unknown): GoogleOAuthStateProvider =>
+  normalizeText(value) === 'gmail' ? 'gmail' : 'google-drive';
+
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
 const isProductionRuntime = (): boolean =>
@@ -149,7 +155,7 @@ export const resolveGoogleDriveOAuthClientId = async (): Promise<string | null> 
     ),
   );
 
-const resolveCallbackBaseUrl = async (
+export const resolveCallbackBaseUrl = async (
   options: { requestApiBaseUrl?: string | null } = {},
 ): Promise<string | null> => {
   const setting = await settingsService.get(GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY, {
@@ -195,7 +201,7 @@ export const resolveGoogleDriveAppReturnBaseUrl = (
   return derived && isLoopbackCallbackBaseUrl(normalized) ? derived : normalized;
 };
 
-const resolveClientSecret = async (): Promise<string | null> => {
+export const resolveClientSecret = async (): Promise<string | null> => {
   const envSecret =
     normalizeOptionalText(process.env.GOOGLE_DRIVE_CLIENT_SECRET) ||
     normalizeOptionalText(env.GOOGLE_CLIENT_SECRET);
@@ -273,6 +279,7 @@ export const createGoogleDriveOAuthState = (input: {
   userId: string;
   workspaceId: string;
   returnPath?: string | null;
+  provider?: GoogleOAuthStateProvider;
   now?: Date;
 }): { state: string; payload: GoogleDriveOAuthStatePayload } => {
   const now = input.now ?? new Date();
@@ -284,6 +291,7 @@ export const createGoogleDriveOAuthState = (input: {
     returnPath: normalizeReturnPath(input.returnPath),
     iat,
     exp: iat + STATE_TTL_MS,
+    provider: normalizeOAuthStateProvider(input.provider),
   };
   const encodedPayload = encodeBase64Url(JSON.stringify(payload));
   return {
@@ -336,6 +344,7 @@ export const verifyGoogleDriveOAuthState = (
     returnPath: normalizeReturnPath(parsed?.returnPath),
     iat,
     exp,
+    provider: normalizeOAuthStateProvider(parsed?.provider),
   };
 };
 
