@@ -36,6 +36,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - `api/src/services/chat-service.ts`
   - `api/src/routes/auth/device.ts`
   - `api/src/services/device-code-store.ts`
+  - `api/src/routes/api/chrome-extension.ts`
   - `api/src/routes/api/chat.ts`
   - `api/src/routes/api/streams.ts`
   - `api/src/db/schema.ts`
@@ -66,6 +67,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
 - `attention`: architect ratification is pending via `neg:cowork-cu-cadrage-20260718`; Lot 0 must resolve spec §9 before product edits.
 - `attention`: BR-COWORK-EX1 is proposed, not active; one durable device/lease migration is allowed only after schema/route ownership is ratified.
 - `resolved`: BR-COWORK-EX2 authorizes `api/src/services/device-code-store.ts` solely for BR-41c enrollment PoP staging; impact is device-code pending state only and rollback is removal of the PoP fields with the dependent route/client change. The user explicitly requested this enrollment binding.
+- `resolved`: BR-COWORK-EX3 authorizes `api/src/routes/api/chrome-extension.ts` solely to keep the published Cowork presence transport while routing `desktop_cowork` to durable ownership-checked storage; browser tab behavior is unchanged and rollback is the isolated desktop route branch.
 - `deferred`: production/unattended takeover and BR-41c/d/e hardening are explicitly outside the same-day acceptance line.
 - `clarification`: conductor provides the isolated Windows OVH target and confirms controller A and target B are different devices for UAT.
 
@@ -114,6 +116,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Add the portable device-identity storage and signing contracts without imposing them on unrelated bridge hosts.
   - [x] Persist one desktop Ed25519 identity in `device-identity.json` and reuse it across restarts.
   - [x] Send the stable key-bound identity in enrollment and presence mutations instead of accepting a server-minted desktop id.
+  - [x] Add durable active/revoked ownership checks for Cowork presence mutations.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.
