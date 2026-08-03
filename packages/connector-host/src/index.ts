@@ -4,6 +4,7 @@ export type {
   ConnectorHostExposurePolicy,
   ConnectorHostOptions,
   ConnectorHostRequest,
+  ConnectorHostResolvedInvocation,
 } from './mount.js';
 export type {
   AccountResolution,

@@ -22,6 +22,8 @@ export type ConnectorHostRequest = {
   capabilityRef: string;
   input: unknown;
   hints?: Record<string, unknown>;
+  /** Trusted execution metadata, never parsed from model tool arguments. */
+  execution?: { toolCallId: string; sessionId: string };
 };
 
 export type ConnectorHostExposurePolicy = {
@@ -41,6 +43,18 @@ export type ConnectorHostOptions = {
   adapters: Readonly<Record<string, AppConnectorProviderAdapter>>;
   ports: ConnectorHostPorts;
   exposurePolicy?: ConnectorHostExposurePolicy;
+  /**
+   * Optional per-request handoff after durable tenancy/account resolution.
+   * It must create invocation-local state; the shared mount retains none.
+   */
+  invokeResolved?(input: ConnectorHostResolvedInvocation): Promise<AppToolResult | string>;
+};
+
+export type ConnectorHostResolvedInvocation = {
+  request: ConnectorHostRequest;
+  ctx: StpConnectorContext;
+  tenantContext: ConnectorTenantContext;
+  account: AccountResolution;
 };
 
 class ConnectorHostPrincipalMismatchError extends Error {
@@ -187,6 +201,7 @@ async function resolveInvocation(
     adapter: AppConnectorProviderAdapter;
     ctx: StpConnectorContext;
     tenantContext: ConnectorTenantContext;
+    account: AccountResolution;
   }
 > {
   const adapter = options.adapters[request.connectorId];
@@ -254,7 +269,7 @@ async function resolveInvocation(
   const visible = listVisibleCapabilities(await adapter.listCapabilities(tenantContext), visibility);
   if (!visible.some((capability) => capability.name === request.capabilityRef)) return { missing: true };
 
-  return { adapter, ctx, tenantContext };
+  return { adapter, ctx, tenantContext, account };
 }
 
 /** Mount every adapter behind one per-workspace, deny-by-default request boundary. */
@@ -263,6 +278,14 @@ export function mountConnectorHost(options: ConnectorHostOptions): ConnectorHost
     async invoke(request): Promise<AppToolResult | string> {
       const resolved = await resolveInvocation(options, request);
       if ('missing' in resolved) return missingResult();
+      if (options.invokeResolved) {
+        return options.invokeResolved({
+          request,
+          ctx: resolved.ctx,
+          tenantContext: resolved.tenantContext,
+          account: resolved.account,
+        });
+      }
       const adapterRequest: AppToolInvocation = {
         capabilityRef: request.capabilityRef,
         input: request.input,
