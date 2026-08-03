@@ -14,7 +14,7 @@ import {
   activateCoworkDevice,
   assertEd25519PublicKey,
   verifyCoworkSignature,
-  type CoworkDeviceCapability,
+  type CoworkDeviceCapabilities,
 } from '../../services/cowork/device-identity';
 import { findPendingDeviceIdentity } from '../../services/device-code-store';
 
@@ -36,7 +36,18 @@ const issueSchema = z.object({
   deviceName: z.string().min(1).max(100).optional(),
   deviceId: z.string().uuid(),
   devicePublicKey: z.string().min(32).max(2048),
-  capabilities: z.array(z.enum(['screen_capture', 'input_action'])).min(1).max(16),
+  capabilities: z.object({
+    capabilityIds: z.array(z.enum(['screen_capture', 'input_action'])).min(1).max(2),
+    isolatedVmTarget: z.boolean(),
+    kioskSurface: z.string().trim().min(1).max(80).optional(),
+  }).superRefine((value, ctx) => {
+    if (value.isolatedVmTarget && !value.kioskSurface) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'kioskSurface is required for isolated VM targets' });
+    }
+    if (!value.isolatedVmTarget && value.kioskSurface) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'kioskSurface requires isolatedVmTarget' });
+    }
+  }),
 });
 
 const pollSchema = z.object({
@@ -68,7 +79,7 @@ deviceRouter.post('/code', async (c) => {
     const issued = issueDeviceCode(deviceName, {
       deviceId,
       devicePublicKey,
-      capabilities: capabilities as CoworkDeviceCapability[],
+      capabilities: capabilities as CoworkDeviceCapabilities,
     });
 
     const origin = (c.req.header('origin') || '').trim();

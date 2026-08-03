@@ -212,7 +212,7 @@ export const coworkDevices = pgTable('cowork_devices', {
   deviceName: text('device_name'),
   publicKey: text('public_key').notNull(),
   publicKeyFingerprint: text('public_key_fingerprint').notNull(),
-  capabilities: jsonb('capabilities').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  capabilities: jsonb('capabilities').$type<import('../services/cowork/device-capabilities').CoworkDeviceCapabilities>().notNull().default(sql`'{}'::jsonb`),
   status: text('status').notNull().default('active'),
   enrolledAt: timestamp('enrolled_at', { withTimezone: false }).notNull().defaultNow(),
   revokedAt: timestamp('revoked_at', { withTimezone: false }),

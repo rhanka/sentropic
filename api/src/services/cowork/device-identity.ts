@@ -3,13 +3,14 @@ import { and, eq } from 'drizzle-orm';
 
 import { db } from '../../db/client';
 import { coworkDevices } from '../../db/schema';
+import type { CoworkDeviceCapabilities } from './device-capabilities';
 
-export type CoworkDeviceCapability = 'screen_capture' | 'input_action';
+export type { CoworkDeviceCapability, CoworkDeviceCapabilities } from './device-capabilities';
 
 export interface PendingCoworkDeviceIdentity {
   deviceId: string;
   devicePublicKey: string;
-  capabilities: CoworkDeviceCapability[];
+  capabilities: CoworkDeviceCapabilities;
   serverNonce: string;
 }
 
@@ -56,6 +57,29 @@ export function verifyCoworkSignature(publicKey: string, payload: string, signat
   } catch {
     return false;
   }
+}
+
+export function coworkDeliveryProofPayload(input: {
+  method: 'GET';
+  deviceId: string;
+  issuedAtMs: number;
+}): string {
+  return `cowork-device-delivery-v1:${input.method}.${input.deviceId}.${input.issuedAtMs}`;
+}
+
+/** C3: a bearer token alone can never receive a device lease. */
+export async function verifyCoworkDeliveryProof(input: {
+  userId: string;
+  deviceId: string;
+  method: 'GET';
+  issuedAtMs: number;
+  signature: string;
+  nowMs?: number;
+}): Promise<boolean> {
+  const nowMs = input.nowMs ?? Date.now();
+  if (!Number.isSafeInteger(input.issuedAtMs) || Math.abs(nowMs - input.issuedAtMs) > 30_000) return false;
+  const device = await findActiveCoworkDevice(input.userId, input.deviceId);
+  return Boolean(device && verifyCoworkSignature(device.publicKey, coworkDeliveryProofPayload(input), input.signature));
 }
 
 function hasSameKey(left: string, right: string): boolean {
