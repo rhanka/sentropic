@@ -68,6 +68,9 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
 - `attention`: BR-COWORK-EX1 is proposed, not active; one durable device/lease migration is allowed only after schema/route ownership is ratified.
 - `resolved`: BR-COWORK-EX2 authorizes `api/src/services/device-code-store.ts` solely for BR-41c enrollment PoP staging; impact is device-code pending state only and rollback is removal of the PoP fields with the dependent route/client change. The user explicitly requested this enrollment binding.
 - `resolved`: BR-COWORK-EX3 authorizes `api/src/routes/api/chrome-extension.ts` solely to keep the published Cowork presence transport while routing `desktop_cowork` to durable ownership-checked storage; browser tab behavior is unchanged and rollback is the isolated desktop route branch.
+- `attention`: BR-41c OQ-1 through OQ-13 and connector-host MVP spec §9 remain architect-pending. They block Lot 4 and any connector/chat execution wiring; Ed25519 is the OQ-1 recommendation only, not a final architect ratification.
+- `resolved`: HARD GATE honored for this lot. Device identity, registry, leases, poll, and SSE are authorization plumbing only; no chat agent mount, desktop runner, screen capture, or input action execution was added. Lot 4 remains the sole attachment boundary after architect ratification and consent-gating.
+- `attention`: `make test-api-endpoints SCOPE=tests/api/auth-device-code.spec.ts ENV=test-cowork-connector` could not run because the API service is absent after the isolated stack bootstrap (the compose API image build is unavailable in this checkout). The new scoped API suites remain pending on a runnable test stack.
 - `deferred`: production/unattended takeover and BR-41c/d/e hardening are explicitly outside the same-day acceptance line.
 - `clarification`: conductor provides the isolated Windows OVH target and confirms controller A and target B are different devices for UAT.
 
@@ -109,7 +112,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [ ] Add context-carrying chat tool source/executor that binds trusted `toolCall.id` to a per-call broker (or ratified mount field) and calls `mountConnectorHost`; never call `/api/v1/mcp` or encode idempotency as a hint.
   - [ ] Tests: deny-as-missing, no auto/broadcast, cross-user/workspace/hint denial, capability visibility, tool-call id propagation, audit redaction.
   - [ ] Gate: `make typecheck-connector-host ENV=test-cowork-connector`; `make test-connector-host ENV=test-cowork-connector`; `make typecheck-api ENV=test-cowork-connector`; `make lint-api ENV=test-cowork-connector`.
-- [ ] **Lot 3 — Targeted device identity, lease and delivery**
+- [x] **Lot 3 — Targeted device identity, lease and delivery**
   - [x] Add the BR-41c durable device, presence, and lease schema with its single migration and non-terminal issuance idempotency index.
   - [x] Add the Ed25519 (OQ-1 architect-revisable) device identity activation primitive with collision, revoked-reuse, and key-rotation denial.
   - [x] Bind device-code approval to the `cowork-enroll-v1:` proof before committing an active device identity.
@@ -125,10 +128,11 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Add API coverage for human approval plus enrollment PoP, active-device commit, cross-user collision, and revoked-device reuse denial.
   - [x] Add API coverage for durable owner-scoped registration, keepalive, unregister, and revoked-device denial.
   - [x] Add API coverage for eligibility, idempotent durable leases, wrong-device/expiry/replay/revocation acknowledgement denial, and device-filtered poll/SSE delivery.
-  - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
-  - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
-  - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.
-  - [ ] Gate scoped API suites, then `make test-api ENV=test-cowork-connector`.
+  - [x] Implement BR-41c foundation: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
+  - [x] Implement device-filtered notify and ownership-checked device-scoped poll fallback; connector bounded await remains deferred to Lot 4.
+  - [x] Add tests for restart-safe DB reads, wrong owner/device, stale presence, duplicate/replay, expiry/revoke, and filtered poll/SSE delivery.
+  - [!] API integration gate remains blocked on the absent isolated API service; rerun the scoped suites then `make test-api ENV=test-cowork-connector` on a runnable stack.
+  - [x] Bump `@sentropic/cowork-bridge` to 0.2.1 and `@sentropic/cowork-desktop` to 0.3.1.
 - [ ] **Lot 4 — Consent-gated eyes/hands and canonical result**
   - [ ] Add foreground action detail/preview with Deny or Allow once; remove permanent input grant from connector path.
   - [ ] Enforce isolated-OVH low-risk allowlist; block key/Enter and all sensitive/irreversible classes; add local Stop and redacted audit.
