@@ -13,6 +13,12 @@ const IN_FLIGHT_STATUSES = ['issued', 'acknowledged'] as const;
 export type LeaseScope = {
   capability: 'screen_capture' | 'input_action';
   serverEnvelope: ServerSignedLeaseEnvelope;
+  /** Delivered to the device for foreground consent; never emitted to audit. */
+  action?: Record<string, unknown>;
+} | null;
+export type LeaseIssueScope = {
+  capability: 'screen_capture' | 'input_action';
+  action?: Record<string, unknown>;
 } | null;
 type LeaseStatus = 'issued' | 'acknowledged' | 'consumed' | 'expired' | 'revoked';
 
@@ -38,7 +44,7 @@ export async function issueLease(input: {
   userId: string;
   deviceId: string;
   turnRef: string;
-  scope: LeaseScope;
+  scope: LeaseIssueScope;
 }): Promise<LeaseResult> {
   // C5a: no server-signed executable lease exists outside the isolated benign
   // kiosk MVP.  This is the authoritative Option-B safety boundary.
@@ -112,7 +118,11 @@ export async function issueLease(input: {
         userId: input.userId,
         turnRef: input.turnRef,
         nonce,
-        scope: { capability: requestedCapability, serverEnvelope: envelope },
+        scope: {
+          capability: requestedCapability,
+          serverEnvelope: envelope,
+          ...(input.scope?.action ? { action: input.scope.action } : {}),
+        },
         status: 'issued',
         issuedAt: now,
         expiresAt,
@@ -175,6 +185,53 @@ export async function acknowledgeLease(input: {
     ))
     .returning();
   return acknowledged ? { ok: true, lease: toLease(acknowledged) } : { ok: false, reason: 'not_issuable' };
+}
+
+/** Device posts only a signed, bounded terminal outcome; never pixels or typed content. */
+export async function completeLease(input: {
+  userId: string;
+  deviceId: string;
+  leaseId: string;
+  outcome: 'FAIT' | 'PAS-FAIT';
+  signature: string;
+}): Promise<LeaseResult> {
+  const [lease] = await db.select().from(coworkDeviceLeases).where(and(
+    eq(coworkDeviceLeases.id, input.leaseId),
+    eq(coworkDeviceLeases.deviceId, input.deviceId),
+    eq(coworkDeviceLeases.userId, input.userId),
+  )).limit(1);
+  if (!lease) return { ok: false, reason: 'not_found' };
+  const device = await findActiveCoworkDevice(input.userId, input.deviceId);
+  if (!device || !verifyCoworkSignature(
+    device.publicKey,
+    `cowork-lease-result-v1:${lease.id}.${lease.nonce}.${input.outcome}`,
+    input.signature,
+  )) return { ok: false, reason: 'invalid_signature' };
+
+  const now = new Date();
+  const status = input.outcome === 'FAIT' ? 'consumed' : 'revoked';
+  const [completed] = await db.update(coworkDeviceLeases).set({ status, consumedAt: now }).where(and(
+    eq(coworkDeviceLeases.id, input.leaseId),
+    eq(coworkDeviceLeases.deviceId, input.deviceId),
+    eq(coworkDeviceLeases.userId, input.userId),
+    eq(coworkDeviceLeases.status, 'acknowledged'),
+    gt(coworkDeviceLeases.expiresAt, now),
+  )).returning();
+  return completed ? { ok: true, lease: toLease(completed) } : { ok: false, reason: 'not_issuable' };
+}
+
+/** Atomic lazy expiry is the fallback for an offline or malformed device result. */
+export async function readLeaseOutcome(leaseId: string): Promise<'FAIT' | 'PAS-FAIT' | null> {
+  const now = new Date();
+  await db.update(coworkDeviceLeases).set({ status: 'expired' }).where(and(
+    eq(coworkDeviceLeases.id, leaseId),
+    inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
+    lte(coworkDeviceLeases.expiresAt, now),
+  ));
+  const [lease] = await db.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases)
+    .where(eq(coworkDeviceLeases.id, leaseId)).limit(1);
+  if (!lease) return 'PAS-FAIT';
+  return lease.status === 'consumed' ? 'FAIT' : ['expired', 'revoked'].includes(lease.status) ? 'PAS-FAIT' : null;
 }
 
 /** Lot 4 will call this primitive before any external screen-side effect. */
