@@ -18,6 +18,7 @@ import type {
 export type AppChatSession = {
   readonly id: string;
   readonly title?: string | null;
+  readonly workspaceId?: string | null;
   readonly updatedAt?: string | number | Date | null;
   readonly createdAt?: string | number | Date | null;
 };
@@ -64,9 +65,11 @@ export type AgentsFeedInput = {
   readonly jobLabel?: (job: AppJob) => string;
   /**
    * Current workspace label from the host `$workspaceScope`. All current-scope
-   * entries belong to it (F8). Cross-workspace per-session labels arrive with F1.
+   * entries belong to it (F8).
    */
   readonly workspaceLabel?: string;
+  /** Workspace labels keyed by id for the cross-workspace list (F1). */
+  readonly workspaceLabelsById?: ReadonlyMap<string, string>;
 };
 
 export type CompactAgentsActivity = {
@@ -170,7 +173,8 @@ export const projectAgentsFeed = (input: AgentsFeedInput): AgentsEntry[] => {
       title: session.title ?? null,
       status: jobStatus === 'running' || jobStatus === 'awaiting-input' ? jobStatus : 'active',
       lastActivityAt: toMs(session.updatedAt ?? session.createdAt),
-      workspaceLabel: input.workspaceLabel,
+      workspaceLabel:
+        input.workspaceLabelsById?.get(session.workspaceId ?? '') ?? input.workspaceLabel,
     };
   });
 

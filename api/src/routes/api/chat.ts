@@ -14,6 +14,7 @@ import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../mi
 import { createId } from '../../utils/id';
 
 export const chatRouter = new Hono();
+export const DEFAULT_ALL_WS_LIMIT = 200;
 
 const editMessageInput = z.object({
   content: z.string().min(1)
@@ -485,7 +486,10 @@ chatRouter.route('/', chatServerRouter);
 
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
-  const sessions = await chatService.listSessions(user.userId, user.workspaceId);
+  const scope = c.req.query('scope');
+  const sessions = scope === 'all'
+    ? await chatService.listSessions(user.userId, null, DEFAULT_ALL_WS_LIMIT)
+    : await chatService.listSessions(user.userId, user.workspaceId);
   return c.json({ sessions });
 });
 
