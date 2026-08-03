@@ -38,6 +38,7 @@ const ROWS: AgentsListRow[] = [
   { entry: { id: 'failed', kind: 'remote', title: 'Remote', status: 'failed', lastActivityAt: 30 }, depth: 0, aggregateStatus: 'failed', childCount: 0 },
   { entry: { id: 'done', kind: 'job', title: 'Job', status: 'done', lastActivityAt: 40 }, depth: 0, aggregateStatus: 'done', childCount: 0 },
   { entry: { id: 'idle', kind: 'run', title: 'Run', status: 'idle', lastActivityAt: 50 }, depth: 0, aggregateStatus: 'idle', childCount: 0 },
+  { entry: { id: 'resumeable', kind: 'session', title: 'Resumeable', status: 'done', lastActivityAt: 60 }, depth: 0, aggregateStatus: 'done', childCount: 0 },
 ];
 
 const renderList = (props: Partial<{
@@ -58,14 +59,19 @@ const renderList = (props: Partial<{
   });
 
 describe('AgentsList', () => {
-  it('should render one listbox option per row and mark the active row selected', () => {
-    renderList({ activeId: 'running' });
+  it('should render one listbox option per row and mark the active row with aria-current', () => {
+    const { container } = renderList({ activeId: 'running' });
 
     expect(screen.getByRole('listbox', { name: 'label:chat.agents.list.label' })).not.toBeNull();
     const options = screen.getAllByRole('option');
     expect(options).toHaveLength(ROWS.length);
-    expect(options[1]?.getAttribute('aria-selected')).toBe('true');
-    expect(options[0]?.getAttribute('aria-selected')).toBe('false');
+    // The active-row highlight is carried by the row wrapper (aria-current),
+    // NOT the DS selection (`aria-selected`) — that is pinned off so a re-click
+    // navigates instead of toggling.
+    const active = container.querySelector('[data-agent-entry-id="running"]');
+    expect(active?.getAttribute('aria-current')).toBe('true');
+    const inactive = container.querySelector('[data-agent-entry-id="waiting"]');
+    expect(inactive?.getAttribute('aria-current')).toBeNull();
   });
 
   it('should call onSelect from click and keyboard activation', async () => {
@@ -80,6 +86,23 @@ describe('AgentsList', () => {
     expect(onSelect).toHaveBeenNthCalledWith(2, 'running');
   });
 
+  it('should still call onSelect when the ALREADY-active row is re-clicked', async () => {
+    // Regression: the DS single-select toggles off on re-click of the selected
+    // row. If navigation were tied to that, returning to the session you just
+    // left would dead-end. onSelect must fire on every activation.
+    const onSelect = vi.fn();
+    renderList({ activeId: 'running', onSelect });
+    const running = screen
+      .getAllByRole('option')
+      .find((el) => el.closest('[data-agent-entry-id="running"]'));
+
+    await fireEvent.click(running!);
+    await fireEvent.click(running!);
+
+    expect(onSelect).toHaveBeenNthCalledWith(1, 'running');
+    expect(onSelect).toHaveBeenNthCalledWith(2, 'running');
+  });
+
   it('should render every status with its semantic DS tone and pulse running only', () => {
     const { container } = renderList();
 
@@ -88,7 +111,38 @@ describe('AgentsList', () => {
     expect(container.querySelector('.st-statusDot__dot--error')).not.toBeNull();
     expect(container.querySelector('.st-statusDot__dot--success')).not.toBeNull();
     expect(container.querySelector('.st-statusDot__dot--neutral')).not.toBeNull();
+    expect(container.querySelectorAll('.st-statusDot__dot--neutral')).toHaveLength(2);
     expect(container.querySelectorAll('.st-statusDot__dot--pulse')).toHaveLength(1);
+  });
+
+  it('should render a session terminal status as neutral active rather than done', () => {
+    const { container } = renderList();
+    const session = container.querySelector('[data-agent-entry-id="resumeable"]');
+
+    expect(session?.textContent).toContain('label:chat.agents.status.active');
+    expect(session?.textContent).not.toContain('label:chat.agents.status.done');
+  });
+
+  it('should render connection state only for remote rows', () => {
+    const { container } = renderList();
+
+    expect(container.querySelector('[data-agent-entry-id="waiting"]')?.textContent).not.toContain(
+      'label:chat.agents.connection.connected',
+    );
+    expect(container.querySelector('[data-agent-entry-id="running"]')?.textContent).not.toContain(
+      'label:chat.agents.connection.unknown',
+    );
+    expect(container.querySelector('[data-agent-entry-id="failed"]')?.textContent).toContain(
+      'label:chat.agents.connection.unknown',
+    );
+  });
+
+  it('should use DS icons instead of initial avatars and keep activity compact', () => {
+    const { container } = renderList({ formatRelative: () => '72j' });
+
+    expect(container.querySelector('.st-avatar')).toBeNull();
+    expect(container.querySelectorAll('.st-icon')).toHaveLength(ROWS.length);
+    expect(screen.getAllByText('72j')).toHaveLength(ROWS.length);
   });
 
   it('should show the pending tag and excerpt only for an awaiting-input row', () => {

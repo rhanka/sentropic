@@ -11,6 +11,8 @@ export type ChatSessionsBarProps = {
   barLabels: SessionsBarLabels;
   labels?: (key: string, opts?: Record<string, unknown>) => string;
   onNewSession?: () => void;
+  onBack?: () => void;
+  backLabel?: string;
   onConfirmDelete?: () => void | Promise<void>;
   deleteConfirmPending?: boolean;
   deleteInFlight?: boolean;
