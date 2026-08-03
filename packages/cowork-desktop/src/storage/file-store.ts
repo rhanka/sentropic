@@ -3,7 +3,9 @@ import { dirname, join } from 'node:path';
 import type {
     AuthPersistentState,
     AuthSessionState,
+    DeviceIdentityStorageAdapter,
     StorageAdapter,
+    StoredDeviceIdentity,
 } from '@sentropic/cowork-bridge/auth';
 import {
     normalizeEntry,
@@ -27,6 +29,7 @@ import type { ConsentStore } from '../consent/index.js';
  */
 
 const PERSISTENT_FILE = 'auth.json';
+const DEVICE_IDENTITY_FILE = 'device-identity.json';
 const CONSENT_FILE = 'consent.json';
 
 type ConsentFileShape = { entries: ToolPermissionEntry[] };
@@ -46,7 +49,7 @@ const writeJson = async (path: string, value: unknown): Promise<void> => {
     await writeFile(path, JSON.stringify(value, null, 2), { mode: 0o600 });
 };
 
-export interface FileStore extends StorageAdapter, ConsentStore {}
+export interface FileStore extends StorageAdapter, DeviceIdentityStorageAdapter, ConsentStore {}
 
 /**
  * Create a file-backed store rooted at `appDir`. The session (access-token)
@@ -54,6 +57,7 @@ export interface FileStore extends StorageAdapter, ConsentStore {}
  */
 export const createFileStore = (appDir: string): FileStore => {
     const persistentPath = join(appDir, PERSISTENT_FILE);
+    const deviceIdentityPath = join(appDir, DEVICE_IDENTITY_FILE);
     const consentPath = join(appDir, CONSENT_FILE);
     let sessionState: AuthSessionState | null = null;
 
@@ -92,6 +96,17 @@ export const createFileStore = (appDir: string): FileStore => {
         },
         async clearSession(): Promise<void> {
             sessionState = null;
+        },
+
+        // --- DeviceIdentityStorageAdapter ---
+        async readDeviceIdentity(): Promise<StoredDeviceIdentity | null> {
+            return readJson<StoredDeviceIdentity>(deviceIdentityPath);
+        },
+        async writeDeviceIdentity(identity: StoredDeviceIdentity): Promise<void> {
+            await writeJson(deviceIdentityPath, identity);
+        },
+        async clearDeviceIdentity(): Promise<void> {
+            await rm(deviceIdentityPath, { force: true });
         },
 
         // --- ConsentStore ---

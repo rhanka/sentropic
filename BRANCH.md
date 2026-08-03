@@ -112,6 +112,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Add the Ed25519 (OQ-1 architect-revisable) device identity activation primitive with collision, revoked-reuse, and key-rotation denial.
   - [x] Bind device-code approval to the `cowork-enroll-v1:` proof before committing an active device identity.
   - [x] Add the portable device-identity storage and signing contracts without imposing them on unrelated bridge hosts.
+  - [x] Persist one desktop Ed25519 identity in `device-identity.json` and reuse it across restarts.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.
