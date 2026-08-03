@@ -25,25 +25,34 @@ export async function depositGeneralCall(input: {
 
 /** Wake can only preserve an honest deposit: it never resurrects a prior lease. */
 export async function requireFreshAuthorityOnWake(input: {
-  durableCallRef: string; principalId: string; tenantId: string; workspaceId: string;
+  durableCallRef: string; principalId: string; targetDeviceId: string;
 }): Promise<GeneralCallRef | null> {
   const [call] = await db.update(coworkGeneralCalls).set({ requiresFreshAuthority: true, updatedAt: new Date() }).where(and(
     eq(coworkGeneralCalls.id, input.durableCallRef), eq(coworkGeneralCalls.principalId, input.principalId),
-    eq(coworkGeneralCalls.tenantId, input.tenantId), eq(coworkGeneralCalls.workspaceId, input.workspaceId),
+    eq(coworkGeneralCalls.targetDeviceId, input.targetDeviceId),
     eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'),
   )).returning();
   return call ? { durableCallRef: call.id, state: 'DÉPOSÉ-EN-ATTENTE' } : null;
 }
 
 /** This foundation has no FAIT writer; all terminal resolution is honest PAS-FAIT. */
-export async function markGeneralCallNotDone(durableCallRef: string): Promise<boolean> {
+export async function markGeneralCallNotDone(durableCallRef: string, targetDeviceId?: string): Promise<boolean> {
   const [updated] = await db.update(coworkGeneralCalls).set({ state: 'PAS-FAIT', updatedAt: new Date() })
-    .where(and(eq(coworkGeneralCalls.id, durableCallRef), eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'))).returning();
+    .where(targetDeviceId
+      ? and(eq(coworkGeneralCalls.id, durableCallRef), eq(coworkGeneralCalls.targetDeviceId, targetDeviceId), eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'))
+      : and(eq(coworkGeneralCalls.id, durableCallRef), eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'))).returning();
   return Boolean(updated);
 }
 
 export async function expireGeneralCall(durableCallRef: string): Promise<boolean> {
   return markGeneralCallNotDone(durableCallRef);
+}
+
+export async function listPendingGeneralCalls(userId: string, deviceId: string): Promise<GeneralCallRef[]> {
+  const calls = await db.select({ id: coworkGeneralCalls.id, state: coworkGeneralCalls.state }).from(coworkGeneralCalls).where(and(
+    eq(coworkGeneralCalls.principalId, userId), eq(coworkGeneralCalls.targetDeviceId, deviceId), eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'),
+  )).limit(50);
+  return calls.map((call) => ({ durableCallRef: call.id, state: call.state as GeneralCallState }));
 }
 
 /** C5b: one transaction soft-revokes, cancels authority, tombstones, then revokes. */

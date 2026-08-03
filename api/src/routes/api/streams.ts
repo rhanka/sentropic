@@ -12,6 +12,8 @@ import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
 import { listIssuedLeases } from '../../services/cowork/device-lease-service';
+import { verifyGeneralDeviceProof } from '../../services/cowork/general-device-proof';
+import { listPendingGeneralCalls } from '../../services/cowork/general-call-service';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import {
   ADMIN_WORKSPACE_ID,
@@ -334,6 +336,32 @@ streamsRouter.get('/cowork-devices/:deviceId/leases/sse', async (c) => {
   c.header('Cache-Control', 'no-cache, no-transform');
   c.header('Connection', 'keep-alive');
   c.header('X-Accel-Buffering', 'no');
+  return c.newResponse(readable, 200);
+});
+
+// GENERAL SSE is separately proof-bound. It exposes only durable opaque refs.
+streamsRouter.get('/cowork-general/:deviceId/calls/sse', async (c) => {
+  const user = c.get('user') as { userId: string };
+  const deviceId = c.req.param('deviceId');
+  const pepKeyId = c.req.query('pep_key_id') ?? '';
+  const challenge = c.req.query('challenge') ?? '';
+  const signature = c.req.query('signature') ?? '';
+  const verified = await verifyGeneralDeviceProof({
+    userId: user.userId, deviceId, channel: 'sse', challenge,
+    proof: { channel: 'sse', deviceId, pepKeyId, challenge, signature },
+  });
+  if (!verified.ok) return c.json({ message: 'General device proof denied.' }, 403);
+  const calls = await listPendingGeneralCalls(user.userId, deviceId);
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const call of calls) controller.enqueue(encoder.encode(`event: cowork_general_call\ndata: ${JSON.stringify(call)}\n\n`));
+      controller.enqueue(encoder.encode(': proof-bound snapshot\n\n'));
+      controller.close();
+    },
+  });
+  c.header('Content-Type', 'text/event-stream; charset=utf-8');
+  c.header('Cache-Control', 'no-cache, no-transform');
   return c.newResponse(readable, 200);
 });
 
