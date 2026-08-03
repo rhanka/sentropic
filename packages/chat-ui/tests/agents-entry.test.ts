@@ -17,6 +17,7 @@ describe('agents entry status urgency', () => {
       'awaiting-input',
       'running',
       'failed',
+      'active',
       'idle',
       'done',
     ];

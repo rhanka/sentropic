@@ -16,7 +16,6 @@ test.describe('Chat', () => {
   const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
     assistantWrapper(page).locator('div.rounded.bg-white.border.border-slate-200');
-  const sessionMenuLabel = /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i;
   const sessionNewLabel = /nouvelle session|new session/i;
   const sessionNoneLabel = /aucune conversation|no conversation/i;
   const composerMenu = (page: any, label: RegExp | string) =>
@@ -26,7 +25,7 @@ test.describe('Chat', () => {
       .first();
 
   const sessionHeaderLabel = (page: any) =>
-    page.locator('#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate').first();
+    page.locator('#chat-widget-dialog [data-chat-sessions-heading]').first();
 
   async function gotoFoldersPage(page: any) {
     await page.goto('/folders');
@@ -180,16 +179,29 @@ test.describe('Chat', () => {
     }
   }
 
-  async function ensureSessionMenuOpen(page: any) {
-    const sessionMenuButton = page.getByRole('button', { name: sessionMenuLabel }).first();
-    await expect(sessionMenuButton).toBeVisible({ timeout: 3000 });
-    const newSessionAction = page.getByRole('button', { name: sessionNewLabel }).first();
-    if (!(await newSessionAction.isVisible().catch(() => false))) {
-      await sessionMenuButton.click();
+  // Session navigation goes through the agents list (the old chooser popover was
+  // removed in pager hosts). From a conversation, the ChatSessionsBar Back control
+  // returns to the list; the list section owns its own "New session" action and
+  // renders one [role="option"] per session, each wrapped in a
+  // [data-agent-entry-id] div. Mirrors the green 08-chat-workspace-switch pattern.
+  async function goToAgentsList(page: any) {
+    const backToList = page
+      .locator(
+        '#chat-widget-dialog button[aria-label="Retour aux conversations"], #chat-widget-dialog button[aria-label="Back to conversations"]',
+      )
+      .first();
+    if (await backToList.isVisible().catch(() => false)) {
+      await backToList.click();
     }
-    await expect(newSessionAction).toBeVisible({ timeout: 3000 });
-    const sessionItems = page.locator('div.max-h-48 button');
-    return { sessionMenuButton, sessionItems };
+    // The list section owns a "New session" action, present even when the list is
+    // empty; its visibility confirms we have landed on the list view.
+    const newSessionAction = page
+      .locator('#chat-widget-dialog')
+      .getByRole('button', { name: sessionNewLabel })
+      .first();
+    await expect(newSessionAction).toBeVisible({ timeout: 5_000 });
+    const sessionRows = page.locator('#chat-widget-dialog [role="option"]');
+    return { newSessionAction, sessionRows };
   }
 
   async function waitForActiveSessionHeader(page: any, timeout = 30_000) {
@@ -861,7 +873,7 @@ test.describe('Chat', () => {
     // On demande explicitement de ne PAS utiliser d'outils
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
-    const { jobId, streamId, userMessageId } = await sendMessageAndWaitApi(page, composer, message);
+    const { jobId, streamId, userMessageId, sessionId } = await sendMessageAndWaitApi(page, composer, message);
     expect(userMessageId).toBeTruthy();
     
     // Attendre la réponse de l'assistant avec le texte spécifique
@@ -875,17 +887,13 @@ test.describe('Chat', () => {
       throw e;
     }
     
-    // Vérifier qu'une session active existe et que le sélecteur est ouvert.
+    // Vérifier qu'une session active existe, puis que la session créée apparaît
+    // dans la liste des agents.
     await waitForActiveSessionHeader(page, 30_000);
-    const { sessionItems } = await ensureSessionMenuOpen(page);
-    await expect
-      .poll(async () => {
-        const count = await sessionItems.count();
-        if (count > 0) return true;
-        const headerText = (await sessionHeaderLabel(page).textContent())?.trim() ?? '';
-        return !sessionNoneLabel.test(headerText);
-      }, { timeout: 10_000 })
-      .toBe(true);
+    expect(sessionId).toBeTruthy();
+    await goToAgentsList(page);
+    const createdRow = page.locator(`#chat-widget-dialog [data-agent-entry-id="${sessionId}"]`);
+    await expect(createdRow).toBeVisible({ timeout: 10_000 });
   });
 
   test('devrait supprimer une session', async ({ page }) => {
@@ -922,10 +930,10 @@ test.describe('Chat', () => {
       throw e;
     }
     
-    // Vérifier qu'une session active existe avant suppression.
+    // Vérifier qu'une session active existe avant suppression. Le bouton de
+    // suppression vit sur la barre de conversation, directement visible.
     await waitForActiveSessionHeader(page, 30_000);
-    await ensureSessionMenuOpen(page);
-    
+
     // Cliquer sur le bouton de suppression (icône poubelle)
     const deleteButton = page.getByRole('button', {
       name: /Supprimer la conversation|Delete conversation/i,
@@ -965,8 +973,13 @@ test.describe('Chat', () => {
       }, { timeout: 10_000 })
       .toBe(false);
 
-    // Le menu de sessions doit rester opérable après suppression.
-    await ensureSessionMenuOpen(page);
+    // La liste des agents doit rester opérable après suppression : on y revient,
+    // l'action « Nouvelle session » reste disponible (assertée par goToAgentsList)
+    // et la session supprimée a disparu de la liste.
+    await goToAgentsList(page);
+    await expect(
+      page.locator(`#chat-widget-dialog [data-agent-entry-id="${deletedSessionId}"]`),
+    ).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('attache une image et le modèle vision la décrit (BR38a-FB2)', async ({ page }) => {
@@ -979,10 +992,10 @@ test.describe('Chat', () => {
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
 
     // Start from a fresh session so retries / shared-account state don't leave
-    // an active assistant (which flips the send button to "steer").
-    const { sessionMenuButton } = await ensureSessionMenuOpen(page);
-    await page.getByRole('button', { name: sessionNewLabel }).first().click();
-    await sessionMenuButton.click().catch(() => {});
+    // an active assistant (which flips the send button to "steer"). The list's
+    // "New session" action creates a fresh session and returns to the conversation.
+    const { newSessionAction } = await goToAgentsList(page);
+    await newSessionAction.click();
     await expect(composer).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
 
     // Default model is text-only (gpt-4.1-nano); switch to a vision-capable one.

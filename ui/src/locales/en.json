@@ -1071,6 +1071,70 @@
       "defaultTitle": "Conversation {id}",
       "confirmDelete": "Delete this conversation?"
     },
+    "agents": {
+      "kind": {
+        "agent": "Agent",
+        "session": "Conversation",
+        "remote": "Remote connection",
+        "job": "Job",
+        "run": "Run"
+      },
+      "status": {
+        "awaiting-input": "Awaiting your input",
+        "running": "Running",
+        "active": "Active",
+        "failed": "Failed",
+        "done": "Completed",
+        "idle": "Idle"
+      },
+      "connection": {
+        "connected": "Connected",
+        "disconnected": "Disconnected",
+        "unknown": "Connection unknown"
+      },
+      "workspace": {
+        "unknown": "Workspace unknown"
+      },
+      "activity": {
+        "unknown": "Activity unknown",
+        "compact": {
+          "second": "{value}s",
+          "minute": "{value}min",
+          "hour": "{value}h",
+          "day": "{value}d"
+        }
+      },
+      "list": {
+        "label": "Conversations and jobs"
+      },
+      "pending-question": "Awaiting your input",
+      "children": "Child items",
+      "empty": {
+        "title": "No conversations or jobs",
+        "message": "Your conversations and jobs will appear here."
+      },
+      "actions": {
+        "label": "Actions",
+        "trigger": "Open actions menu"
+      },
+      "action": {
+        "stop": "Stop",
+        "delete": "Delete",
+        "view": "View",
+        "cancel": "Cancel",
+        "retry": "Retry",
+        "failed": "Unable to {action} the job."
+      },
+      "scope": {
+        "allWorkspaces": "All workspaces",
+        "unavailable": "The all-workspaces view is unavailable until the cross-workspace API feed exists."
+      },
+      "back": "Back to conversations",
+      "view": {
+        "conversation": "Conversation opened",
+        "list": "Conversations list opened"
+      }
+    },
     "checkpoints": {
       "create": "Create checkpoint",
       "restoreLatest": "Restore latest checkpoint",
