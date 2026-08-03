@@ -52,4 +52,23 @@ describe('RemoteLeaseRunner', () => {
         await runner.handleLease({ leaseId: 'forged', nonce: 'n', expiresAt: new Date(Date.now() + 10_000).toISOString(), scope: { capability: 'input_action', serverEnvelope: { kid: 'missing', mac: 'forged' }, action: { action: 'click', x: 1, y: 2 } } });
         expect(provider.calls).toEqual([]);
     });
+
+    it('revoke active leases when the local host stops', async () => {
+        const calls: Array<{ url: string; body?: string }> = [];
+        const runner = new RemoteLeaseRunner({
+            fetch: async (url: string, init?: RequestInit) => {
+                calls.push({ url, body: typeof init?.body === 'string' ? init.body : undefined });
+                return new Response('{}');
+            },
+            apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
+            deviceIdentity: { deviceId: randomUUID(), publicKey: '', sign: async () => 'signature' },
+            consent: new ConsentManager({ store: createMemoryConsentStore() }), context: { provider: createMockCapabilityProvider() },
+        });
+        (runner as unknown as { active: Set<string> }).active.add('lease-stop');
+        await runner.stop();
+        expect(calls).toEqual([{
+            url: 'https://api.example.test/api/v1/chrome-extension/cowork-devices/leases/lease-stop/revoke',
+            body: JSON.stringify({ reason: 'local_stop' }),
+        }]);
+    });
 });
