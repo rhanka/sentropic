@@ -57,6 +57,8 @@ import type { McpCatalogSource } from '../catalog/sources/mcp-source.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
 import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
 import { workflowSeedSource } from '../catalog/sources/workflow-seed-source.js';
+import { COWORK_CAPABILITIES, COWORK_CONNECTOR_ID, createCoworkConnectorHost } from '../connector-host/cowork.js';
+import { coworkTargetSelections } from '../cowork/target-selection.js';
 
 // ---------------------------------------------------------------------------
 // Build the composite registry with all registered sources
@@ -85,6 +87,34 @@ compositeCatalogRegistry.addSource(workflowSeedSource);
 // Lot 6: wire canvas template source (static starters; D-CANVAS — kind/template only, no runtime).
 // Vocabulary: kind='canvas' aligns with CommentTargetKind 'canvas' (packages/comments/src/types.ts:13).
 compositeCatalogRegistry.addSource(canvasTemplateSource);
+
+const coworkConnectorHost = createCoworkConnectorHost();
+for (const capability of COWORK_CAPABILITIES) {
+  standaloneToolSource.register({
+    tool: {
+      name: capability,
+      description: `Use ${capability} on the human-selected remote Cowork kiosk.`,
+      inputSchema: { type: 'object' },
+    },
+    category: 'cowork-remote',
+    handler: async (args, context) => {
+      if (!context) return { status: 'PAS-FAIT' };
+      const selected = coworkTargetSelections.get({
+        userId: context.sessionPrincipalSub, workspaceId: context.workspaceId, sessionId: context.sessionId,
+      });
+      if (!selected) return { status: 'PAS-FAIT' };
+      return coworkConnectorHost.invoke({
+        sessionPrincipalSub: context.sessionPrincipalSub,
+        requestedWorkspaceRef: context.workspaceId,
+        connectorId: COWORK_CONNECTOR_ID,
+        capabilityRef: capability,
+        input: args,
+        hints: { accountSelectorHint: selected.deviceId },
+        execution: { toolCallId: context.toolCallId, sessionId: context.sessionId },
+      });
+    },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Catalog execution seam (Lot 2 / Lot 5) — dispatches non-hardcoded tool calls
@@ -227,7 +257,12 @@ export function resolveFoundationChatTools(
     // but if it does, just prepend search_catalog first.
     return [searchCatalogTool];
   }
-  return [searchSkillsEntry, searchCatalogTool, ...rest];
+  const connectorTools = standaloneToolSource.snapshot()
+    .filter((entry) => entry.kind === 'tool')
+    .map((entry) => ({ type: 'function' as const, function: {
+      name: entry.tool.name, description: entry.tool.description, parameters: entry.tool.inputSchema,
+    } }));
+  return [searchSkillsEntry, searchCatalogTool, ...rest, ...connectorTools];
 }
 
 export function executeFoundationSearchSkills(input: {
