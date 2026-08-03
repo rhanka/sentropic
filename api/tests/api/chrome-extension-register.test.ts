@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { app } from '../../src/app';
-import { getTab, clearAll as clearTabRegistry } from '../../src/services/tab-registry';
+import { clearAll as clearTabRegistry } from '../../src/services/tab-registry';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -37,7 +37,7 @@ describe('Presence registry — POST /chrome-extension/tabs/register', () => {
     await expect(response.json()).resolves.toEqual({ ok: true, tab_id: 'chrome-1' });
   });
 
-  it('accepts a desktop_cowork source and auto-assigns a device_ id', async () => {
+  it('requires a durable device id for desktop_cowork instead of minting an ephemeral tab id', async () => {
     const response = await authenticatedRequest(
       app,
       'POST',
@@ -45,14 +45,7 @@ describe('Presence registry — POST /chrome-extension/tabs/register', () => {
       user.sessionToken!,
       { source: 'desktop_cowork', url: '', title: 'Workstation' },
     );
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as { ok: boolean; tab_id: string };
-    expect(payload.ok).toBe(true);
-    expect(payload.tab_id).toMatch(/^device_/);
-
-    const entry = getTab(payload.tab_id);
-    expect(entry?.source).toBe('desktop_cowork');
-    expect(entry?.userId).toBe(user.id);
+    expect(response.status).toBe(400);
   });
 
   it('rejects an unknown source with 400', async () => {
