@@ -1129,8 +1129,7 @@
         "failed": "Impossible de {action} la tâche."
       },
       "scope": {
-        "allWorkspaces": "Tous les espaces de travail",
-        "unavailable": "La vue de tous les espaces de travail sera disponible lorsque l’API inter-espaces existera."
+        "allWorkspaces": "Tous les espaces de travail"
       },
       "back": "Retour aux conversations",
       "view": {

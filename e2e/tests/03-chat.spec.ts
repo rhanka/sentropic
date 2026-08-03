@@ -199,7 +199,7 @@ test.describe('Chat', () => {
       .locator('#chat-widget-dialog')
       .getByRole('button', { name: sessionNewLabel })
       .first();
-    await expect(newSessionAction).toBeVisible({ timeout: 5_000 });
+    await expect(newSessionAction).toBeVisible({ timeout: QUICK_UI_TIMEOUT });
     const sessionRows = page.locator('#chat-widget-dialog [role="option"]');
     return { newSessionAction, sessionRows };
   }
