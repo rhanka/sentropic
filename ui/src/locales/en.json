@@ -1129,8 +1129,7 @@
         "failed": "Unable to {action} the job."
       },
       "scope": {
-        "allWorkspaces": "All workspaces",
-        "unavailable": "The all-workspaces view is unavailable until the cross-workspace API feed exists."
+        "allWorkspaces": "All workspaces"
       },
       "back": "Back to conversations",
       "view": {
