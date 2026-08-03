@@ -7,6 +7,7 @@ import { coworkDeliveryProofPayload } from '../../src/services/cowork/device-ide
 
 describe('Cowork device lease delivery', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
+  const sessionId = 'delivery-test-session';
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
@@ -14,8 +15,12 @@ describe('Cowork device lease delivery', () => {
   afterEach(cleanupAuthData);
 
   async function issue(deviceId: string, turnRef: string) {
+    await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/selection', user.sessionToken!, {
+      session_id: sessionId, workspace_id: user.workspaceId, device_id: deviceId,
+    });
     const response = await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/leases', user.sessionToken!, {
-      device_id: deviceId, turn_ref: turnRef, scope: { capability: 'screen_capture' },
+      device_id: deviceId, turn_ref: turnRef, session_id: sessionId,
+      workspace_id: user.workspaceId, scope: { capability: 'screen_capture' },
     });
     expect(response.status).toBe(201);
     return (await response.json() as { lease: { leaseId: string } }).lease.leaseId;

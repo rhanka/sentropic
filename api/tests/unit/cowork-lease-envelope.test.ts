@@ -20,8 +20,12 @@ describe('Cowork server-signed lease envelope', () => {
     const mac = sign(null, Buffer.from(canonicalLeaseEnvelope(fields)), pair.privateKey).toString('base64url');
 
     expect(verifyLeaseEnvelope(fields, { kid: 'oauth-key', mac }, publicJwk)).toBe(true);
+    expect(verifyLeaseEnvelope(fields, { kid: 'oauth-key', mac: '' }, publicJwk)).toBe(false);
     expect(verifyLeaseEnvelope(fields, { kid: 'oauth-key', mac: 'forged' }, publicJwk)).toBe(false);
+    expect(verifyLeaseEnvelope({ ...fields, leaseId: 'other-lease' }, { kid: 'oauth-key', mac }, publicJwk)).toBe(false);
+    expect(verifyLeaseEnvelope({ ...fields, capability: 'screen_capture' }, { kid: 'oauth-key', mac }, publicJwk)).toBe(false);
     expect(verifyLeaseEnvelope({ ...fields, targetDeviceId: 'other-device' }, { kid: 'oauth-key', mac }, publicJwk)).toBe(false);
     expect(verifyLeaseEnvelope({ ...fields, nonce: 'other-nonce' }, { kid: 'oauth-key', mac }, publicJwk)).toBe(false);
+    expect(verifyLeaseEnvelope({ ...fields, expiry: '2030-01-02T00:00:00.000Z' }, { kid: 'oauth-key', mac }, publicJwk)).toBe(false);
   });
 });
