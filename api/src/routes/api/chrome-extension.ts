@@ -1,7 +1,13 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { env } from '../../config/env';
 import { register, touchTab, evictStaleTabs, unregister } from '../../services/tab-registry';
 import type { TabSource } from '../../services/tab-registry';
+import {
+  isKnownCoworkDevice,
+  keepaliveCoworkDevice,
+  registerCoworkDevice,
+  unregisterCoworkDevice,
+} from '../../services/cowork/device-registry';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/chrome-ext';
@@ -45,10 +51,16 @@ export const chromeExtensionRouter = new Hono();
 
 const VALID_TAB_SOURCES = new Set<TabSource>(['chrome_plugin', 'bookmarklet', 'desktop_cowork']);
 
+function mutationFailure(c: Context, reason: string) {
+  const status = reason === 'not_found' ? 404 : 403;
+  return c.json({ message: `Cowork device mutation denied: ${reason}.` }, status);
+}
+
 chromeExtensionRouter.post('/tabs/register', async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
   const tab_id = typeof body.tab_id === 'string' ? body.tab_id.trim() : '';
+  const device_id = typeof body.device_id === 'string' ? body.device_id.trim() : '';
   const url = typeof body.url === 'string' ? body.url.trim() : '';
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const source = typeof body.source === 'string' ? body.source.trim() : '';
@@ -58,6 +70,13 @@ chromeExtensionRouter.post('/tabs/register', async (c) => {
       { message: 'Invalid source. Must be "chrome_plugin", "bookmarklet" or "desktop_cowork".' },
       400,
     );
+  }
+
+  if (source === 'desktop_cowork') {
+    if (!device_id) return c.json({ message: 'device_id is required for desktop_cowork.' }, 400);
+    const result = await registerCoworkDevice(user.userId, device_id);
+    if (!result.ok) return mutationFailure(c, result.reason);
+    return c.json({ ok: true, tab_id: device_id, device_id });
   }
 
   const entry = register({
@@ -72,8 +91,16 @@ chromeExtensionRouter.post('/tabs/register', async (c) => {
 });
 
 chromeExtensionRouter.post('/tabs/keepalive', async (c) => {
+  const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
   const tab_id = typeof body.tab_id === 'string' ? body.tab_id.trim() : '';
+  const device_id = typeof body.device_id === 'string' ? body.device_id.trim() : '';
+
+  if (device_id) {
+    const result = await keepaliveCoworkDevice(user.userId, device_id);
+    if (!result.ok) return mutationFailure(c, result.reason);
+    return c.json({ ok: true, evicted_count: 0 });
+  }
 
   if (!tab_id) {
     return c.json({ message: 'tab_id is required.' }, 400);
@@ -86,7 +113,13 @@ chromeExtensionRouter.post('/tabs/keepalive', async (c) => {
 });
 
 chromeExtensionRouter.delete('/tabs/:tabId', async (c) => {
+  const user = c.get('user');
   const tabId = c.req.param('tabId');
+  if (await isKnownCoworkDevice(tabId)) {
+    const result = await unregisterCoworkDevice(user.userId, tabId);
+    if (!result.ok) return mutationFailure(c, result.reason);
+    return c.json({ ok: true });
+  }
   unregister(tabId);
   return c.json({ ok: true });
 });
