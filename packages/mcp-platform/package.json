@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/mcp-platform",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Generic Sentropic/STP MCP provider platform contract: manifest/adapter/context schemas, session/consent/enrollment/secret records, elicitation, per-request authz, discovery/visibility and durable-call refs (SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM). Broker-aware public surface — DRAFT, not frozen. In-memory mocks are a test harness only.",
   "type": "module",
   "license": "MIT",
