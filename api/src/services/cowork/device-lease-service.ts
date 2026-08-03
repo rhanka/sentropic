@@ -1,7 +1,7 @@
 import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 
 import { db, pool } from '../../db/client';
-import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../db/schema';
+import { coworkDeviceLeases, coworkDevices } from '../../db/schema';
 import { findActiveCoworkDevice, verifyCoworkSignature } from './device-identity';
 
 const LEASE_TTL_MS = 45_000;
@@ -59,20 +59,22 @@ export async function issueLease(input: {
       .limit(1);
     if (existing) return { ok: true, lease: toLease(existing) } as LeaseResult;
 
-    const [eligible] = await tx
-      .select({ id: coworkDevices.id })
-      .from(coworkDevices)
-      .innerJoin(coworkDevicePresence, eq(coworkDevicePresence.deviceId, coworkDevices.id))
-      .where(and(
-        eq(coworkDevices.id, input.deviceId),
-        eq(coworkDevices.userId, input.userId),
-        eq(coworkDevices.status, 'active'),
-        eq(coworkDevicePresence.userId, input.userId),
-        eq(coworkDevicePresence.status, 'active'),
-        gt(coworkDevicePresence.lastSeenAt, new Date(now.getTime() - PRESENCE_FRESHNESS_MS)),
-      ))
-      .limit(1);
-    if (!eligible) return { ok: false, reason: 'ineligible' } as LeaseResult;
+    // Lock the device while checking presence and inserting the lease. A
+    // concurrent revoke waits for this transaction rather than slipping between
+    // eligibility and issuance.
+    const eligibility = await tx.execute(sql`
+      SELECT d.id
+      FROM cowork_devices d
+      JOIN cowork_device_presence p ON p.device_id = d.id
+      WHERE d.id = ${input.deviceId}
+        AND d.user_id = ${input.userId}
+        AND d.status = 'active'
+        AND p.user_id = ${input.userId}
+        AND p.status = 'active'
+        AND p.last_seen_at > ${new Date(now.getTime() - PRESENCE_FRESHNESS_MS)}
+      FOR UPDATE OF d
+    `);
+    if (eligibility.rows.length === 0) return { ok: false, reason: 'ineligible' } as LeaseResult;
 
     const [lease] = await tx
       .insert(coworkDeviceLeases)
