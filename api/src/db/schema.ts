@@ -213,6 +213,11 @@ export const coworkDevices = pgTable('cowork_devices', {
   publicKey: text('public_key').notNull(),
   publicKeyFingerprint: text('public_key_fingerprint').notNull(),
   capabilities: jsonb('capabilities').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  // GENERAL-only fields stay null/empty for BR-41c devices and therefore fail closed.
+  pepPublicKey: text('pep_public_key'),
+  pepKeyId: text('pep_key_id'),
+  generalProfile: jsonb('general_profile').$type<{ isolatedVmTarget?: boolean; egressPolicyRef?: string }>().notNull().default(sql`'{}'::jsonb`),
+  killEpoch: integer('kill_epoch').notNull().default(0),
   status: text('status').notNull().default('active'),
   enrolledAt: timestamp('enrolled_at', { withTimezone: false }).notNull().defaultNow(),
   revokedAt: timestamp('revoked_at', { withTimezone: false }),
@@ -258,6 +263,39 @@ export const coworkDeviceLeases = pgTable('cowork_device_leases', {
     .on(table.deviceId, table.turnRef)
     .where(sql`${table.status} IN ('issued', 'acknowledged')`),
 }));
+
+// GENERAL durable call source of truth. It deliberately stores only encrypted
+// descriptor material and opaque IDs/digests; no model text or screen content.
+export const coworkGeneralCalls = pgTable('cowork_general_calls', {
+  id: text('id').primaryKey(),
+  principalId: text('principal_id').notNull().references(() => users.id),
+  tenantId: text('tenant_id').notNull(),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.id),
+  targetDeviceId: text('target_device_id').notNull().references(() => coworkDevices.id),
+  invocationId: text('invocation_id').notNull(),
+  toolCallId: text('tool_call_id').notNull(),
+  descriptorCiphertext: text('descriptor_ciphertext').notNull(),
+  descriptorKeyRef: text('descriptor_key_ref').notNull(),
+  descriptorMeta: jsonb('descriptor_meta').$type<{ actionDescriptorId: string; argumentDigest: string }>().notNull(),
+  state: text('state').notNull().default('DÉPOSÉ-EN-ATTENTE'),
+  authorityEpoch: integer('authority_epoch').notNull(),
+  requiresFreshAuthority: boolean('requires_fresh_authority').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  logicalCallUnique: uniqueIndex('cowork_general_calls_logical_unique').on(table.principalId, table.workspaceId, table.toolCallId),
+  pendingDeviceIdx: index('cowork_general_calls_pending_device_idx').on(table.targetDeviceId, table.state),
+}));
+
+// Survives later hard deletion: C5b requires this durable tombstone first.
+export const coworkDeviceTeardownTombstones = pgTable('cowork_device_teardown_tombstones', {
+  id: text('id').primaryKey(),
+  deviceId: text('device_id').notNull(),
+  userId: text('user_id').notNull().references(() => users.id),
+  killEpoch: integer('kill_epoch').notNull(),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+});
 
 export const webauthnChallenges = pgTable('webauthn_challenges', {
   id: text('id').primaryKey(),
