@@ -106,6 +106,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [ ] Tests: deny-as-missing, no auto/broadcast, cross-user/workspace/hint denial, capability visibility, tool-call id propagation, audit redaction.
   - [ ] Gate: `make typecheck-connector-host ENV=test-cowork-connector`; `make test-connector-host ENV=test-cowork-connector`; `make typecheck-api ENV=test-cowork-connector`; `make lint-api ENV=test-cowork-connector`.
 - [ ] **Lot 3 — Targeted device identity, lease and delivery**
+  - [x] Add the BR-41c durable device, presence, and lease schema with its single migration and non-terminal issuance idempotency index.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.

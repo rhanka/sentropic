@@ -201,6 +201,64 @@ export const userSessions = pgTable('user_sessions', {
   expiresAtIdx: index('user_sessions_expires_at_idx').on(table.expiresAt),
 }));
 
+// BR-41c authorization foundation. These records identify an enrolled Cowork
+// device and authorize a later, separate Lot 4 execution path; they never run
+// screen capture or input actions themselves.
+export const coworkDevices = pgTable('cowork_devices', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  deviceName: text('device_name'),
+  publicKey: text('public_key').notNull(),
+  publicKeyFingerprint: text('public_key_fingerprint').notNull(),
+  capabilities: jsonb('capabilities').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  status: text('status').notNull().default('active'),
+  enrolledAt: timestamp('enrolled_at', { withTimezone: false }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: false }),
+}, (table) => ({
+  userStatusIdx: index('cowork_devices_user_status_idx').on(table.userId, table.status),
+  fingerprintIdx: index('cowork_devices_fingerprint_idx').on(table.publicKeyFingerprint),
+}));
+
+export const coworkDevicePresence = pgTable('cowork_device_presence', {
+  deviceId: text('device_id')
+    .primaryKey()
+    .references(() => coworkDevices.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('active'),
+  connectedAt: timestamp('connected_at', { withTimezone: false }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  userStatusIdx: index('cowork_device_presence_user_status_idx').on(table.userId, table.status),
+}));
+
+export const coworkDeviceLeases = pgTable('cowork_device_leases', {
+  id: text('id').primaryKey(),
+  deviceId: text('device_id')
+    .notNull()
+    .references(() => coworkDevices.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  turnRef: text('turn_ref').notNull(),
+  nonce: text('nonce').notNull(),
+  scope: jsonb('scope').$type<Record<string, unknown> | null>(),
+  status: text('status').notNull().default('issued'),
+  issuedAt: timestamp('issued_at', { withTimezone: false }).notNull().defaultNow(),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: false }),
+  consumedAt: timestamp('consumed_at', { withTimezone: false }),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+}, (table) => ({
+  deviceStatusIdx: index('cowork_device_leases_device_status_idx').on(table.deviceId, table.status),
+  expiresIdx: index('cowork_device_leases_expires_idx').on(table.expiresAt),
+  nonTerminalDeviceTurnUnique: uniqueIndex('cowork_device_leases_device_turn_unique')
+    .on(table.deviceId, table.turnRef)
+    .where(sql`${table.status} IN ('issued', 'acknowledged')`),
+}));
+
 export const webauthnChallenges = pgTable('webauthn_challenges', {
   id: text('id').primaryKey(),
   challenge: text('challenge').notNull().unique(), // base64url-encoded
