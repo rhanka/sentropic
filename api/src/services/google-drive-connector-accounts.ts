@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { documentConnectorAccounts, type DocumentConnectorAccountRow } from '../db/schema';
 import { logger } from '../logger';
@@ -14,6 +14,7 @@ import {
   type GoogleDriveAccountIdentity,
   type GoogleDriveTokenResponse,
 } from './google-drive-oauth';
+import type { GoogleConnectorProvider } from './gmail-oauth';
 
 export type GoogleDriveConnectionStatus = 'connected' | 'disconnected' | 'error';
 
@@ -30,7 +31,7 @@ export class ConnectorAccountLimitError extends Error {
 
 export type GoogleDriveConnectionPublic = {
   id: string | null;
-  provider: typeof GOOGLE_DRIVE_PROVIDER;
+  provider: GoogleConnectorProvider;
   status: GoogleDriveConnectionStatus;
   connected: boolean;
   accountEmail: string | null;
@@ -177,11 +178,12 @@ const refreshStoredGoogleDriveTokenSecret = async (input: {
 
 export const toPublicGoogleDriveConnection = (
   row: DocumentConnectorAccountRow | null | undefined,
+  provider: GoogleConnectorProvider = GOOGLE_DRIVE_PROVIDER,
 ): GoogleDriveConnectionPublic => {
   if (!row) {
     return {
       id: null,
-      provider: GOOGLE_DRIVE_PROVIDER,
+      provider,
       status: 'disconnected',
       connected: false,
       accountEmail: null,
@@ -198,7 +200,7 @@ export const toPublicGoogleDriveConnection = (
   const status = row.status === 'connected' || row.status === 'error' ? row.status : 'disconnected';
   return {
     id: row.id,
-    provider: GOOGLE_DRIVE_PROVIDER,
+    provider,
     status,
     connected: status === 'connected',
     accountEmail: row.accountEmail ?? null,
@@ -232,14 +234,17 @@ export const listConnectorAccounts = async (
       desc(documentConnectorAccounts.updatedAt),
     );
 
-export const getGoogleDriveConnectorAccount = async (input: {
-  userId: string;
-  workspaceId: string;
-}): Promise<DocumentConnectorAccountRow | null> => {
+export const getGoogleDriveConnectorAccount = async (
+  input: {
+    userId: string;
+    workspaceId: string;
+  },
+  provider: GoogleConnectorProvider = GOOGLE_DRIVE_PROVIDER,
+): Promise<DocumentConnectorAccountRow | null> => {
   const [row] = await listConnectorAccounts(
     input.workspaceId,
     input.userId,
-    GOOGLE_DRIVE_PROVIDER,
+    provider,
   );
   return row ?? null;
 };
@@ -249,14 +254,15 @@ export const getGoogleDriveConnection = async (
     userId: string;
     workspaceId: string;
   },
-  options: { validateToken?: boolean } = {},
+  options: { validateToken?: boolean; provider?: GoogleConnectorProvider } = {},
 ): Promise<GoogleDriveConnectionPublic> => {
-  let account = await getGoogleDriveConnectorAccount(input);
+  const provider = options.provider ?? GOOGLE_DRIVE_PROVIDER;
+  let account = await getGoogleDriveConnectorAccount(input, provider);
   if (options.validateToken && account && account.status !== 'disconnected') {
-    await resolveGoogleDriveTokenSecret(input);
-    account = await getGoogleDriveConnectorAccount(input);
+    await resolveGoogleDriveTokenSecret({ ...input, provider });
+    account = await getGoogleDriveConnectorAccount(input, provider);
   }
-  return toPublicGoogleDriveConnection(account);
+  return toPublicGoogleDriveConnection(account, provider);
 };
 
 export const storeGoogleDriveTokenMaterial = async (input: {
@@ -264,11 +270,13 @@ export const storeGoogleDriveTokenMaterial = async (input: {
   workspaceId: string;
   token: GoogleDriveTokenResponse;
   identity: GoogleDriveAccountIdentity;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveConnectionPublic> => {
+  const provider = input.provider ?? GOOGLE_DRIVE_PROVIDER;
   const accounts = await listConnectorAccounts(
     input.workspaceId,
     input.userId,
-    GOOGLE_DRIVE_PROVIDER,
+    provider,
   );
   const isExistingSubject = accounts.some(
     (account) => account.accountSubject === input.identity.accountSubject,
@@ -296,7 +304,7 @@ export const storeGoogleDriveTokenMaterial = async (input: {
     id: createId(),
     workspaceId: input.workspaceId,
     userId: input.userId,
-    provider: GOOGLE_DRIVE_PROVIDER,
+    provider,
     status: 'connected',
     accountEmail: input.identity.accountEmail,
     accountSubject: input.identity.accountSubject,
@@ -334,7 +342,7 @@ export const storeGoogleDriveTokenMaterial = async (input: {
       },
     });
 
-  return getGoogleDriveConnection(input);
+  return getGoogleDriveConnection(input, { provider });
 };
 
 /**
@@ -366,6 +374,34 @@ const readRevocableGoogleDriveToken = (tokenSecret: string | null): string | nul
 };
 
 /**
+ * What a stored connector secret tells us about the grant behind it.
+ *
+ * `readRevocableGoogleDriveToken` collapses two very different states into `null`: "there is no
+ * stored secret" and "there is a secret we cannot read". For `disconnect` that collapse is harmless
+ * — the row survives, so a mistake is visible and retryable. For a DESTRUCTIVE teardown it is not:
+ * the row is about to cease to exist, so "nothing to revoke" and "a live grant we cannot revoke"
+ * must lead to different outcomes. Collapsing them would silently strand grants at Google forever.
+ */
+export type ConnectorGrantClassification =
+  /** No stored secret: the account is already disconnected. Nothing exists to revoke. */
+  | { kind: 'none' }
+  /** A usable token was recovered. Revoke it upstream. */
+  | { kind: 'token'; token: string }
+  /**
+   * A secret IS stored but cannot be decoded — wrong at-rest key, or a malformed payload. A grant
+   * therefore very likely exists at Google and we have permanently lost the means to revoke it.
+   * This is not hypothetical: rows encrypted under a since-lost key are known to exist in
+   * production (2026-07-27). Such a grant must leave a durable trace before its row is destroyed.
+   */
+  | { kind: 'unreadable' };
+
+export const classifyConnectorGrant = (tokenSecret: string | null): ConnectorGrantClassification => {
+  if (!tokenSecret) return { kind: 'none' };
+  const token = readRevocableGoogleDriveToken(tokenSecret);
+  return token ? { kind: 'token', token } : { kind: 'unreadable' };
+};
+
+/**
  * Tell Google to revoke a grant. Best-effort, and deliberately called AFTER the local row is
  * cleared — see the ordering note in `disconnectGoogleDriveConnectorAccount`.
  *
@@ -388,9 +424,25 @@ const revokeGoogleDriveGrantUpstream = async (accountId: string, token: string):
 export const disconnectGoogleDriveConnectorAccount = async (input: {
   userId: string;
   workspaceId: string;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveConnectionPublic> => {
-  const existing = await getGoogleDriveConnectorAccount(input);
-  if (!existing) return toPublicGoogleDriveConnection(null);
+  const provider = input.provider ?? GOOGLE_DRIVE_PROVIDER;
+
+  // EVERY account, not the first one.
+  //
+  // The uniqueness constraint is on (workspace, user, provider, accountSubject), so one user may
+  // legitimately hold several connected Google accounts. `POST /disconnect` carries no account
+  // identifier — it only knows the authenticated user — so its meaning to the user is "disconnect
+  // this Google connection", not "disconnect whichever account happens to sort first". Acting on a
+  // single row returned a success while leaving the other accounts' refresh tokens stored locally
+  // AND their grants live at Google: the exact silent failure this revocation work exists to remove.
+  // Scoped to `provider` so a Gmail disconnect never touches a Drive grant, and vice versa.
+  const existing = await listConnectorAccounts(
+    input.workspaceId,
+    input.userId,
+    provider,
+  );
+  if (existing.length === 0) return toPublicGoogleDriveConnection(null, provider);
 
   // ORDERING IS THE WHOLE DESIGN HERE.
   //
@@ -404,12 +456,27 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
   // never cleared. Disconnect would then fail precisely under the conditions that make people want
   // to disconnect.
   //
-  // So: read the token into memory, clear the row, THEN revoke upstream with the in-memory copy.
-  // The local disconnect is unconditional and immediate; the remote call can take as long as it
-  // likes without holding it hostage. That also removes the crash window in which a revoked grant
+  // So: read the tokens into memory, clear the rows, THEN revoke upstream with the in-memory copies.
+  // The local disconnect is unconditional and immediate; the remote calls can take as long as they
+  // like without holding it hostage. That also removes the crash window in which a revoked grant
   // was still stored locally as "connected".
-  const revocableToken = readRevocableGoogleDriveToken(existing.tokenSecret);
+  const revocable = existing.map((row) => ({
+    accountId: row.id,
+    token: readRevocableGoogleDriveToken(row.tokenSecret),
+  }));
 
+  // Scoped to the ids we actually captured, and in ONE statement.
+  //
+  // Not a loop over ids — a partial clear reports success while leaving live tokens behind. But not
+  // a blanket `(workspace, user, provider)` predicate either, which looks equivalent and is not: an
+  // account connected between the read above and this write would be cleared WITHOUT its token ever
+  // having been captured, so its grant would stay live at Google with no local copy left to revoke
+  // it with, and not even a warning, since it never entered `revocable`. Silent and unrecoverable —
+  // the exact failure mode this whole change exists to remove.
+  //
+  // Restricting to the captured ids leaves such a row untouched instead. The user then still sees
+  // one account connected and can disconnect again: visible and recoverable beats silent and
+  // unrecoverable, which is the trade this codebase makes everywhere else in the revocation path.
   await db
     .update(documentConnectorAccounts)
     .set({
@@ -420,33 +487,48 @@ export const disconnectGoogleDriveConnectorAccount = async (input: {
       lastError: null,
       updatedAt: new Date(),
     })
-    .where(eq(documentConnectorAccounts.id, existing.id));
-
-  if (revocableToken) {
-    await revokeGoogleDriveGrantUpstream(existing.id, revocableToken);
-  } else {
-    logger.warn(
-      { accountId: existing.id },
-      'google-drive: disconnected locally but found no token to revoke upstream — the grant may still be live at Google',
+    .where(
+      inArray(
+        documentConnectorAccounts.id,
+        revocable.map((entry) => entry.accountId),
+      ),
     );
-  }
 
-  return getGoogleDriveConnection(input);
+  // Concurrently, and never sequentially: each revocation is already bounded by its own timeout, so
+  // a serial loop would make the worst case scale with the number of connected accounts for no gain.
+  // `revokeGoogleDriveGrantUpstream` is best-effort and never throws, so nothing here can fail the
+  // disconnect that has already been committed above.
+  await Promise.all(
+    revocable.map(async ({ accountId, token }) => {
+      if (token) {
+        await revokeGoogleDriveGrantUpstream(accountId, token);
+        return;
+      }
+      logger.warn(
+        { accountId },
+        'google-drive: disconnected locally but found no token to revoke upstream — the grant may still be live at Google',
+      );
+    }),
+  );
+
+  return getGoogleDriveConnection(input, { provider });
 };
 
 export const markGoogleDriveConnectorError = async (input: {
   userId: string;
   workspaceId: string;
   message: string;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveConnectionPublic> => {
-  const existing = await getGoogleDriveConnectorAccount(input);
+  const provider = input.provider ?? GOOGLE_DRIVE_PROVIDER;
+  const existing = await getGoogleDriveConnectorAccount(input, provider);
   const now = new Date();
   if (!existing) {
     await db.insert(documentConnectorAccounts).values({
       id: createId(),
       workspaceId: input.workspaceId,
       userId: input.userId,
-      provider: GOOGLE_DRIVE_PROVIDER,
+      provider,
       status: 'error',
       accountEmail: null,
       accountSubject: null,
@@ -459,7 +541,7 @@ export const markGoogleDriveConnectorError = async (input: {
       createdAt: now,
       updatedAt: now,
     });
-    return getGoogleDriveConnection(input);
+    return getGoogleDriveConnection(input, { provider });
   }
 
   await db
@@ -473,14 +555,15 @@ export const markGoogleDriveConnectorError = async (input: {
     })
     .where(eq(documentConnectorAccounts.id, existing.id));
 
-  return getGoogleDriveConnection(input);
+  return getGoogleDriveConnection(input, { provider });
 };
 
 export const resolveGoogleDriveTokenSecret = async (input: {
   userId: string;
   workspaceId: string;
+  provider?: GoogleConnectorProvider;
 }): Promise<GoogleDriveTokenSecretPayload | null> => {
-  const account = await getGoogleDriveConnectorAccount(input);
+  const account = await getGoogleDriveConnectorAccount(input, input.provider);
   if (!account || (account.status !== 'connected' && account.status !== 'error')) return null;
   const decrypted = decryptSecretOrNull(account.tokenSecret);
   if (!decrypted) return null;

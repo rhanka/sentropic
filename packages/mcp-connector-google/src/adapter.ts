@@ -5,8 +5,6 @@ import type {
   ConnectorTenantContext,
   ConnectorTenantResolutionInput,
   RedactionClass,
-} from '../../mcp-platform/src/manifest.js';
-import type {
   AppConnectorProviderAdapter,
   AppResourceRead,
   AppResourceResult,
@@ -14,7 +12,7 @@ import type {
   AppToolResult,
   ConnectorSecretStatus,
   DurableCallRef,
-} from '../../mcp-platform/src/runtime.js';
+} from '@sentropic/mcp-platform';
 import { getResourceFixture, getToolFixture, type GoogleProvider } from './fixtures.js';
 import { gmailManifest, googleDriveManifest } from './manifest.js';
 

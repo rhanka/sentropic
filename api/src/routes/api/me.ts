@@ -25,6 +25,11 @@ import {
   inferProviderFromModelIdWithLegacy,
   resolveDefaultSelection,
 } from '../../services/model-catalog';
+import {
+  captureConnectorGrantsForTeardown,
+  recordConnectorGrantTombstones,
+  revokeCapturedConnectorGrants,
+} from '../../services/connector-grant-teardown';
 
 export const meRouter = new Hono();
 
@@ -208,7 +213,16 @@ meRouter.post('/deactivate', async (c) => {
 meRouter.delete('/', async (c) => {
   const { userId, workspaceId } = c.get('user');
 
+  // Capture the external grants BEFORE anything is deleted: `document_connector_accounts` cascades
+  // from both `users` and `workspaces`, a cascade runs no application code, and once the rows are
+  // gone the encrypted refresh tokens are gone with them — leaving grants live at Google that
+  // nothing can ever revoke. See services/connector-grant-teardown.ts for the full ordering.
+  const capturedGrants = await captureConnectorGrantsForTeardown({ userId, workspaceId });
+
   await db.transaction(async (tx) => {
+    // Tombstone inside the same transaction, so the record and the destruction are atomic.
+    await recordConnectorGrantTombstones(tx, capturedGrants);
+
     // Collect object IDs for stream cleanup + history cleanup
     const organizationRows = await tx
       .select({ id: organizations.id })
@@ -291,6 +305,10 @@ meRouter.delete('/', async (c) => {
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
   });
+
+  // Only after a successful commit. Revoking earlier would kill the grant of an account that a
+  // rolled-back transaction leaves alive.
+  await revokeCapturedConnectorGrants(capturedGrants);
 
   return c.json({ success: true });
 });
