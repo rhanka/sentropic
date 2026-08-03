@@ -120,6 +120,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Route only `desktop_cowork` register, keepalive, and unregister through durable ownership checks; preserve browser tab handling.
   - [x] Add durable short-TTL lease issuance, idempotency, signature acknowledgement, replay protection, and pre-execution revocation primitives.
   - [x] Expose bounded, authenticated lease issue, acknowledge, revoke, and device-scoped poll primitives with no remote execution route.
+  - [x] Add device-filtered lease SSE notification backed by the durable queue; a connection never queries another device's rows.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.
