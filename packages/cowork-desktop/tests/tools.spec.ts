@@ -20,6 +20,12 @@ const allowAll = () =>
         ]),
     });
 
+const allowInputOnce = () =>
+    new ConsentManager({
+        store: createMemoryConsentStore(),
+        prompt: async () => 'allow_once',
+    });
+
 describe('tool definitions', () => {
     it('advertises exactly screen_capture and input_action', () => {
         expect(desktopToolDefinitions.map((d) => d.name).sort()).toEqual([
@@ -120,7 +126,7 @@ describe('runDesktopToolCall — consent gate', () => {
     it('returns an error result for an unknown tool', async () => {
         const result = await runDesktopToolCall(
             { toolCallId: 'c3', name: 'mystery', arguments: {} },
-            { consent: allowAll(), context: context() },
+            { consent: allowInputOnce(), context: context() },
         );
         expect(result.error).toMatch(/Unknown desktop tool/);
     });
@@ -128,7 +134,7 @@ describe('runDesktopToolCall — consent gate', () => {
     it('reports executor errors back as a tool error (consent allowed)', async () => {
         const result = await runDesktopToolCall(
             { toolCallId: 'c4', name: 'input_action', arguments: { action: 'click' } },
-            { consent: allowAll(), context: context() },
+            { consent: allowInputOnce(), context: context() },
         );
         expect(result.error).toMatch(/numeric x and y/);
         expect(JSON.parse(result.output).ok).toBe(false);

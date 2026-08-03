@@ -15,6 +15,12 @@ const allowAll = () =>
         ]),
     });
 
+const allowInputOnce = () =>
+    new ConsentManager({
+        store: createMemoryConsentStore(),
+        prompt: async () => 'allow_once',
+    });
+
 const statusPayload = (calls: Array<{ id: string; name: string; args: unknown }>) => ({
     state: 'awaiting_local_tool_results',
     pending_local_tool_calls: calls.map((c) => ({ tool_call_id: c.id, name: c.name, args: c.args })),
@@ -25,7 +31,7 @@ describe('CoworkRunner.handleStatusPayload', () => {
         const provider = createMockCapabilityProvider();
         const post = vi.fn().mockResolvedValue({ resumed: true });
         const runner = new CoworkRunner({
-            consent: allowAll(),
+            consent: allowInputOnce(),
             context: { provider } as DesktopToolContext,
             postToolResults: post,
         });

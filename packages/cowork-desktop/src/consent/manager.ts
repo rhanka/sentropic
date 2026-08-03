@@ -15,7 +15,8 @@ import {
  *
  * Resolution order for a tool call:
  *  1. A persisted `deny` policy matches  → `deny` (source `deny_always`).
- *  2. A persisted `allow` policy matches → `allow` (source `allow_always`).
+ *  2. A persisted `allow` policy matches → `allow` (source `allow_always`),
+ *     except `input_action`, which is deliberately never durable.
  *  3. No persisted policy:
  *     - with a {@link ConsentPrompt}: ask the host once, then apply:
  *         - `allow_once`   → allow this call, persist nothing.
@@ -68,11 +69,16 @@ export class ConsentManager {
     ): Promise<ConsentVerdict> {
         // Remote hands are always Allow once.  A durable input grant would let
         // a later model turn act without a foreground human decision.
-        const persisted = toolName === 'input_action' ? null : await this.resolvePersisted(toolName);
+        const persisted = await this.resolvePersisted(toolName);
         if (persisted) {
-            return persisted.policy === 'allow'
+            if (toolName === 'input_action' && persisted.policy === 'allow') {
+                // A prior local version could have written this policy.  Do
+                // not honor it: remote hands always require a fresh prompt.
+            } else {
+                return persisted.policy === 'allow'
                 ? { decision: 'allow', source: 'allow_always' }
                 : { decision: 'deny', source: 'deny_always' };
+            }
         }
 
         if (!this.prompt) {

@@ -91,7 +91,7 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
         }
         default:
             throw new Error(
-                `input_action: unknown or denied action "${action}" (expected click|type|scroll).`,
+                `input_action: unknown action or denied action "${action}" (expected click|type|scroll).`,
             );
     }
 };
