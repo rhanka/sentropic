@@ -1,48 +1,54 @@
-# Feature: F1 — cross-workspace agents list (all-workspaces session scope)
+# Feature: h2a Into Sentropic Integration — Orientation 3 Remote
 
 ## Objective
-- [x] Make the agents-surface "Tous les espaces de travail" toggle WORK (UAT-1 F1): list the user's own sessions across ALL their workspaces, via an additive own-principal API scope.
-- [x] Restore the interim-hidden toggle: functional, on a DS control, no dev message.
+- [x] Pose the design-only D6 architecture for orientation #3 of capitalize-sentropic: code-workspace enrollment, remote h2a sessions on the one agents feed, and owner signatures through Focus decisions.
 
 ## Scope / Guardrails
-- [x] Additive-minor, own-principal, backward-compatible. `GET /sessions` current behaviour unchanged; a new `?scope=all` path lists all-workspaces.
-- [x] Own-principal STRICT: `scope=all` filters `user_id = self` only — it can NEVER list another user's sessions (already true in `listForUser`'s `WHERE userId`).
-- [x] Bounded default APPLIED in the all-ws variant (the current list is unbounded — pre-existing; the variant must not inherit it): a sensible default limit, ordering preserved.
-- [x] Workspace labels are client-side: each session carries `workspaceId`; map to name via `$workspaceScope.items`. NO per-workspace labels API.
-- [ ] Every UI element on a DS component. i18n FR+EN. Make-only, Docker-first, `ENV` last, never `ENV=dev`.
-- [ ] Architect (`s-archi`) CO-SIGNS the PR on 3 criteria: own-principal strict / bounded-default-applied / dev-message fully removed.
+- [x] Implementation scope is limited to `spec/**`; `BRANCH.md` is branch-control metadata only.
+- [x] No code, lane, build, test, migration, UAT, or package change.
+- [x] The h2a 0.90.1 storm-gate and owner-signature gate remain closed; this spec is not a signature.
+- [x] Make-only workflow; all new text is English.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths**:
-  - `api/src/routes/api/chat.ts`
-  - `api/src/services/chat-service.ts`
-  - `api/src/services/chat/postgres-chat-session-store.ts`
-  - `api/tests/**`
-  - `ui/src/lib/components/ChatWidget.svelte`
-  - `ui/src/lib/chat/agents-feed-adapter.ts`
-  - `ui/src/lib/stores/**`
-  - `ui/src/lib/api/**`
-  - `ui/src/locales/en.json`, `ui/src/locales/fr.json`
-  - `ui/tests/**`
-  - `packages/chat-ui/src/components/AgentsList.svelte`, `packages/chat-ui/package.json`
-  - `BRANCH.md`
-- **Forbidden Paths**:
-  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
-- **Conditional Paths**: `.github/workflows/**` (none expected)
+- **Allowed Paths (implementation scope)**:
+  - `spec/SPEC_EVOL_H2A_INTO_SENTROPIC.md`
+  - `BRANCH.md` (branch-control metadata only)
+- **Forbidden Paths (must not change in this branch)**:
+  - `api/**`
+  - `ui/**`
+  - `packages/**`
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `.github/workflows/**`
+  - `plan/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - none
+- **Exception process**:
+  - Declare `H2A-INTO-STP-EXn` in `## Feedback Loop` with reason, impact, and rollback before touching any conditional or forbidden path.
 
 ## Feedback Loop
-- `attention` — the current `listForUser` (current-workspace path) is UNBOUNDED (pre-existing). This branch bounds only the new all-ws path; do not change the current-ws behaviour.
+- [x] `attention` — sentropic PR #502 is an open design draft; this spec depends on its one-port fusion contract without treating it as merged code beyond the locally measured `AgentsFeedPort`/`AgentsEntry` types.
+- [x] `attention` — h2a PR #152 is the sole merged publisher of `docs/governance/surface-invariants.md`; this branch references it and does not republish the invariant set.
+- [x] `attention` — the exact Part 1 enrollment shape remains co-specified with the workspace primitive owner.
+
+## AI Flaky tests
+- [x] N/A — design-only documentation branch; no test campaign.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (single design artifact; no sub-workstreams)
+- [ ] **Multi-branch**
+- Rationale: one spec and no implementation lane.
+
+## UAT Management (in orchestration context)
+- [x] N/A — design-only; review flow is architect evaluation, conductor consolidation, then owner signature.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — server: additive own-principal all-ws scope**
-  - [x] `listForUser(userId, workspaceId?, limit?)`: apply `.limit(limit)` when provided; keep `desc(updatedAt), desc(createdAt)`.
-  - [x] `listSessions(userId, workspaceId?, limit?)`: passthrough.
-  - [x] `GET /sessions`: read `scope` query. `scope=all` -> `listSessions(user.userId, null, DEFAULT_ALL_WS_LIMIT)`. Else unchanged.
-  - [x] `api/tests`: `scope=all` returns cross-workspace own sessions; NEVER another user's; bounded default applied (seed > limit, get limit).
-- [x] **Lot 2 — client: functional toggle + per-session labels**
-  - [x] Restore the toggle in `ChatWidget.svelte` (DS control), no dev message. On -> fetch `/sessions?scope=all`; off -> current workspace.
-  - [x] Adapter: for all-ws, resolve each session label from its `workspaceId` via `$workspaceScope.items` (id->name), not the single current label.
-  - [x] `ui/tests`: adapter per-session label; toggle->fetch wiring.
-- [x] **Lot 3 — gates + PR**
-  - [x] `make test-api` (chat.test.ts, 31 passed incl. scope=all own-principal + bounded) + `make test-ui` (460 passed) green.
-  - [x] PR; ping `s-archi` for co-sign against the 3 criteria (own-principal strict / bounded default applied / dev message removed — all verified at code + test).
+- [x] **Lot 0 — Baseline and placement measurement**
+  - [x] Read the governing rules, branch template, #502 contract, h2a surface-invariants publisher, and cited local primitives.
+  - [x] Verify the worktree mechanically with `harness check branch`.
+- [x] **Lot 1 — Architecture specification**
+  - [x] Author `spec/SPEC_EVOL_H2A_INTO_SENTROPIC.md` to the supplied orientation #3 direction.
+  - [x] Make absence-of-debt, LIB/INTEGRATION ownership, gates, acceptance grid, non-goals, and open items explicit.
+- [x] **Lot 2 — Documentation gate**
+  - [x] Run `make scope-check` and inspect the final diff; no build or tests.
