@@ -4,7 +4,7 @@ import { INPUT_ACTION_TOOL, type DesktopToolContext } from './types.js';
 
 /**
  * `input_action` (hands) — the actuation step of the agentic computer-use loop.
- * Routes `click` / `type` / `scroll` / `key` to the injected
+ * Routes only `click` / `type` / `scroll` to the injected
  * {@link DesktopCapabilityProvider}.
  */
 
@@ -12,13 +12,13 @@ export const inputActionDefinition: ToolDefinition = {
     name: INPUT_ACTION_TOOL,
     description:
         'Perform a desktop input action (the agent\'s hands): click at coordinates, type text, ' +
-        'scroll by a delta, or press a key combination.',
+        'or scroll by a delta. Key chords, Enter, and submission are denied.',
     parameters: {
         type: 'object',
         properties: {
             action: {
                 type: 'string',
-                enum: ['click', 'type', 'scroll', 'key'],
+                enum: ['click', 'type', 'scroll'],
                 description: 'Which input action to perform.',
             },
             x: { type: 'integer', description: 'click: absolute screen X.' },
@@ -31,10 +31,6 @@ export const inputActionDefinition: ToolDefinition = {
             text: { type: 'string', description: 'type: literal text to enter.' },
             dx: { type: 'integer', description: 'scroll: horizontal delta (+ = right).' },
             dy: { type: 'integer', description: 'scroll: vertical delta (+ = down).' },
-            combo: {
-                type: 'string',
-                description: 'key: "+"-separated combo, e.g. "Ctrl+C", "Enter", "Alt+Tab".',
-            },
         },
         required: ['action'],
         additionalProperties: false,
@@ -78,6 +74,9 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
             if (typeof text !== 'string') {
                 throw new Error('input_action type requires a string "text".');
             }
+            if (/[\r\n]/.test(text)) {
+                throw new Error('input_action denies Enter and submission characters.');
+            }
             await provider.type(text);
             return { ok: true, action: 'type', length: text.length };
         }
@@ -90,17 +89,9 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
             await provider.scroll(dx, dy);
             return { ok: true, action: 'scroll', dx, dy };
         }
-        case 'key': {
-            const combo = args.combo;
-            if (typeof combo !== 'string' || !combo.trim()) {
-                throw new Error('input_action key requires a non-empty "combo".');
-            }
-            await provider.key(combo.trim());
-            return { ok: true, action: 'key', combo: combo.trim() };
-        }
         default:
             throw new Error(
-                `input_action: unknown action "${action}" (expected click|type|scroll|key).`,
+                `input_action: unknown or denied action "${action}" (expected click|type|scroll).`,
             );
     }
 };

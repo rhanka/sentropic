@@ -61,16 +61,23 @@ describe('input_action executor (hands)', () => {
         expect(provider.calls).toEqual([{ kind: 'mouseClick', x: 10, y: 20, button: 'right' }]);
     });
 
-    it('dispatches type/scroll/key', async () => {
+    it('dispatches only type and scroll', async () => {
         const provider = createMockCapabilityProvider();
         await inputActionExecutor({ action: 'type', text: 'hello' }, { provider } as DesktopToolContext);
         await inputActionExecutor({ action: 'scroll', dx: 0, dy: 120 }, { provider } as DesktopToolContext);
-        await inputActionExecutor({ action: 'key', combo: 'Ctrl+C' }, { provider } as DesktopToolContext);
         expect(provider.calls).toEqual([
             { kind: 'type', text: 'hello' },
             { kind: 'scroll', dx: 0, dy: 120 },
-            { kind: 'key', combo: 'Ctrl+C' },
         ]);
+    });
+
+    it('denies key chords, Enter, and submission characters before the provider', async () => {
+        const provider = createMockCapabilityProvider();
+        await expect(inputActionExecutor({ action: 'key', combo: 'Ctrl+S' }, { provider } as DesktopToolContext))
+            .rejects.toThrow(/denied action/);
+        await expect(inputActionExecutor({ action: 'type', text: 'submit\n' }, { provider } as DesktopToolContext))
+            .rejects.toThrow(/denies Enter/);
+        expect(provider.calls).toEqual([]);
     });
 
     it('throws on missing click coordinates and unknown actions', async () => {
