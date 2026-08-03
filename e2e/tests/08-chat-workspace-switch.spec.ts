@@ -10,11 +10,6 @@ test.describe('Chat session/workspace switch', () => {
 
   const chatButtonSelector = 'button[aria-controls="chat-widget-dialog"]';
   const composerSelector = '[role="textbox"][aria-label="Composer"]';
-  const sessionMenuLabel =
-    /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i;
-  const sessionNewLabel = /nouvelle session|new session/i;
-  const sessionItemsSelector =
-    'button.w-full.text-left.rounded:not([aria-label="Nouvelle session"]):not([aria-label="New session"])';
 
   type SessionFixture = {
     id: string;
@@ -43,26 +38,33 @@ test.describe('Chat session/workspace switch', () => {
     await expect(page.locator(composerSelector)).toBeVisible({ timeout: 10_000 });
   }
 
-  async function ensureSessionMenuOpen(page: import('@playwright/test').Page) {
-    const sessionMenuButton = page.locator(
-      '#chat-widget-dialog button[aria-label="Choisir une conversation"]:visible, #chat-widget-dialog button[aria-label="Choose a conversation"]:visible',
+  // Session switching now goes through the agents list, not the old chooser
+  // popover: from a conversation, the ChatSessionsBar Back control returns to
+  // the list, where each session is a listbox option carrying its title.
+  // Only the active view is rendered, so these selectors can target the dialog
+  // directly without matching an off-screen inactive row.
+  const activePage = '#chat-widget-dialog';
+
+  async function goToAgentsList(page: import('@playwright/test').Page) {
+    const backToList = page.locator(
+      `${activePage} button[aria-label="Retour aux conversations"], ${activePage} button[aria-label="Back to conversations"]`,
     ).first();
-    await expect(sessionMenuButton).toBeVisible({ timeout: 5_000 });
-    const sessionItems = page.locator(sessionItemsSelector);
-    if (!(await sessionItems.first().isVisible().catch(() => false))) {
-      await sessionMenuButton.click();
+    if (await backToList.isVisible().catch(() => false)) {
+      await backToList.click();
     }
-    await expect(sessionItems.first()).toBeVisible({ timeout: 5_000 });
   }
 
   async function selectSessionByMarker(
     page: import('@playwright/test').Page,
     marker: string,
   ) {
-    await ensureSessionMenuOpen(page);
-    const sessionItem = page.locator(sessionItemsSelector).filter({ hasText: marker }).first();
-    await expect(sessionItem).toBeVisible({ timeout: 10_000 });
-    await sessionItem.click();
+    await goToAgentsList(page);
+    const sessionRow = page
+      .locator(`${activePage} [role="option"]`)
+      .filter({ hasText: marker })
+      .first();
+    await expect(sessionRow).toBeVisible({ timeout: 10_000 });
+    await sessionRow.click();
   }
 
   async function resolveWorkspaceRow(
@@ -226,16 +228,16 @@ test.describe('Chat session/workspace switch', () => {
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       await openChat(page);
-      await ensureSessionMenuOpen(page);
+      await goToAgentsList(page);
 
       await expect(
-        page.locator(sessionItemsSelector).filter({ hasText: sessionBPrompt }).first(),
+        page.locator(`${activePage} [role="option"]`).filter({ hasText: sessionBPrompt }).first(),
       ).toBeVisible({ timeout: 10_000 });
       await expect(
-        page.locator(sessionItemsSelector).filter({ hasText: sessionAOnePrompt }),
+        page.locator(`${activePage} [role="option"]`).filter({ hasText: sessionAOnePrompt }),
       ).toHaveCount(0);
       await expect(
-        page.locator(sessionItemsSelector).filter({ hasText: sessionATwoPrompt }),
+        page.locator(`${activePage} [role="option"]`).filter({ hasText: sessionATwoPrompt }),
       ).toHaveCount(0);
     } finally {
       await context.close();

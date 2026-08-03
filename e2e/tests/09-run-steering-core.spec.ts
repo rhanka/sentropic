@@ -97,7 +97,7 @@ test.describe('chat steering core', () => {
 
       const sessionHeader = page
         .locator(
-          '#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate',
+          '#chat-widget-dialog [data-chat-sessions-heading]',
         )
         .first();
       await expect(sessionHeader).toContainText(sessionTitle);
