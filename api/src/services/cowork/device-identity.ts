@@ -19,6 +19,7 @@ export type ActiveCoworkDevice = {
   userId: string;
   publicKey: string;
   status: string;
+  capabilities: unknown;
 };
 
 export type ActivateDeviceResult =
@@ -98,6 +99,7 @@ export async function findActiveCoworkDevice(
       userId: coworkDevices.userId,
       publicKey: coworkDevices.publicKey,
       status: coworkDevices.status,
+      capabilities: coworkDevices.capabilities,
     })
     .from(coworkDevices)
     .where(and(eq(coworkDevices.id, deviceId), eq(coworkDevices.userId, userId)))
@@ -122,6 +124,7 @@ export async function activateCoworkDevice(input: {
       userId: coworkDevices.userId,
       publicKey: coworkDevices.publicKey,
       status: coworkDevices.status,
+      capabilities: coworkDevices.capabilities,
     })
     .from(coworkDevices)
     .where(eq(coworkDevices.id, input.identity.deviceId))
@@ -153,6 +156,7 @@ export async function activateCoworkDevice(input: {
         userId: coworkDevices.userId,
         publicKey: coworkDevices.publicKey,
         status: coworkDevices.status,
+        capabilities: coworkDevices.capabilities,
       });
     return { ok: true, device };
   } catch (error) {

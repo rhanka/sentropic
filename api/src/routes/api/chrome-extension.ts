@@ -11,11 +11,13 @@ import {
 } from '../../services/cowork/device-registry';
 import {
   acknowledgeLease,
+  completeLease,
   issueLease,
   listIssuedLeases,
   revokeLease,
 } from '../../services/cowork/device-lease-service';
 import { verifyCoworkDeliveryProof } from '../../services/cowork/device-identity';
+import { coworkTargetSelections } from '../../services/cowork/target-selection';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/chrome-ext';
@@ -61,11 +63,26 @@ const VALID_TAB_SOURCES = new Set<TabSource>(['chrome_plugin', 'bookmarklet', 'd
 const issueLeaseSchema = z.object({
   device_id: z.string().uuid(),
   turn_ref: z.string().min(1).max(256),
+  // This endpoint remains useful to the native delivery UAT, but it is never
+  // an alternate target-selection path.  The selected target is bound to this
+  // authenticated human session before the server will mint a lease.
+  session_id: z.string().min(1).max(256),
+  workspace_id: z.string().min(1).max(256),
   scope: z.record(z.unknown()).nullable().optional().default(null),
 });
 const acknowledgeLeaseSchema = z.object({
   device_id: z.string().uuid(),
   signature: z.string().min(1),
+});
+const completeLeaseSchema = z.object({
+  device_id: z.string().uuid(),
+  outcome: z.enum(['FAIT', 'PAS-FAIT']),
+  signature: z.string().min(1),
+});
+const selectCoworkTargetSchema = z.object({
+  session_id: z.string().min(1).max(256),
+  workspace_id: z.string().min(1).max(256),
+  device_id: z.string().uuid(),
 });
 const revokeLeaseSchema = z.object({ reason: z.string().min(1).max(256) });
 
@@ -154,12 +171,20 @@ chromeExtensionRouter.delete('/tabs/:tabId', async (c) => {
   return c.json({ ok: true });
 });
 
-// Authorization-only BR-41c lease primitives. Lot 4 may attach a consented
-// desktop execution loop after `acknowledgeLease`; this branch deliberately does not.
+// C2: delivery/UAT issuance can only use the target already chosen in the
+// authenticated human session.  Tool arguments are not a target channel.
 chromeExtensionRouter.post('/cowork-devices/leases', async (c) => {
   const parsed = issueLeaseSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ message: 'Invalid lease request.' }, 400);
   const user = c.get('user');
+  const selected = coworkTargetSelections.get({
+    userId: user.userId,
+    workspaceId: parsed.data.workspace_id,
+    sessionId: parsed.data.session_id,
+  });
+  if (!selected || selected.deviceId !== parsed.data.device_id) {
+    return c.json({ message: 'Human Cowork target selection is required.' }, 403);
+  }
   const result = await issueLease({
     userId: user.userId,
     deviceId: parsed.data.device_id,
@@ -192,6 +217,31 @@ chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/revoke', async (c) =
   return result.ok
     ? c.json({ ok: true, lease: result.lease })
     : c.json({ message: `Lease revocation denied: ${result.reason}.` }, 404);
+});
+
+chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/result', async (c) => {
+  const parsed = completeLeaseSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid lease result.' }, 400);
+  const result = await completeLease({ ...parsed.data, userId: c.get('user').userId, leaseId: c.req.param('leaseId') });
+  return result.ok
+    ? c.json({ ok: true, lease: result.lease })
+    : c.json({ message: `Lease result denied: ${result.reason}.` }, result.reason === 'not_found' ? 404 : 409);
+});
+
+/** C2: this authenticated controller route is the sole target-selection path. */
+chromeExtensionRouter.post('/cowork-devices/selection', async (c) => {
+  const parsed = selectCoworkTargetSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid Cowork target selection.' }, 400);
+  const selected = await coworkTargetSelections.select({
+    userId: c.get('user').userId,
+    workspaceId: parsed.data.workspace_id,
+    sessionId: parsed.data.session_id,
+    deviceId: parsed.data.device_id,
+    selectedAt: Date.now(),
+  });
+  return selected
+    ? c.json({ ok: true, device_id: parsed.data.device_id })
+    : c.json({ message: 'Cowork target is not an eligible isolated kiosk device.' }, 403);
 });
 
 chromeExtensionRouter.get('/cowork-devices/:deviceId/leases', async (c) => {
