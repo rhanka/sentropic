@@ -1,5 +1,7 @@
 import { createHash, createPublicKey, sign, verify, type KeyObject } from 'node:crypto';
 
+import { createJwksAdapter, type JwksAdapter } from '../auth/jwks-adapter';
+
 export type LeaseV2Envelope = Readonly<{
   version: 2; kid: string; leaseId: string; invocationId: string; toolCallId: string; durableCallRef: string | null;
   principalId: string; tenantId: string; workspaceId: string; targetDeviceId: string; targetPepKeyId: string;
@@ -12,6 +14,20 @@ export type SignedLeaseV2 = Readonly<{ envelope: LeaseV2Envelope; signature: str
 type ServerKey = Readonly<{ kid: string; privateKey: KeyObject }>;
 type PublicKey = Readonly<{ kid: string; publicJwk: JsonWebKey }>;
 export interface LeaseV2KeyPort { getActiveKey(): Promise<ServerKey | null>; findKeyByKid(kid: string): Promise<PublicKey | null>; }
+
+/** Reuses the LOCAL OAuth/OIDC signing-key port; no Cowork key is introduced. */
+export function createServerLeaseV2KeyPort(jwks: Pick<JwksAdapter, 'getActiveKey' | 'findKeyByKid'> = createJwksAdapter()): LeaseV2KeyPort {
+  return {
+    async getActiveKey() {
+      const key = await jwks.getActiveKey();
+      return key?.privateKey ? { kid: key.kid, privateKey: key.privateKey } : null;
+    },
+    async findKeyByKid(kid) {
+      const key = await jwks.findKeyByKid(kid);
+      return key ? { kid: key.kid, publicJwk: key.publicJwk as JsonWebKey } : null;
+    },
+  };
+}
 
 /** Stable JSON avoids signature ambiguity across rotation and language boundaries. */
 export function canonicalJson(value: unknown): string {
