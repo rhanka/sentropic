@@ -39,6 +39,14 @@ describe('Cowork device authorization leases', () => {
     });
   }
 
+  async function complete(deviceId: string, leaseId: string, nonce: string, outcome: 'FAIT' | 'PAS-FAIT', signPayload: (payload: string) => string) {
+    return authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${leaseId}/result`, user.sessionToken!, {
+      device_id: deviceId,
+      outcome,
+      signature: signPayload(`cowork-lease-result-v1:${leaseId}.${nonce}.${outcome}`),
+    });
+  }
+
   function proofHeaders(device: { deviceId: string; signPayload: (payload: string) => string }) {
     const issuedAtMs = Date.now();
     return {
@@ -146,6 +154,18 @@ describe('Cowork device authorization leases', () => {
     await db.update(coworkDevices).set({ status: 'revoked', revokedAt: new Date() })
       .where(eq(coworkDevices.id, target.deviceId));
     expect((await acknowledge(target.deviceId, afterRevoke.payload.lease.leaseId, afterRevoke.payload.lease.nonce, target.signPayload)).status).toBe(409);
+  });
+
+  it('atomically consumes or revokes one acknowledged lease from its signed bounded result', async () => {
+    const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const success = await issue(target.deviceId, 'turn-result-success');
+    expect((await acknowledge(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(200);
+    expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(409);
+
+    const failure = await issue(target.deviceId, 'turn-result-failure');
+    expect((await acknowledge(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await complete(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, 'PAS-FAIT', target.signPayload)).status).toBe(200);
   });
 
   it('returns only the target device queue through the bounded poll fallback', async () => {
