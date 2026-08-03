@@ -9,4 +9,5 @@
 export * from './types.js';
 export * from './token.js';
 export * from './storage-adapter.js';
+export * from './device-identity.js';
 export * from './session-auth.js';
