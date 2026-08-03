@@ -10,6 +10,13 @@ import {
 import { db } from '../../db/client';
 import { users } from '../../db/schema';
 import { eq } from 'drizzle-orm';
+import {
+  activateCoworkDevice,
+  assertEd25519PublicKey,
+  verifyCoworkSignature,
+  type CoworkDeviceCapability,
+} from '../../services/cowork/device-identity';
+import { findPendingDeviceIdentity } from '../../services/device-code-store';
 
 /**
  * Device-Code Enrollment Routes (RFC 8628-style)
@@ -27,10 +34,14 @@ export const deviceRouter = new Hono();
 
 const issueSchema = z.object({
   deviceName: z.string().min(1).max(100).optional(),
+  deviceId: z.string().uuid(),
+  devicePublicKey: z.string().min(32).max(2048),
+  capabilities: z.array(z.enum(['screen_capture', 'input_action'])).min(1).max(16),
 });
 
 const pollSchema = z.object({
   device_code: z.string().min(1),
+  proof: z.string().min(1),
 });
 
 const approveSchema = z.object({
@@ -47,9 +58,18 @@ const DEVICE_CODE_TTL_SEC = 10 * 60;
 deviceRouter.post('/code', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { deviceName } = issueSchema.parse(body);
+    const { deviceName, deviceId, devicePublicKey, capabilities } = issueSchema.parse(body);
+    try {
+      assertEd25519PublicKey(devicePublicKey);
+    } catch {
+      return c.json({ error: 'devicePublicKey must be an Ed25519 SPKI key' }, 400);
+    }
 
-    const issued = issueDeviceCode(deviceName);
+    const issued = issueDeviceCode(deviceName, {
+      deviceId,
+      devicePublicKey,
+      capabilities: capabilities as CoworkDeviceCapability[],
+    });
 
     const origin = (c.req.header('origin') || '').trim();
     const verificationUri = origin ? `${origin}/auth/devices/pair` : '/auth/devices/pair';
@@ -60,6 +80,7 @@ deviceRouter.post('/code', async (c) => {
       verification_uri: verificationUri,
       interval: issued.intervalSec,
       expires_in: DEVICE_CODE_TTL_SEC,
+      server_nonce: issued.serverNonce,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -77,11 +98,30 @@ deviceRouter.post('/code', async (c) => {
 deviceRouter.post('/poll', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}));
-    const { device_code } = pollSchema.parse(body);
+    const { device_code, proof } = pollSchema.parse(body);
+    const identity = findPendingDeviceIdentity(device_code);
+    const proofValid = Boolean(
+      identity && verifyCoworkSignature(
+        identity.devicePublicKey,
+        `cowork-enroll-v1:${device_code}.${identity.serverNonce}`,
+        proof,
+      ),
+    );
 
-    const outcome = pollDeviceCode(device_code);
+    const outcome = pollDeviceCode(device_code, proofValid);
 
     if (outcome.status === 'approved') {
+      if (!outcome.identity) {
+        return c.json({ error: 'Device identity is required' }, 400);
+      }
+      const activated = await activateCoworkDevice({
+        userId: outcome.userId,
+        deviceName: outcome.deviceName,
+        identity: outcome.identity,
+      });
+      if (!activated.ok) {
+        return c.json({ error: `Device enrollment rejected: ${activated.reason}` }, 409);
+      }
       const issued = await createSession(outcome.userId, outcome.role, {
         name: outcome.deviceName,
         ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || undefined,

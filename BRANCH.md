@@ -35,6 +35,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - `api/src/services/skills/foundation-executor.ts`
   - `api/src/services/chat-service.ts`
   - `api/src/routes/auth/device.ts`
+  - `api/src/services/device-code-store.ts`
   - `api/src/routes/api/chat.ts`
   - `api/src/routes/api/streams.ts`
   - `api/src/db/schema.ts`
@@ -64,6 +65,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
 ## Feedback Loop
 - `attention`: architect ratification is pending via `neg:cowork-cu-cadrage-20260718`; Lot 0 must resolve spec §9 before product edits.
 - `attention`: BR-COWORK-EX1 is proposed, not active; one durable device/lease migration is allowed only after schema/route ownership is ratified.
+- `resolved`: BR-COWORK-EX2 authorizes `api/src/services/device-code-store.ts` solely for BR-41c enrollment PoP staging; impact is device-code pending state only and rollback is removal of the PoP fields with the dependent route/client change. The user explicitly requested this enrollment binding.
 - `deferred`: production/unattended takeover and BR-41c/d/e hardening are explicitly outside the same-day acceptance line.
 - `clarification`: conductor provides the isolated Windows OVH target and confirms controller A and target B are different devices for UAT.
 
@@ -108,6 +110,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
 - [ ] **Lot 3 — Targeted device identity, lease and delivery**
   - [x] Add the BR-41c durable device, presence, and lease schema with its single migration and non-terminal issuance idempotency index.
   - [x] Add the Ed25519 (OQ-1 architect-revisable) device identity activation primitive with collision, revoked-reuse, and key-rotation denial.
+  - [x] Bind device-code approval to the `cowork-enroll-v1:` proof before committing an active device identity.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.
