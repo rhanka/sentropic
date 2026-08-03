@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { coworkDevicePresence, coworkDevices } from '../../db/schema';
+import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../db/schema';
 
 export type CoworkDeviceMutationResult =
   | { ok: true }
@@ -70,6 +70,29 @@ export async function unregisterCoworkDevice(
     .set({ status: 'disconnected', lastSeenAt: new Date() })
     .where(and(eq(coworkDevicePresence.deviceId, deviceId), eq(coworkDevicePresence.userId, userId)));
   return { ok: true };
+}
+
+/**
+ * C5b/#492: terminalize every executable lease in the same transaction before
+ * deleting the target row.  Do not replace this with a direct FK cascade.
+ */
+export async function deleteCoworkDeviceWithLeaseRevocation(
+  userId: string,
+  deviceId: string,
+): Promise<CoworkDeviceMutationResult> {
+  return db.transaction(async (tx) => {
+    const [device] = await tx.select({ userId: coworkDevices.userId, status: coworkDevices.status })
+      .from(coworkDevices).where(eq(coworkDevices.id, deviceId)).limit(1);
+    if (!device) return { ok: false, reason: 'not_found' };
+    if (device.userId !== userId) return { ok: false, reason: 'not_owned' };
+
+    await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
+      eq(coworkDeviceLeases.deviceId, deviceId),
+      inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
+    ));
+    await tx.delete(coworkDevices).where(and(eq(coworkDevices.id, deviceId), eq(coworkDevices.userId, userId)));
+    return { ok: true };
+  });
 }
 
 /** Identifies a durable Cowork record so browser-tab routes cannot bypass its ownership checks. */

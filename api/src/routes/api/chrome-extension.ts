@@ -15,6 +15,7 @@ import {
   listIssuedLeases,
   revokeLease,
 } from '../../services/cowork/device-lease-service';
+import { verifyCoworkDeliveryProof } from '../../services/cowork/device-identity';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/chrome-ext';
@@ -67,6 +68,18 @@ const acknowledgeLeaseSchema = z.object({
   signature: z.string().min(1),
 });
 const revokeLeaseSchema = z.object({ reason: z.string().min(1).max(256) });
+
+async function hasDeliveryProof(c: Context, deviceId: string): Promise<boolean> {
+  const issuedAtMs = Number(c.req.header('x-cowork-device-proof-at'));
+  const signature = c.req.header('x-cowork-device-proof') ?? '';
+  return verifyCoworkDeliveryProof({
+    userId: c.get('user').userId,
+    deviceId,
+    method: 'GET',
+    issuedAtMs,
+    signature,
+  });
+}
 
 function mutationFailure(c: Context, reason: string) {
   const status = reason === 'not_found' ? 404 : 403;
@@ -182,8 +195,12 @@ chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/revoke', async (c) =
 });
 
 chromeExtensionRouter.get('/cowork-devices/:deviceId/leases', async (c) => {
+  const deviceId = c.req.param('deviceId');
+  if (!(await hasDeliveryProof(c, deviceId))) {
+    return c.json({ message: 'Cowork device proof is required for lease delivery.' }, 401);
+  }
   const requestedLimit = Number(c.req.query('limit') ?? 20);
-  const leases = await listIssuedLeases(c.get('user').userId, c.req.param('deviceId'), requestedLimit);
+  const leases = await listIssuedLeases(c.get('user').userId, deviceId, requestedLimit);
   if (!leases) return c.json({ message: 'Cowork device not found.' }, 404);
   return c.json({ leases: leases.map((lease) => ({
     leaseId: lease.id,

@@ -34,7 +34,11 @@ export async function seedCoworkDevice(input: {
     deviceName: 'Test Cowork',
     publicKey: key.publicKey,
     publicKeyFingerprint: fingerprintDevicePublicKey(key.publicKey),
-    capabilities: ['screen_capture', 'input_action'],
+    capabilities: {
+      capabilityIds: ['screen_capture', 'input_action'],
+      isolatedVmTarget: true,
+      kioskSurface: 'notepad',
+    },
     status,
     revokedAt: status === 'revoked' ? new Date() : null,
   });

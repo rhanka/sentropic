@@ -5,6 +5,7 @@ import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../src/db/schema';
 import { listIssuedLeases } from '../../src/services/cowork/device-lease-service';
+import { deleteCoworkDeviceWithLeaseRevocation } from '../../src/services/cowork/device-registry';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { seedCoworkDevice } from '../utils/cowork-device';
 
@@ -104,5 +105,17 @@ describe('Cowork device authorization leases', () => {
     const payload = await response.json() as { leases: Array<{ leaseId: string }> };
     expect(payload.leases.map((lease) => lease.leaseId)).toEqual([firstLease.payload.lease.leaseId]);
     expect(payload.leases.map((lease) => lease.leaseId)).not.toContain(secondLease.payload.lease.leaseId);
+  });
+
+  it('revokes outstanding leases before deleting a device so none survives the cascade', async () => {
+    const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    await db.insert(coworkDeviceLeases).values({
+      id: crypto.randomUUID(), deviceId: device.deviceId, userId: user.id, turnRef: 'delete-turn',
+      nonce: 'delete-nonce', scope: null, status: 'acknowledged', issuedAt: new Date(), expiresAt: new Date(Date.now() + 30_000),
+    });
+
+    await expect(deleteCoworkDeviceWithLeaseRevocation(user.id, device.deviceId)).resolves.toEqual({ ok: true });
+    expect(await db.select().from(coworkDeviceLeases).where(eq(coworkDeviceLeases.deviceId, device.deviceId))).toEqual([]);
+    expect(await db.select().from(coworkDevices).where(eq(coworkDevices.id, device.deviceId))).toEqual([]);
   });
 });
