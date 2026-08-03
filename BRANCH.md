@@ -124,6 +124,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Test persistent desktop identity generation, enrollment proof transport, and stable device-id presence transport.
   - [x] Add API coverage for human approval plus enrollment PoP, active-device commit, cross-user collision, and revoked-device reuse denial.
   - [x] Add API coverage for durable owner-scoped registration, keepalive, unregister, and revoked-device denial.
+  - [x] Add API coverage for eligibility, idempotent durable leases, wrong-device/expiry/replay/revocation acknowledgement denial, and device-filtered poll/SSE delivery.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.
