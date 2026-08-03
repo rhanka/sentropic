@@ -16,6 +16,11 @@ import {
   webauthnCredentials
 } from '../../db/schema';
 import { getTenantResolutionMetrics } from '../../services/tenancy/tenant-resolution-metrics';
+import {
+  captureConnectorGrantsForTeardown,
+  recordConnectorGrantTombstones,
+  revokeCapturedConnectorGrants,
+} from '../../services/connector-grant-teardown';
 
 export const adminRouter = new Hono();
 export const tenantResolutionMetricsRouter = new Hono();
@@ -270,7 +275,18 @@ adminRouter.delete('/users/:id', async (c) => {
     .limit(1);
   const workspaceId = ws?.id ?? null;
 
+  // Capture external grants BEFORE the deletion — the connector rows cascade from both `users` and
+  // `workspaces`, and a cascade runs no application code, so afterwards nothing remains to revoke
+  // with. See services/connector-grant-teardown.ts.
+  const capturedGrants = await captureConnectorGrantsForTeardown({
+    userId,
+    ...(workspaceId ? { workspaceId } : {}),
+  });
+
   await db.transaction(async (tx) => {
+    // Atomic with the destruction: tombstone and delete commit or roll back together.
+    await recordConnectorGrantTombstones(tx, capturedGrants);
+
     if (workspaceId) {
       // IMPORTANT: A workspace can be referenced by:
       // - chat_sessions.workspace_id (including admin-owned sessions scoped to this workspace)
@@ -349,6 +365,10 @@ adminRouter.delete('/users/:id', async (c) => {
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
   });
+
+  // Only after a successful commit — a rolled-back transaction must not leave a revoked grant
+  // behind for an account that still exists.
+  await revokeCapturedConnectorGrants(capturedGrants);
 
   return c.json({ success: true });
 });

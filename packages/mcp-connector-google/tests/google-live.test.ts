@@ -1,6 +1,6 @@
 /** HERMETIC live-adapter tests: every request uses a mocked global fetch. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppConnectorProviderAdapter, StpConnectorContext } from '../../mcp-platform/src/runtime.js';
+import type { AppConnectorProviderAdapter, StpConnectorContext } from '@sentropic/mcp-platform';
 import { gmailLiveAdapter, googleDriveLiveAdapter } from '../src/live-adapter.js';
 import { getDriveFileLive, getGmailMessageLive } from '../src/live-executors.js';
 

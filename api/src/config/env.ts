@@ -146,6 +146,12 @@ const envSchema = z.object({
   // (defaults to the OAuth issuer URL).
   MCP_RESOURCE_SERVER_ENABLED: z.string().optional(),
   MCP_RESOURCE_URI: z.string().optional(),
+  // The authorization server this resource server trusts: it is BOTH advertised in the RFC 9728
+  // PRM (so a client can discover where to authenticate) AND the expected `iss` of every access
+  // token (mcp-auth core.ts:158). It is NOT always this api: where a standalone IdP is deployed on
+  // its own host, that IdP is the AS, and only it serves the RFC 8414 metadata a client must fetch.
+  // Absent ⇒ falls back to this api's own resolved OAuth issuer (the co-located dev/test shape).
+  MCP_AUTHORIZATION_SERVER_URL: z.string().optional(),
   // Dev/test self-S2S dogfood client (BR39d-D10)
   OAUTH_SELF_SERVICE_CLIENT_ID: z.string().optional(),
   OAUTH_SELF_SERVICE_CLIENT_SECRET: z.string().optional(),

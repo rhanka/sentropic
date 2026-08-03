@@ -1,5 +1,5 @@
 /** Minimal live broker used only by the opt-in Google smoke. */
-import type { AppResultEnvelope, StpConnectorContext } from '../../mcp-platform/src/runtime.js';
+import type { AppResultEnvelope, StpConnectorContext } from '@sentropic/mcp-platform';
 import { gmailLiveAdapter, googleDriveLiveAdapter } from './live-adapter.js';
 
 type Provider = 'googleDrive' | 'gmail';
