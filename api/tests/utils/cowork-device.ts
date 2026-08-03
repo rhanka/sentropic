@@ -22,11 +22,14 @@ export function createTestCoworkKey(deviceId = randomUUID()): TestCoworkKey {
 export async function seedCoworkDevice(input: {
   userId: string;
   key?: TestCoworkKey;
+  pepKey?: TestCoworkKey;
+  general?: boolean;
   status?: 'active' | 'revoked';
   presence?: 'active' | 'disconnected' | 'none';
   lastSeenAt?: Date;
 }) {
   const key = input.key ?? createTestCoworkKey();
+  const pepKey = input.pepKey ?? (input.general ? createTestCoworkKey() : undefined);
   const status = input.status ?? 'active';
   await db.insert(coworkDevices).values({
     id: key.deviceId,
@@ -35,6 +38,9 @@ export async function seedCoworkDevice(input: {
     publicKey: key.publicKey,
     publicKeyFingerprint: fingerprintDevicePublicKey(key.publicKey),
     capabilities: ['screen_capture', 'input_action'],
+    pepPublicKey: pepKey?.publicKey ?? null,
+    pepKeyId: pepKey ? `pep:${pepKey.deviceId}` : null,
+    generalProfile: input.general ? { isolatedVmTarget: true, egressPolicyRef: 'test-egress' } : {},
     status,
     revokedAt: status === 'revoked' ? new Date() : null,
   });
@@ -48,5 +54,5 @@ export async function seedCoworkDevice(input: {
       lastSeenAt: input.lastSeenAt ?? now,
     });
   }
-  return key;
+  return { ...key, pepKey };
 }
