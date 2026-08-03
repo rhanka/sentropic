@@ -475,4 +475,44 @@ describe('Google Drive connector account storage', () => {
     expect(row.status).toBe('disconnected');
     expect(row.tokenSecret).toBeNull();
   });
+
+  it('disconnects and revokes EVERY connected account, not just the first one', async () => {
+    // The uniqueness constraint is on (workspace, user, provider, accountSubject), so one user can
+    // hold several connected Google accounts — and `POST /disconnect` carries no account identifier,
+    // so to the user it means "disconnect Google Drive". Acting on a single row returned a success
+    // while leaving the other accounts' refresh tokens stored locally AND live at Google. A test
+    // that connects only one account cannot see that, which is why this one connects two.
+    const calls: { url: string; body: string }[] = [];
+    const fetchMock = vi.fn(async (url: unknown, init?: unknown) => {
+      const req = init as { body?: URLSearchParams } | undefined;
+      calls.push({ url: String(url), body: req?.body ? String(req.body) : '' });
+      return new Response('', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await storeAccount('multi-a');
+    await storeAccount('multi-b');
+
+    await disconnectGoogleDriveConnectorAccount({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+    });
+
+    // Every row cleared. Asserting on the whole set rather than on `[0]` is the point: reading a
+    // single row is precisely the mistake being fixed, so the oracle must not repeat it.
+    const rows = await listConnectorAccounts(String(user.workspaceId), user.id, 'google_drive');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.status, `account ${row.accountSubject} must be disconnected`).toBe('disconnected');
+      expect(row.tokenSecret, `account ${row.accountSubject} must keep no token`).toBeNull();
+    }
+
+    // Both grants told to Google, at the exact endpoint. Checking only that "a revoke happened"
+    // would stay green with the first-account-only behaviour.
+    const revoked = calls.filter((c) => c.url === 'https://oauth2.googleapis.com/revoke');
+    expect(revoked, 'every connected account must be revoked upstream').toHaveLength(2);
+    const bodies = revoked.map((c) => c.body).join('\n');
+    expect(bodies).toContain('refresh-multi-a');
+    expect(bodies).toContain('refresh-multi-b');
+  });
 });

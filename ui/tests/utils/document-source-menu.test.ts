@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   resolveDocumentSourceGoogleDriveMode,
+  resolveGmailConnectorCardState,
   resolveGoogleDriveAccountLabel,
   resolveGoogleDriveConnectorCardState,
 } from '../../src/lib/utils/document-source-menu';
@@ -65,6 +66,28 @@ describe('document source menu helpers', () => {
     ).toEqual({
       connected: true,
       accountLabel: 'google-subject-1',
+    });
+  });
+
+  it('normalizes Gmail connector card state', () => {
+    expect(
+      resolveGmailConnectorCardState({
+        id: 'gmail-account-1',
+        provider: 'gmail',
+        status: 'connected',
+        connected: true,
+        accountEmail: null,
+        accountSubject: 'gmail-subject-1',
+        scopes: [],
+        tokenExpiresAt: null,
+        connectedAt: null,
+        disconnectedAt: null,
+        lastError: null,
+        updatedAt: null,
+      }),
+    ).toEqual({
+      connected: true,
+      accountLabel: 'gmail-subject-1',
     });
   });
 });

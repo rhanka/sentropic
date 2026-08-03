@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppMcpProviderManifest, ConnectorTenantContext } from '../../mcp-platform/src/manifest.js';
-import type { AppConnectorProviderAdapter, StpConnectorContext } from '../../mcp-platform/src/runtime.js';
+import type {
+  AppMcpProviderManifest,
+  ConnectorTenantContext,
+  AppConnectorProviderAdapter,
+  StpConnectorContext,
+} from '@sentropic/mcp-platform';
 import { gmailAdapter, googleDriveAdapter, mountedConnectorId } from '../src/adapter.js';
 import { gmailManifest, googleDriveManifest } from '../src/manifest.js';
 

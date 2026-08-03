@@ -549,7 +549,7 @@ build-connector-host: build-mcp-platform ## Build @sentropic/connector-host dist
 .PHONY: build-mcp-connector-google
 build-mcp-connector-google: build-mcp-platform ## Build @sentropic/mcp-connector-google dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../mcp-platform node_modules/@sentropic/mcp-platform; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; ln -sfn mcp-connector-google/src/index.js dist/index.js; ln -sfn mcp-connector-google/src/index.d.ts dist/index.d.ts'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-connector-google $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../mcp-platform node_modules/@sentropic/mcp-platform; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 # BR-LB-EX1 — @sentropic/llm-gateway (WP16 Layer-B) CI wiring (owner-approved 2026-06-22).
 # Mirrors the sibling-package symlink pattern used by typecheck-auth-hono/test-auth-hono
@@ -2061,7 +2061,7 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test-ci
-up-api-test-ci: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+up-api-test-ci: build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
