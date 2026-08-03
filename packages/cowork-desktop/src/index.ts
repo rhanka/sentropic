@@ -25,3 +25,4 @@ export * from './runner/index.js';
 export * from './config/index.js';
 export * from './cli/index.js';
 export * from './native/index.js';
+export * from './shell/index.js';

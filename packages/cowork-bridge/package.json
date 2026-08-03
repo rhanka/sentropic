@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cowork-bridge",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Portable client bridge for Sentropic Cowork: shared client core (ApiClient/ContextProvider/NavigationAdapter), transport/storage-agnostic auth (token lifecycle behind a StorageAdapter + injected fetch), and local-tool protocol types + portable permission schema. Reuses @sentropic/chat-ui for SSE.",
   "type": "module",
   "license": "MIT",
@@ -26,6 +26,11 @@
       "types": "./src/auth/index.ts",
       "svelte": "./src/auth/index.ts",
       "import": "./src/auth/index.ts"
+    },
+    "./desktop-rpc": {
+      "types": "./src/desktop-rpc/index.ts",
+      "svelte": "./src/desktop-rpc/index.ts",
+      "import": "./src/desktop-rpc/index.ts"
     },
     "./tools": {
       "types": "./src/tools/index.ts",
