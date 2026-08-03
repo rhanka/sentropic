@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders, organizations, initiatives, userSessions, users, workspaces } from '../../db/schema';
+import { coworkDeviceLeases, folders, organizations, initiatives, userSessions, users, workspaces } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   chatGenerationTraces,
@@ -361,6 +361,13 @@ adminRouter.delete('/users/:id', async (c) => {
 
     // Delete chat sessions (cascade deletes chat_messages/contexts; stream events with messageId also cascade)
     await tx.delete(chatSessions).where(eq(chatSessions.userId, userId));
+
+    // C5b/#492: parent deletion cascades Cowork devices, so terminalize their
+    // executable leases before that cascade removes the device rows.
+    await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
+      eq(coworkDeviceLeases.userId, userId),
+      inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
+    ));
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));

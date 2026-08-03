@@ -39,7 +39,9 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - `api/src/routes/auth/device.ts`
   - `api/src/services/device-code-store.ts`
   - `api/src/routes/api/chrome-extension.ts`
+  - `api/src/routes/api/admin.ts`
   - `api/src/routes/api/chat.ts`
+  - `api/src/routes/api/me.ts`
   - `api/src/routes/api/streams.ts`
   - `api/src/db/schema.ts`
   - `api/tests/**`
@@ -70,6 +72,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
 - `attention`: BR-COWORK-EX1 is proposed, not active; one durable device/lease migration is allowed only after schema/route ownership is ratified.
 - `resolved`: BR-COWORK-EX2 authorizes `api/src/services/device-code-store.ts` solely for BR-41c enrollment PoP staging; impact is device-code pending state only and rollback is removal of the PoP fields with the dependent route/client change. The user explicitly requested this enrollment binding.
 - `resolved`: BR-COWORK-EX3 authorizes `api/src/routes/api/chrome-extension.ts` solely to keep the published Cowork presence transport while routing `desktop_cowork` to durable ownership-checked storage; browser tab behavior is unchanged and rollback is the isolated desktop route branch.
+- `resolved`: BR-COWORK-EX4 authorizes `api/src/routes/api/admin.ts` and `api/src/routes/api/me.ts` solely to terminalize outstanding Cowork leases immediately before their existing user-delete cascades; impact is limited to #492 revoke-before-cascade and rollback is removal of those terminalization statements.
 - `resolved`: Architect and owner ratified the Feature 3 narrow Option-B surface. The remote execution path is now attached only to the isolated benign-kiosk VM MVP; it is not a general computer-use surface.
 - `resolved`: I1–I5 are published by `docs/governance/surface-invariants.md` in the separate h2a governance repository (h2a PR #152). This checkout cites that cross-repository provenance and does not require the file locally. `origin/feat/d6a-agents-surface-fusion` (#502) is a secondary pointer only.
 - `attention`: `make test-api-endpoints SCOPE=tests/api/auth-device-code.spec.ts ENV=test-cowork-connector` could not run because the API service is absent after the isolated stack bootstrap (the compose API image build is unavailable in this checkout). The new scoped API suites remain pending on a runnable test stack.

@@ -6,6 +6,7 @@ import {
   chatSessions,
   chatGenerationTraces,
   chatStreamEvents,
+  coworkDeviceLeases,
   organizations,
   contextModificationHistory,
   emailVerificationCodes,
@@ -301,6 +302,13 @@ meRouter.delete('/', async (c) => {
 
     // Delete workspace owned by this user
     await tx.delete(workspaces).where(and(eq(workspaces.id, workspaceId), eq(workspaces.ownerUserId, userId)));
+
+    // C5b/#492: parent deletion cascades Cowork devices, so terminalize their
+    // executable leases before that cascade removes the device rows.
+    await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
+      eq(coworkDeviceLeases.userId, userId),
+      inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
+    ));
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
