@@ -13,5 +13,6 @@
 
 export * from './core/index.js';
 export * from './auth/index.js';
+export * from './desktop-rpc/index.js';
 export * from './tools/index.js';
 export * from './permissions/index.js';
