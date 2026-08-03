@@ -122,6 +122,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Expose bounded, authenticated lease issue, acknowledge, revoke, and device-scoped poll primitives with no remote execution route.
   - [x] Add device-filtered lease SSE notification backed by the durable queue; a connection never queries another device's rows.
   - [x] Test persistent desktop identity generation, enrollment proof transport, and stable device-id presence transport.
+  - [x] Add API coverage for human approval plus enrollment PoP, active-device commit, cross-user collision, and revoked-device reuse denial.
   - [ ] Implement ratified BR-41c minimum: stable key/id, durable active presence, one-use capability lease, signed ack, expiry/revoke and eligibility.
   - [ ] Implement device-filtered notify + ownership/proof-checked poll fallback and connector bounded await; no dormant-success claim.
   - [ ] Tests: restart durability, wrong owner/device, stale presence, capability mismatch, duplicate/replay, expiry/revoke, SSE filtering, poll recovery.

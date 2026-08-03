@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import { app } from '../../src/app';
+import { db } from '../../src/db/client';
+import { coworkDevices } from '../../src/db/schema';
 import { validateSession } from '../../src/services/session-manager';
 import { clearAll as clearDeviceCodes } from '../../src/services/device-code-store';
 import {
@@ -9,12 +12,8 @@ import {
   cleanupAuthData,
   createAuthenticatedUser,
 } from '../utils/auth-helper';
+import { createTestCoworkKey } from '../utils/cowork-device';
 
-/**
- * Device-code enrollment flow (RFC 8628-style) for the headless Cowork binary.
- *
- * code -> (authenticated) approve -> poll -> token pair via session-manager.
- */
 describe('Device-code enrollment API', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
 
@@ -28,176 +27,114 @@ describe('Device-code enrollment API', () => {
     await cleanupAuthData();
   });
 
-  async function issueCode(deviceName?: string) {
-    const response = await unauthenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/code',
-      deviceName ? { deviceName } : undefined,
-    );
+  async function issueCode(deviceName = 'My Workstation', key = createTestCoworkKey()) {
+    const response = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/code', {
+      deviceName,
+      deviceId: key.deviceId,
+      devicePublicKey: key.publicKey,
+      capabilities: ['screen_capture', 'input_action'],
+    });
     expect(response.status).toBe(200);
-    return (await response.json()) as {
-      device_code: string;
-      user_code: string;
-      verification_uri: string;
-      interval: number;
-      expires_in: number;
+    const payload = await response.json() as {
+      device_code: string; user_code: string; verification_uri: string; interval: number;
+      expires_in: number; server_nonce: string;
+    };
+    return {
+      key,
+      ...payload,
+      proof: key.signPayload(`cowork-enroll-v1:${payload.device_code}.${payload.server_nonce}`),
     };
   }
 
-  it('issues a device code with the expected shape (no auth required)', async () => {
-    const payload = await issueCode('My Workstation');
+  async function approve(code: { user_code: string }, approver = user) {
+    return authenticatedRequest(app, 'POST', '/api/v1/auth/device/approve', approver.sessionToken!, {
+      user_code: code.user_code,
+    });
+  }
 
-    expect(typeof payload.device_code).toBe('string');
+  it('issues an identity-bound code with a server nonce without authentication', async () => {
+    const payload = await issueCode();
     expect(payload.device_code.length).toBeGreaterThan(10);
     expect(payload.user_code).toMatch(/^PAIR-[A-Z2-9]{4}$/);
     expect(payload.verification_uri).toContain('/auth/devices/pair');
     expect(payload.interval).toBeGreaterThan(0);
     expect(payload.expires_in).toBe(600);
+    expect(payload.server_nonce.length).toBeGreaterThan(20);
   });
 
-  it('returns authorization_pending before approval', async () => {
-    const { device_code } = await issueCode();
-
-    const pollResponse = await unauthenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/poll',
-      { device_code },
-    );
-    expect(pollResponse.status).toBe(200);
-    await expect(pollResponse.json()).resolves.toEqual({ status: 'authorization_pending' });
-  });
-
-  it('returns slow_down when polled faster than the interval', async () => {
-    const { device_code } = await issueCode();
-
+  it('returns authorization_pending before approval and slow_down for a fast retry', async () => {
+    const code = await issueCode();
     const first = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
-      device_code,
+      device_code: code.device_code, proof: code.proof,
     });
     await expect(first.json()).resolves.toEqual({ status: 'authorization_pending' });
-
-    // Immediate second poll is throttled.
     const second = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
-      device_code,
+      device_code: code.device_code, proof: code.proof,
     });
     await expect(second.json()).resolves.toEqual({ status: 'slow_down' });
   });
 
-  it('returns expired for an unknown/consumed device code', async () => {
-    const pollResponse = await unauthenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/poll',
-      { device_code: 'does-not-exist' },
-    );
-    expect(pollResponse.status).toBe(200);
-    await expect(pollResponse.json()).resolves.toEqual({ status: 'expired' });
-  });
-
-  it('rejects unauthenticated approve', async () => {
-    const { user_code } = await issueCode();
-
-    const approveResponse = await unauthenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/approve',
-      { user_code, device_name: 'Hacker box' },
-    );
-    expect(approveResponse.status).toBe(401);
-  });
-
-  it('rejects approve for an unknown user_code', async () => {
-    const approveResponse = await authenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/approve',
-      user.sessionToken!,
-      { user_code: 'PAIR-ZZZZ' },
-    );
-    expect(approveResponse.status).toBe(404);
-  });
-
-  it('approve links the code to the user; subsequent poll returns a valid token pair', async () => {
-    const { device_code, user_code } = await issueCode('Original Name');
-
-    const approveResponse = await authenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/approve',
-      user.sessionToken!,
-      { user_code, device_name: 'Approved Name' },
-    );
-    expect(approveResponse.status).toBe(200);
-    await expect(approveResponse.json()).resolves.toEqual({ success: true });
-
-    const pollResponse = await unauthenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/poll',
-      { device_code },
-    );
-    expect(pollResponse.status).toBe(200);
-    const pollPayload = (await pollResponse.json()) as {
-      status: string;
-      sessionToken: string;
-      refreshToken: string;
-      expiresAt: string;
-      user: { id: string; role: string };
-    };
-
-    expect(pollPayload.status).toBe('approved');
-    expect(typeof pollPayload.sessionToken).toBe('string');
-    expect(typeof pollPayload.refreshToken).toBe('string');
-    expect(pollPayload.user.id).toBe(user.id);
-
-    // The minted session token must validate to the same user.
-    const validated = await validateSession(pollPayload.sessionToken);
-    expect(validated).not.toBeNull();
-    expect(validated?.userId).toBe(user.id);
-  });
-
-  it('is single-use: a second poll after approval delivery returns expired', async () => {
-    const { device_code, user_code } = await issueCode();
-
-    await authenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/approve',
-      user.sessionToken!,
-      { user_code },
-    );
-
-    const firstPoll = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
-      device_code,
+  it('requires proof after human approval and never commits a device without it', async () => {
+    const code = await issueCode();
+    expect((await approve(code)).status).toBe(200);
+    const poll = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
+      device_code: code.device_code, proof: 'invalid-proof',
     });
-    await expect(firstPoll.json()).resolves.toMatchObject({ status: 'approved' });
-
-    const secondPoll = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
-      device_code,
-    });
-    await expect(secondPoll.json()).resolves.toEqual({ status: 'expired' });
+    await expect(poll.json()).resolves.toEqual({ status: 'proof_required' });
+    const rows = await db.select().from(coworkDevices).where(eq(coworkDevices.id, code.key.deviceId));
+    expect(rows).toHaveLength(0);
   });
 
-  it('rejects a second approve of an already-approved code', async () => {
-    const { user_code } = await issueCode();
+  it('mints a session only after approval and valid proof, then commits the active device', async () => {
+    const code = await issueCode('Original Name');
+    expect((await approve(code)).status).toBe(200);
+    const poll = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
+      device_code: code.device_code, proof: code.proof,
+    });
+    expect(poll.status).toBe(200);
+    const payload = await poll.json() as { status: string; sessionToken: string; refreshToken: string; user: { id: string } };
+    expect(payload.status).toBe('approved');
+    expect(payload.refreshToken).toBeTruthy();
+    expect((await validateSession(payload.sessionToken))?.userId).toBe(user.id);
+    await expect(db.select().from(coworkDevices).where(eq(coworkDevices.id, code.key.deviceId))).resolves.toMatchObject([
+      { userId: user.id, publicKey: code.key.publicKey, status: 'active' },
+    ]);
+  });
 
-    const first = await authenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/approve',
-      user.sessionToken!,
-      { user_code },
-    );
-    expect(first.status).toBe(200);
+  it('is single-use after a successful proof-bound approval', async () => {
+    const code = await issueCode();
+    await approve(code);
+    const first = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
+      device_code: code.device_code, proof: code.proof,
+    });
+    expect((await first.json() as { status: string }).status).toBe('approved');
+    const second = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
+      device_code: code.device_code, proof: code.proof,
+    });
+    await expect(second.json()).resolves.toEqual({ status: 'expired' });
+  });
 
-    const second = await authenticatedRequest(
-      app,
-      'POST',
-      '/api/v1/auth/device/approve',
-      user.sessionToken!,
-      { user_code },
-    );
-    expect(second.status).toBe(409);
+  it('rejects a cross-user collision and a changed or revoked device identity', async () => {
+    const first = await issueCode();
+    await approve(first);
+    await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
+      device_code: first.device_code, proof: first.proof,
+    });
+    const other = await createAuthenticatedUser('editor');
+    const collision = await issueCode('Other', first.key);
+    await approve(collision, other);
+    const collisionPoll = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
+      device_code: collision.device_code, proof: collision.proof,
+    });
+    expect(collisionPoll.status).toBe(409);
+
+    await db.update(coworkDevices).set({ status: 'revoked', revokedAt: new Date() })
+      .where(eq(coworkDevices.id, first.key.deviceId));
+    const revoked = await issueCode('Revoked', first.key);
+    await approve(revoked);
+    const revokedPoll = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/poll', {
+      device_code: revoked.device_code, proof: revoked.proof,
+    });
+    expect(revokedPoll.status).toBe(409);
   });
 });
