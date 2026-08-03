@@ -5,6 +5,11 @@ import { DeviceCodeClient } from '../src/enroll/index.js';
 const base64url = (obj: unknown): string => Buffer.from(JSON.stringify(obj)).toString('base64url');
 const makeJwt = (expSeconds: number): string =>
     `${base64url({ alg: 'HS256' })}.${base64url({ exp: expSeconds })}.sig`;
+const deviceIdentity = {
+    deviceId: '018fd5c0-0a9d-7e2f-8000-000000000001',
+    publicKey: 'ed25519-spki-base64url',
+    sign: async () => 'enrollment-proof',
+};
 
 const memoryStorage = (): StorageAdapter & { persistent: unknown; session: unknown } => {
     const state = { persistent: null as unknown, session: null as unknown };
@@ -48,6 +53,7 @@ describe('DeviceCodeClient — start', () => {
                 verification_uri: 'https://app/auth/devices/pair',
                 interval: 5,
                 expires_in: 600,
+                server_nonce: 'server-nonce',
             }),
         );
         const client = new DeviceCodeClient({
@@ -55,12 +61,21 @@ describe('DeviceCodeClient — start', () => {
             storage: memoryStorage(),
             apiBaseUrl: 'https://api/api/v1',
             deviceName: 'Lab PC',
+            deviceIdentity,
         });
         const start = await client.start();
         expect(start).toMatchObject({ deviceCode: 'dev-123', userCode: 'PAIR-ABCD', intervalSec: 5 });
         expect(fetchFn).toHaveBeenCalledWith(
             'https://api/api/v1/auth/device/code',
-            expect.objectContaining({ method: 'POST', body: JSON.stringify({ deviceName: 'Lab PC' }) }),
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({
+                    deviceName: 'Lab PC',
+                    deviceId: deviceIdentity.deviceId,
+                    devicePublicKey: deviceIdentity.publicKey,
+                    capabilities: ['screen_capture', 'input_action'],
+                }),
+            }),
         );
     });
 });
@@ -75,6 +90,7 @@ describe('DeviceCodeClient — poll state machine', () => {
                 .mockReturnValueOnce(jsonResponse({ status: 'denied' })),
             storage: memoryStorage(),
             apiBaseUrl: 'https://api/api/v1',
+            deviceIdentity,
         });
         expect(await client.poll('d')).toEqual({ status: 'authorization_pending' });
         expect(await client.poll('d')).toEqual({ status: 'slow_down' });
@@ -96,6 +112,7 @@ describe('DeviceCodeClient — poll state machine', () => {
             ),
             storage,
             apiBaseUrl: 'https://api/api/v1',
+            deviceIdentity,
         });
         const result = await client.poll('d');
         expect(result.status).toBe('approved');
@@ -113,6 +130,7 @@ describe('DeviceCodeClient — poll state machine', () => {
             ),
             storage: memoryStorage(),
             apiBaseUrl: 'https://api/api/v1',
+            deviceIdentity,
         });
         await expect(client.poll('d')).rejects.toThrow(/invalid token payload/);
     });
@@ -126,7 +144,7 @@ describe('DeviceCodeClient — enroll loop', () => {
             .fn<FetchLike>()
             // start
             .mockReturnValueOnce(
-                jsonResponse({ device_code: 'd1', user_code: 'PAIR-ZZZZ', interval: 5, expires_in: 600 }),
+                jsonResponse({ device_code: 'd1', user_code: 'PAIR-ZZZZ', interval: 5, expires_in: 600, server_nonce: 'nonce' }),
             )
             // poll #1 pending, #2 slow_down, #3 approved
             .mockReturnValueOnce(jsonResponse({ status: 'authorization_pending' }))
@@ -147,6 +165,7 @@ describe('DeviceCodeClient — enroll loop', () => {
             fetch: fetchFn,
             storage: memoryStorage(),
             apiBaseUrl: 'https://api/api/v1',
+            deviceIdentity,
             sleep,
             now: () => clock,
         });
