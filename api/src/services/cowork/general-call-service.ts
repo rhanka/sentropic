@@ -2,18 +2,25 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { coworkDeviceLeases, coworkDevices, coworkDeviceTeardownTombstones, coworkGeneralCalls } from '../../db/schema';
+import { coworkDeviceLeases, coworkDevices, coworkDeviceTeardownTombstones, coworkGeneralCalls, workspaceMemberships, workspaces } from '../../db/schema';
 
 export type GeneralCallState = 'FAIT' | 'DÉPOSÉ-EN-ATTENTE' | 'PAS-FAIT';
 export type GeneralCallRef = Readonly<{ durableCallRef: string; state: GeneralCallState }>;
 
 export async function depositGeneralCall(input: {
   principalId: string; tenantId: string; workspaceId: string; targetDeviceId: string; invocationId: string; toolCallId: string;
-  descriptorCiphertext: string; descriptorKeyRef: string; descriptorMeta: { actionDescriptorId: string; argumentDigest: string }; authorityEpoch: number;
+  descriptorCiphertext: string; descriptorKeyRef: string; descriptorMeta: { actionDescriptorId: string; argumentDigest: string }; authorityEpoch: number; nodeEnv?: string;
 }): Promise<GeneralCallRef | null> {
-  if (!input.descriptorCiphertext || !input.descriptorKeyRef) return null;
+  if (input.nodeEnv === 'production' || !input.descriptorCiphertext || !input.descriptorKeyRef || !input.descriptorMeta.actionDescriptorId || !input.descriptorMeta.argumentDigest) return null;
+  const [device, workspace, membership] = await Promise.all([
+    db.select({ id: coworkDevices.id, profile: coworkDevices.generalProfile }).from(coworkDevices).where(and(eq(coworkDevices.id, input.targetDeviceId), eq(coworkDevices.userId, input.principalId), eq(coworkDevices.status, 'active'))).limit(1),
+    db.select({ id: workspaces.id }).from(workspaces).where(and(eq(workspaces.id, input.workspaceId), eq(workspaces.tenantId, input.tenantId))).limit(1),
+    db.select({ userId: workspaceMemberships.userId }).from(workspaceMemberships).where(and(eq(workspaceMemberships.workspaceId, input.workspaceId), eq(workspaceMemberships.userId, input.principalId))).limit(1),
+  ]);
+  if (!device[0] || device[0].profile?.isolatedVmTarget !== true || !device[0].profile?.egressPolicyRef || !workspace[0] || !membership[0]) return null;
   const id = randomUUID();
-  const [created] = await db.insert(coworkGeneralCalls).values({ ...input, id, state: 'DÉPOSÉ-EN-ATTENTE', requiresFreshAuthority: true })
+  const { nodeEnv: _nodeEnv, ...record } = input;
+  const [created] = await db.insert(coworkGeneralCalls).values({ ...record, id, state: 'DÉPOSÉ-EN-ATTENTE', requiresFreshAuthority: true })
     .onConflictDoNothing().returning();
   if (created) return { durableCallRef: created.id, state: 'DÉPOSÉ-EN-ATTENTE' };
   const [existing] = await db.select().from(coworkGeneralCalls).where(and(
