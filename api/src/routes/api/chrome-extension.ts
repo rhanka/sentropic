@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 import { env } from '../../config/env';
 import { register, touchTab, evictStaleTabs, unregister } from '../../services/tab-registry';
 import type { TabSource } from '../../services/tab-registry';
@@ -8,6 +9,12 @@ import {
   registerCoworkDevice,
   unregisterCoworkDevice,
 } from '../../services/cowork/device-registry';
+import {
+  acknowledgeLease,
+  issueLease,
+  listIssuedLeases,
+  revokeLease,
+} from '../../services/cowork/device-lease-service';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/chrome-ext';
@@ -50,6 +57,16 @@ export const chromeExtensionRouter = new Hono();
 // --- Tab registration / keepalive / unregister endpoints ---
 
 const VALID_TAB_SOURCES = new Set<TabSource>(['chrome_plugin', 'bookmarklet', 'desktop_cowork']);
+const issueLeaseSchema = z.object({
+  device_id: z.string().uuid(),
+  turn_ref: z.string().min(1).max(256),
+  scope: z.record(z.unknown()).nullable().optional().default(null),
+});
+const acknowledgeLeaseSchema = z.object({
+  device_id: z.string().uuid(),
+  signature: z.string().min(1),
+});
+const revokeLeaseSchema = z.object({ reason: z.string().min(1).max(256) });
 
 function mutationFailure(c: Context, reason: string) {
   const status = reason === 'not_found' ? 404 : 403;
@@ -122,6 +139,58 @@ chromeExtensionRouter.delete('/tabs/:tabId', async (c) => {
   }
   unregister(tabId);
   return c.json({ ok: true });
+});
+
+// Authorization-only BR-41c lease primitives. Lot 4 may attach a consented
+// desktop execution loop after `acknowledgeLease`; this branch deliberately does not.
+chromeExtensionRouter.post('/cowork-devices/leases', async (c) => {
+  const parsed = issueLeaseSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid lease request.' }, 400);
+  const user = c.get('user');
+  const result = await issueLease({
+    userId: user.userId,
+    deviceId: parsed.data.device_id,
+    turnRef: parsed.data.turn_ref,
+    scope: parsed.data.scope,
+  });
+  return result.ok
+    ? c.json({ ok: true, lease: result.lease }, 201)
+    : c.json({ message: `Lease issuance denied: ${result.reason}.` }, 403);
+});
+
+chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/ack', async (c) => {
+  const parsed = acknowledgeLeaseSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid lease acknowledgement.' }, 400);
+  const user = c.get('user');
+  const result = await acknowledgeLease({
+    userId: user.userId,
+    deviceId: parsed.data.device_id,
+    leaseId: c.req.param('leaseId'),
+    signature: parsed.data.signature,
+  });
+  if (result.ok) return c.json({ ok: true, lease: result.lease });
+  return c.json({ message: `Lease acknowledgement denied: ${result.reason}.` }, result.reason === 'not_found' ? 404 : 409);
+});
+
+chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/revoke', async (c) => {
+  const parsed = revokeLeaseSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid lease revocation.' }, 400);
+  const result = await revokeLease(c.req.param('leaseId'), parsed.data.reason, c.get('user').userId);
+  return result.ok
+    ? c.json({ ok: true, lease: result.lease })
+    : c.json({ message: `Lease revocation denied: ${result.reason}.` }, 404);
+});
+
+chromeExtensionRouter.get('/cowork-devices/:deviceId/leases', async (c) => {
+  const requestedLimit = Number(c.req.query('limit') ?? 20);
+  const leases = await listIssuedLeases(c.get('user').userId, c.req.param('deviceId'), requestedLimit);
+  if (!leases) return c.json({ message: 'Cowork device not found.' }, 404);
+  return c.json({ leases: leases.map((lease) => ({
+    leaseId: lease.id,
+    nonce: lease.nonce,
+    scope: lease.scope,
+    expiresAt: lease.expiresAt,
+  })) });
 });
 
 // --- Download endpoint ---
