@@ -51,8 +51,16 @@ import type { CatalogEntry, ToolEntry } from '../types.js';
  * mapping `metadata.name → handler` and exposes a `getHandler()` accessor
  * consumed by the execution seam.
  */
+export type CatalogToolInvocationContext = {
+  toolCallId: string;
+  sessionPrincipalSub: string;
+  sessionId: string;
+  workspaceId: string;
+};
+
 export type StandaloneToolHandler = (
   args: Record<string, unknown>,
+  context?: CatalogToolInvocationContext,
 ) => unknown | Promise<unknown>;
 
 // ---------------------------------------------------------------------------

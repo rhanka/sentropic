@@ -580,7 +580,12 @@ export async function executeFoundationSkillTool(
   // Foundation tools (hardcoded above) ALWAYS dispatch FIRST and never reach
   // this point — the seam is a pure fall-through for non-hardcoded names.
   // -------------------------------------------------------------------------
-  const seamResult = await catalogExecutionSeam.execute(toolCall.name, args);
+  const seamResult = await catalogExecutionSeam.execute(toolCall.name, args, {
+    toolCallId: toolCall.id,
+    sessionPrincipalSub: options.userId,
+    sessionId: options.sessionId,
+    workspaceId: sessionWorkspaceId,
+  });
   if (seamResult.handled) {
     return {
       handled: true,

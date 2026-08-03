@@ -41,6 +41,7 @@
 
 import type { CompositeCatalogRegistry } from './composite-registry.js';
 import type { StandaloneToolSource } from './sources/standalone-tool-source.js';
+import type { CatalogToolInvocationContext } from './sources/standalone-tool-source.js';
 import type { ToolHandlerSource } from './sources/mcp-source.js';
 
 // ---------------------------------------------------------------------------
@@ -128,6 +129,7 @@ export class CatalogExecutionSeam {
   async execute(
     name: string,
     args: Record<string, unknown>,
+    context?: CatalogToolInvocationContext,
   ): Promise<ExecutionSeamResult> {
     const entry = this.registry.get(name);
 
@@ -146,7 +148,7 @@ export class CatalogExecutionSeam {
     for (const source of this.handlerSources) {
       const handler = source.getHandler(name);
       if (handler !== undefined) {
-        const result = await Promise.resolve(handler(args));
+        const result = await Promise.resolve(handler(args, context));
         return { handled: true, result };
       }
     }
