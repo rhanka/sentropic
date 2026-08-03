@@ -1,11 +1,11 @@
 # Feature: Cowork connector-host functional MVP
 
 ## Objective
-Specify, then after architect ratification build, a same-day closed-alpha vertical slice in which Cowork embeds/selects Sentropic chat sessions and safely exposes a different Cowork workstation's `screen_capture`/`input_action` through the connector-host mount. This plan is PENDING ratification via `neg:cowork-cu-cadrage-20260718`.
+Build the architect- and owner-ratified same-day closed-alpha vertical slice in which Cowork embeds/selects Sentropic chat sessions and safely exposes a different Cowork workstation's `screen_capture`/`input_action` through the connector-host mount. The binding Option-B narrow-surface conditions are recorded below.
 
 ## Scope / Guardrails
-- This authoring pass changes only `BRANCH.md` and `spec/SPEC_EVOL_COWORK_CONNECTOR_HOST_MVP.md`; no product code, push, or UAT.
-- Implementation starts only after the architect resolves the spec's open questions; until then all implementation lots remain unchecked.
+- This build implements only the ratified Option-B narrow MVP; no push or UAT is included.
+- General computer use is out of scope until separately ratified with its trusted-policy/human-in-the-loop envelope.
 - D6(b) only: Cowork is a connector on `packages/connector-host`, not a standalone MCP server and not the #489 inbound Gmail/Drive `/mcp` approach.
 - Same-day MVP is closed-alpha, isolated non-admin Windows OVH only, explicit different-device selection, per-action consent, no permanent input grant, no high-risk/irreversible action, and fail-closed results.
 - Reuse BR-41c identity/lease/broker foundations and the study §5 guardrails; apply #439 per-request tenancy/exposure and #492 teardown ordering.
@@ -66,7 +66,7 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - Run `make scope-check` before the exception commit and mirror the exception in the spec if it changes architecture.
 
 ## Feedback Loop
-- `attention`: architect ratification is pending via `neg:cowork-cu-cadrage-20260718`; Lot 0 must resolve spec §9 before product edits.
+- `resolved`: architect and owner ratified the binding Feature 3 Option-B conditions before product edits; `COWORK_MVP_RATIFICATION_archi.md` is the decision record.
 - `attention`: BR-COWORK-EX1 is proposed, not active; one durable device/lease migration is allowed only after schema/route ownership is ratified.
 - `resolved`: BR-COWORK-EX2 authorizes `api/src/services/device-code-store.ts` solely for BR-41c enrollment PoP staging; impact is device-code pending state only and rollback is removal of the PoP fields with the dependent route/client change. The user explicitly requested this enrollment binding.
 - `resolved`: BR-COWORK-EX3 authorizes `api/src/routes/api/chrome-extension.ts` solely to keep the published Cowork presence transport while routing `desktop_cowork` to durable ownership-checked storage; browser tab behavior is unchanged and rollback is the isolated desktop route branch.
@@ -104,11 +104,11 @@ Specify, then after architect ratification build, a same-day closed-alpha vertic
   - [x] Ground connector-host, Cowork, bridge, chat, BR-41c, threat guardrails, #439/#492 and D6 fusion with path:line evidence.
   - [x] Quote I1–I5 and write the exact MVP/deferred line, TERRA lots and Windows OVH UAT.
   - [x] Commit only the spec and this plan; no product code or push.
-- [ ] **Lot 0b — Architect ratification / freeze**
-  - [ ] Resolve every spec §9 question in `neg:cowork-cu-cadrage-20260718`; record decisions here before edits.
-  - [ ] Freeze WebView2/runtime RPC, context-carrying chat seam, per-call broker/invocation-ref transport, connector/device account placement, scopes, capability lease, delivery route, result states and audit fields.
-  - [ ] Activate BR-COWORK-EX1 only if one migration is approved; otherwise stop as blocked.
-  - [ ] Re-run `harness check branch` and `make scope-check` before implementation.
+- [x] **Lot 0b — Architect ratification / freeze**
+  - [x] Resolve the implemented spec §9 questions in the architect decision record before edits.
+  - [x] Freeze the narrow host/runtime seam, per-call broker, account selection, capability lease, delivery route, result states and audit fields.
+  - [x] Retain the already-ratified BR-41c migration foundation; F3 itself adds no migration.
+  - [x] Re-run `harness check branch` and `make scope-check` before implementation.
 - [ ] **Lot 1 — Embedded chat and Sentropic session join (Features 1/2)**
   - [x] Add local-only WebView2 shell, published chat-ui composition, conversation list/selection, history hydration, send/stop and session switching.
   - [x] Add narrow native RPC + authenticated StreamHub proxy; keep bearer/refresh tokens out of webview JavaScript.
