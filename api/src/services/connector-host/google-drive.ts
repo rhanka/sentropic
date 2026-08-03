@@ -61,10 +61,12 @@ export const createGoogleDriveSecretPort = (
   dependencies: {
     loadAccounts?: GoogleDriveAccountLoader;
     resolveToken?: GoogleDriveTokenResolver;
+    connectorInstanceIdOf?: (account: Pick<GoogleDriveConnectorAccount, 'id'>) => string;
   } = {},
 ): SecretPort => {
   const loadAccounts = dependencies.loadAccounts ?? loadGoogleDriveAccounts;
   const resolveToken = dependencies.resolveToken ?? resolveGoogleDriveToken;
+  const connectorInstanceIdOf = dependencies.connectorInstanceIdOf ?? toGoogleDriveConnectorInstanceId;
 
   return {
     async resolve(request: SecretPortRequest): Promise<string> {
@@ -77,7 +79,7 @@ export const createGoogleDriveSecretPort = (
         workspaceId: request.workspaceRef,
       });
       const account = accounts.find(
-        (candidate) => toGoogleDriveConnectorInstanceId(candidate) === request.connectorInstanceId,
+        (candidate) => connectorInstanceIdOf(candidate) === request.connectorInstanceId,
       );
       if (!account) throw new SecretAccessError('not_enrolled');
       if (account.status !== 'connected' || !account.tokenSecret) {
@@ -140,6 +142,7 @@ const hintedPrincipal = (hints: Record<string, unknown> | undefined): unknown =>
 export const createSessionTenantWorkspaceResolver = (
   sessionUser: SessionUser,
   checkWorkspaceAccess: WorkspaceAccess = requireWorkspaceAccess,
+  capabilityIds: readonly string[] = GOOGLE_DRIVE_P1_CAPABILITY_IDS,
 ): TenantWorkspaceResolver => ({
   async resolve(input: Parameters<TenantWorkspaceResolver['resolve']>[0]) {
     const requestedPrincipal = hintedPrincipal(input.hints);
@@ -162,7 +165,7 @@ export const createSessionTenantWorkspaceResolver = (
       principalSub: sessionUser.userId,
       tenantRef: workspaceRef,
       workspaceRef,
-      exposure: { capabilityIds: [...GOOGLE_DRIVE_P1_CAPABILITY_IDS] },
+      exposure: { capabilityIds: [...capabilityIds] },
     };
   },
 });
