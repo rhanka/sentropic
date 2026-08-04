@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@sentropic/llm-mesh": "^0.8.0",
-    "hono": "^4.10.7"
+    "hono": "^4.13.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",
