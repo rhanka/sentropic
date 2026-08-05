@@ -26,8 +26,14 @@ Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
   - `packages/llm-mesh/tests/**`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/tsconfig*.json`
+  - `packages/llm-gateway/package.json`
+  - `package.json`
+  - `package-lock.json`
+  - `api/package.json`
+  - `api/package-lock.json`
   - `api/src/services/cloud-code-provider-auth.ts` (NEW)
   - `api/src/services/llm-account-transports.ts` (Cloud Code adapter extension)
+  - `api/tests/unit/**`
   - `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -43,7 +49,7 @@ Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
 
 ## Feedback Loop
 
-_No items yet._
+- `BRXX-EX1`: `package-lock.json` and `api/package-lock.json` updated for `@sentropic/llm-mesh` version 0.9.0 bump.
 
 ## AI Flaky tests
 
@@ -142,21 +148,21 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [x] `make test-llm-mesh ENV=test-llm-mesh-agy`
     - [ ] **Conductor review gate**
 
-- [ ] **Lot 3 — Portal API adapter** · _Owner: sentropic_ · _After Lot 2 gate_
-  - [ ] `api/src/services/cloud-code-provider-auth.ts` (NEW):
-    - [ ] Adapt `antigravity-provider-auth.ts` to `CloudCodeEnrollmentProvider` contract
-    - [ ] `fetchCloudCodeUserInfo`, `loadCodeAssist`, `onboardCloudCodeUser`
-  - [ ] `api/src/services/llm-account-transports.ts`:
-    - [ ] Cloud Code adapter (pattern: existing Codex + Claude Code)
-    - [ ] Single-flight refresh per `account_id` (CAS/DB)
-    - [ ] `owner_user_id` scoped — SQL/RLS
-    - [ ] `cloudaicompanionProject` encrypted per account, never global
+- [x] **Lot 3 — Portal API adapter** · _Owner: sentropic_ · _After Lot 2 gate_
+  - [x] `api/src/services/cloud-code-provider-auth.ts` (NEW):
+    - [x] Adapt `antigravity-provider-auth.ts` to `CloudCodeEnrollmentProvider` contract
+    - [x] `fetchCloudCodeUserInfo`, `loadCodeAssist`, `onboardCloudCodeUser`
+  - [x] `api/src/services/llm-account-transports.ts`:
+    - [x] Cloud Code adapter (pattern: existing Codex + Claude Code)
+    - [x] Single-flight refresh per `account_id` (CAS/DB)
+    - [x] `owner_user_id` scoped — SQL/RLS
+    - [x] `cloudaicompanionProject` encrypted per account, never global
   - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-llm-mesh-agy`
+    - [x] `make typecheck-api ENV=test-llm-mesh-agy`
     - [ ] `make lint-api ENV=test-llm-mesh-agy`
-    - [ ] `api/tests/unit/services/cloud-code-provider-auth.test.ts` (NEW)
-    - [ ] `api/tests/unit/services/llm-account-transports.test.ts` — Cloud Code cases (multi-tenant, single-flight)
-    - [ ] `make test-api-unit ENV=test-llm-mesh-agy`
+    - [x] `api/tests/unit/services/cloud-code-provider-auth.test.ts` (NEW)
+    - [x] `api/tests/unit/services/llm-account-transports.test.ts` — Cloud Code cases (multi-tenant, single-flight)
+    - [x] `make test-api-unit ENV=test-llm-mesh-agy`
     - [ ] **Conductor review gate**
 
 - [ ] **Lot N-2 — Final integration + h2a acceptance**

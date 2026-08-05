@@ -47,6 +47,8 @@ export type LlmAccountTransportAcquisition = {
 export type CodexAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type ClaudeCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type AntigravityAccountTransportAcquisition = LlmAccountTransportAcquisition;
+export type GeminiCodeAssistAccountTransportAcquisition = LlmAccountTransportAcquisition;
+export type CloudCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
 
 export type LlmAccountTransportOutcomeInput = {
   status: 'success' | 'failed' | 'rate_limited' | 'auth_failed';
@@ -93,6 +95,32 @@ export type AntigravityTokenSecretPayload = {
   profile: Record<string, unknown> | null;
 };
 
+export type CloudCodeTokenSecretPayload = {
+  accessToken: string;
+  refreshToken: string | null;
+  tokenType: 'bearer';
+  obtainedAt: string;
+  expiresAt: string | null;
+  source: 'cloud-code-import' | 'cloud-code-refresh';
+  cloudaicompanionProject: string;
+  clientId: string | null;
+  profile: Record<string, unknown> | null;
+};
+
+export type GeminiCodeAssistTokenSecretPayload = {
+  accessToken: string;
+  refreshToken: string | null;
+  tokenType: 'bearer';
+  obtainedAt: string;
+  expiresAt: string | null;
+  source: 'antigravity-import' | 'antigravity-refresh';
+  // GCP project bound to the Google account (discovered via loadCodeAssist);
+  // injected into every cloudcode-pa v1internal request body.
+  project: string | null;
+  tier: string | null;
+  profile: Record<string, unknown> | null;
+};
+
 type AccountSelectionRow = {
   account_id: string;
   external_account_id: string | null;
@@ -125,12 +153,18 @@ const CLAUDE_CODE_TRANSPORT_PROVIDER_ID = 'claude-code';
 // (selection is keyed by BOTH target + transport provider ids).
 const ANTIGRAVITY_TARGET_PROVIDER_ID = 'cloudcode-pa';
 const ANTIGRAVITY_TRANSPORT_PROVIDER_ID = 'antigravity';
+
+const CLOUD_CODE_TARGET_PROVIDER_ID = 'gemini';
+const CLOUD_CODE_TRANSPORT_PROVIDER_ID = 'cloud-code';
+const GEMINI_CODE_ASSIST_TARGET_PROVIDER_ID = 'gcp';
+const GEMINI_CODE_ASSIST_TRANSPORT_PROVIDER_ID = 'gemini-code-assist';
 const RESERVATION_TTL_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 
 const codexRefreshes = new Map<string, Promise<CodexTokenSecretPayload | null>>();
 const claudeCodeRefreshes = new Map<string, Promise<ClaudeCodeTokenSecretPayload | null>>();
 const antigravityRefreshes = new Map<string, Promise<AntigravityTokenSecretPayload | null>>();
+const cloudCodeRefreshes = new Map<string, Promise<CloudCodeTokenSecretPayload | null>>();
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -254,7 +288,36 @@ const parseClaudeCodeTokenSecret = (
   }
 };
 
-const parseAntigravityTokenSecret = (
+const parseCloudCodeTokenSecret = (
+  value: string | null | undefined,
+): CloudCodeTokenSecretPayload | null => {
+  const decrypted = decryptSecretOrNull(value);
+  if (!decrypted) return null;
+  try {
+    const parsed = JSON.parse(decrypted) as Partial<CloudCodeTokenSecretPayload> | null;
+    const accessToken = normalizeOptionalText(parsed?.accessToken);
+    const cloudaicompanionProject = normalizeOptionalText(parsed?.cloudaicompanionProject);
+    if (!parsed || !accessToken || !cloudaicompanionProject) return null;
+    return {
+      accessToken,
+      refreshToken: normalizeOptionalText(parsed.refreshToken),
+      tokenType: 'bearer',
+      obtainedAt: normalizeOptionalText(parsed.obtainedAt) ?? new Date().toISOString(),
+      expiresAt: normalizeOptionalText(parsed.expiresAt),
+      source: parsed.source === 'cloud-code-refresh' ? 'cloud-code-refresh' : 'cloud-code-import',
+      cloudaicompanionProject,
+      clientId: normalizeOptionalText(parsed.clientId),
+      profile:
+        parsed.profile && typeof parsed.profile === 'object' && !Array.isArray(parsed.profile)
+          ? parsed.profile as Record<string, unknown>
+          : null,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const parseGeminiCodeAssistTokenSecret = (
   value: string | null | undefined,
 ): AntigravityTokenSecretPayload | null => {
   const decrypted = decryptSecretOrNull(value);
@@ -281,6 +344,8 @@ const parseAntigravityTokenSecret = (
     return null;
   }
 };
+
+const parseAntigravityTokenSecret = parseGeminiCodeAssistTokenSecret;
 
 const buildAntigravityTokenPayload = (input: {
   accessToken: string;
@@ -370,6 +435,26 @@ const buildClaudeCodeTokenPayload = (input: {
   clientId: normalizeOptionalText(input.clientId),
   subscriptionType: normalizeOptionalText(input.subscriptionType),
   rateLimitTier: normalizeOptionalText(input.rateLimitTier),
+  profile: input.profile ?? null,
+});
+
+const buildCloudCodeTokenPayload = (input: {
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: string | null;
+  source: CloudCodeTokenSecretPayload['source'];
+  cloudaicompanionProject: string;
+  clientId?: string | null;
+  profile?: Record<string, unknown> | null;
+}): CloudCodeTokenSecretPayload => ({
+  accessToken: input.accessToken,
+  refreshToken: normalizeOptionalText(input.refreshToken),
+  tokenType: 'bearer',
+  obtainedAt: new Date().toISOString(),
+  expiresAt: normalizeOptionalText(input.expiresAt),
+  source: input.source,
+  cloudaicompanionProject: input.cloudaicompanionProject,
+  clientId: normalizeOptionalText(input.clientId),
   profile: input.profile ?? null,
 });
 
@@ -796,10 +881,12 @@ export const storeAntigravityAccountTransport = async (input: {
     tier: input.tier,
     profile: input.profile,
   });
+
   const now = new Date();
   const accountId = createId();
   const tokenSecret = encryptSecret(JSON.stringify(token));
   const accountLabel = normalizeOptionalText(input.accountLabel);
+
   // `project` lives in metadata (read at acquire time and injected into every
   // cloudcode-pa v1internal request body); it survives token refresh because
   // refresh only rewrites token_secret + token_expires_at.
@@ -872,6 +959,106 @@ export const storeAntigravityAccountTransport = async (input: {
   return getPrimaryAntigravityAccountTransport({ ownerUserId });
 };
 
+export const storeCloudCodeAccountTransport = async (input: {
+  ownerUserId: string;
+  accountLabel?: string | null;
+  externalAccountId?: string | null;
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: string | null;
+  cloudaicompanionProject: string;
+  clientId?: string | null;
+  profile?: Record<string, unknown> | null;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  const accessToken = normalizeOptionalText(input.accessToken);
+  const cloudaicompanionProject = normalizeOptionalText(input.cloudaicompanionProject);
+  if (!ownerUserId || !accessToken || !cloudaicompanionProject) return null;
+
+  const token = buildCloudCodeTokenPayload({
+    accessToken,
+    refreshToken: input.refreshToken,
+    expiresAt: input.expiresAt,
+    source: 'cloud-code-import',
+    cloudaicompanionProject,
+    clientId: input.clientId,
+    profile: input.profile,
+  });
+
+  const now = new Date();
+  const accountId = createId();
+  const tokenSecret = encryptSecret(JSON.stringify(token));
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+
+  const externalAccountId = normalizeOptionalText(input.externalAccountId) ?? \`cc_\${accountId.slice(0, 8)}\`;
+  const metadata = {
+    source: token.source,
+    credentialSchemaVersion: 1,
+    productAccountSource: 'cloud-code',
+    cloudaicompanionProject: token.cloudaicompanionProject,
+    clientId: token.clientId,
+    profile: token.profile,
+  };
+
+  await db.run(sql`
+    INSERT INTO llm_provider_accounts (
+      id,
+      owner_user_id,
+      scope,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id,
+      account_label,
+      status,
+      token_secret,
+      token_expires_at,
+      connected_at,
+      disconnected_at,
+      last_error,
+      metadata,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${accountId},
+      ${ownerUserId},
+      'user',
+      ${CLOUD_CODE_TARGET_PROVIDER_ID},
+      ${CLOUD_CODE_TRANSPORT_PROVIDER_ID},
+      ${externalAccountId},
+      ${accountLabel},
+      'active',
+      ${tokenSecret},
+      ${token.expiresAt ? new Date(token.expiresAt) : null},
+      ${now},
+      NULL,
+      NULL,
+      ${JSON.stringify(metadata)}::jsonb,
+      ${now},
+      ${now}
+    )
+    ON CONFLICT (
+      owner_user_id,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id
+    )
+    WHERE external_account_id IS NOT NULL
+    DO UPDATE SET
+      account_label = COALESCE(EXCLUDED.account_label, llm_provider_accounts.account_label),
+      status = 'active',
+      token_secret = EXCLUDED.token_secret,
+      token_expires_at = EXCLUDED.token_expires_at,
+      connected_at = EXCLUDED.connected_at,
+      disconnected_at = NULL,
+      last_error = NULL,
+      metadata = EXCLUDED.metadata,
+      updated_at = EXCLUDED.updated_at
+  `);
+
+  return getPrimaryCloudCodeAccountTransport({ ownerUserId });
+};
+
 export const getPrimaryAntigravityAccountTransport = async (input: {
   ownerUserId: string;
 }): Promise<LlmAccountTransportPublic | null> => {
@@ -906,6 +1093,70 @@ export const getPrimaryAntigravityAccountTransport = async (input: {
       updated_at DESC NULLS LAST
     LIMIT 1
   `) as Array<{
+    id: string;
+    targetProviderId: string;
+    transportProviderId: string;
+    externalAccountId: string | null;
+    accountLabel: string | null;
+    status: LlmAccountTransportStatus;
+    connectedAt: Date | string | null;
+    disconnectedAt: Date | string | null;
+    tokenExpiresAt: Date | string | null;
+    lastError: string | null;
+    updatedAt: Date | string | null;
+  }>;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    targetProviderId: row.targetProviderId,
+    transportProviderId: row.transportProviderId,
+    externalAccountId: row.externalAccountId,
+    accountLabel: row.accountLabel,
+    status: row.status,
+    connectedAt: toIso(row.connectedAt),
+    disconnectedAt: toIso(row.disconnectedAt),
+    tokenExpiresAt: toIso(row.tokenExpiresAt),
+    lastError: row.lastError,
+    updatedAt: toIso(row.updatedAt),
+  };
+};
+
+export const getPrimaryCloudCodeAccountTransport = async (input: {
+  ownerUserId: string;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return null;
+  const rows = (await db.all(sql`
+    SELECT
+      id,
+      target_provider_id as "targetProviderId",
+      transport_provider_id as "transportProviderId",
+      external_account_id as "externalAccountId",
+      accountLabel: string | null;
+      account_label as "accountLabel",
+      status,
+      connected_at as "connectedAt",
+      disconnected_at as "disconnectedAt",
+      token_expires_at as "tokenExpiresAt",
+      last_error as "lastError",
+      updated_at as "updatedAt"
+    FROM llm_provider_accounts
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${CLOUD_CODE_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${CLOUD_CODE_TRANSPORT_PROVIDER_ID}
+      AND status <> 'disconnected'
+    ORDER BY
+      CASE status
+        WHEN 'active' THEN 0
+        WHEN 'cooldown' THEN 1
+        WHEN 'reauth_required' THEN 2
+        ELSE 3
+      END,
+      connected_at DESC NULLS LAST,
+      updated_at DESC NULLS LAST
+    LIMIT 1
+  `)) as Array<{
     id: string;
     targetProviderId: string;
     transportProviderId: string;
@@ -973,6 +1224,49 @@ export const disconnectAntigravityAccountTransports = async (input: {
       WHERE owner_user_id = ${ownerUserId}
         AND target_provider_id = ${ANTIGRAVITY_TARGET_PROVIDER_ID}
         AND transport_provider_id = ${ANTIGRAVITY_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
+};
+
+export const disconnectCloudCodeAccountTransports = async (input: {
+  ownerUserId: string;
+}): Promise<void> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return;
+  const now = new Date();
+  await db.run(sql`
+    UPDATE llm_provider_accounts
+    SET
+      status = 'disconnected',
+      token_secret = NULL,
+      token_expires_at = NULL,
+      disconnected_at = ${now},
+      last_error = NULL,
+      updated_at = ${now}
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${CLOUD_CODE_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${CLOUD_CODE_TRANSPORT_PROVIDER_ID}
+  `);
+  await db.run(sql`
+    UPDATE llm_account_leases
+    SET status = 'invalidated', released_at = ${now}, updated_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${CLOUD_CODE_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${CLOUD_CODE_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
+  await db.run(sql`
+    UPDATE llm_account_reservations
+    SET status = 'completed', completed_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${CLOUD_CODE_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${CLOUD_CODE_TRANSPORT_PROVIDER_ID}
     )
       AND status = 'active'
   `);
@@ -1115,6 +1409,90 @@ const refreshClaudeCodeTokenIfNeeded = async (input: {
   })();
 
   claudeCodeRefreshes.set(input.accountId, refreshPromise);
+  return refreshPromise;
+};
+
+const refreshCloudCodeTokenIfNeeded = async (input: {
+  accountId: string;
+  externalAccountId: string | null;
+  token: CloudCodeTokenSecretPayload;
+}): Promise<CloudCodeTokenSecretPayload | null> => {
+  if (!isTokenExpiring(input.token.expiresAt)) return input.token;
+  if (!input.token.refreshToken) {
+    await db.run(sql`
+      UPDATE llm_provider_accounts
+      SET status = 'reauth_required',
+          token_secret = NULL,
+          token_expires_at = NULL,
+          last_error = 'Cloud Code token expired and no refresh token is available.',
+          updated_at = ${new Date()}
+      WHERE id = ${input.accountId}
+    `);
+    return null;
+  }
+
+  const existing = cloudCodeRefreshes.get(input.accountId);
+  if (existing) return existing;
+
+  const refreshPromise = (async () => {
+    try {
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: input.token.refreshToken,
+          client_id: input.token.clientId ?? 'mock-cloud-code-client-id',
+          client_secret: 'mock-cloud-code-client-secret',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Cloud Code token refresh failed (${response.status})`);
+      }
+
+      const payload = (await response.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
+      const accessToken = normalizeOptionalText(payload.access_token);
+      if (!accessToken) throw new Error('Cloud Code token refresh returned no access token');
+
+      const expiresIn = typeof payload.expires_in === 'number' ? payload.expires_in : 3600;
+      const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+      const next = buildCloudCodeTokenPayload({
+        accessToken,
+        refreshToken: payload.refresh_token ?? input.token.refreshToken,
+        expiresAt,
+        source: 'cloud-code-refresh',
+        cloudaicompanionProject: input.token.cloudaicompanionProject,
+        clientId: input.token.clientId,
+        profile: input.token.profile,
+      });
+
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET token_secret = ${encryptSecret(JSON.stringify(next))},
+            token_expires_at = ${next.expiresAt ? new Date(next.expiresAt) : null},
+            status = 'active',
+            last_error = NULL,
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return next;
+    } catch (error) {
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET status = 'reauth_required',
+            last_error = ${error instanceof Error ? error.message : 'Cloud Code token refresh failed.'},
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return null;
+    } finally {
+      cloudCodeRefreshes.delete(input.accountId);
+    }
+  })();
+
+  cloudCodeRefreshes.set(input.accountId, refreshPromise);
   return refreshPromise;
 };
 
@@ -1479,6 +1857,25 @@ export const acquireClaudeCodeAccountTransport = async (input: {
     refreshTokenIfNeeded: refreshClaudeCodeTokenIfNeeded,
     invalidTokenMessage: 'Claude Code account token secret is missing or invalid.',
     reauthMessage: 'Claude Code account requires reauthentication.',
+  });
+
+export const acquireCloudCodeAccountTransport = async (input: {
+  userId: string;
+  workspaceId?: string | null;
+  modelId: string;
+  affinityKey?: string | null;
+  requestId?: string | null;
+}): Promise<CloudCodeAccountTransportAcquisition | null> =>
+  acquireDbAccountTransport({
+    ...input,
+    targetProviderId: CLOUD_CODE_TARGET_PROVIDER_ID,
+    transportProviderId: CLOUD_CODE_TRANSPORT_PROVIDER_ID,
+    defaultModelId: 'gemini-2.5-flash',
+    stableSessionPrefix: 'cloud_code',
+    parseTokenSecret: parseCloudCodeTokenSecret,
+    refreshTokenIfNeeded: refreshCloudCodeTokenIfNeeded,
+    invalidTokenMessage: 'Cloud Code account token secret is missing or invalid.',
+    reauthMessage: 'Cloud Code account requires reauthentication.',
   });
 
 export const acquireAntigravityAccountTransport = async (input: {
