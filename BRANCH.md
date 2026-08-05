@@ -1,47 +1,182 @@
-# Feature: D6 slice (a) — Agents-Surface Cross-Host Fusion Contract
+# BR-XX — feat/llm-mesh-agy-enrollment — Cloud Code Native Enrollment in @sentropic/llm-mesh
 
-## Objective
-Pose the design-only contract by which cowork agents and plugins become entries on the ONE agents surface (`AgentsFeedPort`), I1/I3/I4-clean, as a standalone D6 slice. No lane, no build (storm-gate 0.90.1; no build before owner signature).
+## Context
+
+Extend `@sentropic/llm-mesh` with native Cloud Code (Antigravity / Google daily-cloudcode)
+enrollment and runtime transport. Aligned with h2a spec v0.6 (commit `6eb2d24c`).
+
+Replaces `gemini-code-assist` transport (removed) with `cloud-code` transport (new).
+Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
+`spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md` (to be merged at Lot N-1).
 
 ## Scope / Guardrails
-- Scope limited to `spec/**` (a single new design spec) — design-only, no code, no build.
-- No migration, no Docker, Make-only workflow.
-- Root workspace `~/src/sentropic` reserved for user dev/UAT (`ENV=dev`); must remain stable.
-- Branch development happens in isolated worktree `tmp/d6a-fusion`.
-- No automated test campaign (spec-only branch).
+
+- Scope: `@sentropic/llm-mesh` package contracts + `@sentropic/api` portal adapter.
+- No DB migration in this branch (DB work belongs to BR-44).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/sentropic` reserved for user dev/UAT (`ENV=dev`), must stay stable.
+- Branch development in `tmp/feat-llm-mesh-agy-enrollment/`.
+- Tests on `ENV=test-llm-mesh-agy`, never root dev.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
+
 - **Allowed Paths (implementation scope)**:
-  - `spec/SPEC_EVOL_AGENTS_SURFACE_FUSION.md`
+  - `packages/llm-mesh/src/**`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/tsconfig*.json`
+  - `api/src/services/cloud-code-provider-auth.ts` (NEW)
+  - `api/src/services/llm-account-transports.ts` (Cloud Code adapter extension)
+  - `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `api/**`
-  - `ui/**`
-  - `packages/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path (reason, impact, rollback).
-
-## Lots
-- [x] Lot 1 — Author `spec/SPEC_EVOL_AGENTS_SURFACE_FUSION.md`: cross-host fusion contract; pins I1-I5 verbatim; I1/I3/I4 compliance; LIB/INTEGRATION split + acceptance-grid mapping; dependency/gate table.
-- [ ] Lot 2 — h2a-architect evaluation against the 6' surface contract (external review; not a code lot).
+  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
+  - `plan/44-BRANCH_feat-llm-mesh-account-transports.md`
+  - `packages/llm-mesh/src/account-transports.ts` (coordinator port — no change without BR-44)
+  - `api/src/routes/**` (no new routes)
+  - `api/drizzle/**` (no DB migration)
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `.github/workflows/**` (only if package publish bootstrap needed)
+  - `api/package.json` + `api/package-lock.json` (only if new dep added — declare BRXX-EX1)
+- **Exception process**: declare `BRXX-EXn` in `## Feedback Loop` before touching.
 
 ## Feedback Loop
-- `acknowledge` (2026-08-02): owner GO = slice (a) now — source `tmp/D6_SLICE_A_OWNER_GO_conductor.md`.
-- `attention` (2026-08-02): orientations 1-4 not yet transmitted; provisional mapping volet (b) -> orientation 3 (remote); does not block this slice.
+
+_No items yet._
 
 ## AI Flaky tests
-- N/A — spec-only branch, no test campaign.
 
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single design artifact; no sub-workstreams)
-- [ ] **Multi-branch**
-- Rationale: one design spec, no CI, no parallel workstreams.
+- No AI generation surface. AI-flaky allowlist N/A.
 
-## UAT Management (in orchestration context)
-- N/A — design-only, no UI change. Review gate = h2a-architect evaluation -> conductor consolidation -> owner signature (not UAT).
+## Orchestration Mode
+
+- [x] **Mono-branch** — `tmp/feat-llm-mesh-agy-enrollment/`, Gemini Flash agent executes lots,
+  conductor reviews each lot gate.
+- Rationale: lots are sequential (Lot 1 gates Lot 2), no parallel sub-workstreams needed.
+
+## Port allocation
+
+Branch env: `ENV=test-llm-mesh-agy`
+- API: `9010` · UI: `5210` · Maildev: `1110`
+
+## Plan / Todo
+
+- [x] **Lot 0 — Baseline**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`.
+  - [x] Worktree `tmp/feat-llm-mesh-agy-enrollment` created on `main`.
+  - [x] Spec EVOL `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md` written.
+  - [x] Alignment with h2a v0.6 spec confirmed (commit `6eb2d24c`).
+  - [x] BRANCH.md written after worktree creation.
+
+- [ ] **Lot 1 — Contracts + Facade + auth.ts** · _Owner: sentropic_ · _Gate: `/facade` compiles, h2a mock import OK_
+  - [ ] `packages/llm-mesh/src/auth.ts`:
+    - [ ] Remove `'gemini-code-assist'` from `accountTransportProviderIds`
+    - [ ] Remove `futureAccountTransportProviderIds` entirely
+    - [ ] Add `'cloud-code'` to `accountTransportProviderIds` AND `executableAccountTransportProviderIds`
+    - [ ] Add `CloudCodeRuntimeMetadata` interface + `isCloudCodeRuntimeMetadata` guard (3 fields, non-empty strings)
+  - [ ] `packages/llm-mesh/src/enrollment/contracts.ts` (NEW):
+    - [ ] `EnrollmentSession` union (`authorization-url` | `device-code`)
+    - [ ] `EnrollmentState` (internal, never exported to h2a)
+    - [ ] `StartEnrollmentInput`, `PreparedCredential`, `ResolvedProviderMetadata`
+    - [ ] `EnrollmentProvider` interface (`start`, `complete` internal, `resolve`, `refresh`)
+  - [ ] `packages/llm-mesh/src/service/facade.ts` (NEW):
+    - [ ] `LlmMeshFacade` interface (enroll, waitForCallback, pollForCompletion, cancel, acquire, release, getAdapter)
+    - [ ] `ProviderAdapter` interface (`execute` → `AsyncIterable<ProviderEvent>`)
+    - [ ] `FacadeOptions`, `ProviderRequest`, `ProviderEvent` types
+    - [ ] `createLlmMeshFacade(options): LlmMeshFacade` export
+  - [ ] `packages/llm-mesh/src/service/local-account-transport-service.ts` (NEW — signatures only):
+    - [ ] Constructor (`KeyringAdapter`, providers `Map`, `ConfigResolver`)
+    - [ ] Public signatures: `enroll`, `waitForCallback`, `pollForCompletion`, `cancel`, `acquire`, `release`
+    - [ ] Private signatures: `completeEnrollment`, `refreshToken`, `persistCredential`, `markReauthRequired`
+  - [ ] `packages/llm-mesh/package.json`:
+    - [ ] Bump version (minor)
+    - [ ] Add exports: `"./facade"`, `"./enrollment"`, `"./node"`, `"./transport/cloud-code"`
+  - [ ] Lot gate:
+    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] `packages/llm-mesh/tests/auth.test.ts` — `cloud-code` present, `gemini-code-assist` absent, guard OK
+    - [ ] `packages/llm-mesh/tests/enrollment/contracts.test.ts` (NEW) — type compilation smoke
+    - [ ] `packages/llm-mesh/tests/service/facade.test.ts` (NEW) — `createLlmMeshFacade` mock compile
+    - [ ] `make test-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] **Conductor review gate** — validate before Lot 2
+    - [ ] Notify h2a: Lot 1 compilable → h2a can start its Lot 3
+
+- [ ] **Lot 2 — Providers + transport** · _Owner: sentropic_ · _Parallel with h2a Lot 3 after Lot 1 gate_
+  - [ ] `packages/llm-mesh/src/enrollment/cloud-code.ts` (NEW):
+    - [ ] `CloudCodeEnrollmentProvider implements EnrollmentProvider`
+    - [ ] PKCE loopback: start HTTP listener, return `authorization-url` session
+    - [ ] `waitForCallback`: receive code from loopback, `completeEnrollment`, `resolve`, persist atomically
+    - [ ] `cancel`: idempotent, stop loopback, mark `cancelledAt`
+    - [ ] Adapted from `api/src/services/antigravity-provider-auth.ts`
+  - [ ] `packages/llm-mesh/src/enrollment/codex.ts` (NEW):
+    - [ ] `CodexEnrollmentProvider implements EnrollmentProvider`
+    - [ ] Device flow: POST `deviceauth/usercode` → `device-code` session
+    - [ ] `pollForCompletion`: internal poll → exchange code → persist atomically
+  - [ ] `packages/llm-mesh/src/enrollment/claude-code.ts` (NEW):
+    - [ ] Portal-only stub; `execute` throws `UNSUPPORTED` for h2a local
+  - [ ] `packages/llm-mesh/src/transport/cloud-code-transport.ts` (NEW):
+    - [ ] `buildCloudCodeRequest(acquisition, request)` — daily-cloudcode envelope
+    - [ ] `parseCloudCodeSSE(stream)` → `AsyncIterable<ProviderEvent>`
+    - [ ] Outcomes: 200→success, 401/403→auth_failed, 429+Retry-After→rate_limited, SSE error→failed
+    - [ ] `execute()` calls `recordOutcome()` internally — h2a never calls it directly
+    - [ ] `release(acquisition)`: abort path, 0 outcome
+  - [ ] `packages/llm-mesh/src/service/local-account-transport-service.ts` — full implementation:
+    - [ ] Keyring read/write (`sentropic-llm-mesh` namespace, NOT `gemini/antigravity`)
+    - [ ] `acquire()`: check expiry → refresh atomically → return material
+    - [ ] Refresh: POST `oauth2.googleapis.com/token`, resolve historical `credentialVersion`
+    - [ ] Token rotation persisted atomically before return
+    - [ ] Refresh failure → `markReauthRequired()` → throw `AccountTransportAcquireError`
+  - [ ] `packages/llm-mesh/src/node/keyring/` (NEW):
+    - [ ] `KeyringAdapter` interface export
+    - [ ] `LinuxSecretstoreKeyring` (evaluate `keytar` vs `@kwlad/keystore`)
+    - [ ] `MacOSKeychainKeyring`
+    - [ ] `EnvKeyring` (CI/prod fallback)
+  - [ ] Lot gate:
+    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] `packages/llm-mesh/tests/enrollment/cloud-code.test.ts` (NEW) — PKCE S256, state/nonce, replay/expiry/cancel, config version
+    - [ ] `packages/llm-mesh/tests/enrollment/codex.test.ts` (NEW) — device flow, poll, exchange
+    - [ ] `packages/llm-mesh/tests/transport/cloud-code-transport.test.ts` (NEW) — fixtures: refresh, UA exact, no project fallback, envelope, requestId UUID, abort=release, SSE/error/outcome
+    - [ ] `packages/llm-mesh/tests/service/local-account-transport-service.test.ts` (NEW) — refresh atomic, rotation, reauth_required, restart recovery
+    - [ ] `make test-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] **Conductor review gate**
+
+- [ ] **Lot 3 — Portal API adapter** · _Owner: sentropic_ · _After Lot 2 gate_
+  - [ ] `api/src/services/cloud-code-provider-auth.ts` (NEW):
+    - [ ] Adapt `antigravity-provider-auth.ts` to `CloudCodeEnrollmentProvider` contract
+    - [ ] `fetchCloudCodeUserInfo`, `loadCodeAssist`, `onboardCloudCodeUser`
+  - [ ] `api/src/services/llm-account-transports.ts`:
+    - [ ] Cloud Code adapter (pattern: existing Codex + Claude Code)
+    - [ ] Single-flight refresh per `account_id` (CAS/DB)
+    - [ ] `owner_user_id` scoped — SQL/RLS
+    - [ ] `cloudaicompanionProject` encrypted per account, never global
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api ENV=test-llm-mesh-agy`
+    - [ ] `make lint-api ENV=test-llm-mesh-agy`
+    - [ ] `api/tests/unit/services/cloud-code-provider-auth.test.ts` (NEW)
+    - [ ] `api/tests/unit/services/llm-account-transports.test.ts` — Cloud Code cases (multi-tenant, single-flight)
+    - [ ] `make test-api-unit ENV=test-llm-mesh-agy`
+    - [ ] **Conductor review gate**
+
+- [ ] **Lot N-2 — Final integration + h2a acceptance**
+  - [ ] `make test-api ENV=test-llm-mesh-agy`
+  - [ ] `make test-llm-mesh ENV=test-llm-mesh-agy`
+  - [ ] Migration test: `gemini-code-assist` rows NOT altered by `cloud-code` path
+  - [ ] Compilation gate: mock h2a consumer imports `@sentropic/llm-mesh/facade` — 0 deep imports
+  - [ ] Notify h2a → await smoke confirmation `h2a llm-mesh enroll cloud-code` (with mocks)
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Merge `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md` into
+    `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` per merge instructions in the SPEC_EVOL.
+  - [ ] Delete `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md`.
+
+- [ ] **Lot N — Final validation**
+  - [ ] `make typecheck-llm-mesh typecheck-api ENV=test-llm-mesh-agy`
+  - [ ] `make lint-llm-mesh lint-api ENV=test-llm-mesh-agy`
+  - [ ] `make test-llm-mesh ENV=test-llm-mesh-agy`
+  - [ ] `make test-api-unit ENV=test-llm-mesh-agy`
+  - [ ] `make test-api ENV=test-llm-mesh-agy`
+  - [ ] Bumped `packages/llm-mesh/package.json` version (minor — new exports + `cloud-code`).
+  - [ ] Final gate step 1: create/update PR using this `BRANCH.md` as PR body.
+  - [ ] Final gate step 2: verify CI on PR; resolve blockers.
+  - [ ] Final gate step 3: UAT + CI green → commit removal of `BRANCH.md`, push, merge.
