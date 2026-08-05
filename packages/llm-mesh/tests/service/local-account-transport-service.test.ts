@@ -18,6 +18,7 @@ describe('LocalAccountTransportService', () => {
         return {};
       },
       async refresh(input): Promise<PreparedCredential> {
+        expect(input.refreshToken).toBe('old-refresh-token'); // P0-7: explicit refreshToken passed
         return {
           accountId: input.accountId,
           accessToken: 'refreshed-access-token',
@@ -62,6 +63,63 @@ describe('LocalAccountTransportService', () => {
     const envelopeSecret = await keyring.getSecret('sentropic-llm-mesh:acct_expired_1:envelope');
     expect(publicSecret).toContain('acct_expired_1');
     expect(envelopeSecret).toContain('refreshed-access-token');
+  });
+
+  it('deduplicates concurrent refresh requests via single-flight map (P0-5)', async () => {
+    const keyring = new InMemoryKeyring();
+    let refreshCalls = 0;
+
+    const mockProvider: EnrollmentProvider = {
+      async start() {
+        throw new Error('Not implemented');
+      },
+      async complete() {
+        throw new Error('Not implemented');
+      },
+      async resolve() {
+        return {};
+      },
+      async refresh(input): Promise<PreparedCredential> {
+        refreshCalls += 1;
+        // Simulate network latency
+        await new Promise((res) => setTimeout(res, 50));
+        return {
+          accountId: input.accountId,
+          accessToken: 'single-flight-token',
+          refreshToken: 'single-flight-refresh',
+          expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+          authClientConfigVersion: 'v1.0.0',
+        };
+      },
+    };
+
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map([['cloud-code', mockProvider]]),
+      { async resolveConfig() { return {}; } },
+    );
+
+    const pastExpiresAt = new Date(Date.now() - 1000).toISOString();
+    service.registerAccount({
+      accountId: 'acct_concurrent_1',
+      targetProviderId: 'gemini',
+      transportProviderId: 'cloud-code',
+      accessToken: 'old-access-token',
+      refreshToken: 'old-refresh-token',
+      expiresAt: pastExpiresAt,
+      status: 'active',
+      metadata: { cloudaicompanionProject: 'test-project' },
+    });
+
+    // Launch two parallel acquire calls
+    const [acq1, acq2] = await Promise.all([
+      service.acquire({ targetProviderId: 'gemini', transportProviderId: 'cloud-code' }),
+      service.acquire({ targetProviderId: 'gemini', transportProviderId: 'cloud-code' }),
+    ]);
+
+    expect(refreshCalls).toBe(1); // Single flight: only 1 network refresh was issued!
+    expect(acq1.material.accessToken).toBe('single-flight-token');
+    expect(acq2.material.accessToken).toBe('single-flight-token');
   });
 
   it('marks reauth_required and throws AccountTransportAcquireError when refresh fails', async () => {

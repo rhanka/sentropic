@@ -1,3 +1,4 @@
+import type { ConfigResolver } from '../service/facade.js';
 import type {
   CompleteEnrollmentInput,
   EnrollmentProvider,
@@ -21,12 +22,14 @@ export const CLOUD_CODE_USER_AGENT =
 export interface CloudCodeEnrollmentOptions {
   clientId?: string;
   clientSecret?: string;
+  configResolver?: ConfigResolver;
   fetchFn?: typeof fetch;
 }
 
 export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
-  private readonly clientId: string;
-  private readonly clientSecret: string;
+  private readonly defaultClientId: string;
+  private readonly defaultClientSecret: string;
+  private readonly configResolver?: ConfigResolver;
   private readonly fetchFn: typeof fetch;
   private readonly sessions = new Map<
     string,
@@ -35,9 +38,25 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   private sequence = 0;
 
   constructor(options: CloudCodeEnrollmentOptions = {}) {
-    this.clientId = options.clientId ?? 'mock-cloud-code-client-id';
-    this.clientSecret = options.clientSecret ?? 'mock-cloud-code-client-secret';
+    this.defaultClientId = options.clientId ?? 'mock-cloud-code-client-id';
+    this.defaultClientSecret = options.clientSecret ?? 'mock-cloud-code-client-secret';
+    this.configResolver = options.configResolver;
     this.fetchFn = options.fetchFn ?? fetch;
+  }
+
+  private async getSecrets(configRef?: string): Promise<{ clientId: string; clientSecret: string }> {
+    if (this.configResolver && configRef) {
+      try {
+        const config = await this.configResolver.resolveConfig(configRef);
+        const clientId = typeof config.clientId === 'string' ? config.clientId : this.defaultClientId;
+        const clientSecret =
+          typeof config.clientSecret === 'string' ? config.clientSecret : this.defaultClientSecret;
+        return { clientId, clientSecret };
+      } catch {
+        // Fall back to default secrets if resolver fails or yields empty
+      }
+    }
+    return { clientId: this.defaultClientId, clientSecret: this.defaultClientSecret };
   }
 
   async start(input: StartEnrollmentInput): Promise<EnrollmentSession> {
@@ -47,16 +66,21 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     const pkceState = generateNonce();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
+    const { clientId } = await this.getSecrets(input.configRef);
+
     let redirectUri = input.redirectUri;
     let loopback: LoopbackServer | undefined;
 
-    if (input.mode === 'cli' && (!redirectUri || redirectUri.includes('127.0.0.1') || redirectUri.includes('localhost'))) {
+    if (
+      input.mode === 'cli' &&
+      (!redirectUri || redirectUri.includes('127.0.0.1') || redirectUri.includes('localhost'))
+    ) {
       loopback = await createLoopbackServer(pkceState);
       redirectUri = loopback.redirectUri;
     }
 
     const url = new URL(CLOUD_CODE_AUTH_URL);
-    url.searchParams.set('client_id', this.clientId);
+    url.searchParams.set('client_id', clientId);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set(
@@ -118,7 +142,11 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
 
     return {
       accountId: cred.accountId,
-      label: cred.accountEmail ?? (meta.cloudaicompanionProject ? `Cloud Code (${meta.cloudaicompanionProject})` : 'Cloud Code Account'),
+      label:
+        cred.accountEmail ??
+        (meta.cloudaicompanionProject
+          ? `Cloud Code (${meta.cloudaicompanionProject})`
+          : 'Cloud Code Account'),
     };
   }
 
@@ -136,13 +164,14 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     }
 
     entry.state.consumedAt = new Date().toISOString();
+    const { clientId, clientSecret } = await this.getSecrets();
 
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code: input.code,
       redirect_uri: entry.state.redirectUri,
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
+      client_id: clientId,
+      client_secret: clientSecret,
       code_verifier: entry.state.pkceVerifier,
     });
 
@@ -211,11 +240,18 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   }
 
   async refresh(input: RefreshInput): Promise<PreparedCredential> {
+    const refreshToken = input.refreshToken ?? input.credentialVersion;
+    if (!refreshToken || refreshToken === 'v1.0.0') {
+      throw new Error('Cloud Code token refresh failed: invalid or missing refresh token');
+    }
+
+    const { clientId, clientSecret } = await this.getSecrets();
+
     const body = new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token: input.credentialVersion, // or passed refresh token
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
     });
 
     const response = await this.fetchFn(CLOUD_CODE_TOKEN_URL, {
@@ -248,7 +284,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     return {
       accountId: input.accountId,
       accessToken: payload.access_token,
-      ...(payload.refresh_token ? { refreshToken: payload.refresh_token } : {}),
+      refreshToken: payload.refresh_token ?? refreshToken,
       expiresAt,
       authClientConfigVersion: 'v1.0.0',
     };

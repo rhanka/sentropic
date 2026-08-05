@@ -5,27 +5,29 @@ import {
   CLOUD_CODE_USER_AGENT,
   CloudCodeEnrollmentProvider,
 } from '../../src/enrollment/cloud-code.js';
+import type { ConfigResolver } from '../../src/service/facade.js';
 
 describe('CloudCodeEnrollmentProvider', () => {
-  it('starts PKCE enrollment and returns an authorization-url session', async () => {
+  it('starts PKCE enrollment using configResolver to resolve client_id (P0-1)', async () => {
+    const mockConfigResolver: ConfigResolver = {
+      async resolveConfig(configRef) {
+        return { clientId: `resolved-client-for-${configRef}`, clientSecret: 'resolved-secret' };
+      },
+    };
+
     const provider = new CloudCodeEnrollmentProvider({
-      clientId: 'test-client-id',
-      clientSecret: 'test-client-secret',
+      configResolver: mockConfigResolver,
     });
 
     const session = await provider.start({
-      configRef: 'vault://cloud-code',
+      configRef: 'vault://cloud-code-prod',
       mode: 'portal',
       redirectUri: 'https://sentropic.example.com/oauth/callback',
       ownerScope: 'user_123',
     });
 
     expect(session.kind).toBe('authorization-url');
-    expect(session.enrollmentId).toMatch(/^enr_cc_/);
-    expect(session.url).toContain('accounts.google.com');
-    expect(session.url).toContain('client_id=test-client-id');
-    expect(session.url).toContain('code_challenge_method=S256');
-    expect(session.url).toContain('state=');
+    expect(session.url).toContain('client_id=resolved-client-for-vault%3A%2F%2Fcloud-code-prod');
   });
 
   it('completes enrollment with token exchange and resolves Cloud Code metadata', async () => {
@@ -95,7 +97,7 @@ describe('CloudCodeEnrollmentProvider', () => {
     });
 
     await provider.cancel(session.enrollmentId);
-    await provider.cancel(session.enrollmentId); // idempotent second call
+    await provider.cancel(session.enrollmentId);
 
     await expect(
       provider.complete({

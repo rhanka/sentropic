@@ -1,3 +1,4 @@
+import type { ConfigResolver } from '../service/facade.js';
 import type {
   CompleteEnrollmentInput,
   EnrollmentProvider,
@@ -18,11 +19,13 @@ export const CODEX_VERIFICATION_URL = `${CODEX_AUTH_ISSUER}/codex/device`;
 
 export interface CodexEnrollmentOptions {
   clientId?: string;
+  configResolver?: ConfigResolver;
   fetchFn?: typeof fetch;
 }
 
 export class CodexEnrollmentProvider implements EnrollmentProvider {
-  private readonly clientId: string;
+  private readonly defaultClientId: string;
+  private readonly configResolver?: ConfigResolver;
   private readonly fetchFn: typeof fetch;
   private readonly sessions = new Map<
     string,
@@ -31,19 +34,34 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
       deviceAuthId: string;
       userCode: string;
       pollIntervalMs: number;
+      credential?: PreparedCredential;
     }
   >();
   private sequence = 0;
 
   constructor(options: CodexEnrollmentOptions = {}) {
-    this.clientId = options.clientId ?? CODEX_CLIENT_ID;
+    this.defaultClientId = options.clientId ?? CODEX_CLIENT_ID;
+    this.configResolver = options.configResolver;
     this.fetchFn = options.fetchFn ?? fetch;
+  }
+
+  private async getClientId(configRef?: string): Promise<string> {
+    if (this.configResolver && configRef) {
+      try {
+        const config = await this.configResolver.resolveConfig(configRef);
+        if (typeof config.clientId === 'string') return config.clientId;
+      } catch {
+        // Fallback
+      }
+    }
+    return this.defaultClientId;
   }
 
   async start(input: StartEnrollmentInput): Promise<EnrollmentSession> {
     this.sequence += 1;
     const enrollmentId = `enr_codex_${Date.now().toString(36)}_${this.sequence.toString(36)}`;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const clientId = await this.getClientId(input.configRef);
 
     const response = await this.fetchFn(CODEX_DEVICE_AUTH_URL, {
       method: 'POST',
@@ -51,7 +69,7 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
         'content-type': 'application/json',
         accept: 'application/json',
       },
-      body: JSON.stringify({ client_id: this.clientId }),
+      body: JSON.stringify({ client_id: clientId }),
     });
 
     if (!response.ok) {
@@ -106,11 +124,13 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
   async pollForCompletion(
     enrollmentId: string,
     maxAttempts = 60,
-  ): Promise<{ accountId: string; label: string }> {
+  ): Promise<{ accountId: string; label: string; credential?: PreparedCredential }> {
     const entry = this.sessions.get(enrollmentId);
     if (!entry) {
       throw new Error(`Enrollment session ${enrollmentId} not found`);
     }
+
+    const clientId = await this.getClientId();
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (entry.state.cancelledAt) {
@@ -130,8 +150,8 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
       });
 
       if (response.status === 403) {
-        // Pending authorization — wait and retry
-        await new Promise((res) => setTimeout(res, Math.min(entry.pollIntervalMs, 50)));
+        // P0-3: Wait for pollIntervalMs without hardcoded 50ms cap
+        await new Promise((res) => setTimeout(res, entry.pollIntervalMs));
         continue;
       }
 
@@ -154,7 +174,7 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
         grant_type: 'authorization_code',
         code: tokenPayload.authorization_code,
         redirect_uri: `${CODEX_AUTH_ISSUER}/deviceauth/callback`,
-        client_id: this.clientId,
+        client_id: clientId,
         code_verifier: tokenPayload.code_verifier,
       });
 
@@ -185,9 +205,21 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
       const accountId = `acct_codex_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const expiresAt = new Date(Date.now() + (credPayload.expires_in ?? 3600) * 1000).toISOString();
 
+      // P0-4: Store credentials so they are preserved and persisted
+      const credential: PreparedCredential = {
+        accountId,
+        accessToken: credPayload.access_token,
+        ...(credPayload.refresh_token ? { refreshToken: credPayload.refresh_token } : {}),
+        expiresAt,
+        authClientConfigVersion: entry.state.configVersion,
+      };
+
+      entry.credential = credential;
+
       return {
         accountId,
         label: `Codex Account (${accountId.slice(0, 16)})`,
+        credential,
       };
     }
 
@@ -198,6 +230,10 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
     const entry = this.sessions.get(input.enrollmentId);
     if (!entry) {
       throw new Error(`Enrollment session ${input.enrollmentId} not found`);
+    }
+
+    if (entry.credential) {
+      return entry.credential;
     }
 
     const accountId = `acct_codex_${Date.now().toString(36)}`;
@@ -217,10 +253,16 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
   }
 
   async refresh(input: RefreshInput): Promise<PreparedCredential> {
+    const refreshToken = input.refreshToken ?? input.credentialVersion;
+    if (!refreshToken || refreshToken === 'v1.0.0') {
+      throw new Error('Codex token refresh failed: invalid or missing refresh token');
+    }
+
+    const clientId = await this.getClientId();
     const body = new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token: input.credentialVersion,
-      client_id: this.clientId,
+      refresh_token: refreshToken,
+      client_id: clientId,
     });
 
     const response = await this.fetchFn(CODEX_OAUTH_TOKEN_URL, {
@@ -250,7 +292,7 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
     return {
       accountId: input.accountId,
       accessToken: payload.access_token,
-      ...(payload.refresh_token ? { refreshToken: payload.refresh_token } : {}),
+      ...(payload.refresh_token ? { refreshToken: payload.refresh_token } : { refreshToken }),
       expiresAt: new Date(Date.now() + (payload.expires_in ?? 3600) * 1000).toISOString(),
       authClientConfigVersion: 'v1.0.0',
     };
