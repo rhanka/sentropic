@@ -1,6 +1,6 @@
 # SPEC EVOL - LLM Mesh Account Transports
 
-Status: Draft, planned by BR-44.
+Status: Active, updated by feat/llm-mesh-agy-enrollment (BR-XX).
 
 Related specs: `SPEC_EVOL_LLM_MESH.md`, `SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`.
 
@@ -10,10 +10,10 @@ Expose product-account subscriptions as `@sentropic/llm-mesh` account
 transports with multi-account enrollment, inter-session balancing,
 intra-session affinity, token refresh, quota state, and DB-backed coordination.
 
-The immediate BR-44 delivery target is executable Claude Code account transport
-for Anthropic/Claude. The same pattern must remain extensible to Codex/OpenAI,
-Agy or Gemini Code Assist/Gemini, and Mistral Vibe/Mistral without changing the
-coordinator contract.
+The immediate delivery targets are executable Claude Code account transport
+for Anthropic/Claude and Cloud Code (Antigravity) account transport for Gemini/Google.
+The same pattern must remain extensible to Codex/OpenAI and Mistral Vibe/Mistral
+without changing the coordinator contract.
 
 ## Baseline
 
@@ -37,7 +37,7 @@ browser or `claude.ai` UI mimic.
 |---|---|---|---|---|---|
 | `openai` | OpenAI API key | `codex` | ChatGPT/Codex account OAuth | ChatGPT Codex backend via OpenAI-compatible runtime adapter | Executable in BR-44 Codex slice |
 | `anthropic` | Anthropic Console API key | `claude-code` | Claude Code OAuth from Claude Pro/Max/Team/Enterprise | Anthropic Messages API (`/v1/messages`) with `Authorization: Bearer` | Mandatory BR-44 delivery |
-| Explicit `gemini` or `gcp` binding | AI Studio API key or Vertex ADC | `gemini-code-assist` | Agy/Gemini Code Assist Google account OAuth | To be proven; must be a machine HTTP endpoint, not UI automation | Planned extension |
+| `gemini` | AI Studio API key or Vertex ADC | `cloud-code` | Antigravity / Google Cloud Code account OAuth | `daily-cloudcode-pa.googleapis.com` (proven mitmproxy) | Executable in feat/llm-mesh-agy-enrollment |
 | `mistral` | Mistral API key | `mistral-vibe` | Mistral Vibe account OAuth/session material | To be proven; must be a machine HTTP endpoint, not UI automation | Planned extension |
 
 The target provider is the model family that owns catalog entries and capability
@@ -50,13 +50,10 @@ D1. Product accounts are transports, not providers.
 
 - `codex` targets provider `openai`.
 - `claude-code` targets provider `anthropic`.
-- `gemini-code-assist` is the canonical planned transport for Agy/Gemini Code
-  Assist style Google product accounts. Its target provider is `gemini` when the
-  wire endpoint is Gemini API compatible, or `gcp` when the proven wire endpoint
-  is Vertex/GCP based. The catalog key must make that target explicit. If both
-  endpoints are supported later, they are separate provider bindings and lease
-  domains keyed by `(targetProviderId, transportProviderId)`; no runtime policy
-  may acquire an ambiguous `gemini|gcp` binding.
+- `cloud-code` is the canonical transport for Antigravity / Google Cloud Code
+  product accounts, targeting provider `gemini` via `daily-cloudcode-pa.googleapis.com`.
+  `gemini-code-assist` is removed from `accountTransportProviderIds` and replaced
+  by `cloud-code`.
 - `mistral-vibe` is the canonical planned transport for Mistral product-account
   usage targeting provider `mistral`.
 - Provider/model catalog entries remain provider-native.
@@ -80,7 +77,7 @@ The coordinator input must be fully provider-family agnostic:
 - `targetProviderId`: the catalog/runtime provider (`openai`, `anthropic`,
   `gemini`, `gcp`, `mistral`, ...).
 - `transportProviderId`: the product-account transport (`codex`,
-  `claude-code`, `gemini-code-assist`, `mistral-vibe`, ...).
+  `claude-code`, `cloud-code`, `mistral-vibe`, ...).
 - `modelId`: the target provider model id or globally unique catalog key.
 - `affinityKey`: the non-secret session key used for sticky account selection.
 
@@ -180,17 +177,20 @@ D9. Token refresh is coordinated.
   material, BR-44 must require a stable operator-supplied account ref and verify
   the token through the Anthropic Messages machine HTTP path, never through a
   browser UI.
-- Planned Agy/Gemini and Mistral Vibe transports cannot become executable until
-  their refresh endpoint, token lifetime semantics, and profile/account-id lookup
-  are proven.
+- Cloud Code refresh uses `POST https://oauth2.googleapis.com/token` with
+  `grant_type=refresh_token`, `client_id`, and `client_secret`. Each account is
+  bound to an `authClientConfigVersion` at enrollment, resolving the historical
+  credential version upon refresh (no hot-reload). Refresh token rotation is
+  persisted atomically before `acquire()` returns. Coalesced single-flight
+  refresh per `account_id`.
+- Planned Mistral Vibe transport cannot become executable until its refresh
+  endpoint, token lifetime semantics, and profile/account-id lookup are proven.
 
 D10. Quota state is heterogeneous.
 
 - Claude Code records Anthropic unified 5h/7d headers and standard limits.
 - Codex records retry-after, 401/403/429, synthetic cooldowns, and local usage.
-- Agy/Gemini records Google product-account quota only after a proven header or
-  response contract exists. Until then, it may record local request usage and
-  provider status outcomes only.
+- Cloud Code records HTTP outcomes: 200 (`success`), 401/403 (`auth_failed` → `reauth_required` for that account), 429 + Retry-After (`rate_limited` + retryAfterMs → cooldown), and SSE errors (`failed`). Abort requests trigger `release()` with zero health outcome.
 - Mistral Vibe records Mistral product-account quota only after a proven header
   or response contract exists. Until then, it may record local request usage and
   provider status outcomes only.
@@ -225,8 +225,8 @@ Each transport family moves through these states:
 5. `ui-managed`: Sentropic UI exposes enrollment and policy controls.
 
 BR-44 requires `claude-code` to reach at least `package-executable` and
-`app-executable` for backend use through `llm-mesh`. Sentropic UI management is
-optional for this branch.
+`app-executable` for backend use through `llm-mesh`.
+`cloud-code` is `app-executable` as of `feat/llm-mesh-agy-enrollment` branch (proven wire facts, package facade/transport implemented, portal adapter complete).
 
 Readiness is enforced in two places: `@sentropic/llm-mesh` rejects executable
 material for transports below `package-executable`, and Sentropic API rejects
@@ -260,6 +260,37 @@ For every provider family:
 - Credential precedence must keep request overrides and BYOK/provider keys
   explicit; account transports run only when selected by policy.
 
+D17. Facade is the single integration boundary for h2a.
+
+h2a imports **only** `@sentropic/llm-mesh/facade`. It never calls `start()`, `complete()`, `resolve()`, or `refresh()` directly. The facade owns the full enrollment state machine internally.
+
+D18. 0-token session boundary (Q3A).
+
+`SessionEntry` in h2a carries only `transportConstraints` (non-secret). No token, no `GATEWAY_ACCOUNTS`, no env durable token. `service.acquire()` is called at every request and sentropic provides the live token. Rotation and expiry are invisible to h2a.
+
+D19. Abort equals release, not outcome (Q2B).
+
+`abort` signal triggers `facade.release(acquisition)`: releases the reservation with 0 impact on account health. All other request terminations (200, 401/403, 429, SSE error) generate exactly one outcome via `execute()` (sentropic-owned). h2a never calls `recordOutcome()` directly.
+
+## Cloud Code (AGY) Native Transport
+
+Cloud Code (Antigravity / Google daily-cloudcode) native enrollment and runtime transport (`cloud-code`) replaces `gemini-code-assist`. Wire facts are validated via mitmproxy against `daily-cloudcode-pa.googleapis.com`.
+
+### Wire Protocol Facts
+- **Account resolution (`resolve()`)**: `POST daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` with `Authorization: Bearer {access_token}` and User-Agent `antigravity/cli/1.1.10...`. Returns `cloudaicompanionProject` (mandatory, no fallback).
+- **Execution (`execute()`)**: `POST daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse` containing `project`, `requestId` (UUID), `model`, `userAgent: "antigravity"`, and `request`.
+- **OAuth refresh**: `POST https://oauth2.googleapis.com/token` (`grant_type=refresh_token`, `client_id`, `client_secret`). Bound to `authClientConfigVersion` at enrollment to resolve historical config versions.
+- **Outcomes**: 200 (success), 401/403 (auth_failed → reauth_required), 429 (rate_limited + retryAfterMs), SSE error (failed), abort (release with 0 outcome).
+
+### Runtime Metadata
+Cloud Code runtime metadata is validated via `isCloudCodeRuntimeMetadata`:
+- `cloudaicompanionProject`: string (non-empty)
+- `cloudCodeUserAgentVersion`: string (non-empty)
+- `authClientConfigVersion`: string (non-empty)
+
+### Facade & PKCE Loopback Enrollment
+Cloud Code uses local PKCE (S256) loopback HTTP listener for CLI enrollment. The `LlmMeshFacade` handles `enroll()`, `waitForCallback()` (returning `accountId`, never raw auth code), and `cancel()`.
+
 ## Sentropic DB Model
 
 - `llm_provider_accounts`: scope, owner, target provider, transport provider,
@@ -291,8 +322,7 @@ For every provider family:
 7. Keep Claude Code Sentropic UI enrollment optional for BR-44; backend
    `llm-mesh` usability with at least two Claude Code accounts is mandatory.
 8. Switch Settings to v2 account transport UI in a later UI-management slice.
-9. Add Agy/Gemini and Mistral Vibe only after each reaches the `proven` state
-   in D13.
+9. Cloud Code (AGY) transport added in `feat/llm-mesh-agy-enrollment` (`cloud-code` replacing `gemini-code-assist`). Add Mistral Vibe only after it reaches the `proven` state in D13.
 
 ## Required Tests
 
@@ -316,6 +346,16 @@ For every provider family:
   storing an active account row does not route traffic.
 - Claude Code acquisition supports at least two configured accounts, sticky
   affinity, and cooldown failover for new sessions.
-- Planned Agy/Gemini and Mistral Vibe transports remain non-executable until
-  their endpoint/auth/refresh contracts are proven.
+- Planned Mistral Vibe transport remains non-executable until its endpoint/auth/refresh contracts are proven.
 - Hooks, traces, and logs never expose access or refresh tokens.
+- Cloud Code fixtures: refresh form-urlencoded, UA exact for `loadCodeAssist`, no project fallback, daily-cloudcode envelope correct, requestId UUID unique, abort=release, SSE/error/outcome.
+- Cloud Code OAuth: PKCE S256, state/nonce mismatch, replay/expiry/cancel, provider denial, rotation, retired historical config-version returns explicit error, zero secrets in logs.
+- Cloud Code multi-tenant: two users cannot acquire each other's account (SQL/RLS scoping).
+- Cloud Code concurrency: single refresh per account across multi-instance (CAS/DB portal).
+- Cloud Code migration: `gemini-code-assist` rows remain untouched by `cloud-code` enrollment path.
+- Cloud Code h2a acceptance: enrollment + refresh without CLI provider present; `waitForCallback` receives `accountId`, never auth code.
+- Cloud Code compilation & facade boundary: h2a consumer compiles against `/facade` exports with zero deep imports; `SessionEntry` contains no token; zero sentropic token in JSON/env.
+- Cloud Code refresh/persistence: atomic rotation before `acquire()` returns; restart recovery; retired config-version sets `reauth_required` for that account only.
+- Cloud Code state machine: `waitForCallback`/`pollForCompletion` never receive auth code; `cancel` is idempotent; state/nonce validated; replay/timeout/cancel covered.
+- Cloud Code outcomes Q2B: abort triggers `release()` (zero outcome, zero health impact); 200/401/403/429/SSE error emit exactly one outcome via `execute()`.
+- Cloud Code data & routing: ULID immutable, project non-PK, `revoked` persistent non-acquirable; Cloud Code constraint routes to daily-cloudcode only with zero degradation to Vertex.
