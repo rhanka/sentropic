@@ -36,9 +36,8 @@ export function buildCloudCodeRequest(
     );
   }
 
-  const requestId = acquisition.reservation.reservationId
-    ? acquisition.reservation.reservationId.replace(/^reservation_/, '')
-    : randomUUID();
+  // P1-2: Always generate a valid UUID v4 for envelope requestId
+  const requestId = randomUUID();
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${acquisition.material.accessToken}`,
@@ -50,7 +49,7 @@ export function buildCloudCodeRequest(
 
   const body: CloudCodeEnvelope = {
     project: project.trim(),
-    requestId: requestId.includes('-') ? requestId : randomUUID(),
+    requestId,
     model: request.modelId,
     userAgent: 'antigravity',
     request: {
@@ -72,6 +71,7 @@ export async function* parseCloudCodeSSE(
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let lastUsage: unknown = null;
 
   try {
     while (true) {
@@ -117,7 +117,7 @@ export async function* parseCloudCodeSSE(
           }
 
           if (parsed.usageMetadata) {
-            yield { kind: 'done', usage: parsed.usageMetadata };
+            lastUsage = parsed.usageMetadata;
           }
         } catch {
           // Ignore unparseable SSE data lines
@@ -125,7 +125,8 @@ export async function* parseCloudCodeSSE(
       }
     }
 
-    yield { kind: 'done', usage: {} };
+    // P1-1: Yield done event exactly once after stream completion
+    yield { kind: 'done', usage: lastUsage ?? {} };
   } finally {
     reader.releaseLock();
   }
@@ -230,14 +231,31 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
     }
 
     let hasError = false;
-    for await (const event of parseCloudCodeSSE(response.body)) {
+    // P0-6: Wrap SSE iteration in try-catch to guarantee recordOutcome on network/stream exception
+    try {
+      for await (const event of parseCloudCodeSSE(response.body)) {
+        if (signal.aborted) {
+          return;
+        }
+        if (event.kind === 'error') {
+          hasError = true;
+        }
+        yield event;
+      }
+    } catch (streamErr) {
       if (signal.aborted) {
         return;
       }
-      if (event.kind === 'error') {
-        hasError = true;
-      }
-      yield event;
+      await acquisition.recordOutcome({
+        status: 'failed',
+        errorCode: 'stream_error',
+      });
+      yield {
+        kind: 'error',
+        code: 'stream_error',
+        message: streamErr instanceof Error ? streamErr.message : String(streamErr),
+      };
+      return;
     }
 
     if (!signal.aborted) {

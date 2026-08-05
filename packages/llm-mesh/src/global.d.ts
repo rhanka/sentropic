@@ -13,6 +13,7 @@ declare module 'http' {
     url?: string;
   }
   export interface ServerResponse {
+    headersSent?: boolean;
     writeHead(statusCode: number, headers?: Record<string, string>): void;
     end(data?: string): void;
   }
