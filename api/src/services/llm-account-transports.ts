@@ -1461,16 +1461,17 @@ export const refreshCloudCodeTokenIfNeeded = async (
         WHERE id = ${input.accountId}
       `)) as Array<{ token_secret: string | null; token_expires_at: Date | string | null; status: string }>;
       const latestRow = latestRows[0];
-      if (latestRow && latestRow.status === 'active' && latestRow.token_secret) {
-        const freshToken = parseCloudCodeTokenSecret(latestRow.token_secret);
+      const oldSecret = latestRow?.token_secret ?? null;
+      if (latestRow && latestRow.status === 'active' && oldSecret) {
+        const freshToken = parseCloudCodeTokenSecret(oldSecret);
         if (freshToken && !isTokenExpiring(freshToken.expiresAt)) {
           return freshToken;
         }
       }
 
       // P0-1 FIX: Resolve client_id and client_secret without hardcoding mocks
-      const clientId = input.token.clientId ?? normalizeOptionalText(process.env.CLOUD_CODE_CLIENT_ID);
-      const clientSecret = input.token.clientSecret ?? normalizeOptionalText(process.env.CLOUD_CODE_CLIENT_SECRET);
+      const clientId = input.token.clientId;
+      const clientSecret = input.token.clientSecret;
       if (!clientId || !clientSecret) {
         throw new Error('Cloud Code client credentials (clientId/clientSecret) are missing for token refresh.');
       }
@@ -1488,7 +1489,8 @@ export const refreshCloudCodeTokenIfNeeded = async (
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(`Cloud Code token refresh failed (${response.status}): ${text}`);
+        const sanitizedText = text.replace(/[A-Za-z0-9_\-]{40,}/g, '[REDACTED]').slice(0, 200);
+        throw new Error(`Cloud Code token refresh failed (${response.status}): ${sanitizedText}`);
       }
 
       const payload = (await response.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
@@ -1510,15 +1512,30 @@ export const refreshCloudCodeTokenIfNeeded = async (
         profile: input.token.profile,
       });
 
-      await db.run(sql`
+      const newSecret = encryptSecret(JSON.stringify(next));
+
+      const updateResult = (await db.all(sql`
         UPDATE llm_provider_accounts
-        SET token_secret = ${encryptSecret(JSON.stringify(next))},
+        SET token_secret = ${newSecret},
             token_expires_at = ${next.expiresAt ? new Date(next.expiresAt) : null},
             status = 'active',
             last_error = NULL,
             updated_at = ${new Date()}
-        WHERE id = ${input.accountId}
-      `);
+        WHERE id = ${input.accountId} AND coalesce(token_secret, '') = coalesce(${oldSecret}, '')
+        RETURNING id
+      `)) as Array<{ id: string }>;
+
+      if (updateResult.length === 0) {
+        const winnerRows = (await db.all(sql`
+          SELECT token_secret FROM llm_provider_accounts WHERE id = ${input.accountId}
+        `)) as Array<{ token_secret: string | null }>;
+        const winnerSecret = winnerRows[0]?.token_secret;
+        if (winnerSecret) {
+          const winnerToken = parseCloudCodeTokenSecret(winnerSecret);
+          if (winnerToken) return winnerToken;
+        }
+      }
+
       return next;
     } catch (error) {
       await db.run(sql`
