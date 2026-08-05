@@ -87,7 +87,9 @@ describe('CloudCodeEnrollmentProvider', () => {
   });
 
   it('handles cancel idempotently', async () => {
-    const provider = new CloudCodeEnrollmentProvider();
+    const provider = new CloudCodeEnrollmentProvider({
+      configResolver: { async resolveConfig() { return { clientId: 'test-client-id', clientSecret: 'test-secret' }; } },
+    });
 
     const session = await provider.start({
       configRef: 'vault://cloud-code',
