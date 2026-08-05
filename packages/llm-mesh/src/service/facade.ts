@@ -79,8 +79,11 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
 
   const keyring = options.keyring ?? new InMemoryKeyring();
   const providers = new Map<string, EnrollmentProvider>([
-    ['cloud-code', new CloudCodeEnrollmentProvider()],
-    ['codex', new CodexEnrollmentProvider()],
+    [
+      'cloud-code',
+      new CloudCodeEnrollmentProvider({ configResolver: options.configResolver }),
+    ],
+    ['codex', new CodexEnrollmentProvider({ configResolver: options.configResolver })],
     ['claude-code', new ClaudeCodeEnrollmentProvider()],
   ]);
 

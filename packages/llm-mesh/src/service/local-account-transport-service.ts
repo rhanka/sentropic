@@ -21,6 +21,7 @@ export class LocalAccountTransportService {
   private readonly coordinator: InMemoryAccountTransportCoordinator;
   private readonly accountsMap = new Map<string, AccountTransportAccount>();
   private readonly credentialVersions = new Map<string, string>();
+  private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
 
   constructor(
     private readonly keyring: KeyringAdapter,
@@ -44,7 +45,8 @@ export class LocalAccountTransportService {
     if (!provider || !('waitForCallback' in provider) || typeof (provider as any).waitForCallback !== 'function') {
       throw new Error("No enrollment provider with 'waitForCallback' registered");
     }
-    return (provider as any).waitForCallback(enrollmentId);
+    const res = await (provider as any).waitForCallback(enrollmentId);
+    return { accountId: res.accountId, label: res.label };
   }
 
   async pollForCompletion(enrollmentId: string): Promise<{ accountId: string; label: string }> {
@@ -52,7 +54,37 @@ export class LocalAccountTransportService {
     if (!provider || !('pollForCompletion' in provider) || typeof (provider as any).pollForCompletion !== 'function') {
       throw new Error("No enrollment provider with 'pollForCompletion' registered");
     }
-    return (provider as any).pollForCompletion(enrollmentId);
+    const res = await (provider as any).pollForCompletion(enrollmentId);
+    if (res.credential) {
+      // P0-4: Persist credentials obtained via device flow poll into keyring/accounts
+      this.registerAccount({
+        accountId: res.accountId,
+        targetProviderId: 'codex',
+        transportProviderId: 'codex',
+        accessToken: res.credential.accessToken,
+        refreshToken: res.credential.refreshToken,
+        expiresAt: res.credential.expiresAt,
+        status: 'active',
+      });
+      await this.persistCredential(
+        {
+          accountId: res.accountId,
+          accountLabel: res.label,
+          providerId: 'codex',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          accountId: res.accountId,
+          accessToken: res.credential.accessToken,
+          refreshToken: res.credential.refreshToken,
+          expiresAt: res.credential.expiresAt,
+          authClientConfigVersion: res.credential.authClientConfigVersion,
+        },
+      );
+    }
+    return { accountId: res.accountId, label: res.label };
   }
 
   async cancel(enrollmentId: string): Promise<void> {
@@ -97,7 +129,8 @@ export class LocalAccountTransportService {
           const version = this.credentialVersions.get(account.accountId) ?? 'v1.0.0';
           const refreshed = await this.refreshToken({
             accountId: account.accountId,
-            credentialVersion: account.refreshToken ?? version,
+            refreshToken: account.refreshToken ?? undefined,
+            credentialVersion: version,
           });
 
           // Atomic persistence of updated credentials
@@ -155,15 +188,29 @@ export class LocalAccountTransportService {
   }
 
   private async refreshToken(input: RefreshInput): Promise<PreparedCredential> {
-    const account = this.accountsMap.get(input.accountId);
-    const providerId = account?.transportProviderId ?? 'cloud-code';
-    const provider = this.providers.get(providerId);
-
-    if (!provider) {
-      throw new Error(`No provider registered for refresh: ${providerId}`);
+    // P0-5: Single-flight refresh map to prevent parallel refresh races
+    if (this.refreshInFlight.has(input.accountId)) {
+      return this.refreshInFlight.get(input.accountId)!;
     }
 
-    return provider.refresh(input);
+    const refreshPromise = (async () => {
+      try {
+        const account = this.accountsMap.get(input.accountId);
+        const providerId = account?.transportProviderId ?? 'cloud-code';
+        const provider = this.providers.get(providerId);
+
+        if (!provider) {
+          throw new Error(`No provider registered for refresh: ${providerId}`);
+        }
+
+        return await provider.refresh(input);
+      } finally {
+        this.refreshInFlight.delete(input.accountId);
+      }
+    })();
+
+    this.refreshInFlight.set(input.accountId, refreshPromise);
+    return refreshPromise;
   }
 
   private async persistCredential(
