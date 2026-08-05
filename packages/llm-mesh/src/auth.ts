@@ -11,6 +11,7 @@ export type TokenAuthSourceType = (typeof tokenAuthSourceTypes)[number];
 
 export const accountTransportProviderIds = [
   'codex',
+  'cloud-code',
   'claude-code',
   // Antigravity: unified Google account transport fronting a multi-model fleet
   // (Cloud Code `cloudcode-pa.googleapis.com`). Replaced the dead classic
@@ -156,6 +157,7 @@ export type AuthInput = SecretAuthMaterial | AuthResolution;
 // material through the mesh adapter-auth gate.
 export const executableAccountTransportProviderIds = [
   'codex',
+  'cloud-code',
   'claude-code',
   'antigravity',
 ] as const satisfies readonly AccountTransportProviderId[];
@@ -251,3 +253,25 @@ export const getAuthDescriptor = (
     ? input.descriptor
     : describeAuthMaterial(input);
 };
+
+export interface CloudCodeRuntimeMetadata {
+  cloudaicompanionProject: string;
+  cloudCodeUserAgentVersion: string;
+  authClientConfigVersion: string;
+}
+
+export const isCloudCodeRuntimeMetadata = (m: unknown): m is CloudCodeRuntimeMetadata => {
+  if (typeof m !== 'object' || m === null) {
+    return false;
+  }
+  const obj = m as Record<string, unknown>;
+  return (
+    typeof obj.cloudaicompanionProject === 'string'
+    && obj.cloudaicompanionProject.trim().length > 0
+    && typeof obj.cloudCodeUserAgentVersion === 'string'
+    && obj.cloudCodeUserAgentVersion.trim().length > 0
+    && typeof obj.authClientConfigVersion === 'string'
+    && obj.authClientConfigVersion.trim().length > 0
+  );
+};
+
