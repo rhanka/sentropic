@@ -1003,7 +1003,7 @@ export const storeCloudCodeAccountTransport = async (input: {
   const tokenSecret = encryptSecret(JSON.stringify(token));
   const accountLabel = normalizeOptionalText(input.accountLabel);
 
-  const externalAccountId = normalizeOptionalText(input.externalAccountId) ?? \`cc_\${accountId.slice(0, 8)}\`;
+  const externalAccountId = normalizeOptionalText(input.externalAccountId) ?? `cc_${accountId.slice(0, 8)}`;
   const metadata = {
     source: token.source,
     credentialSchemaVersion: 1,
@@ -1146,7 +1146,6 @@ export const getPrimaryCloudCodeAccountTransport = async (input: {
       target_provider_id as "targetProviderId",
       transport_provider_id as "transportProviderId",
       external_account_id as "externalAccountId",
-      accountLabel: string | null;
       account_label as "accountLabel",
       status,
       connected_at as "connectedAt",
