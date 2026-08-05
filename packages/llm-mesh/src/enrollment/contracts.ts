@@ -52,6 +52,7 @@ export interface PreparedCredential {
 // RefreshInput: internal LocalAccountTransportService use only
 export interface RefreshInput {
   accountId: string;
+  refreshToken?: string;
   credentialVersion: string;
 }
 

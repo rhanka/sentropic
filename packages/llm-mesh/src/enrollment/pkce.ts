@@ -43,6 +43,7 @@ export async function createLoopbackServer(
   let server: Server | null = null;
   let resolveCallback: ((res: LoopbackCallbackResult) => void) | null = null;
   let rejectCallback: ((err: Error) => void) | null = null;
+  let handled = false;
 
   const callbackPromise = new Promise<LoopbackCallbackResult>((res, rej) => {
     resolveCallback = res;
@@ -54,10 +55,26 @@ export async function createLoopbackServer(
       const addressInfo = server?.address();
       const portNum = typeof addressInfo === 'object' && addressInfo ? addressInfo.port : preferredPort;
       const reqUrl = new URL(req.url ?? '/', `http://127.0.0.1:${portNum}`);
+
+      // P0-2: Ignore non-callback requests (e.g. GET /favicon.ico)
+      if (reqUrl.pathname !== '/oauth/callback') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      // P1-3: Prevent double-handling of replay callbacks
+      if (handled) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<h1>Authentication completed</h1><p>Callback already consumed.</p>');
+        return;
+      }
+
       const code = reqUrl.searchParams.get('code');
       const state = reqUrl.searchParams.get('state');
 
       if (!state || state !== expectedState) {
+        handled = true;
         res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end('<h1>Authentication failed</h1><p>State/nonce mismatch.</p>');
         rejectCallback?.(new Error('State/nonce mismatch'));
@@ -65,20 +82,27 @@ export async function createLoopbackServer(
       }
 
       if (!code) {
+        handled = true;
         res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end('<h1>Authentication failed</h1><p>Missing authorization code.</p>');
         rejectCallback?.(new Error('Missing authorization code'));
         return;
       }
 
+      handled = true;
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end('<h1>Authentication successful</h1><p>You may close this window and return to your terminal.</p>');
 
       resolveCallback?.({ code, state });
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end('Internal error');
-      rejectCallback?.(err instanceof Error ? err : new Error(String(err)));
+      if (!handled) {
+        handled = true;
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+        }
+        res.end('Internal error');
+        rejectCallback?.(err instanceof Error ? err : new Error(String(err)));
+      }
     }
   });
 

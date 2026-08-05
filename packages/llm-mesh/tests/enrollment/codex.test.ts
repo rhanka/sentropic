@@ -32,7 +32,7 @@ describe('CodexEnrollmentProvider', () => {
     }
   });
 
-  it('polls for completion, handles pending state, and exchanges token on success', async () => {
+  it('polls for completion, preserves credential tokens (P0-4), and uses pollIntervalMs (P0-3)', async () => {
     let attempts = 0;
     const mockFetch = vi.fn(async (url: string | URL | Request) => {
       const urlStr = url.toString();
@@ -42,7 +42,7 @@ describe('CodexEnrollmentProvider', () => {
           JSON.stringify({
             device_auth_id: 'dev_auth_456',
             user_code: 'XYZ-789',
-            interval: 1,
+            interval: 0.01, // 10ms for fast test execution
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
@@ -51,7 +51,6 @@ describe('CodexEnrollmentProvider', () => {
       if (urlStr.includes('deviceauth/token')) {
         attempts += 1;
         if (attempts === 1) {
-          // Pending status 403
           return new Response('Pending', { status: 403 });
         }
         return new Response(
@@ -91,6 +90,9 @@ describe('CodexEnrollmentProvider', () => {
     const res = await provider.pollForCompletion(session.enrollmentId, 5);
     expect(res.accountId).toMatch(/^acct_codex_/);
     expect(res.label).toContain('Codex Account');
+    expect(res.credential).toBeDefined();
+    expect(res.credential?.accessToken).toBe('codex-access-token');
+    expect(res.credential?.refreshToken).toBe('codex-refresh-token');
     expect(attempts).toBe(2);
   });
 });
