@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  accountTransportProviderIds,
   describeAuthMaterial,
+  executableAccountTransportProviderIds,
   getAuthDescriptor,
   getSecretAuthMaterial,
+  isCloudCodeRuntimeMetadata,
   type AuthResolution,
   type ClaudeCodeAccountAuthMaterial,
+  type CloudCodeRuntimeMetadata,
   type SecretAuthMaterial,
 } from '../src/auth.js';
 import { validateAdapterAuthSource } from '../src/adapter-auth.js';
@@ -68,6 +72,17 @@ describe('adapter auth validation', () => {
   });
 
   it('rejects planned account transports without executable material', () => {
+    expect(
+      validateAdapterAuthSource({
+        type: 'account-transport',
+        provider: 'cloud-code',
+        status: 'planned',
+      }),
+    ).toEqual({
+      ok: false,
+      message: 'cloud-code account transport is planned, not executable',
+    });
+
     expect(
       validateAdapterAuthSource({
         type: 'account-transport',
@@ -137,5 +152,54 @@ describe('claude-code-account auth material', () => {
         accountId: 'acct_claude',
       }),
     ).toEqual({ ok: true });
+  });
+});
+
+describe('cloud-code account transport and runtime metadata', () => {
+  it('includes cloud-code and excludes gemini-code-assist in provider lists', () => {
+    expect(accountTransportProviderIds).toContain('cloud-code');
+    expect((accountTransportProviderIds as readonly string[])).not.toContain('gemini-code-assist');
+
+    expect(executableAccountTransportProviderIds).toContain('cloud-code');
+    expect((executableAccountTransportProviderIds as readonly string[])).not.toContain('gemini-code-assist');
+  });
+
+  it('validates CloudCodeRuntimeMetadata with isCloudCodeRuntimeMetadata guard', () => {
+    const validMetadata: CloudCodeRuntimeMetadata = {
+      cloudaicompanionProject: 'test-project-123',
+      cloudCodeUserAgentVersion: '1.1.10',
+      authClientConfigVersion: 'v1.0.0',
+    };
+
+    expect(isCloudCodeRuntimeMetadata(validMetadata)).toBe(true);
+
+    expect(isCloudCodeRuntimeMetadata(null)).toBe(false);
+    expect(isCloudCodeRuntimeMetadata(undefined)).toBe(false);
+    expect(isCloudCodeRuntimeMetadata('string')).toBe(false);
+    expect(isCloudCodeRuntimeMetadata({})).toBe(false);
+
+    expect(
+      isCloudCodeRuntimeMetadata({
+        cloudaicompanionProject: '',
+        cloudCodeUserAgentVersion: '1.1.10',
+        authClientConfigVersion: 'v1.0.0',
+      }),
+    ).toBe(false);
+
+    expect(
+      isCloudCodeRuntimeMetadata({
+        cloudaicompanionProject: 'test-project',
+        cloudCodeUserAgentVersion: '   ',
+        authClientConfigVersion: 'v1.0.0',
+      }),
+    ).toBe(false);
+
+    expect(
+      isCloudCodeRuntimeMetadata({
+        cloudaicompanionProject: 'test-project',
+        cloudCodeUserAgentVersion: '1.1.10',
+        authClientConfigVersion: 123,
+      }),
+    ).toBe(false);
   });
 });
