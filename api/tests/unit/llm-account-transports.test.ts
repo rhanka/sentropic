@@ -9,10 +9,13 @@ import {
 import {
   acquireAntigravityAccountTransport,
   acquireClaudeCodeAccountTransport,
+  acquireCloudCodeAccountTransport,
+  getPrimaryCloudCodeAccountTransport,
   inferCodexAccountIdFromToken,
   inferTokenExpiresAt,
   storeAntigravityAccountTransport,
   storeClaudeCodeAccountTransport,
+  storeCloudCodeAccountTransport,
 } from '../../src/services/llm-account-transports';
 import {
   getAnthropicTransportMode,
@@ -221,5 +224,47 @@ describe('llm account transports', () => {
       requestId: 'antigravity-req-2',
     });
     expect(claudeAcquire).toBeNull();
+  });
+
+  it('stores and acquires Cloud Code account transport with multi-tenant userId isolation and project metadata', async () => {
+    const user1 = await createAuthenticatedUser('admin_app');
+    const user2 = await createAuthenticatedUser('admin_app');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    // Store Cloud Code account for user1
+    await storeCloudCodeAccountTransport({
+      ownerUserId: user1.id,
+      externalAccountId: 'cc-user1-account',
+      accountLabel: 'Cloud Code User 1',
+      accessToken: 'cc-access-user1',
+      refreshToken: 'cc-refresh-user1',
+      expiresAt,
+      cloudaicompanionProject: 'user1-cloudcode-project',
+    });
+
+    const primary1 = await getPrimaryCloudCodeAccountTransport({ ownerUserId: user1.id });
+    expect(primary1).not.toBeNull();
+    expect(primary1?.transportProviderId).toBe('cloud-code');
+
+    // User 2 should NOT acquire user 1's account (multi-tenant isolation)
+    const acqUser2 = await acquireCloudCodeAccountTransport({
+      userId: user2.id,
+      modelId: 'gemini-2.5-flash',
+      affinityKey: 'session:user2',
+    });
+    expect(acqUser2).toBeNull();
+
+    // User 1 acquires their Cloud Code account
+    const acqUser1 = await acquireCloudCodeAccountTransport({
+      userId: user1.id,
+      modelId: 'gemini-2.5-flash',
+      affinityKey: 'session:user1',
+    });
+    expect(acqUser1).not.toBeNull();
+    expect(acqUser1?.accessToken).toBe('cc-access-user1');
+    expect(acqUser1?.transportProviderId).toBe('cloud-code');
+    expect(acqUser1?.metadata).toMatchObject({
+      cloudaicompanionProject: 'user1-cloudcode-project',
+    });
   });
 });
