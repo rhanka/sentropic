@@ -30,6 +30,30 @@ describe('CloudCodeEnrollmentProvider', () => {
     expect(session.url).toContain('client_id=resolved-client-for-vault%3A%2F%2Fcloud-code-prod');
   });
 
+  it('falls back to default CLOUD_CODE_CLIENT_ID when configResolver returns empty object', async () => {
+    const mockEmptyConfigResolver: ConfigResolver = {
+      async resolveConfig() {
+        return {};
+      },
+    };
+
+    const provider = new CloudCodeEnrollmentProvider({
+      configResolver: mockEmptyConfigResolver,
+    });
+
+    const session = await provider.start({
+      configRef: 'default',
+      mode: 'portal',
+      redirectUri: 'https://sentropic.example.com/oauth/callback',
+      ownerScope: 'user_123',
+    });
+
+    expect(session.kind).toBe('authorization-url');
+    expect(session.url).toContain(
+      'client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com',
+    );
+  });
+
   it('completes enrollment with token exchange and resolves Cloud Code metadata', async () => {
     const mockFetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
       const urlStr = url.toString();

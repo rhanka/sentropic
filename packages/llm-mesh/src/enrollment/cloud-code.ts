@@ -19,6 +19,10 @@ export const CLOUD_CODE_LOAD_CODE_ASSIST_URL =
 export const CLOUD_CODE_USER_AGENT =
   'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
 
+export const CLOUD_CODE_CLIENT_ID =
+  '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
+export const CLOUD_CODE_CLIENT_SECRET = 'GOCSPX-vP2-9_7a3d-example_secret';
+
 export interface CloudCodeEnrollmentOptions {
   clientId?: string;
   clientSecret?: string;
@@ -38,13 +42,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   private sequence = 0;
 
   constructor(options: CloudCodeEnrollmentOptions = {}) {
-    if (!options.clientId && !options.configResolver) {
-      throw new Error('CloudCodeEnrollmentProvider: clientId or configResolver required');
-    }
-    if (!options.clientSecret && !options.configResolver) {
-      throw new Error('CloudCodeEnrollmentProvider: clientSecret or configResolver required');
-    }
-    this.defaultClientId = options.clientId ?? '';
+    this.defaultClientId = options.clientId ?? CLOUD_CODE_CLIENT_ID;
     this.defaultClientSecret = options.clientSecret ?? '';
     this.configResolver = options.configResolver;
     this.fetchFn = options.fetchFn ?? fetch;
@@ -54,9 +52,14 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     if (this.configResolver && configRef) {
       try {
         const config = await this.configResolver.resolveConfig(configRef);
-        const clientId = typeof config.clientId === 'string' ? config.clientId : this.defaultClientId;
+        const clientId =
+          typeof config.clientId === 'string' && config.clientId.trim().length > 0
+            ? config.clientId
+            : this.defaultClientId;
         const clientSecret =
-          typeof config.clientSecret === 'string' ? config.clientSecret : this.defaultClientSecret;
+          typeof config.clientSecret === 'string' && config.clientSecret.trim().length > 0
+            ? config.clientSecret
+            : this.defaultClientSecret;
         return { clientId, clientSecret };
       } catch {
         // Fall back to default secrets if resolver fails or yields empty
