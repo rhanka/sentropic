@@ -6,6 +6,7 @@ export const CLOUD_CODE_USER_AGENT =
   'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
 
 export interface CloudCodeUserInfo {
+  id: string | null;
   email: string | null;
   name: string | null;
   picture: string | null;
@@ -17,6 +18,7 @@ export interface CloudCodeOnboardingResult {
   expiresAt: string | null;
   cloudaicompanionProject: string;
   email: string | null;
+  externalAccountId: string | null;
   profile: Record<string, unknown> | null;
 }
 
@@ -37,6 +39,7 @@ export const fetchCloudCodeUserInfo = async (
     if (!response.ok) return null;
     const payload = (await response.json()) as Record<string, unknown>;
     return {
+      id: normalizeText(payload.id) ?? normalizeText(payload.sub),
       email: normalizeText(payload.email),
       name: normalizeText(payload.name),
       picture: normalizeText(payload.picture),
@@ -136,6 +139,7 @@ export const onboardCloudCodeUser = async (
 
   const { cloudaicompanionProject } = await loadCodeAssist(accessToken, fetchFn);
   const userInfo = await fetchCloudCodeUserInfo(accessToken, fetchFn);
+  const externalAccountId = userInfo?.id ?? userInfo?.email ?? null;
 
   return {
     accessToken,
@@ -143,6 +147,7 @@ export const onboardCloudCodeUser = async (
     expiresAt,
     cloudaicompanionProject,
     email: userInfo?.email ?? null,
+    externalAccountId,
     profile: userInfo ? { ...userInfo } : null,
   };
 };
