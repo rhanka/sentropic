@@ -3,7 +3,17 @@ import type {
   AccountTransportAcquisition,
 } from '../account-transports.js';
 import type { AccountTransportProviderId } from '../auth.js';
-import type { EnrollmentSession, StartEnrollmentInput } from '../enrollment/contracts.js';
+import type {
+  EnrollmentProvider,
+  EnrollmentSession,
+  StartEnrollmentInput,
+} from '../enrollment/contracts.js';
+import { ClaudeCodeEnrollmentProvider } from '../enrollment/claude-code.js';
+import { CloudCodeEnrollmentProvider } from '../enrollment/cloud-code.js';
+import { CodexEnrollmentProvider } from '../enrollment/codex.js';
+import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
+import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
+import { LocalAccountTransportService } from './local-account-transport-service.js';
 
 export interface ProviderRequest {
   modelId: string;
@@ -67,27 +77,39 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
     throw new Error('configResolver is required');
   }
 
+  const keyring = options.keyring ?? new InMemoryKeyring();
+  const providers = new Map<string, EnrollmentProvider>([
+    ['cloud-code', new CloudCodeEnrollmentProvider()],
+    ['codex', new CodexEnrollmentProvider()],
+    ['claude-code', new ClaudeCodeEnrollmentProvider()],
+  ]);
+
+  const service = new LocalAccountTransportService(keyring, providers, options.configResolver);
+
   return {
-    async enroll() {
-      throw new Error('Not implemented');
+    async enroll(providerId, input) {
+      return service.enroll(providerId, input);
     },
-    async waitForCallback() {
-      throw new Error('Not implemented');
+    async waitForCallback(enrollmentId) {
+      return service.waitForCallback(enrollmentId);
     },
-    async pollForCompletion() {
-      throw new Error('Not implemented');
+    async pollForCompletion(enrollmentId) {
+      return service.pollForCompletion(enrollmentId);
     },
-    async cancel() {
-      // no-op stub
+    async cancel(enrollmentId) {
+      return service.cancel(enrollmentId);
     },
-    async acquire() {
-      throw new Error('Not implemented');
+    async acquire(input) {
+      return service.acquire(input);
     },
-    async release() {
-      // no-op stub
+    async release(acquisition) {
+      return service.release(acquisition);
     },
-    getAdapter() {
-      throw new Error('Not implemented');
+    getAdapter(providerId) {
+      if (providerId === 'cloud-code') {
+        return new CloudCodeProviderAdapter();
+      }
+      throw new Error(`Adapter for ${providerId} not available locally`);
     },
   };
 }

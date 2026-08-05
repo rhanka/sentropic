@@ -102,44 +102,44 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [ ] **Conductor review gate** — validate before Lot 2
     - [ ] Notify h2a: Lot 1 compilable → h2a can start its Lot 3
 
-- [ ] **Lot 2 — Providers + transport** · _Owner: sentropic_ · _Parallel with h2a Lot 3 after Lot 1 gate_
-  - [ ] `packages/llm-mesh/src/enrollment/cloud-code.ts` (NEW):
-    - [ ] `CloudCodeEnrollmentProvider implements EnrollmentProvider`
-    - [ ] PKCE loopback: start HTTP listener, return `authorization-url` session
-    - [ ] `waitForCallback`: receive code from loopback, `completeEnrollment`, `resolve`, persist atomically
-    - [ ] `cancel`: idempotent, stop loopback, mark `cancelledAt`
-    - [ ] Adapted from `api/src/services/antigravity-provider-auth.ts`
-  - [ ] `packages/llm-mesh/src/enrollment/codex.ts` (NEW):
-    - [ ] `CodexEnrollmentProvider implements EnrollmentProvider`
-    - [ ] Device flow: POST `deviceauth/usercode` → `device-code` session
-    - [ ] `pollForCompletion`: internal poll → exchange code → persist atomically
-  - [ ] `packages/llm-mesh/src/enrollment/claude-code.ts` (NEW):
-    - [ ] Portal-only stub; `execute` throws `UNSUPPORTED` for h2a local
-  - [ ] `packages/llm-mesh/src/transport/cloud-code-transport.ts` (NEW):
-    - [ ] `buildCloudCodeRequest(acquisition, request)` — daily-cloudcode envelope
-    - [ ] `parseCloudCodeSSE(stream)` → `AsyncIterable<ProviderEvent>`
-    - [ ] Outcomes: 200→success, 401/403→auth_failed, 429+Retry-After→rate_limited, SSE error→failed
-    - [ ] `execute()` calls `recordOutcome()` internally — h2a never calls it directly
-    - [ ] `release(acquisition)`: abort path, 0 outcome
-  - [ ] `packages/llm-mesh/src/service/local-account-transport-service.ts` — full implementation:
-    - [ ] Keyring read/write (`sentropic-llm-mesh` namespace, NOT `gemini/antigravity`)
-    - [ ] `acquire()`: check expiry → refresh atomically → return material
-    - [ ] Refresh: POST `oauth2.googleapis.com/token`, resolve historical `credentialVersion`
-    - [ ] Token rotation persisted atomically before return
-    - [ ] Refresh failure → `markReauthRequired()` → throw `AccountTransportAcquireError`
-  - [ ] `packages/llm-mesh/src/node/keyring/` (NEW):
-    - [ ] `KeyringAdapter` interface export
-    - [ ] `LinuxSecretstoreKeyring` (evaluate `keytar` vs `@kwlad/keystore`)
-    - [ ] `MacOSKeychainKeyring`
-    - [ ] `EnvKeyring` (CI/prod fallback)
+- [x] **Lot 2 — Providers + transport** · _Owner: sentropic_ · _Parallel with h2a Lot 3 after Lot 1 gate_
+  - [x] `packages/llm-mesh/src/enrollment/cloud-code.ts` (NEW):
+    - [x] `CloudCodeEnrollmentProvider implements EnrollmentProvider`
+    - [x] PKCE loopback: start HTTP listener, return `authorization-url` session
+    - [x] `waitForCallback`: receive code from loopback, `completeEnrollment`, `resolve`, persist atomically
+    - [x] `cancel`: idempotent, stop loopback, mark `cancelledAt`
+    - [x] Adapted from `api/src/services/antigravity-provider-auth.ts`
+  - [x] `packages/llm-mesh/src/enrollment/codex.ts` (NEW):
+    - [x] `CodexEnrollmentProvider implements EnrollmentProvider`
+    - [x] Device flow: POST `deviceauth/usercode` → `device-code` session
+    - [x] `pollForCompletion`: internal poll → exchange code → persist atomically
+  - [x] `packages/llm-mesh/src/enrollment/claude-code.ts` (NEW):
+    - [x] Portal-only stub; `execute` throws `UNSUPPORTED` for h2a local
+  - [x] `packages/llm-mesh/src/transport/cloud-code-transport.ts` (NEW):
+    - [x] `buildCloudCodeRequest(acquisition, request)` — daily-cloudcode envelope
+    - [x] `parseCloudCodeSSE(stream)` → `AsyncIterable<ProviderEvent>`
+    - [x] Outcomes: 200→success, 401/403→auth_failed, 429+Retry-After→rate_limited, SSE error→failed
+    - [x] `execute()` calls `recordOutcome()` internally — h2a never calls it directly
+    - [x] `release(acquisition)`: abort path, 0 outcome
+  - [x] `packages/llm-mesh/src/service/local-account-transport-service.ts` — full implementation:
+    - [x] Keyring read/write (`sentropic-llm-mesh` namespace, NOT `gemini/antigravity`)
+    - [x] `acquire()`: check expiry → refresh atomically → return material
+    - [x] Refresh: POST `oauth2.googleapis.com/token`, resolve historical `credentialVersion`
+    - [x] Token rotation persisted atomically before return
+    - [x] Refresh failure → `markReauthRequired()` → throw `AccountTransportAcquireError`
+  - [x] `packages/llm-mesh/src/node/keyring/` (NEW):
+    - [x] `KeyringAdapter` interface export
+    - [x] `LinuxSecretstoreKeyring` (evaluate `keytar` vs `@kwlad/keystore`)
+    - [x] `MacOSKeychainKeyring`
+    - [x] `EnvKeyring` (CI/prod fallback)
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
+    - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
     - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy`
-    - [ ] `packages/llm-mesh/tests/enrollment/cloud-code.test.ts` (NEW) — PKCE S256, state/nonce, replay/expiry/cancel, config version
-    - [ ] `packages/llm-mesh/tests/enrollment/codex.test.ts` (NEW) — device flow, poll, exchange
-    - [ ] `packages/llm-mesh/tests/transport/cloud-code-transport.test.ts` (NEW) — fixtures: refresh, UA exact, no project fallback, envelope, requestId UUID, abort=release, SSE/error/outcome
-    - [ ] `packages/llm-mesh/tests/service/local-account-transport-service.test.ts` (NEW) — refresh atomic, rotation, reauth_required, restart recovery
-    - [ ] `make test-llm-mesh ENV=test-llm-mesh-agy`
+    - [x] `packages/llm-mesh/tests/enrollment/cloud-code.test.ts` (NEW) — PKCE S256, state/nonce, replay/expiry/cancel, config version
+    - [x] `packages/llm-mesh/tests/enrollment/codex.test.ts` (NEW) — device flow, poll, exchange
+    - [x] `packages/llm-mesh/tests/transport/cloud-code-transport.test.ts` (NEW) — fixtures: refresh, UA exact, no project fallback, envelope, requestId UUID, abort=release, SSE/error/outcome
+    - [x] `packages/llm-mesh/tests/service/local-account-transport-service.test.ts` (NEW) — refresh atomic, rotation, reauth_required, restart recovery
+    - [x] `make test-llm-mesh ENV=test-llm-mesh-agy`
     - [ ] **Conductor review gate**
 
 - [ ] **Lot 3 — Portal API adapter** · _Owner: sentropic_ · _After Lot 2 gate_
