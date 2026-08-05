@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type {
   EnrollmentProvider,
   EnrollmentSession,
-  EnrollmentState,
   PreparedCredential,
   ResolvedProviderMetadata,
   StartEnrollmentInput,
-} from '../../src/enrollment/contracts.js';
+} from '../../src/enrollment/index.js';
+import type { EnrollmentState } from '../../src/enrollment/contracts.js';
 
 describe('enrollment contracts', () => {
   it('instantiates authorization-url and device-code enrollment sessions', () => {
@@ -67,6 +67,7 @@ describe('enrollment contracts', () => {
     expect(state.providerId).toBe('cloud-code');
     expect(credential.accountId).toBeTruthy();
     expect(metadata.cloudaicompanionProject).toBe('my-project-123');
+    expect(metadata.cloudCodeUserAgentVersion).toBe('1.1.10');
   });
 
   it('supports mock EnrollmentProvider implementations', async () => {

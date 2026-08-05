@@ -41,6 +41,12 @@ describe('LlmMeshFacade', () => {
     expect(typeof facade.getAdapter).toBe('function');
   });
 
+  it('throws an error if options is missing', () => {
+    expect(() => createLlmMeshFacade(undefined as unknown as FacadeOptions)).toThrow(
+      'LlmMeshFacade: options is required',
+    );
+  });
+
   it('stub methods throw Not Implemented errors for unhandled operations', async () => {
     const mockConfigResolver: ConfigResolver = {
       async resolveConfig() {

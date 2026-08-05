@@ -14,6 +14,8 @@ import {
 } from '../src/auth.js';
 import { validateAdapterAuthSource } from '../src/adapter-auth.js';
 
+import * as authModule from '../src/auth.js';
+
 describe('auth descriptors', () => {
   it('builds a redacted descriptor for direct tokens', () => {
     const material: SecretAuthMaterial = {
@@ -162,6 +164,8 @@ describe('cloud-code account transport and runtime metadata', () => {
 
     expect(executableAccountTransportProviderIds).toContain('cloud-code');
     expect((executableAccountTransportProviderIds as readonly string[])).not.toContain('gemini-code-assist');
+
+    expect('futureAccountTransportProviderIds' in authModule).toBe(false);
   });
 
   it('validates CloudCodeRuntimeMetadata with isCloudCodeRuntimeMetadata guard', () => {

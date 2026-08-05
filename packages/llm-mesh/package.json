@@ -21,8 +21,8 @@
       "import": "./dist/service/facade.js"
     },
     "./enrollment": {
-      "types": "./dist/enrollment/contracts.d.ts",
-      "import": "./dist/enrollment/contracts.js"
+      "types": "./dist/enrollment/index.d.ts",
+      "import": "./dist/enrollment/index.js"
     },
     "./node": {
       "types": "./dist/node/index.d.ts",
