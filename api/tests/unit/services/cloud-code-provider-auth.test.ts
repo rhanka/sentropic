@@ -101,6 +101,8 @@ describe('cloud-code-provider-auth service', () => {
         code: 'oauth-code',
         codeVerifier: 'pkce-verifier',
         redirectUri: 'http://localhost/callback',
+        clientId: 'test-client-id',
+        clientSecret: 'test-client-secret',
       },
       fetchMock as unknown as typeof fetch,
     );

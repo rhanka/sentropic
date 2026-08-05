@@ -38,8 +38,14 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   private sequence = 0;
 
   constructor(options: CloudCodeEnrollmentOptions = {}) {
-    this.defaultClientId = options.clientId ?? 'mock-cloud-code-client-id';
-    this.defaultClientSecret = options.clientSecret ?? 'mock-cloud-code-client-secret';
+    if (!options.clientId) {
+      throw new Error('CloudCodeEnrollmentProvider: clientId required');
+    }
+    if (!options.clientSecret) {
+      throw new Error('CloudCodeEnrollmentProvider: clientSecret required');
+    }
+    this.defaultClientId = options.clientId;
+    this.defaultClientSecret = options.clientSecret;
     this.configResolver = options.configResolver;
     this.fetchFn = options.fetchFn ?? fetch;
   }
