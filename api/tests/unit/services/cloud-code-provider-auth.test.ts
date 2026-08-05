@@ -16,6 +16,7 @@ describe('cloud-code-provider-auth service', () => {
       expect(init?.headers).toMatchObject({ Authorization: 'Bearer valid-access-token' });
       return new Response(
         JSON.stringify({
+          id: 'gaia-user-123',
           email: 'testuser@example.com',
           name: 'Test User',
           picture: 'https://example.com/avatar.jpg',
@@ -26,6 +27,7 @@ describe('cloud-code-provider-auth service', () => {
 
     const info = await fetchCloudCodeUserInfo('valid-access-token', fetchMock as unknown as typeof fetch);
     expect(info).toEqual({
+      id: 'gaia-user-123',
       email: 'testuser@example.com',
       name: 'Test User',
       picture: 'https://example.com/avatar.jpg',

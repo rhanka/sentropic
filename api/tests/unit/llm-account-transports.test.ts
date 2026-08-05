@@ -14,6 +14,7 @@ import {
   inferCodexAccountIdFromToken,
   inferTokenExpiresAt,
   storeAntigravityAccountTransport,
+  refreshCloudCodeTokenIfNeeded,
   storeClaudeCodeAccountTransport,
   storeCloudCodeAccountTransport,
 } from '../../src/services/llm-account-transports';
@@ -266,5 +267,119 @@ describe('llm account transports', () => {
     expect(acqUser1?.metadata).toMatchObject({
       cloudaicompanionProject: 'user1-cloudcode-project',
     });
+  });
+
+  it('refreshes Cloud Code token on expiration and deduplicates concurrent refresh calls (single-flight)', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+
+    const stored = await storeCloudCodeAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'gaia-id-12345',
+      accountLabel: 'Cloud Code Refreshed',
+      accessToken: 'cc-access-old',
+      refreshToken: 'cc-refresh-old',
+      expiresAt: expiredAt,
+      cloudaicompanionProject: 'test-cloudcode-proj',
+      clientId: 'my-client-id',
+      clientSecret: 'my-client-secret',
+    });
+    expect(stored).not.toBeNull();
+
+    let networkCallCount = 0;
+    const mockFetch = vi.fn().mockImplementation(async () => {
+      networkCallCount++;
+      return new Response(
+        JSON.stringify({
+          access_token: 'cc-access-new',
+          refresh_token: 'cc-refresh-new',
+          expires_in: 3600,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    const tokenPayload = {
+      accessToken: 'cc-access-old',
+      refreshToken: 'cc-refresh-old',
+      tokenType: 'bearer' as const,
+      obtainedAt: expiredAt,
+      expiresAt: expiredAt,
+      source: 'cloud-code-import' as const,
+      cloudaicompanionProject: 'test-cloudcode-proj',
+      clientId: 'my-client-id',
+      clientSecret: 'my-client-secret',
+      profile: null,
+    };
+
+    // Execute two concurrent refresh calls to test single-flight in-memory deduplication
+    const [res1, res2] = await Promise.all([
+      refreshCloudCodeTokenIfNeeded(
+        { accountId: stored!.id, externalAccountId: 'gaia-id-12345', token: tokenPayload },
+        mockFetch,
+      ),
+      refreshCloudCodeTokenIfNeeded(
+        { accountId: stored!.id, externalAccountId: 'gaia-id-12345', token: tokenPayload },
+        mockFetch,
+      ),
+    ]);
+
+    expect(networkCallCount).toBe(1);
+    expect(res1?.accessToken).toBe('cc-access-new');
+    expect(res2?.accessToken).toBe('cc-access-new');
+
+    // Verify DB updated
+    const dbRow = (await db.all(sql`SELECT status, last_error FROM llm_provider_accounts WHERE id = ${stored!.id}`)) as Array<{ status: string; last_error: string | null }>;
+    expect(dbRow[0]?.status).toBe('active');
+    expect(dbRow[0]?.last_error).toBeNull();
+  });
+
+  it('marks account as reauth_required when Cloud Code refresh fails', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+
+    const stored = await storeCloudCodeAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'gaia-id-error',
+      accountLabel: 'Cloud Code Failing Refresh',
+      accessToken: 'cc-access-old',
+      refreshToken: 'cc-refresh-bad',
+      expiresAt: expiredAt,
+      cloudaicompanionProject: 'test-cloudcode-proj',
+      clientId: 'my-client-id',
+      clientSecret: 'my-client-secret',
+    });
+
+    const mockFailingFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'Token revoked' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const tokenPayload = {
+      accessToken: 'cc-access-old',
+      refreshToken: 'cc-refresh-bad',
+      tokenType: 'bearer' as const,
+      obtainedAt: expiredAt,
+      expiresAt: expiredAt,
+      source: 'cloud-code-import' as const,
+      cloudaicompanionProject: 'test-cloudcode-proj',
+      clientId: 'my-client-id',
+      clientSecret: 'my-client-secret',
+      profile: null,
+    };
+
+    const res = await refreshCloudCodeTokenIfNeeded(
+      { accountId: stored!.id, externalAccountId: 'gaia-id-error', token: tokenPayload },
+      mockFailingFetch,
+    );
+
+    expect(res).toBeNull();
+
+    // Verify DB status updated to reauth_required
+    const dbRow = (await db.all(sql`SELECT status, last_error FROM llm_provider_accounts WHERE id = ${stored!.id}`)) as Array<{ status: string; last_error: string | null }>;
+    expect(dbRow[0]?.status).toBe('reauth_required');
+    expect(dbRow[0]?.last_error).toContain('Cloud Code token refresh failed');
   });
 });

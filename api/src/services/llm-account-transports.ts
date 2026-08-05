@@ -104,6 +104,8 @@ export type CloudCodeTokenSecretPayload = {
   source: 'cloud-code-import' | 'cloud-code-refresh';
   cloudaicompanionProject: string;
   clientId: string | null;
+  clientSecret?: string | null;
+  authClientConfigVersion?: string | null;
   profile: Record<string, unknown> | null;
 };
 
@@ -307,9 +309,11 @@ const parseCloudCodeTokenSecret = (
       source: parsed.source === 'cloud-code-refresh' ? 'cloud-code-refresh' : 'cloud-code-import',
       cloudaicompanionProject,
       clientId: normalizeOptionalText(parsed.clientId),
+      clientSecret: normalizeOptionalText(parsed.clientSecret),
+      authClientConfigVersion: normalizeOptionalText(parsed.authClientConfigVersion),
       profile:
         parsed.profile && typeof parsed.profile === 'object' && !Array.isArray(parsed.profile)
-          ? parsed.profile as Record<string, unknown>
+          ? (parsed.profile as Record<string, unknown>)
           : null,
     };
   } catch {
@@ -445,6 +449,8 @@ const buildCloudCodeTokenPayload = (input: {
   source: CloudCodeTokenSecretPayload['source'];
   cloudaicompanionProject: string;
   clientId?: string | null;
+  clientSecret?: string | null;
+  authClientConfigVersion?: string | null;
   profile?: Record<string, unknown> | null;
 }): CloudCodeTokenSecretPayload => ({
   accessToken: input.accessToken,
@@ -455,6 +461,8 @@ const buildCloudCodeTokenPayload = (input: {
   source: input.source,
   cloudaicompanionProject: input.cloudaicompanionProject,
   clientId: normalizeOptionalText(input.clientId),
+  clientSecret: normalizeOptionalText(input.clientSecret),
+  authClientConfigVersion: normalizeOptionalText(input.authClientConfigVersion),
   profile: input.profile ?? null,
 });
 
@@ -968,6 +976,9 @@ export const storeCloudCodeAccountTransport = async (input: {
   expiresAt?: string | null;
   cloudaicompanionProject: string;
   clientId?: string | null;
+  clientSecret?: string | null;
+  authClientConfigVersion?: string | null;
+  source?: CloudCodeTokenSecretPayload['source'];
   profile?: Record<string, unknown> | null;
 }): Promise<LlmAccountTransportPublic | null> => {
   const ownerUserId = normalizeOptionalText(input.ownerUserId);
@@ -979,9 +990,11 @@ export const storeCloudCodeAccountTransport = async (input: {
     accessToken,
     refreshToken: input.refreshToken,
     expiresAt: input.expiresAt,
-    source: 'cloud-code-import',
+    source: input.source ?? 'cloud-code-import',
     cloudaicompanionProject,
     clientId: input.clientId,
+    clientSecret: input.clientSecret,
+    authClientConfigVersion: input.authClientConfigVersion,
     profile: input.profile,
   });
 
@@ -995,8 +1008,8 @@ export const storeCloudCodeAccountTransport = async (input: {
     source: token.source,
     credentialSchemaVersion: 1,
     productAccountSource: 'cloud-code',
-    cloudaicompanionProject: token.cloudaicompanionProject,
     clientId: token.clientId,
+    authClientConfigVersion: token.authClientConfigVersion,
     profile: token.profile,
   };
 
@@ -1412,13 +1425,17 @@ const refreshClaudeCodeTokenIfNeeded = async (input: {
   return refreshPromise;
 };
 
-const refreshCloudCodeTokenIfNeeded = async (input: {
-  accountId: string;
-  externalAccountId: string | null;
-  token: CloudCodeTokenSecretPayload;
-}): Promise<CloudCodeTokenSecretPayload | null> => {
+export const refreshCloudCodeTokenIfNeeded = async (
+  input: {
+    accountId: string;
+    externalAccountId: string | null;
+    token: CloudCodeTokenSecretPayload;
+  },
+  fetchFn: typeof fetch = fetch,
+): Promise<CloudCodeTokenSecretPayload | null> => {
   if (!isTokenExpiring(input.token.expiresAt)) return input.token;
-  if (!input.token.refreshToken) {
+  const refreshToken = input.token.refreshToken;
+  if (!refreshToken) {
     await db.run(sql`
       UPDATE llm_provider_accounts
       SET status = 'reauth_required',
@@ -1431,24 +1448,47 @@ const refreshCloudCodeTokenIfNeeded = async (input: {
     return null;
   }
 
+  // 1st level in-memory single-flight deduplication (same pod)
   const existing = cloudCodeRefreshes.get(input.accountId);
   if (existing) return existing;
 
   const refreshPromise = (async () => {
     try {
-      const response = await fetch('https://oauth2.googleapis.com/token', {
+      // P0-3 FIX: 2nd level DB-level optimistic check (multi-pod protection)
+      const latestRows = (await db.all(sql`
+        SELECT token_secret, token_expires_at, status
+        FROM llm_provider_accounts
+        WHERE id = ${input.accountId}
+      `)) as Array<{ token_secret: string | null; token_expires_at: Date | string | null; status: string }>;
+      const latestRow = latestRows[0];
+      if (latestRow && latestRow.status === 'active' && latestRow.token_secret) {
+        const freshToken = parseCloudCodeTokenSecret(latestRow.token_secret);
+        if (freshToken && !isTokenExpiring(freshToken.expiresAt)) {
+          return freshToken;
+        }
+      }
+
+      // P0-1 FIX: Resolve client_id and client_secret without hardcoding mocks
+      const clientId = input.token.clientId ?? normalizeOptionalText(process.env.CLOUD_CODE_CLIENT_ID);
+      const clientSecret = input.token.clientSecret ?? normalizeOptionalText(process.env.CLOUD_CODE_CLIENT_SECRET);
+      if (!clientId || !clientSecret) {
+        throw new Error('Cloud Code client credentials (clientId/clientSecret) are missing for token refresh.');
+      }
+
+      const response = await fetchFn('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          refresh_token: input.token.refreshToken,
-          client_id: input.token.clientId ?? 'mock-cloud-code-client-id',
-          client_secret: 'mock-cloud-code-client-secret',
+          refresh_token: refreshToken,
+          client_id: clientId,
+          client_secret: clientSecret,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Cloud Code token refresh failed (${response.status})`);
+        const text = await response.text().catch(() => '');
+        throw new Error(`Cloud Code token refresh failed (${response.status}): ${text}`);
       }
 
       const payload = (await response.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
@@ -1464,7 +1504,9 @@ const refreshCloudCodeTokenIfNeeded = async (input: {
         expiresAt,
         source: 'cloud-code-refresh',
         cloudaicompanionProject: input.token.cloudaicompanionProject,
-        clientId: input.token.clientId,
+        clientId,
+        clientSecret,
+        authClientConfigVersion: input.token.authClientConfigVersion,
         profile: input.token.profile,
       });
 
@@ -1865,8 +1907,8 @@ export const acquireCloudCodeAccountTransport = async (input: {
   modelId: string;
   affinityKey?: string | null;
   requestId?: string | null;
-}): Promise<CloudCodeAccountTransportAcquisition | null> =>
-  acquireDbAccountTransport({
+}): Promise<CloudCodeAccountTransportAcquisition | null> => {
+  const result = await acquireDbAccountTransport({
     ...input,
     targetProviderId: CLOUD_CODE_TARGET_PROVIDER_ID,
     transportProviderId: CLOUD_CODE_TRANSPORT_PROVIDER_ID,
@@ -1877,6 +1919,25 @@ export const acquireCloudCodeAccountTransport = async (input: {
     invalidTokenMessage: 'Cloud Code account token secret is missing or invalid.',
     reauthMessage: 'Cloud Code account requires reauthentication.',
   });
+
+  if (!result) return null;
+
+  const decryptedRows = (await db.all(sql`
+    SELECT token_secret FROM llm_provider_accounts WHERE id = ${result.accountTransportAccountId}
+  `)) as Array<{ token_secret: string | null }>;
+  const decryptedToken = parseCloudCodeTokenSecret(decryptedRows[0]?.token_secret);
+
+  return {
+    ...result,
+    metadata: {
+      ...(result.metadata ?? {}),
+      cloudaicompanionProject: decryptedToken?.cloudaicompanionProject ?? null,
+    },
+  };
+};
+
+/** @deprecated Replaced by acquireCloudCodeAccountTransport */
+export const acquireGeminiCodeAssistAccountTransport = acquireCloudCodeAccountTransport;
 
 export const acquireAntigravityAccountTransport = async (input: {
   userId: string;
