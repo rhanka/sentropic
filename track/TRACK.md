@@ -176,3 +176,11 @@ Open items:
 - Migration calendar enforcement for `api/drizzle/*` across BR-44/60/59/61/65.
 - #272 scope-violation (touches `ui/AppChatPanel.svelte` it forbids) — chat
   lane to fix/split before merge.
+- **publish-auth-hono ENEEDAUTH** (post-PR #511): `provenance: true` ajouté dans #511
+  a déclenché `publish-auth-hono` — échec `ENEEDAUTH` car OIDC trusted publisher non
+  configuré sur npmjs.org pour les packages hors llm-mesh. Fix : configurer les trusted
+  publishers npmjs.org pour tous les `@sentropic/*` publics, OU ajouter le guard
+  `npm view` dans chaque `make publish-*`. `priority: high`
+  Ref: [job 92427869469](https://github.com/rhanka/sentropic/actions/runs/31038964594/job/92427869469)
+- **api/package-lock.json llm-mesh ref stale** (post-PR #511): enregistre `0.9.0`
+  au lieu de `0.13.0`. Pas de régression fonctionnelle mais à corriger. `priority: low`
