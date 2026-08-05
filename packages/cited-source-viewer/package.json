@@ -65,6 +65,7 @@
     "LICENSE"
   ],
   "publishConfig": {
+    "provenance": true,
     "access": "public"
   },
   "sideEffects": [
