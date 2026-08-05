@@ -99,12 +99,16 @@ export const onboardCloudCodeUser = async (
     throw new Error('Cloud Code onboarding requires code, codeVerifier, and redirectUri');
   }
 
+  if (!input.clientId || !input.clientSecret) {
+    throw new Error('Cloud Code: clientId/clientSecret required — check configResolver');
+  }
+
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
     redirect_uri: redirectUri,
-    client_id: input.clientId ?? 'mock-cloud-code-client-id',
-    client_secret: input.clientSecret ?? 'mock-cloud-code-client-secret',
+    client_id: input.clientId,
+    client_secret: input.clientSecret,
     code_verifier: codeVerifier,
   });
 
@@ -119,7 +123,8 @@ export const onboardCloudCodeUser = async (
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`Cloud Code OAuth token exchange failed (${response.status}): ${text}`);
+    const sanitizedText = text.replace(/[A-Za-z0-9_\-]{40,}/g, '[REDACTED]').slice(0, 200);
+    throw new Error(`Cloud Code OAuth token exchange failed (${response.status}): ${sanitizedText}`);
   }
 
   const payload = (await response.json()) as {
