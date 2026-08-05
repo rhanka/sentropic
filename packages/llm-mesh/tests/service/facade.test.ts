@@ -47,7 +47,7 @@ describe('LlmMeshFacade', () => {
     );
   });
 
-  it('stub methods throw Not Implemented errors for unhandled operations', async () => {
+  it('delegates enroll and getAdapter to registered providers and adapters', async () => {
     const mockConfigResolver: ConfigResolver = {
       async resolveConfig() {
         return {};
@@ -56,22 +56,30 @@ describe('LlmMeshFacade', () => {
 
     const facade = createLlmMeshFacade({
       configResolver: mockConfigResolver,
-      mode: 'cli',
+      mode: 'portal',
     });
 
+    const session = await facade.enroll('cloud-code', {
+      configRef: 'ref',
+      mode: 'portal',
+      redirectUri: 'https://localhost/cb',
+      ownerScope: 'test',
+    });
+    expect(session.kind).toBe('authorization-url');
+
     await expect(
-      facade.enroll('cloud-code', {
+      facade.enroll('claude-code', {
         configRef: 'ref',
-        mode: 'cli',
-        redirectUri: 'http://localhost',
+        mode: 'portal',
+        redirectUri: 'https://localhost/cb',
         ownerScope: 'test',
       }),
-    ).rejects.toThrow('Not implemented');
+    ).rejects.toThrow('UNSUPPORTED');
 
-    await expect(facade.waitForCallback('enr_1')).rejects.toThrow('Not implemented');
-    await expect(facade.pollForCompletion('enr_2')).rejects.toThrow('Not implemented');
-    await expect(facade.cancel('enr_3')).resolves.toBeUndefined();
+    const adapter = facade.getAdapter('cloud-code');
+    expect(adapter).toBeDefined();
+    expect(typeof adapter.execute).toBe('function');
 
-    expect(() => facade.getAdapter('cloud-code')).toThrow('Not implemented');
+    expect(() => facade.getAdapter('codex')).toThrow('not available locally');
   });
 });
