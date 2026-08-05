@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/llm-mesh",
-  "version": "0.12.0",
+  "version": "0.9.0",
   "description": "Provider-agnostic LLM access runtime SDK for Sentropic.",
   "type": "module",
   "license": "MIT",
@@ -15,6 +15,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./facade": {
+      "types": "./dist/service/facade.d.ts",
+      "import": "./dist/service/facade.js"
+    },
+    "./enrollment": {
+      "types": "./dist/enrollment/contracts.d.ts",
+      "import": "./dist/enrollment/contracts.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.js"
+    },
+    "./transport/cloud-code": {
+      "types": "./dist/transport/cloud-code-transport.d.ts",
+      "import": "./dist/transport/cloud-code-transport.js"
     }
   },
   "files": [
