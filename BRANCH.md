@@ -23,6 +23,7 @@ Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
 
 - **Allowed Paths (implementation scope)**:
   - `packages/llm-mesh/src/**`
+  - `packages/llm-mesh/tests/**`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/tsconfig*.json`
   - `api/src/services/cloud-code-provider-auth.ts` (NEW)
@@ -68,36 +69,36 @@ Branch env: `ENV=test-llm-mesh-agy`
   - [x] Alignment with h2a v0.6 spec confirmed (commit `6eb2d24c`).
   - [x] BRANCH.md written after worktree creation.
 
-- [ ] **Lot 1 — Contracts + Facade + auth.ts** · _Owner: sentropic_ · _Gate: `/facade` compiles, h2a mock import OK_
-  - [ ] `packages/llm-mesh/src/auth.ts`:
-    - [ ] Remove `'gemini-code-assist'` from `accountTransportProviderIds`
-    - [ ] Remove `futureAccountTransportProviderIds` entirely
-    - [ ] Add `'cloud-code'` to `accountTransportProviderIds` AND `executableAccountTransportProviderIds`
-    - [ ] Add `CloudCodeRuntimeMetadata` interface + `isCloudCodeRuntimeMetadata` guard (3 fields, non-empty strings)
-  - [ ] `packages/llm-mesh/src/enrollment/contracts.ts` (NEW):
-    - [ ] `EnrollmentSession` union (`authorization-url` | `device-code`)
-    - [ ] `EnrollmentState` (internal, never exported to h2a)
-    - [ ] `StartEnrollmentInput`, `PreparedCredential`, `ResolvedProviderMetadata`
-    - [ ] `EnrollmentProvider` interface (`start`, `complete` internal, `resolve`, `refresh`)
-  - [ ] `packages/llm-mesh/src/service/facade.ts` (NEW):
-    - [ ] `LlmMeshFacade` interface (enroll, waitForCallback, pollForCompletion, cancel, acquire, release, getAdapter)
-    - [ ] `ProviderAdapter` interface (`execute` → `AsyncIterable<ProviderEvent>`)
-    - [ ] `FacadeOptions`, `ProviderRequest`, `ProviderEvent` types
-    - [ ] `createLlmMeshFacade(options): LlmMeshFacade` export
-  - [ ] `packages/llm-mesh/src/service/local-account-transport-service.ts` (NEW — signatures only):
-    - [ ] Constructor (`KeyringAdapter`, providers `Map`, `ConfigResolver`)
-    - [ ] Public signatures: `enroll`, `waitForCallback`, `pollForCompletion`, `cancel`, `acquire`, `release`
-    - [ ] Private signatures: `completeEnrollment`, `refreshToken`, `persistCredential`, `markReauthRequired`
-  - [ ] `packages/llm-mesh/package.json`:
-    - [ ] Bump version (minor)
-    - [ ] Add exports: `"./facade"`, `"./enrollment"`, `"./node"`, `"./transport/cloud-code"`
+- [x] **Lot 1 — Contracts + Facade + auth.ts** · _Owner: sentropic_ · _Gate: `/facade` compiles, h2a mock import OK_
+  - [x] `packages/llm-mesh/src/auth.ts`:
+    - [x] Remove `'gemini-code-assist'` from `accountTransportProviderIds`
+    - [x] Remove `futureAccountTransportProviderIds` entirely
+    - [x] Add `'cloud-code'` to `accountTransportProviderIds` AND `executableAccountTransportProviderIds`
+    - [x] Add `CloudCodeRuntimeMetadata` interface + `isCloudCodeRuntimeMetadata` guard (3 fields, non-empty strings)
+  - [x] `packages/llm-mesh/src/enrollment/contracts.ts` (NEW):
+    - [x] `EnrollmentSession` union (`authorization-url` | `device-code`)
+    - [x] `EnrollmentState` (internal, never exported to h2a)
+    - [x] `StartEnrollmentInput`, `PreparedCredential`, `ResolvedProviderMetadata`
+    - [x] `EnrollmentProvider` interface (`start`, `complete` internal, `resolve`, `refresh`)
+  - [x] `packages/llm-mesh/src/service/facade.ts` (NEW):
+    - [x] `LlmMeshFacade` interface (enroll, waitForCallback, pollForCompletion, cancel, acquire, release, getAdapter)
+    - [x] `ProviderAdapter` interface (`execute` → `AsyncIterable<ProviderEvent>`)
+    - [x] `FacadeOptions`, `ProviderRequest`, `ProviderEvent` types
+    - [x] `createLlmMeshFacade(options): LlmMeshFacade` export
+  - [x] `packages/llm-mesh/src/service/local-account-transport-service.ts` (NEW — signatures only):
+    - [x] Constructor (`KeyringAdapter`, providers `Map`, `ConfigResolver`)
+    - [x] Public signatures: `enroll`, `waitForCallback`, `pollForCompletion`, `cancel`, `acquire`, `release`
+    - [x] Private signatures: `completeEnrollment`, `refreshToken`, `persistCredential`, `markReauthRequired`
+  - [x] `packages/llm-mesh/package.json`:
+    - [x] Bump version (minor)
+    - [x] Add exports: `"./facade"`, `"./enrollment"`, `"./node"`, `"./transport/cloud-code"`
   - [ ] Lot gate:
-    - [ ] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
+    - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
     - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy`
-    - [ ] `packages/llm-mesh/tests/auth.test.ts` — `cloud-code` present, `gemini-code-assist` absent, guard OK
-    - [ ] `packages/llm-mesh/tests/enrollment/contracts.test.ts` (NEW) — type compilation smoke
-    - [ ] `packages/llm-mesh/tests/service/facade.test.ts` (NEW) — `createLlmMeshFacade` mock compile
-    - [ ] `make test-llm-mesh ENV=test-llm-mesh-agy`
+    - [x] `packages/llm-mesh/tests/auth.test.ts` — `cloud-code` present, `gemini-code-assist` absent, guard OK
+    - [x] `packages/llm-mesh/tests/enrollment/contracts.test.ts` (NEW) — type compilation smoke
+    - [x] `packages/llm-mesh/tests/service/facade.test.ts` (NEW) — `createLlmMeshFacade` mock compile
+    - [x] `make test-llm-mesh ENV=test-llm-mesh-agy`
     - [ ] **Conductor review gate** — validate before Lot 2
     - [ ] Notify h2a: Lot 1 compilable → h2a can start its Lot 3
 
