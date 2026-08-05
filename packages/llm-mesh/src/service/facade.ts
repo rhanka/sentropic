@@ -20,7 +20,7 @@ export interface ProviderAdapter {
   execute(
     acquisition: AccountTransportAcquisition,
     request: ProviderRequest,
-    signal?: AbortSignal,
+    signal: AbortSignal,
   ): AsyncIterable<ProviderEvent>;
 }
 
@@ -59,6 +59,10 @@ export interface LlmMeshFacade {
 }
 
 export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
+  if (!options) {
+    throw new Error('LlmMeshFacade: options is required');
+  }
+
   if (!options.configResolver) {
     throw new Error('configResolver is required');
   }
