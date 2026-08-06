@@ -93,7 +93,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set(
       'scope',
-      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs',
+      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email openid',
     );
     url.searchParams.set('code_challenge', codeChallenge);
     url.searchParams.set('code_challenge_method', 'S256');
