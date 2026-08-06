@@ -19,9 +19,8 @@ export const CLOUD_CODE_LOAD_CODE_ASSIST_URL =
 export const CLOUD_CODE_USER_AGENT =
   'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
 
-export const CLOUD_CODE_CLIENT_ID =
-  '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-export const CLOUD_CODE_CLIENT_SECRET = '';
+export const CLOUD_CODE_CLIENT_ID = '32555940559.apps.googleusercontent.com';
+export const CLOUD_CODE_CLIENT_SECRET = 'ZmssLNjJy2998hD4CTg2ejr2';
 
 export interface CloudCodeEnrollmentOptions {
   clientId?: string;
