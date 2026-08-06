@@ -12,7 +12,11 @@ This package boundary is the BR-14c model-access runtime extraction. It defines 
 - Normalized stream events: `reasoning_delta`, `content_delta`, `tool_call_start`, `tool_call_delta`, `tool_call_result`, `status`, `error`, `done`.
 - Provider adapters: OpenAI, Gemini, Anthropic Claude, Mistral, and Cohere scaffolds accept injected clients for deterministic tests; they do not perform live SDK calls by default.
 
-Application wiring, encrypted storage, quotas, retries, UI behavior, and concrete live provider credential storage remain outside this package contract. The application runtime may provide those integrations through the package's resolver and adapter hooks.
+Application wiring, quotas, retries, and UI behavior remain outside this package contract. The
+application runtime may provide those integrations through the package's resolver and adapter
+hooks. CLI-mode enrollment uses an encrypted local keyring so the enrollment and gateway
+processes can share provider credentials; portal mode remains injection-only. Override the CLI
+keyring directory with `SENTROPIC_LLM_MESH_KEYRING_DIR` when runtime isolation requires it.
 
 ## Cloud Code OAuth client rotation
 
