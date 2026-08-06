@@ -55,6 +55,7 @@ Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
 - `BR514-EX1`: `package-lock.json` and `api/package-lock.json` updated for `@sentropic/llm-mesh` version 0.9.0 bump.
 - `BR514-DEC1` (owner-approved 2026-08-05): ship the Antigravity OAuth client credential in the published `@sentropic/llm-mesh` artifact so Cloud Code enrollment remains configuration-free.
 - `BR514-EX2` (owner-approved 2026-08-05): update `Makefile` and `.github/workflows/ci.yml` with a deterministic credential rotation recipe and a protected-reference verification gate before npm publication. The checked-in source and published artifact stay identical; CI never mutates `dist`. Impact: llm-mesh credential rotation/publish targets and the llm-mesh publish job. Rollback: remove the rotation target and pre-publish verification gate.
+- `BR514-REL1`: document encrypted CLI keyring sharing and the `SENTROPIC_LLM_MESH_KEYRING_DIR` override for isolated runtimes.
 - `BR514-VER1` (2026-08-05): Cloud Code OAuth UAT completed with Google consent, loopback PKCE callback, token exchange, and Cloud Code metadata resolution. The later h2a metadata-file write is sandbox-blocked (`EROFS`) and is outside the OAuth exchange. Package gates: 77/77 tests, build, typecheck, and protected-reference source/`dist` verification pass.
 
 ## AI Flaky tests
