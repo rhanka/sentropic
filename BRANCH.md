@@ -119,6 +119,7 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [x] `CloudCodeEnrollmentProvider implements EnrollmentProvider`
     - [x] PKCE loopback: start HTTP listener, return `authorization-url` session
     - [x] `waitForCallback`: receive code from loopback, `completeEnrollment`, `resolve`, persist atomically
+    - [x] Completion returns credential and metadata internally for facade persistence
     - [x] `cancel`: idempotent, stop loopback, mark `cancelledAt`
     - [x] Adapted from `api/src/services/antigravity-provider-auth.ts`
   - [x] `packages/llm-mesh/src/enrollment/codex.ts` (NEW):
