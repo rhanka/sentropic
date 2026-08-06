@@ -140,7 +140,12 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     };
   }
 
-  async waitForCallback(enrollmentId: string): Promise<{ accountId: string; label: string }> {
+  async waitForCallback(enrollmentId: string): Promise<{
+    accountId: string;
+    label: string;
+    credential: PreparedCredential;
+    metadata: ResolvedProviderMetadata;
+  }> {
     const entry = this.sessions.get(enrollmentId);
     if (!entry) {
       throw new Error(`Enrollment session ${enrollmentId} not found`);
@@ -172,6 +177,8 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
         (meta.cloudaicompanionProject
           ? `Cloud Code (${meta.cloudaicompanionProject})`
           : 'Cloud Code Account'),
+      credential: cred,
+      metadata: meta,
     };
   }
 

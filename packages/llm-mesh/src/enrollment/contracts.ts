@@ -80,10 +80,19 @@ export interface CredentialEnvelope {
   authClientConfigVersion: string;
 }
 
+export interface CompletedEnrollment {
+  accountId: string;
+  label: string;
+  credential?: PreparedCredential;
+  metadata?: ResolvedProviderMetadata;
+}
+
 export interface EnrollmentProvider {
   start(input: StartEnrollmentInput): Promise<EnrollmentSession>;
   complete(input: CompleteEnrollmentInput): Promise<PreparedCredential>;
   resolve(credential: PreparedCredential): Promise<ResolvedProviderMetadata>;
   refresh(input: RefreshInput): Promise<PreparedCredential>;
+  waitForCallback?(enrollmentId: string): Promise<CompletedEnrollment>;
+  pollForCompletion?(enrollmentId: string): Promise<CompletedEnrollment>;
   cancel?(enrollmentId: string): Promise<void>;
 }
