@@ -57,6 +57,8 @@ Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
 - `BR514-EX2` (owner-approved 2026-08-05): update `Makefile` and `.github/workflows/ci.yml` with a deterministic credential rotation recipe and a protected-reference verification gate before npm publication. The checked-in source and published artifact stay identical; CI never mutates `dist`. Impact: llm-mesh credential rotation/publish targets and the llm-mesh publish job. Rollback: remove the rotation target and pre-publish verification gate.
 - `BR514-REL1`: document encrypted CLI keyring sharing and the `SENTROPIC_LLM_MESH_KEYRING_DIR` override for isolated runtimes.
 - `BR514-VER1` (2026-08-05): Cloud Code OAuth UAT completed with Google consent, loopback PKCE callback, token exchange, and Cloud Code metadata resolution. The later h2a metadata-file write is sandbox-blocked (`EROFS`) and is outside the OAuth exchange. Package gates: 77/77 tests, build, typecheck, and protected-reference source/`dist` verification pass.
+- `BR514-VER2` (2026-08-06): release package gates pass at 0.13.2 — typecheck, 79/79 tests, build, pack dry-run, diff-check, and C2 scope-check. Local protected credential reference was unavailable; the protected CI gate remains required.
+- `BR514-BLK1` (2026-08-06): API typecheck reached `prepare-node-workspace` but is blocked by the existing high-severity npm audit gate (`js-yaml`, `mermaid`, `@hono/node-server`) after `REGISTRY=local` resolved the local image name. No API files changed.
 
 ## AI Flaky tests
 
@@ -193,7 +195,7 @@ Branch env: `ENV=test-llm-mesh-agy`
 
 - [ ] **Lot N — Final validation**
   - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
-  - [ ] `make typecheck-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `build-flow` pré-existant
+  - [ ] `make typecheck-api ENV=test-llm-mesh-agy` — ⚠️ `prepare-node-workspace` blocked by unset `REGISTRY`; with `REGISTRY=local`, existing high npm audit gate blocks before typecheck
   - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy` — ⚠️ target inexistante dans Makefile
   - [ ] `make lint-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `prepare-node-workspace`
   - [x] `make test-llm-mesh ENV=test-llm-mesh-agy` — 79/79
