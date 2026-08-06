@@ -621,8 +621,46 @@ build-flow: ## Build @sentropic/flow dist package
 pack-llm-mesh: build-llm-mesh ## Validate @sentropic/llm-mesh npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
+CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE ?=
+AGY_BINARY ?=
+AGY_BINARY_SHA256 ?=
+CLOUD_CODE_OAUTH_EXPECTED_SHA256 ?=
+
+.PHONY: rotate-llm-mesh-cloud-code-oauth
+rotate-llm-mesh-cloud-code-oauth: ## Rotate the checked-in Cloud Code OAuth client credential from a protected file
+	@test -s "$(CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE)" || { echo "ERROR: CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE is missing or empty"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" \
+		-v "$(CURDIR):/workspace" \
+		-v "$(CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE):/run/cloud-code-oauth-client-secret:ro" \
+		-w /workspace/packages/llm-mesh \
+		$(LLM_MESH_NODE_IMAGE) node scripts/cloud-code-oauth-credential.mjs \
+			--credential-file /run/cloud-code-oauth-client-secret --write
+
+.PHONY: rotate-llm-mesh-cloud-code-oauth-from-agy
+rotate-llm-mesh-cloud-code-oauth-from-agy: ## Recover a pinned OAuth client credential from an official Antigravity binary
+	@test -s "$(AGY_BINARY)" || { echo "ERROR: AGY_BINARY is missing or empty"; exit 1; }
+	@test -n "$(AGY_BINARY_SHA256)" || { echo "ERROR: AGY_BINARY_SHA256 is required"; exit 1; }
+	@test -n "$(CLOUD_CODE_OAUTH_EXPECTED_SHA256)" || { echo "ERROR: CLOUD_CODE_OAUTH_EXPECTED_SHA256 is required"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" \
+		-v "$(CURDIR):/workspace" \
+		-v "$(AGY_BINARY):/run/antigravity:ro" \
+		-w /workspace/packages/llm-mesh \
+		$(LLM_MESH_NODE_IMAGE) node scripts/cloud-code-oauth-credential.mjs \
+			--agy-binary /run/antigravity --agy-sha256 "$(AGY_BINARY_SHA256)" \
+			--expected-fingerprint "$(CLOUD_CODE_OAUTH_EXPECTED_SHA256)" --write
+
+.PHONY: verify-llm-mesh-cloud-code-oauth
+verify-llm-mesh-cloud-code-oauth: build-llm-mesh ## Verify source and dist against the protected credential reference
+	@test -s "$(CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE)" || { echo "ERROR: CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE is missing or empty"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" \
+		-v "$(CURDIR):/workspace" \
+		-v "$(CLOUD_CODE_OAUTH_CLIENT_SECRET_FILE):/run/cloud-code-oauth-client-secret:ro" \
+		-w /workspace/packages/llm-mesh \
+		$(LLM_MESH_NODE_IMAGE) node scripts/cloud-code-oauth-credential.mjs \
+			--credential-file /run/cloud-code-oauth-client-secret --dist-dir dist
+
 .PHONY: publish-llm-mesh
-publish-llm-mesh: build-llm-mesh ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
+publish-llm-mesh: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
 	@docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp \
@@ -649,7 +687,7 @@ publish-llm-mesh: build-llm-mesh ## Publish @sentropic/llm-mesh from CI OIDC tru
 NPM_TOKEN_FILE ?= /tmp/sentropic-npm-token
 
 .PHONY: publish-llm-mesh-token
-publish-llm-mesh-token: build-llm-mesh ## Publish @sentropic/llm-mesh using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-llm-mesh in CI)
+publish-llm-mesh-token: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-llm-mesh in CI)
 	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
 	@docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
