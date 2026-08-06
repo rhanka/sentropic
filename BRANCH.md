@@ -133,6 +133,7 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [x] Outcomes: 200→success, 401/403→auth_failed, 429+Retry-After→rate_limited, SSE error→failed
     - [x] `execute()` calls `recordOutcome()` internally — h2a never calls it directly
     - [x] `release(acquisition)`: abort path, 0 outcome
+    - [x] Parse the Cloud Code `response` SSE envelope without changing direct-chunk support
   - [x] `packages/llm-mesh/src/service/local-account-transport-service.ts` — full implementation:
     - [x] Keyring read/write (`sentropic-llm-mesh` namespace, NOT `gemini/antigravity`)
     - [x] `acquire()`: check expiry → refresh atomically → return material
