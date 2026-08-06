@@ -175,14 +175,17 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     entry.state.consumedAt = new Date().toISOString();
     const { clientId, clientSecret } = await this.getSecrets();
 
-    const body = new URLSearchParams({
+    const bodyParams: Record<string, string> = {
       grant_type: 'authorization_code',
       code: input.code,
       redirect_uri: entry.state.redirectUri,
       client_id: clientId,
-      client_secret: clientSecret,
       code_verifier: entry.state.pkceVerifier,
-    });
+    };
+    if (clientSecret) {
+      bodyParams.client_secret = clientSecret;
+    }
+    const body = new URLSearchParams(bodyParams);
 
     const response = await this.fetchFn(CLOUD_CODE_TOKEN_URL, {
       method: 'POST',
@@ -256,12 +259,15 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
 
     const { clientId, clientSecret } = await this.getSecrets();
 
-    const body = new URLSearchParams({
+    const bodyParams: Record<string, string> = {
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: clientId,
-      client_secret: clientSecret,
-    });
+    };
+    if (clientSecret) {
+      bodyParams.client_secret = clientSecret;
+    }
+    const body = new URLSearchParams(bodyParams);
 
     const response = await this.fetchFn(CLOUD_CODE_TOKEN_URL, {
       method: 'POST',
