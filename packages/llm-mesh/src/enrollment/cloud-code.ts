@@ -43,7 +43,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
 
   constructor(options: CloudCodeEnrollmentOptions = {}) {
     this.defaultClientId = options.clientId ?? CLOUD_CODE_CLIENT_ID;
-    this.defaultClientSecret = options.clientSecret ?? '';
+    this.defaultClientSecret = options.clientSecret ?? CLOUD_CODE_CLIENT_SECRET;
     this.configResolver = options.configResolver;
     this.fetchFn = options.fetchFn ?? fetch;
   }
