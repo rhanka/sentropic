@@ -19,8 +19,9 @@ export const CLOUD_CODE_LOAD_CODE_ASSIST_URL =
 export const CLOUD_CODE_USER_AGENT =
   'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
 
-export const CLOUD_CODE_CLIENT_ID = '32555940559.apps.googleusercontent.com';
-export const CLOUD_CODE_CLIENT_SECRET = 'ZmssLNjJy2998hD4CTg2ejr2';
+export const CLOUD_CODE_CLIENT_ID =
+  '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
+export const CLOUD_CODE_CLIENT_SECRET = '';
 
 export interface CloudCodeEnrollmentOptions {
   clientId?: string;
@@ -93,7 +94,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set(
       'scope',
-      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email openid',
+      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs',
     );
     url.searchParams.set('code_challenge', codeChallenge);
     url.searchParams.set('code_challenge_method', 'S256');
@@ -231,6 +232,12 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
         Authorization: `Bearer ${credential.accessToken}`,
         'User-Agent': CLOUD_CODE_USER_AGENT,
         'Content-Type': 'application/json',
+        'X-Goog-Api-Client': 'gl-node/22.0.0 antigravity/0.1.0',
+        'Client-Metadata': JSON.stringify({
+          ideType: 'ANTIGRAVITY',
+          platform: 'PLATFORM_UNSPECIFIED',
+          pluginType: 'ANTIGRAVITY',
+        }),
       },
       body: JSON.stringify({ metadata: { ideType: 'ANTIGRAVITY' } }),
     });
