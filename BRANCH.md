@@ -92,11 +92,12 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [x] `EnrollmentState` (internal, never exported to h2a)
     - [x] `StartEnrollmentInput`, `PreparedCredential`, `ResolvedProviderMetadata`
     - [x] `EnrollmentProvider` interface (`start`, `complete` internal, `resolve`, `refresh`)
-  - [x] `packages/llm-mesh/src/service/facade.ts` (NEW):
-    - [x] `LlmMeshFacade` interface (enroll, waitForCallback, pollForCompletion, cancel, acquire, release, getAdapter)
-    - [x] `ProviderAdapter` interface (`execute` → `AsyncIterable<ProviderEvent>`)
-    - [x] `FacadeOptions`, `ProviderRequest`, `ProviderEvent` types
-    - [x] `createLlmMeshFacade(options): LlmMeshFacade` export
+    - [x] `packages/llm-mesh/src/service/facade.ts` (NEW):
+      - [x] `LlmMeshFacade` interface (enroll, waitForCallback, pollForCompletion, cancel, acquire, release, getAdapter)
+      - [x] `ProviderAdapter` interface (`execute` → `AsyncIterable<ProviderEvent>`)
+      - [x] `FacadeOptions`, `ProviderRequest`, `ProviderEvent` types
+      - [x] `createLlmMeshFacade(options): LlmMeshFacade` export
+      - [x] CLI mode defaults to encrypted file keyring; portal mode remains injection-only
   - [x] `packages/llm-mesh/src/service/local-account-transport-service.ts` (NEW — signatures only):
     - [x] Constructor (`KeyringAdapter`, providers `Map`, `ConfigResolver`)
     - [x] Public signatures: `enroll`, `waitForCallback`, `pollForCompletion`, `cancel`, `acquire`, `release`
