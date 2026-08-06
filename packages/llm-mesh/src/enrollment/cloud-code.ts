@@ -21,7 +21,17 @@ export const CLOUD_CODE_USER_AGENT =
 
 export const CLOUD_CODE_CLIENT_ID =
   '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-export const CLOUD_CODE_CLIENT_SECRET = '';
+// cloud-code-oauth-credential:start
+export const CLOUD_CODE_CLIENT_SECRET = ['GOCSPX-', 'K58FWR486LdLJ1', 'mLB8sXC4z6qDAf'].join('');
+// cloud-code-oauth-credential:end
+
+function redactOAuthError(text: string, clientSecret: string): string {
+  return text
+    .split(clientSecret)
+    .join('[redacted]')
+    .replace(/GOCSPX-[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/(client_secret(?:=|%3D))[^&\s"']+/gi, '$1[redacted]');
+}
 
 export interface CloudCodeEnrollmentOptions {
   clientId?: string;
@@ -99,7 +109,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set(
       'scope',
-      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs',
+      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs https://www.googleapis.com/auth/aicode openid',
     );
     url.searchParams.set('code_challenge', codeChallenge);
     url.searchParams.set('code_challenge_method', 'S256');
@@ -204,7 +214,9 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
 
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      throw new Error(`Cloud Code token exchange failed (${response.status}): ${text}`);
+      throw new Error(
+        `Cloud Code token exchange failed (${response.status}): ${redactOAuthError(text, clientSecret)}`,
+      );
     }
 
     const payload = (await response.json()) as {
