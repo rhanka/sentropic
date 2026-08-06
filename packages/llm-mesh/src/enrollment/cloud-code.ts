@@ -21,7 +21,7 @@ export const CLOUD_CODE_USER_AGENT =
 
 export const CLOUD_CODE_CLIENT_ID =
   '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-export const CLOUD_CODE_CLIENT_SECRET = 'GOCSPX-vP2-9_7a3d-example_secret';
+export const CLOUD_CODE_CLIENT_SECRET = '';
 
 export interface CloudCodeEnrollmentOptions {
   clientId?: string;
