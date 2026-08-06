@@ -153,6 +153,7 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [x] `packages/llm-mesh/tests/enrollment/codex.test.ts` (NEW) — device flow, poll, exchange
     - [x] `packages/llm-mesh/tests/transport/cloud-code-transport.test.ts` (NEW) — fixtures: refresh, UA exact, no project fallback, envelope, requestId UUID, abort=release, SSE/error/outcome
     - [x] `packages/llm-mesh/tests/service/local-account-transport-service.test.ts` (NEW) — refresh atomic, rotation, reauth_required, restart recovery
+    - [x] Fresh-service restart recovery covers persisted Cloud Code account material
     - [x] `make test-llm-mesh ENV=test-llm-mesh-agy`
     - [ ] **Conductor review gate**
 
