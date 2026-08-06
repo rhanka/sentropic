@@ -196,10 +196,12 @@ Branch env: `ENV=test-llm-mesh-agy`
   - [ ] `make typecheck-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `build-flow` pré-existant
   - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy` — ⚠️ target inexistante dans Makefile
   - [ ] `make lint-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `prepare-node-workspace`
-  - [x] `make test-llm-mesh ENV=test-llm-mesh-agy` — 61/61
+  - [x] `make test-llm-mesh ENV=test-llm-mesh-agy` — 79/79
+  - [x] `make build-llm-mesh ENV=test-llm-mesh-agy`
+  - [x] `make pack-llm-mesh ENV=test-llm-mesh-agy` — dry-run passed
   - [x] `make test-api-unit ENV=test-llm-mesh-agy` — 762/762
   - [ ] `make test-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `build-flow` pré-existant
-  - [x] Bumped `packages/llm-mesh/package.json` version (0.9.0 — new exports + `cloud-code`).
+  - [x] Bumped `packages/llm-mesh/package.json` version to 0.13.2 (patch for persistence/SSE fixes).
   - [ ] Final gate step 1: create/update PR using this `BRANCH.md` as PR body.
   - [ ] Final gate step 2: verify CI on PR; resolve blockers.
   - [ ] Final gate step 3: UAT + CI green → commit removal of `BRANCH.md`, push, merge.
