@@ -12,7 +12,7 @@ import type {
 import type { LoopbackServer } from './pkce.js';
 import { createLoopbackServer, generateNonce, generatePkcePair } from './pkce.js';
 
-export const CLOUD_CODE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+export const CLOUD_CODE_AUTH_URL = 'https://accounts.google.com/o/oauth2/auth';
 export const CLOUD_CODE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const CLOUD_CODE_LOAD_CODE_ASSIST_URL =
   'https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
@@ -94,7 +94,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set(
       'scope',
-      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs',
     );
     url.searchParams.set('code_challenge', codeChallenge);
     url.searchParams.set('code_challenge_method', 'S256');
