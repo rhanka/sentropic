@@ -139,6 +139,7 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [x] Refresh: POST `oauth2.googleapis.com/token`, resolve historical `credentialVersion`
     - [x] Token rotation persisted atomically before return
     - [x] Refresh failure → `markReauthRequired()` → throw `AccountTransportAcquireError`
+    - [x] Restore persisted account metadata and credential envelopes on process restart
   - [x] `packages/llm-mesh/src/node/keyring/` (NEW):
     - [x] `KeyringAdapter` interface export
     - [x] `LinuxSecretstoreKeyring` (evaluate `keytar` vs `@kwlad/keystore`)
