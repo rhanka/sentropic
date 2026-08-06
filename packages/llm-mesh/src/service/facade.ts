@@ -11,6 +11,7 @@ import type {
 import { ClaudeCodeEnrollmentProvider } from '../enrollment/claude-code.js';
 import { CloudCodeEnrollmentProvider } from '../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../enrollment/codex.js';
+import { EncryptedFileKeyring } from '../node/keyring/encrypted-file-keyring.js';
 import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
 import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
 import { LocalAccountTransportService } from './local-account-transport-service.js';
@@ -77,7 +78,9 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
     throw new Error('configResolver is required');
   }
 
-  const keyring = options.keyring ?? new InMemoryKeyring();
+  const keyring =
+    options.keyring ??
+    (options.mode === 'cli' ? new EncryptedFileKeyring() : new InMemoryKeyring());
   const providers = new Map<string, EnrollmentProvider>([
     [
       'cloud-code',
