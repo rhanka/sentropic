@@ -144,6 +144,7 @@ Branch env: `ENV=test-llm-mesh-agy`
     - [x] `LinuxSecretstoreKeyring` (evaluate `keytar` vs `@kwlad/keystore`)
     - [x] `MacOSKeychainKeyring`
     - [x] `EnvKeyring` (CI/prod fallback)
+    - [x] `EncryptedFileKeyring` for encrypted cross-process CLI persistence
   - [ ] Lot gate:
     - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
     - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy`
