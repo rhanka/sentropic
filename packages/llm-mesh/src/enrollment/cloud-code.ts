@@ -49,6 +49,11 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   }
 
   private async getSecrets(configRef?: string): Promise<{ clientId: string; clientSecret: string }> {
+    const envSecret =
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET ??
+      process.env.GOOGLE_CLIENT_SECRET ??
+      this.defaultClientSecret;
+
     if (this.configResolver) {
       try {
         const config = await this.configResolver.resolveConfig(configRef || 'default');
@@ -59,13 +64,13 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
         const clientSecret =
           typeof config.clientSecret === 'string' && config.clientSecret.trim().length > 0
             ? config.clientSecret
-            : this.defaultClientSecret;
+            : envSecret;
         return { clientId, clientSecret };
       } catch {
         // Fall back to default secrets if resolver fails or yields empty
       }
     }
-    return { clientId: this.defaultClientId, clientSecret: this.defaultClientSecret };
+    return { clientId: this.defaultClientId, clientSecret: envSecret };
   }
 
   async start(input: StartEnrollmentInput): Promise<EnrollmentSession> {
