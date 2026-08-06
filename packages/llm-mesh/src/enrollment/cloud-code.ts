@@ -190,8 +190,8 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     const response = await this.fetchFn(CLOUD_CODE_TOKEN_URL, {
       method: 'POST',
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
       },
       body,
     });
