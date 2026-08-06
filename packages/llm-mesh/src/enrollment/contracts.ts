@@ -25,6 +25,7 @@ export interface EnrollmentState {
   expiresAt: string;
   consumedAt?: string;
   cancelledAt?: string;
+  configRef?: string;
 }
 
 export interface StartEnrollmentInput {
