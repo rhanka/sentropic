@@ -49,9 +49,9 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   }
 
   private async getSecrets(configRef?: string): Promise<{ clientId: string; clientSecret: string }> {
-    if (this.configResolver && configRef) {
+    if (this.configResolver) {
       try {
-        const config = await this.configResolver.resolveConfig(configRef);
+        const config = await this.configResolver.resolveConfig(configRef || 'default');
         const clientId =
           typeof config.clientId === 'string' && config.clientId.trim().length > 0
             ? config.clientId
@@ -110,6 +110,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
       pkceState,
       redirectUri,
       configVersion: 'v1.0.0',
+      configRef: input.configRef,
       createdAt: new Date().toISOString(),
       expiresAt,
     };
@@ -173,7 +174,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     }
 
     entry.state.consumedAt = new Date().toISOString();
-    const { clientId, clientSecret } = await this.getSecrets();
+    const { clientId, clientSecret } = await this.getSecrets(entry.state.configRef);
 
     const bodyParams: Record<string, string> = {
       grant_type: 'authorization_code',
@@ -182,7 +183,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
       client_id: clientId,
       code_verifier: entry.state.pkceVerifier,
     };
-    if (clientSecret) {
+    if (clientSecret && clientSecret.trim().length > 0) {
       bodyParams.client_secret = clientSecret;
     }
     const body = new URLSearchParams(bodyParams);
@@ -264,7 +265,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
       refresh_token: refreshToken,
       client_id: clientId,
     };
-    if (clientSecret) {
+    if (clientSecret && clientSecret.trim().length > 0) {
       bodyParams.client_secret = clientSecret;
     }
     const body = new URLSearchParams(bodyParams);
