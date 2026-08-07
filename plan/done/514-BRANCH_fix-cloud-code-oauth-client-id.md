@@ -1,0 +1,211 @@
+# BR-XX — feat/llm-mesh-agy-enrollment — Cloud Code Native Enrollment in @sentropic/llm-mesh
+
+## Context
+
+Extend `@sentropic/llm-mesh` with native Cloud Code (Antigravity / Google daily-cloudcode)
+enrollment and runtime transport. Aligned with h2a spec v0.6 (commit `6eb2d24c`).
+
+Replaces `gemini-code-assist` transport (removed) with `cloud-code` transport (new).
+Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
+`spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md` (to be merged at Lot N-1).
+
+## Scope / Guardrails
+
+- Scope: `@sentropic/llm-mesh` package contracts + `@sentropic/api` portal adapter.
+- No DB migration in this branch (DB work belongs to BR-44).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/sentropic` reserved for user dev/UAT (`ENV=dev`), must stay stable.
+- Branch development in `tmp/feat-llm-mesh-agy-enrollment/`.
+- Tests on `ENV=test-llm-mesh-agy`, never root dev.
+- All new text in English.
+
+## Branch Scope Boundaries (MANDATORY)
+
+- **Allowed Paths (implementation scope)**:
+  - `packages/llm-mesh/src/**`
+  - `packages/llm-mesh/tests/**`
+  - `packages/llm-mesh/scripts/**` (OAuth client credential rotation recipe)
+  - `packages/llm-mesh/README.md` (operator runbook)
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/tsconfig*.json`
+  - `packages/llm-gateway/package.json`
+  - `package.json`
+  - `package-lock.json`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `api/src/services/cloud-code-provider-auth.ts` (NEW)
+  - `api/src/services/llm-account-transports.ts` (Cloud Code adapter extension)
+  - `api/tests/unit/**`
+  - `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md`
+  - `BRANCH.md`
+  - `plan/done/514-BRANCH_fix-cloud-code-oauth-client-id.md` (final archival snapshot)
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`, `.cursor/rules/**`
+  - `plan/44-BRANCH_feat-llm-mesh-account-transports.md`
+  - `packages/llm-mesh/src/account-transports.ts` (coordinator port — no change without BR-44)
+  - `api/src/routes/**` (no new routes)
+  - `api/drizzle/**` (no DB migration)
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `Makefile` (only for the owner-approved credential rotation/publish gate)
+  - `.github/workflows/**` (only if package publish bootstrap needed)
+  - `api/package.json` + `api/package-lock.json` (only if new dep added — declare BRXX-EX1)
+- **Exception process**: declare `BRXX-EXn` in `## Feedback Loop` before touching.
+
+## Feedback Loop
+
+- `BR514-EX1`: `package-lock.json` and `api/package-lock.json` updated for `@sentropic/llm-mesh` version 0.9.0 bump.
+- `BR514-DEC1` (owner-approved 2026-08-05): ship the Antigravity OAuth client credential in the published `@sentropic/llm-mesh` artifact so Cloud Code enrollment remains configuration-free.
+- `BR514-EX2` (owner-approved 2026-08-05): update `Makefile` and `.github/workflows/ci.yml` with a deterministic credential rotation recipe and a protected-reference verification gate before npm publication. The checked-in source and published artifact stay identical; CI never mutates `dist`. Impact: llm-mesh credential rotation/publish targets and the llm-mesh publish job. Rollback: remove the rotation target and pre-publish verification gate.
+- `BR514-REL1`: document encrypted CLI keyring sharing and the `SENTROPIC_LLM_MESH_KEYRING_DIR` override for isolated runtimes.
+- `BR514-VER1` (2026-08-05): Cloud Code OAuth UAT completed with Google consent, loopback PKCE callback, token exchange, and Cloud Code metadata resolution. The later h2a metadata-file write is sandbox-blocked (`EROFS`) and is outside the OAuth exchange. Package gates: 77/77 tests, build, typecheck, and protected-reference source/`dist` verification pass.
+- `BR514-EX3` (user-directed 2026-08-07): archive this final branch-plan snapshot under `plan/done/514-BRANCH_fix-cloud-code-oauth-client-id.md` and remove the worktree `BRANCH.md` before merge. Impact: immutable planning record only. Rollback: revert this archival commit.
+- `BR514-VER2` (2026-08-06): release package gates pass at 0.13.2 — typecheck, 79/79 tests, build, pack dry-run, diff-check, and C2 scope-check. Local protected credential reference was unavailable; the protected CI gate remains required.
+- `BR514-BLK1` (2026-08-06): API typecheck reached `prepare-node-workspace` but is blocked by the existing high-severity npm audit gate (`js-yaml`, `mermaid`, `@hono/node-server`) after `REGISTRY=local` resolved the local image name. No API files changed.
+
+## AI Flaky tests
+
+- No AI generation surface. AI-flaky allowlist N/A.
+
+## Orchestration Mode
+
+- [x] **Mono-branch** — `tmp/feat-llm-mesh-agy-enrollment/`, Gemini Flash agent executes lots,
+  conductor reviews each lot gate.
+- Rationale: lots are sequential (Lot 1 gates Lot 2), no parallel sub-workstreams needed.
+
+## Port allocation
+
+Branch env: `ENV=test-llm-mesh-agy`
+- API: `9010` · UI: `5210` · Maildev: `1110`
+
+## Plan / Todo
+
+- [x] **Lot 0 — Baseline**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`.
+  - [x] Worktree `tmp/feat-llm-mesh-agy-enrollment` created on `main`.
+  - [x] Spec EVOL `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md` written.
+  - [x] Alignment with h2a v0.6 spec confirmed (commit `6eb2d24c`).
+  - [x] BRANCH.md written after worktree creation.
+
+- [x] **Lot 1 — Contracts + Facade + auth.ts** · _Owner: sentropic_ · _Gate: `/facade` compiles, h2a mock import OK_
+  - [x] `packages/llm-mesh/src/auth.ts`:
+    - [x] Remove `'gemini-code-assist'` from `accountTransportProviderIds`
+    - [x] Remove `futureAccountTransportProviderIds` entirely
+    - [x] Add `'cloud-code'` to `accountTransportProviderIds` AND `executableAccountTransportProviderIds`
+    - [x] Add `CloudCodeRuntimeMetadata` interface + `isCloudCodeRuntimeMetadata` guard (3 fields, non-empty strings)
+  - [x] `packages/llm-mesh/src/enrollment/contracts.ts` (NEW):
+    - [x] `EnrollmentSession` union (`authorization-url` | `device-code`)
+    - [x] `EnrollmentState` (internal, never exported to h2a)
+    - [x] `StartEnrollmentInput`, `PreparedCredential`, `ResolvedProviderMetadata`
+    - [x] `EnrollmentProvider` interface (`start`, `complete` internal, `resolve`, `refresh`)
+    - [x] `packages/llm-mesh/src/service/facade.ts` (NEW):
+      - [x] `LlmMeshFacade` interface (enroll, waitForCallback, pollForCompletion, cancel, acquire, release, getAdapter)
+      - [x] `ProviderAdapter` interface (`execute` → `AsyncIterable<ProviderEvent>`)
+      - [x] `FacadeOptions`, `ProviderRequest`, `ProviderEvent` types
+      - [x] `createLlmMeshFacade(options): LlmMeshFacade` export
+      - [x] CLI mode defaults to encrypted file keyring; portal mode remains injection-only
+  - [x] `packages/llm-mesh/src/service/local-account-transport-service.ts` (NEW — signatures only):
+    - [x] Constructor (`KeyringAdapter`, providers `Map`, `ConfigResolver`)
+    - [x] Public signatures: `enroll`, `waitForCallback`, `pollForCompletion`, `cancel`, `acquire`, `release`
+    - [x] Private signatures: `completeEnrollment`, `refreshToken`, `persistCredential`, `markReauthRequired`
+  - [x] `packages/llm-mesh/package.json`:
+    - [x] Bump version (minor)
+    - [x] Add exports: `"./facade"`, `"./enrollment"`, `"./node"`, `"./transport/cloud-code"`
+  - [ ] Lot gate:
+    - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy`
+    - [x] `packages/llm-mesh/tests/auth.test.ts` — `cloud-code` present, `gemini-code-assist` absent, guard OK
+    - [x] `packages/llm-mesh/tests/enrollment/contracts.test.ts` (NEW) — type compilation smoke
+    - [x] `packages/llm-mesh/tests/service/facade.test.ts` (NEW) — `createLlmMeshFacade` mock compile
+    - [x] `make test-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] **Conductor review gate** — validate before Lot 2
+    - [ ] Notify h2a: Lot 1 compilable → h2a can start its Lot 3
+
+- [x] **Lot 2 — Providers + transport** · _Owner: sentropic_ · _Parallel with h2a Lot 3 after Lot 1 gate_
+  - [x] `packages/llm-mesh/src/enrollment/cloud-code.ts` (NEW):
+    - [x] `CloudCodeEnrollmentProvider implements EnrollmentProvider`
+    - [x] PKCE loopback: start HTTP listener, return `authorization-url` session
+    - [x] `waitForCallback`: receive code from loopback, `completeEnrollment`, `resolve`, persist atomically
+    - [x] Completion returns credential and metadata internally for facade persistence
+    - [x] `cancel`: idempotent, stop loopback, mark `cancelledAt`
+    - [x] Adapted from `api/src/services/antigravity-provider-auth.ts`
+  - [x] `packages/llm-mesh/src/enrollment/codex.ts` (NEW):
+    - [x] `CodexEnrollmentProvider implements EnrollmentProvider`
+    - [x] Device flow: POST `deviceauth/usercode` → `device-code` session
+    - [x] `pollForCompletion`: internal poll → exchange code → persist atomically
+  - [x] `packages/llm-mesh/src/enrollment/claude-code.ts` (NEW):
+    - [x] Portal-only stub; `execute` throws `UNSUPPORTED` for h2a local
+  - [x] `packages/llm-mesh/src/transport/cloud-code-transport.ts` (NEW):
+    - [x] `buildCloudCodeRequest(acquisition, request)` — daily-cloudcode envelope
+    - [x] `parseCloudCodeSSE(stream)` → `AsyncIterable<ProviderEvent>`
+    - [x] Outcomes: 200→success, 401/403→auth_failed, 429+Retry-After→rate_limited, SSE error→failed
+    - [x] `execute()` calls `recordOutcome()` internally — h2a never calls it directly
+    - [x] `release(acquisition)`: abort path, 0 outcome
+    - [x] Parse the Cloud Code `response` SSE envelope without changing direct-chunk support
+  - [x] `packages/llm-mesh/src/service/local-account-transport-service.ts` — full implementation:
+    - [x] Keyring read/write (`sentropic-llm-mesh` namespace, NOT `gemini/antigravity`)
+    - [x] `acquire()`: check expiry → refresh atomically → return material
+    - [x] Refresh: POST `oauth2.googleapis.com/token`, resolve historical `credentialVersion`
+    - [x] Token rotation persisted atomically before return
+    - [x] Refresh failure → `markReauthRequired()` → throw `AccountTransportAcquireError`
+    - [x] Restore persisted account metadata and credential envelopes on process restart
+  - [x] `packages/llm-mesh/src/node/keyring/` (NEW):
+    - [x] `KeyringAdapter` interface export
+    - [x] `LinuxSecretstoreKeyring` (evaluate `keytar` vs `@kwlad/keystore`)
+    - [x] `MacOSKeychainKeyring`
+    - [x] `EnvKeyring` (CI/prod fallback)
+    - [x] `EncryptedFileKeyring` for encrypted cross-process CLI persistence
+  - [ ] Lot gate:
+    - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy`
+    - [x] `packages/llm-mesh/tests/enrollment/cloud-code.test.ts` (NEW) — PKCE S256, state/nonce, replay/expiry/cancel, config version
+    - [x] `packages/llm-mesh/tests/enrollment/codex.test.ts` (NEW) — device flow, poll, exchange
+    - [x] `packages/llm-mesh/tests/transport/cloud-code-transport.test.ts` (NEW) — fixtures: refresh, UA exact, no project fallback, envelope, requestId UUID, abort=release, SSE/error/outcome
+    - [x] `packages/llm-mesh/tests/service/local-account-transport-service.test.ts` (NEW) — refresh atomic, rotation, reauth_required, restart recovery
+    - [x] Fresh-service restart recovery covers persisted Cloud Code account material
+    - [x] `packages/llm-mesh/tests/node/encrypted-file-keyring.test.ts` verifies encrypted cross-process reads, permissions, and deletion
+    - [x] `make test-llm-mesh ENV=test-llm-mesh-agy`
+    - [ ] **Conductor review gate**
+
+- [x] **Lot 3 — Portal API adapter** · _Owner: sentropic_ · _After Lot 2 gate_
+  - [x] `api/src/services/cloud-code-provider-auth.ts` (NEW):
+    - [x] Adapt `antigravity-provider-auth.ts` to `CloudCodeEnrollmentProvider` contract
+    - [x] `fetchCloudCodeUserInfo`, `loadCodeAssist`, `onboardCloudCodeUser`
+  - [x] `api/src/services/llm-account-transports.ts`:
+    - [x] Cloud Code adapter (pattern: existing Codex + Claude Code)
+    - [x] Single-flight refresh per `account_id` (CAS/DB)
+    - [x] `owner_user_id` scoped — SQL/RLS
+    - [x] `cloudaicompanionProject` encrypted per account, never global
+  - [ ] Lot gate:
+    - [x] `make typecheck-api ENV=test-llm-mesh-agy`
+    - [ ] `make lint-api ENV=test-llm-mesh-agy`
+    - [x] `api/tests/unit/services/cloud-code-provider-auth.test.ts` (NEW)
+    - [x] `api/tests/unit/services/llm-account-transports.test.ts` — Cloud Code cases (multi-tenant, single-flight)
+    - [x] `make test-api-unit ENV=test-llm-mesh-agy`
+    - [ ] **Conductor review gate**
+
+- [x] **Lot N-2 — Final integration + h2a acceptance**
+  - [ ] `make test-api ENV=test-llm-mesh-agy` — ⚠️ bloqué par `build-flow` TS2688 pré-existant (hors branche) — CI vert
+  - [x] `make test-llm-mesh ENV=test-llm-mesh-agy`
+  - [x] Migration test: `gemini-code-assist` rows NOT altered by `cloud-code` path
+  - [x] Compilation gate: mock h2a consumer imports `@sentropic/llm-mesh/facade` — 0 deep imports
+  - [ ] Notify h2a → await smoke confirmation `h2a llm-mesh enroll cloud-code` (with mocks) — ⚠️ h2a MCP EOF (infra down)
+
+- [x] **Lot N-1 — Docs consolidation** — commit `dd30085fc`
+  - [x] Merge `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md` into
+    `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` per merge instructions in the SPEC_EVOL.
+  - [x] Delete `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md`.
+
+- [ ] **Lot N — Final validation**
+  - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-agy`
+  - [ ] `make typecheck-api ENV=test-llm-mesh-agy` — ⚠️ `prepare-node-workspace` blocked by unset `REGISTRY`; with `REGISTRY=local`, existing high npm audit gate blocks before typecheck
+  - [ ] `make lint-llm-mesh ENV=test-llm-mesh-agy` — ⚠️ target inexistante dans Makefile
+  - [ ] `make lint-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `prepare-node-workspace`
+  - [x] `make test-llm-mesh ENV=test-llm-mesh-agy` — 79/79
+  - [x] `make build-llm-mesh ENV=test-llm-mesh-agy`
+  - [x] `make pack-llm-mesh ENV=test-llm-mesh-agy` — dry-run passed
+  - [x] `make test-api-unit ENV=test-llm-mesh-agy` — 762/762
+  - [ ] `make test-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `build-flow` pré-existant
+  - [x] Bumped `packages/llm-mesh/package.json` version to 0.13.2 (patch for persistence/SSE fixes).
+  - [x] Final gate step 1: update PR #514 using this `BRANCH.md` as PR body.
+  - [x] Final gate step 2: PR #514 CI run 31140344329 passed (80 checks).
+  - [x] Final gate step 3: archive this plan under `plan/done/514-BRANCH_fix-cloud-code-oauth-client-id.md`, remove `BRANCH.md`, push, then merge.

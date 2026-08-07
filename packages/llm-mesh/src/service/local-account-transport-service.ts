@@ -17,7 +17,17 @@ import type {
 } from '../enrollment/contracts.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 
+type PersistedAccountTransportAccount = Omit<
+  AccountTransportAccount,
+  'accessToken' | 'refreshToken' | 'expiresAt'
+>;
+
+interface AccountPublicRecord extends AccountPublic {
+  account: PersistedAccountTransportAccount;
+}
+
 export class LocalAccountTransportService {
+  private static readonly accountIndexKey = 'sentropic-llm-mesh:accounts:index';
   private readonly coordinator: InMemoryAccountTransportCoordinator;
   private readonly accountsMap = new Map<string, AccountTransportAccount>();
   private readonly credentialVersions = new Map<string, string>();
@@ -42,38 +52,75 @@ export class LocalAccountTransportService {
 
   async waitForCallback(enrollmentId: string): Promise<{ accountId: string; label: string }> {
     const provider = this.providers.get('cloud-code');
-    if (!provider || !('waitForCallback' in provider) || typeof (provider as any).waitForCallback !== 'function') {
+    if (!provider?.waitForCallback) {
       throw new Error("No enrollment provider with 'waitForCallback' registered");
     }
-    const res = await (provider as any).waitForCallback(enrollmentId);
+    const res = await provider.waitForCallback(enrollmentId);
+    if (res.credential) {
+      const now = new Date().toISOString();
+      const account: AccountTransportAccount = {
+        accountId: res.accountId,
+        accountLabel: res.label,
+        targetProviderId: 'google',
+        transportProviderId: 'cloud-code',
+        accessToken: res.credential.accessToken,
+        refreshToken: res.credential.refreshToken,
+        expiresAt: res.credential.expiresAt,
+        status: 'active',
+        metadata: res.metadata,
+      };
+      this.registerAccount(account, res.credential.authClientConfigVersion);
+      await this.persistCredential(
+        {
+          accountId: account.accountId,
+          accountLabel: res.label,
+          providerId: 'cloud-code',
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          accountId: account.accountId,
+          accessToken: res.credential.accessToken,
+          refreshToken: res.credential.refreshToken,
+          expiresAt: res.credential.expiresAt,
+          authClientConfigVersion: res.credential.authClientConfigVersion,
+        },
+        account,
+      );
+    }
     return { accountId: res.accountId, label: res.label };
   }
 
   async pollForCompletion(enrollmentId: string): Promise<{ accountId: string; label: string }> {
     const provider = this.providers.get('codex');
-    if (!provider || !('pollForCompletion' in provider) || typeof (provider as any).pollForCompletion !== 'function') {
+    if (!provider?.pollForCompletion) {
       throw new Error("No enrollment provider with 'pollForCompletion' registered");
     }
-    const res = await (provider as any).pollForCompletion(enrollmentId);
+    const res = await provider.pollForCompletion(enrollmentId);
     if (res.credential) {
       // P0-4: Persist credentials obtained via device flow poll into keyring/accounts
-      this.registerAccount({
+      const account: AccountTransportAccount = {
         accountId: res.accountId,
+        accountLabel: res.label,
         targetProviderId: 'codex',
         transportProviderId: 'codex',
         accessToken: res.credential.accessToken,
         refreshToken: res.credential.refreshToken,
         expiresAt: res.credential.expiresAt,
         status: 'active',
-      });
+        metadata: res.metadata,
+      };
+      this.registerAccount(account, res.credential.authClientConfigVersion);
+      const now = new Date().toISOString();
       await this.persistCredential(
         {
           accountId: res.accountId,
           accountLabel: res.label,
           providerId: 'codex',
           status: 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: now,
+          updatedAt: now,
         },
         {
           accountId: res.accountId,
@@ -82,6 +129,7 @@ export class LocalAccountTransportService {
           expiresAt: res.credential.expiresAt,
           authClientConfigVersion: res.credential.authClientConfigVersion,
         },
+        account,
       );
     }
     return { accountId: res.accountId, label: res.label };
@@ -104,6 +152,7 @@ export class LocalAccountTransportService {
 
   // ── Runtime (called via facade by h2a gateway) ─────────────────────────
   async acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition> {
+    await this.restorePersistedAccounts();
     // Attempt coordinator acquisition
     let acquisition: AccountTransportAcquisition;
     try {
@@ -152,10 +201,11 @@ export class LocalAccountTransportService {
             {
               accountId: account.accountId,
               accessToken: refreshed.accessToken,
-              refreshToken: refreshed.refreshToken,
+              refreshToken: account.refreshToken ?? undefined,
               expiresAt: refreshed.expiresAt,
               authClientConfigVersion: refreshed.authClientConfigVersion,
             },
+            account,
           );
 
           // Update material with refreshed token
@@ -216,9 +266,67 @@ export class LocalAccountTransportService {
   private async persistCredential(
     pub: AccountPublic,
     env: CredentialEnvelope,
+    account: AccountTransportAccount,
   ): Promise<void> {
-    await this.keyring.setSecret(`sentropic-llm-mesh:${pub.accountId}:public`, JSON.stringify(pub));
+    const {
+      accessToken: _accessToken,
+      refreshToken: _refreshToken,
+      expiresAt: _expiresAt,
+      ...persistedAccount
+    } = account;
+    const publicRecord: AccountPublicRecord = { ...pub, account: persistedAccount };
+    await this.keyring.setSecret(
+      `sentropic-llm-mesh:${pub.accountId}:public`,
+      JSON.stringify(publicRecord),
+    );
     await this.keyring.setSecret(`sentropic-llm-mesh:${pub.accountId}:envelope`, JSON.stringify(env));
+    const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
+    const accountIds = this.parseAccountIndex(rawIndex);
+    if (!accountIds.includes(pub.accountId)) {
+      accountIds.push(pub.accountId);
+      await this.keyring.setSecret(
+        LocalAccountTransportService.accountIndexKey,
+        JSON.stringify(accountIds),
+      );
+    }
+  }
+
+  private parseAccountIndex(raw: string | null): string[] {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.filter((value): value is string => typeof value === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async restorePersistedAccounts(): Promise<void> {
+    const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
+    for (const accountId of this.parseAccountIndex(rawIndex)) {
+      if (this.accountsMap.has(accountId)) continue;
+      const publicRaw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`);
+      const envelopeRaw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`);
+      if (!publicRaw || !envelopeRaw) continue;
+      try {
+        const publicRecord = JSON.parse(publicRaw) as Partial<AccountPublicRecord>;
+        const envelope = JSON.parse(envelopeRaw) as CredentialEnvelope;
+        if (!publicRecord.account || envelope.accountId !== accountId) continue;
+        this.registerAccount(
+          {
+            ...publicRecord.account,
+            accessToken: envelope.accessToken,
+            refreshToken: envelope.refreshToken,
+            expiresAt: envelope.expiresAt,
+          },
+          envelope.authClientConfigVersion,
+        );
+      } catch {
+        // Ignore incomplete/corrupt entries; another active account may still be usable.
+      }
+    }
   }
 
   private async markReauthRequired(accountId: string): Promise<void> {
