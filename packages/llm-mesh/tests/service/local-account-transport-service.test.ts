@@ -5,6 +5,65 @@ import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 describe('LocalAccountTransportService', () => {
+  it('restores a Cloud Code enrollment in a fresh runtime service', async () => {
+    const keyring = new InMemoryKeyring();
+    const provider = {
+      async start() {
+        throw new Error('Not implemented');
+      },
+      async complete() {
+        throw new Error('Not implemented');
+      },
+      async resolve() {
+        return {};
+      },
+      async refresh() {
+        throw new Error('Not implemented');
+      },
+      async waitForCallback() {
+        return {
+          accountId: 'acct_persisted_1',
+          label: 'Cloud Code (test-project)',
+          credential: {
+            accountId: 'acct_persisted_1',
+            accessToken: 'persisted-access-token',
+            refreshToken: 'persisted-refresh-token',
+            expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+            authClientConfigVersion: 'v1.0.0',
+          },
+          metadata: { cloudaicompanionProject: 'test-project' },
+        };
+      },
+    } satisfies EnrollmentProvider & {
+      waitForCallback(enrollmentId: string): Promise<{
+        accountId: string;
+        label: string;
+        credential: PreparedCredential;
+        metadata: Record<string, unknown>;
+      }>;
+    };
+    const providers = new Map<string, EnrollmentProvider>([['cloud-code', provider]]);
+    const configResolver = { async resolveConfig() { return {}; } };
+    const enrollmentService = new LocalAccountTransportService(
+      keyring,
+      providers,
+      configResolver,
+    );
+
+    await enrollmentService.waitForCallback('enrollment-1');
+
+    const runtimeService = new LocalAccountTransportService(keyring, providers, configResolver);
+    const acquisition = await runtimeService.acquire({
+      targetProviderId: 'google',
+      transportProviderId: 'cloud-code',
+    });
+    expect(acquisition.material).toMatchObject({
+      accountId: 'acct_persisted_1',
+      accessToken: 'persisted-access-token',
+      metadata: { cloudaicompanionProject: 'test-project' },
+    });
+  });
+
   it('acquires an active account and refreshes atomically if expired', async () => {
     const keyring = new InMemoryKeyring();
     const mockProvider: EnrollmentProvider = {
