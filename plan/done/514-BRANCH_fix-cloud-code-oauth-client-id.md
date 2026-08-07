@@ -38,6 +38,7 @@ Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
   - `api/tests/unit/**`
   - `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS_CLOUD_CODE.md`
   - `BRANCH.md`
+  - `plan/done/514-BRANCH_fix-cloud-code-oauth-client-id.md` (final archival snapshot)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`, `.cursor/rules/**`
   - `plan/44-BRANCH_feat-llm-mesh-account-transports.md`
@@ -57,6 +58,7 @@ Extends `SPEC_EVOL_LLM_MESH_ACCOUNT_TRANSPORTS.md` via
 - `BR514-EX2` (owner-approved 2026-08-05): update `Makefile` and `.github/workflows/ci.yml` with a deterministic credential rotation recipe and a protected-reference verification gate before npm publication. The checked-in source and published artifact stay identical; CI never mutates `dist`. Impact: llm-mesh credential rotation/publish targets and the llm-mesh publish job. Rollback: remove the rotation target and pre-publish verification gate.
 - `BR514-REL1`: document encrypted CLI keyring sharing and the `SENTROPIC_LLM_MESH_KEYRING_DIR` override for isolated runtimes.
 - `BR514-VER1` (2026-08-05): Cloud Code OAuth UAT completed with Google consent, loopback PKCE callback, token exchange, and Cloud Code metadata resolution. The later h2a metadata-file write is sandbox-blocked (`EROFS`) and is outside the OAuth exchange. Package gates: 77/77 tests, build, typecheck, and protected-reference source/`dist` verification pass.
+- `BR514-EX3` (user-directed 2026-08-07): archive this final branch-plan snapshot under `plan/done/514-BRANCH_fix-cloud-code-oauth-client-id.md` and remove the worktree `BRANCH.md` before merge. Impact: immutable planning record only. Rollback: revert this archival commit.
 - `BR514-VER2` (2026-08-06): release package gates pass at 0.13.2 — typecheck, 79/79 tests, build, pack dry-run, diff-check, and C2 scope-check. Local protected credential reference was unavailable; the protected CI gate remains required.
 - `BR514-BLK1` (2026-08-06): API typecheck reached `prepare-node-workspace` but is blocked by the existing high-severity npm audit gate (`js-yaml`, `mermaid`, `@hono/node-server`) after `REGISTRY=local` resolved the local image name. No API files changed.
 
@@ -205,5 +207,5 @@ Branch env: `ENV=test-llm-mesh-agy`
   - [ ] `make test-api ENV=test-llm-mesh-agy` — ⚠️ bloqué `build-flow` pré-existant
   - [x] Bumped `packages/llm-mesh/package.json` version to 0.13.2 (patch for persistence/SSE fixes).
   - [x] Final gate step 1: update PR #514 using this `BRANCH.md` as PR body.
-  - [ ] Final gate step 2: verify CI on PR; resolve blockers.
-  - [ ] Final gate step 3: UAT + CI green → commit removal of `BRANCH.md`, push, merge.
+  - [x] Final gate step 2: PR #514 CI run 31140344329 passed (80 checks).
+  - [x] Final gate step 3: archive this plan under `plan/done/514-BRANCH_fix-cloud-code-oauth-client-id.md`, remove `BRANCH.md`, push, then merge.
