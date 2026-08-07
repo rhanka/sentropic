@@ -47,13 +47,13 @@ Diagnose and fix the two failed jobs in main CI run 31142348331: `validate-harne
   - [x] Extract the exact failures from GitHub Actions job logs.
   - [x] Name one evidenced root cause per job.
 
-- [ ] **Lot 1 — Focused fixes**
+- [x] **Lot 1 — Focused fixes**
   - [x] Confirm `validate-harness` passes when GitHub retries the transient Docker Hub bootstrap.
   - [x] Fix the `publish-auth-hono` token bootstrap provenance conflict.
   - [x] Run only the relevant make validation targets for the affected packages (`make build-auth-hono` and `make pack-auth-hono`).
 
 - [ ] **Lot N — Delivery**
   - [x] Run `make scope-check ENV=test-fix-main-ci-harness-auth-hono`.
-  - [ ] Commit atomically with `make commit`.
-  - [ ] Push and open a PR using this plan as its body.
+  - [x] Commit atomically with `make commit`.
+  - [x] Push and open draft PR #518 using this plan as its body.
   - [ ] Verify CI and archive/remove `BRANCH.md` before merge.
