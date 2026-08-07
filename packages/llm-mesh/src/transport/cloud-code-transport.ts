@@ -89,7 +89,7 @@ export async function* parseCloudCodeSSE(
         if (!dataStr || dataStr === '[DONE]') continue;
 
         try {
-          const parsed = JSON.parse(dataStr) as {
+          type CloudCodeStreamChunk = {
             candidates?: Array<{
               content?: { parts?: Array<{ text?: string }> };
               finishReason?: string;
@@ -97,17 +97,21 @@ export async function* parseCloudCodeSSE(
             usageMetadata?: unknown;
             error?: { message?: string; code?: number };
           };
+          const parsed = JSON.parse(dataStr) as CloudCodeStreamChunk & {
+            response?: CloudCodeStreamChunk;
+          };
+          const payload = parsed.response ?? parsed;
 
-          if (parsed.error) {
+          if (payload.error) {
             yield {
               kind: 'error',
-              code: String(parsed.error.code ?? 'sse_error'),
-              message: parsed.error.message ?? 'Cloud Code SSE stream error',
+              code: String(payload.error.code ?? 'sse_error'),
+              message: payload.error.message ?? 'Cloud Code SSE stream error',
             };
             return;
           }
 
-          const parts = parsed.candidates?.[0]?.content?.parts;
+          const parts = payload.candidates?.[0]?.content?.parts;
           if (parts) {
             for (const part of parts) {
               if (part.text) {
@@ -116,8 +120,8 @@ export async function* parseCloudCodeSSE(
             }
           }
 
-          if (parsed.usageMetadata) {
-            lastUsage = parsed.usageMetadata;
+          if (payload.usageMetadata) {
+            lastUsage = payload.usageMetadata;
           }
         } catch {
           // Ignore unparseable SSE data lines

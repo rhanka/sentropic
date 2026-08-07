@@ -90,7 +90,7 @@ describe('Cloud Code Transport', () => {
       start(controller) {
         controller.enqueue(
           new TextEncoder().encode(
-            'data: {"candidates":[{"content":{"parts":[{"text":"Hello from Cloud Code!"}]}}],"usageMetadata":{"promptTokens":10}}\n\n',
+            'data: {"response":{"candidates":[{"content":{"parts":[{"text":"Hello from Cloud Code!"}]}}],"usageMetadata":{"promptTokens":10}}}\n\n',
           ),
         );
         controller.close();
