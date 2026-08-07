@@ -1,4 +1,4 @@
-# Fix: Restore main CI validation and publication for harness and auth-hono
+# Archive: Restore main CI validation and publication for harness and auth-hono
 
 ## Objective
 Diagnose and fix the two failed jobs in main CI run 31142348331: `validate-harness` and `publish-auth-hono`. Keep the correction limited to the proven causes and restore a green main publication lane.
@@ -23,6 +23,7 @@ Diagnose and fix the two failed jobs in main CI run 31142348331: `validate-harne
   - `api/drizzle/**`
 - **Conditional Paths (allowed only with explicit exception)**:
   - `Makefile` (bootstrap publication only; `BR00-EX1`)
+  - `plan/done/518-BRANCH_fix-main-ci-harness-auth-hono.md` (branch archive only; `BR00-EX2`)
   - `package.json`
   - `package-lock.json`
 - **Exception process**:
@@ -32,6 +33,7 @@ Diagnose and fix the two failed jobs in main CI run 31142348331: `validate-harne
 - `BR-CI-01`: Main CI run 31142348331 `validate-harness` failed before typecheck because the GitHub runner timed out reaching `registry-1.docker.io` while booting BuildKit. A same-SHA rerun in workflow-dispatch run 31142823600 passed `validate-harness`; no repository change is appropriate.
 - `BR-CI-02`: Main CI run 31142348331 `publish-auth-hono` built the tarball then failed `ENEEDAUTH`, proving `@sentropic/auth-hono@0.15.0` has no configured npm Trusted Publisher yet.
 - `BR00-EX1` (accepted, 2026-08-07): modify `Makefile` only to make the existing token bootstrap publication invoke npm with provenance disabled. Reason: the bootstrap token path otherwise inherits `publishConfig.provenance: true` and fails with `Automatic provenance generation not supported for provider: null`. Impact: only the one-time bootstrap artifact lacks provenance; normal OIDC publication remains unchanged. Rollback: revert the explicit bootstrap-only npm flag after the package is published and its Trusted Publisher is configured.
+- `BR00-EX2` (accepted, 2026-08-07): archive this completed plan at `plan/done/518-BRANCH_fix-main-ci-harness-auth-hono.md` and remove root `BRANCH.md` before merging. Reason: mandatory branch-closure workflow. Impact: historical planning record moves out of the branch root only. Rollback: restore `BRANCH.md` from the archive commit if the branch needs to reopen.
 
 ## AI Flaky tests
 - N/A. These are deterministic CI validation and publication jobs.
@@ -52,8 +54,9 @@ Diagnose and fix the two failed jobs in main CI run 31142348331: `validate-harne
   - [x] Fix the `publish-auth-hono` token bootstrap provenance conflict.
   - [x] Run only the relevant make validation targets for the affected packages (`make build-auth-hono` and `make pack-auth-hono`).
 
-- [ ] **Lot N — Delivery**
+- [x] **Lot N — Delivery**
   - [x] Run `make scope-check ENV=test-fix-main-ci-harness-auth-hono`.
   - [x] Commit atomically with `make commit`.
   - [x] Push and open draft PR #518 using this plan as its body.
-  - [ ] Verify CI and archive/remove `BRANCH.md` before merge.
+  - [x] Verify complete CI run 31143590125 passed, including `validate-harness` and `validate-auth-hono`.
+  - [x] Archive/remove `BRANCH.md` before merge.
