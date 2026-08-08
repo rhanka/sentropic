@@ -115,7 +115,7 @@
   - [ ] Lot gate: `make typecheck-api ENV=test-track-sig-adapter` and scoped real-adapter unit tests pass.
 
 - [ ] **Lot 2 — API Focus composition and concurrency proof**
-  - [ ] Add the API Focus live-session factory that always injects the durable PostgreSQL adapter into `FocusLiveSessionDriver`.
+  - [x] Add the API Focus live-session factory that always injects the durable PostgreSQL adapter into `FocusLiveSessionDriver`.
   - [ ] Add `api/tests/unit/track-owner-signature-adapter.test.ts` with real PostgreSQL concurrent appends using distinct idempotency keys and one canonical durable row assertion.
   - [ ] Add persisted canonical attestation read-back coverage.
   - [ ] Add a real database transactional read-back failure test that returns the driver’s honest not-done outcome.
