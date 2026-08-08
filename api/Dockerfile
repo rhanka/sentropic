@@ -64,6 +64,7 @@ COPY packages/mcp-auth/package.json ./packages/mcp-auth/package.json
 COPY packages/mcp-platform/package.json ./packages/mcp-platform/package.json
 COPY packages/connector-host/package.json ./packages/connector-host/package.json
 COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
+COPY packages/focus/package.json ./packages/focus/package.json
 RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
     else npm install --workspaces --include-workspace-root; fi
 # Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
@@ -82,6 +83,7 @@ RUN npm --workspace @sentropic/mcp-auth run build
 RUN npm --workspace @sentropic/mcp-platform run build
 RUN npm --workspace @sentropic/connector-host run build
 RUN npm --workspace @sentropic/mcp-connector-google run build
+RUN npm --workspace @sentropic/focus run build
 
 FROM base AS development
 WORKDIR /workspace/api

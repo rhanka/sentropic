@@ -64,6 +64,7 @@
   - `api/drizzle/meta/0041_snapshot.json`
   - `api/package.json`
   - `api/package-lock.json`
+  - `api/Dockerfile`
   - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -91,7 +92,7 @@
 - [x] `BR-SIG-ADAPTER-5` — C5: the signing route emits 201 for a newly durable signature, 200 only for a durable duplicate, and non-2xx for every not-done result.
 - [x] `BR-SIG-ADAPTER-6` — C6: every signing request re-checks the current tenant membership through the authoritative service before any durable write, while tenant resolution remains a mapping-only step.
 - [x] `BR-SIG-ADAPTER-7` — G1: the owner-signature endpoint validates through a fail-closed DecisionValidator before constructing the Focus session, so absent Track-decision validation returns `503 not-done` with zero durable writes. The endpoint is intentionally NON-LIVE until the L2 follow-up wires the owner-ratified decision existence and signer-authorization policy.
-- [x] `BR-SIG-ADAPTER-8` — The latent post-L2 signature authorization path forwards the authenticated global role to tenant membership, allowing the sanctioned `admin_app` bootstrap path while preserving workspace access checks.
+- [x] `BR-SIG-ADAPTER-8` — The latent post-L2 signature authorization path forwards the authenticated global role to tenant membership, allowing the sanctioned `admin_app` bootstrap path while preserving workspace access checks. The API image also wires the consumed `@sentropic/focus` workspace through its package-manifest COPY and workspace build layers, mirroring the 13 sibling packages; impact is image dependency wiring only, and rollback is to revert those two Dockerfile lines together.
 - [ ] `BR-SIG-ADAPTER-L2` — BLOCKER-BEFORE-LIVE. Replace the fail-closed DecisionValidator with the authoritative Track-decision authorization primitive that binds `decisionId` to the real `DecisionDossierView` and applies the owner-ratified signer policy. Owner: decision-policy owner; acceptance: only existing, policy-authorized decisions reach the Focus signing session.
 - [ ] `BR-SIG-ADAPTER-2` — BLOCKED. `make db-generate REGISTRY=local`, `make up-api-test`, and `make typecheck-api` cannot build the isolated API image because the audit gate rejects `vitest` advisory `GHSA-5xrq-8626-4rwp`; the scoped test command consequently reports `service "api" is not running`. Owner: security lane; acceptance: resolve the advisory without weakening the audit gate, then regenerate the journaled migration and rerun the scoped real-database tests.
 
