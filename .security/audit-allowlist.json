@@ -1,0 +1,19 @@
+{
+  "_comment": "Machine-readable allowlist for .security/audit-gate.mjs (the exception-aware npm-audit gate used in api/Dockerfile + ui/Dockerfile). Each entry allows ONE GHSA to not fail the HIGH/CRITICAL gate until review_due. Human record + full justification: .security/vulnerability-register.yaml. Keep the two in sync.",
+  "allow": [
+    {
+      "ghsa": "GHSA-w3rx-r6r6-pgpr",
+      "package": "image-size",
+      "severity": "high",
+      "reason": "DoS via ICNS parser infinite loop. No patched version exists (<=2.0.2 all vulnerable, first_patched=null). Unreachable in sentropic: pptxgenjs@4.0.1 never imports image-size (dead declared dep) AND the pptx export passes no image bytes (no addImage; text/shape/table + color-only backgrounds). false_positive/unreachable.",
+      "review_due": "2026-09-08"
+    },
+    {
+      "ghsa": "GHSA-5p2g-fcmc-qvqq",
+      "package": "image-size",
+      "severity": "high",
+      "reason": "DoS via JXL/HEIF parser infinite loops. Same as GHSA-w3rx-r6r6-pgpr: no patched version, unreachable dead transitive dependency.",
+      "review_due": "2026-09-08"
+    }
+  ]
+}
