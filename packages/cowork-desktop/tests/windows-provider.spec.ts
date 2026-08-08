@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { createWindowsCapabilityProvider } from '../src/capability/windows-provider.js';
 
+const nativeGuard = { recheckAfterNativeAwait: async () => {} };
+
 describe('Windows literal text path', () => {
     it('rejects Tab, Escape, C0/C1, format, line, paragraph, and Enter variants before native loading', async () => {
         let nativeLoads = 0;
@@ -31,7 +33,7 @@ describe('Windows literal text path', () => {
             const provider = createWindowsCapabilityProvider({
                 resolveNativeModule: () => `data:text/javascript,${source}`,
             });
-            await provider.type('literal text only');
+            await provider.type('literal text only', nativeGuard);
             expect(calls).toEqual(['literal text only']);
         } finally {
             delete (globalThis as typeof globalThis & { __coworkLiteralCalls?: string[] }).__coworkLiteralCalls;

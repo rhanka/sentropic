@@ -23,6 +23,10 @@ export interface ScreenCapture {
     height: number;
 }
 
+export interface NativeActuationGuard {
+    recheckAfterNativeAwait(): Promise<void>;
+}
+
 /** A rectangular capture region in screen pixels. */
 export interface CaptureRegion {
     x: number;
@@ -53,22 +57,22 @@ export interface DesktopCapabilityProvider {
     readonly name: string;
 
     /** Capture a screen (or region) and return a base64 image. */
-    captureScreen(options?: CaptureOptions): Promise<ScreenCapture>;
+    captureScreen(options: CaptureOptions | undefined, guard: NativeActuationGuard): Promise<ScreenCapture>;
 
     /** Click at absolute screen coordinates with the given button (default left). */
-    mouseClick(x: number, y: number, button?: MouseButton): Promise<void>;
+    mouseClick(x: number, y: number, button: MouseButton | undefined, guard: NativeActuationGuard): Promise<void>;
 
     /** Type a literal text string at the current focus. */
-    type(text: string): Promise<void>;
+    type(text: string, guard: NativeActuationGuard): Promise<void>;
 
     /** Scroll by a relative delta (positive dy = down, positive dx = right). */
-    scroll(dx: number, dy: number): Promise<void>;
+    scroll(dx: number, dy: number, guard: NativeActuationGuard): Promise<void>;
 
     /**
      * Press a key combination, e.g. `"Ctrl+C"`, `"Enter"`, `"Alt+Tab"`.
      * Modifiers and the final key are `+`-separated.
      */
-    key(combo: string): Promise<void>;
+    key(combo: string, guard: NativeActuationGuard): Promise<void>;
 }
 
 /**

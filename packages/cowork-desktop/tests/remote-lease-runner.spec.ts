@@ -2,12 +2,18 @@ import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createMockCapabilityProvider } from '../src/capability/index.js';
+import { ForegroundSurfaceGuard } from '../src/capability/foreground-surface.js';
 import { ConsentManager, createMemoryConsentStore } from '../src/consent/index.js';
 import { RemoteLeaseRunner } from '../src/remote/index.js';
 
 const canonical = (fields: Record<string, string>) => JSON.stringify({
     leaseId: fields.leaseId, capability: fields.capability, targetDeviceId: fields.targetDeviceId,
     nonce: fields.nonce, expiry: fields.expiry,
+});
+
+const guardedContext = (provider: ReturnType<typeof createMockCapabilityProvider>) => ({
+    provider,
+    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => ({ hwnd: '1', processId: 1, executable: 'C:\\Windows\\notepad.exe', title: 'Untitled - Notepad' }) }),
 });
 
 describe('RemoteLeaseRunner', () => {
@@ -29,7 +35,7 @@ describe('RemoteLeaseRunner', () => {
         const runner = new RemoteLeaseRunner({
             fetch, apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
             deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
-            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: { provider },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: guardedContext(provider),
         });
 
         await runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 1, y: 2 } } });
@@ -49,7 +55,7 @@ describe('RemoteLeaseRunner', () => {
         const runner = new RemoteLeaseRunner({
             fetch: async () => new Response(JSON.stringify({ keys: [] })), apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
             deviceIdentity: { deviceId: randomUUID(), publicKey: '', sign: async () => 'signature' },
-            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: { provider },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: guardedContext(provider),
         });
         await runner.handleLease({ leaseId: 'forged', nonce: 'n', expiresAt: new Date(Date.now() + 10_000).toISOString(), scope: { capability: 'input_action', serverEnvelope: { kid: 'missing', mac: 'forged' }, action: { action: 'click', x: 1, y: 2 } } });
         expect(provider.calls).toEqual([]);
@@ -64,7 +70,7 @@ describe('RemoteLeaseRunner', () => {
             },
             apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
             deviceIdentity: { deviceId: randomUUID(), publicKey: '', sign: async () => 'signature' },
-            consent: new ConsentManager({ store: createMemoryConsentStore() }), context: { provider: createMockCapabilityProvider() },
+            consent: new ConsentManager({ store: createMemoryConsentStore() }), context: guardedContext(createMockCapabilityProvider()),
         });
         (runner as unknown as { active: Map<string, { cancelled: boolean }> }).active.set('lease-stop', { cancelled: false });
         await runner.stop();
@@ -104,7 +110,7 @@ describe('RemoteLeaseRunner', () => {
             },
             apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
             deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
-            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => new Promise<'allow_once'>((grant) => { allow = grant; promptReady(); }) }), context: { provider },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => new Promise<'allow_once'>((grant) => { allow = grant; promptReady(); }) }), context: guardedContext(provider),
         });
         try {
             const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 1, y: 2 } } });
@@ -141,7 +147,7 @@ describe('RemoteLeaseRunner', () => {
             },
             apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
             deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
-            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => new Promise<'allow_once'>((grant) => { allow = grant; promptReady(); }) }), context: { provider },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => new Promise<'allow_once'>((grant) => { allow = grant; promptReady(); }) }), context: guardedContext(provider),
         });
         const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 1, y: 2 } } });
         await promptReadyPromise;
@@ -180,7 +186,7 @@ describe('RemoteLeaseRunner', () => {
             },
             apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
             deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
-            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: { provider },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: guardedContext(provider),
         });
         const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 1, y: 2 } } });
         await startPending;
@@ -190,6 +196,40 @@ describe('RemoteLeaseRunner', () => {
         expect(calls.filter((url) => url.endsWith('/ack'))).toHaveLength(1);
         expect(calls.filter((url) => url.endsWith('/start'))).toHaveLength(1);
         expect(calls.filter((url) => url.endsWith('/cancel-ack'))).toHaveLength(1);
+        expect(provider.calls).toEqual([]);
+    });
+
+    it('shows the measured foreground and coordinates, then refuses a post-consent focus drift before acknowledgement', async () => {
+        const server = generateKeyPairSync('ed25519');
+        const device = generateKeyPairSync('ed25519');
+        const deviceId = randomUUID();
+        const expiry = new Date(Date.now() + 20_000).toISOString();
+        const fields = { leaseId: 'lease-focus-drift', capability: 'input_action', targetDeviceId: deviceId, nonce: 'nonce', expiry };
+        const mac = sign(null, Buffer.from(canonical(fields)), server.privateKey).toString('base64url');
+        let measurement = 0;
+        let promptDetails: Record<string, unknown> | undefined;
+        const provider = createMockCapabilityProvider();
+        const calls: string[] = [];
+        const runner = new RemoteLeaseRunner({
+            fetch: async (url: string) => {
+                calls.push(url);
+                if (url.endsWith('/.well-known/jwks.json')) return new Response(JSON.stringify({ keys: [{ ...server.publicKey.export({ format: 'jwk' }), kid: 'oauth-key' }] }));
+                return new Response('{}');
+            },
+            apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
+            deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async (request) => { promptDetails = request.details; return 'allow_once'; } }),
+            context: {
+                provider,
+                surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => (++measurement === 1
+                    ? { hwnd: '1', processId: 1, executable: 'notepad.exe', title: 'Untitled - Notepad' }
+                    : { hwnd: '2', processId: 2, executable: 'powershell.exe', title: 'PowerShell' }) }),
+            },
+        });
+        await runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 4, y: 8 } } });
+
+        expect(promptDetails).toMatchObject({ foreground: { executable: 'notepad.exe', windowTitle: 'Untitled - Notepad' }, coordinates: { x: 4, y: 8 } });
+        expect(calls.some((url) => url.endsWith('/ack'))).toBe(false);
         expect(provider.calls).toEqual([]);
     });
 });

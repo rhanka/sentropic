@@ -9,3 +9,4 @@
 export * from './types.js';
 export * from './mock-provider.js';
 export * from './windows-provider.js';
+export * from './foreground-surface.js';

@@ -19,9 +19,9 @@ import { resolveApiBaseUrl } from '../config/api-base-url.js';
 import { buildPairingUrl } from '../config/app-origin.js';
 import { openBrowser } from './open-browser.js';
 import { createFileStore } from '../storage/index.js';
-import { createWindowsCapabilityProvider } from '../capability/index.js';
+import { createWindowsCapabilityProvider, createWindowsForegroundSurfaceProbe, ForegroundSurfaceGuard } from '../capability/index.js';
 import { prepareNativeModules } from '../native/index.js';
-import { DeviceCodeClient, loadOrCreateDeviceIdentity } from '../enroll/index.js';
+import { DeviceCodeClient, loadOrCreateDeviceIdentity } from '../enroll/device-identity.js';
 import { SessionAuthClient } from '@sentropic/cowork-bridge/auth';
 import { RegistryClient } from '../registry/index.js';
 import { ConsentManager } from '../consent/index.js';
@@ -79,6 +79,7 @@ export async function runCli(): Promise<void> {
     const provider = createWindowsCapabilityProvider({
         resolveNativeModule: (name) => nativeResolver.resolve(name),
     });
+    const surfaceGuard = new ForegroundSurfaceGuard(createWindowsForegroundSurfaceProbe());
 
     const auth = new SessionAuthClient({
         storage: store,
@@ -136,7 +137,7 @@ export async function runCli(): Promise<void> {
 
     const consent = new ConsentManager({ store, prompt: promptAllowOnce });
     const remoteRunner = new RemoteLeaseRunner({
-        fetch: globalThis.fetch, apiBaseUrl, getAccessToken, deviceIdentity, consent, context: { provider },
+        fetch: globalThis.fetch, apiBaseUrl, getAccessToken, deviceIdentity, consent, context: { provider, surfaceGuard },
     });
     let running = true;
     void (async () => {

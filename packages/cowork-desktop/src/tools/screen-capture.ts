@@ -42,7 +42,11 @@ export const screenCaptureExecutor: ToolExecutor<DesktopToolContext> = async (
         throw new Error('screen_capture supports only the default full primary display; region and non-default screen are denied.');
     }
 
-    const capture = await context.provider.captureScreen({ screen: 0 });
+    const guard = context.surfaceGuard;
+    if (!guard) throw new Error('screen_capture requires a measured foreground-surface guard.');
+    const surface = context.surfaceToken ?? await guard.acquire();
+    await guard.recheck(surface);
+    const capture = await context.provider.captureScreen({ screen: 0 }, guard.nativeGuard(surface));
     if (!Number.isInteger(capture.width) || !Number.isInteger(capture.height) || capture.width < 1 || capture.height < 1) {
         throw new Error('screen_capture provider returned invalid image dimensions.');
     }
