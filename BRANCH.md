@@ -84,9 +84,9 @@ Hand the chat widget shell over from the app to `@sentropic/chat-ui` in header-f
   - [x] Package: `renderHeaderLeading`/`renderHeaderActions`/`headerGrip` slots on ChatWidget (+ `.d.ts`) + `chat-widget-header-frame.dom.spec.ts` (4). App: mobile-menu + actions blocks wrapped in-place snippets (`renderHeaderLeadingHost`/`renderHeaderActionsHost`), rendered at the same spot — no reindent of the 726-line settings popover (I4).
   - [x] Lot gate GREEN (`ENV=test-lc-shell`): typecheck-ui 0, lint-ui clean, package DOM 212 (order + grip), host-wiring `ChatWidget-header-snippets` (4), FULL test-ui 471/471 zero regression.
 
-- [ ] **Lot S3 — package tab-content routing, host panels unchanged (≤120 lines)**
-  - [ ] Introduce the narrow package content compositor; feed existing jobs/comments/chat snippets; `QueueMonitor` stays inside the jobs snippet (app-only per boundary test).
-  - [ ] Lot gate: typecheck+lint; package DOM selects each tab and sees only its injected panel; host-wiring proves `<QueueMonitor />` still app-only; FULL `make test-ui ENV=test`.
+- [x] **Lot S3 — package tab-content routing, host panels unchanged** — DONE
+  - [x] Package already exposes `renderJobsPanel`/`renderCommentsPanel`/`renderChatPanel` + routes by activeTab. App: the gate-ready branch's jobs/comments/chat panels wrapped in in-place snippets (`renderJobsPanelHost`/`renderCommentsPanelHost`/`renderChatPanelHost`), ready to feed the package slots at S8; `QueueMonitor` stays inside the jobs snippet (app-only, package boundary honored). I4-exact (no reindent).
+  - [x] Lot gate GREEN (`ENV=test-lc-shell`): typecheck-ui 0, lint-ui clean, host-wiring `ChatWidget-content-snippets` (3), FULL test-ui 474/474 zero regression.
 
 - [ ] **Lot S4 — cut conversation host seams in place (≤130 lines)**
   - [ ] Make configured `ChatSessionsBar` a `renderConversationHeader` snippet and `<ChatPanel>` a `renderChatPanel` snippet; keep menu/Plus/Trash host snippets; no composer code moves.

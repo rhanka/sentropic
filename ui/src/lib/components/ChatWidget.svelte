@@ -3240,6 +3240,7 @@
             </div>
           </div>
         {:else}
+          {#snippet renderJobsPanelHost()}
           {#if panelVisibility.showQueuePanel}
             <div class="h-full min-h-0 flex flex-col">
               <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
@@ -3259,6 +3260,9 @@
               </div>
             </div>
           {/if}
+          {/snippet}
+          {@render renderJobsPanelHost()}
+          {#snippet renderCommentsPanelHost()}
           {#if panelVisibility.showCommentsPanel}
             <div class="h-full min-h-0 overflow-hidden">
               {#if panelVisibility.showCommentsContext && commentContext?.id}
@@ -3281,6 +3285,9 @@
               {/if}
             </div>
           {/if}
+          {/snippet}
+          {@render renderCommentsPanelHost()}
+          {#snippet renderChatPanelHost()}
           <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
             {#if canAgentsListBeDefaultView && agentsView === 'list'}
               <section
@@ -3423,6 +3430,8 @@
               {agentsViewAnnouncement}
             </div>
           </div>
+          {/snippet}
+          {@render renderChatPanelHost()}
         {/if}
       </div>
 {/snippet}
