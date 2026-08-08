@@ -21,7 +21,7 @@ import { openBrowser } from './open-browser.js';
 import { createFileStore } from '../storage/index.js';
 import { createWindowsCapabilityProvider, createWindowsForegroundSurfaceProbe, ForegroundSurfaceGuard } from '../capability/index.js';
 import { prepareNativeModules } from '../native/index.js';
-import { DeviceCodeClient, loadOrCreateDeviceIdentity } from '../enroll/device-identity.js';
+import { DeviceCodeClient, loadOrCreateWindowsMachineIdentity } from '../enroll/index.js';
 import { SessionAuthClient } from '@sentropic/cowork-bridge/auth';
 import { RegistryClient } from '../registry/index.js';
 import { ConsentManager } from '../consent/index.js';
@@ -49,7 +49,7 @@ function usage(apiBaseUrl: string): void {
             '  SENTROPIC_APP_ORIGIN     web app origin for pairing (default: derived from the API base)',
             '  SENTROPIC_COWORK_DIR     app data dir (default: ~/.sentropic/cowork)',
             '  SENTROPIC_DEVICE_NAME    device name shown in the chat target selector',
-            '  The authenticated conductor must pre-register this device public key for the Notepad kiosk VM before enrollment.',
+            '  The authenticated conductor must pre-register this Windows-DPAPI machine key for the Notepad kiosk VM before enrollment.',
             '',
             'Flags:',
             '  --no-open                do not auto-open the browser for pairing',
@@ -71,7 +71,7 @@ export async function runCli(): Promise<void> {
     }
 
     const store = createFileStore(APP_DIR);
-    const deviceIdentity = await loadOrCreateDeviceIdentity(store);
+    const deviceIdentity = await loadOrCreateWindowsMachineIdentity(APP_DIR);
     // In the single-file exe the native deps are extracted from the embedded
     // payload to a cache and resolved by absolute file:// URL; from npm they
     // resolve from node_modules (identity).

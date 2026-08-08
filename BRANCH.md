@@ -161,6 +161,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Cycle 2 N-03: add authenticated conductor grant/revoke through public routes with active-device ownership, workspace-admin access, exact capability subset, and durable grant provenance.
   - [x] Cycle 2 SOL-01: signed final start claim fences acknowledged execution against revoke/delete; stopped local execution is abortable and must terminalize before provider entry.
   - [x] Cycle 2 N-01: fail-closed measured Notepad HWND/process foreground guard rechecked after consent and native awaits.
+  - [x] Cycle 2 N-01: replace the exported device-identity.json private key with a Windows-DPAPI CurrentUser machine-bound signing identity.
   - [x] Fix 1 critical: consent-before-acknowledgement and final pre-act revoke/expiry/Stop race closure.
     - [x] Implement consent-first acknowledgement, synchronous Stop cancellation, and local pre-act expiry/cancellation checks.
     - [x] Prove held-consent timeout, expiry, Stop, device-deletion, and account-deletion races produce zero provider calls.
