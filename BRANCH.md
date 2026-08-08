@@ -45,7 +45,7 @@
 - [ ] `BR-FOCUS-SIG-GATE-1` — OPEN. Production use remains gated: PR #416 tenancy resolution needs strict mode plus cache invalidation/TTL or fresh per-authorization resolution; this primitive neither claims nor implements that repair.
 - [ ] `BR-FOCUS-SIG-GATE-2` — OPEN. The h2a-to-Track dossier adapter/wire is not implemented or consumed; only already Track-native decisions can be submitted.
 - [ ] `BR-FOCUS-SIG-GATE-3` — OPEN. No locally installed `@sentropic/track/ingest` contract is yet proven to expose the required owner-attestation event; the driver stays port-injected and returns not-done without a matching pinned implementation.
-- [ ] `BR-FOCUS-SIG-GATE-4` — OPEN. Before any live use, a co-specified production Track adapter must persist the owner signature with a durable canonical-owner/workspace/decision unique constraint or upsert and transactionally read it back. The test-only in-memory Map is intentionally non-durable and is not a production adapter.
+- [ ] `BR-FOCUS-SIG-GATE-4` — OPEN. Before any live use, a co-specified production Track adapter must persist the owner signature with a durable canonical-owner/workspace/decision unique constraint or upsert and transactionally read it back. Full exactly-once atomicity is proven only by that production durable adapter; an in-memory test can only verify the driver's constraint-duplicate handling.
 - [x] `BR503-EX1` — `package-lock.json` workspace metadata is updated with `packages/focus/package.json`: required for Docker `npm ci` after the mandatory package patch bump; impact is only the matching workspace version; rollback is to revert both version fields together.
 - [x] `BR503-EX2` — `Makefile` corrects the Focus package target comment from private to public: impact is documentation-only with no target behavior change; rollback is to revert that comment.
 
@@ -90,7 +90,7 @@
 - [ ] **Lot 4 — Independent signature-gate review repair**
   - [x] Capture every request, authentication, trusted-relayer, authorization, receipt, and persisted-read-back value exactly once into frozen snapshots before validation or reuse.
   - [x] Accept only the boolean authorization result `true`; malformed truthy values are denied before append.
-  - [x] Remove caller-supplied relayer provenance, use normalized issuer+subject identity equality, and reject canonical owner-relayer collisions before authorization.
+  - [x] Remove caller-supplied relayer provenance, use exact canonical issuer+subject identity equality, and reject canonical owner-relayer collisions before authorization.
   - [x] Make the in-memory adapter test-only and unexported; document the production durable atomic upsert/read-back primitive as a prerequisite for live use.
   - [x] Add getter/receipt/authentication/authorization/append-failure/racy-port adversarial regression coverage.
   - [x] Re-run focused and full Focus package tests in `ENV=test-focus-sig-gate`.
@@ -98,7 +98,7 @@
 
 - [x] **Lot 5 — Third independent adversarial signature-gate repair**
   - [x] Define the durable Track uniqueness key as canonical owner, workspace, and decision id, excluding idempotency.
-  - [x] Replace the false-positive barrier race with a production-like atomic uniqueness regression.
+  - [x] Add a barrier race regression that verifies driver handling of a constraint duplicate without claiming an in-memory durability proof.
   - [x] Make every external capture boundary exception-total and copy the opaque proof into an immutable call-boundary value.
   - [x] Add throwing-accessor and proof-mutation regressions with honest not-done results.
   - [x] Correct the stale public-package and live-driver documentation.
@@ -107,6 +107,6 @@
 - [ ] **Lot 6 — Fourth independent adversarial signature-gate repair**
   - [x] Preserve trusted canonical issuer and subject values exactly, including case-sensitive opaque identity parts, across authorization, collision rejection, and durable uniqueness.
   - [x] Capture hostile opaque proofs from one structural snapshot and lock all affected port-failure paths with tests.
-  - [ ] Replace the synchronous race fake with a barrier async constraint-rejection driver regression; retain the production durable adapter as the only full exactly-once proof.
+  - [x] Replace the synchronous race fake with a barrier async constraint-rejection driver regression; retain the production durable adapter as the only full exactly-once proof.
   - [ ] Regenerate root lock metadata and correct the public Focus README/version history.
   - [ ] Re-run isolated Focus package tests, scope checks, and push the existing draft branch without changing its draft state.
