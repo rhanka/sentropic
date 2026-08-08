@@ -15,6 +15,7 @@ import {
   claimLeaseExecution,
   completeLease,
   issueLease,
+  isLeaseCancellationRequested,
   listIssuedLeases,
   revokeLease,
 } from '../../services/cowork/device-lease-service';
@@ -236,6 +237,15 @@ chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/revoke', async (c) =
   return result.ok
     ? c.json({ ok: true, lease: result.lease })
     : c.json({ message: `Lease revocation denied: ${result.reason}.` }, result.reason === 'execution_in_progress' ? 409 : 404);
+});
+
+chromeExtensionRouter.get('/cowork-devices/leases/:leaseId/cancellation', async (c) => {
+  const deviceId = c.req.query('device_id') ?? '';
+  if (!z.string().uuid().safeParse(deviceId).success || !(await hasDeliveryProof(c, deviceId))) {
+    return c.json({ message: 'Cowork device proof is required for lease cancellation delivery.' }, 401);
+  }
+  const cancelled = await isLeaseCancellationRequested({ userId: c.get('user').userId, deviceId, leaseId: c.req.param('leaseId') });
+  return cancelled === null ? c.json({ message: 'Lease not found.' }, 404) : c.json({ cancelled });
 });
 
 chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/start', async (c) => {

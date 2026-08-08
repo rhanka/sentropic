@@ -9,7 +9,9 @@ import { isCoworkScreenCaptureAction } from './screen-capture-action-schema';
 import { COWORK_KIOSK_SURFACE } from './provisioning';
 import { signLeaseEnvelope, type ServerSignedLeaseEnvelope } from './lease-envelope';
 
-const LEASE_TTL_MS = 45_000;
+// The device receives a five-second quiescence window before the connector's
+// ratified 30-second bounded result deadline.
+const LEASE_TTL_MS = 25_000;
 const PRESENCE_FRESHNESS_MS = 45_000;
 const IN_FLIGHT_STATUSES = ['issued', 'acknowledged', 'executing'] as const;
 const REVOCABLE_LEASE_STATUSES = ['issued', 'acknowledged'] as const;
@@ -21,6 +23,8 @@ export type LeaseScope = {
   action?: Record<string, unknown>;
   /** Durable idempotency binding; never sourced from a mutable mount field. */
   invocation?: CoworkInvocationBinding;
+  /** Server-side stop/timeout request; executing remains non-terminal until device quiescence. */
+  cancellationRequestedAt?: string;
   result?: Record<string, unknown>;
   resultDigest?: string;
 } | null;
@@ -419,7 +423,13 @@ export async function completeLease(input: {
     eq(coworkDeviceLeases.deviceId, input.deviceId),
     eq(coworkDeviceLeases.userId, input.userId),
     eq(coworkDeviceLeases.status, 'executing'),
-    gt(coworkDeviceLeases.expiresAt, now),
+    // A Stop/timeout cancellation is a durable fence, not merely advisory to
+    // the device.  Once it is recorded, a late FAIT cannot win the race after
+    // the local native provider has been told to quiesce.
+    ...(input.outcome === 'FAIT' ? [
+      gt(coworkDeviceLeases.expiresAt, now),
+      sql`NOT (${coworkDeviceLeases.scope} ? 'cancellationRequestedAt')`,
+    ] : []),
   )).returning();
   return completed ? { ok: true, lease: toLease(completed) } : { ok: false, reason: 'not_issuable' };
 }
@@ -431,7 +441,7 @@ export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | 
   const now = new Date();
   await db.update(coworkDeviceLeases).set({ status: 'expired' }).where(and(
     eq(coworkDeviceLeases.id, leaseId),
-    inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
+    inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES),
     lte(coworkDeviceLeases.expiresAt, now),
   ));
   const [lease] = await db.select({ status: coworkDeviceLeases.status, scope: coworkDeviceLeases.scope }).from(coworkDeviceLeases)
@@ -452,10 +462,28 @@ export async function revokeLease(leaseId: string, reason: string, userId?: stri
     : and(eq(coworkDeviceLeases.id, leaseId), inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES));
   const [revoked] = await db.update(coworkDeviceLeases).set({ status: 'revoked' }).where(where).returning();
   if (revoked) return { ok: true, lease: toLease(revoked) };
-  const [current] = await db.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases).where(and(
+  const [current] = await db.select({ status: coworkDeviceLeases.status, scope: coworkDeviceLeases.scope }).from(coworkDeviceLeases).where(and(
     eq(coworkDeviceLeases.id, leaseId), ...(userId ? [eq(coworkDeviceLeases.userId, userId)] : []),
   )).limit(1);
+  if (current?.status === 'executing') {
+    const scope = { ...(current.scope as LeaseScope), cancellationRequestedAt: new Date().toISOString() };
+    await db.update(coworkDeviceLeases).set({ scope }).where(and(
+      eq(coworkDeviceLeases.id, leaseId), eq(coworkDeviceLeases.status, 'executing'),
+      ...(userId ? [eq(coworkDeviceLeases.userId, userId)] : []),
+    ));
+  }
   return { ok: false, reason: current?.status === 'executing' ? 'execution_in_progress' : 'not_revocable' };
+}
+
+/** Device-only cancellation signal for an already-started lease; never terminal by itself. */
+export async function isLeaseCancellationRequested(input: { userId: string; deviceId: string; leaseId: string }): Promise<boolean | null> {
+  const [lease] = await db.select({ status: coworkDeviceLeases.status, scope: coworkDeviceLeases.scope }).from(coworkDeviceLeases).where(and(
+    eq(coworkDeviceLeases.id, input.leaseId),
+    eq(coworkDeviceLeases.deviceId, input.deviceId),
+    eq(coworkDeviceLeases.userId, input.userId),
+  )).limit(1);
+  if (!lease) return null;
+  return lease.status === 'executing' && Boolean((lease.scope as LeaseScope | null)?.cancellationRequestedAt);
 }
 
 export async function listIssuedLeases(userId: string, deviceId: string, limit = 20) {

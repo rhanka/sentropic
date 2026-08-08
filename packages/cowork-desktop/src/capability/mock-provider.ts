@@ -49,24 +49,34 @@ export const createMockCapabilityProvider = (
         calls,
         async captureScreen(captureOptions: CaptureOptions | undefined, guard: NativeActuationGuard): Promise<ScreenCapture> {
             await guard.recheckAfterNativeAwait();
+            guard.throwIfAborted();
             calls.push({ kind: 'captureScreen', options: captureOptions });
+            guard.throwIfAborted();
             return { ...capture };
         },
         async mouseClick(x: number, y: number, button: MouseButton | undefined, guard: NativeActuationGuard): Promise<void> {
             await guard.recheckAfterNativeAwait();
+            guard.throwIfAborted();
             calls.push({ kind: 'mouseClick', x, y, button: button ?? 'left' });
+            guard.throwIfAborted();
         },
         async type(text: string, guard: NativeActuationGuard): Promise<void> {
             await guard.recheckAfterNativeAwait();
+            guard.throwIfAborted();
             calls.push({ kind: 'type', text });
+            guard.throwIfAborted();
         },
         async scroll(dx: number, dy: number, guard: NativeActuationGuard): Promise<void> {
             await guard.recheckAfterNativeAwait();
+            guard.throwIfAborted();
             calls.push({ kind: 'scroll', dx, dy });
+            guard.throwIfAborted();
         },
         async key(combo: string, guard: NativeActuationGuard): Promise<void> {
             await guard.recheckAfterNativeAwait();
+            guard.throwIfAborted();
             calls.push({ kind: 'key', combo });
+            guard.throwIfAborted();
         },
     };
 };

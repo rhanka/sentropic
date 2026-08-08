@@ -27,6 +27,7 @@ export const COWORK_CAPABILITIES = ['screen_capture', 'input_action'] as const;
 type CoworkCapability = typeof COWORK_CAPABILITIES[number];
 
 const gates = { requiresElicitation: true, requiresHumanConfirmation: true, requiresPrincipalGate: true };
+const EXECUTION_QUIESCENCE_GRACE_MS = 5_000;
 const tool = (name: CoworkCapability, mutability: 'read-only' | 'state-transition'): AppCapability => ({
   kind: 'tool', name, description: `Remote Cowork ${name.replace('_', ' ')} on a selected isolated kiosk.`,
   requiredScopes: [`cowork:${name === 'screen_capture' ? 'screen:capture' : 'input:act'}`], requiredClaims: [],
@@ -60,9 +61,15 @@ const defaultBroker: CoworkInvocationBrokerPort = {
   },
   async wait(leaseId, timeoutMs) {
     const deadline = Date.now() + timeoutMs;
+    const cancelAt = deadline - EXECUTION_QUIESCENCE_GRACE_MS;
+    let cancellationRequested = false;
     while (Date.now() < deadline) {
       const outcome = await readLeaseOutcome(leaseId);
       if (outcome) return outcome;
+      if (!cancellationRequested && Date.now() >= cancelAt) {
+        cancellationRequested = true;
+        await revokeLease(leaseId, 'bounded_result_timeout');
+      }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     return { outcome: 'PAS-FAIT' };

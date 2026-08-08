@@ -259,6 +259,24 @@ describe('Cowork device authorization leases', () => {
     }
   });
 
+  it('fences a 200 start winner on Stop so a late FAIT cannot outlive native quiescence', async () => {
+    const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const issued = await issue(target.deviceId, 'started-stop-fence');
+    const lease = issued.payload.lease;
+    expect((await acknowledge(target.deviceId, lease.leaseId, lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await start(target.deviceId, lease.leaseId, lease.nonce, target.signPayload)).status).toBe(200);
+
+    // Executing is intentionally non-terminal here: the device must observe the
+    // cancellation endpoint and settle its native provider before PAS-FAIT.
+    expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${lease.leaseId}/revoke`, user.sessionToken!, { reason: 'stop' })).status).toBe(409);
+    const cancellation = await authenticatedRequest(app, 'GET', `/api/v1/chrome-extension/cowork-devices/leases/${lease.leaseId}/cancellation?device_id=${target.deviceId}`, user.sessionToken!, undefined, proofHeaders(target));
+    expect(await cancellation.json()).toEqual({ cancelled: true });
+
+    const capture = { ok: true, screen: 0, width: 1, height: 1, image: 'data:image/png;base64,QUJD' };
+    expect((await complete(target.deviceId, lease.leaseId, lease.nonce, 'FAIT', target.signPayload, capture)).status).toBe(409);
+    expect((await complete(target.deviceId, lease.leaseId, lease.nonce, 'PAS-FAIT', target.signPayload)).status).toBe(200);
+  });
+
   it('atomically consumes or revokes one acknowledged lease from its signed bounded result', async () => {
     const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     const success = await issue(target.deviceId, 'turn-result-success');

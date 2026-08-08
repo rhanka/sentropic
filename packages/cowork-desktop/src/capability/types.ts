@@ -31,6 +31,9 @@ export type TargetedNativeInput = {
 };
 
 export interface NativeActuationGuard {
+    /** The per-lease cancellation signal; native work must observe it before and after each await. */
+    readonly signal: AbortSignal;
+    throwIfAborted(): void;
     recheckAfterNativeAwait(): Promise<void>;
     /** Fails closed when an absolute click falls outside the measured HWND client area. */
     assertClickInBounds?(x: number, y: number): void;

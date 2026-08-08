@@ -11,6 +11,8 @@ export interface DesktopToolContext extends ToolExecutionContext {
     /** Required for every real input/capture path; missing measurement denies execution. */
     surfaceGuard?: ForegroundSurfaceGuard;
     surfaceToken?: ForegroundSurface;
+    /** Present only for a claimed remote lease; local tool calls remain uncancelled. */
+    abortSignal?: AbortSignal;
 }
 
 /** Tool name constants — mirror the `localToolDefinitions` advertised to the model. */

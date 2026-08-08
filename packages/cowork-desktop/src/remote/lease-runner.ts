@@ -15,6 +15,12 @@ type DeliveredLease = {
     scope: { capability?: unknown; serverEnvelope?: unknown; action?: unknown } | null;
     expiresAt: string;
 };
+type ActiveLeaseExecution = {
+    cancelled: boolean;
+    abort: AbortController;
+    settled: Promise<void>;
+    settle: () => void;
+};
 
 const canonicalEnvelope = (fields: {
     leaseId: string; capability: string; targetDeviceId: string; nonce: string; expiry: string;
@@ -63,7 +69,7 @@ export interface RemoteLeaseRunnerDeps {
  */
 export class RemoteLeaseRunner {
     private readonly base: string;
-    private readonly active = new Map<string, { cancelled: boolean; abort: AbortController }>();
+    private readonly active = new Map<string, ActiveLeaseExecution>();
     private stopped = false;
     private executionTail: Promise<void> = Promise.resolve();
 
@@ -124,8 +130,11 @@ export class RemoteLeaseRunner {
             execution.abort?.abort();
         }
         const token = await this.deps.getAccessToken();
-        if (!token) return;
-        await Promise.all(active.map(([leaseId]) => this.revoke(token, leaseId, 'local_stop')));
+        if (token) await Promise.all(active.map(([leaseId]) => this.revoke(token, leaseId, 'local_stop')));
+        // A terminal local stop is honest only after every native provider has
+        // settled. The provider itself never races an AbortSignal against native
+        // work, so no actuation can outlive this awaited quiescence barrier.
+        await Promise.all(active.map(([, execution]) => execution.settled));
     }
 
     async handleLease(raw: unknown): Promise<void> {
@@ -135,7 +144,13 @@ export class RemoteLeaseRunner {
         const envelope = lease.scope?.serverEnvelope;
         if (isEnvelope(envelope) && !this.keys.has(envelope.kid)) await this.refreshServerKeys();
         if (!isCapability(capability) || !isEnvelope(envelope) || !this.verify(lease, capability, envelope)) return;
-        const execution = { cancelled: false, abort: new AbortController() };
+        let settle!: () => void;
+        const execution: ActiveLeaseExecution = {
+            cancelled: false,
+            abort: new AbortController(),
+            settled: new Promise<void>((resolve) => { settle = resolve; }),
+            settle: () => settle(),
+        };
         this.active.set(lease.leaseId, execution);
         let claimed = false;
         try {
@@ -175,27 +190,39 @@ export class RemoteLeaseRunner {
                 return;
             }
             claimed = true;
-            const release = await this.enterExecution(execution);
-            if (!release) {
-                await this.complete(token, lease, 'PAS-FAIT');
-                return;
-            }
+            const stopExpiry = this.abortAtLeaseExpiry(execution, lease);
+            const stopServerCancellation = this.watchServerCancellation(token, lease, execution);
             try {
+                const release = await this.enterExecution(execution);
+                if (!release) {
+                    await this.complete(token, lease, 'PAS-FAIT');
+                    return;
+                }
+                try {
                 if (!this.canEnter(execution, lease)) {
                     await this.complete(token, lease, 'PAS-FAIT');
                     return;
                 }
-            const result = await runDesktopToolCall(
-                { toolCallId: lease.leaseId, name: capability, arguments: args },
-                { consent: this.deps.consent, context: { ...this.deps.context, surfaceToken: surface }, remoteReceipt: receipt },
-            );
-            const resultPayload = result.error ? undefined : JSON.parse(result.output) as Record<string, unknown>;
-            await this.complete(token, lease, result.error ? 'PAS-FAIT' : 'FAIT', resultPayload);
-            } finally { release(); }
+                const result = await runDesktopToolCall(
+                    { toolCallId: lease.leaseId, name: capability, arguments: args },
+                    { consent: this.deps.consent, context: { ...this.deps.context, surfaceToken: surface, abortSignal: execution.abort.signal }, remoteReceipt: receipt },
+                );
+                if (!this.canEnter(execution, lease)) {
+                    await this.complete(token, lease, 'PAS-FAIT');
+                    return;
+                }
+                const resultPayload = result.error ? undefined : JSON.parse(result.output) as Record<string, unknown>;
+                await this.complete(token, lease, result.error ? 'PAS-FAIT' : 'FAIT', resultPayload);
+                } finally { release(); }
+            } finally {
+                stopServerCancellation();
+                stopExpiry();
+            }
         } catch {
             const token = await this.deps.getAccessToken();
             if (claimed && token && typeof lease.leaseId === 'string' && typeof lease.nonce === 'string') await this.complete(token, lease, 'PAS-FAIT');
         } finally {
+            execution.settle();
             this.active.delete(lease.leaseId);
         }
     }
@@ -215,7 +242,7 @@ export class RemoteLeaseRunner {
         return Number.isFinite(expiry.getTime()) && expiry.getTime() > Date.now();
     }
 
-    private canEnter(execution: { cancelled: boolean; abort: AbortController }, lease: DeliveredLease): boolean {
+    private canEnter(execution: ActiveLeaseExecution, lease: DeliveredLease): boolean {
         return !this.stopped && !execution.cancelled && !execution.abort.signal.aborted && this.isLocallyValid(lease);
     }
 
@@ -228,7 +255,7 @@ export class RemoteLeaseRunner {
     }
 
     /** One provider entry at a time; a queued entry wakes on Stop and fails closed. */
-    private async enterExecution(execution: { cancelled: boolean; abort: AbortController }): Promise<(() => void) | null> {
+    private async enterExecution(execution: ActiveLeaseExecution): Promise<(() => void) | null> {
         let release!: () => void;
         const previous = this.executionTail;
         this.executionTail = new Promise<void>((resolve) => { release = resolve; });
@@ -245,6 +272,43 @@ export class RemoteLeaseRunner {
             return null;
         }
         return release;
+    }
+
+    private abortAtLeaseExpiry(execution: ActiveLeaseExecution, lease: DeliveredLease): () => void {
+        const remainingMs = new Date(lease.expiresAt).getTime() - Date.now();
+        const abort = () => {
+            execution.cancelled = true;
+            execution.abort.abort();
+        };
+        if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+            abort();
+            return () => {};
+        }
+        const timer = setTimeout(abort, remainingMs);
+        return () => clearTimeout(timer);
+    }
+
+    private watchServerCancellation(token: string, lease: DeliveredLease, execution: ActiveLeaseExecution): () => void {
+        let stopped = false;
+        void (async () => {
+            while (!stopped && !execution.abort.signal.aborted) {
+                try {
+                    const response = await this.deps.fetch(
+                        `${this.base}/chrome-extension/cowork-devices/leases/${encodeURIComponent(lease.leaseId)}/cancellation?device_id=${encodeURIComponent(this.deps.deviceIdentity.deviceId)}`,
+                        { headers: await this.deliveryHeaders(token) },
+                    );
+                    if (!response.ok || (await response.json() as { cancelled?: unknown }).cancelled === true) {
+                        execution.cancelled = true;
+                        execution.abort.abort();
+                        return;
+                    }
+                } catch {
+                    if (execution.abort.signal.aborted) return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 100));
+            }
+        })();
+        return () => { stopped = true; };
     }
 
     private readonly keys = new Map<string, Jwk>();
