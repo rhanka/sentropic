@@ -105,7 +105,7 @@ describe('Focus owner-signature route', () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ status: 'signed', duplicate: false });
     expect(createApiFocusLiveSessionMock).toHaveBeenCalledOnce();
     expect(capturedRequest).toEqual({
@@ -197,6 +197,21 @@ describe('Focus owner-signature route', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('should return a non-2xx result when owner authorization is denied', async () => {
+    createApiFocusLiveSessionMock.mockReturnValue({
+      sign: async () => ({ status: 'not-done' as const, reason: 'authorization-denied' as const }),
+    } as FocusLiveSession);
+
+    const response = await authenticatedApp().request('http://localhost/focus/owner-signatures', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision_id: 'decision-42', idempotency_key: 'request-retry-42' }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ status: 'not-done', reason: 'authorization-denied' });
   });
 
   it('should reject direct access without an authenticated context', async () => {
