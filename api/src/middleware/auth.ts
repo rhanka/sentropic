@@ -27,6 +27,7 @@ const readSessionToken = (c: Context): string | undefined =>
 export interface AuthUser {
   userId: string;
   sessionId: string;
+  authenticatedAt?: string;
   role: string;
   workspaceId: string;
   email?: string | null;
@@ -106,6 +107,7 @@ export async function requireAuth(c: Context, next: Next) {
     c.set('user', {
       userId: session.userId,
       sessionId: session.sessionId,
+      authenticatedAt: validated.sessionRecord.createdAt.toISOString(),
       role: session.role,
       workspaceId: workspaceId ?? '',
     });
@@ -137,6 +139,7 @@ export async function optionalAuth(c: Context, next: Next) {
           c.set('user', {
             userId: validated.session.userId,
             sessionId: validated.session.sessionId,
+            authenticatedAt: validated.sessionRecord.createdAt.toISOString(),
             role: validated.role,
             workspaceId,
             email: validated.session.email ?? null,
@@ -153,4 +156,3 @@ export async function optionalAuth(c: Context, next: Next) {
     await next();
   }
 }
-
