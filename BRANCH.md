@@ -88,9 +88,9 @@ Hand the chat widget shell over from the app to `@sentropic/chat-ui` in header-f
   - [x] Package already exposes `renderJobsPanel`/`renderCommentsPanel`/`renderChatPanel` + routes by activeTab. App: the gate-ready branch's jobs/comments/chat panels wrapped in in-place snippets (`renderJobsPanelHost`/`renderCommentsPanelHost`/`renderChatPanelHost`), ready to feed the package slots at S8; `QueueMonitor` stays inside the jobs snippet (app-only, package boundary honored). I4-exact (no reindent).
   - [x] Lot gate GREEN (`ENV=test-lc-shell`): typecheck-ui 0, lint-ui clean, host-wiring `ChatWidget-content-snippets` (3), FULL test-ui 474/474 zero regression.
 
-- [ ] **Lot S4 — cut conversation host seams in place (≤130 lines)**
-  - [ ] Make configured `ChatSessionsBar` a `renderConversationHeader` snippet and `<ChatPanel>` a `renderChatPanel` snippet; keep menu/Plus/Trash host snippets; no composer code moves.
-  - [ ] Lot gate: typecheck+lint; host-wiring asserts header/body slot placement + Back/menu/icon wiring; keep existing Back DOM contract; preserve mounted `chatPanelRef`; FULL `make test-ui ENV=test`.
+- [x] **Lot S4 — cut conversation host seams in place** — DONE
+  - [x] `ChatSessionsBar` wrapped in `renderConversationHeaderHost` snippet, `<ChatPanel>` (chatPanelRef) in `renderChatBodyHost` snippet, both rendered in place; sessions menu + Plus/Trash icon snippets stay app-owned; no composer code moved; chatPanelRef preserved (I4).
+  - [x] Lot gate GREEN (`ENV=test-lc-shell`): typecheck-ui 0, lint-ui clean, host-wiring `ChatWidget-conversation-seams` (4) + `agents-list` chatPanelRef preserved, FULL test-ui 478/478 zero regression.
 
 - [ ] **Lot S5 — package agents pager prepared (≤145 lines)**
   - [ ] Add package-owned list section + conversation container around shipped `AgentsList` with `agentsList` object, `renderAgentsListHeader`, `renderConversationHeader`, `renderChatPanel`, announcement prop; move the logical slide/reduced-motion CSS into the package.

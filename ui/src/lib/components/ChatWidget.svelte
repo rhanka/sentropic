@@ -3391,6 +3391,7 @@
             {/snippet}
             {#snippet renderSessionsPlusIcon()}<Plus class="w-4 h-4" />{/snippet}
             {#snippet renderSessionsTrashIcon()}<Trash2 class="w-4 h-4" />{/snippet}
+            {#snippet renderConversationHeaderHost()}
             <ChatSessionsBar
               sessions={chatSessions}
               sessionId={chatSessionId}
@@ -3413,6 +3414,9 @@
               renderPlusIcon={renderSessionsPlusIcon}
               renderTrashIcon={renderSessionsTrashIcon}
             />
+            {/snippet}
+            {@render renderConversationHeaderHost()}
+            {#snippet renderChatBodyHost()}
             <div class="flex-1 min-h-0 overflow-hidden">
               {#if !extensionChatGateState.blockChatPanel}
                 <ChatPanel
@@ -3425,6 +3429,8 @@
                 />
               {/if}
             </div>
+            {/snippet}
+            {@render renderChatBodyHost()}
             </div>
             <div class="sr-only" aria-live="polite" aria-atomic="true">
               {agentsViewAnnouncement}
