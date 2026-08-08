@@ -37,12 +37,13 @@
   - `spec/**`
   - `.github/workflows/**`
 - **Exception process**:
-  - [ ] Declare a `BR-FOCUS-SIG-EXn` item in `## Feedback Loop` with reason, impact, and rollback before changing any conditional or forbidden path.
+  - [ ] Declare a `BR503-EXn` item in `## Feedback Loop` with reason, impact, and rollback before changing any conditional or forbidden path.
 
 ## Feedback Loop
 - [ ] `BR-FOCUS-SIG-GATE-1` — OPEN. Production use remains gated: PR #416 tenancy resolution needs strict mode plus cache invalidation/TTL or fresh per-authorization resolution; this primitive neither claims nor implements that repair.
 - [ ] `BR-FOCUS-SIG-GATE-2` — OPEN. The h2a-to-Track dossier adapter/wire is not implemented or consumed; only already Track-native decisions can be submitted.
 - [ ] `BR-FOCUS-SIG-GATE-3` — OPEN. No locally installed `@sentropic/track/ingest` contract is yet proven to expose the required owner-attestation event; the driver stays port-injected and returns not-done without a matching pinned implementation.
+- [x] `BR503-EX1` — `package-lock.json` workspace metadata is updated with `packages/focus/package.json`: required for Docker `npm ci` after the mandatory package patch bump; impact is only the matching workspace version; rollback is to revert both version fields together.
 
 ## AI Flaky tests
 - [ ] Not applicable: focused deterministic package unit tests only.
@@ -53,31 +54,31 @@
 - [ ] One coherent package primitive with sequential contract, implementation, and verification lots.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Scope and executable contract plan**
+- [x] **Lot 0 — Scope and executable contract plan**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/architecture.md`, and `rules/testing.md`.
   - [x] Run `harness check branch` for `feat/focus-live-signature-gate`.
   - [x] Inspect #503, the FocusSnapshot/Track-read boundary, package metadata, and the plan template.
   - [x] Create this file from `plan/BRANCH_TEMPLATE.md` with allowed and forbidden paths.
-  - [ ] Commit the initial plan before implementation.
-  - [ ] Lot gate: `harness check scope` and `make scope-check` pass for `BRANCH.md` only.
+  - [x] Commit the initial plan before implementation.
+  - [x] Lot gate: `harness check scope` and `make scope-check` pass for `BRANCH.md` only.
 
-- [ ] **Lot 1 — Live signature contract and fail-closed driver**
+- [x] **Lot 1 — Live signature contract and fail-closed driver**
   - [x] Add `FocusLiveSession` types for an own-principal owner act, distinct relayer provenance, Track-native decision target, exact ingest-contract version, idempotency key, duplicate semantics, persisted attestation, and honest not-done outcomes.
   - [x] Add the live driver port that authenticates the owner, authorizes the owner for the requested workspace and decision, rejects an owner/relayer identity substitution, requires the exact pinned Track ingest contract, submits the signature, and reads the attestation back.
   - [x] Export the live driver from the package root without changing the read-only CLI or Track-read binding.
   - [x] Lot gate: package typecheck and focused live-driver test command pass in `ENV=test-focus-sig-gate`.
 
-- [ ] **Lot 2 — Security and duplicate-result test lock**
+- [x] **Lot 2 — Security and duplicate-result test lock**
   - [x] Add `packages/focus/tests/live.spec.ts` covering own-principal authentication required.
   - [x] Add `packages/focus/tests/live.spec.ts` coverage that a relayer cannot forge the owner attestation and that relayer provenance is retained separately.
   - [x] Add `packages/focus/tests/live.spec.ts` coverage that double submit with one idempotency key yields one persisted attestation and a duplicate result.
   - [x] Add `packages/focus/tests/live.spec.ts` coverage that failed or mismatched read-back returns not-done, never a signature.
   - [x] Add `packages/focus/tests/live.spec.ts` coverage that unauthorized workspace or decision is denied before ingest.
-  - [ ] Lot gate: focused package tests and package typecheck pass in `ENV=test-focus-sig-gate`.
+  - [x] Lot gate: focused package tests and package typecheck pass in `ENV=test-focus-sig-gate`.
 
 - [ ] **Lot 3 — Version, final verification, and draft review handoff**
-  - [ ] Bump `packages/focus/package.json` from `0.3.0` to the next patch version after checking the published package version.
-  - [ ] Run package typecheck, focused live tests, and the available package test suite through Make in `ENV=test-focus-sig-gate`.
-  - [ ] Run `harness check scope` and `make scope-check` before every commit.
+  - [x] Bump `packages/focus/package.json` from `0.3.0` to the next patch version after checking the published package version.
+  - [x] Run package typecheck, focused live tests, the available package test suite, and package build through Make in `ENV=test-focus-sig-gate`.
+  - [x] Run `harness check scope` and `make scope-check` before every commit.
   - [ ] Create a draft PR against `main` using this plan as the source body; state the contract, held items, and `draft: independent build-review + owner UAT required before merge/live`.
   - [ ] Verify the pushed branch CI and report exact command results, package version, commit SHAs, and PR URL.
