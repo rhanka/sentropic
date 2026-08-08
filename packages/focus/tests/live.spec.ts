@@ -355,6 +355,101 @@ describe("FocusLiveSession owner-signature gate", () => {
     );
   });
 
+  it.each([
+    [
+      "request target",
+      () =>
+        ({
+          get target() {
+            throw new Error("request target unavailable");
+          },
+          authentication: REQUEST.authentication,
+          idempotencyKey: REQUEST.idempotencyKey,
+        }) as OwnerSignatureRequest,
+    ],
+    [
+      "target workspace",
+      () =>
+        ({
+          target: {
+            get workspace() {
+              throw new Error("workspace unavailable");
+            },
+            decisionId: REQUEST.target.decisionId,
+          } as TrackNativeDecisionTarget,
+          authentication: REQUEST.authentication,
+          idempotencyKey: REQUEST.idempotencyKey,
+        }) as OwnerSignatureRequest,
+    ],
+    [
+      "target decision id",
+      () =>
+        ({
+          target: {
+            workspace: REQUEST.target.workspace,
+            get decisionId() {
+              throw new Error("decision unavailable");
+            },
+          } as TrackNativeDecisionTarget,
+          authentication: REQUEST.authentication,
+          idempotencyKey: REQUEST.idempotencyKey,
+        }) as OwnerSignatureRequest,
+    ],
+    [
+      "authentication",
+      () =>
+        ({
+          target: REQUEST.target,
+          get authentication() {
+            throw new Error("authentication unavailable");
+          },
+          idempotencyKey: REQUEST.idempotencyKey,
+        }) as OwnerSignatureRequest,
+    ],
+    [
+      "authentication kind",
+      () =>
+        ({
+          target: REQUEST.target,
+          authentication: {
+            get kind() {
+              throw new Error("authentication kind unavailable");
+            },
+            proof: REQUEST.authentication.proof,
+          } as OwnerSignatureRequest["authentication"],
+          idempotencyKey: REQUEST.idempotencyKey,
+        }) as OwnerSignatureRequest,
+    ],
+    [
+      "authentication proof",
+      () =>
+        ({
+          target: REQUEST.target,
+          authentication: {
+            kind: "own-principal",
+            get proof() {
+              throw new Error("authentication proof unavailable");
+            },
+          } as OwnerSignatureRequest["authentication"],
+          idempotencyKey: REQUEST.idempotencyKey,
+        }) as OwnerSignatureRequest,
+    ],
+    [
+      "idempotency key",
+      () =>
+        ({
+          target: REQUEST.target,
+          authentication: REQUEST.authentication,
+          get idempotencyKey() {
+            throw new Error("idempotency key unavailable");
+          },
+        }) as OwnerSignatureRequest,
+    ],
+  ])("fails closed without ingest when the %s accessor throws", async (_label, requestFactory) => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(store), store, requestFactory(), "invalid-signature-request");
+  });
+
   it("captures a getter-backed request field once, so its changed second value cannot enter the signed write", async () => {
     const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     let idempotencyKeyReads = 0;
