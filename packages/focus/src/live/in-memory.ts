@@ -38,8 +38,9 @@ const copyPersisted = (write: TrackOwnerSignatureWrite, recordId: string): Persi
 
 /**
  * TEST-ONLY, non-durable reference adapter. This process-local Map is not a Track persistence
- * implementation and must never be wired into a live host. It gives unit tests a deterministic
- * synchronous critical section; production needs the durable atomic port contract.
+ * implementation and must never be wired into a live host. It only gives unit tests deterministic
+ * duplicate behavior; it cannot prove durable exactly-once atomicity. Only the co-specified
+ * production Track adapter's durable unique constraint/upsert proves that property before live use.
  */
 export class TestOnlyInMemoryTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
   readonly contractVersion = FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION;

@@ -117,10 +117,12 @@ const expectNoIngest = async (
 };
 
 /**
- * Production-like test adapter: both writers cross the barrier, then one synchronous section
- * models a database unique constraint/upsert on canonical owner + workspace + decision only.
+ * In-memory race test double: both writers observe the uniqueness gap before the barrier, then
+ * an insert constraint returns `duplicate` to the loser. This tests the driver's response to a
+ * constraint rejection; a Map cannot prove durable exactly-once behavior. Only the co-specified
+ * production Track adapter, with its durable constraint/upsert, proves that property before live use.
  */
-class BarrierSynchronizedDurableAtomicTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
+class BarrierAsyncConstraintTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
   readonly contractVersion = FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION;
 
   private readonly records = new Map<string, PersistedOwnerSignature>();
@@ -142,17 +144,26 @@ class BarrierSynchronizedDurableAtomicTrackOwnerSignaturePort implements TrackOw
 
   async appendOwnerSignature(input: TrackOwnerSignatureWrite): Promise<TrackOwnerSignatureWriteResult> {
     this.appendAttempts += 1;
+    const key = this.key(input.attestation.attester.canonicalIdentity, input.target);
+    const observed = this.records.get(key);
     this.waiting += 1;
     if (this.waiting === 2) this.releaseBarrier?.();
     await this.barrier;
 
-    const key = this.key(input.attestation.attester.canonicalIdentity, input.target);
+    if (observed !== undefined) {
+      this.receiptStatuses.push("duplicate");
+      return { status: "duplicate", recordId: observed.recordId };
+    }
+
+    return this.insertWithConstraint(input, key);
+  }
+
+  private insertWithConstraint(input: TrackOwnerSignatureWrite, key: string): TrackOwnerSignatureWriteResult {
     const existing = this.records.get(key);
     if (existing !== undefined) {
       this.receiptStatuses.push("duplicate");
       return { status: "duplicate", recordId: existing.recordId };
     }
-
     const persisted = persistedFromWrite(input, `racy-owner-signature-${this.appendAttempts}`);
     this.records.set(key, persisted);
     this.receiptStatuses.push("written");
@@ -913,9 +924,9 @@ describe("FocusLiveSession owner-signature gate", () => {
     });
   });
 
-  it("returns one duplicate from a barrier-synchronized durable atomic owner-decision write", async () => {
-    const atomicPort = new BarrierSynchronizedDurableAtomicTrackOwnerSignaturePort();
-    const live = makeLive(atomicPort);
+  it("returns one duplicate when an async barrier race reaches the insert constraint", async () => {
+    const constrainedPort = new BarrierAsyncConstraintTrackOwnerSignaturePort();
+    const live = makeLive(constrainedPort);
     const [first, second] = await Promise.all([
       live.sign({ ...REQUEST, idempotencyKey: "race-key-one" }),
       live.sign({ ...REQUEST, idempotencyKey: "race-key-two" }),
@@ -923,13 +934,13 @@ describe("FocusLiveSession owner-signature gate", () => {
 
     expect([first, second].filter((result) => result.status === "signed" && !result.duplicate)).toHaveLength(1);
     expect([first, second].filter((result) => result.status === "signed" && result.duplicate)).toHaveLength(1);
-    expect(atomicPort.appendAttempts).toBe(2);
-    expect(atomicPort.recordCount).toBe(1);
-    expect(atomicPort.receiptStatuses.filter((status) => status === "written")).toHaveLength(1);
-    expect(atomicPort.receiptStatuses.filter((status) => status === "duplicate")).toHaveLength(1);
+    expect(constrainedPort.appendAttempts).toBe(2);
+    expect(constrainedPort.recordCount).toBe(1);
+    expect(constrainedPort.receiptStatuses.filter((status) => status === "written")).toHaveLength(1);
+    expect(constrainedPort.receiptStatuses.filter((status) => status === "duplicate")).toHaveLength(1);
   });
 
-  it("uses the test-only adapter's synchronous atomic owner-decision uniqueness for same-key replay", async () => {
+  it("returns a duplicate for a sequentially observed same-key replay in the test-only adapter", async () => {
     const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     const live = makeLive(store);
     const [first, second] = await Promise.all([live.sign(REQUEST), live.sign(REQUEST)]);
