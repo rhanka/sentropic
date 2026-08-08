@@ -17,7 +17,12 @@ import {
   type CoworkDeviceCapabilities,
 } from '../../services/cowork/device-identity';
 import { findPendingDeviceIdentity } from '../../services/device-code-store';
-import { isProvisionedCoworkPublicKey, registerCoworkKioskProvisioning } from '../../services/cowork/provisioning';
+import {
+  COWORK_REMOTE_CAPABILITIES,
+  isProvisionedCoworkPublicKey,
+  manageCoworkWorkspaceExposure,
+  registerCoworkKioskProvisioning,
+} from '../../services/cowork/provisioning';
 
 /**
  * Device-Code Enrollment Routes (RFC 8628-style)
@@ -57,6 +62,13 @@ const approveSchema = z.object({
 const provisionSchema = z.object({
   devicePublicKey: z.string().min(32).max(2048),
   kioskSurface: z.literal('notepad'),
+});
+const exposureSchema = z.object({
+  action: z.enum(['grant', 'revoke']),
+  device_id: z.string().uuid(),
+  workspace_id: z.string().min(1).max(256),
+  capabilities: z.array(z.enum(COWORK_REMOTE_CAPABILITIES)).min(1).max(2)
+    .refine((capabilities) => new Set(capabilities).size === capabilities.length),
 });
 
 const DEVICE_CODE_TTL_SEC = 10 * 60;
@@ -121,6 +133,31 @@ deviceRouter.post('/provision', async (c) => {
     return c.json({ error: 'devicePublicKey must be an Ed25519 SPKI key' }, 400);
   }
   return c.json({ ok: true, kioskSurface: 'notepad' });
+});
+
+/** Authenticated, auditable conductor route for explicit workspace exposure. */
+deviceRouter.post('/cowork-exposure', async (c) => {
+  const token = c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] || c.req.header('authorization')?.replace('Bearer ', '');
+  const session = token ? await validateSession(token) : null;
+  if (!session || session.role !== 'admin_app') return c.json({ error: 'Conductor authentication is required.' }, 403);
+  const parsed = exposureSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: 'Invalid Cowork exposure request.' }, 400);
+  const managed = await manageCoworkWorkspaceExposure({
+    action: parsed.data.action,
+    deviceId: parsed.data.device_id,
+    workspaceId: parsed.data.workspace_id,
+    capabilities: parsed.data.capabilities,
+    actorId: session.userId,
+  });
+  if (!managed) return c.json({ error: 'Conductor must own the active device and administer the workspace.' }, 403);
+  return c.json({
+    ok: true,
+    action: parsed.data.action,
+    device_id: parsed.data.device_id,
+    workspace_id: parsed.data.workspace_id,
+    capabilities: parsed.data.capabilities,
+    granted_by: session.userId,
+  });
 });
 
 /**
