@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import type { FocusLiveSession, OwnerSignatureRequest } from '@sentropic/focus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createApiFocusLiveSessionMock, requireWorkspaceAccessMock, resolveTenantMock } = vi.hoisted(() => ({
+const { createApiFocusLiveSessionMock, isTenantAdminMock, requireWorkspaceAccessMock, resolveTenantMock } = vi.hoisted(() => ({
   createApiFocusLiveSessionMock: vi.fn(),
+  isTenantAdminMock: vi.fn(),
   requireWorkspaceAccessMock: vi.fn(),
   resolveTenantMock: vi.fn(),
 }));
@@ -14,6 +15,10 @@ vi.mock('../../src/services/focus/live-session', () => ({
 
 vi.mock('../../src/services/workspace-access', () => ({
   requireWorkspaceAccess: requireWorkspaceAccessMock,
+}));
+
+vi.mock('../../src/services/auth/tenant-membership', () => ({
+  isTenantAdmin: isTenantAdminMock,
 }));
 
 vi.mock('../../src/services/tenancy/resolve-tenant', () => ({
@@ -51,6 +56,7 @@ const authenticatedApp = () => {
 describe('Focus owner-signature route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    isTenantAdminMock.mockResolvedValue(true);
     requireWorkspaceAccessMock.mockResolvedValue(undefined);
     resolveTenantMock.mockResolvedValue({ tenantId: 'tenant-from-resolver' });
   });
@@ -130,8 +136,8 @@ describe('Focus owner-signature route', () => {
     expect(requireWorkspaceAccessMock).toHaveBeenCalledWith('authenticated-user', 'workspace-from-auth-context');
     expect(resolveTenantMock).toHaveBeenCalledWith({
       workspaceId: 'workspace-from-auth-context',
-      userId: 'authenticated-user',
     });
+    expect(isTenantAdminMock).toHaveBeenCalledWith('authenticated-user', 'tenant-from-resolver');
   });
 
   it('should keep an authenticated session attestation stable for a delayed retry', async () => {
@@ -212,6 +218,52 @@ describe('Focus owner-signature route', () => {
 
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ status: 'not-done', reason: 'authorization-denied' });
+  });
+
+  it('should reject a suspended tenant member after a cached tenant resolution', async () => {
+    let persistedSignatures = 0;
+    isTenantAdminMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    createApiFocusLiveSessionMock.mockImplementation((dependencies: Parameters<typeof createApiFocusLiveSession>[0]) => ({
+      sign: async (request: OwnerSignatureRequest) => {
+        const owner = await dependencies.ownPrincipal.authenticate(request);
+        if (!owner) return { status: 'not-done' as const, reason: 'owner-authentication-required' as const };
+
+        const authorized = await dependencies.authorizer.authorize({ owner, target: request.target });
+        if (!authorized) return { status: 'not-done' as const, reason: 'authorization-denied' as const };
+
+        persistedSignatures += 1;
+        return {
+          status: 'signed' as const,
+          duplicate: false,
+          persisted: {
+            contractVersion: 'track-owner-signature/1.0.0' as const,
+            target: request.target,
+            attestation: { attester: owner },
+            relayer: HTTP_RELAYER,
+            idempotencyKey: request.idempotencyKey,
+            recordId: `durable-record-${persistedSignatures}`,
+          },
+        };
+      },
+    } as FocusLiveSession));
+
+    const app = authenticatedApp();
+    const request = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision_id: 'decision-42', idempotency_key: 'request-retry-42' }),
+    };
+
+    const approved = await app.request('http://localhost/focus/owner-signatures', request);
+    const suspended = await app.request('http://localhost/focus/owner-signatures', request);
+
+    expect(approved.status).toBe(201);
+    expect(suspended.status).toBe(403);
+    expect(await suspended.json()).toEqual({ status: 'not-done', reason: 'authorization-denied' });
+    expect(persistedSignatures).toBe(1);
+    expect(resolveTenantMock).toHaveBeenNthCalledWith(1, { workspaceId: 'workspace-from-auth-context' });
+    expect(resolveTenantMock).toHaveBeenNthCalledWith(2, { workspaceId: 'workspace-from-auth-context' });
+    expect(isTenantAdminMock).toHaveBeenCalledTimes(2);
   });
 
   it('should reject direct access without an authenticated context', async () => {
