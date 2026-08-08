@@ -232,8 +232,9 @@ export interface PersistedOwnerSignature extends TrackOwnerSignatureWrite {
 }
 
 /**
- * The atomic uniqueness identity for a persisted owner acceptance. One owner may attest to a
- * given Track-native decision once, irrespective of transport retries or idempotency keys.
+ * The atomic durable-uniqueness key for a persisted owner acceptance. One canonical owner may
+ * attest to a given Track-native decision once, irrespective of transport retries or
+ * idempotency keys.
  */
 export interface OwnerSignatureIdentity {
   /**
@@ -243,6 +244,12 @@ export interface OwnerSignatureIdentity {
   readonly ownerCanonicalIdentity: CanonicalPrincipalIdentity;
   readonly target: TrackNativeDecisionTarget;
 }
+
+/**
+ * The Track port's durable uniqueness key: canonical owner + workspace + decision id only.
+ * `idempotencyKey` deliberately does not belong to this key.
+ */
+export type OwnerSignatureDurableUniquenessKey = OwnerSignatureIdentity;
 
 /** The Track adapter must say whether an idempotency replay created or reused a record. */
 export type TrackOwnerSignatureWriteResult =
