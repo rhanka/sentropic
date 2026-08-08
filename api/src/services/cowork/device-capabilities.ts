@@ -12,7 +12,9 @@ export type CoworkDeviceCapability = 'screen_capture' | 'input_action';
 
 export type CoworkDeviceCapabilities = {
   capabilityIds: CoworkDeviceCapability[];
-  isolatedVmTarget: boolean;
+  /** Untrusted enrollment telemetry; never an authorization signal. */
+  isolatedVmTarget?: boolean;
+  /** Untrusted enrollment telemetry; never an authorization signal. */
   kioskSurface?: string;
 };
 
@@ -23,7 +25,7 @@ export function isCoworkDeviceCapabilities(value: unknown): value is CoworkDevic
   const candidate = value as Record<string, unknown>;
   return Array.isArray(candidate.capabilityIds)
     && candidate.capabilityIds.every((capability) => COWORK_CAPABILITY_IDS.includes(capability as CoworkDeviceCapability))
-    && typeof candidate.isolatedVmTarget === 'boolean'
+    && (candidate.isolatedVmTarget === undefined || typeof candidate.isolatedVmTarget === 'boolean')
     && (candidate.kioskSurface === undefined || (typeof candidate.kioskSurface === 'string' && candidate.kioskSurface.trim().length > 0));
 }
 
@@ -32,12 +34,14 @@ export function normalizeCoworkDeviceCapabilities(value: unknown): CoworkDeviceC
   if (!isCoworkDeviceCapabilities(value)) return null;
   return {
     capabilityIds: [...value.capabilityIds],
-    isolatedVmTarget: value.isolatedVmTarget,
+    ...(typeof value.isolatedVmTarget === 'boolean' ? { isolatedVmTarget: value.isolatedVmTarget } : {}),
     ...(value.kioskSurface ? { kioskSurface: value.kioskSurface.trim() } : {}),
   };
 }
 
 export function isNarrowCoworkKioskTarget(value: unknown): boolean {
-  const capabilities = normalizeCoworkDeviceCapabilities(value);
-  return Boolean(capabilities?.isolatedVmTarget && capabilities.kioskSurface);
+  // Client-held capability JSON contains only CLAIMED attributes. The only
+  // attestation is the server-side public-key provisioning record.
+  void value;
+  return false;
 }

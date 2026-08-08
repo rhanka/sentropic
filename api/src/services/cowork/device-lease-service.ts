@@ -3,8 +3,8 @@ import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
 import { coworkDeviceLeases, coworkDevices } from '../../db/schema';
 import { findActiveCoworkDevice, verifyCoworkSignature } from './device-identity';
-import { isNarrowCoworkKioskTarget } from './device-capabilities';
 import { isCoworkInputAction } from './input-action-schema';
+import { COWORK_KIOSK_SURFACE } from './provisioning';
 import { signLeaseEnvelope, type ServerSignedLeaseEnvelope } from './lease-envelope';
 
 const LEASE_TTL_MS = 45_000;
@@ -88,18 +88,22 @@ export async function issueLease(input: {
     // concurrent revoke waits for this transaction rather than slipping between
     // eligibility and issuance.
     const eligibility = await tx.execute(sql`
-      SELECT d.id, d.capabilities
+      SELECT d.id
       FROM cowork_devices d
       JOIN cowork_device_presence p ON p.device_id = d.id
+      JOIN cowork_device_provisioning kp ON kp.public_key = d.public_key
       WHERE d.id = ${input.deviceId}
         AND d.user_id = ${input.userId}
         AND d.status = 'active'
         AND p.user_id = ${input.userId}
         AND p.status = 'active'
         AND p.last_seen_at > ${new Date(now.getTime() - PRESENCE_FRESHNESS_MS)}
+        AND kp.status = 'active'
+        AND kp.kiosk_surface = ${COWORK_KIOSK_SURFACE}
+        AND kp.capability_ids @> ${JSON.stringify(['screen_capture', 'input_action'])}::jsonb
       FOR UPDATE OF d
     `);
-    if (eligibility.rows.length === 0 || !isNarrowCoworkKioskTarget(eligibility.rows[0]?.capabilities)) {
+    if (eligibility.rows.length === 0) {
       return { ok: false, reason: 'ineligible' } as LeaseResult;
     }
 
@@ -186,6 +190,7 @@ export async function acknowledgeLease(input: {
       eq(coworkDeviceLeases.status, 'issued'),
       gt(coworkDeviceLeases.expiresAt, now),
       sql`EXISTS (SELECT 1 FROM cowork_devices d WHERE d.id = ${coworkDeviceLeases.deviceId} AND d.user_id = ${input.userId} AND d.status = 'active')`,
+      sql`EXISTS (SELECT 1 FROM cowork_devices d JOIN cowork_device_provisioning kp ON kp.public_key = d.public_key WHERE d.id = ${coworkDeviceLeases.deviceId} AND kp.status = 'active' AND kp.kiosk_surface = ${COWORK_KIOSK_SURFACE} AND kp.capability_ids @> ${JSON.stringify(['screen_capture', 'input_action'])}::jsonb)`,
     ))
     .returning();
   return acknowledged ? { ok: true, lease: toLease(acknowledged) } : { ok: false, reason: 'not_issuable' };

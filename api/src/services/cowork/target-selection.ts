@@ -1,6 +1,6 @@
-import { isNarrowCoworkKioskTarget } from './device-capabilities';
 import { findActiveCoworkDevice } from './device-identity';
 import { requireWorkspaceAccess } from '../workspace-access';
+import { hasCoworkWorkspaceExposure, isAttestedCoworkKioskDevice } from './provisioning';
 
 export type CoworkTargetSelection = {
   userId: string;
@@ -25,12 +25,19 @@ export class CoworkTargetSelectionStore {
   constructor(private readonly deps: {
     requireWorkspaceAccess?: typeof requireWorkspaceAccess;
     findDevice?: typeof findActiveCoworkDevice;
+    isAttested?: typeof isAttestedCoworkKioskDevice;
+    hasExposure?: typeof hasCoworkWorkspaceExposure;
   } = {}) {}
 
   async select(input: CoworkTargetSelection): Promise<boolean> {
     await (this.deps.requireWorkspaceAccess ?? requireWorkspaceAccess)(input.userId, input.workspaceId);
     const device = await (this.deps.findDevice ?? findActiveCoworkDevice)(input.userId, input.deviceId);
-    if (!device || !isNarrowCoworkKioskTarget(device.capabilities)) return false;
+    if (!device || !(await (this.deps.isAttested ?? isAttestedCoworkKioskDevice)({ userId: input.userId, deviceId: input.deviceId }))) return false;
+    const hasExposure = this.deps.hasExposure ?? hasCoworkWorkspaceExposure;
+    const exposed = await Promise.all(['screen_capture', 'input_action'].map((capability) => hasExposure({
+      userId: input.userId, deviceId: input.deviceId, workspaceId: input.workspaceId, capability: capability as 'screen_capture' | 'input_action',
+    })));
+    if (!exposed.some(Boolean)) return false;
     this.selections.set(selectionKey(input), input);
     return true;
   }
