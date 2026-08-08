@@ -45,6 +45,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - `api/src/routes/api/streams.ts`
   - `api/src/db/schema.ts`
   - `api/tests/**`
+  - `api/package.json`
   - `api/package-lock.json`
   - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
