@@ -6,8 +6,9 @@
  * whose primary outcome modality is a decision). It is intentionally CONCRETE, not a generic
  * "Focus platform": the model stays decision-dossier-shaped until a 2nd modality is real.
  *
- * This is the read-only FocusSnapshot split: affordances render as DISABLED metadata only
- * (no live commands). Live drivers (FocusLiveSession) are deferred (L3+).
+ * This remains the read-only FocusSnapshot split: affordances render as DISABLED metadata only
+ * (no snapshot live commands). The shipped fail-closed `FocusLiveSession` owner-signature live
+ * driver activates only with a real durable Track adapter and owner UAT.
  */
 
 /**
@@ -165,4 +166,122 @@ export interface DecisionDossierDocument {
   readonly interactions: readonly Affordance[];
   readonly provenance: FocusProvenance;
   readonly amendmentTrace: readonly AmendmentStep[];
+}
+
+/** A Track-native decision location. h2a dossiers are intentionally not accepted here. */
+export interface TrackNativeDecisionTarget {
+  readonly workspace: string;
+  readonly decisionId: FocusRef;
+}
+
+/** The sole Track owner-signature contract accepted and emitted by this package. */
+export const FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION = "track-owner-signature/1.0.0" as const;
+
+/** A package-owned, closed contract version: callers cannot compose an arbitrary version. */
+export type FocusOwnerSignatureContractVersion = typeof FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION;
+
+/** Opaque proof that only an own-principal authentication adapter may verify. */
+export interface OwnPrincipalAuthentication {
+  readonly kind: "own-principal";
+  readonly proof: unknown;
+}
+
+/** An exact canonical, issuer-scoped identity supplied by a trusted authentication boundary. */
+export interface CanonicalPrincipalIdentity {
+  readonly issuer: string;
+  readonly subject: string;
+}
+
+/** The authenticated owner identity returned by the trusted own-principal adapter. */
+export interface AuthenticatedOwnPrincipal {
+  readonly principalId: string;
+  readonly canonicalIdentity: CanonicalPrincipalIdentity;
+  readonly authenticatedAt: string;
+}
+
+/** Transport provenance is a relayer record, never the owner attester. */
+export interface RelayerProvenance {
+  readonly transport: "cli" | "http" | "mcp-stdio" | "internal";
+  readonly relayerId: string;
+  readonly canonicalIdentity: CanonicalPrincipalIdentity;
+}
+
+/** The authenticated owner act that the Track signature contract must persist. */
+export interface OwnerSignatureAttestation {
+  readonly attester: AuthenticatedOwnPrincipal;
+}
+
+/** A request to accept one existing Track-native decision. */
+export interface OwnerSignatureRequest {
+  readonly target: TrackNativeDecisionTarget;
+  readonly authentication: OwnPrincipalAuthentication;
+  readonly idempotencyKey: string;
+}
+
+/** Exact, versioned write shape submitted to a Track owner-signature adapter. */
+export interface TrackOwnerSignatureWrite {
+  readonly contractVersion: FocusOwnerSignatureContractVersion;
+  readonly target: TrackNativeDecisionTarget;
+  readonly attestation: OwnerSignatureAttestation;
+  readonly relayer: RelayerProvenance;
+  readonly idempotencyKey: string;
+}
+
+/** Persisted read-back record required before an owner signature may be reported. */
+export interface PersistedOwnerSignature extends TrackOwnerSignatureWrite {
+  readonly recordId: string;
+}
+
+/**
+ * The atomic durable-uniqueness key for a persisted owner acceptance. One canonical owner may
+ * attest to a given Track-native decision once, irrespective of transport retries or
+ * idempotency keys.
+ */
+export interface OwnerSignatureIdentity {
+  /**
+   * The exact canonical issuer+subject identity of the authenticated owner. This is the identity
+   * used for the durable unique constraint, never a caller-supplied display identifier.
+   */
+  readonly ownerCanonicalIdentity: CanonicalPrincipalIdentity;
+  readonly target: TrackNativeDecisionTarget;
+}
+
+/**
+ * The Track port's durable uniqueness key: canonical owner + workspace + decision id only.
+ * `idempotencyKey` deliberately does not belong to this key.
+ */
+export type OwnerSignatureDurableUniquenessKey = OwnerSignatureIdentity;
+
+/** The Track adapter must say whether an idempotency replay created or reused a record. */
+export type TrackOwnerSignatureWriteResult =
+  | { readonly status: "written"; readonly recordId: string }
+  | { readonly status: "duplicate"; readonly recordId: string };
+
+/** Explicit honest-not-done outcomes; none represent an owner signature. */
+export type OwnerSignatureNotDoneReason =
+  | "invalid-signature-request"
+  | "owner-authentication-required"
+  | "owner-authentication-invalid"
+  | "relayer-provenance-invalid"
+  | "authorization-denied"
+  | "attester-relayer-conflict"
+  | "track-contract-mismatch"
+  | "track-write-failed"
+  | "persisted-attestation-not-confirmed";
+
+/** A live attempt either returns verified persisted evidence or an honest not-done result. */
+export type OwnerSignatureResult =
+  | {
+      readonly status: "signed";
+      readonly duplicate: boolean;
+      readonly persisted: PersistedOwnerSignature;
+    }
+  | {
+      readonly status: "not-done";
+      readonly reason: OwnerSignatureNotDoneReason;
+    };
+
+/** The live write surface; a snapshot never implements this contract. */
+export interface FocusLiveSession {
+  sign(request: OwnerSignatureRequest): Promise<OwnerSignatureResult>;
 }
