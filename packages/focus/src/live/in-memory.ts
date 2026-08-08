@@ -69,7 +69,7 @@ export class TestOnlyInMemoryTrackOwnerSignaturePort implements TrackOwnerSignat
   }
 
   readOwnerSignature(
-    input: OwnerSignatureIdentity & { readonly idempotencyKey: string },
+    input: OwnerSignatureIdentity,
   ): Promise<PersistedOwnerSignature | undefined> {
     this.readAttempts += 1;
     return Promise.resolve(this.records.get(identityKey(input)));

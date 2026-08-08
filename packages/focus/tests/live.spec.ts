@@ -116,7 +116,11 @@ const expectNoIngest = async (
   expect(store.readAttempts).toBe(0);
 };
 
-class BarrierRacingTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
+/**
+ * Production-like test adapter: both writers cross the barrier, then one synchronous section
+ * models a database unique constraint/upsert on canonical owner + workspace + decision only.
+ */
+class BarrierSynchronizedDurableAtomicTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
   readonly contractVersion = FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION;
 
   private readonly records = new Map<string, PersistedOwnerSignature>();
@@ -124,6 +128,7 @@ class BarrierRacingTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
   private releaseBarrier: (() => void) | undefined;
   private waiting = 0;
   appendAttempts = 0;
+  readonly receiptStatuses: TrackOwnerSignatureWriteResult["status"][] = [];
 
   constructor() {
     this.barrier = new Promise((resolve) => {
@@ -137,28 +142,29 @@ class BarrierRacingTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
 
   async appendOwnerSignature(input: TrackOwnerSignatureWrite): Promise<TrackOwnerSignatureWriteResult> {
     this.appendAttempts += 1;
-    const key = this.key(input.attestation.attester.canonicalIdentity, input.target, input.idempotencyKey);
-    if (this.records.has(key)) return { status: "duplicate", recordId: this.records.get(key)!.recordId };
-
     this.waiting += 1;
     if (this.waiting === 2) this.releaseBarrier?.();
     await this.barrier;
 
+    const key = this.key(input.attestation.attester.canonicalIdentity, input.target);
+    const existing = this.records.get(key);
+    if (existing !== undefined) {
+      this.receiptStatuses.push("duplicate");
+      return { status: "duplicate", recordId: existing.recordId };
+    }
+
     const persisted = persistedFromWrite(input, `racy-owner-signature-${this.appendAttempts}`);
     this.records.set(key, persisted);
+    this.receiptStatuses.push("written");
     return { status: "written", recordId: persisted.recordId };
   }
 
   readOwnerSignature(input: Parameters<TrackOwnerSignaturePort["readOwnerSignature"]>[0]) {
-    return Promise.resolve(this.records.get(this.key(input.ownerCanonicalIdentity, input.target, input.idempotencyKey)));
+    return Promise.resolve(this.records.get(this.key(input.ownerCanonicalIdentity, input.target)));
   }
 
-  private key(
-    owner: AuthenticatedOwnPrincipal["canonicalIdentity"],
-    target: TrackNativeDecisionTarget,
-    idempotencyKey: string,
-  ): string {
-    return `${owner.issuer}\u0000${owner.subject}\u0000${target.workspace}\u0000${target.decisionId}\u0000${idempotencyKey}`;
+  private key(owner: AuthenticatedOwnPrincipal["canonicalIdentity"], target: TrackNativeDecisionTarget): string {
+    return `${owner.issuer}\u0000${owner.subject}\u0000${target.workspace}\u0000${target.decisionId}`;
   }
 }
 
@@ -499,18 +505,20 @@ describe("FocusLiveSession owner-signature gate", () => {
     });
   });
 
-  it("documents that atomic uniqueness is enforced by the durable Track port, not this driver", async () => {
-    const racyPort = new BarrierRacingTrackOwnerSignaturePort();
-    const live = makeLive(racyPort);
+  it("returns one duplicate from a barrier-synchronized durable atomic owner-decision write", async () => {
+    const atomicPort = new BarrierSynchronizedDurableAtomicTrackOwnerSignaturePort();
+    const live = makeLive(atomicPort);
     const [first, second] = await Promise.all([
       live.sign({ ...REQUEST, idempotencyKey: "race-key-one" }),
       live.sign({ ...REQUEST, idempotencyKey: "race-key-two" }),
     ]);
 
-    expect(first).toMatchObject({ status: "signed", duplicate: false });
-    expect(second).toMatchObject({ status: "signed", duplicate: false });
-    expect(racyPort.appendAttempts).toBe(2);
-    expect(racyPort.recordCount).toBe(2);
+    expect([first, second].filter((result) => result.status === "signed" && !result.duplicate)).toHaveLength(1);
+    expect([first, second].filter((result) => result.status === "signed" && result.duplicate)).toHaveLength(1);
+    expect(atomicPort.appendAttempts).toBe(2);
+    expect(atomicPort.recordCount).toBe(1);
+    expect(atomicPort.receiptStatuses.filter((status) => status === "written")).toHaveLength(1);
+    expect(atomicPort.receiptStatuses.filter((status) => status === "duplicate")).toHaveLength(1);
   });
 
   it("uses the test-only adapter's synchronous atomic owner-decision uniqueness for same-key replay", async () => {
