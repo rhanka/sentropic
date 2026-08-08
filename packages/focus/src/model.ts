@@ -185,9 +185,16 @@ export interface OwnPrincipalAuthentication {
   readonly proof: unknown;
 }
 
+/** A normalized, issuer-scoped identity supplied by a trusted authentication boundary. */
+export interface CanonicalPrincipalIdentity {
+  readonly issuer: string;
+  readonly subject: string;
+}
+
 /** The authenticated owner identity returned by the trusted own-principal adapter. */
 export interface AuthenticatedOwnPrincipal {
   readonly principalId: string;
+  readonly canonicalIdentity: CanonicalPrincipalIdentity;
   readonly authenticatedAt: string;
 }
 
@@ -195,6 +202,7 @@ export interface AuthenticatedOwnPrincipal {
 export interface RelayerProvenance {
   readonly transport: "cli" | "http" | "mcp-stdio" | "internal";
   readonly relayerId: string;
+  readonly canonicalIdentity: CanonicalPrincipalIdentity;
 }
 
 /** The authenticated owner act that the Track signature contract must persist. */
@@ -206,7 +214,6 @@ export interface OwnerSignatureAttestation {
 export interface OwnerSignatureRequest {
   readonly target: TrackNativeDecisionTarget;
   readonly authentication: OwnPrincipalAuthentication;
-  readonly relayer: RelayerProvenance;
   readonly idempotencyKey: string;
 }
 
@@ -229,7 +236,11 @@ export interface PersistedOwnerSignature extends TrackOwnerSignatureWrite {
  * given Track-native decision once, irrespective of transport retries or idempotency keys.
  */
 export interface OwnerSignatureIdentity {
-  readonly ownerPrincipalId: string;
+  /**
+   * The normalized issuer+subject identity of the authenticated owner. This is the identity
+   * used for the durable unique constraint, never a caller-supplied display identifier.
+   */
+  readonly ownerCanonicalIdentity: CanonicalPrincipalIdentity;
   readonly target: TrackNativeDecisionTarget;
 }
 
@@ -243,6 +254,7 @@ export type OwnerSignatureNotDoneReason =
   | "invalid-signature-request"
   | "owner-authentication-required"
   | "owner-authentication-invalid"
+  | "relayer-provenance-invalid"
   | "authorization-denied"
   | "attester-relayer-conflict"
   | "track-contract-mismatch"

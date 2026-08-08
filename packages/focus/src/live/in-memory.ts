@@ -8,7 +8,7 @@ import {
 import type { TrackOwnerSignaturePort } from "./index.js";
 
 const identityKey = (identity: OwnerSignatureIdentity): string =>
-  `${identity.ownerPrincipalId}\u0000${identity.target.workspace}\u0000${identity.target.decisionId}`;
+  `${identity.ownerCanonicalIdentity.issuer}\u0000${identity.ownerCanonicalIdentity.subject}\u0000${identity.target.workspace}\u0000${identity.target.decisionId}`;
 
 const copyPersisted = (write: TrackOwnerSignatureWrite, recordId: string): PersistedOwnerSignature =>
   Object.freeze({
@@ -17,25 +17,37 @@ const copyPersisted = (write: TrackOwnerSignatureWrite, recordId: string): Persi
     attestation: Object.freeze({
       attester: Object.freeze({
         principalId: write.attestation.attester.principalId,
+        canonicalIdentity: Object.freeze({
+          issuer: write.attestation.attester.canonicalIdentity.issuer,
+          subject: write.attestation.attester.canonicalIdentity.subject,
+        }),
         authenticatedAt: write.attestation.attester.authenticatedAt,
       }),
     }),
-    relayer: Object.freeze({ transport: write.relayer.transport, relayerId: write.relayer.relayerId }),
+    relayer: Object.freeze({
+      transport: write.relayer.transport,
+      relayerId: write.relayer.relayerId,
+      canonicalIdentity: Object.freeze({
+        issuer: write.relayer.canonicalIdentity.issuer,
+        subject: write.relayer.canonicalIdentity.subject,
+      }),
+    }),
     idempotencyKey: write.idempotencyKey,
     recordId,
   });
 
 /**
- * Reference Track adapter for tests and local hosts. Its synchronous map check-and-set is one
- * JavaScript critical section: concurrent callers cannot observe an empty identity between the
- * check and insert. Durable adapters must provide the same guarantee with an upsert/constraint.
+ * TEST-ONLY, non-durable reference adapter. This process-local Map is not a Track persistence
+ * implementation and must never be wired into a live host. It gives unit tests a deterministic
+ * synchronous critical section; production needs the durable atomic port contract.
  */
-export class InMemoryTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
+export class TestOnlyInMemoryTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
   readonly contractVersion = FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION;
 
   private readonly records = new Map<string, PersistedOwnerSignature>();
   private nextRecord = 1;
   appendAttempts = 0;
+  readAttempts = 0;
 
   get recordCount(): number {
     return this.records.size;
@@ -44,7 +56,7 @@ export class InMemoryTrackOwnerSignaturePort implements TrackOwnerSignaturePort 
   appendOwnerSignature(input: TrackOwnerSignatureWrite): Promise<TrackOwnerSignatureWriteResult> {
     this.appendAttempts += 1;
     const key = identityKey({
-      ownerPrincipalId: input.attestation.attester.principalId,
+      ownerCanonicalIdentity: input.attestation.attester.canonicalIdentity,
       target: input.target,
     });
     const existing = this.records.get(key);
@@ -59,6 +71,7 @@ export class InMemoryTrackOwnerSignaturePort implements TrackOwnerSignaturePort 
   readOwnerSignature(
     input: OwnerSignatureIdentity & { readonly idempotencyKey: string },
   ): Promise<PersistedOwnerSignature | undefined> {
+    this.readAttempts += 1;
     return Promise.resolve(this.records.get(identityKey(input)));
   }
 }
