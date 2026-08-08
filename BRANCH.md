@@ -89,6 +89,7 @@
 - [x] `BR-SIG-ADAPTER-1` — The authenticated Focus owner-signature route composes the durable factory with session-derived own-principal, trusted HTTP relayer provenance, workspace membership, and tenancy resolution; its focused unit test verifies that composition structurally.
 - [x] `BR-SIG-ADAPTER-4` — C4: the route obtains `authenticatedAt` from the immutable validated-session creation timestamp, so delayed retries retain the durable attestation identity.
 - [x] `BR-SIG-ADAPTER-5` — C5: the signing route emits 201 for a newly durable signature, 200 only for a durable duplicate, and non-2xx for every not-done result.
+- [x] `BR-SIG-ADAPTER-6` — C6: every signing request re-checks the current tenant membership through the authoritative service before any durable write, while tenant resolution remains a mapping-only step.
 - [ ] `BR-SIG-ADAPTER-2` — BLOCKED. `make db-generate REGISTRY=local`, `make up-api-test`, and `make typecheck-api` cannot build the isolated API image because the audit gate rejects `vitest` advisory `GHSA-5xrq-8626-4rwp`; the scoped test command consequently reports `service "api" is not running`. Owner: security lane; acceptance: resolve the advisory without weakening the audit gate, then regenerate the journaled migration and rerun the scoped real-database tests.
 
 ## AI Flaky tests

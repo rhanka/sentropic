@@ -8,6 +8,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AuthUser } from '../../middleware/auth';
+import { isTenantAdmin } from '../../services/auth/tenant-membership';
 import { createApiFocusLiveSession } from '../../services/focus/live-session';
 import { resolveTenant } from '../../services/tenancy/resolve-tenant';
 import { requireWorkspaceAccess } from '../../services/workspace-access';
@@ -68,8 +69,9 @@ focusRouter.post('/owner-signatures', zValidator('json', ownerSignatureSchema), 
 
         try {
           await requireWorkspaceAccess(user.userId, target.workspace);
-          const tenant = await resolveTenant({ workspaceId: target.workspace, userId: user.userId });
-          return 'tenantId' in tenant;
+          const tenant = await resolveTenant({ workspaceId: target.workspace });
+          if (!('tenantId' in tenant)) return false;
+          return isTenantAdmin(user.userId, tenant.tenantId);
         } catch {
           return false;
         }
