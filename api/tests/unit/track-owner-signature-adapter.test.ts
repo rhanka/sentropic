@@ -67,7 +67,7 @@ describe('PostgresTrackOwnerSignaturePort', () => {
     expect(receipts.filter((receipt) => receipt.status === 'duplicate')).toHaveLength(1);
     expect(new Set(receipts.map((receipt) => receipt.recordId))).toHaveSize(1);
 
-    const [row] = await db
+    const rows = await db
       .select()
       .from(trackOwnerSignatures)
       .where(
@@ -78,6 +78,8 @@ describe('PostgresTrackOwnerSignaturePort', () => {
           eq(trackOwnerSignatures.decisionId, target.decisionId),
         ),
       );
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
     expect(row).toBeDefined();
 
     const persisted = await port.readOwnerSignature(identityOf(target));
@@ -108,24 +110,24 @@ describe('PostgresTrackOwnerSignaturePort', () => {
 
   it('should return not-done when the real adapter cannot transactionally read its write back', async () => {
     const target = createTarget();
-    await db.execute(sql`
-      CREATE OR REPLACE FUNCTION delete_test_owner_signature_after_insert()
-      RETURNS trigger
-      LANGUAGE plpgsql
-      AS $$
-      BEGIN
-        DELETE FROM track_owner_signatures WHERE id = NEW.id;
-        RETURN NEW;
-      END;
-      $$;
-    `);
-    await db.execute(sql`
-      CREATE TRIGGER delete_test_owner_signature_after_insert
-      AFTER INSERT ON track_owner_signatures
-      FOR EACH ROW EXECUTE FUNCTION delete_test_owner_signature_after_insert();
-    `);
-
     try {
+      await db.execute(sql`
+        CREATE OR REPLACE FUNCTION delete_test_owner_signature_after_insert()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+          DELETE FROM track_owner_signatures WHERE id = NEW.id;
+          RETURN NEW;
+        END;
+        $$;
+      `);
+      await db.execute(sql`
+        CREATE TRIGGER delete_test_owner_signature_after_insert
+        AFTER INSERT ON track_owner_signatures
+        FOR EACH ROW EXECUTE FUNCTION delete_test_owner_signature_after_insert();
+      `);
+
       const session = createApiFocusLiveSession({
         ownPrincipal: { authenticate: async () => OWNER },
         relayerProvenance: { getRelayerProvenance: async () => RELAYER },
