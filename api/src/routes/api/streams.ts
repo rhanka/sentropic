@@ -12,7 +12,7 @@ import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
 import { listIssuedLeases } from '../../services/cowork/device-lease-service';
-import { verifyGeneralDeviceProof } from '../../services/cowork/general-device-proof';
+import { consumeGeneralSseProofSession } from '../../services/cowork/general-device-proof';
 import { listPendingGeneralCalls } from '../../services/cowork/general-call-service';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import {
@@ -343,13 +343,8 @@ streamsRouter.get('/cowork-devices/:deviceId/leases/sse', async (c) => {
 streamsRouter.get('/cowork-general/:deviceId/calls/sse', async (c) => {
   const user = c.get('user') as { userId: string };
   const deviceId = c.req.param('deviceId');
-  const pepKeyId = c.req.query('pep_key_id') ?? '';
-  const challenge = c.req.query('challenge') ?? '';
-  const signature = c.req.query('signature') ?? '';
-  const verified = await verifyGeneralDeviceProof({
-    userId: user.userId, deviceId, channel: 'sse', challenge,
-    proof: { channel: 'sse', deviceId, pepKeyId, challenge, signature },
-  });
+  const sessionId = c.req.header('x-cowork-proof-session') ?? '';
+  const verified = await consumeGeneralSseProofSession({ userId: user.userId, deviceId, sessionId });
   if (!verified.ok) return c.json({ message: 'General device proof denied.' }, 403);
   const calls = await listPendingGeneralCalls(user.userId, deviceId);
   const encoder = new TextEncoder();

@@ -33,13 +33,13 @@ export async function depositGeneralCall(input: {
 /** Wake can only preserve an honest deposit: it never resurrects a prior lease. */
 export async function requireFreshAuthorityOnWake(input: {
   durableCallRef: string; principalId: string; targetDeviceId: string;
-}): Promise<GeneralCallRef | null> {
+}): Promise<boolean> {
   const [call] = await db.update(coworkGeneralCalls).set({ requiresFreshAuthority: true, updatedAt: new Date() }).where(and(
     eq(coworkGeneralCalls.id, input.durableCallRef), eq(coworkGeneralCalls.principalId, input.principalId),
     eq(coworkGeneralCalls.targetDeviceId, input.targetDeviceId),
     eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'),
   )).returning();
-  return call ? { durableCallRef: call.id, state: 'DÉPOSÉ-EN-ATTENTE' } : null;
+  return Boolean(call);
 }
 
 /** This foundation has no FAIT writer; all terminal resolution is honest PAS-FAIT. */

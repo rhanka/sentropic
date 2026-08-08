@@ -15,7 +15,7 @@ import {
   listIssuedLeases,
   revokeLease,
 } from '../../services/cowork/device-lease-service';
-import { verifyGeneralDeviceProof } from '../../services/cowork/general-device-proof';
+import { establishGeneralSseProofSession, mintGeneralDeviceProofChallenge, verifyGeneralDeviceProof } from '../../services/cowork/general-device-proof';
 import { acknowledgeGeneralLeaseV2 } from '../../services/cowork/general-lease-service';
 import { listPendingGeneralCalls, markGeneralCallNotDone, requireFreshAuthorityOnWake } from '../../services/cowork/general-call-service';
 
@@ -71,7 +71,19 @@ const acknowledgeLeaseSchema = z.object({
 });
 const revokeLeaseSchema = z.object({ reason: z.string().min(1).max(256) });
 const generalProofSchema = z.object({
-  device_id: z.string().uuid(), pep_key_id: z.string().min(1), challenge: z.string().min(1).max(256), signature: z.string().min(1),
+  device_id: z.string().uuid(),
+  pep_key_id: z.string().min(1),
+  challenge_id: z.string().uuid(),
+  resource_id: z.string().min(1).max(300),
+  method: z.literal('POST'),
+  expires_at: z.string().datetime(),
+  device_kill_epoch: z.number().int().nonnegative(),
+  signature: z.string().min(1),
+});
+const generalProofChallengeSchema = z.object({
+  device_id: z.string().uuid(),
+  channel: z.enum(['poll', 'sse', 'wake', 'ack', 'result', 'stop-status']),
+  resource_id: z.string().uuid().optional(),
 });
 const generalAckSchema = generalProofSchema.extend({
   ack: z.object({ leaseId: z.string().uuid(), leaseDigest: z.string().min(1), deviceId: z.string().uuid(), pepKeyId: z.string().min(1), surfaceEpoch: z.number().int().nonnegative(), killEpoch: z.number().int().nonnegative(), signature: z.string().min(1), version: z.literal(2) }),
@@ -202,33 +214,68 @@ chromeExtensionRouter.get('/cowork-devices/:deviceId/leases', async (c) => {
   })) });
 });
 
-async function requireGeneralProof(c: Context, channel: 'poll' | 'wake' | 'ack' | 'result') {
+function generalProofResource(channel: 'poll' | 'sse' | 'wake' | 'ack' | 'result' | 'stop-status', deviceId: string, resourceId?: string): string | null {
+  if (channel === 'poll' || channel === 'sse' || channel === 'stop-status') return resourceId ? null : `device:${deviceId}`;
+  if (!resourceId) return null;
+  return `${channel === 'ack' ? 'lease' : 'call'}:${resourceId}`;
+}
+
+chromeExtensionRouter.post('/cowork-general/proof-challenges', async (c) => {
+  const parsed = generalProofChallengeSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid General proof challenge request.' }, 400);
+  const resourceId = generalProofResource(parsed.data.channel, parsed.data.device_id, parsed.data.resource_id);
+  if (!resourceId) return c.json({ message: 'Invalid General proof resource.' }, 400);
+  const challenge = await mintGeneralDeviceProofChallenge({
+    userId: c.get('user').userId,
+    deviceId: parsed.data.device_id,
+    channel: parsed.data.channel,
+    resourceId,
+    method: 'POST',
+  });
+  return challenge ? c.json({ challenge }, 201) : c.json({ message: 'General proof challenge denied.' }, 403);
+});
+
+async function requireGeneralProof(c: Context, channel: 'poll' | 'wake' | 'ack' | 'result', resourceId: string) {
   const parsed = generalProofSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return null;
   const result = await verifyGeneralDeviceProof({
-    userId: c.get('user').userId, deviceId: parsed.data.device_id, channel, challenge: parsed.data.challenge,
-    proof: { channel, deviceId: parsed.data.device_id, pepKeyId: parsed.data.pep_key_id, challenge: parsed.data.challenge, signature: parsed.data.signature },
+    userId: c.get('user').userId,
+    deviceId: parsed.data.device_id,
+    channel,
+    resourceId,
+    method: 'POST',
+    proof: {
+      channel,
+      deviceId: parsed.data.device_id,
+      pepKeyId: parsed.data.pep_key_id,
+      challengeId: parsed.data.challenge_id,
+      resourceId: parsed.data.resource_id,
+      method: parsed.data.method,
+      expiresAt: parsed.data.expires_at,
+      deviceKillEpoch: parsed.data.device_kill_epoch,
+      signature: parsed.data.signature,
+    },
   });
   return result.ok ? { parsed: parsed.data, proof: result } : null;
 }
 
 // General-only delivery: a bearer is insufficient on every channel below.
 chromeExtensionRouter.post('/cowork-general/:deviceId/poll', async (c) => {
-  const verified = await requireGeneralProof(c, 'poll');
+  const verified = await requireGeneralProof(c, 'poll', `device:${c.req.param('deviceId')}`);
   if (!verified || verified.parsed.device_id !== c.req.param('deviceId')) return c.json({ message: 'General device proof denied.' }, 403);
   return c.json({ calls: await listPendingGeneralCalls(c.get('user').userId, verified.parsed.device_id) });
 });
 
 chromeExtensionRouter.post('/cowork-general/calls/:callRef/wake', async (c) => {
-  const verified = await requireGeneralProof(c, 'wake');
-  if (!verified || verified.parsed.challenge !== c.req.param('callRef')) return c.json({ message: 'General device proof denied.' }, 403);
-  const call = await requireFreshAuthorityOnWake({ durableCallRef: c.req.param('callRef'), principalId: c.get('user').userId, targetDeviceId: verified.parsed.device_id });
-  return call ? c.json({ call }) : c.json({ message: 'Fresh authority required.' }, 409);
+  const verified = await requireGeneralProof(c, 'wake', `call:${c.req.param('callRef')}`);
+  if (!verified) return c.json({ message: 'General device proof denied.' }, 403);
+  await requireFreshAuthorityOnWake({ durableCallRef: c.req.param('callRef'), principalId: c.get('user').userId, targetDeviceId: verified.parsed.device_id });
+  return c.json({ message: 'Fresh policy, lease, and sensitive confirmation are required before a deposited call can resume.' }, 409);
 });
 
 chromeExtensionRouter.post('/cowork-general/calls/:callRef/result', async (c) => {
-  const verified = await requireGeneralProof(c, 'result');
-  if (!verified || verified.parsed.challenge !== c.req.param('callRef')) return c.json({ message: 'General device proof denied.' }, 403);
+  const verified = await requireGeneralProof(c, 'result', `call:${c.req.param('callRef')}`);
+  if (!verified) return c.json({ message: 'General device proof denied.' }, 403);
   // Native PEP/postcondition evidence is absent: a reported input is never FAIT.
   return c.json({ outcome: (await markGeneralCallNotDone(c.req.param('callRef'), verified.parsed.device_id)) ? 'PAS-FAIT' : 'PAS-FAIT' });
 });
@@ -237,10 +284,48 @@ chromeExtensionRouter.post('/cowork-general/leases/:leaseId/ack', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const parsed = generalAckSchema.safeParse(body);
   if (!parsed.success || parsed.data.ack.leaseId !== c.req.param('leaseId')) return c.json({ message: 'Invalid General lease acknowledgement.' }, 400);
-  const proof = await verifyGeneralDeviceProof({ userId: c.get('user').userId, deviceId: parsed.data.device_id, channel: 'ack', challenge: parsed.data.challenge, proof: { channel: 'ack', deviceId: parsed.data.device_id, pepKeyId: parsed.data.pep_key_id, challenge: parsed.data.challenge, signature: parsed.data.signature } });
+  const proof = await verifyGeneralDeviceProof({
+    userId: c.get('user').userId,
+    deviceId: parsed.data.device_id,
+    channel: 'ack',
+    resourceId: `lease:${c.req.param('leaseId')}`,
+    method: 'POST',
+    proof: {
+      channel: 'ack',
+      deviceId: parsed.data.device_id,
+      pepKeyId: parsed.data.pep_key_id,
+      challengeId: parsed.data.challenge_id,
+      resourceId: parsed.data.resource_id,
+      method: parsed.data.method,
+      expiresAt: parsed.data.expires_at,
+      deviceKillEpoch: parsed.data.device_kill_epoch,
+      signature: parsed.data.signature,
+    },
+  });
   if (!proof.ok) return c.json({ message: 'General device proof denied.' }, 403);
   return (await acknowledgeGeneralLeaseV2({ userId: c.get('user').userId, deviceId: parsed.data.device_id, leaseId: c.req.param('leaseId'), ack: parsed.data.ack, pepPublicKey: proof.device.pepPublicKey }))
     ? c.json({ ok: true }) : c.json({ message: 'General lease acknowledgement denied.' }, 409);
+});
+
+chromeExtensionRouter.post('/cowork-general/:deviceId/calls/sse-session', async (c) => {
+  const parsed = generalProofSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success || parsed.data.device_id !== c.req.param('deviceId')) return c.json({ message: 'Invalid General SSE proof.' }, 400);
+  const session = await establishGeneralSseProofSession({
+    userId: c.get('user').userId,
+    deviceId: parsed.data.device_id,
+    proof: {
+      channel: 'sse',
+      deviceId: parsed.data.device_id,
+      pepKeyId: parsed.data.pep_key_id,
+      challengeId: parsed.data.challenge_id,
+      resourceId: parsed.data.resource_id,
+      method: parsed.data.method,
+      expiresAt: parsed.data.expires_at,
+      deviceKillEpoch: parsed.data.device_kill_epoch,
+      signature: parsed.data.signature,
+    },
+  });
+  return session ? c.json({ session }) : c.json({ message: 'General SSE proof denied.' }, 403);
 });
 
 // --- Download endpoint ---
