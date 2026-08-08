@@ -288,6 +288,13 @@
       "when": 1785024000000,
       "tag": "0040_connector_accounts_multi_account",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1785110400000,
+      "tag": "0041_track_owner_signatures",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "name": "sentropic-api",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "overrides": {
     "glob": "^11.1.0",
@@ -67,6 +67,7 @@
     "@sentropic/chat-server": "file:../packages/chat-server",
     "@sentropic/comments": "file:../packages/comments",
     "@sentropic/connector-host": "file:../packages/connector-host",
+    "@sentropic/focus": "file:../packages/focus",
     "@sentropic/flow": "file:../packages/flow",
     "@sentropic/llm-mesh": "file:../packages/llm-mesh",
     "@sentropic/mcp-auth": "file:../packages/mcp-auth",
