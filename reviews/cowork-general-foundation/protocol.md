@@ -25,3 +25,21 @@ lens: protocol/state machine, crypto binding, replay, and teardown ordering
 ## Verdict
 
 **FAILED.** The diff has useful fail-closed seams and conditional state updates, but the missing schema/time validation, replayable/non-fresh wake, absent connected issue/consume path, and stale-epoch teardown race prevent approval of lease-v2 canonicalization/ack/PoP, durable I5 transitions, fresh wake, atomicity, and revoke-before-cascade as a complete protocol.
+
+## Remediation self-check — 2026-08-08
+
+**Reviewed remediation commits:** `a5089b966`, `282ef0cdf`, `8ad2f71b9`, `99adf16b7`, `c5d3f4816`, `8fabfa2dc`, `14539954d`, `5daaee874`, `a983de549`, `80459abe2`, and `9b1f4ee00`.
+
+| Defect | Re-run result | Evidence |
+|---|---|---|
+| C3 replayable proof / stale wake | **Implementation remediated; acceptance not closed.** | `cowork_device_proof_challenges` atomically burns a 60-second, PEP-key/device-epoch/channel/resource/method-bound challenge. SSE establishes a one-use header session by POST; no PEP signature remains in the URL. Wake consumes its proof but returns `409` and cannot return/resume authority. |
+| C4 durable call / current epoch / rotation / TTL | **Implementation remediated; acceptance not closed.** | `issueGeneralLeaseV2` locks the pending durable call and active device, mints the signed envelope, persists fresh policy/receipt authority, and inserts the lease in one transaction. Ack and consume lock and re-match the complete call/device/authority tuple. Strict envelope, time, algorithm, bounded-key-overlap, and epoch validation now precede acceptance. |
+| C5b revoke before cascade | **Implementation remediated; acceptance not closed.** | `0042` installs one SQL revoke function reached by `BEFORE DELETE` device and user triggers; a call-delete trigger covers workspace/user call cascades. It revokes live leases, invalidates proof material, cancels pending calls, and stores ids-only tombstone lease ids before cascade. Key/status changes also bump the device epoch and revoke pending authority. |
+
+The new vectors in `api/tests/unit/cowork-general-lease-v2.test.ts` cover malformed/future/overlong and rotated-out leases. `api/tests/api/cowork-general-protocol.spec.ts` covers proof replay plus durable restart/reconnect, different-call and prior-epoch rejection, and device/workspace/user cascade ordering.
+
+`make typecheck-api ENV=test-cowork-cu-general` passes. The two required scoped API commands remain blocked by the environment after both permitted API stack bootstraps: `make test-api-unit SCOPE=tests/unit/cowork-general-lease-v2.test.ts ENV=test-cowork-cu-general` and `make test-api-endpoints SCOPE=tests/api/cowork-general-protocol.spec.ts ENV=test-cowork-cu-general` both report `service "api" is not running`. Therefore no replay/race/cascade test is claimed green.
+
+## Updated verdict
+
+**NOT ACCEPTED YET.** The original C3/C4/C5b exploit paths are remediated in source and are covered by deterministic regressions, but their required API execution evidence is blocked. Lots 1–2 remain stopped and must not be re-ticked or merged until those suites run green. The earlier enrollment/containment observations remain later-lot fail-closed seams; no execution or auto-authority route was introduced.

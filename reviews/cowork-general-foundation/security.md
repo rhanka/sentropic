@@ -91,3 +91,20 @@ The gates accept `general_profile.isolatedVmTarget === true` and any non-empty `
 ## Review scope
 
 Reviewed target diff `d7ec18180..670560734` for D2, C1–C5b, BC-2/BC-3/BC-5, tenancy/device proof, and cryptographic safety. This was a blind code review; no product code was changed and no test result is claimed.
+
+## Remediation self-check — 2026-08-08
+
+The remediation was re-read against S1–S4 and the protocol findings. It does not introduce execution, a `FAIT` writer, model-selected authority, or an exemption from BC-2/BC-3.
+
+| Finding | Re-run result | Evidence |
+|---|---|---|
+| S1 / C3 reusable PEP proof | **Implementation remediated; acceptance not closed.** | The server now mints and persists short-lived challenge rows bound to authenticated user, selected device, current PEP key and kill epoch, exact channel/resource/method. A locked conditional update consumes each proof exactly once. SSE signs nothing in a URL: a POST proof establishment creates one header-only, one-use session. |
+| S2 / C4 durable authority substitution and stale epoch | **Implementation remediated; acceptance not closed.** | Issuance locks call and device, derives all signed call/device fields from those rows, persists fresh human-receipt authority, and stores the lease transactionally. Ack/consume reload and lock the same durable call and active current-epoch device; a different `durableCallRef`, stale PEP key, stale kill epoch, or changed authority is denied. |
+| S3 / C4 key rotation and temporal validity | **Implementation remediated; acceptance not closed.** | Lease-v2 now requires the exact schema, canonical finite numbers, strict timestamps, a 60-second maximum TTL, limited future issuance skew, EdDSA/Ed25519, and at most 120 seconds of inactive-key overlap. Unknown, expired, malformed, and rotated-out keys reject. |
+| S4 / C5b deletion bypass | **Implementation remediated; acceptance not closed.** | SQL `BEFORE DELETE` triggers for devices and users call the same revoke routine before FK cascade. A call-delete trigger revokes authority during workspace cascades. Tombstones do not reference the deleted user and retain revoked opaque lease ids. |
+
+The focused API regressions cover the specified attacks, but cannot execute in the current checkout: the scoped unit and protocol commands both fail because Docker has no running `api` service after the permitted bootstraps. `make typecheck-api ENV=test-cowork-cu-general` passes. Consequently this self-check does not replace the required passing execution evidence or the independent scaled qualification gate.
+
+## Updated verdict
+
+**NOT ACCEPTED YET.** Source review finds the release-blocking C3/C4/C5b mechanics redesigned to the ratified fail-closed shape, but the foundation remains blocked until the API proofs run green. S5’s trusted enrollment authority and S6’s containment evidence remain explicitly unavailable later-lot seams; because this branch still has no execution or auto-authorization route, they do not become a bypass in Lots 1–2.

@@ -47,7 +47,7 @@ Build only ratified General Cowork Lots 1–2: a durable, fail-closed authorizat
 - `attention`: `docs/governance/surface-invariants.md` is cited by the ratification as h2a PR #152, but is absent from the declared cross-repository path. The I1–I5 contract is encoded from the ratified spec; no local publisher check is claimed.
 - `attention`: BC-4 global STOP, BC-5 egress enforcement, BC-6 signed allowlist-change governance, and BC-7 qualification are later-lot gates. This foundation supplies only their fail-closed seams and never executes an action.
 - `acknowledge`: BR-CU-GENERAL-EX1 permits `reviews/cowork-general-foundation/**` solely for the mandatory harness review dossier and two immutable peer-leg artefacts; impact is review evidence only and rollback is removal before merge.
-- `blocked`: the two independent review legs failed on C3 replayable proof, C4 lease-to-durable-authority binding and key-time validation, fresh wake, and C5b cascade enforcement. Under the ratification STOP-don't-weaken condition, Lots 1–2 are not accepted and this branch must not merge or feed later lots until those findings are redesigned and remediated.
+- `blocked`: C3/C4/C5b are remediated in source and have deterministic regression suites, but both scoped API commands remain blocked with `service "api" is not running` after the permitted normal and CI-style test-stack bootstraps. Under the ratification STOP-don't-weaken condition, Lots 1–2 remain unaccepted and this branch must not merge or feed later lots until that execution evidence is green.
 
 ## AI Flaky tests
 - No AI-dependent test is in scope. Any non-deterministic failure remains blocking unless recorded here with the exact command and an explicit owner sign-off.
@@ -76,8 +76,8 @@ Build only ratified General Cowork Lots 1–2: a durable, fail-closed authorizat
   - [x] Sign canonical v2 envelopes through the existing JWKS signing-key port; enforce `kid` rotation overlap, reject v1 for General, and require device/PEP PoP on poll/SSE/wake/ack/result.
   - [x] Implement atomic issue/ack/consume/revoke/expire and revoke-before-cascade tombstone; keep FAIT/DÉPOSÉ-EN-ATTENTE/PAS-FAIT durable and mutually exclusive.
   - [x] Add API suites for v2 vectors/tamper/wrong kid/device, all proof channels, deposit durability/wake freshness, I5, and revoke/tombstone ordering; atomic conditional transitions provide the replay/race seam.
-  - [x] Gate: `make typecheck-api ENV=test-cowork-cu-general`; the scoped API suite cannot start because the `api` service is absent; bridge/desktop and connector-host gates pass.
+  - [x] Gate: `make typecheck-api ENV=test-cowork-cu-general`; connector-host, bridge, and desktop type/test gates pass. The scoped API unit/protocol suites remain blocked because the `api` service is not running after permitted stack bootstrap.
 - [ ] **Lot 3 — Final foundation verification**
   - [x] Inspect each hunk and record the mandatory two-peer review evidence.
-  - [ ] `make scope-check` and acceptance reporting remain blocked: C3/C4/C5b do not meet the ratified contract.
+  - [ ] `make scope-check` passes, but acceptance reporting remains blocked until the C3/C4/C5b scoped API regressions run green on an available API service.
   - [ ] Do not state the no-bypass acceptance claim until both review findings are remediated and retested.
