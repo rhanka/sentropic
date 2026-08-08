@@ -21,8 +21,9 @@ durable Track adapters for live use.
 - A local **`DecisionDossierView`-shaped fixture type** + `toDecisionDossierDocument(view)` mapper.
   L2 (`feat/focus-track-read`) rebinds the same mapper to the real `@sentropic/track/read`.
 
-This is the **read-only FocusSnapshot** split: affordances render as **disabled metadata only**
-(no live commands). Live drivers (`FocusLiveSession`) are deferred to later lots.
+The **read-only FocusSnapshot** split remains: affordances render as **disabled metadata only**
+(no live commands). A fail-closed `FocusLiveSession` owner-signature driver is now available to
+hosts that inject their own authentication, relayer-provenance, authorization, and durable Track adapters.
 
 ## Injection + sanitize hooks (no bundled markdown/diagram engine)
 
