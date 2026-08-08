@@ -82,10 +82,89 @@ const copyText = (value: string): string => `${value}`;
 
 const normalizeIdentityPart = (value: string): string => value.trim().toLocaleLowerCase("en-US");
 
+const captureBoundary = <T>(capture: () => T | undefined): T | undefined => {
+  try {
+    return capture();
+  } catch {
+    return undefined;
+  }
+};
+
+type ImmutableProofPrimitive = undefined | null | boolean | number | string | bigint | symbol;
+interface ImmutableProofArray extends ReadonlyArray<ImmutableProof> {}
+interface ImmutableProofObject {
+  readonly [key: string]: ImmutableProof;
+}
+type ImmutableProof = ImmutableProofPrimitive | ImmutableProofArray | ImmutableProofObject;
+
+interface ImmutableProofCapture {
+  readonly value: ImmutableProof;
+}
+
+/**
+ * Reduce opaque proof input to a frozen, JSON-shaped value tree (plus immutable primitives).
+ * Unsupported, cyclic, accessor-throwing, or proxy-throwing values are rejected before auth.
+ */
+const copyImmutableProof = (
+  value: unknown,
+  ancestors: ReadonlySet<object>,
+): ImmutableProofCapture | undefined => {
+  if (
+    value === undefined ||
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string" ||
+    typeof value === "bigint" ||
+    typeof value === "symbol"
+  ) {
+    return { value };
+  }
+  if (typeof value !== "object") return undefined;
+  if (ancestors.has(value)) return undefined;
+
+  const nextAncestors = new Set(ancestors);
+  nextAncestors.add(value);
+
+  if (Array.isArray(value)) {
+    const length = value.length;
+    if (Reflect.ownKeys(value).length !== length + 1) return undefined;
+
+    const copy: ImmutableProof[] = [];
+    for (let index = 0; index < length; index += 1) {
+      if (!Object.hasOwn(value, index)) return undefined;
+      const item = copyImmutableProof(value[index], nextAncestors);
+      if (item === undefined) return undefined;
+      copy.push(item.value);
+    }
+    return { value: Object.freeze(copy) };
+  }
+
+  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return undefined;
+  const keys = Object.keys(value);
+  if (Reflect.ownKeys(value).length !== keys.length) return undefined;
+
+  const copy: Record<string, ImmutableProof> = Object.create(null) as Record<string, ImmutableProof>;
+  for (const key of keys) {
+    const item = copyImmutableProof((value as Record<string, unknown>)[key], nextAncestors);
+    if (item === undefined) return undefined;
+    Object.defineProperty(copy, key, {
+      configurable: false,
+      enumerable: true,
+      value: item.value,
+      writable: false,
+    });
+  }
+  return { value: Object.freeze(copy) };
+};
+
+const captureImmutableProof = (value: unknown): ImmutableProofCapture | undefined =>
+  captureBoundary(() => copyImmutableProof(value, new Set<object>()));
+
 interface RequestSignatureScalars {
   readonly workspace: string;
   readonly decisionId: string;
-  readonly authenticationProof: unknown;
+  readonly authenticationProof: ImmutableProof;
   readonly idempotencyKey: string;
   readonly contractVersion: FocusOwnerSignatureContractVersion;
 }
@@ -114,7 +193,7 @@ interface ReceiptScalars {
   readonly recordId: string;
 }
 
-const captureCanonicalIdentity = (value: unknown): CanonicalPrincipalIdentity | undefined => {
+const captureCanonicalIdentityUnsafe = (value: unknown): CanonicalPrincipalIdentity | undefined => {
   if (!isObject(value)) return undefined;
 
   const scalarSnapshot = Object.freeze({ issuer: value.issuer, subject: value.subject });
@@ -126,8 +205,11 @@ const captureCanonicalIdentity = (value: unknown): CanonicalPrincipalIdentity | 
   });
 };
 
+const captureCanonicalIdentity = (value: unknown): CanonicalPrincipalIdentity | undefined =>
+  captureBoundary(() => captureCanonicalIdentityUnsafe(value));
+
 /** Capture every caller field once, then validate only the frozen scalar snapshot. */
-const captureRequest = (value: unknown): RequestSignatureScalars | undefined => {
+const captureRequestUnsafe = (value: unknown): RequestSignatureScalars | undefined => {
   if (!isObject(value)) return undefined;
 
   const requestBoundary = Object.freeze({
@@ -144,11 +226,13 @@ const captureRequest = (value: unknown): RequestSignatureScalars | undefined => 
     authenticationProof: requestBoundary.authentication.proof,
     idempotencyKey: requestBoundary.idempotencyKey,
   });
+  const proofSnapshot = captureImmutableProof(scalarSnapshot.authenticationProof);
   if (
     scalarSnapshot.authenticationKind !== "own-principal" ||
     !hasText(scalarSnapshot.workspace) ||
     !hasText(scalarSnapshot.decisionId) ||
-    !hasText(scalarSnapshot.idempotencyKey)
+    !hasText(scalarSnapshot.idempotencyKey) ||
+    proofSnapshot === undefined
   ) {
     return undefined;
   }
@@ -156,14 +240,17 @@ const captureRequest = (value: unknown): RequestSignatureScalars | undefined => 
   return Object.freeze({
     workspace: copyText(scalarSnapshot.workspace),
     decisionId: copyText(scalarSnapshot.decisionId),
-    authenticationProof: scalarSnapshot.authenticationProof,
+    authenticationProof: proofSnapshot.value,
     idempotencyKey: copyText(scalarSnapshot.idempotencyKey),
     contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
   });
 };
 
+const captureRequest = (value: unknown): RequestSignatureScalars | undefined =>
+  captureBoundary(() => captureRequestUnsafe(value));
+
 /** Capture a runtime authentication result once; null, arrays, and malformed shapes are invalid. */
-const captureAuthenticatedOwner = (value: unknown): OwnerSignatureScalars | undefined => {
+const captureAuthenticatedOwnerUnsafe = (value: unknown): OwnerSignatureScalars | undefined => {
   if (!isObject(value)) return undefined;
 
   const scalarSnapshot = Object.freeze({
@@ -183,8 +270,11 @@ const captureAuthenticatedOwner = (value: unknown): OwnerSignatureScalars | unde
   });
 };
 
+const captureAuthenticatedOwner = (value: unknown): OwnerSignatureScalars | undefined =>
+  captureBoundary(() => captureAuthenticatedOwnerUnsafe(value));
+
 /** Capture trusted relayer provenance once; callers cannot supply this value. */
-const captureRelayerProvenance = (value: unknown): RelayerSignatureScalars | undefined => {
+const captureRelayerProvenanceUnsafe = (value: unknown): RelayerSignatureScalars | undefined => {
   if (!isObject(value)) return undefined;
 
   const scalarSnapshot = Object.freeze({
@@ -204,8 +294,11 @@ const captureRelayerProvenance = (value: unknown): RelayerSignatureScalars | und
   });
 };
 
+const captureRelayerProvenance = (value: unknown): RelayerSignatureScalars | undefined =>
+  captureBoundary(() => captureRelayerProvenanceUnsafe(value));
+
 /** Capture a port-owned receipt once; no receipt property is ever consulted after this boundary. */
-const captureReceipt = (value: unknown): ReceiptScalars | undefined => {
+const captureReceiptUnsafe = (value: unknown): ReceiptScalars | undefined => {
   if (!isObject(value)) return undefined;
 
   const scalarSnapshot = Object.freeze({ status: value.status, recordId: value.recordId });
@@ -213,6 +306,9 @@ const captureReceipt = (value: unknown): ReceiptScalars | undefined => {
 
   return Object.freeze({ status: scalarSnapshot.status, recordId: copyText(scalarSnapshot.recordId) });
 };
+
+const captureReceipt = (value: unknown): ReceiptScalars | undefined =>
+  captureBoundary(() => captureReceiptUnsafe(value));
 
 const freezeTarget = (snapshot: Pick<RequestSignatureScalars, "workspace" | "decisionId">): TrackNativeDecisionTarget =>
   Object.freeze({ workspace: snapshot.workspace, decisionId: snapshot.decisionId });
@@ -260,7 +356,7 @@ const canonicalIdentityEquals = (left: CanonicalPrincipalIdentity, right: Canoni
   left.issuer === right.issuer && left.subject === right.subject;
 
 /** Capture every field of an untrusted persisted record before validating the read-back. */
-const capturePersistedSignature = (value: unknown): ConfirmedSignatureScalars | undefined => {
+const capturePersistedSignatureUnsafe = (value: unknown): ConfirmedSignatureScalars | undefined => {
   if (!isObject(value)) return undefined;
 
   const recordBoundary = Object.freeze({
@@ -271,11 +367,7 @@ const capturePersistedSignature = (value: unknown): ConfirmedSignatureScalars | 
     relayer: value.relayer,
     idempotencyKey: value.idempotencyKey,
   });
-  if (
-    !isObject(recordBoundary.target) ||
-    !isObject(recordBoundary.attestation) ||
-    !isObject(recordBoundary.relayer)
-  ) {
+  if (!isObject(recordBoundary.target) || !isObject(recordBoundary.attestation) || !isObject(recordBoundary.relayer)) {
     return undefined;
   }
 
@@ -327,6 +419,9 @@ const capturePersistedSignature = (value: unknown): ConfirmedSignatureScalars | 
     recordId: copyText(scalarSnapshot.recordId),
   });
 };
+
+const capturePersistedSignature = (value: unknown): ConfirmedSignatureScalars | undefined =>
+  captureBoundary(() => capturePersistedSignatureUnsafe(value));
 
 const confirms = (
   persisted: ConfirmedSignatureScalars,
@@ -427,7 +522,13 @@ export class FocusLiveSessionDriver implements FocusLiveSession {
       return { status: "not-done", reason: "authorization-denied" };
     }
 
-    const trackContractSnapshot = Object.freeze({ contractVersion: this.track.contractVersion });
+    let trackContractVersion: unknown;
+    try {
+      trackContractVersion = this.track.contractVersion;
+    } catch {
+      return { status: "not-done", reason: "track-write-failed" };
+    }
+    const trackContractSnapshot = Object.freeze({ contractVersion: trackContractVersion });
     if (trackContractSnapshot.contractVersion !== FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION) {
       return { status: "not-done", reason: "track-contract-mismatch" };
     }
