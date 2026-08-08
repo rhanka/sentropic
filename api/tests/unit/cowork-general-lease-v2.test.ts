@@ -35,10 +35,19 @@ describe('Cowork General lease v2', () => {
     expect(verifyLeaseAckV2({ ...ack, surfaceEpoch: 10 }, signed, pepKey)).toBe(false);
 
     for (const channel of ['poll', 'sse', 'wake', 'ack', 'result', 'stop-status'] as const) {
-      const unsignedProof = { channel, deviceId: 'device-a', pepKeyId: 'pep-a', challenge: `server-${channel}` };
+      const unsignedProof = {
+        channel,
+        deviceId: 'device-a',
+        pepKeyId: 'pep-a',
+        challengeId: `00000000-0000-4000-8000-00000000000${['poll', 'sse', 'wake', 'ack', 'result', 'stop-status'].indexOf(channel)}`,
+        resourceId: channel === 'ack' ? 'lease:lease-a' : channel === 'poll' || channel === 'sse' || channel === 'stop-status' ? 'device:device-a' : 'call:call-a',
+        method: 'POST',
+        expiresAt: '2026-08-03T00:00:30.000Z',
+        deviceKillEpoch: 4,
+      };
       const proof = { ...unsignedProof, signature: sign(null, Buffer.from(devicePepProofPayload(unsignedProof)), pair.privateKey).toString('base64url') };
       expect(verifyDevicePepProof(proof, unsignedProof, pepKey)).toBe(true);
-      expect(verifyDevicePepProof({ ...proof, challenge: 'replayed-on-other-resource' }, unsignedProof, pepKey)).toBe(false);
+      expect(verifyDevicePepProof({ ...proof, resourceId: 'replayed-on-other-resource' }, unsignedProof, pepKey)).toBe(false);
     }
   });
 });
