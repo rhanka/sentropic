@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 
 import { db } from '../../src/db/client';
-import { coworkDeviceTeardownTombstones, coworkDevices, coworkGeneralCalls } from '../../src/db/schema';
+import { coworkDeviceLeases, coworkDeviceTeardownTombstones, coworkDevices, coworkGeneralCalls, users, workspaces } from '../../src/db/schema';
 import { depositGeneralCall, markGeneralCallNotDone, requireFreshAuthorityOnWake, revokeCoworkDeviceBeforeCascade } from '../../src/services/cowork/general-call-service';
 import { consumeGeneralSseProofSession, establishGeneralSseProofSession, mintGeneralDeviceProofChallenge, verifyGeneralDeviceProof } from '../../src/services/cowork/general-device-proof';
 import { acknowledgeGeneralLeaseV2, consumeGeneralLease, issueGeneralLeaseV2, type FreshGeneralAuthority } from '../../src/services/cowork/general-lease-service';
@@ -141,6 +141,42 @@ describe('Cowork General durable protocol', () => {
     const [rotatedDevice] = await db.select().from(coworkDevices).where(eq(coworkDevices.id, device.deviceId));
     expect(rotatedDevice?.killEpoch).toBeGreaterThan(signed!.envelope.killEpoch);
     expect(await consumeGeneralLease({ userId: user.id, deviceId: device.deviceId, leaseId: signed!.envelope.leaseId, durableCallRef: first!.durableCallRef, keys, now })).toBe(false);
+  });
+
+  it('revokes authority before direct device, user, and workspace cascades', async () => {
+    const addLease = async (userId: string, deviceId: string, turnRef: string) => {
+      const id = randomUUID();
+      await db.insert(coworkDeviceLeases).values({ id, deviceId, userId, turnRef, nonce: randomUUID(), scope: { protocol: 'cowork-general-lease-v2' }, expiresAt: new Date(Date.now() + 60_000) });
+      return id;
+    };
+    const makeCall = (principalId: string, workspaceId: string, targetDeviceId: string, toolCallId: string) => depositGeneralCall({
+      principalId, tenantId: 'sentropic', workspaceId, targetDeviceId, invocationId: `${toolCallId}-invoke`, toolCallId,
+      descriptorCiphertext: 'opaque-ciphertext', descriptorKeyRef: 'test-key-ref', descriptorMeta: { actionDescriptorId: `action-${toolCallId}`, argumentDigest: `digest-${toolCallId}` }, authorityEpoch: 0, nodeEnv: 'test',
+    });
+
+    const direct = await seedCoworkDevice({ userId: user.id, presence: 'active', general: true });
+    const directCall = await deposit(direct.deviceId, 'direct-delete-call');
+    const directLease = await addLease(user.id, direct.deviceId, directCall!.durableCallRef);
+    await db.delete(coworkDevices).where(eq(coworkDevices.id, direct.deviceId));
+    const [directTombstone] = await db.select().from(coworkDeviceTeardownTombstones).where(eq(coworkDeviceTeardownTombstones.deviceId, direct.deviceId));
+    expect(directTombstone?.revokedLeaseIds).toContain(directLease);
+    expect(await db.select().from(coworkDeviceLeases).where(eq(coworkDeviceLeases.id, directLease))).toHaveLength(0);
+
+    const workspaceUser = await createAuthenticatedUser('editor');
+    const workspaceDevice = await seedCoworkDevice({ userId: workspaceUser.id, presence: 'active', general: true });
+    const workspaceCall = await makeCall(workspaceUser.id, workspaceUser.workspaceId!, workspaceDevice.deviceId, 'workspace-delete-call');
+    const workspaceLease = await addLease(workspaceUser.id, workspaceDevice.deviceId, workspaceCall!.durableCallRef);
+    await db.delete(workspaces).where(eq(workspaces.id, workspaceUser.workspaceId!));
+    expect((await db.select().from(coworkDeviceLeases).where(eq(coworkDeviceLeases.id, workspaceLease)))[0]?.status).toBe('revoked');
+
+    const accountUser = await createAuthenticatedUser('editor');
+    const accountDevice = await seedCoworkDevice({ userId: accountUser.id, presence: 'active', general: true });
+    const accountCall = await makeCall(accountUser.id, accountUser.workspaceId!, accountDevice.deviceId, 'account-delete-call');
+    const accountLease = await addLease(accountUser.id, accountDevice.deviceId, accountCall!.durableCallRef);
+    await db.delete(users).where(eq(users.id, accountUser.id));
+    const [accountTombstone] = await db.select().from(coworkDeviceTeardownTombstones).where(eq(coworkDeviceTeardownTombstones.deviceId, accountDevice.deviceId));
+    expect(accountTombstone?.revokedLeaseIds).toContain(accountLease);
+    expect(await db.select().from(coworkDeviceLeases).where(eq(coworkDeviceLeases.id, accountLease))).toHaveLength(0);
   });
 
 });
