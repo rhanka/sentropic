@@ -36,6 +36,7 @@ CREATE TABLE "cowork_device_teardown_tombstones" (
   "revoked_lease_ids" jsonb NOT NULL DEFAULT '[]'::jsonb,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX "cowork_device_teardown_tombstones_device_unique" ON "cowork_device_teardown_tombstones" ("device_id");
 
 CREATE TABLE "cowork_device_proof_challenges" (
   "id" text PRIMARY KEY NOT NULL,
@@ -80,25 +81,48 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION "cowork_general_revoke_device_before_delete"()
-RETURNS trigger
+CREATE OR REPLACE FUNCTION "cowork_general_revoke_device_authority"(p_device_id text, p_user_id text, p_kill_epoch integer, p_reason text)
+RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE revoked_lease_ids jsonb;
 BEGIN
   SELECT COALESCE(jsonb_agg("id" ORDER BY "id"), '[]'::jsonb) INTO revoked_lease_ids
-  FROM "cowork_device_leases" WHERE "device_id" = OLD."id" AND "status" IN ('issued', 'acknowledged');
+  FROM "cowork_device_leases" WHERE "device_id" = p_device_id AND "status" IN ('issued', 'acknowledged');
   UPDATE "cowork_general_calls"
   SET "state" = 'PAS-FAIT', "requires_fresh_authority" = true, "fresh_authority" = NULL, "updated_at" = now()
-  WHERE "target_device_id" = OLD."id" AND "state" = 'DÉPOSÉ-EN-ATTENTE';
+  WHERE "target_device_id" = p_device_id AND "state" = 'DÉPOSÉ-EN-ATTENTE';
   UPDATE "cowork_device_leases" SET "status" = 'revoked'
-  WHERE "device_id" = OLD."id" AND "status" IN ('issued', 'acknowledged');
+  WHERE "device_id" = p_device_id AND "status" IN ('issued', 'acknowledged');
   UPDATE "cowork_device_proof_challenges" SET "consumed_at" = now()
-  WHERE "device_id" = OLD."id" AND "consumed_at" IS NULL;
+  WHERE "device_id" = p_device_id AND "consumed_at" IS NULL;
   UPDATE "cowork_device_proof_sessions" SET "consumed_at" = now()
-  WHERE "device_id" = OLD."id" AND "consumed_at" IS NULL;
+  WHERE "device_id" = p_device_id AND "consumed_at" IS NULL;
   INSERT INTO "cowork_device_teardown_tombstones" ("id", "device_id", "user_id", "kill_epoch", "reason", "revoked_lease_ids")
-  VALUES (gen_random_uuid()::text, OLD."id", OLD."user_id", OLD."kill_epoch" + 1, 'cascade_delete', revoked_lease_ids);
+  VALUES (gen_random_uuid()::text, p_device_id, p_user_id, p_kill_epoch, p_reason, revoked_lease_ids)
+  ON CONFLICT ("device_id") DO NOTHING;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION "cowork_general_revoke_device_before_delete"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM "cowork_general_revoke_device_authority"(OLD."id", OLD."user_id", OLD."kill_epoch" + 1, 'device_cascade_delete');
+  RETURN OLD;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION "cowork_general_revoke_user_before_delete"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE device record;
+BEGIN
+  FOR device IN SELECT "id", "kill_epoch" FROM "cowork_devices" WHERE "user_id" = OLD."id" FOR UPDATE LOOP
+    PERFORM "cowork_general_revoke_device_authority"(device."id", OLD."id", device."kill_epoch" + 1, 'user_cascade_delete');
+  END LOOP;
   RETURN OLD;
 END;
 $$;
@@ -129,5 +153,7 @@ CREATE TRIGGER "cowork_general_call_before_delete_revoke"
 BEFORE DELETE ON "cowork_general_calls" FOR EACH ROW EXECUTE FUNCTION "cowork_general_revoke_call_before_delete"();
 CREATE TRIGGER "cowork_general_device_before_delete_revoke"
 BEFORE DELETE ON "cowork_devices" FOR EACH ROW EXECUTE FUNCTION "cowork_general_revoke_device_before_delete"();
+CREATE TRIGGER "cowork_general_user_before_delete_revoke"
+BEFORE DELETE ON "users" FOR EACH ROW EXECUTE FUNCTION "cowork_general_revoke_user_before_delete"();
 CREATE TRIGGER "cowork_general_device_before_authority_change"
 BEFORE UPDATE OF "pep_public_key", "pep_key_id", "status" ON "cowork_devices" FOR EACH ROW EXECUTE FUNCTION "cowork_general_bump_device_epoch"();

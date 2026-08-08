@@ -307,7 +307,9 @@ export const coworkDeviceTeardownTombstones = pgTable('cowork_device_teardown_to
   reason: text('reason').notNull(),
   revokedLeaseIds: jsonb('revoked_lease_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-});
+}, (table) => ({
+  deviceUnique: uniqueIndex('cowork_device_teardown_tombstones_device_unique').on(table.deviceId),
+}));
 
 // Server-minted, one-use General PEP proof challenges.  The proof itself is
 // never a bearer credential: it is accepted only while this durable row is
