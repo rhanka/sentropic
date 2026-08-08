@@ -4,6 +4,7 @@ import type { DeviceIdentitySigner, FetchLike } from '@sentropic/cowork-bridge/a
 import type { ConsentManager } from '../consent/index.js';
 import { runDesktopToolCall, type DesktopToolContext } from '../tools/index.js';
 import { remoteActionDigest, remotePayloadDigest } from '../tools/action-digest.js';
+import { parseCoworkInputAction } from '../tools/input-action-schema.js';
 import type { ForegroundSurface } from '../capability/index.js';
 
 type Jwk = { kid?: string; kty: string; crv?: string; x?: string };
@@ -35,7 +36,7 @@ const isCapability = (value: unknown): value is 'screen_capture' | 'input_action
 const consentDetails = (capability: 'screen_capture' | 'input_action', action: Record<string, unknown>, surface: ForegroundSurface) => {
     const foreground = { executable: surface.executable, windowTitle: surface.title, hwnd: surface.hwnd };
     if (capability === 'screen_capture') return { foreground, capture: { screen: 'primary full display' } };
-    if (action.action === 'click') return { foreground, coordinates: { x: action.x, y: action.y, button: action.button ?? 'left' } };
+    if (action.action === 'click') return { foreground, coordinates: { x: action.x, y: action.y, button: action.button } };
     if (action.action === 'scroll') return { foreground, scroll: { dx: action.dx ?? 0, dy: action.dy ?? 0 } };
     return { foreground, typedText: typeof action.text === 'string' ? action.text : '' };
 };
@@ -132,8 +133,13 @@ export class RemoteLeaseRunner {
         let claimed = false;
         try {
             const token = await this.deps.getAccessToken();
-            const action = lease.scope?.action;
-            const args = action && typeof action === 'object' && !Array.isArray(action) ? action as Record<string, unknown> : {};
+            const rawAction = lease.scope?.action;
+            const parsedInputAction = capability === 'input_action' ? parseCoworkInputAction(rawAction) : null;
+            if (capability === 'input_action' && !parsedInputAction) {
+                if (token) await this.cancelBeforeStart(token, lease, 'invalid_input_action');
+                return;
+            }
+            const args = parsedInputAction ?? (rawAction && typeof rawAction === 'object' && !Array.isArray(rawAction) ? rawAction as Record<string, unknown> : {});
             const surface = await this.acquireSurface();
             if (!surface) {
                 if (token) await this.cancelBeforeStart(token, lease, 'surface_guard_failed');

@@ -182,6 +182,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Cycle 3 F-02: amend the branch-local lease migration and Drizzle partial idempotency index to admit `executing`; real Postgres migration/API validation remains pending a runnable stack.
   - [x] Cycle 3 SOL-03: deny a mismatched invocation without mutating an `executing` owner; only device-lock-serialized issued/acknowledged rows remain pre-start-revocable.
   - [x] Cycle 3 F-01: revoke exact workspace/capability issued and acknowledged authority under the device/grant lock; acknowledge and start recheck the grant under that same fence.
+  - [x] Cycle 3 F-03: canonicalize one exact click/type/scroll schema at issuance and execution, reject malformed action shapes, and bind FAIT to the canonical action digest.
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**
   - [ ] Run all Lot 1–4 typecheck/lint/tests plus `make test-api ENV=test-cowork-connector`; document any accepted AI flaky signature.

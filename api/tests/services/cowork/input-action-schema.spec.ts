@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isCoworkInputAction, isCoworkLiteralText } from '../../../src/services/cowork/input-action-schema';
+import { isCoworkInputAction, isCoworkLiteralText, parseCoworkInputAction } from '../../../src/services/cowork/input-action-schema';
 
 describe('Cowork input action schema', () => {
   it('accepts only bounded printable literal type text', () => {
@@ -9,5 +9,16 @@ describe('Cowork input action schema', () => {
       expect(isCoworkLiteralText(`safe${text}text`)).toBe(false);
       expect(isCoworkInputAction({ action: 'type', text: `safe${text}text` })).toBe(false);
     }
+  });
+
+  it('accepts only exact discriminated action shapes and canonicalizes a missing click button', () => {
+    expect(parseCoworkInputAction({ action: 'click', x: 10, y: -2 })).toEqual({ action: 'click', x: 10, y: -2, button: 'left' });
+    expect(parseCoworkInputAction({ action: 'click', x: 10.5, y: 2 })).toBeNull();
+    expect(parseCoworkInputAction({ action: 'click', x: 10, y: 2, button: 'right ' })).toBeNull();
+    expect(parseCoworkInputAction({ action: 'click', x: 10, y: 2, extra: true })).toBeNull();
+    expect(parseCoworkInputAction({ action: 'scroll', dx: 0, dy: 1 })).toEqual({ action: 'scroll', dx: 0, dy: 1 });
+    expect(parseCoworkInputAction({ action: 'scroll', dx: 0, dy: 0 })).toBeNull();
+    expect(parseCoworkInputAction({ action: 'scroll', dx: 0 })).toBeNull();
+    expect(isCoworkInputAction({ action: 'type', text: 'safe', extra: true })).toBe(false);
   });
 });
