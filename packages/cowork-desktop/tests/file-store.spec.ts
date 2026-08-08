@@ -2,9 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { verify, createPublicKey } from 'node:crypto';
 import { createFileStore, type FileStore } from '../src/storage/index.js';
-import { loadOrCreateDeviceIdentity } from '../src/enroll/index.js';
 import { DESKTOP_ORIGIN } from '../src/consent/index.js';
 
 describe('createFileStore — StorageAdapter + ConsentStore round-trip', () => {
@@ -54,16 +52,9 @@ describe('createFileStore — StorageAdapter + ConsentStore round-trip', () => {
         expect(await store.readPersistent()).toBeNull();
     });
 
-    it('persists one Ed25519 device identity across store instances', async () => {
-        const first = await loadOrCreateDeviceIdentity(store);
-        const reopened = await loadOrCreateDeviceIdentity(createFileStore(dir));
-        expect(reopened.deviceId).toBe(first.deviceId);
-        expect(reopened.publicKey).toBe(first.publicKey);
-        const payload = 'cowork-enroll-v1:device.nonce';
-        const publicKey = createPublicKey({
-            key: Buffer.from(first.publicKey, 'base64url'), format: 'der', type: 'spki',
-        });
-        expect(verify(null, Buffer.from(payload), publicKey, Buffer.from(await reopened.sign(payload), 'base64url'))).toBe(true);
+    it('does not persist an exportable device private key in the portable store', async () => {
+        await store.writePersistent({ refreshToken: 'r', user: { id: 'u', role: 'guest', email: null, displayName: null }, updatedAt: 1 });
+        await expect((await import('node:fs/promises')).readdir(dir)).resolves.not.toContain('device-identity.json');
     });
 
     it('persists, lists, and clears consent entries on disk', async () => {

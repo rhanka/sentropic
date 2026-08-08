@@ -4,4 +4,4 @@
  */
 
 export * from './device-code-client.js';
-export * from './device-identity.js';
+export * from './windows-machine-identity.js';
