@@ -8,8 +8,10 @@ COPY ui/package.json ./ui/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
 RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
     else npm install --workspaces --include-workspace-root; fi
-# Security: Audit production dependencies for HIGH/CRITICAL vulnerabilities
-RUN npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root
+# Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
+# (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
+COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
+RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
 COPY . .
 
 FROM base AS development
