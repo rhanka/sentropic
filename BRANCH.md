@@ -63,8 +63,8 @@
 
 - [ ] **Lot 1 — Live signature contract and fail-closed driver**
   - [x] Add `FocusLiveSession` types for an own-principal owner act, distinct relayer provenance, Track-native decision target, exact ingest-contract version, idempotency key, duplicate semantics, persisted attestation, and honest not-done outcomes.
-  - [ ] Add the live driver port that authenticates the owner, authorizes the owner for the requested workspace and decision, rejects an owner/relayer identity substitution, requires the exact pinned Track ingest contract, submits the signature, and reads the attestation back.
-  - [ ] Export the live driver from the package root without changing the read-only CLI or Track-read binding.
+  - [x] Add the live driver port that authenticates the owner, authorizes the owner for the requested workspace and decision, rejects an owner/relayer identity substitution, requires the exact pinned Track ingest contract, submits the signature, and reads the attestation back.
+  - [x] Export the live driver from the package root without changing the read-only CLI or Track-read binding.
   - [ ] Lot gate: package typecheck and focused live-driver test command pass in `ENV=test-focus-sig-gate`.
 
 - [ ] **Lot 2 — Security and duplicate-result test lock**
