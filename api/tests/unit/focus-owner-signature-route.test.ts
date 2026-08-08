@@ -35,6 +35,7 @@ const HTTP_RELAYER = Object.freeze({
 });
 
 const { focusRouter } = await import('../../src/routes/api/focus');
+const { failClosedDecisionValidator } = await import('../../src/services/focus/decision-validator');
 const { createApiFocusLiveSession } = await import('../../src/services/focus/live-session');
 
 const authenticatedApp = () => {
@@ -56,9 +57,30 @@ const authenticatedApp = () => {
 describe('Focus owner-signature route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(failClosedDecisionValidator, 'validate').mockResolvedValue({ authorized: true });
     isTenantAdminMock.mockResolvedValue(true);
     requireWorkspaceAccessMock.mockResolvedValue(undefined);
     resolveTenantMock.mockResolvedValue({ tenantId: 'tenant-from-resolver' });
+  });
+
+  it('should fail closed before creating a Focus session when decision validation is not configured', async () => {
+    vi.restoreAllMocks();
+
+    const response = await authenticatedApp().request('http://localhost/focus/owner-signatures', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision_id: 'decision-42',
+        idempotency_key: 'request-retry-42',
+      }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      status: 'not-done',
+      reason: 'decision-validation-not-configured',
+    });
+    expect(createApiFocusLiveSessionMock).not.toHaveBeenCalled();
   });
 
   it('should submit a session-derived owner signature through the durable Focus composition', async () => {
