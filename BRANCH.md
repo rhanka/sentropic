@@ -1,41 +1,83 @@
-# Fix(sec): exception-aware npm-audit gate — unblock ui/api Docker builds
+# Feature: FocusLiveSession owner-signature gate
 
 ## Objective
-- [x] Lift the repo-wide `--audit-level=high` Docker gate that reds every ui/api build (blocks all ui lanes + PR CI).
-- [x] Root cause: `image-size` (GHSA-w3rx-r6r6-pgpr + GHSA-5p2g-fcmc-qvqq, DoS parsers) pulled transitively by `pptxgenjs@4.0.1` in the ROOT lockfile. `#517` (mermaid in `ui/package-lock.json`) is a NO-OP — the Docker build audits the ROOT lockfile; mermaid is only moderate anyway.
-- [x] No forward fix exists (`image-size <= 2.0.2` all vulnerable, `first_patched_version = null`), and the DoS is unreachable in sentropic → a targeted, expiring audit exception is the right unblock.
+- [ ] Provide the first live-write primitive for a Track-native decision: an owner-authenticated, authorized, version-pinned, idempotent Track attestation with verified persisted read-back.
+- [ ] Return an honest not-done result whenever authentication, authorization, contract validation, ingest, or read-back confirmation is unavailable or fails.
 
 ## Scope / Guardrails
-- [x] `.security/audit-gate.mjs` (new) + `.security/audit-allowlist.json` (new): exception-aware wrapper — fails on any HIGH/CRITICAL GHSA not allowlisted, and fails after `review_due`.
-- [x] `.security/vulnerability-register.yaml`: `false_positive` entry for the 2 GHSAs (human record).
-- [x] `api/Dockerfile` (base + production gates) + `ui/Dockerfile` (base gate): replace raw `npm audit` with the wrapper. `api/Dockerfile:99` (auth-idp/web sub-tree, no image-size) left as raw audit.
-- [x] No `package.json` / lockfile change (npm ci stays valid). mermaid override bump DEFERRED (needs a full lockfile regen; moderate/non-blocking) — fast-follow.
+- [ ] Scope is limited to the private `@sentropic/focus` live-write driver, its public exports, focused unit tests, package metadata, and this branch plan.
+- [ ] The driver accepts only a Track-native decision id; it does not accept, render, transform, or submit an h2a decision dossier.
+- [ ] Owner authentication and decision/workspace authorization are required injected gates; a relayer is recorded separately and can never become the attester.
+- [ ] The Track ingest contract is pinned to an exact version and every successful write is confirmed by a persisted read-back attestation before success is returned.
+- [ ] The package remains private and no package publication, CLI prompt, UI, API endpoint, migration, or Track event-schema change is introduced.
+- [ ] The h2a-to-Track dossier adapter, connector teardown, tenancy cache invalidation/freshness repair, durable agentRef repair, and V1 breadth remain held out of scope.
+- [ ] Make-only workflow and Docker-first execution apply; every Make command ends with `ENV=focus-sig-gate`.
+- [ ] Automated tests use `ENV=test-focus-sig-gate`, never `ENV=dev`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.security/audit-gate.mjs`, `.security/audit-allowlist.json`, `.security/vulnerability-register.yaml`
-  - `api/Dockerfile`, `ui/Dockerfile`, `BRANCH.md`
+  - `packages/focus/src/model.ts`
+  - `packages/focus/src/live/index.ts`
+  - `packages/focus/src/index.ts`
+  - `packages/focus/tests/live.spec.ts`
+  - `packages/focus/package.json`
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`, `docker-compose*.yml`, `package.json`, `package-lock.json`, `api/src/**`, `ui/src/**`, `packages/**`
-- **Conditional Paths**: none.
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `api/**`
+  - `ui/**`
+  - `packages/cli/**`
+  - `packages/focus/src/cli/**`
+  - `packages/focus/src/track/**`
+  - `plan/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `package-lock.json`
+  - `spec/**`
+  - `.github/workflows/**`
+- **Exception process**:
+  - [ ] Declare a `BR-FOCUS-SIG-EXn` item in `## Feedback Loop` with reason, impact, and rollback before changing any conditional or forbidden path.
 
 ## Feedback Loop
-- [x] `SEC-IMGSIZE-A` — RESOLVED. Option A (forward override) is IMPOSSIBLE: no patched image-size exists (`<= 2.0.2` vulnerable, `first_patched=null`, latest 2.0.2). Confirmed by cyber (gh api /advisories + npm registry) and infra (GitHub advisories). Conductor decision A/B/C: A preferred if a patch exists, else B (expiring exception), C (breaking pptxgenjs downgrade) REJECTED.
-- [x] `SEC-IMGSIZE-B` — Reachability NULL, double barrier (verified): (1) pptxgenjs@4.0.1 never imports image-size — dead declared dep (commented `FIXME: currently unused` consumer, `browser:{image-size:false}`); (2) sentropic passes no image bytes — no `addImage` in the repo, pptx surface = text/shape/table, backgrounds color-only. The CVSS 7.5 DoS on attacker-image parsing has no reachable path → `false_positive`.
-- [x] `SEC-IMGSIZE-VERIFY` — `make build-ui-image` green: `audit-gate: OK — only allowlisted HIGH/CRITICAL remain`, full ui build `Successfully built`.
-- [ ] `SEC-IMGSIZE-EXPIRY` — exception `review_due` 2026-09-08. Follow-up: upstream pptxgenjs issue to drop the dead image-size dependency, then remove the exception.
-- [ ] `SEC-IMGSIZE-MERMAID` — DEFERRED fast-follow: bump the `mermaid` root override `^11.15.0 -> ^11.16.1` (clears the moderate mermaid advisory) via a dedicated delete-lockfile regen. Moderate, non-blocking, out of this urgent unblock.
+- [ ] `BR-FOCUS-SIG-GATE-1` — OPEN. Production use remains gated: PR #416 tenancy resolution needs strict mode plus cache invalidation/TTL or fresh per-authorization resolution; this primitive neither claims nor implements that repair.
+- [ ] `BR-FOCUS-SIG-GATE-2` — OPEN. The h2a-to-Track dossier adapter/wire is not implemented or consumed; only already Track-native decisions can be submitted.
+- [ ] `BR-FOCUS-SIG-GATE-3` — OPEN. No locally installed `@sentropic/track/ingest` contract is yet proven to expose the required owner-attestation event; the driver stays port-injected and returns not-done without a matching pinned implementation.
 
 ## AI Flaky tests
-- Not applicable: security-gate + Dockerfile change only.
+- [ ] Not applicable: focused deterministic package unit tests only.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch + cherry-pick.
-- [ ] Multi-branch.
-- Rationale: one atomic security-gate change; conductor holds the merge GO.
+- [x] **Mono-branch + cherry-pick**
+- [ ] **Multi-branch**
+- [ ] One coherent package primitive with sequential contract, implementation, and verification lots.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0 — RCA: gate = 4 Dockerfile lines audit the ROOT lockfile; #517 no-op; blocker = image-size HIGH.
-- [x] Lot 1 — Build the exception-aware wrapper + allowlist + register entry; wire the 3 real gates.
-- [x] Lot 2 — Verify via `make build-ui-image` (REGISTRY=local): gate passes, build green.
-- [ ] Lot 3 — Handover: draft PR; merge on conductor GO; report main-green to conductor + chat; open the pptxgenjs upstream follow-up.
+- [ ] **Lot 0 — Scope and executable contract plan**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/architecture.md`, and `rules/testing.md`.
+  - [x] Run `harness check branch` for `feat/focus-live-signature-gate`.
+  - [x] Inspect #503, the FocusSnapshot/Track-read boundary, package metadata, and the plan template.
+  - [x] Create this file from `plan/BRANCH_TEMPLATE.md` with allowed and forbidden paths.
+  - [ ] Commit the initial plan before implementation.
+  - [ ] Lot gate: `harness check scope` and `make scope-check` pass for `BRANCH.md` only.
+
+- [ ] **Lot 1 — Live signature contract and fail-closed driver**
+  - [ ] Add `FocusLiveSession` types for an own-principal owner act, distinct relayer provenance, Track-native decision target, exact ingest-contract version, idempotency key, duplicate semantics, persisted attestation, and honest not-done outcomes.
+  - [ ] Add the live driver port that authenticates the owner, authorizes the owner for the requested workspace and decision, rejects an owner/relayer identity substitution, requires the exact pinned Track ingest contract, submits the signature, and reads the attestation back.
+  - [ ] Export the live driver from the package root without changing the read-only CLI or Track-read binding.
+  - [ ] Lot gate: package typecheck and focused live-driver test command pass in `ENV=test-focus-sig-gate`.
+
+- [ ] **Lot 2 — Security and duplicate-result test lock**
+  - [ ] Add `packages/focus/tests/live.spec.ts` covering own-principal authentication required.
+  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that a relayer cannot forge the owner attestation and that relayer provenance is retained separately.
+  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that double submit with one idempotency key yields one persisted attestation and a duplicate result.
+  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that failed or mismatched read-back returns not-done, never a signature.
+  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that unauthorized workspace or decision is denied before ingest.
+  - [ ] Lot gate: focused package tests and package typecheck pass in `ENV=test-focus-sig-gate`.
+
+- [ ] **Lot 3 — Version, final verification, and draft review handoff**
+  - [ ] Bump `packages/focus/package.json` from `0.3.0` to the next patch version after checking the published package version.
+  - [ ] Run package typecheck, focused live tests, and the available package test suite through Make in `ENV=test-focus-sig-gate`.
+  - [ ] Run `harness check scope` and `make scope-check` before every commit.
+  - [ ] Create a draft PR against `main` using this plan as the source body; state the contract, held items, and `draft: independent build-review + owner UAT required before merge/live`.
+  - [ ] Verify the pushed branch CI and report exact command results, package version, commit SHAs, and PR URL.
