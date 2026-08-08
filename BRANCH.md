@@ -25,7 +25,6 @@
   - `packages/focus/README.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `api/**`
@@ -35,6 +34,7 @@
   - `packages/focus/src/track/**`
   - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
   - `package-lock.json`
   - `spec/**`
   - `.github/workflows/**`
@@ -47,6 +47,7 @@
 - [ ] `BR-FOCUS-SIG-GATE-3` — OPEN. No locally installed `@sentropic/track/ingest` contract is yet proven to expose the required owner-attestation event; the driver stays port-injected and returns not-done without a matching pinned implementation.
 - [ ] `BR-FOCUS-SIG-GATE-4` — OPEN. Before any live use, a co-specified production Track adapter must persist the owner signature with a durable canonical-owner/workspace/decision unique constraint or upsert and transactionally read it back. The test-only in-memory Map is intentionally non-durable and is not a production adapter.
 - [x] `BR503-EX1` — `package-lock.json` workspace metadata is updated with `packages/focus/package.json`: required for Docker `npm ci` after the mandatory package patch bump; impact is only the matching workspace version; rollback is to revert both version fields together.
+- [x] `BR503-EX2` — `Makefile` corrects the Focus package target comment from private to public: impact is documentation-only with no target behavior change; rollback is to revert that comment.
 
 ## AI Flaky tests
 - [ ] Not applicable: focused deterministic package unit tests only.
@@ -99,6 +100,6 @@
   - [x] Define the durable Track uniqueness key as canonical owner, workspace, and decision id, excluding idempotency.
   - [x] Replace the false-positive barrier race with a production-like atomic uniqueness regression.
   - [x] Make every external capture boundary exception-total and copy the opaque proof into an immutable call-boundary value.
-  - [ ] Add throwing-accessor and proof-mutation regressions with honest not-done results.
-  - [ ] Correct the stale public-package and live-driver documentation.
+  - [x] Add throwing-accessor and proof-mutation regressions with honest not-done results.
+  - [x] Correct the stale public-package and live-driver documentation.
   - [ ] Re-run the isolated Focus package test target, scope checks, and push the existing draft branch.
