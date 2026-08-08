@@ -3,6 +3,7 @@ import type {
   CanonicalPrincipalIdentity,
   FocusOwnerSignatureContractVersion,
   FocusLiveSession,
+  OwnerSignatureDurableUniquenessKey,
   OwnerSignatureIdentity,
   OwnerSignatureRequest,
   OwnerSignatureResult,
@@ -43,16 +44,17 @@ export interface TrustedRelayerProvenancePort {
 export interface TrackOwnerSignaturePort {
   readonly contractVersion: FocusOwnerSignatureContractVersion;
   /**
-   * Atomically create or return the record unique on canonical
-   * `{ owner issuer+subject, workspace, decisionId }`. Production implementations MUST enforce
-   * that uniqueness with a durable database constraint/upsert and transactionally read the
-   * persisted attestation back. Process-local locking or a check-then-insert sequence is not a
-   * valid implementation: the driver deliberately relies on this port-level contract.
+   * Atomically create or return the record unique on the
+   * `OwnerSignatureDurableUniquenessKey` `{ canonical owner issuer+subject, workspace,
+   * decisionId }`. `idempotencyKey` is intentionally excluded: it only identifies an identical
+   * retry and never authorizes a second durable owner signature. Production implementations MUST
+   * enforce this uniqueness with a durable database constraint/upsert and transactionally read
+   * the persisted attestation back. Process-local locking or a check-then-insert sequence is not
+   * a valid implementation: the driver deliberately relies on this port-level contract.
    */
   appendOwnerSignature(input: TrackOwnerSignatureWrite): Promise<TrackOwnerSignatureWriteResult>;
-  readOwnerSignature(
-    input: OwnerSignatureIdentity & { readonly idempotencyKey: string },
-  ): Promise<PersistedOwnerSignature | undefined>;
+  /** Read the canonical durable record by the same uniqueness key, never by idempotency key. */
+  readOwnerSignature(input: OwnerSignatureDurableUniquenessKey): Promise<PersistedOwnerSignature | undefined>;
 }
 
 /** Dependencies owned by the host that knows its own-principal, transport, and tenancy policy. */
@@ -326,12 +328,16 @@ const capturePersistedSignature = (value: unknown): ConfirmedSignatureScalars | 
   });
 };
 
-const confirms = (persisted: ConfirmedSignatureScalars, expected: ConfirmedSignatureScalars): boolean =>
+const confirms = (
+  persisted: ConfirmedSignatureScalars,
+  expected: ConfirmedSignatureScalars,
+  requireMatchingIdempotencyKey: boolean,
+): boolean =>
   persisted.recordId === expected.recordId &&
   persisted.contractVersion === expected.contractVersion &&
   persisted.workspace === expected.workspace &&
   persisted.decisionId === expected.decisionId &&
-  persisted.idempotencyKey === expected.idempotencyKey &&
+  (!requireMatchingIdempotencyKey || persisted.idempotencyKey === expected.idempotencyKey) &&
   persisted.ownerPrincipalId === expected.ownerPrincipalId &&
   persisted.ownerAuthenticatedAt === expected.ownerAuthenticatedAt &&
   canonicalIdentityEquals(persisted.ownerCanonicalIdentity, expected.ownerCanonicalIdentity) &&
@@ -448,15 +454,15 @@ export class FocusLiveSessionDriver implements FocusLiveSession {
     let persistedResult: unknown;
     try {
       const readOwnerSignature = this.track.readOwnerSignature;
-      persistedResult = await readOwnerSignature.call(
-        this.track,
-        Object.freeze({ ...freezeIdentity(confirmationSnapshot), idempotencyKey: confirmationSnapshot.idempotencyKey }),
-      );
+      persistedResult = await readOwnerSignature.call(this.track, freezeIdentity(confirmationSnapshot));
     } catch {
       return { status: "not-done", reason: "persisted-attestation-not-confirmed" };
     }
     const persistedSnapshot = capturePersistedSignature(persistedResult);
-    if (persistedSnapshot === undefined || !confirms(persistedSnapshot, confirmationSnapshot)) {
+    if (
+      persistedSnapshot === undefined ||
+      !confirms(persistedSnapshot, confirmationSnapshot, receiptSnapshot.status === "written")
+    ) {
       return { status: "not-done", reason: "persisted-attestation-not-confirmed" };
     }
 

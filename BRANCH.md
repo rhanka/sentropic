@@ -94,3 +94,11 @@
   - [x] Add getter/receipt/authentication/authorization/append-failure/racy-port adversarial regression coverage.
   - [x] Re-run focused and full Focus package tests in `ENV=test-focus-sig-gate`.
   - [x] Push the existing draft branch without changing its draft state and update its follow-up note.
+
+- [ ] **Lot 5 — Third independent adversarial signature-gate repair**
+  - [x] Define the durable Track uniqueness key as canonical owner, workspace, and decision id, excluding idempotency.
+  - [x] Replace the false-positive barrier race with a production-like atomic uniqueness regression.
+  - [ ] Make every external capture boundary exception-total and copy the opaque proof into an immutable call-boundary value.
+  - [ ] Add throwing-accessor and proof-mutation regressions with honest not-done results.
+  - [ ] Correct the stale public-package and live-driver documentation.
+  - [ ] Re-run the isolated Focus package test target, scope checks, and push the existing draft branch.

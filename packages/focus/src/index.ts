@@ -24,6 +24,7 @@ export type {
   FocusLiveSession,
   FocusOwnerSignatureContractVersion,
   OwnerSignatureAttestation,
+  OwnerSignatureDurableUniquenessKey,
   OwnerSignatureIdentity,
   OwnerSignatureNotDoneReason,
   OwnerSignatureRequest,
