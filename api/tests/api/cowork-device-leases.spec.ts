@@ -52,6 +52,12 @@ describe('Cowork device authorization leases', () => {
     });
   }
 
+  async function start(deviceId: string, leaseId: string, nonce: string, signPayload: (payload: string) => string) {
+    return authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${leaseId}/start`, user.sessionToken!, {
+      device_id: deviceId, signature: signPayload(`cowork-lease-start-v1:${leaseId}.${nonce}`),
+    });
+  }
+
   function proofHeaders(device: { deviceId: string; signPayload: (payload: string) => string }) {
     const issuedAtMs = Date.now();
     return {
@@ -212,16 +218,39 @@ describe('Cowork device authorization leases', () => {
     expect((await acknowledge(target.deviceId, afterRevoke.payload.lease.leaseId, afterRevoke.payload.lease.nonce, target.signPayload)).status).toBe(409);
   });
 
+  it('gives post-acknowledgement revocation and the signed start claim exactly one winner', async () => {
+    const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const issued = await issue(target.deviceId, 'post-ack-race');
+    const lease = issued.payload.lease;
+    expect((await acknowledge(target.deviceId, lease.leaseId, lease.nonce, target.signPayload)).status).toBe(200);
+    const [startResponse, revokeResponse] = await Promise.all([
+      start(target.deviceId, lease.leaseId, lease.nonce, target.signPayload),
+      authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${lease.leaseId}/revoke`, user.sessionToken!, { reason: 'race' }),
+    ]);
+    expect([startResponse.status, revokeResponse.status].sort()).toEqual([200, 409]);
+    if (startResponse.status === 200) {
+      expect((await deleteCoworkDeviceWithLeaseRevocation(user.id, target.deviceId))).toEqual({ ok: false, reason: 'execution_in_progress' });
+      expect((await complete(target.deviceId, lease.leaseId, lease.nonce, 'PAS-FAIT', target.signPayload)).status).toBe(200);
+      await expect(deleteCoworkDeviceWithLeaseRevocation(user.id, target.deviceId)).resolves.toEqual({ ok: true });
+    } else {
+      expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${lease.leaseId}/cancel-ack`, user.sessionToken!, {
+        device_id: target.deviceId, signature: target.signPayload(`cowork-lease-cancel-v1:${lease.leaseId}.${lease.nonce}`),
+      })).status).toBe(200);
+    }
+  });
+
   it('atomically consumes or revokes one acknowledged lease from its signed bounded result', async () => {
     const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     const success = await issue(target.deviceId, 'turn-result-success');
     expect((await acknowledge(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await start(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, target.signPayload)).status).toBe(200);
     const capture = { ok: true, screen: 0, width: 1, height: 1, image: 'data:image/png;base64,QUJD' };
     expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload, capture)).status).toBe(200);
     expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload, capture)).status).toBe(409);
 
     const failure = await issue(target.deviceId, 'turn-result-failure');
     expect((await acknowledge(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await start(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, target.signPayload)).status).toBe(200);
     expect((await complete(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, 'PAS-FAIT', target.signPayload)).status).toBe(200);
   });
 
@@ -229,6 +258,7 @@ describe('Cowork device authorization leases', () => {
     const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     const issued = await issue(target.deviceId, 'capture-result-required');
     expect((await acknowledge(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await start(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, target.signPayload)).status).toBe(200);
     expect((await complete(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(409);
     const broad = { ok: true, screen: 1, width: 1, height: 1, image: 'data:image/png;base64,QUJD' };
     expect((await complete(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, 'FAIT', target.signPayload, broad)).status).toBe(409);

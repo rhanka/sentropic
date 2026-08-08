@@ -46,7 +46,9 @@ export interface RemoteLeaseRunnerDeps {
  */
 export class RemoteLeaseRunner {
     private readonly base: string;
-    private readonly active = new Map<string, { cancelled: boolean }>();
+    private readonly active = new Map<string, { cancelled: boolean; abort: AbortController }>();
+    private stopped = false;
+    private executionTail: Promise<void> = Promise.resolve();
 
     constructor(private readonly deps: RemoteLeaseRunnerDeps) {
         this.base = deps.apiBaseUrl.replace(/\/$/, '');
@@ -99,7 +101,11 @@ export class RemoteLeaseRunner {
         // Cancellation is synchronous. A pending foreground prompt observes it
         // before it can ask the server for the final acknowledgement permit.
         const active = [...this.active.entries()];
-        for (const [, execution] of active) execution.cancelled = true;
+        this.stopped = true;
+        for (const [, execution] of active) {
+            execution.cancelled = true;
+            execution.abort.abort();
+        }
         const token = await this.deps.getAccessToken();
         if (!token) return;
         await Promise.all(active.map(([leaseId]) => this.revoke(token, leaseId, 'local_stop')));
@@ -107,13 +113,14 @@ export class RemoteLeaseRunner {
 
     async handleLease(raw: unknown): Promise<void> {
         const lease = raw as DeliveredLease;
-        if (!lease || typeof lease.leaseId !== 'string' || this.active.has(lease.leaseId)) return;
+        if (this.stopped || !lease || typeof lease.leaseId !== 'string' || this.active.has(lease.leaseId)) return;
         const capability = lease.scope?.capability;
         const envelope = lease.scope?.serverEnvelope;
         if (isEnvelope(envelope) && !this.keys.has(envelope.kid)) await this.refreshServerKeys();
         if (!isCapability(capability) || !isEnvelope(envelope) || !this.verify(lease, capability, envelope)) return;
-        const execution = { cancelled: false };
+        const execution = { cancelled: false, abort: new AbortController() };
         this.active.set(lease.leaseId, execution);
+        let claimed = false;
         try {
             const token = await this.deps.getAccessToken();
             const action = lease.scope?.action;
@@ -124,26 +131,43 @@ export class RemoteLeaseRunner {
                 actionDigest: remoteActionDigest(args),
                 details: args,
             });
-            if (!token || !receipt || execution.cancelled || !this.isLocallyValid(lease)) {
-                if (token) await this.revoke(token, lease.leaseId, execution.cancelled ? 'local_stop' : 'local_not_done');
+            if (!token || !receipt || !this.canEnter(execution, lease)) {
+                if (token) await this.cancelBeforeStart(token, lease, execution.cancelled || this.stopped ? 'local_stop' : 'local_not_done');
                 return;
             }
             // The atomic issued->acknowledged response is the final server
             // lease/device permit. It is deliberately after consent and before
             // the provider call, so revocation/deletion/expiry fails closed.
-            if (!(await this.acknowledge(token, lease)) || execution.cancelled || !this.isLocallyValid(lease)) {
-                if (execution.cancelled || !this.isLocallyValid(lease)) await this.revoke(token, lease.leaseId, 'local_not_done');
+            if (!(await this.acknowledge(token, lease)) || !this.canEnter(execution, lease)) {
+                if (execution.cancelled || this.stopped || !this.isLocallyValid(lease)) await this.cancelBeforeStart(token, lease, 'local_not_done');
                 return;
             }
+            const start = await this.claimExecution(token, lease);
+            if (start !== 'started') {
+                if (start === 'cancelled') await this.acknowledgeCancellation(token, lease);
+                return;
+            }
+            claimed = true;
+            const release = await this.enterExecution(execution);
+            if (!release) {
+                await this.complete(token, lease, 'PAS-FAIT');
+                return;
+            }
+            try {
+                if (!this.canEnter(execution, lease)) {
+                    await this.complete(token, lease, 'PAS-FAIT');
+                    return;
+                }
             const result = await runDesktopToolCall(
                 { toolCallId: lease.leaseId, name: capability, arguments: args },
                 { consent: this.deps.consent, context: this.deps.context, remoteReceipt: receipt },
             );
             const resultPayload = result.error ? undefined : JSON.parse(result.output) as Record<string, unknown>;
             await this.complete(token, lease, result.error ? 'PAS-FAIT' : 'FAIT', resultPayload);
+            } finally { release(); }
         } catch {
             const token = await this.deps.getAccessToken();
-            if (token && typeof lease.leaseId === 'string' && typeof lease.nonce === 'string') await this.complete(token, lease, 'PAS-FAIT');
+            if (claimed && token && typeof lease.leaseId === 'string' && typeof lease.nonce === 'string') await this.complete(token, lease, 'PAS-FAIT');
         } finally {
             this.active.delete(lease.leaseId);
         }
@@ -162,6 +186,30 @@ export class RemoteLeaseRunner {
     private isLocallyValid(lease: DeliveredLease): boolean {
         const expiry = new Date(lease.expiresAt);
         return Number.isFinite(expiry.getTime()) && expiry.getTime() > Date.now();
+    }
+
+    private canEnter(execution: { cancelled: boolean; abort: AbortController }, lease: DeliveredLease): boolean {
+        return !this.stopped && !execution.cancelled && !execution.abort.signal.aborted && this.isLocallyValid(lease);
+    }
+
+    /** One provider entry at a time; a queued entry wakes on Stop and fails closed. */
+    private async enterExecution(execution: { cancelled: boolean; abort: AbortController }): Promise<(() => void) | null> {
+        let release!: () => void;
+        const previous = this.executionTail;
+        this.executionTail = new Promise<void>((resolve) => { release = resolve; });
+        if (this.stopped || execution.cancelled || execution.abort.signal.aborted) {
+            release();
+            return null;
+        }
+        await Promise.race([
+            previous,
+            new Promise<void>((resolve) => execution.abort.signal.addEventListener('abort', resolve, { once: true })),
+        ]);
+        if (this.stopped || execution.cancelled || execution.abort.signal.aborted) {
+            release();
+            return null;
+        }
+        return release;
     }
 
     private readonly keys = new Map<string, Jwk>();
@@ -195,6 +243,30 @@ export class RemoteLeaseRunner {
             body: JSON.stringify({ device_id: this.deps.deviceIdentity.deviceId, signature }),
         });
         return response.ok;
+    }
+
+    private async claimExecution(token: string, lease: DeliveredLease): Promise<'started' | 'cancelled' | 'denied'> {
+        const signature = await this.deps.deviceIdentity.sign(`cowork-lease-start-v1:${lease.leaseId}.${lease.nonce}`);
+        const response = await this.deps.fetch(`${this.base}/chrome-extension/cowork-devices/leases/${encodeURIComponent(lease.leaseId)}/start`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: this.deps.deviceIdentity.deviceId, signature }),
+        });
+        if (response.ok) return 'started';
+        const payload = await response.json().catch(() => null) as { reason?: unknown } | null;
+        return payload?.reason === 'cancelled' ? 'cancelled' : 'denied';
+    }
+
+    private async acknowledgeCancellation(token: string, lease: DeliveredLease): Promise<void> {
+        const signature = await this.deps.deviceIdentity.sign(`cowork-lease-cancel-v1:${lease.leaseId}.${lease.nonce}`);
+        await this.deps.fetch(`${this.base}/chrome-extension/cowork-devices/leases/${encodeURIComponent(lease.leaseId)}/cancel-ack`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: this.deps.deviceIdentity.deviceId, signature }),
+        });
+    }
+
+    private async cancelBeforeStart(token: string, lease: DeliveredLease, reason: string): Promise<void> {
+        await this.revoke(token, lease.leaseId, reason);
+        await this.acknowledgeCancellation(token, lease);
     }
 
     private async complete(token: string, lease: DeliveredLease, outcome: 'FAIT' | 'PAS-FAIT', result?: Record<string, unknown>): Promise<void> {

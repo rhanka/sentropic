@@ -37,6 +37,7 @@ describe('RemoteLeaseRunner', () => {
         expect(calls.map((call) => call.url)).toEqual(expect.arrayContaining([
             'https://api.example.test/.well-known/jwks.json',
             'https://api.example.test/api/v1/chrome-extension/cowork-devices/leases/lease-1/ack',
+            'https://api.example.test/api/v1/chrome-extension/cowork-devices/leases/lease-1/start',
             'https://api.example.test/api/v1/chrome-extension/cowork-devices/leases/lease-1/result',
         ]));
         expect(calls.find((call) => call.url.endsWith('/result'))?.body).toContain('FAIT');
@@ -149,6 +150,46 @@ describe('RemoteLeaseRunner', () => {
         allow('allow_once');
         await handling;
         await stopping;
+        expect(provider.calls).toEqual([]);
+    });
+
+    it('lets the revoke win after a 200 acknowledgement, acknowledges cancellation, and never calls the provider', async () => {
+        const server = generateKeyPairSync('ed25519');
+        const device = generateKeyPairSync('ed25519');
+        const deviceId = randomUUID();
+        const expiry = new Date(Date.now() + 20_000).toISOString();
+        const fields = { leaseId: 'lease-post-ack-revoke', capability: 'input_action', targetDeviceId: deviceId, nonce: 'nonce', expiry };
+        const mac = sign(null, Buffer.from(canonical(fields)), server.privateKey).toString('base64url');
+        let releaseStart!: () => void;
+        let startObserved!: () => void;
+        const startPending = new Promise<void>((resolve) => { startObserved = resolve; });
+        const startGate = new Promise<void>((resolve) => { releaseStart = resolve; });
+        const provider = createMockCapabilityProvider();
+        const calls: string[] = [];
+        const runner = new RemoteLeaseRunner({
+            fetch: async (url: string) => {
+                calls.push(url);
+                if (url.endsWith('/.well-known/jwks.json')) return new Response(JSON.stringify({ keys: [{ ...server.publicKey.export({ format: 'jwk' }), kid: 'oauth-key' }] }));
+                if (url.endsWith('/ack')) return new Response('{}', { status: 200 });
+                if (url.endsWith('/start')) {
+                    startObserved();
+                    await startGate; // The server-side revoke wins this post-ack race.
+                    return new Response(JSON.stringify({ reason: 'cancelled' }), { status: 409 });
+                }
+                return new Response('{}', { status: 200 });
+            },
+            apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
+            deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: { provider },
+        });
+        const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 1, y: 2 } } });
+        await startPending;
+        releaseStart();
+        await handling;
+
+        expect(calls.filter((url) => url.endsWith('/ack'))).toHaveLength(1);
+        expect(calls.filter((url) => url.endsWith('/start'))).toHaveLength(1);
+        expect(calls.filter((url) => url.endsWith('/cancel-ack'))).toHaveLength(1);
         expect(provider.calls).toEqual([]);
     });
 });

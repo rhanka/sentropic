@@ -11,7 +11,8 @@ import { signLeaseEnvelope, type ServerSignedLeaseEnvelope } from './lease-envel
 
 const LEASE_TTL_MS = 45_000;
 const PRESENCE_FRESHNESS_MS = 45_000;
-const IN_FLIGHT_STATUSES = ['issued', 'acknowledged'] as const;
+const IN_FLIGHT_STATUSES = ['issued', 'acknowledged', 'executing'] as const;
+const REVOCABLE_LEASE_STATUSES = ['issued', 'acknowledged'] as const;
 
 export type LeaseScope = {
   capability: 'screen_capture' | 'input_action';
@@ -27,7 +28,7 @@ export type LeaseIssueScope = {
   capability: 'screen_capture' | 'input_action';
   action?: Record<string, unknown>;
 } | null;
-type LeaseStatus = 'issued' | 'acknowledged' | 'consumed' | 'expired' | 'revoked';
+type LeaseStatus = 'issued' | 'acknowledged' | 'executing' | 'consumed' | 'expired' | 'revoked';
 
 export type CoworkInvocationBinding = {
   principalId: string;
@@ -84,7 +85,7 @@ function hasBinding(scope: LeaseScope, expected: CoworkInvocationBinding): boole
 
 export type LeaseResult =
   | { ok: true; lease: { leaseId: string; deviceId: string; nonce: string; scope: LeaseScope; expiresAt: Date; status: LeaseStatus } }
-  | { ok: false; reason: 'ineligible' | 'not_found' | 'invalid_signature' | 'not_issuable' | 'not_revocable' };
+  | { ok: false; reason: 'ineligible' | 'not_found' | 'invalid_signature' | 'not_issuable' | 'not_revocable' | 'cancelled' | 'execution_in_progress' };
 
 const toLease = (lease: typeof coworkDeviceLeases.$inferSelect) => ({
   leaseId: lease.id,
@@ -285,6 +286,65 @@ export async function acknowledgeLease(input: {
   return acknowledged ? { ok: true, lease: toLease(acknowledged) } : { ok: false, reason: 'not_issuable' };
 }
 
+/**
+ * Final device start claim.  It shares the device-row lock with deletion, while
+ * its acknowledged->executing update races revocation exactly once.
+ */
+export async function claimLeaseExecution(input: {
+  userId: string;
+  deviceId: string;
+  leaseId: string;
+  signature: string;
+}): Promise<LeaseResult> {
+  const [lease] = await db.select().from(coworkDeviceLeases).where(and(
+    eq(coworkDeviceLeases.id, input.leaseId), eq(coworkDeviceLeases.deviceId, input.deviceId), eq(coworkDeviceLeases.userId, input.userId),
+  )).limit(1);
+  if (!lease) return { ok: false, reason: 'not_found' };
+  const device = await findActiveCoworkDevice(input.userId, input.deviceId);
+  if (!device || !verifyCoworkSignature(device.publicKey, `cowork-lease-start-v1:${lease.id}.${lease.nonce}`, input.signature)) {
+    return { ok: false, reason: 'invalid_signature' };
+  }
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`
+      SELECT id FROM cowork_devices
+      WHERE id = ${input.deviceId} AND user_id = ${input.userId} AND status = 'active'
+      FOR UPDATE
+    `);
+    if (locked.rows.length === 0) return { ok: false, reason: 'cancelled' } as LeaseResult;
+    const [claimed] = await tx.update(coworkDeviceLeases).set({ status: 'executing' }).where(and(
+      eq(coworkDeviceLeases.id, input.leaseId), eq(coworkDeviceLeases.deviceId, input.deviceId),
+      eq(coworkDeviceLeases.userId, input.userId), eq(coworkDeviceLeases.status, 'acknowledged'), gt(coworkDeviceLeases.expiresAt, now),
+    )).returning();
+    if (claimed) return { ok: true, lease: toLease(claimed) } as LeaseResult;
+    const [current] = await tx.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases)
+      .where(eq(coworkDeviceLeases.id, input.leaseId)).limit(1);
+    return { ok: false, reason: current?.status === 'revoked' ? 'cancelled' : 'not_issuable' } as LeaseResult;
+  });
+}
+
+/** A revoked lease is acknowledged by the device before it can enter its provider. */
+export async function acknowledgeLeaseCancellation(input: {
+  userId: string;
+  deviceId: string;
+  leaseId: string;
+  signature: string;
+}): Promise<LeaseResult> {
+  const [lease] = await db.select().from(coworkDeviceLeases).where(and(
+    eq(coworkDeviceLeases.id, input.leaseId), eq(coworkDeviceLeases.deviceId, input.deviceId), eq(coworkDeviceLeases.userId, input.userId),
+  )).limit(1);
+  if (!lease) return { ok: false, reason: 'not_found' };
+  const device = await findActiveCoworkDevice(input.userId, input.deviceId);
+  if (!device || !verifyCoworkSignature(device.publicKey, `cowork-lease-cancel-v1:${lease.id}.${lease.nonce}`, input.signature)) {
+    return { ok: false, reason: 'invalid_signature' };
+  }
+  const scope = { ...(lease.scope as LeaseScope), cancellationAcknowledgedAt: new Date().toISOString() };
+  const [acknowledged] = await db.update(coworkDeviceLeases).set({ scope }).where(and(
+    eq(coworkDeviceLeases.id, input.leaseId), eq(coworkDeviceLeases.status, 'revoked'),
+  )).returning();
+  return acknowledged ? { ok: true, lease: toLease(acknowledged) } : { ok: false, reason: 'not_issuable' };
+}
+
 /** Device posts only a signed, bounded terminal outcome; never pixels or typed content. */
 export async function completeLease(input: {
   userId: string;
@@ -317,7 +377,7 @@ export async function completeLease(input: {
     eq(coworkDeviceLeases.id, input.leaseId),
     eq(coworkDeviceLeases.deviceId, input.deviceId),
     eq(coworkDeviceLeases.userId, input.userId),
-    eq(coworkDeviceLeases.status, 'acknowledged'),
+    eq(coworkDeviceLeases.status, 'executing'),
     gt(coworkDeviceLeases.expiresAt, now),
   )).returning();
   return completed ? { ok: true, lease: toLease(completed) } : { ok: false, reason: 'not_issuable' };
@@ -347,10 +407,14 @@ export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | 
 export async function revokeLease(leaseId: string, reason: string, userId?: string): Promise<LeaseResult> {
   void reason; // Audit persistence is intentionally deferred with Lot 4's result protocol.
   const where = userId
-    ? and(eq(coworkDeviceLeases.id, leaseId), eq(coworkDeviceLeases.userId, userId), inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES))
-    : and(eq(coworkDeviceLeases.id, leaseId), inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES));
+    ? and(eq(coworkDeviceLeases.id, leaseId), eq(coworkDeviceLeases.userId, userId), inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES))
+    : and(eq(coworkDeviceLeases.id, leaseId), inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES));
   const [revoked] = await db.update(coworkDeviceLeases).set({ status: 'revoked' }).where(where).returning();
-  return revoked ? { ok: true, lease: toLease(revoked) } : { ok: false, reason: 'not_revocable' };
+  if (revoked) return { ok: true, lease: toLease(revoked) };
+  const [current] = await db.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases).where(and(
+    eq(coworkDeviceLeases.id, leaseId), ...(userId ? [eq(coworkDeviceLeases.userId, userId)] : []),
+  )).limit(1);
+  return { ok: false, reason: current?.status === 'executing' ? 'execution_in_progress' : 'not_revocable' };
 }
 
 export async function listIssuedLeases(userId: string, deviceId: string, limit = 20) {

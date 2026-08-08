@@ -6,6 +6,7 @@ import {
   chatSessions,
   chatGenerationTraces,
   chatStreamEvents,
+  coworkDevices,
   coworkDeviceLeases,
   organizations,
   contextModificationHistory,
@@ -19,7 +20,7 @@ import {
   webauthnCredentials,
   workspaces,
 } from '../../db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { settingsService } from '../../services/settings';
 import {
   getModelCatalogPayload,
@@ -220,6 +221,7 @@ meRouter.delete('/', async (c) => {
   // nothing can ever revoke. See services/connector-grant-teardown.ts for the full ordering.
   const capturedGrants = await captureConnectorGrantsForTeardown({ userId, workspaceId });
 
+  try {
   await db.transaction(async (tx) => {
     // Tombstone inside the same transaction, so the record and the destruction are atomic.
     await recordConnectorGrantTombstones(tx, capturedGrants);
@@ -305,14 +307,24 @@ meRouter.delete('/', async (c) => {
 
     // C5b/#492: parent deletion cascades Cowork devices, so terminalize their
     // executable leases before that cascade removes the device rows.
+    await tx.execute(sql`SELECT id FROM cowork_devices WHERE user_id = ${userId} FOR UPDATE`);
     await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
       eq(coworkDeviceLeases.userId, userId),
       inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
     ));
+    const [executing] = await tx.select({ id: coworkDeviceLeases.id }).from(coworkDeviceLeases)
+      .where(and(eq(coworkDeviceLeases.userId, userId), eq(coworkDeviceLeases.status, 'executing'))).limit(1);
+    if (executing) throw new Error('cowork_execution_in_progress');
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
   });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'cowork_execution_in_progress') {
+      return c.json({ error: 'Cowork execution is in progress; wait for its signed terminal result before account deletion.' }, 409);
+    }
+    throw error;
+  }
 
   // Only after a successful commit. Revoking earlier would kill the grant of an account that a
   // rolled-back transaction leaves alive.
