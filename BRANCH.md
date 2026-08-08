@@ -85,8 +85,10 @@
   - [ ] Verify the pushed branch CI and report exact command results, package version, commit SHAs, and PR URL.
 
 - [ ] **Lot 4 — Independent signature-gate review repair**
-  - [ ] Replace mutable caller and port aliases with frozen scalar snapshots and a separately frozen port copy.
-  - [ ] Runtime-validate the Track write receipt and make the package-owned contract version the sole accepted value.
-  - [ ] Require atomic owner/decision uniqueness from Track ports and provide an in-memory reference adapter.
-  - [ ] Add adversarial wrong-record, pre-ingest-denial, malformed-receipt, and concurrent-submit regression coverage.
-  - [ ] Run focused and full Focus package tests in `ENV=test-focus-sig-gate`, then push the existing draft branch.
+  - [x] Replace mutable caller and port aliases with frozen scalar snapshots and a separately frozen port copy.
+  - [x] Runtime-validate the Track write receipt and make the package-owned contract version the sole accepted value.
+  - [x] Require atomic owner/decision uniqueness from Track ports and provide an in-memory reference adapter.
+  - [x] Add adversarial wrong-record, pre-ingest-denial, malformed-receipt, and concurrent-submit regression coverage.
+  - [x] Runtime-validate request object shape and relayer transport before the authentication boundary.
+  - [x] Run focused and full Focus package tests in `ENV=test-focus-sig-gate`.
+  - [ ] Push the existing draft branch without changing its draft state.
