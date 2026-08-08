@@ -184,6 +184,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Cycle 3 F-01: revoke exact workspace/capability issued and acknowledged authority under the device/grant lock; acknowledge and start recheck the grant under that same fence.
   - [x] Cycle 3 F-03: canonicalize one exact click/type/scroll schema at issuance and execution, reject malformed action shapes, and bind FAIT to the canonical action digest.
   - [x] Cycle 3 N-01: retain a canonical System32 Microsoft-signed Notepad identity and measured HWND client area in consent; fail closed on spoofed identity/out-of-bounds coordinates and use the Windows HWND-targeted click primitive (Windows UAT still required).
+  - [x] Cycle 3 SOL-01: after a 200 start claim, propagate cancellation into every native operation, wait for provider quiescence before terminal PAS-FAIT, and fence late FAIT at the durable cancellation marker; Stop, server-timeout, and lease-expiry races are covered cross-platform (native Windows UAT still required).
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**
   - [ ] Run all Lot 1–4 typecheck/lint/tests plus `make test-api ENV=test-cowork-connector`; document any accepted AI flaky signature.

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { createWindowsCapabilityProvider } from '../src/capability/windows-provider.js';
 
-const nativeGuard = { recheckAfterNativeAwait: async () => {} };
+const nativeGuard = {
+    signal: new AbortController().signal,
+    throwIfAborted: () => {},
+    recheckAfterNativeAwait: async () => {},
+};
 
 describe('Windows literal text path', () => {
     it('rejects Tab, Escape, C0/C1, format, line, paragraph, and Enter variants before native loading', async () => {

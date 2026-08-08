@@ -5,6 +5,7 @@ import type { NativeActuationGuard, TargetedNativeInput } from './types.js';
 const execFileAsync = promisify(execFile);
 const NOTEPAD_EXECUTABLE = 'notepad.exe';
 const MICROSOFT_SUBJECT = /\bCN=Microsoft(?: Corporation)?\b/i;
+const NEVER_ABORTED_SIGNAL = new AbortController().signal;
 
 export type ClientArea = { left: number; top: number; right: number; bottom: number };
 
@@ -85,15 +86,26 @@ export class ForegroundSurfaceGuard {
         }
     }
 
-    nativeGuard(token: ForegroundSurface): NativeActuationGuard {
+    nativeGuard(token: ForegroundSurface, signal: AbortSignal = NEVER_ABORTED_SIGNAL): NativeActuationGuard {
+        const throwIfAborted = () => {
+            if (signal.aborted) throw new Error('Cowork cancelled before native actuation quiesced.');
+        };
         return {
-            recheckAfterNativeAwait: () => this.recheck(token),
+            signal,
+            throwIfAborted,
+            recheckAfterNativeAwait: async () => {
+                throwIfAborted();
+                await this.recheck(token);
+                throwIfAborted();
+            },
             assertClickInBounds: (x, y) => this.assertClickInBounds(token, x, y),
             targetedInput: async (input) => {
+                throwIfAborted();
                 this.assertClickInBounds(token, input.x, input.y);
                 await this.recheck(token);
                 if (!this.probe.targetedInput) throw new Error('Cowork refused: HWND-targeted native input is unavailable.');
                 await this.probe.targetedInput(token, input);
+                throwIfAborted();
             },
         };
     }

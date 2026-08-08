@@ -57,7 +57,7 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
         if (!surfaceGuard) throw new Error('input_action requires a measured foreground-surface guard.');
         const surface = context.surfaceToken ?? await surfaceGuard.acquire();
         await surfaceGuard.recheck(surface);
-        return surfaceGuard.nativeGuard(surface);
+        return surfaceGuard.nativeGuard(surface, context.abortSignal);
     };
 
     switch (action.action) {

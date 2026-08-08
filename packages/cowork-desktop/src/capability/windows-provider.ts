@@ -36,6 +36,20 @@ const pngDimensions = (buffer: Buffer): { width: number; height: number } => {
     return { width, height };
 };
 
+/**
+ * Native libraries do not expose a common cancellation API. Never race them: a
+ * race could report PAS-FAIT while their OS side effect continues. Instead wait
+ * for the in-flight native promise to settle, then observe the lease signal
+ * before allowing any further actuation or terminal result.
+ */
+const awaitNativeQuiescence = async <T>(guard: NativeActuationGuard, operation: () => Promise<T>): Promise<T> => {
+    guard.throwIfAborted();
+    const result = await operation();
+    await guard.recheckAfterNativeAwait();
+    guard.throwIfAborted();
+    return result;
+};
+
 // The nut-js surface we actually use, declared structurally so we never need the
 // package's types at build time on Linux.
 type NutModule = {
@@ -125,7 +139,7 @@ export const createWindowsCapabilityProvider = (
             );
             await guard.recheckAfterNativeAwait();
             const screenshot = (mod.default ?? mod) as ScreenshotModule;
-            const buffer = await screenshot({ format: 'png', screen: options?.screen });
+            const buffer = await awaitNativeQuiescence(guard, () => screenshot({ format: 'png', screen: options?.screen }));
             const { width, height } = pngDimensions(buffer);
             return {
                 base64: Buffer.from(buffer).toString('base64'),
@@ -145,8 +159,7 @@ export const createWindowsCapabilityProvider = (
                 );
             }
             guard.assertClickInBounds(x, y);
-            await guard.targetedInput({ kind: 'click', x, y, button: selectedButton });
-            await guard.recheckAfterNativeAwait();
+            await awaitNativeQuiescence(guard, () => guard.targetedInput!({ kind: 'click', x, y, button: selectedButton }));
         },
 
         async type(text: string, guard: NativeActuationGuard): Promise<void> {
@@ -156,7 +169,7 @@ export const createWindowsCapabilityProvider = (
             // This is the only literal-text primitive. Do not add clipboard,
             // IME, pressKey, or key-combo fallbacks: those turn text into
             // submission/navigation controls on a kiosk surface.
-            await nut.keyboard.type(text);
+            await awaitNativeQuiescence(guard, () => nut.keyboard.type(text));
         },
 
         async scroll(dx: number, dy: number, guard: NativeActuationGuard): Promise<void> {
@@ -168,18 +181,18 @@ export const createWindowsCapabilityProvider = (
                 scrollLeft?: (n: number) => Promise<unknown>;
                 scrollRight?: (n: number) => Promise<unknown>;
             };
-            if (dy > 0 && mouseFacade.scrollDown) await mouseFacade.scrollDown(dy);
-            else if (dy < 0 && mouseFacade.scrollUp) await mouseFacade.scrollUp(-dy);
-            if (dx > 0 && mouseFacade.scrollRight) await mouseFacade.scrollRight(dx);
-            else if (dx < 0 && mouseFacade.scrollLeft) await mouseFacade.scrollLeft(-dx);
+            if (dy > 0 && mouseFacade.scrollDown) await awaitNativeQuiescence(guard, () => mouseFacade.scrollDown!(dy));
+            else if (dy < 0 && mouseFacade.scrollUp) await awaitNativeQuiescence(guard, () => mouseFacade.scrollUp!(-dy));
+            if (dx > 0 && mouseFacade.scrollRight) await awaitNativeQuiescence(guard, () => mouseFacade.scrollRight!(dx));
+            else if (dx < 0 && mouseFacade.scrollLeft) await awaitNativeQuiescence(guard, () => mouseFacade.scrollLeft!(-dx));
         },
 
         async key(combo: string, guard: NativeActuationGuard): Promise<void> {
             const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
             await guard.recheckAfterNativeAwait();
             const keys = resolveKeyCombo(combo, nut.Key);
-            await nut.keyboard.pressKey(...keys);
-            await nut.keyboard.releaseKey(...keys.slice().reverse());
+            await awaitNativeQuiescence(guard, () => nut.keyboard.pressKey(...keys));
+            await awaitNativeQuiescence(guard, () => nut.keyboard.releaseKey(...keys.slice().reverse()));
         },
     };
 };

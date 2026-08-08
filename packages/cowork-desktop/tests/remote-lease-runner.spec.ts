@@ -238,4 +238,69 @@ describe('RemoteLeaseRunner', () => {
         expect(calls.some((url) => url.endsWith('/ack'))).toBe(false);
         expect(provider.calls).toEqual([]);
     });
+
+    it.each(['Stop', 'server timeout', 'lease expiry'] as const)('waits for native quiescence after a 200 start claim before terminalizing $0', async (trigger) => {
+        const server = generateKeyPairSync('ed25519');
+        const device = generateKeyPairSync('ed25519');
+        const deviceId = randomUUID();
+        const expiry = new Date(Date.now() + (trigger === 'lease expiry' ? 150 : 20_000)).toISOString();
+        const fields = { leaseId: `lease-quiesce-${trigger}`, capability: 'input_action', targetDeviceId: deviceId, nonce: 'nonce', expiry };
+        const mac = sign(null, Buffer.from(canonical(fields)), server.privateKey).toString('base64url');
+        let nativeStarted!: () => void;
+        let nativeAborted!: () => void;
+        let releaseNative!: () => void;
+        const started = new Promise<void>((resolve) => { nativeStarted = resolve; });
+        const aborted = new Promise<void>((resolve) => { nativeAborted = resolve; });
+        const provider = createMockCapabilityProvider();
+        provider.type = async (text, guard) => {
+            provider.calls.push({ kind: 'type', text });
+            nativeStarted();
+            await new Promise<void>((resolve) => {
+                releaseNative = resolve;
+                guard.signal.addEventListener('abort', () => nativeAborted(), { once: true });
+            });
+            guard.throwIfAborted();
+        };
+        const calls: Array<{ url: string; body?: string }> = [];
+        let cancellationPolls = 0;
+        const runner = new RemoteLeaseRunner({
+            fetch: async (url, init) => {
+                const requestUrl = String(url);
+                calls.push({ url: requestUrl, body: typeof init?.body === 'string' ? init.body : undefined });
+                if (requestUrl.endsWith('/.well-known/jwks.json')) return new Response(JSON.stringify({ keys: [{ ...server.publicKey.export({ format: 'jwk' }), kid: 'oauth-key' }] }));
+                if (requestUrl.includes('/cancellation?device_id=')) {
+                    // Let the first post-start poll prove the device has entered
+                    // native work. The next timeout poll must interrupt that
+                    // in-flight work and still defer PAS-FAIT until it settles.
+                    cancellationPolls += 1;
+                    return new Response(JSON.stringify({ cancelled: trigger === 'server timeout' && cancellationPolls >= 2 }));
+                }
+                return new Response('{}');
+            },
+            apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
+            deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: guardedContext(provider),
+        });
+        const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'type', text: 'literal' } } });
+        await started;
+        expect(calls.filter((call) => call.url.endsWith('/start'))).toHaveLength(1);
+
+        let stopped = false;
+        const stopping = trigger === 'Stop' ? runner.stop().then(() => { stopped = true; }) : null;
+        if (trigger === 'server timeout') {
+            await new Promise((resolve) => setTimeout(resolve, 125));
+            expect(cancellationPolls).toBeGreaterThanOrEqual(2);
+        }
+        await aborted;
+        await Promise.resolve();
+        expect(calls.filter((call) => call.url.endsWith('/result'))).toHaveLength(0);
+        if (trigger === 'Stop') expect(stopped).toBe(false);
+
+        releaseNative();
+        await handling;
+        await stopping;
+        expect(provider.calls).toEqual([{ kind: 'type', text: 'literal' }]);
+        expect(calls.filter((call) => call.url.endsWith('/result'))).toHaveLength(1);
+        expect(calls.find((call) => call.url.endsWith('/result'))?.body).toContain('PAS-FAIT');
+    });
 });
