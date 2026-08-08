@@ -150,11 +150,20 @@ describe("FocusLiveSession owner-signature gate", () => {
   });
 
   it("does not ingest for every pre-ingest denial", async () => {
-    const invalidRequest = { ...REQUEST, idempotencyKey: " " };
+    const invalidRequests: readonly OwnerSignatureRequest[] = [
+      { ...REQUEST, target: { ...REQUEST.target, workspace: " " } },
+      { ...REQUEST, target: { ...REQUEST.target, decisionId: " " } },
+      { ...REQUEST, idempotencyKey: " " },
+      { ...REQUEST, relayer: { ...REQUEST.relayer, relayerId: " " } },
+      { ...REQUEST, relayer: { ...REQUEST.relayer, transport: "smtp" as never } },
+      { ...REQUEST, authentication: { ...REQUEST.authentication, kind: "other" as never } },
+    ];
     const relayerCollision = { ...REQUEST, relayer: { ...REQUEST.relayer, relayerId: OWNER.principalId } };
 
-    const invalid = new InMemoryTrackOwnerSignaturePort();
-    await expectNoIngest(makeLive(invalid), invalid, invalidRequest, "invalid-signature-request");
+    for (const invalidRequest of invalidRequests) {
+      const invalid = new InMemoryTrackOwnerSignaturePort();
+      await expectNoIngest(makeLive(invalid), invalid, invalidRequest, "invalid-signature-request");
+    }
 
     const authenticationRequired = new InMemoryTrackOwnerSignaturePort();
     await expectNoIngest(makeLive(authenticationRequired, { owner: null }), authenticationRequired, REQUEST, "owner-authentication-required");
