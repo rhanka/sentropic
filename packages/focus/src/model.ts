@@ -6,8 +6,9 @@
  * whose primary outcome modality is a decision). It is intentionally CONCRETE, not a generic
  * "Focus platform": the model stays decision-dossier-shaped until a 2nd modality is real.
  *
- * This is the read-only FocusSnapshot split: affordances render as DISABLED metadata only
- * (no live commands). Live drivers (FocusLiveSession) are deferred (L3+).
+ * This remains the read-only FocusSnapshot split: affordances render as DISABLED metadata only
+ * (no snapshot live commands). The shipped fail-closed `FocusLiveSession` owner-signature live
+ * driver activates only with a real durable Track adapter and owner UAT.
  */
 
 /**
