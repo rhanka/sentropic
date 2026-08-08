@@ -21,7 +21,9 @@ export type {
   FocusProvenance,
   FocusRef,
   FocusLiveSession,
+  FocusOwnerSignatureContractVersion,
   OwnerSignatureAttestation,
+  OwnerSignatureIdentity,
   OwnerSignatureNotDoneReason,
   OwnerSignatureRequest,
   OwnerSignatureResult,
@@ -41,6 +43,8 @@ export type {
   TrackOwnerSignatureWrite,
   TrackOwnerSignatureWriteResult,
 } from "./model.js";
+
+export { FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION } from "./model.js";
 
 export type {
   HtmlRenderHooks,

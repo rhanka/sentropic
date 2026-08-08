@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/focus",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Focused-session document runtime: read-only FocusSnapshot renderers plus the fail-closed FocusLiveSession owner-signature driver for Track-native decisions. Markdown is injected by the host and HTML is sanitized by the host.",
   "type": "module",
   "license": "MIT",
