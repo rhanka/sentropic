@@ -69,7 +69,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
 
 ## Feedback Loop
 - `resolved`: architect and owner ratified the binding Feature 3 Option-B conditions before product edits; `COWORK_MVP_RATIFICATION_archi.md` is the decision record.
-- `attention`: BR-COWORK-EX1 is proposed, not active; one durable device/lease migration is allowed only after schema/route ownership is ratified.
+- `resolved`: BR-COWORK-EX1 authorizes the single `0042_cowork_provisioning_exposure.sql` migration for server-issued kiosk provisioning and durable Cowork workspace exposure grants; impact is deny-by-default authorization storage and rollback is removal of the new tables after revoking affected leases.
 - `resolved`: BR-COWORK-EX2 authorizes `api/src/services/device-code-store.ts` solely for BR-41c enrollment PoP staging; impact is device-code pending state only and rollback is removal of the PoP fields with the dependent route/client change. The user explicitly requested this enrollment binding.
 - `resolved`: BR-COWORK-EX3 authorizes `api/src/routes/api/chrome-extension.ts` solely to keep the published Cowork presence transport while routing `desktop_cowork` to durable ownership-checked storage; browser tab behavior is unchanged and rollback is the isolated desktop route branch.
 - `resolved`: BR-COWORK-EX4 authorizes `api/src/routes/api/admin.ts` and `api/src/routes/api/me.ts` solely to terminalize outstanding Cowork leases immediately before their existing user-delete cascades; impact is limited to #492 revoke-before-cascade and rollback is removal of those terminalization statements.
@@ -161,6 +161,8 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
     - [x] Implement consent-first acknowledgement, synchronous Stop cancellation, and local pre-act expiry/cancellation checks.
     - [x] Prove held-consent timeout, expiry, Stop, device-deletion, and account-deletion races produce zero provider calls.
   - [ ] Fix 2 critical: server-issued key-bound kiosk provisioning attestation; client claims are non-authoritative.
+    - [x] Add the single durable provisioning/exposure migration and server-only attestation record keyed by the device public key.
+    - [ ] Require authenticated provisioning before enrollment and re-check exact Notepad attestation at target selection and acknowledgement.
   - [ ] Fix 3 high: complete canonical invocation binding and mismatch-safe idempotency.
   - [ ] Fix 4 high: durable device-workspace-capability exposure grants at every authorization seam.
   - [x] Fix 5 high: lease/action-bound one-use remote consent; persisted remote allows are deleted and ignored.
