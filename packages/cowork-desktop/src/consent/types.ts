@@ -29,6 +29,18 @@ export type ConsentVerdict =
     | { decision: 'needs_consent' };
 
 /**
+ * An in-memory, one-use authorization for one remote lease/action pair.  The
+ * receipt is deliberately useless after consumption or if copied to another
+ * lease/action.  It is not persisted and is never sent to the server.
+ */
+export type RemoteConsentReceipt = {
+    id: string;
+    toolName: 'screen_capture' | 'input_action';
+    leaseId: string;
+    actionDigest: string;
+};
+
+/**
  * Persistence seam for consent entries (the durable `allow_always` /
  * `deny_always` policies). Mirrors the bridge `StorageAdapter` philosophy: the
  * binary supplies a file/credential-store backed implementation, tests supply

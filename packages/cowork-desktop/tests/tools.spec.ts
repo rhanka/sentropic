@@ -3,7 +3,6 @@ import { createMockCapabilityProvider } from '../src/capability/index.js';
 import {
     ConsentManager,
     createMemoryConsentStore,
-    DESKTOP_ORIGIN,
 } from '../src/consent/index.js';
 import {
     desktopToolDefinitions,
@@ -15,9 +14,8 @@ import {
 
 const allowAll = () =>
     new ConsentManager({
-        store: createMemoryConsentStore([
-            { toolName: '*', origin: DESKTOP_ORIGIN, policy: 'allow', updatedAt: new Date().toISOString() },
-        ]),
+        store: createMemoryConsentStore(),
+        prompt: async () => 'allow_once',
     });
 
 const allowInputOnce = () =>

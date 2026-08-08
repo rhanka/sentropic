@@ -20,11 +20,12 @@ describe('ConsentManager — default deny', () => {
         expect(verdict).toEqual({ decision: 'deny', source: 'default' });
     });
 
-    it('honors a persisted allow_always policy', async () => {
+    it('deletes and ignores a persisted screen-capture allow policy', async () => {
         const store = createMemoryConsentStore([allowAlwaysEntry('screen_capture')]);
         const consent = new ConsentManager({ store });
         const verdict = await consent.check('screen_capture');
-        expect(verdict).toEqual({ decision: 'allow', source: 'allow_always' });
+        expect(verdict).toEqual({ decision: 'deny', source: 'default' });
+        expect(await store.readEntries()).toEqual([]);
     });
 
     it('honors a persisted deny_always policy', async () => {
@@ -48,19 +49,14 @@ describe('ConsentManager — prompt decisions', () => {
         expect(await store.readEntries()).toHaveLength(0);
     });
 
-    it('allow_always allows and persists an allow policy (no re-prompt next time)', async () => {
+    it('treats remote allow_always as allow-once and persists no policy', async () => {
         const store = createMemoryConsentStore();
         const prompt = vi.fn().mockResolvedValue('allow_always');
         const consent = new ConsentManager({ store, prompt });
 
         const first = await consent.check('screen_capture');
-        expect(first).toEqual({ decision: 'allow', source: 'allow_always' });
-        expect(await store.readEntries()).toHaveLength(1);
-
-        // Second call resolves from the persisted policy — prompt not consulted again.
-        const second = await consent.check('screen_capture');
-        expect(second).toEqual({ decision: 'allow', source: 'allow_always' });
-        expect(prompt).toHaveBeenCalledTimes(1);
+        expect(first).toEqual({ decision: 'allow', source: 'allow_once' });
+        expect(await store.readEntries()).toHaveLength(0);
     });
 
     it('deny_once denies without persisting', async () => {
@@ -92,5 +88,41 @@ describe('ConsentManager — prompt decisions', () => {
             decision: 'deny',
             source: 'default',
         });
+    });
+});
+
+describe('ConsentManager — remote lease receipt', () => {
+    it('binds Allow once to one lease/action and consumes it exactly once', async () => {
+        const consent = new ConsentManager({
+            store: createMemoryConsentStore(),
+            prompt: async () => 'allow_once',
+        });
+        const receipt = await consent.requestRemoteAllowOnce({
+            toolName: 'input_action', leaseId: 'lease-1', actionDigest: 'digest-1', details: { action: 'click' },
+        });
+        expect(receipt).not.toBeNull();
+        expect(consent.consumeRemoteAllowOnce(receipt!, {
+            toolName: 'input_action', leaseId: 'lease-1', actionDigest: 'digest-1',
+        })).toBe(true);
+        expect(consent.consumeRemoteAllowOnce(receipt!, {
+            toolName: 'input_action', leaseId: 'lease-1', actionDigest: 'digest-1',
+        })).toBe(false);
+    });
+
+    it('does not reuse or honor a stale persisted allow for either remote capability', async () => {
+        const store = createMemoryConsentStore([
+            allowAlwaysEntry('screen_capture'),
+            allowAlwaysEntry('input_action'),
+        ]);
+        const prompt = vi.fn().mockResolvedValue('allow_once');
+        const consent = new ConsentManager({ store, prompt });
+        await expect(consent.requestRemoteAllowOnce({
+            toolName: 'screen_capture', leaseId: 'capture-1', actionDigest: 'capture-digest',
+        })).resolves.toMatchObject({ leaseId: 'capture-1' });
+        await expect(consent.requestRemoteAllowOnce({
+            toolName: 'input_action', leaseId: 'input-1', actionDigest: 'input-digest',
+        })).resolves.toMatchObject({ leaseId: 'input-1' });
+        expect(await store.readEntries()).toEqual([]);
+        expect(prompt).toHaveBeenCalledTimes(2);
     });
 });
