@@ -173,6 +173,7 @@ jobs:
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
               - 'packages/flow/**'
+              - 'packages/focus/**'
               - 'packages/chat-server/**'
               - 'packages/chat-core/**'
               - 'packages/events/**'
