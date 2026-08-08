@@ -5,11 +5,11 @@
 - [ ] Return an honest not-done result whenever authentication, authorization, contract validation, ingest, or read-back confirmation is unavailable or fails.
 
 ## Scope / Guardrails
-- [ ] Scope is limited to the private `@sentropic/focus` live-write driver, its public exports, focused unit tests, package metadata, and this branch plan.
+- [ ] Scope is limited to the public `@sentropic/focus` live-write driver, its public exports, focused unit tests, package metadata, README, and this branch plan.
 - [ ] The driver accepts only a Track-native decision id; it does not accept, render, transform, or submit an h2a decision dossier.
-- [ ] Owner authentication and decision/workspace authorization are required injected gates; a relayer is recorded separately and can never become the attester.
+- [ ] Owner authentication, trusted relayer provenance, and decision/workspace authorization are required injected gates; a relayer is recorded separately and can never become the attester.
 - [ ] The Track ingest contract is pinned to an exact version and every successful write is confirmed by a persisted read-back attestation before success is returned.
-- [ ] The package remains private and no package publication, CLI prompt, UI, API endpoint, migration, or Track event-schema change is introduced.
+- [ ] The package remains public and no package publication command, CLI prompt, UI, API endpoint, migration, or Track event-schema change is introduced.
 - [ ] The h2a-to-Track dossier adapter, connector teardown, tenancy cache invalidation/freshness repair, durable agentRef repair, and V1 breadth remain held out of scope.
 - [ ] Make-only workflow and Docker-first execution apply; every Make command ends with `ENV=focus-sig-gate`.
 - [ ] Automated tests use `ENV=test-focus-sig-gate`, never `ENV=dev`.
@@ -22,6 +22,7 @@
   - `packages/focus/src/index.ts`
   - `packages/focus/tests/live.spec.ts`
   - `packages/focus/package.json`
+  - `packages/focus/README.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -44,6 +45,7 @@
 - [ ] `BR-FOCUS-SIG-GATE-1` — OPEN. Production use remains gated: PR #416 tenancy resolution needs strict mode plus cache invalidation/TTL or fresh per-authorization resolution; this primitive neither claims nor implements that repair.
 - [ ] `BR-FOCUS-SIG-GATE-2` — OPEN. The h2a-to-Track dossier adapter/wire is not implemented or consumed; only already Track-native decisions can be submitted.
 - [ ] `BR-FOCUS-SIG-GATE-3` — OPEN. No locally installed `@sentropic/track/ingest` contract is yet proven to expose the required owner-attestation event; the driver stays port-injected and returns not-done without a matching pinned implementation.
+- [ ] `BR-FOCUS-SIG-GATE-4` — OPEN. Before any live use, a co-specified production Track adapter must persist the owner signature with a durable canonical-owner/workspace/decision unique constraint or upsert and transactionally read it back. The test-only in-memory Map is intentionally non-durable and is not a production adapter.
 - [x] `BR503-EX1` — `package-lock.json` workspace metadata is updated with `packages/focus/package.json`: required for Docker `npm ci` after the mandatory package patch bump; impact is only the matching workspace version; rollback is to revert both version fields together.
 
 ## AI Flaky tests
@@ -85,10 +87,10 @@
   - [ ] Verify the pushed branch CI and report exact command results, package version, commit SHAs, and PR URL.
 
 - [ ] **Lot 4 — Independent signature-gate review repair**
-  - [x] Replace mutable caller and port aliases with frozen scalar snapshots and a separately frozen port copy.
-  - [x] Runtime-validate the Track write receipt and make the package-owned contract version the sole accepted value.
-  - [x] Require atomic owner/decision uniqueness from Track ports and provide an in-memory reference adapter.
-  - [x] Add adversarial wrong-record, pre-ingest-denial, malformed-receipt, and concurrent-submit regression coverage.
-  - [x] Runtime-validate request object shape and relayer transport before the authentication boundary.
-  - [x] Run focused and full Focus package tests in `ENV=test-focus-sig-gate`.
-  - [x] Push the existing draft branch without changing its draft state.
+  - [x] Capture every request, authentication, trusted-relayer, authorization, receipt, and persisted-read-back value exactly once into frozen snapshots before validation or reuse.
+  - [x] Accept only the boolean authorization result `true`; malformed truthy values are denied before append.
+  - [x] Remove caller-supplied relayer provenance, use normalized issuer+subject identity equality, and reject canonical owner-relayer collisions before authorization.
+  - [x] Make the in-memory adapter test-only and unexported; document the production durable atomic upsert/read-back primitive as a prerequisite for live use.
+  - [x] Add getter/receipt/authentication/authorization/append-failure/racy-port adversarial regression coverage.
+  - [x] Re-run focused and full Focus package tests in `ENV=test-focus-sig-gate`.
+  - [ ] Push the existing draft branch without changing its draft state and update its follow-up note.
