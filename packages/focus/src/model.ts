@@ -166,3 +166,87 @@ export interface DecisionDossierDocument {
   readonly provenance: FocusProvenance;
   readonly amendmentTrace: readonly AmendmentStep[];
 }
+
+/** A Track-native decision location. h2a dossiers are intentionally not accepted here. */
+export interface TrackNativeDecisionTarget {
+  readonly workspace: string;
+  readonly decisionId: FocusRef;
+}
+
+/** Opaque proof that only an own-principal authentication adapter may verify. */
+export interface OwnPrincipalAuthentication {
+  readonly kind: "own-principal";
+  readonly proof: unknown;
+}
+
+/** The authenticated owner identity returned by the trusted own-principal adapter. */
+export interface AuthenticatedOwnPrincipal {
+  readonly principalId: string;
+  readonly authenticatedAt: string;
+}
+
+/** Transport provenance is a relayer record, never the owner attester. */
+export interface RelayerProvenance {
+  readonly transport: "cli" | "http" | "mcp-stdio" | "internal";
+  readonly relayerId: string;
+}
+
+/** The authenticated owner act that the Track signature contract must persist. */
+export interface OwnerSignatureAttestation {
+  readonly attester: AuthenticatedOwnPrincipal;
+}
+
+/** A request to accept one existing Track-native decision. */
+export interface OwnerSignatureRequest {
+  readonly target: TrackNativeDecisionTarget;
+  readonly authentication: OwnPrincipalAuthentication;
+  readonly relayer: RelayerProvenance;
+  readonly idempotencyKey: string;
+}
+
+/** Exact, versioned write shape submitted to a Track owner-signature adapter. */
+export interface TrackOwnerSignatureWrite {
+  readonly contractVersion: string;
+  readonly target: TrackNativeDecisionTarget;
+  readonly attestation: OwnerSignatureAttestation;
+  readonly relayer: RelayerProvenance;
+  readonly idempotencyKey: string;
+}
+
+/** Persisted read-back record required before an owner signature may be reported. */
+export interface PersistedOwnerSignature extends TrackOwnerSignatureWrite {
+  readonly recordId: string;
+}
+
+/** The Track adapter must say whether an idempotency replay created or reused a record. */
+export type TrackOwnerSignatureWriteResult =
+  | { readonly status: "written"; readonly recordId: string }
+  | { readonly status: "duplicate"; readonly recordId: string };
+
+/** Explicit honest-not-done outcomes; none represent an owner signature. */
+export type OwnerSignatureNotDoneReason =
+  | "invalid-signature-request"
+  | "owner-authentication-required"
+  | "owner-authentication-invalid"
+  | "authorization-denied"
+  | "attester-relayer-conflict"
+  | "track-contract-mismatch"
+  | "track-write-failed"
+  | "persisted-attestation-not-confirmed";
+
+/** A live attempt either returns verified persisted evidence or an honest not-done result. */
+export type OwnerSignatureResult =
+  | {
+      readonly status: "signed";
+      readonly duplicate: boolean;
+      readonly persisted: PersistedOwnerSignature;
+    }
+  | {
+      readonly status: "not-done";
+      readonly reason: OwnerSignatureNotDoneReason;
+    };
+
+/** The live write surface; a snapshot never implements this contract. */
+export interface FocusLiveSession {
+  sign(request: OwnerSignatureRequest): Promise<OwnerSignatureResult>;
+}

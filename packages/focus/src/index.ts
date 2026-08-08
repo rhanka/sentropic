@@ -12,6 +12,7 @@ export type {
   Affordance,
   AmendmentStep,
   AmendmentTraceNode,
+  AuthenticatedOwnPrincipal,
   ComprehensionEvidence,
   DecisionDossierDocument,
   DiagramNode,
@@ -19,6 +20,11 @@ export type {
   FocusNode,
   FocusProvenance,
   FocusRef,
+  FocusLiveSession,
+  OwnerSignatureAttestation,
+  OwnerSignatureNotDoneReason,
+  OwnerSignatureRequest,
+  OwnerSignatureResult,
   OptionAnnotationState,
   OptionNode,
   OptionSetNode,
@@ -27,7 +33,13 @@ export type {
   ProseNode,
   QuestionNode,
   QuestionValidationState,
+  OwnPrincipalAuthentication,
+  PersistedOwnerSignature,
+  RelayerProvenance,
   TargetRef,
+  TrackNativeDecisionTarget,
+  TrackOwnerSignatureWrite,
+  TrackOwnerSignatureWriteResult,
 } from "./model.js";
 
 export type {
