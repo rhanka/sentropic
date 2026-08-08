@@ -38,14 +38,14 @@ const { focusRouter } = await import('../../src/routes/api/focus');
 const { failClosedDecisionValidator } = await import('../../src/services/focus/decision-validator');
 const { createApiFocusLiveSession } = await import('../../src/services/focus/live-session');
 
-const authenticatedApp = () => {
+const authenticatedApp = (role = 'user') => {
   const app = new Hono();
   app.use('*', async (c, next) => {
     c.set('user', {
       userId: 'authenticated-user',
       sessionId: 'authenticated-session',
       authenticatedAt: '2026-08-08T12:00:00.000Z',
-      role: 'user',
+      role,
       workspaceId: 'workspace-from-auth-context',
     });
     await next();
@@ -159,7 +159,47 @@ describe('Focus owner-signature route', () => {
     expect(resolveTenantMock).toHaveBeenCalledWith({
       workspaceId: 'workspace-from-auth-context',
     });
-    expect(isTenantAdminMock).toHaveBeenCalledWith('authenticated-user', 'tenant-from-resolver');
+    expect(isTenantAdminMock).toHaveBeenCalledWith('authenticated-user', 'tenant-from-resolver', 'user');
+  });
+
+  it('should admit an admin_app caller when decision validation is authorized', async () => {
+    createApiFocusLiveSessionMock.mockImplementation((dependencies: Parameters<typeof createApiFocusLiveSession>[0]) => ({
+      sign: async (request: OwnerSignatureRequest) => {
+        const owner = await dependencies.ownPrincipal.authenticate(request);
+        if (!owner) return { status: 'not-done' as const, reason: 'owner-authentication-required' as const };
+
+        const authorized = await dependencies.authorizer.authorize({ owner, target: request.target });
+        if (!authorized) return { status: 'not-done' as const, reason: 'authorization-denied' as const };
+
+        return {
+          status: 'signed' as const,
+          duplicate: false,
+          persisted: {
+            contractVersion: 'track-owner-signature/1.0.0' as const,
+            target: request.target,
+            attestation: { attester: owner },
+            relayer: HTTP_RELAYER,
+            idempotencyKey: request.idempotencyKey,
+            recordId: 'durable-record-id',
+          },
+        };
+      },
+    } as FocusLiveSession));
+
+    const response = await authenticatedApp('admin_app').request('http://localhost/focus/owner-signatures', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision_id: 'decision-42', idempotency_key: 'request-retry-42' }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ status: 'signed', duplicate: false });
+    expect(failClosedDecisionValidator.validate).toHaveBeenCalledWith({
+      workspace: 'workspace-from-auth-context',
+      decisionId: 'decision-42',
+      userId: 'authenticated-user',
+    });
+    expect(isTenantAdminMock).toHaveBeenCalledWith('authenticated-user', 'tenant-from-resolver', 'admin_app');
   });
 
   it('should keep an authenticated session attestation stable for a delayed retry', async () => {
