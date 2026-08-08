@@ -7,11 +7,17 @@ import {
     DESKTOP_ORIGIN,
 } from '../src/consent/index.js';
 import { CoworkRunner } from '../src/runner/index.js';
+
+const measuredNotepad = () => ({
+    hwnd: '1', processId: 1, executable: 'C:\\Windows\\System32\\notepad.exe', title: 'Notepad',
+    windowsDirectory: 'C:\\Windows', signatureStatus: 'Valid', signerSubject: 'CN=Microsoft Corporation',
+    clientArea: { left: 0, top: 0, right: 1280, bottom: 720 },
+});
 import type { DesktopToolContext } from '../src/tools/index.js';
 
 const guardedContext = (provider: ReturnType<typeof createMockCapabilityProvider>): DesktopToolContext => ({
     provider,
-    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => ({ hwnd: '1', processId: 1, executable: 'notepad.exe', title: 'Notepad' }) }),
+    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => measuredNotepad() }),
 });
 
 const allowAll = () =>

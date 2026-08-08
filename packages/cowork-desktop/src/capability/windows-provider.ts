@@ -136,28 +136,17 @@ export const createWindowsCapabilityProvider = (
         },
 
         async mouseClick(x: number, y: number, button: MouseButton | undefined, guard: NativeActuationGuard): Promise<void> {
-            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
-            await guard.recheckAfterNativeAwait();
-            await nut.mouse.setPosition(new nut.Point(x, y));
             await guard.recheckAfterNativeAwait();
             const selectedButton = button ?? 'left';
-            const buttonName = selectedButton === 'left' ? 'LEFT' : selectedButton === 'right' ? 'RIGHT' : 'MIDDLE';
-            const nutButton = nut.Button[buttonName];
-            // nut.js exposes click helpers off the default export in some builds;
-            // fall back to press/release semantics through the mouse facade.
-            const mouseFacade = nut.mouse as unknown as {
-                click?: (b: unknown) => Promise<unknown>;
-            };
-            if (typeof mouseFacade.click === 'function') {
-                await mouseFacade.click(nutButton);
-            } else if (typeof nut.leftClick === 'function' && selectedButton === 'left') {
-                await nut.leftClick();
-            } else {
+            if (!guard.assertClickInBounds || !guard.targetedInput) {
                 throw new CapabilityUnavailableError(
                     'input_action.click',
-                    'no click primitive on the loaded native input module',
+                    'the measured HWND-targeted click primitive is unavailable.',
                 );
             }
+            guard.assertClickInBounds(x, y);
+            await guard.targetedInput({ kind: 'click', x, y, button: selectedButton });
+            await guard.recheckAfterNativeAwait();
         },
 
         async type(text: string, guard: NativeActuationGuard): Promise<void> {
