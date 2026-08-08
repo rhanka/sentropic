@@ -11,6 +11,7 @@ import type {
   PersistedOwnerSignature,
   TrackNativeDecisionTarget,
   TrackOwnerSignaturePort,
+  TrackOwnerSignatureWrite,
   TrackOwnerSignatureWriteResult,
 } from "../src/index.js";
 
@@ -180,6 +181,76 @@ describe("FocusLiveSession owner-signature gate", () => {
       readOwnerSignature: (identity) => contractStore.readOwnerSignature(identity),
     };
     await expectNoIngest(makeLive(wrongContract), contractStore, REQUEST, "track-contract-mismatch");
+  });
+
+  it("snapshots caller values and gives the port a separate deeply frozen copy", async () => {
+    const store = new InMemoryTrackOwnerSignaturePort();
+    let authorizedTarget: TrackNativeDecisionTarget | undefined;
+    let submitted: TrackOwnerSignatureWrite | undefined;
+    let mutationRejected = false;
+    const track: TrackOwnerSignaturePort = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      appendOwnerSignature(input) {
+        submitted = input;
+        try {
+          (input.target as { workspace: string }).workspace = "port-mutated";
+        } catch {
+          mutationRejected = true;
+        }
+        return store.appendOwnerSignature(input);
+      },
+      readOwnerSignature: (identity) => store.readOwnerSignature(identity),
+    };
+    const live = makeLive(track, {
+      authorize: ({ target }) => {
+        authorizedTarget = target;
+        return true;
+      },
+    });
+    const mutableRequest: {
+      target: { workspace: string; decisionId: string };
+      authentication: OwnerSignatureRequest["authentication"];
+      relayer: { transport: OwnerSignatureRequest["relayer"]["transport"]; relayerId: string };
+      idempotencyKey: string;
+    } = {
+      target: { ...REQUEST.target },
+      authentication: REQUEST.authentication,
+      relayer: { ...REQUEST.relayer },
+      idempotencyKey: REQUEST.idempotencyKey,
+    };
+
+    const pending = live.sign(mutableRequest);
+    mutableRequest.target.workspace = "caller-mutated";
+    mutableRequest.relayer.relayerId = "caller-mutated";
+    mutableRequest.idempotencyKey = "caller-mutated";
+    const result = await pending;
+
+    expect(result.status).toBe("signed");
+    expect(mutationRejected).toBe(true);
+    expect(submitted).toBeDefined();
+    if (submitted === undefined || authorizedTarget === undefined) throw new Error("expected captured port boundaries");
+    expect(Object.isFrozen(submitted.target)).toBe(true);
+    expect(Object.isFrozen(submitted.attestation)).toBe(true);
+    expect(Object.isFrozen(submitted.attestation.attester)).toBe(true);
+    expect(Object.isFrozen(submitted.relayer)).toBe(true);
+    expect(Object.isFrozen(authorizedTarget)).toBe(true);
+    expect(submitted.target).not.toBe(authorizedTarget);
+    expect(result).toMatchObject({
+      status: "signed",
+      persisted: { target: REQUEST.target, relayer: REQUEST.relayer, idempotencyKey: REQUEST.idempotencyKey },
+    });
+  });
+
+  it("uses the reference adapter's atomic owner-decision uniqueness for concurrent double-submit", async () => {
+    const store = new InMemoryTrackOwnerSignaturePort();
+    const live = makeLive(store);
+    const [first, second] = await Promise.all([live.sign(REQUEST), live.sign(REQUEST)]);
+
+    expect(first).toMatchObject({ status: "signed" });
+    expect(second).toMatchObject({ status: "signed" });
+    expect([first, second].filter((result) => result.status === "signed" && result.duplicate)).toHaveLength(1);
+    expect(store.appendAttempts).toBe(2);
+    expect(store.recordCount).toBe(1);
   });
 
 });
