@@ -9,7 +9,9 @@ import type {
   AuthenticatedOwnPrincipal,
   OwnerSignatureRequest,
   PersistedOwnerSignature,
+  TrackNativeDecisionTarget,
   TrackOwnerSignaturePort,
+  TrackOwnerSignatureWriteResult,
 } from "../src/index.js";
 
 const OWNER: AuthenticatedOwnPrincipal = {
@@ -62,6 +64,17 @@ const makeWrongReadBackPort = (
   return { store, track };
 };
 
+const expectNoIngest = async (
+  live: FocusLiveSessionDriver,
+  store: InMemoryTrackOwnerSignaturePort,
+  request: OwnerSignatureRequest,
+  reason: string,
+) => {
+  await expect(live.sign(request)).resolves.toEqual({ status: "not-done", reason });
+  expect(store.appendAttempts).toBe(0);
+  expect(store.recordCount).toBe(0);
+};
+
 describe("FocusLiveSession owner-signature gate", () => {
   it("records the authenticated owner as attester and retains distinct relayer provenance", async () => {
     const store = new InMemoryTrackOwnerSignaturePort();
@@ -105,6 +118,68 @@ describe("FocusLiveSession owner-signature gate", () => {
       reason: "persisted-attestation-not-confirmed",
     });
     expect(store.recordCount).toBe(1);
+  });
+
+  it.each([
+    ["undefined receipt", undefined],
+    ["failed receipt", { status: "failed", recordId: "not-a-success" }],
+    ["blank record id", { status: "written", recordId: "   " }],
+    ["missing record id", { status: "duplicate" }],
+  ])("rejects a runtime-invalid %s without reading or persisting", async (_label, receipt) => {
+    const store = new InMemoryTrackOwnerSignaturePort();
+    let appendCalls = 0;
+    let readCalls = 0;
+    const track = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      async appendOwnerSignature(): Promise<TrackOwnerSignatureWriteResult> {
+        appendCalls += 1;
+        return receipt as TrackOwnerSignatureWriteResult;
+      },
+      async readOwnerSignature(identity: Parameters<TrackOwnerSignaturePort["readOwnerSignature"]>[0]) {
+        readCalls += 1;
+        return store.readOwnerSignature(identity);
+      },
+    } as TrackOwnerSignaturePort;
+
+    await expect(makeLive(track).sign(REQUEST)).resolves.toEqual({ status: "not-done", reason: "track-write-failed" });
+    expect(appendCalls).toBe(1);
+    expect(readCalls).toBe(0);
+    expect(store.appendAttempts).toBe(0);
+    expect(store.recordCount).toBe(0);
+  });
+
+  it("does not ingest for every pre-ingest denial", async () => {
+    const invalidRequest = { ...REQUEST, idempotencyKey: " " };
+    const relayerCollision = { ...REQUEST, relayer: { ...REQUEST.relayer, relayerId: OWNER.principalId } };
+
+    const invalid = new InMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(invalid), invalid, invalidRequest, "invalid-signature-request");
+
+    const authenticationRequired = new InMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(authenticationRequired, { owner: null }), authenticationRequired, REQUEST, "owner-authentication-required");
+
+    const authenticationInvalid = new InMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(authenticationInvalid, { owner: { ...OWNER, principalId: "" } }), authenticationInvalid, REQUEST, "owner-authentication-invalid");
+
+    const authenticationRejected = new InMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(authenticationRejected, { authenticate: async () => { throw new Error("rejected"); } }), authenticationRejected, REQUEST, "owner-authentication-invalid");
+
+    const collision = new InMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(collision), collision, relayerCollision, "attester-relayer-conflict");
+
+    const authorizationRejected = new InMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(authorizationRejected, { authorize: () => false }), authorizationRejected, REQUEST, "authorization-denied");
+
+    const authorizationError = new InMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(makeLive(authorizationError, { authorize: () => { throw new Error("denied"); } }), authorizationError, REQUEST, "authorization-denied");
+
+    const contractStore = new InMemoryTrackOwnerSignaturePort();
+    const wrongContract: TrackOwnerSignaturePort = {
+      contractVersion: "track-owner-signature/2.0.0" as never,
+      appendOwnerSignature: (input) => contractStore.appendOwnerSignature(input),
+      readOwnerSignature: (identity) => contractStore.readOwnerSignature(identity),
+    };
+    await expectNoIngest(makeLive(wrongContract), contractStore, REQUEST, "track-contract-mismatch");
   });
 
 });
