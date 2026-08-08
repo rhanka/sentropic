@@ -83,6 +83,18 @@ function hasBinding(scope: LeaseScope, expected: CoworkInvocationBinding): boole
   return canonicalJson(binding) === canonicalJson(expected);
 }
 
+function exposureBinding(scope: LeaseScope, deviceId: string, userId: string): CoworkInvocationBinding | null {
+  const binding = scope?.invocation;
+  if (!binding
+    || binding.targetDeviceId !== deviceId
+    || binding.principalId !== userId
+    || (binding.capability !== 'screen_capture' && binding.capability !== 'input_action')
+    || typeof binding.workspaceId !== 'string'
+    || typeof binding.sessionId !== 'string'
+    || typeof binding.actionHash !== 'string') return null;
+  return binding;
+}
+
 export type LeaseResult =
   | { ok: true; lease: { leaseId: string; deviceId: string; nonce: string; scope: LeaseScope; expiresAt: Date; status: LeaseStatus } }
   | { ok: false; reason: 'ineligible' | 'not_found' | 'invalid_signature' | 'not_issuable' | 'not_revocable' | 'cancelled' | 'execution_in_progress' };
@@ -274,20 +286,37 @@ export async function acknowledgeLease(input: {
   }
 
   const now = new Date();
-  const [acknowledged] = await db
-    .update(coworkDeviceLeases)
-    .set({ status: 'acknowledged', acknowledgedAt: now })
-    .where(and(
-      eq(coworkDeviceLeases.id, input.leaseId),
-      eq(coworkDeviceLeases.deviceId, input.deviceId),
-      eq(coworkDeviceLeases.userId, input.userId),
-      eq(coworkDeviceLeases.status, 'issued'),
-      gt(coworkDeviceLeases.expiresAt, now),
-      sql`EXISTS (SELECT 1 FROM cowork_devices d WHERE d.id = ${coworkDeviceLeases.deviceId} AND d.user_id = ${input.userId} AND d.status = 'active')`,
-      sql`EXISTS (SELECT 1 FROM cowork_devices d JOIN cowork_device_provisioning kp ON kp.public_key = d.public_key WHERE d.id = ${coworkDeviceLeases.deviceId} AND kp.status = 'active' AND kp.kiosk_surface = ${COWORK_KIOSK_SURFACE} AND kp.capability_ids @> ${JSON.stringify(['screen_capture', 'input_action'])}::jsonb)`,
-    ))
-    .returning();
-  return acknowledged ? { ok: true, lease: toLease(acknowledged) } : { ok: false, reason: 'not_issuable' };
+  const binding = exposureBinding(lease.scope as LeaseScope, input.deviceId, input.userId);
+  if (!binding) return { ok: false, reason: 'not_issuable' };
+  return db.transaction(async (tx) => {
+    // This is the same lock used by issue, start, deletion, and explicit
+    // exposure revocation. The grant cannot disappear after its check.
+    const locked = await tx.execute(sql`
+      SELECT d.id
+      FROM cowork_devices d
+      JOIN cowork_device_provisioning kp ON kp.public_key = d.public_key
+      WHERE d.id = ${input.deviceId}
+        AND d.user_id = ${input.userId}
+        AND d.status = 'active'
+        AND kp.status = 'active'
+        AND kp.kiosk_surface = ${COWORK_KIOSK_SURFACE}
+        AND kp.capability_ids @> ${JSON.stringify(['screen_capture', 'input_action'])}::jsonb
+      FOR UPDATE OF d
+    `);
+    if (locked.rows.length === 0) return { ok: false, reason: 'not_issuable' } as LeaseResult;
+    const [acknowledged] = await tx.update(coworkDeviceLeases)
+      .set({ status: 'acknowledged', acknowledgedAt: now })
+      .where(and(
+        eq(coworkDeviceLeases.id, input.leaseId),
+        eq(coworkDeviceLeases.deviceId, input.deviceId),
+        eq(coworkDeviceLeases.userId, input.userId),
+        eq(coworkDeviceLeases.status, 'issued'),
+        gt(coworkDeviceLeases.expiresAt, now),
+        sql`EXISTS (SELECT 1 FROM cowork_device_exposure_grants g WHERE g.device_id = ${input.deviceId} AND g.workspace_id = ${binding.workspaceId} AND g.capability = ${binding.capability})`,
+      ))
+      .returning();
+    return acknowledged ? { ok: true, lease: toLease(acknowledged) } : { ok: false, reason: 'not_issuable' } as LeaseResult;
+  });
 }
 
 /**
@@ -309,6 +338,8 @@ export async function claimLeaseExecution(input: {
     return { ok: false, reason: 'invalid_signature' };
   }
   const now = new Date();
+  const binding = exposureBinding(lease.scope as LeaseScope, input.deviceId, input.userId);
+  if (!binding) return { ok: false, reason: 'not_issuable' };
   return db.transaction(async (tx) => {
     const locked = await tx.execute(sql`
       SELECT id FROM cowork_devices
@@ -319,6 +350,7 @@ export async function claimLeaseExecution(input: {
     const [claimed] = await tx.update(coworkDeviceLeases).set({ status: 'executing' }).where(and(
       eq(coworkDeviceLeases.id, input.leaseId), eq(coworkDeviceLeases.deviceId, input.deviceId),
       eq(coworkDeviceLeases.userId, input.userId), eq(coworkDeviceLeases.status, 'acknowledged'), gt(coworkDeviceLeases.expiresAt, now),
+      sql`EXISTS (SELECT 1 FROM cowork_device_exposure_grants g WHERE g.device_id = ${input.deviceId} AND g.workspace_id = ${binding.workspaceId} AND g.capability = ${binding.capability})`,
     )).returning();
     if (claimed) return { ok: true, lease: toLease(claimed) } as LeaseResult;
     const [current] = await tx.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases)
