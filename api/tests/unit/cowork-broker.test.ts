@@ -13,7 +13,7 @@ describe('Cowork remote broker safety boundaries', () => {
       async revoke() {},
     };
     const run = (toolCallId: string) => createCoworkInvocationBroker({
-      broker, audit: (event) => { audit.push(event); }, userId: 'user', targetDeviceId: 'device', toolCallId,
+      broker, audit: (event) => { audit.push(event); }, userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId,
       capability: 'input_action', action: { action: 'click', x: 1, y: 1 },
     })();
 
@@ -24,12 +24,28 @@ describe('Cowork remote broker safety boundaries', () => {
     expect(audit.map((event) => event.toolCallId)).toEqual(expect.arrayContaining(['call-a', 'call-b']));
   });
 
+  it('passes workspace and session into each independent issuance closure', async () => {
+    const bindings: Array<Record<string, unknown>> = [];
+    const invoke = createCoworkInvocationBroker({
+      broker: {
+        async issue(input) { bindings.push(input); return { ok: true as const, leaseId: 'lease' }; },
+        async wait() { return 'PAS-FAIT' as const; },
+        async revoke() {},
+      },
+      userId: 'user', workspaceId: 'workspace-a', sessionId: 'session-a', targetDeviceId: 'device', toolCallId: 'call', capability: 'screen_capture', action: {},
+    });
+    await invoke();
+    expect(bindings).toEqual([expect.objectContaining({ userId: 'user', workspaceId: 'workspace-a', sessionId: 'session-a', targetDeviceId: 'device', toolCallId: 'call' })]);
+  });
+
   it('requires a human session-bound selection even when exactly one device is eligible', async () => {
     const store = new CoworkTargetSelectionStore({
       requireWorkspaceAccess: async () => undefined,
       findDevice: async () => ({ id: 'only-device', userId: 'user', publicKey: 'key', status: 'active', capabilities: {
         capabilityIds: ['screen_capture', 'input_action'], isolatedVmTarget: true, kioskSurface: 'notepad',
       } }),
+      isAttested: async () => true,
+      hasExposure: async () => true,
     });
     expect(store.get({ userId: 'user', workspaceId: 'workspace', sessionId: 'session' })).toBeNull();
     await expect(store.select({ userId: 'user', workspaceId: 'workspace', sessionId: 'session', deviceId: 'only-device', selectedAt: Date.now() })).resolves.toBe(true);
@@ -45,7 +61,7 @@ describe('Cowork remote broker safety boundaries', () => {
           async wait() { return 'PAS-FAIT' as const; },
           async revoke() {},
         },
-        userId: 'user', targetDeviceId: 'device', toolCallId: 'call-failed',
+        userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-failed',
         capability: 'screen_capture', action: {},
       });
       await expect(invoke()).resolves.toMatchObject({

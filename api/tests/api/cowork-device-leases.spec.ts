@@ -7,6 +7,7 @@ import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../s
 import { issueLease, listIssuedLeases } from '../../src/services/cowork/device-lease-service';
 import { deleteCoworkDeviceWithLeaseRevocation } from '../../src/services/cowork/device-registry';
 import { coworkDeliveryProofPayload } from '../../src/services/cowork/device-identity';
+import { grantCoworkWorkspaceExposure } from '../../src/services/cowork/provisioning';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { seedCoworkDevice } from '../utils/cowork-device';
 
@@ -22,6 +23,9 @@ describe('Cowork device authorization leases', () => {
   afterEach(cleanupAuthData);
 
   async function issue(deviceId: string, turnRef: string) {
+    await Promise.all(['screen_capture', 'input_action'].map((capability) => grantCoworkWorkspaceExposure({
+      deviceId, workspaceId: user.workspaceId, capability: capability as 'screen_capture' | 'input_action', grantedBy: user.id,
+    })));
     await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/selection', user.sessionToken!, {
       session_id: TEST_COWORK_SESSION, workspace_id: user.workspaceId, device_id: deviceId,
     });
@@ -64,6 +68,26 @@ describe('Cowork device authorization leases', () => {
     expect(response.status).toBe(403);
   });
 
+  it('requires a pre-existing exact workspace/capability exposure before selection or issuance', async () => {
+    const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const selectedWithoutGrant = await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/selection', user.sessionToken!, {
+      session_id: TEST_COWORK_SESSION, workspace_id: user.workspaceId, device_id: device.deviceId,
+    });
+    expect(selectedWithoutGrant.status).toBe(403);
+    await grantCoworkWorkspaceExposure({
+      deviceId: device.deviceId, workspaceId: user.workspaceId, capability: 'screen_capture', grantedBy: user.id,
+    });
+    const selected = await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/selection', user.sessionToken!, {
+      session_id: TEST_COWORK_SESSION, workspace_id: user.workspaceId, device_id: device.deviceId,
+    });
+    expect(selected.status).toBe(200);
+    const input = await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/leases', user.sessionToken!, {
+      device_id: device.deviceId, turn_ref: 'ungranted-input', session_id: TEST_COWORK_SESSION,
+      workspace_id: user.workspaceId, scope: { capability: 'input_action', action: { action: 'click', x: 1, y: 1 } },
+    });
+    expect(input.status).toBe(403);
+  });
+
   it('fails closed when a device is missing, stale, disconnected, or revoked', async () => {
     expect((await issue(crypto.randomUUID(), 'missing')).response.status).toBe(403);
     const stale = await seedCoworkDevice({
@@ -89,10 +113,12 @@ describe('Cowork device authorization leases', () => {
     });
     await expect(issueLease({
       userId: user.id, deviceId: ordinary.deviceId, turnRef: 'ordinary-target',
+      workspaceId: user.workspaceId, sessionId: TEST_COWORK_SESSION,
       scope: { capability: 'screen_capture' },
     })).resolves.toMatchObject({ ok: false, reason: 'ineligible' });
     await expect(issueLease({
       userId: user.id, deviceId: unmarkedKiosk.deviceId, turnRef: 'unmarked-kiosk',
+      workspaceId: user.workspaceId, sessionId: TEST_COWORK_SESSION,
       scope: { capability: 'screen_capture' },
     })).resolves.toMatchObject({ ok: false, reason: 'ineligible' });
   });
@@ -104,6 +130,7 @@ describe('Cowork device authorization leases', () => {
     try {
       await expect(issueLease({
         userId: user.id, deviceId: device.deviceId, turnRef: 'production-denied',
+        workspaceId: user.workspaceId, sessionId: TEST_COWORK_SESSION,
         scope: { capability: 'screen_capture' },
       })).resolves.toMatchObject({ ok: false, reason: 'not_issuable' });
     } finally {
@@ -123,6 +150,23 @@ describe('Cowork device authorization leases', () => {
     expect(rows).toHaveLength(1);
     const reopenedRead = await listIssuedLeases(user.id, device.deviceId);
     expect(reopenedRead?.map((row) => row.id)).toContain(first.payload.lease.leaseId);
+  });
+
+  it('revokes an idempotency collision instead of aliasing a second invocation to the first FAIT', async () => {
+    const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const first = await issue(device.deviceId, 'shared-tool-call');
+    expect(first.response.status).toBe(201);
+    const mismatch = await issueLease({
+      userId: user.id,
+      deviceId: device.deviceId,
+      turnRef: 'shared-tool-call',
+      workspaceId: user.workspaceId,
+      sessionId: 'different-session',
+      scope: { capability: 'input_action', action: { action: 'click', x: 1, y: 1 } },
+    });
+    expect(mismatch).toEqual({ ok: false, reason: 'not_issuable' });
+    await expect(db.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases)
+      .where(eq(coworkDeviceLeases.id, first.payload.lease.leaseId))).resolves.toEqual([{ status: 'revoked' }]);
   });
 
   it('fails closed on an idempotent retry after presence becomes stale', async () => {
