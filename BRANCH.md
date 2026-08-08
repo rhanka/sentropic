@@ -42,11 +42,11 @@
 
 ## Scope / Guardrails
 
-- [ ] Scope is limited to the API database schema, one API migration, the durable owner-signature adapter, its Focus live-session composition factory, focused API unit tests, required workspace metadata, and this plan.
+- [ ] Scope is limited to the API database schema, one API migration, the durable owner-signature adapter, its Focus live-session composition factory, one authenticated Focus owner-signature route, focused API unit tests, required workspace metadata, and this plan.
 - [ ] The durable key is exactly canonical owner issuer, canonical owner subject, workspace, and decision id; idempotency keys remain stored retry metadata only.
 - [ ] The adapter persists and reads attestations only; own-principal authentication, trusted relayer provenance, and authorization remain the merged Focus driver’s injected gates.
 - [ ] One migration maximum is permitted under `api/drizzle/`.
-- [ ] No new HTTP signing route is in scope because no existing API Focus authentication/authorization surface exists to supply the driver’s required gates.
+- [ ] The HTTP signing route derives the owner solely from the authenticated API session; it never accepts caller-supplied owner or relayer identity.
 - [ ] All Make commands use `ENV=test-track-sig-adapter` as the final argument; tests never use `ENV=dev`.
 - [ ] Owner UAT is required before any live activation or merge.
 
@@ -55,7 +55,12 @@
 - **Allowed Paths (implementation scope)**:
   - `api/src/db/schema.ts`
   - `api/src/services/focus/**`
+  - `api/src/routes/api/focus.ts`
+  - `api/src/routes/api/index.ts`
   - `api/tests/unit/track-owner-signature-adapter.test.ts`
+  - `api/tests/unit/focus-owner-signature-route.test.ts`
+  - `api/drizzle/meta/_journal.json`
+  - `api/drizzle/meta/0041_snapshot.json`
   - `api/package.json`
   - `api/package-lock.json`
   - `package-lock.json`
@@ -67,7 +72,7 @@
   - `packages/focus/**`
   - `packages/cli/**`
   - `ui/**`
-  - `api/src/routes/**`
+  - `api/src/routes/**` except the declared Focus route and its router registration
   - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (one migration maximum)
@@ -79,8 +84,9 @@
 
 - [x] `BR-SIG-ADAPTER-EX1` — approved by the owner’s explicit migration request. `api/drizzle/0041_track_owner_signatures.sql` creates the one durable owner-signature table and unique index; impact is an additive table; rollback is to drop that table in a follow-up migration only after its records are safely retired.
 - [x] `BR-SIG-ADAPTER-EX2` — required by the `@sentropic/focus` API workspace dependency. The root lockfile is regenerated through Make; the API lockfile remains blocked with the isolated service build; impact is package-resolution metadata only; rollback is to revert each lockfile with its matching manifest.
-- [ ] `BR-SIG-ADAPTER-1` — OPEN. No API route currently supplies the Focus driver’s own-principal authentication and authorization dependencies; live endpoint activation remains an owner-gated follow-up after this durable adapter is independently reviewed and UAT-qualified.
-- [ ] `BR-SIG-ADAPTER-2` — BLOCKED. `make up-api-test` and `make typecheck-api` cannot build the isolated API image because the current `origin/main` audit gate rejects existing `vitest` advisory `GHSA-5xrq-8626-4rwp`; the scoped test command consequently reports `service "api" is not running`. Owner: security lane; acceptance: resolve the advisory without weakening the audit gate, then rerun the scoped real-database tests.
+- [x] `BR-SIG-ADAPTER-EX3` — approved by the owner’s explicit build-review remediation request. Add the minimal authenticated Focus owner-signature route and router registration; it obtains the owner from the session context, records fixed HTTP relayer provenance, and injects workspace-membership plus tenancy-resolution authorization. Impact is one authenticated API entry point; rollback is to remove that route and registration while retaining the durable adapter.
+- [ ] `BR-SIG-ADAPTER-1` — The authenticated Focus owner-signature route composes the durable factory with session-derived own-principal, trusted HTTP relayer provenance, workspace membership, and tenancy resolution; its focused unit test remains required before review handoff.
+- [ ] `BR-SIG-ADAPTER-2` — BLOCKED. `make db-generate REGISTRY=local`, `make up-api-test`, and `make typecheck-api` cannot build the isolated API image because the audit gate rejects `vitest` advisory `GHSA-5xrq-8626-4rwp`; the scoped test command consequently reports `service "api" is not running`. Owner: security lane; acceptance: resolve the advisory without weakening the audit gate, then regenerate the journaled migration and rerun the scoped real-database tests.
 
 ## AI Flaky tests
 
@@ -113,6 +119,7 @@
   - [x] Add one additive migration with `UNIQUE(owner_issuer, owner_subject, workspace_id, decision_id)`.
   - [x] Implement a PostgreSQL/Drizzle `TrackOwnerSignaturePort` using `INSERT … ON CONFLICT DO NOTHING`, a transaction-local canonical read-back, and no application-side check-then-insert path.
   - [x] Preserve the first persisted attestation and return an authoritative `written` or `duplicate` receipt.
+  - [ ] Regenerate/register the migration through `make db-generate ENV=test-track-sig-adapter`, including the Drizzle journal and matching snapshot.
   - [ ] Lot gate: `make typecheck-api ENV=test-track-sig-adapter` and scoped real-adapter unit tests pass.
 
 - [ ] **Lot 2 — API Focus composition and concurrency proof**
@@ -120,6 +127,8 @@
   - [x] Add `api/tests/unit/track-owner-signature-adapter.test.ts` with real PostgreSQL concurrent appends using distinct idempotency keys and one canonical durable row assertion.
   - [x] Add persisted canonical attestation read-back coverage.
   - [x] Add a real database transactional read-back failure test that returns the driver’s honest not-done outcome.
+  - [x] Add the authenticated Focus owner-signature endpoint through `createApiFocusLiveSession`, with session-derived own-principal, fixed trusted HTTP relayer provenance, and workspace-membership plus tenancy-resolution authorization.
+  - [ ] Add a focused API unit test proving the endpoint invokes the durable Focus composition with the authenticated principal.
   - [ ] Lot gate: scoped `make test-api-unit SCOPE=tests/unit/track-owner-signature-adapter.test.ts ENV=test-track-sig-adapter` passes.
 
 - [ ] **Lot 3 — Final verification and draft review handoff**
