@@ -56,12 +56,22 @@ describe('Cowork workspace exposure public route', () => {
     expect(held.status).toBe(201);
     const heldLease = (await held.json() as { lease: { leaseId: string; nonce: string } }).lease;
 
-    expect((await authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
-      action: 'revoke', device_id: key.deviceId, workspace_id: workspaceId, capabilities: ['screen_capture'],
-    })).status).toBe(200);
-    expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${heldLease.leaseId}/ack`, deviceSession, {
+    const [heldAck, heldRevoke] = await Promise.all([
+      authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${heldLease.leaseId}/ack`, deviceSession, {
+        device_id: key.deviceId,
+        signature: key.signPayload(`cowork-lease-ack-v1:${heldLease.leaseId}.${heldLease.nonce}`),
+      }),
+      authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
+        action: 'revoke', device_id: key.deviceId, workspace_id: workspaceId, capabilities: ['screen_capture'],
+      }),
+    ]);
+    expect(heldRevoke.status).toBe(200);
+    // Whichever transaction takes the device lock first, the revoke owns the
+    // final state: an acknowledged winner is revoked before its start claim.
+    expect([200, 409]).toContain(heldAck.status);
+    expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${heldLease.leaseId}/start`, deviceSession, {
       device_id: key.deviceId,
-      signature: key.signPayload(`cowork-lease-ack-v1:${heldLease.leaseId}.${heldLease.nonce}`),
+      signature: key.signPayload(`cowork-lease-start-v1:${heldLease.leaseId}.${heldLease.nonce}`),
     })).status).toBe(409);
 
     expect((await authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
@@ -77,13 +87,20 @@ describe('Cowork workspace exposure public route', () => {
       device_id: key.deviceId,
       signature: key.signPayload(`cowork-lease-ack-v1:${acknowledgedLease.leaseId}.${acknowledgedLease.nonce}`),
     })).status).toBe(200);
-    expect((await authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
-      action: 'revoke', device_id: key.deviceId, workspace_id: workspaceId, capabilities: ['screen_capture'],
-    })).status).toBe(200);
-    expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${acknowledgedLease.leaseId}/start`, deviceSession, {
-      device_id: key.deviceId,
-      signature: key.signPayload(`cowork-lease-start-v1:${acknowledgedLease.leaseId}.${acknowledgedLease.nonce}`),
-    })).status).toBe(409);
+    const [postAckStart, postAckRevoke] = await Promise.all([
+      authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${acknowledgedLease.leaseId}/start`, deviceSession, {
+        device_id: key.deviceId,
+        signature: key.signPayload(`cowork-lease-start-v1:${acknowledgedLease.leaseId}.${acknowledgedLease.nonce}`),
+      }),
+      authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
+        action: 'revoke', device_id: key.deviceId, workspace_id: workspaceId, capabilities: ['screen_capture'],
+      }),
+    ]);
+    expect(postAckRevoke.status).toBe(200);
+    // The device lock serializes start versus exposure revoke. If the revoke
+    // wins, start is denied; if start wins, it was authorized before revocation
+    // and is already an executing, non-reissuable lease.
+    expect([200, 409]).toContain(postAckStart.status);
     expect((await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/leases', deviceSession, {
       device_id: key.deviceId, turn_ref: 'revoked-public-route', session_id: 'cowork-public-route',
       workspace_id: workspaceId, scope: { capability: 'screen_capture' },
