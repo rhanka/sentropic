@@ -50,7 +50,7 @@ Hand the chat widget shell over from the app to `@sentropic/chat-ui` in header-f
 - `clarification` — Q5 release cadence: baseline = ONE cumulative `chat-ui` minor (`0.33.0` → `0.34.0`) for the whole lot in one PR (8 atomic commits), not a published per-slice series.
 - `attention` — DS DOM blocker to re-check before S5/S6: the AgentsList DOM suite recorded a design-system parse blocker (`packages/chat-ui/tests/agents-list.dom.spec.ts`). Re-verify at S5; if still present, cover S5/S6 with package source + host-wiring fail-first tests and do not green a DOM-acceptance that was not executed.
 - `attention` — F5 (typed bubble/wheel glyph) stays blocked on the design-system lane; interim `layers` icon in `AgentsList` is unchanged by this lot.
-- `blocked` — S1 ui gates (`make typecheck-ui`, `make lint-ui`, `make test-ui`) cannot run: `up-ui` fails on a repo-wide `npm audit --audit-level=high` for mermaid CVEs (GHSA-3rrr-jr9j-h3q3 + 4 more). PRE-EXISTING on `origin/main` (`mermaid ^11.14.0`); this branch changes zero dependencies (only `packages/chat-ui/package.json` +6 lines, no lockfile). S1 code is otherwise validated: `make test-chat-ui ENV=test-lc-shell` GREEN (1022 tests incl reference-validation + theme-css drift + version pins) and `ChatWidgetTabBar` DOM test GREEN (5); app-swap type-safety verified (app `type Tab = ChatWidgetTab`). Route the mermaid audit to a `fix/sec-*` branch via the conductor; re-run typecheck-ui/test-ui once it lands. Do NOT push S1 until the ui gates can go green.
+- `acknowledge` — mermaid npm-audit blocker RESOLVED: infra merged #519 (exception-aware audit gate — `.security/audit-gate.mjs` + allowlist + register; image-size DoS unreachable/expiring 2026-09-08; mermaid = moderate, below `--audit-level=high`). Merged `origin/main` into this branch (`856e54c6d`, BRANCH.md=ours). S1 ui gates now GREEN on `ENV=test-lc-shell`: `typecheck-ui` 0 errors, `lint-ui` clean, FULL `test-ui` 467/467 (incl `ChatWidget-tab-bar.test.ts`), zero regression. Two typing fixes made: `.d.ts` uses Svelte-5 `Component<Props>` (not `SvelteComponentTyped`) and the app annotates `onSelect={(tab: ChatWidgetTab) => …}` (svelte-check would not infer the param otherwise).
 
 ## AI Flaky tests
 - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (one success on same commit+command). Never add timeouts. Record command + file + signature here. Owner sign-off before merge.
@@ -72,13 +72,13 @@ Hand the chat widget shell over from the app to `@sentropic/chat-ui` in header-f
 
 - [ ] **Lot S1 — move the live tab bar, not a façade (≤145 lines)**
   - [x] Extract the app tab-bar literals/labels/callbacks into a package `ChatWidgetTabBar` primitive (commit 5d3f86f6c); app-swap: app renders `<ChatWidgetTabBar variant="extension" showJobsBadge={false}>` (I4-exact), export subpath + manifest + reference-validation entry + bump chat-ui 0.34.0; DOM test + host-wiring test written. `make test-chat-ui-dom` + `make test-chat-ui` GREEN. typecheck-ui/lint-ui/test-ui BLOCKED by mermaid audit (see Feedback Loop).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-ui` + `make lint-ui`
-    - [ ] **UI tests**
-      - [ ] Package DOM (fail-first): `ChatWidgetTabBar` asserts current three-role order, `showCommentsTab` predicate, click callback, badge-off parity → `make test-chat-ui-dom ENV=test`
-      - [ ] Host-wiring (fail-first): the app header imports the primitive and no longer owns the three buttons → `make test-ui SCOPE=tests/components/chat/ChatWidget-shell.test.ts ENV=test`
-      - [ ] Sub-lot gate: FULL `make test-ui ENV=test`
-    - [ ] `chat-ui` minor bump + export/reference-validation entry for `ChatWidgetTabBar`
+  - [x] Lot gate (mermaid unblocked via #519; all GREEN on `ENV=test-lc-shell`):
+    - [x] `make typecheck-ui` (0 errors) + `make lint-ui` (clean)
+    - [x] **UI tests**
+      - [x] Package DOM: `ChatWidgetTabBar` three-role order, `showCommentsTab`, onSelect callback, badge-off parity → `make test-chat-ui-dom` GREEN (5)
+      - [x] Host-wiring: app imports the primitive + dropped the three raw buttons → `ui/tests/components/chat/ChatWidget-tab-bar.test.ts` (3) GREEN
+      - [x] Sub-lot gate: FULL `make test-ui ENV=test-lc-shell` → 467/467, zero regression
+    - [x] `chat-ui` minor bump 0.34.0 + export/manifest/reference-validation entry for `ChatWidgetTabBar` (`make test-chat-ui` GREEN 1022)
 
 - [ ] **Lot S2 — package header frame, host controls as slots (≤145 lines)**
   - [ ] Add `renderHeaderLeading`, `renderHeaderActions`, `headerGrip`; wrap existing mobile/action blocks as in-place host snippets (no move/reindent of the settings popover).

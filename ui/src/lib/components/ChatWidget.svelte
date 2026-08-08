@@ -2380,7 +2380,7 @@
                 chatTabLabel={$_('chat.tabs.chat')}
                 commentsTabLabel={$_('chat.tabs.comments')}
                 queueTabLabel={$_('chat.tabs.jobs')}
-                onSelect={(tab) => (activeTab = tab)}
+                onSelect={(tab: ChatWidgetTab) => (activeTab = tab)}
               />
             </div>
           </div>

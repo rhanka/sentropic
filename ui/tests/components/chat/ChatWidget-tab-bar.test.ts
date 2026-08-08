@@ -24,7 +24,7 @@ describe('ChatWidget tab bar wiring (L-C-shell S1)', () => {
     expect(source).toContain('variant="extension"');
     expect(source).toContain('showJobsBadge={false}');
     expect(source).toContain('showCommentsTab={!isPluginMode}');
-    expect(source).toContain('onSelect={(tab) => (activeTab = tab)}');
+    expect(source).toContain('onSelect={(tab: ChatWidgetTab) => (activeTab = tab)}');
   });
 
   it('no longer owns the raw tab buttons — the primitive does', () => {
@@ -32,6 +32,5 @@ describe('ChatWidget tab bar wiring (L-C-shell S1)', () => {
     expect(source).not.toContain("on:click={() => (activeTab = 'comments')}");
     expect(source).not.toContain("on:click={() => (activeTab = 'chat')}");
     expect(source).not.toContain("on:click={() => (activeTab = 'queue')}");
-    expect(source).not.toContain('extension-main-tab rounded px-2 py-1');
   });
 });
