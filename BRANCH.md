@@ -157,9 +157,9 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Run the desktop/bridge/connector/API scoped gates where the local stack is available; API integration remains contingent on the test stack.
   - [x] General computer use remains separately ratification-gated in `spec/SPEC_EVOL_COWORK_COMPUTER_USE_GENERAL.md`; it needs a trusted-policy/human-in-the-loop envelope and must not inherit this MVP surface.
 - [ ] **Lot 4b — Independent codex-sol release-block remediation (re-run required)**
-  - [ ] Fix 1 critical: consent-before-acknowledgement and final pre-act revoke/expiry/Stop race closure.
+  - [x] Fix 1 critical: consent-before-acknowledgement and final pre-act revoke/expiry/Stop race closure.
     - [x] Implement consent-first acknowledgement, synchronous Stop cancellation, and local pre-act expiry/cancellation checks.
-    - [ ] Prove held-consent timeout, expiry, Stop, device-deletion, and account-deletion races produce zero provider calls.
+    - [x] Prove held-consent timeout, expiry, Stop, device-deletion, and account-deletion races produce zero provider calls.
   - [ ] Fix 2 critical: server-issued key-bound kiosk provisioning attestation; client claims are non-authoritative.
   - [ ] Fix 3 high: complete canonical invocation binding and mismatch-safe idempotency.
   - [ ] Fix 4 high: durable device-workspace-capability exposure grants at every authorization seam.

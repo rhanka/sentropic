@@ -1,5 +1,5 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createMockCapabilityProvider } from '../src/capability/index.js';
 import { ConsentManager, createMemoryConsentStore } from '../src/consent/index.js';
@@ -64,11 +64,90 @@ describe('RemoteLeaseRunner', () => {
             deviceIdentity: { deviceId: randomUUID(), publicKey: '', sign: async () => 'signature' },
             consent: new ConsentManager({ store: createMemoryConsentStore() }), context: { provider: createMockCapabilityProvider() },
         });
-        (runner as unknown as { active: Set<string> }).active.add('lease-stop');
+        (runner as unknown as { active: Map<string, { cancelled: boolean }> }).active.set('lease-stop', { cancelled: false });
         await runner.stop();
         expect(calls).toEqual([{
             url: 'https://api.example.test/api/v1/chrome-extension/cowork-devices/leases/lease-stop/revoke',
             body: JSON.stringify({ reason: 'local_stop' }),
         }]);
+    });
+
+    it.each([
+        { name: 'lease expiry', ackStatus: 200, advanceClock: true },
+        { name: 'server timeout revocation', ackStatus: 409, advanceClock: false },
+        { name: 'device deletion', ackStatus: 404, advanceClock: false },
+        { name: 'account deletion', ackStatus: 403, advanceClock: false },
+    ])('never calls the provider after $name while consent is held', async ({ ackStatus, advanceClock }) => {
+        const now = 1_000_000;
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+        const server = generateKeyPairSync('ed25519');
+        const device = generateKeyPairSync('ed25519');
+        const deviceId = randomUUID();
+        const expiry = new Date(now + 5_000).toISOString();
+        const fields = { leaseId: `lease-${ackStatus}`, capability: 'input_action', targetDeviceId: deviceId, nonce: 'nonce', expiry };
+        const mac = sign(null, Buffer.from(canonical(fields)), server.privateKey).toString('base64url');
+        let allow!: (decision: 'allow_once') => void;
+        let promptReady!: () => void;
+        const prompted = new Promise<void>((resolve) => { promptReady = resolve; });
+        const provider = createMockCapabilityProvider();
+        const calls: string[] = [];
+        const runner = new RemoteLeaseRunner({
+            fetch: async (url: string) => {
+                calls.push(url);
+                if (url.endsWith('/.well-known/jwks.json')) {
+                    return new Response(JSON.stringify({ keys: [{ ...server.publicKey.export({ format: 'jwk' }), kid: 'oauth-key' }] }));
+                }
+                if (url.endsWith('/ack')) return new Response('{}', { status: ackStatus });
+                return new Response('{}');
+            },
+            apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
+            deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => new Promise<'allow_once'>((grant) => { allow = grant; promptReady(); }) }), context: { provider },
+        });
+        try {
+            const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 1, y: 2 } } });
+            await prompted;
+            expect(calls.filter((url) => url.endsWith('/ack'))).toHaveLength(0);
+            if (advanceClock) clock.mockReturnValue(now + 6_000);
+            allow('allow_once');
+            await handling;
+            expect(provider.calls).toEqual([]);
+            expect(calls.filter((url) => url.endsWith('/ack'))).toHaveLength(advanceClock ? 0 : 1);
+            expect(calls.some((url) => url.endsWith('/result'))).toBe(false);
+        } finally {
+            clock.mockRestore();
+        }
+    });
+
+    it('marks a held-consent lease cancelled synchronously on Stop before any revoke I/O', async () => {
+        const server = generateKeyPairSync('ed25519');
+        const device = generateKeyPairSync('ed25519');
+        const deviceId = randomUUID();
+        const expiry = new Date(Date.now() + 20_000).toISOString();
+        const fields = { leaseId: 'lease-stop-race', capability: 'input_action', targetDeviceId: deviceId, nonce: 'nonce', expiry };
+        const mac = sign(null, Buffer.from(canonical(fields)), server.privateKey).toString('base64url');
+        let allow!: (decision: 'allow_once') => void;
+        let promptReady!: () => void;
+        const promptReadyPromise = new Promise<void>((resolve) => { promptReady = resolve; });
+        const provider = createMockCapabilityProvider();
+        const runner = new RemoteLeaseRunner({
+            fetch: async (url: string) => {
+                if (url.endsWith('/.well-known/jwks.json')) {
+                    return new Response(JSON.stringify({ keys: [{ ...server.publicKey.export({ format: 'jwk' }), kid: 'oauth-key' }] }));
+                }
+                return new Response('{}');
+            },
+            apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
+            deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => new Promise<'allow_once'>((grant) => { allow = grant; promptReady(); }) }), context: { provider },
+        });
+        const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 1, y: 2 } } });
+        await promptReadyPromise;
+        const stopping = runner.stop();
+        expect((runner as unknown as { active: Map<string, { cancelled: boolean }> }).active.get(fields.leaseId)?.cancelled).toBe(true);
+        allow('allow_once');
+        await handling;
+        await stopping;
+        expect(provider.calls).toEqual([]);
     });
 });
