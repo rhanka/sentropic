@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 
 import { db, pool } from '../../db/client';
@@ -16,12 +17,40 @@ export type LeaseScope = {
   serverEnvelope: ServerSignedLeaseEnvelope;
   /** Delivered to the device for foreground consent; never emitted to audit. */
   action?: Record<string, unknown>;
+  /** Durable idempotency binding; never sourced from a mutable mount field. */
+  invocation?: CoworkInvocationBinding;
 } | null;
 export type LeaseIssueScope = {
   capability: 'screen_capture' | 'input_action';
   action?: Record<string, unknown>;
 } | null;
 type LeaseStatus = 'issued' | 'acknowledged' | 'consumed' | 'expired' | 'revoked';
+
+export type CoworkInvocationBinding = {
+  principalId: string;
+  workspaceId: string;
+  sessionId: string;
+  targetDeviceId: string;
+  capability: 'screen_capture' | 'input_action';
+  actionHash: string;
+};
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(',')}}`;
+}
+
+export function coworkActionHash(action: Record<string, unknown> | undefined): string {
+  return createHash('sha256').update(canonicalJson(action ?? {})).digest('base64url');
+}
+
+function hasBinding(scope: LeaseScope, expected: CoworkInvocationBinding): boolean {
+  if (!scope || typeof scope !== 'object') return false;
+  const binding = (scope as LeaseScope & { invocation?: unknown }).invocation;
+  return canonicalJson(binding) === canonicalJson(expected);
+}
 
 export type LeaseResult =
   | { ok: true; lease: { leaseId: string; deviceId: string; nonce: string; scope: LeaseScope; expiresAt: Date; status: LeaseStatus } }
@@ -45,6 +74,8 @@ export async function issueLease(input: {
   userId: string;
   deviceId: string;
   turnRef: string;
+  workspaceId: string;
+  sessionId: string;
   scope: LeaseIssueScope;
 }): Promise<LeaseResult> {
   // C5a: no server-signed executable lease exists outside the isolated benign
@@ -61,6 +92,14 @@ export async function issueLease(input: {
   const expiresAt = new Date(now.getTime() + LEASE_TTL_MS);
   const leaseId = crypto.randomUUID();
   const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
+  const invocation: CoworkInvocationBinding = {
+    principalId: input.userId,
+    workspaceId: input.workspaceId,
+    sessionId: input.sessionId,
+    targetDeviceId: input.deviceId,
+    capability: requestedCapability,
+    actionHash: coworkActionHash(input.scope?.action),
+  };
   let envelope: ServerSignedLeaseEnvelope;
   try {
     envelope = await signLeaseEnvelope({
@@ -92,6 +131,7 @@ export async function issueLease(input: {
       FROM cowork_devices d
       JOIN cowork_device_presence p ON p.device_id = d.id
       JOIN cowork_device_provisioning kp ON kp.public_key = d.public_key
+      JOIN cowork_device_exposure_grants g ON g.device_id = d.id
       WHERE d.id = ${input.deviceId}
         AND d.user_id = ${input.userId}
         AND d.status = 'active'
@@ -101,6 +141,8 @@ export async function issueLease(input: {
         AND kp.status = 'active'
         AND kp.kiosk_surface = ${COWORK_KIOSK_SURFACE}
         AND kp.capability_ids @> ${JSON.stringify(['screen_capture', 'input_action'])}::jsonb
+        AND g.workspace_id = ${input.workspaceId}
+        AND g.capability = ${requestedCapability}
       FOR UPDATE OF d
     `);
     if (eligibility.rows.length === 0) {
@@ -116,7 +158,14 @@ export async function issueLease(input: {
         inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
       ))
       .limit(1);
-    if (existing) return { ok: true, lease: toLease(existing) } as LeaseResult;
+    if (existing) {
+      if (hasBinding(existing.scope as LeaseScope, invocation)) return { ok: true, lease: toLease(existing) } as LeaseResult;
+      await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
+        eq(coworkDeviceLeases.id, existing.id),
+        inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
+      ));
+      return { ok: false, reason: 'not_issuable' } as LeaseResult;
+    }
 
     const [lease] = await tx
       .insert(coworkDeviceLeases)
@@ -129,6 +178,7 @@ export async function issueLease(input: {
         scope: {
           capability: requestedCapability,
           serverEnvelope: envelope,
+          invocation,
           ...(input.scope?.action ? { action: input.scope.action } : {}),
         },
         status: 'issued',
@@ -148,7 +198,13 @@ export async function issueLease(input: {
         inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
       ))
       .limit(1);
-    return raced ? { ok: true, lease: toLease(raced) } as LeaseResult : { ok: false, reason: 'ineligible' } as LeaseResult;
+    if (!raced) return { ok: false, reason: 'ineligible' } as LeaseResult;
+    if (hasBinding(raced.scope as LeaseScope, invocation)) return { ok: true, lease: toLease(raced) } as LeaseResult;
+    await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
+      eq(coworkDeviceLeases.id, raced.id),
+      inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
+    ));
+    return { ok: false, reason: 'not_issuable' } as LeaseResult;
   });
 
   if (result.ok && result.lease.status === 'issued') {

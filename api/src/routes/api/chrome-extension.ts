@@ -18,6 +18,7 @@ import {
 } from '../../services/cowork/device-lease-service';
 import { verifyCoworkDeliveryProof } from '../../services/cowork/device-identity';
 import { coworkTargetSelections } from '../../services/cowork/target-selection';
+import { hasCoworkWorkspaceExposure } from '../../services/cowork/provisioning';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/chrome-ext';
@@ -185,10 +186,24 @@ chromeExtensionRouter.post('/cowork-devices/leases', async (c) => {
   if (!selected || selected.deviceId !== parsed.data.device_id) {
     return c.json({ message: 'Human Cowork target selection is required.' }, 403);
   }
+  const requestedCapability = parsed.data.scope && typeof parsed.data.scope === 'object'
+    ? (parsed.data.scope as Record<string, unknown>).capability
+    : null;
+  if ((requestedCapability !== 'screen_capture' && requestedCapability !== 'input_action')
+    || !(await hasCoworkWorkspaceExposure({
+      userId: user.userId,
+      deviceId: parsed.data.device_id,
+      workspaceId: parsed.data.workspace_id,
+      capability: requestedCapability,
+    }))) {
+    return c.json({ message: 'Cowork workspace exposure is required.' }, 403);
+  }
   const result = await issueLease({
     userId: user.userId,
     deviceId: parsed.data.device_id,
     turnRef: parsed.data.turn_ref,
+    workspaceId: parsed.data.workspace_id,
+    sessionId: parsed.data.session_id,
     scope: parsed.data.scope,
   });
   return result.ok

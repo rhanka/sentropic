@@ -165,7 +165,11 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
     - [x] Require authenticated provisioning before enrollment and re-check exact Notepad attestation at target selection and acknowledgement.
     - [x] Prove arbitrary claimed safety flags, unprovisioned enrollment, and un-attested target selection fail closed.
   - [ ] Fix 3 high: complete canonical invocation binding and mismatch-safe idempotency.
+    - [x] Persist canonical principal/workspace/session/target/capability/action-hash binding and revoke mismatched idempotency collisions.
+    - [ ] Prove same tool-call ID cannot converge across a changed invocation closure.
   - [ ] Fix 4 high: durable device-workspace-capability exposure grants at every authorization seam.
+    - [x] Enforce existing grants during mount discovery/account resolution, human selection, broker invocation, direct issue, and locked issuance.
+    - [ ] Prove selection narrows a grant and an ungranted workspace/capability cannot issue control.
   - [x] Fix 5 high: lease/action-bound one-use remote consent; persisted remote allows are deleted and ignored.
   - [x] Fix 6 high: strict literal printable text schema and Windows primitive coverage.
   - [ ] Fix 7 high: bounded integrity-bound capture result persisted before FAIT and returned to the broker.
