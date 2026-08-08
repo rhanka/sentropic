@@ -98,7 +98,7 @@
 
 ## Plan / Todo (lot-based)
 
-- [ ] **Lot 0 — Scope and durable persistence decision**
+- [x] **Lot 0 — Scope and durable persistence decision**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/architecture.md`, and `rules/testing.md`.
   - [x] Run `harness check branch` for `feat/track-durable-signature-adapter`.
   - [x] Inspect the merged Focus live port and test-only in-memory implementation.
@@ -108,8 +108,8 @@
   - [x] Lot gate: `harness check scope` and `make scope-check` pass for `BRANCH.md` only.
 
 - [ ] **Lot 1 — Constraint-backed persistence adapter**
-  - [ ] Add the owner-signature table schema with all canonical attestation and relayer fields.
-  - [ ] Add one additive migration with `UNIQUE(owner_issuer, owner_subject, workspace_id, decision_id)`.
+  - [x] Add the owner-signature table schema with all canonical attestation and relayer fields.
+  - [x] Add one additive migration with `UNIQUE(owner_issuer, owner_subject, workspace_id, decision_id)`.
   - [ ] Implement a PostgreSQL/Drizzle `TrackOwnerSignaturePort` using `INSERT … ON CONFLICT DO NOTHING`, a transaction-local canonical read-back, and no application-side check-then-insert path.
   - [ ] Preserve the first persisted attestation and return an authoritative `written` or `duplicate` receipt.
   - [ ] Lot gate: `make typecheck-api ENV=test-track-sig-adapter` and scoped real-adapter unit tests pass.
