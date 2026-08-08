@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
   FocusLiveSessionDriver,
-  InMemoryTrackOwnerSignaturePort,
 } from "../src/index.js";
+import { TestOnlyInMemoryTrackOwnerSignaturePort } from "../src/live/in-memory.js";
 import type {
   AuthenticatedOwnPrincipal,
   OwnerSignatureRequest,
   PersistedOwnerSignature,
+  RelayerProvenance,
   TrackNativeDecisionTarget,
   TrackOwnerSignaturePort,
   TrackOwnerSignatureWrite,
@@ -17,43 +18,81 @@ import type {
 
 const OWNER: AuthenticatedOwnPrincipal = {
   principalId: "owner-verified",
+  canonicalIdentity: { issuer: "https://auth.example", subject: "owner-verified" },
   authenticatedAt: "2026-08-08T12:00:00.000Z",
+};
+const RELAYER: RelayerProvenance = {
+  transport: "http",
+  relayerId: "signature-gateway",
+  canonicalIdentity: { issuer: "https://gateway.example", subject: "signature-gateway" },
 };
 const REQUEST: OwnerSignatureRequest = {
   target: { workspace: "focus", decisionId: "decision-track-native" },
   authentication: { kind: "own-principal", proof: { session: "verified" } },
-  relayer: { transport: "http", relayerId: "signature-gateway" },
   idempotencyKey: "focus-signature:decision-track-native:owner-verified",
 };
 
 interface LiveOptions {
-  readonly owner?: AuthenticatedOwnPrincipal | null;
-  readonly authenticate?: (input: OwnerSignatureRequest) => Promise<AuthenticatedOwnPrincipal | undefined>;
+  readonly authenticate?: (input: OwnerSignatureRequest) => unknown | Promise<unknown>;
+  readonly getRelayerProvenance?: () => unknown | Promise<unknown>;
   readonly authorize?: (input: {
     readonly owner: AuthenticatedOwnPrincipal;
     readonly target: TrackNativeDecisionTarget;
-  }) => boolean | Promise<boolean>;
+  }) => unknown | Promise<unknown>;
 }
 
-const makeLive = (track: TrackOwnerSignaturePort, options: LiveOptions = {}) => {
-  const configuredOwner = options.owner === undefined ? OWNER : options.owner;
-  return new FocusLiveSessionDriver({
+const makeLive = (track: TrackOwnerSignaturePort, options: LiveOptions = {}) =>
+  new FocusLiveSessionDriver({
     ownPrincipal: {
-      authenticate: options.authenticate ?? (async () => configuredOwner ?? undefined),
+      authenticate: async (input) =>
+        ((options.authenticate === undefined ? OWNER : await options.authenticate(input)) as AuthenticatedOwnPrincipal | undefined),
+    },
+    relayerProvenance: {
+      getRelayerProvenance: async () =>
+        ((options.getRelayerProvenance === undefined
+          ? RELAYER
+          : await options.getRelayerProvenance()) as RelayerProvenance),
     },
     authorizer: {
-      authorize: async (input) => (options.authorize ?? (() => true))(input),
+      authorize: async (input) => ((options.authorize === undefined ? true : await options.authorize(input)) as boolean),
     },
     track,
   });
-};
 
 const asPersisted = (value: unknown): PersistedOwnerSignature => value as PersistedOwnerSignature;
+
+const persistedFromWrite = (write: TrackOwnerSignatureWrite, recordId: string): PersistedOwnerSignature =>
+  asPersisted(
+    Object.freeze({
+      contractVersion: write.contractVersion,
+      target: Object.freeze({ workspace: write.target.workspace, decisionId: write.target.decisionId }),
+      attestation: Object.freeze({
+        attester: Object.freeze({
+          principalId: write.attestation.attester.principalId,
+          canonicalIdentity: Object.freeze({
+            issuer: write.attestation.attester.canonicalIdentity.issuer,
+            subject: write.attestation.attester.canonicalIdentity.subject,
+          }),
+          authenticatedAt: write.attestation.attester.authenticatedAt,
+        }),
+      }),
+      relayer: Object.freeze({
+        transport: write.relayer.transport,
+        relayerId: write.relayer.relayerId,
+        canonicalIdentity: Object.freeze({
+          issuer: write.relayer.canonicalIdentity.issuer,
+          subject: write.relayer.canonicalIdentity.subject,
+        }),
+      }),
+      idempotencyKey: write.idempotencyKey,
+      recordId,
+    }),
+  );
 
 const makeWrongReadBackPort = (
   change: (persisted: PersistedOwnerSignature) => PersistedOwnerSignature,
 ) => {
-  const store = new InMemoryTrackOwnerSignaturePort();
+  const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
   const track: TrackOwnerSignaturePort = {
     contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
     appendOwnerSignature: (input) => store.appendOwnerSignature(input),
@@ -67,24 +106,71 @@ const makeWrongReadBackPort = (
 
 const expectNoIngest = async (
   live: FocusLiveSessionDriver,
-  store: InMemoryTrackOwnerSignaturePort,
+  store: TestOnlyInMemoryTrackOwnerSignaturePort,
   request: OwnerSignatureRequest,
   reason: string,
 ) => {
   await expect(live.sign(request)).resolves.toEqual({ status: "not-done", reason });
   expect(store.appendAttempts).toBe(0);
   expect(store.recordCount).toBe(0);
+  expect(store.readAttempts).toBe(0);
 };
 
+class BarrierRacingTrackOwnerSignaturePort implements TrackOwnerSignaturePort {
+  readonly contractVersion = FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION;
+
+  private readonly records = new Map<string, PersistedOwnerSignature>();
+  private readonly barrier: Promise<void>;
+  private releaseBarrier: (() => void) | undefined;
+  private waiting = 0;
+  appendAttempts = 0;
+
+  constructor() {
+    this.barrier = new Promise((resolve) => {
+      this.releaseBarrier = resolve;
+    });
+  }
+
+  get recordCount(): number {
+    return this.records.size;
+  }
+
+  async appendOwnerSignature(input: TrackOwnerSignatureWrite): Promise<TrackOwnerSignatureWriteResult> {
+    this.appendAttempts += 1;
+    const key = this.key(input.attestation.attester.canonicalIdentity, input.target, input.idempotencyKey);
+    if (this.records.has(key)) return { status: "duplicate", recordId: this.records.get(key)!.recordId };
+
+    this.waiting += 1;
+    if (this.waiting === 2) this.releaseBarrier?.();
+    await this.barrier;
+
+    const persisted = persistedFromWrite(input, `racy-owner-signature-${this.appendAttempts}`);
+    this.records.set(key, persisted);
+    return { status: "written", recordId: persisted.recordId };
+  }
+
+  readOwnerSignature(input: Parameters<TrackOwnerSignaturePort["readOwnerSignature"]>[0]) {
+    return Promise.resolve(this.records.get(this.key(input.ownerCanonicalIdentity, input.target, input.idempotencyKey)));
+  }
+
+  private key(
+    owner: AuthenticatedOwnPrincipal["canonicalIdentity"],
+    target: TrackNativeDecisionTarget,
+    idempotencyKey: string,
+  ): string {
+    return `${owner.issuer}\u0000${owner.subject}\u0000${target.workspace}\u0000${target.decisionId}\u0000${idempotencyKey}`;
+  }
+}
+
 describe("FocusLiveSession owner-signature gate", () => {
-  it("records the authenticated owner as attester and retains distinct relayer provenance", async () => {
-    const store = new InMemoryTrackOwnerSignaturePort();
+  it("records the authenticated owner as attester and trusted relayer provenance separately", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     const result = await makeLive(store).sign(REQUEST);
 
     expect(result.status).toBe("signed");
     if (result.status === "signed") {
       expect(result.persisted.attestation.attester).toEqual(OWNER);
-      expect(result.persisted.relayer).toEqual(REQUEST.relayer);
+      expect(result.persisted.relayer).toEqual(RELAYER);
     }
   });
 
@@ -94,9 +180,11 @@ describe("FocusLiveSession owner-signature gate", () => {
     ["record id", (record: PersistedOwnerSignature) => asPersisted({ ...record, recordId: "other-record" })],
     ["contract version", (record: PersistedOwnerSignature) => asPersisted({ ...record, contractVersion: "track-owner-signature/other" })],
     ["attester principal", (record: PersistedOwnerSignature) => asPersisted({ ...record, attestation: { attester: { ...record.attestation.attester, principalId: "other-owner" } } })],
+    ["attester canonical identity", (record: PersistedOwnerSignature) => asPersisted({ ...record, attestation: { attester: { ...record.attestation.attester, canonicalIdentity: { ...record.attestation.attester.canonicalIdentity, subject: "other-owner" } } } })],
     ["attester authentication time", (record: PersistedOwnerSignature) => asPersisted({ ...record, attestation: { attester: { ...record.attestation.attester, authenticatedAt: "2026-08-08T13:00:00.000Z" } } })],
     ["relayer transport", (record: PersistedOwnerSignature) => asPersisted({ ...record, relayer: { ...record.relayer, transport: "cli" } })],
     ["relayer identity", (record: PersistedOwnerSignature) => asPersisted({ ...record, relayer: { ...record.relayer, relayerId: "other-relayer" } })],
+    ["relayer canonical identity", (record: PersistedOwnerSignature) => asPersisted({ ...record, relayer: { ...record.relayer, canonicalIdentity: { ...record.relayer.canonicalIdentity, subject: "other-relayer" } } })],
     ["idempotency key", (record: PersistedOwnerSignature) => asPersisted({ ...record, idempotencyKey: "other-key" })],
   ])("returns not-done when read-back has the wrong %s", async (_field, change) => {
     const { store, track } = makeWrongReadBackPort(change);
@@ -107,7 +195,7 @@ describe("FocusLiveSession owner-signature gate", () => {
   });
 
   it("returns not-done when the port returns no persisted read-back", async () => {
-    const store = new InMemoryTrackOwnerSignaturePort();
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     const track: TrackOwnerSignaturePort = {
       contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
       appendOwnerSignature: (input) => store.appendOwnerSignature(input),
@@ -127,20 +215,20 @@ describe("FocusLiveSession owner-signature gate", () => {
     ["blank record id", { status: "written", recordId: "   " }],
     ["missing record id", { status: "duplicate" }],
   ])("rejects a runtime-invalid %s without reading or persisting", async (_label, receipt) => {
-    const store = new InMemoryTrackOwnerSignaturePort();
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     let appendCalls = 0;
     let readCalls = 0;
-    const track = {
+    const track: TrackOwnerSignaturePort = {
       contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
       async appendOwnerSignature(): Promise<TrackOwnerSignatureWriteResult> {
         appendCalls += 1;
         return receipt as TrackOwnerSignatureWriteResult;
       },
-      async readOwnerSignature(identity: Parameters<TrackOwnerSignaturePort["readOwnerSignature"]>[0]) {
+      async readOwnerSignature(identity) {
         readCalls += 1;
         return store.readOwnerSignature(identity);
       },
-    } as TrackOwnerSignaturePort;
+    };
 
     await expect(makeLive(track).sign(REQUEST)).resolves.toEqual({ status: "not-done", reason: "track-write-failed" });
     expect(appendCalls).toBe(1);
@@ -149,41 +237,95 @@ describe("FocusLiveSession owner-signature gate", () => {
     expect(store.recordCount).toBe(0);
   });
 
+  it("fails honestly when append throws without durable records or read-back calls", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let appendCalls = 0;
+    let readCalls = 0;
+    const track: TrackOwnerSignaturePort = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      async appendOwnerSignature() {
+        appendCalls += 1;
+        throw new Error("Track unavailable");
+      },
+      async readOwnerSignature(identity) {
+        readCalls += 1;
+        return store.readOwnerSignature(identity);
+      },
+    };
+
+    await expect(makeLive(track).sign(REQUEST)).resolves.toEqual({ status: "not-done", reason: "track-write-failed" });
+    expect(appendCalls).toBe(1);
+    expect(store.recordCount).toBe(0);
+    expect(readCalls).toBe(0);
+  });
+
+  it.each(["false", { authorized: false }, { authorized: true }])(
+    "denies truthy-malformed authorization results without append: %j",
+    async (authorizationResult) => {
+      const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+      await expectNoIngest(
+        makeLive(store, { authorize: () => authorizationResult }),
+        store,
+        REQUEST,
+        "authorization-denied",
+      );
+    },
+  );
+
   it("does not ingest for every pre-ingest denial", async () => {
     const invalidRequests: readonly OwnerSignatureRequest[] = [
       { ...REQUEST, target: { ...REQUEST.target, workspace: " " } },
       { ...REQUEST, target: { ...REQUEST.target, decisionId: " " } },
       { ...REQUEST, idempotencyKey: " " },
-      { ...REQUEST, relayer: { ...REQUEST.relayer, relayerId: " " } },
-      { ...REQUEST, relayer: { ...REQUEST.relayer, transport: "smtp" as never } },
       { ...REQUEST, authentication: { ...REQUEST.authentication, kind: "other" as never } },
     ];
-    const relayerCollision = { ...REQUEST, relayer: { ...REQUEST.relayer, relayerId: OWNER.principalId } };
 
     for (const invalidRequest of invalidRequests) {
-      const invalid = new InMemoryTrackOwnerSignaturePort();
+      const invalid = new TestOnlyInMemoryTrackOwnerSignaturePort();
       await expectNoIngest(makeLive(invalid), invalid, invalidRequest, "invalid-signature-request");
     }
 
-    const authenticationRequired = new InMemoryTrackOwnerSignaturePort();
-    await expectNoIngest(makeLive(authenticationRequired, { owner: null }), authenticationRequired, REQUEST, "owner-authentication-required");
+    const authenticationRequired = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(
+      makeLive(authenticationRequired, { authenticate: async () => undefined }),
+      authenticationRequired,
+      REQUEST,
+      "owner-authentication-required",
+    );
 
-    const authenticationInvalid = new InMemoryTrackOwnerSignaturePort();
-    await expectNoIngest(makeLive(authenticationInvalid, { owner: { ...OWNER, principalId: "" } }), authenticationInvalid, REQUEST, "owner-authentication-invalid");
+    const authenticationRejected = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(
+      makeLive(authenticationRejected, {
+        authenticate: async () => {
+          throw new Error("rejected");
+        },
+      }),
+      authenticationRejected,
+      REQUEST,
+      "owner-authentication-invalid",
+    );
 
-    const authenticationRejected = new InMemoryTrackOwnerSignaturePort();
-    await expectNoIngest(makeLive(authenticationRejected, { authenticate: async () => { throw new Error("rejected"); } }), authenticationRejected, REQUEST, "owner-authentication-invalid");
+    const authorizationRejected = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(
+      makeLive(authorizationRejected, { authorize: () => false }),
+      authorizationRejected,
+      REQUEST,
+      "authorization-denied",
+    );
 
-    const collision = new InMemoryTrackOwnerSignaturePort();
-    await expectNoIngest(makeLive(collision), collision, relayerCollision, "attester-relayer-conflict");
+    const authorizationError = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(
+      makeLive(authorizationError, {
+        authorize: () => {
+          throw new Error("denied");
+        },
+      }),
+      authorizationError,
+      REQUEST,
+      "authorization-denied",
+    );
 
-    const authorizationRejected = new InMemoryTrackOwnerSignaturePort();
-    await expectNoIngest(makeLive(authorizationRejected, { authorize: () => false }), authorizationRejected, REQUEST, "authorization-denied");
-
-    const authorizationError = new InMemoryTrackOwnerSignaturePort();
-    await expectNoIngest(makeLive(authorizationError, { authorize: () => { throw new Error("denied"); } }), authorizationError, REQUEST, "authorization-denied");
-
-    const contractStore = new InMemoryTrackOwnerSignaturePort();
+    const contractStore = new TestOnlyInMemoryTrackOwnerSignaturePort();
     const wrongContract: TrackOwnerSignaturePort = {
       contractVersion: "track-owner-signature/2.0.0" as never,
       appendOwnerSignature: (input) => contractStore.appendOwnerSignature(input),
@@ -192,8 +334,75 @@ describe("FocusLiveSession owner-signature gate", () => {
     await expectNoIngest(makeLive(wrongContract), contractStore, REQUEST, "track-contract-mismatch");
   });
 
-  it("snapshots caller values and gives the port a separate deeply frozen copy", async () => {
-    const store = new InMemoryTrackOwnerSignaturePort();
+  it.each([
+    ["raw null", null],
+    ["array", []],
+    ["wrong shape", { principalId: OWNER.principalId, authenticatedAt: OWNER.authenticatedAt }],
+    ["blank scalar", { ...OWNER, principalId: " " }],
+  ])("returns not-done for a runtime-invalid authentication result: %s", async (_label, owner) => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(
+      makeLive(store, { authenticate: async () => owner }),
+      store,
+      REQUEST,
+      "owner-authentication-invalid",
+    );
+  });
+
+  it("captures a getter-backed request field once, so its changed second value cannot enter the signed write", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let idempotencyKeyReads = 0;
+    const getterRequest = {
+      target: REQUEST.target,
+      authentication: REQUEST.authentication,
+      get idempotencyKey() {
+        idempotencyKeyReads += 1;
+        return idempotencyKeyReads === 1 ? REQUEST.idempotencyKey : " ";
+      },
+    } as OwnerSignatureRequest;
+
+    const result = await makeLive(store).sign(getterRequest);
+
+    expect(idempotencyKeyReads).toBe(1);
+    expect(result).toMatchObject({ status: "signed", persisted: { idempotencyKey: REQUEST.idempotencyKey } });
+  });
+
+  it("captures accessor-backed receipts once before validating and reading back", async () => {
+    let statusReads = 0;
+    let recordIdReads = 0;
+    let write: TrackOwnerSignatureWrite | undefined;
+    const track: TrackOwnerSignaturePort = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      async appendOwnerSignature(input) {
+        write = input;
+        return {
+          get status() {
+            statusReads += 1;
+            return statusReads === 1 ? "written" : "failed";
+          },
+          get recordId() {
+            recordIdReads += 1;
+            return recordIdReads === 1 ? "accessor-receipt" : " ";
+          },
+        } as TrackOwnerSignatureWriteResult;
+      },
+      async readOwnerSignature() {
+        if (write === undefined) throw new Error("expected append before read");
+        return persistedFromWrite(write, "accessor-receipt");
+      },
+    };
+
+    await expect(makeLive(track).sign(REQUEST)).resolves.toMatchObject({
+      status: "signed",
+      duplicate: false,
+      persisted: { recordId: "accessor-receipt" },
+    });
+    expect(statusReads).toBe(1);
+    expect(recordIdReads).toBe(1);
+  });
+
+  it("gives the port immutable request, owner, and trusted relayer copies", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     let authorizedTarget: TrackNativeDecisionTarget | undefined;
     let submitted: TrackOwnerSignatureWrite | undefined;
     let mutationRejected = false;
@@ -216,21 +425,14 @@ describe("FocusLiveSession owner-signature gate", () => {
         return true;
       },
     });
-    const mutableRequest: {
-      target: { workspace: string; decisionId: string };
-      authentication: OwnerSignatureRequest["authentication"];
-      relayer: { transport: OwnerSignatureRequest["relayer"]["transport"]; relayerId: string };
-      idempotencyKey: string;
-    } = {
+    const mutableRequest: OwnerSignatureRequest = {
       target: { ...REQUEST.target },
       authentication: REQUEST.authentication,
-      relayer: { ...REQUEST.relayer },
       idempotencyKey: REQUEST.idempotencyKey,
     };
 
     const pending = live.sign(mutableRequest);
     mutableRequest.target.workspace = "caller-mutated";
-    mutableRequest.relayer.relayerId = "caller-mutated";
     mutableRequest.idempotencyKey = "caller-mutated";
     const result = await pending;
 
@@ -241,17 +443,78 @@ describe("FocusLiveSession owner-signature gate", () => {
     expect(Object.isFrozen(submitted.target)).toBe(true);
     expect(Object.isFrozen(submitted.attestation)).toBe(true);
     expect(Object.isFrozen(submitted.attestation.attester)).toBe(true);
+    expect(Object.isFrozen(submitted.attestation.attester.canonicalIdentity)).toBe(true);
     expect(Object.isFrozen(submitted.relayer)).toBe(true);
+    expect(Object.isFrozen(submitted.relayer.canonicalIdentity)).toBe(true);
     expect(Object.isFrozen(authorizedTarget)).toBe(true);
     expect(submitted.target).not.toBe(authorizedTarget);
     expect(result).toMatchObject({
       status: "signed",
-      persisted: { target: REQUEST.target, relayer: REQUEST.relayer, idempotencyKey: REQUEST.idempotencyKey },
+      persisted: { target: REQUEST.target, relayer: RELAYER, idempotencyKey: REQUEST.idempotencyKey },
     });
   });
 
-  it("uses the reference adapter's atomic owner-decision uniqueness for concurrent double-submit", async () => {
-    const store = new InMemoryTrackOwnerSignaturePort();
+  it("rejects an owner-relayer canonical collision before authorization or append", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let authorizationCalls = 0;
+    const collidingOwner: AuthenticatedOwnPrincipal = {
+      ...OWNER,
+      canonicalIdentity: { issuer: "HTTPS://AUTH.EXAMPLE", subject: "RELAY@EXAMPLE.COM" },
+    };
+    const collidingRelayer: RelayerProvenance = {
+      ...RELAYER,
+      canonicalIdentity: { issuer: "https://auth.example", subject: "relay@example.com" },
+    };
+
+    await expect(
+      makeLive(store, {
+        authenticate: async () => collidingOwner,
+        getRelayerProvenance: async () => collidingRelayer,
+        authorize: () => {
+          authorizationCalls += 1;
+          return true;
+        },
+      }).sign(REQUEST),
+    ).resolves.toEqual({ status: "not-done", reason: "attester-relayer-conflict" });
+    expect(authorizationCalls).toBe(0);
+    expect(store.appendAttempts).toBe(0);
+  });
+
+  it("cannot let caller-asserted relayer text replace the authenticated owner attester", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    const callerAssertedRelayer = {
+      ...REQUEST,
+      relayer: {
+        transport: "internal",
+        relayerId: OWNER.principalId,
+        canonicalIdentity: OWNER.canonicalIdentity,
+      },
+    } as unknown as OwnerSignatureRequest;
+
+    const result = await makeLive(store).sign(callerAssertedRelayer);
+
+    expect(result).toMatchObject({
+      status: "signed",
+      persisted: { attestation: { attester: OWNER }, relayer: RELAYER },
+    });
+  });
+
+  it("documents that atomic uniqueness is enforced by the durable Track port, not this driver", async () => {
+    const racyPort = new BarrierRacingTrackOwnerSignaturePort();
+    const live = makeLive(racyPort);
+    const [first, second] = await Promise.all([
+      live.sign({ ...REQUEST, idempotencyKey: "race-key-one" }),
+      live.sign({ ...REQUEST, idempotencyKey: "race-key-two" }),
+    ]);
+
+    expect(first).toMatchObject({ status: "signed", duplicate: false });
+    expect(second).toMatchObject({ status: "signed", duplicate: false });
+    expect(racyPort.appendAttempts).toBe(2);
+    expect(racyPort.recordCount).toBe(2);
+  });
+
+  it("uses the test-only adapter's synchronous atomic owner-decision uniqueness for same-key replay", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     const live = makeLive(store);
     const [first, second] = await Promise.all([live.sign(REQUEST), live.sign(REQUEST)]);
 
@@ -261,5 +524,4 @@ describe("FocusLiveSession owner-signature gate", () => {
     expect(store.appendAttempts).toBe(2);
     expect(store.recordCount).toBe(1);
   });
-
 });
