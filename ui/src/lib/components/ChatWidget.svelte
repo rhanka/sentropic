@@ -2357,6 +2357,7 @@
       >
         <div class="flex w-full items-center justify-between gap-2">
           <div class="flex items-center gap-2">
+            {#snippet renderHeaderLeadingHost()}
             {#if isDocked && isMobileViewport && !isSidePanelHost}
               <button
                 class="inline-flex items-center justify-center rounded p-2 text-slate-700 hover:bg-slate-100"
@@ -2370,6 +2371,8 @@
                 <Menu class="h-5 w-5" aria-hidden="true" />
               </button>
             {/if}
+            {/snippet}
+            {@render renderHeaderLeadingHost()}
 
             <div class="flex items-center gap-2">
               <ChatWidgetTabBar
@@ -2386,6 +2389,7 @@
           </div>
 
           <div class="flex items-center gap-2">
+            {#snippet renderHeaderActionsHost()}
             {#if isExtensionConfigAvailable()}
               <MenuPopover
                 bind:open={showExtensionConfigMenu}
@@ -3150,6 +3154,8 @@
                 <X class="w-5 h-5" />
               </button>
             {/if}
+            {/snippet}
+            {@render renderHeaderActionsHost()}
           </div>
         </div>
       </div>

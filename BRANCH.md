@@ -80,9 +80,9 @@ Hand the chat widget shell over from the app to `@sentropic/chat-ui` in header-f
       - [x] Sub-lot gate: FULL `make test-ui ENV=test-lc-shell` → 467/467, zero regression
     - [x] `chat-ui` minor bump 0.34.0 + export/manifest/reference-validation entry for `ChatWidgetTabBar` (`make test-chat-ui` GREEN 1022)
 
-- [ ] **Lot S2 — package header frame, host controls as slots (≤145 lines)**
-  - [ ] Add `renderHeaderLeading`, `renderHeaderActions`, `headerGrip`; wrap existing mobile/action blocks as in-place host snippets (no move/reindent of the settings popover).
-  - [ ] Lot gate: typecheck+lint; package DOM proves leading→tab→actions order + grip pointer callback; host-wiring proves every existing action still injected; FULL `make test-ui ENV=test`.
+- [x] **Lot S2 — package header frame, host controls as slots** — DONE (commit 77cec2831 package-side + app-side)
+  - [x] Package: `renderHeaderLeading`/`renderHeaderActions`/`headerGrip` slots on ChatWidget (+ `.d.ts`) + `chat-widget-header-frame.dom.spec.ts` (4). App: mobile-menu + actions blocks wrapped in-place snippets (`renderHeaderLeadingHost`/`renderHeaderActionsHost`), rendered at the same spot — no reindent of the 726-line settings popover (I4).
+  - [x] Lot gate GREEN (`ENV=test-lc-shell`): typecheck-ui 0, lint-ui clean, package DOM 212 (order + grip), host-wiring `ChatWidget-header-snippets` (4), FULL test-ui 471/471 zero regression.
 
 - [ ] **Lot S3 — package tab-content routing, host panels unchanged (≤120 lines)**
   - [ ] Introduce the narrow package content compositor; feed existing jobs/comments/chat snippets; `QueueMonitor` stays inside the jobs snippet (app-only per boundary test).
