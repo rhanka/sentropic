@@ -81,7 +81,7 @@
   - [x] Lot gate: focused package tests and package typecheck pass in `ENV=test-focus-sig-gate`.
 
 - [ ] **Lot 3 — Version, final verification, and draft review handoff**
-  - [x] Bump `packages/focus/package.json` from `0.3.0` to the next patch version after checking the published package version.
+  - [x] Bump `packages/focus/package.json` from `0.4.0` to `0.4.1` after checking the published package version.
   - [x] Run package typecheck, focused live tests, the available package test suite, and package build through Make in `ENV=test-focus-sig-gate`.
   - [x] Run `harness check scope` and `make scope-check` before every commit.
   - [ ] Create a draft PR against `main` using this plan as the source body; state the contract, held items, and `draft: independent build-review + owner UAT required before merge/live`.
@@ -108,5 +108,5 @@
   - [x] Preserve trusted canonical issuer and subject values exactly, including case-sensitive opaque identity parts, across authorization, collision rejection, and durable uniqueness.
   - [x] Capture hostile opaque proofs from one structural snapshot and lock all affected port-failure paths with tests.
   - [x] Replace the synchronous race fake with a barrier async constraint-rejection driver regression; retain the production durable adapter as the only full exactly-once proof.
-  - [ ] Regenerate root lock metadata and correct the public Focus README/version history.
+  - [x] Regenerate root lock metadata and correct the public Focus README/version history.
   - [ ] Re-run isolated Focus package tests, scope checks, and push the existing draft branch without changing its draft state.
