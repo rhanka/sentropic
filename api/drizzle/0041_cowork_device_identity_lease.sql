@@ -33,7 +33,7 @@ CREATE TABLE "cowork_device_leases" (
   "turn_ref" text NOT NULL,
   "nonce" text NOT NULL,
   "scope" jsonb,
-  "status" text DEFAULT 'issued' NOT NULL CHECK ("status" IN ('issued', 'acknowledged', 'consumed', 'expired', 'revoked')),
+  "status" text DEFAULT 'issued' NOT NULL CHECK ("status" IN ('issued', 'acknowledged', 'executing', 'consumed', 'expired', 'revoked')),
   "issued_at" timestamp DEFAULT now() NOT NULL,
   "acknowledged_at" timestamp,
   "consumed_at" timestamp,
@@ -44,4 +44,4 @@ CREATE INDEX "cowork_device_leases_device_status_idx" ON "cowork_device_leases" 
 CREATE INDEX "cowork_device_leases_expires_idx" ON "cowork_device_leases" ("expires_at");
 CREATE UNIQUE INDEX "cowork_device_leases_device_turn_unique"
   ON "cowork_device_leases" ("device_id", "turn_ref")
-  WHERE "status" IN ('issued', 'acknowledged');
+  WHERE "status" IN ('issued', 'acknowledged', 'executing');

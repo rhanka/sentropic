@@ -279,7 +279,7 @@ export const coworkDeviceLeases = pgTable('cowork_device_leases', {
   expiresIdx: index('cowork_device_leases_expires_idx').on(table.expiresAt),
   nonTerminalDeviceTurnUnique: uniqueIndex('cowork_device_leases_device_turn_unique')
     .on(table.deviceId, table.turnRef)
-    .where(sql`${table.status} IN ('issued', 'acknowledged')`),
+    .where(sql`${table.status} IN ('issued', 'acknowledged', 'executing')`),
 }));
 
 export const webauthnChallenges = pgTable('webauthn_challenges', {
