@@ -79,7 +79,17 @@ export function verifyLeaseAckV2(ack: LeaseAckV2, signed: SignedLeaseV2, pepPubl
 }
 
 export type ProofChannel = 'poll' | 'sse' | 'wake' | 'ack' | 'result' | 'stop-status';
-export type DevicePepProof = Readonly<{ channel: ProofChannel; deviceId: string; pepKeyId: string; challenge: string; signature: string }>;
+export type DevicePepProof = Readonly<{
+  channel: ProofChannel;
+  deviceId: string;
+  pepKeyId: string;
+  challengeId: string;
+  resourceId: string;
+  method: string;
+  expiresAt: string;
+  deviceKillEpoch: number;
+  signature: string;
+}>;
 export const devicePepProofPayload = (proof: Omit<DevicePepProof, 'signature'>): string => `cowork-device-pep-pop-v2:${canonicalJson(proof)}`;
 
 export function verifyDevicePepProof(proof: DevicePepProof, expected: Omit<DevicePepProof, 'signature'>, pepPublicKey: string): boolean {
