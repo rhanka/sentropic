@@ -19,6 +19,8 @@ export type LeaseScope = {
   action?: Record<string, unknown>;
   /** Durable idempotency binding; never sourced from a mutable mount field. */
   invocation?: CoworkInvocationBinding;
+  result?: Record<string, unknown>;
+  resultDigest?: string;
 } | null;
 export type LeaseIssueScope = {
   capability: 'screen_capture' | 'input_action';
@@ -44,6 +46,27 @@ function canonicalJson(value: unknown): string {
 
 export function coworkActionHash(action: Record<string, unknown> | undefined): string {
   return createHash('sha256').update(canonicalJson(action ?? {})).digest('base64url');
+}
+
+export const coworkResultDigest = (result: Record<string, unknown> | undefined): string => coworkActionHash(result);
+
+function validCaptureResult(result: unknown): result is Record<string, unknown> {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
+  const value = result as Record<string, unknown>;
+  if (value.ok !== true || typeof value.image !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]*={0,2}$/.test(value.image)) return false;
+  const encoded = value.image.slice(value.image.indexOf(',') + 1);
+  return Buffer.from(encoded, 'base64').byteLength > 0 && Buffer.from(encoded, 'base64').byteLength <= 4 * 1024 * 1024;
+}
+
+function validInputResult(result: unknown): result is Record<string, unknown> {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
+  const value = result as Record<string, unknown>;
+  return value.ok === true && (value.action === 'click' || value.action === 'scroll' || value.action === 'type');
+}
+
+function validCompletionResult(capability: unknown, outcome: 'FAIT' | 'PAS-FAIT', result: unknown): result is Record<string, unknown> | undefined {
+  if (outcome === 'PAS-FAIT') return result === undefined;
+  return capability === 'screen_capture' ? validCaptureResult(result) : validInputResult(result);
 }
 
 function hasBinding(scope: LeaseScope, expected: CoworkInvocationBinding): boolean {
@@ -258,6 +281,7 @@ export async function completeLease(input: {
   deviceId: string;
   leaseId: string;
   outcome: 'FAIT' | 'PAS-FAIT';
+  result?: Record<string, unknown>;
   signature: string;
 }): Promise<LeaseResult> {
   const [lease] = await db.select().from(coworkDeviceLeases).where(and(
@@ -267,15 +291,19 @@ export async function completeLease(input: {
   )).limit(1);
   if (!lease) return { ok: false, reason: 'not_found' };
   const device = await findActiveCoworkDevice(input.userId, input.deviceId);
+  const capability = (lease.scope as LeaseScope)?.capability;
+  if (!validCompletionResult(capability, input.outcome, input.result)) return { ok: false, reason: 'not_issuable' };
+  const resultDigest = coworkResultDigest(input.result);
   if (!device || !verifyCoworkSignature(
     device.publicKey,
-    `cowork-lease-result-v1:${lease.id}.${lease.nonce}.${input.outcome}`,
+    `cowork-lease-result-v1:${lease.id}.${lease.nonce}.${input.outcome}.${resultDigest}`,
     input.signature,
   )) return { ok: false, reason: 'invalid_signature' };
 
   const now = new Date();
   const status = input.outcome === 'FAIT' ? 'consumed' : 'revoked';
-  const [completed] = await db.update(coworkDeviceLeases).set({ status, consumedAt: now }).where(and(
+  const scope = { ...(lease.scope as LeaseScope), ...(input.result ? { result: input.result, resultDigest } : {}) };
+  const [completed] = await db.update(coworkDeviceLeases).set({ status, consumedAt: now, scope }).where(and(
     eq(coworkDeviceLeases.id, input.leaseId),
     eq(coworkDeviceLeases.deviceId, input.deviceId),
     eq(coworkDeviceLeases.userId, input.userId),
@@ -286,17 +314,23 @@ export async function completeLease(input: {
 }
 
 /** Atomic lazy expiry is the fallback for an offline or malformed device result. */
-export async function readLeaseOutcome(leaseId: string): Promise<'FAIT' | 'PAS-FAIT' | null> {
+export type LeaseOutcome = { outcome: 'FAIT'; result: Record<string, unknown> } | { outcome: 'PAS-FAIT' };
+
+export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | null> {
   const now = new Date();
   await db.update(coworkDeviceLeases).set({ status: 'expired' }).where(and(
     eq(coworkDeviceLeases.id, leaseId),
     inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
     lte(coworkDeviceLeases.expiresAt, now),
   ));
-  const [lease] = await db.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases)
+  const [lease] = await db.select({ status: coworkDeviceLeases.status, scope: coworkDeviceLeases.scope }).from(coworkDeviceLeases)
     .where(eq(coworkDeviceLeases.id, leaseId)).limit(1);
-  if (!lease) return 'PAS-FAIT';
-  return lease.status === 'consumed' ? 'FAIT' : ['expired', 'revoked'].includes(lease.status) ? 'PAS-FAIT' : null;
+  if (!lease) return { outcome: 'PAS-FAIT' };
+  if (lease.status === 'consumed') {
+    const result = (lease.scope as LeaseScope | null)?.result;
+    return result ? { outcome: 'FAIT', result } : { outcome: 'PAS-FAIT' };
+  }
+  return ['expired', 'revoked'].includes(lease.status) ? { outcome: 'PAS-FAIT' } : null;
 }
 
 /** Lot 4 will call this primitive before any external screen-side effect. */

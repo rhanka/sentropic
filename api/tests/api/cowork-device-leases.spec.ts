@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../src/db/schema';
-import { issueLease, listIssuedLeases } from '../../src/services/cowork/device-lease-service';
+import { coworkResultDigest, issueLease, listIssuedLeases } from '../../src/services/cowork/device-lease-service';
 import { deleteCoworkDeviceWithLeaseRevocation } from '../../src/services/cowork/device-registry';
 import { coworkDeliveryProofPayload } from '../../src/services/cowork/device-identity';
 import { grantCoworkWorkspaceExposure } from '../../src/services/cowork/provisioning';
@@ -43,11 +43,12 @@ describe('Cowork device authorization leases', () => {
     });
   }
 
-  async function complete(deviceId: string, leaseId: string, nonce: string, outcome: 'FAIT' | 'PAS-FAIT', signPayload: (payload: string) => string) {
+  async function complete(deviceId: string, leaseId: string, nonce: string, outcome: 'FAIT' | 'PAS-FAIT', signPayload: (payload: string) => string, result?: Record<string, unknown>) {
     return authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${leaseId}/result`, user.sessionToken!, {
       device_id: deviceId,
       outcome,
-      signature: signPayload(`cowork-lease-result-v1:${leaseId}.${nonce}.${outcome}`),
+      ...(result ? { result } : {}),
+      signature: signPayload(`cowork-lease-result-v1:${leaseId}.${nonce}.${outcome}.${coworkResultDigest(result)}`),
     });
   }
 
@@ -204,12 +205,20 @@ describe('Cowork device authorization leases', () => {
     const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     const success = await issue(target.deviceId, 'turn-result-success');
     expect((await acknowledge(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, target.signPayload)).status).toBe(200);
-    expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(200);
-    expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(409);
+    const capture = { ok: true, image: 'data:image/png;base64,QUJD' };
+    expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload, capture)).status).toBe(200);
+    expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload, capture)).status).toBe(409);
 
     const failure = await issue(target.deviceId, 'turn-result-failure');
     expect((await acknowledge(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, target.signPayload)).status).toBe(200);
     expect((await complete(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, 'PAS-FAIT', target.signPayload)).status).toBe(200);
+  });
+
+  it('refuses FAIT capture completion without a bounded integrity-bound image result', async () => {
+    const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const issued = await issue(target.deviceId, 'capture-result-required');
+    expect((await acknowledge(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await complete(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(409);
   });
 
   it('returns only the target device queue through the bounded poll fallback', async () => {

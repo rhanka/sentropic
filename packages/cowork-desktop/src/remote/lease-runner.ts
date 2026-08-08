@@ -3,7 +3,7 @@ import { createPublicKey, verify } from 'node:crypto';
 import type { DeviceIdentitySigner, FetchLike } from '@sentropic/cowork-bridge/auth';
 import type { ConsentManager } from '../consent/index.js';
 import { runDesktopToolCall, type DesktopToolContext } from '../tools/index.js';
-import { remoteActionDigest } from '../tools/action-digest.js';
+import { remoteActionDigest, remotePayloadDigest } from '../tools/action-digest.js';
 
 type Jwk = { kid?: string; kty: string; crv?: string; x?: string };
 type Envelope = { kid: string; mac: string };
@@ -139,7 +139,8 @@ export class RemoteLeaseRunner {
                 { toolCallId: lease.leaseId, name: capability, arguments: args },
                 { consent: this.deps.consent, context: this.deps.context, remoteReceipt: receipt },
             );
-            await this.complete(token, lease, result.error ? 'PAS-FAIT' : 'FAIT');
+            const resultPayload = result.error ? undefined : JSON.parse(result.output) as Record<string, unknown>;
+            await this.complete(token, lease, result.error ? 'PAS-FAIT' : 'FAIT', resultPayload);
         } catch {
             const token = await this.deps.getAccessToken();
             if (token && typeof lease.leaseId === 'string' && typeof lease.nonce === 'string') await this.complete(token, lease, 'PAS-FAIT');
@@ -196,11 +197,11 @@ export class RemoteLeaseRunner {
         return response.ok;
     }
 
-    private async complete(token: string, lease: DeliveredLease, outcome: 'FAIT' | 'PAS-FAIT'): Promise<void> {
-        const signature = await this.deps.deviceIdentity.sign(`cowork-lease-result-v1:${lease.leaseId}.${lease.nonce}.${outcome}`);
+    private async complete(token: string, lease: DeliveredLease, outcome: 'FAIT' | 'PAS-FAIT', result?: Record<string, unknown>): Promise<void> {
+        const signature = await this.deps.deviceIdentity.sign(`cowork-lease-result-v1:${lease.leaseId}.${lease.nonce}.${outcome}.${remotePayloadDigest(result)}`);
         await this.deps.fetch(`${this.base}/chrome-extension/cowork-devices/leases/${encodeURIComponent(lease.leaseId)}/result`, {
             method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: this.deps.deviceIdentity.deviceId, outcome, signature }),
+            body: JSON.stringify({ device_id: this.deps.deviceIdentity.deviceId, outcome, ...(result ? { result } : {}), signature }),
         });
     }
 
