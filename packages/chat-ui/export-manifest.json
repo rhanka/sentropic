@@ -1,7 +1,7 @@
 {
   "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes.",
   "_generated": "2026-07-25",
-  "_version": "0.33.0",
+  "_version": "0.34.0",
   "subpaths": {
     ".": {
       "kind": "ts",
@@ -466,6 +466,12 @@
       "file": "dist/components/AgentsList.svelte",
       "exists": true,
       "_propSnapshot": "Props: rows? (AgentsListRow[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn), onAction? (fn), formatRelative? (fn)."
+    },
+    "./components/ChatWidgetTabBar.svelte": {
+      "kind": "svelte",
+      "file": "dist/components/ChatWidgetTabBar.svelte",
+      "exists": true,
+      "_propSnapshot": "Props: activeTab (ChatWidgetTab='chat'|'queue'|'comments'), showCommentsTab? (boolean), chatTabLabel? (string), commentsTabLabel? (string), queueTabLabel? (string), onSelect? (fn(tab)), showJobsBadge? (boolean), jobsBadgeCount? (number), variant? ('default'|'extension'), ariaLabel? (string). Two faithful looks: 'extension' = app extension-main-tab classes, no badge; 'default' = package plain, jobs badge."
     },
     "./components/ChatPlacementMenuButton.svelte": {
       "kind": "svelte",

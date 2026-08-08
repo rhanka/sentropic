@@ -69,6 +69,7 @@
   } from '@sentropic/chat-ui/state/chatWidgetShell';
   import ChatDock from '@sentropic/chat-ui/components/ChatDock.svelte';
   import AgentsList from '@sentropic/chat-ui/components/AgentsList.svelte';
+  import ChatWidgetTabBar from '@sentropic/chat-ui/components/ChatWidgetTabBar.svelte';
   import ChatPlacementDropZones from '@sentropic/chat-ui/components/ChatPlacementDropZones.svelte';
   import ChatPlacementMenuButton from '@sentropic/chat-ui/components/ChatPlacementMenuButton.svelte';
   import ChatSessionsBar from '@sentropic/chat-ui/components/ChatSessionsBar.svelte';
@@ -2371,40 +2372,16 @@
             {/if}
 
             <div class="flex items-center gap-2">
-              <div class="extension-main-tabs flex items-center gap-1 rounded bg-slate-50 p-1">
-                {#if !isPluginMode}
-                  <button
-                    class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
-                    'comments'
-                      ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'}"
-                    type="button"
-                    on:click={() => (activeTab = 'comments')}
-                  >
-                    {$_('chat.tabs.comments')}
-                  </button>
-                {/if}
-                <button
-                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
-                  'chat'
-                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'}"
-                  type="button"
-                  on:click={() => (activeTab = 'chat')}
-                >
-                  {$_('chat.tabs.chat')}
-                </button>
-                <button
-                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
-                  'queue'
-                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'}"
-                  type="button"
-                  on:click={() => (activeTab = 'queue')}
-                >
-                  {$_('chat.tabs.jobs')}
-                </button>
-              </div>
+              <ChatWidgetTabBar
+                variant="extension"
+                showJobsBadge={false}
+                showCommentsTab={!isPluginMode}
+                activeTab={activeTab}
+                chatTabLabel={$_('chat.tabs.chat')}
+                commentsTabLabel={$_('chat.tabs.comments')}
+                queueTabLabel={$_('chat.tabs.jobs')}
+                onSelect={(tab) => (activeTab = tab)}
+              />
             </div>
           </div>
 

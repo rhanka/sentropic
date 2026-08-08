@@ -20,6 +20,9 @@
   export let ariaLabel = 'Chat';
 
   $: isExtension = variant === 'extension';
+  $: commentsActive = activeTab === 'comments';
+  $: chatActive = activeTab === 'chat';
+  $: queueActive = activeTab === 'queue';
   $: containerClass = `${
     isExtension ? 'extension-main-tabs ' : ''
   }flex items-center gap-1 rounded bg-slate-50 p-1`;
@@ -44,26 +47,26 @@
 >
   {#if showCommentsTab}
     <button
-      class={tabClass(activeTab === 'comments', isExtension)}
+      class={tabClass(commentsActive, isExtension)}
       type="button"
-      aria-pressed={isExtension ? undefined : activeTab === 'comments'}
+      aria-pressed={isExtension ? undefined : commentsActive}
       on:click={() => onSelect('comments')}
     >
       {commentsTabLabel}
     </button>
   {/if}
   <button
-    class={tabClass(activeTab === 'chat', isExtension)}
+    class={tabClass(chatActive, isExtension)}
     type="button"
-    aria-pressed={isExtension ? undefined : activeTab === 'chat'}
+    aria-pressed={isExtension ? undefined : chatActive}
     on:click={() => onSelect('chat')}
   >
     {chatTabLabel}
   </button>
   <button
-    class={tabClass(activeTab === 'queue', isExtension)}
+    class={tabClass(queueActive, isExtension)}
     type="button"
-    aria-pressed={isExtension ? undefined : activeTab === 'queue'}
+    aria-pressed={isExtension ? undefined : queueActive}
     on:click={() => onSelect('queue')}
   >
     {#if isExtension}
