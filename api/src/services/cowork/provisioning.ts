@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { coworkDeviceExposureGrants, coworkDeviceProvisioning, coworkDevices } from '../../db/schema';
+import { coworkDeviceExposureGrants, coworkDeviceProvisioning, coworkDevices, workspaceMemberships } from '../../db/schema';
 
 export const COWORK_KIOSK_SURFACE = 'notepad';
 export const COWORK_REMOTE_CAPABILITIES = ['screen_capture', 'input_action'] as const;
@@ -61,6 +61,42 @@ export async function grantCoworkWorkspaceExposure(input: {
   grantedBy: string;
 }): Promise<void> {
   await db.insert(coworkDeviceExposureGrants).values(input).onConflictDoNothing();
+}
+
+/**
+ * The only production grant/revoke seam.  A conductor cannot expose another
+ * user's device or a workspace where it lacks admin access; the durable grant
+ * itself records its actor and timestamp as redacted audit provenance.
+ */
+export async function manageCoworkWorkspaceExposure(input: {
+  action: 'grant' | 'revoke';
+  deviceId: string;
+  workspaceId: string;
+  capabilities: CoworkRemoteCapability[];
+  actorId: string;
+}): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [device] = await tx.select({ id: coworkDevices.id }).from(coworkDevices).where(and(
+      eq(coworkDevices.id, input.deviceId), eq(coworkDevices.userId, input.actorId), eq(coworkDevices.status, 'active'),
+    )).limit(1);
+    const [membership] = await tx.select({ role: workspaceMemberships.role }).from(workspaceMemberships).where(and(
+      eq(workspaceMemberships.workspaceId, input.workspaceId), eq(workspaceMemberships.userId, input.actorId),
+    )).limit(1);
+    if (!device || membership?.role !== 'admin') return false;
+
+    if (input.action === 'revoke') {
+      await tx.delete(coworkDeviceExposureGrants).where(and(
+        eq(coworkDeviceExposureGrants.deviceId, input.deviceId),
+        eq(coworkDeviceExposureGrants.workspaceId, input.workspaceId),
+        inArray(coworkDeviceExposureGrants.capability, input.capabilities),
+      ));
+      return true;
+    }
+    await tx.insert(coworkDeviceExposureGrants).values(input.capabilities.map((capability) => ({
+      deviceId: input.deviceId, workspaceId: input.workspaceId, capability, grantedBy: input.actorId,
+    }))).onConflictDoNothing();
+    return true;
+  });
 }
 
 export async function hasCoworkWorkspaceExposure(input: {

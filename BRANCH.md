@@ -158,6 +158,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] General computer use remains separately ratification-gated in `spec/SPEC_EVOL_COWORK_COMPUTER_USE_GENERAL.md`; it needs a trusted-policy/human-in-the-loop envelope and must not inherit this MVP surface.
 - [ ] **Lot 4b — Independent codex-sol release-block remediation (re-run required)**
   - [x] Cycle 2 N-02: reject malformed, narrowed, and non-primary screen_capture actions at both issuance and device execution; bind FAIT to full-primary dimensions/metadata.
+  - [x] Cycle 2 N-03: add authenticated conductor grant/revoke through public routes with active-device ownership, workspace-admin access, exact capability subset, and durable grant provenance.
   - [x] Fix 1 critical: consent-before-acknowledgement and final pre-act revoke/expiry/Stop race closure.
     - [x] Implement consent-first acknowledgement, synchronous Stop cancellation, and local pre-act expiry/cancellation checks.
     - [x] Prove held-consent timeout, expiry, Stop, device-deletion, and account-deletion races produce zero provider calls.
