@@ -109,4 +109,4 @@
   - [x] Capture hostile opaque proofs from one structural snapshot and lock all affected port-failure paths with tests.
   - [x] Replace the synchronous race fake with a barrier async constraint-rejection driver regression; retain the production durable adapter as the only full exactly-once proof.
   - [x] Regenerate root lock metadata and correct the public Focus README/version history.
-  - [ ] Re-run isolated Focus package tests, scope checks, and push the existing draft branch without changing its draft state.
+  - [x] Re-run isolated Focus package tests and scope checks; push the existing draft branch without changing its draft state.
