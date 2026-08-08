@@ -297,6 +297,43 @@ export const coworkDeviceTeardownTombstones = pgTable('cowork_device_teardown_to
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
 });
 
+// Server-minted, one-use General PEP proof challenges.  The proof itself is
+// never a bearer credential: it is accepted only while this durable row is
+// pending, unexpired, tied to the current PEP key and device epoch.
+export const coworkDeviceProofChallenges = pgTable('cowork_device_proof_challenges', {
+  id: text('id').primaryKey(),
+  deviceId: text('device_id').notNull().references(() => coworkDevices.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  pepKeyId: text('pep_key_id').notNull(),
+  channel: text('channel').notNull(),
+  resourceId: text('resource_id').notNull(),
+  method: text('method').notNull(),
+  deviceKillEpoch: integer('device_kill_epoch').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  pendingDeviceIdx: index('cowork_device_proof_challenges_pending_device_idx').on(table.deviceId, table.expiresAt),
+}));
+
+// EventSource cannot safely carry a PEP signature in a URL.  A consumed SSE
+// challenge establishes one short-lived, single-use header session instead.
+export const coworkDeviceProofSessions = pgTable('cowork_device_proof_sessions', {
+  id: text('id').primaryKey(),
+  deviceId: text('device_id').notNull().references(() => coworkDevices.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  pepKeyId: text('pep_key_id').notNull(),
+  channel: text('channel').notNull(),
+  resourceId: text('resource_id').notNull(),
+  method: text('method').notNull(),
+  deviceKillEpoch: integer('device_kill_epoch').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  pendingDeviceIdx: index('cowork_device_proof_sessions_pending_device_idx').on(table.deviceId, table.expiresAt),
+}));
+
 export const webauthnChallenges = pgTable('webauthn_challenges', {
   id: text('id').primaryKey(),
   challenge: text('challenge').notNull().unique(), // base64url-encoded

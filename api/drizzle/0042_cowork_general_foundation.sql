@@ -34,3 +34,33 @@ CREATE TABLE "cowork_device_teardown_tombstones" (
   "reason" text NOT NULL,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+
+CREATE TABLE "cowork_device_proof_challenges" (
+  "id" text PRIMARY KEY NOT NULL,
+  "device_id" text NOT NULL REFERENCES "cowork_devices"("id") ON DELETE cascade,
+  "user_id" text NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+  "pep_key_id" text NOT NULL,
+  "channel" text NOT NULL CHECK ("channel" IN ('poll', 'sse', 'wake', 'ack', 'result', 'stop-status')),
+  "resource_id" text NOT NULL,
+  "method" text NOT NULL,
+  "device_kill_epoch" integer NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "consumed_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX "cowork_device_proof_challenges_pending_device_idx" ON "cowork_device_proof_challenges" ("device_id", "expires_at");
+
+CREATE TABLE "cowork_device_proof_sessions" (
+  "id" text PRIMARY KEY NOT NULL,
+  "device_id" text NOT NULL REFERENCES "cowork_devices"("id") ON DELETE cascade,
+  "user_id" text NOT NULL REFERENCES "users"("id") ON DELETE cascade,
+  "pep_key_id" text NOT NULL,
+  "channel" text NOT NULL CHECK ("channel" IN ('sse')),
+  "resource_id" text NOT NULL,
+  "method" text NOT NULL CHECK ("method" IN ('GET')),
+  "device_kill_epoch" integer NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "consumed_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+CREATE INDEX "cowork_device_proof_sessions_pending_device_idx" ON "cowork_device_proof_sessions" ("device_id", "expires_at");
