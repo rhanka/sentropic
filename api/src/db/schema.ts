@@ -235,6 +235,29 @@ export const coworkDevicePresence = pgTable('cowork_device_presence', {
   userStatusIdx: index('cowork_device_presence_user_status_idx').on(table.userId, table.status),
 }));
 
+/** Server/conductor-only VM attestation, intentionally separate from client claims. */
+export const coworkDeviceProvisioning = pgTable('cowork_device_provisioning', {
+  publicKey: text('public_key').primaryKey(),
+  kioskSurface: text('kiosk_surface').notNull(),
+  capabilityIds: jsonb('capability_ids').$type<string[]>().notNull(),
+  status: text('status').notNull().default('active'),
+  provisionedBy: text('provisioned_by').notNull(),
+  provisionedAt: timestamp('provisioned_at', { withTimezone: false }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: false }),
+});
+
+/** Explicit connector-account/device exposure: no workspace receives it implicitly. */
+export const coworkDeviceExposureGrants = pgTable('cowork_device_exposure_grants', {
+  deviceId: text('device_id').notNull().references(() => coworkDevices.id, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+  capability: text('capability').notNull(),
+  grantedBy: text('granted_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  primary: primaryKey({ columns: [table.deviceId, table.workspaceId, table.capability] }),
+  workspaceCapabilityIdx: index('cowork_device_exposure_grants_workspace_idx').on(table.workspaceId, table.capability),
+}));
+
 export const coworkDeviceLeases = pgTable('cowork_device_leases', {
   id: text('id').primaryKey(),
   deviceId: text('device_id')
