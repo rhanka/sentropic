@@ -3,6 +3,7 @@ import { createPublicKey, verify } from 'node:crypto';
 import type { DeviceIdentitySigner, FetchLike } from '@sentropic/cowork-bridge/auth';
 import type { ConsentManager } from '../consent/index.js';
 import { runDesktopToolCall, type DesktopToolContext } from '../tools/index.js';
+import { remoteActionDigest } from '../tools/action-digest.js';
 
 type Jwk = { kid?: string; kty: string; crv?: string; x?: string };
 type Envelope = { kid: string; mac: string };
@@ -45,7 +46,7 @@ export interface RemoteLeaseRunnerDeps {
  */
 export class RemoteLeaseRunner {
     private readonly base: string;
-    private readonly active = new Set<string>();
+    private readonly active = new Map<string, { cancelled: boolean }>();
 
     constructor(private readonly deps: RemoteLeaseRunnerDeps) {
         this.base = deps.apiBaseUrl.replace(/\/$/, '');
@@ -95,14 +96,13 @@ export class RemoteLeaseRunner {
     }
 
     async stop(): Promise<void> {
+        // Cancellation is synchronous. A pending foreground prompt observes it
+        // before it can ask the server for the final acknowledgement permit.
+        const active = [...this.active.entries()];
+        for (const [, execution] of active) execution.cancelled = true;
         const token = await this.deps.getAccessToken();
         if (!token) return;
-        await Promise.all([...this.active].map(async (leaseId) => {
-            await this.deps.fetch(`${this.base}/chrome-extension/cowork-devices/leases/${encodeURIComponent(leaseId)}/revoke`, {
-                method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'local_stop' }),
-            });
-        }));
-        this.active.clear();
+        await Promise.all(active.map(([leaseId]) => this.revoke(token, leaseId, 'local_stop')));
     }
 
     async handleLease(raw: unknown): Promise<void> {
@@ -112,15 +112,32 @@ export class RemoteLeaseRunner {
         const envelope = lease.scope?.serverEnvelope;
         if (isEnvelope(envelope) && !this.keys.has(envelope.kid)) await this.refreshServerKeys();
         if (!isCapability(capability) || !isEnvelope(envelope) || !this.verify(lease, capability, envelope)) return;
-        this.active.add(lease.leaseId);
+        const execution = { cancelled: false };
+        this.active.set(lease.leaseId, execution);
         try {
             const token = await this.deps.getAccessToken();
-            if (!token || !(await this.acknowledge(token, lease))) return;
             const action = lease.scope?.action;
             const args = action && typeof action === 'object' && !Array.isArray(action) ? action as Record<string, unknown> : {};
+            const receipt = await this.deps.consent.requestRemoteAllowOnce({
+                toolName: capability,
+                leaseId: lease.leaseId,
+                actionDigest: remoteActionDigest(args),
+                details: args,
+            });
+            if (!token || !receipt || execution.cancelled || !this.isLocallyValid(lease)) {
+                if (token) await this.revoke(token, lease.leaseId, execution.cancelled ? 'local_stop' : 'local_not_done');
+                return;
+            }
+            // The atomic issued->acknowledged response is the final server
+            // lease/device permit. It is deliberately after consent and before
+            // the provider call, so revocation/deletion/expiry fails closed.
+            if (!(await this.acknowledge(token, lease)) || execution.cancelled || !this.isLocallyValid(lease)) {
+                if (execution.cancelled || !this.isLocallyValid(lease)) await this.revoke(token, lease.leaseId, 'local_not_done');
+                return;
+            }
             const result = await runDesktopToolCall(
                 { toolCallId: lease.leaseId, name: capability, arguments: args },
-                { consent: this.deps.consent, context: this.deps.context },
+                { consent: this.deps.consent, context: this.deps.context, remoteReceipt: receipt },
             );
             await this.complete(token, lease, result.error ? 'PAS-FAIT' : 'FAIT');
         } catch {
@@ -139,6 +156,11 @@ export class RemoteLeaseRunner {
         try {
             return verify(null, Buffer.from(canonicalEnvelope({ leaseId: lease.leaseId, capability, targetDeviceId: this.deps.deviceIdentity.deviceId, nonce: lease.nonce, expiry: expiry.toISOString() })), createPublicKey({ key: jwk as never, format: 'jwk' }), Buffer.from(envelope.mac, 'base64url'));
         } catch { return false; }
+    }
+
+    private isLocallyValid(lease: DeliveredLease): boolean {
+        const expiry = new Date(lease.expiresAt);
+        return Number.isFinite(expiry.getTime()) && expiry.getTime() > Date.now();
     }
 
     private readonly keys = new Map<string, Jwk>();
@@ -179,6 +201,12 @@ export class RemoteLeaseRunner {
         await this.deps.fetch(`${this.base}/chrome-extension/cowork-devices/leases/${encodeURIComponent(lease.leaseId)}/result`, {
             method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ device_id: this.deps.deviceIdentity.deviceId, outcome, signature }),
+        });
+    }
+
+    private async revoke(token: string, leaseId: string, reason: string): Promise<void> {
+        await this.deps.fetch(`${this.base}/chrome-extension/cowork-devices/leases/${encodeURIComponent(leaseId)}/revoke`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }),
         });
     }
 }

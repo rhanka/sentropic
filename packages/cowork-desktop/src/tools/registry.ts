@@ -5,6 +5,8 @@ import type {
     ToolResult,
 } from '@sentropic/cowork-bridge/tools';
 import type { ConsentManager } from '../consent/index.js';
+import type { RemoteConsentReceipt } from '../consent/types.js';
+import { remoteActionDigest } from './action-digest.js';
 import { inputActionDefinition, inputActionExecutor } from './input-action.js';
 import { screenCaptureDefinition, screenCaptureExecutor } from './screen-capture.js';
 import { type DesktopToolContext } from './types.js';
@@ -36,7 +38,7 @@ const executors: Record<string, ToolExecutor<DesktopToolContext>> = {
  */
 export const runDesktopToolCall = async (
     call: ToolCall,
-    deps: { consent: ConsentManager; context: DesktopToolContext },
+    deps: { consent: ConsentManager; context: DesktopToolContext; remoteReceipt?: RemoteConsentReceipt },
 ): Promise<ToolResult> => {
     const { consent, context } = deps;
     const executor = executors[call.name];
@@ -50,29 +52,47 @@ export const runDesktopToolCall = async (
         };
     }
 
-    const verdict = await consent.check(call.name, call.arguments);
+    if (deps.remoteReceipt) {
+        const remoteToolName = call.name === 'screen_capture' || call.name === 'input_action' ? call.name : null;
+        const consumed = Boolean(remoteToolName && consent.consumeRemoteAllowOnce(deps.remoteReceipt, {
+            toolName: remoteToolName,
+            leaseId: call.toolCallId,
+            actionDigest: remoteActionDigest(call.arguments),
+        }));
+        if (!consumed) {
+            const message = `Tool "${call.name}" requires a fresh lease-bound foreground consent receipt.`;
+            return {
+                toolCallId: call.toolCallId,
+                name: call.name,
+                output: JSON.stringify({ ok: false, denied: true, reason: message }),
+                error: message,
+            };
+        }
+    } else {
+        const verdict = await consent.check(call.name, call.arguments);
 
-    if (verdict.decision === 'deny') {
-        const message =
-            verdict.source === 'deny_always'
-                ? `Tool "${call.name}" is denied by a standing user policy.`
-                : `Tool "${call.name}" requires user consent and was not granted (default deny).`;
-        return {
-            toolCallId: call.toolCallId,
-            name: call.name,
-            output: JSON.stringify({ ok: false, denied: true, reason: message }),
-            error: message,
-        };
-    }
+        if (verdict.decision === 'deny') {
+            const message =
+                verdict.source === 'deny_always'
+                    ? `Tool "${call.name}" is denied by a standing user policy.`
+                    : `Tool "${call.name}" requires user consent and was not granted (default deny).`;
+            return {
+                toolCallId: call.toolCallId,
+                name: call.name,
+                output: JSON.stringify({ ok: false, denied: true, reason: message }),
+                error: message,
+            };
+        }
 
-    if (verdict.decision === 'needs_consent') {
-        const message = `Tool "${call.name}" needs explicit user consent before it can run.`;
-        return {
-            toolCallId: call.toolCallId,
-            name: call.name,
-            output: JSON.stringify({ ok: false, needsConsent: true, reason: message }),
-            error: message,
-        };
+        if (verdict.decision === 'needs_consent') {
+            const message = `Tool "${call.name}" needs explicit user consent before it can run.`;
+            return {
+                toolCallId: call.toolCallId,
+                name: call.name,
+                output: JSON.stringify({ ok: false, needsConsent: true, reason: message }),
+                error: message,
+            };
+        }
     }
 
     try {
