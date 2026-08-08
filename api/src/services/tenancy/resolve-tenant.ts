@@ -53,12 +53,26 @@ export class TenantResolutionError extends Error {
 }
 
 // -----------------------------------------------------------------------------
-// In-process cache (spec §3 invariant 3: idempotent + cacheable).
-// Process-lifetime Map — invalidation/TTL is a STRICT-mode (G1c) follow-up; in shadow the
-// only consequence of staleness is a mismeasured divergence, never wrong behavior. Tests
-// clear it via `resetResolveTenantCache()`.
+// In-process cache (spec §3 invariant 3: idempotent + cacheable). Both successful resolutions
+// and fail-closed denials are cached.
+// AUTHZ REVOCATION: `invalidateResolveTenantCache()` (called on every membership transition)
+// clears ONLY the calling process's map. On a multi-replica deploy it clears just the acting
+// pod, so `CACHE_TTL_MS` — NOT the invalidation — is the true CROSS-POD guarantee: a suspended
+// user can still resolve on other pods for up to that TTL. That bounded revocation latency is
+// the accepted property (owner-signed before any strict-mode cutover; today the only prod
+// consumer, `reconcileTenantId`, is shadow/measure-only, so this is latent). A generation
+// counter additionally prevents a resolve in flight during an invalidation from repopulating a
+// stale entry (TOCTOU guard). Tests clear it via `resetResolveTenantCache()`.
 // -----------------------------------------------------------------------------
-const cache = new Map<string, ResolveTenantResult>();
+const CACHE_TTL_MS = 30_000;
+let cacheGeneration = 0;
+
+type CacheEntry = {
+  insertedAt: number;
+  result: ResolveTenantResult;
+};
+
+const cache = new Map<string, CacheEntry>();
 
 function cacheKey(input: ResolveTenantInput): string {
   if ('clientId' in input) return `cl:${input.clientId}`;
@@ -68,9 +82,15 @@ function cacheKey(input: ResolveTenantInput): string {
   return `u:${input.userId}`;
 }
 
+/** Clear cached tenant resolutions after an authorization-affecting tenancy change. */
+export function invalidateResolveTenantCache(): void {
+  cacheGeneration += 1;
+  cache.clear();
+}
+
 /** Test/ops helper: clear the in-process resolution cache. */
 export function resetResolveTenantCache(): void {
-  cache.clear();
+  invalidateResolveTenantCache();
 }
 
 async function resolveByWorkspace(workspaceId: string, userId?: string): Promise<ResolveTenantResult> {
@@ -118,13 +138,17 @@ async function resolveByUser(userId: string): Promise<ResolveTenantResult> {
 
 /**
  * Resolve the real tenant for one input (spec §3). Fail-closed: an unresolved input returns an
- * `error`, never a `workspaceId`. Cached in-process (idempotent). Only successful resolutions
- * AND fail-closed denials are cached — both are stable given the current DB row set.
+ * `error`, never a `workspaceId`. Cached in-process (idempotent) with a bounded TTL. Both
+ * successful resolutions AND fail-closed denials are cached.
  */
 export async function resolveTenant(input: ResolveTenantInput): Promise<ResolveTenantResult> {
   const key = cacheKey(input);
   const cached = cache.get(key);
-  if (cached) return cached;
+  if (cached) {
+    if (Date.now() - cached.insertedAt <= CACHE_TTL_MS) return cached.result;
+    cache.delete(key);
+  }
+  const cacheGenerationAtStart = cacheGeneration;
 
   let result: ResolveTenantResult;
   if ('clientId' in input) {
@@ -135,7 +159,10 @@ export async function resolveTenant(input: ResolveTenantInput): Promise<ResolveT
     result = await resolveByUser(input.userId);
   }
 
-  cache.set(key, result);
+  // Do not let a query started before invalidation repopulate the cache after a status change.
+  if (cacheGeneration === cacheGenerationAtStart) {
+    cache.set(key, { insertedAt: Date.now(), result });
+  }
   return result;
 }
 
