@@ -78,8 +78,9 @@
 ## Feedback Loop
 
 - [x] `BR-SIG-ADAPTER-EX1` — approved by the owner’s explicit migration request. `api/drizzle/0041_track_owner_signatures.sql` creates the one durable owner-signature table and unique index; impact is an additive table; rollback is to drop that table in a follow-up migration only after its records are safely retired.
-- [x] `BR-SIG-ADAPTER-EX2` — required by the `@sentropic/focus` API workspace dependency. Root and API lockfiles are regenerated through Make; impact is package-resolution metadata only; rollback is to revert each lockfile with its matching manifest.
+- [x] `BR-SIG-ADAPTER-EX2` — required by the `@sentropic/focus` API workspace dependency. The root lockfile is regenerated through Make; the API lockfile remains blocked with the isolated service build; impact is package-resolution metadata only; rollback is to revert each lockfile with its matching manifest.
 - [ ] `BR-SIG-ADAPTER-1` — OPEN. No API route currently supplies the Focus driver’s own-principal authentication and authorization dependencies; live endpoint activation remains an owner-gated follow-up after this durable adapter is independently reviewed and UAT-qualified.
+- [ ] `BR-SIG-ADAPTER-2` — BLOCKED. `make up-api-test` and `make typecheck-api` cannot build the isolated API image because the current `origin/main` audit gate rejects existing `vitest` advisory `GHSA-5xrq-8626-4rwp`; the scoped test command consequently reports `service "api" is not running`. Owner: security lane; acceptance: resolve the advisory without weakening the audit gate, then rerun the scoped real-database tests.
 
 ## AI Flaky tests
 
