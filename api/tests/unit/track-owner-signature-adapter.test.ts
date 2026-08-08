@@ -65,7 +65,7 @@ describe('PostgresTrackOwnerSignaturePort', () => {
 
     expect(receipts.filter((receipt) => receipt.status === 'written')).toHaveLength(1);
     expect(receipts.filter((receipt) => receipt.status === 'duplicate')).toHaveLength(1);
-    expect(new Set(receipts.map((receipt) => receipt.recordId))).toHaveSize(1);
+    expect(new Set(receipts.map((receipt) => receipt.recordId)).size).toBe(1);
 
     const rows = await db
       .select()
