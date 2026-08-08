@@ -3,14 +3,15 @@ import { and, eq } from 'drizzle-orm';
 
 import { db } from '../../db/client';
 import { coworkDevices } from '../../db/schema';
-import type { CoworkDeviceCapabilities } from './device-capabilities';
+import type { CoworkDeviceCapabilities, CoworkDeviceCapability } from './device-capabilities';
+import { isProvisionedCoworkPublicKey } from './provisioning';
 
 export type { CoworkDeviceCapability, CoworkDeviceCapabilities } from './device-capabilities';
 
 export interface PendingCoworkDeviceIdentity {
   deviceId: string;
   devicePublicKey: string;
-  capabilities: CoworkDeviceCapabilities;
+  capabilities: CoworkDeviceCapability[];
   serverNonce: string;
 }
 
@@ -24,7 +25,7 @@ export type ActiveCoworkDevice = {
 
 export type ActivateDeviceResult =
   | { ok: true; device: ActiveCoworkDevice }
-  | { ok: false; reason: 'cross_user_collision' | 'key_mismatch' | 'revoked' };
+  | { ok: false; reason: 'cross_user_collision' | 'key_mismatch' | 'revoked' | 'unprovisioned' };
 
 function decodeEd25519PublicKey(publicKey: string) {
   const key = createPublicKey({
@@ -118,6 +119,11 @@ export async function activateCoworkDevice(input: {
   deviceName: string;
   identity: PendingCoworkDeviceIdentity;
 }): Promise<ActivateDeviceResult> {
+  // Recheck the server-issued record at activation: a client claim is never a
+  // kiosk authorization and an intervening provisioning revocation fails closed.
+  if (!(await isProvisionedCoworkPublicKey(input.identity.devicePublicKey))) {
+    return { ok: false, reason: 'unprovisioned' };
+  }
   const [existing] = await db
     .select({
       id: coworkDevices.id,
@@ -148,7 +154,7 @@ export async function activateCoworkDevice(input: {
         deviceName: input.deviceName,
         publicKey: input.identity.devicePublicKey,
         publicKeyFingerprint: fingerprintDevicePublicKey(input.identity.devicePublicKey),
-        capabilities: input.identity.capabilities,
+        capabilities: { capabilityIds: input.identity.capabilities },
         status: 'active',
       })
       .returning({

@@ -17,6 +17,7 @@ import {
   type CoworkDeviceCapabilities,
 } from '../../services/cowork/device-identity';
 import { findPendingDeviceIdentity } from '../../services/device-code-store';
+import { isProvisionedCoworkPublicKey, registerCoworkKioskProvisioning } from '../../services/cowork/provisioning';
 
 /**
  * Device-Code Enrollment Routes (RFC 8628-style)
@@ -36,18 +37,12 @@ const issueSchema = z.object({
   deviceName: z.string().min(1).max(100).optional(),
   deviceId: z.string().uuid(),
   devicePublicKey: z.string().min(32).max(2048),
-  capabilities: z.object({
-    capabilityIds: z.array(z.enum(['screen_capture', 'input_action'])).min(1).max(2),
-    isolatedVmTarget: z.boolean(),
-    kioskSurface: z.string().trim().min(1).max(80).optional(),
-  }).superRefine((value, ctx) => {
-    if (value.isolatedVmTarget && !value.kioskSurface) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'kioskSurface is required for isolated VM targets' });
-    }
-    if (!value.isolatedVmTarget && value.kioskSurface) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'kioskSurface requires isolatedVmTarget' });
-    }
-  }),
+  // Claimed capabilities are telemetry only. Legacy safety flags are accepted
+  // for compatibility then ignored; server provisioning is the authorization.
+  capabilities: z.union([
+    z.array(z.enum(['screen_capture', 'input_action'])).min(1).max(2),
+    z.object({ capabilityIds: z.array(z.enum(['screen_capture', 'input_action'])).min(1).max(2) }).passthrough(),
+  ]),
 });
 
 const pollSchema = z.object({
@@ -58,6 +53,10 @@ const pollSchema = z.object({
 const approveSchema = z.object({
   user_code: z.string().min(1),
   device_name: z.string().min(1).max(100).optional(),
+});
+const provisionSchema = z.object({
+  devicePublicKey: z.string().min(32).max(2048),
+  kioskSurface: z.literal('notepad'),
 });
 
 const DEVICE_CODE_TTL_SEC = 10 * 60;
@@ -75,11 +74,14 @@ deviceRouter.post('/code', async (c) => {
     } catch {
       return c.json({ error: 'devicePublicKey must be an Ed25519 SPKI key' }, 400);
     }
+    if (!(await isProvisionedCoworkPublicKey(devicePublicKey))) {
+      return c.json({ error: 'Device enrollment requires a conductor-issued Notepad provisioning record.' }, 403);
+    }
 
     const issued = issueDeviceCode(deviceName, {
       deviceId,
       devicePublicKey,
-      capabilities: capabilities as CoworkDeviceCapabilities,
+      capabilities: Array.isArray(capabilities) ? capabilities : capabilities.capabilityIds,
     });
 
     const origin = (c.req.header('origin') || '').trim();
@@ -100,6 +102,25 @@ deviceRouter.post('/code', async (c) => {
     logger.error({ err: error }, 'Error issuing device code');
     return c.json({ error: 'Failed to issue device code' }, 500);
   }
+});
+
+/**
+ * Conductor/VM-rental registration step. It requires an authenticated app
+ * administrator and is deliberately separate from unauthenticated enrollment.
+ */
+deviceRouter.post('/provision', async (c) => {
+  const token = c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] || c.req.header('authorization')?.replace('Bearer ', '');
+  const session = token ? await validateSession(token) : null;
+  if (!session || session.role !== 'admin_app') return c.json({ error: 'Conductor authentication is required.' }, 403);
+  const parsed = provisionSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: 'Invalid provisioning request.' }, 400);
+  try {
+    assertEd25519PublicKey(parsed.data.devicePublicKey);
+    await registerCoworkKioskProvisioning({ publicKey: parsed.data.devicePublicKey, provisionedBy: session.userId });
+  } catch {
+    return c.json({ error: 'devicePublicKey must be an Ed25519 SPKI key' }, 400);
+  }
+  return c.json({ ok: true, kioskSurface: 'notepad' });
 });
 
 /**

@@ -30,8 +30,6 @@ import { resolveCoworkAccessToken } from './auth-bootstrap.js';
 
 const APP_DIR = process.env.SENTROPIC_COWORK_DIR ?? join(homedir(), '.sentropic', 'cowork');
 const DEVICE_NAME = process.env.SENTROPIC_DEVICE_NAME ?? 'Sentropic Cowork';
-const ISOLATED_VM = process.env.SENTROPIC_COWORK_ISOLATED_VM === 'true';
-const KIOSK_SURFACE = process.env.SENTROPIC_COWORK_KIOSK_SURFACE?.trim();
 
 const promptAllowOnce = async (request: { toolName: string; details?: Record<string, unknown> }) => {
     const terminal = createInterface({ input: process.stdin as never, output: process.stdout as never });
@@ -51,7 +49,7 @@ function usage(apiBaseUrl: string): void {
             '  SENTROPIC_APP_ORIGIN     web app origin for pairing (default: derived from the API base)',
             '  SENTROPIC_COWORK_DIR     app data dir (default: ~/.sentropic/cowork)',
             '  SENTROPIC_DEVICE_NAME    device name shown in the chat target selector',
-            '  SENTROPIC_COWORK_ISOLATED_VM=true and SENTROPIC_COWORK_KIOSK_SURFACE=notepad for the only executable MVP target',
+            '  The authenticated conductor must pre-register this device public key for the Notepad kiosk VM before enrollment.',
             '',
             'Flags:',
             '  --no-open                do not auto-open the browser for pairing',
@@ -73,11 +71,6 @@ export async function runCli(): Promise<void> {
     }
 
     const store = createFileStore(APP_DIR);
-    if (ISOLATED_VM && !KIOSK_SURFACE) {
-        process.stderr.write('SENTROPIC_COWORK_KIOSK_SURFACE is required for an isolated VM target.\n');
-        process.exitCode = 1;
-        return;
-    }
     const deviceIdentity = await loadOrCreateDeviceIdentity(store);
     // In the single-file exe the native deps are extracted from the embedded
     // payload to a cache and resolved by absolute file:// URL; from npm they
@@ -100,8 +93,6 @@ export async function runCli(): Promise<void> {
         deviceIdentity,
         capabilities: {
             capabilityIds: ['screen_capture', 'input_action'],
-            isolatedVmTarget: ISOLATED_VM,
-            ...(KIOSK_SURFACE ? { kioskSurface: KIOSK_SURFACE } : {}),
         },
     });
 
