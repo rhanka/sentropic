@@ -162,7 +162,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [ ] Fix 3 high: complete canonical invocation binding and mismatch-safe idempotency.
   - [ ] Fix 4 high: durable device-workspace-capability exposure grants at every authorization seam.
   - [x] Fix 5 high: lease/action-bound one-use remote consent; persisted remote allows are deleted and ignored.
-  - [ ] Fix 6 high: strict literal printable text schema and Windows primitive coverage.
+  - [x] Fix 6 high: strict literal printable text schema and Windows primitive coverage.
   - [ ] Fix 7 high: bounded integrity-bound capture result persisted before FAIT and returned to the broker.
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**

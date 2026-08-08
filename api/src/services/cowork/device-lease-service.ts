@@ -4,6 +4,7 @@ import { db, pool } from '../../db/client';
 import { coworkDeviceLeases, coworkDevices } from '../../db/schema';
 import { findActiveCoworkDevice, verifyCoworkSignature } from './device-identity';
 import { isNarrowCoworkKioskTarget } from './device-capabilities';
+import { isCoworkInputAction } from './input-action-schema';
 import { signLeaseEnvelope, type ServerSignedLeaseEnvelope } from './lease-envelope';
 
 const LEASE_TTL_MS = 45_000;
@@ -51,6 +52,9 @@ export async function issueLease(input: {
   if (process.env.NODE_ENV === 'production') return { ok: false, reason: 'not_issuable' };
   const requestedCapability = input.scope?.capability;
   if (requestedCapability !== 'screen_capture' && requestedCapability !== 'input_action') {
+    return { ok: false, reason: 'not_issuable' };
+  }
+  if (requestedCapability === 'input_action' && !isCoworkInputAction(input.scope?.action)) {
     return { ok: false, reason: 'not_issuable' };
   }
   const now = new Date();

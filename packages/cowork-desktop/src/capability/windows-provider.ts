@@ -5,6 +5,7 @@ import {
     type MouseButton,
     type ScreenCapture,
 } from './types.js';
+import { assertLiteralText } from '../tools/literal-text.js';
 
 /**
  * Real Windows capability provider. The native modules are loaded via dynamic
@@ -143,7 +144,11 @@ export const createWindowsCapabilityProvider = (
         },
 
         async type(text: string): Promise<void> {
+            assertLiteralText(text);
             const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            // This is the only literal-text primitive. Do not add clipboard,
+            // IME, pressKey, or key-combo fallbacks: those turn text into
+            // submission/navigation controls on a kiosk surface.
             await nut.keyboard.type(text);
         },
 
