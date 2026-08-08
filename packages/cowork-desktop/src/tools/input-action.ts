@@ -1,6 +1,7 @@
 import type { ToolDefinition, ToolExecutor } from '@sentropic/cowork-bridge/tools';
 import type { MouseButton } from '../capability/index.js';
 import { INPUT_ACTION_TOOL, type DesktopToolContext } from './types.js';
+import { assertLiteralText } from './literal-text.js';
 
 /**
  * `input_action` (hands) — the actuation step of the agentic computer-use loop.
@@ -71,12 +72,7 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
         }
         case 'type': {
             const text = args.text;
-            if (typeof text !== 'string') {
-                throw new Error('input_action type requires a string "text".');
-            }
-            if (/[\r\n]/.test(text)) {
-                throw new Error('input_action denies Enter and submission characters.');
-            }
+            assertLiteralText(text);
             await provider.type(text);
             return { ok: true, action: 'type', length: text.length };
         }

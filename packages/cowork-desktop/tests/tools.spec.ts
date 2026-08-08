@@ -75,12 +75,14 @@ describe('input_action executor (hands)', () => {
         ]);
     });
 
-    it('denies key chords, Enter, and submission characters before the provider', async () => {
+    it('denies key chords and every control/submission character before the provider', async () => {
         const provider = createMockCapabilityProvider();
         await expect(inputActionExecutor({ action: 'key', combo: 'Ctrl+S' }, { provider } as DesktopToolContext))
             .rejects.toThrow(/denied action/);
-        await expect(inputActionExecutor({ action: 'type', text: 'submit\n' }, { provider } as DesktopToolContext))
-            .rejects.toThrow(/denies Enter/);
+        for (const text of ['submit\n', 'submit\r', 'submit\t', 'submit\u001b', 'submit\u0085', 'submit\u2028', 'submit\u2029', 'submit\u200d']) {
+            await expect(inputActionExecutor({ action: 'type', text }, { provider } as DesktopToolContext))
+                .rejects.toThrow(/denies control/);
+        }
         expect(provider.calls).toEqual([]);
     });
 
