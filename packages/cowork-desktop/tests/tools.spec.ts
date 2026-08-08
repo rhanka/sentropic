@@ -13,6 +13,12 @@ import {
     type DesktopToolContext,
 } from '../src/tools/index.js';
 
+const measuredNotepad = (overrides: Record<string, unknown> = {}) => ({
+    hwnd: '1', processId: 1, executable: 'C:\\Windows\\System32\\notepad.exe', title: 'Untitled - Notepad',
+    windowsDirectory: 'C:\\Windows', signatureStatus: 'Valid', signerSubject: 'CN=Microsoft Corporation',
+    clientArea: { left: 0, top: 0, right: 1280, bottom: 720 }, ...overrides,
+});
+
 const allowAll = () =>
     new ConsentManager({
         store: createMemoryConsentStore(),
@@ -27,7 +33,7 @@ const allowInputOnce = () =>
 
 const toolContext = (provider: ReturnType<typeof createMockCapabilityProvider>): DesktopToolContext => ({
     provider,
-    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => ({ hwnd: '1', processId: 1, executable: 'C:\\Windows\\notepad.exe', title: 'Untitled - Notepad' }) }),
+    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => measuredNotepad() }),
 });
 
 describe('tool definitions', () => {
@@ -95,17 +101,22 @@ describe('input_action executor (hands)', () => {
         const context: DesktopToolContext = {
             provider: drifted,
             surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => (++measurements < 3
-                ? { hwnd: '1', processId: 1, executable: 'notepad.exe', title: 'Notepad' }
-                : { hwnd: '2', processId: 2, executable: 'powershell.exe', title: 'PowerShell' }) }),
+                ? measuredNotepad({ title: 'Notepad' })
+                : measuredNotepad({ hwnd: '2', processId: 2, executable: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', title: 'PowerShell' })) }),
         };
         await expect(inputActionExecutor({ action: 'click', x: 1, y: 2 }, context)).rejects.toThrow(/drifted or is unavailable/);
         expect(drifted.calls).toEqual([]);
+
+        const outside = createMockCapabilityProvider();
+        await expect(inputActionExecutor({ action: 'click', x: 1280, y: 1 }, toolContext(outside)))
+            .rejects.toThrow(/outside the measured/);
+        expect(outside.calls).toEqual([]);
     });
 
     it('denies key chords and every control/submission character before the provider', async () => {
         const provider = createMockCapabilityProvider();
         await expect(inputActionExecutor({ action: 'key', combo: 'Ctrl+S' }, { provider } as DesktopToolContext))
-            .rejects.toThrow(/denied action/);
+            .rejects.toThrow(/exact click/);
         for (const text of ['submit\n', 'submit\r', 'submit\t', 'submit\u001b', 'submit\u0085', 'submit\u2028', 'submit\u2029', 'submit\u200d']) {
             await expect(inputActionExecutor({ action: 'type', text }, { provider } as DesktopToolContext))
                 .rejects.toThrow(/denies control/);
@@ -176,7 +187,7 @@ describe('runDesktopToolCall — consent gate', () => {
             { toolCallId: 'c4', name: 'input_action', arguments: { action: 'click' } },
             { consent: allowInputOnce(), context: context() },
         );
-        expect(result.error).toMatch(/numeric x and y/);
+        expect(result.error).toMatch(/exact click/);
         expect(JSON.parse(result.output).ok).toBe(false);
     });
 });

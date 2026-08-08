@@ -20,8 +20,9 @@ export function parseCoworkInputAction(value: unknown): CoworkInputAction | null
     }
     if (action.action === 'click') {
         if (!hasOnlyKeys(action, ['action', 'x', 'y', 'button']) || !isInteger(action.x) || !isInteger(action.y)) return null;
-        if ('button' in action && action.button !== 'left' && action.button !== 'right' && action.button !== 'middle') return null;
-        return { action: 'click', x: action.x, y: action.y, button: action.button ?? 'left' };
+        const button = action.button;
+        if ('button' in action && button !== 'left' && button !== 'right' && button !== 'middle') return null;
+        return { action: 'click', x: action.x, y: action.y, button: button === 'right' || button === 'middle' ? button : 'left' };
     }
     if (action.action === 'scroll') {
         if (!hasOnlyKeys(action, ['action', 'dx', 'dy']) || !isInteger(action.dx) || !isInteger(action.dy)) return null;

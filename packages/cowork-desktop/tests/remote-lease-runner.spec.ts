@@ -6,6 +6,12 @@ import { ForegroundSurfaceGuard } from '../src/capability/foreground-surface.js'
 import { ConsentManager, createMemoryConsentStore } from '../src/consent/index.js';
 import { RemoteLeaseRunner } from '../src/remote/index.js';
 
+const measuredNotepad = (overrides: Record<string, unknown> = {}) => ({
+    hwnd: '1', processId: 1, executable: 'C:\\Windows\\System32\\notepad.exe', title: 'Untitled - Notepad',
+    windowsDirectory: 'C:\\Windows', signatureStatus: 'Valid', signerSubject: 'CN=Microsoft Corporation',
+    clientArea: { left: 0, top: 0, right: 1280, bottom: 720 }, ...overrides,
+});
+
 const canonical = (fields: Record<string, string>) => JSON.stringify({
     leaseId: fields.leaseId, capability: fields.capability, targetDeviceId: fields.targetDeviceId,
     nonce: fields.nonce, expiry: fields.expiry,
@@ -13,7 +19,7 @@ const canonical = (fields: Record<string, string>) => JSON.stringify({
 
 const guardedContext = (provider: ReturnType<typeof createMockCapabilityProvider>) => ({
     provider,
-    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => ({ hwnd: '1', processId: 1, executable: 'C:\\Windows\\notepad.exe', title: 'Untitled - Notepad' }) }),
+    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => measuredNotepad() }),
 });
 
 describe('RemoteLeaseRunner', () => {
@@ -222,13 +228,13 @@ describe('RemoteLeaseRunner', () => {
             context: {
                 provider,
                 surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => (++measurement === 1
-                    ? { hwnd: '1', processId: 1, executable: 'notepad.exe', title: 'Untitled - Notepad' }
-                    : { hwnd: '2', processId: 2, executable: 'powershell.exe', title: 'PowerShell' }) }),
+                    ? measuredNotepad()
+                    : measuredNotepad({ hwnd: '2', processId: 2, executable: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', title: 'PowerShell' })) }),
             },
         });
         await runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'click', x: 4, y: 8 } } });
 
-        expect(promptDetails).toMatchObject({ foreground: { executable: 'notepad.exe', windowTitle: 'Untitled - Notepad' }, coordinates: { x: 4, y: 8 } });
+        expect(promptDetails).toMatchObject({ foreground: { executable: 'c:\\windows\\system32\\notepad.exe', windowTitle: 'Untitled - Notepad' }, coordinates: { x: 4, y: 8 } });
         expect(calls.some((url) => url.endsWith('/ack'))).toBe(false);
         expect(provider.calls).toEqual([]);
     });

@@ -34,7 +34,14 @@ const isCapability = (value: unknown): value is 'screen_capture' | 'input_action
     value === 'screen_capture' || value === 'input_action';
 
 const consentDetails = (capability: 'screen_capture' | 'input_action', action: Record<string, unknown>, surface: ForegroundSurface) => {
-    const foreground = { executable: surface.executable, windowTitle: surface.title, hwnd: surface.hwnd };
+    const foreground = {
+        executable: surface.executable,
+        canonicalExecutable: surface.executable,
+        signerSubject: surface.signerSubject,
+        clientArea: surface.clientArea,
+        windowTitle: surface.title,
+        hwnd: surface.hwnd,
+    };
     if (capability === 'screen_capture') return { foreground, capture: { screen: 'primary full display' } };
     if (action.action === 'click') return { foreground, coordinates: { x: action.x, y: action.y, button: action.button } };
     if (action.action === 'scroll') return { foreground, scroll: { dx: action.dx ?? 0, dy: action.dy ?? 0 } };

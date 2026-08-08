@@ -23,8 +23,19 @@ export interface ScreenCapture {
     height: number;
 }
 
+export type TargetedNativeInput = {
+    kind: 'click';
+    x: number;
+    y: number;
+    button: MouseButton;
+};
+
 export interface NativeActuationGuard {
     recheckAfterNativeAwait(): Promise<void>;
+    /** Fails closed when an absolute click falls outside the measured HWND client area. */
+    assertClickInBounds?(x: number, y: number): void;
+    /** Windows-only HWND-targeted guard-and-act primitive; absent support denies real clicks. */
+    targetedInput?(input: TargetedNativeInput): Promise<void>;
 }
 
 /** A rectangular capture region in screen pixels. */

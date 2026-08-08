@@ -2,6 +2,7 @@ import type { ToolDefinition, ToolExecutor } from '@sentropic/cowork-bridge/tool
 import { INPUT_ACTION_TOOL, type DesktopToolContext } from './types.js';
 import { remoteActionDigest } from './action-digest.js';
 import { parseCoworkInputAction } from './input-action-schema.js';
+import { assertLiteralText } from './literal-text.js';
 
 /**
  * `input_action` (hands) — the actuation step of the agentic computer-use loop.
@@ -47,6 +48,7 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
     args,
     context,
 ) => {
+    if (args.action === 'type' && typeof args.text === 'string') assertLiteralText(args.text);
     const action = parseCoworkInputAction(args);
     if (!action) throw new Error('input_action requires an exact click, type, or scroll action shape.');
     const provider = context.provider;
@@ -60,7 +62,10 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
 
     switch (action.action) {
         case 'click': {
-            await provider.mouseClick(action.x, action.y, action.button, await nativeGuard());
+            const guard = await nativeGuard();
+            if (!guard.assertClickInBounds) throw new Error('input_action requires measured HWND client-area bounds.');
+            guard.assertClickInBounds(action.x, action.y);
+            await provider.mouseClick(action.x, action.y, action.button, guard);
             return { ok: true, action: action.action, actionDigest: remoteActionDigest(action) };
         }
         case 'type': {
