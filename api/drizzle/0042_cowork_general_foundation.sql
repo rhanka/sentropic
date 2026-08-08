@@ -8,10 +8,10 @@ ALTER TABLE "cowork_devices" ADD CONSTRAINT "cowork_devices_status_check" CHECK 
 
 CREATE TABLE "cowork_general_calls" (
   "id" text PRIMARY KEY NOT NULL,
-  "principal_id" text NOT NULL REFERENCES "users"("id"),
+  "principal_id" text NOT NULL REFERENCES "users"("id") ON DELETE cascade,
   "tenant_id" text NOT NULL,
-  "workspace_id" text NOT NULL REFERENCES "workspaces"("id"),
-  "target_device_id" text NOT NULL REFERENCES "cowork_devices"("id"),
+  "workspace_id" text NOT NULL REFERENCES "workspaces"("id") ON DELETE cascade,
+  "target_device_id" text NOT NULL REFERENCES "cowork_devices"("id") ON DELETE cascade,
   "invocation_id" text NOT NULL,
   "tool_call_id" text NOT NULL,
   "descriptor_ciphertext" text NOT NULL,
@@ -30,9 +30,10 @@ CREATE INDEX "cowork_general_calls_pending_device_idx" ON "cowork_general_calls"
 CREATE TABLE "cowork_device_teardown_tombstones" (
   "id" text PRIMARY KEY NOT NULL,
   "device_id" text NOT NULL,
-  "user_id" text NOT NULL REFERENCES "users"("id"),
+  "user_id" text NOT NULL,
   "kill_epoch" integer NOT NULL,
   "reason" text NOT NULL,
+  "revoked_lease_ids" jsonb NOT NULL DEFAULT '[]'::jsonb,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
@@ -65,3 +66,68 @@ CREATE TABLE "cowork_device_proof_sessions" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 CREATE INDEX "cowork_device_proof_sessions_pending_device_idx" ON "cowork_device_proof_sessions" ("device_id", "expires_at");
+
+CREATE OR REPLACE FUNCTION "cowork_general_revoke_call_before_delete"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE "cowork_device_leases" SET "status" = 'revoked'
+  WHERE "turn_ref" = OLD."id" AND "status" IN ('issued', 'acknowledged');
+  UPDATE "cowork_device_proof_challenges" SET "consumed_at" = now()
+  WHERE "resource_id" = 'call:' || OLD."id" AND "consumed_at" IS NULL;
+  RETURN OLD;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION "cowork_general_revoke_device_before_delete"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE revoked_lease_ids jsonb;
+BEGIN
+  SELECT COALESCE(jsonb_agg("id" ORDER BY "id"), '[]'::jsonb) INTO revoked_lease_ids
+  FROM "cowork_device_leases" WHERE "device_id" = OLD."id" AND "status" IN ('issued', 'acknowledged');
+  UPDATE "cowork_general_calls"
+  SET "state" = 'PAS-FAIT', "requires_fresh_authority" = true, "fresh_authority" = NULL, "updated_at" = now()
+  WHERE "target_device_id" = OLD."id" AND "state" = 'DÉPOSÉ-EN-ATTENTE';
+  UPDATE "cowork_device_leases" SET "status" = 'revoked'
+  WHERE "device_id" = OLD."id" AND "status" IN ('issued', 'acknowledged');
+  UPDATE "cowork_device_proof_challenges" SET "consumed_at" = now()
+  WHERE "device_id" = OLD."id" AND "consumed_at" IS NULL;
+  UPDATE "cowork_device_proof_sessions" SET "consumed_at" = now()
+  WHERE "device_id" = OLD."id" AND "consumed_at" IS NULL;
+  INSERT INTO "cowork_device_teardown_tombstones" ("id", "device_id", "user_id", "kill_epoch", "reason", "revoked_lease_ids")
+  VALUES (gen_random_uuid()::text, OLD."id", OLD."user_id", OLD."kill_epoch" + 1, 'cascade_delete', revoked_lease_ids);
+  RETURN OLD;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION "cowork_general_bump_device_epoch"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF OLD."pep_public_key" IS DISTINCT FROM NEW."pep_public_key"
+     OR OLD."pep_key_id" IS DISTINCT FROM NEW."pep_key_id"
+     OR (OLD."status" = 'active' AND NEW."status" <> 'active') THEN
+    NEW."kill_epoch" := GREATEST(NEW."kill_epoch", OLD."kill_epoch" + 1);
+    UPDATE "cowork_general_calls" SET "requires_fresh_authority" = true, "fresh_authority" = NULL, "updated_at" = now()
+    WHERE "target_device_id" = OLD."id" AND "state" = 'DÉPOSÉ-EN-ATTENTE';
+    UPDATE "cowork_device_leases" SET "status" = 'revoked'
+    WHERE "device_id" = OLD."id" AND "status" IN ('issued', 'acknowledged');
+    UPDATE "cowork_device_proof_challenges" SET "consumed_at" = now()
+    WHERE "device_id" = OLD."id" AND "consumed_at" IS NULL;
+    UPDATE "cowork_device_proof_sessions" SET "consumed_at" = now()
+    WHERE "device_id" = OLD."id" AND "consumed_at" IS NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER "cowork_general_call_before_delete_revoke"
+BEFORE DELETE ON "cowork_general_calls" FOR EACH ROW EXECUTE FUNCTION "cowork_general_revoke_call_before_delete"();
+CREATE TRIGGER "cowork_general_device_before_delete_revoke"
+BEFORE DELETE ON "cowork_devices" FOR EACH ROW EXECUTE FUNCTION "cowork_general_revoke_device_before_delete"();
+CREATE TRIGGER "cowork_general_device_before_authority_change"
+BEFORE UPDATE OF "pep_public_key", "pep_key_id", "status" ON "cowork_devices" FOR EACH ROW EXECUTE FUNCTION "cowork_general_bump_device_epoch"();

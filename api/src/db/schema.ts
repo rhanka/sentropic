@@ -268,10 +268,10 @@ export const coworkDeviceLeases = pgTable('cowork_device_leases', {
 // descriptor material and opaque IDs/digests; no model text or screen content.
 export const coworkGeneralCalls = pgTable('cowork_general_calls', {
   id: text('id').primaryKey(),
-  principalId: text('principal_id').notNull().references(() => users.id),
+  principalId: text('principal_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   tenantId: text('tenant_id').notNull(),
-  workspaceId: text('workspace_id').notNull().references(() => workspaces.id),
-  targetDeviceId: text('target_device_id').notNull().references(() => coworkDevices.id),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+  targetDeviceId: text('target_device_id').notNull().references(() => coworkDevices.id, { onDelete: 'cascade' }),
   invocationId: text('invocation_id').notNull(),
   toolCallId: text('tool_call_id').notNull(),
   descriptorCiphertext: text('descriptor_ciphertext').notNull(),
@@ -302,9 +302,10 @@ export const coworkGeneralCalls = pgTable('cowork_general_calls', {
 export const coworkDeviceTeardownTombstones = pgTable('cowork_device_teardown_tombstones', {
   id: text('id').primaryKey(),
   deviceId: text('device_id').notNull(),
-  userId: text('user_id').notNull().references(() => users.id),
+  userId: text('user_id').notNull(),
   killEpoch: integer('kill_epoch').notNull(),
   reason: text('reason').notNull(),
+  revokedLeaseIds: jsonb('revoked_lease_ids').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
 });
 
