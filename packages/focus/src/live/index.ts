@@ -147,6 +147,7 @@ const copyImmutableProof = (
 
   const copy: Record<string, ImmutableProof> = Object.create(null) as Record<string, ImmutableProof>;
   for (const key of structuralSnapshot.ownKeys) {
+    if (typeof key !== "string") return undefined;
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor === undefined || !descriptor.enumerable) return undefined;
     const item = copyImmutableProof((value as Record<string, unknown>)[key], nextAncestors);
