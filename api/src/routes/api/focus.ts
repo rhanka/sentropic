@@ -81,7 +81,7 @@ focusRouter.post('/owner-signatures', zValidator('json', ownerSignatureSchema), 
           await requireWorkspaceAccess(user.userId, target.workspace);
           const tenant = await resolveTenant({ workspaceId: target.workspace });
           if (!('tenantId' in tenant)) return false;
-          return isTenantAdmin(user.userId, tenant.tenantId);
+          return isTenantAdmin(user.userId, tenant.tenantId, user.role);
         } catch {
           return false;
         }
