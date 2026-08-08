@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { generateKeyPairSync } from 'node:crypto';
 
 import { db } from '../../src/db/client';
 import { coworkDeviceTeardownTombstones, coworkDevices, coworkGeneralCalls } from '../../src/db/schema';
 import { depositGeneralCall, markGeneralCallNotDone, requireFreshAuthorityOnWake, revokeCoworkDeviceBeforeCascade } from '../../src/services/cowork/general-call-service';
 import { consumeGeneralSseProofSession, establishGeneralSseProofSession, mintGeneralDeviceProofChallenge, verifyGeneralDeviceProof } from '../../src/services/cowork/general-device-proof';
-import { devicePepProofPayload, type DevicePepProof } from '../../src/services/cowork/lease-v2';
+import { acknowledgeGeneralLeaseV2, consumeGeneralLease, issueGeneralLeaseV2, type FreshGeneralAuthority } from '../../src/services/cowork/general-lease-service';
+import { canonicalJson, devicePepProofPayload, leaseV2Digest, type DevicePepProof } from '../../src/services/cowork/lease-v2';
 import { cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
-import { seedCoworkDevice } from '../utils/cowork-device';
+import { createTestCoworkKey, seedCoworkDevice } from '../utils/cowork-device';
 
 describe('Cowork General durable protocol', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
@@ -94,4 +96,51 @@ describe('Cowork General durable protocol', () => {
     expect((await consumeGeneralSseProofSession({ userId: user.id, deviceId: device.deviceId, sessionId: session!.sessionId })).ok).toBe(true);
     expect((await consumeGeneralSseProofSession({ userId: user.id, deviceId: device.deviceId, sessionId: session!.sessionId })).ok).toBe(false);
   });
+
+  it('binds each minted lease to one durable call and the current device epoch', async () => {
+    const device = await seedCoworkDevice({ userId: user.id, presence: 'active', general: true });
+    const first = await deposit(device.deviceId, 'lease-call-a');
+    const second = await deposit(device.deviceId, 'lease-call-b');
+    const serverPair = generateKeyPairSync('ed25519');
+    const publicJwk = serverPair.publicKey.export({ format: 'jwk' }) as JsonWebKey;
+    const keys = {
+      getActiveKey: async () => ({ kid: 'lease-kid', privateKey: serverPair.privateKey, alg: 'EdDSA', crv: 'Ed25519' }),
+      findKeyByKid: async (kid: string) => kid === 'lease-kid' ? ({ kid, publicJwk, active: true, alg: 'EdDSA', crv: 'Ed25519', rotatedAt: null }) : null,
+    };
+    const now = new Date();
+    const authority: FreshGeneralAuthority = {
+      authorityEpoch: 1,
+      capability: 'input_action',
+      actionKind: 'click',
+      actionBudget: 1,
+      policyVersion: 'policy-test-1',
+      attestationProfileId: 'profile-test-1',
+      confirmationReceiptId: 'receipt-test-1',
+      issuedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 45_000).toISOString(),
+    };
+    const signed = await issueGeneralLeaseV2({ userId: user.id, durableCallRef: first!.durableCallRef, authority, keys, now });
+    expect(signed).not.toBeNull();
+    const unsignedAck = {
+      version: 2 as const,
+      leaseId: signed!.envelope.leaseId,
+      leaseDigest: leaseV2Digest(signed!.envelope),
+      deviceId: device.deviceId,
+      pepKeyId: device.pepKeyId!,
+      surfaceEpoch: 1,
+      killEpoch: signed!.envelope.killEpoch,
+    };
+    const ack = {
+      ...unsignedAck,
+      signature: device.pepKey!.signPayload(`cowork-lease-ack-v2:${canonicalJson(unsignedAck)}`),
+    };
+    expect(await acknowledgeGeneralLeaseV2({ userId: user.id, deviceId: device.deviceId, leaseId: signed!.envelope.leaseId, ack, keys, now })).toBe(true);
+    expect(await consumeGeneralLease({ userId: user.id, deviceId: device.deviceId, leaseId: signed!.envelope.leaseId, durableCallRef: second!.durableCallRef, keys, now })).toBe(false);
+    const rotatedPep = createTestCoworkKey();
+    await db.update(coworkDevices).set({ pepKeyId: `pep:${rotatedPep.deviceId}`, pepPublicKey: rotatedPep.publicKey }).where(eq(coworkDevices.id, device.deviceId));
+    const [rotatedDevice] = await db.select().from(coworkDevices).where(eq(coworkDevices.id, device.deviceId));
+    expect(rotatedDevice?.killEpoch).toBeGreaterThan(signed!.envelope.killEpoch);
+    expect(await consumeGeneralLease({ userId: user.id, deviceId: device.deviceId, leaseId: signed!.envelope.leaseId, durableCallRef: first!.durableCallRef, keys, now })).toBe(false);
+  });
+
 });

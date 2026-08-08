@@ -34,12 +34,32 @@ export async function depositGeneralCall(input: {
 export async function requireFreshAuthorityOnWake(input: {
   durableCallRef: string; principalId: string; targetDeviceId: string;
 }): Promise<boolean> {
-  const [call] = await db.update(coworkGeneralCalls).set({ requiresFreshAuthority: true, updatedAt: new Date() }).where(and(
-    eq(coworkGeneralCalls.id, input.durableCallRef), eq(coworkGeneralCalls.principalId, input.principalId),
-    eq(coworkGeneralCalls.targetDeviceId, input.targetDeviceId),
-    eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'),
-  )).returning();
-  return Boolean(call);
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const [call] = await tx.select().from(coworkGeneralCalls).where(and(
+      eq(coworkGeneralCalls.id, input.durableCallRef),
+      eq(coworkGeneralCalls.principalId, input.principalId),
+      eq(coworkGeneralCalls.targetDeviceId, input.targetDeviceId),
+      eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'),
+    )).for('update');
+    const [device] = await tx.select().from(coworkDevices).where(and(
+      eq(coworkDevices.id, input.targetDeviceId),
+      eq(coworkDevices.userId, input.principalId),
+      eq(coworkDevices.status, 'active'),
+    )).for('update');
+    if (!call || !device) return false;
+    const [updated] = await tx.update(coworkGeneralCalls).set({
+      requiresFreshAuthority: true,
+      freshAuthority: null,
+      updatedAt: now,
+    }).where(and(eq(coworkGeneralCalls.id, call.id), eq(coworkGeneralCalls.state, 'DÉPOSÉ-EN-ATTENTE'))).returning();
+    if (!updated) return false;
+    await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
+      eq(coworkDeviceLeases.turnRef, call.id),
+      inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
+    ));
+    return true;
+  });
 }
 
 /** This foundation has no FAIT writer; all terminal resolution is honest PAS-FAIT. */

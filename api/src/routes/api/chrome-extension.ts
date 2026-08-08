@@ -303,7 +303,7 @@ chromeExtensionRouter.post('/cowork-general/leases/:leaseId/ack', async (c) => {
     },
   });
   if (!proof.ok) return c.json({ message: 'General device proof denied.' }, 403);
-  return (await acknowledgeGeneralLeaseV2({ userId: c.get('user').userId, deviceId: parsed.data.device_id, leaseId: c.req.param('leaseId'), ack: parsed.data.ack, pepPublicKey: proof.device.pepPublicKey }))
+  return (await acknowledgeGeneralLeaseV2({ userId: c.get('user').userId, deviceId: parsed.data.device_id, leaseId: c.req.param('leaseId'), ack: parsed.data.ack }))
     ? c.json({ ok: true }) : c.json({ message: 'General lease acknowledgement denied.' }, 409);
 });
 
