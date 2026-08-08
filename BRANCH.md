@@ -180,6 +180,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Fix 6 high: strict literal printable text schema and Windows primitive coverage.
   - [x] Fix 7 high: bounded integrity-bound capture result persisted before FAIT and returned to the broker.
   - [x] Cycle 3 F-02: amend the branch-local lease migration and Drizzle partial idempotency index to admit `executing`; real Postgres migration/API validation remains pending a runnable stack.
+  - [x] Cycle 3 SOL-03: deny a mismatched invocation without mutating an `executing` owner; only device-lock-serialized issued/acknowledged rows remain pre-start-revocable.
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**
   - [ ] Run all Lot 1–4 typecheck/lint/tests plus `make test-api ENV=test-cowork-connector`; document any accepted AI flaky signature.
