@@ -5,11 +5,11 @@ A **focused-session document runtime** — the read-only **FocusSnapshot** rende
 to orient/steer it (decide being one modality among orient / amend / comment). See
 `spec/SPEC_VOL_FOCUS.md`.
 
-This package is **private** (`"private": true`) and **app-local-first**: it is not yet published.
-It is extracted to `@sentropic/focus` on npm only once a real external consumer wires it
-(repo real-consumption rule).
+This is a **public published package** (`@sentropic/focus`). Its public API is intentionally
+small and hosts must provide their own authentication, relayer-provenance, authorization, and
+durable Track adapters for live use.
 
-## Scope — Focus-M1 L1 (`feat/focus-render-core`)
+## Scope — Focus-M1 L2 + live signature driver (`feat/focus-live-signature-gate`)
 
 - The **concrete `DecisionDossierDocument` model** — the decision-dossier is the *first* focus
   type, not a generic Focus platform. Node families: `prose`, `question` (q + recommended
@@ -18,11 +18,17 @@ It is extracted to `@sentropic/focus` on npm only once a real external consumer 
   `targetRef`.
 - The **three deterministic renderers**: `renderTerminal`, `renderMd`, `renderHtml` — **HTML is
   mandatory**. Each takes a document and returns a `string`.
-- A local **`DecisionDossierView`-shaped fixture type** + `toDecisionDossierDocument(view)` mapper.
-  L2 (`feat/focus-track-read`) rebinds the same mapper to the real `@sentropic/track/read`.
+- The **`@sentropic/focus/track` binding** maps the real `@sentropic/track/read`
+  `DecisionDossierView` + amendment trace with `toDecisionDossierDocument(view)`.
+- The fail-closed **`FocusLiveSession` owner-signature driver** accepts only an authenticated,
+  authorized own-principal signature for an existing Track-native decision. A co-specified
+  production Track adapter with a durable canonical-owner/workspace/decision unique
+  constraint or upsert and transactional read-back is required before any live use; the
+  in-memory adapter is test-only and cannot establish exactly-once durability.
 
-This is the **read-only FocusSnapshot** split: affordances render as **disabled metadata only**
-(no live commands). Live drivers (`FocusLiveSession`) are deferred to later lots.
+The **read-only FocusSnapshot** split remains: affordances render as **disabled metadata only**
+(no live commands). The live driver requires host-injected authentication, relayer provenance,
+authorization, and the durable Track adapter described above.
 
 ## Injection + sanitize hooks (no bundled markdown/diagram engine)
 
@@ -38,14 +44,10 @@ in HTML, indented text in the terminal.
 ## Usage
 
 ```ts
-import {
-  toDecisionDossierDocument,
-  renderTerminal,
-  renderMd,
-  renderHtml,
-} from "@sentropic/focus";
+import { renderTerminal, renderMd, renderHtml } from "@sentropic/focus";
+import { toDecisionDossierDocument } from "@sentropic/focus/track";
 
-const doc = toDecisionDossierDocument(view); // view = DecisionDossierView fixture (L1) / track read (L2)
+const doc = toDecisionDossierDocument(view); // view = real Track DecisionDossierView
 
 const text = renderTerminal(doc);
 const md = renderMd(doc);
