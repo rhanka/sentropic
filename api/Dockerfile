@@ -66,8 +66,10 @@ COPY packages/connector-host/package.json ./packages/connector-host/package.json
 COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
 RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
     else npm install --workspaces --include-workspace-root; fi
-# Security: Audit production dependencies for HIGH/CRITICAL vulnerabilities
-RUN npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root
+# Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
+# (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
+COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
+RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
 COPY . .
 RUN npm --workspace @sentropic/oauth-verify run build
 RUN npm --workspace @sentropic/auth-hono run build
@@ -126,7 +128,8 @@ FROM base AS production
 WORKDIR /workspace
 ENV NODE_ENV=production
 RUN npm prune --omit=dev --workspaces --include-workspace-root
-RUN npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root
+# Exception-aware gate (inherits .security/ from the base stage's COPY . .).
+RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);
