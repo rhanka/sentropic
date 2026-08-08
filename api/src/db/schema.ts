@@ -1,4 +1,4 @@
-import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Workspace constants (keep stable IDs for migrations/backfills)
@@ -926,6 +926,30 @@ export const objectLocks = pgTable('object_locks', {
 }));
 
 export type ObjectLockRow = typeof objectLocks.$inferSelect;
+
+export const trackOwnerSignatures = pgTable('track_owner_signatures', {
+  id: text('id').primaryKey(),
+  ownerIssuer: text('owner_issuer').notNull(),
+  ownerSubject: text('owner_subject').notNull(),
+  workspaceId: text('workspace_id').notNull(),
+  decisionId: text('decision_id').notNull(),
+  contractVersion: text('contract_version').notNull(),
+  attesterPrincipalId: text('attester_principal_id').notNull(),
+  attesterAuthenticatedAt: text('attester_authenticated_at').notNull(),
+  relayerTransport: text('relayer_transport').notNull(),
+  relayerId: text('relayer_id').notNull(),
+  relayerIssuer: text('relayer_issuer').notNull(),
+  relayerSubject: text('relayer_subject').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  canonicalOwnerWorkspaceDecisionUnique: unique('track_owner_signatures_owner_workspace_decision_unique').on(
+    table.ownerIssuer,
+    table.ownerSubject,
+    table.workspaceId,
+    table.decisionId,
+  ),
+}));
 
 // Lot 4: Comments (flat conversations, workspace-scoped)
 export const comments = pgTable('comments', {
