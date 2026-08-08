@@ -1,7 +1,7 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 
 import { db } from '../../src/db/client';
-import { coworkDevicePresence, coworkDevices } from '../../src/db/schema';
+import { coworkDevicePresence, coworkDeviceProvisioning, coworkDevices } from '../../src/db/schema';
 import { fingerprintDevicePublicKey } from '../../src/services/cowork/device-identity';
 import type { CoworkDeviceCapabilities } from '../../src/services/cowork/device-capabilities';
 
@@ -44,6 +44,13 @@ export async function seedCoworkDevice(input: {
     status,
     revokedAt: status === 'revoked' ? new Date() : null,
   });
+  await db.insert(coworkDeviceProvisioning).values({
+    publicKey: key.publicKey,
+    kioskSurface: 'notepad',
+    capabilityIds: ['screen_capture', 'input_action'],
+    provisionedBy: input.userId,
+    status: 'active',
+  }).onConflictDoNothing();
   if (input.presence && input.presence !== 'none') {
     const now = new Date();
     await db.insert(coworkDevicePresence).values({
