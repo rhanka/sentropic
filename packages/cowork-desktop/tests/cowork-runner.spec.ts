@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createMockCapabilityProvider } from '../src/capability/index.js';
+import { ForegroundSurfaceGuard } from '../src/capability/foreground-surface.js';
 import {
     ConsentManager,
     createMemoryConsentStore,
@@ -7,6 +8,11 @@ import {
 } from '../src/consent/index.js';
 import { CoworkRunner } from '../src/runner/index.js';
 import type { DesktopToolContext } from '../src/tools/index.js';
+
+const guardedContext = (provider: ReturnType<typeof createMockCapabilityProvider>): DesktopToolContext => ({
+    provider,
+    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => ({ hwnd: '1', processId: 1, executable: 'notepad.exe', title: 'Notepad' }) }),
+});
 
 const allowAll = () =>
     new ConsentManager({
@@ -32,7 +38,7 @@ describe('CoworkRunner.handleStatusPayload', () => {
         const post = vi.fn().mockResolvedValue({ resumed: true });
         const runner = new CoworkRunner({
             consent: allowInputOnce(),
-            context: { provider } as DesktopToolContext,
+            context: guardedContext(provider),
             postToolResults: post,
         });
 
@@ -62,7 +68,7 @@ describe('CoworkRunner.handleStatusPayload', () => {
         const post = vi.fn().mockResolvedValue({ resumed: true });
         const runner = new CoworkRunner({
             consent: new ConsentManager({ store: createMemoryConsentStore() }),
-            context: { provider } as DesktopToolContext,
+            context: guardedContext(provider),
             postToolResults: post,
         });
 
@@ -82,7 +88,7 @@ describe('CoworkRunner.handleStatusPayload', () => {
         const post = vi.fn();
         const runner = new CoworkRunner({
             consent: allowAll(),
-            context: { provider: createMockCapabilityProvider() } as DesktopToolContext,
+            context: guardedContext(createMockCapabilityProvider()),
             postToolResults: post,
         });
         const out = await runner.handleStatusPayload('m', 's', 0, { state: 'streaming' });
@@ -94,7 +100,7 @@ describe('CoworkRunner.handleStatusPayload', () => {
         const post = vi.fn();
         const runner = new CoworkRunner({
             consent: allowAll(),
-            context: { provider: createMockCapabilityProvider() } as DesktopToolContext,
+            context: guardedContext(createMockCapabilityProvider()),
             postToolResults: post,
         });
         const out = await runner.handleStatusPayload(

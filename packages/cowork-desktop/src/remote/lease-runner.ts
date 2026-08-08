@@ -4,6 +4,7 @@ import type { DeviceIdentitySigner, FetchLike } from '@sentropic/cowork-bridge/a
 import type { ConsentManager } from '../consent/index.js';
 import { runDesktopToolCall, type DesktopToolContext } from '../tools/index.js';
 import { remoteActionDigest, remotePayloadDigest } from '../tools/action-digest.js';
+import type { ForegroundSurface } from '../capability/index.js';
 
 type Jwk = { kid?: string; kty: string; crv?: string; x?: string };
 type Envelope = { kid: string; mac: string };
@@ -30,6 +31,14 @@ const isEnvelope = (value: unknown): value is Envelope => Boolean(
 
 const isCapability = (value: unknown): value is 'screen_capture' | 'input_action' =>
     value === 'screen_capture' || value === 'input_action';
+
+const consentDetails = (capability: 'screen_capture' | 'input_action', action: Record<string, unknown>, surface: ForegroundSurface) => {
+    const foreground = { executable: surface.executable, windowTitle: surface.title, hwnd: surface.hwnd };
+    if (capability === 'screen_capture') return { foreground, capture: { screen: 'primary full display' } };
+    if (action.action === 'click') return { foreground, coordinates: { x: action.x, y: action.y, button: action.button ?? 'left' } };
+    if (action.action === 'scroll') return { foreground, scroll: { dx: action.dx ?? 0, dy: action.dy ?? 0 } };
+    return { foreground, typedText: typeof action.text === 'string' ? action.text : '' };
+};
 
 export interface RemoteLeaseRunnerDeps {
     fetch: FetchLike;
@@ -104,7 +113,7 @@ export class RemoteLeaseRunner {
         this.stopped = true;
         for (const [, execution] of active) {
             execution.cancelled = true;
-            execution.abort.abort();
+            execution.abort?.abort();
         }
         const token = await this.deps.getAccessToken();
         if (!token) return;
@@ -125,13 +134,18 @@ export class RemoteLeaseRunner {
             const token = await this.deps.getAccessToken();
             const action = lease.scope?.action;
             const args = action && typeof action === 'object' && !Array.isArray(action) ? action as Record<string, unknown> : {};
+            const surface = await this.acquireSurface();
+            if (!surface) {
+                if (token) await this.cancelBeforeStart(token, lease, 'surface_guard_failed');
+                return;
+            }
             const receipt = await this.deps.consent.requestRemoteAllowOnce({
                 toolName: capability,
                 leaseId: lease.leaseId,
                 actionDigest: remoteActionDigest(args),
-                details: args,
+                details: consentDetails(capability, args, surface),
             });
-            if (!token || !receipt || !this.canEnter(execution, lease)) {
+            if (!token || !receipt || !this.canEnter(execution, lease) || !(await this.recheckSurface(surface))) {
                 if (token) await this.cancelBeforeStart(token, lease, execution.cancelled || this.stopped ? 'local_stop' : 'local_not_done');
                 return;
             }
@@ -160,7 +174,7 @@ export class RemoteLeaseRunner {
                 }
             const result = await runDesktopToolCall(
                 { toolCallId: lease.leaseId, name: capability, arguments: args },
-                { consent: this.deps.consent, context: this.deps.context, remoteReceipt: receipt },
+                { consent: this.deps.consent, context: { ...this.deps.context, surfaceToken: surface }, remoteReceipt: receipt },
             );
             const resultPayload = result.error ? undefined : JSON.parse(result.output) as Record<string, unknown>;
             await this.complete(token, lease, result.error ? 'PAS-FAIT' : 'FAIT', resultPayload);
@@ -192,6 +206,14 @@ export class RemoteLeaseRunner {
         return !this.stopped && !execution.cancelled && !execution.abort.signal.aborted && this.isLocallyValid(lease);
     }
 
+    private async acquireSurface(): Promise<ForegroundSurface | null> {
+        try { return await this.deps.context.surfaceGuard?.acquire() ?? null; } catch { return null; }
+    }
+
+    private async recheckSurface(surface: ForegroundSurface): Promise<boolean> {
+        try { await this.deps.context.surfaceGuard?.recheck(surface); return Boolean(this.deps.context.surfaceGuard); } catch { return false; }
+    }
+
     /** One provider entry at a time; a queued entry wakes on Stop and fails closed. */
     private async enterExecution(execution: { cancelled: boolean; abort: AbortController }): Promise<(() => void) | null> {
         let release!: () => void;
@@ -203,7 +225,7 @@ export class RemoteLeaseRunner {
         }
         await Promise.race([
             previous,
-            new Promise<void>((resolve) => execution.abort.signal.addEventListener('abort', resolve, { once: true })),
+            new Promise<void>((resolve) => execution.abort.signal.addEventListener('abort', () => resolve(), { once: true })),
         ]);
         if (this.stopped || execution.cancelled || execution.abort.signal.aborted) {
             release();

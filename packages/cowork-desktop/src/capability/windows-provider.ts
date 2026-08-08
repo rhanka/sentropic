@@ -3,6 +3,7 @@ import {
     type CaptureOptions,
     type DesktopCapabilityProvider,
     type MouseButton,
+    type NativeActuationGuard,
     type ScreenCapture,
 } from './types.js';
 import { assertLiteralText } from '../tools/literal-text.js';
@@ -114,7 +115,7 @@ export const createWindowsCapabilityProvider = (
     return {
         name: 'windows',
 
-        async captureScreen(options?: CaptureOptions): Promise<ScreenCapture> {
+        async captureScreen(options: CaptureOptions | undefined, guard: NativeActuationGuard): Promise<ScreenCapture> {
             if (options?.screen !== undefined && options.screen !== 0 || options?.region) {
                 throw new CapabilityUnavailableError('screen_capture', 'only the default full primary display is available in this MVP.');
             }
@@ -122,6 +123,7 @@ export const createWindowsCapabilityProvider = (
                 'screenshot-desktop',
                 'screen_capture',
             );
+            await guard.recheckAfterNativeAwait();
             const screenshot = (mod.default ?? mod) as ScreenshotModule;
             const buffer = await screenshot({ format: 'png', screen: options?.screen });
             const { width, height } = pngDimensions(buffer);
@@ -133,10 +135,13 @@ export const createWindowsCapabilityProvider = (
             };
         },
 
-        async mouseClick(x: number, y: number, button: MouseButton = 'left'): Promise<void> {
+        async mouseClick(x: number, y: number, button: MouseButton | undefined, guard: NativeActuationGuard): Promise<void> {
             const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            await guard.recheckAfterNativeAwait();
             await nut.mouse.setPosition(new nut.Point(x, y));
-            const buttonName = button === 'left' ? 'LEFT' : button === 'right' ? 'RIGHT' : 'MIDDLE';
+            await guard.recheckAfterNativeAwait();
+            const selectedButton = button ?? 'left';
+            const buttonName = selectedButton === 'left' ? 'LEFT' : selectedButton === 'right' ? 'RIGHT' : 'MIDDLE';
             const nutButton = nut.Button[buttonName];
             // nut.js exposes click helpers off the default export in some builds;
             // fall back to press/release semantics through the mouse facade.
@@ -145,7 +150,7 @@ export const createWindowsCapabilityProvider = (
             };
             if (typeof mouseFacade.click === 'function') {
                 await mouseFacade.click(nutButton);
-            } else if (typeof nut.leftClick === 'function' && button === 'left') {
+            } else if (typeof nut.leftClick === 'function' && selectedButton === 'left') {
                 await nut.leftClick();
             } else {
                 throw new CapabilityUnavailableError(
@@ -155,17 +160,19 @@ export const createWindowsCapabilityProvider = (
             }
         },
 
-        async type(text: string): Promise<void> {
+        async type(text: string, guard: NativeActuationGuard): Promise<void> {
             assertLiteralText(text);
             const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            await guard.recheckAfterNativeAwait();
             // This is the only literal-text primitive. Do not add clipboard,
             // IME, pressKey, or key-combo fallbacks: those turn text into
             // submission/navigation controls on a kiosk surface.
             await nut.keyboard.type(text);
         },
 
-        async scroll(dx: number, dy: number): Promise<void> {
+        async scroll(dx: number, dy: number, guard: NativeActuationGuard): Promise<void> {
             const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            await guard.recheckAfterNativeAwait();
             const mouseFacade = nut.mouse as unknown as {
                 scrollDown?: (n: number) => Promise<unknown>;
                 scrollUp?: (n: number) => Promise<unknown>;
@@ -178,8 +185,9 @@ export const createWindowsCapabilityProvider = (
             else if (dx < 0 && mouseFacade.scrollLeft) await mouseFacade.scrollLeft(-dx);
         },
 
-        async key(combo: string): Promise<void> {
+        async key(combo: string, guard: NativeActuationGuard): Promise<void> {
             const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
+            await guard.recheckAfterNativeAwait();
             const keys = resolveKeyCombo(combo, nut.Key);
             await nut.keyboard.pressKey(...keys);
             await nut.keyboard.releaseKey(...keys.slice().reverse());

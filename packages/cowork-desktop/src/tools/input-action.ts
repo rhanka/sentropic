@@ -59,6 +59,13 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
 ) => {
     const action = String(args.action ?? '');
     const provider = context.provider;
+    const nativeGuard = async () => {
+        const surfaceGuard = context.surfaceGuard;
+        if (!surfaceGuard) throw new Error('input_action requires a measured foreground-surface guard.');
+        const surface = context.surfaceToken ?? await surfaceGuard.acquire();
+        await surfaceGuard.recheck(surface);
+        return surfaceGuard.nativeGuard(surface);
+    };
 
     switch (action) {
         case 'click': {
@@ -67,13 +74,13 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
             if (x === null || y === null) {
                 throw new Error('input_action click requires numeric x and y.');
             }
-            await provider.mouseClick(x, y, asMouseButton(args.button));
+            await provider.mouseClick(x, y, asMouseButton(args.button), await nativeGuard());
             return { ok: true, action: 'click', x, y };
         }
         case 'type': {
             const text = args.text;
             assertLiteralText(text);
-            await provider.type(text);
+            await provider.type(text, await nativeGuard());
             return { ok: true, action: 'type', length: text.length };
         }
         case 'scroll': {
@@ -82,7 +89,7 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
             if (dx === 0 && dy === 0) {
                 throw new Error('input_action scroll requires a non-zero dx or dy.');
             }
-            await provider.scroll(dx, dy);
+            await provider.scroll(dx, dy, await nativeGuard());
             return { ok: true, action: 'scroll', dx, dy };
         }
         default:

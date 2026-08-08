@@ -1,5 +1,5 @@
 import type { ToolExecutionContext } from '@sentropic/cowork-bridge/tools';
-import type { DesktopCapabilityProvider } from '../capability/index.js';
+import type { DesktopCapabilityProvider, ForegroundSurface, ForegroundSurfaceGuard } from '../capability/index.js';
 
 /**
  * Desktop tool execution context. Extends the portable bridge base with the
@@ -8,6 +8,9 @@ import type { DesktopCapabilityProvider } from '../capability/index.js';
  */
 export interface DesktopToolContext extends ToolExecutionContext {
     provider: DesktopCapabilityProvider;
+    /** Required for every real input/capture path; missing measurement denies execution. */
+    surfaceGuard?: ForegroundSurfaceGuard;
+    surfaceToken?: ForegroundSurface;
 }
 
 /** Tool name constants — mirror the `localToolDefinitions` advertised to the model. */

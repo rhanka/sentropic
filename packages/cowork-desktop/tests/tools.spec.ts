@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMockCapabilityProvider } from '../src/capability/index.js';
+import { ForegroundSurfaceGuard } from '../src/capability/foreground-surface.js';
 import {
     ConsentManager,
     createMemoryConsentStore,
@@ -24,6 +25,11 @@ const allowInputOnce = () =>
         prompt: async () => 'allow_once',
     });
 
+const toolContext = (provider: ReturnType<typeof createMockCapabilityProvider>): DesktopToolContext => ({
+    provider,
+    surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => ({ hwnd: '1', processId: 1, executable: 'C:\\Windows\\notepad.exe', title: 'Untitled - Notepad' }) }),
+});
+
 describe('tool definitions', () => {
     it('advertises exactly screen_capture and input_action', () => {
         expect(desktopToolDefinitions.map((d) => d.name).sort()).toEqual([
@@ -40,7 +46,7 @@ describe('screen_capture executor (eyes)', () => {
         });
         const result = (await screenCaptureExecutor(
             { screen: 0 },
-            { provider } as DesktopToolContext,
+            toolContext(provider),
         )) as { ok: boolean; image: string; width: number };
 
         expect(result.ok).toBe(true);
@@ -64,18 +70,36 @@ describe('screen_capture executor (eyes)', () => {
 describe('input_action executor (hands)', () => {
     it('dispatches click to provider.mouseClick with the button', async () => {
         const provider = createMockCapabilityProvider();
-        await inputActionExecutor({ action: 'click', x: 10, y: 20, button: 'right' }, { provider } as DesktopToolContext);
+        await inputActionExecutor({ action: 'click', x: 10, y: 20, button: 'right' }, toolContext(provider));
         expect(provider.calls).toEqual([{ kind: 'mouseClick', x: 10, y: 20, button: 'right' }]);
     });
 
     it('dispatches only type and scroll', async () => {
         const provider = createMockCapabilityProvider();
-        await inputActionExecutor({ action: 'type', text: 'hello' }, { provider } as DesktopToolContext);
-        await inputActionExecutor({ action: 'scroll', dx: 0, dy: 120 }, { provider } as DesktopToolContext);
+        await inputActionExecutor({ action: 'type', text: 'hello' }, toolContext(provider));
+        await inputActionExecutor({ action: 'scroll', dx: 0, dy: 120 }, toolContext(provider));
         expect(provider.calls).toEqual([
             { kind: 'type', text: 'hello' },
             { kind: 'scroll', dx: 0, dy: 120 },
         ]);
+    });
+
+    it('fails closed without a measurement or when the surface drifts during provider entry', async () => {
+        const absent = createMockCapabilityProvider();
+        await expect(inputActionExecutor({ action: 'click', x: 1, y: 2 }, { provider: absent } as DesktopToolContext))
+            .rejects.toThrow(/measured foreground-surface guard/);
+        expect(absent.calls).toEqual([]);
+
+        let measurements = 0;
+        const drifted = createMockCapabilityProvider();
+        const context: DesktopToolContext = {
+            provider: drifted,
+            surfaceGuard: new ForegroundSurfaceGuard({ measure: async () => (++measurements < 3
+                ? { hwnd: '1', processId: 1, executable: 'notepad.exe', title: 'Notepad' }
+                : { hwnd: '2', processId: 2, executable: 'powershell.exe', title: 'PowerShell' }) }),
+        };
+        await expect(inputActionExecutor({ action: 'click', x: 1, y: 2 }, context)).rejects.toThrow(/drifted or is unavailable/);
+        expect(drifted.calls).toEqual([]);
     });
 
     it('denies key chords and every control/submission character before the provider', async () => {
@@ -101,7 +125,7 @@ describe('input_action executor (hands)', () => {
 });
 
 describe('runDesktopToolCall — consent gate', () => {
-    const context = (): DesktopToolContext => ({ provider: createMockCapabilityProvider() });
+    const context = (): DesktopToolContext => toolContext(createMockCapabilityProvider());
 
     it('executes when consent allows and returns a ToolResult', async () => {
         const ctx = context();

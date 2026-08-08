@@ -2,6 +2,7 @@ import type {
     CaptureOptions,
     DesktopCapabilityProvider,
     MouseButton,
+    NativeActuationGuard,
     ScreenCapture,
 } from './types.js';
 
@@ -46,20 +47,25 @@ export const createMockCapabilityProvider = (
     return {
         name: 'mock',
         calls,
-        async captureScreen(captureOptions?: CaptureOptions): Promise<ScreenCapture> {
+        async captureScreen(captureOptions: CaptureOptions | undefined, guard: NativeActuationGuard): Promise<ScreenCapture> {
+            await guard.recheckAfterNativeAwait();
             calls.push({ kind: 'captureScreen', options: captureOptions });
             return { ...capture };
         },
-        async mouseClick(x: number, y: number, button: MouseButton = 'left'): Promise<void> {
-            calls.push({ kind: 'mouseClick', x, y, button });
+        async mouseClick(x: number, y: number, button: MouseButton | undefined, guard: NativeActuationGuard): Promise<void> {
+            await guard.recheckAfterNativeAwait();
+            calls.push({ kind: 'mouseClick', x, y, button: button ?? 'left' });
         },
-        async type(text: string): Promise<void> {
+        async type(text: string, guard: NativeActuationGuard): Promise<void> {
+            await guard.recheckAfterNativeAwait();
             calls.push({ kind: 'type', text });
         },
-        async scroll(dx: number, dy: number): Promise<void> {
+        async scroll(dx: number, dy: number, guard: NativeActuationGuard): Promise<void> {
+            await guard.recheckAfterNativeAwait();
             calls.push({ kind: 'scroll', dx, dy });
         },
-        async key(combo: string): Promise<void> {
+        async key(combo: string, guard: NativeActuationGuard): Promise<void> {
+            await guard.recheckAfterNativeAwait();
             calls.push({ kind: 'key', combo });
         },
     };
