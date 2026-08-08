@@ -20,6 +20,15 @@ vi.mock('../../src/services/tenancy/resolve-tenant', () => ({
   resolveTenant: resolveTenantMock,
 }));
 
+const HTTP_RELAYER = Object.freeze({
+  transport: 'http' as const,
+  relayerId: 'sentropic-api',
+  canonicalIdentity: Object.freeze({
+    issuer: 'sentropic-api',
+    subject: 'focus-owner-signature-route',
+  }),
+});
+
 const { focusRouter } = await import('../../src/routes/api/focus');
 const { createApiFocusLiveSession } = await import('../../src/services/focus/live-session');
 
@@ -29,6 +38,7 @@ const authenticatedApp = () => {
     c.set('user', {
       userId: 'authenticated-user',
       sessionId: 'authenticated-session',
+      authenticatedAt: '2026-08-08T12:00:00.000Z',
       role: 'user',
       workspaceId: 'workspace-from-auth-context',
     });
@@ -122,6 +132,71 @@ describe('Focus owner-signature route', () => {
       workspaceId: 'workspace-from-auth-context',
       userId: 'authenticated-user',
     });
+  });
+
+  it('should keep an authenticated session attestation stable for a delayed retry', async () => {
+    let persistedOwner: Awaited<ReturnType<Parameters<typeof createApiFocusLiveSession>[0]['ownPrincipal']['authenticate']>>;
+
+    createApiFocusLiveSessionMock.mockImplementation((dependencies: Parameters<typeof createApiFocusLiveSession>[0]) => ({
+      sign: async (request: OwnerSignatureRequest) => {
+        const owner = await dependencies.ownPrincipal.authenticate(request);
+        if (!owner) return { status: 'not-done' as const, reason: 'owner-authentication-required' as const };
+
+        if (!persistedOwner) {
+          persistedOwner = owner;
+          return {
+            status: 'signed' as const,
+            duplicate: false,
+            persisted: {
+              contractVersion: 'track-owner-signature/1.0.0' as const,
+              target: request.target,
+              attestation: { attester: owner },
+              relayer: HTTP_RELAYER,
+              idempotencyKey: request.idempotencyKey,
+              recordId: 'durable-record-id',
+            },
+          };
+        }
+
+        if (owner.authenticatedAt !== persistedOwner.authenticatedAt) {
+          return { status: 'not-done' as const, reason: 'persisted-attestation-not-confirmed' as const };
+        }
+
+        return {
+          status: 'signed' as const,
+          duplicate: true,
+          persisted: {
+            contractVersion: 'track-owner-signature/1.0.0' as const,
+            target: request.target,
+            attestation: { attester: persistedOwner },
+            relayer: HTTP_RELAYER,
+            idempotencyKey: request.idempotencyKey,
+            recordId: 'durable-record-id',
+          },
+        };
+      },
+    } as FocusLiveSession));
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-08-08T12:00:00.000Z'));
+      const app = authenticatedApp();
+      const request = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision_id: 'decision-42', idempotency_key: 'request-retry-42' }),
+      };
+
+      const first = await app.request('http://localhost/focus/owner-signatures', request);
+      vi.setSystemTime(new Date('2026-08-08T12:01:00.000Z'));
+      const retry = await app.request('http://localhost/focus/owner-signatures', request);
+
+      expect(await first.json()).toMatchObject({ status: 'signed', duplicate: false });
+      expect(retry.status).toBe(200);
+      expect(await retry.json()).toMatchObject({ status: 'signed', duplicate: true });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should reject direct access without an authenticated context', async () => {

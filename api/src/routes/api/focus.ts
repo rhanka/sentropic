@@ -42,7 +42,7 @@ const isCurrentOwner = (candidate: AuthenticatedOwnPrincipal, owner: Authenticat
 
 focusRouter.post('/owner-signatures', zValidator('json', ownerSignatureSchema), async (c) => {
   const user = c.get('user') as AuthUser | undefined;
-  if (!user?.workspaceId) return c.json({ error: 'Authentication required' }, 401);
+  if (!user?.workspaceId || !user.authenticatedAt) return c.json({ error: 'Authentication required' }, 401);
 
   const body = c.req.valid('json');
   const owner: AuthenticatedOwnPrincipal = Object.freeze({
@@ -51,7 +51,7 @@ focusRouter.post('/owner-signatures', zValidator('json', ownerSignatureSchema), 
       issuer: 'sentropic-api-session',
       subject: user.userId,
     }),
-    authenticatedAt: new Date().toISOString(),
+    authenticatedAt: user.authenticatedAt,
   });
 
   const session = createApiFocusLiveSession({
