@@ -86,5 +86,7 @@ focusRouter.post('/owner-signatures', zValidator('json', ownerSignatureSchema), 
     idempotencyKey: body.idempotency_key,
   });
 
-  return c.json(result);
+  if (result.status === 'signed') return c.json(result, result.duplicate ? 200 : 201);
+
+  return c.json(result, result.reason === 'authorization-denied' ? 403 : 409);
 });
