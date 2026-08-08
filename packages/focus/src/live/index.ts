@@ -1,5 +1,6 @@
 import type {
   AuthenticatedOwnPrincipal,
+  CanonicalPrincipalIdentity,
   FocusOwnerSignatureContractVersion,
   FocusLiveSession,
   OwnerSignatureIdentity,
@@ -27,6 +28,14 @@ export interface OwnerSignatureAuthorizer {
 }
 
 /**
+ * Trusted host-owned transport provenance. It is deliberately separate from the caller request:
+ * callers must never assert the identity recorded as the relayer.
+ */
+export interface TrustedRelayerProvenancePort {
+  getRelayerProvenance(): Promise<RelayerProvenance>;
+}
+
+/**
  * The co-specified Track ingest/read-back contract required for a real owner signature.
  * Current `@sentropic/track/ingest@1.2.0` does not implement this shape, so production wiring
  * must supply a future pinned adapter instead of weakening attester/relayer provenance.
@@ -34,9 +43,11 @@ export interface OwnerSignatureAuthorizer {
 export interface TrackOwnerSignaturePort {
   readonly contractVersion: FocusOwnerSignatureContractVersion;
   /**
-   * Atomically create or return the record unique on `{ ownerPrincipalId, workspace, decisionId }`.
-   * Implementations MUST enforce that uniqueness in their durable store (for example with an
-   * upsert or unique constraint); a process-local read-then-insert is not a valid implementation.
+   * Atomically create or return the record unique on canonical
+   * `{ owner issuer+subject, workspace, decisionId }`. Production implementations MUST enforce
+   * that uniqueness with a durable database constraint/upsert and transactionally read the
+   * persisted attestation back. Process-local locking or a check-then-insert sequence is not a
+   * valid implementation: the driver deliberately relies on this port-level contract.
    */
   appendOwnerSignature(input: TrackOwnerSignatureWrite): Promise<TrackOwnerSignatureWriteResult>;
   readOwnerSignature(
@@ -44,14 +55,16 @@ export interface TrackOwnerSignaturePort {
   ): Promise<PersistedOwnerSignature | undefined>;
 }
 
-/** Dependencies owned by the host that knows its own-principal and tenancy policy. */
+/** Dependencies owned by the host that knows its own-principal, transport, and tenancy policy. */
 export interface FocusLiveSessionDependencies {
   readonly ownPrincipal: OwnPrincipalAuthenticator;
+  readonly relayerProvenance: TrustedRelayerProvenancePort;
   readonly authorizer: OwnerSignatureAuthorizer;
   readonly track: TrackOwnerSignaturePort;
 }
 
 type RelayerTransport = RelayerProvenance["transport"];
+type ReceiptStatus = TrackOwnerSignatureWriteResult["status"];
 
 const hasText = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 
@@ -61,49 +74,169 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 const isRelayerTransport = (value: unknown): value is RelayerTransport =>
   value === "cli" || value === "http" || value === "mcp-stdio" || value === "internal";
 
+const isReceiptStatus = (value: unknown): value is ReceiptStatus => value === "written" || value === "duplicate";
+
 const copyText = (value: string): string => `${value}`;
 
-const isRequestWellFormed = (request: OwnerSignatureRequest): boolean =>
-  isObject(request) &&
-  isObject(request.target) &&
-  isObject(request.authentication) &&
-  isObject(request.relayer) &&
-  request.authentication.kind === "own-principal" &&
-  hasText(request.target.workspace) &&
-  hasText(request.target.decisionId) &&
-  hasText(request.idempotencyKey) &&
-  hasText(request.relayer.relayerId) &&
-  isRelayerTransport(request.relayer.transport);
+const normalizeIdentityPart = (value: string): string => value.trim().toLocaleLowerCase("en-US");
 
 interface RequestSignatureScalars {
   readonly workspace: string;
   readonly decisionId: string;
-  readonly relayerTransport: RelayerTransport;
-  readonly relayerId: string;
+  readonly authenticationProof: unknown;
   readonly idempotencyKey: string;
   readonly contractVersion: FocusOwnerSignatureContractVersion;
 }
 
-interface ConfirmedSignatureScalars extends RequestSignatureScalars {
+interface OwnerSignatureScalars {
   readonly ownerPrincipalId: string;
-  readonly authenticatedAt: string;
+  readonly ownerAuthenticatedAt: string;
+  readonly ownerCanonicalIdentity: CanonicalPrincipalIdentity;
+}
+
+interface RelayerSignatureScalars {
+  readonly relayerTransport: RelayerTransport;
+  readonly relayerId: string;
+  readonly relayerCanonicalIdentity: CanonicalPrincipalIdentity;
+}
+
+interface ConfirmedSignatureScalars
+  extends Omit<RequestSignatureScalars, "authenticationProof">,
+    OwnerSignatureScalars,
+    RelayerSignatureScalars {
   readonly recordId: string;
 }
+
+interface ReceiptScalars {
+  readonly status: ReceiptStatus;
+  readonly recordId: string;
+}
+
+const captureCanonicalIdentity = (value: unknown): CanonicalPrincipalIdentity | undefined => {
+  if (!isObject(value)) return undefined;
+
+  const scalarSnapshot = Object.freeze({ issuer: value.issuer, subject: value.subject });
+  if (!hasText(scalarSnapshot.issuer) || !hasText(scalarSnapshot.subject)) return undefined;
+
+  return Object.freeze({
+    issuer: normalizeIdentityPart(scalarSnapshot.issuer),
+    subject: normalizeIdentityPart(scalarSnapshot.subject),
+  });
+};
+
+/** Capture every caller field once, then validate only the frozen scalar snapshot. */
+const captureRequest = (value: unknown): RequestSignatureScalars | undefined => {
+  if (!isObject(value)) return undefined;
+
+  const requestBoundary = Object.freeze({
+    target: value.target,
+    authentication: value.authentication,
+    idempotencyKey: value.idempotencyKey,
+  });
+  if (!isObject(requestBoundary.target) || !isObject(requestBoundary.authentication)) return undefined;
+
+  const scalarSnapshot = Object.freeze({
+    workspace: requestBoundary.target.workspace,
+    decisionId: requestBoundary.target.decisionId,
+    authenticationKind: requestBoundary.authentication.kind,
+    authenticationProof: requestBoundary.authentication.proof,
+    idempotencyKey: requestBoundary.idempotencyKey,
+  });
+  if (
+    scalarSnapshot.authenticationKind !== "own-principal" ||
+    !hasText(scalarSnapshot.workspace) ||
+    !hasText(scalarSnapshot.decisionId) ||
+    !hasText(scalarSnapshot.idempotencyKey)
+  ) {
+    return undefined;
+  }
+
+  return Object.freeze({
+    workspace: copyText(scalarSnapshot.workspace),
+    decisionId: copyText(scalarSnapshot.decisionId),
+    authenticationProof: scalarSnapshot.authenticationProof,
+    idempotencyKey: copyText(scalarSnapshot.idempotencyKey),
+    contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+  });
+};
+
+/** Capture a runtime authentication result once; null, arrays, and malformed shapes are invalid. */
+const captureAuthenticatedOwner = (value: unknown): OwnerSignatureScalars | undefined => {
+  if (!isObject(value)) return undefined;
+
+  const scalarSnapshot = Object.freeze({
+    principalId: value.principalId,
+    authenticatedAt: value.authenticatedAt,
+    canonicalIdentity: value.canonicalIdentity,
+  });
+  if (!hasText(scalarSnapshot.principalId) || !hasText(scalarSnapshot.authenticatedAt)) return undefined;
+
+  const canonicalIdentity = captureCanonicalIdentity(scalarSnapshot.canonicalIdentity);
+  if (canonicalIdentity === undefined) return undefined;
+
+  return Object.freeze({
+    ownerPrincipalId: copyText(scalarSnapshot.principalId),
+    ownerAuthenticatedAt: copyText(scalarSnapshot.authenticatedAt),
+    ownerCanonicalIdentity: canonicalIdentity,
+  });
+};
+
+/** Capture trusted relayer provenance once; callers cannot supply this value. */
+const captureRelayerProvenance = (value: unknown): RelayerSignatureScalars | undefined => {
+  if (!isObject(value)) return undefined;
+
+  const scalarSnapshot = Object.freeze({
+    transport: value.transport,
+    relayerId: value.relayerId,
+    canonicalIdentity: value.canonicalIdentity,
+  });
+  if (!isRelayerTransport(scalarSnapshot.transport) || !hasText(scalarSnapshot.relayerId)) return undefined;
+
+  const canonicalIdentity = captureCanonicalIdentity(scalarSnapshot.canonicalIdentity);
+  if (canonicalIdentity === undefined) return undefined;
+
+  return Object.freeze({
+    relayerTransport: scalarSnapshot.transport,
+    relayerId: copyText(scalarSnapshot.relayerId),
+    relayerCanonicalIdentity: canonicalIdentity,
+  });
+};
+
+/** Capture a port-owned receipt once; no receipt property is ever consulted after this boundary. */
+const captureReceipt = (value: unknown): ReceiptScalars | undefined => {
+  if (!isObject(value)) return undefined;
+
+  const scalarSnapshot = Object.freeze({ status: value.status, recordId: value.recordId });
+  if (!isReceiptStatus(scalarSnapshot.status) || !hasText(scalarSnapshot.recordId)) return undefined;
+
+  return Object.freeze({ status: scalarSnapshot.status, recordId: copyText(scalarSnapshot.recordId) });
+};
 
 const freezeTarget = (snapshot: Pick<RequestSignatureScalars, "workspace" | "decisionId">): TrackNativeDecisionTarget =>
   Object.freeze({ workspace: snapshot.workspace, decisionId: snapshot.decisionId });
 
-const freezeAttester = (
-  snapshot: Pick<ConfirmedSignatureScalars, "ownerPrincipalId" | "authenticatedAt">,
-): AuthenticatedOwnPrincipal =>
-  Object.freeze({ principalId: snapshot.ownerPrincipalId, authenticatedAt: snapshot.authenticatedAt });
+const freezeCanonicalIdentity = (identity: CanonicalPrincipalIdentity): CanonicalPrincipalIdentity =>
+  Object.freeze({ issuer: identity.issuer, subject: identity.subject });
 
-const freezeRelayer = (
-  snapshot: Pick<RequestSignatureScalars, "relayerTransport" | "relayerId">,
-) => Object.freeze({ transport: snapshot.relayerTransport, relayerId: snapshot.relayerId });
+const freezeAttester = (snapshot: OwnerSignatureScalars): AuthenticatedOwnPrincipal =>
+  Object.freeze({
+    principalId: snapshot.ownerPrincipalId,
+    canonicalIdentity: freezeCanonicalIdentity(snapshot.ownerCanonicalIdentity),
+    authenticatedAt: snapshot.ownerAuthenticatedAt,
+  });
+
+const freezeRelayer = (snapshot: RelayerSignatureScalars): RelayerProvenance =>
+  Object.freeze({
+    transport: snapshot.relayerTransport,
+    relayerId: snapshot.relayerId,
+    canonicalIdentity: freezeCanonicalIdentity(snapshot.relayerCanonicalIdentity),
+  });
+
+const freezeAuthentication = (snapshot: RequestSignatureScalars): OwnerSignatureRequest["authentication"] =>
+  Object.freeze({ kind: "own-principal", proof: snapshot.authenticationProof });
 
 const freezePortWrite = (
-  snapshot: RequestSignatureScalars & Pick<ConfirmedSignatureScalars, "ownerPrincipalId" | "authenticatedAt">,
+  snapshot: RequestSignatureScalars & OwnerSignatureScalars & RelayerSignatureScalars,
 ): TrackOwnerSignatureWrite =>
   Object.freeze({
     contractVersion: snapshot.contractVersion,
@@ -113,126 +246,224 @@ const freezePortWrite = (
     idempotencyKey: snapshot.idempotencyKey,
   });
 
-/** Runtime validation is required because an injected port can violate its TypeScript declaration. */
-const isWrittenReceipt = (value: unknown): value is TrackOwnerSignatureWriteResult =>
-  isObject(value) &&
-  (value.status === "written" || value.status === "duplicate") &&
-  typeof value.recordId === "string" &&
-  hasText(value.recordId);
+const freezeIdentity = (
+  snapshot: OwnerSignatureScalars & Pick<RequestSignatureScalars, "workspace" | "decisionId">,
+): OwnerSignatureIdentity =>
+  Object.freeze({
+    ownerCanonicalIdentity: freezeCanonicalIdentity(snapshot.ownerCanonicalIdentity),
+    target: freezeTarget(snapshot),
+  });
 
-const confirms = (
-  persisted: unknown,
-  snapshot: ConfirmedSignatureScalars,
-): boolean =>
-  isObject(persisted) &&
-  isObject(persisted.target) &&
-  isObject(persisted.attestation) &&
-  isObject(persisted.attestation.attester) &&
-  isObject(persisted.relayer) &&
-  persisted.recordId === snapshot.recordId &&
-  persisted.contractVersion === snapshot.contractVersion &&
-  persisted.target.workspace === snapshot.workspace &&
-  persisted.target.decisionId === snapshot.decisionId &&
-  persisted.idempotencyKey === snapshot.idempotencyKey &&
-  persisted.attestation.attester.principalId === snapshot.ownerPrincipalId &&
-  persisted.attestation.attester.authenticatedAt === snapshot.authenticatedAt &&
-  persisted.relayer.transport === snapshot.relayerTransport &&
-  persisted.relayer.relayerId === snapshot.relayerId;
+const canonicalIdentityEquals = (left: CanonicalPrincipalIdentity, right: CanonicalPrincipalIdentity): boolean =>
+  left.issuer === right.issuer && left.subject === right.subject;
+
+/** Capture every field of an untrusted persisted record before validating the read-back. */
+const capturePersistedSignature = (value: unknown): ConfirmedSignatureScalars | undefined => {
+  if (!isObject(value)) return undefined;
+
+  const recordBoundary = Object.freeze({
+    recordId: value.recordId,
+    contractVersion: value.contractVersion,
+    target: value.target,
+    attestation: value.attestation,
+    relayer: value.relayer,
+    idempotencyKey: value.idempotencyKey,
+  });
+  if (
+    !isObject(recordBoundary.target) ||
+    !isObject(recordBoundary.attestation) ||
+    !isObject(recordBoundary.relayer)
+  ) {
+    return undefined;
+  }
+
+  const attestationBoundary = Object.freeze({ attester: recordBoundary.attestation.attester });
+  if (!isObject(attestationBoundary.attester)) return undefined;
+
+  const scalarSnapshot = Object.freeze({
+    recordId: recordBoundary.recordId,
+    contractVersion: recordBoundary.contractVersion,
+    workspace: recordBoundary.target.workspace,
+    decisionId: recordBoundary.target.decisionId,
+    idempotencyKey: recordBoundary.idempotencyKey,
+    ownerPrincipalId: attestationBoundary.attester.principalId,
+    ownerAuthenticatedAt: attestationBoundary.attester.authenticatedAt,
+    ownerCanonicalIdentity: attestationBoundary.attester.canonicalIdentity,
+    relayerTransport: recordBoundary.relayer.transport,
+    relayerId: recordBoundary.relayer.relayerId,
+    relayerCanonicalIdentity: recordBoundary.relayer.canonicalIdentity,
+  });
+  if (
+    scalarSnapshot.contractVersion !== FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION ||
+    !hasText(scalarSnapshot.recordId) ||
+    !hasText(scalarSnapshot.workspace) ||
+    !hasText(scalarSnapshot.decisionId) ||
+    !hasText(scalarSnapshot.idempotencyKey) ||
+    !hasText(scalarSnapshot.ownerPrincipalId) ||
+    !hasText(scalarSnapshot.ownerAuthenticatedAt) ||
+    !isRelayerTransport(scalarSnapshot.relayerTransport) ||
+    !hasText(scalarSnapshot.relayerId)
+  ) {
+    return undefined;
+  }
+
+  const ownerCanonicalIdentity = captureCanonicalIdentity(scalarSnapshot.ownerCanonicalIdentity);
+  const relayerCanonicalIdentity = captureCanonicalIdentity(scalarSnapshot.relayerCanonicalIdentity);
+  if (ownerCanonicalIdentity === undefined || relayerCanonicalIdentity === undefined) return undefined;
+
+  return Object.freeze({
+    contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+    workspace: copyText(scalarSnapshot.workspace),
+    decisionId: copyText(scalarSnapshot.decisionId),
+    idempotencyKey: copyText(scalarSnapshot.idempotencyKey),
+    ownerPrincipalId: copyText(scalarSnapshot.ownerPrincipalId),
+    ownerAuthenticatedAt: copyText(scalarSnapshot.ownerAuthenticatedAt),
+    ownerCanonicalIdentity,
+    relayerTransport: scalarSnapshot.relayerTransport,
+    relayerId: copyText(scalarSnapshot.relayerId),
+    relayerCanonicalIdentity,
+    recordId: copyText(scalarSnapshot.recordId),
+  });
+};
+
+const confirms = (persisted: ConfirmedSignatureScalars, expected: ConfirmedSignatureScalars): boolean =>
+  persisted.recordId === expected.recordId &&
+  persisted.contractVersion === expected.contractVersion &&
+  persisted.workspace === expected.workspace &&
+  persisted.decisionId === expected.decisionId &&
+  persisted.idempotencyKey === expected.idempotencyKey &&
+  persisted.ownerPrincipalId === expected.ownerPrincipalId &&
+  persisted.ownerAuthenticatedAt === expected.ownerAuthenticatedAt &&
+  canonicalIdentityEquals(persisted.ownerCanonicalIdentity, expected.ownerCanonicalIdentity) &&
+  persisted.relayerTransport === expected.relayerTransport &&
+  persisted.relayerId === expected.relayerId &&
+  canonicalIdentityEquals(persisted.relayerCanonicalIdentity, expected.relayerCanonicalIdentity);
+
+const freezePersistedSignature = (snapshot: ConfirmedSignatureScalars): PersistedOwnerSignature =>
+  Object.freeze({
+    contractVersion: snapshot.contractVersion,
+    target: freezeTarget(snapshot),
+    attestation: Object.freeze({ attester: freezeAttester(snapshot) }),
+    relayer: freezeRelayer(snapshot),
+    idempotencyKey: snapshot.idempotencyKey,
+    recordId: snapshot.recordId,
+  });
 
 /**
  * Fail-closed live driver for owner acceptance of an existing Track-native decision.
  * A write receipt alone never means signed: only matching persisted read-back returns `signed`.
  */
 export class FocusLiveSessionDriver implements FocusLiveSession {
-  constructor(private readonly dependencies: FocusLiveSessionDependencies) {}
+  private readonly ownPrincipal: OwnPrincipalAuthenticator;
+  private readonly relayerProvenance: TrustedRelayerProvenancePort;
+  private readonly authorizer: OwnerSignatureAuthorizer;
+  private readonly track: TrackOwnerSignaturePort;
+
+  constructor(dependencies: FocusLiveSessionDependencies) {
+    this.ownPrincipal = dependencies.ownPrincipal;
+    this.relayerProvenance = dependencies.relayerProvenance;
+    this.authorizer = dependencies.authorizer;
+    this.track = dependencies.track;
+  }
 
   async sign(request: OwnerSignatureRequest): Promise<OwnerSignatureResult> {
-    if (!isRequestWellFormed(request)) {
-      return { status: "not-done", reason: "invalid-signature-request" };
-    }
+    const requestSnapshot = captureRequest(request);
+    if (requestSnapshot === undefined) return { status: "not-done", reason: "invalid-signature-request" };
 
-    // Copy all caller-controlled primitives before authentication can yield to another actor.
-    const requestSnapshot: RequestSignatureScalars = Object.freeze({
-      workspace: copyText(request.target.workspace),
-      decisionId: copyText(request.target.decisionId),
-      relayerTransport: request.relayer.transport,
-      relayerId: copyText(request.relayer.relayerId),
-      idempotencyKey: copyText(request.idempotencyKey),
-      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
-    });
     const authenticationRequest: OwnerSignatureRequest = Object.freeze({
       target: freezeTarget(requestSnapshot),
-      authentication: request.authentication,
-      relayer: freezeRelayer(requestSnapshot),
+      authentication: freezeAuthentication(requestSnapshot),
       idempotencyKey: requestSnapshot.idempotencyKey,
     });
 
-    let owner: AuthenticatedOwnPrincipal | undefined;
+    let authenticationResult: unknown;
     try {
-      owner = await this.dependencies.ownPrincipal.authenticate(authenticationRequest);
+      const authenticate = this.ownPrincipal.authenticate;
+      authenticationResult = await authenticate.call(this.ownPrincipal, authenticationRequest);
     } catch {
       return { status: "not-done", reason: "owner-authentication-invalid" };
     }
-    if (owner === undefined) {
+    if (authenticationResult === undefined) {
       return { status: "not-done", reason: "owner-authentication-required" };
     }
-    if (!hasText(owner.principalId) || !hasText(owner.authenticatedAt)) {
-      return { status: "not-done", reason: "owner-authentication-invalid" };
+
+    const ownerSnapshot = captureAuthenticatedOwner(authenticationResult);
+    if (ownerSnapshot === undefined) return { status: "not-done", reason: "owner-authentication-invalid" };
+
+    let relayerResult: unknown;
+    try {
+      const getRelayerProvenance = this.relayerProvenance.getRelayerProvenance;
+      relayerResult = await getRelayerProvenance.call(this.relayerProvenance);
+    } catch {
+      return { status: "not-done", reason: "relayer-provenance-invalid" };
     }
-    const ownerSnapshot = Object.freeze({
-      ownerPrincipalId: copyText(owner.principalId),
-      authenticatedAt: copyText(owner.authenticatedAt),
-    });
-    if (ownerSnapshot.ownerPrincipalId === requestSnapshot.relayerId) {
+    const relayerSnapshot = captureRelayerProvenance(relayerResult);
+    if (relayerSnapshot === undefined) return { status: "not-done", reason: "relayer-provenance-invalid" };
+
+    if (canonicalIdentityEquals(ownerSnapshot.ownerCanonicalIdentity, relayerSnapshot.relayerCanonicalIdentity)) {
       return { status: "not-done", reason: "attester-relayer-conflict" };
     }
 
     const authorizationOwner = freezeAttester(ownerSnapshot);
     const authorizationTarget = freezeTarget(requestSnapshot);
-
+    let authorizationResult: unknown;
     try {
-      const authorized = await this.dependencies.authorizer.authorize(
+      const authorize = this.authorizer.authorize;
+      authorizationResult = await authorize.call(
+        this.authorizer,
         Object.freeze({ owner: authorizationOwner, target: authorizationTarget }),
       );
-      if (!authorized) return { status: "not-done", reason: "authorization-denied" };
     } catch {
       return { status: "not-done", reason: "authorization-denied" };
     }
+    const authorizationSnapshot = Object.freeze({ authorized: authorizationResult });
+    if (authorizationSnapshot.authorized !== true) {
+      return { status: "not-done", reason: "authorization-denied" };
+    }
 
-    if (this.dependencies.track.contractVersion !== FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION) {
+    const trackContractSnapshot = Object.freeze({ contractVersion: this.track.contractVersion });
+    if (trackContractSnapshot.contractVersion !== FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION) {
       return { status: "not-done", reason: "track-contract-mismatch" };
     }
 
-    const write = freezePortWrite(Object.freeze({ ...requestSnapshot, ...ownerSnapshot }));
+    const write = freezePortWrite(Object.freeze({ ...requestSnapshot, ...ownerSnapshot, ...relayerSnapshot }));
 
-    let receipt: unknown;
+    let receiptResult: unknown;
     try {
-      receipt = await this.dependencies.track.appendOwnerSignature(write);
+      const appendOwnerSignature = this.track.appendOwnerSignature;
+      receiptResult = await appendOwnerSignature.call(this.track, write);
     } catch {
       return { status: "not-done", reason: "track-write-failed" };
     }
-    if (!isWrittenReceipt(receipt)) return { status: "not-done", reason: "track-write-failed" };
+    const receiptSnapshot = captureReceipt(receiptResult);
+    if (receiptSnapshot === undefined) return { status: "not-done", reason: "track-write-failed" };
 
     const confirmationSnapshot: ConfirmedSignatureScalars = Object.freeze({
       ...requestSnapshot,
       ...ownerSnapshot,
-      recordId: copyText(receipt.recordId),
+      ...relayerSnapshot,
+      recordId: receiptSnapshot.recordId,
     });
 
+    let persistedResult: unknown;
     try {
-      const persisted = await this.dependencies.track.readOwnerSignature(
-        Object.freeze({
-          ownerPrincipalId: confirmationSnapshot.ownerPrincipalId,
-          target: freezeTarget(confirmationSnapshot),
-          idempotencyKey: confirmationSnapshot.idempotencyKey,
-        }),
+      const readOwnerSignature = this.track.readOwnerSignature;
+      persistedResult = await readOwnerSignature.call(
+        this.track,
+        Object.freeze({ ...freezeIdentity(confirmationSnapshot), idempotencyKey: confirmationSnapshot.idempotencyKey }),
       );
-      if (persisted === undefined || !confirms(persisted, confirmationSnapshot)) {
-        return { status: "not-done", reason: "persisted-attestation-not-confirmed" };
-      }
-      return { status: "signed", duplicate: receipt.status === "duplicate", persisted };
     } catch {
       return { status: "not-done", reason: "persisted-attestation-not-confirmed" };
     }
+    const persistedSnapshot = capturePersistedSignature(persistedResult);
+    if (persistedSnapshot === undefined || !confirms(persistedSnapshot, confirmationSnapshot)) {
+      return { status: "not-done", reason: "persisted-attestation-not-confirmed" };
+    }
+
+    return {
+      status: "signed",
+      duplicate: receiptSnapshot.status === "duplicate",
+      persisted: freezePersistedSignature(persistedSnapshot),
+    };
   }
 }
