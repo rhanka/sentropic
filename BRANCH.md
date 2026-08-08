@@ -156,6 +156,15 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Emit ID-only redacted audit events and keep I3 holder=`remote-B`, view=`A`.
   - [x] Run the desktop/bridge/connector/API scoped gates where the local stack is available; API integration remains contingent on the test stack.
   - [x] General computer use remains separately ratification-gated in `spec/SPEC_EVOL_COWORK_COMPUTER_USE_GENERAL.md`; it needs a trusted-policy/human-in-the-loop envelope and must not inherit this MVP surface.
+- [ ] **Lot 4b — Independent codex-sol release-block remediation (re-run required)**
+  - [ ] Fix 1 critical: consent-before-acknowledgement and final pre-act revoke/expiry/Stop race closure.
+  - [ ] Fix 2 critical: server-issued key-bound kiosk provisioning attestation; client claims are non-authoritative.
+  - [ ] Fix 3 high: complete canonical invocation binding and mismatch-safe idempotency.
+  - [ ] Fix 4 high: durable device-workspace-capability exposure grants at every authorization seam.
+  - [x] Fix 5 high: lease/action-bound one-use remote consent; persisted remote allows are deleted and ignored.
+  - [ ] Fix 6 high: strict literal printable text schema and Windows primitive coverage.
+  - [ ] Fix 7 high: bounded integrity-bound capture result persisted before FAIT and returned to the broker.
+  - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**
   - [ ] Run all Lot 1–4 typecheck/lint/tests plus `make test-api ENV=test-cowork-connector`; document any accepted AI flaky signature.
   - [ ] Build/package through existing Make targets with `ENV=test-cowork-connector` last; record exact artifact SHA-256 and branch HEAD.
