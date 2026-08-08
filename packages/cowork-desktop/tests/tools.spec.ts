@@ -39,7 +39,7 @@ describe('screen_capture executor (eyes)', () => {
             capture: { base64: 'QUJD', mimeType: 'image/png', width: 1920, height: 1080 },
         });
         const result = (await screenCaptureExecutor(
-            { screen: 1, region: { x: 0, y: 0, width: 100, height: 50 } },
+            { screen: 0 },
             { provider } as DesktopToolContext,
         )) as { ok: boolean; image: string; width: number };
 
@@ -47,14 +47,17 @@ describe('screen_capture executor (eyes)', () => {
         expect(result.width).toBe(1920);
         expect(result.image).toBe('data:image/png;base64,QUJD');
         expect(provider.calls).toEqual([
-            { kind: 'captureScreen', options: { screen: 1, region: { x: 0, y: 0, width: 100, height: 50 } } },
+            { kind: 'captureScreen', options: { screen: 0 } },
         ]);
     });
 
-    it('ignores an invalid region and a negative screen index', async () => {
+    it('rejects malformed, narrowed, or non-default capture arguments before the provider', async () => {
         const provider = createMockCapabilityProvider();
-        await screenCaptureExecutor({ screen: -3, region: { x: 'bad' } }, { provider } as DesktopToolContext);
-        expect(provider.calls).toEqual([{ kind: 'captureScreen', options: { screen: undefined, region: undefined } }]);
+        await expect(screenCaptureExecutor({ screen: -3, region: { x: 'bad' } }, { provider } as DesktopToolContext))
+            .rejects.toThrow(/default full primary display/);
+        await expect(screenCaptureExecutor({ region: { x: 0, y: 0, width: 1, height: 1 } }, { provider } as DesktopToolContext))
+            .rejects.toThrow(/default full primary display/);
+        expect(provider.calls).toEqual([]);
     });
 });
 

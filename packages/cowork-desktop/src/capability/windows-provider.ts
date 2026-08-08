@@ -25,6 +25,16 @@ type ScreenshotModule = {
     (opts?: { format?: string; screen?: number }): Promise<Buffer>;
 };
 
+const pngDimensions = (buffer: Buffer): { width: number; height: number } => {
+    if (buffer.length < 24 || buffer.toString('ascii', 1, 4) !== 'PNG' || buffer.toString('ascii', 12, 16) !== 'IHDR') {
+        throw new CapabilityUnavailableError('screen_capture', 'native capture did not return a PNG image.');
+    }
+    const width = buffer.readUInt32BE(16);
+    const height = buffer.readUInt32BE(20);
+    if (width < 1 || height < 1) throw new CapabilityUnavailableError('screen_capture', 'native capture returned invalid dimensions.');
+    return { width, height };
+};
+
 // The nut-js surface we actually use, declared structurally so we never need the
 // package's types at build time on Linux.
 type NutModule = {
@@ -105,19 +115,21 @@ export const createWindowsCapabilityProvider = (
         name: 'windows',
 
         async captureScreen(options?: CaptureOptions): Promise<ScreenCapture> {
+            if (options?.screen !== undefined && options.screen !== 0 || options?.region) {
+                throw new CapabilityUnavailableError('screen_capture', 'only the default full primary display is available in this MVP.');
+            }
             const mod = await loadOptional<ScreenshotModule>(
                 'screenshot-desktop',
                 'screen_capture',
             );
             const screenshot = (mod.default ?? mod) as ScreenshotModule;
             const buffer = await screenshot({ format: 'png', screen: options?.screen });
-            // Region cropping (if requested) is a Windows-side post-process applied
-            // at UAT; the bundled artifact returns the full screen for now.
+            const { width, height } = pngDimensions(buffer);
             return {
                 base64: Buffer.from(buffer).toString('base64'),
                 mimeType: 'image/png',
-                width: 0,
-                height: 0,
+                width,
+                height,
             };
         },
 

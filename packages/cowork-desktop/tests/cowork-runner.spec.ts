@@ -48,7 +48,7 @@ describe('CoworkRunner.handleStatusPayload', () => {
 
         expect(results).toHaveLength(2);
         expect(provider.calls).toEqual([
-            { kind: 'captureScreen', options: { screen: undefined, region: undefined } },
+            { kind: 'captureScreen', options: { screen: 0 } },
             { kind: 'mouseClick', x: 5, y: 6, button: 'left' },
         ]);
         expect(post).toHaveBeenCalledWith('msg-1', expect.arrayContaining([

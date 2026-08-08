@@ -5,6 +5,7 @@ import { db, pool } from '../../db/client';
 import { coworkDeviceLeases, coworkDevices } from '../../db/schema';
 import { findActiveCoworkDevice, verifyCoworkSignature } from './device-identity';
 import { isCoworkInputAction } from './input-action-schema';
+import { isCoworkScreenCaptureAction } from './screen-capture-action-schema';
 import { COWORK_KIOSK_SURFACE } from './provisioning';
 import { signLeaseEnvelope, type ServerSignedLeaseEnvelope } from './lease-envelope';
 
@@ -50,10 +51,14 @@ export function coworkActionHash(action: Record<string, unknown> | undefined): s
 
 export const coworkResultDigest = (result: Record<string, unknown> | undefined): string => coworkActionHash(result);
 
-function validCaptureResult(result: unknown): result is Record<string, unknown> {
+function validCaptureResult(result: unknown, action: unknown): result is Record<string, unknown> {
+  if (!isCoworkScreenCaptureAction(action)) return false;
   if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
   const value = result as Record<string, unknown>;
-  if (value.ok !== true || typeof value.image !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]*={0,2}$/.test(value.image)) return false;
+  if (value.ok !== true || value.screen !== 0
+    || !Number.isInteger(value.width) || !Number.isInteger(value.height)
+    || (value.width as number) < 1 || (value.height as number) < 1
+    || typeof value.image !== 'string' || !/^data:image\/png;base64,[A-Za-z0-9+/]*={0,2}$/.test(value.image)) return false;
   const encoded = value.image.slice(value.image.indexOf(',') + 1);
   return Buffer.from(encoded, 'base64').byteLength > 0 && Buffer.from(encoded, 'base64').byteLength <= 4 * 1024 * 1024;
 }
@@ -64,9 +69,11 @@ function validInputResult(result: unknown): result is Record<string, unknown> {
   return value.ok === true && (value.action === 'click' || value.action === 'scroll' || value.action === 'type');
 }
 
-function validCompletionResult(capability: unknown, outcome: 'FAIT' | 'PAS-FAIT', result: unknown): result is Record<string, unknown> | undefined {
+function validCompletionResult(scope: LeaseScope, outcome: 'FAIT' | 'PAS-FAIT', result: unknown): result is Record<string, unknown> | undefined {
   if (outcome === 'PAS-FAIT') return result === undefined;
-  return capability === 'screen_capture' ? validCaptureResult(result) : validInputResult(result);
+  return scope?.capability === 'screen_capture'
+    ? validCaptureResult(result, scope.action ?? {})
+    : validInputResult(result);
 }
 
 function hasBinding(scope: LeaseScope, expected: CoworkInvocationBinding): boolean {
@@ -109,6 +116,9 @@ export async function issueLease(input: {
     return { ok: false, reason: 'not_issuable' };
   }
   if (requestedCapability === 'input_action' && !isCoworkInputAction(input.scope?.action)) {
+    return { ok: false, reason: 'not_issuable' };
+  }
+  if (requestedCapability === 'screen_capture' && !isCoworkScreenCaptureAction(input.scope?.action ?? {})) {
     return { ok: false, reason: 'not_issuable' };
   }
   const now = new Date();
@@ -291,8 +301,8 @@ export async function completeLease(input: {
   )).limit(1);
   if (!lease) return { ok: false, reason: 'not_found' };
   const device = await findActiveCoworkDevice(input.userId, input.deviceId);
-  const capability = (lease.scope as LeaseScope)?.capability;
-  if (!validCompletionResult(capability, input.outcome, input.result)) return { ok: false, reason: 'not_issuable' };
+  const scope = lease.scope as LeaseScope;
+  if (!validCompletionResult(scope, input.outcome, input.result)) return { ok: false, reason: 'not_issuable' };
   const resultDigest = coworkResultDigest(input.result);
   if (!device || !verifyCoworkSignature(
     device.publicKey,
@@ -302,8 +312,8 @@ export async function completeLease(input: {
 
   const now = new Date();
   const status = input.outcome === 'FAIT' ? 'consumed' : 'revoked';
-  const scope = { ...(lease.scope as LeaseScope), ...(input.result ? { result: input.result, resultDigest } : {}) };
-  const [completed] = await db.update(coworkDeviceLeases).set({ status, consumedAt: now, scope }).where(and(
+  const completedScope = { ...scope, ...(input.result ? { result: input.result, resultDigest } : {}) };
+  const [completed] = await db.update(coworkDeviceLeases).set({ status, consumedAt: now, scope: completedScope }).where(and(
     eq(coworkDeviceLeases.id, input.leaseId),
     eq(coworkDeviceLeases.deviceId, input.deviceId),
     eq(coworkDeviceLeases.userId, input.userId),
