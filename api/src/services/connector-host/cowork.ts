@@ -20,6 +20,7 @@ import { issueLease, readLeaseOutcome, revokeLease } from '../cowork/device-leas
 import { redactCoworkAudit, type CoworkAuditEvent } from '../cowork/redacted-audit';
 import { logger } from '../../logger';
 import { requireWorkspaceAccess } from '../workspace-access';
+import { hasCoworkWorkspaceExposure, listCoworkWorkspaceExposureCapabilities } from '../cowork/provisioning';
 
 export const COWORK_CONNECTOR_ID = 'cowork-desktop';
 export const COWORK_CAPABILITIES = ['screen_capture', 'input_action'] as const;
@@ -44,7 +45,7 @@ export const coworkManifest: AppMcpProviderManifest = {
 const deny = (reason: string) => ({ deny: true as const, reason });
 
 export type CoworkInvocationBrokerPort = {
-  issue(input: { userId: string; targetDeviceId: string; toolCallId: string; capability: CoworkCapability; action: Record<string, unknown> }): Promise<{ ok: true; leaseId: string } | { ok: false }>;
+  issue(input: { userId: string; workspaceId: string; sessionId: string; targetDeviceId: string; toolCallId: string; capability: CoworkCapability; action: Record<string, unknown> }): Promise<{ ok: true; leaseId: string } | { ok: false }>;
   wait(leaseId: string, timeoutMs: number): Promise<'FAIT' | 'PAS-FAIT'>;
   revoke(leaseId: string, userId: string): Promise<void>;
 };
@@ -52,7 +53,7 @@ export type CoworkInvocationBrokerPort = {
 const defaultBroker: CoworkInvocationBrokerPort = {
   async issue(input) {
     const result = await issueLease({
-      userId: input.userId, deviceId: input.targetDeviceId, turnRef: input.toolCallId,
+      userId: input.userId, deviceId: input.targetDeviceId, turnRef: input.toolCallId, workspaceId: input.workspaceId, sessionId: input.sessionId,
       scope: { capability: input.capability, action: input.action },
     });
     return result.ok ? { ok: true, leaseId: result.lease.leaseId } : { ok: false };
@@ -73,6 +74,8 @@ export function createCoworkInvocationBroker(input: {
   broker?: CoworkInvocationBrokerPort;
   audit?: (event: CoworkAuditEvent) => void | Promise<void>;
   userId: string;
+  workspaceId: string;
+  sessionId: string;
   targetDeviceId: string;
   toolCallId: string;
   capability: CoworkCapability;
@@ -115,6 +118,9 @@ export const createCoworkAccountResolver = (): AccountResolver => ({
     if (!deviceId) return deny('human_target_selection_required');
     const device = await findActiveCoworkDevice(input.principalSub, deviceId);
     if (!device) return deny('target_not_eligible');
+    if (!(await hasCoworkWorkspaceExposure({ userId: input.principalSub, deviceId, workspaceId: input.workspaceRef }))) {
+      return deny('workspace_exposure_required');
+    }
     return { connectorInstanceId: `cowork-device:${deviceId}`, enrollmentRef: `cowork-device:${deviceId}`, secretRefs: [] };
   },
 });
@@ -124,9 +130,13 @@ export const createCoworkTenantWorkspaceResolver = (): TenantWorkspaceResolver =
     if (!input.requestedWorkspaceRef) return deny('workspace_required');
     try { await requireWorkspaceAccess(input.sessionPrincipalSub, input.requestedWorkspaceRef); }
     catch { return deny('workspace_access_denied'); }
+    const capabilityIds = await listCoworkWorkspaceExposureCapabilities({
+      userId: input.sessionPrincipalSub,
+      workspaceId: input.requestedWorkspaceRef,
+    });
     return {
       principalSub: input.sessionPrincipalSub, tenantRef: input.requestedWorkspaceRef, workspaceRef: input.requestedWorkspaceRef,
-      exposure: { capabilityIds: [...COWORK_CAPABILITIES] },
+      exposure: { capabilityIds },
     };
   },
 });
@@ -147,7 +157,10 @@ export function createCoworkConnectorHost(input: { broker?: CoworkInvocationBrok
       if (!execution || !COWORK_CAPABILITIES.includes(capability)) {
         return { ok: false, auditId: 'cowork-missing-trusted-context', redactionClass: 'high', error: { code: 'cowork_not_done', message: 'PAS-FAIT', retriable: false } };
       }
-      return createCoworkInvocationBroker({ broker: input.broker, audit, userId: request.sessionPrincipalSub, targetDeviceId, toolCallId: execution.toolCallId, capability, action: request.input as Record<string, unknown> })();
+      if (!(await hasCoworkWorkspaceExposure({ userId: request.sessionPrincipalSub, deviceId: targetDeviceId, workspaceId: request.requestedWorkspaceRef ?? '', capability }))) {
+        return { ok: false, auditId: 'cowork-workspace-exposure-required', redactionClass: 'high', error: { code: 'cowork_not_done', message: 'PAS-FAIT', retriable: false } };
+      }
+      return createCoworkInvocationBroker({ broker: input.broker, audit, userId: request.sessionPrincipalSub, workspaceId: request.requestedWorkspaceRef ?? '', sessionId: execution.sessionId, targetDeviceId, toolCallId: execution.toolCallId, capability, action: request.input as Record<string, unknown> })();
     },
   });
 }
