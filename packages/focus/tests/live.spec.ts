@@ -657,6 +657,34 @@ describe("FocusLiveSession owner-signature gate", () => {
     expect(store.recordCount).toBe(0);
   });
 
+  it("rejects a hostile proof proxy from a single structural snapshot before authentication", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let prototypeReads = 0;
+    let ownKeysReads = 0;
+    const proof = new Proxy(
+      { session: "verified" },
+      {
+        getPrototypeOf() {
+          prototypeReads += 1;
+          return prototypeReads === 1 ? Date.prototype : Object.prototype;
+        },
+        ownKeys() {
+          ownKeysReads += 1;
+          return ownKeysReads === 1 ? ["session"] : ["other"];
+        },
+      },
+    );
+
+    await expectNoIngest(
+      makeLive(store),
+      store,
+      { ...REQUEST, authentication: { kind: "own-principal", proof } },
+      "invalid-signature-request",
+    );
+    expect(prototypeReads).toBe(1);
+    expect(ownKeysReads).toBe(1);
+  });
+
   it("captures a getter-backed request field once, so its changed second value cannot enter the signed write", async () => {
     const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     let idempotencyKeyReads = 0;
@@ -707,6 +735,42 @@ describe("FocusLiveSession owner-signature gate", () => {
     });
     expect(statusReads).toBe(1);
     expect(recordIdReads).toBe(1);
+  });
+
+  it("does not ingest when the relayer provenance port rejects", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+
+    await expectNoIngest(
+      makeLive(store, {
+        getRelayerProvenance: async () => {
+          throw new Error("relayer provenance unavailable");
+        },
+      }),
+      store,
+      REQUEST,
+      "relayer-provenance-invalid",
+    );
+  });
+
+  it("returns not-done when the persisted read port rejects after a write", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let readCalls = 0;
+    const track: TrackOwnerSignaturePort = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      appendOwnerSignature: (input) => store.appendOwnerSignature(input),
+      async readOwnerSignature() {
+        readCalls += 1;
+        throw new Error("persisted read unavailable");
+      },
+    };
+
+    await expect(makeLive(track).sign(REQUEST)).resolves.toEqual({
+      status: "not-done",
+      reason: "persisted-attestation-not-confirmed",
+    });
+    expect(readCalls).toBe(1);
+    expect(store.appendAttempts).toBe(1);
+    expect(store.recordCount).toBe(1);
   });
 
   it("gives the port immutable request, owner, and trusted relayer copies", async () => {
