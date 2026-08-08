@@ -6,6 +6,7 @@ import type {
   OwnerSignatureRequest,
   OwnerSignatureResult,
   PersistedOwnerSignature,
+  RelayerProvenance,
   TrackNativeDecisionTarget,
   TrackOwnerSignatureWrite,
   TrackOwnerSignatureWriteResult,
@@ -50,20 +51,34 @@ export interface FocusLiveSessionDependencies {
   readonly track: TrackOwnerSignaturePort;
 }
 
-const hasText = (value: string): boolean => value.trim().length > 0;
+type RelayerTransport = RelayerProvenance["transport"];
+
+const hasText = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isRelayerTransport = (value: unknown): value is RelayerTransport =>
+  value === "cli" || value === "http" || value === "mcp-stdio" || value === "internal";
 
 const copyText = (value: string): string => `${value}`;
 
 const isRequestWellFormed = (request: OwnerSignatureRequest): boolean =>
+  isObject(request) &&
+  isObject(request.target) &&
+  isObject(request.authentication) &&
+  isObject(request.relayer) &&
+  request.authentication.kind === "own-principal" &&
   hasText(request.target.workspace) &&
   hasText(request.target.decisionId) &&
   hasText(request.idempotencyKey) &&
-  hasText(request.relayer.relayerId);
+  hasText(request.relayer.relayerId) &&
+  isRelayerTransport(request.relayer.transport);
 
 interface RequestSignatureScalars {
   readonly workspace: string;
   readonly decisionId: string;
-  readonly relayerTransport: "cli" | "http" | "mcp-stdio" | "internal";
+  readonly relayerTransport: RelayerTransport;
   readonly relayerId: string;
   readonly idempotencyKey: string;
   readonly contractVersion: FocusOwnerSignatureContractVersion;
@@ -97,9 +112,6 @@ const freezePortWrite = (
     relayer: freezeRelayer(snapshot),
     idempotencyKey: snapshot.idempotencyKey,
   });
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Runtime validation is required because an injected port can violate its TypeScript declaration. */
 const isWrittenReceipt = (value: unknown): value is TrackOwnerSignatureWriteResult =>
