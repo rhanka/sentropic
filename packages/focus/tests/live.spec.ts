@@ -762,12 +762,12 @@ describe("FocusLiveSession owner-signature gate", () => {
     });
   });
 
-  it("rejects an owner-relayer canonical collision before authorization or append", async () => {
+  it("rejects an owner-relayer exact canonical collision before authorization or append", async () => {
     const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     let authorizationCalls = 0;
     const collidingOwner: AuthenticatedOwnPrincipal = {
       ...OWNER,
-      canonicalIdentity: { issuer: "HTTPS://AUTH.EXAMPLE", subject: "RELAY@EXAMPLE.COM" },
+      canonicalIdentity: { issuer: "https://auth.example", subject: "relay@example.com" },
     };
     const collidingRelayer: RelayerProvenance = {
       ...RELAYER,
@@ -786,6 +786,48 @@ describe("FocusLiveSession owner-signature gate", () => {
     ).resolves.toEqual({ status: "not-done", reason: "attester-relayer-conflict" });
     expect(authorizationCalls).toBe(0);
     expect(store.appendAttempts).toBe(0);
+  });
+
+  it("keeps case-sensitive canonical identities distinct for authorization and durable uniqueness", async () => {
+    const upperCaseIdentity: AuthenticatedOwnPrincipal = {
+      ...OWNER,
+      canonicalIdentity: { issuer: "https://idp.example/Realm", subject: "Owner-A" },
+    };
+    const lowerCaseIdentity: AuthenticatedOwnPrincipal = {
+      ...OWNER,
+      canonicalIdentity: { issuer: "https://idp.example/realm", subject: "owner-a" },
+    };
+    const authorizationStore = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let authorizedOwner: AuthenticatedOwnPrincipal | undefined;
+
+    await expect(
+      makeLive(authorizationStore, {
+        authenticate: () => upperCaseIdentity,
+        authorize: ({ owner }) => {
+          authorizedOwner = owner;
+          return (
+            owner.canonicalIdentity.issuer === lowerCaseIdentity.canonicalIdentity.issuer &&
+            owner.canonicalIdentity.subject === lowerCaseIdentity.canonicalIdentity.subject
+          );
+        },
+      }).sign(REQUEST),
+    ).resolves.toEqual({ status: "not-done", reason: "authorization-denied" });
+    expect(authorizedOwner?.canonicalIdentity).toEqual(upperCaseIdentity.canonicalIdentity);
+    expect(authorizationStore.recordCount).toBe(0);
+
+    const uniquenessStore = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    const upperCaseResult = await makeLive(uniquenessStore, { authenticate: () => upperCaseIdentity }).sign({
+      ...REQUEST,
+      idempotencyKey: "case-sensitive-upper",
+    });
+    const lowerCaseResult = await makeLive(uniquenessStore, { authenticate: () => lowerCaseIdentity }).sign({
+      ...REQUEST,
+      idempotencyKey: "case-sensitive-lower",
+    });
+
+    expect(upperCaseResult).toMatchObject({ status: "signed", duplicate: false });
+    expect(lowerCaseResult).toMatchObject({ status: "signed", duplicate: false });
+    expect(uniquenessStore.recordCount).toBe(2);
   });
 
   it("cannot let caller-asserted relayer text replace the authenticated owner attester", async () => {

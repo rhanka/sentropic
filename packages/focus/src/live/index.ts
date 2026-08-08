@@ -80,8 +80,6 @@ const isReceiptStatus = (value: unknown): value is ReceiptStatus => value === "w
 
 const copyText = (value: string): string => `${value}`;
 
-const normalizeIdentityPart = (value: string): string => value.trim().toLocaleLowerCase("en-US");
-
 const captureBoundary = <T>(capture: () => T | undefined): T | undefined => {
   try {
     return capture();
@@ -200,8 +198,10 @@ const captureCanonicalIdentityUnsafe = (value: unknown): CanonicalPrincipalIdent
   if (!hasText(scalarSnapshot.issuer) || !hasText(scalarSnapshot.subject)) return undefined;
 
   return Object.freeze({
-    issuer: normalizeIdentityPart(scalarSnapshot.issuer),
-    subject: normalizeIdentityPart(scalarSnapshot.subject),
+    // Trusted boundaries supply canonical opaque identities. Do not recanonicalize case-sensitive
+    // issuer paths or subjects here: exact values are the authorization and uniqueness identity.
+    issuer: copyText(scalarSnapshot.issuer),
+    subject: copyText(scalarSnapshot.subject),
   });
 };
 
