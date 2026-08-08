@@ -65,14 +65,14 @@
   - [x] Add `FocusLiveSession` types for an own-principal owner act, distinct relayer provenance, Track-native decision target, exact ingest-contract version, idempotency key, duplicate semantics, persisted attestation, and honest not-done outcomes.
   - [x] Add the live driver port that authenticates the owner, authorizes the owner for the requested workspace and decision, rejects an owner/relayer identity substitution, requires the exact pinned Track ingest contract, submits the signature, and reads the attestation back.
   - [x] Export the live driver from the package root without changing the read-only CLI or Track-read binding.
-  - [ ] Lot gate: package typecheck and focused live-driver test command pass in `ENV=test-focus-sig-gate`.
+  - [x] Lot gate: package typecheck and focused live-driver test command pass in `ENV=test-focus-sig-gate`.
 
 - [ ] **Lot 2 — Security and duplicate-result test lock**
-  - [ ] Add `packages/focus/tests/live.spec.ts` covering own-principal authentication required.
-  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that a relayer cannot forge the owner attestation and that relayer provenance is retained separately.
-  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that double submit with one idempotency key yields one persisted attestation and a duplicate result.
-  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that failed or mismatched read-back returns not-done, never a signature.
-  - [ ] Add `packages/focus/tests/live.spec.ts` coverage that unauthorized workspace or decision is denied before ingest.
+  - [x] Add `packages/focus/tests/live.spec.ts` covering own-principal authentication required.
+  - [x] Add `packages/focus/tests/live.spec.ts` coverage that a relayer cannot forge the owner attestation and that relayer provenance is retained separately.
+  - [x] Add `packages/focus/tests/live.spec.ts` coverage that double submit with one idempotency key yields one persisted attestation and a duplicate result.
+  - [x] Add `packages/focus/tests/live.spec.ts` coverage that failed or mismatched read-back returns not-done, never a signature.
+  - [x] Add `packages/focus/tests/live.spec.ts` coverage that unauthorized workspace or decision is denied before ingest.
   - [ ] Lot gate: focused package tests and package typecheck pass in `ENV=test-focus-sig-gate`.
 
 - [ ] **Lot 3 — Version, final verification, and draft review handoff**
