@@ -11,6 +11,8 @@ import {
 } from '../../services/cowork/device-registry';
 import {
   acknowledgeLease,
+  acknowledgeLeaseCancellation,
+  claimLeaseExecution,
   completeLease,
   issueLease,
   listIssuedLeases,
@@ -75,6 +77,7 @@ const acknowledgeLeaseSchema = z.object({
   device_id: z.string().uuid(),
   signature: z.string().min(1),
 });
+const claimLeaseSchema = z.object({ device_id: z.string().uuid(), signature: z.string().min(1) });
 const completeLeaseSchema = z.object({
   device_id: z.string().uuid(),
   outcome: z.enum(['FAIT', 'PAS-FAIT']),
@@ -101,7 +104,7 @@ async function hasDeliveryProof(c: Context, deviceId: string): Promise<boolean> 
 }
 
 function mutationFailure(c: Context, reason: string) {
-  const status = reason === 'not_found' ? 404 : 403;
+  const status = reason === 'not_found' ? 404 : reason === 'execution_in_progress' ? 409 : 403;
   return c.json({ message: `Cowork device mutation denied: ${reason}.` }, status);
 }
 
@@ -232,7 +235,23 @@ chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/revoke', async (c) =
   const result = await revokeLease(c.req.param('leaseId'), parsed.data.reason, c.get('user').userId);
   return result.ok
     ? c.json({ ok: true, lease: result.lease })
-    : c.json({ message: `Lease revocation denied: ${result.reason}.` }, 404);
+    : c.json({ message: `Lease revocation denied: ${result.reason}.` }, result.reason === 'execution_in_progress' ? 409 : 404);
+});
+
+chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/start', async (c) => {
+  const parsed = claimLeaseSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid lease start claim.' }, 400);
+  const result = await claimLeaseExecution({ ...parsed.data, userId: c.get('user').userId, leaseId: c.req.param('leaseId') });
+  return result.ok
+    ? c.json({ ok: true, lease: result.lease })
+    : c.json({ message: `Lease start denied: ${result.reason}.`, reason: result.reason }, result.reason === 'not_found' ? 404 : 409);
+});
+
+chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/cancel-ack', async (c) => {
+  const parsed = claimLeaseSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ message: 'Invalid lease cancellation acknowledgement.' }, 400);
+  const result = await acknowledgeLeaseCancellation({ ...parsed.data, userId: c.get('user').userId, leaseId: c.req.param('leaseId') });
+  return result.ok ? c.json({ ok: true }) : c.json({ message: `Lease cancellation acknowledgement denied: ${result.reason}.` }, 409);
 });
 
 chromeExtensionRouter.post('/cowork-devices/leases/:leaseId/result', async (c) => {

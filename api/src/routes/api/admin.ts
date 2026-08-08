@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { coworkDeviceLeases, folders, organizations, initiatives, userSessions, users, workspaces } from '../../db/schema';
+import { coworkDeviceLeases, coworkDevices, folders, organizations, initiatives, userSessions, users, workspaces } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   chatGenerationTraces,
@@ -283,6 +283,7 @@ adminRouter.delete('/users/:id', async (c) => {
     ...(workspaceId ? { workspaceId } : {}),
   });
 
+  try {
   await db.transaction(async (tx) => {
     // Atomic with the destruction: tombstone and delete commit or roll back together.
     await recordConnectorGrantTombstones(tx, capturedGrants);
@@ -364,14 +365,24 @@ adminRouter.delete('/users/:id', async (c) => {
 
     // C5b/#492: parent deletion cascades Cowork devices, so terminalize their
     // executable leases before that cascade removes the device rows.
+    await tx.execute(sql`SELECT id FROM cowork_devices WHERE user_id = ${userId} FOR UPDATE`);
     await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
       eq(coworkDeviceLeases.userId, userId),
       inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
     ));
+    const [executing] = await tx.select({ id: coworkDeviceLeases.id }).from(coworkDeviceLeases)
+      .where(and(eq(coworkDeviceLeases.userId, userId), eq(coworkDeviceLeases.status, 'executing'))).limit(1);
+    if (executing) throw new Error('cowork_execution_in_progress');
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
   });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'cowork_execution_in_progress') {
+      return c.json({ error: 'Cowork execution is in progress; wait for its signed terminal result before account deletion.' }, 409);
+    }
+    throw error;
+  }
 
   // Only after a successful commit — a rolled-back transaction must not leave a revoked grant
   // behind for an account that still exists.

@@ -1,11 +1,11 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client';
 import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../db/schema';
 
 export type CoworkDeviceMutationResult =
   | { ok: true }
-  | { ok: false; reason: 'not_found' | 'not_owned' | 'revoked' };
+  | { ok: false; reason: 'not_found' | 'not_owned' | 'revoked' | 'execution_in_progress' };
 
 async function checkActiveDeviceOwner(
   userId: string,
@@ -81,15 +81,18 @@ export async function deleteCoworkDeviceWithLeaseRevocation(
   deviceId: string,
 ): Promise<CoworkDeviceMutationResult> {
   return db.transaction(async (tx) => {
-    const [device] = await tx.select({ userId: coworkDevices.userId, status: coworkDevices.status })
-      .from(coworkDevices).where(eq(coworkDevices.id, deviceId)).limit(1);
+    const locked = await tx.execute(sql`SELECT user_id, status FROM cowork_devices WHERE id = ${deviceId} FOR UPDATE`);
+    const device = locked.rows[0] as { user_id: string; status: string } | undefined;
     if (!device) return { ok: false, reason: 'not_found' };
-    if (device.userId !== userId) return { ok: false, reason: 'not_owned' };
-
+    if (device.user_id !== userId) return { ok: false, reason: 'not_owned' };
     await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
       eq(coworkDeviceLeases.deviceId, deviceId),
       inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
     ));
+    const [executing] = await tx.select({ id: coworkDeviceLeases.id }).from(coworkDeviceLeases).where(and(
+      eq(coworkDeviceLeases.deviceId, deviceId), eq(coworkDeviceLeases.status, 'executing'),
+    )).limit(1);
+    if (executing) return { ok: false, reason: 'execution_in_progress' };
     await tx.delete(coworkDevices).where(and(eq(coworkDevices.id, deviceId), eq(coworkDevices.userId, userId)));
     return { ok: true };
   });
