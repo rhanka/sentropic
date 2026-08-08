@@ -109,8 +109,8 @@ export class PostgresTrackOwnerSignaturePort implements TrackOwnerSignaturePort 
       }
 
       return inserted === undefined
-        ? { status: 'duplicate', recordId: persisted.recordId }
-        : { status: 'written', recordId: persisted.recordId };
+        ? { status: 'duplicate' as const, recordId: persisted.recordId }
+        : { status: 'written' as const, recordId: persisted.recordId };
     });
   }
 
