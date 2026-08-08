@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client';
 import { oauthClients, tenantMemberships, tenants } from '../../db/schema';
+import { invalidateResolveTenantCache } from '../tenancy/resolve-tenant';
 
 // BR-39e Lot 2 — tenant-scoped membership acceptance.
 //
@@ -158,6 +159,7 @@ export async function decideMembership(
     .update(tenantMemberships)
     .set({ status: to, approvedByUserId: callerId, decidedAt: now, updatedAt: now })
     .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, targetUserId)));
+  invalidateResolveTenantCache();
   return { status: to };
 }
 
