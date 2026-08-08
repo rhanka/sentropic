@@ -185,7 +185,7 @@ export interface OwnPrincipalAuthentication {
   readonly proof: unknown;
 }
 
-/** A normalized, issuer-scoped identity supplied by a trusted authentication boundary. */
+/** An exact canonical, issuer-scoped identity supplied by a trusted authentication boundary. */
 export interface CanonicalPrincipalIdentity {
   readonly issuer: string;
   readonly subject: string;
@@ -238,7 +238,7 @@ export interface PersistedOwnerSignature extends TrackOwnerSignatureWrite {
  */
 export interface OwnerSignatureIdentity {
   /**
-   * The normalized issuer+subject identity of the authenticated owner. This is the identity
+   * The exact canonical issuer+subject identity of the authenticated owner. This is the identity
    * used for the durable unique constraint, never a caller-supplied display identifier.
    */
   readonly ownerCanonicalIdentity: CanonicalPrincipalIdentity;
