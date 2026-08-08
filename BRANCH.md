@@ -91,4 +91,4 @@
   - [x] Add adversarial wrong-record, pre-ingest-denial, malformed-receipt, and concurrent-submit regression coverage.
   - [x] Runtime-validate request object shape and relayer transport before the authentication boundary.
   - [x] Run focused and full Focus package tests in `ENV=test-focus-sig-gate`.
-  - [ ] Push the existing draft branch without changing its draft state.
+  - [x] Push the existing draft branch without changing its draft state.
