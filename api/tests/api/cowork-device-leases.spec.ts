@@ -187,6 +187,26 @@ describe('Cowork device authorization leases', () => {
       .where(eq(coworkDeviceLeases.id, first.payload.lease.leaseId))).resolves.toEqual([{ status: 'revoked' }]);
   });
 
+  it('denies a mismatched idempotency collision without mutating an executing owner lease', async () => {
+    const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const issued = await issue(target.deviceId, 'executing-owner-tool-call');
+    const lease = issued.payload.lease;
+    expect((await acknowledge(target.deviceId, lease.leaseId, lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await start(target.deviceId, lease.leaseId, lease.nonce, target.signPayload)).status).toBe(200);
+
+    await expect(issueLease({
+      userId: user.id,
+      deviceId: target.deviceId,
+      turnRef: 'executing-owner-tool-call',
+      workspaceId: user.workspaceId,
+      sessionId: 'colliding-session',
+      scope: { capability: 'input_action', action: { action: 'click', x: 1, y: 1 } },
+    })).resolves.toEqual({ ok: false, reason: 'not_issuable' });
+
+    await expect(db.select({ status: coworkDeviceLeases.status }).from(coworkDeviceLeases)
+      .where(eq(coworkDeviceLeases.id, lease.leaseId))).resolves.toEqual([{ status: 'executing' }]);
+  });
+
   it('fails closed on an idempotent retry after presence becomes stale', async () => {
     const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     expect((await issue(device.deviceId, 'turn-stale-retry')).response.status).toBe(201);

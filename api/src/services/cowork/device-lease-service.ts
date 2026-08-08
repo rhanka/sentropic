@@ -194,9 +194,13 @@ export async function issueLease(input: {
       .limit(1);
     if (existing) {
       if (hasBinding(existing.scope as LeaseScope, invocation)) return { ok: true, lease: toLease(existing) } as LeaseResult;
+      // The device row is locked for this whole issuance transaction, just like
+      // claimLeaseExecution. A mismatched invocation may cancel an unstarted
+      // owner, but it must never terminalize an executing owner that can still
+      // be actuating on the target.
       await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
         eq(coworkDeviceLeases.id, existing.id),
-        inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
+        inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES),
       ));
       return { ok: false, reason: 'not_issuable' } as LeaseResult;
     }
@@ -236,7 +240,7 @@ export async function issueLease(input: {
     if (hasBinding(raced.scope as LeaseScope, invocation)) return { ok: true, lease: toLease(raced) } as LeaseResult;
     await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
       eq(coworkDeviceLeases.id, raced.id),
-      inArray(coworkDeviceLeases.status, IN_FLIGHT_STATUSES),
+      inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES),
     ));
     return { ok: false, reason: 'not_issuable' } as LeaseResult;
   });
