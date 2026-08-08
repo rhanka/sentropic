@@ -1,5 +1,4 @@
 import type { ToolDefinition, ToolExecutor } from '@sentropic/cowork-bridge/tools';
-import type { CaptureRegion } from '../capability/index.js';
 import { SCREEN_CAPTURE_TOOL, type DesktopToolContext } from './types.js';
 
 /**
@@ -13,41 +12,22 @@ export const screenCaptureDefinition: ToolDefinition = {
     name: SCREEN_CAPTURE_TOOL,
     description:
         'Capture the desktop screen (the agent\'s eyes). Returns a base64 PNG image of the ' +
-        'current screen. Optionally target a display index or a rectangular region.',
+        'primary screen. Display selection and region cropping are unavailable in this MVP.',
     parameters: {
         type: 'object',
         properties: {
             screen: {
                 type: 'integer',
-                minimum: 0,
-                description: 'Display index to capture (0 = primary). Defaults to primary.',
-            },
-            region: {
-                type: 'object',
-                description: 'Optional sub-region to crop, in screen pixels.',
-                properties: {
-                    x: { type: 'integer' },
-                    y: { type: 'integer' },
-                    width: { type: 'integer', minimum: 1 },
-                    height: { type: 'integer', minimum: 1 },
-                },
-                required: ['x', 'y', 'width', 'height'],
+                enum: [0],
+                description: 'Primary display only (0). Defaults to primary.',
             },
         },
         additionalProperties: false,
     },
 };
 
-const parseRegion = (raw: unknown): CaptureRegion | undefined => {
-    if (!raw || typeof raw !== 'object') return undefined;
-    const r = raw as Record<string, unknown>;
-    const x = Number(r.x);
-    const y = Number(r.y);
-    const width = Number(r.width);
-    const height = Number(r.height);
-    if (![x, y, width, height].every(Number.isFinite)) return undefined;
-    return { x, y, width, height };
-};
+export const isDefaultScreenCaptureAction = (args: Record<string, unknown>): boolean =>
+    Object.keys(args).every((key) => key === 'screen') && (args.screen === undefined || args.screen === 0);
 
 /**
  * Executor: dispatches to `provider.captureScreen` and returns a serializable
@@ -58,16 +38,17 @@ export const screenCaptureExecutor: ToolExecutor<DesktopToolContext> = async (
     args,
     context,
 ) => {
-    const screenRaw = args.screen;
-    const screen =
-        typeof screenRaw === 'number' && Number.isInteger(screenRaw) && screenRaw >= 0
-            ? screenRaw
-            : undefined;
-    const region = parseRegion(args.region);
+    if (!isDefaultScreenCaptureAction(args)) {
+        throw new Error('screen_capture supports only the default full primary display; region and non-default screen are denied.');
+    }
 
-    const capture = await context.provider.captureScreen({ screen, region });
+    const capture = await context.provider.captureScreen({ screen: 0 });
+    if (!Number.isInteger(capture.width) || !Number.isInteger(capture.height) || capture.width < 1 || capture.height < 1) {
+        throw new Error('screen_capture provider returned invalid image dimensions.');
+    }
     return {
         ok: true,
+        screen: 0,
         mimeType: capture.mimeType,
         width: capture.width,
         height: capture.height,

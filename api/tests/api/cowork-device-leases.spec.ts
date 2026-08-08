@@ -139,6 +139,17 @@ describe('Cowork device authorization leases', () => {
     }
   });
 
+  it('rejects narrowed or malformed screen_capture before issuance', async () => {
+    const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    for (const action of [{ screen: -3 }, { screen: 1 }, { region: { x: 0, y: 0, width: 1, height: 1 } }, { screen: 0, region: {} }]) {
+      await expect(issueLease({
+        userId: user.id, deviceId: device.deviceId, turnRef: `capture-${JSON.stringify(action)}`,
+        workspaceId: user.workspaceId, sessionId: TEST_COWORK_SESSION,
+        scope: { capability: 'screen_capture', action },
+      })).resolves.toMatchObject({ ok: false, reason: 'not_issuable' });
+    }
+  });
+
   it('uses a durable idempotent queue and survives a fresh DB-backed read', async () => {
     const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     const first = await issue(device.deviceId, 'turn-durable');
@@ -205,7 +216,7 @@ describe('Cowork device authorization leases', () => {
     const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     const success = await issue(target.deviceId, 'turn-result-success');
     expect((await acknowledge(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, target.signPayload)).status).toBe(200);
-    const capture = { ok: true, image: 'data:image/png;base64,QUJD' };
+    const capture = { ok: true, screen: 0, width: 1, height: 1, image: 'data:image/png;base64,QUJD' };
     expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload, capture)).status).toBe(200);
     expect((await complete(target.deviceId, success.payload.lease.leaseId, success.payload.lease.nonce, 'FAIT', target.signPayload, capture)).status).toBe(409);
 
@@ -214,11 +225,13 @@ describe('Cowork device authorization leases', () => {
     expect((await complete(target.deviceId, failure.payload.lease.leaseId, failure.payload.lease.nonce, 'PAS-FAIT', target.signPayload)).status).toBe(200);
   });
 
-  it('refuses FAIT capture completion without a bounded integrity-bound image result', async () => {
+  it('refuses FAIT capture completion without action-bound dimensions and primary-screen metadata', async () => {
     const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
     const issued = await issue(target.deviceId, 'capture-result-required');
     expect((await acknowledge(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, target.signPayload)).status).toBe(200);
     expect((await complete(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(409);
+    const broad = { ok: true, screen: 1, width: 1, height: 1, image: 'data:image/png;base64,QUJD' };
+    expect((await complete(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, 'FAIT', target.signPayload, broad)).status).toBe(409);
   });
 
   it('returns only the target device queue through the bounded poll fallback', async () => {
