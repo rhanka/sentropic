@@ -49,14 +49,41 @@ describe('Cowork workspace exposure public route', () => {
     expect((await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/selection', deviceSession, {
       session_id: 'cowork-public-route', workspace_id: workspaceId, device_id: key.deviceId,
     })).status).toBe(200);
-    expect((await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/leases', deviceSession, {
+    const held = await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/leases', deviceSession, {
       device_id: key.deviceId, turn_ref: 'public-route-invoke', session_id: 'cowork-public-route',
       workspace_id: workspaceId, scope: { capability: 'screen_capture' },
-    })).status).toBe(201);
+    });
+    expect(held.status).toBe(201);
+    const heldLease = (await held.json() as { lease: { leaseId: string; nonce: string } }).lease;
 
     expect((await authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
       action: 'revoke', device_id: key.deviceId, workspace_id: workspaceId, capabilities: ['screen_capture'],
     })).status).toBe(200);
+    expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${heldLease.leaseId}/ack`, deviceSession, {
+      device_id: key.deviceId,
+      signature: key.signPayload(`cowork-lease-ack-v1:${heldLease.leaseId}.${heldLease.nonce}`),
+    })).status).toBe(409);
+
+    expect((await authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
+      action: 'grant', device_id: key.deviceId, workspace_id: workspaceId, capabilities: ['screen_capture'],
+    })).status).toBe(200);
+    const acknowledged = await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/leases', deviceSession, {
+      device_id: key.deviceId, turn_ref: 'post-ack-revoke', session_id: 'cowork-public-route',
+      workspace_id: workspaceId, scope: { capability: 'screen_capture' },
+    });
+    expect(acknowledged.status).toBe(201);
+    const acknowledgedLease = (await acknowledged.json() as { lease: { leaseId: string; nonce: string } }).lease;
+    expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${acknowledgedLease.leaseId}/ack`, deviceSession, {
+      device_id: key.deviceId,
+      signature: key.signPayload(`cowork-lease-ack-v1:${acknowledgedLease.leaseId}.${acknowledgedLease.nonce}`),
+    })).status).toBe(200);
+    expect((await authenticatedRequest(app, 'POST', '/api/v1/auth/device/cowork-exposure', conductor.sessionToken!, {
+      action: 'revoke', device_id: key.deviceId, workspace_id: workspaceId, capabilities: ['screen_capture'],
+    })).status).toBe(200);
+    expect((await authenticatedRequest(app, 'POST', `/api/v1/chrome-extension/cowork-devices/leases/${acknowledgedLease.leaseId}/start`, deviceSession, {
+      device_id: key.deviceId,
+      signature: key.signPayload(`cowork-lease-start-v1:${acknowledgedLease.leaseId}.${acknowledgedLease.nonce}`),
+    })).status).toBe(409);
     expect((await authenticatedRequest(app, 'POST', '/api/v1/chrome-extension/cowork-devices/leases', deviceSession, {
       device_id: key.deviceId, turn_ref: 'revoked-public-route', session_id: 'cowork-public-route',
       workspace_id: workspaceId, scope: { capability: 'screen_capture' },

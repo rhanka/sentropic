@@ -1,7 +1,7 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { coworkDeviceExposureGrants, coworkDeviceProvisioning, coworkDevices, workspaceMemberships } from '../../db/schema';
+import { coworkDeviceExposureGrants, coworkDeviceLeases, coworkDeviceProvisioning, coworkDevices, workspaceMemberships } from '../../db/schema';
 
 export const COWORK_KIOSK_SURFACE = 'notepad';
 export const COWORK_REMOTE_CAPABILITIES = ['screen_capture', 'input_action'] as const;
@@ -76,15 +76,34 @@ export async function manageCoworkWorkspaceExposure(input: {
   actorId: string;
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
-    const [device] = await tx.select({ id: coworkDevices.id }).from(coworkDevices).where(and(
-      eq(coworkDevices.id, input.deviceId), eq(coworkDevices.userId, input.actorId), eq(coworkDevices.status, 'active'),
-    )).limit(1);
+    // The device row is the authorization fence shared with issue, acknowledgement,
+    // and the final start claim. Lock it before reading or deleting any exposure.
+    const locked = await tx.execute(sql`
+      SELECT id FROM cowork_devices
+      WHERE id = ${input.deviceId} AND user_id = ${input.actorId} AND status = 'active'
+      FOR UPDATE
+    `);
     const [membership] = await tx.select({ role: workspaceMemberships.role }).from(workspaceMemberships).where(and(
       eq(workspaceMemberships.workspaceId, input.workspaceId), eq(workspaceMemberships.userId, input.actorId),
     )).limit(1);
-    if (!device || membership?.role !== 'admin') return false;
+    if (locked.rows.length === 0 || membership?.role !== 'admin') return false;
 
     if (input.action === 'revoke') {
+      // Lock the exact grant rows, then revoke every still-pre-start lease whose
+      // durable invocation binding was authorized by those rows before deletion.
+      await tx.execute(sql`
+        SELECT capability FROM cowork_device_exposure_grants
+        WHERE device_id = ${input.deviceId}
+          AND workspace_id = ${input.workspaceId}
+          AND capability IN (${sql.join(input.capabilities.map((capability) => sql`${capability}`), sql`, `)})
+        FOR UPDATE
+      `);
+      await tx.update(coworkDeviceLeases).set({ status: 'revoked' }).where(and(
+        eq(coworkDeviceLeases.deviceId, input.deviceId),
+        inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
+        sql`${coworkDeviceLeases.scope} -> 'invocation' ->> 'workspaceId' = ${input.workspaceId}`,
+        sql`${coworkDeviceLeases.scope} -> 'invocation' ->> 'capability' IN (${sql.join(input.capabilities.map((capability) => sql`${capability}`), sql`, `)})`,
+      ));
       await tx.delete(coworkDeviceExposureGrants).where(and(
         eq(coworkDeviceExposureGrants.deviceId, input.deviceId),
         eq(coworkDeviceExposureGrants.workspaceId, input.workspaceId),
