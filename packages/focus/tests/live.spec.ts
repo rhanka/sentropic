@@ -551,6 +551,112 @@ describe("FocusLiveSession owner-signature gate", () => {
     await expectNoIngest(makeLive(track), store, REQUEST, "track-write-failed");
   });
 
+  it.each([
+    [
+      "status",
+      {
+        get status() {
+          throw new Error("receipt status unavailable");
+        },
+        recordId: "throwing-receipt",
+      },
+    ],
+    [
+      "record id",
+      {
+        status: "written",
+        get recordId() {
+          throw new Error("receipt record unavailable");
+        },
+      },
+    ],
+  ])("returns track-write-failed when receipt %s access throws", async (_label, receipt) => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let appendCalls = 0;
+    let readCalls = 0;
+    const track: TrackOwnerSignaturePort = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      async appendOwnerSignature() {
+        appendCalls += 1;
+        return receipt as TrackOwnerSignatureWriteResult;
+      },
+      async readOwnerSignature(identity) {
+        readCalls += 1;
+        return store.readOwnerSignature(identity);
+      },
+    };
+
+    await expect(makeLive(track).sign(REQUEST)).resolves.toEqual({ status: "not-done", reason: "track-write-failed" });
+    expect(appendCalls).toBe(1);
+    expect(readCalls).toBe(0);
+    expect(store.recordCount).toBe(0);
+  });
+
+  it.each([
+    ["record id", (record: PersistedOwnerSignature) => asPersisted({ ...record, get recordId() { throw new Error("record unavailable"); } })],
+    ["target workspace", (record: PersistedOwnerSignature) => asPersisted({ ...record, target: { get workspace() { throw new Error("workspace unavailable"); }, decisionId: record.target.decisionId } })],
+    ["attester principal", (record: PersistedOwnerSignature) => asPersisted({ ...record, attestation: { attester: { ...record.attestation.attester, get principalId() { throw new Error("owner unavailable"); } } } })],
+    ["relayer transport", (record: PersistedOwnerSignature) => asPersisted({ ...record, relayer: { ...record.relayer, get transport() { throw new Error("transport unavailable"); } } })],
+    ["idempotency key", (record: PersistedOwnerSignature) => asPersisted({ ...record, get idempotencyKey() { throw new Error("idempotency unavailable"); } })],
+  ])("returns persisted-attestation-not-confirmed when persisted %s access throws", async (_label, change) => {
+    let write: TrackOwnerSignatureWrite | undefined;
+    let appendCalls = 0;
+    let readCalls = 0;
+    const track: TrackOwnerSignaturePort = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      async appendOwnerSignature(input) {
+        appendCalls += 1;
+        write = input;
+        return { status: "written", recordId: "throwing-persisted" };
+      },
+      async readOwnerSignature() {
+        readCalls += 1;
+        if (write === undefined) throw new Error("expected append before read");
+        return change(persistedFromWrite(write, "throwing-persisted"));
+      },
+    };
+
+    await expect(makeLive(track).sign(REQUEST)).resolves.toEqual({
+      status: "not-done",
+      reason: "persisted-attestation-not-confirmed",
+    });
+    expect(appendCalls).toBe(1);
+    expect(readCalls).toBe(1);
+  });
+
+  it("does not authenticate a caller-mutated proof referent after the call boundary", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    const proof = { session: "invalid" };
+    let startAuthentication: (() => void) | undefined;
+    let resumeAuthentication: (() => void) | undefined;
+    let capturedProof: unknown;
+    const authenticationStarted = new Promise<void>((resolve) => {
+      startAuthentication = resolve;
+    });
+    const authenticationResumed = new Promise<void>((resolve) => {
+      resumeAuthentication = resolve;
+    });
+    const live = makeLive(store, {
+      authenticate: async (input) => {
+        capturedProof = input.authentication.proof;
+        startAuthentication?.();
+        await authenticationResumed;
+        return (input.authentication.proof as { readonly session: string }).session === "valid" ? OWNER : undefined;
+      },
+    });
+
+    const pending = live.sign({ ...REQUEST, authentication: { kind: "own-principal", proof } });
+    await authenticationStarted;
+    proof.session = "valid";
+    resumeAuthentication?.();
+
+    await expect(pending).resolves.toEqual({ status: "not-done", reason: "owner-authentication-required" });
+    expect(capturedProof).not.toBe(proof);
+    expect(Object.isFrozen(capturedProof)).toBe(true);
+    expect(store.appendAttempts).toBe(0);
+    expect(store.recordCount).toBe(0);
+  });
+
   it("captures a getter-backed request field once, so its changed second value cannot enter the signed write", async () => {
     const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     let idempotencyKeyReads = 0;
