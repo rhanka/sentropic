@@ -93,4 +93,4 @@
   - [x] Make the in-memory adapter test-only and unexported; document the production durable atomic upsert/read-back primitive as a prerequisite for live use.
   - [x] Add getter/receipt/authentication/authorization/append-failure/racy-port adversarial regression coverage.
   - [x] Re-run focused and full Focus package tests in `ENV=test-focus-sig-gate`.
-  - [ ] Push the existing draft branch without changing its draft state and update its follow-up note.
+  - [x] Push the existing draft branch without changing its draft state and update its follow-up note.
