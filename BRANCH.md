@@ -18,6 +18,7 @@
 - **Allowed Paths (implementation scope)**:
   - `packages/focus/src/model.ts`
   - `packages/focus/src/live/index.ts`
+  - `packages/focus/src/live/in-memory.ts`
   - `packages/focus/src/index.ts`
   - `packages/focus/tests/live.spec.ts`
   - `packages/focus/package.json`
@@ -82,3 +83,10 @@
   - [x] Run `harness check scope` and `make scope-check` before every commit.
   - [ ] Create a draft PR against `main` using this plan as the source body; state the contract, held items, and `draft: independent build-review + owner UAT required before merge/live`.
   - [ ] Verify the pushed branch CI and report exact command results, package version, commit SHAs, and PR URL.
+
+- [ ] **Lot 4 — Independent signature-gate review repair**
+  - [ ] Replace mutable caller and port aliases with frozen scalar snapshots and a separately frozen port copy.
+  - [ ] Runtime-validate the Track write receipt and make the package-owned contract version the sole accepted value.
+  - [ ] Require atomic owner/decision uniqueness from Track ports and provide an in-memory reference adapter.
+  - [ ] Add adversarial wrong-record, pre-ingest-denial, malformed-receipt, and concurrent-submit regression coverage.
+  - [ ] Run focused and full Focus package tests in `ENV=test-focus-sig-gate`, then push the existing draft branch.

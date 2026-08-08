@@ -173,6 +173,12 @@ export interface TrackNativeDecisionTarget {
   readonly decisionId: FocusRef;
 }
 
+/** The sole Track owner-signature contract accepted and emitted by this package. */
+export const FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION = "track-owner-signature/1.0.0" as const;
+
+/** A package-owned, closed contract version: callers cannot compose an arbitrary version. */
+export type FocusOwnerSignatureContractVersion = typeof FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION;
+
 /** Opaque proof that only an own-principal authentication adapter may verify. */
 export interface OwnPrincipalAuthentication {
   readonly kind: "own-principal";
@@ -206,7 +212,7 @@ export interface OwnerSignatureRequest {
 
 /** Exact, versioned write shape submitted to a Track owner-signature adapter. */
 export interface TrackOwnerSignatureWrite {
-  readonly contractVersion: string;
+  readonly contractVersion: FocusOwnerSignatureContractVersion;
   readonly target: TrackNativeDecisionTarget;
   readonly attestation: OwnerSignatureAttestation;
   readonly relayer: RelayerProvenance;
@@ -216,6 +222,15 @@ export interface TrackOwnerSignatureWrite {
 /** Persisted read-back record required before an owner signature may be reported. */
 export interface PersistedOwnerSignature extends TrackOwnerSignatureWrite {
   readonly recordId: string;
+}
+
+/**
+ * The atomic uniqueness identity for a persisted owner acceptance. One owner may attest to a
+ * given Track-native decision once, irrespective of transport retries or idempotency keys.
+ */
+export interface OwnerSignatureIdentity {
+  readonly ownerPrincipalId: string;
+  readonly target: TrackNativeDecisionTarget;
 }
 
 /** The Track adapter must say whether an idempotency replay created or reused a record. */
