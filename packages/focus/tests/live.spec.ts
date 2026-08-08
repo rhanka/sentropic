@@ -450,6 +450,107 @@ describe("FocusLiveSession owner-signature gate", () => {
     await expectNoIngest(makeLive(store), store, requestFactory(), "invalid-signature-request");
   });
 
+  it.each([
+    [
+      "principal id",
+      {
+        get principalId() {
+          throw new Error("principal unavailable");
+        },
+        authenticatedAt: OWNER.authenticatedAt,
+        canonicalIdentity: OWNER.canonicalIdentity,
+      },
+    ],
+    [
+      "authentication time",
+      {
+        principalId: OWNER.principalId,
+        get authenticatedAt() {
+          throw new Error("authentication time unavailable");
+        },
+        canonicalIdentity: OWNER.canonicalIdentity,
+      },
+    ],
+    [
+      "canonical identity",
+      {
+        principalId: OWNER.principalId,
+        authenticatedAt: OWNER.authenticatedAt,
+        canonicalIdentity: {
+          get issuer() {
+            throw new Error("owner issuer unavailable");
+          },
+          subject: OWNER.canonicalIdentity.subject,
+        },
+      },
+    ],
+  ])("fails closed without ingest when authenticated-owner %s access throws", async (_label, owner) => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(
+      makeLive(store, { authenticate: () => owner }),
+      store,
+      REQUEST,
+      "owner-authentication-invalid",
+    );
+  });
+
+  it.each([
+    [
+      "transport",
+      {
+        get transport() {
+          throw new Error("relayer transport unavailable");
+        },
+        relayerId: RELAYER.relayerId,
+        canonicalIdentity: RELAYER.canonicalIdentity,
+      },
+    ],
+    [
+      "relayer id",
+      {
+        transport: RELAYER.transport,
+        get relayerId() {
+          throw new Error("relayer id unavailable");
+        },
+        canonicalIdentity: RELAYER.canonicalIdentity,
+      },
+    ],
+    [
+      "canonical identity",
+      {
+        transport: RELAYER.transport,
+        relayerId: RELAYER.relayerId,
+        canonicalIdentity: {
+          issuer: RELAYER.canonicalIdentity.issuer,
+          get subject() {
+            throw new Error("relayer subject unavailable");
+          },
+        },
+      },
+    ],
+  ])("fails closed without ingest when relayer %s access throws", async (_label, relayer) => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    await expectNoIngest(
+      makeLive(store, { getRelayerProvenance: () => relayer }),
+      store,
+      REQUEST,
+      "relayer-provenance-invalid",
+    );
+  });
+
+  it("fails closed without ingest when the Track contract version accessor throws", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    const track: TrackOwnerSignaturePort = {
+      get contractVersion() {
+        throw new Error("Track contract unavailable");
+      },
+      appendOwnerSignature: (input) => store.appendOwnerSignature(input),
+      readOwnerSignature: (identity) => store.readOwnerSignature(identity),
+    };
+
+    await expectNoIngest(makeLive(track), store, REQUEST, "track-write-failed");
+  });
+
   it("captures a getter-backed request field once, so its changed second value cannot enter the signed write", async () => {
     const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     let idempotencyKeyReads = 0;
