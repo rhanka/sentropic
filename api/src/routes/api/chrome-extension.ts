@@ -78,6 +78,7 @@ const acknowledgeLeaseSchema = z.object({
 const completeLeaseSchema = z.object({
   device_id: z.string().uuid(),
   outcome: z.enum(['FAIT', 'PAS-FAIT']),
+  result: z.record(z.unknown()).optional(),
   signature: z.string().min(1),
 });
 const selectCoworkTargetSchema = z.object({

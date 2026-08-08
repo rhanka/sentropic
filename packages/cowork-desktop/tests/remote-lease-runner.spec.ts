@@ -40,6 +40,7 @@ describe('RemoteLeaseRunner', () => {
             'https://api.example.test/api/v1/chrome-extension/cowork-devices/leases/lease-1/result',
         ]));
         expect(calls.find((call) => call.url.endsWith('/result'))?.body).toContain('FAIT');
+        expect(calls.find((call) => call.url.endsWith('/result'))?.body).toContain('"action":"click"');
     });
 
     it('does not acknowledge or execute a forged envelope', async () => {

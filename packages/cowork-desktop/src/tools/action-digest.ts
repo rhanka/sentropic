@@ -8,6 +8,8 @@ function canonicalJson(value: unknown): string {
 }
 
 /** Stable local digest that binds a foreground receipt to the exact action. */
-export function remoteActionDigest(action: Record<string, unknown>): string {
-    return createHash('sha256').update(canonicalJson(action)).digest('base64url');
+export function remotePayloadDigest(payload: Record<string, unknown> | undefined): string {
+    return createHash('sha256').update(canonicalJson(payload ?? {})).digest('base64url');
 }
+
+export const remoteActionDigest = remotePayloadDigest;

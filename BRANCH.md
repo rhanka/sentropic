@@ -172,7 +172,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
     - [x] Prove selection narrows a grant and an ungranted workspace/capability cannot issue control.
   - [x] Fix 5 high: lease/action-bound one-use remote consent; persisted remote allows are deleted and ignored.
   - [x] Fix 6 high: strict literal printable text schema and Windows primitive coverage.
-  - [ ] Fix 7 high: bounded integrity-bound capture result persisted before FAIT and returned to the broker.
+  - [x] Fix 7 high: bounded integrity-bound capture result persisted before FAIT and returned to the broker.
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**
   - [ ] Run all Lot 1–4 typecheck/lint/tests plus `make test-api ENV=test-cowork-connector`; document any accepted AI flaky signature.

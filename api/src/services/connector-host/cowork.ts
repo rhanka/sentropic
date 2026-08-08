@@ -16,7 +16,7 @@ import type {
 } from '@sentropic/mcp-platform';
 
 import { findActiveCoworkDevice } from '../cowork/device-identity';
-import { issueLease, readLeaseOutcome, revokeLease } from '../cowork/device-lease-service';
+import { issueLease, readLeaseOutcome, revokeLease, type LeaseOutcome } from '../cowork/device-lease-service';
 import { redactCoworkAudit, type CoworkAuditEvent } from '../cowork/redacted-audit';
 import { logger } from '../../logger';
 import { requireWorkspaceAccess } from '../workspace-access';
@@ -46,7 +46,7 @@ const deny = (reason: string) => ({ deny: true as const, reason });
 
 export type CoworkInvocationBrokerPort = {
   issue(input: { userId: string; workspaceId: string; sessionId: string; targetDeviceId: string; toolCallId: string; capability: CoworkCapability; action: Record<string, unknown> }): Promise<{ ok: true; leaseId: string } | { ok: false }>;
-  wait(leaseId: string, timeoutMs: number): Promise<'FAIT' | 'PAS-FAIT'>;
+  wait(leaseId: string, timeoutMs: number): Promise<LeaseOutcome>;
   revoke(leaseId: string, userId: string): Promise<void>;
 };
 
@@ -65,7 +65,7 @@ const defaultBroker: CoworkInvocationBrokerPort = {
       if (outcome) return outcome;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    return 'PAS-FAIT';
+    return { outcome: 'PAS-FAIT' };
   },
   async revoke(leaseId, userId) { await revokeLease(leaseId, 'bounded_result_timeout', userId); },
 };
@@ -90,11 +90,11 @@ export function createCoworkInvocationBroker(input: {
       return { ok: false, auditId: `cowork:${input.toolCallId}`, redactionClass: 'high', error: { code: 'cowork_not_done', message: 'PAS-FAIT', retriable: false } };
     }
     await audit({ kind: 'lease_issued', toolCallId: input.toolCallId, leaseId: issued.leaseId, targetDeviceId: input.targetDeviceId, capability: input.capability });
-    const outcome = await broker.wait(issued.leaseId, 30_000);
-    if (outcome !== 'FAIT') await broker.revoke(issued.leaseId, input.userId);
-    await audit({ kind: 'lease_result', toolCallId: input.toolCallId, leaseId: issued.leaseId, targetDeviceId: input.targetDeviceId, capability: input.capability, outcome });
-    return outcome === 'FAIT'
-      ? { ok: true, output: { status: 'FAIT' }, auditId: `cowork:${input.toolCallId}`, redactionClass: 'high' }
+    const completion = await broker.wait(issued.leaseId, 30_000);
+    if (completion.outcome !== 'FAIT') await broker.revoke(issued.leaseId, input.userId);
+    await audit({ kind: 'lease_result', toolCallId: input.toolCallId, leaseId: issued.leaseId, targetDeviceId: input.targetDeviceId, capability: input.capability, outcome: completion.outcome });
+    return completion.outcome === 'FAIT'
+      ? { ok: true, output: { status: 'FAIT', result: completion.result }, auditId: `cowork:${input.toolCallId}`, redactionClass: 'high' }
       : { ok: false, auditId: `cowork:${input.toolCallId}`, redactionClass: 'high', error: { code: 'cowork_not_done', message: 'PAS-FAIT', retriable: false } };
   };
 }

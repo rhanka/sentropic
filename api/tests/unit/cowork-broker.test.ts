@@ -9,7 +9,7 @@ describe('Cowork remote broker safety boundaries', () => {
     const audit: Array<Record<string, unknown>> = [];
     const broker = {
       async issue(input: { toolCallId: string }) { issued.push(input.toolCallId); return { ok: true as const, leaseId: `lease-${input.toolCallId}` }; },
-      async wait(leaseId: string) { return leaseId === 'lease-call-a' ? 'FAIT' as const : 'PAS-FAIT' as const; },
+      async wait(leaseId: string) { return leaseId === 'lease-call-a' ? { outcome: 'FAIT' as const, result: { ok: true, image: 'data:image/png;base64,QUJD' } } : { outcome: 'PAS-FAIT' as const }; },
       async revoke() {},
     };
     const run = (toolCallId: string) => createCoworkInvocationBroker({
@@ -19,7 +19,7 @@ describe('Cowork remote broker safety boundaries', () => {
 
     const [first, second] = await Promise.all([run('call-a'), run('call-b')]);
     expect(issued).toEqual(expect.arrayContaining(['call-a', 'call-b']));
-    expect(first).toMatchObject({ ok: true, output: { status: 'FAIT' }, auditId: 'cowork:call-a' });
+    expect(first).toMatchObject({ ok: true, output: { status: 'FAIT', result: { image: 'data:image/png;base64,QUJD' } }, auditId: 'cowork:call-a' });
     expect(second).toMatchObject({ ok: false, error: { message: 'PAS-FAIT' }, auditId: 'cowork:call-b' });
     expect(audit.map((event) => event.toolCallId)).toEqual(expect.arrayContaining(['call-a', 'call-b']));
   });
@@ -29,7 +29,7 @@ describe('Cowork remote broker safety boundaries', () => {
     const invoke = createCoworkInvocationBroker({
       broker: {
         async issue(input) { bindings.push(input); return { ok: true as const, leaseId: 'lease' }; },
-        async wait() { return 'PAS-FAIT' as const; },
+        async wait() { return { outcome: 'PAS-FAIT' as const }; },
         async revoke() {},
       },
       userId: 'user', workspaceId: 'workspace-a', sessionId: 'session-a', targetDeviceId: 'device', toolCallId: 'call', capability: 'screen_capture', action: {},
@@ -58,7 +58,7 @@ describe('Cowork remote broker safety boundaries', () => {
       const invoke = createCoworkInvocationBroker({
         broker: {
           async issue() { return { ok: true as const, leaseId: 'lease-failed' }; },
-          async wait() { return 'PAS-FAIT' as const; },
+          async wait() { return { outcome: 'PAS-FAIT' as const }; },
           async revoke() {},
         },
         userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-failed',
