@@ -55,6 +55,7 @@
 - **Allowed Paths (implementation scope)**:
   - `api/src/db/schema.ts`
   - `api/src/services/focus/**`
+  - `api/src/middleware/auth.ts`
   - `api/src/routes/api/focus.ts`
   - `api/src/routes/api/index.ts`
   - `api/tests/unit/track-owner-signature-adapter.test.ts`
@@ -86,6 +87,7 @@
 - [x] `BR-SIG-ADAPTER-EX2` — required by the `@sentropic/focus` API workspace dependency. The root lockfile is regenerated through Make; the API lockfile remains blocked with the isolated service build; impact is package-resolution metadata only; rollback is to revert each lockfile with its matching manifest.
 - [x] `BR-SIG-ADAPTER-EX3` — approved by the owner’s explicit build-review remediation request. Add the minimal authenticated Focus owner-signature route and router registration; it obtains the owner from the session context, records fixed HTTP relayer provenance, and injects workspace-membership plus tenancy-resolution authorization. Impact is one authenticated API entry point; rollback is to remove that route and registration while retaining the durable adapter.
 - [x] `BR-SIG-ADAPTER-1` — The authenticated Focus owner-signature route composes the durable factory with session-derived own-principal, trusted HTTP relayer provenance, workspace membership, and tenancy resolution; its focused unit test verifies that composition structurally.
+- [x] `BR-SIG-ADAPTER-4` — C4: the route obtains `authenticatedAt` from the immutable validated-session creation timestamp, so delayed retries retain the durable attestation identity.
 - [ ] `BR-SIG-ADAPTER-2` — BLOCKED. `make db-generate REGISTRY=local`, `make up-api-test`, and `make typecheck-api` cannot build the isolated API image because the audit gate rejects `vitest` advisory `GHSA-5xrq-8626-4rwp`; the scoped test command consequently reports `service "api" is not running`. Owner: security lane; acceptance: resolve the advisory without weakening the audit gate, then regenerate the journaled migration and rerun the scoped real-database tests.
 
 ## AI Flaky tests
