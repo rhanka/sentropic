@@ -280,6 +280,17 @@ export const coworkGeneralCalls = pgTable('cowork_general_calls', {
   state: text('state').notNull().default('DÉPOSÉ-EN-ATTENTE'),
   authorityEpoch: integer('authority_epoch').notNull(),
   requiresFreshAuthority: boolean('requires_fresh_authority').notNull().default(true),
+  freshAuthority: jsonb('fresh_authority').$type<{
+    authorityEpoch: number;
+    capability: string;
+    actionKind: string;
+    actionBudget: number;
+    policyVersion: string;
+    attestationProfileId: string;
+    confirmationReceiptId: string;
+    issuedAt: string;
+    expiresAt: string;
+  } | null>(),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
 }, (table) => ({

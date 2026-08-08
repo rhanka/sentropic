@@ -20,6 +20,7 @@ CREATE TABLE "cowork_general_calls" (
   "state" text NOT NULL DEFAULT 'DÉPOSÉ-EN-ATTENTE' CHECK ("state" IN ('FAIT', 'DÉPOSÉ-EN-ATTENTE', 'PAS-FAIT')),
   "authority_epoch" integer NOT NULL,
   "requires_fresh_authority" boolean NOT NULL DEFAULT true,
+  "fresh_authority" jsonb,
   "created_at" timestamp NOT NULL DEFAULT now(),
   "updated_at" timestamp NOT NULL DEFAULT now()
 );
