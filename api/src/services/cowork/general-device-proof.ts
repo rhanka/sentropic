@@ -26,7 +26,7 @@ export type GeneralProofChallenge = Readonly<{
 async function loadEligibleGeneralDevice(input: { userId: string; deviceId: string; nodeEnv?: string }, transaction = db): Promise<GeneralProofCheck> {
   const [device] = await transaction.select().from(coworkDevices).where(and(
     eq(coworkDevices.id, input.deviceId), eq(coworkDevices.userId, input.userId), eq(coworkDevices.status, 'active'),
-  )).limit(1);
+  )).for('update').limit(1);
   if (!device?.pepPublicKey || !device.pepKeyId) return { ok: false, reason: 'device_not_eligible' };
   const profile = device.generalProfile ?? {};
   if (input.nodeEnv === 'production' || profile.isolatedVmTarget !== true || !profile.egressPolicyRef) return { ok: false, reason: 'containment_required' };
