@@ -106,7 +106,7 @@
 
 - [ ] **Lot 6 — Fourth independent adversarial signature-gate repair**
   - [x] Preserve trusted canonical issuer and subject values exactly, including case-sensitive opaque identity parts, across authorization, collision rejection, and durable uniqueness.
-  - [ ] Capture hostile opaque proofs from one structural snapshot and lock all affected port-failure paths with tests.
+  - [x] Capture hostile opaque proofs from one structural snapshot and lock all affected port-failure paths with tests.
   - [ ] Replace the synchronous race fake with a barrier async constraint-rejection driver regression; retain the production durable adapter as the only full exactly-once proof.
   - [ ] Regenerate root lock metadata and correct the public Focus README/version history.
   - [ ] Re-run isolated Focus package tests, scope checks, and push the existing draft branch without changing its draft state.

@@ -138,12 +138,17 @@ const copyImmutableProof = (
     return { value: Object.freeze(copy) };
   }
 
-  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return undefined;
-  const keys = Object.keys(value);
-  if (Reflect.ownKeys(value).length !== keys.length) return undefined;
+  const structuralSnapshot = Object.freeze({
+    prototype: Object.getPrototypeOf(value),
+    ownKeys: Object.freeze([...Reflect.ownKeys(value)]),
+  });
+  if (structuralSnapshot.prototype !== Object.prototype && structuralSnapshot.prototype !== null) return undefined;
+  if (structuralSnapshot.ownKeys.some((key) => typeof key !== "string")) return undefined;
 
   const copy: Record<string, ImmutableProof> = Object.create(null) as Record<string, ImmutableProof>;
-  for (const key of keys) {
+  for (const key of structuralSnapshot.ownKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !descriptor.enumerable) return undefined;
     const item = copyImmutableProof((value as Record<string, unknown>)[key], nextAncestors);
     if (item === undefined) return undefined;
     Object.defineProperty(copy, key, {
