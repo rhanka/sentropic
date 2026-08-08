@@ -1194,7 +1194,7 @@ pack-harness: build-harness ## Validate @sentropic/harness npm package contents 
 # --- @sentropic/focus (BR-FOCUS-EX (Makefile): focus gained its first real runtime dep
 #     @sentropic/track, so it builds via the WORKSPACE node_modules — the install-internal-packages
 #     + `npx --offline tsc/vitest` pattern used by chat-core/comments — NOT the isolated zero-dep
-#     temp-toolset (which cannot resolve @sentropic/track + its transitive deps). Private, pure-TS
+#     temp-toolset (which cannot resolve @sentropic/track + its transitive deps). Public, pure-TS
 #     render-core + the /track read binding; node test env. install-internal-packages installs the
 #     packages/focus workspace (incl. @sentropic/track@0.17.0) into node_modules from the lockfile.) ---
 .PHONY: typecheck-focus test-focus build-focus pack-focus publish-focus publish-focus-token
