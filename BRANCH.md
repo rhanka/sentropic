@@ -110,8 +110,8 @@
 - [ ] **Lot 1 — Constraint-backed persistence adapter**
   - [x] Add the owner-signature table schema with all canonical attestation and relayer fields.
   - [x] Add one additive migration with `UNIQUE(owner_issuer, owner_subject, workspace_id, decision_id)`.
-  - [ ] Implement a PostgreSQL/Drizzle `TrackOwnerSignaturePort` using `INSERT … ON CONFLICT DO NOTHING`, a transaction-local canonical read-back, and no application-side check-then-insert path.
-  - [ ] Preserve the first persisted attestation and return an authoritative `written` or `duplicate` receipt.
+  - [x] Implement a PostgreSQL/Drizzle `TrackOwnerSignaturePort` using `INSERT … ON CONFLICT DO NOTHING`, a transaction-local canonical read-back, and no application-side check-then-insert path.
+  - [x] Preserve the first persisted attestation and return an authoritative `written` or `duplicate` receipt.
   - [ ] Lot gate: `make typecheck-api ENV=test-track-sig-adapter` and scoped real-adapter unit tests pass.
 
 - [ ] **Lot 2 — API Focus composition and concurrency proof**
