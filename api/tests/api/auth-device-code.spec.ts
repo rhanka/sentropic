@@ -13,6 +13,7 @@ import {
   createAuthenticatedUser,
 } from '../utils/auth-helper';
 import { createTestCoworkKey } from '../utils/cowork-device';
+import { registerCoworkKioskProvisioning } from '../../src/services/cowork/provisioning';
 
 describe('Device-code enrollment API', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
@@ -28,6 +29,7 @@ describe('Device-code enrollment API', () => {
   });
 
   async function issueCode(deviceName = 'My Workstation', key = createTestCoworkKey()) {
+    await registerCoworkKioskProvisioning({ publicKey: key.publicKey, provisionedBy: user.id });
     const response = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/code', {
       deviceName,
       deviceId: key.deviceId,
@@ -60,6 +62,16 @@ describe('Device-code enrollment API', () => {
     expect(payload.interval).toBeGreaterThan(0);
     expect(payload.expires_in).toBe(600);
     expect(payload.server_nonce.length).toBeGreaterThan(20);
+  });
+
+  it('rejects enrollment when the conductor has not provisioned the device public key', async () => {
+    const key = createTestCoworkKey();
+    const response = await unauthenticatedRequest(app, 'POST', '/api/v1/auth/device/code', {
+      deviceId: key.deviceId,
+      devicePublicKey: key.publicKey,
+      capabilities: { capabilityIds: ['screen_capture'], isolatedVmTarget: true, kioskSurface: 'powershell' },
+    });
+    expect(response.status).toBe(403);
   });
 
   it('returns authorization_pending before approval and slow_down for a fast retry', async () => {

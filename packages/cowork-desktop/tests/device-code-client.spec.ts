@@ -75,7 +75,6 @@ describe('DeviceCodeClient — start', () => {
                     devicePublicKey: deviceIdentity.publicKey,
                     capabilities: {
                         capabilityIds: ['screen_capture', 'input_action'],
-                        isolatedVmTarget: false,
                     },
                 }),
             }),

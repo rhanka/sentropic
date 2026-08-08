@@ -160,10 +160,10 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Fix 1 critical: consent-before-acknowledgement and final pre-act revoke/expiry/Stop race closure.
     - [x] Implement consent-first acknowledgement, synchronous Stop cancellation, and local pre-act expiry/cancellation checks.
     - [x] Prove held-consent timeout, expiry, Stop, device-deletion, and account-deletion races produce zero provider calls.
-  - [ ] Fix 2 critical: server-issued key-bound kiosk provisioning attestation; client claims are non-authoritative.
+  - [x] Fix 2 critical: server-issued key-bound kiosk provisioning attestation; client claims are non-authoritative.
     - [x] Add the single durable provisioning/exposure migration and server-only attestation record keyed by the device public key.
     - [x] Require authenticated provisioning before enrollment and re-check exact Notepad attestation at target selection and acknowledgement.
-    - [ ] Prove arbitrary claimed safety flags, unprovisioned enrollment, and un-attested target selection fail closed.
+    - [x] Prove arbitrary claimed safety flags, unprovisioned enrollment, and un-attested target selection fail closed.
   - [ ] Fix 3 high: complete canonical invocation binding and mismatch-safe idempotency.
   - [ ] Fix 4 high: durable device-workspace-capability exposure grants at every authorization seam.
   - [x] Fix 5 high: lease/action-bound one-use remote consent; persisted remote allows are deleted and ignored.
