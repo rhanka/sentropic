@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { coworkDeviceLeases, coworkDevicePresence, coworkDevices } from '../../src/db/schema';
-import { coworkResultDigest, issueLease, listIssuedLeases } from '../../src/services/cowork/device-lease-service';
+import { coworkActionHash, coworkResultDigest, issueLease, listIssuedLeases } from '../../src/services/cowork/device-lease-service';
 import { deleteCoworkDeviceWithLeaseRevocation } from '../../src/services/cowork/device-registry';
 import { coworkDeliveryProofPayload } from '../../src/services/cowork/device-identity';
 import { grantCoworkWorkspaceExposure } from '../../src/services/cowork/provisioning';
@@ -282,6 +282,25 @@ describe('Cowork device authorization leases', () => {
     expect((await complete(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, 'FAIT', target.signPayload)).status).toBe(409);
     const broad = { ok: true, screen: 1, width: 1, height: 1, image: 'data:image/png;base64,QUJD' };
     expect((await complete(target.deviceId, issued.payload.lease.leaseId, issued.payload.lease.nonce, 'FAIT', target.signPayload, broad)).status).toBe(409);
+  });
+
+  it('accepts an input FAIT only when its digest binds the canonical expected action', async () => {
+    const target = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    await grantCoworkWorkspaceExposure({ deviceId: target.deviceId, workspaceId: user.workspaceId, capability: 'input_action', grantedBy: user.id });
+    const issued = await issueLease({
+      userId: user.id, deviceId: target.deviceId, turnRef: 'canonical-input-result', workspaceId: user.workspaceId, sessionId: TEST_COWORK_SESSION,
+      scope: { capability: 'input_action', action: { action: 'click', x: 1, y: 2, button: 'right' } },
+    });
+    if (!issued.ok) throw new Error('Expected an issuable input lease');
+    expect((await acknowledge(target.deviceId, issued.lease.leaseId, issued.lease.nonce, target.signPayload)).status).toBe(200);
+    expect((await start(target.deviceId, issued.lease.leaseId, issued.lease.nonce, target.signPayload)).status).toBe(200);
+
+    expect((await complete(target.deviceId, issued.lease.leaseId, issued.lease.nonce, 'FAIT', target.signPayload, {
+      ok: true, action: 'click', actionDigest: coworkActionHash({ action: 'click', x: 1, y: 2, button: 'left' }),
+    })).status).toBe(409);
+    expect((await complete(target.deviceId, issued.lease.leaseId, issued.lease.nonce, 'FAIT', target.signPayload, {
+      ok: true, action: 'click', actionDigest: coworkActionHash({ action: 'click', x: 1, y: 2, button: 'right' }),
+    })).status).toBe(200);
   });
 
   it('returns only the target device queue through the bounded poll fallback', async () => {

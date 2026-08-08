@@ -4,7 +4,7 @@ import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
 import { coworkDeviceLeases, coworkDevices } from '../../db/schema';
 import { findActiveCoworkDevice, verifyCoworkSignature } from './device-identity';
-import { isCoworkInputAction } from './input-action-schema';
+import { parseCoworkInputAction } from './input-action-schema';
 import { isCoworkScreenCaptureAction } from './screen-capture-action-schema';
 import { COWORK_KIOSK_SURFACE } from './provisioning';
 import { signLeaseEnvelope, type ServerSignedLeaseEnvelope } from './lease-envelope';
@@ -64,17 +64,22 @@ function validCaptureResult(result: unknown, action: unknown): result is Record<
   return Buffer.from(encoded, 'base64').byteLength > 0 && Buffer.from(encoded, 'base64').byteLength <= 4 * 1024 * 1024;
 }
 
-function validInputResult(result: unknown): result is Record<string, unknown> {
+function validInputResult(result: unknown, expectedAction: unknown): result is Record<string, unknown> {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
   const value = result as Record<string, unknown>;
-  return value.ok === true && (value.action === 'click' || value.action === 'scroll' || value.action === 'type');
+  const action = parseCoworkInputAction(expectedAction);
+  return Boolean(action
+    && value.ok === true
+    && value.action === action.action
+    && value.actionDigest === coworkActionHash(action)
+    && Object.keys(value).every((key) => key === 'ok' || key === 'action' || key === 'actionDigest'));
 }
 
 function validCompletionResult(scope: LeaseScope, outcome: 'FAIT' | 'PAS-FAIT', result: unknown): result is Record<string, unknown> | undefined {
   if (outcome === 'PAS-FAIT') return result === undefined;
   return scope?.capability === 'screen_capture'
     ? validCaptureResult(result, scope.action ?? {})
-    : validInputResult(result);
+    : validInputResult(result, scope?.action);
 }
 
 function hasBinding(scope: LeaseScope, expected: CoworkInvocationBinding): boolean {
@@ -128,12 +133,12 @@ export async function issueLease(input: {
   if (requestedCapability !== 'screen_capture' && requestedCapability !== 'input_action') {
     return { ok: false, reason: 'not_issuable' };
   }
-  if (requestedCapability === 'input_action' && !isCoworkInputAction(input.scope?.action)) {
-    return { ok: false, reason: 'not_issuable' };
-  }
+  const canonicalInputAction = requestedCapability === 'input_action' ? parseCoworkInputAction(input.scope?.action) : null;
+  if (requestedCapability === 'input_action' && !canonicalInputAction) return { ok: false, reason: 'not_issuable' };
   if (requestedCapability === 'screen_capture' && !isCoworkScreenCaptureAction(input.scope?.action ?? {})) {
     return { ok: false, reason: 'not_issuable' };
   }
+  const canonicalAction = canonicalInputAction ?? input.scope?.action;
   const now = new Date();
   const expiresAt = new Date(now.getTime() + LEASE_TTL_MS);
   const leaseId = crypto.randomUUID();
@@ -144,7 +149,7 @@ export async function issueLease(input: {
     sessionId: input.sessionId,
     targetDeviceId: input.deviceId,
     capability: requestedCapability,
-    actionHash: coworkActionHash(input.scope?.action),
+    actionHash: coworkActionHash(canonicalAction),
   };
   let envelope: ServerSignedLeaseEnvelope;
   try {
@@ -229,7 +234,7 @@ export async function issueLease(input: {
           capability: requestedCapability,
           serverEnvelope: envelope,
           invocation,
-          ...(input.scope?.action ? { action: input.scope.action } : {}),
+          ...(canonicalAction ? { action: canonicalAction } : {}),
         },
         status: 'issued',
         issuedAt: now,

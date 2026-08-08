@@ -1,7 +1,7 @@
 import type { ToolDefinition, ToolExecutor } from '@sentropic/cowork-bridge/tools';
-import type { MouseButton } from '../capability/index.js';
 import { INPUT_ACTION_TOOL, type DesktopToolContext } from './types.js';
-import { assertLiteralText } from './literal-text.js';
+import { remoteActionDigest } from './action-digest.js';
+import { parseCoworkInputAction } from './input-action-schema.js';
 
 /**
  * `input_action` (hands) — the actuation step of the agentic computer-use loop.
@@ -38,16 +38,6 @@ export const inputActionDefinition: ToolDefinition = {
     },
 };
 
-const asMouseButton = (raw: unknown): MouseButton => {
-    if (raw === 'right' || raw === 'middle') return raw;
-    return 'left';
-};
-
-const asFiniteNumber = (raw: unknown): number | null => {
-    const value = Number(raw);
-    return Number.isFinite(value) ? value : null;
-};
-
 /**
  * Executor: validates the discriminated `action` and dispatches to the provider.
  * Returns a structured `{ ok, action }` result; throws on malformed args so the
@@ -57,7 +47,8 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
     args,
     context,
 ) => {
-    const action = String(args.action ?? '');
+    const action = parseCoworkInputAction(args);
+    if (!action) throw new Error('input_action requires an exact click, type, or scroll action shape.');
     const provider = context.provider;
     const nativeGuard = async () => {
         const surfaceGuard = context.surfaceGuard;
@@ -67,34 +58,18 @@ export const inputActionExecutor: ToolExecutor<DesktopToolContext> = async (
         return surfaceGuard.nativeGuard(surface);
     };
 
-    switch (action) {
+    switch (action.action) {
         case 'click': {
-            const x = asFiniteNumber(args.x);
-            const y = asFiniteNumber(args.y);
-            if (x === null || y === null) {
-                throw new Error('input_action click requires numeric x and y.');
-            }
-            await provider.mouseClick(x, y, asMouseButton(args.button), await nativeGuard());
-            return { ok: true, action: 'click', x, y };
+            await provider.mouseClick(action.x, action.y, action.button, await nativeGuard());
+            return { ok: true, action: action.action, actionDigest: remoteActionDigest(action) };
         }
         case 'type': {
-            const text = args.text;
-            assertLiteralText(text);
-            await provider.type(text, await nativeGuard());
-            return { ok: true, action: 'type', length: text.length };
+            await provider.type(action.text, await nativeGuard());
+            return { ok: true, action: action.action, actionDigest: remoteActionDigest(action) };
         }
         case 'scroll': {
-            const dx = asFiniteNumber(args.dx) ?? 0;
-            const dy = asFiniteNumber(args.dy) ?? 0;
-            if (dx === 0 && dy === 0) {
-                throw new Error('input_action scroll requires a non-zero dx or dy.');
-            }
-            await provider.scroll(dx, dy, await nativeGuard());
-            return { ok: true, action: 'scroll', dx, dy };
+            await provider.scroll(action.dx, action.dy, await nativeGuard());
+            return { ok: true, action: action.action, actionDigest: remoteActionDigest(action) };
         }
-        default:
-            throw new Error(
-                `input_action: unknown action or denied action "${action}" (expected click|type|scroll).`,
-            );
     }
 };

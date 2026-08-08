@@ -114,13 +114,26 @@ describe('input_action executor (hands)', () => {
     });
 
     it('throws on missing click coordinates and unknown actions', async () => {
+      const provider = createMockCapabilityProvider();
+      await expect(
+        inputActionExecutor({ action: 'click' }, { provider } as DesktopToolContext),
+        ).rejects.toThrow(/exact click/);
+      await expect(
+        inputActionExecutor({ action: 'teleport' }, { provider } as DesktopToolContext),
+        ).rejects.toThrow(/exact click/);
+    });
+
+    it('rejects malformed clicks and invalid scroll shapes without normalizing them into an actuation', async () => {
         const provider = createMockCapabilityProvider();
-        await expect(
-            inputActionExecutor({ action: 'click' }, { provider } as DesktopToolContext),
-        ).rejects.toThrow(/numeric x and y/);
-        await expect(
-            inputActionExecutor({ action: 'teleport' }, { provider } as DesktopToolContext),
-        ).rejects.toThrow(/unknown action/);
+        const context = toolContext(provider);
+        for (const args of [
+            { action: 'click', x: 1, y: 2, button: 'right ' },
+            { action: 'click', x: 1.5, y: 2 },
+            { action: 'click', x: 1, y: 2, extra: true },
+            { action: 'scroll', dx: 0 },
+            { action: 'scroll', dx: 0, dy: 0 },
+        ]) await expect(inputActionExecutor(args, context)).rejects.toThrow(/exact click/);
+        expect(provider.calls).toEqual([]);
     });
 });
 
