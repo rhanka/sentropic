@@ -47,6 +47,7 @@ export const prepareStoredRouteAttempt = async (input: {
   }
   const attempt = await input.directory.prepareAttempt({
     subject: input.subject,
+    ...(stored.affinityRef ? { affinityRef: stored.affinityRef } : {}),
     accountRef: current.accountRef,
     target: candidate.target,
     requestId: input.requestId,

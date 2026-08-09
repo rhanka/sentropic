@@ -158,6 +158,32 @@ describe('LocalAccountTransportService', () => {
     });
     await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
     await attempt.complete();
+    const nextAttempt = await directory.prepareAttempt({
+      subject: { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' },
+      affinityRef: 'opaque-affinity-1',
+      accountRef: accounts[0]!.accountRef,
+      target: {
+        requestedModel: 'claude-opus-5-high', providerId: 'openai',
+        modelId: 'gpt-5.6-terra', transportProviderId: 'codex',
+        effort: 'high', reason: 'alias',
+      },
+      requestId: 'request-2', attemptIndex: 0,
+    });
+    const thirdAttempt = await directory.prepareAttempt({
+      subject: { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' },
+      affinityRef: 'opaque-affinity-1',
+      accountRef: accounts[0]!.accountRef,
+      target: {
+        requestedModel: 'claude-opus-5-high', providerId: 'openai',
+        modelId: 'gpt-5.6-terra', transportProviderId: 'codex',
+        effort: 'high', reason: 'alias',
+      },
+      requestId: 'request-3', attemptIndex: 0,
+    });
+    await nextAttempt.generate({ messages: [{ role: 'user', content: 'again' }] });
+    await nextAttempt.complete();
+    await thirdAttempt.generate({ messages: [{ role: 'user', content: 'again' }] });
+    await thirdAttempt.complete();
 
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({
       providerId: 'openai', modelId: 'gpt-5.6-terra',
@@ -166,6 +192,9 @@ describe('LocalAccountTransportService', () => {
       }),
       reasoning: { effort: 'high' },
     }));
+    const sessionIds = generate.mock.calls.slice(1).map(([request]) =>
+      request.auth.material.metadata.stableSessionId);
+    expect(new Set(sessionIds).size).toBe(1);
   });
 
   it('acquires an active account and refreshes atomically if expired', async () => {
