@@ -15,6 +15,7 @@ describe('canonical gateway ingress', () => {
       }],
       tools: [{ name: 'lookup', description: 'Lookup data', input_schema: { type: 'object' } }],
       thinking: { type: 'enabled', budget_tokens: 1024 },
+      tool_choice: { type: 'tool', name: 'lookup', disable_parallel_tool_use: true },
       max_tokens: 2048,
       stream: true,
     };
@@ -34,7 +35,28 @@ describe('canonical gateway ingress', () => {
       ],
     });
     expect(normalized.request.tools?.[0]).toMatchObject({ name: 'lookup' });
+    expect(normalized.request).toMatchObject({
+      toolChoice: { type: 'tool', name: 'lookup' },
+      parallelToolCalls: false,
+      reasoning: { enabled: true, budgetTokens: 1024 },
+    });
     expect(normalized.request.providerOptions?.ingressBody).toBe(body);
+  });
+
+  it('preserves signed Anthropic thinking history as a distinct canonical part', () => {
+    const normalized = normalizeGatewayIngress('anthropic-messages', {
+      model: 'gemini-3.1-flash-lite',
+      messages: [{ role: 'assistant', content: [
+        { type: 'thinking', thinking: 'private chain', signature: 'signed-history' },
+        { type: 'text', text: 'visible answer' },
+      ] }],
+    });
+    expect(normalized.request.messages[0]).toMatchObject({
+      role: 'assistant', content: [
+        { type: 'reasoning', text: 'private chain', signature: 'signed-history' },
+        { type: 'text', text: 'visible answer' },
+      ],
+    });
   });
 
   it('preserves OpenAI tool calls and tool results', () => {

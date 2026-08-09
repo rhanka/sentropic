@@ -197,14 +197,30 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     }
   }
 
-  addAccount(account: AccountTransportAccount): void {
-    this.accounts.set(account.accountId, {
+  addAccount(account: AccountTransportAccount): AccountTransportAccount {
+    const stored: StoredAccount = {
       ...account,
       status: account.status ?? 'active',
       priority: account.priority ?? 0,
       weight: Math.max(account.weight ?? 1, 1),
       totalAcquisitions: 0,
-    });
+    };
+    this.accounts.set(account.accountId, stored);
+    // The local account service deliberately retains this exact object. Token
+    // refreshes and lifecycle transitions therefore update the executable
+    // coordinator state instead of a detached copy.
+    return stored;
+  }
+
+  /**
+   * Advance time-based lifecycle state without acquiring an account.
+   * Returns account ids whose cooldown expired so a durable host can persist
+   * the transition before exposing route inventory.
+   */
+  refreshLifecycle(nowInput?: Date | string | number): readonly string[] {
+    const now = toDate(nowInput);
+    this.releaseExpiredReservations(now);
+    return this.expireCooldowns(now);
   }
 
   async acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition> {
@@ -412,13 +428,16 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     }
   }
 
-  private expireCooldowns(now: Date): void {
+  private expireCooldowns(now: Date): string[] {
+    const recovered: string[] = [];
     for (const account of this.accounts.values()) {
       if (account.status === 'cooldown' && !isCooldownActive(account, now)) {
         account.status = 'active';
         account.cooldownUntil = undefined;
+        recovered.push(account.accountId);
       }
     }
+    return recovered;
   }
 
   private applyOutcome(account: StoredAccount, outcome: AccountTransportOutcome): void {

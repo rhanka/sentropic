@@ -70,6 +70,7 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
 
   it('runs through the opaque mesh route path without a target resolver', async () => {
     const settlements: unknown[] = [];
+    let observedSignal: AbortSignal | undefined;
     const config = {
       ...stubGatewayConfig,
       callerAuth: { async verify() { return {
@@ -97,11 +98,14 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
       }; },
       async prepareAttempt() { return {
         attemptRef: 'attempt-1',
-        async generate() { return {
+        async generate(request) {
+          observedSignal = request.signal;
+          return {
           id: 'response-1', providerId: 'openai', modelId: 'gpt-5.6-terra',
           message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [],
           finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 },
-        }; },
+          };
+        },
         async stream() { return { async *[Symbol.asyncIterator]() {} }; },
         async recordOutcome() {}, async markCommitted() {}, async complete() {},
         async releaseCancelled() {},
@@ -114,8 +118,10 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
       routeMetering: { settleRoute(value) { settlements.push(value); } },
     });
 
+    const abort = new AbortController();
     const response = await app.request('/v1/messages', {
       method: 'POST', headers: { authorization: 'Bearer gateway-session' },
+      signal: abort.signal,
       body: JSON.stringify({
         model: 'claude-opus-5-high', max_tokens: 100,
         messages: [{ role: 'user', content: 'hello' }],
@@ -127,5 +133,9 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
       type: 'message', model: 'gpt-5.6-terra', content: [{ type: 'text', text: 'ok' }],
     });
     expect(settlements).toHaveLength(1);
+    // Hono/undici may wrap the caller's signal, but the canonical request must
+    // receive a live signal rather than dropping cancellation altogether.
+    expect(observedSignal).toBeInstanceOf(AbortSignal);
+    expect(observedSignal?.aborted).toBe(false);
   });
 });
