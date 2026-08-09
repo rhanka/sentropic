@@ -1,0 +1,77 @@
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
+import { selectRouteCandidates } from '../src/route-selection.js';
+import { DEFAULT_ROUTE_POLICY } from '../src/routing-policy.js';
+
+const accounts = [
+  {
+    accountRef: 'internal-old',
+    diagnosticAccountRef: 'acct_old',
+    targetProviderId: 'gemini',
+    transportProviderId: 'cloud-code',
+    supportedModelIds: ['gemini-3.5-flash'],
+    enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+    readiness: 'ready' as const,
+    revision: 'r1',
+  },
+  {
+    accountRef: 'internal-new',
+    diagnosticAccountRef: 'acct_new',
+    targetProviderId: 'gemini',
+    transportProviderId: 'antigravity',
+    supportedModelIds: ['gemini-3.5-flash'],
+    enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+    readiness: 'ready' as const,
+    revision: 'r1',
+  },
+];
+
+const select = (policy = DEFAULT_ROUTE_POLICY, roundRobinOffset = 0) =>
+  selectRouteCandidates({
+    request: { requestedModel: 'gemini-3.5-flash' },
+    policy,
+    council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+    accounts,
+    roundRobinOffset,
+  });
+
+describe('route candidate selection', () => {
+  it('tries the last enrolled account first by default', () => {
+    expect(select().map((candidate) => candidate.account.diagnosticAccountRef))
+      .toEqual(['acct_new', 'acct_old']);
+  });
+
+  it('honors an explicit ordered transport preference', () => {
+    const candidates = select({
+      ...DEFAULT_ROUTE_POLICY,
+      strategy: {
+        kind: 'ordered',
+        preferences: [
+          { transportProviderId: 'cloud-code' },
+          { transportProviderId: 'antigravity' },
+        ],
+      },
+    });
+    expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
+  });
+
+  it('rotates only the starting candidate for a new affinity', () => {
+    const policy = {
+      ...DEFAULT_ROUTE_POLICY,
+      strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
+    };
+    expect(select(policy, 0)[0]?.account.diagnosticAccountRef).toBe('acct_new');
+    expect(select(policy, 1)[0]?.account.diagnosticAccountRef).toBe('acct_old');
+  });
+
+  it('applies the first matching per-model rule', () => {
+    const candidates = select({
+      ...DEFAULT_ROUTE_POLICY,
+      rules: [{
+        match: { requestedModel: 'gemini-3.5-flash' },
+        preferences: [{ transportProviderId: 'cloud-code' }],
+      }],
+    });
+    expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
+  });
+});
