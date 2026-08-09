@@ -1,4 +1,5 @@
 import type { CapabilityRequirement } from './equivalence-council.js';
+import type { RoutePlanInput } from './routing-contracts.js';
 
 export interface RouteSelector {
   readonly providerId?: string;
@@ -93,6 +94,19 @@ export const validateRoutePolicy = (policy: RoutePolicy): void => {
 
 export const describeRoutePolicy = (policy: RoutePolicy): string =>
   JSON.stringify(policy);
+
+export const resolveRoutePolicy = (
+  policy: RoutePolicy,
+  input: RoutePlanInput,
+): RoutePolicy => {
+  const rule = policy.rules.find((candidate) =>
+    (!candidate.match.requestedModel || candidate.match.requestedModel === input.requestedModel)
+    && (!candidate.match.alias || candidate.match.alias === input.requestedModel)
+    && (!candidate.match.capabilities || candidate.match.capabilities.every(
+      (capability) => input.requiredCapabilities?.includes(capability),
+    )));
+  return rule?.fallback ? { ...policy, ...rule.fallback } : policy;
+};
 
 export class InMemoryRoutePolicyProfiles {
   private readonly profiles = new Map<string, RoutePolicyProfile>();
