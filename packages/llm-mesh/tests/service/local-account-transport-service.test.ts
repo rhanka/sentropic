@@ -125,6 +125,51 @@ describe('LocalAccountTransportService', () => {
     expect(acquisition.material.accountId).toBe('acct_codex_1');
   });
 
+  it('requires fresh Codex enrollment instead of silently claiming a legacy credential', async () => {
+    const keyring = new InMemoryKeyring();
+    const provider = {
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() { return {
+        accountId: 'legacy-codex', label: 'Legacy Codex', ownerScope: 'owner-a',
+        credential: {
+          accountId: 'legacy-codex', accessToken: 'legacy-token',
+          authClientConfigVersion: 'v1.0.0',
+        },
+        metadata: {},
+      }; },
+    } satisfies EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string; label: string; ownerScope: string;
+        credential: PreparedCredential; metadata: Record<string, unknown>;
+      }>;
+    };
+    const providers = new Map<string, EnrollmentProvider>([['codex', provider]]);
+    const configResolver = { async resolveConfig() { return {}; } };
+    const enrollment = new LocalAccountTransportService(keyring, providers, configResolver);
+    await enrollment.pollForCompletion('legacy');
+    const key = 'sentropic-llm-mesh:legacy-codex:public';
+    const record = JSON.parse(await keyring.getSecret(key) ?? '{}');
+    delete record.account.ownerScopeRef;
+    await keyring.setSecret(key, JSON.stringify(record));
+
+    const restored = new LocalAccountTransportService(
+      keyring, providers, configResolver, 'owner-a',
+    );
+    const directory = restored.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+    const subject = { principalRef: 'session-a', ownerScopeRef: 'owner-a' };
+    expect(await directory.listEligible(subject)).toEqual([]);
+    expect(await directory.listDiagnostics?.(subject)).toEqual([{
+      code: 'reenrollment-required', transportProviderId: 'codex',
+      message: 'Codex enrollment must be renewed for owner-scoped routing',
+    }]);
+  });
+
   it('keeps executable account material inside an opaque route attempt', async () => {
     const service = new LocalAccountTransportService(
       new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
@@ -299,6 +344,13 @@ describe('LocalAccountTransportService', () => {
 
     expect(acquisition.material.accessToken).toBe('refreshed-access-token');
     expect(acquisition.material.refreshToken).toBe('refreshed-refresh-token');
+
+    const second = await service.acquire({
+      targetProviderId: 'gemini',
+      transportProviderId: 'cloud-code',
+    });
+    expect(second.material.accessToken).toBe('refreshed-access-token');
+    expect(second.material.refreshToken).toBe('refreshed-refresh-token');
 
     // Verify atomic persistence to keyring
     const publicSecret = await keyring.getSecret('sentropic-llm-mesh:acct_expired_1:public');

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CloudCodeRuntimeClient } from '../../src/transport/cloud-code-runtime-client.js';
+import {
+  CloudCodeRuntimeClient,
+  projectCloudCodeSchema,
+} from '../../src/transport/cloud-code-runtime-client.js';
 
 const context = {
   auth: {
@@ -69,7 +72,7 @@ describe('Cloud Code runtime client', () => {
           { inlineData: { mimeType: 'image/png', data: 'AA==' } },
         ] }],
         tools: [{ functionDeclarations: [{ name: 'lookup', parameters: { type: 'object' } }] }],
-        generationConfig: { thinkingConfig: { effort: 'high' } },
+        generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } },
       },
     });
   });
@@ -167,5 +170,13 @@ describe('Cloud Code runtime client', () => {
     expect(JSON.stringify(body)).not.toContain('$schema');
     expect(JSON.stringify(body)).not.toContain('additionalProperties');
     expect(JSON.stringify(body)).not.toContain('exclusiveMinimum');
+    expect(projectCloudCodeSchema({
+      type: 'object', additionalProperties: false,
+      properties: { value: { type: 'integer', exclusiveMinimum: 0 } },
+      oneOf: [{ type: 'object' }, { type: 'null' }],
+    }).droppedConstraints).toEqual([
+      '$.properties.value:exclusiveMinimum',
+      '$:additionalProperties', '$:oneOf->anyOf',
+    ]);
   });
 });

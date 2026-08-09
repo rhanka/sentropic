@@ -1,4 +1,4 @@
-import type { StreamEvent } from '@sentropic/llm-mesh';
+import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
 import { encodeGatewayStream } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, SettleUsage } from './flow.js';
 import {
@@ -19,12 +19,14 @@ export const runRouteStreamFlow = async (
   for (let index = 0; index < prepared.plan.candidateRefs.length; index += 1) {
     const candidateRef = prepared.plan.candidateRefs[index]!;
     const diagnostic = prepared.plan.diagnostics[index]!;
-    const attempt = await deps.routePlanner.prepareAttempt(
-      prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
-    );
+    let attempt: PreparedRouteAttempt | undefined;
     let iterator: AsyncIterator<StreamEvent> | undefined;
     try {
-      const source = await attempt.stream({
+      attempt = await deps.routePlanner.prepareAttempt(
+        prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
+      );
+      const preparedAttempt = attempt;
+      const source = await preparedAttempt.stream({
         ...prepared.canonical.request,
         ...(request.signal ? { signal: request.signal } : {}),
       });
@@ -35,7 +37,7 @@ export const runRouteStreamFlow = async (
       }
       if (first.done) throw { code: 'empty_stream' };
       if (first.value.type === 'error') throw first.value.data;
-      await attempt.markCommitted();
+      await preparedAttempt.markCommitted();
       let usage = usageFromEvent(first.value) ?? routeUsage();
       let terminal = false;
       const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
@@ -49,7 +51,7 @@ export const runRouteStreamFlow = async (
       const cancel = async () => {
         await iterator?.return?.();
         if (terminal) return;
-        await attempt.releaseCancelled();
+        await preparedAttempt.releaseCancelled();
         attempts.push({
           candidateRef, providerId: diagnostic.actualProviderId,
           modelId: diagnostic.actualModelId,
@@ -72,7 +74,7 @@ export const runRouteStreamFlow = async (
             }
           }
           completed = true;
-          await attempt.complete(attemptUsage(usage));
+          await preparedAttempt.complete(attemptUsage(usage));
           attempts.push({
             candidateRef, providerId: diagnostic.actualProviderId,
             modelId: diagnostic.actualModelId,
@@ -82,8 +84,8 @@ export const runRouteStreamFlow = async (
           await settle('success');
         } catch (error) {
           const classification = classifyRouteError(error, request.signal?.aborted);
-          if (classification.reason === 'cancelled') await attempt.releaseCancelled();
-          else await attempt.recordOutcome(classification, attemptUsage(usage));
+          if (classification.reason === 'cancelled') await preparedAttempt.releaseCancelled();
+          else await preparedAttempt.recordOutcome(classification, attemptUsage(usage));
           attempts.push({
             candidateRef, providerId: diagnostic.actualProviderId,
             modelId: diagnostic.actualModelId,
@@ -123,8 +125,10 @@ export const runRouteStreamFlow = async (
       await iterator?.return?.();
       const classification = classifyRouteError(error, request.signal?.aborted);
       const usage = routeUsage();
-      if (classification.reason === 'cancelled') await attempt.releaseCancelled();
-      else await attempt.recordOutcome(classification, attemptUsage(usage));
+      if (attempt) {
+        if (classification.reason === 'cancelled') await attempt.releaseCancelled();
+        else await attempt.recordOutcome(classification, attemptUsage(usage));
+      }
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,

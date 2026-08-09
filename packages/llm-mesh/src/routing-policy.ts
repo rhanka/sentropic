@@ -113,6 +113,24 @@ export const resolveRoutePolicy = (
   return rule?.fallback ? { ...policy, ...rule.fallback } : policy;
 };
 
+export const resolveRouteStrategy = (
+  policy: RoutePolicy,
+  input: RoutePlanInput,
+): RouteStrategy => {
+  const rule = policy.rules.find((candidate) =>
+    (!candidate.match.requestedModel || candidate.match.requestedModel === input.requestedModel)
+    && (!candidate.match.alias || candidate.match.alias === input.requestedModel)
+    && (!candidate.match.intent || candidate.match.intent === input.intent)
+    && (!candidate.match.capabilities || candidate.match.capabilities.every(
+      (capability) => input.requiredCapabilities?.some(
+        (required) => capabilityRequirementEquals(required, capability),
+      ),
+    )));
+  if (rule?.strategy) return rule.strategy;
+  if (rule?.preferences) return { kind: 'ordered', preferences: rule.preferences };
+  return policy.strategy;
+};
+
 export class InMemoryRoutePolicyProfiles {
   private readonly profiles = new Map<string, RoutePolicyProfile>();
   private activeName?: string;

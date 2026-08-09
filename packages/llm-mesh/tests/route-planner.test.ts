@@ -32,6 +32,19 @@ describe('opaque route planner', () => {
     expect(directory.prepared).toHaveLength(0);
   });
 
+  it('rejects replay of an exact prepared attempt tuple', async () => {
+    const directory = new FakeRouteDirectory();
+    const planner = new InMemoryRoutePlanner({ directory });
+    const plan = await planner.plan(routingSubject(), request);
+    await planner.prepareAttempt(
+      routingSubject(), plan.planRef, plan.candidateRefs[0]!, 'req-replay', 0,
+    );
+    await expect(planner.prepareAttempt(
+      routingSubject(), plan.planRef, plan.candidateRefs[0]!, 'req-replay', 0,
+    )).rejects.toMatchObject({ code: 'invalid-plan' });
+    expect(directory.prepared).toHaveLength(1);
+  });
+
   it('revalidates account revision immediately before preparation', async () => {
     const directory = new FakeRouteDirectory();
     const planner = new InMemoryRoutePlanner({ directory });
@@ -170,6 +183,40 @@ describe('opaque route planner', () => {
     });
 
     expect(sticky.diagnostics[0]?.diagnosticAccountRef).toBe('acct_new');
+  });
+
+  it('releases an uncommitted round-robin reservation and bounds route-key state', async () => {
+    let now = Date.parse('2026-08-08T00:00:00Z');
+    const directory = new FakeRouteDirectory();
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      clock: { now: () => new Date(now) },
+      planTtlMs: 1_000,
+      maximumPlanEntries: 2,
+      maximumRoundRobinEntries: 2,
+    });
+    const rr = {
+      ...request,
+      policyOverride: {
+        strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
+      },
+    };
+    const abandoned = await planner.plan(routingSubject(), {
+      ...rr, requestedModel: 'gemini-3.5-flash', affinityKey: 'abandoned',
+    });
+    expect(abandoned.diagnostics[0]?.diagnosticAccountRef).toBe('acct_new');
+    now += 1_000;
+    const replacement = await planner.plan(routingSubject(), {
+      ...rr, requestedModel: 'gemini-3.5-flash', affinityKey: 'replacement',
+    });
+    expect(replacement.diagnostics[0]?.diagnosticAccountRef).toBe('acct_new');
+
+    await planner.plan(routingSubject('session-b', 'owner-b'), {
+      ...rr, affinityKey: 'key-2',
+    });
+    await planner.plan(routingSubject('session-c', 'owner-c'), {
+      ...rr, affinityKey: 'key-3',
+    });
   });
 
   it('falls back only to a same-account equivalent for a strict affinity', async () => {

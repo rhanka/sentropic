@@ -15,11 +15,30 @@ const asSchema = (value: unknown): Record<string, unknown> | undefined =>
     ? value as Record<string, unknown>
     : undefined;
 
-/** Project JSON Schema onto the subset accepted by the Cloud Code Gemini wire. */
-const cloudCodeSchema = (value: unknown): Record<string, unknown> => {
+export interface CloudCodeSchemaProjection {
+  readonly schema: Record<string, unknown>;
+  readonly droppedConstraints: readonly string[];
+}
+
+/**
+ * Project JSON Schema onto the Cloud Code subset and return every lossy step.
+ * The provider request carries only `schema`; diagnostics travel on the local
+ * canonical stream so weakening is observable without sending unknown fields
+ * to Google.
+ */
+export const projectCloudCodeSchema = (
+  value: unknown,
+  path = '$',
+): CloudCodeSchemaProjection => {
   const input = asSchema(value);
-  if (!input) return {};
+  if (!input) return { schema: {}, droppedConstraints: [`${path}:non-object-schema`] };
   const output: Record<string, unknown> = {};
+  const dropped: string[] = [];
+  const handled = new Set([
+    'type', 'format', 'title', 'description', 'nullable', 'minItems', 'maxItems',
+    'minimum', 'maximum', 'enum', 'const', 'items', 'properties', 'required',
+    'anyOf', 'oneOf', 'default', 'examples',
+  ]);
   const declaredTypes = Array.isArray(input.type) ? input.type : undefined;
   const type = declaredTypes?.find((entry) => entry !== 'null') ?? input.type;
   if (typeof type === 'string') output.type = type;
@@ -37,12 +56,18 @@ const cloudCodeSchema = (value: unknown): Record<string, unknown> => {
   } else if (typeof input.const === 'string') {
     output.enum = [input.const];
   }
-  if (input.items !== undefined) output.items = cloudCodeSchema(input.items);
+  if (input.items !== undefined) {
+    const projected = projectCloudCodeSchema(input.items, `${path}.items`);
+    output.items = projected.schema;
+    dropped.push(...projected.droppedConstraints);
+  }
   const properties = asSchema(input.properties);
   if (properties) {
-    output.properties = Object.fromEntries(Object.entries(properties).map(
-      ([key, schema]) => [key, cloudCodeSchema(schema)],
-    ));
+    output.properties = Object.fromEntries(Object.entries(properties).map(([key, schema]) => {
+      const projected = projectCloudCodeSchema(schema, `${path}.properties.${key}`);
+      dropped.push(...projected.droppedConstraints);
+      return [key, projected.schema];
+    }));
   }
   if (Array.isArray(input.required)) {
     output.required = input.required.filter((entry) => typeof entry === 'string');
@@ -50,14 +75,35 @@ const cloudCodeSchema = (value: unknown): Record<string, unknown> => {
   const alternatives = Array.isArray(input.anyOf)
     ? input.anyOf
     : Array.isArray(input.oneOf) ? input.oneOf : undefined;
-  if (alternatives) output.anyOf = alternatives.map(cloudCodeSchema);
-  return output;
+  if (alternatives) {
+    output.anyOf = alternatives.map((alternative, index) => {
+      const projected = projectCloudCodeSchema(alternative, `${path}.anyOf[${index}]`);
+      dropped.push(...projected.droppedConstraints);
+      return projected.schema;
+    });
+    if (Array.isArray(input.oneOf)) dropped.push(`${path}:oneOf->anyOf`);
+  }
+  if (Array.isArray(input.enum) && !input.enum.every((entry) => typeof entry === 'string')) {
+    dropped.push(`${path}:non-string-enum`);
+  }
+  if (input.const !== undefined && typeof input.const !== 'string') {
+    dropped.push(`${path}:non-string-const`);
+  }
+  for (const key of Object.keys(input)) {
+    if (!handled.has(key)) dropped.push(`${path}:${key}`);
+  }
+  return { schema: output, droppedConstraints: [...new Set(dropped)].sort() };
 };
 
 const messageParts = (message: LlmMeshMessage): unknown[] => {
   if (typeof message.content === 'string') return [{ text: message.content }];
   return message.content.map((part) => {
     if (part.type === 'text') return { text: part.text };
+    if (part.type === 'reasoning') return {
+      text: part.text,
+      thought: true,
+      ...(part.signature ? { thoughtSignature: part.signature } : {}),
+    };
     if (part.type === 'image') return part.data
       ? { inlineData: { mimeType: part.mediaType ?? 'application/octet-stream', data: part.data } }
       : { fileData: { mimeType: part.mediaType, fileUri: part.url } };
@@ -65,6 +111,42 @@ const messageParts = (message: LlmMeshMessage): unknown[] => {
       ? { inlineData: { mimeType: part.mediaType ?? 'application/octet-stream', data: part.data } }
       : { fileData: { mimeType: part.mediaType, fileUri: part.url } };
   });
+};
+
+const cloudCodeToolConfig = (request: GenerateRequest): unknown => {
+  if (!request.toolChoice) return undefined;
+  const choice = request.toolChoice;
+  const mode = choice === 'required' || (typeof choice === 'object' && choice.type === 'tool')
+    ? 'ANY'
+    : choice === 'none' ? 'NONE' : 'AUTO';
+  return {
+    functionCallingConfig: {
+      mode,
+      ...(typeof choice === 'object' && choice.type === 'tool'
+        ? { allowedFunctionNames: [choice.name] }
+        : {}),
+    },
+  };
+};
+
+const cloudCodeThinkingConfig = (request: GenerateRequest): unknown => {
+  if (!request.reasoning) return undefined;
+  const config = {
+    ...(request.reasoning.effort && request.reasoning.effort !== 'none'
+      ? {
+          thinkingLevel: request.reasoning.effort === 'low'
+            ? 'LOW'
+            : request.reasoning.effort === 'medium' ? 'MEDIUM' : 'HIGH',
+        }
+      : {}),
+    ...(request.reasoning.enabled !== undefined
+      ? { includeThoughts: request.reasoning.enabled }
+      : {}),
+    ...(request.reasoning.budgetTokens !== undefined
+      ? { thinkingBudget: request.reasoning.budgetTokens }
+      : {}),
+  };
+  return Object.keys(config).length > 0 ? config : undefined;
 };
 
 const functionResponse = (output: unknown): Record<string, unknown> =>
@@ -90,24 +172,40 @@ const contents = (messages: readonly LlmMeshMessage[]) => messages.flatMap((mess
   return [{ role: message.role === 'assistant' ? 'model' : 'user', parts }];
 });
 
-const providerRequest = (request: GenerateRequest): ProviderRequest => ({
-  modelId: request.modelId ?? (typeof request.model === 'string' ? request.model : ''),
-  contents: contents(request.messages),
-  systemInstruction: {
-    parts: request.messages
-      .filter((message) => message.role === 'system' || message.role === 'developer')
-      .flatMap(messageParts),
-  },
-  ...(request.tools?.length ? { tools: [{ functionDeclarations: request.tools.map((tool) => ({
-    name: tool.name, description: tool.description, parameters: cloudCodeSchema(tool.inputSchema),
-  })) }] } : {}),
-  generationConfig: {
-    ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-    ...(request.topP !== undefined ? { topP: request.topP } : {}),
-    ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
-    ...(request.reasoning ? { thinkingConfig: request.reasoning } : {}),
-  },
-});
+const providerRequest = (request: GenerateRequest): ProviderRequest => {
+  const projections = request.tools?.map((tool) => ({
+    tool,
+    projection: projectCloudCodeSchema(tool.inputSchema, `tools.${tool.name}`),
+  })) ?? [];
+  const droppedConstraints = projections.flatMap(({ projection }) =>
+    projection.droppedConstraints);
+  return {
+    modelId: request.modelId ?? (typeof request.model === 'string' ? request.model : ''),
+    contents: contents(request.messages),
+    systemInstruction: {
+      parts: request.messages
+        .filter((message) => message.role === 'system' || message.role === 'developer')
+        .flatMap(messageParts),
+    },
+    ...(projections.length ? { tools: [{ functionDeclarations: projections.map(({ tool, projection }) => ({
+      name: tool.name, description: tool.description, parameters: projection.schema,
+    })) }] } : {}),
+    ...(droppedConstraints.length > 0 ? { diagnostics: [{
+      code: 'cloud-code-schema-projection-loss',
+      message: `Cloud Code schema projection omitted ${droppedConstraints.length} constraint(s)`,
+      metadata: { droppedConstraints },
+    }] } : {}),
+    ...(cloudCodeToolConfig(request) ? { toolConfig: cloudCodeToolConfig(request) } : {}),
+    generationConfig: {
+      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      ...(request.topP !== undefined ? { topP: request.topP } : {}),
+      ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
+      ...(cloudCodeThinkingConfig(request)
+        ? { thinkingConfig: cloudCodeThinkingConfig(request) }
+        : {}),
+    },
+  };
+};
 
 const usage = (value: unknown): TokenUsage => {
   const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -152,15 +250,24 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
   }
 
   private async *events(source: AsyncIterable<ProviderEvent>): AsyncGenerator<StreamEvent> {
+    let sawToolCall = false;
     for await (const event of source) {
       if (event.kind === 'content') yield { type: 'content_delta', data: { delta: event.delta } };
       else if (event.kind === 'reasoning') yield {
         type: 'reasoning_delta', data: { delta: event.delta, kind: 'summary' },
       };
-      else if (event.kind === 'tool-call') yield {
-        type: 'tool_call_start', data: {
+      else if (event.kind === 'tool-call') {
+        sawToolCall = true;
+        yield { type: 'tool_call_start', data: {
           toolCallId: event.id, providerCallId: event.id, name: event.name,
           argumentsText: JSON.stringify(event.arguments), arguments: event.arguments,
+        } };
+      }
+      else if (event.kind === 'diagnostic') yield {
+        type: 'status', data: {
+          status: 'schema_projection', providerId: 'gemini',
+          message: event.message,
+          metadata: { code: event.code, ...(event.metadata ?? {}) },
         },
       };
       else if (event.kind === 'error') yield { type: 'error', data: {
@@ -169,7 +276,12 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
         ...(event.statusCode ? { statusCode: event.statusCode } : {}),
         ...(event.retryAfterMs ? { retryAfterMs: event.retryAfterMs } : {}),
       } };
-      else yield { type: 'done', data: { finishReason: 'stop', usage: usage(event.usage) } };
+      else yield { type: 'done', data: {
+        finishReason: sawToolCall || event.finishReason === 'FUNCTION_CALL'
+          ? 'tool_calls'
+          : event.finishReason === 'MAX_TOKENS' ? 'length' : 'stop',
+        usage: usage(event.usage),
+      } };
     }
   }
 

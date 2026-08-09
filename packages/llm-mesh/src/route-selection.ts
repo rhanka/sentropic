@@ -1,9 +1,7 @@
 import { modelProfiles, type ModelProfile } from './catalog.js';
-import {
-  capabilityRequirementEquals, modelSupportsCapability, type ModelEquivalenceCouncil,
-} from './equivalence-council.js';
+import { modelSupportsCapability, type ModelEquivalenceCouncil } from './equivalence-council.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
-import type { RoutePolicy, RouteSelector, RouteStrategy } from './routing-policy.js';
+import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
 import { createCanonicalTargetResolver } from './routing-targets.js';
 export interface RankedRouteCandidate {
   readonly account: EligibleAccountDescriptor;
@@ -36,21 +34,6 @@ const selectorMatches = (
     || selector.transportProviderId === candidate.target.transportProviderId)
   && (!selector.diagnosticAccountRef
     || selector.diagnosticAccountRef === candidate.account.diagnosticAccountRef);
-
-const strategyFor = (policy: RoutePolicy, input: RoutePlanInput): RouteStrategy => {
-  const rule = policy.rules.find((candidate) =>
-    (!candidate.match.requestedModel || candidate.match.requestedModel === input.requestedModel)
-    && (!candidate.match.alias || candidate.match.alias === input.requestedModel)
-    && (!candidate.match.intent || candidate.match.intent === input.intent)
-    && (!candidate.match.capabilities || candidate.match.capabilities.every(
-      (capability) => input.requiredCapabilities?.some(
-        (required) => capabilityRequirementEquals(required, capability),
-      ),
-    )));
-  if (rule?.strategy) return rule.strategy;
-  if (rule?.preferences) return { kind: 'ordered', preferences: rule.preferences };
-  return policy.strategy;
-};
 
 const resolveRequestedTarget = (requestedModel: string): {
   providerId: string;
@@ -140,7 +123,7 @@ export const selectRouteCandidates = (input: {
     candidates = candidates.filter((candidate) =>
       selectorMatches(input.request.explicit!, candidate, input.request.requestedModel));
   }
-  const strategy = strategyFor(input.policy, input.request);
+  const strategy = resolveRouteStrategy(input.policy, input.request);
   const preferredExactTransport = candidates
     .filter((candidate) => candidate.target.reason !== 'equivalent')
     .sort((left, right) => Date.parse(right.account.enrollmentCompletedAt)

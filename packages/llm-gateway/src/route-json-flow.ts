@@ -1,4 +1,4 @@
-import type { RouteAttemptUsage } from '@sentropic/llm-mesh';
+import type { PreparedRouteAttempt, RouteAttemptUsage } from '@sentropic/llm-mesh';
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
 import type { GatewayFlowRequest, SettleUsage } from './flow.js';
 import {
@@ -22,10 +22,11 @@ export const runRouteJsonFlow = async (
   for (let index = 0; index < prepared.plan.candidateRefs.length; index += 1) {
     const candidateRef = prepared.plan.candidateRefs[index]!;
     const diagnostic = prepared.plan.diagnostics[index]!;
-    const attempt = await deps.routePlanner.prepareAttempt(
-      prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
-    );
+    let attempt: PreparedRouteAttempt | undefined;
     try {
+      attempt = await deps.routePlanner.prepareAttempt(
+        prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
+      );
       const response = await attempt.generate({
         ...prepared.canonical.request,
         ...(request.signal ? { signal: request.signal } : {}),
@@ -46,8 +47,10 @@ export const runRouteJsonFlow = async (
     } catch (error) {
       const classification = classifyRouteError(error, request.signal?.aborted);
       const usage = errorUsage(error);
-      if (classification.reason === 'cancelled') await attempt.releaseCancelled();
-      else await attempt.recordOutcome(classification, attemptUsage(usage));
+      if (attempt) {
+        if (classification.reason === 'cancelled') await attempt.releaseCancelled();
+        else await attempt.recordOutcome(classification, attemptUsage(usage));
+      }
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,

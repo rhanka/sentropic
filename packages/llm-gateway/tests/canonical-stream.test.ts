@@ -47,9 +47,13 @@ describe('canonical gateway streams', () => {
       delta: { type: 'input_json_delta', partial_json: '{"id":1}' },
     });
     expect(JSON.parse(frames.at(-2)!.data)).toMatchObject({
-      delta: { stop_reason: 'tool_calls' },
+      delta: { stop_reason: 'tool_use' },
       usage: { input_tokens: 12, output_tokens: 7 },
     });
+    const reasoning = JSON.parse(frames[1]!.data);
+    const text = JSON.parse(frames[3]!.data);
+    expect(reasoning).toMatchObject({ index: 0, content_block: { type: 'thinking' } });
+    expect(text).toMatchObject({ index: 1, content_block: { type: 'text' } });
   });
 
   it('preserves OpenAI reasoning, tool deltas, usage and DONE', async () => {

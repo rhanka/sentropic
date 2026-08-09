@@ -18,6 +18,10 @@ const content = (message: LlmMeshMessage): unknown => {
     if (part.type === 'text') {
       return { type: message.role === 'assistant' ? 'output_text' : 'input_text', text: part.text };
     }
+    if (part.type === 'reasoning') return {
+      type: message.role === 'assistant' ? 'output_text' : 'input_text',
+      text: part.text,
+    };
     if (part.type === 'image') {
       const imageUrl = part.url ?? (part.data
         ? `data:${part.mediaType ?? 'application/octet-stream'};base64,${part.data}`
@@ -50,6 +54,11 @@ const messageInput = (message: LlmMeshMessage): unknown[] => {
   return items;
 };
 
+const codexToolChoice = (choice: GenerateRequest['toolChoice']): unknown =>
+  typeof choice === 'object'
+    ? { type: 'function', name: choice.name }
+    : choice;
+
 export const buildCodexRuntimeRequest = (request: GenerateRequest) =>
   prepareCodexResponsesRequest({
     model: request.modelId ?? (typeof request.model === 'string' ? request.model : ''),
@@ -62,8 +71,14 @@ export const buildCodexRuntimeRequest = (request: GenerateRequest) =>
         parameters: tool.inputSchema, strict: tool.strict,
       })),
     } : {}),
-    ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
-    ...(request.reasoning ? { reasoning: { ...request.reasoning } } : {}),
+    ...(request.toolChoice ? { tool_choice: codexToolChoice(request.toolChoice) } : {}),
+    ...(request.parallelToolCalls !== undefined
+      ? { parallel_tool_calls: request.parallelToolCalls }
+      : {}),
+    ...(request.reasoning?.effort || request.reasoning?.summary ? { reasoning: {
+      ...(request.reasoning.effort ? { effort: request.reasoning.effort } : {}),
+      ...(request.reasoning.summary ? { summary: request.reasoning.summary } : {}),
+    } } : {}),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
     ...(request.topP !== undefined ? { top_p: request.topP } : {}),
     include: ['reasoning.encrypted_content'],
@@ -91,7 +106,7 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
     const item = asRecord(record?.item);
     if (item?.type === 'function_call') return [{
       type: 'tool_call_start', data: {
-        toolCallId: String(item.call_id ?? item.id ?? ''),
+        toolCallId: String(item.id ?? item.call_id ?? ''),
         providerCallId: String(item.call_id ?? item.id ?? ''),
         name: String(item.name ?? ''), argumentsText: String(item.arguments ?? ''),
       },
@@ -100,14 +115,18 @@ export const decodeCodexRuntimeEvent = (event: unknown): readonly StreamEvent[] 
   if (type === 'response.function_call_arguments.delta' && typeof record?.delta === 'string') {
     return [{
       type: 'tool_call_delta', data: {
-        toolCallId: String(record.item_id ?? record.call_id ?? ''), delta: record.delta,
+        toolCallId: String(record.item_id ?? record.call_id ?? ''),
+        ...(record.call_id ? { providerCallId: String(record.call_id) } : {}),
+        delta: record.delta,
       },
     }];
   }
   if (type === 'response.completed') {
     const response = asRecord(record?.response); const usage = asRecord(response?.usage);
+    const hasToolCall = Array.isArray(response?.output)
+      && response.output.some((item) => asRecord(item)?.type === 'function_call');
     return [{ type: 'done', data: {
-      finishReason: 'stop', providerId: 'openai',
+      finishReason: hasToolCall ? 'tool_calls' : 'stop', providerId: 'openai',
       ...(typeof response?.id === 'string' ? { providerResponseId: response.id } : {}),
       usage: {
         inputTokens: Number(usage?.input_tokens ?? 0),

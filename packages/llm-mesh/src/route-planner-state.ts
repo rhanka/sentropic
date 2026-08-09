@@ -2,6 +2,7 @@ import type { RankedRouteCandidate } from './route-selection.js';
 import type {
   AffinityDescription,
   IdFactory,
+  RouteAvailabilityDiagnostic,
   RoutePlan,
   VerifiedRoutingSubject,
 } from './routing-contracts.js';
@@ -21,6 +22,8 @@ export interface StoredPlan {
   readonly hadAffinity: boolean;
   readonly candidates: readonly StoredCandidate[];
   readonly policy: RoutePolicy;
+  readonly claimedAttempts: Set<string>;
+  readonly roundRobinKey?: string;
 }
 
 export interface StoredAffinity extends AffinityDescription {
@@ -32,6 +35,7 @@ export class RoutePlanError extends Error {
   constructor(
     message: string,
     readonly code: 'no-route' | 'invalid-plan' | 'expired-plan' | 'stale-candidate' | 'conflict',
+    readonly diagnostic?: RouteAvailabilityDiagnostic,
   ) {
     super(message);
     this.name = 'RoutePlanError';

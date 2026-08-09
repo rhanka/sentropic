@@ -19,6 +19,12 @@ export interface EligibleAccountDescriptor {
   readonly revision: string;
 }
 
+export interface RouteAvailabilityDiagnostic {
+  readonly code: 'reenrollment-required' | 'reauth-required';
+  readonly transportProviderId: string;
+  readonly message: string;
+}
+
 export interface PlannedRouteTarget {
   readonly requestedModel: string;
   readonly providerId: string;
@@ -60,6 +66,11 @@ export interface RoutePlan {
   readonly diagnostics: readonly RouteDiagnostic[];
 }
 
+export interface RouteModelInventoryEntry {
+  readonly modelId: string;
+  readonly providerId: string;
+}
+
 export type RouteOutcomeReason =
   | 'success'
   | 'network-unavailable'
@@ -96,6 +107,9 @@ export interface PreparedRouteAttempt {
 
 export interface AccountDirectoryPort {
   listEligible(subject: VerifiedRoutingSubject): Promise<readonly EligibleAccountDescriptor[]>;
+  listDiagnostics?(
+    subject: VerifiedRoutingSubject,
+  ): Promise<readonly RouteAvailabilityDiagnostic[]>;
   prepareAttempt(input: {
     readonly subject: VerifiedRoutingSubject;
     /** Mesh-internal affinity reference; never exposed in a route plan. */
@@ -133,6 +147,10 @@ export interface AffinityMutationEvent {
 }
 
 export interface RoutePlanner {
+  /** Owner-scoped executable inventory for provider-compatible model listing. */
+  listModels?(
+    subject: VerifiedRoutingSubject,
+  ): Promise<readonly RouteModelInventoryEntry[]>;
   plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan>;
   prepareAttempt(
     subject: VerifiedRoutingSubject,
