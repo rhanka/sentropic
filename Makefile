@@ -583,12 +583,24 @@ build-llm-gateway: build-llm-mesh ## Build @sentropic/llm-gateway dist package
 pack-llm-gateway: build-llm-gateway ## Validate @sentropic/llm-gateway npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
-.PHONY: check-llm-gateway-mesh-dependency
-check-llm-gateway-mesh-dependency: ## Require the gateway's mesh dependency floor to be visible on npm
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; npm view "@sentropic/llm-mesh@$$version" version >/dev/null'
+LLM_ROUTING_PACK_DIR ?= /tmp/sentropic-llm-routing-pack
+
+.PHONY: package-llm-routing-candidates
+package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact mesh/gateway tarballs and print SHA-256 values
+	@mkdir -p "$(LLM_ROUTING_PACK_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
+	@docker run --rm -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'mesh="$$(node -p "require(\"./packages/llm-mesh/package.json\").version")"; gateway="$$(node -p "require(\"./packages/llm-gateway/package.json\").version")"; sha256sum "/artifacts/sentropic-llm-mesh-$$mesh.tgz" "/artifacts/sentropic-llm-gateway-$$gateway.tgz"'
+
+LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 12
+LLM_MESH_REGISTRY_WAIT_SECONDS ?= 5
+
+.PHONY: wait-llm-gateway-mesh-dependency
+wait-llm-gateway-mesh-dependency: ## Wait until the gateway's mesh dependency floor is visible on npm
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; attempt=1; while ! npm view "@sentropic/llm-mesh@$$version" version >/dev/null 2>&1; do if [ "$$attempt" -ge "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" ]; then echo "@sentropic/llm-mesh@$$version is not visible" >&2; exit 1; fi; echo "Waiting for @sentropic/llm-mesh@$$version ($$attempt/$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS))"; sleep "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"; attempt=$$((attempt + 1)); done'
 
 .PHONY: publish-llm-gateway
-publish-llm-gateway: check-llm-model-equivalences check-llm-gateway-mesh-dependency build-llm-gateway ## Publish @sentropic/llm-gateway from CI OIDC trusted publishing
+publish-llm-gateway: check-llm-model-equivalences wait-llm-gateway-mesh-dependency build-llm-gateway ## Publish @sentropic/llm-gateway from CI OIDC trusted publishing
 	@docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp \
