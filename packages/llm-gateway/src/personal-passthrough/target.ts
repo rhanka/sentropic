@@ -10,6 +10,11 @@
  */
 
 import type { ResolvedTarget, TargetResolver } from '../flow.js';
+import {
+  CANONICAL_TARGET_MAPPINGS as MESH_CANONICAL_TARGET_MAPPINGS,
+  DEFAULT_TARGET_MAPPINGS as MESH_DEFAULT_TARGET_MAPPINGS,
+  LAUNCH_ALIAS_TARGET_MAPPINGS as MESH_LAUNCH_ALIAS_TARGET_MAPPINGS,
+} from '@sentropic/llm-mesh';
 
 export interface TargetMapping {
   /** Target provider family (e.g. `anthropic`, `openai`). */
@@ -55,43 +60,8 @@ export const createStaticTargetResolver = (
  * pooled accounts. Uses the current llm-mesh catalog ids. Hosts override this
  * with their enrolled pool's models.
  */
-export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
-  'claude-sonnet-5': {
-    providerId: 'anthropic',
-    transportProviderId: 'claude-code',
-    model: 'claude-sonnet-5',
-  },
-  'claude-opus-5': {
-    providerId: 'anthropic',
-    transportProviderId: 'claude-code',
-    model: 'claude-opus-5',
-  },
-  'claude-opus-4-8': {
-    providerId: 'anthropic',
-    transportProviderId: 'claude-code',
-    model: 'claude-opus-4-8',
-  },
-  'claude-fable-5': {
-    providerId: 'anthropic',
-    transportProviderId: 'claude-code',
-    model: 'claude-fable-5',
-  },
-  'gpt-5.6-luna': {
-    providerId: 'openai',
-    transportProviderId: 'codex',
-    model: 'gpt-5.6-luna',
-  },
-  'gpt-5.6-sol': {
-    providerId: 'openai',
-    transportProviderId: 'codex',
-    model: 'gpt-5.6-sol',
-  },
-  'gpt-5.6-terra': {
-    providerId: 'openai',
-    transportProviderId: 'codex',
-    model: 'gpt-5.6-terra',
-  },
-};
+export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> =
+  MESH_DEFAULT_TARGET_MAPPINGS;
 
 /**
  * A launch alias: a DISPLAY name (what a skill/CLI asks for) served by another
@@ -154,13 +124,7 @@ export const defineLaunchAliases = (
  * catalog — read it via `describeTargetRoutes()` instead.
  */
 export const LAUNCH_ALIAS_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> =
-  defineLaunchAliases([
-    { alias: 'claude-opus-5-high', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra', effort: 'high' },
-    { alias: 'claude-opus-5-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra', effort: 'xhigh' },
-    { alias: 'claude-fable-5-high', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'high' },
-    { alias: 'claude-fable-5-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'xhigh' },
-    { alias: 'claude-fable-5-max', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'max' },
-  ]);
+  MESH_LAUNCH_ALIAS_TARGET_MAPPINGS;
 
 /**
  * THE canonical servable set: provider-faithful models + the owner-ratified
@@ -170,10 +134,8 @@ export const LAUNCH_ALIAS_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping
  * Hosts with their own extra aliases still merge `defineLaunchAliases([...])`
  * over it; that is an opt-in, never a prerequisite.
  */
-export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
-  ...DEFAULT_TARGET_MAPPINGS,
-  ...LAUNCH_ALIAS_TARGET_MAPPINGS,
-};
+export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> =
+  MESH_CANONICAL_TARGET_MAPPINGS;
 
 /** One discoverable route: what a caller may ask for, and what actually serves it. */
 export interface TargetRouteDescription {
