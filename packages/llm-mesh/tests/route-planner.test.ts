@@ -215,6 +215,26 @@ describe('opaque route planner', () => {
     )).rejects.toBeInstanceOf(RoutePlanError);
   });
 
+  it('bounds retained plans and affinities independently', async () => {
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(), maximumPlanEntries: 1, maximumAffinityEntries: 1,
+    });
+    const first = await planner.plan(routingSubject(), { ...request, affinityKey: 'first' });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const second = await planner.plan(routingSubject(), { ...request, affinityKey: 'second' });
+    await (await planner.prepareAttempt(
+      routingSubject(), second.planRef, second.candidateRefs[0]!, 'req-2', 0,
+    )).complete();
+
+    expect(planner.describeAffinity(routingSubject(), 'first')).toBeNull();
+    expect(planner.describeAffinity(routingSubject(), 'second')).not.toBeNull();
+    await expect(planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-3', 0,
+    )).rejects.toMatchObject({ code: 'invalid-plan' });
+  });
+
   it('rejects a plan after its named policy revision changes', async () => {
     const profiles = new InMemoryRoutePolicyProfiles([{
       name: 'coding', revision: 'r1', policy: DEFAULT_ROUTE_POLICY,
