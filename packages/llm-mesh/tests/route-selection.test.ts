@@ -75,6 +75,30 @@ describe('route candidate selection', () => {
     expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
   });
 
+  it('applies a capability rule reconstructed from JSON by structural value', () => {
+    const requiredCapabilities = JSON.parse(
+      '[{"required":true,"capability":"input:image"}]',
+    );
+    const candidates = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash', requiredCapabilities },
+      policy: {
+        ...DEFAULT_ROUTE_POLICY,
+        rules: [{
+          match: {
+            capabilities: JSON.parse(
+              '[{"capability":"input:image","required":true}]',
+            ),
+          },
+          preferences: [{ transportProviderId: 'cloud-code' }],
+        }],
+      },
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts,
+    });
+
+    expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
+  });
+
   it('rejects an equivalent that cannot preserve a requested capability', () => {
     const candidates = selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:image'] },
