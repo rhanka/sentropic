@@ -125,6 +125,29 @@ describe('LocalAccountTransportService', () => {
     expect(acquisition.material.accountId).toBe('acct_codex_1');
   });
 
+  it('advertises only verified executable Cloud Code models when enrollment has no inventory', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'cloud-without-inventory', ownerScopeRef: 'owner-a',
+      targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+      accessToken: 'secret', status: 'active',
+      metadata: { cloudaicompanionProject: 'project-a' },
+    });
+    const directory = service.createRouteDirectory({
+      async generate() { throw new Error('unused'); },
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+
+    const accounts = await directory.listEligible({
+      principalRef: 'session-a', ownerScopeRef: 'owner-a',
+    });
+
+    expect(accounts[0]?.supportedModelIds).toEqual(['gemini-3.1-flash-lite']);
+    expect(accounts[0]?.supportedModelIds).not.toContain('gemini-3.5-flash');
+  });
+
   it('requires fresh Codex enrollment instead of silently claiming a legacy credential', async () => {
     const keyring = new InMemoryKeyring();
     const provider = {

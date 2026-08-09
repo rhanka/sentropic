@@ -267,9 +267,11 @@ The existing owner-ratified suffixed aliases migrate from gateway to mesh:
 |---|---|---|
 | `claude-opus-5-high` | `openai:gpt-5.6-terra` | `high` |
 | `claude-opus-5-xhigh` | `openai:gpt-5.6-terra` | `xhigh` |
+| `claude-opus-4-8-xhigh` | `openai:gpt-5.6-terra` | `xhigh` |
 | `claude-fable-5-high` | `openai:gpt-5.6-sol` | `high` |
 | `claude-fable-5-xhigh` | `openai:gpt-5.6-sol` | `xhigh` |
 | `claude-fable-5-max` | `openai:gpt-5.6-sol` | `max` |
+| `claude-sonnet-5-xhigh` | `openai:gpt-5.6-luna` | `xhigh` |
 
 Bare provider model ids remain provider-faithful. Alias migration preserves
 existing behaviour but does not by itself authorize automatic fallback. Before

@@ -22,6 +22,8 @@ knowledge.
 - Default route precedence is last successfully enrolled first. Consumers such
   as h2a must wire all public options and must not hardcode Cloud Code.
 - Routing policy and the model-equivalence council belong to `llm-mesh`.
+- Owner-ratified xhigh aliases include Opus 5/4.8 to Terra, Fable 5 to Sol,
+  and Sonnet 5 to Luna; bare provider ids remain provider-faithful.
 - Equivalence entries are benchmark-backed, overridable, and mandatory to
   update or explicitly exclude whenever a model is added to the mesh catalog.
 - The gateway remains usable in every direction: for Claude Code, Codex, AGY,
