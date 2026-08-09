@@ -69,4 +69,75 @@ describe('canonical gateway ingress', () => {
     });
     expect(normalized.requiredCapabilities).toEqual(['tools']);
   });
+
+  it('preserves Anthropic tool use and result continuation without leaking blocks as text', () => {
+    const body = {
+      model: 'gemini-3.1-flash-lite',
+      messages: [{
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'I will inspect it.' },
+          { type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'sleep 3' } },
+        ],
+      }, {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'toolu_1', content: 'completed' },
+          { type: 'text', text: 'Continue after the tool.' },
+        ],
+      }],
+      tools: [{ name: 'Bash', input_schema: { type: 'object' } }],
+    };
+
+    const normalized = normalizeGatewayIngress('anthropic-messages', body);
+
+    expect(normalized.request.messages).toHaveLength(3);
+    expect(normalized.request.messages[0]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'I will inspect it.' }],
+      toolCalls: [{
+        toolCallId: 'toolu_1', providerCallId: 'toolu_1', name: 'Bash',
+        argumentsText: '{"command":"sleep 3"}', arguments: { command: 'sleep 3' },
+      }],
+    });
+    expect(normalized.request.messages[1]).toMatchObject({
+      role: 'tool', content: 'completed',
+      toolResult: {
+        toolCallId: 'toolu_1', providerCallId: 'toolu_1', name: 'Bash',
+        output: { content: 'completed' },
+        content: [{ type: 'text', text: 'completed' }],
+      },
+    });
+    expect(normalized.request.messages[2]).toMatchObject({
+      role: 'user', content: [{ type: 'text', text: 'Continue after the tool.' }],
+    });
+    expect(JSON.stringify(normalized.request.messages[0]?.content)).not.toContain('tool_use');
+    expect(JSON.stringify(normalized.request.messages[1]?.content)).not.toContain('tool_result');
+    expect(normalized.requiredCapabilities).toEqual(['tools']);
+  });
+
+  it('preserves Anthropic tool errors and rich result content', () => {
+    const normalized = normalizeGatewayIngress('anthropic-messages', {
+      model: 'gemini-3.1-flash-lite',
+      messages: [{
+        role: 'assistant', content: [
+          { type: 'tool_use', id: 'toolu_2', name: 'Read', input: { file_path: '/missing' } },
+        ],
+      }, {
+        role: 'user', content: [{
+          type: 'tool_result', tool_use_id: 'toolu_2', is_error: true,
+          content: [{ type: 'text', text: 'not found' }],
+        }],
+      }],
+    });
+
+    expect(normalized.request.messages).toHaveLength(2);
+    expect(normalized.request.messages[1]).toMatchObject({
+      role: 'tool',
+      toolResult: {
+        name: 'Read', output: { content: 'not found' }, isError: true,
+        error: { type: 'tool_error', message: 'not found', retryable: false },
+      },
+    });
+  });
 });
