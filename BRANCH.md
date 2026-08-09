@@ -41,6 +41,12 @@ knowledge.
   consumers must re-enrol Codex through the current mesh contract.
 - Sentropic lands and publishes the two libraries first. h2a then performs the
   local consumer integration and functional UAT before this branch may merge.
+# Feature: L2-A/E1 local Track decision owner validator
+
+## Objective
+
+- [ ] Replace the Focus decision-signature fail-closed placeholder with the owner-only local E1 validator.
+- [ ] Preserve the production fail-closed guard when no local Track event-store path is configured.
 
 ## Scope / guardrails
 
@@ -54,10 +60,25 @@ knowledge.
 - All commands use repository Make targets; `ENV=` is last when applicable.
 - Automated tests use `ENV=test-br73-llm-routing`; no service uses root `dev`.
 - New text, code, comments, and artifacts are in English.
+- [ ] Scope is limited to the Focus validator seam, its existing route wiring, the workspace Track mapping, one migration and journal entry, the dev-only Track mount and configuration, focused API unit tests, and this plan.
+- [ ] An owner signature is authorized only after event-store availability, workspace mapping, decision existence in that claimed Track workspace, an explicit caller map entry, and an exact accountable-handle match all succeed.
+- [ ] The validator performs no normalization, derivation from email, fallback identity, or production configuration.
+- [ ] One migration maximum is permitted under `api/drizzle/`.
+- [ ] No local stack is started after a known worktree `EACCES`; verification uses focused API unit tests and CI.
+- [ ] All Make commands use `ENV=test-track-l2-e1` as the final argument; tests never use `ENV=dev`.
+- [ ] All new text is English.
 
 ## Branch Scope Boundaries (MANDATORY)
 
 - **Allowed Paths (implementation scope)**:
+  - `api/src/services/focus/decision-validator.ts`
+  - `api/src/routes/api/focus.ts`
+  - `api/src/db/schema.ts`
+  - `api/drizzle/0042_workspace_track_mapping.sql`
+  - `api/drizzle/meta/_journal.json`
+  - `api/tests/unit/decision-validator.test.ts`
+  - `api/tests/unit/focus-owner-signature-route.test.ts`
+  - `api/tests/fixtures/track-decision-validator/events.jsonl`
   - `BRANCH.md`
   - `PLAN.md`
   - `plan/done/73-BRANCH_feat-llm-mesh-gateway-routing.md` (closure only)
@@ -314,3 +335,62 @@ them blocks merge. No timeout-only amendments are accepted.
   `2eeccb7d6a4b4ffcfdceec8aa3887143aeb1e98666b06577bbf6d6d3f2765dbe`.
 - h2a integration/UAT artifact names the final candidate SHA and versions.
 - Both package versions visible on npm only after merge-triggered CD.
+  - `Makefile`
+  - `docker-compose.yml`
+  - Production deployment/configuration files
+  - `api/src/services/focus/live-session.ts`
+  - `api/src/services/focus/postgres-owner-signature-port.ts`
+  - `api/drizzle/0041_track_owner_signatures.sql`
+  - `.cursor/rules/**`
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `docker-compose.dev.yml` (`BR-L2E1-EX1` only)
+- **Exception process**:
+  - [x] `BR-L2E1-EX1` is declared below before the dev-compose edit.
+  - [x] `BR42-EX1` mirrors `BR-L2E1-EX1` solely for this checkout's numeric harness exception parser.
+
+## Feedback Loop
+
+- [x] `BR-L2E1-EX1` — status: acknowledge; rationale: mount the owner-local `.track` event store read-only and configure `TRACK_EVENTS_PATH` only in `docker-compose.dev.yml`; impact: local API containers can read the mounted event log while deployed services remain unmounted and fail closed; rollback: remove the mount and dev-only Track environment entries.
+- [x] `BR42-EX1` — status: acknowledge; parser-compatible mirror of `BR-L2E1-EX1`, with the identical rationale, impact, and rollback.
+- [x] `L2E1-TRACK-017` — status: acknowledge; the root lock resolves `@sentropic/track` 0.17.0. The focused API test must prove its `report()` and `canevas()` reads against the fixture before implementation is accepted; no dependency bump is planned.
+- [x] `L2E1-BASELINE` — status: acknowledge; `TRACK_BASELINE_COMMIT` is an explicit local adapter input, defaulted in dev to the branch baseline `feebc6769aac8bd313d84310b1f0d66d07b68ee1`; an unset baseline reaches the validator catch and denies.
+- [x] `L2E1-EACCES` — status: acknowledge; `make typecheck-api REGISTRY=local ENV=test-track-l2-e1` reached the known worktree permission failure at `api/node_modules/.vite/vitest`; no further local stack attempt is permitted, while the focused unit proof passed and CI remains required.
+- [ ] `L2E1-WORKSPACE-MAP` — status: attention; after migration, set the local owner workspace without hardcoding its API id: `UPDATE workspaces SET track_workspace_id = 'sentropic' WHERE id = '<owner-workspace-id>';`.
+
+## AI Flaky tests
+
+- [x] Not applicable: the focused validator proof is deterministic and has no AI/provider dependency.
+
+## Orchestration Mode (AI-selected)
+
+- [x] Mono-branch + cherry-pick.
+- [ ] Multi-branch.
+- [x] Rationale: validator, schema, and local compose wiring form one security-sensitive execution path on the supplied branch.
+
+## UAT Management (in orchestration context)
+
+- [x] No UI surface changes: no browser UAT checkpoint is required for this local authorization primitive.
+- [x] Local stack UAT is intentionally excluded after the known worktree `EACCES`; focused unit tests and CI are the verification path.
+
+## Plan / Todo (lot-based)
+
+- [x] **Lot 0 — Baseline and scope**
+  - [x] Confirm `feat/track-decision-validator-e1` is based on `origin/main` at `feebc6769`.
+  - [x] Read the required rules, build brief, template, validator seam, 0041 migration journal pattern, Track fixture, and compose boundaries.
+  - [x] Capture E1 config inputs: `TRACK_EVENTS_PATH`, `TRACK_BASELINE_COMMIT`, and `TRACK_OWNER_IDENTITY_MAP`.
+- [ ] **Lot 1 — Owner-only Track validator**
+  - [ ] Read the mapped Track workspace from `workspaces.track_workspace_id`.
+  - [ ] Read the configured Track store with `TrackReader.report({ baselineCommit, decisions: true })` and `canevas()`.
+  - [ ] Deny every missing, mismatched, unmapped, non-owner, unavailable, or thrown-error path with the specified reason.
+  - [ ] Wire the existing Focus route to the real validator without modifying the #526 driver/adapter path.
+  - [ ] Lot gate: `make typecheck-api ENV=test-track-l2-e1` and `make lint-api ENV=test-track-l2-e1`.
+- [ ] **Lot 2 — Workspace and local-only wiring**
+  - [ ] Add nullable `workspaces.track_workspace_id` in schema, `0042_workspace_track_mapping.sql`, and `api/drizzle/meta/_journal.json`.
+  - [ ] Add only the `BR-L2E1-EX1` read-only store mount plus E1 environment values to `docker-compose.dev.yml`.
+  - [ ] Keep production compose and configuration unchanged.
+- [ ] **Lot 3 — Focused proof and final validation**
+  - [ ] Add `api/tests/unit/decision-validator.test.ts` with owner match, non-owner, unmapped caller, missing decision, workspace mismatch, unset event path, and missing workspace mapping cases.
+  - [ ] Prove the installed locked Track 0.17 reader returns the fixture decision through `report()` and `canevas()`.
+  - [ ] Run `make test-api-unit SCOPE=tests/unit/decision-validator.test.ts REGISTRY=local ENV=test-track-l2-e1`.
+  - [ ] Run `make scope-check` before every commit and verify `harness check scope` before handoff.
+  - [ ] Push `feat/track-decision-validator-e1` and verify its CI.
