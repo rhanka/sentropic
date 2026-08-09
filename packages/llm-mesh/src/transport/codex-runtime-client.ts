@@ -103,6 +103,10 @@ export class CodexRuntimeClient implements OpenAIAdapterClient {
       }
     }
     const calls = [...toolCalls.values()];
+    // The live Codex backend can emit function-call items incrementally while
+    // omitting them from response.completed.output. Collected calls are the
+    // authoritative terminal signal for the canonical response.
+    if (calls.length > 0) finishReason = 'tool_calls';
     return {
       id: responseId, providerId: 'openai',
       modelId: request.modelId ?? 'gpt-5.6-terra',

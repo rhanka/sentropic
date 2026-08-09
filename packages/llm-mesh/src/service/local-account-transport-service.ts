@@ -33,6 +33,22 @@ interface AccountPublicRecord extends AccountPublic {
   account: PersistedAccountTransportAccount;
 }
 
+// Cloud Code does not currently return a per-account model inventory during
+// enrollment. Advertise only the model proven executable by the live transport
+// contract; explicit account.modelIds may widen this after provider evidence.
+const VERIFIED_CLOUD_CODE_MODEL_IDS = ['gemini-3.1-flash-lite'] as const;
+
+const supportedModelIdsForAccount = (
+  account: AccountTransportAccount,
+): readonly string[] => {
+  if (account.modelIds?.length) return account.modelIds;
+  if (account.transportProviderId === 'cloud-code') {
+    return VERIFIED_CLOUD_CODE_MODEL_IDS;
+  }
+  return listModelProfilesByProvider(account.targetProviderId as ProviderId)
+    .map((profile) => profile.modelId);
+};
+
 export class LocalAccountTransportService {
   private static readonly accountIndexKey = 'sentropic-llm-mesh:accounts:index';
   private readonly coordinator: InMemoryAccountTransportCoordinator;
@@ -309,10 +325,7 @@ export class LocalAccountTransportService {
       diagnosticAccountRef: this.diagnosticAccountRef(account.accountId),
       targetProviderId: account.targetProviderId,
       transportProviderId: account.transportProviderId,
-      supportedModelIds: account.modelIds?.length
-        ? account.modelIds
-        : listModelProfilesByProvider(account.targetProviderId as ProviderId)
-          .map((profile) => profile.modelId),
+      supportedModelIds: supportedModelIdsForAccount(account),
       enrollmentCompletedAt: account.enrollmentCompletedAt ?? '1970-01-01T00:00:00.000Z',
       readiness: account.status === 'active' || account.status === undefined
         ? 'ready'
