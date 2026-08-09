@@ -76,6 +76,7 @@ export const selectRouteCandidates = (input: {
   readonly accounts: readonly EligibleAccountDescriptor[];
   readonly roundRobinOffset?: number;
   readonly now?: Date;
+  readonly applyAttemptLimit?: boolean;
 }): readonly RankedRouteCandidate[] => {
   const resolved = resolveRequestedTarget(input.request.requestedModel);
   if (!resolved) return [];
@@ -178,5 +179,7 @@ export const selectRouteCandidates = (input: {
     const offset = (input.roundRobinOffset ?? 0) % candidates.length;
     candidates = [...candidates.slice(offset), ...candidates.slice(0, offset)];
   }
-  return candidates.slice(0, input.policy.maxAttempts);
+  return input.applyAttemptLimit === false
+    ? candidates
+    : candidates.slice(0, input.policy.maxAttempts);
 };

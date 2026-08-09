@@ -41,11 +41,14 @@ export class RoutePlanError extends Error {
 export const subjectRef = (subject: VerifiedRoutingSubject): string =>
   `${subject.principalRef}\u001f${subject.ownerScopeRef}`;
 
+export const routingOwnerRef = (subject: VerifiedRoutingSubject): string =>
+  subject.ownerScopeRef;
+
 export const affinityRef = (
   subject: VerifiedRoutingSubject,
   affinityKey: string,
   workspaceId?: string,
-): string => [subjectRef(subject), workspaceId ?? '', affinityKey].join('\u001f');
+): string => [routingOwnerRef(subject), workspaceId ?? '', affinityKey].join('\u001f');
 
 export const mergeRoutePolicy = (
   base: RoutePolicy,
