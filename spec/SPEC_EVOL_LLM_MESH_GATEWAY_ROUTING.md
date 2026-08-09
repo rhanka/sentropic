@@ -356,6 +356,12 @@ cannot supply them. `enrollmentCompletedAt` is persisted on every successful
 enrollment, restored with the account and updated by successful re-enrollment.
 It is unavailable outside the owner-scoped directory and redacted diagnostics.
 
+Completed enrollment also persists the exact enrollment `ownerScope` as the
+account `ownerScopeRef`. Local records created before owner tagging are not
+eligible by default; a host may bind them once through the explicit
+`legacyAccountOwnerScopeRef` facade option. This migration never infers owner
+from an untrusted request or from whichever subject happens to arrive first.
+
 Account executable material is resolved only inside mesh for the exact planned
 candidate. It is never embedded in a plan or returned to gateway.
 
@@ -417,6 +423,12 @@ atomically activated. Mesh exposes `validateRoutePolicy`,
 Ordered rules are first-match. Round-robin applies only when creating a new
 affinity and never moves an existing lease. Selectors are validated against the
 catalog/council; consumers never carry a copied target table.
+
+Round-robin state and affinity identity are keyed by stable owner scope (plus
+model, and workspace/affinity where applicable), not by the ephemeral
+authenticated session principal. Plans remain bound to the full verified
+subject, so changing principals cannot replay an existing plan, while a
+re-authenticated session for the same owner retains its established affinity.
 
 ### 4.7 Override precedence
 
@@ -657,7 +669,9 @@ gateway configuration is translated to `RoutePolicy` where unambiguous;
 unsupported implicit defaults fail with a clear migration error.
 
 Codex enrollment is explicit and new. Existing Cloud Code enrollment remains
-valid. No h2a file or secret is read by either package during migration.
+valid: legacy local records require the host's explicit stable owner binding,
+then retain their stored credential and `google` -> `gemini` normalization. No
+h2a file or secret is read by either package during migration.
 
 ## 7. Configuration surface for consumers
 

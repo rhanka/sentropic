@@ -60,6 +60,23 @@ const routePlanner = facade.createRoutePlanner(runtime, {
 });
 ```
 
+Every completed enrollment persists its `ownerScopeRef`. The planner lists and
+prepares only accounts whose owner scope exactly matches the authenticated
+`VerifiedRoutingSubject`; changing a bearer/session principal does not change
+that owner scope or its affinities. Older local keyring records that predate
+owner tagging fail closed unless the host explicitly binds them once:
+
+```ts
+const facade = createLlmMeshFacade({
+  mode: 'cli',
+  configResolver,
+  legacyAccountOwnerScopeRef: stableLocalOwnerRef,
+});
+```
+
+That migration option is only for pre-ownerScope local records. New enrollment
+always takes ownership from `StartEnrollmentInput.ownerScope`.
+
 ## Cloud Code OAuth client rotation
 
 The embedded Antigravity OAuth client credential is distributable client configuration, not a
