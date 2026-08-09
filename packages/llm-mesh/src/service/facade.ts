@@ -61,6 +61,8 @@ export interface FacadeOptions {
   configResolver: ConfigResolver;
   keyring?: KeyringAdapter;
   mode: 'cli' | 'portal';
+  /** Explicit owner used only to bind pre-ownerScope local keyring records. */
+  legacyAccountOwnerScopeRef?: string;
 }
 
 export interface LlmMeshFacade {
@@ -106,7 +108,12 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
     ['claude-code', new ClaudeCodeEnrollmentProvider()],
   ]);
 
-  const service = new LocalAccountTransportService(keyring, providers, options.configResolver);
+  const service = new LocalAccountTransportService(
+    keyring,
+    providers,
+    options.configResolver,
+    options.legacyAccountOwnerScopeRef,
+  );
 
   return {
     async enroll(providerId, input) {
