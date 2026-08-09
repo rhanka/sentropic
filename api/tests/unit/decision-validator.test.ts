@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { TrackReader } from '@sentropic/track/read';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createTrackDecisionValidator } from '../../src/services/focus/decision-validator';
 
@@ -37,6 +38,30 @@ describe('Track decision validator', () => {
       .resolves.toEqual({ authorized: false, reason: 'not-decision-owner' });
   });
 
+  it('should deny a case-only caller handle difference', async () => {
+    const validator = validatorFor({ environment: { TRACK_OWNER_IDENTITY_MAP: '{"owner-user":"Rhanka"}' } });
+
+    await expect(validator.validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
+      .resolves.toEqual({ authorized: false, reason: 'not-decision-owner' });
+  });
+
+  it('should deny whitespace around the accountable handle', async () => {
+    const report = vi.spyOn(TrackReader.prototype, 'report').mockReturnValue({
+      decisions: [{ id: DECISION_ID, workspace: 'sentropic', accountable: ' rhanka ' }],
+    } as never);
+    const canevas = vi.spyOn(TrackReader.prototype, 'canevas').mockReturnValue({
+      dossier: { id: DECISION_ID },
+    } as never);
+
+    try {
+      await expect(validatorFor().validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
+        .resolves.toEqual({ authorized: false, reason: 'not-decision-owner' });
+    } finally {
+      report.mockRestore();
+      canevas.mockRestore();
+    }
+  });
+
   it('should deny an unmapped caller', async () => {
     await expect(validatorFor().validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'other-user' }))
       .resolves.toEqual({ authorized: false, reason: 'owner-identity-unmapped' });
@@ -55,6 +80,24 @@ describe('Track decision validator', () => {
 
   it('should deny when the Track events path is unset', async () => {
     await expect(validatorFor({ environment: { TRACK_EVENTS_PATH: '' } })
+      .validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
+      .resolves.toEqual({ authorized: false, reason: 'track-store-unavailable' });
+  });
+
+  it('should return a validation error for a malformed owner identity map', async () => {
+    await expect(validatorFor({ environment: { TRACK_OWNER_IDENTITY_MAP: '{' } })
+      .validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
+      .resolves.toEqual({ authorized: false, reason: 'validation-error' });
+  });
+
+  it('should deny when the Track baseline commit is unset', async () => {
+    await expect(validatorFor({ environment: { TRACK_BASELINE_COMMIT: '' } })
+      .validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
+      .resolves.toEqual({ authorized: false, reason: 'validation-error' });
+  });
+
+  it('should return track-store-unavailable when the Track store is unreadable', async () => {
+    await expect(validatorFor({ environment: { TRACK_EVENTS_PATH: '/missing/track-events.jsonl' } })
       .validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
       .resolves.toEqual({ authorized: false, reason: 'track-store-unavailable' });
   });
