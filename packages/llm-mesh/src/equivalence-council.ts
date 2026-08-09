@@ -1,4 +1,5 @@
 import type { ModelProfile } from './catalog.js';
+import { GENERATED_MODEL_COUNCIL_SOURCE } from './generated-model-council.js';
 import { LAUNCH_ALIAS_TARGET_MAPPINGS } from './routing-targets.js';
 
 export type CapabilityRequirement =
@@ -61,18 +62,6 @@ export class EquivalenceCouncilError extends Error {
   }
 }
 
-const excludedModelKeys = [
-  'openai:gpt-5.6-sol', 'openai:gpt-5.6-terra', 'openai:gpt-5.6-luna',
-  'openai:gpt-5.5', 'openai:gpt-5.4-nano', 'openai:gpt-4.1-nano',
-  'gemini:gemini-3.5-flash', 'gemini:gemini-3.1-flash-lite',
-  'anthropic:claude-sonnet-5', 'anthropic:claude-opus-5',
-  'anthropic:claude-opus-4-8', 'anthropic:claude-fable-5',
-  'mistral:mistral-small-2603', 'mistral:magistral-medium-2509',
-  'cohere:command-a-03-2025', 'cohere:command-a-reasoning-08-2025',
-  'gcp:google/gemini-3.5-flash@gcp', 'gcp:google/gemini-3.1-flash-lite@gcp',
-  'gcp:anthropic/claude-sonnet-4-6@gcp', 'gcp:anthropic/claude-opus-4-6@gcp',
-] as const;
-
 const aliases = Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS).map(([alias, target]) => ({
   alias,
   providerId: target.providerId,
@@ -82,18 +71,18 @@ const aliases = Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS).map(([alias, target
 }));
 
 export const DEFAULT_MODEL_EQUIVALENCE_COUNCIL: ModelEquivalenceCouncil = {
-  revision: '2026-08-08.1',
+  revision: GENERATED_MODEL_COUNCIL_SOURCE.revision,
   aliases,
   groups: [],
-  exclusions: excludedModelKeys.map((key) => {
+  exclusions: GENERATED_MODEL_COUNCIL_SOURCE.excludedModelKeys.map((key) => {
     const separator = key.indexOf(':');
     return {
       providerId: key.slice(0, separator),
       modelId: key.slice(separator + 1),
-      reason: 'No pinned benchmark evidence authorizes automatic substitution.',
-      reviewer: 'BR-73 model council',
-      expiresAt: '2027-02-08T00:00:00.000Z',
-      provenance: 'spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md',
+      reason: GENERATED_MODEL_COUNCIL_SOURCE.reason,
+      reviewer: GENERATED_MODEL_COUNCIL_SOURCE.reviewer,
+      expiresAt: GENERATED_MODEL_COUNCIL_SOURCE.expiresAt,
+      provenance: `${GENERATED_MODEL_COUNCIL_SOURCE.provenance}#${GENERATED_MODEL_COUNCIL_SOURCE.digest}`,
     };
   }),
 };
