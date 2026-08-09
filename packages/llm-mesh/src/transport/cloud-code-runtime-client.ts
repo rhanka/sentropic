@@ -67,12 +67,15 @@ const messageParts = (message: LlmMeshMessage): unknown[] => {
   });
 };
 
+const functionResponse = (output: unknown): Record<string, unknown> =>
+  asSchema(output) ?? { output: output ?? null };
+
 const contents = (messages: readonly LlmMeshMessage[]) => messages.flatMap((message) => {
   if (message.role === 'system' || message.role === 'developer') return [];
   if (message.role === 'tool') return [{
     role: 'user', parts: [{ functionResponse: {
       id: message.toolResult.providerCallId ?? message.toolResult.toolCallId,
-      name: message.toolResult.name, response: message.toolResult.output,
+      name: message.toolResult.name, response: functionResponse(message.toolResult.output),
     } }],
   }];
   const parts = messageParts(message);
