@@ -15,6 +15,11 @@ import { EncryptedFileKeyring } from '../node/keyring/encrypted-file-keyring.js'
 import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
 import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
 import { LocalAccountTransportService } from './local-account-transport-service.js';
+import type { LlmMesh } from '../mesh.js';
+import {
+  InMemoryRoutePlanner, type InMemoryRoutePlannerOptions,
+} from '../route-planner.js';
+import type { RoutePlanner } from '../routing-contracts.js';
 
 export interface ProviderRequest {
   modelId: string;
@@ -67,6 +72,10 @@ export interface LlmMeshFacade {
 
   // Provider adapter
   getAdapter(providerId: AccountTransportProviderId): ProviderAdapter;
+  createRoutePlanner(
+    runtime: Pick<LlmMesh, 'generate' | 'stream'>,
+    options?: Omit<InMemoryRoutePlannerOptions, 'directory'>,
+  ): RoutePlanner;
 }
 
 export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
@@ -116,6 +125,12 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
         return new CloudCodeProviderAdapter();
       }
       throw new Error(`Adapter for ${providerId} not available locally`);
+    },
+    createRoutePlanner(runtime, routeOptions = {}) {
+      return new InMemoryRoutePlanner({
+        ...routeOptions,
+        directory: service.createRouteDirectory(runtime),
+      });
     },
   };
 }
