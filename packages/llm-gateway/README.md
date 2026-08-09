@@ -49,11 +49,19 @@ Only verified caller data may determine ownership. `routeInput` is a trusted
 host projection for workspace, affinity, intent/profile, and policy overrides;
 request bodies never supply an owner identity.
 
+When account ownership is stable across multiple authenticated session
+principals, caller authentication may set `CostContext.ownerScopeRef`. The
+gateway forwards that verified scope to mesh while preserving `principalId`
+for caller identity. Existing callers that omit it retain the
+`tenantId:principalId` ownership scope.
+
 Fallback is attempted only before a response is committed. The first visible
 canonical stream event commits the route, after which an error is emitted once
 in the selected provider's shape and no other provider is tried. All attempts
 produce one aggregate financial settlement while retaining operational
-per-attempt outcomes.
+per-attempt outcomes. A planning failure after trusted `routeInput` processing
+also settles once, with zero usage and no attempts, so host request lifecycles
+cannot remain open.
 
 `personal-passthrough` remains the default mode. Cross-user pooling still
 requires both `mode: 'cross-user-pool'` and the explicit

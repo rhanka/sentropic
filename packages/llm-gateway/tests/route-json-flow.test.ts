@@ -51,6 +51,31 @@ const routePlanner = (attempts: PreparedRouteAttempt[]): RoutePlanner => ({
 });
 
 describe('route JSON flow', () => {
+  it('settles once when planning fails after trusted route input starts the request', async () => {
+    const settlements: RouteRequestSettlement[] = [];
+    let routeInputCalls = 0;
+    const failingPlanner = {
+      async plan() { throw new Error('no eligible route'); },
+    } as unknown as RoutePlanner;
+
+    await expect(runRouteJsonFlow({
+      config,
+      routePlanner: failingPlanner,
+      routeInput() {
+        routeInputCalls += 1;
+        return { affinityKey: 'session-a' };
+      },
+      metering: { settleRoute(value) { settlements.push(value); } },
+    }, request)).rejects.toThrow(/no eligible route/);
+
+    expect(routeInputCalls).toBe(1);
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      outcome: 'failed', requestedModel: 'gpt-5.6-terra',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: true }, attempts: [],
+    });
+  });
+
   it('falls back before commitment and settles aggregate usage once', async () => {
     const operational: unknown[] = [];
     const settlements: RouteRequestSettlement[] = [];
