@@ -14,6 +14,7 @@ interface ResolvedRouteTarget {
   readonly modelId: string;
   readonly transportProviderId?: string;
   readonly effort?: string;
+  readonly transportPreferences?: readonly string[];
   readonly reason: PlannedRouteTarget['reason'];
 }
 const resolveCanonical = createCanonicalTargetResolver();
@@ -102,6 +103,9 @@ export const selectRouteCandidates = (input: {
         providerId: member.providerId,
         modelId: member.modelId,
         ...(member.effort ? { effort: member.effort } : {}),
+        ...(member.transportPreferences
+          ? { transportPreferences: member.transportPreferences }
+          : {}),
         reason: 'equivalent',
       }));
   }
@@ -133,6 +137,12 @@ export const selectRouteCandidates = (input: {
       selectorMatches(input.request.explicit!, candidate, input.request.requestedModel));
   }
   const strategy = strategyFor(input.policy, input.request);
+  const preferredExactTransport = candidates
+    .filter((candidate) => candidate.target.reason !== 'equivalent')
+    .sort((left, right) => Date.parse(right.account.enrollmentCompletedAt)
+      - Date.parse(left.account.enrollmentCompletedAt))[0]?.account.transportProviderId;
+  const targetFor = (candidate: RankedRouteCandidate) => targets.find((target) =>
+    target.providerId === candidate.target.providerId && target.modelId === candidate.target.modelId);
   candidates.sort((left, right) => {
     if (strategy.kind === 'ordered') {
       const rank = (candidate: RankedRouteCandidate) => strategy.preferences.findIndex(
@@ -141,6 +151,22 @@ export const selectRouteCandidates = (input: {
       if (leftRank !== rightRank) return (leftRank < 0 ? Number.MAX_SAFE_INTEGER : leftRank)
         - (rightRank < 0 ? Number.MAX_SAFE_INTEGER : rightRank);
     }
+    const classRank = (candidate: RankedRouteCandidate) =>
+      candidate.target.reason === 'equivalent' ? 1 : 0;
+    if (classRank(left) !== classRank(right)) return classRank(left) - classRank(right);
+    if (input.policy.preferSameTransport && classRank(left) === 1 && preferredExactTransport) {
+      const sameTransportRank = (candidate: RankedRouteCandidate) =>
+        candidate.account.transportProviderId === preferredExactTransport ? 0 : 1;
+      if (sameTransportRank(left) !== sameTransportRank(right)) {
+        return sameTransportRank(left) - sameTransportRank(right);
+      }
+    }
+    const transportRank = (candidate: RankedRouteCandidate) => {
+      const rank = targetFor(candidate)?.transportPreferences
+        ?.indexOf(candidate.account.transportProviderId) ?? -1;
+      return rank < 0 ? Number.MAX_SAFE_INTEGER : rank;
+    };
+    if (transportRank(left) !== transportRank(right)) return transportRank(left) - transportRank(right);
     return Date.parse(right.account.enrollmentCompletedAt)
       - Date.parse(left.account.enrollmentCompletedAt)
       || left.account.diagnosticAccountRef.localeCompare(right.account.diagnosticAccountRef);
