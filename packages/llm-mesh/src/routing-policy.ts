@@ -1,4 +1,6 @@
-import type { CapabilityRequirement } from './equivalence-council.js';
+import {
+  capabilityRequirementEquals, type CapabilityRequirement,
+} from './equivalence-council.js';
 import type { RoutePlanInput } from './routing-contracts.js';
 
 export interface RouteSelector {
@@ -104,7 +106,9 @@ export const resolveRoutePolicy = (
     && (!candidate.match.alias || candidate.match.alias === input.requestedModel)
     && (!candidate.match.intent || candidate.match.intent === input.intent)
     && (!candidate.match.capabilities || candidate.match.capabilities.every(
-      (capability) => input.requiredCapabilities?.includes(capability),
+      (capability) => input.requiredCapabilities?.some(
+        (required) => capabilityRequirementEquals(required, capability),
+      ),
     )));
   return rule?.fallback ? { ...policy, ...rule.fallback } : policy;
 };

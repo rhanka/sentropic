@@ -1,6 +1,6 @@
 import { modelProfiles, type ModelProfile } from './catalog.js';
 import {
-  modelSupportsCapability, type ModelEquivalenceCouncil,
+  capabilityRequirementEquals, modelSupportsCapability, type ModelEquivalenceCouncil,
 } from './equivalence-council.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import type { RoutePolicy, RouteSelector, RouteStrategy } from './routing-policy.js';
@@ -43,7 +43,9 @@ const strategyFor = (policy: RoutePolicy, input: RoutePlanInput): RouteStrategy 
     && (!candidate.match.alias || candidate.match.alias === input.requestedModel)
     && (!candidate.match.intent || candidate.match.intent === input.intent)
     && (!candidate.match.capabilities || candidate.match.capabilities.every(
-      (capability) => input.requiredCapabilities?.includes(capability),
+      (capability) => input.requiredCapabilities?.some(
+        (required) => capabilityRequirementEquals(required, capability),
+      ),
     )));
   if (rule?.strategy) return rule.strategy;
   if (rule?.preferences) return { kind: 'ordered', preferences: rule.preferences };

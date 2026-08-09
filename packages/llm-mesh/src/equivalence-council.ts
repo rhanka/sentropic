@@ -2,10 +2,15 @@ import type { ModelProfile } from './catalog.js';
 import { GENERATED_MODEL_COUNCIL_SOURCE } from './generated-model-council.js';
 import { LAUNCH_ALIAS_TARGET_MAPPINGS } from './routing-targets.js';
 
-export type CapabilityRequirement =
+export type CapabilityName =
   | keyof ModelProfile['capabilities']
   | `input:${ModelProfile['capabilities']['modalities']['input'][number]}`
   | `output:${ModelProfile['capabilities']['modalities']['output'][number]}`;
+
+export type CapabilityRequirement =
+  | CapabilityName
+  | { readonly capability: CapabilityName; readonly required: true }
+  | { readonly capability: CapabilityName; readonly minimum: number };
 
 export interface BenchmarkEvidence {
   readonly suite: string;
@@ -62,19 +67,51 @@ export class EquivalenceCouncilError extends Error {
   }
 }
 
+const normalizedCapabilityRequirement = (requirement: CapabilityRequirement): {
+  readonly capability: CapabilityName;
+  readonly minimum?: number;
+} => typeof requirement === 'string'
+  ? { capability: requirement }
+  : {
+      capability: requirement.capability,
+      ...('minimum' in requirement ? { minimum: requirement.minimum } : {}),
+    };
+
+export const capabilityRequirementEquals = (
+  left: CapabilityRequirement,
+  right: CapabilityRequirement,
+): boolean => {
+  const normalizedLeft = normalizedCapabilityRequirement(left);
+  const normalizedRight = normalizedCapabilityRequirement(right);
+  return normalizedLeft.capability === normalizedRight.capability
+    && normalizedLeft.minimum === normalizedRight.minimum;
+};
+
 export const modelSupportsCapability = (
   profile: ModelProfile | undefined,
   requirement: CapabilityRequirement,
 ): boolean => {
   if (!profile) return false;
-  if (requirement.startsWith('input:')) {
-    return profile.capabilities.modalities.input.includes(requirement.slice(6) as never);
+  const normalized = normalizedCapabilityRequirement(requirement);
+  if (normalized.capability.startsWith('input:')) {
+    return profile.capabilities.modalities.input.includes(
+      normalized.capability.slice(6) as never,
+    );
   }
-  if (requirement.startsWith('output:')) {
-    return profile.capabilities.modalities.output.includes(requirement.slice(7) as never);
+  if (normalized.capability.startsWith('output:')) {
+    return profile.capabilities.modalities.output.includes(
+      normalized.capability.slice(7) as never,
+    );
   }
-  const capability = profile.capabilities[requirement as keyof ModelProfile['capabilities']];
-  if (typeof capability === 'number') return capability > 0;
+  const capability = profile.capabilities[
+    normalized.capability as keyof ModelProfile['capabilities']
+  ];
+  if (typeof capability === 'number') {
+    return normalized.minimum === undefined
+      ? capability > 0
+      : capability >= normalized.minimum;
+  }
+  if (normalized.minimum !== undefined) return false;
   if (capability && typeof capability === 'object' && 'support' in capability) {
     return capability.support !== 'unsupported';
   }
