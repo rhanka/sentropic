@@ -113,6 +113,59 @@ describe('LocalAccountTransportService', () => {
     expect(acquisition.material.accountId).toBe('acct_codex_1');
   });
 
+  it('keeps executable account material inside an opaque route attempt', async () => {
+    const service = new LocalAccountTransportService(
+      new InMemoryKeyring(), new Map(), { async resolveConfig() { return {}; } },
+    );
+    service.registerAccount({
+      accountId: 'secret-account-id', targetProviderId: 'openai', transportProviderId: 'codex',
+      accessToken: 'secret-access-token', status: 'active', modelIds: ['gpt-5.6-terra'],
+      enrollmentCompletedAt: '2026-08-08T00:00:00Z',
+    });
+    const generate = vi.fn(async (request) => ({
+      id: 'response-1', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+      finishReason: 'stop' as const,
+      providerMetadata: { receivedAuth: request.auth },
+    }));
+    const directory = service.createRouteDirectory({
+      generate,
+      async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+    });
+
+    const accounts = await directory.listEligible({
+      principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1',
+    });
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({
+      diagnosticAccountRef: expect.stringMatching(/^acct_/), readiness: 'ready',
+      targetProviderId: 'openai', transportProviderId: 'codex',
+    });
+    expect(JSON.stringify(accounts)).not.toContain('secret-access-token');
+    expect(accounts[0]?.diagnosticAccountRef).not.toContain('secret-account-id');
+
+    const attempt = await directory.prepareAttempt({
+      subject: { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' },
+      accountRef: accounts[0]!.accountRef,
+      target: {
+        requestedModel: 'claude-opus-5-high', providerId: 'openai',
+        modelId: 'gpt-5.6-terra', transportProviderId: 'codex',
+        effort: 'high', reason: 'alias',
+      },
+      requestId: 'request-1', attemptIndex: 0,
+    });
+    await attempt.generate({ messages: [{ role: 'user', content: 'hello' }] });
+    await attempt.complete();
+
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      auth: expect.objectContaining({
+        material: expect.objectContaining({ accessToken: 'secret-access-token' }),
+      }),
+      reasoning: { effort: 'high' },
+    }));
+  });
+
   it('acquires an active account and refreshes atomically if expired', async () => {
     const keyring = new InMemoryKeyring();
     const mockProvider: EnrollmentProvider = {
