@@ -7,6 +7,7 @@ const response = {
   toolCalls: [{
     toolCallId: 'sentropic-call-1', providerCallId: 'provider-call-1',
     name: 'lookup', argumentsText: '{"id":1}', arguments: { id: 1 },
+    metadata: { thoughtSignature: 'cloud-signature' },
   }],
   finishReason: 'tool_calls' as const,
   usage: { inputTokens: 12, outputTokens: 7, reasoningTokens: 3, totalTokens: 19 },
@@ -24,6 +25,7 @@ describe('canonical gateway egress', () => {
       id: 'response-1', type: 'message', model: 'gpt-5.6-terra',
       content: [
         { type: 'text', text: 'Done.' },
+        { type: 'thinking', thinking: '', signature: 'cloud-signature' },
         { type: 'tool_use', id: 'provider-call-1', name: 'lookup', input: { id: 1 } },
       ],
       stop_reason: 'tool_use',

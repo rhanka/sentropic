@@ -162,6 +162,9 @@ const contents = (messages: readonly LlmMeshMessage[]) => messages.flatMap((mess
   }];
   const parts = messageParts(message);
   if (message.role === 'assistant') message.toolCalls?.forEach((call) => parts.push({
+    ...(typeof call.metadata?.thoughtSignature === 'string'
+      ? { thoughtSignature: call.metadata.thoughtSignature }
+      : {}),
     functionCall: {
       id: call.providerCallId ?? call.toolCallId, name: call.name,
       args: call.arguments ?? (() => {
@@ -261,6 +264,7 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
         yield { type: 'tool_call_start', data: {
           toolCallId: event.id, providerCallId: event.id, name: event.name,
           argumentsText: JSON.stringify(event.arguments), arguments: event.arguments,
+          ...(event.metadata ? { metadata: event.metadata } : {}),
         } };
       }
       else if (event.kind === 'diagnostic') yield {

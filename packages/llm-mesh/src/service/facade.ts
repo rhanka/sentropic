@@ -38,7 +38,10 @@ export interface ProviderRequest {
 export type ProviderEvent =
   | { kind: 'content'; delta: string }
   | { kind: 'reasoning'; delta: string }
-  | { kind: 'tool-call'; id: string; name: string; arguments: unknown }
+  | {
+      kind: 'tool-call'; id: string; name: string; arguments: unknown;
+      metadata?: Record<string, unknown>;
+    }
   | {
       kind: 'diagnostic'; code: string; message: string;
       metadata?: Record<string, unknown>;

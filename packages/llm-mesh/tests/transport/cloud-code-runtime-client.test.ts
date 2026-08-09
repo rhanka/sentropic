@@ -25,7 +25,10 @@ const streamResponse = () => new Response(new ReadableStream<Uint8Array>({
         candidates: [{ content: { parts: [
           { text: 'thinking', thought: true },
           { text: 'answer' },
-          { functionCall: { id: 'call-1', name: 'lookup', args: { id: 1 } } },
+          {
+            thoughtSignature: 'cloud-signature',
+            functionCall: { id: 'call-1', name: 'lookup', args: { id: 1 } },
+          },
         ] } }],
         usageMetadata: { promptTokenCount: 9, candidatesTokenCount: 4, totalTokenCount: 13 },
       },
@@ -58,6 +61,7 @@ describe('Cloud Code runtime client', () => {
       finishReason: 'tool_calls',
       toolCalls: [{
         providerCallId: 'call-1', name: 'lookup', arguments: { id: 1 },
+        metadata: { thoughtSignature: 'cloud-signature' },
       }],
       usage: { inputTokens: 9, outputTokens: 4, totalTokens: 13 },
     });
@@ -88,6 +92,7 @@ describe('Cloud Code runtime client', () => {
         toolCalls: [{
           toolCallId: 'toolu_1', providerCallId: 'toolu_1', name: 'Bash',
           argumentsText: '{"command":"sleep 3"}', arguments: { command: 'sleep 3' },
+          metadata: { thoughtSignature: 'cloud-signature' },
         }],
       }, {
         role: 'tool', content: 'completed',
@@ -102,6 +107,7 @@ describe('Cloud Code runtime client', () => {
     expect(JSON.parse(String(init.body))).toMatchObject({
       request: { contents: [{
         role: 'model', parts: [{
+          thoughtSignature: 'cloud-signature',
           functionCall: { id: 'toolu_1', name: 'Bash', args: { command: 'sleep 3' } },
         }],
       }, {

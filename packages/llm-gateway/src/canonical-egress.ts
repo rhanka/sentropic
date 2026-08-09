@@ -44,12 +44,19 @@ export const encodeGatewayResponse = (
   const headers = safeHeaders(response.providerMetadata);
   if (wire === 'anthropic-messages') {
     const content: unknown[] = response.text ? [{ type: 'text', text: response.text }] : [];
-    response.toolCalls.forEach((call) => content.push({
-      type: 'tool_use', id: call.providerCallId ?? call.toolCallId, name: call.name,
-      input: call.arguments ?? (() => {
-        try { return JSON.parse(call.argumentsText); } catch { return call.argumentsText; }
-      })(),
-    }));
+    response.toolCalls.forEach((call) => {
+      if (typeof call.metadata?.thoughtSignature === 'string') {
+        content.push({
+          type: 'thinking', thinking: '', signature: call.metadata.thoughtSignature,
+        });
+      }
+      content.push({
+        type: 'tool_use', id: call.providerCallId ?? call.toolCallId, name: call.name,
+        input: call.arguments ?? (() => {
+          try { return JSON.parse(call.argumentsText); } catch { return call.argumentsText; }
+        })(),
+      });
+    });
     return {
       status: 200,
       body: {
