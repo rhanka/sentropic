@@ -32,6 +32,7 @@ export interface AccountTransportAccount {
   cooldownUntil?: Date | string | null;
   headers?: Record<string, string>;
   metadata?: Record<string, unknown>;
+  enrollmentCompletedAt?: string;
 }
 
 export interface AccountTransportAcquireInput {
@@ -294,6 +295,12 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     const candidates = [...this.accounts.values()]
       .filter((account) => this.isEligible(account, input, now))
       .sort((left, right) => {
+        const enrollmentOrder = (Date.parse(right.enrollmentCompletedAt ?? '') || 0)
+          - (Date.parse(left.enrollmentCompletedAt ?? '') || 0);
+        if (enrollmentOrder !== 0) {
+          return enrollmentOrder;
+        }
+
         if (right.priority !== left.priority) {
           return right.priority - left.priority;
         }
