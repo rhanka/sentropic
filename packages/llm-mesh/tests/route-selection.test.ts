@@ -55,6 +55,86 @@ describe('route candidate selection', () => {
     expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
   });
 
+  it('inverts one launch alias between enrolled Codex and Cloud Code transports', () => {
+    const launchAccounts = [
+      {
+        accountRef: 'codex-internal',
+        diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai',
+        transportProviderId: 'codex',
+        supportedModelIds: ['gpt-5.6-terra'],
+        enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready' as const,
+        revision: 'r1',
+      },
+      {
+        accountRef: 'cloud-internal',
+        diagnosticAccountRef: 'cloud-redacted',
+        targetProviderId: 'gemini',
+        transportProviderId: 'cloud-code',
+        supportedModelIds: ['gemini-3.1-flash-lite'],
+        enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+        readiness: 'ready' as const,
+        revision: 'r1',
+      },
+    ];
+    const choose = (first: 'codex' | 'cloud-code') => selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-5-xhigh' },
+      policy: {
+        ...DEFAULT_ROUTE_POLICY,
+        strategy: {
+          kind: 'ordered',
+          preferences: [
+            { transportProviderId: first },
+            { transportProviderId: first === 'codex' ? 'cloud-code' : 'codex' },
+          ],
+        },
+      },
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: launchAccounts,
+    });
+
+    expect(choose('codex').map((candidate) => candidate.target.transportProviderId))
+      .toEqual(['codex', 'cloud-code']);
+    expect(choose('cloud-code').map((candidate) => candidate.target.transportProviderId))
+      .toEqual(['cloud-code', 'codex']);
+  });
+
+  it('keeps a bare provider model faithful when another transport is preferred', () => {
+    const candidates = selectRouteCandidates({
+      request: { requestedModel: 'gpt-5.6-terra' },
+      policy: {
+        ...DEFAULT_ROUTE_POLICY,
+        strategy: {
+          kind: 'ordered',
+          preferences: [
+            { transportProviderId: 'cloud-code' },
+            { transportProviderId: 'codex' },
+          ],
+        },
+      },
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'codex-internal',
+        diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai',
+        transportProviderId: 'codex',
+        supportedModelIds: ['gpt-5.6-terra'],
+        enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready',
+        revision: 'r1',
+      }],
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.target).toMatchObject({
+      providerId: 'openai',
+      modelId: 'gpt-5.6-terra',
+      transportProviderId: 'codex',
+      reason: 'exact',
+    });
+  });
+
   it('rotates only the starting candidate for a new affinity', () => {
     const policy = {
       ...DEFAULT_ROUTE_POLICY,
