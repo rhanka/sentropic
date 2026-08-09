@@ -184,6 +184,7 @@ describe('Cloud Code Transport', () => {
         kind: 'error',
         code: 'auth_failed',
         message: 'Cloud Code authentication failed (401)',
+        statusCode: 401,
       },
     ]);
     expect(outcomes).toEqual([{ status: 'auth_failed', providerStatusCode: 401 }]);
@@ -215,6 +216,8 @@ describe('Cloud Code Transport', () => {
         kind: 'error',
         code: 'rate_limited',
         message: 'Cloud Code rate limit exceeded (429)',
+        statusCode: 429,
+        retryAfterMs: 10000,
       },
     ]);
     expect(outcomes).toEqual([
