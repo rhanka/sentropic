@@ -99,7 +99,7 @@ export async function* parseCloudCodeSSE(
           type CloudCodeStreamChunk = {
             candidates?: Array<{
               content?: { parts?: Array<{
-                text?: string; thought?: boolean;
+                text?: string; thought?: boolean; thoughtSignature?: string;
                 functionCall?: { id?: string; name?: string; args?: unknown };
               }> };
               finishReason?: string;
@@ -132,6 +132,9 @@ export async function* parseCloudCodeSSE(
                 id: part.functionCall.id ?? part.functionCall.name,
                 name: part.functionCall.name,
                 arguments: part.functionCall.args ?? {},
+                ...(part.thoughtSignature
+                  ? { metadata: { thoughtSignature: part.thoughtSignature } }
+                  : {}),
               };
             }
           }

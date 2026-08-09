@@ -99,6 +99,7 @@ describe('canonical gateway ingress', () => {
         role: 'assistant',
         content: [
           { type: 'text', text: 'I will inspect it.' },
+          { type: 'thinking', thinking: '', signature: 'cloud-signature' },
           { type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'sleep 3' } },
         ],
       }, {
@@ -116,10 +117,14 @@ describe('canonical gateway ingress', () => {
     expect(normalized.request.messages).toHaveLength(3);
     expect(normalized.request.messages[0]).toMatchObject({
       role: 'assistant',
-      content: [{ type: 'text', text: 'I will inspect it.' }],
+      content: [
+        { type: 'text', text: 'I will inspect it.' },
+        { type: 'reasoning', text: '', signature: 'cloud-signature' },
+      ],
       toolCalls: [{
         toolCallId: 'toolu_1', providerCallId: 'toolu_1', name: 'Bash',
         argumentsText: '{"command":"sleep 3"}', arguments: { command: 'sleep 3' },
+        metadata: { thoughtSignature: 'cloud-signature' },
       }],
     });
     expect(normalized.request.messages[1]).toMatchObject({

@@ -1,6 +1,6 @@
 import type {
   CapabilityRequirement, GenerateRequest, LlmMeshMessage, MessageContent, ToolDefinition,
-  ToolChoice, ToolResultContent,
+  ToolCall, ToolChoice, ToolResultContent,
 } from '@sentropic/llm-mesh';
 import type { GatewayWire } from './ports/dispatch.js';
 
@@ -67,15 +67,31 @@ const openAiToolCalls = (message: JsonRecord) => records(message.tool_calls).map
   };
 });
 
-const anthropicToolCalls = (content: unknown) => records(content)
-  .filter((part) => part.type === 'tool_use')
-  .map((part) => ({
-    toolCallId: String(part.id ?? ''),
-    providerCallId: String(part.id ?? ''),
-    name: String(part.name ?? ''),
-    argumentsText: JSON.stringify(part.input ?? {}),
-    arguments: part.input ?? {},
-  }));
+const anthropicToolCalls = (content: unknown) => {
+  const calls: ToolCall[] = [];
+  let thoughtSignature: string | undefined;
+  for (const part of records(content)) {
+    if (part.type === 'thinking' && typeof part.signature === 'string') {
+      thoughtSignature = part.signature;
+      continue;
+    }
+    if (part.type === 'redacted_thinking' && typeof part.data === 'string') {
+      thoughtSignature = part.data;
+      continue;
+    }
+    if (part.type !== 'tool_use') continue;
+    calls.push({
+      toolCallId: String(part.id ?? ''),
+      providerCallId: String(part.id ?? ''),
+      name: String(part.name ?? ''),
+      argumentsText: JSON.stringify(part.input ?? {}),
+      arguments: part.input ?? {},
+      ...(thoughtSignature ? { metadata: { thoughtSignature } } : {}),
+    });
+    thoughtSignature = undefined;
+  }
+  return calls;
+};
 
 const toolResultContent = (content: unknown): ToolResultContent[] => {
   if (typeof content === 'string') return [{ type: 'text', text: content }];
@@ -128,7 +144,7 @@ const normalizeMessages = (value: unknown): LlmMeshMessage[] => {
     const role = typeof message.role === 'string' ? message.role : 'user';
     if (role === 'assistant') {
       const calls = [...openAiToolCalls(message), ...anthropicToolCalls(message.content)];
-      calls.forEach((call) => toolNames.set(call.providerCallId, call.name));
+      calls.forEach((call) => toolNames.set(call.providerCallId ?? call.toolCallId, call.name));
       output.push({
         role, content: contentParts(message.content),
         ...(calls.length > 0 ? { toolCalls: calls } : {}), metadata: { ingress: message },
