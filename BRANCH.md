@@ -127,6 +127,14 @@ agents are read-only and do not create implementation branches.
 - `BR73-F5` (`attention`, resolved 2026-08-09): acceptance audit found and
   fixed cancellation before the tracked stream body and missing transport
   `stableSessionId` reuse across an affinity; deterministic regressions pass.
+- `BR73-F6` (`blocking`, resolved 2026-08-09): exact-candidate h2a review
+  withdrew the Cloud Code migration finding after proving `google` -> `gemini`
+  normalization, then identified four Sentropic-owned defects. Local routing
+  now persists and filters exact owner scope (with explicit legacy binding),
+  removes negative-cache entries before `maxAttempts`, matches JSON capability
+  requirements structurally, and keys round-robin/affinity state by stable
+  owner scope across authenticated sessions. Targeted regressions and both
+  complete package suites pass.
 
 ## Plan / todo
 
@@ -241,9 +249,11 @@ them blocks merge. No timeout-only amendments are accepted.
 - Two independent spec review artifacts reconciled.
 - Local candidate `723a7db19`: equivalence check, scope and branch checks,
   typecheck/build/pack for both packages, mesh 125 tests and gateway 98 tests.
-- Candidate tarballs: mesh `0.14.0`
-  `54eb1af83fb6cb866d9a050881cb0ab9d779b7c09175f8b807af10ac7628a91b`;
+- Current candidate tarballs: mesh `0.14.0`
+  `08be23a0f14b2726358f3b6e9cbb5754a3f2c85b9650c90a1b9bad34d3b3f9e5`;
   gateway `0.12.0`
   `ceb27b6022be79e38349a00fa60fd36006c13b4f133442b06992f66ea8d34872`.
+- Post-review routing gates: equivalence check, mesh typecheck/build/pack with
+  130 tests, gateway typecheck/build/pack with 98 tests, scope C2 and branch C1.
 - h2a integration/UAT artifact names the final candidate SHA and versions.
 - Both package versions visible on npm only after merge-triggered CD.
