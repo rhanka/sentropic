@@ -70,10 +70,11 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         const rotated = policy.rotateEquivalentAccounts
           ? candidates.filter((candidate) => candidate.account.accountRef !== affinity.accountRef)
           : [];
-        candidates = [{
+        const sticky: RankedRouteCandidate = {
           account,
           target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
-        }, ...sameAccount, ...rotated]
+        };
+        candidates = [sticky, ...sameAccount, ...rotated]
           .filter((candidate) => !this.health.isSuppressed(candidate))
           .slice(0, policy.maxAttempts);
       }
