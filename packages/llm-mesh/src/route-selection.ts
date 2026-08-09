@@ -2,7 +2,7 @@ import { modelProfiles, type ModelProfile } from './catalog.js';
 import { modelSupportsCapability, type ModelEquivalenceCouncil } from './equivalence-council.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
-import { createCanonicalTargetResolver } from './routing-targets.js';
+import { createCanonicalTargetCandidatesResolver } from './routing-targets.js';
 export interface RankedRouteCandidate {
   readonly account: EligibleAccountDescriptor;
   readonly target: PlannedRouteTarget;
@@ -15,7 +15,7 @@ interface ResolvedRouteTarget {
   readonly transportPreferences?: readonly string[];
   readonly reason: PlannedRouteTarget['reason'];
 }
-const resolveCanonical = createCanonicalTargetResolver();
+const resolveCanonicalTargets = createCanonicalTargetCandidatesResolver();
 const supportsCapabilities = (
   profile: ModelProfile | undefined,
   required: RoutePlanInput['requiredCapabilities'],
@@ -35,21 +35,24 @@ const selectorMatches = (
   && (!selector.diagnosticAccountRef
     || selector.diagnosticAccountRef === candidate.account.diagnosticAccountRef);
 
-const resolveRequestedTarget = (requestedModel: string): {
+const resolveRequestedTargets = (requestedModel: string): readonly {
   providerId: string;
   model: string;
   transportProviderId?: string;
   effort?: string;
   reason: 'exact' | 'alias';
-} | undefined => {
-  const canonical = resolveCanonical(requestedModel);
-  if (canonical) return { ...canonical, reason: requestedModel === canonical.model ? 'exact' as const : 'alias' as const };
+}[] => {
+  const canonical = resolveCanonicalTargets(requestedModel);
+  if (canonical.length > 0) return canonical.map((target) => ({
+    ...target,
+    reason: requestedModel === target.model ? 'exact' as const : 'alias' as const,
+  }));
   const profile = modelProfiles.find((candidate) => candidate.modelId === requestedModel);
-  return profile ? {
+  return profile ? [{
     providerId: profile.providerId,
     model: profile.modelId,
     reason: 'exact' as const,
-  } : undefined;
+  }] : [];
 };
 
 export const selectRouteCandidates = (input: {
@@ -61,13 +64,9 @@ export const selectRouteCandidates = (input: {
   readonly now?: Date;
   readonly applyAttemptLimit?: boolean;
 }): readonly RankedRouteCandidate[] => {
-  const resolved = resolveRequestedTarget(input.request.requestedModel);
-  if (!resolved) return [];
-  const requestedProfile = modelProfiles.find((profile) =>
-    profile.providerId === resolved.providerId && profile.modelId === resolved.model);
-  if (!supportsCapabilities(requestedProfile, input.request.requiredCapabilities)) return [];
-
-  const targets: ResolvedRouteTarget[] = [{
+  const resolvedTargets = resolveRequestedTargets(input.request.requestedModel);
+  if (resolvedTargets.length === 0) return [];
+  const targets: ResolvedRouteTarget[] = resolvedTargets.map((resolved) => ({
     providerId: resolved.providerId,
     modelId: resolved.model,
     ...(resolved.effort ? { effort: resolved.effort } : {}),
@@ -75,26 +74,29 @@ export const selectRouteCandidates = (input: {
       ? { transportProviderId: resolved.transportProviderId }
       : {}),
     reason: resolved.reason,
-  }];
+  }));
   if (input.policy.allowEquivalentModels) {
     const now = (input.now ?? new Date()).getTime();
-    const group = input.council.groups.find((candidate) =>
-      Date.parse(candidate.expiresAt) > now
-      && candidate.evidence.length > 0
-      && candidate.members.some((member) =>
-        member.providerId === resolved.providerId && member.modelId === resolved.model));
-    group?.members.filter((member) =>
-      member.providerId !== resolved.providerId || member.modelId !== resolved.model)
-      .sort((left, right) => left.rank - right.rank)
-      .forEach((member) => targets.push({
-        providerId: member.providerId,
-        modelId: member.modelId,
-        ...(member.effort ? { effort: member.effort } : {}),
-        ...(member.transportPreferences
-          ? { transportPreferences: member.transportPreferences }
-          : {}),
-        reason: 'equivalent',
-      }));
+    for (const resolved of resolvedTargets) {
+      const group = input.council.groups.find((candidate) =>
+        Date.parse(candidate.expiresAt) > now
+        && candidate.evidence.length > 0
+        && candidate.members.some((member) =>
+          member.providerId === resolved.providerId && member.modelId === resolved.model));
+      group?.members.filter((member) =>
+        !targets.some((target) => target.providerId === member.providerId
+          && target.modelId === member.modelId))
+        .sort((left, right) => left.rank - right.rank)
+        .forEach((member) => targets.push({
+          providerId: member.providerId,
+          modelId: member.modelId,
+          ...(member.effort ? { effort: member.effort } : {}),
+          ...(member.transportPreferences
+            ? { transportPreferences: member.transportPreferences }
+            : {}),
+          reason: 'equivalent',
+        }));
+    }
   }
 
   let candidates = targets.flatMap((target) => {

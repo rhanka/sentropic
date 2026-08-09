@@ -6,19 +6,22 @@
  *   - Fable 5 high/xhigh/max  -> gpt-5.6-sol   at the same effort
  *   - Sonnet 5 xhigh          -> gpt-5.6-luna  xhigh
  *   - BARE ids stay provider-faithful (the real Anthropic models stay reachable)
- *   - no silent cross-pool fallback (unknown id -> undefined -> router 400)
+ *   - suffixed aliases expose ratified Codex + Cloud Code candidates to policy
+ *   - bare ids stay provider-faithful; unknown id -> undefined -> router 400
  * Consumers read `describeTargetRoutes()` instead of duplicating a route table.
  */
 
 import { describe, expect, it } from 'vitest';
 
 import {
+  createCanonicalTargetCandidatesResolver,
   createCanonicalTargetResolver,
   createStaticTargetResolver,
   defineLaunchAliases,
   describeCanonicalTargetRoutes,
   describeTargetRoutes,
   CANONICAL_TARGET_MAPPINGS,
+  CANONICAL_TARGET_ROUTE_MAPPINGS,
   DEFAULT_TARGET_MAPPINGS,
   LAUNCH_ALIAS_TARGET_MAPPINGS,
 } from '../src/index.js';
@@ -142,13 +145,29 @@ describe('describeTargetRoutes (discovery)', () => {
     // composing DEFAULT + LAUNCH_ALIAS is itself routing knowledge and must not
     // be re-implemented downstream.
     expect(CANONICAL_TARGET_MAPPINGS).toEqual(MERGED);
-    expect(describeCanonicalTargetRoutes()).toEqual(describeTargetRoutes(MERGED));
+    expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-opus-5-xhigh']).toEqual([
+      MERGED['claude-opus-5-xhigh'],
+      {
+        providerId: 'gemini',
+        transportProviderId: 'cloud-code',
+        model: 'gemini-3.1-flash-lite',
+      },
+    ]);
+    expect(describeCanonicalTargetRoutes()).toHaveLength(
+      Object.keys(DEFAULT_TARGET_MAPPINGS).length
+        + (2 * Object.keys(LAUNCH_ALIAS_TARGET_MAPPINGS).length),
+    );
 
     const resolve = createCanonicalTargetResolver();
     expect(resolve('claude-opus-5-xhigh')?.model).toBe('gpt-5.6-terra');
     expect(resolve('claude-opus-5')?.model).toBe('claude-opus-5');
     expect(resolve('claude-opus-4-8-xhigh')?.model).toBe('gpt-5.6-terra');
     expect(resolve('claude-sonnet-5-xhigh')?.model).toBe('gpt-5.6-luna');
+
+    const resolveCandidates = createCanonicalTargetCandidatesResolver();
+    expect(resolveCandidates('claude-opus-5-xhigh').map(
+      (target) => target.transportProviderId,
+    )).toEqual(['codex', 'cloud-code']);
   });
 
   it('describes every servable id exactly once, sorted, with no credential data', () => {
