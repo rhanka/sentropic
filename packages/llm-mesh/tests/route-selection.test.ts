@@ -74,4 +74,33 @@ describe('route candidate selection', () => {
     });
     expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
   });
+
+  it('rejects an equivalent that cannot preserve a requested capability', () => {
+    const candidates = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:image'] },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: {
+        ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+        groups: [{
+          id: 'vision-fixture', intent: 'general', expiresAt: '2027-01-01T00:00:00Z',
+          evidence: [{
+            suite: 'fixture', artifact: 'fixture.json', measuredAt: '2026-08-01T00:00:00Z',
+            dimensions: { quality: 'equivalent' },
+          }],
+          members: [
+            { providerId: 'gemini', modelId: 'gemini-3.5-flash', rank: 1, requiredCapabilities: [] },
+            { providerId: 'openai', modelId: 'gpt-4.1-nano', rank: 2, requiredCapabilities: [] },
+          ],
+        }],
+      },
+      accounts: [...accounts, {
+        ...accounts[0]!, accountRef: 'openai-internal', diagnosticAccountRef: 'openai-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-4.1-nano'],
+      }],
+    });
+
+    expect(candidates.map((candidate) => candidate.target.modelId))
+      .not.toContain('gpt-4.1-nano');
+  });
 });
