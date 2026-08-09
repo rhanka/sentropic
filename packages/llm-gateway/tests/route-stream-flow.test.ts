@@ -114,4 +114,25 @@ describe('route stream flow', () => {
     expect(settlements).toHaveLength(1);
     expect(settlements[0]?.outcome).toBe('failed');
   });
+
+  it('releases and settles a committed stream when the consumer cancels', async () => {
+    const hooks: string[] = [];
+    const settlements: RouteRequestSettlement[] = [];
+    const source = attempt(async function* () {
+      yield { type: 'content_delta', data: { delta: 'first' } };
+      yield { type: 'content_delta', data: { delta: 'second' } };
+    }, hooks);
+    const result = await runRouteStreamFlow({
+      config, routePlanner: plannerFor([source]),
+      metering: { settleRoute(value) { settlements.push(value); } },
+    }, request);
+
+    for await (const _frame of result.stream) break;
+
+    expect(hooks).toEqual(['committed', 'cancelled']);
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      outcome: 'cancelled', attempts: [{ outcome: 'cancelled' }],
+    });
+  });
 });
