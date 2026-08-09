@@ -133,4 +133,41 @@ describe('route candidate selection', () => {
     expect(candidates.map((candidate) => candidate.target.modelId))
       .toEqual(['gemini-3.5-flash', 'gemini-3.5-flash']);
   });
+
+  it('orders exact routes before same-transport equivalents', () => {
+    const candidates = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash' },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: {
+        ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+        groups: [{
+          id: 'transport-fixture', intent: 'general', expiresAt: '2027-01-01T00:00:00Z',
+          evidence: [{
+            suite: 'fixture', artifact: 'fixture.json', measuredAt: '2026-08-01T00:00:00Z',
+            dimensions: { quality: 'equivalent' },
+          }],
+          members: [
+            { providerId: 'gemini', modelId: 'gemini-3.5-flash', rank: 1, requiredCapabilities: [] },
+            {
+              providerId: 'openai', modelId: 'gpt-5.6-terra', rank: 2,
+              requiredCapabilities: [], transportPreferences: ['cloud-code', 'codex'],
+            },
+          ],
+        }],
+      },
+      accounts: [...accounts, {
+        ...accounts[0]!, accountRef: 'openai-codex', diagnosticAccountRef: 'openai-codex',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-5.6-terra'], enrollmentCompletedAt: '2026-08-04T00:00:00Z',
+      }, {
+        ...accounts[0]!, accountRef: 'openai-cloud', diagnosticAccountRef: 'openai-cloud',
+        targetProviderId: 'openai', transportProviderId: 'cloud-code',
+        supportedModelIds: ['gpt-5.6-terra'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
+      }],
+      now: new Date('2026-08-08T00:00:00Z'),
+    });
+
+    expect(candidates.map((candidate) => candidate.account.diagnosticAccountRef))
+      .toEqual(['acct_new', 'acct_old', 'openai-cloud']);
+  });
 });
