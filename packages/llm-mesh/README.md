@@ -40,6 +40,12 @@ preferred route is suppressed until its TTL expires, then tested again.
 `one-way` promotes a successful fallback instead. Override `negativeCacheTtlMs`
 between 1 second and 1 hour.
 
+Suffixed Claude launch aliases expose the owner-ratified Codex and Cloud Code
+targets returned by `createCanonicalTargetCandidatesResolver()`. An ordered
+policy can therefore place either enrolled transport first and keep the other
+as bounded pre-byte fallback. Bare provider model ids remain provider-faithful;
+these explicit alias routes do not create general model equivalence.
+
 Equivalent-account rotation is disabled by default. Enabling
 `rotateEquivalentAccounts` may move an affinity to another account and lose
 provider-side prompt/session cache continuity; such a move is exposed as an
