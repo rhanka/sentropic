@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
 import { InMemoryRoutePlanner } from '../src/route-planner.js';
 import { RoutePlanError } from '../src/route-planner-state.js';
+import { DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles } from '../src/routing-policy.js';
 import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
 
 const request = { requestedModel: 'gemini-3.5-flash' } as const;
@@ -184,5 +185,21 @@ describe('opaque route planner', () => {
     await expect(planner.prepareAttempt(
       routingSubject(), plan.planRef, plan.candidateRefs[0]!, 'req-1', 0,
     )).rejects.toBeInstanceOf(RoutePlanError);
+  });
+
+  it('rejects a plan after its named policy revision changes', async () => {
+    const profiles = new InMemoryRoutePolicyProfiles([{
+      name: 'coding', revision: 'r1', policy: DEFAULT_ROUTE_POLICY,
+    }]);
+    profiles.activate('coding');
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(), profiles,
+    });
+    const plan = await planner.plan(routingSubject(), request);
+    profiles.set({ name: 'coding', revision: 'r2', policy: DEFAULT_ROUTE_POLICY });
+
+    await expect(planner.prepareAttempt(
+      routingSubject(), plan.planRef, plan.candidateRefs[0]!, 'req-1', 0,
+    )).rejects.toMatchObject({ code: 'invalid-plan' });
   });
 });

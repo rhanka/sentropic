@@ -109,16 +109,34 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     this.plans.set(planRef, {
       plan, subjectRef: subjectRef(subject), candidates: storedCandidates, policy,
       hadAffinity: Boolean(affinity),
+      ...(affinity ? { affinityRevision: affinity.revision } : {}),
+      ...(profile ? {
+        policyProfileName: profile.name,
+        policyProfileRevision: profile.revision,
+      } : {}),
       ...(input.affinityKey
         ? { affinityRef: affinityRef(subject, input.affinityKey, input.workspaceId) }
         : {}),
     });
     return plan;
   }
-  prepareAttempt(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
+  async prepareAttempt(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
     requestId: string, attemptIndex: number): Promise<PreparedRouteAttempt> {
+    const stored = this.plans.get(planRef);
+    if (stored?.plan.councilRevision !== this.council.revision) {
+      throw new RoutePlanError('Route council revision changed', 'invalid-plan');
+    }
+    if (stored?.affinityRef && stored.affinityRevision !== undefined
+      && this.affinities.get(stored.affinityRef)?.revision !== stored.affinityRevision) {
+      throw new RoutePlanError('Route affinity revision changed', 'conflict');
+    }
+    if (stored?.policyProfileName && this.profiles.list().find(
+      (profile) => profile.name === stored.policyProfileName,
+    )?.revision !== stored.policyProfileRevision) {
+      throw new RoutePlanError('Route policy revision changed', 'invalid-plan');
+    }
     return prepareStoredRouteAttempt({
-      stored: this.plans.get(planRef), subject, planRef, candidateRef, requestId, attemptIndex,
+      stored, subject, planRef, candidateRef, requestId, attemptIndex,
       directory: this.options.directory, clock: this.clock,
       onOutcome: (candidate, failure) => this.health.record(candidate, failure,
         this.plans.get(planRef)?.policy ?? DEFAULT_ROUTE_POLICY),
