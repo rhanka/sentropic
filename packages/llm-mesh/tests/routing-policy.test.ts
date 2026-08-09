@@ -97,4 +97,23 @@ describe('route policy', () => {
       requestedModel: 'gpt-5.6-sol', intent: 'general',
     }).fallbackMode).toBe('retest-preferred');
   });
+
+  it('matches capability requirements reconstructed from JSON structurally', () => {
+    const policy = {
+      ...DEFAULT_ROUTE_POLICY,
+      rules: [{
+        match: {
+          capabilities: JSON.parse('[{"capability":"input:image","required":true}]'),
+        },
+        fallback: { fallbackMode: 'one-way' as const },
+      }],
+    };
+    const requiredCapabilities = JSON.parse(
+      '[{"required":true,"capability":"input:image"}]',
+    );
+
+    expect(resolveRoutePolicy(policy, {
+      requestedModel: 'gemini-3.5-flash', requiredCapabilities,
+    }).fallbackMode).toBe('one-way');
+  });
 });
