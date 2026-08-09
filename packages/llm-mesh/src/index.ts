@@ -14,5 +14,6 @@ export * from './routing-targets.js';
 export * from './routing-policy.js';
 export * from './routing-contracts.js';
 export * from './route-planner.js';
+export * from './codex.js';
 export * from './streaming.js';
 export * from './tools.js';
