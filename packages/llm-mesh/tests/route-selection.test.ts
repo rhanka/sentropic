@@ -103,4 +103,34 @@ describe('route candidate selection', () => {
     expect(candidates.map((candidate) => candidate.target.modelId))
       .not.toContain('gpt-4.1-nano');
   });
+
+  it('keeps the exact route but fails closed on stale equivalence evidence', () => {
+    const candidates = selectRouteCandidates({
+      request: { requestedModel: 'gemini-3.5-flash' },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: {
+        ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+        groups: [{
+          id: 'stale-fixture', intent: 'general', expiresAt: '2026-01-01T00:00:00Z',
+          evidence: [{
+            suite: 'fixture', artifact: 'fixture.json', measuredAt: '2025-01-01T00:00:00Z',
+            dimensions: { quality: 'equivalent' },
+          }],
+          members: [
+            { providerId: 'gemini', modelId: 'gemini-3.5-flash', rank: 1, requiredCapabilities: [] },
+            { providerId: 'openai', modelId: 'gpt-4.1-nano', rank: 2, requiredCapabilities: [] },
+          ],
+        }],
+      },
+      accounts: [...accounts, {
+        ...accounts[0]!, accountRef: 'openai-internal', diagnosticAccountRef: 'openai-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-4.1-nano'],
+      }],
+      now: new Date('2026-08-08T00:00:00Z'),
+    });
+
+    expect(candidates.map((candidate) => candidate.target.modelId))
+      .toEqual(['gemini-3.5-flash', 'gemini-3.5-flash']);
+  });
 });
