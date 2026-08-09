@@ -19,11 +19,13 @@ export const prepareStoredRouteAttempt = async (input: {
   readonly directory: AccountDirectoryPort;
   readonly clock: Clock;
   readonly onOutcome: (
+    stored: StoredPlan,
     candidate: RankedRouteCandidate,
     classification: RouteFailureClassification,
   ) => void;
   readonly onCommitted: (stored: StoredPlan, candidate: RankedRouteCandidate) => void;
   readonly onSuccess: (stored: StoredPlan, candidate: RankedRouteCandidate) => void;
+  readonly onCancelled: (stored: StoredPlan, candidate: RankedRouteCandidate) => void;
 }): Promise<PreparedRouteAttempt> => {
   const { stored } = input;
   if (!stored || stored.plan.planRef !== input.planRef) {
@@ -39,6 +41,11 @@ export const prepareStoredRouteAttempt = async (input: {
   if (!candidate || candidate.candidateRef !== input.candidateRef) {
     throw new RoutePlanError('Candidate does not match attempt index', 'invalid-plan');
   }
+  const claim = [input.candidateRef, input.requestId, input.attemptIndex].join('\u001f');
+  if (stored.claimedAttempts.has(claim)) {
+    throw new RoutePlanError('Route attempt was already prepared', 'invalid-plan');
+  }
+  stored.claimedAttempts.add(claim);
   const current = (await input.directory.listEligible(input.subject)).find(
     (account) => account.accountRef === candidate.account.accountRef,
   );
@@ -62,7 +69,7 @@ export const prepareStoredRouteAttempt = async (input: {
     recordOutcome: async (classification, usage) => {
       if (terminal) return;
       terminal = true;
-      input.onOutcome(candidate, classification);
+      input.onOutcome(stored, candidate, classification);
       await attempt.recordOutcome(classification, usage);
     },
     markCommitted: async () => {
@@ -80,6 +87,7 @@ export const prepareStoredRouteAttempt = async (input: {
     releaseCancelled: async () => {
       if (terminal) return;
       terminal = true;
+      input.onCancelled(stored, candidate);
       await attempt.releaseCancelled();
     },
   };

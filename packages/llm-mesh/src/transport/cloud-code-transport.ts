@@ -21,6 +21,7 @@ export interface CloudCodeEnvelope {
     generationConfig?: unknown;
     systemInstruction?: unknown;
     tools?: unknown[];
+    toolConfig?: unknown;
   };
 }
 
@@ -59,6 +60,7 @@ export function buildCloudCodeRequest(
       ...(request.generationConfig ? { generationConfig: request.generationConfig } : {}),
       ...(request.systemInstruction ? { systemInstruction: request.systemInstruction } : {}),
       ...(request.tools?.length ? { tools: request.tools } : {}),
+      ...(request.toolConfig ? { toolConfig: request.toolConfig } : {}),
     },
   };
 
@@ -76,6 +78,7 @@ export async function* parseCloudCodeSSE(
   const decoder = new TextDecoder();
   let buffer = '';
   let lastUsage: unknown = null;
+  let lastFinishReason: string | undefined;
 
   try {
     while (true) {
@@ -136,6 +139,9 @@ export async function* parseCloudCodeSSE(
           if (payload.usageMetadata) {
             lastUsage = payload.usageMetadata;
           }
+          if (typeof payload.candidates?.[0]?.finishReason === 'string') {
+            lastFinishReason = payload.candidates[0].finishReason;
+          }
         } catch {
           // Ignore unparseable SSE data lines
         }
@@ -143,7 +149,10 @@ export async function* parseCloudCodeSSE(
     }
 
     // P1-1: Yield done event exactly once after stream completion
-    yield { kind: 'done', usage: lastUsage ?? {} };
+    yield {
+      kind: 'done', usage: lastUsage ?? {},
+      ...(lastFinishReason ? { finishReason: lastFinishReason } : {}),
+    };
   } finally {
     reader.releaseLock();
   }
@@ -163,6 +172,10 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
     }
 
     const { url, headers, body } = buildCloudCodeRequest(acquisition, request);
+
+    for (const diagnostic of request.diagnostics ?? []) {
+      yield { kind: 'diagnostic', ...diagnostic };
+    }
 
     let response: Response;
     try {

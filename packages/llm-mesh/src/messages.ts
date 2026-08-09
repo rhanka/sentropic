@@ -22,7 +22,17 @@ export interface FileContentPart {
   filename?: string;
 }
 
-export type MessageContent = string | readonly (TextContentPart | ImageContentPart | FileContentPart)[];
+/** Provider-originated reasoning history that may carry a replay signature. */
+export interface ReasoningContentPart {
+  type: 'reasoning';
+  text: string;
+  signature?: string;
+  redacted?: boolean;
+}
+
+export type MessageContent = string | readonly (
+  TextContentPart | ImageContentPart | FileContentPart | ReasoningContentPart
+)[];
 
 export interface BaseMessage {
   role: MessageRole;

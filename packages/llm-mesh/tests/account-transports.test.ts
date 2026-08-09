@@ -186,6 +186,25 @@ describe('InMemoryAccountTransportCoordinator', () => {
     expect(recovered.lease.accountId).toBe('codex-a');
   });
 
+  it('exposes lifecycle recovery to inventory readers without an acquisition', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator([accounts[0]]);
+    const first = await coordinator.acquire({
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      now: '2026-06-16T12:00:00.000Z',
+    });
+    await first.recordOutcome({
+      status: 'rate_limited', retryAfterMs: 5_000,
+      finishedAt: '2026-06-16T12:00:00.000Z',
+    });
+
+    expect(coordinator.refreshLifecycle('2026-06-16T12:00:03.000Z')).toEqual([]);
+    expect(coordinator.refreshLifecycle('2026-06-16T12:00:06.000Z')).toEqual(['codex-a']);
+    await expect(coordinator.acquire({
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      now: '2026-06-16T12:00:06.000Z',
+    })).resolves.toMatchObject({ lease: { accountId: 'codex-a' } });
+  });
+
   it('rotates to next account when one is rate-limited', async () => {
     const coordinator = new InMemoryAccountTransportCoordinator(accounts);
 

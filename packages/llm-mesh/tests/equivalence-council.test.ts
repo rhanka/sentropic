@@ -41,6 +41,13 @@ describe('model equivalence council', () => {
       .toThrow(EquivalenceCouncilError);
   });
 
+  it('fails closed when the council publication itself expires', () => {
+    expect(() => validateEquivalenceCouncil({
+      ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      expiresAt: '2026-08-01T00:00:00Z',
+    }, modelProfiles, now)).toThrow(/expired council/);
+  });
+
   it('rejects member capabilities explicitly marked unsupported', () => {
     const council = {
       ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,

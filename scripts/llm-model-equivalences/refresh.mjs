@@ -6,6 +6,13 @@ const root = process.cwd();
 const inputPath = resolve(root, 'scripts/llm-model-equivalences/council.source.json');
 const outputPath = resolve(root, 'packages/llm-mesh/src/generated-model-council.ts');
 const source = JSON.parse(await readFile(inputPath, 'utf8'));
+const expiresAtMs = Date.parse(source.expiresAt);
+if (!Number.isFinite(expiresAtMs)) {
+  throw new Error('Model equivalence council expiresAt must be a valid timestamp');
+}
+if (expiresAtMs <= Date.now()) {
+  throw new Error(`Model equivalence council expired at ${source.expiresAt}`);
+}
 const normalized = {
   revision: source.revision,
   expiresAt: source.expiresAt,

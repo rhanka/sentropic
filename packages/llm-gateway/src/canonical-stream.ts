@@ -13,8 +13,14 @@ const openAiUsage = (usage: Extract<StreamEvent, { type: 'done' }>['data']['usag
   total_tokens: usage?.totalTokens ?? (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
 });
 
-const stopReason = (reason: Extract<StreamEvent, { type: 'done' }>['data']['finishReason']) =>
+const openAiStopReason = (reason: Extract<StreamEvent, { type: 'done' }>['data']['finishReason']) =>
   reason === 'tool_calls' ? 'tool_calls' : reason === 'length' ? 'length' : 'stop';
+
+const anthropicStopReason = (reason: Extract<StreamEvent, { type: 'done' }>['data']['finishReason']) =>
+  reason === 'tool_calls' ? 'tool_use'
+    : reason === 'length' ? 'max_tokens'
+      : reason === 'content_filter' ? 'refusal'
+        : 'end_turn';
 
 const raw = (value: string): GatewayDispatchStreamEvent => ({ raw: value });
 
@@ -32,7 +38,12 @@ const encodeAnthropicStream = async function* (
   responseId: string,
   events: AsyncIterable<StreamEvent>,
 ): AsyncGenerator<GatewayDispatchStreamEvent> {
-  const opened = new Set<number>();
+  const opened: number[] = [];
+  const textIndexes = new Map<number, number>();
+  const toolIndexes = new Map<string, number>();
+  let reasoningIndex: number | undefined;
+  let activeToolIndex: number | undefined;
+  let nextIndex = 0;
   yield raw(frameAnthropicEvent('message_start', {
     type: 'message_start', message: {
       id: responseId, type: 'message', role: 'assistant', model,
@@ -42,9 +53,16 @@ const encodeAnthropicStream = async function* (
   }));
   for await (const event of events) {
     if (event.type === 'content_delta' || event.type === 'reasoning_delta') {
-      const index = event.type === 'content_delta' ? event.data.index ?? 0 : 0;
-      if (!opened.has(index)) {
-        opened.add(index);
+      const sourceIndex = event.type === 'content_delta' ? event.data.index ?? 0 : 0;
+      let index = event.type === 'reasoning_delta'
+        ? reasoningIndex
+        : textIndexes.get(sourceIndex);
+      if (index === undefined) {
+        index = nextIndex;
+        nextIndex += 1;
+        opened.push(index);
+        if (event.type === 'reasoning_delta') reasoningIndex = index;
+        else textIndexes.set(sourceIndex, index);
         yield raw(frameAnthropicEvent('content_block_start', {
           type: 'content_block_start', index,
           content_block: event.type === 'content_delta'
@@ -59,8 +77,11 @@ const encodeAnthropicStream = async function* (
           : { type: 'thinking_delta', thinking: event.data.delta },
       }));
     } else if (event.type === 'tool_call_start') {
-      const index = opened.size;
-      opened.add(index);
+      const index = nextIndex;
+      nextIndex += 1;
+      opened.push(index);
+      toolIndexes.set(event.data.toolCallId, index);
+      activeToolIndex = index;
       yield raw(frameAnthropicEvent('content_block_start', {
         type: 'content_block_start', index,
         content_block: {
@@ -69,8 +90,9 @@ const encodeAnthropicStream = async function* (
         },
       }));
     } else if (event.type === 'tool_call_delta') {
+      const index = toolIndexes.get(event.data.toolCallId) ?? activeToolIndex ?? 0;
       yield raw(frameAnthropicEvent('content_block_delta', {
-        type: 'content_block_delta', index: Math.max(opened.size - 1, 0),
+        type: 'content_block_delta', index,
         delta: { type: 'input_json_delta', partial_json: event.data.delta },
       }));
     } else if (event.type === 'error') {
@@ -78,12 +100,12 @@ const encodeAnthropicStream = async function* (
         type: 'error', error: { type: 'api_error', message: event.data.message },
       }));
     } else if (event.type === 'done') {
-      for (const index of [...opened].sort((left, right) => left - right)) {
+      for (const index of opened) {
         yield raw(frameAnthropicEvent('content_block_stop', { type: 'content_block_stop', index }));
       }
       yield raw(frameAnthropicEvent('message_delta', {
         type: 'message_delta',
-        delta: { stop_reason: stopReason(event.data.finishReason), stop_sequence: null },
+        delta: { stop_reason: anthropicStopReason(event.data.finishReason), stop_sequence: null },
         usage: anthropicUsage(event.data.usage),
       }));
       yield raw(frameAnthropicEvent('message_stop', { type: 'message_stop' }));
@@ -117,7 +139,7 @@ const encodeOpenAiStream = async function* (
       error: { message: event.data.message, type: 'server_error', code: event.data.code },
     }));
     else if (event.type === 'done') {
-      yield chunk({}, stopReason(event.data.finishReason), openAiUsage(event.data.usage));
+      yield chunk({}, openAiStopReason(event.data.finishReason), openAiUsage(event.data.usage));
       yield raw(OPENAI_DONE);
     }
   }

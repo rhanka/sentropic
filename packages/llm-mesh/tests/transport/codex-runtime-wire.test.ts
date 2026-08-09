@@ -30,12 +30,15 @@ describe('Codex runtime wire', () => {
         },
       ],
       tools: [{ type: 'function', name: 'lookup', inputSchema: { type: 'object' } }],
+      toolChoice: { type: 'tool', name: 'lookup' },
+      parallelToolCalls: false,
       reasoning: { effort: 'xhigh' },
     });
 
     expect(prepared.body).toMatchObject({
       model: 'gpt-5.6-terra', stream: true, store: false,
       instructions: 'System instruction', reasoning: { effort: 'xhigh' },
+      tool_choice: { type: 'function', name: 'lookup' }, parallel_tool_calls: false,
       tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object' } }],
       input: [
         { type: 'message', role: 'user', content: [
@@ -60,18 +63,27 @@ describe('Codex runtime wire', () => {
     })).toEqual([{ type: 'content_delta', data: { delta: 'hello' } }]);
     expect(decodeCodexRuntimeEvent({
       type: 'response.output_item.added',
-      item: { type: 'function_call', call_id: 'call-1', name: 'lookup', arguments: '' },
+      item: {
+        type: 'function_call', id: 'item-1', call_id: 'call-1',
+        name: 'lookup', arguments: '',
+      },
     })).toEqual([{ type: 'tool_call_start', data: {
-      toolCallId: 'call-1', providerCallId: 'call-1', name: 'lookup', argumentsText: '',
+      toolCallId: 'item-1', providerCallId: 'call-1', name: 'lookup', argumentsText: '',
+    } }]);
+    expect(decodeCodexRuntimeEvent({
+      type: 'response.function_call_arguments.delta', item_id: 'item-1', delta: '{"id":',
+    })).toEqual([{ type: 'tool_call_delta', data: {
+      toolCallId: 'item-1', delta: '{"id":',
     } }]);
     expect(decodeCodexRuntimeEvent({
       type: 'response.completed',
       response: {
         id: 'response-1',
+        output: [{ type: 'function_call', id: 'item-1', call_id: 'call-1' }],
         usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 },
       },
     })).toEqual([{ type: 'done', data: {
-      finishReason: 'stop', providerId: 'openai', providerResponseId: 'response-1',
+      finishReason: 'tool_calls', providerId: 'openai', providerResponseId: 'response-1',
       usage: {
         inputTokens: 11, outputTokens: 7, totalTokens: 18,
         providerRawUsage: { input_tokens: 11, output_tokens: 7, total_tokens: 18 },

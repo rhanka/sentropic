@@ -90,6 +90,32 @@ describe('route stream flow', () => {
     });
   });
 
+  it('falls back and settles when stream-attempt preparation fails', async () => {
+    const hooks: string[] = [];
+    const settlements: RouteRequestSettlement[] = [];
+    const second = attempt(async function* () {
+      yield { type: 'content_delta', data: { delta: 'ok' } };
+      yield { type: 'done', data: { finishReason: 'stop' } };
+    }, hooks);
+    const planner = plannerFor([second, second]);
+    let preparations = 0;
+    planner.prepareAttempt = async () => {
+      preparations += 1;
+      if (preparations === 1) throw Object.assign(new TypeError('offline'), { code: 'network_error' });
+      return second;
+    };
+    const result = await runRouteStreamFlow({
+      config, routePlanner: planner,
+      metering: { settleRoute(value) { settlements.push(value); } },
+    }, request);
+    expect(await collect(result.stream)).toContain('ok');
+    expect(settlements[0]).toMatchObject({
+      outcome: 'success', attempts: [
+        { outcome: 'network-unavailable' }, { outcome: 'success' },
+      ],
+    });
+  });
+
   it('never retries after commitment and emits one terminal error frame', async () => {
     const firstHooks: string[] = []; let secondCalls = 0;
     const first = attempt(async function* () {

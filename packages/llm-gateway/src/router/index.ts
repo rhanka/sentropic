@@ -23,7 +23,11 @@ import type { GatewayFlowDeps, MeteringSink, TargetResolver } from '../flow.js';
 import { runJsonFlow, runStreamFlow } from '../flow.js';
 import { runRouteJsonFlow } from '../route-json-flow.js';
 import { runRouteStreamFlow } from '../route-stream-flow.js';
-import type { RouteFlowDeps, RouteMeteringSink } from '../route-flow-core.js';
+import {
+  routingSubjectForCost,
+  type RouteFlowDeps,
+  type RouteMeteringSink,
+} from '../route-flow-core.js';
 import type { GatewayWire, ProviderResponseHeaders } from '../ports/dispatch.js';
 import {
   mapGatewayError,
@@ -200,7 +204,10 @@ export const createGatewayRouter = (
 
     const headers = readHeaders(c.req.raw.headers);
     const stream = readStream(body);
-    const flowRequest = { wire, headers, body, model, stream };
+    const flowRequest = {
+      wire, headers, body, model, stream,
+      signal: c.req.raw.signal,
+    };
 
     if (!stream) {
       try {
@@ -267,11 +274,17 @@ export const createGatewayRouter = (
         id,
       );
     }
-    const snapshot = await config.pool.snapshotModels(auth.cost).catch(() => []);
+    const snapshot = routeFlowDeps
+      ? await routeFlowDeps.routePlanner.listModels?.(
+        routingSubjectForCost(auth.cost),
+      ).catch(() => []) ?? []
+      : await config.pool.snapshotModels(auth.cost).catch(() => []);
     c.header(REQUEST_ID_HEADER, id);
     return c.json({
       object: 'list',
-      data: snapshot.map((m) => ({ id: m.id, object: 'model', owned_by: m.ownedBy })),
+      data: snapshot.map((m) => ('modelId' in m
+        ? { id: m.modelId, object: 'model', owned_by: m.providerId }
+        : { id: m.id, object: 'model', owned_by: m.ownedBy })),
     });
   });
 

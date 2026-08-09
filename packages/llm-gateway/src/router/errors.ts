@@ -132,6 +132,20 @@ export const toProviderShapedError = (
   if (error instanceof GatewayError) {
     return mapGatewayError(wire, error.kind, error.retryAfterSeconds);
   }
+  const diagnostic = error && typeof error === 'object'
+    ? (error as { diagnostic?: {
+        code?: string; transportProviderId?: string;
+      } }).diagnostic
+    : undefined;
+  if (diagnostic?.code === 'reenrollment-required' || diagnostic?.code === 'reauth-required') {
+    const transport = diagnostic.transportProviderId ?? 'provider';
+    const action = diagnostic.code === 'reenrollment-required' ? 're-enroll' : 'reauthenticate';
+    const message = `${transport} ${action} required`;
+    const headers = { 'X-Sentropic-Route-Action': `${action}-${transport}` };
+    return wire === 'anthropic-messages'
+      ? anthropicError(503, 'authentication_error', message, headers)
+      : openAiError(503, 'authentication_error', message, 'provider_auth_required', headers);
+  }
   // Unknown internal failure — never leak the message; map to a generic
   // provider availability error (NOT the internal detail).
   return wire === 'anthropic-messages'

@@ -1,6 +1,6 @@
 import type {
   CapabilityRequirement, GenerateRequest, LlmMeshMessage, MessageContent, ToolDefinition,
-  ToolResultContent,
+  ToolChoice, ToolResultContent,
 } from '@sentropic/llm-mesh';
 import type { GatewayWire } from './ports/dispatch.js';
 
@@ -38,6 +38,17 @@ const contentParts = (content: unknown): LlmMeshMessage['content'] => {
       const image = asRecord(part.image_url);
       const url = typeof part.image_url === 'string' ? part.image_url : image?.url;
       if (typeof url === 'string') parts.push({ type: 'image', url });
+      continue;
+    }
+    if (part.type === 'thinking' && typeof part.thinking === 'string') {
+      parts.push({
+        type: 'reasoning', text: part.thinking,
+        ...(typeof part.signature === 'string' ? { signature: part.signature } : {}),
+      });
+      continue;
+    }
+    if (part.type === 'redacted_thinking' && typeof part.data === 'string') {
+      parts.push({ type: 'reasoning', text: '', signature: part.data, redacted: true });
     }
   }
   if (inputParts.some((part) => part.type === 'tool_use' || part.type === 'tool_result')) {
@@ -186,6 +197,47 @@ const normalizeTools = (value: unknown): ToolDefinition[] => records(value).flat
   }];
 });
 
+const normalizeToolChoice = (value: unknown): {
+  readonly choice?: ToolChoice;
+  readonly parallelToolCalls?: boolean;
+} => {
+  if (value === 'auto' || value === 'required' || value === 'none') return { choice: value };
+  const input = asRecord(value);
+  if (!input) return {};
+  const choice: ToolChoice | undefined = input.type === 'any' || input.type === 'required'
+    ? 'required'
+    : input.type === 'none' ? 'none'
+      : input.type === 'tool' && typeof input.name === 'string'
+        ? { type: 'tool', name: input.name }
+        : input.type === 'auto' ? 'auto' : undefined;
+  return {
+    ...(choice ? { choice } : {}),
+    ...(typeof input.disable_parallel_tool_use === 'boolean'
+      ? { parallelToolCalls: !input.disable_parallel_tool_use }
+      : {}),
+  };
+};
+
+const normalizeReasoning = (raw: JsonRecord): GenerateRequest['reasoning'] | undefined => {
+  const reasoning = asRecord(raw.reasoning);
+  const thinking = asRecord(raw.thinking);
+  if (!reasoning && !thinking) return undefined;
+  return {
+    ...(reasoning?.effort === 'none' || reasoning?.effort === 'low'
+      || reasoning?.effort === 'medium' || reasoning?.effort === 'high'
+      || reasoning?.effort === 'xhigh' || reasoning?.effort === 'max'
+      ? { effort: reasoning.effort }
+      : {}),
+    ...(reasoning?.summary === 'auto' || reasoning?.summary === 'concise'
+      || reasoning?.summary === 'detailed' ? { summary: reasoning.summary } : {}),
+    ...(thinking?.type === 'enabled' ? { enabled: true } : {}),
+    ...(thinking?.type === 'disabled' ? { enabled: false } : {}),
+    ...(typeof thinking?.budget_tokens === 'number'
+      ? { budgetTokens: thinking.budget_tokens }
+      : {}),
+  };
+};
+
 export const normalizeGatewayIngress = (
   wire: GatewayWire,
   body: unknown,
@@ -197,6 +249,8 @@ export const normalizeGatewayIngress = (
     messages.unshift({ role: 'system', content: contentParts(raw.system) });
   }
   const tools = normalizeTools(raw.tools);
+  const toolControl = normalizeToolChoice(raw.tool_choice);
+  const reasoning = normalizeReasoning(raw);
   const serialized = JSON.stringify(body);
   const required = new Set<CapabilityRequirement>();
   if (tools.length > 0 || messages.some((message) =>
@@ -211,6 +265,11 @@ export const normalizeGatewayIngress = (
   const request: GenerateRequest = {
     model: raw.model as GenerateRequest['model'], messages,
     ...(tools.length > 0 ? { tools } : {}),
+    ...(toolControl.choice ? { toolChoice: toolControl.choice } : {}),
+    ...(toolControl.parallelToolCalls !== undefined
+      ? { parallelToolCalls: toolControl.parallelToolCalls }
+      : {}),
+    ...(reasoning ? { reasoning } : {}),
     ...(typeof raw.max_tokens === 'number' ? { maxOutputTokens: raw.max_tokens } : {}),
     ...(typeof raw.max_completion_tokens === 'number'
       ? { maxOutputTokens: raw.max_completion_tokens }
