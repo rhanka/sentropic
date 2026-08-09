@@ -45,6 +45,7 @@ export class LocalAccountTransportService {
     private readonly keyring: KeyringAdapter,
     private readonly providers: Map<string, EnrollmentProvider>,
     private readonly configResolver: ConfigResolver,
+    private readonly legacyAccountOwnerScopeRef?: string,
   ) {
     this.coordinator = new InMemoryAccountTransportCoordinator();
   }
@@ -68,6 +69,7 @@ export class LocalAccountTransportService {
       const now = new Date().toISOString();
       const account: AccountTransportAccount = {
         accountId: res.accountId,
+        ownerScopeRef: res.ownerScope,
         accountLabel: res.label,
         targetProviderId: 'gemini',
         transportProviderId: 'cloud-code',
@@ -112,6 +114,7 @@ export class LocalAccountTransportService {
       // P0-4: Persist credentials obtained via device flow poll into keyring/accounts
       const account: AccountTransportAccount = {
         accountId: res.accountId,
+        ownerScopeRef: res.ownerScope,
         accountLabel: res.label,
         targetProviderId: 'openai',
         transportProviderId: 'codex',
@@ -244,10 +247,11 @@ export class LocalAccountTransportService {
 
   createRouteDirectory(runtime: Pick<LlmMesh, 'generate' | 'stream'>): AccountDirectoryPort {
     return {
-      listEligible: async () => this.listRouteAccounts(),
+      listEligible: async (subject) => this.listRouteAccounts(subject),
       prepareAttempt: async (input) => {
         const acquisition = await this.acquire({
           accountId: input.accountRef,
+          ownerScopeRef: input.subject.ownerScopeRef,
           ...(input.affinityRef ? { affinityKey: input.affinityRef } : {}),
           targetProviderId: input.target.providerId,
           transportProviderId: input.target.transportProviderId,
@@ -262,9 +266,13 @@ export class LocalAccountTransportService {
     };
   }
 
-  private async listRouteAccounts(): Promise<readonly EligibleAccountDescriptor[]> {
+  private async listRouteAccounts(
+    subject: import('../routing-contracts.js').VerifiedRoutingSubject,
+  ): Promise<readonly EligibleAccountDescriptor[]> {
     await this.restorePersistedAccounts();
-    return [...this.accountsMap.values()].map((account) => ({
+    return [...this.accountsMap.values()]
+      .filter((account) => account.ownerScopeRef === subject.ownerScopeRef)
+      .map((account) => ({
       accountRef: account.accountId,
       diagnosticAccountRef: this.diagnosticAccountRef(account.accountId),
       targetProviderId: account.targetProviderId,
@@ -283,7 +291,7 @@ export class LocalAccountTransportService {
         this.credentialVersions.get(account.accountId) ?? 'v1.0.0',
         account.expiresAt ?? '', account.status ?? 'active', account.enrollmentCompletedAt ?? '',
       ].join(':'),
-    }));
+      }));
   }
 
   private routeAttempt(
@@ -423,9 +431,15 @@ export class LocalAccountTransportService {
         const publicRecord = JSON.parse(publicRaw) as Partial<AccountPublicRecord>;
         const envelope = JSON.parse(envelopeRaw) as CredentialEnvelope;
         if (!publicRecord.account || envelope.accountId !== accountId) continue;
+        const restoredAccount = {
+          ...publicRecord.account,
+          ...(!publicRecord.account.ownerScopeRef && this.legacyAccountOwnerScopeRef
+            ? { ownerScopeRef: this.legacyAccountOwnerScopeRef }
+            : {}),
+        };
         this.registerAccount(
           {
-            ...publicRecord.account,
+            ...restoredAccount,
             targetProviderId: publicRecord.account.transportProviderId === 'cloud-code'
               && publicRecord.account.targetProviderId === 'google'
               ? 'gemini'
@@ -436,6 +450,12 @@ export class LocalAccountTransportService {
           },
           envelope.authClientConfigVersion,
         );
+        if (!publicRecord.account.ownerScopeRef && restoredAccount.ownerScopeRef) {
+          await this.keyring.setSecret(
+            `sentropic-llm-mesh:${accountId}:public`,
+            JSON.stringify({ ...publicRecord, account: restoredAccount }),
+          );
+        }
       } catch {
         // Ignore incomplete/corrupt entries; another active account may still be usable.
       }

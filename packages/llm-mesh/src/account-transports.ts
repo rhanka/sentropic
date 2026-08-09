@@ -19,6 +19,7 @@ export type AccountTransportOutcomeStatus =
 
 export interface AccountTransportAccount {
   accountId: string;
+  ownerScopeRef?: string;
   accountLabel?: string | null;
   targetProviderId: ProviderId | (string & {});
   transportProviderId: AccountTransportProviderId | (string & {});
@@ -38,6 +39,7 @@ export interface AccountTransportAccount {
 export interface AccountTransportAcquireInput {
   /** Mesh-internal exact candidate binding; never sourced from gateway ingress. */
   accountId?: string;
+  ownerScopeRef?: string;
   targetProviderId: ProviderId | (string & {});
   transportProviderId: AccountTransportProviderId | (string & {});
   modelId?: ModelId | (string & {}) | null;
@@ -150,6 +152,7 @@ const buildLeaseKey = (input: AccountTransportAcquireInput): string | undefined 
   }
 
   return [
+    normalizeOptional(input.ownerScopeRef),
     normalizeOptional(input.workspaceId),
     input.affinityKey,
     input.targetProviderId,
@@ -336,6 +339,9 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     _now: Date,
   ): boolean {
     return (!input.accountId || account.accountId === input.accountId)
+      && (input.ownerScopeRef
+        ? account.ownerScopeRef === input.ownerScopeRef
+        : account.ownerScopeRef === undefined)
       && account.targetProviderId === input.targetProviderId
       && account.transportProviderId === input.transportProviderId
       && account.status === 'active'
