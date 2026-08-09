@@ -67,6 +67,7 @@ export class LocalAccountTransportService {
         refreshToken: res.credential.refreshToken,
         expiresAt: res.credential.expiresAt,
         status: 'active',
+        enrollmentCompletedAt: now,
         metadata: res.metadata,
       };
       this.registerAccount(account, res.credential.authClientConfigVersion);
@@ -99,20 +100,21 @@ export class LocalAccountTransportService {
     }
     const res = await provider.pollForCompletion(enrollmentId);
     if (res.credential) {
+      const now = new Date().toISOString();
       // P0-4: Persist credentials obtained via device flow poll into keyring/accounts
       const account: AccountTransportAccount = {
         accountId: res.accountId,
         accountLabel: res.label,
-        targetProviderId: 'codex',
+        targetProviderId: 'openai',
         transportProviderId: 'codex',
         accessToken: res.credential.accessToken,
         refreshToken: res.credential.refreshToken,
         expiresAt: res.credential.expiresAt,
         status: 'active',
+        enrollmentCompletedAt: now,
         metadata: res.metadata,
       };
       this.registerAccount(account, res.credential.authClientConfigVersion);
-      const now = new Date().toISOString();
       await this.persistCredential(
         {
           accountId: res.accountId,
