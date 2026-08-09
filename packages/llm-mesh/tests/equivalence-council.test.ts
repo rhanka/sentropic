@@ -40,4 +40,28 @@ describe('model equivalence council', () => {
     expect(() => validateEquivalenceCouncil(council, modelProfiles, now))
       .toThrow(EquivalenceCouncilError);
   });
+
+  it('rejects member capabilities explicitly marked unsupported', () => {
+    const council = {
+      ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      exclusions: DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.filter(
+        (entry) => entry.modelId !== 'gpt-4.1-nano',
+      ),
+      groups: [{
+        id: 'reasoning-fixture', intent: 'reasoning' as const,
+        expiresAt: '2027-01-01T00:00:00Z',
+        evidence: [{
+          suite: 'fixture', artifact: 'fixture.json', measuredAt: '2026-08-01T00:00:00Z',
+          dimensions: { quality: 'equivalent' },
+        }],
+        members: [{
+          providerId: 'openai', modelId: 'gpt-4.1-nano', rank: 1,
+          requiredCapabilities: ['reasoning' as const],
+        }],
+      }],
+    };
+
+    expect(() => validateEquivalenceCouncil(council, modelProfiles, now))
+      .toThrow(/missing capability reasoning: openai:gpt-4.1-nano/);
+  });
 });

@@ -62,6 +62,25 @@ export class EquivalenceCouncilError extends Error {
   }
 }
 
+export const modelSupportsCapability = (
+  profile: ModelProfile | undefined,
+  requirement: CapabilityRequirement,
+): boolean => {
+  if (!profile) return false;
+  if (requirement.startsWith('input:')) {
+    return profile.capabilities.modalities.input.includes(requirement.slice(6) as never);
+  }
+  if (requirement.startsWith('output:')) {
+    return profile.capabilities.modalities.output.includes(requirement.slice(7) as never);
+  }
+  const capability = profile.capabilities[requirement as keyof ModelProfile['capabilities']];
+  if (typeof capability === 'number') return capability > 0;
+  if (capability && typeof capability === 'object' && 'support' in capability) {
+    return capability.support !== 'unsupported';
+  }
+  return capability !== undefined;
+};
+
 const aliases = Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS).map(([alias, target]) => ({
   alias,
   providerId: target.providerId,
@@ -110,12 +129,9 @@ export const validateEquivalenceCouncil = (
       const profile = profilesByKey.get(key);
       if (!profile) issues.push(`unknown council model: ${key}`);
       for (const requirement of member.requiredCapabilities) {
-        const supported = requirement.startsWith('input:')
-          ? profile?.capabilities.modalities.input.includes(requirement.slice(6) as never)
-          : requirement.startsWith('output:')
-            ? profile?.capabilities.modalities.output.includes(requirement.slice(7) as never)
-            : profile?.capabilities[requirement as keyof ModelProfile['capabilities']] !== undefined;
-        if (!supported) issues.push(`missing capability ${requirement}: ${key}`);
+        if (!modelSupportsCapability(profile, requirement)) {
+          issues.push(`missing capability ${requirement}: ${key}`);
+        }
       }
     });
   });
