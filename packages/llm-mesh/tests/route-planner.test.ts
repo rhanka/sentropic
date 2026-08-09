@@ -68,6 +68,40 @@ describe('opaque route planner', () => {
     )).toBe(true);
   });
 
+  it('requires explicit audited rebind to change an affinity account', async () => {
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(),
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      ...request, workspaceId: 'ws-1', affinityKey: 'session-2',
+      explicit: { diagnosticAccountRef: 'acct_old' },
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const alternatives = await planner.plan(routingSubject(), {
+      ...request, workspaceId: 'ws-1', affinityKey: 'session-2',
+      policyOverride: { stickyAccount: false },
+    });
+    const nextIndex = alternatives.diagnostics.findIndex(
+      (candidate) => candidate.diagnosticAccountRef === 'acct_new',
+    );
+
+    expect(() => planner.promoteAffinity(
+      routingSubject(), alternatives.planRef, alternatives.candidateRefs[nextIndex]!, 1,
+    )).toThrow(/cannot change account/);
+    const rebound = planner.rebindAffinity(
+      routingSubject(), alternatives.planRef, alternatives.candidateRefs[nextIndex]!, 1,
+    );
+    expect(rebound.diagnosticAccountRef).toBe('acct_new');
+    expect(planner.describeAffinity(routingSubject(), 'session-2', 'ws-1')?.revision).toBe(2);
+    expect(events).toContainEqual(expect.objectContaining({
+      operation: 'rebind', cacheContinuityRisk: true,
+    }));
+  });
+
   it('suppresses a failed preferred route until the injected clock reaches TTL', async () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const directory = new FakeRouteDirectory();
