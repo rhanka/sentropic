@@ -8,7 +8,7 @@ import {
 import { selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
 import type {
   AccountDirectoryPort, AffinityDescription, Clock, IdFactory, PreparedRouteAttempt,
-  RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
+  AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
 } from './routing-contracts.js';
 import {
   DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles, validateRoutePolicy,
@@ -20,6 +20,7 @@ export interface InMemoryRoutePlannerOptions {
   readonly clock?: Clock;
   readonly idFactory?: IdFactory;
   readonly planTtlMs?: number;
+  readonly affinityAudit?: (event: AffinityMutationEvent) => void;
 }
 export class InMemoryRoutePlanner implements RoutePlanner {
   private readonly plans = new Map<string, StoredPlan>();
@@ -109,17 +110,61 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     });
   }
 
-  describeAffinity(subject: VerifiedRoutingSubject, key: string): AffinityDescription | null {
-    return this.affinities.get(affinityRef(subject, key)) ?? null;
+  describeAffinity(subject: VerifiedRoutingSubject, key: string, workspaceId?: string): AffinityDescription | null {
+    return this.affinities.get(affinityRef(subject, key, workspaceId)) ?? null;
   }
 
-  resetAffinity(subject: VerifiedRoutingSubject, key: string, expectedRevision?: number): boolean {
-    const ref = affinityRef(subject, key); const current = this.affinities.get(ref);
+  promoteAffinity(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
+    expectedRevision?: number): AffinityDescription {
+    return this.mutateAffinity(subject, planRef, candidateRef, false, expectedRevision);
+  }
+
+  rebindAffinity(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
+    expectedRevision?: number): AffinityDescription {
+    return this.mutateAffinity(subject, planRef, candidateRef, true, expectedRevision);
+  }
+
+  resetAffinity(subject: VerifiedRoutingSubject, key: string, expectedRevision?: number,
+    workspaceId?: string): boolean {
+    const ref = affinityRef(subject, key, workspaceId); const current = this.affinities.get(ref);
     if (!current) return false;
     if (expectedRevision !== undefined && current.revision !== expectedRevision) {
       throw new RoutePlanError('Affinity revision changed', 'conflict');
     }
-    return this.affinities.delete(ref);
+    const removed = this.affinities.delete(ref);
+    if (removed) this.options.affinityAudit?.({
+      operation: 'reset', subjectRef: subjectRef(subject), affinityRef: ref,
+      previousRevision: current.revision, cacheContinuityRisk: false,
+    });
+    return removed;
+  }
+
+  private mutateAffinity(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
+    allowRebind: boolean, expectedRevision?: number): AffinityDescription {
+    const stored = this.plans.get(planRef);
+    if (!stored || stored.subjectRef !== subjectRef(subject) || !stored.affinityRef) {
+      throw new RoutePlanError('Invalid affinity plan', 'invalid-plan');
+    }
+    const candidate = stored.candidates.find((entry) => entry.candidateRef === candidateRef);
+    const current = this.affinities.get(stored.affinityRef);
+    if (!candidate || !current) throw new RoutePlanError('Affinity candidate missing', 'invalid-plan');
+    if (expectedRevision !== undefined && current.revision !== expectedRevision) {
+      throw new RoutePlanError('Affinity revision changed', 'conflict');
+    }
+    const rebind = current.accountRef !== candidate.account.accountRef;
+    if (rebind && !allowRebind) throw new RoutePlanError('Promotion cannot change account', 'conflict');
+    const next: StoredAffinity = {
+      ...current, accountRef: candidate.account.accountRef,
+      diagnosticAccountRef: candidate.account.diagnosticAccountRef,
+      target: candidate.target, revision: current.revision + 1, promoted: !rebind,
+    };
+    this.affinities.set(stored.affinityRef, next);
+    this.options.affinityAudit?.({
+      operation: rebind ? 'rebind' : 'promote', subjectRef: subjectRef(subject),
+      affinityRef: stored.affinityRef, previousRevision: current.revision,
+      nextRevision: next.revision, cacheContinuityRisk: rebind,
+    });
+    return next;
   }
 
   private bind(stored: StoredPlan, candidate: RankedRouteCandidate): void {

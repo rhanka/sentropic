@@ -120,6 +120,15 @@ export interface AffinityDescription {
   readonly promoted: boolean;
 }
 
+export interface AffinityMutationEvent {
+  readonly operation: 'promote' | 'reset' | 'rebind';
+  readonly subjectRef: string;
+  readonly affinityRef: string;
+  readonly previousRevision: number;
+  readonly nextRevision?: number;
+  readonly cacheContinuityRisk: boolean;
+}
+
 export interface RoutePlanner {
   plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan>;
   prepareAttempt(
@@ -129,6 +138,19 @@ export interface RoutePlanner {
     requestId: string,
     attemptIndex: number,
   ): Promise<PreparedRouteAttempt>;
-  describeAffinity(subject: VerifiedRoutingSubject, affinityKey: string): AffinityDescription | null;
-  resetAffinity(subject: VerifiedRoutingSubject, affinityKey: string, expectedRevision?: number): boolean;
+  describeAffinity(
+    subject: VerifiedRoutingSubject, affinityKey: string, workspaceId?: string,
+  ): AffinityDescription | null;
+  promoteAffinity(
+    subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
+    expectedRevision?: number,
+  ): AffinityDescription;
+  rebindAffinity(
+    subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
+    expectedRevision?: number,
+  ): AffinityDescription;
+  resetAffinity(
+    subject: VerifiedRoutingSubject, affinityKey: string, expectedRevision?: number,
+    workspaceId?: string,
+  ): boolean;
 }
