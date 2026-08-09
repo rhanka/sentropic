@@ -3,12 +3,17 @@ services:
     volumes:
       - ./:/workspace
       - workspace_node_modules:/workspace/node_modules
+      - ${TRACK_EVENTS_HOST_DIR:-/home/antoinefa/src/sentropic/.track}:/track:ro
     command: sh -c "npm run db:migrate && npm run dev"
     environment:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:${UI_PORT:-5173},http://127.0.0.1:${UI_PORT:-5173},http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*}
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN}
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
+      # L2-A/E1: owner-local Track store only. Production does not set this path and stays fail-closed.
+      - TRACK_EVENTS_PATH=/track/events.jsonl
+      - TRACK_BASELINE_COMMIT=${TRACK_BASELINE_COMMIT:-feebc6769aac8bd313d84310b1f0d66d07b68ee1}
+      - TRACK_OWNER_IDENTITY_MAP=${TRACK_OWNER_IDENTITY_MAP:-{"rhanka":"rhanka"}}
       # Chat tracing (dev: enabled by default)
       - CHAT_TRACE_ENABLED=${CHAT_TRACE_ENABLED:-true}
       - CHAT_TRACE_RETENTION_DAYS=${CHAT_TRACE_RETENTION_DAYS:-7}

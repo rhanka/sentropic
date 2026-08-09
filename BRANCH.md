@@ -386,8 +386,8 @@ them blocks merge. No timeout-only amendments are accepted.
   - [ ] Lot gate: `make typecheck-api ENV=test-track-l2-e1` and `make lint-api ENV=test-track-l2-e1`.
 - [ ] **Lot 2 — Workspace and local-only wiring**
   - [x] Add nullable `workspaces.track_workspace_id` in schema, `0042_workspace_track_mapping.sql`, and `api/drizzle/meta/_journal.json`.
-  - [ ] Add only the `BR-L2E1-EX1` read-only store mount plus E1 environment values to `docker-compose.dev.yml`.
-  - [ ] Keep production compose and configuration unchanged.
+  - [x] Add only the `BR-L2E1-EX1` read-only store mount plus E1 environment values to `docker-compose.dev.yml`.
+  - [x] Keep production compose and configuration unchanged.
 - [ ] **Lot 3 — Focused proof and final validation**
   - [ ] Add `api/tests/unit/decision-validator.test.ts` with owner match, non-owner, unmapped caller, missing decision, workspace mismatch, unset event path, and missing workspace mapping cases.
   - [ ] Prove the installed locked Track 0.17 reader returns the fixture decision through `report()` and `canevas()`.
