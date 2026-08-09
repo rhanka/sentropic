@@ -121,8 +121,12 @@ agents are read-only and do not create implementation branches.
   in accepted design v2 and archived under `docs/reviews/`.
 - `BR73-F3` (`attention`, open): h2a must complete local integration and
   functional UAT on the exact PR candidate before merge.
-- `BR73-F4` (`attention`, open): package versions must be verified against npm
-  before bump and rechecked after final rebase; publication is CD-only.
+- `BR73-F4` (`attention`, resolved 2026-08-09): the repository audit recipe
+  confirmed npm latest mesh `0.13.2` and gateway `0.11.0` both before the bump
+  and after the final ancestry check; publication remains CD-only.
+- `BR73-F5` (`attention`, resolved 2026-08-09): acceptance audit found and
+  fixed cancellation before the tracked stream body and missing transport
+  `stableSessionId` reuse across an affinity; deterministic regressions pass.
 
 ## Plan / todo
 
@@ -190,7 +194,7 @@ agents are read-only and do not create implementation branches.
     `make test-llm-gateway`; `make build-llm-gateway`;
     `make pack-llm-gateway`.
 
-- [ ] **Lot 3 — Versioning, docs, CI and package candidate**
+- [x] **Lot 3 — Versioning, docs, CI and package candidate**
   - [x] Update both READMEs with ownership, policies, overrides and cache caveat.
   - [x] Wire equivalence freshness/completeness validation into Make and CI.
   - [x] Verify current registry versions through the repository recipe.
@@ -198,7 +202,7 @@ agents are read-only and do not create implementation branches.
     dependency range; refresh lock data only if required.
   - [x] Re-run all typecheck/test/build/pack gates for both packages.
   - [x] Run `make scope-check` before each atomic commit.
-  - [ ] Push and open/update the PR using this file as source of truth.
+  - [x] Push and open draft PR #529 using this file as source of truth.
 
 - [ ] **Lot 4 — h2a local integration and functional UAT**
   - [ ] Send h2a the exact PR commit, package versions and integration contract.
@@ -235,6 +239,11 @@ them blocks merge. No timeout-only amendments are accepted.
 
 - Track feature specified, realized and acceptance-linked.
 - Two independent spec review artifacts reconciled.
-- Exact local and CI commands with results recorded here or in PR checks.
+- Local candidate `723a7db19`: equivalence check, scope and branch checks,
+  typecheck/build/pack for both packages, mesh 125 tests and gateway 98 tests.
+- Candidate tarballs: mesh `0.14.0`
+  `54eb1af83fb6cb866d9a050881cb0ab9d779b7c09175f8b807af10ac7628a91b`;
+  gateway `0.12.0`
+  `ceb27b6022be79e38349a00fa60fd36006c13b4f133442b06992f66ea8d34872`.
 - h2a integration/UAT artifact names the final candidate SHA and versions.
 - Both package versions visible on npm only after merge-triggered CD.
