@@ -25,12 +25,19 @@ export interface ProviderRequest {
   modelId: string;
   contents: unknown[];
   generationConfig?: unknown;
+  systemInstruction?: unknown;
+  tools?: unknown[];
 }
 
 export type ProviderEvent =
   | { kind: 'content'; delta: string }
+  | { kind: 'reasoning'; delta: string }
+  | { kind: 'tool-call'; id: string; name: string; arguments: unknown }
   | { kind: 'done'; usage: unknown }
-  | { kind: 'error'; code: string; message: string };
+  | {
+      kind: 'error'; code: string; message: string;
+      statusCode?: number; retryAfterMs?: number;
+    };
 
 export interface ProviderAdapter {
   execute(
