@@ -16,10 +16,14 @@
  */
 
 import { Hono } from 'hono';
+import type { RoutePlanner } from '@sentropic/llm-mesh';
 
 import type { GatewayConfig } from '../config.js';
 import type { GatewayFlowDeps, MeteringSink, TargetResolver } from '../flow.js';
 import { runJsonFlow, runStreamFlow } from '../flow.js';
+import { runRouteJsonFlow } from '../route-json-flow.js';
+import { runRouteStreamFlow } from '../route-stream-flow.js';
+import type { RouteFlowDeps, RouteMeteringSink } from '../route-flow-core.js';
 import type { GatewayWire, ProviderResponseHeaders } from '../ports/dispatch.js';
 import {
   mapGatewayError,
@@ -47,6 +51,12 @@ export interface CreateGatewayRouterOptions {
   readonly metering?: MeteringSink;
   /** Usage estimator for never-zero settlement (spec §5). */
   readonly estimateUsage?: GatewayFlowDeps['estimateUsage'];
+  /** Mesh-owned opaque route planner. Enables the consumer-neutral data plane. */
+  readonly routePlanner?: RoutePlanner;
+  /** Single aggregate financial settlement for an opaque route plan. */
+  readonly routeMetering?: RouteMeteringSink;
+  /** Trusted host/workspace/request policy projection; never reads body ownership. */
+  readonly routeInput?: RouteFlowDeps['routeInput'];
   /** `X-Sentropic-Request-Id` source (spec §3b). Defaults to a per-call id. */
   readonly requestId?: () => string;
 }
@@ -159,12 +169,18 @@ export const createGatewayRouter = (
           ...(options.estimateUsage ? { estimateUsage: options.estimateUsage } : {}),
         }
       : undefined;
+  const routeFlowDeps: RouteFlowDeps | undefined = options.routePlanner && options.routeMetering
+    ? {
+        config, routePlanner: options.routePlanner, metering: options.routeMetering,
+        ...(options.routeInput ? { routeInput: options.routeInput } : {}),
+      }
+    : undefined;
 
   const handle = (wire: GatewayWire) => async (c: import('hono').Context) => {
     const id = requestId();
 
     // Scaffold mode (no flow deps): provider-shaped 501, surface stays frozen.
-    if (!flowDeps) {
+    if (!routeFlowDeps && !flowDeps) {
       return sendError(c, notImplemented(wire), id);
     }
 
@@ -188,7 +204,9 @@ export const createGatewayRouter = (
 
     if (!stream) {
       try {
-        const result = await runJsonFlow(flowDeps, flowRequest);
+        const result = routeFlowDeps
+          ? await runRouteJsonFlow(routeFlowDeps, flowRequest)
+          : await runJsonFlow(flowDeps!, flowRequest);
         forwardProviderHeaders(c, result.headers); // #4 allowlisted provider headers
         c.header(REQUEST_ID_HEADER, id);
         return c.json(result.body as object, result.status as 200);
@@ -203,7 +221,9 @@ export const createGatewayRouter = (
     // (#6). A mid-stream failure is settled inside the stream (no retry, §2).
     let streamResult;
     try {
-      streamResult = await runStreamFlow(flowDeps, flowRequest);
+      streamResult = routeFlowDeps
+        ? await runRouteStreamFlow(routeFlowDeps, flowRequest)
+        : await runStreamFlow(flowDeps!, flowRequest);
     } catch (error) {
       return sendError(c, toProviderShapedError(wire, error), id);
     }
