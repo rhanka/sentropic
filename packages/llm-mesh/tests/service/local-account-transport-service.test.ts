@@ -51,10 +51,14 @@ describe('LocalAccountTransportService', () => {
     );
 
     await enrollmentService.waitForCallback('enrollment-1');
+    const publicKey = 'sentropic-llm-mesh:acct_persisted_1:public';
+    const legacyPublic = JSON.parse(await keyring.getSecret(publicKey) ?? '{}');
+    legacyPublic.account.targetProviderId = 'google';
+    await keyring.setSecret(publicKey, JSON.stringify(legacyPublic));
 
     const runtimeService = new LocalAccountTransportService(keyring, providers, configResolver);
     const acquisition = await runtimeService.acquire({
-      targetProviderId: 'google',
+      targetProviderId: 'gemini',
       transportProviderId: 'cloud-code',
     });
     expect(acquisition.material).toMatchObject({
@@ -62,9 +66,7 @@ describe('LocalAccountTransportService', () => {
       accessToken: 'persisted-access-token',
       metadata: { cloudaicompanionProject: 'test-project' },
     });
-    const persisted = await keyring.getSecret(
-      'sentropic-llm-mesh:acct_persisted_1:public',
-    );
+    const persisted = await keyring.getSecret(publicKey);
     expect(JSON.parse(persisted ?? '{}').account.enrollmentCompletedAt).toEqual(
       expect.any(String),
     );
