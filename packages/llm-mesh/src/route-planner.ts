@@ -20,6 +20,8 @@ export interface InMemoryRoutePlannerOptions {
   readonly clock?: Clock;
   readonly idFactory?: IdFactory;
   readonly planTtlMs?: number;
+  readonly maximumPlanEntries?: number;
+  readonly maximumAffinityEntries?: number;
   readonly affinityAudit?: (event: AffinityMutationEvent) => void;
 }
 export class InMemoryRoutePlanner implements RoutePlanner {
@@ -32,6 +34,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
   private readonly profiles: InMemoryRoutePolicyProfiles;
   private readonly health: InMemoryRouteHealth;
   private readonly planTtlMs: number;
+  private readonly maximumPlanEntries: number;
+  private readonly maximumAffinityEntries: number;
 
   constructor(private readonly options: InMemoryRoutePlannerOptions) {
     this.clock = options.clock ?? { now: () => new Date() };
@@ -40,6 +44,8 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     this.profiles = options.profiles ?? new InMemoryRoutePolicyProfiles();
     this.health = new InMemoryRouteHealth(this.clock);
     this.planTtlMs = options.planTtlMs ?? 30_000;
+    this.maximumPlanEntries = Math.max(1, options.maximumPlanEntries ?? 1_000);
+    this.maximumAffinityEntries = Math.max(1, options.maximumAffinityEntries ?? 10_000);
   }
   async plan(subject: VerifiedRoutingSubject, input: RoutePlanInput): Promise<RoutePlan> {
     this.evictPlans();
@@ -118,6 +124,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
         ? { affinityRef: affinityRef(subject, input.affinityKey, input.workspaceId) }
         : {}),
     });
+    this.trim(this.plans, this.maximumPlanEntries);
     return plan;
   }
   async prepareAttempt(subject: VerifiedRoutingSubject, planRef: string, candidateRef: string,
@@ -194,6 +201,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       target: candidate.target, revision: current.revision + 1, promoted: !rebind,
     };
     this.affinities.set(stored.affinityRef, next);
+    this.trim(this.affinities, this.maximumAffinityEntries);
     this.options.affinityAudit?.({
       operation: rebind ? 'rebind' : 'promote', subjectRef: subjectRef(subject),
       affinityRef: stored.affinityRef, previousRevision: current.revision,
@@ -217,6 +225,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       promoted: Boolean(current && !rebind),
     };
     this.affinities.set(stored.affinityRef, next);
+    this.trim(this.affinities, this.maximumAffinityEntries);
     if (current) this.options.affinityAudit?.({
       operation: rebind ? 'rebind' : 'promote', subjectRef: stored.subjectRef,
       affinityRef: stored.affinityRef, previousRevision: current.revision,
@@ -234,6 +243,14 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const now = this.clock.now().getTime();
     for (const [ref, stored] of this.plans) {
       if (Date.parse(stored.plan.expiresAt) <= now) this.plans.delete(ref);
+    }
+  }
+
+  private trim<T>(entries: Map<string, T>, maximum: number): void {
+    while (entries.size > maximum) {
+      const oldest = entries.keys().next().value;
+      if (!oldest) break;
+      entries.delete(oldest);
     }
   }
 }
