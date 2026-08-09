@@ -147,6 +147,14 @@ agents are read-only and do not create implementation branches.
   The Cloud Code runtime now projects schemas onto Google's accepted subset;
   a deterministic regression covers nested unsupported keywords and the full
   live 157-tool payload succeeded through the instrumented gateway probe.
+- `BR73-F9` (`blocking`, active 2026-08-09): the subsequent real Claude Code
+  tool-continuation UAT exposed that Anthropic `tool_use` and `tool_result`
+  content blocks were omitted by canonical ingress, causing the same tool to be
+  requested repeatedly after successful execution. Canonical ingress now
+  preserves calls, results, names, rich content and error state; Cloud Code
+  receives an object-valued `functionResponse.response`. Deterministic package
+  suites pass; exact-candidate live Claude continuation remains the resolution
+  gate.
 
 ## Plan / todo
 
@@ -267,5 +275,7 @@ them blocks merge. No timeout-only amendments are accepted.
   `ceb27b6022be79e38349a00fa60fd36006c13b4f133442b06992f66ea8d34872`.
 - Post-review routing gates: equivalence check, mesh typecheck/build/pack with
   130 tests, gateway typecheck/build/pack with 98 tests, scope C2 and branch C1.
+- Post-live-tool remediation: mesh 132 tests and gateway 102 tests pass; both
+  focused continuation regressions and gateway typecheck pass.
 - h2a integration/UAT artifact names the final candidate SHA and versions.
 - Both package versions visible on npm only after merge-triggered CD.

@@ -74,6 +74,43 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('sends canonical tool results as Cloud Code function responses', async () => {
+    const fetchFn = vi.fn(async () => streamResponse());
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-3.1-flash-lite',
+      messages: [{
+        role: 'assistant', content: [],
+        toolCalls: [{
+          toolCallId: 'toolu_1', providerCallId: 'toolu_1', name: 'Bash',
+          argumentsText: '{"command":"sleep 3"}', arguments: { command: 'sleep 3' },
+        }],
+      }, {
+        role: 'tool', content: 'completed',
+        toolResult: {
+          toolCallId: 'toolu_1', providerCallId: 'toolu_1', name: 'Bash',
+          output: 'completed',
+        },
+      }],
+    }, context);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      request: { contents: [{
+        role: 'model', parts: [{
+          functionCall: { id: 'toolu_1', name: 'Bash', args: { command: 'sleep 3' } },
+        }],
+      }, {
+        role: 'user', parts: [{
+          functionResponse: {
+            id: 'toolu_1', name: 'Bash', response: { output: 'completed' },
+          },
+        }],
+      }] },
+    });
+  });
+
   it('surfaces Retry-After on a canonical error event', async () => {
     const client = new CloudCodeRuntimeClient(async () => new Response('rate limited', {
       status: 429, headers: { 'retry-after': '6' },
