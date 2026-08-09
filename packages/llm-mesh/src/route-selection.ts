@@ -71,6 +71,7 @@ export const selectRouteCandidates = (input: {
   readonly council: ModelEquivalenceCouncil;
   readonly accounts: readonly EligibleAccountDescriptor[];
   readonly roundRobinOffset?: number;
+  readonly now?: Date;
 }): readonly RankedRouteCandidate[] => {
   const resolved = resolveRequestedTarget(input.request.requestedModel);
   if (!resolved) return [];
@@ -88,8 +89,12 @@ export const selectRouteCandidates = (input: {
     reason: resolved.reason,
   }];
   if (input.policy.allowEquivalentModels) {
-    const group = input.council.groups.find((candidate) => candidate.members.some((member) =>
-      member.providerId === resolved.providerId && member.modelId === resolved.model));
+    const now = (input.now ?? new Date()).getTime();
+    const group = input.council.groups.find((candidate) =>
+      Date.parse(candidate.expiresAt) > now
+      && candidate.evidence.length > 0
+      && candidate.members.some((member) =>
+        member.providerId === resolved.providerId && member.modelId === resolved.model));
     group?.members.filter((member) =>
       member.providerId !== resolved.providerId || member.modelId !== resolved.model)
       .sort((left, right) => left.rank - right.rank)
