@@ -46,6 +46,18 @@ export const runRouteStreamFlow = async (
           outcome, usage: aggregateUsage(attempts), attempts,
         });
       };
+      const cancel = async () => {
+        await iterator?.return?.();
+        if (terminal) return;
+        await attempt.releaseCancelled();
+        attempts.push({
+          candidateRef, providerId: diagnostic.actualProviderId,
+          modelId: diagnostic.actualModelId,
+          transportProviderId: diagnostic.actualTransportProviderId,
+          outcome: 'cancelled', usage,
+        });
+        await settle('cancelled');
+      };
       const tracked = (async function* (): AsyncGenerator<StreamEvent> {
         let completed = false;
         let providerErrorEmitted = false;
@@ -89,17 +101,7 @@ export const runRouteStreamFlow = async (
             };
           }
         } finally {
-          await iterator?.return?.();
-          if (!completed && !terminal) {
-            await attempt.releaseCancelled();
-            attempts.push({
-              candidateRef, providerId: diagnostic.actualProviderId,
-              modelId: diagnostic.actualModelId,
-              transportProviderId: diagnostic.actualTransportProviderId,
-              outcome: 'cancelled', usage,
-            });
-            await settle('cancelled');
-          }
+          if (!completed) await cancel();
         }
       })();
       const responseId = first.value.type === 'done'
@@ -107,9 +109,16 @@ export const runRouteStreamFlow = async (
         : first.value.type === 'status'
           ? first.value.data.sentropicResponseId ?? prepared.cost.correlationId
           : prepared.cost.correlationId;
-      return {
-        stream: encodeGatewayStream(request.wire, diagnostic.actualModelId, responseId, tracked),
-      };
+      const encoded = encodeGatewayStream(
+        request.wire, diagnostic.actualModelId, responseId, tracked,
+      );
+      return { stream: (async function* () {
+        try { yield* encoded; }
+        finally {
+          await encoded.return(undefined);
+          await cancel();
+        }
+      })() };
     } catch (error) {
       await iterator?.return?.();
       const classification = classifyRouteError(error, request.signal?.aborted);
