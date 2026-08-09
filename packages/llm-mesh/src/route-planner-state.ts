@@ -15,6 +15,9 @@ export interface StoredPlan {
   readonly plan: RoutePlan;
   readonly subjectRef: string;
   readonly affinityRef?: string;
+  readonly affinityRevision?: number;
+  readonly policyProfileName?: string;
+  readonly policyProfileRevision?: string;
   readonly hadAffinity: boolean;
   readonly candidates: readonly StoredCandidate[];
   readonly policy: RoutePolicy;
