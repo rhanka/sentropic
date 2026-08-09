@@ -11,7 +11,7 @@ import type {
   AffinityMutationEvent, RoutePlan, RoutePlanInput, RoutePlanner, VerifiedRoutingSubject,
 } from './routing-contracts.js';
 import {
-  DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles, validateRoutePolicy,
+  DEFAULT_ROUTE_POLICY, InMemoryRoutePolicyProfiles, resolveRoutePolicy, validateRoutePolicy,
 } from './routing-policy.js';
 export interface InMemoryRoutePlannerOptions {
   readonly directory: AccountDirectoryPort;
@@ -47,7 +47,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       ? this.profiles.list().find((entry) => entry.name === input.policyProfile)
       : this.profiles.active();
     if (input.policyProfile && !profile) throw new RoutePlanError('Unknown policy profile', 'no-route');
-    const policy = mergeRoutePolicy(profile?.policy ?? DEFAULT_ROUTE_POLICY, input.policyOverride);
+    const policy = resolveRoutePolicy(
+      mergeRoutePolicy(profile?.policy ?? DEFAULT_ROUTE_POLICY, input.policyOverride), input,
+    );
     validateRoutePolicy(policy);
     const affinity = input.affinityKey
       ? this.affinities.get(affinityRef(subject, input.affinityKey, input.workspaceId))
