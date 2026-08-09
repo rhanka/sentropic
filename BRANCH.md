@@ -385,7 +385,7 @@ them blocks merge. No timeout-only amendments are accepted.
   - [ ] Wire the existing Focus route to the real validator without modifying the #526 driver/adapter path.
   - [ ] Lot gate: `make typecheck-api ENV=test-track-l2-e1` and `make lint-api ENV=test-track-l2-e1`.
 - [ ] **Lot 2 — Workspace and local-only wiring**
-  - [ ] Add nullable `workspaces.track_workspace_id` in schema, `0042_workspace_track_mapping.sql`, and `api/drizzle/meta/_journal.json`.
+  - [x] Add nullable `workspaces.track_workspace_id` in schema, `0042_workspace_track_mapping.sql`, and `api/drizzle/meta/_journal.json`.
   - [ ] Add only the `BR-L2E1-EX1` read-only store mount plus E1 environment values to `docker-compose.dev.yml`.
   - [ ] Keep production compose and configuration unchanged.
 - [ ] **Lot 3 — Focused proof and final validation**

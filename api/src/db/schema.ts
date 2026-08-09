@@ -15,6 +15,7 @@ export const workspaces = pgTable('workspaces', {
   ownerUserId: text('owner_user_id'), // nullable; UNIQUE constraint removed to allow multiple workspaces per user
   name: text('name').notNull(),
   type: text('type').notNull().default('ai-priorities'), // 'neutral' | 'ai-priorities' | 'opportunity' | 'code'
+  trackWorkspaceId: text('track_workspace_id'), // nullable local Track workspace claim for Focus owner-signature validation
   // ARCH-11 G1a: the single durable `workspace → tenant` edge (one tenant → many workspaces;
   // one workspace → exactly one tenant). Real FK to `tenants` (D1=B: tenant = org). DEFAULT-safe
   // for rolling deploys: fast-default 'sentropic' so old + new pods both satisfy NOT NULL during
