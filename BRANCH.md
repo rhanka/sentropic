@@ -379,10 +379,10 @@ them blocks merge. No timeout-only amendments are accepted.
   - [x] Read the required rules, build brief, template, validator seam, 0041 migration journal pattern, Track fixture, and compose boundaries.
   - [x] Capture E1 config inputs: `TRACK_EVENTS_PATH`, `TRACK_BASELINE_COMMIT`, and `TRACK_OWNER_IDENTITY_MAP`.
 - [ ] **Lot 1 — Owner-only Track validator**
-  - [ ] Read the mapped Track workspace from `workspaces.track_workspace_id`.
-  - [ ] Read the configured Track store with `TrackReader.report({ baselineCommit, decisions: true })` and `canevas()`.
-  - [ ] Deny every missing, mismatched, unmapped, non-owner, unavailable, or thrown-error path with the specified reason.
-  - [ ] Wire the existing Focus route to the real validator without modifying the #526 driver/adapter path.
+  - [x] Read the mapped Track workspace from `workspaces.track_workspace_id`.
+  - [x] Read the configured Track store with `TrackReader.report({ baselineCommit, decisions: true })` and `canevas()`.
+  - [x] Deny every missing, mismatched, unmapped, non-owner, unavailable, or thrown-error path with the specified reason.
+  - [x] Wire the existing Focus route to the real validator without modifying the #526 driver/adapter path.
   - [ ] Lot gate: `make typecheck-api ENV=test-track-l2-e1` and `make lint-api ENV=test-track-l2-e1`.
 - [ ] **Lot 2 — Workspace and local-only wiring**
   - [x] Add nullable `workspaces.track_workspace_id` in schema, `0042_workspace_track_mapping.sql`, and `api/drizzle/meta/_journal.json`.

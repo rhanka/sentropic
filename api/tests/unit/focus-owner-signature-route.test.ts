@@ -35,7 +35,7 @@ const HTTP_RELAYER = Object.freeze({
 });
 
 const { focusRouter } = await import('../../src/routes/api/focus');
-const { failClosedDecisionValidator } = await import('../../src/services/focus/decision-validator');
+const { trackDecisionValidator } = await import('../../src/services/focus/decision-validator');
 const { createApiFocusLiveSession } = await import('../../src/services/focus/live-session');
 
 const authenticatedApp = (role = 'user') => {
@@ -57,14 +57,17 @@ const authenticatedApp = (role = 'user') => {
 describe('Focus owner-signature route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(failClosedDecisionValidator, 'validate').mockResolvedValue({ authorized: true });
+    vi.spyOn(trackDecisionValidator, 'validate').mockResolvedValue({ authorized: true });
     isTenantAdminMock.mockResolvedValue(true);
     requireWorkspaceAccessMock.mockResolvedValue(undefined);
     resolveTenantMock.mockResolvedValue({ tenantId: 'tenant-from-resolver' });
   });
 
-  it('should fail closed before creating a Focus session when decision validation is not configured', async () => {
-    vi.restoreAllMocks();
+  it('should return not-done before creating a Focus session when decision validation denies', async () => {
+    vi.spyOn(trackDecisionValidator, 'validate').mockResolvedValue({
+      authorized: false,
+      reason: 'track-store-unavailable',
+    });
 
     const response = await authenticatedApp().request('http://localhost/focus/owner-signatures', {
       method: 'POST',
@@ -78,7 +81,7 @@ describe('Focus owner-signature route', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       status: 'not-done',
-      reason: 'decision-validation-not-configured',
+      reason: 'track-store-unavailable',
     });
     expect(createApiFocusLiveSessionMock).not.toHaveBeenCalled();
   });

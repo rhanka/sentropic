@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import type { AuthUser } from '../../middleware/auth';
 import { isTenantAdmin } from '../../services/auth/tenant-membership';
-import { failClosedDecisionValidator } from '../../services/focus/decision-validator';
+import { trackDecisionValidator } from '../../services/focus/decision-validator';
 import { createApiFocusLiveSession } from '../../services/focus/live-session';
 import { resolveTenant } from '../../services/tenancy/resolve-tenant';
 import { requireWorkspaceAccess } from '../../services/workspace-access';
@@ -47,7 +47,7 @@ focusRouter.post('/owner-signatures', zValidator('json', ownerSignatureSchema), 
   if (!user?.workspaceId || !user.authenticatedAt) return c.json({ error: 'Authentication required' }, 401);
 
   const body = c.req.valid('json');
-  const validation = await failClosedDecisionValidator.validate({
+  const validation = await trackDecisionValidator.validate({
     workspace: user.workspaceId,
     decisionId: body.decision_id,
     userId: user.userId,
