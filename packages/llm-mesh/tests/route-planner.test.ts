@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_MODEL_EQUIVALENCE_COUNCIL } from '../src/equivalence-council.js';
 import { InMemoryRoutePlanner } from '../src/route-planner.js';
 import { RoutePlanError } from '../src/route-planner-state.js';
 import { FakeRouteDirectory, routingSubject } from './fixtures/route-planner.js';
@@ -122,6 +123,52 @@ describe('opaque route planner', () => {
     now += 300_000;
     const retried = await planner.plan(routingSubject(), request);
     expect(retried.diagnostics[0]?.diagnosticAccountRef).toBe('acct_new');
+  });
+
+  it('falls back only to a same-account equivalent for a strict affinity', async () => {
+    const directory = new FakeRouteDirectory();
+    directory.accounts[1] = {
+      ...directory.accounts[1]!,
+      supportedModelIds: ['gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+    };
+    const planner = new InMemoryRoutePlanner({
+      directory,
+      council: {
+        ...DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+        groups: [{
+          id: 'gemini-flash', intent: 'fast', expiresAt: '2027-01-01T00:00:00Z',
+          evidence: [{
+            suite: 'fixture', artifact: 'fixture.json', measuredAt: '2026-08-01T00:00:00Z',
+            dimensions: { quality: 'equivalent' },
+          }],
+          members: [
+            { providerId: 'gemini', modelId: 'gemini-3.5-flash', rank: 1, requiredCapabilities: [] },
+            { providerId: 'gemini', modelId: 'gemini-3.1-flash-lite', rank: 2, requiredCapabilities: [] },
+          ],
+        }],
+      },
+    });
+    const initial = await planner.plan(routingSubject(), {
+      ...request, affinityKey: 'strict', explicit: { diagnosticAccountRef: 'acct_new' },
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), initial.planRef, initial.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const preferred = await planner.plan(routingSubject(), {
+      ...request, affinityKey: 'strict',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), preferred.planRef, preferred.candidateRefs[0]!, 'req-2', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+
+    const fallback = await planner.plan(routingSubject(), {
+      ...request, affinityKey: 'strict',
+    });
+    expect(fallback.diagnostics[0]).toMatchObject({
+      diagnosticAccountRef: 'acct_new', actualModelId: 'gemini-3.1-flash-lite',
+    });
+    expect(fallback.diagnostics.some((candidate) =>
+      candidate.diagnosticAccountRef === 'acct_old')).toBe(false);
   });
 
   it('rejects attempt preparation after the plan expires', async () => {

@@ -60,9 +60,22 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     })];
     if (affinity && policy.stickyAccount) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
-      candidates = account && account.readiness === 'ready'
-        ? [{ account, target: affinity.target }]
-        : [];
+      if (!account || account.readiness !== 'ready') {
+        candidates = [];
+      } else {
+        const sameAccount = candidates.filter((candidate) =>
+          candidate.account.accountRef === affinity.accountRef
+          && !this.isAffinityTarget(candidate, affinity));
+        const rotated = policy.rotateEquivalentAccounts
+          ? candidates.filter((candidate) => candidate.account.accountRef !== affinity.accountRef)
+          : [];
+        candidates = [{
+          account,
+          target: { ...affinity.target, requestedModel: input.requestedModel, reason: 'sticky' },
+        }, ...sameAccount, ...rotated]
+          .filter((candidate) => !this.health.isSuppressed(candidate))
+          .slice(0, policy.maxAttempts);
+      }
     } else {
       candidates = candidates.filter((candidate) => !this.health.isSuppressed(candidate));
       this.roundRobin.set(roundRobinKey, (this.roundRobin.get(roundRobinKey) ?? 0) + 1);
@@ -181,6 +194,12 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       target: candidate.target, revision: (current?.revision ?? 0) + 1,
       promoted: Boolean(current),
     });
+  }
+
+  private isAffinityTarget(candidate: RankedRouteCandidate, affinity: StoredAffinity): boolean {
+    return candidate.target.providerId === affinity.target.providerId
+      && candidate.target.modelId === affinity.target.modelId
+      && candidate.target.transportProviderId === affinity.target.transportProviderId;
   }
 
   private evictPlans(): void {
