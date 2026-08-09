@@ -19,6 +19,7 @@ export type AccountTransportOutcomeStatus =
 
 export interface AccountTransportAccount {
   accountId: string;
+  ownerScopeRef?: string;
   accountLabel?: string | null;
   targetProviderId: ProviderId | (string & {});
   transportProviderId: AccountTransportProviderId | (string & {});
@@ -32,9 +33,13 @@ export interface AccountTransportAccount {
   cooldownUntil?: Date | string | null;
   headers?: Record<string, string>;
   metadata?: Record<string, unknown>;
+  enrollmentCompletedAt?: string;
 }
 
 export interface AccountTransportAcquireInput {
+  /** Mesh-internal exact candidate binding; never sourced from gateway ingress. */
+  accountId?: string;
+  ownerScopeRef?: string;
   targetProviderId: ProviderId | (string & {});
   transportProviderId: AccountTransportProviderId | (string & {});
   modelId?: ModelId | (string & {}) | null;
@@ -83,6 +88,8 @@ export interface AccountTransportAcquisition {
     metadata?: Record<string, unknown>;
   };
   recordOutcome(outcome: AccountTransportOutcome): Promise<void>;
+  /** Releases an unfinished reservation without changing account health. */
+  release?(): Promise<void>;
 }
 
 /**
@@ -145,6 +152,7 @@ const buildLeaseKey = (input: AccountTransportAcquireInput): string | undefined 
   }
 
   return [
+    normalizeOptional(input.ownerScopeRef),
     normalizeOptional(input.workspaceId),
     input.affinityKey,
     input.targetProviderId,
@@ -189,14 +197,30 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     }
   }
 
-  addAccount(account: AccountTransportAccount): void {
-    this.accounts.set(account.accountId, {
+  addAccount(account: AccountTransportAccount): AccountTransportAccount {
+    const stored: StoredAccount = {
       ...account,
       status: account.status ?? 'active',
       priority: account.priority ?? 0,
       weight: Math.max(account.weight ?? 1, 1),
       totalAcquisitions: 0,
-    });
+    };
+    this.accounts.set(account.accountId, stored);
+    // The local account service deliberately retains this exact object. Token
+    // refreshes and lifecycle transitions therefore update the executable
+    // coordinator state instead of a detached copy.
+    return stored;
+  }
+
+  /**
+   * Advance time-based lifecycle state without acquiring an account.
+   * Returns account ids whose cooldown expired so a durable host can persist
+   * the transition before exposing route inventory.
+   */
+  refreshLifecycle(nowInput?: Date | string | number): readonly string[] {
+    const now = toDate(nowInput);
+    this.releaseExpiredReservations(now);
+    return this.expireCooldowns(now);
   }
 
   async acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition> {
@@ -271,6 +295,11 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
         this.reservations.delete(reservation.reservationId);
         this.applyOutcome(account, outcome);
       },
+      release: async () => {
+        if (outcomeRecorded) return;
+        outcomeRecorded = true;
+        this.reservations.delete(reservation.reservationId);
+      },
     };
   }
 
@@ -294,6 +323,12 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     const candidates = [...this.accounts.values()]
       .filter((account) => this.isEligible(account, input, now))
       .sort((left, right) => {
+        const enrollmentOrder = (Date.parse(right.enrollmentCompletedAt ?? '') || 0)
+          - (Date.parse(left.enrollmentCompletedAt ?? '') || 0);
+        if (enrollmentOrder !== 0) {
+          return enrollmentOrder;
+        }
+
         if (right.priority !== left.priority) {
           return right.priority - left.priority;
         }
@@ -319,7 +354,11 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     input: AccountTransportAcquireInput,
     _now: Date,
   ): boolean {
-    return account.targetProviderId === input.targetProviderId
+    return (!input.accountId || account.accountId === input.accountId)
+      && (input.ownerScopeRef
+        ? account.ownerScopeRef === input.ownerScopeRef
+        : account.ownerScopeRef === undefined)
+      && account.targetProviderId === input.targetProviderId
       && account.transportProviderId === input.transportProviderId
       && account.status === 'active'
       && supportsModel(account, input.modelId);
@@ -389,13 +428,16 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     }
   }
 
-  private expireCooldowns(now: Date): void {
+  private expireCooldowns(now: Date): string[] {
+    const recovered: string[] = [];
     for (const account of this.accounts.values()) {
       if (account.status === 'cooldown' && !isCooldownActive(account, now)) {
         account.status = 'active';
         account.cooldownUntil = undefined;
+        recovered.push(account.accountId);
       }
     }
+    return recovered;
   }
 
   private applyOutcome(account: StoredAccount, outcome: AccountTransportOutcome): void {

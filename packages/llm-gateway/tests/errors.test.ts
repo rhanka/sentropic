@@ -71,6 +71,22 @@ describe('provider-shaped error mapper (unit)', () => {
     expect(JSON.stringify(mapped.body)).not.toContain('10.0.0.5');
     expect(JSON.stringify(mapped.body)).not.toContain('Postgres');
   });
+
+  it('surfaces a redacted enrollment action without account material', () => {
+    const mapped = toProviderShapedError('anthropic-messages', {
+      diagnostic: {
+        code: 'reenrollment-required',
+        transportProviderId: 'codex',
+      },
+      accountRef: 'SECRET-ACCOUNT-ID',
+    });
+    expect(mapped).toMatchObject({
+      status: 503,
+      headers: { 'X-Sentropic-Route-Action': 're-enroll-codex' },
+      body: { error: { type: 'authentication_error', message: 'codex re-enroll required' } },
+    });
+    expect(JSON.stringify(mapped)).not.toContain('SECRET-ACCOUNT-ID');
+  });
 });
 
 describe('error mapping through the router (integration)', () => {

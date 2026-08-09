@@ -83,6 +83,39 @@ describe('InMemoryAccountTransportCoordinator', () => {
     );
   });
 
+  it('selects the most recently enrolled eligible account for a new affinity', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator([
+      { ...accounts[0], priority: 100, enrollmentCompletedAt: '2026-08-01T00:00:00Z' },
+      { ...accounts[1], priority: 0, enrollmentCompletedAt: '2026-08-02T00:00:00Z' },
+    ]);
+
+    const acquisition = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      affinityKey: 'new-session',
+      now: '2026-08-03T00:00:00Z',
+    });
+
+    expect(acquisition.lease.accountId).toBe('codex-b');
+  });
+
+  it('acquires only the exact mesh-planned account and releases without health impact', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator(accounts);
+    const acquisition = await coordinator.acquire({
+      accountId: 'codex-a', targetProviderId: 'openai', transportProviderId: 'codex',
+      modelId: 'gpt-5.5', requestId: 'planned-attempt',
+    });
+
+    expect(acquisition.lease.accountId).toBe('codex-a');
+    await acquisition.release?.();
+    await acquisition.release?.();
+    await expect(coordinator.acquire({
+      accountId: 'codex-a', targetProviderId: 'openai', transportProviderId: 'codex',
+      modelId: 'gpt-5.5', requestId: 'next-attempt',
+    })).resolves.toMatchObject({ lease: { accountId: 'codex-a' } });
+  });
+
   it('marks auth-failed accounts as unavailable for later acquisitions', async () => {
     const coordinator = new InMemoryAccountTransportCoordinator([accounts[0]]);
     const first = await coordinator.acquire({
@@ -151,6 +184,25 @@ describe('InMemoryAccountTransportCoordinator', () => {
     });
 
     expect(recovered.lease.accountId).toBe('codex-a');
+  });
+
+  it('exposes lifecycle recovery to inventory readers without an acquisition', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator([accounts[0]]);
+    const first = await coordinator.acquire({
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      now: '2026-06-16T12:00:00.000Z',
+    });
+    await first.recordOutcome({
+      status: 'rate_limited', retryAfterMs: 5_000,
+      finishedAt: '2026-06-16T12:00:00.000Z',
+    });
+
+    expect(coordinator.refreshLifecycle('2026-06-16T12:00:03.000Z')).toEqual([]);
+    expect(coordinator.refreshLifecycle('2026-06-16T12:00:06.000Z')).toEqual(['codex-a']);
+    await expect(coordinator.acquire({
+      targetProviderId: 'openai', transportProviderId: 'codex',
+      now: '2026-06-16T12:00:06.000Z',
+    })).resolves.toMatchObject({ lease: { accountId: 'codex-a' } });
   });
 
   it('rotates to next account when one is rate-limited', async () => {
