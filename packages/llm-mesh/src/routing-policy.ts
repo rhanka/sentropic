@@ -102,6 +102,7 @@ export const resolveRoutePolicy = (
   const rule = policy.rules.find((candidate) =>
     (!candidate.match.requestedModel || candidate.match.requestedModel === input.requestedModel)
     && (!candidate.match.alias || candidate.match.alias === input.requestedModel)
+    && (!candidate.match.intent || candidate.match.intent === input.intent)
     && (!candidate.match.capabilities || candidate.match.capabilities.every(
       (capability) => input.requiredCapabilities?.includes(capability),
     )));
