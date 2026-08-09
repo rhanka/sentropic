@@ -350,7 +350,7 @@ them blocks merge. No timeout-only amendments are accepted.
 
 ## Feedback Loop
 
-- [x] `BR-L2E1-EX1` — status: acknowledge; rationale: mount the owner-local `.track` event store read-only and configure `TRACK_EVENTS_PATH` only in `docker-compose.dev.yml`; impact: local API containers can read the mounted event log while deployed services remain unmounted and fail closed; rollback: remove the mount and dev-only Track environment entries.
+- [x] `BR-L2E1-EX1` — status: acknowledge; rationale: mount the owner-local `.track` event store read-only only when `TRACK_EVENTS_HOST_DIR` is explicitly set, and configure `TRACK_EVENTS_PATH` only in `docker-compose.dev.yml`; impact: the unset CI-safe mount is an empty named volume and fails closed, while the owner-local API can read the explicitly selected event log; rollback: remove the mount and dev-only Track environment entries.
 - [x] `BR42-EX1` — status: acknowledge; parser-compatible mirror of `BR-L2E1-EX1`, with the identical rationale, impact, and rollback.
 - [x] `L2E1-TRACK-017` — status: acknowledge; the root lock resolves `@sentropic/track` 0.17.0. The focused API test must prove its `report()` and `canevas()` reads against the fixture before implementation is accepted; no dependency bump is planned.
 - [x] `L2E1-BASELINE` — status: acknowledge; `TRACK_BASELINE_COMMIT` is an explicit local adapter input, defaulted in dev to the branch baseline `feebc6769aac8bd313d84310b1f0d66d07b68ee1`; an unset baseline reaches the validator catch and denies.
@@ -388,6 +388,7 @@ them blocks merge. No timeout-only amendments are accepted.
 - [ ] **Lot 2 — Workspace and local-only wiring**
   - [x] Add nullable `workspaces.track_workspace_id` in schema, `0042_workspace_track_mapping.sql`, and `api/drizzle/meta/_journal.json`.
   - [x] Add only the `BR-L2E1-EX1` read-only store mount plus E1 environment values to `docker-compose.dev.yml`.
+  - [x] Set `TRACK_EVENTS_HOST_DIR` in the owner-local `.env` to the host `.track` directory before local E1 use; leaving it unset mounts an empty named volume so CI starts and the validator denies access.
   - [x] Keep production compose and configuration unchanged.
 - [ ] **Lot 3 — Focused proof and final validation**
   - [x] Replace the stale route-test validator symbol with `trackDecisionValidator` and invoke the full API unit lane.
