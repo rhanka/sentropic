@@ -31,6 +31,30 @@ const collect = async (wire: 'anthropic-messages' | 'openai-chat-completions') =
   return parseSse(text);
 };
 
+const sourceWithCompleteArgumentsAtStart = async function* (): AsyncGenerator<StreamEvent> {
+  yield {
+    type: 'tool_call_start',
+    data: {
+      toolCallId: 'call-cloud', providerCallId: 'provider-cloud', name: 'Bash',
+      argumentsText: '{"command":"pwd"}', arguments: { command: 'pwd' },
+    },
+  };
+  yield {
+    type: 'done',
+    data: { finishReason: 'tool_calls' },
+  };
+};
+
+const collectCompleteArguments = async (
+  wire: 'anthropic-messages' | 'openai-chat-completions',
+) => {
+  let text = '';
+  for await (const frame of encodeGatewayStream(
+    wire, 'gemini-3.1-flash-lite', 'response-cloud', sourceWithCompleteArgumentsAtStart(),
+  )) text += frame.raw;
+  return parseSse(text);
+};
+
 describe('canonical gateway streams', () => {
   it('preserves Anthropic block boundaries and terminal ordering', async () => {
     const frames = await collect('anthropic-messages');
@@ -71,5 +95,19 @@ describe('canonical gateway streams', () => {
       usage: { prompt_tokens: 12, completion_tokens: 7, total_tokens: 19 },
     });
     expect(frames.at(-1)?.data).toBe('[DONE]');
+  });
+
+  it('forwards complete Cloud Code arguments carried by tool_call_start', async () => {
+    const anthropic = await collectCompleteArguments('anthropic-messages');
+    expect(JSON.parse(anthropic[2]!.data)).toMatchObject({
+      delta: { type: 'input_json_delta', partial_json: '{"command":"pwd"}' },
+    });
+
+    const openai = await collectCompleteArguments('openai-chat-completions');
+    expect(JSON.parse(openai[1]!.data)).toMatchObject({
+      choices: [{ delta: { tool_calls: [{
+        function: { name: 'Bash', arguments: '{"command":"pwd"}' },
+      }] } }],
+    });
   });
 });
