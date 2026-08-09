@@ -248,6 +248,7 @@ export class LocalAccountTransportService {
       prepareAttempt: async (input) => {
         const acquisition = await this.acquire({
           accountId: input.accountRef,
+          ...(input.affinityRef ? { affinityKey: input.affinityRef } : {}),
           targetProviderId: input.target.providerId,
           transportProviderId: input.target.transportProviderId,
           modelId: input.target.modelId,
