@@ -143,6 +143,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   async waitForCallback(enrollmentId: string): Promise<{
     accountId: string;
     label: string;
+    ownerScope: string;
     credential: PreparedCredential;
     metadata: ResolvedProviderMetadata;
   }> {
@@ -172,6 +173,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
 
     return {
       accountId: cred.accountId,
+      ownerScope: entry.state.ownerScope,
       label:
         cred.accountEmail ??
         (meta.cloudaicompanionProject

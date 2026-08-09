@@ -78,7 +78,7 @@ const toMeshContent = (value: unknown): MessageContent => {
   if (!Array.isArray(value)) return stringifyContent(value);
 
   const parts = value
-    .map((item) => {
+    .map((item): Exclude<MessageContent, string>[number] | null => {
       if (!isRecord(item)) return null;
       const type = typeof item.type === 'string' ? item.type : '';
       if (type === 'text' || type === 'input_text') {

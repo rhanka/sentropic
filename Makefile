@@ -532,6 +532,18 @@ typecheck-api: prepare-node-workspace ## Run API type checks
 typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
+.PHONY: refresh-llm-model-equivalences
+refresh-llm-model-equivalences: ## Regenerate the pinned model-equivalence council
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/llm-model-equivalences/refresh.mjs
+
+.PHONY: check-llm-model-equivalences
+check-llm-model-equivalences: ## Check model-equivalence generation and freshness
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/llm-model-equivalences/refresh.mjs --check
+
+.PHONY: audit-llm-routing-package-versions
+audit-llm-routing-package-versions: ## Compare local LLM routing package versions with npm latest
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for package_dir in llm-mesh llm-gateway; do package="$$(node -p "require(\"./packages/$$package_dir/package.json\").name")"; local_version="$$(node -p "require(\"./packages/$$package_dir/package.json\").version")"; registry_version="$$(npm view "$$package" version)"; printf "%s local=%s registry=%s\n" "$$package" "$$local_version" "$$registry_version"; done'
+
 .PHONY: typecheck-skills
 typecheck-skills: ## Run @sentropic/skills type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node gray-matter@4.0.3 zod@3.23.8 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
@@ -571,8 +583,24 @@ build-llm-gateway: build-llm-mesh ## Build @sentropic/llm-gateway dist package
 pack-llm-gateway: build-llm-gateway ## Validate @sentropic/llm-gateway npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
+LLM_ROUTING_PACK_DIR ?= /tmp/sentropic-llm-routing-pack
+
+.PHONY: package-llm-routing-candidates
+package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact mesh/gateway tarballs and print SHA-256 values
+	@mkdir -p "$(LLM_ROUTING_PACK_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
+	@docker run --rm -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'mesh="$$(node -p "require(\"./packages/llm-mesh/package.json\").version")"; gateway="$$(node -p "require(\"./packages/llm-gateway/package.json\").version")"; sha256sum "/artifacts/sentropic-llm-mesh-$$mesh.tgz" "/artifacts/sentropic-llm-gateway-$$gateway.tgz"'
+
+LLM_MESH_REGISTRY_WAIT_ATTEMPTS ?= 12
+LLM_MESH_REGISTRY_WAIT_SECONDS ?= 5
+
+.PHONY: wait-llm-gateway-mesh-dependency
+wait-llm-gateway-mesh-dependency: ## Wait until the gateway's mesh dependency floor is visible on npm
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; requirement="$$(node -p "require(\"./packages/llm-gateway/package.json\").dependencies[\"@sentropic/llm-mesh\"]")"; version="$${requirement#^}"; test "$$version" != "$$requirement"; attempt=1; while ! npm view "@sentropic/llm-mesh@$$version" version >/dev/null 2>&1; do if [ "$$attempt" -ge "$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS)" ]; then echo "@sentropic/llm-mesh@$$version is not visible" >&2; exit 1; fi; echo "Waiting for @sentropic/llm-mesh@$$version ($$attempt/$(LLM_MESH_REGISTRY_WAIT_ATTEMPTS))"; sleep "$(LLM_MESH_REGISTRY_WAIT_SECONDS)"; attempt=$$((attempt + 1)); done'
+
 .PHONY: publish-llm-gateway
-publish-llm-gateway: build-llm-gateway ## Publish @sentropic/llm-gateway from CI OIDC trusted publishing
+publish-llm-gateway: check-llm-model-equivalences wait-llm-gateway-mesh-dependency build-llm-gateway ## Publish @sentropic/llm-gateway from CI OIDC trusted publishing
 	@docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp \
@@ -660,7 +688,7 @@ verify-llm-mesh-cloud-code-oauth: build-llm-mesh ## Verify source and dist again
 			--credential-file /run/cloud-code-oauth-client-secret --dist-dir dist
 
 .PHONY: publish-llm-mesh
-publish-llm-mesh: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
+publish-llm-mesh: check-llm-model-equivalences verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
 	@docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp \
@@ -1798,7 +1826,7 @@ test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-llm-mesh
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +

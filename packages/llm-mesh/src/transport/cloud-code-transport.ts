@@ -19,6 +19,9 @@ export interface CloudCodeEnvelope {
   request: {
     contents: unknown[];
     generationConfig?: unknown;
+    systemInstruction?: unknown;
+    tools?: unknown[];
+    toolConfig?: unknown;
   };
 }
 
@@ -55,6 +58,9 @@ export function buildCloudCodeRequest(
     request: {
       contents: request.contents,
       ...(request.generationConfig ? { generationConfig: request.generationConfig } : {}),
+      ...(request.systemInstruction ? { systemInstruction: request.systemInstruction } : {}),
+      ...(request.tools?.length ? { tools: request.tools } : {}),
+      ...(request.toolConfig ? { toolConfig: request.toolConfig } : {}),
     },
   };
 
@@ -72,6 +78,7 @@ export async function* parseCloudCodeSSE(
   const decoder = new TextDecoder();
   let buffer = '';
   let lastUsage: unknown = null;
+  let lastFinishReason: string | undefined;
 
   try {
     while (true) {
@@ -91,7 +98,10 @@ export async function* parseCloudCodeSSE(
         try {
           type CloudCodeStreamChunk = {
             candidates?: Array<{
-              content?: { parts?: Array<{ text?: string }> };
+              content?: { parts?: Array<{
+                text?: string; thought?: boolean; thoughtSignature?: string;
+                functionCall?: { id?: string; name?: string; args?: unknown };
+              }> };
               finishReason?: string;
             }>;
             usageMetadata?: unknown;
@@ -114,14 +124,26 @@ export async function* parseCloudCodeSSE(
           const parts = payload.candidates?.[0]?.content?.parts;
           if (parts) {
             for (const part of parts) {
-              if (part.text) {
-                yield { kind: 'content', delta: part.text };
-              }
+              if (part.text) yield {
+                kind: part.thought ? 'reasoning' : 'content', delta: part.text,
+              };
+              if (part.functionCall?.name) yield {
+                kind: 'tool-call',
+                id: part.functionCall.id ?? part.functionCall.name,
+                name: part.functionCall.name,
+                arguments: part.functionCall.args ?? {},
+                ...(part.thoughtSignature
+                  ? { metadata: { thoughtSignature: part.thoughtSignature } }
+                  : {}),
+              };
             }
           }
 
           if (payload.usageMetadata) {
             lastUsage = payload.usageMetadata;
+          }
+          if (typeof payload.candidates?.[0]?.finishReason === 'string') {
+            lastFinishReason = payload.candidates[0].finishReason;
           }
         } catch {
           // Ignore unparseable SSE data lines
@@ -130,7 +152,10 @@ export async function* parseCloudCodeSSE(
     }
 
     // P1-1: Yield done event exactly once after stream completion
-    yield { kind: 'done', usage: lastUsage ?? {} };
+    yield {
+      kind: 'done', usage: lastUsage ?? {},
+      ...(lastFinishReason ? { finishReason: lastFinishReason } : {}),
+    };
   } finally {
     reader.releaseLock();
   }
@@ -150,6 +175,10 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
     }
 
     const { url, headers, body } = buildCloudCodeRequest(acquisition, request);
+
+    for (const diagnostic of request.diagnostics ?? []) {
+      yield { kind: 'diagnostic', ...diagnostic };
+    }
 
     let response: Response;
     try {
@@ -189,6 +218,7 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
         kind: 'error',
         code: 'auth_failed',
         message: `Cloud Code authentication failed (${response.status})`,
+        statusCode: response.status,
       };
       return;
     }
@@ -211,6 +241,8 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
         kind: 'error',
         code: 'rate_limited',
         message: 'Cloud Code rate limit exceeded (429)',
+        statusCode: 429,
+        retryAfterMs,
       };
       return;
     }
@@ -224,6 +256,7 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
         kind: 'error',
         code: 'http_error',
         message: `Cloud Code HTTP error (${response.status})`,
+        statusCode: response.status,
       };
       return;
     }
