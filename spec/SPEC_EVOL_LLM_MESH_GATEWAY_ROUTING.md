@@ -263,21 +263,24 @@ provider/model/transport separately.
 
 The existing owner-ratified suffixed aliases migrate from gateway to mesh:
 
-| Requested alias | Canonical candidate | Effort |
-|---|---|---|
-| `claude-opus-5-high` | `openai:gpt-5.6-terra` | `high` |
-| `claude-opus-5-xhigh` | `openai:gpt-5.6-terra` | `xhigh` |
-| `claude-opus-4-8-xhigh` | `openai:gpt-5.6-terra` | `xhigh` |
-| `claude-fable-5-high` | `openai:gpt-5.6-sol` | `high` |
-| `claude-fable-5-xhigh` | `openai:gpt-5.6-sol` | `xhigh` |
-| `claude-fable-5-max` | `openai:gpt-5.6-sol` | `max` |
-| `claude-sonnet-5-xhigh` | `openai:gpt-5.6-luna` | `xhigh` |
+| Requested alias | Codex candidate | Cloud Code candidate | Effort |
+|---|---|---|---|
+| `claude-opus-5-high` | `openai:gpt-5.6-terra` | `gemini:gemini-3.1-flash-lite` | `high` |
+| `claude-opus-5-xhigh` | `openai:gpt-5.6-terra` | `gemini:gemini-3.1-flash-lite` | `xhigh` |
+| `claude-opus-4-8-xhigh` | `openai:gpt-5.6-terra` | `gemini:gemini-3.1-flash-lite` | `xhigh` |
+| `claude-fable-5-high` | `openai:gpt-5.6-sol` | `gemini:gemini-3.1-flash-lite` | `high` |
+| `claude-fable-5-xhigh` | `openai:gpt-5.6-sol` | `gemini:gemini-3.1-flash-lite` | `xhigh` |
+| `claude-fable-5-max` | `openai:gpt-5.6-sol` | `gemini:gemini-3.1-flash-lite` | `max` |
+| `claude-sonnet-5-xhigh` | `openai:gpt-5.6-luna` | `gemini:gemini-3.1-flash-lite` | `xhigh` |
 
-Bare provider model ids remain provider-faithful. Alias migration preserves
-existing behaviour but does not by itself authorize automatic fallback. Before
-automatic equivalence fallback is enabled for a group, its evidence must be
-fresh and its required capabilities must be satisfied. Stale evidence fails
-closed for automatic substitution while exact requested routes remain usable.
+Bare provider model ids remain provider-faithful. A suffixed launch alias is an
+explicit owner-ratified multi-transport route: its ordered policy may select the
+Codex or Cloud Code candidate above and bounded pre-byte fallback may try the
+other. This explicit alias contract is not benchmark equivalence evidence and
+does not make bare models interchangeable. Before any additional automatic
+equivalence fallback is enabled for a group, its evidence must be fresh and its
+required capabilities must be satisfied. Stale evidence fails closed for
+automatic substitution while exact requested routes remain usable.
 
 The first implementation ships a conservative coding council using only
 existing ratified aliases plus benchmark evidence available in the repository.
