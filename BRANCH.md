@@ -135,6 +135,13 @@ agents are read-only and do not create implementation branches.
   requirements structurally, and keys round-robin/affinity state by stable
   owner scope across authenticated sessions. Targeted regressions and both
   complete package suites pass.
+- `BR73-F7` (`blocking`, resolved 2026-08-09): exact-candidate live h2a UAT
+  exposed two gateway integration gaps after session authentication. The
+  verified principal/cost context now carries an optional stable ownership
+  scope distinct from financial tenant/principal identity, and planning
+  failures settle the route exactly once with zero usage and no attempts.
+  Backward-compatible ownership derivation remains for callers that omit the
+  new verified field; regressions cover both contracts.
 
 ## Plan / todo
 

@@ -27,7 +27,7 @@ describe('route flow core', () => {
           ok: true,
           cost: {
             tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'user-1',
-            source: 'test', correlationId: 'session-1',
+            ownerScopeRef: 'cli:stable-owner', source: 'test', correlationId: 'session-1',
           },
         };
       } },
@@ -44,12 +44,55 @@ describe('route flow core', () => {
     });
 
     expect(captured).toMatchObject({
-      subject: { principalRef: 'user-1', ownerScopeRef: 'tenant-1:user-1' },
+      subject: { principalRef: 'user-1', ownerScopeRef: 'cli:stable-owner' },
       input: {
         requestedModel: 'gpt-5.6-terra', workspaceId: 'workspace-1', affinityKey: 'session-1',
       },
     });
     expect(JSON.stringify(captured)).not.toContain('attacker');
+  });
+
+  it('falls back to tenant and principal ownership for existing callers', async () => {
+    let subject: VerifiedRoutingSubject | undefined;
+    const routePlanner = {
+      async plan(value: VerifiedRoutingSubject) {
+        subject = value;
+        return {
+          planRef: 'plan-legacy', expiresAt: '2026-08-08T12:01:00Z', candidateRefs: [],
+          policy: {
+            strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+            negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+            stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+          },
+          councilRevision: 'fixture', diagnostics: [],
+        };
+      },
+    } as unknown as RoutePlanner;
+
+    await prepareRouteFlow({
+      config: {
+        ...stubGatewayConfig,
+        callerAuth: { async verify() {
+          return {
+            ok: true,
+            cost: {
+              tenantId: 'tenant-legacy', principalId: 'principal-legacy',
+              source: 'test', correlationId: 'session-legacy',
+            },
+          };
+        } },
+      },
+      routePlanner,
+      metering: { settleRoute() {} },
+    }, {
+      wire: 'openai-chat-completions', headers: {}, model: 'gpt-5.6-terra', stream: false,
+      body: { model: 'gpt-5.6-terra', messages: [{ role: 'user', content: 'hello' }] },
+    });
+
+    expect(subject).toEqual({
+      principalRef: 'principal-legacy',
+      ownerScopeRef: 'tenant-legacy:principal-legacy',
+    });
   });
 
   it('classifies retryable availability without making auth retryable', () => {
