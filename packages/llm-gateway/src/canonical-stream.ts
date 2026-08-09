@@ -89,6 +89,12 @@ const encodeAnthropicStream = async function* (
           name: event.data.name, input: {},
         },
       }));
+      if (event.data.argumentsText) {
+        yield raw(frameAnthropicEvent('content_block_delta', {
+          type: 'content_block_delta', index,
+          delta: { type: 'input_json_delta', partial_json: event.data.argumentsText },
+        }));
+      }
     } else if (event.type === 'tool_call_delta') {
       const index = toolIndexes.get(event.data.toolCallId) ?? activeToolIndex ?? 0;
       yield raw(frameAnthropicEvent('content_block_delta', {
@@ -130,7 +136,7 @@ const encodeOpenAiStream = async function* (
     else if (event.type === 'reasoning_delta') yield chunk({ reasoning_content: event.data.delta });
     else if (event.type === 'tool_call_start') yield chunk({ tool_calls: [{
       index: 0, id: event.data.providerCallId ?? event.data.toolCallId, type: 'function',
-      function: { name: event.data.name, arguments: '' },
+      function: { name: event.data.name, arguments: event.data.argumentsText },
     }] });
     else if (event.type === 'tool_call_delta') yield chunk({ tool_calls: [{
       index: 0, function: { arguments: event.data.delta },
