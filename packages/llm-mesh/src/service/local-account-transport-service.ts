@@ -229,9 +229,9 @@ export class LocalAccountTransportService {
     return acquisition;
   }
 
-  async release(_acquisition: AccountTransportAcquisition): Promise<void> {
+  async release(acquisition: AccountTransportAcquisition): Promise<void> {
     // Q2B abort -> release reservation without recording an outcome / zero account impact
-    return;
+    await acquisition.release?.();
   }
 
   // ── Internal — never exposed to h2a ───────────────────────────────────────
