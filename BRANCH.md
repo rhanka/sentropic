@@ -155,6 +155,20 @@ agents are read-only and do not create implementation branches.
   receives an object-valued `functionResponse.response`. Deterministic package
   suites pass; exact-candidate live Claude continuation remains the resolution
   gate.
+- `BR73-F10` (`blocking`, resolved locally 2026-08-09): final adversarial
+  implementation review identified stale refreshed credentials and cooldown
+  state, legacy model inventory in route mode, pre-attempt failures escaping
+  settlement, canonical thinking/tool-control gaps, incorrect streamed tool
+  terminal semantics, replayable attempts, premature round-robin advancement,
+  unbounded route-key state, lossy Cloud Code schema projection, stale council
+  validation, and ambiguous legacy Codex migration. The remediation keeps
+  account state executable and durable, derives owner-scoped inventory from
+  mesh, settles every bounded attempt, preserves canonical controls and stream
+  identifiers, reserves round-robin state until commitment, reports lossy
+  projection and safe re-enrolment actions, and fails closed on stale councils.
+  The exact rebased package candidate passes equivalence validation, mesh
+  typecheck plus 137 tests, and gateway typecheck plus 107 tests. Final review
+  closure and live h2a UAT remain the acceptance gates.
 
 ## Plan / todo
 
@@ -245,9 +259,9 @@ agents are read-only and do not create implementation branches.
   - [ ] Fix blocking feedback and repeat affected gates/UAT.
 
 - [ ] **Lot 5 — Final validation and merge**
-  - [ ] Rebase on current `origin/main`; re-run harness branch check.
-  - [ ] Reverify npm versions after rebase and confirm both bumps are unique.
-  - [ ] Full mesh/gateway typecheck/test/build/pack and equivalence CI check.
+  - [x] Rebase on current `origin/main`; re-run harness branch check.
+  - [x] Reverify npm versions after rebase and confirm both bumps are unique.
+  - [x] Full mesh/gateway typecheck/test/build/pack and equivalence CI check.
   - [ ] `make scope-check` passes with no undeclared paths.
   - [ ] GitHub CI is green and h2a UAT is accepted on the final candidate.
   - [ ] Use branch-lifecycle event-loss check and acceptance refresh.
@@ -277,5 +291,12 @@ them blocks merge. No timeout-only amendments are accepted.
   130 tests, gateway typecheck/build/pack with 98 tests, scope C2 and branch C1.
 - Post-live-tool remediation: mesh 132 tests and gateway 102 tests pass; both
   focused continuation regressions and gateway typecheck pass.
+- Final adversarial remediation package commit `d3a19c3e`: equivalence check,
+  mesh typecheck/build with 137 tests, and gateway typecheck/build with 107
+  tests. Registry uniqueness checks return `E404` for mesh `0.14.0` and gateway
+  `0.12.0`. Exact local tarballs: mesh SHA-256
+  `dc7e058c00b231b6368da6289ab16298f181ac7e3ade47d9d737730de0366597`;
+  gateway SHA-256
+  `2eeccb7d6a4b4ffcfdceec8aa3887143aeb1e98666b06577bbf6d6d3f2765dbe`.
 - h2a integration/UAT artifact names the final candidate SHA and versions.
 - Both package versions visible on npm only after merge-triggered CD.
