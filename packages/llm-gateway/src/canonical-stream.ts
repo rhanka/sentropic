@@ -23,7 +23,7 @@ export const encodeGatewayStream = (
   requestedModel: string,
   responseId: string,
   events: AsyncIterable<StreamEvent>,
-): AsyncIterable<GatewayDispatchStreamEvent> => wire === 'anthropic-messages'
+): AsyncGenerator<GatewayDispatchStreamEvent, void, unknown> => wire === 'anthropic-messages'
   ? encodeAnthropicStream(requestedModel, responseId, events)
   : encodeOpenAiStream(requestedModel, responseId, events);
 
