@@ -57,6 +57,7 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     let candidates = [...selectRouteCandidates({
       request: input, policy, council: this.council, accounts,
       roundRobinOffset: this.roundRobin.get(roundRobinKey) ?? 0,
+      now: this.clock.now(),
     })];
     if (affinity && policy.stickyAccount) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
