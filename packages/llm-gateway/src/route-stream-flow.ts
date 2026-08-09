@@ -29,8 +29,12 @@ export const runRouteStreamFlow = async (
         ...(request.signal ? { signal: request.signal } : {}),
       });
       iterator = source[Symbol.asyncIterator]();
-      const first = await iterator.next();
+      let first = await iterator.next();
+      while (!first.done && (first.value.type === 'status' || first.value.type === 'tool_call_result')) {
+        first = await iterator.next();
+      }
       if (first.done) throw { code: 'empty_stream' };
+      if (first.value.type === 'error') throw first.value.data;
       await attempt.markCommitted();
       let usage = usageFromEvent(first.value) ?? routeUsage();
       let terminal = false;
@@ -44,11 +48,16 @@ export const runRouteStreamFlow = async (
       };
       const tracked = (async function* (): AsyncGenerator<StreamEvent> {
         let completed = false;
+        let providerErrorEmitted = false;
         try {
           yield first.value;
           for (let next = await iterator!.next(); !next.done; next = await iterator!.next()) {
             usage = usageFromEvent(next.value) ?? usage;
             yield next.value;
+            if (next.value.type === 'error') {
+              providerErrorEmitted = true;
+              throw next.value.data;
+            }
           }
           completed = true;
           await attempt.complete(attemptUsage(usage));
@@ -70,7 +79,7 @@ export const runRouteStreamFlow = async (
             outcome: classification.reason, usage,
           });
           await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
-          if (classification.reason !== 'cancelled') {
+          if (classification.reason !== 'cancelled' && !providerErrorEmitted) {
             yield {
               type: 'error',
               data: {
