@@ -19,6 +19,8 @@ export interface CloudCodeEnvelope {
   request: {
     contents: unknown[];
     generationConfig?: unknown;
+    systemInstruction?: unknown;
+    tools?: unknown[];
   };
 }
 
@@ -55,6 +57,8 @@ export function buildCloudCodeRequest(
     request: {
       contents: request.contents,
       ...(request.generationConfig ? { generationConfig: request.generationConfig } : {}),
+      ...(request.systemInstruction ? { systemInstruction: request.systemInstruction } : {}),
+      ...(request.tools?.length ? { tools: request.tools } : {}),
     },
   };
 
@@ -91,7 +95,10 @@ export async function* parseCloudCodeSSE(
         try {
           type CloudCodeStreamChunk = {
             candidates?: Array<{
-              content?: { parts?: Array<{ text?: string }> };
+              content?: { parts?: Array<{
+                text?: string; thought?: boolean;
+                functionCall?: { id?: string; name?: string; args?: unknown };
+              }> };
               finishReason?: string;
             }>;
             usageMetadata?: unknown;
@@ -114,9 +121,15 @@ export async function* parseCloudCodeSSE(
           const parts = payload.candidates?.[0]?.content?.parts;
           if (parts) {
             for (const part of parts) {
-              if (part.text) {
-                yield { kind: 'content', delta: part.text };
-              }
+              if (part.text) yield {
+                kind: part.thought ? 'reasoning' : 'content', delta: part.text,
+              };
+              if (part.functionCall?.name) yield {
+                kind: 'tool-call',
+                id: part.functionCall.id ?? part.functionCall.name,
+                name: part.functionCall.name,
+                arguments: part.functionCall.args ?? {},
+              };
             }
           }
 
@@ -189,6 +202,7 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
         kind: 'error',
         code: 'auth_failed',
         message: `Cloud Code authentication failed (${response.status})`,
+        statusCode: response.status,
       };
       return;
     }
@@ -211,6 +225,8 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
         kind: 'error',
         code: 'rate_limited',
         message: 'Cloud Code rate limit exceeded (429)',
+        statusCode: 429,
+        retryAfterMs,
       };
       return;
     }
@@ -224,6 +240,7 @@ export class CloudCodeProviderAdapter implements ProviderAdapter {
         kind: 'error',
         code: 'http_error',
         message: `Cloud Code HTTP error (${response.status})`,
+        statusCode: response.status,
       };
       return;
     }
