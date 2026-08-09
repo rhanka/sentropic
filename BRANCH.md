@@ -1,9 +1,9 @@
 # BR-73: LLM mesh/gateway consumer-neutral routing
 
-Status: ACTIVE — implementation phase
-Branch: `feat/llm-mesh-gateway-routing`
-Worktree: `tmp/llm-mesh-gateway-routing`
-Base: `origin/main` at `feebc6769aac8bd313d84310b1f0d66d07b68ee1`
+Status: ACTIVE — post-merge UAT corrective phase
+Branch: `fix/llm-mesh-alias-transport-preference`
+Worktree: `/tmp/sentropic-br73-final`
+Base: `origin/main` at `9d67d60f832ca4ff6f12ac8a88ff9cd798033c15`
 Track feature: `01KZHZCNN1CR98NCE9KB7ZZM8G`
 Track imported branch root: `01KZHZDBD07V5DJ5TBW7WRHV1D` (workspace `br-73`)
 Canonical evolution spec: `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
@@ -24,6 +24,9 @@ knowledge.
 - Routing policy and the model-equivalence council belong to `llm-mesh`.
 - Owner-ratified xhigh aliases include Opus 5/4.8 to Terra, Fable 5 to Sol,
   and Sonnet 5 to Luna; bare provider ids remain provider-faithful.
+- Those suffixed launch aliases expose both the ratified Codex target and the
+  executable Cloud Code Gemini target. Ordered policy selects between them;
+  this explicit alias contract is not general model-equivalence evidence.
 - Equivalence entries are benchmark-backed, overridable, and mandatory to
   update or explicitly exclude whenever a model is added to the mesh catalog.
 - The gateway remains usable in every direction: for Claude Code, Codex, AGY,
@@ -95,6 +98,15 @@ knowledge.
   the root lockfile only for the gateway dependency floor and the two package
   versions. Impact is lock metadata only; rollback is the matching lockfile
   hunk if either package bump is reverted.
+
+## Post-merge UAT corrective lot
+
+- [x] Reproduce the defect after 0.14.0/0.12.0 publication: Cloud-first still
+  selected Codex for `claude-opus-5-xhigh` although both accounts were ready.
+- [x] Preserve bare provider model fidelity and the evidence-gated council.
+- [x] Expose multi-transport candidates only for explicit suffixed aliases.
+- [x] Verify one real alias executes through Cloud Code first and Codex first.
+- [ ] Obtain one exact-head adversarial review, merge through CI and publish.
 
 ## Environment and agent slots
 
