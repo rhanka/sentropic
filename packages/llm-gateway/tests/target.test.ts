@@ -2,7 +2,9 @@
  * Launch-alias routing + route DISCOVERY (single source of truth in the gateway
  * target-map). Owner decision 2026-07-25:
  *   - Opus 5  high/xhigh      -> gpt-5.6-terra at the same effort
+ *   - Opus 4.8 xhigh          -> gpt-5.6-terra xhigh
  *   - Fable 5 high/xhigh/max  -> gpt-5.6-sol   at the same effort
+ *   - Sonnet 5 xhigh          -> gpt-5.6-luna  xhigh
  *   - BARE ids stay provider-faithful (the real Anthropic models stay reachable)
  *   - no silent cross-pool fallback (unknown id -> undefined -> router 400)
  * Consumers read `describeTargetRoutes()` instead of duplicating a route table.
@@ -52,6 +54,17 @@ describe('launch-alias target-map', () => {
     }
   });
 
+  it('routes the owner-ratified Opus 4.8 and Sonnet 5 xhigh aliases', () => {
+    expect(resolve('claude-opus-4-8-xhigh')).toEqual({
+      providerId: 'openai', transportProviderId: 'codex',
+      model: 'gpt-5.6-terra', effort: 'xhigh',
+    });
+    expect(resolve('claude-sonnet-5-xhigh')).toEqual({
+      providerId: 'openai', transportProviderId: 'codex',
+      model: 'gpt-5.6-luna', effort: 'xhigh',
+    });
+  });
+
   it('keeps the BARE ids provider-faithful (real Anthropic models stay reachable)', () => {
     expect(resolve('claude-opus-5')).toEqual({
       providerId: 'anthropic',
@@ -74,7 +87,7 @@ describe('launch-alias target-map', () => {
   it('never silently falls back cross-pool: unknown id -> undefined', () => {
     expect(resolve('gemini-3.1-pro')).toBeUndefined();
     expect(resolve('claude-opus-5-ultra')).toBeUndefined();
-    expect(resolve('claude-opus-4-8-xhigh')).toBeUndefined();
+    expect(resolve('claude-sonnet-5-ultra')).toBeUndefined();
   });
 });
 
@@ -134,7 +147,8 @@ describe('describeTargetRoutes (discovery)', () => {
     const resolve = createCanonicalTargetResolver();
     expect(resolve('claude-opus-5-xhigh')?.model).toBe('gpt-5.6-terra');
     expect(resolve('claude-opus-5')?.model).toBe('claude-opus-5');
-    expect(resolve('claude-opus-4-8-xhigh')).toBeUndefined();
+    expect(resolve('claude-opus-4-8-xhigh')?.model).toBe('gpt-5.6-terra');
+    expect(resolve('claude-sonnet-5-xhigh')?.model).toBe('gpt-5.6-luna');
   });
 
   it('describes every servable id exactly once, sorted, with no credential data', () => {

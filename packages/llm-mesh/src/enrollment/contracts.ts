@@ -83,6 +83,7 @@ export interface CredentialEnvelope {
 export interface CompletedEnrollment {
   accountId: string;
   label: string;
+  ownerScope: string;
   credential?: PreparedCredential;
   metadata?: ResolvedProviderMetadata;
 }

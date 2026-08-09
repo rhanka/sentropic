@@ -15,17 +15,42 @@ import { EncryptedFileKeyring } from '../node/keyring/encrypted-file-keyring.js'
 import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
 import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
 import { LocalAccountTransportService } from './local-account-transport-service.js';
+import type { LlmMesh } from '../mesh.js';
+import {
+  InMemoryRoutePlanner, type InMemoryRoutePlannerOptions,
+} from '../route-planner.js';
+import type { RoutePlanner } from '../routing-contracts.js';
 
 export interface ProviderRequest {
   modelId: string;
   contents: unknown[];
   generationConfig?: unknown;
+  systemInstruction?: unknown;
+  tools?: unknown[];
+  toolConfig?: unknown;
+  diagnostics?: readonly {
+    code: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+  }[];
 }
 
 export type ProviderEvent =
   | { kind: 'content'; delta: string }
-  | { kind: 'done'; usage: unknown }
-  | { kind: 'error'; code: string; message: string };
+  | { kind: 'reasoning'; delta: string }
+  | {
+      kind: 'tool-call'; id: string; name: string; arguments: unknown;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      kind: 'diagnostic'; code: string; message: string;
+      metadata?: Record<string, unknown>;
+    }
+  | { kind: 'done'; usage: unknown; finishReason?: string }
+  | {
+      kind: 'error'; code: string; message: string;
+      statusCode?: number; retryAfterMs?: number;
+    };
 
 export interface ProviderAdapter {
   execute(
@@ -49,6 +74,8 @@ export interface FacadeOptions {
   configResolver: ConfigResolver;
   keyring?: KeyringAdapter;
   mode: 'cli' | 'portal';
+  /** Explicit owner used only to bind pre-ownerScope local keyring records. */
+  legacyAccountOwnerScopeRef?: string;
 }
 
 export interface LlmMeshFacade {
@@ -67,6 +94,10 @@ export interface LlmMeshFacade {
 
   // Provider adapter
   getAdapter(providerId: AccountTransportProviderId): ProviderAdapter;
+  createRoutePlanner(
+    runtime: Pick<LlmMesh, 'generate' | 'stream'>,
+    options?: Omit<InMemoryRoutePlannerOptions, 'directory'>,
+  ): RoutePlanner;
 }
 
 export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
@@ -90,7 +121,12 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
     ['claude-code', new ClaudeCodeEnrollmentProvider()],
   ]);
 
-  const service = new LocalAccountTransportService(keyring, providers, options.configResolver);
+  const service = new LocalAccountTransportService(
+    keyring,
+    providers,
+    options.configResolver,
+    options.legacyAccountOwnerScopeRef,
+  );
 
   return {
     async enroll(providerId, input) {
@@ -116,6 +152,12 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
         return new CloudCodeProviderAdapter();
       }
       throw new Error(`Adapter for ${providerId} not available locally`);
+    },
+    createRoutePlanner(runtime, routeOptions = {}) {
+      return new InMemoryRoutePlanner({
+        ...routeOptions,
+        directory: service.createRouteDirectory(runtime),
+      });
     },
   };
 }

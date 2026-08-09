@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import type { VerifiedRoutingSubject } from '@sentropic/llm-mesh';
 
 import { FixtureTransport } from './fixtures/transport.js';
 import { authHeaders, buildHarness, claudeCodePool } from './fixtures/harness.js';
@@ -29,6 +30,39 @@ describe('GET /v1/models', () => {
     const text = JSON.stringify(body);
     expect(text).not.toContain('acct-alpha');
     expect(text).not.toContain('SECRET');
+  });
+
+  it('uses owner-scoped mesh inventory in route mode instead of the legacy pool', async () => {
+    const { createGatewayRouter, stubGatewayConfig } = await import('../src/index.js');
+    const app = createGatewayRouter({
+      config: {
+        ...stubGatewayConfig,
+        callerAuth: { async verify() { return {
+          ok: true as const,
+          cost: {
+            tenantId: 'tenant-a', principalId: 'session-a', ownerScopeRef: 'owner-a',
+            source: 'test', correlationId: 'request-a',
+          },
+        }; } },
+        pool: {
+          ...stubGatewayConfig.pool,
+          async snapshotModels() { throw new Error('legacy pool must not be queried'); },
+        },
+      },
+      routePlanner: {
+        async listModels(subject: VerifiedRoutingSubject) {
+          expect(subject).toEqual({ principalRef: 'session-a', ownerScopeRef: 'owner-a' });
+          return [{ modelId: 'gpt-5.6-terra', providerId: 'openai' }];
+        },
+      } as never,
+      routeMetering: { settleRoute() {} },
+    });
+
+    const res = await app.request('/v1/models', { headers: authHeaders('user-a') });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      data: [{ id: 'gpt-5.6-terra', owned_by: 'openai' }],
+    });
   });
 
   it('returns 401 for an unauthenticated caller (never the pool)', async () => {
