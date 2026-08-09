@@ -80,6 +80,7 @@ knowledge.
   - `api/tests/unit/focus-owner-signature-route.test.ts`
   - `api/tests/fixtures/track-decision-validator/events.jsonl`
   - `api/tsconfig.json` (`BR-L2E1-EX2` only)
+  - `apps/auth-idp/tsconfig.json` (`BR-L2E1-EX2` only)
   - `BRANCH.md`
   - `PLAN.md`
   - `plan/done/73-BRANCH_feat-llm-mesh-gateway-routing.md` (closure only)
@@ -346,6 +347,7 @@ them blocks merge. No timeout-only amendments are accepted.
 - **Conditional Paths (allowed only with explicit exception)**:
   - `docker-compose.dev.yml` (`BR-L2E1-EX1` only)
   - `api/tsconfig.json` (`BR-L2E1-EX2` only)
+  - `apps/auth-idp/tsconfig.json` (`BR-L2E1-EX2` only)
 - **Exception process**:
   - [x] `BR-L2E1-EX1` is declared below before the dev-compose edit.
   - [x] `BR42-EX1` mirrors `BR-L2E1-EX1` solely for this checkout's numeric harness exception parser.
@@ -356,7 +358,7 @@ them blocks merge. No timeout-only amendments are accepted.
 
 - [x] `BR-L2E1-EX1` — status: acknowledge; rationale: mount the owner-local `.track` event store read-only only when `TRACK_EVENTS_HOST_DIR` is explicitly set, and configure `TRACK_EVENTS_PATH` only in `docker-compose.dev.yml`; impact: the unset CI-safe mount is an empty named volume and fails closed, while the owner-local API can read the explicitly selected event log; rollback: remove the mount and dev-only Track environment entries.
 - [x] `BR42-EX1` — status: acknowledge; parser-compatible mirror of `BR-L2E1-EX1`, with the identical rationale, impact, and rollback.
-- [x] `BR-L2E1-EX2` — status: acknowledge; rationale: resolve the public `@sentropic/track/read` type export with TypeScript Bundler module resolution; impact: API compile-time package resolution only, with no runtime or validator authorization change; rollback: restore Node resolution after the public subpath dependency is no longer imported.
+- [x] `BR-L2E1-EX2` — status: acknowledge; rationale: resolve the public `@sentropic/track/read` type export with TypeScript Bundler module resolution in the API and standalone IdP compiler configurations; impact: compile-time package resolution only, with no runtime or validator authorization change; rollback: restore Node resolution after the public subpath dependency is no longer imported.
 - [x] `BR42-EX2` — status: acknowledge; parser-compatible mirror of `BR-L2E1-EX2`, with the identical rationale, impact, and rollback.
 - [x] `L2E1-TRACK-017` — status: acknowledge; the root lock resolves `@sentropic/track` 0.17.0. The focused API test must prove its `report()` and `canevas()` reads against the fixture before implementation is accepted; no dependency bump is planned.
 - [x] `L2E1-BASELINE` — status: acknowledge; `TRACK_BASELINE_COMMIT` is an explicit local adapter input, defaulted in dev to the branch baseline `feebc6769aac8bd313d84310b1f0d66d07b68ee1`; an unset baseline reaches the validator catch and denies.
@@ -401,7 +403,7 @@ them blocks merge. No timeout-only amendments are accepted.
   - [x] Add `api/tests/unit/decision-validator.test.ts` with owner match, non-owner, unmapped caller, missing decision, workspace mismatch, unset event path, and missing workspace mapping cases.
   - [x] Add exact-match and fail-closed regression cases for case-only and whitespace identities, malformed owner mapping, unset baseline, and unreadable Track storage.
   - [x] Catch environment acquisition and every subsequent validator operation so configuration throws fail closed as `validation-error`.
-  - [x] Resolve the public Track reader subpath in API type checking without changing validator runtime or authorization behavior.
+  - [x] Resolve the public Track reader subpath in API and standalone IdP type checking without changing validator runtime or authorization behavior.
   - [x] Prove the installed locked Track 0.17 reader returns the fixture decision through `report()` and `canevas()`.
   - [x] Run `make test-api-unit SCOPE=tests/unit/decision-validator.test.ts REGISTRY=local ENV=test-track-l2-e1`.
   - [ ] Run `make scope-check` before every commit and verify `harness check scope` before handoff.
