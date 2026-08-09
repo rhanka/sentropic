@@ -16,6 +16,13 @@ import type {
   StartEnrollmentInput,
 } from '../enrollment/contracts.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
+import { listModelProfilesByProvider } from '../catalog.js';
+import type { LlmMesh } from '../mesh.js';
+import type { ProviderId } from '../providers.js';
+import type {
+  AccountDirectoryPort, EligibleAccountDescriptor, PlannedRouteTarget,
+  PreparedRouteAttempt, RouteFailureClassification,
+} from '../routing-contracts.js';
 
 type PersistedAccountTransportAccount = Omit<
   AccountTransportAccount,
@@ -26,17 +33,35 @@ interface AccountPublicRecord extends AccountPublic {
   account: PersistedAccountTransportAccount;
 }
 
+// Cloud Code does not currently return a per-account model inventory during
+// enrollment. Advertise only the model proven executable by the live transport
+// contract; explicit account.modelIds may widen this after provider evidence.
+const VERIFIED_CLOUD_CODE_MODEL_IDS = ['gemini-3.1-flash-lite'] as const;
+
+const supportedModelIdsForAccount = (
+  account: AccountTransportAccount,
+): readonly string[] => {
+  if (account.modelIds?.length) return account.modelIds;
+  if (account.transportProviderId === 'cloud-code') {
+    return VERIFIED_CLOUD_CODE_MODEL_IDS;
+  }
+  return listModelProfilesByProvider(account.targetProviderId as ProviderId)
+    .map((profile) => profile.modelId);
+};
+
 export class LocalAccountTransportService {
   private static readonly accountIndexKey = 'sentropic-llm-mesh:accounts:index';
   private readonly coordinator: InMemoryAccountTransportCoordinator;
   private readonly accountsMap = new Map<string, AccountTransportAccount>();
   private readonly credentialVersions = new Map<string, string>();
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
+  private routeAttemptSequence = 0;
 
   constructor(
     private readonly keyring: KeyringAdapter,
     private readonly providers: Map<string, EnrollmentProvider>,
     private readonly configResolver: ConfigResolver,
+    private readonly legacyAccountOwnerScopeRef?: string,
   ) {
     this.coordinator = new InMemoryAccountTransportCoordinator();
   }
@@ -60,13 +85,15 @@ export class LocalAccountTransportService {
       const now = new Date().toISOString();
       const account: AccountTransportAccount = {
         accountId: res.accountId,
+        ownerScopeRef: res.ownerScope,
         accountLabel: res.label,
-        targetProviderId: 'google',
+        targetProviderId: 'gemini',
         transportProviderId: 'cloud-code',
         accessToken: res.credential.accessToken,
         refreshToken: res.credential.refreshToken,
         expiresAt: res.credential.expiresAt,
         status: 'active',
+        enrollmentCompletedAt: now,
         metadata: res.metadata,
       };
       this.registerAccount(account, res.credential.authClientConfigVersion);
@@ -99,20 +126,22 @@ export class LocalAccountTransportService {
     }
     const res = await provider.pollForCompletion(enrollmentId);
     if (res.credential) {
+      const now = new Date().toISOString();
       // P0-4: Persist credentials obtained via device flow poll into keyring/accounts
       const account: AccountTransportAccount = {
         accountId: res.accountId,
+        ownerScopeRef: res.ownerScope,
         accountLabel: res.label,
-        targetProviderId: 'codex',
+        targetProviderId: 'openai',
         transportProviderId: 'codex',
         accessToken: res.credential.accessToken,
         refreshToken: res.credential.refreshToken,
         expiresAt: res.credential.expiresAt,
         status: 'active',
+        enrollmentCompletedAt: now,
         metadata: res.metadata,
       };
       this.registerAccount(account, res.credential.authClientConfigVersion);
-      const now = new Date().toISOString();
       await this.persistCredential(
         {
           accountId: res.accountId,
@@ -145,9 +174,9 @@ export class LocalAccountTransportService {
 
   // ── Account Registration for Coordinator ──────────────────────────────
   registerAccount(account: AccountTransportAccount, configVersion = 'v1.0.0'): void {
-    this.accountsMap.set(account.accountId, account);
+    const executableAccount = this.coordinator.addAccount(account);
+    this.accountsMap.set(account.accountId, executableAccount);
     this.credentialVersions.set(account.accountId, configVersion);
-    this.coordinator.addAccount(account);
   }
 
   // ── Runtime (called via facade by h2a gateway) ─────────────────────────
@@ -227,9 +256,141 @@ export class LocalAccountTransportService {
     return acquisition;
   }
 
-  async release(_acquisition: AccountTransportAcquisition): Promise<void> {
+  async release(acquisition: AccountTransportAcquisition): Promise<void> {
     // Q2B abort -> release reservation without recording an outcome / zero account impact
-    return;
+    await acquisition.release?.();
+  }
+
+  createRouteDirectory(runtime: Pick<LlmMesh, 'generate' | 'stream'>): AccountDirectoryPort {
+    return {
+      listEligible: async (subject) => this.listRouteAccounts(subject),
+      listDiagnostics: async (subject) => this.listRouteDiagnostics(subject),
+      prepareAttempt: async (input) => {
+        const acquisition = await this.acquire({
+          accountId: input.accountRef,
+          ownerScopeRef: input.subject.ownerScopeRef,
+          ...(input.affinityRef ? { affinityKey: input.affinityRef } : {}),
+          targetProviderId: input.target.providerId,
+          transportProviderId: input.target.transportProviderId,
+          modelId: input.target.modelId,
+          userId: input.subject.principalRef,
+          requestId: `${input.requestId}:${input.attemptIndex}`,
+        });
+        this.routeAttemptSequence += 1;
+        return this.routeAttempt(runtime, acquisition, input.target,
+          `attempt_${this.routeAttemptSequence.toString(36)}`);
+      },
+    };
+  }
+
+  private async listRouteDiagnostics(
+    subject: import('../routing-contracts.js').VerifiedRoutingSubject,
+  ): Promise<readonly import('../routing-contracts.js').RouteAvailabilityDiagnostic[]> {
+    await this.restorePersistedAccounts();
+    const diagnostics: import('../routing-contracts.js').RouteAvailabilityDiagnostic[] = [];
+    if ([...this.accountsMap.values()].some((account) =>
+      account.transportProviderId === 'codex' && !account.ownerScopeRef)) {
+      diagnostics.push({
+        code: 'reenrollment-required',
+        transportProviderId: 'codex',
+        message: 'Codex enrollment must be renewed for owner-scoped routing',
+      });
+    }
+    for (const account of this.accountsMap.values()) {
+      if (account.ownerScopeRef !== subject.ownerScopeRef || account.status !== 'reauth_required') {
+        continue;
+      }
+      diagnostics.push({
+        code: 'reauth-required',
+        transportProviderId: account.transportProviderId,
+        message: `${account.transportProviderId} authentication must be renewed`,
+      });
+    }
+    return diagnostics;
+  }
+
+  private async listRouteAccounts(
+    subject: import('../routing-contracts.js').VerifiedRoutingSubject,
+  ): Promise<readonly EligibleAccountDescriptor[]> {
+    await this.restorePersistedAccounts();
+    const recovered = this.coordinator.refreshLifecycle();
+    await Promise.all(recovered.flatMap((accountId) => {
+      const account = this.accountsMap.get(accountId);
+      return account ? [this.persistAccountState(account)] : [];
+    }));
+    return [...this.accountsMap.values()]
+      .filter((account) => account.ownerScopeRef === subject.ownerScopeRef)
+      .map((account) => ({
+      accountRef: account.accountId,
+      diagnosticAccountRef: this.diagnosticAccountRef(account.accountId),
+      targetProviderId: account.targetProviderId,
+      transportProviderId: account.transportProviderId,
+      supportedModelIds: supportedModelIdsForAccount(account),
+      enrollmentCompletedAt: account.enrollmentCompletedAt ?? '1970-01-01T00:00:00.000Z',
+      readiness: account.status === 'active' || account.status === undefined
+        ? 'ready'
+        : account.status === 'reauth_required'
+          ? 'reauth-required'
+          : account.status,
+      revision: [
+        this.credentialVersions.get(account.accountId) ?? 'v1.0.0',
+        account.expiresAt ?? '', account.status ?? 'active', account.enrollmentCompletedAt ?? '',
+      ].join(':'),
+      }));
+  }
+
+  private routeAttempt(
+    runtime: Pick<LlmMesh, 'generate' | 'stream'>,
+    acquisition: AccountTransportAcquisition,
+    target: PlannedRouteTarget,
+    attemptRef: string,
+  ): PreparedRouteAttempt {
+    const routeRequest = <T extends Parameters<LlmMesh['generate']>[0]>(request: T): T => ({
+      ...request,
+      providerId: target.providerId as ProviderId,
+      modelId: target.modelId,
+      auth: { material: acquisition.material, descriptor: acquisition.descriptor },
+      ...(target.effort
+        ? { reasoning: { ...request.reasoning, effort: target.effort as never } }
+        : {}),
+    });
+    let terminal = false;
+    const record = async (classification: RouteFailureClassification) => {
+      if (terminal) return;
+      terminal = true;
+      await acquisition.recordOutcome({
+        status: classification.reason === 'auth-failed' ? 'auth_failed'
+          : classification.reason === 'rate-limited' ? 'rate_limited' : 'failed',
+        ...(classification.retryAfterMs !== undefined
+          ? { retryAfterMs: classification.retryAfterMs }
+          : {}),
+      });
+      const account = this.accountsMap.get(acquisition.lease.accountId);
+      if (account) await this.persistAccountState(account);
+    };
+    return {
+      attemptRef,
+      generate: (request) => runtime.generate(routeRequest(request)),
+      stream: (request) => runtime.stream(routeRequest(request)),
+      recordOutcome: record,
+      async markCommitted() {},
+      complete: async () => {
+        if (terminal) return;
+        terminal = true;
+        await acquisition.recordOutcome({ status: 'success' });
+      },
+      releaseCancelled: async () => {
+        if (terminal) return;
+        terminal = true;
+        await this.release(acquisition);
+      },
+    };
+  }
+
+  private diagnosticAccountRef(accountId: string): string {
+    let hash = 2_166_136_261;
+    for (const char of accountId) hash = Math.imul(hash ^ char.charCodeAt(0), 16_777_619);
+    return `acct_${(hash >>> 0).toString(36)}`;
   }
 
   // ── Internal — never exposed to h2a ───────────────────────────────────────
@@ -291,6 +452,30 @@ export class LocalAccountTransportService {
     }
   }
 
+  private async persistAccountState(account: AccountTransportAccount): Promise<void> {
+    const key = `sentropic-llm-mesh:${account.accountId}:public`;
+    const raw = await this.keyring.getSecret(key);
+    if (!raw) return;
+    try {
+      const current = JSON.parse(raw) as Partial<AccountPublicRecord>;
+      if (!current.account) return;
+      const {
+        accessToken: _accessToken,
+        refreshToken: _refreshToken,
+        expiresAt: _expiresAt,
+        ...persistedAccount
+      } = account;
+      await this.keyring.setSecret(key, JSON.stringify({
+        ...current,
+        status: account.status ?? current.status,
+        updatedAt: new Date().toISOString(),
+        account: persistedAccount,
+      }));
+    } catch {
+      // A corrupt public record remains fail-closed and is not overwritten.
+    }
+  }
+
   private parseAccountIndex(raw: string | null): string[] {
     if (!raw) return [];
     try {
@@ -314,15 +499,34 @@ export class LocalAccountTransportService {
         const publicRecord = JSON.parse(publicRaw) as Partial<AccountPublicRecord>;
         const envelope = JSON.parse(envelopeRaw) as CredentialEnvelope;
         if (!publicRecord.account || envelope.accountId !== accountId) continue;
+        const migrateLegacyOwner = !publicRecord.account.ownerScopeRef
+          && publicRecord.account.transportProviderId === 'cloud-code'
+          && this.legacyAccountOwnerScopeRef;
+        const restoredAccount = {
+          ...publicRecord.account,
+          ...(migrateLegacyOwner
+            ? { ownerScopeRef: this.legacyAccountOwnerScopeRef }
+            : {}),
+        };
         this.registerAccount(
           {
-            ...publicRecord.account,
+            ...restoredAccount,
+            targetProviderId: publicRecord.account.transportProviderId === 'cloud-code'
+              && publicRecord.account.targetProviderId === 'google'
+              ? 'gemini'
+              : publicRecord.account.targetProviderId,
             accessToken: envelope.accessToken,
             refreshToken: envelope.refreshToken,
             expiresAt: envelope.expiresAt,
           },
           envelope.authClientConfigVersion,
         );
+        if (migrateLegacyOwner && restoredAccount.ownerScopeRef) {
+          await this.keyring.setSecret(
+            `sentropic-llm-mesh:${accountId}:public`,
+            JSON.stringify({ ...publicRecord, account: restoredAccount }),
+          );
+        }
       } catch {
         // Ignore incomplete/corrupt entries; another active account may still be usable.
       }
@@ -333,6 +537,7 @@ export class LocalAccountTransportService {
     const account = this.accountsMap.get(accountId);
     if (account) {
       account.status = 'reauth_required';
+      await this.persistAccountState(account);
     }
   }
 }

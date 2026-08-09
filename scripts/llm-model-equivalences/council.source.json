@@ -1,0 +1,29 @@
+{
+  "revision": "2026-08-08.1",
+  "expiresAt": "2027-02-08T00:00:00.000Z",
+  "reason": "No pinned benchmark evidence authorizes automatic substitution.",
+  "reviewer": "BR-73 model council",
+  "provenance": "spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md",
+  "excludedModelKeys": [
+    "anthropic:claude-fable-5",
+    "anthropic:claude-opus-4-8",
+    "anthropic:claude-opus-5",
+    "anthropic:claude-sonnet-5",
+    "cohere:command-a-03-2025",
+    "cohere:command-a-reasoning-08-2025",
+    "gcp:anthropic/claude-opus-4-6@gcp",
+    "gcp:anthropic/claude-sonnet-4-6@gcp",
+    "gcp:google/gemini-3.1-flash-lite@gcp",
+    "gcp:google/gemini-3.5-flash@gcp",
+    "gemini:gemini-3.1-flash-lite",
+    "gemini:gemini-3.5-flash",
+    "mistral:magistral-medium-2509",
+    "mistral:mistral-small-2603",
+    "openai:gpt-4.1-nano",
+    "openai:gpt-5.4-nano",
+    "openai:gpt-5.5",
+    "openai:gpt-5.6-luna",
+    "openai:gpt-5.6-sol",
+    "openai:gpt-5.6-terra"
+  ]
+}

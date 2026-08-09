@@ -8,6 +8,8 @@ export interface CostContext {
   readonly tenantId: string;
   readonly workspaceId?: string;
   readonly principalId: string;
+  /** Stable account-ownership scope resolved by caller auth, when distinct from tenant+principal. */
+  readonly ownerScopeRef?: string;
   /** Origin surface of the call (e.g. `chat-server`, `api-tools`, `layer-c`). */
   readonly source: string;
   readonly correlationId: string;

@@ -39,6 +39,7 @@ describe('LlmMeshFacade', () => {
     expect(typeof facade.acquire).toBe('function');
     expect(typeof facade.release).toBe('function');
     expect(typeof facade.getAdapter).toBe('function');
+    expect(typeof facade.createRoutePlanner).toBe('function');
   });
 
   it('throws an error if options is missing', () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { RoutePlanner } from '@sentropic/llm-mesh';
 
 import {
   createGatewayRouter,
@@ -65,5 +66,76 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
   it('produces a provider-shaped error mapper', () => {
     const err = notImplemented('openai-chat-completions');
     expect(err.status).toBe(501);
+  });
+
+  it('runs through the opaque mesh route path without a target resolver', async () => {
+    const settlements: unknown[] = [];
+    let observedSignal: AbortSignal | undefined;
+    const config = {
+      ...stubGatewayConfig,
+      callerAuth: { async verify() { return {
+        ok: true,
+        cost: {
+          tenantId: 'tenant-1', principalId: 'user-1', source: 'test', correlationId: 'request-1',
+        },
+      }; } },
+    };
+    const routePlanner: RoutePlanner = {
+      async plan() { return {
+        planRef: 'plan-1', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: ['candidate-1'],
+        policy: {
+          strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+          negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+          stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+        },
+        councilRevision: 'fixture',
+        diagnostics: [{
+          candidateRef: 'candidate-1', diagnosticAccountRef: 'redacted',
+          requestedModel: 'claude-opus-5-high', actualProviderId: 'openai',
+          actualModelId: 'gpt-5.6-terra', actualTransportProviderId: 'codex',
+          reason: 'alias', cacheContinuityRisk: false,
+        }],
+      }; },
+      async prepareAttempt() { return {
+        attemptRef: 'attempt-1',
+        async generate(request) {
+          observedSignal = request.signal;
+          return {
+          id: 'response-1', providerId: 'openai', modelId: 'gpt-5.6-terra',
+          message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [],
+          finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 },
+          };
+        },
+        async stream() { return { async *[Symbol.asyncIterator]() {} }; },
+        async recordOutcome() {}, async markCommitted() {}, async complete() {},
+        async releaseCancelled() {},
+      }; },
+      describeAffinity() { return null; }, promoteAffinity() { throw new Error('unused'); },
+      rebindAffinity() { throw new Error('unused'); }, resetAffinity() { return false; },
+    };
+    const app = createGatewayRouter({
+      config, routePlanner,
+      routeMetering: { settleRoute(value) { settlements.push(value); } },
+    });
+
+    const abort = new AbortController();
+    const response = await app.request('/v1/messages', {
+      method: 'POST', headers: { authorization: 'Bearer gateway-session' },
+      signal: abort.signal,
+      body: JSON.stringify({
+        model: 'claude-opus-5-high', max_tokens: 100,
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      type: 'message', model: 'gpt-5.6-terra', content: [{ type: 'text', text: 'ok' }],
+    });
+    expect(settlements).toHaveLength(1);
+    // Hono/undici may wrap the caller's signal, but the canonical request must
+    // receive a live signal rather than dropping cancellation altogether.
+    expect(observedSignal).toBeInstanceOf(AbortSignal);
+    expect(observedSignal?.aborted).toBe(false);
   });
 });
