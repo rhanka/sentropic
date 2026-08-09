@@ -1,5 +1,7 @@
 import { modelProfiles, type ModelProfile } from './catalog.js';
-import type { ModelEquivalenceCouncil } from './equivalence-council.js';
+import {
+  modelSupportsCapability, type ModelEquivalenceCouncil,
+} from './equivalence-council.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import type { RoutePolicy, RouteSelector, RouteStrategy } from './routing-policy.js';
 import { createCanonicalTargetResolver } from './routing-targets.js';
@@ -18,16 +20,8 @@ const resolveCanonical = createCanonicalTargetResolver();
 const supportsCapabilities = (
   profile: ModelProfile | undefined,
   required: RoutePlanInput['requiredCapabilities'],
-): boolean => !required?.length || required.every((capability) => {
-  if (!profile) return false;
-  if (capability.startsWith('input:')) {
-    return profile.capabilities.modalities.input.includes(capability.slice(6) as never);
-  }
-  if (capability.startsWith('output:')) {
-    return profile.capabilities.modalities.output.includes(capability.slice(7) as never);
-  }
-  return profile.capabilities[capability as keyof ModelProfile['capabilities']] !== undefined;
-});
+): boolean => !required?.length
+  || required.every((capability) => modelSupportsCapability(profile, capability));
 
 const selectorMatches = (
   selector: RouteSelector,
@@ -107,23 +101,28 @@ export const selectRouteCandidates = (input: {
       }));
   }
 
-  let candidates = targets.flatMap((target) => input.accounts
-    .filter((account) => account.readiness === 'ready'
-      && account.targetProviderId === target.providerId
-      && account.supportedModelIds.includes(target.modelId)
-      && (!target.transportProviderId
-        || target.transportProviderId === account.transportProviderId))
-    .map((account): RankedRouteCandidate => ({
-      account,
-      target: {
-        requestedModel: input.request.requestedModel,
-        providerId: target.providerId,
-        modelId: target.modelId,
-        transportProviderId: account.transportProviderId,
-        ...(target.effort ? { effort: target.effort } : {}),
-        reason: target.reason,
-      },
-    })));
+  let candidates = targets.flatMap((target) => {
+    const targetProfile = modelProfiles.find((profile) =>
+      profile.providerId === target.providerId && profile.modelId === target.modelId);
+    if (!supportsCapabilities(targetProfile, input.request.requiredCapabilities)) return [];
+    return input.accounts
+      .filter((account) => account.readiness === 'ready'
+        && account.targetProviderId === target.providerId
+        && account.supportedModelIds.includes(target.modelId)
+        && (!target.transportProviderId
+          || target.transportProviderId === account.transportProviderId))
+      .map((account): RankedRouteCandidate => ({
+        account,
+        target: {
+          requestedModel: input.request.requestedModel,
+          providerId: target.providerId,
+          modelId: target.modelId,
+          transportProviderId: account.transportProviderId,
+          ...(target.effort ? { effort: target.effort } : {}),
+          reason: target.reason,
+        },
+      }));
+  });
   if (input.request.explicit) {
     candidates = candidates.filter((candidate) =>
       selectorMatches(input.request.explicit!, candidate, input.request.requestedModel));
