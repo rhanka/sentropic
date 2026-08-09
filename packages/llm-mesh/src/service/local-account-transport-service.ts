@@ -16,6 +16,13 @@ import type {
   StartEnrollmentInput,
 } from '../enrollment/contracts.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
+import { listModelProfilesByProvider } from '../catalog.js';
+import type { LlmMesh } from '../mesh.js';
+import type { ProviderId } from '../providers.js';
+import type {
+  AccountDirectoryPort, EligibleAccountDescriptor, PlannedRouteTarget,
+  PreparedRouteAttempt, RouteFailureClassification,
+} from '../routing-contracts.js';
 
 type PersistedAccountTransportAccount = Omit<
   AccountTransportAccount,
@@ -32,6 +39,7 @@ export class LocalAccountTransportService {
   private readonly accountsMap = new Map<string, AccountTransportAccount>();
   private readonly credentialVersions = new Map<string, string>();
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
+  private routeAttemptSequence = 0;
 
   constructor(
     private readonly keyring: KeyringAdapter,
@@ -232,6 +240,104 @@ export class LocalAccountTransportService {
   async release(acquisition: AccountTransportAcquisition): Promise<void> {
     // Q2B abort -> release reservation without recording an outcome / zero account impact
     await acquisition.release?.();
+  }
+
+  createRouteDirectory(runtime: Pick<LlmMesh, 'generate' | 'stream'>): AccountDirectoryPort {
+    return {
+      listEligible: async () => this.listRouteAccounts(),
+      prepareAttempt: async (input) => {
+        const acquisition = await this.acquire({
+          accountId: input.accountRef,
+          targetProviderId: input.target.providerId,
+          transportProviderId: input.target.transportProviderId,
+          modelId: input.target.modelId,
+          userId: input.subject.principalRef,
+          requestId: `${input.requestId}:${input.attemptIndex}`,
+        });
+        this.routeAttemptSequence += 1;
+        return this.routeAttempt(runtime, acquisition, input.target,
+          `attempt_${this.routeAttemptSequence.toString(36)}`);
+      },
+    };
+  }
+
+  private async listRouteAccounts(): Promise<readonly EligibleAccountDescriptor[]> {
+    await this.restorePersistedAccounts();
+    return [...this.accountsMap.values()].map((account) => ({
+      accountRef: account.accountId,
+      diagnosticAccountRef: this.diagnosticAccountRef(account.accountId),
+      targetProviderId: account.targetProviderId,
+      transportProviderId: account.transportProviderId,
+      supportedModelIds: account.modelIds?.length
+        ? account.modelIds
+        : listModelProfilesByProvider(account.targetProviderId as ProviderId)
+          .map((profile) => profile.modelId),
+      enrollmentCompletedAt: account.enrollmentCompletedAt ?? '1970-01-01T00:00:00.000Z',
+      readiness: account.status === 'active' || account.status === undefined
+        ? 'ready'
+        : account.status === 'reauth_required'
+          ? 'reauth-required'
+          : account.status,
+      revision: [
+        this.credentialVersions.get(account.accountId) ?? 'v1.0.0',
+        account.expiresAt ?? '', account.status ?? 'active', account.enrollmentCompletedAt ?? '',
+      ].join(':'),
+    }));
+  }
+
+  private routeAttempt(
+    runtime: Pick<LlmMesh, 'generate' | 'stream'>,
+    acquisition: AccountTransportAcquisition,
+    target: PlannedRouteTarget,
+    attemptRef: string,
+  ): PreparedRouteAttempt {
+    const routeRequest = <T extends Parameters<LlmMesh['generate']>[0]>(request: T): T => ({
+      ...request,
+      providerId: target.providerId as ProviderId,
+      modelId: target.modelId,
+      auth: { material: acquisition.material, descriptor: acquisition.descriptor },
+      ...(target.effort
+        ? { reasoning: { ...request.reasoning, effort: target.effort as never } }
+        : {}),
+    });
+    let terminal = false;
+    const record = async (classification: RouteFailureClassification) => {
+      if (terminal) return;
+      terminal = true;
+      const account = this.accountsMap.get(acquisition.lease.accountId);
+      if (account && classification.reason === 'auth-failed') account.status = 'reauth_required';
+      if (account && classification.reason === 'rate-limited') account.status = 'cooldown';
+      await acquisition.recordOutcome({
+        status: classification.reason === 'auth-failed' ? 'auth_failed'
+          : classification.reason === 'rate-limited' ? 'rate_limited' : 'failed',
+        ...(classification.retryAfterMs !== undefined
+          ? { retryAfterMs: classification.retryAfterMs }
+          : {}),
+      });
+    };
+    return {
+      attemptRef,
+      generate: (request) => runtime.generate(routeRequest(request)),
+      stream: (request) => runtime.stream(routeRequest(request)),
+      recordOutcome: record,
+      async markCommitted() {},
+      complete: async () => {
+        if (terminal) return;
+        terminal = true;
+        await acquisition.recordOutcome({ status: 'success' });
+      },
+      releaseCancelled: async () => {
+        if (terminal) return;
+        terminal = true;
+        await this.release(acquisition);
+      },
+    };
+  }
+
+  private diagnosticAccountRef(accountId: string): string {
+    let hash = 2_166_136_261;
+    for (const char of accountId) hash = Math.imul(hash ^ char.charCodeAt(0), 16_777_619);
+    return `acct_${(hash >>> 0).toString(36)}`;
   }
 
   // ── Internal — never exposed to h2a ───────────────────────────────────────
