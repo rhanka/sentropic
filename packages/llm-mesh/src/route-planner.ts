@@ -205,16 +205,22 @@ export class InMemoryRoutePlanner implements RoutePlanner {
   private bind(stored: StoredPlan, candidate: RankedRouteCandidate): void {
     if (!stored.affinityRef) return;
     const current = this.affinities.get(stored.affinityRef);
-    if (current && (stored.policy.fallbackMode !== 'one-way'
-      || current.accountRef !== candidate.account.accountRef)) return;
+    if (current && stored.policy.fallbackMode !== 'one-way') return;
     if (current?.target.providerId === candidate.target.providerId
       && current.target.modelId === candidate.target.modelId
       && current.target.transportProviderId === candidate.target.transportProviderId) return;
-    this.affinities.set(stored.affinityRef, {
+    const rebind = Boolean(current && current.accountRef !== candidate.account.accountRef);
+    const next: StoredAffinity = {
       affinityRef: stored.affinityRef, accountRef: candidate.account.accountRef,
       diagnosticAccountRef: candidate.account.diagnosticAccountRef,
       target: candidate.target, revision: (current?.revision ?? 0) + 1,
-      promoted: Boolean(current),
+      promoted: Boolean(current && !rebind),
+    };
+    this.affinities.set(stored.affinityRef, next);
+    if (current) this.options.affinityAudit?.({
+      operation: rebind ? 'rebind' : 'promote', subjectRef: stored.subjectRef,
+      affinityRef: stored.affinityRef, previousRevision: current.revision,
+      nextRevision: next.revision, cacheContinuityRisk: rebind,
     });
   }
 
