@@ -25,6 +25,12 @@ commitment remain outside this package. CLI enrollment uses an encrypted local
 keyring; portal mode remains injection-only. Override the CLI keyring directory
 with `SENTROPIC_LLM_MESH_KEYRING_DIR` when runtime isolation requires it.
 
+`CloudCodeRuntimeClient` projects function parameter schemas onto the JSON
+Schema subset accepted by the Cloud Code Gemini wire. Tool names, properties,
+required fields and supported constraints are preserved; unsupported
+validation-only keywords are omitted before dispatch rather than causing an
+upstream 400 for rich Claude Code tool catalogs.
+
 ## Routing policy
 
 `DEFAULT_ROUTE_POLICY` uses the latest successful enrollment, a strict sticky

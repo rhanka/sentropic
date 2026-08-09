@@ -89,4 +89,46 @@ describe('Cloud Code runtime client', () => {
       retryAfterMs: 6_000, retryable: true,
     }) }]);
   });
+
+  it('projects Claude tool schemas onto the Cloud Code supported subset', async () => {
+    const fetchFn = vi.fn(async () => streamResponse());
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-3.1-flash-lite',
+      messages: [{ role: 'user', content: 'hello' }],
+      tools: [{
+        type: 'function', name: 'agent', inputSchema: {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          type: ['object', 'null'], additionalProperties: false,
+          properties: {
+            prompt: { type: 'string', minLength: 1 },
+            limit: { type: 'integer', exclusiveMinimum: 0, const: 1 },
+            mode: { oneOf: [
+              { const: 'fast' },
+              { type: 'string', pattern: '^[a-z]+$' },
+            ] },
+            mixed: { enum: ['fast', 2] },
+          },
+          required: ['prompt'],
+        },
+      }],
+    }, context);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    const body = JSON.parse(String(init.body));
+    expect(body.request.tools[0].functionDeclarations[0].parameters).toEqual({
+      type: 'object', nullable: true,
+      properties: {
+        prompt: { type: 'string' },
+        limit: { type: 'integer' },
+        mode: { anyOf: [{ enum: ['fast'] }, { type: 'string' }] },
+        mixed: {},
+      },
+      required: ['prompt'],
+    });
+    expect(JSON.stringify(body)).not.toContain('$schema');
+    expect(JSON.stringify(body)).not.toContain('additionalProperties');
+    expect(JSON.stringify(body)).not.toContain('exclusiveMinimum');
+  });
 });
