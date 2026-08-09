@@ -76,6 +76,38 @@ describe('Codex runtime client', () => {
     }, auth)).rejects.toMatchObject({ status: 429, retryAfterMs: 9_000 });
   });
 
+  it('reports tool_calls when the live terminal event omits its streamed function call', async () => {
+    const fetchFn = vi.fn(async () => sseResponse([
+      {
+        type: 'response.output_item.added',
+        item: {
+          type: 'function_call', id: 'item-1', call_id: 'call-1',
+          name: 'report_probe', arguments: '{"status":"ok"}',
+        },
+      },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'response-tool-1', output: [],
+          usage: { input_tokens: 4, output_tokens: 3, total_tokens: 7 },
+        },
+      },
+    ]));
+    const client = new CodexRuntimeClient({ fetch: fetchFn });
+
+    const response = await client.generate({
+      providerId: 'openai', modelId: 'gpt-5.6-terra',
+      messages: [{ role: 'user', content: 'call the tool' }],
+      tools: [{ type: 'function', name: 'report_probe', inputSchema: { type: 'object' } }],
+      toolChoice: { type: 'tool', name: 'report_probe' },
+    }, auth);
+
+    expect(response.finishReason).toBe('tool_calls');
+    expect(response.toolCalls).toEqual([expect.objectContaining({
+      toolCallId: 'item-1', providerCallId: 'call-1', name: 'report_probe',
+    })]);
+  });
+
   it('never accepts an absent executable Codex token', async () => {
     const fetchFn = vi.fn();
     const client = new CodexRuntimeClient({ fetch: fetchFn });

@@ -22,7 +22,18 @@ describe('canonical model targets', () => {
       model: 'gpt-5.6-terra',
       effort: 'xhigh',
     });
-    expect(resolve('claude-opus-4-8-xhigh')).toBeUndefined();
+    expect(resolve('claude-opus-4-8-xhigh')).toEqual({
+      providerId: 'openai',
+      transportProviderId: 'codex',
+      model: 'gpt-5.6-terra',
+      effort: 'xhigh',
+    });
+    expect(resolve('claude-sonnet-5-xhigh')).toEqual({
+      providerId: 'openai',
+      transportProviderId: 'codex',
+      model: 'gpt-5.6-luna',
+      effort: 'xhigh',
+    });
   });
 
   it('describes routes without account or credential fields', () => {
