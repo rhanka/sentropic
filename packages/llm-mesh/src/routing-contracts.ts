@@ -98,6 +98,8 @@ export interface AccountDirectoryPort {
   listEligible(subject: VerifiedRoutingSubject): Promise<readonly EligibleAccountDescriptor[]>;
   prepareAttempt(input: {
     readonly subject: VerifiedRoutingSubject;
+    /** Mesh-internal affinity reference; never exposed in a route plan. */
+    readonly affinityRef?: string;
     readonly accountRef: string;
     readonly target: PlannedRouteTarget;
     readonly requestId: string;
