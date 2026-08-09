@@ -393,6 +393,7 @@ them blocks merge. No timeout-only amendments are accepted.
   - [x] Replace the stale route-test validator symbol with `trackDecisionValidator` and invoke the full API unit lane.
   - [x] Add `api/tests/unit/decision-validator.test.ts` with owner match, non-owner, unmapped caller, missing decision, workspace mismatch, unset event path, and missing workspace mapping cases.
   - [x] Add exact-match and fail-closed regression cases for case-only and whitespace identities, malformed owner mapping, unset baseline, and unreadable Track storage.
+  - [x] Catch environment acquisition and every subsequent validator operation so configuration throws fail closed as `validation-error`.
   - [x] Prove the installed locked Track 0.17 reader returns the fixture decision through `report()` and `canevas()`.
   - [x] Run `make test-api-unit SCOPE=tests/unit/decision-validator.test.ts REGISTRY=local ENV=test-track-l2-e1`.
   - [ ] Run `make scope-check` before every commit and verify `harness check scope` before handoff.

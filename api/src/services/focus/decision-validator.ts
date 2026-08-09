@@ -54,18 +54,18 @@ export const createTrackDecisionValidator = (
 
   return {
     validate: async ({ workspace, decisionId, userId }) => {
-      const env = environment();
-      const eventsPath = env.TRACK_EVENTS_PATH;
-
-      if (!eventsPath) return { authorized: false, reason: 'track-store-unavailable' };
-
       try {
-        await access(eventsPath, constants.R_OK);
-      } catch {
-        return { authorized: false, reason: 'track-store-unavailable' };
-      }
+        const env = environment();
+        const eventsPath = env.TRACK_EVENTS_PATH;
 
-      try {
+        if (!eventsPath) return { authorized: false, reason: 'track-store-unavailable' };
+
+        try {
+          await access(eventsPath, constants.R_OK);
+        } catch {
+          return { authorized: false, reason: 'track-store-unavailable' };
+        }
+
         const trackWorkspace = await getTrackWorkspaceId(workspace);
         if (!trackWorkspace) return { authorized: false, reason: 'workspace-not-track-mapped' };
 

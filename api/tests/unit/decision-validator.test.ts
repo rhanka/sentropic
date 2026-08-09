@@ -102,6 +102,32 @@ describe('Track decision validator', () => {
       .resolves.toEqual({ authorized: false, reason: 'track-store-unavailable' });
   });
 
+  it('should return a validation error when the environment provider throws', async () => {
+    const validator = createTrackDecisionValidator({
+      environment: () => {
+        throw new Error('configuration unavailable');
+      },
+      resolveTrackWorkspaceId: async () => 'sentropic',
+    });
+
+    await expect(validator.validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
+      .resolves.toEqual({ authorized: false, reason: 'validation-error' });
+  });
+
+  it('should return a validation error when reading the events path throws', async () => {
+    const validator = createTrackDecisionValidator({
+      environment: () => ({
+        get TRACK_EVENTS_PATH(): string {
+          throw new Error('configuration unavailable');
+        },
+      }),
+      resolveTrackWorkspaceId: async () => 'sentropic',
+    });
+
+    await expect(validator.validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
+      .resolves.toEqual({ authorized: false, reason: 'validation-error' });
+  });
+
   it('should deny when the API workspace has no Track workspace mapping', async () => {
     await expect(validatorFor({ trackWorkspace: null })
       .validate({ workspace: 'api-workspace', decisionId: DECISION_ID, userId: 'owner-user' }))
