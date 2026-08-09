@@ -83,6 +83,23 @@ describe('InMemoryAccountTransportCoordinator', () => {
     );
   });
 
+  it('selects the most recently enrolled eligible account for a new affinity', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator([
+      { ...accounts[0], priority: 100, enrollmentCompletedAt: '2026-08-01T00:00:00Z' },
+      { ...accounts[1], priority: 0, enrollmentCompletedAt: '2026-08-02T00:00:00Z' },
+    ]);
+
+    const acquisition = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      affinityKey: 'new-session',
+      now: '2026-08-03T00:00:00Z',
+    });
+
+    expect(acquisition.lease.accountId).toBe('codex-b');
+  });
+
   it('marks auth-failed accounts as unavailable for later acquisitions', async () => {
     const coordinator = new InMemoryAccountTransportCoordinator([accounts[0]]);
     const first = await coordinator.acquire({

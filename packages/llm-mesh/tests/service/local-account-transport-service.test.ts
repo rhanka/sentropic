@@ -62,6 +62,55 @@ describe('LocalAccountTransportService', () => {
       accessToken: 'persisted-access-token',
       metadata: { cloudaicompanionProject: 'test-project' },
     });
+    const persisted = await keyring.getSecret(
+      'sentropic-llm-mesh:acct_persisted_1:public',
+    );
+    expect(JSON.parse(persisted ?? '{}').account.enrollmentCompletedAt).toEqual(
+      expect.any(String),
+    );
+  });
+
+  it('registers a completed Codex enrollment as an OpenAI transport account', async () => {
+    const keyring = new InMemoryKeyring();
+    const provider = {
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() {
+        return {
+          accountId: 'acct_codex_1',
+          label: 'Codex account',
+          credential: {
+            accountId: 'acct_codex_1',
+            accessToken: 'codex-token',
+            refreshToken: 'codex-refresh',
+            authClientConfigVersion: 'v1.0.0',
+          },
+          metadata: {},
+        };
+      },
+    } satisfies EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string;
+        label: string;
+        credential: PreparedCredential;
+        metadata: Record<string, unknown>;
+      }>;
+    };
+    const service = new LocalAccountTransportService(
+      keyring,
+      new Map([['codex', provider]]),
+      { async resolveConfig() { return {}; } },
+    );
+
+    await service.pollForCompletion('codex-enrollment');
+    const acquisition = await service.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+    });
+
+    expect(acquisition.material.accountId).toBe('acct_codex_1');
   });
 
   it('acquires an active account and refreshes atomically if expired', async () => {
