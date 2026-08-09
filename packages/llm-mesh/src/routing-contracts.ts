@@ -30,6 +30,7 @@ export interface PlannedRouteTarget {
 
 export interface RoutePlanInput {
   readonly requestedModel: string;
+  readonly intent?: 'coding' | 'general' | 'reasoning' | 'fast';
   readonly requiredCapabilities?: readonly CapabilityRequirement[];
   readonly affinityKey?: string;
   readonly workspaceId?: string;

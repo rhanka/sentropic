@@ -80,4 +80,21 @@ describe('route policy', () => {
       fallbackMode: 'one-way', allowEquivalentModels: false,
     });
   });
+
+  it('matches intent rules only when the caller supplies that intent', () => {
+    const base = {
+      ...DEFAULT_ROUTE_POLICY,
+      rules: [{
+        match: { intent: 'coding' as const },
+        fallback: { fallbackMode: 'one-way' as const },
+      }],
+    };
+
+    expect(resolveRoutePolicy(base, {
+      requestedModel: 'gpt-5.6-sol', intent: 'coding',
+    }).fallbackMode).toBe('one-way');
+    expect(resolveRoutePolicy(base, {
+      requestedModel: 'gpt-5.6-sol', intent: 'general',
+    }).fallbackMode).toBe('retest-preferred');
+  });
 });
