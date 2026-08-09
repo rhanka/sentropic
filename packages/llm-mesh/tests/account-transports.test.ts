@@ -100,6 +100,22 @@ describe('InMemoryAccountTransportCoordinator', () => {
     expect(acquisition.lease.accountId).toBe('codex-b');
   });
 
+  it('acquires only the exact mesh-planned account and releases without health impact', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator(accounts);
+    const acquisition = await coordinator.acquire({
+      accountId: 'codex-a', targetProviderId: 'openai', transportProviderId: 'codex',
+      modelId: 'gpt-5.5', requestId: 'planned-attempt',
+    });
+
+    expect(acquisition.lease.accountId).toBe('codex-a');
+    await acquisition.release?.();
+    await acquisition.release?.();
+    await expect(coordinator.acquire({
+      accountId: 'codex-a', targetProviderId: 'openai', transportProviderId: 'codex',
+      modelId: 'gpt-5.5', requestId: 'next-attempt',
+    })).resolves.toMatchObject({ lease: { accountId: 'codex-a' } });
+  });
+
   it('marks auth-failed accounts as unavailable for later acquisitions', async () => {
     const coordinator = new InMemoryAccountTransportCoordinator([accounts[0]]);
     const first = await coordinator.acquire({
