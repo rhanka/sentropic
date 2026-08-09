@@ -172,6 +172,34 @@ describe('opaque route planner', () => {
       candidate.diagnosticAccountRef === 'acct_old')).toBe(false);
   });
 
+  it('audits and persists an explicitly enabled one-way account rotation', async () => {
+    const events: Array<{ operation: string; cacheContinuityRisk: boolean }> = [];
+    const planner = new InMemoryRoutePlanner({
+      directory: new FakeRouteDirectory(),
+      affinityAudit: (event) => events.push(event),
+    });
+    const first = await planner.plan(routingSubject(), {
+      ...request, affinityKey: 'one-way',
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const fallback = await planner.plan(routingSubject(), {
+      ...request, affinityKey: 'one-way',
+      policyOverride: { fallbackMode: 'one-way', rotateEquivalentAccounts: true },
+    });
+    await (await planner.prepareAttempt(
+      routingSubject(), fallback.planRef, fallback.candidateRefs[1]!, 'req-2', 1,
+    )).complete();
+
+    expect(planner.describeAffinity(routingSubject(), 'one-way')).toMatchObject({
+      diagnosticAccountRef: 'acct_old', promoted: false,
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      operation: 'rebind', cacheContinuityRisk: true,
+    }));
+  });
+
   it('rejects attempt preparation after the plan expires', async () => {
     let now = Date.parse('2026-08-08T00:00:00Z');
     const planner = new InMemoryRoutePlanner({
