@@ -124,7 +124,12 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
   async pollForCompletion(
     enrollmentId: string,
     maxAttempts = 60,
-  ): Promise<{ accountId: string; label: string; credential?: PreparedCredential }> {
+  ): Promise<{
+    accountId: string;
+    label: string;
+    ownerScope: string;
+    credential?: PreparedCredential;
+  }> {
     const entry = this.sessions.get(enrollmentId);
     if (!entry) {
       throw new Error(`Enrollment session ${enrollmentId} not found`);
@@ -218,6 +223,7 @@ export class CodexEnrollmentProvider implements EnrollmentProvider {
 
       return {
         accountId,
+        ownerScope: entry.state.ownerScope,
         label: `Codex Account (${accountId.slice(0, 16)})`,
         credential,
       };
