@@ -355,6 +355,7 @@ them blocks merge. No timeout-only amendments are accepted.
 - [x] `L2E1-TRACK-017` — status: acknowledge; the root lock resolves `@sentropic/track` 0.17.0. The focused API test must prove its `report()` and `canevas()` reads against the fixture before implementation is accepted; no dependency bump is planned.
 - [x] `L2E1-BASELINE` — status: acknowledge; `TRACK_BASELINE_COMMIT` is an explicit local adapter input, defaulted in dev to the branch baseline `feebc6769aac8bd313d84310b1f0d66d07b68ee1`; an unset baseline reaches the validator catch and denies.
 - [x] `L2E1-EACCES` — status: acknowledge; `make typecheck-api REGISTRY=local ENV=test-track-l2-e1` reached the known worktree permission failure at `api/node_modules/.vite/vitest`; no further local stack attempt is permitted, while the focused unit proof passed and CI remains required.
+- [x] `L2E1-CYCLE1-UNIT` — status: acknowledge; the required full `make test-api-unit REGISTRY=local ENV=test-track-l2-e1` invocation cannot run because the API service is stopped, and the existing EACCES guard prohibits starting this worktree stack; CI remains required.
 - [ ] `L2E1-WORKSPACE-MAP` — status: attention; after migration, set the local owner workspace without hardcoding its API id: `UPDATE workspaces SET track_workspace_id = 'sentropic' WHERE id = '<owner-workspace-id>';`.
 
 ## AI Flaky tests
@@ -389,6 +390,7 @@ them blocks merge. No timeout-only amendments are accepted.
   - [x] Add only the `BR-L2E1-EX1` read-only store mount plus E1 environment values to `docker-compose.dev.yml`.
   - [x] Keep production compose and configuration unchanged.
 - [ ] **Lot 3 — Focused proof and final validation**
+  - [x] Replace the stale route-test validator symbol with `trackDecisionValidator` and invoke the full API unit lane.
   - [x] Add `api/tests/unit/decision-validator.test.ts` with owner match, non-owner, unmapped caller, missing decision, workspace mismatch, unset event path, and missing workspace mapping cases.
   - [x] Prove the installed locked Track 0.17 reader returns the fixture decision through `report()` and `canevas()`.
   - [x] Run `make test-api-unit SCOPE=tests/unit/decision-validator.test.ts REGISTRY=local ENV=test-track-l2-e1`.

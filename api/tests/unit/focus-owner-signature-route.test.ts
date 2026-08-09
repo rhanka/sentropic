@@ -197,7 +197,7 @@ describe('Focus owner-signature route', () => {
 
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ status: 'signed', duplicate: false });
-    expect(failClosedDecisionValidator.validate).toHaveBeenCalledWith({
+    expect(trackDecisionValidator.validate).toHaveBeenCalledWith({
       workspace: 'workspace-from-auth-context',
       decisionId: 'decision-42',
       userId: 'authenticated-user',
