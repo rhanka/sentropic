@@ -69,7 +69,7 @@ export class LocalAccountTransportService {
       const account: AccountTransportAccount = {
         accountId: res.accountId,
         accountLabel: res.label,
-        targetProviderId: 'google',
+        targetProviderId: 'gemini',
         transportProviderId: 'cloud-code',
         accessToken: res.credential.accessToken,
         refreshToken: res.credential.refreshToken,
@@ -425,6 +425,10 @@ export class LocalAccountTransportService {
         this.registerAccount(
           {
             ...publicRecord.account,
+            targetProviderId: publicRecord.account.transportProviderId === 'cloud-code'
+              && publicRecord.account.targetProviderId === 'google'
+              ? 'gemini'
+              : publicRecord.account.targetProviderId,
             accessToken: envelope.accessToken,
             refreshToken: envelope.refreshToken,
             expiresAt: envelope.expiresAt,
