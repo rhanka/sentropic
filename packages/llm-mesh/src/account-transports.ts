@@ -36,6 +36,8 @@ export interface AccountTransportAccount {
 }
 
 export interface AccountTransportAcquireInput {
+  /** Mesh-internal exact candidate binding; never sourced from gateway ingress. */
+  accountId?: string;
   targetProviderId: ProviderId | (string & {});
   transportProviderId: AccountTransportProviderId | (string & {});
   modelId?: ModelId | (string & {}) | null;
@@ -84,6 +86,8 @@ export interface AccountTransportAcquisition {
     metadata?: Record<string, unknown>;
   };
   recordOutcome(outcome: AccountTransportOutcome): Promise<void>;
+  /** Releases an unfinished reservation without changing account health. */
+  release?(): Promise<void>;
 }
 
 /**
@@ -272,6 +276,11 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
         this.reservations.delete(reservation.reservationId);
         this.applyOutcome(account, outcome);
       },
+      release: async () => {
+        if (outcomeRecorded) return;
+        outcomeRecorded = true;
+        this.reservations.delete(reservation.reservationId);
+      },
     };
   }
 
@@ -326,7 +335,8 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     input: AccountTransportAcquireInput,
     _now: Date,
   ): boolean {
-    return account.targetProviderId === input.targetProviderId
+    return (!input.accountId || account.accountId === input.accountId)
+      && account.targetProviderId === input.targetProviderId
       && account.transportProviderId === input.transportProviderId
       && account.status === 'active'
       && supportsModel(account, input.modelId);
