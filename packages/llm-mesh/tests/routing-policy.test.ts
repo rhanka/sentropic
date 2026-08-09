@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ROUTE_POLICY,
   InMemoryRoutePolicyProfiles,
+  resolveRoutePolicy,
   RoutePolicyError,
   validateRoutePolicy,
 } from '../src/routing-policy.js';
@@ -61,5 +62,22 @@ describe('route policy', () => {
         },
       }],
     })).not.toThrow();
+  });
+
+  it('applies only the first matching per-model fallback override', () => {
+    const policy = resolveRoutePolicy({
+      ...DEFAULT_ROUTE_POLICY,
+      rules: [{
+        match: { requestedModel: 'gpt-5.6-terra' },
+        fallback: { fallbackMode: 'one-way', allowEquivalentModels: false },
+      }, {
+        match: { requestedModel: 'gpt-5.6-terra' },
+        fallback: { fallbackMode: 'retest-preferred' },
+      }],
+    }, { requestedModel: 'gpt-5.6-terra' });
+
+    expect(policy).toMatchObject({
+      fallbackMode: 'one-way', allowEquivalentModels: false,
+    });
   });
 });
