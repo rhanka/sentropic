@@ -15,6 +15,9 @@ export interface TargetRouteDescription extends TargetMapping {
 }
 
 export type ModelTargetResolver = (model: string) => TargetMapping | undefined;
+export type ModelTargetCandidatesResolver = (
+  model: string,
+) => readonly TargetMapping[];
 
 export const defineLaunchAliases = (
   definitions: readonly LaunchAliasDefinition[],
@@ -56,9 +59,36 @@ export const LAUNCH_ALIAS_TARGET_MAPPINGS = defineLaunchAliases([
   { alias: 'claude-sonnet-5-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-luna', effort: 'xhigh' },
 ]);
 
+const CLOUD_CODE_LAUNCH_TARGET: TargetMapping = {
+  providerId: 'gemini',
+  transportProviderId: 'cloud-code',
+  model: 'gemini-3.1-flash-lite',
+};
+
+/**
+ * A launch alias is an explicit user-facing routing contract, not benchmark
+ * equivalence evidence. Keep the historical Codex target first for backwards
+ * compatibility while exposing the owner-ratified Cloud Code target to route
+ * policy ordering and bounded pre-byte fallback.
+ */
+export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
+  Record<string, readonly TargetMapping[]>
+> = Object.fromEntries(Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS).map(
+  ([alias, primary]) => [alias, [primary, CLOUD_CODE_LAUNCH_TARGET]],
+));
+
 export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
   ...DEFAULT_TARGET_MAPPINGS,
   ...LAUNCH_ALIAS_TARGET_MAPPINGS,
+};
+
+export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
+  Record<string, readonly TargetMapping[]>
+> = {
+  ...Object.fromEntries(Object.entries(DEFAULT_TARGET_MAPPINGS).map(
+    ([requestedId, target]) => [requestedId, [target]],
+  )),
+  ...LAUNCH_ALIAS_ROUTE_MAPPINGS,
 };
 
 export const createStaticTargetResolver = (options: {
@@ -67,6 +97,10 @@ export const createStaticTargetResolver = (options: {
 
 export const createCanonicalTargetResolver = (): ModelTargetResolver =>
   createStaticTargetResolver({ mappings: CANONICAL_TARGET_MAPPINGS });
+
+export const createCanonicalTargetCandidatesResolver = (
+): ModelTargetCandidatesResolver => (model) =>
+  CANONICAL_TARGET_ROUTE_MAPPINGS[model] ?? [];
 
 export const describeTargetRoutes = (
   mappings: Readonly<Record<string, TargetMapping>>,
@@ -79,4 +113,11 @@ export const describeTargetRoutes = (
   .sort((left, right) => left.requestedId.localeCompare(right.requestedId));
 
 export const describeCanonicalTargetRoutes = (): readonly TargetRouteDescription[] =>
-  describeTargetRoutes(CANONICAL_TARGET_MAPPINGS);
+  Object.entries(CANONICAL_TARGET_ROUTE_MAPPINGS)
+    .flatMap(([requestedId, targets]) => targets.map((target) => ({
+      requestedId,
+      ...target,
+      kind: requestedId === target.model ? 'faithful' as const : 'alias' as const,
+    })))
+    .sort((left, right) => left.requestedId.localeCompare(right.requestedId)
+      || left.transportProviderId.localeCompare(right.transportProviderId));
