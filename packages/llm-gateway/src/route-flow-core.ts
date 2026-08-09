@@ -63,19 +63,31 @@ export const prepareRouteFlow = async (
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
   const canonical = normalizeGatewayIngress(request.wire, request.body);
-  const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
   const subject = {
     principalRef: auth.cost.principalId,
-    ownerScopeRef: `${auth.cost.tenantId}:${auth.cost.principalId}`,
+    ownerScopeRef: auth.cost.ownerScopeRef ?? `${auth.cost.tenantId}:${auth.cost.principalId}`,
   };
-  const plan = await deps.routePlanner.plan(subject, {
-    ...routeInput,
-    requestedModel: request.model,
-    requiredCapabilities: canonical.requiredCapabilities,
-    workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
-    affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
-  });
-  return { cost: auth.cost, subject, canonical, plan };
+  try {
+    const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
+    const plan = await deps.routePlanner.plan(subject, {
+      ...routeInput,
+      requestedModel: request.model,
+      requiredCapabilities: canonical.requiredCapabilities,
+      workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
+      affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
+    });
+    return { cost: auth.cost, subject, canonical, plan };
+  } catch (error) {
+    await deps.metering.settleRoute({
+      cost: auth.cost,
+      wire: request.wire,
+      requestedModel: request.model,
+      outcome: 'failed',
+      usage: { inputTokens: 0, outputTokens: 0, estimated: true },
+      attempts: [],
+    });
+    throw error;
+  }
 };
 
 export const classifyRouteError = (

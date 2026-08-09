@@ -24,6 +24,8 @@ import type { CostContext } from '../ports/cost-context.js';
 export interface VerifiedPrincipal {
   readonly tenantId: string;
   readonly principalId: string;
+  /** Stable account-ownership scope asserted by the trusted verifier. */
+  readonly ownerScopeRef?: string;
   readonly workspaceId?: string;
   readonly source: string;
   readonly budgetScope?: string;
@@ -133,6 +135,7 @@ export class PersonalPassthroughCallerAuth implements CallerAuthPort {
     const cost: CostContext = {
       tenantId: principal.tenantId,
       principalId: principal.principalId,
+      ...(principal.ownerScopeRef ? { ownerScopeRef: principal.ownerScopeRef } : {}),
       source: principal.source,
       correlationId,
       ...(principal.workspaceId ? { workspaceId: principal.workspaceId } : {}),
