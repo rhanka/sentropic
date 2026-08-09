@@ -10,6 +10,50 @@ import type { StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
 import { CloudCodeProviderAdapter } from './cloud-code-transport.js';
 
+const asSchema = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+
+/** Project JSON Schema onto the subset accepted by the Cloud Code Gemini wire. */
+const cloudCodeSchema = (value: unknown): Record<string, unknown> => {
+  const input = asSchema(value);
+  if (!input) return {};
+  const output: Record<string, unknown> = {};
+  const declaredTypes = Array.isArray(input.type) ? input.type : undefined;
+  const type = declaredTypes?.find((entry) => entry !== 'null') ?? input.type;
+  if (typeof type === 'string') output.type = type;
+  if (declaredTypes?.includes('null')) output.nullable = true;
+  for (const key of ['format', 'title', 'description'] as const) {
+    if (typeof input[key] === 'string') output[key] = input[key];
+  }
+  for (const key of ['nullable', 'minItems', 'maxItems', 'minimum', 'maximum'] as const) {
+    if (typeof input[key] === 'boolean' || typeof input[key] === 'number') {
+      output[key] = input[key];
+    }
+  }
+  if (Array.isArray(input.enum) && input.enum.every((entry) => typeof entry === 'string')) {
+    output.enum = input.enum;
+  } else if (typeof input.const === 'string') {
+    output.enum = [input.const];
+  }
+  if (input.items !== undefined) output.items = cloudCodeSchema(input.items);
+  const properties = asSchema(input.properties);
+  if (properties) {
+    output.properties = Object.fromEntries(Object.entries(properties).map(
+      ([key, schema]) => [key, cloudCodeSchema(schema)],
+    ));
+  }
+  if (Array.isArray(input.required)) {
+    output.required = input.required.filter((entry) => typeof entry === 'string');
+  }
+  const alternatives = Array.isArray(input.anyOf)
+    ? input.anyOf
+    : Array.isArray(input.oneOf) ? input.oneOf : undefined;
+  if (alternatives) output.anyOf = alternatives.map(cloudCodeSchema);
+  return output;
+};
+
 const messageParts = (message: LlmMeshMessage): unknown[] => {
   if (typeof message.content === 'string') return [{ text: message.content }];
   return message.content.map((part) => {
@@ -52,7 +96,7 @@ const providerRequest = (request: GenerateRequest): ProviderRequest => ({
       .flatMap(messageParts),
   },
   ...(request.tools?.length ? { tools: [{ functionDeclarations: request.tools.map((tool) => ({
-    name: tool.name, description: tool.description, parameters: tool.inputSchema,
+    name: tool.name, description: tool.description, parameters: cloudCodeSchema(tool.inputSchema),
   })) }] } : {}),
   generationConfig: {
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),

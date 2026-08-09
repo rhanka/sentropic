@@ -142,6 +142,11 @@ agents are read-only and do not create implementation branches.
   failures settle the route exactly once with zero usage and no attempts.
   Backward-compatible ownership derivation remains for callers that omit the
   new verified field; regressions cover both contracts.
+- `BR73-F8` (`blocking`, resolved 2026-08-09): real Claude Code UAT through
+  Cloud Code reproduced upstream 400 responses for rich Anthropic tool schemas.
+  The Cloud Code runtime now projects schemas onto Google's accepted subset;
+  a deterministic regression covers nested unsupported keywords and the full
+  live 157-tool payload succeeded through the instrumented gateway probe.
 
 ## Plan / todo
 
