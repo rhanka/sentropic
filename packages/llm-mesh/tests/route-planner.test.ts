@@ -126,6 +126,52 @@ describe('opaque route planner', () => {
     expect(retried.diagnostics[0]?.diagnosticAccountRef).toBe('acct_new');
   });
 
+  it('removes suppressed routes before applying the maximum attempt bound', async () => {
+    const directory = new FakeRouteDirectory();
+    const planner = new InMemoryRoutePlanner({ directory });
+    const boundedRequest = {
+      ...request,
+      policyOverride: { maxAttempts: 1 },
+    };
+    const first = await planner.plan(routingSubject(), boundedRequest);
+    await (await planner.prepareAttempt(
+      routingSubject(), first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).recordOutcome({ reason: 'provider-5xx', retryable: true, healthScope: 'route' });
+
+    const fallback = await planner.plan(routingSubject(), boundedRequest);
+
+    expect(fallback.diagnostics).toHaveLength(1);
+    expect(fallback.diagnostics[0]?.diagnosticAccountRef).toBe('acct_old');
+  });
+
+  it('shares new-affinity round-robin and sticky affinity across authenticated sessions', async () => {
+    const directory = new FakeRouteDirectory();
+    const planner = new InMemoryRoutePlanner({ directory });
+    const roundRobin = {
+      ...request,
+      policyOverride: {
+        strategy: { kind: 'round-robin' as const, scope: 'new-affinity' as const },
+      },
+    };
+    const firstSession = routingSubject('session-principal-1', 'owner-a');
+    const secondSession = routingSubject('session-principal-2', 'owner-a');
+    const first = await planner.plan(firstSession, { ...roundRobin, affinityKey: 'affinity-1' });
+    const second = await planner.plan(secondSession, { ...roundRobin, affinityKey: 'affinity-2' });
+
+    expect(first.diagnostics[0]?.diagnosticAccountRef).toBe('acct_new');
+    expect(second.diagnostics[0]?.diagnosticAccountRef).toBe('acct_old');
+
+    await (await planner.prepareAttempt(
+      firstSession, first.planRef, first.candidateRefs[0]!, 'req-1', 0,
+    )).complete();
+    const sticky = await planner.plan(secondSession, {
+      ...roundRobin,
+      affinityKey: 'affinity-1',
+    });
+
+    expect(sticky.diagnostics[0]?.diagnosticAccountRef).toBe('acct_new');
+  });
+
   it('falls back only to a same-account equivalent for a strict affinity', async () => {
     const directory = new FakeRouteDirectory();
     directory.accounts[1] = {

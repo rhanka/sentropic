@@ -9,7 +9,8 @@ import type {
 
 export const routingSubject = (
   principalRef = 'user-a',
-): VerifiedRoutingSubject => ({ principalRef, ownerScopeRef: principalRef });
+  ownerScopeRef = principalRef,
+): VerifiedRoutingSubject => ({ principalRef, ownerScopeRef });
 
 export const routeAccounts = (): EligibleAccountDescriptor[] => [
   {

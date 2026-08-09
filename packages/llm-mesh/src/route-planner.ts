@@ -3,7 +3,7 @@ import { prepareStoredRouteAttempt } from './route-attempt.js';
 import { InMemoryRouteHealth } from './route-health.js';
 import {
   affinityRef, mergeRoutePolicy, RoutePlanError, SequentialIdFactory,
-  subjectRef, type StoredAffinity, type StoredPlan,
+  routingOwnerRef, subjectRef, type StoredAffinity, type StoredPlan,
 } from './route-planner-state.js';
 import { selectRouteCandidates, type RankedRouteCandidate } from './route-selection.js';
 import type {
@@ -61,11 +61,12 @@ export class InMemoryRoutePlanner implements RoutePlanner {
       ? this.affinities.get(affinityRef(subject, input.affinityKey, input.workspaceId))
       : undefined;
     const accounts = await this.options.directory.listEligible(subject);
-    const roundRobinKey = `${subjectRef(subject)}\u001f${input.requestedModel}`;
+    const roundRobinKey = `${routingOwnerRef(subject)}\u001f${input.requestedModel}`;
     let candidates = [...selectRouteCandidates({
       request: input, policy, council: this.council, accounts,
       roundRobinOffset: this.roundRobin.get(roundRobinKey) ?? 0,
       now: this.clock.now(),
+      applyAttemptLimit: false,
     })];
     if (affinity && policy.stickyAccount) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
@@ -87,7 +88,9 @@ export class InMemoryRoutePlanner implements RoutePlanner {
           .slice(0, policy.maxAttempts);
       }
     } else {
-      candidates = candidates.filter((candidate) => !this.health.isSuppressed(candidate));
+      candidates = candidates
+        .filter((candidate) => !this.health.isSuppressed(candidate))
+        .slice(0, policy.maxAttempts);
       this.roundRobin.set(roundRobinKey, (this.roundRobin.get(roundRobinKey) ?? 0) + 1);
     }
     if (candidates.length === 0) throw new RoutePlanError('No eligible route', 'no-route');
