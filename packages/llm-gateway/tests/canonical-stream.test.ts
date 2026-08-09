@@ -37,6 +37,7 @@ const sourceWithCompleteArgumentsAtStart = async function* (): AsyncGenerator<St
     data: {
       toolCallId: 'call-cloud', providerCallId: 'provider-cloud', name: 'Bash',
       argumentsText: '{"command":"pwd"}', arguments: { command: 'pwd' },
+      metadata: { thoughtSignature: 'cloud-signature' },
     },
   };
   yield {
@@ -99,7 +100,12 @@ describe('canonical gateway streams', () => {
 
   it('forwards complete Cloud Code arguments carried by tool_call_start', async () => {
     const anthropic = await collectCompleteArguments('anthropic-messages');
-    expect(JSON.parse(anthropic[2]!.data)).toMatchObject({
+    expect(anthropic.map((frame) => JSON.parse(frame.data)).find((payload) =>
+      payload.delta?.type === 'signature_delta')).toMatchObject({
+      delta: { type: 'signature_delta', signature: 'cloud-signature' },
+    });
+    expect(anthropic.map((frame) => JSON.parse(frame.data)).find((payload) =>
+      payload.delta?.type === 'input_json_delta')).toMatchObject({
       delta: { type: 'input_json_delta', partial_json: '{"command":"pwd"}' },
     });
 

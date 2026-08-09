@@ -77,6 +77,24 @@ const encodeAnthropicStream = async function* (
           : { type: 'thinking_delta', thinking: event.data.delta },
       }));
     } else if (event.type === 'tool_call_start') {
+      const thoughtSignature = typeof event.data.metadata?.thoughtSignature === 'string'
+        ? event.data.metadata.thoughtSignature
+        : undefined;
+      if (thoughtSignature) {
+        const signatureIndex = nextIndex;
+        nextIndex += 1;
+        yield raw(frameAnthropicEvent('content_block_start', {
+          type: 'content_block_start', index: signatureIndex,
+          content_block: { type: 'thinking', thinking: '' },
+        }));
+        yield raw(frameAnthropicEvent('content_block_delta', {
+          type: 'content_block_delta', index: signatureIndex,
+          delta: { type: 'signature_delta', signature: thoughtSignature },
+        }));
+        yield raw(frameAnthropicEvent('content_block_stop', {
+          type: 'content_block_stop', index: signatureIndex,
+        }));
+      }
       const index = nextIndex;
       nextIndex += 1;
       opened.push(index);
