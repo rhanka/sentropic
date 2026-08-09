@@ -55,6 +55,7 @@ export interface EquivalenceExclusion {
 
 export interface ModelEquivalenceCouncil {
   readonly revision: string;
+  readonly expiresAt: string;
   readonly aliases: readonly ModelAlias[];
   readonly groups: readonly ModelEquivalenceGroup[];
   readonly exclusions: readonly EquivalenceExclusion[];
@@ -128,6 +129,7 @@ const aliases = Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS).map(([alias, target
 
 export const DEFAULT_MODEL_EQUIVALENCE_COUNCIL: ModelEquivalenceCouncil = {
   revision: GENERATED_MODEL_COUNCIL_SOURCE.revision,
+  expiresAt: GENERATED_MODEL_COUNCIL_SOURCE.expiresAt,
   aliases,
   groups: [],
   exclusions: GENERATED_MODEL_COUNCIL_SOURCE.excludedModelKeys.map((key) => {
@@ -149,6 +151,11 @@ export const validateEquivalenceCouncil = (
   now: Date = new Date(),
 ): void => {
   const issues: string[] = [];
+  if (!Number.isFinite(Date.parse(council.expiresAt))) {
+    issues.push('council expiresAt must be a valid timestamp');
+  } else if (Date.parse(council.expiresAt) <= now.getTime()) {
+    issues.push(`expired council ${council.revision}`);
+  }
   const profilesByKey = new Map(
     profiles.map((profile) => [`${profile.providerId}:${profile.modelId}`, profile]),
   );

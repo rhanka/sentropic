@@ -115,6 +115,38 @@ describe('route JSON flow', () => {
     expect(JSON.stringify(settlements)).not.toContain('account-0');
   });
 
+  it('falls back and settles when exact-attempt preparation fails', async () => {
+    const settlements: RouteRequestSettlement[] = [];
+    const second = {
+      attemptRef: 'attempt-2',
+      async generate() { return {
+        id: 'response-2', providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+        message: { role: 'assistant' as const, content: 'ok' }, text: 'ok', toolCalls: [],
+        finishReason: 'stop' as const,
+      }; },
+      async stream() { throw new Error('unused'); }, async recordOutcome() {},
+      async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+    } satisfies PreparedRouteAttempt;
+    const planner = routePlanner([second, second]);
+    let preparations = 0;
+    planner.prepareAttempt = async (...args) => {
+      preparations += 1;
+      if (preparations === 1) throw Object.assign(new TypeError('offline'), { code: 'network_error' });
+      return second;
+    };
+
+    await expect(runRouteJsonFlow({
+      config, routePlanner: planner,
+      metering: { settleRoute(value) { settlements.push(value); } },
+    }, request)).resolves.toMatchObject({ status: 200 });
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      outcome: 'success', attempts: [
+        { outcome: 'network-unavailable' }, { outcome: 'success' },
+      ],
+    });
+  });
+
   it('does not try another candidate after a terminal auth failure', async () => {
     let secondCalls = 0;
     const failed = (status: number): PreparedRouteAttempt => ({

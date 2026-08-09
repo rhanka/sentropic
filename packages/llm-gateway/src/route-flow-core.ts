@@ -48,6 +48,11 @@ export interface PreparedRouteFlow {
   readonly plan: RoutePlan;
 }
 
+export const routingSubjectForCost = (cost: CostContext): VerifiedRoutingSubject => ({
+  principalRef: cost.principalId,
+  ownerScopeRef: cost.ownerScopeRef ?? `${cost.tenantId}:${cost.principalId}`,
+});
+
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
 
@@ -63,10 +68,7 @@ export const prepareRouteFlow = async (
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
   const canonical = normalizeGatewayIngress(request.wire, request.body);
-  const subject = {
-    principalRef: auth.cost.principalId,
-    ownerScopeRef: auth.cost.ownerScopeRef ?? `${auth.cost.tenantId}:${auth.cost.principalId}`,
-  };
+  const subject = routingSubjectForCost(auth.cost);
   try {
     const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
     const plan = await deps.routePlanner.plan(subject, {

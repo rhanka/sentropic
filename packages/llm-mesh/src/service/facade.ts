@@ -27,13 +27,23 @@ export interface ProviderRequest {
   generationConfig?: unknown;
   systemInstruction?: unknown;
   tools?: unknown[];
+  toolConfig?: unknown;
+  diagnostics?: readonly {
+    code: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+  }[];
 }
 
 export type ProviderEvent =
   | { kind: 'content'; delta: string }
   | { kind: 'reasoning'; delta: string }
   | { kind: 'tool-call'; id: string; name: string; arguments: unknown }
-  | { kind: 'done'; usage: unknown }
+  | {
+      kind: 'diagnostic'; code: string; message: string;
+      metadata?: Record<string, unknown>;
+    }
+  | { kind: 'done'; usage: unknown; finishReason?: string }
   | {
       kind: 'error'; code: string; message: string;
       statusCode?: number; retryAfterMs?: number;

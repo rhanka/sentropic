@@ -27,6 +27,8 @@ export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'ma
 export interface ReasoningOptions {
   effort?: ReasoningEffort;
   summary?: 'auto' | 'concise' | 'detailed';
+  enabled?: boolean;
+  budgetTokens?: number;
 }
 
 export interface LlmMeshRequestMetadata {
@@ -46,6 +48,7 @@ export interface GenerateRequest {
   auth?: AuthInput | AuthResolver;
   tools?: readonly ToolDefinition[];
   toolChoice?: ToolChoice;
+  parallelToolCalls?: boolean;
   responseFormat?: ResponseFormat;
   reasoning?: ReasoningOptions;
   maxOutputTokens?: number;
