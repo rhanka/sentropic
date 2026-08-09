@@ -104,17 +104,39 @@ export const validateEquivalenceCouncil = (
   now: Date = new Date(),
 ): void => {
   const issues: string[] = [];
+  const profilesByKey = new Map(
+    profiles.map((profile) => [`${profile.providerId}:${profile.modelId}`, profile]),
+  );
   const classified = new Map<string, number>();
   const add = (providerId: string, modelId: string) => {
     const key = `${providerId}:${modelId}`;
     classified.set(key, (classified.get(key) ?? 0) + 1);
   };
-  council.groups.flatMap((group) => group.members)
-    .forEach((member) => add(member.providerId, member.modelId));
+  council.groups.forEach((group) => {
+    if (group.evidence.length === 0) issues.push(`group has no evidence: ${group.id}`);
+    if (Date.parse(group.expiresAt) <= now.getTime()) issues.push(`expired group ${group.id}`);
+    group.members.forEach((member) => {
+      add(member.providerId, member.modelId);
+      const key = `${member.providerId}:${member.modelId}`;
+      const profile = profilesByKey.get(key);
+      if (!profile) issues.push(`unknown council model: ${key}`);
+      for (const requirement of member.requiredCapabilities) {
+        const supported = requirement.startsWith('input:')
+          ? profile?.capabilities.modalities.input.includes(requirement.slice(6) as never)
+          : requirement.startsWith('output:')
+            ? profile?.capabilities.modalities.output.includes(requirement.slice(7) as never)
+            : profile?.capabilities[requirement as keyof ModelProfile['capabilities']] !== undefined;
+        if (!supported) issues.push(`missing capability ${requirement}: ${key}`);
+      }
+    });
+  });
   council.exclusions.forEach((exclusion) => {
     add(exclusion.providerId, exclusion.modelId);
     if (Date.parse(exclusion.expiresAt) <= now.getTime()) {
       issues.push(`expired exclusion ${exclusion.providerId}:${exclusion.modelId}`);
+    }
+    if (!profilesByKey.has(`${exclusion.providerId}:${exclusion.modelId}`)) {
+      issues.push(`unknown excluded model: ${exclusion.providerId}:${exclusion.modelId}`);
     }
   });
   for (const profile of profiles) {
