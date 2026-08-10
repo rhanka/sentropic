@@ -46,21 +46,30 @@ focusRouter.post('/owner-signatures', zValidator('json', ownerSignatureSchema), 
   const user = c.get('user') as AuthUser | undefined;
   if (!user?.workspaceId || !user.authenticatedAt) return c.json({ error: 'Authentication required' }, 401);
 
+  const userEmail = user.email ?? (user as unknown as { email?: string }).email;
+  const ownerSubject = userEmail
+    ? userEmail.startsWith('human:')
+      ? userEmail
+      : `human:${userEmail}`
+    : `human:${user.userId}`;
+
   const body = c.req.valid('json');
   const validation = await failClosedDecisionValidator.validate({
     workspace: user.workspaceId,
     decisionId: body.decision_id,
     userId: user.userId,
+    userEmail: userEmail ?? user.userId,
   });
   if (!validation.authorized) {
-    return c.json({ status: 'not-done', reason: validation.reason ?? 'decision-validation-unavailable' }, 503);
+    const isDeny = validation.reason === 'authorization-denied' || validation.reason === 'not-decision-owner';
+    return c.json({ status: 'not-done', reason: validation.reason ?? 'decision-validation-unavailable' }, isDeny ? 403 : 503);
   }
 
   const owner: AuthenticatedOwnPrincipal = Object.freeze({
     principalId: user.userId,
     canonicalIdentity: Object.freeze({
       issuer: 'sentropic-api-session',
-      subject: user.userId,
+      subject: ownerSubject,
     }),
     authenticatedAt: user.authenticatedAt,
   });
