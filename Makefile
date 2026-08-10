@@ -1925,6 +1925,26 @@ test-ui: up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.
 .PHONY: test-api
 test-api: up-api-test test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security test-api-ai up-api test-api-limit
 
+.PHONY: owner-sign
+owner-sign: ## Sign a decision as owner (DECISION=<id>) (BR-FUSION-EX1)
+	@if [ -z "$(DECISION)" ]; then \
+		echo "❌ DECISION is required (e.g., make owner-sign DECISION=01KX4ZNTAZYSHCY108NJXYNWJ6)"; \
+		exit 1; \
+	fi
+	@echo "▶ Signing decision $(DECISION) as owner..."
+	@idempotency_key="owner-sign-$$(date +%s)"; \
+	res=$$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "$(API_BASE_URL)/api/v1/focus/owner-signatures" \
+		-H "Content-Type: application/json" \
+		-d "{\"decision_id\": \"$(DECISION)\", \"idempotency_key\": \"$$idempotency_key\"}" 2>/dev/null); \
+	status=$$(echo "$$res" | grep "HTTP_STATUS" | cut -d: -f2); \
+	body=$$(echo "$$res" | grep -v "HTTP_STATUS"); \
+	if [ "$$status" = "200" ] || [ "$$status" = "201" ]; then \
+		echo "✅ posé ($$status)"; \
+	else \
+		echo "⛔ refusé ($$status): $$body"; \
+		exit 1; \
+	fi
+
 .PHONY: test-contract
 test-contract:
 	@echo "Contract tests placeholder" && exit 0
