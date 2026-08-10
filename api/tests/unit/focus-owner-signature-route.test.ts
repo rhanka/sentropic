@@ -47,6 +47,7 @@ const authenticatedApp = (role = 'user') => {
       authenticatedAt: '2026-08-08T12:00:00.000Z',
       role,
       workspaceId: 'workspace-from-auth-context',
+      email: 'authenticated-user',
     });
     await next();
   });
@@ -78,7 +79,7 @@ describe('Focus owner-signature route', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       status: 'not-done',
-      reason: 'decision-validation-not-configured',
+      reason: 'decision-not-found',
     });
     expect(createApiFocusLiveSessionMock).not.toHaveBeenCalled();
   });
@@ -103,7 +104,7 @@ describe('Focus owner-signature route', () => {
                   principalId: 'authenticated-user',
                   canonicalIdentity: {
                     issuer: 'sentropic-api-session',
-                    subject: 'authenticated-user',
+                    subject: 'human:authenticated-user',
                   },
                   authenticatedAt: '2026-08-08T12:00:00.000Z',
                 },
@@ -147,7 +148,7 @@ describe('Focus owner-signature route', () => {
     const owner = await capturedDependencies.ownPrincipal.authenticate(capturedRequest);
     expect(owner).toMatchObject({
       principalId: 'authenticated-user',
-      canonicalIdentity: { issuer: 'sentropic-api-session', subject: 'authenticated-user' },
+      canonicalIdentity: { issuer: 'sentropic-api-session', subject: 'human:authenticated-user' },
     });
     expect(await capturedDependencies.relayerProvenance.getRelayerProvenance()).toEqual({
       transport: 'http',
@@ -198,6 +199,7 @@ describe('Focus owner-signature route', () => {
       workspace: 'workspace-from-auth-context',
       decisionId: 'decision-42',
       userId: 'authenticated-user',
+      userEmail: 'authenticated-user',
     });
     expect(isTenantAdminMock).toHaveBeenCalledWith('authenticated-user', 'tenant-from-resolver', 'admin_app');
   });
