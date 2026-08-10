@@ -40,7 +40,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@sentropic/track": "^0.17.0"
+    "@sentropic/track": "^0.91.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
