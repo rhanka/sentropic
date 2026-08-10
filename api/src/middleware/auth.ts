@@ -110,6 +110,8 @@ export async function requireAuth(c: Context, next: Next) {
       authenticatedAt: validated.sessionRecord.createdAt.toISOString(),
       role: session.role,
       workspaceId: workspaceId ?? '',
+      email: validated.session.email ?? null,
+      displayName: validated.session.displayName ?? null,
     });
     
     await next();
