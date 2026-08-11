@@ -35,8 +35,13 @@ interface AccountPublicRecord extends AccountPublic {
 
 // Cloud Code does not currently return a per-account model inventory during
 // enrollment. Advertise only the model proven executable by the live transport
-// contract; explicit account.modelIds may widen this after provider evidence.
-const VERIFIED_CLOUD_CODE_MODEL_IDS = ['gemini-3.1-flash-lite'] as const;
+// contract; explicit account.modelIds may override this after provider evidence.
+const VERIFIED_CLOUD_CODE_MODEL_IDS = [
+  'gemini-3.1-flash-lite',
+  'claude-opus-4-6-thinking',
+  'gemini-3.6-flash',
+  'gemini-3.1-pro',
+] as const;
 
 const supportedModelIdsForAccount = (
   account: AccountTransportAccount,

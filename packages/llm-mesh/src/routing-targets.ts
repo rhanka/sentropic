@@ -59,11 +59,27 @@ export const LAUNCH_ALIAS_TARGET_MAPPINGS = defineLaunchAliases([
   { alias: 'claude-sonnet-5-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-luna', effort: 'xhigh' },
 ]);
 
-const CLOUD_CODE_LAUNCH_TARGET: TargetMapping = {
+const STANDARD_CODEX_ROUTE_MAPPINGS = defineLaunchAliases([
+  { alias: 'claude-opus-5', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra' },
+  { alias: 'claude-opus-4-8', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra' },
+  { alias: 'claude-sonnet-5', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-luna' },
+  { alias: 'claude-sonnet-4-6', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-luna' },
+  { alias: 'claude-fable-5', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol' },
+]);
+
+const cloudCodeLaunchTarget = (
+  requestedId: string,
+  primary: TargetMapping,
+): TargetMapping => ({
   providerId: 'gemini',
   transportProviderId: 'cloud-code',
-  model: 'gemini-3.1-flash-lite',
-};
+  model: requestedId.startsWith('claude-opus-')
+    ? 'claude-opus-4-6-thinking'
+    : requestedId.startsWith('claude-sonnet-')
+      ? 'gemini-3.6-flash'
+      : 'gemini-3.1-pro',
+  ...(primary.effort ? { effort: primary.effort } : {}),
+});
 
 /**
  * A launch alias is an explicit user-facing routing contract, not benchmark
@@ -73,8 +89,11 @@ const CLOUD_CODE_LAUNCH_TARGET: TargetMapping = {
  */
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
-> = Object.fromEntries(Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS).map(
-  ([alias, primary]) => [alias, [primary, CLOUD_CODE_LAUNCH_TARGET]],
+> = Object.fromEntries(Object.entries({
+  ...STANDARD_CODEX_ROUTE_MAPPINGS,
+  ...LAUNCH_ALIAS_TARGET_MAPPINGS,
+}).map(
+  ([alias, primary]) => [alias, [primary, cloudCodeLaunchTarget(alias, primary)]],
 ));
 
 export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
