@@ -49,7 +49,32 @@ describe('canonical model targets', () => {
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.1-flash-lite',
+        model: 'claude-opus-4-6-thinking',
+        effort: 'xhigh',
+      },
+    ]);
+    expect(resolveCandidates('claude-sonnet-4-6')).toEqual([
+      {
+        providerId: 'openai',
+        transportProviderId: 'codex',
+        model: 'gpt-5.6-luna',
+      },
+      {
+        providerId: 'gemini',
+        transportProviderId: 'cloud-code',
+        model: 'gemini-3.6-flash',
+      },
+    ]);
+    expect(resolveCandidates('claude-fable-5')).toEqual([
+      {
+        providerId: 'openai',
+        transportProviderId: 'codex',
+        model: 'gpt-5.6-sol',
+      },
+      {
+        providerId: 'gemini',
+        transportProviderId: 'cloud-code',
+        model: 'gemini-3.1-pro',
       },
     ]);
     expect(resolveCandidates('gpt-5.6-terra')).toEqual([
