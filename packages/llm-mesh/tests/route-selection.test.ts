@@ -72,14 +72,17 @@ describe('route candidate selection', () => {
         diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini',
         transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-3.1-flash-lite'],
+        supportedModelIds: ['claude-opus-4-6-thinking'],
         enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const,
         revision: 'r1',
       },
     ];
     const choose = (first: 'codex' | 'cloud-code') => selectRouteCandidates({
-      request: { requestedModel: 'claude-opus-5-xhigh' },
+      request: {
+        requestedModel: 'claude-opus-5-xhigh',
+        requiredCapabilities: ['tools', 'streaming'],
+      },
       policy: {
         ...DEFAULT_ROUTE_POLICY,
         strategy: {
