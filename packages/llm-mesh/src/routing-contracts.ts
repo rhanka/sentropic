@@ -1,6 +1,7 @@
 import type { CapabilityRequirement } from './equivalence-council.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
 import type { RoutePolicy, RouteSelector } from './routing-policy.js';
+import type { TargetMapping } from './routing-targets.js';
 
 export interface VerifiedRoutingSubject {
   readonly principalRef: string;
@@ -36,6 +37,8 @@ export interface PlannedRouteTarget {
 
 export interface RoutePlanInput {
   readonly requestedModel: string;
+  /** Optional owner-scoped replacement for the library's standard target profile. */
+  readonly targetCandidatesOverride?: readonly TargetMapping[];
   readonly intent?: 'coding' | 'general' | 'reasoning' | 'fast';
   readonly requiredCapabilities?: readonly CapabilityRequirement[];
   readonly affinityKey?: string;

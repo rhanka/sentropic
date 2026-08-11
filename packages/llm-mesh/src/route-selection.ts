@@ -35,14 +35,15 @@ const selectorMatches = (
   && (!selector.diagnosticAccountRef
     || selector.diagnosticAccountRef === candidate.account.diagnosticAccountRef);
 
-const resolveRequestedTargets = (requestedModel: string): readonly {
+const resolveRequestedTargets = (request: RoutePlanInput): readonly {
   providerId: string;
   model: string;
   transportProviderId?: string;
   effort?: string;
   reason: 'exact' | 'alias';
 }[] => {
-  const canonical = resolveCanonicalTargets(requestedModel);
+  const { requestedModel } = request;
+  const canonical = request.targetCandidatesOverride ?? resolveCanonicalTargets(requestedModel);
   if (canonical.length > 0) return canonical.map((target) => ({
     ...target,
     reason: requestedModel === target.model ? 'exact' as const : 'alias' as const,
@@ -64,7 +65,7 @@ export const selectRouteCandidates = (input: {
   readonly now?: Date;
   readonly applyAttemptLimit?: boolean;
 }): readonly RankedRouteCandidate[] => {
-  const resolvedTargets = resolveRequestedTargets(input.request.requestedModel);
+  const resolvedTargets = resolveRequestedTargets(input.request);
   if (resolvedTargets.length === 0) return [];
   const targets: ResolvedRouteTarget[] = resolvedTargets.map((resolved) => ({
     providerId: resolved.providerId,
