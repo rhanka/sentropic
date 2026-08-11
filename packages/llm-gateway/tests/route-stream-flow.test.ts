@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { runRouteStreamFlow } from '../src/route-stream-flow.js';
 import type { RouteRequestSettlement } from '../src/route-flow-core.js';
 import { stubGatewayConfig } from '../src/stubs.js';
+import { parseSse } from '../src/wire.js';
 
 const policy = {
   strategy: { kind: 'last-enrolled' as const }, rules: [], fallbackMode: 'retest-preferred' as const,
@@ -56,6 +57,54 @@ const collect = async (stream: AsyncIterable<{ raw: string }>) => {
 };
 
 describe('route stream flow', () => {
+  it('separates Anthropic compaction usage from provider settlement', async () => {
+    const run = async (imageData: string) => {
+      const settlements: RouteRequestSettlement[] = [];
+      const source = attempt(async function* () {
+        yield { type: 'content_delta', data: { delta: 'ok' } };
+        yield {
+          type: 'done',
+          data: {
+            finishReason: 'stop',
+            usage: { inputTokens: 123, outputTokens: 7, totalTokens: 130 },
+          },
+        };
+      }, []);
+      const body = {
+        model: request.model, stream: true, system: 'system context',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Bonjour 🌍' },
+            { type: 'image', source: { media_type: 'image/png', data: imageData } },
+          ],
+        }],
+        tools: [{
+          name: 'lookup', description: 'Look up a record',
+          input_schema: { type: 'object', properties: { id: { type: 'string' } } },
+        }],
+      };
+      const result = await runRouteStreamFlow({
+        config, routePlanner: plannerFor([source]),
+        metering: { settleRoute(value) { settlements.push(value); } },
+      }, { ...request, wire: 'anthropic-messages', body });
+      return { frames: parseSse(await collect(result.stream)), settlements };
+    };
+
+    const small = await run('AAAA');
+    const large = await run('A'.repeat(100_000));
+    const smallStart = JSON.parse(small.frames[0]!.data);
+    const largeStart = JSON.parse(large.frames[0]!.data);
+    const terminal = JSON.parse(small.frames.at(-2)!.data);
+
+    expect(smallStart.message.usage.input_tokens).toBeGreaterThan(0);
+    expect(largeStart.message.usage.input_tokens).toBe(smallStart.message.usage.input_tokens);
+    expect(terminal.usage).toEqual({ output_tokens: 7 });
+    expect(small.settlements[0]).toMatchObject({
+      usage: { inputTokens: 123, outputTokens: 7, estimated: false },
+    });
+  });
+
   it('falls back before the first visible event and settles once', async () => {
     const firstHooks: string[] = []; const secondHooks: string[] = [];
     const settlements: RouteRequestSettlement[] = [];

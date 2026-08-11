@@ -8,6 +8,7 @@ import {
   type AuthzMode,
   type GatewayConfig,
 } from '../src/index.js';
+import { parseSse } from '../src/wire.js';
 
 const buildApp = () => createGatewayRouter({ config: stubGatewayConfig });
 
@@ -137,5 +138,79 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     // receive a live signal rather than dropping cancellation altogether.
     expect(observedSignal).toBeInstanceOf(AbortSignal);
     expect(observedSignal?.aborted).toBe(false);
+  });
+
+  it('serves Anthropic compaction usage through the real Hono SSE route', async () => {
+    const settlements: unknown[] = [];
+    const config = {
+      ...stubGatewayConfig,
+      callerAuth: { async verify() { return {
+        ok: true,
+        cost: {
+          tenantId: 'tenant-1', principalId: 'user-1', source: 'test',
+          correlationId: 'stream-request-1',
+        },
+      }; } },
+    };
+    const routePlanner: RoutePlanner = {
+      async plan() { return {
+        planRef: 'plan-stream', expiresAt: '2027-01-01T00:00:00Z',
+        candidateRefs: ['candidate-stream'],
+        policy: {
+          strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+          negativeCacheTtlMs: 300_000, maxAttempts: 1, preferSameTransport: true,
+          stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+        },
+        councilRevision: 'fixture',
+        diagnostics: [{
+          candidateRef: 'candidate-stream', diagnosticAccountRef: 'redacted',
+          requestedModel: 'claude-opus-5-high', actualProviderId: 'openai',
+          actualModelId: 'gpt-5.6-terra', actualTransportProviderId: 'codex',
+          reason: 'alias', cacheContinuityRisk: false,
+        }],
+      }; },
+      async prepareAttempt() { return {
+        attemptRef: 'attempt-stream',
+        async generate() { throw new Error('unused'); },
+        async stream() { return { async *[Symbol.asyncIterator]() {
+          yield { type: 'content_delta' as const, data: { delta: 'ok' } };
+          yield {
+            type: 'done' as const,
+            data: {
+              finishReason: 'stop' as const,
+              usage: { inputTokens: 321, outputTokens: 8, totalTokens: 329 },
+            },
+          };
+        } }; },
+        async recordOutcome() {}, async markCommitted() {}, async complete() {},
+        async releaseCancelled() {},
+      }; },
+      describeAffinity() { return null; }, promoteAffinity() { throw new Error('unused'); },
+      rebindAffinity() { throw new Error('unused'); }, resetAffinity() { return false; },
+    };
+    const app = createGatewayRouter({
+      config, routePlanner,
+      routeMetering: { settleRoute(value) { settlements.push(value); } },
+    });
+    const response = await app.request('/v1/messages', {
+      method: 'POST', headers: {
+        authorization: 'Bearer gateway-session', 'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-5-high', stream: true, max_tokens: 100,
+        system: 'Retain the marker BR74.',
+        messages: [{ role: 'user', content: 'Continue after compaction.' }],
+      }),
+    });
+    const frames = parseSse(await response.text());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(JSON.parse(frames[0]!.data).message.usage.input_tokens).toBeGreaterThan(0);
+    expect(JSON.parse(frames.at(-2)!.data).usage).toEqual({ output_tokens: 8 });
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0]).toMatchObject({
+      usage: { inputTokens: 321, outputTokens: 8, estimated: false },
+    });
   });
 });
