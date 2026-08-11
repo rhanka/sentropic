@@ -1,6 +1,6 @@
 # BR-74: Restore Anthropic compaction usage
 
-Status: ACTIVE
+Status: MERGED — DOWNSTREAM H2A RELEASE IN PROGRESS
 Branch: `fix/llm-gateway-compaction-usage`
 Worktree: `/home/antoinefa/src/sentropic/tmp/fix-llm-gateway-compaction-usage`
 Base: `origin/main` at `61bd9231b7f41c22e281f89fd61f5cbe9ee5c005`
