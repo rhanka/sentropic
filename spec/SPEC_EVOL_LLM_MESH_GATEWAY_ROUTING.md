@@ -661,6 +661,30 @@ Terminal without fallback:
   explicitly estimated upstream usage across all attempts; failed zero-usage
   attempts remain operational outcome events.
 
+### 5.5 Anthropic streaming usage and compaction
+
+Anthropic-compatible streaming clients use the input-token count carried by
+the first `message_start` event to track context occupancy and decide when to
+compact. A routed `/v1/messages` stream must therefore emit a non-zero,
+request-derived `message_start.message.usage.input_tokens` for non-empty
+context before consuming the provider stream to completion. Emitting a
+hard-coded zero and disclosing input usage only in the terminal event is not
+wire-compatible: Claude Code can compact repeatedly without recovering space.
+
+When exact upstream input usage is unavailable before response commitment, the
+gateway computes a deterministic bounded estimate from the normalized request.
+It includes system instructions, ordered textual content and tool definitions,
+but does not scale with embedded base64/binary bytes. The estimate must not
+buffer the provider response, make an extra provider call or alter route
+selection. If an adapter can provide exact input usage before commitment, exact
+usage takes precedence.
+
+The terminal Anthropic `message_delta.usage` carries output usage only.
+Provider-reported input/output usage remains authoritative for aggregate
+financial settlement and diagnostics; the first-frame estimate is a
+caller-compatibility signal, not a billing record. OpenAI stream usage is
+unchanged.
+
 ## 6. Compatibility and migration
 
 Canonical target maps, aliases and discovery move from
@@ -763,6 +787,10 @@ models allowed only with fresh evidence, equivalent-account rotation disabled.
 - Cancellation releases without retry or negative-cache health outcome.
 - Caller ownership and cross-user kill switch hold on every attempt.
 - Anthropic/OpenAI error and stream fixtures remain wire-compatible.
+- Anthropic `message_start` reports bounded request-derived input usage
+  before provider completion; terminal `message_delta` reports output only.
+- Long text, Unicode, tools and embedded binary/image data exercise the
+  estimator, while OpenAI usage and provider settlement remain unchanged.
 - Deprecated gateway route exports are identical mesh re-exports.
 - Cost events are not duplicated across attempts.
 - Pre-commit usage from failed attempts is included once in aggregate usage.
