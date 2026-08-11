@@ -103,6 +103,27 @@ describe('route candidate selection', () => {
       .toEqual(['cloud-code', 'codex']);
   });
 
+  it('allows an owner-scoped target profile override without a consumer default table', () => {
+    const candidates = selectRouteCandidates({
+      request: {
+        requestedModel: 'claude-sonnet-4-6',
+        targetCandidatesOverride: [{
+          providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.1-flash-lite',
+        }],
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+        targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+        supportedModelIds: ['gemini-3.1-flash-lite'],
+        enrollmentCompletedAt: '2026-08-02T00:00:00Z', readiness: 'ready', revision: 'r1',
+      }],
+    });
+
+    expect(candidates[0]?.target.modelId).toBe('gemini-3.1-flash-lite');
+  });
+
   it('keeps a bare provider model faithful when another transport is preferred', () => {
     const candidates = selectRouteCandidates({
       request: { requestedModel: 'gpt-5.6-terra' },

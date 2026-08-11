@@ -45,7 +45,7 @@ Provide owner-ratified default Codex and Cloud Code targets for Claude launch mo
   - [x] Record Track item `01KZSK7XKFRKS8R406K4WSBT1K`.
 - [x] **Lot 1 — Standard transport routes**
   - [x] Add Codex and Cloud Code standard targets for Opus, Sonnet, and Fable launch models.
-  - [x] Keep consumer selection configurable through existing route policy overrides.
+  - [x] Allow H2A to replace the standard target candidates through `RoutePlanInput` without owning a default table.
   - [x] Preserve effort and explicit policy override precedence.
   - [x] Extend focused routing and account inventory tests.
   - [x] Lot gate: focused `routing-targets`, `route-selection`, and local account transport tests.
