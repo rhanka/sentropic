@@ -25,7 +25,9 @@ const source = async function* (): AsyncGenerator<StreamEvent> {
 
 const collect = async (wire: 'anthropic-messages' | 'openai-chat-completions') => {
   let text = '';
-  for await (const frame of encodeGatewayStream(wire, 'requested-model', 'response-1', source())) {
+  for await (const frame of encodeGatewayStream(
+    wire, 'requested-model', 'response-1', source(), { anthropicInputTokens: 11 },
+  )) {
     text += frame.raw;
   }
   return parseSse(text);
@@ -71,10 +73,14 @@ describe('canonical gateway streams', () => {
     expect(JSON.parse(frames[6]!.data)).toMatchObject({
       delta: { type: 'input_json_delta', partial_json: '{"id":1}' },
     });
+    expect(JSON.parse(frames[0]!.data)).toMatchObject({
+      message: { usage: { input_tokens: 11, output_tokens: 0 } },
+    });
     expect(JSON.parse(frames.at(-2)!.data)).toMatchObject({
       delta: { stop_reason: 'tool_use' },
-      usage: { input_tokens: 12, output_tokens: 7 },
+      usage: { output_tokens: 7 },
     });
+    expect(JSON.parse(frames.at(-2)!.data).usage).not.toHaveProperty('input_tokens');
     const reasoning = JSON.parse(frames[1]!.data);
     const text = JSON.parse(frames[3]!.data);
     expect(reasoning).toMatchObject({ index: 0, content_block: { type: 'thinking' } });
