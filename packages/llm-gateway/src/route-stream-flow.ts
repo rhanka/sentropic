@@ -1,5 +1,5 @@
 import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
-import { encodeGatewayStream } from './canonical-stream.js';
+import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
 import type { GatewayFlowRequest, GatewayStreamResult, SettleUsage } from './flow.js';
 import {
   aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage,
@@ -113,6 +113,9 @@ export const runRouteStreamFlow = async (
           : prepared.cost.correlationId;
       const encoded = encodeGatewayStream(
         request.wire, diagnostic.actualModelId, responseId, tracked,
+        request.wire === 'anthropic-messages'
+          ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) }
+          : undefined,
       );
       return { stream: (async function* () {
         try { yield* encoded; }
