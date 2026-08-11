@@ -1,6 +1,6 @@
 # BR-73: LLM mesh/gateway consumer-neutral routing
 
-Status: ACTIVE — post-merge UAT corrective phase
+Status: DONE — PR #529 and corrective PR #530 merged; packages published
 Branch: `fix/llm-mesh-alias-transport-preference`
 Worktree: `/tmp/sentropic-br73-final`
 Base: `origin/main` at `9d67d60f832ca4ff6f12ac8a88ff9cd798033c15`
@@ -106,7 +106,7 @@ knowledge.
 - [x] Preserve bare provider model fidelity and the evidence-gated council.
 - [x] Expose multi-transport candidates only for explicit suffixed aliases.
 - [x] Verify one real alias executes through Cloud Code first and Codex first.
-- [ ] Obtain one exact-head adversarial review, merge through CI and publish.
+- [x] Obtain one exact-head adversarial review, merge through CI and publish.
 
 ## Environment and agent slots
 
