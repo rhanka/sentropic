@@ -1,9 +1,10 @@
-import type { StreamEvent } from '@sentropic/llm-mesh';
+import type { GenerateRequest, MessageContent, StreamEvent } from '@sentropic/llm-mesh';
 import type { GatewayDispatchStreamEvent, GatewayWire } from './ports/dispatch.js';
 import { frameAnthropicEvent, frameOpenAiChunk, OPENAI_DONE } from './wire.js';
 
-const anthropicUsage = (usage: Extract<StreamEvent, { type: 'done' }>['data']['usage']) => ({
-  input_tokens: usage?.inputTokens ?? 0,
+const anthropicOutputUsage = (
+  usage: Extract<StreamEvent, { type: 'done' }>['data']['usage'],
+) => ({
   output_tokens: usage?.outputTokens ?? 0,
 });
 
@@ -24,19 +25,87 @@ const anthropicStopReason = (reason: Extract<StreamEvent, { type: 'done' }>['dat
 
 const raw = (value: string): GatewayDispatchStreamEvent => ({ raw: value });
 
+const projectValue = (value: unknown, key = ''): unknown => {
+  if (typeof value === 'string') {
+    if (/^(data|base64|blob|bytes)$/i.test(key) || value.startsWith('data:')) return '[binary]';
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((item) => projectValue(item));
+  if (value && typeof value === 'object') return Object.fromEntries(
+    Object.entries(value).map(([entryKey, entryValue]) =>
+      [entryKey, projectValue(entryValue, entryKey)]),
+  );
+  return value;
+};
+
+const projectContent = (content: MessageContent) => typeof content === 'string'
+  ? content
+  : content.map((part) => part.type === 'text'
+    ? { type: part.type, text: part.text }
+    : part.type === 'reasoning'
+      ? {
+        type: part.type, text: part.text,
+        ...(part.signature ? { signature: '[signature]' } : {}),
+        ...(part.redacted ? { redacted: true } : {}),
+      }
+      : {
+        type: part.type,
+        ...(part.mediaType ? { mediaType: part.mediaType } : {}),
+        ...(part.url ? { url: projectValue(part.url) } : {}),
+        ...(part.type === 'file' && part.filename ? { filename: part.filename } : {}),
+        ...(part.data ? { data: '[binary]' } : {}),
+      });
+
+export const estimateAnthropicInputTokens = (request: GenerateRequest): number => {
+  const messages = request.messages.map((message) => ({
+    role: message.role,
+    content: projectContent(message.content),
+    ...('toolCalls' in message && message.toolCalls ? {
+      toolCalls: message.toolCalls.map((call) => ({
+        name: call.name,
+        arguments: projectValue(call.arguments ?? call.argumentsText),
+      })),
+    } : {}),
+    ...('toolResult' in message ? {
+      toolResult: {
+        name: message.toolResult.name,
+        content: message.toolResult.content?.map((part) => projectValue(part)),
+        ...(!message.toolResult.content
+          ? { output: projectValue(message.toolResult.output) }
+          : {}),
+      },
+    } : {}),
+  }));
+  const tools = request.tools?.map((tool) => ({
+    type: tool.type, name: tool.name, description: tool.description,
+    inputSchema: projectValue(tool.inputSchema),
+  }));
+  const bytes = new TextEncoder().encode(JSON.stringify({ messages, tools })).byteLength;
+  return Math.max(1, Math.ceil(bytes / 4));
+};
+
+export interface GatewayStreamUsageHints {
+  readonly anthropicInputTokens?: number;
+}
+
 export const encodeGatewayStream = (
   wire: GatewayWire,
   requestedModel: string,
   responseId: string,
   events: AsyncIterable<StreamEvent>,
+  usageHints?: GatewayStreamUsageHints,
 ): AsyncGenerator<GatewayDispatchStreamEvent, void, unknown> => wire === 'anthropic-messages'
-  ? encodeAnthropicStream(requestedModel, responseId, events)
+  ? encodeAnthropicStream(
+    requestedModel, responseId, events,
+    Math.max(0, Math.floor(usageHints?.anthropicInputTokens ?? 0)),
+  )
   : encodeOpenAiStream(requestedModel, responseId, events);
 
 const encodeAnthropicStream = async function* (
   model: string,
   responseId: string,
   events: AsyncIterable<StreamEvent>,
+  inputTokens: number,
 ): AsyncGenerator<GatewayDispatchStreamEvent> {
   const opened: number[] = [];
   const textIndexes = new Map<number, number>();
@@ -48,7 +117,7 @@ const encodeAnthropicStream = async function* (
     type: 'message_start', message: {
       id: responseId, type: 'message', role: 'assistant', model,
       content: [], stop_reason: null, stop_sequence: null,
-      usage: { input_tokens: 0, output_tokens: 0 },
+      usage: { input_tokens: inputTokens, output_tokens: 0 },
     },
   }));
   for await (const event of events) {
@@ -130,7 +199,7 @@ const encodeAnthropicStream = async function* (
       yield raw(frameAnthropicEvent('message_delta', {
         type: 'message_delta',
         delta: { stop_reason: anthropicStopReason(event.data.finishReason), stop_sequence: null },
-        usage: anthropicUsage(event.data.usage),
+        usage: anthropicOutputUsage(event.data.usage),
       }));
       yield raw(frameAnthropicEvent('message_stop', { type: 'message_stop' }));
     }
