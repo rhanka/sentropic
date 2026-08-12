@@ -124,6 +124,37 @@ describe('route candidate selection', () => {
     expect(candidates[0]?.target.modelId).toBe('gemini-3.1-flash-lite');
   });
 
+  it('preserves an enrolled faithful Claude Code route for bare Claude models', () => {
+    const candidates = selectRouteCandidates({
+      request: { requestedModel: 'claude-opus-5', requiredCapabilities: ['tools', 'streaming'] },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [
+        {
+          accountRef: 'codex', diagnosticAccountRef: 'codex-redacted',
+          targetProviderId: 'openai', transportProviderId: 'codex',
+          supportedModelIds: ['gpt-5.6-terra'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'cloud', diagnosticAccountRef: 'cloud-redacted',
+          targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+          supportedModelIds: ['claude-opus-4-6-thinking'],
+          enrollmentCompletedAt: '2026-08-02T00:00:00Z', readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'claude', diagnosticAccountRef: 'claude-redacted',
+          targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+          supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+      ],
+    });
+
+    expect(candidates.map((candidate) => candidate.target.transportProviderId))
+      .toEqual(['claude-code', 'cloud-code', 'codex']);
+  });
+
   it('keeps a bare provider model faithful when another transport is preferred', () => {
     const candidates = selectRouteCandidates({
       request: { requestedModel: 'gpt-5.6-terra' },
