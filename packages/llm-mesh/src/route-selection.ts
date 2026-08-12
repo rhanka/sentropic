@@ -2,7 +2,9 @@ import { modelProfiles, type ModelProfile } from './catalog.js';
 import { modelSupportsCapability, type ModelEquivalenceCouncil } from './equivalence-council.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
-import { createCanonicalTargetCandidatesResolver } from './routing-targets.js';
+import {
+  createCanonicalTargetCandidatesResolver, resolveTargetCapabilitySource,
+} from './routing-targets.js';
 export interface RankedRouteCandidate {
   readonly account: EligibleAccountDescriptor;
   readonly target: PlannedRouteTarget;
@@ -35,14 +37,15 @@ const selectorMatches = (
   && (!selector.diagnosticAccountRef
     || selector.diagnosticAccountRef === candidate.account.diagnosticAccountRef);
 
-const resolveRequestedTargets = (requestedModel: string): readonly {
+const resolveRequestedTargets = (request: RoutePlanInput): readonly {
   providerId: string;
   model: string;
   transportProviderId?: string;
   effort?: string;
   reason: 'exact' | 'alias';
 }[] => {
-  const canonical = resolveCanonicalTargets(requestedModel);
+  const { requestedModel } = request;
+  const canonical = request.targetCandidatesOverride ?? resolveCanonicalTargets(requestedModel);
   if (canonical.length > 0) return canonical.map((target) => ({
     ...target,
     reason: requestedModel === target.model ? 'exact' as const : 'alias' as const,
@@ -64,7 +67,7 @@ export const selectRouteCandidates = (input: {
   readonly now?: Date;
   readonly applyAttemptLimit?: boolean;
 }): readonly RankedRouteCandidate[] => {
-  const resolvedTargets = resolveRequestedTargets(input.request.requestedModel);
+  const resolvedTargets = resolveRequestedTargets(input.request);
   if (resolvedTargets.length === 0) return [];
   const targets: ResolvedRouteTarget[] = resolvedTargets.map((resolved) => ({
     providerId: resolved.providerId,
@@ -100,8 +103,14 @@ export const selectRouteCandidates = (input: {
   }
 
   let candidates = targets.flatMap((target) => {
+    const capabilitySource = resolveTargetCapabilitySource({
+      providerId: target.providerId,
+      transportProviderId: target.transportProviderId ?? '',
+      model: target.modelId,
+    });
     const targetProfile = modelProfiles.find((profile) =>
-      profile.providerId === target.providerId && profile.modelId === target.modelId);
+      profile.providerId === capabilitySource.providerId
+      && profile.modelId === capabilitySource.model);
     if (!supportsCapabilities(targetProfile, input.request.requiredCapabilities)) return [];
     return input.accounts
       .filter((account) => account.readiness === 'ready'

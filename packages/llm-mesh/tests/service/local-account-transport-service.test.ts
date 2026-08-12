@@ -144,7 +144,12 @@ describe('LocalAccountTransportService', () => {
       principalRef: 'session-a', ownerScopeRef: 'owner-a',
     });
 
-    expect(accounts[0]?.supportedModelIds).toEqual(['gemini-3.1-flash-lite']);
+    expect(accounts[0]?.supportedModelIds).toEqual([
+      'gemini-3.1-flash-lite',
+      'claude-opus-4-6-thinking',
+      'gemini-3.6-flash',
+      'gemini-3.1-pro',
+    ]);
     expect(accounts[0]?.supportedModelIds).not.toContain('gemini-3.5-flash');
   });
 
