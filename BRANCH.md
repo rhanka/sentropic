@@ -29,6 +29,7 @@ Provide owner-ratified default Codex and Cloud Code targets for Claude launch mo
 
 ## Feedback Loop
 - `attention`: H2A integration #215 is blocked until this package exposes the standard routes; candidate SHA must be sent before merge.
+- `acknowledge`: a read-only GPT-5.6 Sol xhigh minimization review removed global catalog/council fallout and preserved faithful Claude Code routes.
 
 ## AI Flaky tests
 - No AI or live-provider test is part of this patch. Any nondeterministic failure remains blocking unless explicitly accepted by the owner.
@@ -53,7 +54,7 @@ Provide owner-ratified default Codex and Cloud Code targets for Claude launch mo
   - [x] Complete a minimum-change review; no specification edit is required for this data-only correction.
   - [x] Run `make check-llm-model-equivalences ENV=test-llm-standard-routes`.
   - [x] Run `make typecheck-llm-mesh ENV=test-llm-standard-routes`.
-  - [x] Run full `make test-llm-mesh ENV=test-llm-standard-routes` (142 tests).
+  - [x] Run full `make test-llm-mesh ENV=test-llm-standard-routes` (144 tests).
   - [x] Run `make build-llm-mesh ENV=test-llm-standard-routes` via the pack gate.
   - [x] Run `make pack-llm-mesh ENV=test-llm-standard-routes`.
   - [x] Verify npm registry `0.15.0` and bump `@sentropic/llm-mesh` to `0.15.1`.
