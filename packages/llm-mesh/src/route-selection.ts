@@ -2,7 +2,9 @@ import { modelProfiles, type ModelProfile } from './catalog.js';
 import { modelSupportsCapability, type ModelEquivalenceCouncil } from './equivalence-council.js';
 import type { EligibleAccountDescriptor, PlannedRouteTarget, RoutePlanInput } from './routing-contracts.js';
 import { resolveRouteStrategy, type RoutePolicy, type RouteSelector } from './routing-policy.js';
-import { createCanonicalTargetCandidatesResolver } from './routing-targets.js';
+import {
+  createCanonicalTargetCandidatesResolver, resolveTargetCapabilitySource,
+} from './routing-targets.js';
 export interface RankedRouteCandidate {
   readonly account: EligibleAccountDescriptor;
   readonly target: PlannedRouteTarget;
@@ -101,8 +103,14 @@ export const selectRouteCandidates = (input: {
   }
 
   let candidates = targets.flatMap((target) => {
+    const capabilitySource = resolveTargetCapabilitySource({
+      providerId: target.providerId,
+      transportProviderId: target.transportProviderId ?? '',
+      model: target.modelId,
+    });
     const targetProfile = modelProfiles.find((profile) =>
-      profile.providerId === target.providerId && profile.modelId === target.modelId);
+      profile.providerId === capabilitySource.providerId
+      && profile.modelId === capabilitySource.model);
     if (!supportsCapabilities(targetProfile, input.request.requiredCapabilities)) return [];
     return input.accounts
       .filter((account) => account.readiness === 'ready'

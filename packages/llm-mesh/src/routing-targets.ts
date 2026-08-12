@@ -67,19 +67,47 @@ const STANDARD_CODEX_ROUTE_MAPPINGS = defineLaunchAliases([
   { alias: 'claude-fable-5', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol' },
 ]);
 
+const CLOUD_CODE_MODEL_BY_REQUESTED_ID: Readonly<Record<string, string>> = {
+  'claude-opus-5': 'claude-opus-4-6-thinking',
+  'claude-opus-5-high': 'claude-opus-4-6-thinking',
+  'claude-opus-5-xhigh': 'claude-opus-4-6-thinking',
+  'claude-opus-4-8': 'claude-opus-4-6-thinking',
+  'claude-opus-4-8-xhigh': 'claude-opus-4-6-thinking',
+  'claude-sonnet-5': 'gemini-3.6-flash',
+  'claude-sonnet-5-xhigh': 'gemini-3.6-flash',
+  'claude-sonnet-4-6': 'gemini-3.6-flash',
+  'claude-fable-5': 'gemini-3.1-pro',
+  'claude-fable-5-high': 'gemini-3.1-pro',
+  'claude-fable-5-xhigh': 'gemini-3.1-pro',
+  'claude-fable-5-max': 'gemini-3.1-pro',
+};
+
 const cloudCodeLaunchTarget = (
   requestedId: string,
   primary: TargetMapping,
 ): TargetMapping => ({
   providerId: 'gemini',
   transportProviderId: 'cloud-code',
-  model: requestedId.startsWith('claude-opus-')
-    ? 'claude-opus-4-6-thinking'
-    : requestedId.startsWith('claude-sonnet-')
-      ? 'gemini-3.6-flash'
-      : 'gemini-3.1-pro',
+  model: CLOUD_CODE_MODEL_BY_REQUESTED_ID[requestedId]!,
   ...(primary.effort ? { effort: primary.effort } : {}),
 });
+
+const CLOUD_CODE_CAPABILITY_SOURCE_BY_MODEL: Readonly<Record<string, TargetMapping>> = {
+  'claude-opus-4-6-thinking': {
+    providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-opus-4-8',
+  },
+  'gemini-3.6-flash': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.5-flash',
+  },
+  'gemini-3.1-pro': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.5-flash',
+  },
+};
+
+export const resolveTargetCapabilitySource = (target: TargetMapping): TargetMapping =>
+  target.transportProviderId === 'cloud-code'
+    ? CLOUD_CODE_CAPABILITY_SOURCE_BY_MODEL[target.model] ?? target
+    : target;
 
 /**
  * A launch alias is an explicit user-facing routing contract, not benchmark
@@ -107,7 +135,14 @@ export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
   ...Object.fromEntries(Object.entries(DEFAULT_TARGET_MAPPINGS).map(
     ([requestedId, target]) => [requestedId, [target]],
   )),
-  ...LAUNCH_ALIAS_ROUTE_MAPPINGS,
+  ...Object.fromEntries(Object.entries(LAUNCH_ALIAS_ROUTE_MAPPINGS).map(
+    ([requestedId, targets]) => [
+      requestedId,
+      DEFAULT_TARGET_MAPPINGS[requestedId]
+        ? [DEFAULT_TARGET_MAPPINGS[requestedId], ...targets]
+        : targets,
+    ],
+  )),
 };
 
 export const createStaticTargetResolver = (options: {
