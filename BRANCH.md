@@ -14,6 +14,7 @@ Provide owner-ratified default Codex and Cloud Code targets for Claude launch mo
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/llm-mesh/**`
+  - `packages/llm-gateway/tests/target.test.ts` (`BRPATCH-EX1`, test-only)
   - `scripts/llm-model-equivalences/**`
   - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -30,6 +31,7 @@ Provide owner-ratified default Codex and Cloud Code targets for Claude launch mo
 ## Feedback Loop
 - `attention`: H2A integration #215 is blocked until this package exposes the standard routes; candidate SHA must be sent before merge.
 - `acknowledge`: a read-only GPT-5.6 Sol xhigh minimization review removed global catalog/council fallout and preserved faithful Claude Code routes.
+- `BRPATCH-EX1`: update the gateway's read-only canonical-route expectation after CI exposed the intentionally removed Flash Lite alias; test-only impact, rollback with the route-table change.
 
 ## AI Flaky tests
 - No AI or live-provider test is part of this patch. Any nondeterministic failure remains blocking unless explicitly accepted by the owner.
