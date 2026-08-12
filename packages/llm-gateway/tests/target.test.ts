@@ -150,12 +150,13 @@ describe('describeTargetRoutes (discovery)', () => {
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.1-flash-lite',
+        model: 'claude-opus-4-6-thinking',
+        effort: 'xhigh',
       },
     ]);
     expect(describeCanonicalTargetRoutes()).toHaveLength(
-      Object.keys(DEFAULT_TARGET_MAPPINGS).length
-        + (2 * Object.keys(LAUNCH_ALIAS_TARGET_MAPPINGS).length),
+      Object.values(CANONICAL_TARGET_ROUTE_MAPPINGS)
+        .reduce((total, targets) => total + targets.length, 0),
     );
 
     const resolve = createCanonicalTargetResolver();

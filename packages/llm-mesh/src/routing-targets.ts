@@ -49,20 +49,43 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   },
 };
 
-export const LAUNCH_ALIAS_TARGET_MAPPINGS = defineLaunchAliases([
-  { alias: 'claude-opus-5-high', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra', effort: 'high' },
-  { alias: 'claude-opus-5-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra', effort: 'xhigh' },
-  { alias: 'claude-opus-4-8-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra', effort: 'xhigh' },
-  { alias: 'claude-fable-5-high', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'high' },
-  { alias: 'claude-fable-5-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'xhigh' },
-  { alias: 'claude-fable-5-max', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'max' },
-  { alias: 'claude-sonnet-5-xhigh', providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-luna', effort: 'xhigh' },
-]);
+type StandardRouteDefinition = readonly [string, string, string, string?];
+const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
+  ['claude-opus-5', 'gpt-5.6-terra', 'claude-opus-4-6-thinking'],
+  ['claude-opus-5-high', 'gpt-5.6-terra', 'claude-opus-4-6-thinking', 'high'],
+  ['claude-opus-5-xhigh', 'gpt-5.6-terra', 'claude-opus-4-6-thinking', 'xhigh'],
+  ['claude-opus-4-8', 'gpt-5.6-terra', 'claude-opus-4-6-thinking'],
+  ['claude-opus-4-8-xhigh', 'gpt-5.6-terra', 'claude-opus-4-6-thinking', 'xhigh'],
+  ['claude-sonnet-5', 'gpt-5.6-luna', 'gemini-3.6-flash'],
+  ['claude-sonnet-5-xhigh', 'gpt-5.6-luna', 'gemini-3.6-flash', 'xhigh'],
+  ['claude-sonnet-4-6', 'gpt-5.6-luna', 'gemini-3.6-flash'],
+  ['claude-fable-5', 'gpt-5.6-sol', 'gemini-3.1-pro'],
+  ['claude-fable-5-high', 'gpt-5.6-sol', 'gemini-3.1-pro', 'high'],
+  ['claude-fable-5-xhigh', 'gpt-5.6-sol', 'gemini-3.1-pro', 'xhigh'],
+  ['claude-fable-5-max', 'gpt-5.6-sol', 'gemini-3.1-pro', 'max'],
+];
+const codexTarget = (model: string, effort?: string): TargetMapping => ({
+  providerId: 'openai', transportProviderId: 'codex', model,
+  ...(effort ? { effort } : {}),
+});
 
-const CLOUD_CODE_LAUNCH_TARGET: TargetMapping = {
-  providerId: 'gemini',
-  transportProviderId: 'cloud-code',
-  model: 'gemini-3.1-flash-lite',
+export const LAUNCH_ALIAS_TARGET_MAPPINGS = Object.fromEntries(
+  STANDARD_ROUTE_DEFINITIONS.filter(([, , , effort]) => effort)
+    .map(([requestedId, model, , effort]) => [requestedId, codexTarget(model, effort)]),
+);
+
+const CLOUD_CODE_CAPABILITY_SOURCE_BY_MODEL: Readonly<
+  Record<string, readonly [string, string]>
+> = {
+  'claude-opus-4-6-thinking': ['anthropic', 'claude-opus-4-8'],
+  'gemini-3.6-flash': ['gemini', 'gemini-3.5-flash'],
+  'gemini-3.1-pro': ['gemini', 'gemini-3.5-flash'],
+};
+
+export const resolveTargetCapabilitySource = (target: TargetMapping): TargetMapping => {
+  const source = target.transportProviderId === 'cloud-code'
+    ? CLOUD_CODE_CAPABILITY_SOURCE_BY_MODEL[target.model] : undefined;
+  return source ? { ...target, providerId: source[0], model: source[1] } : target;
 };
 
 /**
@@ -73,8 +96,14 @@ const CLOUD_CODE_LAUNCH_TARGET: TargetMapping = {
  */
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
-> = Object.fromEntries(Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS).map(
-  ([alias, primary]) => [alias, [primary, CLOUD_CODE_LAUNCH_TARGET]],
+> = Object.fromEntries(STANDARD_ROUTE_DEFINITIONS.map(
+  ([requestedId, codexModel, cloudModel, effort]) => [requestedId, [
+    codexTarget(codexModel, effort),
+    {
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel,
+      ...(effort ? { effort } : {}),
+    },
+  ]],
 ));
 
 export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
@@ -88,7 +117,12 @@ export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
   ...Object.fromEntries(Object.entries(DEFAULT_TARGET_MAPPINGS).map(
     ([requestedId, target]) => [requestedId, [target]],
   )),
-  ...LAUNCH_ALIAS_ROUTE_MAPPINGS,
+  ...Object.fromEntries(Object.entries(LAUNCH_ALIAS_ROUTE_MAPPINGS).map(
+    ([requestedId, targets]) => [requestedId, [
+      ...(DEFAULT_TARGET_MAPPINGS[requestedId] ? [DEFAULT_TARGET_MAPPINGS[requestedId]!] : []),
+      ...targets,
+    ]],
+  )),
 };
 
 export const createStaticTargetResolver = (options: {

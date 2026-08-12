@@ -72,14 +72,17 @@ describe('route candidate selection', () => {
         diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini',
         transportProviderId: 'cloud-code',
-        supportedModelIds: ['gemini-3.1-flash-lite'],
+        supportedModelIds: ['claude-opus-4-6-thinking'],
         enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const,
         revision: 'r1',
       },
     ];
     const choose = (first: 'codex' | 'cloud-code') => selectRouteCandidates({
-      request: { requestedModel: 'claude-opus-5-xhigh' },
+      request: {
+        requestedModel: 'claude-opus-5-xhigh',
+        requiredCapabilities: ['tools', 'streaming'],
+      },
       policy: {
         ...DEFAULT_ROUTE_POLICY,
         strategy: {
@@ -98,6 +101,27 @@ describe('route candidate selection', () => {
       .toEqual(['codex', 'cloud-code']);
     expect(choose('cloud-code').map((candidate) => candidate.target.transportProviderId))
       .toEqual(['cloud-code', 'codex']);
+  });
+
+  it('allows an owner-scoped target profile override without a consumer default table', () => {
+    const candidates = selectRouteCandidates({
+      request: {
+        requestedModel: 'claude-sonnet-4-6',
+        targetCandidatesOverride: [{
+          providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.1-flash-lite',
+        }],
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+        targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+        supportedModelIds: ['gemini-3.1-flash-lite'],
+        enrollmentCompletedAt: '2026-08-02T00:00:00Z', readiness: 'ready', revision: 'r1',
+      }],
+    });
+
+    expect(candidates[0]?.target.modelId).toBe('gemini-3.1-flash-lite');
   });
 
   it('keeps a bare provider model faithful when another transport is preferred', () => {
