@@ -3,6 +3,7 @@ import {
   createCanonicalTargetCandidatesResolver,
   createCanonicalTargetResolver,
   describeCanonicalTargetRoutes,
+  LAUNCH_ALIAS_TARGET_MAPPINGS,
 } from '../src/routing-targets.js';
 
 describe('canonical model targets', () => {
@@ -67,6 +68,11 @@ describe('canonical model targets', () => {
     ]);
     expect(resolveCandidates('claude-fable-5')).toEqual([
       {
+        providerId: 'anthropic',
+        transportProviderId: 'claude-code',
+        model: 'claude-fable-5',
+      },
+      {
         providerId: 'openai',
         transportProviderId: 'codex',
         model: 'gpt-5.6-sol',
@@ -84,6 +90,15 @@ describe('canonical model targets', () => {
         model: 'gpt-5.6-terra',
       },
     ]);
+  });
+
+  it('preserves effort and never uses Flash Lite for standard aliases', () => {
+    for (const [alias, codexTarget] of Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS)) {
+      const candidates = resolveCandidates(alias);
+      expect(candidates[1]?.effort).toBe(codexTarget.effort);
+      expect(candidates.map((candidate) => candidate.model))
+        .not.toContain('gemini-3.1-flash-lite');
+    }
   });
 
   it('describes routes without account or credential fields', () => {
