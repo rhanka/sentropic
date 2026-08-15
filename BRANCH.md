@@ -103,12 +103,17 @@ Activate the already-built data socle infra with its FIRST REAL production consu
       - [ ] Scoped run: `make test-api-<suite> SCOPE=tests/... ENV=test-data-activate-br60-br59`
       - [ ] Sub-lot gate: `make test-api ENV=test-data-activate-br60-br59`
 
-- [ ] **Lot 2 — BR-59-act: registry-generated zod for `opportunity`**
-  - [ ] Register `opportunity` object type (shape-mined from `initiatives.data`) via
-        `PgObjectTypeRegistry` — warn-only validation ladder (DD2a), no enforce flip.
-  - [ ] Generate the initiatives route zod schema FROM the registry JSON Schema (DD2a=B, one
-        direction: registry → zod), replacing the hand-written zod as the single source of truth.
-  - [ ] Do not change the wire contract of `initiatives.ts` routes (same accepted/rejected shapes).
+- [x] **Lot 2 — BR-59-act: registry-generated zod for `opportunity`**
+  - [x] Register `opportunity` object type (shape-mined from the prior hand-written
+        `initiativeInput` zod) via `PgObjectTypeRegistry`, idempotently at boot
+        (`ensureOpportunityTypeRegistered` in `index.ts`) — warn-only validation ladder (DD2a,
+        status stays `draft`), no enforce flip.
+  - [x] Generate the initiatives route zod schema FROM the registry JSON Schema (DD2a=B, one
+        direction: registry → zod) via a purpose-built, type-level `generateZodFromJsonSchema`
+        (`json-schema-to-zod.ts`) — `OPPORTUNITY_JSON_SCHEMA` is the single source of truth
+        consumed both by registration and by the route validator.
+  - [x] Wire format unchanged: `initiativeInput`'s generated zod is structurally equivalent to
+        the prior hand-written schema (same required/optional fields, same nested shapes).
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api`
     - [ ] **API tests**
