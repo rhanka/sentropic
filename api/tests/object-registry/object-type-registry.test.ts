@@ -12,6 +12,8 @@ import {
   ObjectTypeValidationError,
   ObjectTypeNotFoundError,
 } from '../../src/services/object-registry';
+import { ensureOpportunityTypeRegistered, OPPORTUNITY_JSON_SCHEMA } from '../../src/services/object-registry/opportunity-type';
+import { generateZodFromJsonSchema } from '../../src/services/object-registry/json-schema-to-zod';
 import {
   isObjectEnvelope,
   isObjectTypeDefinition,
@@ -115,5 +117,45 @@ describe('ObjectTypeRegistry (BR-59)', () => {
 
   it('update on a missing type throws ObjectTypeNotFoundError', async () => {
     await expect(objectTypeRegistry.deprecate(`${TEST_PREFIX}ghost`)).rejects.toBeInstanceOf(ObjectTypeNotFoundError);
+  });
+});
+
+describe('opportunity object type (BR-59-act)', () => {
+  afterEach(async () => {
+    await db.run(sql`DELETE FROM control.object_type_definitions WHERE object_type = 'opportunity' AND tenant_id IS NULL`);
+  });
+
+  it('ensureOpportunityTypeRegistered registers the type, warn-only (draft) status', async () => {
+    await ensureOpportunityTypeRegistered(objectTypeRegistry);
+    const def = await objectTypeRegistry.get('opportunity', null);
+    expect(def).not.toBeNull();
+    expect(def!.status).toBe('draft');
+    expect(def!.declaredQueryableFields).toContain('name');
+  });
+
+  it('ensureOpportunityTypeRegistered is idempotent (no-op if already registered)', async () => {
+    await ensureOpportunityTypeRegistered(objectTypeRegistry);
+    await expect(ensureOpportunityTypeRegistered(objectTypeRegistry)).resolves.toBeUndefined();
+    const all = await objectTypeRegistry.list(null);
+    expect(all.filter((d) => d.objectType === 'opportunity')).toHaveLength(1);
+  });
+
+  it('generateZodFromJsonSchema(OPPORTUNITY_JSON_SCHEMA) enforces the same required fields as the prior hand-written schema', () => {
+    const schema = generateZodFromJsonSchema(OPPORTUNITY_JSON_SCHEMA);
+
+    expect(schema.safeParse({ folderId: 'f_1', name: 'Opportunity A' }).success).toBe(true);
+    expect(schema.safeParse({ name: 'Missing folderId' }).success).toBe(false);
+    expect(schema.safeParse({ folderId: 'f_1' }).success).toBe(false); // missing required name
+    expect(schema.safeParse({ folderId: 'f_1', name: '' }).success).toBe(false); // name minLength 1
+
+    const full = schema.safeParse({
+      folderId: 'f_1',
+      organizationId: 'org_1',
+      name: 'Opportunity B',
+      technologies: ['ai', 'postgres'],
+      references: [{ title: 'Doc', url: 'https://example.com' }],
+      valueScores: [{ axisId: 'value', rating: 80, description: 'High' }],
+    });
+    expect(full.success).toBe(true);
   });
 });
