@@ -27,6 +27,7 @@ Record owner-signature in shared h2a Track log with sentropic as gatekeeper (ver
   - `api/tests/unit/focus-*.test.ts`
   - `api/tests/unit/track-*.test.ts`
   - `api/tests/helpers/owner-sign-child.ts` (`BR-FUSION-EX2` scope exception)
+  - `api/tsconfig.json` (`BR-FUSION-EX3` scope exception)
   - `packages/focus/package.json`
   - `packages/focus/src/**`
   - `packages/focus/tests/**`
@@ -37,9 +38,11 @@ Record owner-signature in shared h2a Track log with sentropic as gatekeeper (ver
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile` (`BR-FUSION-EX1`)
   - `api/tests/helpers/owner-sign-child.ts` (`BR-FUSION-EX2`)
+  - `api/tsconfig.json` (`BR-FUSION-EX3`)
 - **Exception process**:
   - `BR-FUSION-EX1`: Makefile target `owner-sign` helper for dev-local UAT.
   - `BR-FUSION-EX2`: PR #536 review F1a — the in-process real-race test cannot exercise the real cross-process Track file-lock (`ingest`'s lock section is synchronous, so `Promise.all` in one process never interleaves). Rationale: a genuine 2-OS-process race requires a spawned child script; `api/tests/helpers/` is the existing repo convention for test-only helper scripts. Impact: one new test-only file, no runtime/prod code path. Rollback: delete the file and the cross-process `it()` block in `track-event-owner-signature-port.test.ts`; the in-process dedup test still covers the deterministic-clientToken invariant.
+  - `BR-FUSION-EX3`: `make typecheck-api` was discovered broken on this branch (pre-existing since the `@sentropic/track` 0.91.0 bump, commit `ce5177fc2`): `api/tsconfig.json`'s classic `"moduleResolution": "Node"` cannot follow `@sentropic/track`'s `package.json#exports` subpaths (`/read`, `/ingest`), so `Cannot find module` errors block every typecheck run, including this branch's review-fix verification. Rationale: this is a directly-blocking regression on an already-allowed dependency bump, not new scope; the fix (`moduleResolution: "Bundler"`, pairing with the already-set `"module": "ESNext"`) matches the pattern `packages/focus/tsconfig.json` already uses successfully for the same dependency. Impact: type-checker resolution only — no runtime/build-output change (esbuild already resolves these imports independently of `tsc`). Rollback: revert `api/tsconfig.json` to `"moduleResolution": "Node"`.
 
 ## Feedback Loop
 - `BR-FUSION-E1`: L2 Fusion E1 active.
