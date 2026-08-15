@@ -1,6 +1,9 @@
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
   type AuthenticatedOwnPrincipal,
@@ -27,6 +30,46 @@ const RELAYER: RelayerProvenance = {
   relayerId: 'sentropic-api',
   canonicalIdentity: { issuer: 'sentropic-api', subject: 'focus-owner-signature-route' },
 };
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CHILD_SCRIPT = join(__dirname, '../helpers/owner-sign-child.ts');
+const TSX_CLI = createRequire(import.meta.url).resolve('tsx/cli');
+
+/**
+ * Runs one appendOwnerSignature call in its OWN OS process via tsx, so two concurrent
+ * calls race across processes on the real Track file-lock instead of sharing one
+ * Node event loop (where `ingest`'s synchronous lock section serializes them anyway).
+ */
+const spawnOwnerSignChild = (
+  eventsPath: string,
+  workspace: string,
+  decisionId: string,
+  idempotencyKey: string,
+  ownerEmail: string,
+): Promise<{ status: 'written' | 'duplicate'; recordId: string }> =>
+  new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [TSX_CLI, CHILD_SCRIPT, eventsPath, workspace, decisionId, idempotencyKey, ownerEmail],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`owner-sign-child exited ${code}: ${stderr}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (err) {
+        reject(new Error(`owner-sign-child produced non-JSON stdout: ${stdout} (${String(err)})`));
+      }
+    });
+  });
 
 describe('TrackEventOwnerSignaturePort (Real Track Store Atomicity)', () => {
   let tmpDir: string;
@@ -97,7 +140,15 @@ describe('TrackEventOwnerSignaturePort (Real Track Store Atomicity)', () => {
     return decRes.ids[0]!;
   };
 
-  it('EXPLICIT real-race atomicity: 2 CONCURRENT owner-sign requests on SAME decision yield 1 written, 1 duplicate', async () => {
+  it('in-process: 2 sequential owner-sign attempts on SAME decision dedup to 1 written, 1 duplicate', async () => {
+    // NOTE: `appendOwnerSignature`'s first `await` is AFTER `ingest` (which runs the
+    // synchronous, event-loop-blocking `withFileLock` section), so `Promise.all([a, b])`
+    // in a single process never interleaves the two `ingest` calls — this exercises the
+    // dedup-by-deterministic-clientToken invariant (independent of idempotencyKey), NOT
+    // the cross-process file-lock. The lock itself is exercised by the REAL cross-process
+    // test below; the durable exactly-once guarantee is provided by @sentropic/track's
+    // store (O_EXCL lock + under-lock dedup keyed on (workspace, clientToken) +
+    // verifyAppend), not by either test — see PR #536 review.
     const workspace = 'ws:sha256-test-workspace';
     const decisionId = seedDecisionInStore(workspace, OWNER_EMAIL);
     const target: TrackNativeDecisionTarget = { workspace, decisionId };
@@ -120,7 +171,6 @@ describe('TrackEventOwnerSignaturePort (Real Track Store Atomicity)', () => {
       idempotencyKey: 'race-retry-b',
     };
 
-    // Run parallel concurrent writes against real Track file-lock
     const [receiptA, receiptB] = await Promise.all([
       port.appendOwnerSignature(writeA),
       port.appendOwnerSignature(writeB),
@@ -138,6 +188,35 @@ describe('TrackEventOwnerSignaturePort (Real Track Store Atomicity)', () => {
 
     expect(artifactEvents).toHaveLength(1);
   });
+
+  it(
+    'cross-process: 2 OS processes writing the SAME events.jsonl concurrently yield 1 durable decision.artifact-added',
+    async () => {
+      const workspace = 'ws:sha256-test-workspace';
+      const decisionId = seedDecisionInStore(workspace, OWNER_EMAIL);
+
+      // Two independent Node processes, started back-to-back (no barrier), racing on the
+      // SAME eventsPath — this is the real cross-process Track file-lock (O_EXCL) race
+      // F1a asked for, not an in-process Promise.all.
+      const [receiptA, receiptB] = await Promise.all([
+        spawnOwnerSignChild(eventsPath, workspace, decisionId, 'cross-process-a', OWNER_EMAIL),
+        spawnOwnerSignChild(eventsPath, workspace, decisionId, 'cross-process-b', OWNER_EMAIL),
+      ]);
+
+      expect(receiptA.recordId).toBe(receiptB.recordId);
+      const statuses = [receiptA.status, receiptB.status];
+      expect(statuses.filter((s) => s === 'written')).toHaveLength(1);
+      expect(statuses.filter((s) => s === 'duplicate')).toHaveLength(1);
+
+      // The durable invariant: exactly one persisted decision.artifact-added event, no
+      // matter which process's write actually landed.
+      const reader = new TrackReader(eventsPath);
+      const snapshot = reader.reportSnapshot({ decisions: true });
+      const artifactEvents = snapshot.events.filter((e) => e.type === 'decision.artifact-added');
+      expect(artifactEvents).toHaveLength(1);
+    },
+    15000,
+  );
 
   it('should read back the exact canonical persisted owner signature', async () => {
     const workspace = 'ws:sha256-test-workspace';
