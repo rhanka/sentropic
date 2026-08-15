@@ -4,6 +4,7 @@ import {
   type FocusOwnerSignatureContractVersion,
   type OwnerSignatureDurableUniquenessKey,
   type PersistedOwnerSignature,
+  type RelayerProvenance,
   type TrackOwnerSignaturePort,
   type TrackOwnerSignatureWrite,
   type TrackOwnerSignatureWriteResult,
@@ -21,7 +22,7 @@ interface StoredSignatureMetadata {
   idempotencyKey: string;
   ownerPrincipalId: string;
   ownerIssuer: string;
-  relayerTransport: 'cli' | 'mcp-stdio' | 'import' | 'internal' | 'http';
+  relayerTransport: RelayerProvenance['transport'];
   relayerId: string;
   relayerIssuer: string;
   relayerSubject: string;
@@ -132,7 +133,9 @@ export class TrackEventOwnerSignaturePort implements TrackOwnerSignaturePort {
   ): Promise<PersistedOwnerSignature | undefined> {
     try {
       const reader = new TrackReader(this.eventsPath);
-      const snapshot = reader.reportSnapshot({ decisions: true });
+      // baselineCommit only feeds item-level acceptance/bucket status (unused here — this
+      // port reads raw decision.artifact-added events only).
+      const snapshot = reader.reportSnapshot({ decisions: true, baselineCommit: '' });
       const events = snapshot.events;
 
       for (const event of events) {
