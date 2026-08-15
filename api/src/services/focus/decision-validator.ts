@@ -46,7 +46,9 @@ export class TrackDecisionValidator implements DecisionValidator {
 
     try {
       const reader = new TrackReader(eventsPath);
-      const snapshot = reader.reportSnapshot({ decisions: true });
+      // baselineCommit only feeds item-level acceptance/bucket status (unused here — this
+      // validator reads decision.created events and report.decisions id/workspace only).
+      const snapshot = reader.reportSnapshot({ decisions: true, baselineCommit: '' });
       const events = snapshot.events;
 
       // Find the decision creation event
