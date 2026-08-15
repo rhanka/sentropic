@@ -11,6 +11,8 @@ import { runChatTracePurge } from './services/chat-trace-sweep';
 import { runQueueReaperSweep } from './services/queue-reaper-sweep';
 import { runStreamEventsPurge } from './services/chat/stream-purge-sweep';
 import { outboxDispatcher } from './services/outbox/outbox-dispatcher';
+import { objectTypeRegistry } from './services/object-registry';
+import { ensureOpportunityTypeRegistered } from './services/object-registry/opportunity-type';
 import { createJwksAdapter } from './services/auth/jwks-adapter';
 import { lt } from 'drizzle-orm';
 
@@ -202,6 +204,16 @@ if (process.env.NODE_ENV !== 'test') {
     } catch (error) {
       logger.error({ err: error }, 'Outbox dispatcher failed to start');
     }
+  }
+
+  // BR-59-act: idempotently register the `opportunity` object type — the
+  // registry's first production caller (warn-only ladder, DD2a). Non-fatal:
+  // the initiatives route's zod validator is generated from the same
+  // in-code JSON Schema regardless of this DB row's presence.
+  try {
+    await ensureOpportunityTypeRegistered(objectTypeRegistry);
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to register opportunity object type at startup');
   }
 }
 
