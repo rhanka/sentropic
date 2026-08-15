@@ -467,4 +467,30 @@ describe('Use Cases API', () => {
       expect(getResponse.status).toBe(404);
     });
   });
+
+  describe('Cross-workspace isolation (BR-59-act regression)', () => {
+    it('rejects GET of an initiative created in another workspace (404)', async () => {
+      const folderId = await createTestFolder();
+      const initiative = await createTestInitiative(folderId);
+
+      const outsider = await createAuthenticatedUser('editor', `outsider-init-${createTestId()}@example.com`);
+      const res = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${initiative.id}`, outsider.sessionToken!);
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('opportunity registry schema (BR-59-act)', () => {
+    it('accepts a full payload matching the registry-generated zod (DD2a=B)', async () => {
+      const folderId = await createTestFolder();
+      const initiativeData = {
+        folderId,
+        name: `Registry Opportunity ${createTestId()}`,
+        description: 'Generated from registry',
+        technologies: ['ai'],
+        valueScores: [{ axisId: 'value', rating: 70, description: 'ok' }],
+      };
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, initiativeData);
+      expect(response.status).toBe(201);
+    });
+  });
 });
