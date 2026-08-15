@@ -103,9 +103,7 @@ export class TrackEventOwnerSignaturePort implements TrackOwnerSignaturePort {
     };
 
     const store = new EventStore(this.eventsPath);
-    const countBefore = store.readAll().length;
     ingest([workEvent], ctx, store);
-    const countAfter = store.readAll().length;
 
     const persisted = await this.readOwnerSignature({
       ownerCanonicalIdentity: attestation.attester.canonicalIdentity,
@@ -116,7 +114,13 @@ export class TrackEventOwnerSignaturePort implements TrackOwnerSignaturePort {
       throw new Error('Owner signature write failed to read back from Track store');
     }
 
-    const status = countAfter > countBefore ? 'written' : 'duplicate';
+    // `ingest` doesn't report append-vs-dedup for its own call (its dedup hook returns the
+    // SAME durable event to every caller sharing this clientToken). An unlocked pre/post
+    // `readAll().length` bracket is racy cross-process (PR #536 review F1b): a concurrent
+    // writer can land between the two reads and make both callers see a length delta. The
+    // persisted record's `idempotencyKey` — stamped by whichever write actually landed — is
+    // the authoritative signal for which caller's attempt was durably recorded.
+    const status = persisted.idempotencyKey === idempotencyKey ? 'written' : 'duplicate';
     return {
       status,
       recordId: persisted.recordId,
