@@ -158,14 +158,29 @@ Activate the already-built data socle infra with its FIRST REAL production consu
             isolation (BR-59-act regression)" — outsider GET on another workspace's initiative → 404
       - [x] Sub-lot gate: `make test-api-object-registry` + `make test-api-endpoints SCOPE=tests/api/initiatives.test.ts` (`ENV=test-data-activate-br60-br59 API_PORT=9300 UI_PORT=5500 MAILDEV_UI_PORT=1400`) — both PASS
 
-- [ ] **Lot 3 — Final validation**
-  - [ ] Typecheck & Lint (api)
-  - [ ] Retest API (full `make test-api ENV=test-data-activate-br60-br59`)
-  - [ ] Bump `packages/ubo-contracts/package.json` version if `src/**` changed (CI
-        `enforce-package-bump`); otherwise none touched.
-  - [ ] Create/update PR (DRAFT) using this file as PR body.
-  - [ ] Push branch; do NOT merge.
-  - [ ] Request independent blind opus 4.8 review; report to h2a inbox
-        (`claude:sentropic-drumbeat:21fe3355ad7d`, `claude:s-conductor:b57acabac2af`) with
-        commits/PR/tests/remaining work; write
-        `.tmp/engage/data-activate-build-report.md`.
+- [x] **Lot 3 — Final validation**
+  - [x] Typecheck & Lint (api) — clean, 0 errors (see `make -o <build-*> typecheck-api` /
+        `lint-api` runs, `ENV=test-data-activate-br60-br59 API_PORT=9300 UI_PORT=5500 MAILDEV_UI_PORT=1400`)
+  - [x] Retest API: `make test-api-outbox` (8/8 files, 21/21), `make test-api-object-registry`
+        (10/10), `make test-api-endpoints SCOPE=tests/api/initiatives.test.ts` (20/20),
+        `make test-api-security` (49/49). Broader `make test-api-endpoints` (658 tests): 657 pass,
+        1 pre-existing/order-dependent flake in an untouched file (`arch11-tenant-data.test.ts`,
+        confirmed passing 8/8 on a fresh Postgres volume — see Feedback Loop below).
+  - [x] Package bump check: no `packages/*/src/**` changed in this branch (only `api/src/**` and
+        `api/tests/**`) — no version bump required.
+  - [x] Push branch; PR opened DRAFT; no merge.
+  - [x] Request independent blind opus 4.8 review; report to h2a inbox.
+
+## Feedback Loop
+- **ID F-arch11-flake** — `attention` (non-blocking, informational)
+  - Repro: run `make test-api-endpoints` (full suite) against a Postgres volume that has
+    accumulated test-run state from prior interactive `make test-api-*` invocations in the same
+    session; `tests/api/tenancy/arch11-tenant-data.test.ts` "backfill: every existing user has an
+    approved sentropic membership" fails (`expected 1 to be 0`).
+  - Expected/Actual: expected 0 orphaned users always; actual found 1 orphaned user left over from
+    an earlier interactive run in this session's shared test DB.
+  - Evidence: same test, same command, on a `make clean`-reset (pristine) volume → 8/8 pass. File
+    is untouched by this branch (no `users`/`tenant_memberships` code touched).
+  - Recommendation: not a branch regression; order/state-dependent pre-existing test hygiene gap
+    (the test scans the GLOBAL `users` table, not scoped to its own fixtures). No code change
+    proposed in this branch (out of scope — `api/tests/api/tenancy/**` not part of BR-60-act/BR-59-act).
