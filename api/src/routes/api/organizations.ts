@@ -9,6 +9,7 @@ import { enrichOrganization } from '../../services/context-organization';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
+import { outboxWriter } from '../../services/outbox/outbox-writer';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
@@ -133,6 +134,15 @@ const organizationInput = z.object({
 
 export const organizationsRouter = new Hono();
 
+// BR-60-act canary: default OFF, reversible. When enabled, the `organization_events`
+// channel is emitted through the outbox ONLY (bespoke NOTIFY below retired for this
+// channel); the outbox dispatcher republishes the same NOTIFY channel/payload shape
+// (`{ organization_id }`) consumed by the streams.ts snapshot-on-wake bridge, so the
+// SSE consumer is unaffected either way. Flip to 'true' to canary; unset/'false' reverts.
+const OUTBOX_CANARY_ORGANIZATIONS = process.env.OUTBOX_CANARY_ORGANIZATIONS === 'true';
+
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 async function notifyOrganizationEvent(organizationId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ organization_id: organizationId });
   const client = await pool.connect();
@@ -141,6 +151,31 @@ async function notifyOrganizationEvent(organizationId: string): Promise<void> {
   } finally {
     client.release();
   }
+}
+
+// Wraps a domain mutation in a transaction. Under the canary, the outbox row is
+// co-written in the SAME transaction (single emission path, no dual-write); off the
+// canary, behavior is unchanged (bespoke NOTIFY after commit).
+async function writeOrganizationMutation<T>(
+  organizationId: string,
+  mutate: (tx: DbTx) => Promise<T>
+): Promise<T> {
+  const result = await db.transaction(async (tx) => {
+    const value = await mutate(tx);
+    if (OUTBOX_CANARY_ORGANIZATIONS) {
+      await outboxWriter.append(tx, {
+        aggregateType: 'organization',
+        aggregateId: organizationId,
+        envelope: { organization_id: organizationId },
+        channel: 'organization_events',
+      });
+    }
+    return value;
+  });
+  if (!OUTBOX_CANARY_ORGANIZATIONS) {
+    await notifyOrganizationEvent(organizationId);
+  }
+  return result;
 }
 
 organizationsRouter.get('/', async (c) => {
@@ -170,19 +205,20 @@ organizationsRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zVali
     references: [],
   };
 
-  await db.insert(organizations).values({
-    id,
-    workspaceId,
-    name: payload.name,
-    status: payload.status,
-    data,
-  });
+  await writeOrganizationMutation(id, (tx) =>
+    tx.insert(organizations).values({
+      id,
+      workspaceId,
+      name: payload.name,
+      status: payload.status,
+      data,
+    })
+  );
 
   const [org] = await db
     .select()
     .from(organizations)
     .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
-  await notifyOrganizationEvent(id);
   return c.json(hydrateOrganization(org), 201);
 });
 
@@ -201,19 +237,20 @@ organizationsRouter.post(
     const { name } = c.req.valid('json');
     const id = createId();
 
-    await db.insert(organizations).values({
-      id,
-      workspaceId,
-      name,
-      status: 'draft',
-      data: { references: [] } satisfies OrganizationData,
-    });
+    await writeOrganizationMutation(id, (tx) =>
+      tx.insert(organizations).values({
+        id,
+        workspaceId,
+        name,
+        status: 'draft',
+        data: { references: [] } satisfies OrganizationData,
+      })
+    );
 
     const [org] = await db
       .select()
       .from(organizations)
       .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
-    await notifyOrganizationEvent(id);
     return c.json(hydrateOrganization(org), 201);
   }
 );
@@ -237,11 +274,12 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
     .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
   if (!org) return c.json({ message: 'Not found' }, 404);
 
-  await db
-    .update(organizations)
-    .set({ status: 'enriching' })
-    .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
-  await notifyOrganizationEvent(id);
+  await writeOrganizationMutation(id, (tx) =>
+    tx
+      .update(organizations)
+      .set({ status: 'enriching' })
+      .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)))
+  );
 
   const jobId = await queueManager.addJob(
     'organization_enrich',
@@ -311,18 +349,19 @@ organizationsRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zVa
     ...(payload.technologies !== undefined ? { technologies: payload.technologies } : {}),
   };
 
-  const updated = await db
-    .update(organizations)
-    .set({
-      ...(payload.name !== undefined ? { name: payload.name } : {}),
-      ...(payload.status !== undefined ? { status: payload.status } : {}),
-      data: nextData,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)))
-    .returning();
+  const updated = await writeOrganizationMutation(id, (tx) =>
+    tx
+      .update(organizations)
+      .set({
+        ...(payload.name !== undefined ? { name: payload.name } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+        data: nextData,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)))
+      .returning()
+  );
 
-  await notifyOrganizationEvent(id);
   return c.json(hydrateOrganization(updated[0]));
 });
 
@@ -386,7 +425,8 @@ organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), 
     );
   }
 
-  await db.delete(organizations).where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)));
-  await notifyOrganizationEvent(id);
+  await writeOrganizationMutation(id, (tx) =>
+    tx.delete(organizations).where(and(eq(organizations.id, id), eq(organizations.workspaceId, workspaceId)))
+  );
   return c.body(null, 204);
 });
