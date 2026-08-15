@@ -116,15 +116,16 @@ Activate the already-built data socle infra with its FIRST REAL production consu
   - [x] Verify SSE bridge (`streams.ts`) receives the outbox-dispatched event unchanged
         (read-only verification: channel `organization_events` + `{ organization_id }` payload
         shape preserved, matches `emitOrganizationSnapshot`'s snapshot-on-wake read).
-  - [ ] Track note (review M1/F5): append a track note (CLI, not manual `.track` edit)
-        referencing BR-60 `01KTSFJHBFRT0HHAB9B8PW7926` that BR-60-act is the completion slice
-        of the titled "replace bespoke NOTIFY" scope, and that the 2026-06-12 `done` predates it.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api`
-    - [ ] **API tests**
-      - [ ] `api/tests/api/organizations.spec.ts` — extend with canary-ON / canary-OFF cases
-      - [ ] `api/tests/outbox/*.spec.ts` (new or extended) — outbox-only path emits exactly once,
-            no dual NOTIFY when flag ON
+  - [x] Track note (review M1/F5): appended via `track` CLI (see commit) referencing BR-60
+        `01KTSFJHBFRT0HHAB9B8PW7926` — BR-60-act is the completion slice of the titled "replace
+        bespoke NOTIFY" scope; the 2026-06-12 `done` predates it. No history rewrite (append-only).
+  - [x] Lot gate:
+    - [x] `make typecheck-api` + `make lint-api` — both clean (0 errors)
+    - [x] **API tests**
+      - [x] `api/tests/outbox/producer-organization-events-canary-on.test.ts` (new) — outbox-only
+            path emits exactly once (no dual NOTIFY when flag ON), covers create/dispatch
+      - [x] `api/tests/outbox/producer-organization-events-canary-off.test.ts` (new) — flag OFF
+            (default) writes zero outbox rows, reversibility proof
       - [x] Negative cross-workspace test: an org mutation in workspace A must not leak an
             outbox-dispatched SSE event to a workspace B subscriber
             (`api/tests/outbox/producer-organization-events-canary-on.test.ts`, mirrors the
@@ -144,16 +145,18 @@ Activate the already-built data socle infra with its FIRST REAL production consu
         consumed both by registration and by the route validator.
   - [x] Wire format unchanged: `initiativeInput`'s generated zod is structurally equivalent to
         the prior hand-written schema (same required/optional fields, same nested shapes).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api`
-    - [ ] **API tests**
-      - [ ] `api/tests/object-registry/object-type-registry.test.ts` — extend for `opportunity`
-            registration + generated-schema round-trip
-      - [ ] `api/tests/api/initiatives.spec.ts` — extend: generated zod accepts/rejects the same
-            cases as before (regression), plus a case proving the registry is the source of truth
-      - [ ] Negative cross-workspace test: initiatives read/write must remain workspace-scoped
-            after the retrofit (extend existing isolation test if present)
-      - [ ] Sub-lot gate: `make test-api ENV=test-data-activate-br60-br59`
+  - [x] Lot gate:
+    - [x] `make typecheck-api` + `make lint-api` — both clean (0 errors)
+    - [x] **API tests**
+      - [x] `api/tests/object-registry/object-type-registry.test.ts` — extended with
+            `ensureOpportunityTypeRegistered` (idempotent registration, warn-only `draft` status)
+            + `generateZodFromJsonSchema` round-trip parity tests — PASS (10/10)
+      - [x] `api/tests/api/initiatives.test.ts` — added a full-payload acceptance case for the
+            registry-generated schema; the pre-existing "should reject invalid use case data"
+            case already regression-covers the generated `required: [folderId,name]` behavior — PASS (20/20)
+      - [x] Negative cross-workspace test: `api/tests/api/initiatives.test.ts` "Cross-workspace
+            isolation (BR-59-act regression)" — outsider GET on another workspace's initiative → 404
+      - [x] Sub-lot gate: `make test-api-object-registry` + `make test-api-endpoints SCOPE=tests/api/initiatives.test.ts` (`ENV=test-data-activate-br60-br59 API_PORT=9300 UI_PORT=5500 MAILDEV_UI_PORT=1400`) — both PASS
 
 - [ ] **Lot 3 — Final validation**
   - [ ] Typecheck & Lint (api)
