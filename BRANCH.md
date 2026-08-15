@@ -71,7 +71,7 @@ Record owner-signature in shared h2a Track log with sentropic as gatekeeper (ver
   - [x] Run `make typecheck-api`, `make test-focus`, and unit tests.
   - [x] Verify `harness check scope` and `harness check branch`.
 - [ ] **Lot 5 — PR #536 opus 4.8 review fixes (3 MEDIUM)**
-  - [ ] F1a: replace the misleading "real file-lock race" in-process test with an honestly-retitled in-process dedup test plus a real cross-process test (`api/tests/helpers/owner-sign-child.ts`, `BR-FUSION-EX2`).
+  - [x] F1a: replace the misleading "real file-lock race" in-process test with an honestly-retitled in-process dedup test plus a real cross-process test (`api/tests/helpers/owner-sign-child.ts`, `BR-FUSION-EX2`).
   - [x] F1b: derive `written`/`duplicate` from the persisted record's `idempotencyKey`, not a racy `readAll()` count bracket, in `track-event-owner-signature-port.ts`.
   - [ ] F2: `createApiFocusLiveSession` storeMode — fail-loud on an unrecognized `NODE_ENV` instead of silently defaulting to `local`; `postgres` for `production`, `local` only for known dev/test envs or explicit `TRACK_STORE_MODE=local`.
   - [ ] CI: pin `@sentropic/track` to `0.91.1` via a root `package.json` override (lockfile already resolved 0.91.1; override guards against a future accidental drift within the `^0.91.0` range).
