@@ -518,7 +518,8 @@ check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every
 
 
 .PHONY: typecheck
-typecheck: typecheck-ui typecheck-api ## Run all type checks
+.NOTPARALLEL: typecheck
+typecheck: prepare-node-workspace typecheck-ui typecheck-api ## Run all type checks
 
 .PHONY: typecheck-ui
 typecheck-ui: up-ui ## Run UI type checks
@@ -1843,7 +1844,8 @@ publish-flow-token: build-flow ## Publish @sentropic/flow using NPM_TOKEN_FILE (
 		$(FLOW_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/flow@"$$version" version >/dev/null 2>&1; then echo "@sentropic/flow@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
 .PHONY: lint
-lint: lint-ui lint-api ## Run all linters
+.NOTPARALLEL: lint
+lint: prepare-node-workspace lint-ui lint-api ## Run all linters
 
 .PHONY: lint-ui
 lint-ui: up-ui ## Run UI linter
