@@ -246,6 +246,25 @@ describe('createLlmMesh', () => {
     expect(gcpFlash?.capabilities.reasoning.support).not.toBe('unsupported');
   });
 
+  it('exposes the verified Gemini 3.7 Flash profile as a real model', () => {
+    const profile = getModelProfile('gemini', 'gemini-3.7-flash');
+
+    expect(profile).toMatchObject({
+      providerId: 'gemini',
+      modelId: 'gemini-3.7-flash',
+      label: 'Gemini 3.7 Flash',
+      reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities.contextWindowTokens).toBe(1_000_000);
+    expect(profile?.capabilities.maxOutputTokens).toBe(65_536);
+    expect(profile?.capabilities.modalities.input).toEqual([
+      'text', 'image', 'audio', 'video',
+    ]);
+    expect(profile?.capabilities.structuredOutput.jsonSchema.level).toBe(
+      getProviderProfile('gemini').capabilities.structuredOutput.jsonSchema.level,
+    );
+  });
+
   it('advertises image input only for verified vision-capable provider families', () => {
     expect(getModelProfile('openai', 'gpt-5.5')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
