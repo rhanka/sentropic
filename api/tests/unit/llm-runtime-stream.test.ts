@@ -1133,6 +1133,69 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
+  // Gemini — 3.7 Flash (reasoning model)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'gemini',
+    model: 'gemini-3.7-flash',
+    label: 'Gemini 3.7 Flash',
+    chatEvents: [
+      { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Hello', ' world'],
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'flash' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'gemini_call_1',
+      startArgs: '{"query":"flash"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'Flash thought', thought: true },
+              { text: 'Flash answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Flash thought'],
+      contentCount: 1,
+      contentDeltas: ['Flash answer'],
+      hasDone: true,
+    },
+    statusEvents: [
+      {
+        candidates: [{
+          content: { parts: [{ text: 'Answer' }] },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
   // GCP — Gemini 3.1 Flash Lite on GCP (BR-43)
   // Identical Gemini SSE wire shape (candidates/parts/functionCall/thought) —
   // the runtime reuses the Gemini SSE→event mapper (BR43-D4 REUSE). Only the
