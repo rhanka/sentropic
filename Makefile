@@ -523,6 +523,7 @@ typecheck: typecheck-ui typecheck-api ## Run all type checks
 .PHONY: typecheck-ui
 typecheck-ui: up-ui ## Run UI type checks
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run check
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/ui/node_modules/.vite 2>/dev/null || true'
 
 .PHONY: typecheck-api
 typecheck-api: prepare-node-workspace ## Run API type checks
@@ -686,12 +687,12 @@ publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway u
 
 .PHONY: typecheck-flow
 typecheck-flow: ## Run @sentropic/flow type checks
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
 .PHONY: build-flow
 build-flow: ## Build @sentropic/flow dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
 .PHONY: pack-llm-mesh
 pack-llm-mesh: build-llm-mesh ## Validate @sentropic/llm-mesh npm package contents without publishing
@@ -1847,6 +1848,7 @@ lint: lint-ui lint-api ## Run all linters
 .PHONY: lint-ui
 lint-ui: up-ui ## Run UI linter
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run lint
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/ui/node_modules/.vite 2>/dev/null || true'
 
 .PHONY: lint-api
 lint-api: prepare-node-workspace ## Run API linter
@@ -2145,7 +2147,8 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # Development environment
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
-prepare-node-workspace: build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google build-focus ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+.NOTPARALLEL: prepare-node-workspace
+prepare-node-workspace: install-internal-packages build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google build-focus ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
@@ -2195,7 +2198,8 @@ up-api-test: prepare-node-workspace ## Start the api stack in detached mode with
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test-ci
-up-api-test-ci: build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google build-focus ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+.NOTPARALLEL: up-api-test-ci
+up-api-test-ci: install-internal-packages build-cluster-mesh build-llm-mesh build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google build-focus ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
