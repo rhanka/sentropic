@@ -54,7 +54,7 @@ export interface ReasoningCapabilities {
 }
 
 export interface ModalityCapabilities {
-  input: readonly ('text' | 'image' | 'audio' | 'file')[];
+  input: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   output: readonly ('text' | 'json' | 'tool-call')[];
 }
 
