@@ -33,8 +33,8 @@ and mesh-lane launch packet. The branch was pushed; the PR was not merged.
 
 ## Evidence and validation
 
-- Canonical reference: PR #540 / `origin/feat/llm-mesh-gemini-37` inspected
-  against base `origin/main` merge PR #539.
+- Canonical reference: PR #540 / `origin/feat/llm-mesh-gemini-37`, now merged
+  into base `origin/main` at `28d57d098`.
 - Official OpenAI, Anthropic, and Google model registries returned HTTP 200.
 - `make llm-mesh-add-model MODEL=gpt-5.7-sol BASE=gpt-5.6-sol DRY_RUN=1` passed
   without changing model sources.
@@ -56,7 +56,8 @@ and mesh-lane launch packet. The branch was pushed; the PR was not merged.
   not the exact author model or effort. The harness forbids inferred identity,
   so no independent blind-consensus claim was fabricated. PR review remains
   required.
-- PR #540 is not merged into the branch base; its changes are evidence only.
+- PR #540 is merged into the branch base; its 0.16.0 package and lockfile state
+  is preserved as current-tree reference material.
 - Vendor documentation is mutable; each future update must retain dated
   official model-id evidence in its own PR.
 - h-cond/h2a-runtime host defaults, including agy, live outside this repo and

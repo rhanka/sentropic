@@ -4,7 +4,7 @@
 - [x] Make recurring LLM model updates repeatable through one owner directive, one safe scaffold command, explicit evidence gates, and blind review.
 
 ## Scope / Guardrails
-- [x] Base is `origin/main` at merge PR #539; PR #540 is the canonical model-cutover reference only.
+- [x] Base is `origin/main` at merge PR #540; its Gemini 3.7 cutover is the canonical model-update reference.
 - [x] Scope is facilitation documentation, one additive scaffold script, its unit test, and one Make target.
 - [x] Preserve existing catalog, provider, routing, equivalence, package publication, and consumer behavior.
 - [x] Require official model-id evidence before any scaffold is applied.
@@ -32,7 +32,7 @@
 
 ## Feedback Loop
 - [x] `BR75-EX1` accepted by owner request: change the normally forbidden `Makefile` because the repository's make-only policy requires an entrypoint for this recurring job; impact is one additive target plus one script; rollback removes that target and script.
-- [x] Source gap: PR #540 is not merged into this branch base, so its Gemini 3.7 changes are evidence, not files to copy into this deliverable.
+- [x] Post-rebase context: PR #540 is merged into this branch base; preserve its `@sentropic/llm-mesh` 0.16.0 package and lockfile state while keeping this branch documentation/scaffold-only.
 - [x] Source gap: vendor documentation is mutable; every future update must capture its dated official model-id evidence in its PR.
 - [x] Source gap: host defaults for h-cond/h2a-runtime, including agy, live outside this repository and require a notification handoff rather than an in-repo edit.
 
@@ -47,7 +47,7 @@
 - [x] **Lot 0 — Baseline and exact scope**
   - [x] Read project rules, workflow, sub-agent contract, project context, PLAN model-council constraint, and branch template.
   - [x] Verify `feat/llm-model-update-runbook` mechanically with `harness check branch`.
-  - [x] Confirm HEAD equals `origin/main` merge PR #539 and study the complete PR #540 delta.
+  - [x] Confirm the original base at merge PR #539, study the complete PR #540 delta, then rebase onto merge PR #540 without losing the runbook commits.
   - [x] Locate catalog, providers, route definitions, capability sources, council generator/check, publish order, and internal consumers.
   - [x] Confirm official OpenAI, Anthropic, and Gemini model registries are reachable.
 
