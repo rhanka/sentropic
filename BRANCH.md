@@ -54,13 +54,23 @@ Activate the already-built data socle infra with its FIRST REAL production consu
   - BR-61 / BR-65 surfaces: no `business_objects` table, no `ObjectResolverPort`, no Parquet/DuckDB export
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file) — only if the canary flag needs persisted config (default: no)
+  - `api/Dockerfile` — only under `BR59-EX1` to make the BR-59-act workspace dependency
+    available to the production API bundle
   - `.github/workflows/**` — not expected
 - **Exception process**:
   - Declare exception ID `BR60-EXn` / `BR59-EXn` in `## Feedback Loop` before touching any
     conditional/forbidden path, with reason, impact, rollback.
 
 ## Feedback Loop
-(none yet)
+- **BR59-EX1** — `api/Dockerfile` (not in Allowed Paths). Reason: PR #537 CI `build-api-image`
+  fails reproducibly — esbuild cannot resolve `@sentropic/ubo-contracts` (`dist/index.js` missing)
+  because the Dockerfile's per-package `COPY`/`npm --workspace ... run build` lists (added for
+  every other `packages/*` consumed by `api/`) were never extended to `ubo-contracts` when
+  BR-59-act added it as an `api/package.json` runtime dependency. Impact: 2-line addition mirroring
+  the existing pattern for the other 12 `@sentropic/*` packages (`COPY packages/ubo-contracts/package.json
+  ./packages/ubo-contracts/package.json` + `RUN npm --workspace @sentropic/ubo-contracts run build`);
+  no Makefile/compose change (bundled convention, not `--external`). Rollback: revert the 2 added
+  Dockerfile lines; no other file touched.
 
 ## AI Flaky tests
 (none — this section is for `make test-api-ai`; not applicable, no AI-generation tests touched)
@@ -199,6 +209,16 @@ Activate the already-built data socle infra with its FIRST REAL production consu
         impossible); already disclosed in `index.ts:210-213` and this PR's description.
   - [x] Lot gate: `make typecheck-api` + `make lint-api` — both clean, 0 errors (see F1/F2 build
         below); `make test-api-outbox` — 2 consecutive full-suite runs, 8/8 files, 21/21 PASS.
+
+- [x] **Lot 5 — Fix `build-api-image` workspace resolution (PR #537)**
+  - [x] Apply `BR59-EX1`: copy `packages/ubo-contracts/package.json` before workspace install and
+        build `@sentropic/ubo-contracts` before the API esbuild bundle, matching the existing
+        bundled-workspace convention (no runtime externalization).
+  - [x] Local gate: `make build-api-image` — PASS (exit 0); `@sentropic/ubo-contracts` build PASS,
+        API esbuild bundle PASS (`dist/index.js`), image `a76faa0f9be6` built successfully.
+  - [x] `make -o <build-*> typecheck-api ENV=data-activate` — PASS (exit 0), following the
+        branch's documented host-workspace bootstrap convention.
+  - [x] `make -o <build-*> lint-api ENV=data-activate` — PASS (exit 0, 0 errors).
 
 ## Feedback Loop
 - **ID F-arch11-flake** — `attention` (non-blocking, informational)
