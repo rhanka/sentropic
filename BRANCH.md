@@ -13,13 +13,13 @@
 - [x] Use owner-supplied verified specifications only; add no unverified capability or GCP variant.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**
-  - [ ] `BRANCH.md`
-  - [ ] `packages/llm-mesh/**`
-  - [ ] `packages/llm-gateway/package.json` — owner-required workspace consumer dependency correction under `G37-EX5`.
-  - [ ] `packages/llm-gateway/tests/target.test.ts` — downstream workspace routing assertion under `G37-EX5`.
+- [x] **Allowed Paths (implementation scope)**
+  - [x] `BRANCH.md`
+  - [x] `packages/llm-mesh/**`
+  - [x] `packages/llm-gateway/package.json` — owner-required workspace consumer dependency correction under `G37-EX5`.
+  - [x] `packages/llm-gateway/tests/target.test.ts` — downstream workspace routing assertion under `G37-EX5`.
   - [ ] `scripts/llm-model-equivalences/council.source.json` — owner-required generated-council source under `G37-EX1`.
-  - [ ] `package-lock.json` — required workspace version synchronization under `G37-EX2`.
+  - [x] `package-lock.json` — required workspace version synchronization under `G37-EX2`.
   - [ ] `api/tests/unit/llm-runtime-stream.test.ts` — exhaustive advertised-model stream fixture under `G37-EX3`.
   - [ ] `api/tests/api/models.test.ts` — exact public catalog response under `G37-EX4`.
 - [ ] **Forbidden Paths (must not change in this branch)**
@@ -106,17 +106,18 @@
   - [x] Run `make scope-check ENV=test-llm-mesh-g37` and `harness check scope`.
   - [ ] Push `feat/llm-mesh-gemini-37` without merge and open the requested PR.
   - [ ] Wait for green CI including `enforce-package-bump` and `validate/publish-llm-mesh` dry run.
-  - [ ] Write `.tmp/engage/llm-mesh-g37-report.md` with assessment first.
-  - [ ] Send valid `sentropic.h2a` v1.0 reports to drumbeat and lane `llm-mesh`.
+  - [ ] Write `.tmp/engage/g37-fix-report.md` with assessment first.
+  - [ ] Send a valid `sentropic.h2a` v1.0 report to `claude:sentropic-drumbeat:21fe3355ad7d`.
 
 ## Verification Evidence
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 145 tests passed after Lot 1.
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 147 tests passed after Lot 2.
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 148 tests passed after the PR review fixes.
+- [x] Gateway workspace validation: typecheck and build passed; 16 files and 111 tests passed against `@sentropic/llm-mesh@0.16.0`.
 - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-g37`: passed after Lot 2.
 - [x] `make build`, `make typecheck`, and `make lint`: passed in isolated `test-llm-mesh-g37`.
 - [x] Aggregate deterministic suites: unit 874 passed / 2 skipped; endpoints 658 passed aside from one parallel ARCH-11 isolation flake that passed scoped and with one worker.
 - [x] Targeted public catalog and exhaustive stream contracts: 4 and 94 tests passed respectively.
 - [x] `make pack-llm-mesh`: packed `@sentropic/llm-mesh@0.16.0`; council drift and scope gates passed.
-- [ ] Live-AI aggregate: 18 tests stopped uniformly because provider auth is not configured in this worktree.
+- [x] Live-AI aggregate attempted: 18 tests stopped uniformly because all provider auth variables are unset in this worktree.
 - [ ] Record remaining exact commands, results, commit SHAs, PR URL, and CI run in the delivery report.
