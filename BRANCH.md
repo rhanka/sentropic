@@ -97,17 +97,17 @@
   - [x] Repoint the retained 3.6 and 3.1 compatibility aliases to the real 3.7 capability source.
   - [x] Add exhaustive Claude-tier candidate and capability-resolution regression coverage.
 
-- [ ] **Lot 4 — Final validation and delivery**
+- [x] **Lot 4 — Final validation and delivery**
   - [x] Run `make build ENV=test-llm-mesh-g37`.
   - [x] Run `make typecheck ENV=test-llm-mesh-g37`.
   - [x] Run `make lint ENV=test-llm-mesh-g37`.
   - [x] Run deterministic `make test ENV=test-llm-mesh-g37` suites; record the isolated live-AI auth failure.
   - [x] Run `make pack-llm-mesh ENV=test-llm-mesh-g37`; leave publication verification to CI.
   - [x] Run `make scope-check ENV=test-llm-mesh-g37` and `harness check scope`.
-  - [ ] Push `feat/llm-mesh-gemini-37` without merge and open the requested PR.
-  - [ ] Wait for green CI including `enforce-package-bump` and `validate/publish-llm-mesh` dry run.
-  - [ ] Write `.tmp/engage/g37-fix-report.md` with assessment first.
-  - [ ] Send a valid `sentropic.h2a` v1.0 report to `claude:sentropic-drumbeat:21fe3355ad7d`.
+  - [x] Push `feat/llm-mesh-gemini-37` to the existing PR without merge.
+  - [x] Wait for green CI including `enforce-package-bump`, `validate-llm-mesh`, and `validate-llm-gateway`.
+  - [x] Write `.tmp/engage/g37-fix-report.md` with assessment first.
+  - [x] Deposit a valid `sentropic.h2a` v1.0 report for `claude:sentropic-drumbeat:21fe3355ad7d`.
 
 ## Verification Evidence
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 145 tests passed after Lot 1.
@@ -120,4 +120,5 @@
 - [x] Targeted public catalog and exhaustive stream contracts: 4 and 94 tests passed respectively.
 - [x] `make pack-llm-mesh`: packed `@sentropic/llm-mesh@0.16.0`; council drift and scope gates passed.
 - [x] Live-AI aggregate attempted: 18 tests stopped uniformly because all provider auth variables are unset in this worktree.
-- [ ] Record remaining exact commands, results, commit SHAs, PR URL, and CI run in the delivery report.
+- [x] PR #540 CI run `31962450752`: success, including both LLM validations and the package-bump gate.
+- [x] Record exact commands, results, commit SHAs, PR URL, and CI run in `.tmp/engage/g37-fix-report.md`.
