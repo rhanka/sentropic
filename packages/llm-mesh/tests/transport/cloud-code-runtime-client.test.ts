@@ -120,6 +120,19 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('defaults agy Cloud Code requests to the real Gemini 3.7 Flash model', async () => {
+    const fetchFn = vi.fn(async () => streamResponse());
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    const response = await client.generate({
+      providerId: 'gemini', messages: [{ role: 'user', content: 'hello' }],
+    }, context);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    expect(JSON.parse(String(init.body)).model).toBe('gemini-3.7-flash');
+    expect(response.modelId).toBe('gemini-3.7-flash');
+  });
+
   it('surfaces Retry-After on a canonical error event', async () => {
     const client = new CloudCodeRuntimeClient(async () => new Response('rate limited', {
       status: 429, headers: { 'retry-after': '6' },
