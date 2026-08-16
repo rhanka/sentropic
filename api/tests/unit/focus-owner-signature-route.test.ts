@@ -1,6 +1,9 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Hono } from 'hono';
 import type { FocusLiveSession, OwnerSignatureRequest } from '@sentropic/focus';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { createApiFocusLiveSessionMock, isTenantAdminMock, requireWorkspaceAccessMock, resolveTenantMock } = vi.hoisted(() => ({
   createApiFocusLiveSessionMock: vi.fn(),
@@ -38,6 +41,9 @@ const { focusRouter } = await import('../../src/routes/api/focus');
 const { failClosedDecisionValidator } = await import('../../src/services/focus/decision-validator');
 const { createApiFocusLiveSession } = await import('../../src/services/focus/live-session');
 
+const originalTrackEventsPath = process.env.TRACK_EVENTS_PATH;
+let trackStoreDir: string;
+
 const authenticatedApp = (role = 'user') => {
   const app = new Hono();
   app.use('*', async (c, next) => {
@@ -57,6 +63,11 @@ const authenticatedApp = (role = 'user') => {
 
 describe('Focus owner-signature route', () => {
   beforeEach(() => {
+    trackStoreDir = mkdtempSync(join(tmpdir(), 'focus-owner-signature-route-'));
+    const eventsPath = join(trackStoreDir, 'events.jsonl');
+    writeFileSync(eventsPath, '');
+    process.env.TRACK_EVENTS_PATH = eventsPath;
+
     vi.clearAllMocks();
     vi.spyOn(failClosedDecisionValidator, 'validate').mockResolvedValue({ authorized: true });
     isTenantAdminMock.mockResolvedValue(true);
@@ -64,7 +75,16 @@ describe('Focus owner-signature route', () => {
     resolveTenantMock.mockResolvedValue({ tenantId: 'tenant-from-resolver' });
   });
 
-  it('should fail closed before creating a Focus session when decision validation is not configured', async () => {
+  afterEach(() => {
+    rmSync(trackStoreDir, { recursive: true, force: true });
+    if (originalTrackEventsPath === undefined) {
+      delete process.env.TRACK_EVENTS_PATH;
+    } else {
+      process.env.TRACK_EVENTS_PATH = originalTrackEventsPath;
+    }
+  });
+
+  it('should fail closed before creating a Focus session when the decision does not exist', async () => {
     vi.restoreAllMocks();
 
     const response = await authenticatedApp().request('http://localhost/focus/owner-signatures', {
