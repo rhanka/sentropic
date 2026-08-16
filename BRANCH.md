@@ -14,13 +14,13 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**
+  - [ ] `BRANCH.md`
   - [ ] `packages/llm-mesh/**`
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
   - [ ] `.cursor/rules/**`
 - [ ] **Conditional Paths**
-  - [ ] `BRANCH.md` — owner-mandated branch plan.
   - [ ] `scripts/llm-model-equivalences/council.source.json` — granted under `G37-EX1`.
 - [ ] **Exception process**
   - [ ] Declare reason, impact, and rollback before changing a conditional path.
@@ -43,23 +43,41 @@
 - [x] Keep all implementation on `feat/llm-mesh-gemini-37` with no subagent or review lane.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Assessment and exact scope**
-  - [x] Read `rules/MASTER.md`, workflow, testing rules, and the full ARCH-11 EVOL.
-  - [x] Verify branch; confirm existing G1a-G1c, resolver, and the residual outbox carrier on `main`.
-  - [x] Gate: `make scope-check ENV=arch11g1a`.
+- [x] **Lot 0 — Assessment and decisions**
+  - [x] Read project rules, package documentation, catalog, providers, routing targets, generated council, account service, and Cloud Code transport.
+  - [x] Verify the isolated worktree branch with `harness check branch`.
+  - [x] Trace agy from launch aliases through route selection, eligible Cloud Code accounts, runtime client, and the Antigravity wire envelope.
+  - [x] Decide direct Gemini profile plus Cloud Code transport; omit the unverified GCP variant.
+  - [x] Decide the 3.6 compatibility alias behavior and record it in the delivery report.
+  - [x] Run `make scope-check ENV=test-llm-mesh-g37` after defining branch scope.
 
-- [x] **Lot 1 — Residual DATA re-key**
-  - [x] Add one idempotent control migration for legacy alias rows.
-  - [x] Re-key column and embedded tenant/UBO scope copies through `workspaces.tenant_id` only.
-  - [x] Commit migration SQL and control journal atomically with this branch plan.
-  - [x] Gate: `make db-migrate API_PORT=9055 UI_PORT=5255 MAILDEV_UI_PORT=1155 REGISTRY=local ENV=arch11g1a`.
-  - [x] Add focused integration coverage in `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`.
-  - [x] Gate: focused test, `make scope-check ENV=arch11g1a`, and `harness check scope`.
+- [ ] **Lot 1 — Real model profile and council coverage**
+  - [ ] Add `gemini-3.7-flash` to provider lists and the catalog with 1,000,000 input tokens, 65,536 output tokens, and text, image, audio, and video inputs.
+  - [ ] Add no GCP catalog profile without verified GCP availability.
+  - [ ] Classify the new profile as non-equivalent and regenerate `generated-model-council.ts` through `make refresh-llm-model-equivalences ENV=test-llm-mesh-g37`.
+  - [ ] Add facade catalog tests for identity, limits, modalities, and provider capability inheritance.
+  - [ ] Bump `@sentropic/llm-mesh` from `0.15.1` to `0.16.0`.
+  - [ ] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make check-llm-model-equivalences ENV=test-llm-mesh-g37`.
 
-- [ ] **Lot 2 — Final validation and delivery**
-  - [x] Gate: `make build`, `make typecheck`, and `make lint` with `ENV=arch11g1a` last.
-  - [x] Gate: `make test` smoke, unit, endpoints, queue, and security categories are green.
-  - [x] Source gap: local AI tests require provider secrets supplied only by `.github/workflows/ci.yml:953-978`.
-  - [x] Verify branch scope mechanically and verify no application alias site changed.
-  - [ ] Push, open the owner-requested PR without merging, and verify green CI.
-  - [ ] Write the report and send valid `sentropic.h2a` envelopes to drumbeat and infra.
+- [ ] **Lot 2 — Faithful agy Cloud Code routing**
+  - [ ] Add the faithful canonical `gemini-3.7-flash` Cloud Code target.
+  - [ ] Route standard agy candidates and the Cloud Code default to `gemini-3.7-flash`.
+  - [ ] Replace the default Cloud Code account inventory entry for 3.6 with 3.7.
+  - [ ] Repoint the 3.6 compatibility capability source from 3.5 to 3.7.
+  - [ ] Add routing, account inventory, and Cloud Code wire-default tests proving no 3.5 resolution.
+  - [ ] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make typecheck-llm-mesh ENV=test-llm-mesh-g37`.
+
+- [ ] **Lot 3 — Final validation and delivery**
+  - [ ] Run `make build ENV=test-llm-mesh-g37`.
+  - [ ] Run `make typecheck ENV=test-llm-mesh-g37`.
+  - [ ] Run `make lint ENV=test-llm-mesh-g37`.
+  - [ ] Run `make test ENV=test-llm-mesh-g37`.
+  - [ ] Run `make pack-llm-mesh ENV=test-llm-mesh-g37` and the publication dry-run CI gates.
+  - [ ] Run `make scope-check ENV=test-llm-mesh-g37` and `harness check scope`.
+  - [ ] Push `feat/llm-mesh-gemini-37` without merge and open the requested PR.
+  - [ ] Wait for green CI including `enforce-package-bump` and `validate/publish-llm-mesh` dry run.
+  - [ ] Write `.tmp/engage/llm-mesh-g37-report.md` with assessment first.
+  - [ ] Send valid `sentropic.h2a` v1.0 reports to drumbeat and lane `llm-mesh`.
+
+## Verification Evidence
+- [ ] Record exact commands, results, commit SHAs, PR URL, and CI run in the delivery report.
