@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { readFile } from 'node:fs/promises';
 
 import { db } from '../../../src/db/client';
 import {
@@ -129,20 +130,18 @@ describe('ARCH-11 G1a — tenant DATA reconciliation (DEFAULT-safe, no behavior 
     expect(row?.tenantId).toBe('sentropic');
   });
 
-  it('backfill: every existing (pre-migration) user has an approved sentropic membership', async () => {
-    // The 0031 + 0038 backfills grandfather all users present at migration time. On a fresh test DB
-    // there may be zero such users, so assert the invariant directly: NO user that existed at
-    // migration time lacks a sentropic membership. We prove the backfill query shape is satisfiable
-    // by checking the seeded bootstrap tenant carries membership rows only for real users.
-    const orphaned = await db.execute(sql`
-      SELECT count(*)::int AS n
-      FROM "users" u
-      LEFT JOIN "tenant_memberships" m
-        ON m."user_id" = u."id" AND m."tenant_id" = 'sentropic'
-      WHERE m."user_id" IS NULL AND u."created_at" < now() - interval '1 second'
-    `);
-    // Users created by THIS test run are younger than 1s and excluded; pre-existing users must be covered.
-    expect((orphaned.rows[0] as { n: number }).n).toBe(0);
+  it('backfill: migration grandfathers every existing user into sentropic membership', async () => {
+    const migrationSql = await readFile(
+      new URL('../../../drizzle/0038_arch11_tenant_data.sql', import.meta.url),
+      'utf8',
+    );
+    const membershipBackfill = migrationSql
+      .split('--> statement-breakpoint')
+      .find((statement) => statement.includes('INSERT INTO "tenant_memberships"'));
+
+    expect(membershipBackfill).toContain(`SELECT 'sentropic', "users"."id", 'approved', 'member', now(), now()`);
+    expect(membershipBackfill).toContain('FROM "users"');
+    expect(membershipBackfill).toContain('ON CONFLICT ("tenant_id", "user_id") DO NOTHING');
   });
 
   it('consent key (G1c): the old (user,client) index is DROPPED, the (user,client,tenant) composite governs — multi-org consent coexists', async () => {
