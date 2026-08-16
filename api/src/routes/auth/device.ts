@@ -94,6 +94,10 @@ deviceRouter.post('/poll', async (c) => {
         .where(eq(users.id, outcome.userId))
         .limit(1);
 
+      if (!userRecord) {
+        throw new Error('Device enrollment user lookup returned no row');
+      }
+
       clusterMeshAdapter.completeDeviceAttachment(outcome);
 
       return c.json({
@@ -103,9 +107,9 @@ deviceRouter.post('/poll', async (c) => {
         expiresAt: issued.expiresAt.toISOString(),
         user: {
           id: outcome.userId,
-          email: userRecord?.email ?? null,
-          displayName: userRecord?.displayName ?? null,
-          role: userRecord?.role ?? outcome.role,
+          email: userRecord.email,
+          displayName: userRecord.displayName,
+          role: userRecord.role,
         },
       });
     }

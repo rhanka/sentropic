@@ -19,7 +19,7 @@ import {
   issueDeviceCode,
   pollDeviceCode,
 } from './device-code-store';
-import { resolveTenant } from './tenancy/resolve-tenant';
+import { resolveTenantAuthoritatively } from './tenancy/resolve-tenant';
 
 export interface ClusterMeshAppAdapter {
   readonly membership: MembershipDomain;
@@ -99,5 +99,5 @@ export const clusterMeshAdapter = createClusterMeshAppAdapter({
   issueDeviceCode,
   pollDeviceCode,
   approveDeviceCode,
-  resolveTenant,
+  resolveTenant: resolveTenantAuthoritatively,
 });
