@@ -96,8 +96,8 @@
 
 - [ ] **Lot 6 — Published package wiring**
   - [x] Add the API workspace dependency and regenerate the root lock through a make target.
-  - [ ] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR72-EX1`.
-  - [ ] Add CI change filters plus validate/package job; document first-publish bootstrap without publishing.
+  - [x] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR72-EX1`.
+  - [x] Add CI change filters plus validate/package job; document first-publish bootstrap without publishing.
   - [ ] Gate: `make check-ci-version-filters ENV=test-cluster-mesh-v1`, package build/pack, and API image build.
 
 - [ ] **Lot 7 — Final validation and independent review**
