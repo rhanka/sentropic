@@ -80,20 +80,43 @@ async function openSse(sessionToken: string) {
   return reader;
 }
 
-async function collectFor(reader: ReadableStreamDefaultReader<Uint8Array>, ms: number): Promise<SseEvent[]> {
-  const end = Date.now() + ms;
-  let buffer = '';
-  const events: SseEvent[] = [];
+/**
+ * Reads two SSE streams concurrently (one in-flight `read()` per reader, resumed only after
+ * its own previous read resolves — never two overlapping reads on the same reader) and stops
+ * as soon as `predicate` matches the accumulated events, or after `maxMs` as a bounded safety
+ * net. This replaces a fixed wall-clock collection window: the positive proof (the watched
+ * reader's event arrives) is awaited on the real signal, not guessed at with a fixed sleep, and
+ * the paired reader's negative assertion (must NOT have received the event) is evaluated over
+ * that exact same real-time interval — both readers had identical opportunity — instead of an
+ * independently-timed window that can under-run the positive signal under load.
+ */
+async function collectConcurrentUntil(
+  readers: [ReadableStreamDefaultReader<Uint8Array>, ReadableStreamDefaultReader<Uint8Array>],
+  predicate: (events: [SseEvent[], SseEvent[]]) => boolean,
+  maxMs: number,
+): Promise<[SseEvent[], SseEvent[]]> {
   const decoder = new TextDecoder();
-  while (Date.now() < end) {
-    const timeLeft = end - Date.now();
+  const buffers: [string, string] = ['', ''];
+  const events: [SseEvent[], SseEvent[]] = [[], []];
+  const pending = readers.map((reader, i) => reader.read().then((result) => ({ i, result })));
+  const deadline = Date.now() + maxMs;
+
+  for (;;) {
+    const timeLeft = deadline - Date.now();
     if (timeLeft <= 0) break;
-    const result = await Promise.race([reader.read(), sleep(timeLeft).then(() => null)]);
-    if (!result || result.done) break;
-    buffer += decoder.decode(result.value, { stream: true });
-    const { events: parsed, rest } = parseSse(buffer);
-    events.push(...parsed);
-    buffer = rest;
+    const winner = await Promise.race([...pending, sleep(timeLeft).then(() => null)]);
+    if (!winner) break;
+    const { i, result } = winner;
+    if (!result.done) {
+      buffers[i] += decoder.decode(result.value, { stream: true });
+      const { events: parsed, rest } = parseSse(buffers[i]);
+      events[i].push(...parsed);
+      buffers[i] = rest;
+      pending[i] = readers[i].read().then((r) => ({ i, result: r }));
+    } else {
+      pending[i] = new Promise(() => {});
+    }
+    if (predicate(events)) break;
   }
   return events;
 }
@@ -162,8 +185,12 @@ describe('Producer (canary ON): organization_events via outbox (BR-60-act)', () 
     expect(sweepResult.dispatched).toBeGreaterThanOrEqual(1);
 
     try {
-      const userEvents = await collectFor(userReader, 1500);
-      const adminEvents = await collectFor(adminReader, 1500);
+      const [userEvents, adminEvents] = await collectConcurrentUntil(
+        [userReader, adminReader],
+        ([userEvts]) =>
+          userEvts.some((e) => e.event === 'organization_update' && e.data?.organizationId === org.id),
+        8000,
+      );
       await userReader.cancel();
       await adminReader.cancel();
 
