@@ -78,14 +78,14 @@
 - [ ] **Lot 3 — Identity, agent, memory, and NHI wrap**
   - [x] Implement local W-A signed-reference projection contracts for human identity, agent identity, and memory snapshots.
   - [x] Map attest, offboard, and export to injected `h2a nhi` command execution without interpreting h2a references.
-  - [x] Keep remote resolution as a gated typed seam.
-  - [ ] Add tests for local projection, exact h2a command mapping, and fail-closed remote access.
-  - [ ] Gate: focused package typecheck and tests.
+  - [x] Keep remote resolution and W-C replication as gated typed seams.
+  - [x] Add tests for local projection, exact h2a command mapping, and fail-closed remote access.
+  - [x] Gate: focused package typecheck and tests.
 
 - [ ] **Lot 4 — Local workstation attachment and mesh facade**
   - [x] Add a local attachment port matching the existing device-code issue, poll, and approve lifecycle.
-  - [ ] Compose the five domains behind a single degenerate cluster-mesh facade.
-  - [ ] Add tests for delegation fidelity and single-instance capability reporting.
+  - [x] Compose the five domains behind a single degenerate cluster-mesh facade.
+  - [x] Add tests for delegation fidelity and single-instance capability reporting.
   - [ ] Gate: focused package typecheck, tests, build, and pack.
 
 - [ ] **Lot 5 — Current application adapter**
