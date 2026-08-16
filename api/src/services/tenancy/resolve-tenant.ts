@@ -96,6 +96,17 @@ async function resolveByWorkspace(workspaceId: string, userId?: string): Promise
   return { tenantId: ws.tenantId };
 }
 
+/**
+ * Resolve a user-bound workspace without the process cache. Authorization boundaries use this
+ * path so membership revocation is observed on the next check rather than after a restart.
+ */
+export async function resolveTenantAuthoritatively(input: {
+  workspaceId: string;
+  userId: string;
+}): Promise<ResolveTenantResult> {
+  return resolveByWorkspace(input.workspaceId, input.userId);
+}
+
 async function resolveByClient(clientId: string): Promise<ResolveTenantResult> {
   const [row] = await db
     .select({ tenantId: serviceClients.tenantId })

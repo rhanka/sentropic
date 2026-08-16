@@ -2,11 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { logger } from '../../logger';
 import { validateSession, createSession } from '../../services/session-manager';
-import {
-  issueDeviceCode,
-  pollDeviceCode,
-  approveDeviceCode,
-} from '../../services/device-code-store';
+import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { db } from '../../db/client';
 import { users } from '../../db/schema';
 import { eq } from 'drizzle-orm';
@@ -49,7 +45,7 @@ deviceRouter.post('/code', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const { deviceName } = issueSchema.parse(body);
 
-    const issued = issueDeviceCode(deviceName);
+    const issued = clusterMeshAdapter.devices.issueDeviceCode(deviceName);
 
     const origin = (c.req.header('origin') || '').trim();
     const verificationUri = origin ? `${origin}/auth/devices/pair` : '/auth/devices/pair';
@@ -79,7 +75,7 @@ deviceRouter.post('/poll', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const { device_code } = pollSchema.parse(body);
 
-    const outcome = pollDeviceCode(device_code);
+    const outcome = clusterMeshAdapter.devices.pollDeviceCode(device_code);
 
     if (outcome.status === 'approved') {
       const issued = await createSession(outcome.userId, outcome.role, {
@@ -98,6 +94,12 @@ deviceRouter.post('/poll', async (c) => {
         .where(eq(users.id, outcome.userId))
         .limit(1);
 
+      if (!userRecord) {
+        throw new Error('Device enrollment user lookup returned no row');
+      }
+
+      clusterMeshAdapter.completeDeviceAttachment(outcome);
+
       return c.json({
         status: 'approved',
         sessionToken: issued.sessionToken,
@@ -105,9 +107,9 @@ deviceRouter.post('/poll', async (c) => {
         expiresAt: issued.expiresAt.toISOString(),
         user: {
           id: outcome.userId,
-          email: userRecord?.email ?? null,
-          displayName: userRecord?.displayName ?? null,
-          role: userRecord?.role ?? outcome.role,
+          email: userRecord.email,
+          displayName: userRecord.displayName,
+          role: userRecord.role,
         },
       });
     }
@@ -145,7 +147,12 @@ deviceRouter.post('/approve', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const { user_code, device_name } = approveSchema.parse(body);
 
-    const result = approveDeviceCode(user_code, session.userId, session.role, device_name);
+    const result = clusterMeshAdapter.devices.approveDeviceCode(
+      user_code,
+      session.userId,
+      session.role,
+      device_name,
+    );
 
     if (!result.ok) {
       if (result.reason === 'not_found') {
