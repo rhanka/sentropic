@@ -147,10 +147,11 @@ describe('LocalAccountTransportService', () => {
     expect(accounts[0]?.supportedModelIds).toEqual([
       'gemini-3.1-flash-lite',
       'claude-opus-4-6-thinking',
-      'gemini-3.6-flash',
+      'gemini-3.7-flash',
       'gemini-3.1-pro',
     ]);
     expect(accounts[0]?.supportedModelIds).not.toContain('gemini-3.5-flash');
+    expect(accounts[0]?.supportedModelIds).not.toContain('gemini-3.6-flash');
   });
 
   it('requires fresh Codex enrollment instead of silently claiming a legacy credential', async () => {
