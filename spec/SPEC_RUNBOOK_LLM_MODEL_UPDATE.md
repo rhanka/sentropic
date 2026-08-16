@@ -4,7 +4,7 @@
 
 Use this procedure for a real provider model addition or cutover, such as `3.7 -> 3.8` or a new Claude, GPT, or Gemini generation. It is an owner facilitation runbook, not evidence that a named model exists.
 
-Canonical repository example: PR #540, branch `origin/feat/llm-mesh-gemini-37`, based on `84512941a`. Its useful pattern is catalog -> providers -> council -> routes -> package version -> consumers -> tests. Do not copy its model specifications into another update: limits, modalities, endpoints, and identifiers are model-specific.
+Canonical repository example: PR #540, merged into `origin/main` as `28d57d098` after originating from base `84512941a`. Its useful pattern is catalog -> providers -> council -> routes -> package version -> consumers -> tests. Do not copy its model specifications into another update: limits, modalities, endpoints, and identifiers are model-specific.
 
 ## Required inputs
 
@@ -31,7 +31,7 @@ The evidence block must include a retrieval date because vendor pages are mutabl
 ### 1. Establish scope and inspect the reference
 
 - Verify the worktree with `harness check branch` before editing and `git branch --show-current` immediately before every commit.
-- Read the current model paths and the complete reference delta. Do not assume PR #540 is merged.
+- Read the current model paths and the complete reference delta. Confirm the reference merge state; this runbook branch now includes PR #540 in its base.
 - Declare exceptions for `Makefile`, workflows, lockfiles, API contracts, or generated sources before editing them.
 
 ### 2. Preview and apply the mechanical scaffold
@@ -142,23 +142,23 @@ Send h-cond/h2a-runtime a handoff containing: exact published mesh/gateway versi
 
 ## Current-tree file map
 
-Line anchors below refer to base `84512941a` plus this runbook/scaffold branch; re-resolve them after a rebase.
+Line anchors below refer to base `28d57d098` plus this runbook/scaffold branch.
 
 | Concern | Current file:line | Why it changes |
 |---|---|---|
-| Profile contract and profiles | `packages/llm-mesh/src/catalog.ts:27`, `:222`, `:260` | Profile shape, inherited capabilities, real model record. |
-| Provider registries | `packages/llm-mesh/src/providers.ts:13`, `:58` | Known id union and provider-indexed list. |
+| Profile contract and profiles | `packages/llm-mesh/src/catalog.ts:27`, `:227`, `:266` | Profile shape, inherited capabilities, real model record. |
+| Provider registries | `packages/llm-mesh/src/providers.ts:13`, `:59` | Known id union and provider-indexed list. |
 | Faithful/default targets | `packages/llm-mesh/src/routing-targets.ts:28` | Callable canonical host target. |
-| Standard alias candidates | `packages/llm-mesh/src/routing-targets.ts:53` | Owner-ratified Codex/Cloud Code route cutover. |
-| Capability aliases | `packages/llm-mesh/src/routing-targets.ts:77` | Resolve transport-only ids to verified catalog capabilities. |
+| Standard alias candidates | `packages/llm-mesh/src/routing-targets.ts:56` | Owner-ratified Codex/Cloud Code route cutover. |
+| Capability aliases | `packages/llm-mesh/src/routing-targets.ts:80` | Resolve transport-only ids to verified catalog capabilities. |
 | Council source | `scripts/llm-model-equivalences/council.source.json:1` | Explicit exclusion and review metadata. |
 | Council generator/output | `scripts/llm-model-equivalences/refresh.mjs:5`, `packages/llm-mesh/src/generated-model-council.ts:1` | Regenerate; never hand-edit output. |
-| Scaffold entrypoint | `Makefile:593`, `packages/llm-mesh/scripts/add-model.mjs:1` | Preview/apply the mechanical copy. |
-| Council CI gate | `.github/workflows/ci.yml:493` | Freshness runs before typecheck/test/build/pack. |
+| Scaffold entrypoint | `Makefile:595`, `packages/llm-mesh/scripts/add-model.mjs:1` | Preview/apply the mechanical copy. |
+| Council CI gate | `.github/workflows/ci.yml:502` | Freshness runs before typecheck/test/build/pack. |
 | Mesh/gateway publish order | `.github/workflows/ci.yml:1418`, `:1442` | Gateway depends on successful/skipped mesh publication. |
 | Mesh/gateway publish recipes | `Makefile:749`, `:661` | Both include council freshness; gateway waits for mesh. |
 | Package versions | `packages/llm-mesh/package.json:3`, `packages/llm-gateway/package.json:3` | Publishable semver identities. |
-| Gateway dependency | `packages/llm-gateway/package.json:36`, `package-lock.json:18204` | New mesh floor and root lock. |
+| Gateway dependency | `packages/llm-gateway/package.json:36`, `package-lock.json:18209` | New mesh floor and root lock. |
 | API workspace consumer | `api/package.json:73`, `api/package-lock.json:86` | File link plus synchronized workspace metadata. |
 | Generated-app consumer | `packages/build-cli/templates/chat-app/package.json:20`, `packages/build-cli/tests/generator-golden.spec.ts:77` | New app dependency and golden contract. |
 | Public API contract | `api/tests/api/models.test.ts:20` | Exact catalog response. |
@@ -167,7 +167,7 @@ Line anchors below refer to base `84512941a` plus this runbook/scaffold branch; 
 
 ## Source gaps and stop conditions
 
-- PR #540 is reference evidence but is not merged into this runbook's base; do not assume its ids or limits exist on `main`.
+- PR #540 is merged into this runbook's base; its Gemini 3.7 ids, routes, and `@sentropic/llm-mesh` 0.16.0 state are current-tree reference material, not specifications to copy blindly into a future model update.
 - `api/package-lock.json` currently records an older mesh workspace version than the root manifest. A future update must regenerate and review it rather than preserving the drift.
 - The build-cli template currently pins an older pre-1.0 mesh range. Updating or explicitly deferring it is mandatory consumer review.
 - Host defaults for h-cond/h2a-runtime and agy live outside this repository; the job stops at a documented handoff until that owner acknowledges it.
