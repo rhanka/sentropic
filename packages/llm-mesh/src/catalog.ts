@@ -52,6 +52,11 @@ const visionModalities = {
   output: ['text', 'json', 'tool-call'] as const,
 };
 
+const gemini37Modalities = {
+  input: ['text', 'image', 'audio', 'video'] as const,
+  output: ['text', 'json', 'tool-call'] as const,
+};
+
 const auth = (
   accountTransports: readonly AccountTransportProviderId[] = [],
 ) => ({
@@ -222,10 +227,11 @@ export const providerProfiles = {
 const modelCapabilities = (
   providerId: ProviderId,
   reasoningTier: ReasoningTier,
-  options: { vision?: boolean } = {},
+  options: { vision?: boolean; modalities?: ModelCapabilities['modalities'] } = {},
 ): ModelCapabilities => ({
   ...providerProfiles[providerId].capabilities,
-  modalities: options.vision ? visionModalities : providerProfiles[providerId].capabilities.modalities,
+  modalities: options.modalities ?? (options.vision
+    ? visionModalities : providerProfiles[providerId].capabilities.modalities),
   reasoning: {
     ...providerProfiles[providerId].capabilities.reasoning,
     support:
@@ -305,6 +311,18 @@ export const modelProfiles = [
     reasoningTier: 'none',
     defaultTaskHints: ['doc'],
     capabilities: modelCapabilities('openai', 'none'),
+  },
+  {
+    providerId: 'gemini',
+    modelId: 'gemini-3.7-flash',
+    label: 'Gemini 3.7 Flash',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: {
+      ...modelCapabilities('gemini', 'advanced', { modalities: gemini37Modalities }),
+      contextWindowTokens: 1_000_000,
+      maxOutputTokens: 65_536,
+    },
   },
   {
     providerId: 'gemini',
