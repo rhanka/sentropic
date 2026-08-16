@@ -41,8 +41,12 @@ export function createDegenerateClusterMesh(input: {
   readonly nhiRunner: CommandRunnerPort;
   readonly devices: LocalDeviceAttachmentPort;
 }): ClusterMesh {
+  const boundaries = createBoundaryDomain({
+    homeNodeId: input.self.nodeId,
+    memberships: input.memberships,
+  });
   return {
-    membership: createSingleNodeMembership(input),
+    membership: createSingleNodeMembership({ ...input, boundaries }),
     trust: createGatedTrustDomain(),
     wrap: {
       projections: createLocalProjectionDomain({ homeNodeId: input.self.nodeId, local: input.projections }),
@@ -50,7 +54,7 @@ export function createDegenerateClusterMesh(input: {
       memoryReplication: createGatedMemoryReplication(),
     },
     devices: createLocalDeviceDomain(input.devices),
-    boundaries: createBoundaryDomain({ homeNodeId: input.self.nodeId, memberships: input.memberships }),
+    boundaries,
     capabilities: {
       mode: 'single-node',
       localDevices: 'available',

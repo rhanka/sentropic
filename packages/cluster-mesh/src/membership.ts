@@ -1,4 +1,5 @@
 import { CapabilityGatedError } from './errors.js';
+import type { BoundaryDomain, MembershipLookup } from './boundaries.js';
 
 export type ClusterNodeId = `node:${string}`;
 export type WorkstationId = `device:${string}`;
@@ -36,7 +37,7 @@ export interface InterServerDirectoryPort {
 export interface MembershipDomain {
   readonly self: ClusterNodeDescriptor;
   readonly interServer: InterServerDirectoryPort;
-  listDirectory(): Promise<readonly ClusterDirectoryEntry[]>;
+  listDirectory(input: MembershipLookup): Promise<readonly ClusterDirectoryEntry[]>;
 }
 
 export function createGatedInterServerDirectory(): InterServerDirectoryPort {
@@ -53,17 +54,21 @@ export function createGatedInterServerDirectory(): InterServerDirectoryPort {
 /** Real v1 directory: exactly this server followed by its currently attached local devices. */
 export function createSingleNodeMembership(input: {
   self: ClusterNodeDescriptor;
+  boundaries: Pick<BoundaryDomain, 'resolve'>;
   workstations: LocalWorkstationDirectoryPort;
 }): MembershipDomain {
   const interServer = createGatedInterServerDirectory();
   return {
     self: input.self,
     interServer,
-    async listDirectory() {
+    async listDirectory(lookup) {
+      const residence = await input.boundaries.resolve(lookup);
       const devices = await input.workstations.listAttached();
       return [
         input.self,
-        ...devices.map((device) => ({ ...device, homeNodeId: input.self.nodeId })),
+        ...devices
+          .filter((device) => device.ownerSubject === residence.userId)
+          .map((device) => ({ ...device, homeNodeId: input.self.nodeId })),
       ];
     },
   };
