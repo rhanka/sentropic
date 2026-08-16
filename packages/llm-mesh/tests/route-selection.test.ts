@@ -60,7 +60,7 @@ describe('route candidate selection', () => {
     expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
   });
 
-  it('inverts one launch alias between enrolled Codex and Cloud Code transports', () => {
+  it('uses the next canonical fallback only when no Anthropic account is enrolled', () => {
     const launchAccounts = [
       {
         accountRef: 'codex-internal',
@@ -83,29 +83,17 @@ describe('route candidate selection', () => {
         revision: 'r1',
       },
     ];
-    const choose = (first: 'codex' | 'cloud-code') => candidatesOf(selectRouteCandidates({
+    const candidates = candidatesOf(selectRouteCandidates({
       request: {
         requestedModel: 'claude-opus-5-xhigh',
         requiredCapabilities: ['tools', 'streaming'],
       },
-      policy: {
-        ...DEFAULT_ROUTE_POLICY,
-        strategy: {
-          kind: 'ordered',
-          preferences: [
-            { transportProviderId: first },
-            { transportProviderId: first === 'codex' ? 'cloud-code' : 'codex' },
-          ],
-        },
-      },
+      policy: DEFAULT_ROUTE_POLICY,
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: launchAccounts,
     }));
 
-    expect(choose('codex').map((candidate) => candidate.target.transportProviderId))
-      .toEqual(['codex', 'cloud-code']);
-    expect(choose('cloud-code').map((candidate) => candidate.target.transportProviderId))
-      .toEqual(['cloud-code', 'codex']);
+    expect(candidates.map((candidate) => candidate.target.transportProviderId)).toEqual(['codex']);
   });
 
   it('allows an owner-scoped target profile override for a non-Claude model', () => {
@@ -312,13 +300,7 @@ describe('route candidate selection', () => {
           providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
         }],
       },
-      policy: {
-        ...DEFAULT_ROUTE_POLICY,
-        strategy: {
-          kind: 'ordered',
-          preferences: [{ providerId: 'anthropic' }, { providerId: 'gemini' }],
-        },
-      },
+      policy: DEFAULT_ROUTE_POLICY,
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: [
         {
@@ -339,6 +321,7 @@ describe('route candidate selection', () => {
     expect(selection.kind).toBe('candidates');
     if (selection.kind === 'candidates') {
       expect(selection.candidates[0]?.target.providerId).toBe('anthropic');
+      expect(selection.candidates).toHaveLength(1);
     }
   });
 
