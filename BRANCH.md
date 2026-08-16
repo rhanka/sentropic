@@ -17,6 +17,7 @@
   - [ ] `BRANCH.md`
   - [ ] `packages/llm-mesh/**`
   - [ ] `scripts/llm-model-equivalences/council.source.json` — owner-required generated-council source under `G37-EX1`.
+  - [ ] `package-lock.json` — required workspace version synchronization under `G37-EX2`.
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -31,6 +32,10 @@
   - [x] Reason: the generator reads its canonical exclusions from `scripts/llm-model-equivalences/council.source.json`.
   - [x] Impact: classify the new Gemini profile as non-equivalent without modifying council policy or generator code.
   - [x] Rollback: remove the new exclusion and regenerate the artifact with the existing make target.
+- [x] `G37-EX2` (`acknowledge`, GRANTED) — the owner requires a publishable 0.16.0 workspace package.
+  - [x] Reason: root `npm ci` rejects the package bump while the workspace lock still records 0.15.1.
+  - [x] Impact: synchronize only the llm-mesh workspace version through `make lock-root`.
+  - [x] Rollback: restore the lock entry together with the package version.
 - [x] Keep `gemini-3.6-flash` as a compatibility-only capability alias repointed to 3.7; do not advertise it in the default Cloud Code inventory.
 - [x] Omit `google/gemini-3.7-flash@gcp`; agy uses Cloud Code and no supplied evidence verifies a GCP Model Garden key.
 - [x] Skip peer review in this branch because the owner explicitly reserved blind Opus review as a separate activity.
