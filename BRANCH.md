@@ -59,7 +59,7 @@
 - [ ] **Lot 2 — Safe add-model scaffold**
   - [x] Add an idempotent script that plans or applies catalog, provider, and default-route stubs copied from `BASE`.
   - [x] Make dry-run side-effect free and print the manual evidence, council, consumer, test, version, publication, and host-default checklist.
-  - [ ] Add focused tests for valid stubs, dry-run immutability, idempotence, partial repair, and invalid input.
+  - [x] Add focused tests for valid stubs, dry-run immutability, idempotence, partial repair, and invalid input.
   - [x] Add `make llm-mesh-add-model MODEL=<id> BASE=<id>` under `BR75-EX1`.
   - [ ] Gate: focused test and dry-run make invocation are green.
 
