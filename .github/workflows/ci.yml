@@ -33,6 +33,7 @@ on:
           - cli
           - harness
           - llm-gateway
+          - cluster-mesh
           - focus
           - cited-source-viewer
           - all
@@ -100,6 +101,7 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
+      cluster_mesh: ${{ steps.filter.outputs.cluster_mesh }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
       cited_source_viewer: ${{ steps.filter.outputs.cited_source_viewer }}
@@ -171,6 +173,7 @@ jobs:
               - 'apps/auth-idp/**'
               - 'package.json'
               - 'package-lock.json'
+              - 'packages/cluster-mesh/**'
               - 'packages/llm-mesh/**'
               - 'packages/flow/**'
               - 'packages/focus/**'
@@ -189,6 +192,12 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
+              - '.github/workflows/ci.yml'
+            cluster_mesh:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/cluster-mesh/**'
               - '.github/workflows/ci.yml'
             llm_gateway:
               - 'Makefile'
@@ -499,6 +508,25 @@ jobs:
         run: make build-llm-mesh
       - name: Pack LLM Mesh
         run: make pack-llm-mesh
+
+  # The first package release uses bootstrap-publish. Enable steady-state OIDC
+  # publication only after the npm trusted publisher has been attached.
+  validate-cluster-mesh:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Cluster Mesh
+        run: make typecheck-cluster-mesh
+      - name: Test Cluster Mesh
+        run: make test-cluster-mesh
+      - name: Build Cluster Mesh
+        run: make build-cluster-mesh
+      - name: Pack Cluster Mesh
+        run: make pack-cluster-mesh
 
   # BR-LB-EX1 — @sentropic/llm-gateway (WP16 Layer-B) CI validation (owner-approved
   # 2026-06-22). Mirrors validate-llm-mesh; the make targets build the sibling
@@ -1770,6 +1798,9 @@ jobs:
       - name: Bootstrap publish llm-gateway
         if: inputs.bootstrap_publish_target == 'llm-gateway' || inputs.bootstrap_publish_target == 'all'
         run: make publish-llm-gateway-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish cluster-mesh
+        if: inputs.bootstrap_publish_target == 'cluster-mesh' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-cluster-mesh-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish focus
         if: inputs.bootstrap_publish_target == 'focus' || inputs.bootstrap_publish_target == 'all'
         run: make publish-focus-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
