@@ -26,27 +26,33 @@ describe('canonical model targets', () => {
 
   it('resolves only ratified suffixed aliases', () => {
     expect(resolve('claude-opus-5-xhigh')).toEqual({
-      providerId: 'openai',
-      transportProviderId: 'codex',
-      model: 'gpt-5.6-terra',
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-opus-5',
       effort: 'xhigh',
     });
     expect(resolve('claude-opus-4-8-xhigh')).toEqual({
-      providerId: 'openai',
-      transportProviderId: 'codex',
-      model: 'gpt-5.6-terra',
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-opus-4-8',
       effort: 'xhigh',
     });
     expect(resolve('claude-sonnet-5-xhigh')).toEqual({
-      providerId: 'openai',
-      transportProviderId: 'codex',
-      model: 'gpt-5.6-luna',
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-sonnet-5',
       effort: 'xhigh',
     });
   });
 
   it('exposes owner-ratified Codex and Cloud Code candidates for launch aliases', () => {
     expect(resolveCandidates('claude-opus-5-xhigh')).toEqual([
+      {
+        providerId: 'anthropic',
+        transportProviderId: 'claude-code',
+        model: 'claude-opus-5',
+        effort: 'xhigh',
+      },
       {
         providerId: 'openai',
         transportProviderId: 'codex',
@@ -61,6 +67,11 @@ describe('canonical model targets', () => {
       },
     ]);
     expect(resolveCandidates('claude-sonnet-4-6')).toEqual([
+      {
+        providerId: 'anthropic',
+        transportProviderId: 'claude-code',
+        model: 'claude-sonnet-4-6',
+      },
       {
         providerId: 'openai',
         transportProviderId: 'codex',
@@ -96,6 +107,31 @@ describe('canonical model targets', () => {
         model: 'gpt-5.6-terra',
       },
     ]);
+  });
+
+  it('puts an Anthropic target first for every known Claude route while retaining Gemini 3.7 Flash', () => {
+    const aliases = [
+      'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
+      'claude-opus-4-8', 'claude-opus-4-8-xhigh',
+      'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
+      'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
+      'claude-fable-5-max',
+    ];
+
+    const descriptions = describeCanonicalTargetRoutes();
+    for (const alias of aliases) {
+      const candidates = resolveCandidates(alias);
+      expect(candidates[0]).toMatchObject({
+        providerId: 'anthropic', transportProviderId: 'claude-code',
+      });
+      expect(candidates).toContainEqual(expect.objectContaining({
+        providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+      }));
+      expect(descriptions.find((route) => route.requestedId === alias)).toMatchObject({
+        providerId: 'anthropic', transportProviderId: 'claude-code',
+        kind: alias === candidates[0]?.model ? 'faithful' : 'alias',
+      });
+    }
   });
 
   it('preserves effort and never uses Flash Lite for standard aliases', () => {
