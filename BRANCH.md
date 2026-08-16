@@ -18,6 +18,7 @@
   - [ ] `api/drizzle/control/0006_arch11_outbox_tenant_rekey.sql`
   - [ ] `api/drizzle/control/meta/_journal.json`
   - [ ] `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`
+  - [ ] `api/tests/api/tenancy/arch11-tenant-data.test.ts`
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -32,6 +33,7 @@
 ## Feedback Loop
 - [x] Owner EVOL is authoritative; source gap: no persisted UBO table exists, so no UBO row re-key applies.
 - [x] Clear isolated root-owned `node_modules` only via `make clean-node-modules`; focused rerun is green.
+- [x] Replace the G1a backfill test's global one-second race with an assertion on the versioned migration statement.
 
 ## AI Flaky tests
 - [ ] Accept no deterministic or security failure as flaky; record eligible nondeterminism with owner sign-off.
