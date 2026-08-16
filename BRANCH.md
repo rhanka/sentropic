@@ -31,15 +31,15 @@
   - [ ] Existing auth, tenant, workspace, and NHI persistence schemas
   - [ ] RFC 8693 endpoints, trusted-issuer stores, and inter-server directory runtime code
 - [ ] **Conditional Paths**
-  - [ ] `Makefile`
-  - [ ] `api/Dockerfile`
-  - [ ] `ui/Dockerfile`
-  - [ ] `.github/workflows/ci.yml`
+  - [ ] `Makefile` — granted under `BR72-EX1`
+  - [ ] `api/Dockerfile` — granted under `BR72-EX1`
+  - [ ] `ui/Dockerfile` — granted under `BR72-EX1`
+  - [ ] `.github/workflows/ci.yml` — granted under `BR72-EX1`
 - [ ] **Exception process**
-  - [ ] Use `BR-INFRA-EX1` only for the owner-mandated eight-point published-package wiring.
+  - [ ] Use `BR72-EX1` only as this branch-local scope ID for the owner-mandated eight-point published-package wiring.
 
 ## Feedback Loop
-- [ ] `BR-INFRA-EX1` — status `acknowledge`; owner explicitly requires package.json, lock, two Dockerfiles, Make target, prerequisites, API_VERSION, and CI wiring.
+- [ ] `BR72-EX1` (`acknowledge`, GRANTED) — owner explicitly requires package.json, lock, two Dockerfiles, Make target, prerequisites, API_VERSION, and CI wiring.
   - [ ] Reason: a published workspace package consumed by `api/` must be installed, built, hashed, and independently validated.
   - [ ] Impact: API/UI image dependency layers and API cache invalidation include `packages/cluster-mesh`; CI gains one focused validation lane.
   - [ ] Rollback: remove the package dependency, Dockerfile copies/build, Make targets/prerequisites/hash input, and CI filters/job as one mechanical reversal.
@@ -58,7 +58,7 @@
   - [x] Read `rules/MASTER.md`, workflow, architecture, API, security, dossier v2, and the blind design review.
   - [x] Verify the isolated worktree branch with `harness check branch`.
   - [x] Open `harness brainstorm` and `harness plan` against the ratified design.
-  - [ ] Run `make scope-check` after this branch plan exists.
+  - [x] Run `make scope-check` after this branch plan exists.
 
 - [ ] **Lot 1 — Membership, directory, and boundary primitives**
   - [ ] Add typed node, workstation, validated membership, residence, and workspace-reference contracts.
@@ -96,7 +96,7 @@
 
 - [ ] **Lot 6 — Published package wiring**
   - [ ] Add the API workspace dependency and regenerate the root lock through a make target.
-  - [ ] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR-INFRA-EX1`.
+  - [ ] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR72-EX1`.
   - [ ] Add CI change filters plus validate/package job; document first-publish bootstrap without publishing.
   - [ ] Gate: `make check-ci-version-filters ENV=test-cluster-mesh-v1`, package build/pack, and API image build.
 
