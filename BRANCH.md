@@ -19,6 +19,7 @@
   - [x] `packages/llm-mesh/scripts/add-model.mjs`
   - [x] `packages/llm-mesh/tests/add-model-script.test.ts`
   - [x] `.tmp/engage/model-update-runbook-report.md`
+  - [x] `.tmp/engage/pr541-rebase-report.md`
 - [x] **Forbidden Paths (must not change in this branch)**
   - [x] `docker-compose*.yml`
   - [x] `.cursor/rules/**`
@@ -69,9 +70,9 @@
   - [x] Specify Codex 5.6 Sol xhigh build, blind Opus 4.8 review, exact evidence/scope/test/publish gates, stop conditions, and report contract.
   - [x] Gate: packet requires one directive, one make scaffold, one blind review, and no merge.
 
-- [ ] **Lot 4 — Final validation and PR-only delivery**
+- [x] **Lot 4 — Final validation and PR-only delivery**
   - [x] Run scope, council freshness, focused tests, dry run, build, typecheck, and lint gates; record the local provider-secret boundary for the full test gate.
   - [x] Record review selection failure: exact author model and effort are unattested, so independent blind peer eligibility cannot be proven without invention.
   - [x] Verify `git branch --show-current` immediately before every commit.
-  - [ ] Push `feat/llm-model-update-runbook`, open the requested PR without merging, and verify CI.
-  - [ ] Write `.tmp/engage/model-update-runbook-report.md` and deposit a valid `sentropic.h2a` v1.0 report to `claude:sentropic-drumbeat:21fe3355ad7d`.
+  - [x] Push `feat/llm-model-update-runbook`, open the requested PR without merging, and verify CI.
+  - [x] Write the delivery reports and deposit a valid `sentropic.h2a` v1.0 report to `claude:sentropic-drumbeat:21fe3355ad7d`.
