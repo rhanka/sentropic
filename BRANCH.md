@@ -84,12 +84,12 @@
   - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make typecheck-llm-mesh ENV=test-llm-mesh-g37`.
 
 - [ ] **Lot 3 — Final validation and delivery**
-  - [ ] Run `make build ENV=test-llm-mesh-g37`.
-  - [ ] Run `make typecheck ENV=test-llm-mesh-g37`.
-  - [ ] Run `make lint ENV=test-llm-mesh-g37`.
-  - [ ] Run `make test ENV=test-llm-mesh-g37`.
-  - [ ] Run `make pack-llm-mesh ENV=test-llm-mesh-g37` and the publication dry-run CI gates.
-  - [ ] Run `make scope-check ENV=test-llm-mesh-g37` and `harness check scope`.
+  - [x] Run `make build ENV=test-llm-mesh-g37`.
+  - [x] Run `make typecheck ENV=test-llm-mesh-g37`.
+  - [x] Run `make lint ENV=test-llm-mesh-g37`.
+  - [x] Run deterministic `make test ENV=test-llm-mesh-g37` suites; record the isolated live-AI auth failure.
+  - [x] Run `make pack-llm-mesh ENV=test-llm-mesh-g37`; leave publication verification to CI.
+  - [x] Run `make scope-check ENV=test-llm-mesh-g37` and `harness check scope`.
   - [ ] Push `feat/llm-mesh-gemini-37` without merge and open the requested PR.
   - [ ] Wait for green CI including `enforce-package-bump` and `validate/publish-llm-mesh` dry run.
   - [ ] Write `.tmp/engage/llm-mesh-g37-report.md` with assessment first.
@@ -99,4 +99,9 @@
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 145 tests passed after Lot 1.
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 147 tests passed after Lot 2.
 - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-g37`: passed after Lot 2.
+- [x] `make build`, `make typecheck`, and `make lint`: passed in isolated `test-llm-mesh-g37`.
+- [x] Aggregate deterministic suites: unit 874 passed / 2 skipped; endpoints 658 passed aside from one parallel ARCH-11 isolation flake that passed scoped and with one worker.
+- [x] Targeted public catalog and exhaustive stream contracts: 4 and 94 tests passed respectively.
+- [x] `make pack-llm-mesh`: packed `@sentropic/llm-mesh@0.16.0`; council drift and scope gates passed.
+- [ ] Live-AI aggregate: 18 tests stopped uniformly because provider auth is not configured in this worktree.
 - [ ] Record remaining exact commands, results, commit SHAs, PR URL, and CI run in the delivery report.
