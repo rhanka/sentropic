@@ -96,12 +96,19 @@ export class InMemoryRoutePlanner implements RoutePlanner {
     const roundRobinOffset = roundRobinState
       ? roundRobinState.committedOffset + roundRobinState.reservations.size
       : 0;
-    let candidates = [...selectRouteCandidates({
+    const selection = selectRouteCandidates({
       request: input, policy, council: this.council, accounts,
       roundRobinOffset,
       now: this.clock.now(),
       applyAttemptLimit: false,
-    })];
+    });
+    if (selection.kind === 'unknown-model') {
+      throw new RoutePlanError('Unknown requested model', 'unknown-model');
+    }
+    if (selection.kind === 'capabilities-unmet') {
+      throw new RoutePlanError('Required capabilities are unavailable', 'capabilities-unmet');
+    }
+    let candidates = selection.kind === 'candidates' ? [...selection.candidates] : [];
     if (affinity && policy.stickyAccount) {
       const account = accounts.find((entry) => entry.accountRef === affinity.accountRef);
       if (!account || account.readiness !== 'ready') {

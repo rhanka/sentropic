@@ -9,6 +9,13 @@ export interface RankedRouteCandidate {
   readonly account: EligibleAccountDescriptor;
   readonly target: PlannedRouteTarget;
 }
+
+export type RouteCandidateSelection =
+  | { readonly kind: 'candidates'; readonly candidates: readonly RankedRouteCandidate[] }
+  | { readonly kind: 'unknown-model'; readonly requestedModel: string }
+  | { readonly kind: 'capabilities-unmet'; readonly requestedModel: string }
+  | { readonly kind: 'no-eligible-account'; readonly requestedModel: string };
+
 interface ResolvedRouteTarget {
   readonly providerId: string;
   readonly modelId: string;
@@ -37,25 +44,54 @@ const selectorMatches = (
   && (!selector.diagnosticAccountRef
     || selector.diagnosticAccountRef === candidate.account.diagnosticAccountRef);
 
-const resolveRequestedTargets = (request: RoutePlanInput): readonly {
+type RequestedTargetResolution =
+  | { readonly kind: 'known'; readonly targets: readonly {
   providerId: string;
   model: string;
   transportProviderId?: string;
   effort?: string;
   reason: 'exact' | 'alias';
-}[] => {
+}[] }
+  | { readonly kind: 'unknown-model'; readonly requestedModel: string };
+
+const sameTarget = (left: {
+  readonly providerId: string; readonly transportProviderId?: string; readonly model: string;
+  readonly effort?: string;
+}, right: {
+  readonly providerId: string; readonly transportProviderId?: string; readonly model: string;
+  readonly effort?: string;
+}): boolean => left.providerId === right.providerId
+  && left.transportProviderId === right.transportProviderId
+  && left.model === right.model
+  && left.effort === right.effort;
+
+const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolution => {
   const { requestedModel } = request;
-  const canonical = request.targetCandidatesOverride ?? resolveCanonicalTargets(requestedModel);
-  if (canonical.length > 0) return canonical.map((target) => ({
+  const canonicalTargets = resolveCanonicalTargets(requestedModel);
+  const profile = modelProfiles.find((candidate) => candidate.modelId === requestedModel);
+  if (canonicalTargets.length === 0 && !profile) {
+    return { kind: 'unknown-model', requestedModel };
+  }
+  const standardTargets = canonicalTargets.length > 0
+    ? canonicalTargets
+    : [{ providerId: profile!.providerId, model: profile!.modelId, transportProviderId: undefined }];
+  const faithfulClaudeTarget = requestedModel.startsWith('claude-')
+    ? standardTargets.find((target) => target.providerId === 'anthropic')
+    : undefined;
+  const override = request.targetCandidatesOverride;
+  const targets = override && faithfulClaudeTarget
+    ? [
+      faithfulClaudeTarget,
+      ...override.filter((target) => !sameTarget(faithfulClaudeTarget, target)),
+    ]
+    : override ?? standardTargets;
+  return {
+    kind: 'known',
+    targets: targets.map((target) => ({
     ...target,
     reason: requestedModel === target.model ? 'exact' as const : 'alias' as const,
-  }));
-  const profile = modelProfiles.find((candidate) => candidate.modelId === requestedModel);
-  return profile ? [{
-    providerId: profile.providerId,
-    model: profile.modelId,
-    reason: 'exact' as const,
-  }] : [];
+    })),
+  };
 };
 
 export const selectRouteCandidates = (input: {
@@ -66,10 +102,10 @@ export const selectRouteCandidates = (input: {
   readonly roundRobinOffset?: number;
   readonly now?: Date;
   readonly applyAttemptLimit?: boolean;
-}): readonly RankedRouteCandidate[] => {
-  const resolvedTargets = resolveRequestedTargets(input.request);
-  if (resolvedTargets.length === 0) return [];
-  const targets: ResolvedRouteTarget[] = resolvedTargets.map((resolved) => ({
+}): RouteCandidateSelection => {
+  const resolution = resolveRequestedTargets(input.request);
+  if (resolution.kind === 'unknown-model') return resolution;
+  const targets: ResolvedRouteTarget[] = resolution.targets.map((resolved) => ({
     providerId: resolved.providerId,
     modelId: resolved.model,
     ...(resolved.effort ? { effort: resolved.effort } : {}),
@@ -80,7 +116,7 @@ export const selectRouteCandidates = (input: {
   }));
   if (input.policy.allowEquivalentModels) {
     const now = (input.now ?? new Date()).getTime();
-    for (const resolved of resolvedTargets) {
+    for (const resolved of resolution.targets) {
       const group = input.council.groups.find((candidate) =>
         Date.parse(candidate.expiresAt) > now
         && candidate.evidence.length > 0
@@ -102,7 +138,7 @@ export const selectRouteCandidates = (input: {
     }
   }
 
-  let candidates = targets.flatMap((target) => {
+  const capableTargets = targets.filter((target) => {
     const capabilitySource = resolveTargetCapabilitySource({
       providerId: target.providerId,
       transportProviderId: target.transportProviderId ?? '',
@@ -111,7 +147,12 @@ export const selectRouteCandidates = (input: {
     const targetProfile = modelProfiles.find((profile) =>
       profile.providerId === capabilitySource.providerId
       && profile.modelId === capabilitySource.model);
-    if (!supportsCapabilities(targetProfile, input.request.requiredCapabilities)) return [];
+    return supportsCapabilities(targetProfile, input.request.requiredCapabilities);
+  });
+  if (targets.length > 0 && capableTargets.length === 0) {
+    return { kind: 'capabilities-unmet', requestedModel: input.request.requestedModel };
+  }
+  let candidates = capableTargets.flatMap((target) => {
     return input.accounts
       .filter((account) => account.readiness === 'ready'
         && account.targetProviderId === target.providerId
@@ -173,7 +214,10 @@ export const selectRouteCandidates = (input: {
     const offset = (input.roundRobinOffset ?? 0) % candidates.length;
     candidates = [...candidates.slice(offset), ...candidates.slice(0, offset)];
   }
-  return input.applyAttemptLimit === false
+  const selected = input.applyAttemptLimit === false
     ? candidates
     : candidates.slice(0, input.policy.maxAttempts);
+  return selected.length > 0
+    ? { kind: 'candidates', candidates: selected }
+    : { kind: 'no-eligible-account', requestedModel: input.request.requestedModel };
 };
