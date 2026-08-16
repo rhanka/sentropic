@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
   type FocusOwnerSignatureContractVersion,
@@ -93,6 +93,15 @@ export class TrackEventOwnerSignaturePort implements TrackOwnerSignaturePort {
       clientToken,
     };
 
+    // Caller-supplied newId: `emitBatch` always mints a fresh id for the event it emits, BEFORE
+    // the under-lock dedupe hook decides whether to persist it or discard it in favor of the
+    // pre-existing event. So `attemptEventId` lands as the persisted event's `id` iff THIS call's
+    // write actually won the (workspace, clientToken) slot under the lock — the same
+    // did-my-own-write-win signal the Postgres sibling port reads off its `onConflictDoNothing`
+    // `.returning()` (PR #536 review F1b-residual). `idempotencyKey` is client-supplied and
+    // legitimately repeats across retries, so it cannot serve as this signal.
+    const attemptEventId = randomUUID();
+
     const ctx: IngestContext = {
       by: ownerSubject,
       workspace: target.workspace,
@@ -101,36 +110,71 @@ export class TrackEventOwnerSignaturePort implements TrackOwnerSignaturePort {
         proposed: false,
         auth: 'local-user',
       },
+      newId: () => attemptEventId,
     };
 
     const store = new EventStore(this.eventsPath);
     ingest([workEvent], ctx, store);
 
-    const persisted = await this.readOwnerSignature({
+    const record = this.findPersistedRecord({
       ownerCanonicalIdentity: attestation.attester.canonicalIdentity,
       target,
     });
 
-    if (!persisted) {
+    if (!record) {
       throw new Error('Owner signature write failed to read back from Track store');
     }
 
-    // `ingest` doesn't report append-vs-dedup for its own call (its dedup hook returns the
-    // SAME durable event to every caller sharing this clientToken). An unlocked pre/post
-    // `readAll().length` bracket is racy cross-process (PR #536 review F1b): a concurrent
-    // writer can land between the two reads and make both callers see a length delta. The
-    // persisted record's `idempotencyKey` — stamped by whichever write actually landed — is
-    // the authoritative signal for which caller's attempt was durably recorded.
-    const status = persisted.idempotencyKey === idempotencyKey ? 'written' : 'duplicate';
+    const status = record.eventId === attemptEventId ? 'written' : 'duplicate';
     return {
       status,
-      recordId: persisted.recordId,
+      recordId: record.meta.recordId,
     };
   }
 
   async readOwnerSignature(
     input: OwnerSignatureDurableUniquenessKey,
   ): Promise<PersistedOwnerSignature | undefined> {
+    const record = this.findPersistedRecord(input);
+    if (!record) return undefined;
+
+    const { meta, at } = record;
+    return Object.freeze({
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      target: Object.freeze({
+        workspace: input.target.workspace,
+        decisionId: input.target.decisionId,
+      }),
+      attestation: Object.freeze({
+        attester: Object.freeze({
+          principalId: meta.ownerPrincipalId,
+          canonicalIdentity: Object.freeze({
+            issuer: meta.ownerIssuer,
+            subject: input.ownerCanonicalIdentity.subject,
+          }),
+          authenticatedAt: at,
+        }),
+      }),
+      relayer: Object.freeze({
+        transport: meta.relayerTransport,
+        relayerId: meta.relayerId,
+        canonicalIdentity: Object.freeze({
+          issuer: meta.relayerIssuer,
+          subject: meta.relayerSubject,
+        }),
+      }),
+      idempotencyKey: meta.idempotencyKey,
+      recordId: meta.recordId,
+    });
+  }
+
+  /**
+   * Shared scan for the durable `(owner, workspace, decision)` record: the raw event's own `id`
+   * (for the append-vs-dedup arbiter) plus its stored metadata (for the public read shape).
+   */
+  private findPersistedRecord(
+    input: OwnerSignatureDurableUniquenessKey,
+  ): { eventId: string; at: string; meta: StoredSignatureMetadata } | undefined {
     try {
       const reader = new TrackReader(this.eventsPath);
       // baselineCommit only feeds item-level acceptance/bucket status (unused here — this
@@ -150,33 +194,7 @@ export class TrackEventOwnerSignaturePort implements TrackOwnerSignaturePort {
               if (comp.subject === input.ownerCanonicalIdentity.subject && comp.sig?.value) {
                 try {
                   const meta = JSON.parse(comp.sig.value) as StoredSignatureMetadata;
-                  return Object.freeze({
-                    contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
-                    target: Object.freeze({
-                      workspace: input.target.workspace,
-                      decisionId: input.target.decisionId,
-                    }),
-                    attestation: Object.freeze({
-                      attester: Object.freeze({
-                        principalId: meta.ownerPrincipalId,
-                        canonicalIdentity: Object.freeze({
-                          issuer: meta.ownerIssuer,
-                          subject: input.ownerCanonicalIdentity.subject,
-                        }),
-                        authenticatedAt: comp.at ?? new Date().toISOString(),
-                      }),
-                    }),
-                    relayer: Object.freeze({
-                      transport: meta.relayerTransport,
-                      relayerId: meta.relayerId,
-                      canonicalIdentity: Object.freeze({
-                        issuer: meta.relayerIssuer,
-                        subject: meta.relayerSubject,
-                      }),
-                    }),
-                    idempotencyKey: meta.idempotencyKey,
-                    recordId: meta.recordId,
-                  });
+                  return { eventId: event.id, at: comp.at ?? new Date().toISOString(), meta };
                 } catch {
                   // Ignore malformed metadata signature values
                 }
