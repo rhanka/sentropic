@@ -60,19 +60,19 @@
   - [x] Open `harness brainstorm` and `harness plan` against the ratified design.
   - [x] Run `make scope-check` after this branch plan exists.
 
-- [ ] **Lot 1 — Membership, directory, and boundary primitives**
+- [x] **Lot 1 — Membership, directory, and boundary primitives**
   - [x] Add typed node, workstation, validated membership, residence, and workspace-reference contracts.
   - [x] Implement single-node directory enumeration as self plus local workstations.
   - [x] Implement fail-closed tenant resolution and `ws:sha256` workspace references.
   - [x] Keep inter-server discovery and member revocation as unavailable typed ports.
   - [x] Add focused membership, directory, and boundary tests.
-  - [ ] Gate: `make typecheck-cluster-mesh ENV=test-cluster-mesh-v1` and `make test-cluster-mesh ENV=test-cluster-mesh-v1`.
+  - [x] Gate: `make typecheck-cluster-mesh ENV=test-cluster-mesh-v1` and `make test-cluster-mesh ENV=test-cluster-mesh-v1`.
 
 - [ ] **Lot 2 — Trust exchange seam**
-  - [ ] Add RFC 8693-shaped subject-token, audience, scope, actor-chain, and exchange result contracts.
-  - [ ] Ship a fail-closed exchange implementation returning a typed gated-capability error.
-  - [ ] Expose no HTTP broker route and persist no issuer trust relation.
-  - [ ] Add tests proving all exchange attempts deny without invoking remote behavior.
+  - [x] Add RFC 8693-shaped subject-token, audience, scope, actor-chain, and exchange result contracts.
+  - [x] Ship a fail-closed exchange implementation returning a typed gated-capability error.
+  - [x] Expose no HTTP broker route and persist no issuer trust relation.
+  - [x] Add tests proving all exchange attempts deny without invoking remote behavior.
   - [ ] Gate: focused package typecheck and tests.
 
 - [ ] **Lot 3 — Identity, agent, memory, and NHI wrap**
