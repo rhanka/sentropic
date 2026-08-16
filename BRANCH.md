@@ -2,7 +2,7 @@
 
 ## Objective
 - [x] Add the real `gemini-3.7-flash` profile to `@sentropic/llm-mesh` with verified limits and input modalities.
-- [ ] Route agy Cloud Code execution to the real model without resolving through Gemini 3.5 Flash.
+- [x] Route agy Cloud Code execution to the real model without resolving through Gemini 3.5 Flash.
 
 ## Scope / Guardrails
 - [x] Keep implementation under `packages/llm-mesh/**` except the generated-council source exception.
@@ -60,13 +60,13 @@
   - [x] Bump `@sentropic/llm-mesh` from `0.15.1` to `0.16.0`.
   - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make check-llm-model-equivalences ENV=test-llm-mesh-g37`.
 
-- [ ] **Lot 2 — Faithful agy Cloud Code routing**
-  - [ ] Add the faithful canonical `gemini-3.7-flash` Cloud Code target.
-  - [ ] Route standard agy candidates and the Cloud Code default to `gemini-3.7-flash`.
-  - [ ] Replace the default Cloud Code account inventory entry for 3.6 with 3.7.
-  - [ ] Repoint the 3.6 compatibility capability source from 3.5 to 3.7.
-  - [ ] Add routing, account inventory, and Cloud Code wire-default tests proving no 3.5 resolution.
-  - [ ] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make typecheck-llm-mesh ENV=test-llm-mesh-g37`.
+- [x] **Lot 2 — Faithful agy Cloud Code routing**
+  - [x] Add the faithful canonical `gemini-3.7-flash` Cloud Code target.
+  - [x] Route standard agy candidates and the Cloud Code default to `gemini-3.7-flash`.
+  - [x] Replace the default Cloud Code account inventory entry for 3.6 with 3.7.
+  - [x] Repoint the 3.6 compatibility capability source from 3.5 to 3.7.
+  - [x] Add routing, account inventory, and Cloud Code wire-default tests proving no 3.5 resolution.
+  - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make typecheck-llm-mesh ENV=test-llm-mesh-g37`.
 
 - [ ] **Lot 3 — Final validation and delivery**
   - [ ] Run `make build ENV=test-llm-mesh-g37`.
@@ -82,4 +82,6 @@
 
 ## Verification Evidence
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 145 tests passed after Lot 1.
+- [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 147 tests passed after Lot 2.
+- [x] `make typecheck-llm-mesh ENV=test-llm-mesh-g37`: passed after Lot 2.
 - [ ] Record remaining exact commands, results, commit SHAs, PR URL, and CI run in the delivery report.
