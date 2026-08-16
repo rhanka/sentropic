@@ -138,7 +138,7 @@ export const selectRouteCandidates = (input: {
     }
   }
 
-  const capableTargets = targets.filter((target) => {
+  const supportsTargetCapabilities = (target: ResolvedRouteTarget): boolean => {
     const capabilitySource = resolveTargetCapabilitySource({
       providerId: target.providerId,
       transportProviderId: target.transportProviderId ?? '',
@@ -148,12 +148,16 @@ export const selectRouteCandidates = (input: {
       profile.providerId === capabilitySource.providerId
       && profile.modelId === capabilitySource.model);
     return supportsCapabilities(targetProfile, input.request.requiredCapabilities);
-  });
-  if (targets.length > 0 && capableTargets.length === 0) {
+  };
+  const faithfulClaude = input.request.requestedModel.startsWith('claude-');
+  if (faithfulClaude && targets[0] && !supportsTargetCapabilities(targets[0])) {
     return { kind: 'capabilities-unmet', requestedModel: input.request.requestedModel };
   }
-  let candidates = capableTargets.flatMap((target) => {
-    return input.accounts
+  const capableTargets = targets.filter(supportsTargetCapabilities);
+  if (!faithfulClaude && targets.length > 0 && capableTargets.length === 0) {
+    return { kind: 'capabilities-unmet', requestedModel: input.request.requestedModel };
+  }
+  const candidatesFor = (target: ResolvedRouteTarget): RankedRouteCandidate[] => input.accounts
       .filter((account) => account.readiness === 'ready'
         && account.targetProviderId === target.providerId
         && account.supportedModelIds.includes(target.modelId)
@@ -170,7 +174,14 @@ export const selectRouteCandidates = (input: {
           reason: target.reason,
         },
       }));
-  });
+  let candidates: RankedRouteCandidate[] = [];
+  for (const target of capableTargets) {
+    const candidatesForTarget = candidatesFor(target);
+    if (candidatesForTarget.length > 0) {
+      candidates = faithfulClaude ? candidatesForTarget : [...candidates, ...candidatesForTarget];
+      if (faithfulClaude) break;
+    }
+  }
   if (input.request.explicit) {
     candidates = candidates.filter((candidate) =>
       selectorMatches(input.request.explicit!, candidate, input.request.requestedModel));
