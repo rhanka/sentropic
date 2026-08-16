@@ -47,6 +47,7 @@
 - [ ] **Lot 1 — Residual DATA re-key**
   - [x] Add one idempotent control migration for legacy alias rows.
   - [x] Re-key column and embedded tenant/UBO scope copies through `workspaces.tenant_id` only.
+  - [x] Commit migration SQL and control journal atomically with this branch plan.
   - [x] Gate: `make db-migrate API_PORT=9055 UI_PORT=5255 MAILDEV_UI_PORT=1155 REGISTRY=local ENV=arch11g1a`.
   - [ ] Add focused integration coverage in `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`.
   - [ ] Gate: focused test, `make scope-check ENV=arch11g1a`, and `harness check scope`.
