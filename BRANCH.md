@@ -82,7 +82,7 @@
   - [x] Add tests for local projection, exact h2a command mapping, and fail-closed remote access.
   - [x] Gate: focused package typecheck and tests.
 
-- [ ] **Lot 4 — Local workstation attachment and mesh facade**
+- [x] **Lot 4 — Local workstation attachment and mesh facade**
   - [x] Add a local attachment port matching the existing device-code issue, poll, and approve lifecycle.
   - [x] Compose the five domains behind a single degenerate cluster-mesh facade.
   - [x] Add tests for delegation fidelity and single-instance capability reporting.
@@ -90,7 +90,7 @@
 
 - [ ] **Lot 5 — Current application adapter**
   - [x] Add a thin API adapter that injects existing device-code functions and the authoritative tenant resolver.
-  - [ ] Route existing device issue, poll, and approve calls through the adapter with byte-equivalent response behavior.
+  - [x] Route existing device issue, poll, and approve calls through the adapter with byte-equivalent response behavior.
   - [x] Add API unit tests proving exact delegation and no tenant fallback.
   - [ ] Gate: `make typecheck-api ENV=test-cluster-mesh-v1`, `make lint-api ENV=test-cluster-mesh-v1`, and scoped API tests.
 
