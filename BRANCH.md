@@ -91,7 +91,7 @@
 - [ ] **Lot 5 — Current application adapter**
   - [x] Add a thin API adapter that injects existing device-code functions and the authoritative tenant resolver.
   - [ ] Route existing device issue, poll, and approve calls through the adapter with byte-equivalent response behavior.
-  - [ ] Add API unit tests proving exact delegation and no tenant fallback.
+  - [x] Add API unit tests proving exact delegation and no tenant fallback.
   - [ ] Gate: `make typecheck-api ENV=test-cluster-mesh-v1`, `make lint-api ENV=test-cluster-mesh-v1`, and scoped API tests.
 
 - [ ] **Lot 6 — Published package wiring**
