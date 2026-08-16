@@ -218,6 +218,65 @@ describe('TrackEventOwnerSignaturePort (Real Track Store Atomicity)', () => {
     15000,
   );
 
+  it('in-process: sequential retry with the SAME idempotency_key yields written then duplicate (PR #536 F1b-residual)', async () => {
+    // PR #536 review F1b-residual: the durable arbiter is (owner, workspace, decision), never
+    // idempotencyKey — a client-supplied retry legitimately reuses the SAME idempotencyKey, and
+    // must still be labeled 'duplicate' on the second call (matching the Postgres sibling port's
+    // onConflictDoNothing-derived label). A same-key arbiter would wrongly say 'written' twice.
+    const workspace = 'ws:sha256-test-workspace';
+    const decisionId = seedDecisionInStore(workspace, OWNER_EMAIL);
+    const target: TrackNativeDecisionTarget = { workspace, decisionId };
+
+    const port = new TrackEventOwnerSignaturePort({ eventsPath });
+
+    const write: TrackOwnerSignatureWrite = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      target,
+      attestation: { attester: OWNER },
+      relayer: RELAYER,
+      idempotencyKey: 'same-key-retry',
+    };
+
+    const first = await port.appendOwnerSignature(write);
+    const second = await port.appendOwnerSignature(write);
+
+    expect(first.status).toBe('written');
+    expect(second.status).toBe('duplicate');
+    expect(second.recordId).toBe(first.recordId);
+
+    const reader = new TrackReader(eventsPath);
+    const snapshot = reader.reportSnapshot({ decisions: true });
+    const artifactEvents = snapshot.events.filter((e) => e.type === 'decision.artifact-added');
+    expect(artifactEvents).toHaveLength(1);
+  });
+
+  it(
+    'cross-process: 2 OS processes writing the SAME idempotency_key concurrently yield exactly 1 written, 1 duplicate (PR #536 F1b-residual)',
+    async () => {
+      const workspace = 'ws:sha256-test-workspace';
+      const decisionId = seedDecisionInStore(workspace, OWNER_EMAIL);
+
+      // Same idempotencyKey on both concurrent attempts — the case the old
+      // `persisted.idempotencyKey === idempotencyKey` arbiter got wrong (2 written, since both
+      // callers' own key trivially matches the persisted one).
+      const [receiptA, receiptB] = await Promise.all([
+        spawnOwnerSignChild(eventsPath, workspace, decisionId, 'cross-process-same-key', OWNER_EMAIL),
+        spawnOwnerSignChild(eventsPath, workspace, decisionId, 'cross-process-same-key', OWNER_EMAIL),
+      ]);
+
+      expect(receiptA.recordId).toBe(receiptB.recordId);
+      const statuses = [receiptA.status, receiptB.status];
+      expect(statuses.filter((s) => s === 'written')).toHaveLength(1);
+      expect(statuses.filter((s) => s === 'duplicate')).toHaveLength(1);
+
+      const reader = new TrackReader(eventsPath);
+      const snapshot = reader.reportSnapshot({ decisions: true });
+      const artifactEvents = snapshot.events.filter((e) => e.type === 'decision.artifact-added');
+      expect(artifactEvents).toHaveLength(1);
+    },
+    15000,
+  );
+
   it('should read back the exact canonical persisted owner signature', async () => {
     const workspace = 'ws:sha256-test-workspace';
     const decisionId = seedDecisionInStore(workspace, OWNER_EMAIL);
