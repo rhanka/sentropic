@@ -1,19 +1,19 @@
 # Feature: Cluster Mesh v1 Degenerate Runtime
 
 ## Objective
-- [ ] Deliver `@sentropic/cluster-mesh` with a working single-instance plus local-device runtime and a federal-shaped public API.
-- [ ] Activate the package from the current API without observable behavior changes while keeping every multi-instance capability gated and fail-closed.
+- [x] Deliver `@sentropic/cluster-mesh` with a working single-instance plus local-device runtime and a federal-shaped public API.
+- [x] Activate the package from the current API without observable behavior changes while keeping every multi-instance capability gated and fail-closed.
 
 ## Scope / Guardrails
-- [ ] Keep federation topology F-B/F-C and RFC 8693 broker behavior as typed seams only.
-- [ ] Keep the shipped runtime to one Sentropic instance, local workstations, and local h2a NHI command mapping.
-- [ ] Derive tenant identity only through a validated membership resolver and never from request input.
-- [ ] Derive workspace references as `ws:sha256:<digest>` and never alias `tenantId` to `workspaceId`.
-- [ ] Keep future OpenERP, immo, and design-system tenants app-neutral with no hard dependency.
-- [ ] Use only make targets for build, typecheck, lint, test, and package operations.
-- [ ] Use `ENV=test-cluster-mesh-v1` or `ENV=e2e-cluster-mesh-v1`, always as the last make argument.
-- [ ] Keep root `ENV=dev` untouched and perform no merge, deploy, or publication.
-- [ ] Keep each implementation commit under approximately 150 changed lines and stage explicit files only.
+- [x] Keep federation topology F-B/F-C and RFC 8693 broker behavior as typed seams only.
+- [x] Keep the shipped runtime to one Sentropic instance, local workstations, and local h2a NHI command mapping.
+- [x] Derive tenant identity only through a validated membership resolver and never from request input.
+- [x] Derive workspace references as `ws:sha256:<digest>` and never alias `tenantId` to `workspaceId`.
+- [x] Keep future OpenERP, immo, and design-system tenants app-neutral with no hard dependency.
+- [x] Use only make targets for build, typecheck, lint, test, and package operations.
+- [x] Use `ENV=test-cluster-mesh-v1` or `ENV=e2e-cluster-mesh-v1`, always as the last make argument.
+- [x] Keep root `ENV=dev` untouched and perform no merge, deploy, or publication.
+- [x] Keep each implementation commit under approximately 150 changed lines and stage explicit files only.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**
@@ -42,15 +42,17 @@
   - [ ] Use `BR72-EX1` only as this branch-local scope ID for the owner-mandated eight-point published-package wiring.
 
 ## Feedback Loop
-- [ ] `BR72-EX1` (`acknowledge`, GRANTED) — owner explicitly requires package.json, lock, two Dockerfiles, Make target, prerequisites, API_VERSION, and CI wiring.
-  - [ ] Reason: a published workspace package consumed by `api/` must be installed, built, hashed, and independently validated.
-  - [ ] Impact: API/UI image dependency layers and API cache invalidation include `packages/cluster-mesh`; CI gains one focused validation lane.
-  - [ ] Rollback: remove the package dependency, Dockerfile copies/build, Make targets/prerequisites/hash input, and CI filters/job as one mechanical reversal.
-- [ ] No unresolved product or architecture decisions; dossier v2 plus independent Opus review and owner GO are authoritative.
-- [ ] `CMV1-EX1` (`acknowledge`, GRANTED) — the owner-mandated fail-closed tenant boundary and blind review require an uncached membership check at the cluster-mesh authorization seam.
-  - [ ] Reason: process-lifetime tenant cache entries must not outlive membership revocation for directory authorization.
-  - [ ] Impact: add one uncached resolver entry point over the existing database query; no schema, alias, or ARCH-11 rollout-mode change.
-  - [ ] Rollback: remove the entry point, its adapter injection, and the two focused regression tests together.
+- [x] `BR72-EX1` (`acknowledge`, GRANTED) — owner explicitly requires package.json, lock, two Dockerfiles, Make target, prerequisites, API_VERSION, and CI wiring.
+  - [x] Reason: a published workspace package consumed by `api/` must be installed, built, hashed, and independently validated.
+  - [x] Impact: API/UI image dependency layers and API cache invalidation include `packages/cluster-mesh`; CI gains one focused validation lane.
+  - [x] Rollback: remove the package dependency, Dockerfile copies/build, Make targets/prerequisites/hash input, and CI filters/job as one mechanical reversal.
+- [x] No unresolved product or architecture decisions; dossier v2 plus independent Opus review and owner GO are authoritative.
+- [x] `CMV1-EX1` (`acknowledge`, GRANTED) — the owner-mandated fail-closed tenant boundary and blind review require an uncached membership check at the cluster-mesh authorization seam.
+  - [x] Reason: process-lifetime tenant cache entries must not outlive membership revocation for directory authorization.
+  - [x] Impact: add one uncached resolver entry point over the existing database query; no schema, alias, or ARCH-11 rollout-mode change.
+  - [x] Rollback: remove the entry point, its adapter injection, and the two focused regression tests together.
+- [x] Reconcile both blind-review rounds without waivers: membership shape, owner isolation, completion ordering, revocation freshness, aggregate coverage, and aggregate gate ordering are fixed with focused tests.
+- [x] Record the post-fix reviewer-runtime failure without inventing a PASS: three Opus 4.8 launches and one Sonnet launch exited before producing artifacts in gateway and direct modes.
 
 ## AI Flaky tests
 - [ ] Do not accept additive timeouts or deterministic failures as flaky.
@@ -95,25 +97,34 @@
   - [x] Add tests for delegation fidelity and single-instance capability reporting.
   - [x] Gate: focused package typecheck, tests, build, and pack.
 
-- [ ] **Lot 5 — Current application adapter**
+- [x] **Lot 5 — Current application adapter**
   - [x] Add a thin API adapter that injects existing device-code functions and the authoritative tenant resolver.
   - [x] Route existing device issue, poll, and approve calls through the adapter with byte-equivalent response behavior.
   - [x] Add API unit tests proving exact delegation and no tenant fallback.
-  - [ ] Gate: `make typecheck-api ENV=test-cluster-mesh-v1`, `make lint-api ENV=test-cluster-mesh-v1`, and scoped API tests.
+  - [x] Gate: `make typecheck-api ENV=test-cluster-mesh-v1`, `make lint-api ENV=test-cluster-mesh-v1`, and scoped API tests.
 
-- [ ] **Lot 6 — Published package wiring**
+- [x] **Lot 6 — Published package wiring**
   - [x] Add the API workspace dependency and regenerate the root lock through a make target.
   - [x] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR72-EX1`.
   - [x] Add CI change filters plus validate/package job; document first-publish bootstrap without publishing.
   - [x] Serialize workspace installation before package prerequisites and return UI cache ownership after aggregate checks.
-  - [ ] Gate: `make check-ci-version-filters ENV=test-cluster-mesh-v1`, package build/pack, and API image build.
+  - [x] Gate: `make check-ci-version-filters ENV=test-cluster-mesh-v1`, package build/pack, and API image build.
 
-- [ ] **Lot 7 — Final validation and independent review**
-  - [ ] Run `make scope-check` and `harness check scope`.
-  - [ ] Run package typecheck, test, build, pack plus API typecheck, lint, unit tests, and build.
-  - [ ] Run the applicable security and CI-configuration gates.
-  - [ ] Request a blind Opus 4.8 review with constructor not reviewer; reconcile every finding.
-  - [ ] Re-run all affected gates after review fixes.
+- [x] **Lot 7 — Final validation and independent review**
+  - [x] Run `make scope-check` and `harness check scope`.
+  - [x] Run package typecheck, test, build, pack plus API typecheck, lint, unit tests, and build.
+  - [x] Run the applicable security and CI-configuration gates.
+  - [x] Request a blind Opus 4.8 review with constructor not reviewer; reconcile every finding.
+  - [x] Re-run all affected gates after review fixes.
+
+## Verification Evidence
+- [x] `@sentropic/cluster-mesh`: typecheck, 7 files / 19 tests, build, and pack PASS at `0.1.0`.
+- [x] API focused suites: 24 assertions PASS across app adapter, device route/enrollment, and tenant resolution.
+- [x] `make build ... ENV=test-cluster-mesh-v1`: PASS, including API/UI builds and container audit gates.
+- [x] `make typecheck ... ENV=test-cluster-mesh-v1`: PASS with 0 errors; only historical UI warnings remain.
+- [x] `make lint ... ENV=test-cluster-mesh-v1`: PASS with 0 errors; only historical API warnings remain.
+- [x] `make check-ci-version-filters ... ENV=test-cluster-mesh-v1`: PASS for all API/UI hash inputs.
+- [x] `make scope-check ... ENV=test-cluster-mesh-v1` and `harness check scope`: PASS C2.
 
 - [ ] **Lot 8 — Delivery**
   - [ ] Push `feat/cluster-mesh-v1` without merging or deploying.
