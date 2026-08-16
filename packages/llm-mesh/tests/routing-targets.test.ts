@@ -56,7 +56,7 @@ describe('canonical model targets', () => {
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'claude-opus-4-6-thinking',
+        model: 'gemini-3.7-flash',
         effort: 'xhigh',
       },
     ]);
@@ -86,7 +86,7 @@ describe('canonical model targets', () => {
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.1-pro',
+        model: 'gemini-3.7-flash',
       },
     ]);
     expect(resolveCandidates('gpt-5.6-terra')).toEqual([
@@ -107,12 +107,42 @@ describe('canonical model targets', () => {
     }
   });
 
-  it('keeps the legacy 3.6 capability alias on 3.7 instead of 3.5', () => {
-    expect(resolveTargetCapabilitySource({
-      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.6-flash',
-    })).toEqual({
-      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
-    });
+  it('routes every Claude tier to the real Gemini 3.7 Flash transport', () => {
+    const aliases = [
+      'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
+      'claude-opus-4-8', 'claude-opus-4-8-xhigh',
+      'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
+      'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
+      'claude-fable-5-max',
+    ];
+
+    for (const alias of aliases) {
+      const candidates = resolveCandidates(alias);
+      const cloudCodeTargets = candidates.filter(
+        ({ transportProviderId }) => transportProviderId === 'cloud-code',
+      );
+      expect(cloudCodeTargets).toHaveLength(1);
+      expect(cloudCodeTargets[0]).toMatchObject({
+        providerId: 'gemini',
+        transportProviderId: 'cloud-code',
+        model: 'gemini-3.7-flash',
+      });
+      expect(resolveTargetCapabilitySource(cloudCodeTargets[0]!)).toMatchObject({
+        providerId: 'gemini',
+        transportProviderId: 'cloud-code',
+        model: 'gemini-3.7-flash',
+      });
+    }
+  });
+
+  it('keeps legacy Gemini capability aliases on 3.7 instead of 3.5', () => {
+    for (const model of ['gemini-3.6-flash', 'gemini-3.1-pro']) {
+      expect(resolveTargetCapabilitySource({
+        providerId: 'gemini', transportProviderId: 'cloud-code', model,
+      })).toEqual({
+        providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+      });
+    }
     expect(resolveCandidates('gemini-3.7-flash')).toEqual([{
       providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
     }]);

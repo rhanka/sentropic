@@ -150,7 +150,7 @@ describe('describeTargetRoutes (discovery)', () => {
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'claude-opus-4-6-thinking',
+        model: 'gemini-3.7-flash',
         effort: 'xhigh',
       },
     ]);
