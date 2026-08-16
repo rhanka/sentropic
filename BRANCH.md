@@ -61,11 +61,11 @@
   - [x] Run `make scope-check` after this branch plan exists.
 
 - [ ] **Lot 1 — Membership, directory, and boundary primitives**
-  - [x] Add typed node and workstation contracts.
+  - [x] Add typed node, workstation, validated membership, residence, and workspace-reference contracts.
   - [x] Implement single-node directory enumeration as self plus local workstations.
-  - [ ] Implement fail-closed tenant resolution and `ws:sha256` workspace references.
+  - [x] Implement fail-closed tenant resolution and `ws:sha256` workspace references.
   - [x] Keep inter-server discovery and member revocation as unavailable typed ports.
-  - [ ] Add focused membership, directory, and boundary tests.
+  - [x] Add focused membership, directory, and boundary tests.
   - [ ] Gate: `make typecheck-cluster-mesh ENV=test-cluster-mesh-v1` and `make test-cluster-mesh ENV=test-cluster-mesh-v1`.
 
 - [ ] **Lot 2 — Trust exchange seam**
