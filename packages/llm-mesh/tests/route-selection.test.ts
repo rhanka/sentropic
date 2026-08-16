@@ -72,7 +72,7 @@ describe('route candidate selection', () => {
         diagnosticAccountRef: 'cloud-redacted',
         targetProviderId: 'gemini',
         transportProviderId: 'cloud-code',
-        supportedModelIds: ['claude-opus-4-6-thinking'],
+        supportedModelIds: ['gemini-3.7-flash'],
         enrollmentCompletedAt: '2026-08-02T00:00:00Z',
         readiness: 'ready' as const,
         revision: 'r1',
