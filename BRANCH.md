@@ -52,9 +52,9 @@
 
 - [ ] **Lot 1 — Owner runbook**
   - [x] Add the anti-phantom evidence gate and copy-from-BASE procedure.
-  - [x] Document catalog, provider, routing, and council refresh/check gates.
-  - [ ] Add a precise current-tree file-and-line table and mark every unresolved external/source gap.
-  - [ ] Gate: Markdown paths and cited line anchors verified against the current tree.
+  - [x] Document catalog, provider, routing, council refresh/check, tests, all consumer bumps, semver, ordered publication, and external host notification.
+  - [x] Add a precise current-tree file-and-line table and mark every unresolved external/source gap.
+  - [x] Gate: Markdown paths and cited line anchors verified against the current tree.
 
 - [ ] **Lot 2 — Safe add-model scaffold**
   - [x] Add an idempotent script that plans or applies catalog, provider, and default-route stubs copied from `BASE`.

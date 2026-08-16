@@ -82,3 +82,97 @@ Every catalog model must be classified exactly once. The current safe path is ex
 4. Run `make check-llm-model-equivalences ENV=test-<slug>` and the equivalence-council tests.
 
 The current generator emits exclusions only. Creating a benchmark-backed equivalence group requires a separately reviewed source/generator evolution; do not encode it as an ad hoc generated-file edit. Freshness is already enforced in mesh validation and in both publication targets, so a model addition that omits this step must fail closed.
+
+### 7. Update every repository consumer
+
+Inventory consumers on every update; the current tree has these distinct obligations:
+
+| Consumer | Required action |
+|---|---|
+| `packages/llm-gateway` | Raise the `@sentropic/llm-mesh` dependency floor to the new mesh version, bump gateway at least patch so the new manifest can publish, update route fixtures, then regenerate the root lock. |
+| `api` | Its manifest is a `file:` workspace link, so normally keep that specifier; regenerate `api/package-lock.json` so workspace version metadata is current, and update the exact public catalog plus stream fixtures. |
+| Root workspace | Run `make lock-root`; verify the linked mesh version and gateway dependency range changed together. |
+| `packages/build-cli/templates/chat-app` | Raise the generated app's published mesh range and its golden assertion so newly generated apps can select the model. If intentionally held back, record an owner-approved source gap and compatibility reason. |
+| External h-cond / h2a-runtime hosts | No in-repo dependency exists. Send a handoff after publication for host catalog/default changes, especially agy/Cloud Code. |
+
+Use `make lock-root ENV=test-<slug>` and `make lock-api ENV=test-<slug>`; never hand-edit lockfiles. Re-run the consumer inventory rather than assuming this list is permanent.
+
+### 8. Add model-specific and regression tests
+
+At minimum, cover each touched behavior:
+
+- `packages/llm-mesh/tests/facade.test.ts`: exact identity and every verified capability that differs from `BASE`.
+- `packages/llm-mesh/tests/equivalence-council.test.ts`: classification remains exhaustive and fail-closed.
+- `packages/llm-mesh/tests/routing-targets.test.ts`: faithful target, all changed aliases, effort preservation, and capability-source resolution.
+- Account inventory and transport client tests when a host default or wire id changes.
+- `packages/llm-gateway/tests/target.test.ts`: downstream canonical route view.
+- `api/tests/api/models.test.ts`: exact provider list and total.
+- `api/tests/unit/llm-runtime-stream.test.ts`: advertised model's content, tool, reasoning, status, and usage normalization.
+- `packages/build-cli/tests/generator-golden.spec.ts` when the template dependency changes.
+
+Run focused tests while editing, then the package and repository gates:
+
+```sh
+make check-llm-model-equivalences ENV=test-<slug>
+make test-llm-mesh ENV=test-<slug>
+make test-llm-gateway ENV=test-<slug>
+make build ENV=test-<slug>
+make typecheck ENV=test-<slug>
+make lint ENV=test-<slug>
+make test ENV=test-<slug>
+make scope-check ENV=test-<slug>
+```
+
+Also run `harness check scope`. Live provider tests may be classified as AI-flaky only under the repository rule: an identical same-commit command must also pass and the owner must sign off. Missing credentials are a source gap, not a passing result.
+
+### 9. Version, package, publish, and verify in order
+
+1. Run `make audit-llm-routing-package-versions` before choosing versions and again after any rebase.
+2. A new catalog model is a mesh feature: bump `packages/llm-mesh/package.json` minor while pre-1.0, unless the public contract requires a major bump.
+3. Bump `packages/llm-gateway/package.json` at least patch whenever its mesh dependency or published route contract changes. Merely changing its dependency without a new gateway version leaves the registry manifest unpublished.
+4. Regenerate both required lockfiles and run `make package-llm-routing-candidates` plus pack gates.
+5. Open the PR and require green mesh, gateway, API, package-bump, council-freshness, and full repository gates. Do not publish manually from the branch.
+6. After merge, CI publishes mesh first. Gateway publication waits for the mesh version to be visible, then builds and publishes against it.
+7. Confirm npm versions and required tags `@sentropic/llm-mesh@<version>` and `@sentropic/llm-gateway@<version>`. Publication without the release tag is incomplete under repository policy.
+8. Smoke the published artifacts, not only workspace links, before changing external host defaults.
+
+### 10. Notify external host-default owners
+
+Send h-cond/h2a-runtime a handoff containing: exact published mesh/gateway versions and tarball hashes, official model evidence, old/new ids, affected aliases and effort tiers, transport/product availability, smoke results, rollback ids, and PR/CI links. Explicitly name agy when Cloud Code inventory or its default changes. This repository cannot apply that default; acknowledgement from the external owner is the acceptance evidence.
+
+## Current-tree file map
+
+Line anchors below refer to base `84512941a` plus this runbook/scaffold branch; re-resolve them after a rebase.
+
+| Concern | Current file:line | Why it changes |
+|---|---|---|
+| Profile contract and profiles | `packages/llm-mesh/src/catalog.ts:27`, `:222`, `:260` | Profile shape, inherited capabilities, real model record. |
+| Provider registries | `packages/llm-mesh/src/providers.ts:13`, `:58` | Known id union and provider-indexed list. |
+| Faithful/default targets | `packages/llm-mesh/src/routing-targets.ts:28` | Callable canonical host target. |
+| Standard alias candidates | `packages/llm-mesh/src/routing-targets.ts:53` | Owner-ratified Codex/Cloud Code route cutover. |
+| Capability aliases | `packages/llm-mesh/src/routing-targets.ts:77` | Resolve transport-only ids to verified catalog capabilities. |
+| Council source | `scripts/llm-model-equivalences/council.source.json:1` | Explicit exclusion and review metadata. |
+| Council generator/output | `scripts/llm-model-equivalences/refresh.mjs:5`, `packages/llm-mesh/src/generated-model-council.ts:1` | Regenerate; never hand-edit output. |
+| Scaffold entrypoint | `Makefile:593`, `packages/llm-mesh/scripts/add-model.mjs:1` | Preview/apply the mechanical copy. |
+| Council CI gate | `.github/workflows/ci.yml:493` | Freshness runs before typecheck/test/build/pack. |
+| Mesh/gateway publish order | `.github/workflows/ci.yml:1418`, `:1442` | Gateway depends on successful/skipped mesh publication. |
+| Mesh/gateway publish recipes | `Makefile:749`, `:661` | Both include council freshness; gateway waits for mesh. |
+| Package versions | `packages/llm-mesh/package.json:3`, `packages/llm-gateway/package.json:3` | Publishable semver identities. |
+| Gateway dependency | `packages/llm-gateway/package.json:36`, `package-lock.json:18204` | New mesh floor and root lock. |
+| API workspace consumer | `api/package.json:73`, `api/package-lock.json:86` | File link plus synchronized workspace metadata. |
+| Generated-app consumer | `packages/build-cli/templates/chat-app/package.json:20`, `packages/build-cli/tests/generator-golden.spec.ts:77` | New app dependency and golden contract. |
+| Public API contract | `api/tests/api/models.test.ts:20` | Exact catalog response. |
+| Council and route tests | `packages/llm-mesh/tests/equivalence-council.test.ts:9`, `packages/llm-mesh/tests/routing-targets.test.ts:9` | Exhaustiveness and canonical routing. |
+| Gateway route contract | `packages/llm-gateway/tests/target.test.ts:143` | Consumer sees the same canonical targets. |
+
+## Source gaps and stop conditions
+
+- PR #540 is reference evidence but is not merged into this runbook's base; do not assume its ids or limits exist on `main`.
+- `api/package-lock.json` currently records an older mesh workspace version than the root manifest. A future update must regenerate and review it rather than preserving the drift.
+- The build-cli template currently pins an older pre-1.0 mesh range. Updating or explicitly deferring it is mandatory consumer review.
+- Host defaults for h-cond/h2a-runtime and agy live outside this repository; the job stops at a documented handoff until that owner acknowledges it.
+- Stop on absent official id evidence, a `BASE` without a faithful route, unclassified council membership, stale generated output, an unbumped publishable consumer, red tests, or unpublished dependency ordering.
+
+## Done definition
+
+The update is done only when evidence, catalog, provider registries, council, routes, consumers, lockfiles, tests, semver, ordered npm publication, release tags, published-artifact smoke, external host notification, and rollback notes are all recorded. The PR remains unmerged until its requested blind review and CI gates are complete.
