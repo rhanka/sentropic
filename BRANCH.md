@@ -28,6 +28,7 @@ Record owner-signature in shared h2a Track log with sentropic as gatekeeper (ver
   - `api/tests/unit/track-*.test.ts`
   - `api/tests/helpers/owner-sign-child.ts` (`BR-FUSION-EX2` scope exception)
   - `api/tsconfig.json` (`BR-FUSION-EX3` scope exception)
+  - `apps/auth-idp/tsconfig.json` (`BR-FUSION-EX4` scope exception)
   - `packages/focus/package.json`
   - `packages/focus/src/**`
   - `packages/focus/tests/**`
@@ -39,10 +40,12 @@ Record owner-signature in shared h2a Track log with sentropic as gatekeeper (ver
   - `Makefile` (`BR-FUSION-EX1`)
   - `api/tests/helpers/owner-sign-child.ts` (`BR-FUSION-EX2`)
   - `api/tsconfig.json` (`BR-FUSION-EX3`)
+  - `apps/auth-idp/tsconfig.json` (`BR-FUSION-EX4`)
 - **Exception process**:
   - `BR-FUSION-EX1`: Makefile target `owner-sign` helper for dev-local UAT.
   - `BR-FUSION-EX2`: PR #536 review F1a — the in-process real-race test cannot exercise the real cross-process Track file-lock (`ingest`'s lock section is synchronous, so `Promise.all` in one process never interleaves). Rationale: a genuine 2-OS-process race requires a spawned child script; `api/tests/helpers/` is the existing repo convention for test-only helper scripts. Impact: one new test-only file, no runtime/prod code path. Rollback: delete the file and the cross-process `it()` block in `track-event-owner-signature-port.test.ts`; the in-process dedup test still covers the deterministic-clientToken invariant.
   - `BR-FUSION-EX3`: `make typecheck-api` was discovered broken on this branch (pre-existing since the `@sentropic/track` 0.91.0 bump, commit `ce5177fc2`): `api/tsconfig.json`'s classic `"moduleResolution": "Node"` cannot follow `@sentropic/track`'s `package.json#exports` subpaths (`/read`, `/ingest`), so `Cannot find module` errors block every typecheck run, including this branch's review-fix verification. Rationale: this is a directly-blocking regression on an already-allowed dependency bump, not new scope; the fix (`moduleResolution: "Bundler"`, pairing with the already-set `"module": "ESNext"`) matches the pattern `packages/focus/tsconfig.json` already uses successfully for the same dependency. Impact: type-checker resolution only — no runtime/build-output change (esbuild already resolves these imports independently of `tsc`). Rollback: revert `api/tsconfig.json` to `"moduleResolution": "Node"`.
+  - `BR-FUSION-EX4`: PR #536 post-rebase CI exposed the same `@sentropic/track` exports-resolution break in `make typecheck-idp`: `apps/auth-idp/tsconfig.json` includes `api/src` but retained classic `"moduleResolution": "Node"`, so the standalone IdP gate could not resolve `/read` and `/ingest` even though `make typecheck-api` and the API image were green. Rationale: align the IdP checker with the API sources it checks by using `"Bundler"`. Impact: type-checker resolution only; no runtime or build-output change. Rollback: restore `"Node"` after the IdP stops including API sources or those sources no longer consume package exports.
 
 ## Feedback Loop
 - `BR-FUSION-E1`: L2 Fusion E1 active.
@@ -80,3 +83,5 @@ Record owner-signature in shared h2a Track log with sentropic as gatekeeper (ver
   - [x] CI: pin `@sentropic/track` to `0.91.1` via a root `package.json` override (lockfile already resolved 0.91.1; override guards against a future accidental drift within the `^0.91.0` range).
   - [x] F1b-residual (2nd opus 4.8 re-review): `idempotencyKey` legitimately repeats on a client retry, so it can't arbitrate written/duplicate — realigned on the durable `(owner, workspace, decision)` winner via a caller-supplied `newId` marker compared against the persisted event's own `id` (mirrors the Postgres port's `onConflictDoNothing().returning()` win-check). Same-idempotency-key sequential + cross-process concurrent tests added in `track-event-owner-signature-port.test.ts`.
   - [x] Re-run `make typecheck-api`, `make lint-api`, and the affected unit suites; request a blind opus 4.8 re-review.
+  - [x] Post-rebase CI: align the standalone IdP tsconfig with the API's package-exports resolution (`BR-FUSION-EX4`).
+  - [x] Post-rebase CI: confirm `focus-owner-signature-route.test.ts` is byte-identical before (`5be4e62e7`) and after the rebase (blob `8a81115b16f3f065e9f8a0832d5d752a59610513`); its known `decision-not-found` versus `track-store-unconfigured` failure predates the rebase and remains unchanged per owner direction.
