@@ -89,7 +89,7 @@
   - [x] Gate: focused package typecheck, tests, build, and pack.
 
 - [ ] **Lot 5 — Current application adapter**
-  - [ ] Add a thin API adapter that injects existing device-code functions and the authoritative tenant resolver.
+  - [x] Add a thin API adapter that injects existing device-code functions and the authoritative tenant resolver.
   - [ ] Route existing device issue, poll, and approve calls through the adapter with byte-equivalent response behavior.
   - [ ] Add API unit tests proving exact delegation and no tenant fallback.
   - [ ] Gate: `make typecheck-api ENV=test-cluster-mesh-v1`, `make lint-api ENV=test-cluster-mesh-v1`, and scoped API tests.
