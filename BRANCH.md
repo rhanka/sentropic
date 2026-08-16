@@ -75,7 +75,7 @@
   - [x] Add tests proving all exchange attempts deny without invoking remote behavior.
   - [x] Gate: focused package typecheck and tests.
 
-- [ ] **Lot 3 — Identity, agent, memory, and NHI wrap**
+- [x] **Lot 3 — Identity, agent, memory, and NHI wrap**
   - [x] Implement local W-A signed-reference projection contracts for human identity, agent identity, and memory snapshots.
   - [x] Map attest, offboard, and export to injected `h2a nhi` command execution without interpreting h2a references.
   - [x] Keep remote resolution and W-C replication as gated typed seams.
@@ -86,7 +86,7 @@
   - [x] Add a local attachment port matching the existing device-code issue, poll, and approve lifecycle.
   - [x] Compose the five domains behind a single degenerate cluster-mesh facade.
   - [x] Add tests for delegation fidelity and single-instance capability reporting.
-  - [ ] Gate: focused package typecheck, tests, build, and pack.
+  - [x] Gate: focused package typecheck, tests, build, and pack.
 
 - [ ] **Lot 5 — Current application adapter**
   - [ ] Add a thin API adapter that injects existing device-code functions and the authoritative tenant resolver.
@@ -95,7 +95,7 @@
   - [ ] Gate: `make typecheck-api ENV=test-cluster-mesh-v1`, `make lint-api ENV=test-cluster-mesh-v1`, and scoped API tests.
 
 - [ ] **Lot 6 — Published package wiring**
-  - [ ] Add the API workspace dependency and regenerate the root lock through a make target.
+  - [x] Add the API workspace dependency and regenerate the root lock through a make target.
   - [ ] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR72-EX1`.
   - [ ] Add CI change filters plus validate/package job; document first-publish bootstrap without publishing.
   - [ ] Gate: `make check-ci-version-filters ENV=test-cluster-mesh-v1`, package build/pack, and API image build.
