@@ -43,6 +43,13 @@
       "when": 1784549908430,
       "tag": "0005_clumsy_spacker_dave",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0006_arch11_outbox_tenant_rekey",
+      "breakpoints": true
     }
   ]
 }
