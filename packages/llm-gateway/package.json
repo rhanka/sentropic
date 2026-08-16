@@ -33,7 +33,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/llm-mesh": "^0.15.0",
+    "@sentropic/llm-mesh": "^0.16.0",
     "hono": "^4.10.7"
   },
   "devDependencies": {
