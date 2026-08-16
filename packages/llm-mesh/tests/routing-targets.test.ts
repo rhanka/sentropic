@@ -4,6 +4,7 @@ import {
   createCanonicalTargetResolver,
   describeCanonicalTargetRoutes,
   LAUNCH_ALIAS_TARGET_MAPPINGS,
+  resolveTargetCapabilitySource,
 } from '../src/routing-targets.js';
 
 describe('canonical model targets', () => {
@@ -15,6 +16,11 @@ describe('canonical model targets', () => {
       providerId: 'anthropic',
       transportProviderId: 'claude-code',
       model: 'claude-opus-5',
+    });
+    expect(resolve('gemini-3.7-flash')).toEqual({
+      providerId: 'gemini',
+      transportProviderId: 'cloud-code',
+      model: 'gemini-3.7-flash',
     });
   });
 
@@ -63,7 +69,7 @@ describe('canonical model targets', () => {
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.7-flash',
       },
     ]);
     expect(resolveCandidates('claude-fable-5')).toEqual([
@@ -99,6 +105,17 @@ describe('canonical model targets', () => {
       expect(candidates.map((candidate) => candidate.model))
         .not.toContain('gemini-3.1-flash-lite');
     }
+  });
+
+  it('keeps the legacy 3.6 capability alias on 3.7 instead of 3.5', () => {
+    expect(resolveTargetCapabilitySource({
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.6-flash',
+    })).toEqual({
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+    });
+    expect(resolveCandidates('gemini-3.7-flash')).toEqual([{
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+    }]);
   });
 
   it('describes routes without account or credential fields', () => {
