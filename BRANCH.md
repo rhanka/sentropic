@@ -3,15 +3,22 @@
 ## Objective
 Activate the already-built data socle infra with its FIRST REAL production consumers, per
 `.tmp/engage/data-socle-dossier.md` (GO-WITH-CHANGES, independent opus 4.8 review applied):
-- BR-60-act: make the outbox the single emission path for the `organizations` channel (canary,
-  feature-flagged, reversible) by wiring the existing SSE surface as consumer and retiring the
-  bespoke NOTIFY for that channel behind the flag.
+- BR-60-act: canary the outbox as the emission path for the `organizations.ts` ROUTE producer of
+  the `organization_events` channel (feature-flagged, reversible) by wiring the existing SSE
+  surface as consumer and retiring the bespoke NOTIFY for that one producer behind the flag.
+  `organization_events` has 3 emitters total; `tool-service.ts:1530` and `queue-manager.ts:565`
+  remain on bespoke NOTIFY, ungated by this canary, and the other 9 domain channels of BR-60's
+  original titled scope are untouched by this branch (see PR #537 independent review F1).
 - BR-59-act: retrofit `initiatives`/`opportunity` to generate its route zod schema from the
   `object_type_definitions` registry — the registry's first production caller.
 - BR-61 and BR-65 stay HOLD (no signed consumer) — untouched in this branch.
 - Track reconciliation (review M1): document that BR-60's 2026-06-12 `done` predates its own
   titled scope ("replace bespoke NOTIFY"); this branch does not re-claim `done`, it records
-  BR-60-act as the completion slice.
+  BR-60-act as a partial completion slice (1-of-3-emitters). Correction: the appended track item
+  `01M03WQJ7F2FSM209A5XM5VZ0D`'s title initially overstated this as "completes BR-60 titled
+  scope"; per PR #537 independent review F1, retitled + body-clarified via an append-only
+  `spec.amended` amendment (seq 5) to state the true partial scope — the original `item.created`
+  record is not rewritten.
 
 ## Scope / Guardrails
 - Scope limited to: `api/src/services/outbox/**`, `api/src/routes/api/organizations.ts`,
@@ -58,21 +65,27 @@ Activate the already-built data socle infra with its FIRST REAL production consu
 ## AI Flaky tests
 (none — this section is for `make test-api-ai`; not applicable, no AI-generation tests touched)
 
-## Non-AI flaky observation (recorded for transparency, non-blocking)
+## Non-AI flaky observation (RESOLVED — see PR #537 independent review F2)
 - Command: `make test-api-outbox ENV=test-data-activate-br60-br59 ...` (full suite, 8 files)
 - File: `api/tests/outbox/producer-organization-events-canary-on.test.ts`, test "dispatches the
   outbox row and preserves cross-workspace SSE isolation"
-- Signature: intermittent SSE-collection-window miss under full-suite concurrent load (shares the
-  1500ms `collectFor` window with the pre-existing `api/tests/api/streams.test.ts` cross-workspace
-  pattern it mirrors).
+- Original signature: intermittent SSE-collection-window miss under full-suite concurrent load
+  (shared the 1500ms fixed-window `collectFor` helper with the pre-existing
+  `api/tests/api/streams.test.ts` cross-workspace pattern it mirrors).
 - Evidence of non-systematic nature: failed once across a full-suite run, then passed 4/4
   subsequent runs (1 full-suite rerun + 3 scoped isolated reruns), same commit, same command.
 - Root cause: real-clock SSE delivery timing under concurrent Postgres LISTEN/NOTIFY load from
   sibling outbox test files in the same single-worker vitest process — not a logic defect (the
   underlying dispatch path is proven correct by the isolated passes and by the pre-existing,
   unmodified `producer-job-events.test.ts` using the same `OutboxDispatcher`/`PgEventBus`).
-- Impact if unrelated: accepted per non-systematic nondeterminism rule. Not amended with an
-  additive timeout on this pass; flagged for the independent review as a robustness follow-up.
+- Fix (F2): replaced the fixed-window `collectFor` with `collectConcurrentUntil`, which reads
+  both SSE readers concurrently (one in-flight `read()` per reader) and resolves as soon as the
+  positive signal (the user's `organization_update` event) is actually observed, bounded by an
+  8000ms safety net — not a bare timeout increase. The paired negative assertion (admin must NOT
+  receive the event) is evaluated over that same real-time interval, since both readers had
+  identical opportunity, instead of an independently-guessed window. Verified: 2 consecutive
+  full-suite runs (`make test-api-outbox`, 8 files/21 tests) green, plus 3 isolated scoped reruns
+  of the fixed test alone, all green (2.4s-4.1s each, well under the old 1500ms×2 fixed cost).
 
 ## Environment note (session-scoped, not a code issue)
 - `make up-api-test` does NOT apply `docker-compose.test.yml` (the file that sets
@@ -171,6 +184,22 @@ Activate the already-built data socle infra with its FIRST REAL production consu
   - [x] Push branch; PR opened DRAFT; no merge.
   - [x] Request independent blind opus 4.8 review; report to h2a inbox.
 
+- [x] **Lot 4 — Fix independent review findings (PR #537, `.tmp/engage/data537-review-opus.md`)**
+  - [x] F1 (MEDIUM): track item `01M03WQJ7F2FSM209A5XM5VZ0D` title overstated "completes BR-60
+        titled scope"; canary covers only the `organizations.ts` route producer, 1 of 3
+        `organization_events` emitters. Fixed via append-only `track item spec-amend` (seq 5):
+        retitled + body-clarified to state the true partial scope; original `item.created` record
+        not rewritten. BRANCH.md/PR body Objective section aligned to match.
+  - [x] F2 (LOW-MEDIUM): canary-ON cross-workspace SSE test used a fixed 1500ms wall-clock
+        `collectFor` window (1/5 flaky under full-suite load). Fixed by replacing it with
+        `collectConcurrentUntil` (event-driven, bounded 8000ms safety net) in
+        `producer-organization-events-canary-on.test.ts` — see resolved flaky-observation note
+        below.
+  - [x] F3 (LOW, disclosure): left as-is per review (generation-from-shared-constant, drift
+        impossible); already disclosed in `index.ts:210-213` and this PR's description.
+  - [x] Lot gate: `make typecheck-api` + `make lint-api` — both clean, 0 errors (see F1/F2 build
+        below); `make test-api-outbox` — 2 consecutive full-suite runs, 8/8 files, 21/21 PASS.
+
 ## Feedback Loop
 - **ID F-arch11-flake** — `attention` (non-blocking, informational)
   - Repro: run `make test-api-endpoints` (full suite) against a Postgres volume that has
@@ -184,3 +213,30 @@ Activate the already-built data socle infra with its FIRST REAL production consu
   - Recommendation: not a branch regression; order/state-dependent pre-existing test hygiene gap
     (the test scans the GLOBAL `users` table, not scoped to its own fixtures). No code change
     proposed in this branch (out of scope — `api/tests/api/tenancy/**` not part of BR-60-act/BR-59-act).
+
+- **ID F1-track-scope** — `resolved` (PR #537 independent review, opus 4.8, `.tmp/engage/data537-review-opus.md`)
+  - Finding: track item `01M03WQJ7F2FSM209A5XM5VZ0D`'s title read "completes BR-60 titled scope:
+    replace bespoke NOTIFY", but the canary only covers the `organizations.ts` route producer —
+    `tool-service.ts:1530` and `queue-manager.ts:565` remain on bespoke NOTIFY for the same
+    `organization_events` channel, and 9 other domain channels are untouched.
+  - Fix: append-only `track item spec-amend 01M03WQJ7F2FSM209A5XM5VZ0D` (seq 5) — retitled to
+    "BR-60-act: organizations.ts route-producer canary for organization_events (1 of 3 emitters;
+    tool-service.ts and queue-manager.ts bespoke NOTIFY UNCHANGED, other 9 channels untouched)"
+    and body clarified with the same detail. Original `item.created`/BR-60 `done` records not
+    rewritten (append-only, per M1/F5 mechanism). Note: one exploratory `spec-amend` probe (seq 4,
+    placeholder title "test", zero-hash) preceded the real fix while learning the CLI's
+    base/result-hash semantics; `spec.amended` is record-only (mutates no item field — confirmed
+    via `track item show` before/after), so no data was corrupted, and a seq-6 meta-note discloses
+    it rather than leaving it unexplained.
+  - Owner: data-impl. Status: resolved, this branch.
+
+- **ID F2-sse-flaky-window** — `resolved` (PR #537 independent review, opus 4.8)
+  - Finding: `producer-organization-events-canary-on.test.ts`'s cross-workspace SSE test used a
+    fixed 1500ms wall-clock `collectFor` window, observed 1/5 flaky under full-suite concurrent
+    LISTEN/NOTIFY load.
+  - Fix: replaced with `collectConcurrentUntil` — reads both SSE readers concurrently and resolves
+    as soon as the real signal (the user's `organization_update` event) is observed, bounded by an
+    8000ms safety net (not a bare timeout bump). The negative cross-workspace assertion is
+    evaluated over that same real-time interval. Verified: 2 consecutive full-suite
+    `make test-api-outbox` runs (8/8 files, 21/21) + 3 isolated scoped reruns, all green.
+  - Owner: data-impl. Status: resolved, this branch.
