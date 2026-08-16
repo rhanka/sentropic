@@ -1,124 +1,76 @@
-# Feature: Real Gemini 3.7 Flash Integration
+# Feature: BR-75 Recurring LLM Model Update Runbook
 
 ## Objective
-- [x] Add the real `gemini-3.7-flash` profile to `@sentropic/llm-mesh` with verified limits and input modalities.
-- [x] Route agy Cloud Code execution to the real model without resolving through Gemini 3.5 Flash.
+- [x] Make recurring LLM model updates repeatable through one owner directive, one safe scaffold command, explicit evidence gates, and blind review.
 
 ## Scope / Guardrails
-- [x] Keep implementation under `packages/llm-mesh/**` except owner-required gateway dependency and generated artifact paths.
-- [x] Use only make targets for build, typecheck, lint, test, and generated artifacts.
-- [x] Use `ENV=test-llm-mesh-g37`, always as the last make argument.
-- [x] Keep root `ENV=dev` untouched and perform no merge, deploy, publication, or in-branch review.
-- [x] Keep each commit under 150 changed lines and stage explicit files only.
-- [x] Use owner-supplied verified specifications only; add no unverified capability or GCP variant.
+- [x] Base is `origin/main` at merge PR #539; PR #540 is the canonical model-cutover reference only.
+- [x] Scope is facilitation documentation, one additive scaffold script, its unit test, and one Make target.
+- [x] Preserve existing catalog, provider, routing, equivalence, package publication, and consumer behavior.
+- [x] Require official model-id evidence before any scaffold is applied.
+- [x] Use make-only commands, dedicated `ENV=test-model-update-runbook` for tests, selective staging, and sub-150-line commits.
+- [x] Keep all code, documentation, commit text, and PR text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**
   - [x] `BRANCH.md`
-  - [x] `packages/llm-mesh/**`
-  - [x] `packages/llm-gateway/package.json` — owner-required workspace consumer dependency correction under `G37-EX5`.
-  - [x] `packages/llm-gateway/tests/target.test.ts` — downstream workspace routing assertion under `G37-EX5`.
-  - [ ] `scripts/llm-model-equivalences/council.source.json` — owner-required generated-council source under `G37-EX1`.
-  - [x] `package-lock.json` — required workspace version synchronization under `G37-EX2`.
-  - [ ] `api/tests/unit/llm-runtime-stream.test.ts` — exhaustive advertised-model stream fixture under `G37-EX3`.
-  - [ ] `api/tests/api/models.test.ts` — exact public catalog response under `G37-EX4`.
-- [ ] **Forbidden Paths (must not change in this branch)**
-  - [ ] `Makefile`
-  - [ ] `docker-compose*.yml`
-  - [ ] `.cursor/rules/**`
-- [ ] **Conditional Paths**
-  - [ ] No additional conditional paths.
-- [ ] **Exception process**
-  - [ ] Declare reason, impact, and rollback before changing a conditional path.
+  - [x] `spec/SPEC_RUNBOOK_LLM_MODEL_UPDATE.md`
+  - [x] `docs/runbooks/model-update-launch-packet.md`
+  - [x] `packages/llm-mesh/scripts/add-model.mjs`
+  - [x] `packages/llm-mesh/tests/add-model-script.test.ts`
+  - [x] `.tmp/engage/model-update-runbook-report.md`
+- [x] **Forbidden Paths (must not change in this branch)**
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+  - [x] `.github/workflows/**`
+  - [x] Existing `packages/llm-mesh/src/**` model data and generated council output.
+  - [x] Package manifests and lockfiles; this branch does not ship a model or package runtime change.
+- [x] **Conditional Paths**
+  - [x] `Makefile` only under `BR75-EX1`.
+- [x] **Exception process**
+  - [x] Declare an exception before changing any other conditional or forbidden path.
 
 ## Feedback Loop
-- [x] `G37-EX1` (`acknowledge`, GRANTED) — the owner requires regeneration of the model council instead of manual generated-file edits.
-  - [x] Reason: the generator reads its canonical exclusions from `scripts/llm-model-equivalences/council.source.json`.
-  - [x] Impact: classify the new Gemini profile as non-equivalent without modifying council policy or generator code.
-  - [x] Rollback: remove the new exclusion and regenerate the artifact with the existing make target.
-- [x] `G37-EX2` (`acknowledge`, GRANTED) — the owner requires a publishable 0.16.0 workspace package.
-  - [x] Reason: root `npm ci` rejects the package bump while the workspace lock still records 0.15.1.
-  - [x] Impact: synchronize only the llm-mesh workspace version through `make lock-root`.
-  - [x] Rollback: restore the lock entry together with the package version.
-- [x] `G37-EX3` (`acknowledge`, GRANTED) — the owner requires green aggregate tests for the advertised model.
-  - [x] Reason: the API stream contract rejects any catalog model without a normalization fixture.
-  - [x] Impact: add one Gemini 3.7 row to the exhaustive fixture matrix; production API code is unchanged.
-  - [x] Rollback: remove the row together with the Gemini 3.7 catalog profile.
-- [x] `G37-EX4` (`acknowledge`, GRANTED) — the owner requires Gemini 3.7 in the public model catalog.
-  - [x] Reason: the endpoint contract asserts its exact provider/model response and total.
-  - [x] Impact: add Gemini 3.7 to the expected Gemini list and increment the expected total only.
-  - [x] Rollback: restore both expectations together with the catalog profile.
-- [x] `G37-EX5` (`acknowledge`, GRANTED) — the owner requires the sole gateway consumer to use mesh 0.16.0.
-  - [x] Reason: the gateway dependency range resolves an obsolete nested registry tarball instead of the workspace package.
-  - [x] Impact: raise the gateway mesh dependency floor, regenerate the root lockfile, and align its workspace routing assertion.
-  - [x] Rollback: restore the dependency range and regenerate the lockfile together.
-- [x] Keep `gemini-3.6-flash` as a compatibility-only capability alias repointed to 3.7; do not advertise it in the default Cloud Code inventory.
-- [x] Keep `gemini-3.1-pro` as a compatibility-only capability alias repointed to 3.7; no Claude route may target either legacy alias.
-- [x] Omit `google/gemini-3.7-flash@gcp`; agy uses Cloud Code and no supplied evidence verifies a GCP Model Garden key.
-- [x] Skip peer review in this branch because the owner explicitly reserved blind Opus review as a separate activity.
+- [x] `BR75-EX1` accepted by owner request: change the normally forbidden `Makefile` because the repository's make-only policy requires an entrypoint for this recurring job; impact is one additive target plus one script; rollback removes that target and script.
+- [x] Source gap: PR #540 is not merged into this branch base, so its Gemini 3.7 changes are evidence, not files to copy into this deliverable.
+- [x] Source gap: vendor documentation is mutable; every future update must capture its dated official model-id evidence in its PR.
+- [x] Source gap: host defaults for h-cond/h2a-runtime, including agy, live outside this repository and require a notification handoff rather than an in-repo edit.
 
 ## AI Flaky tests
-- [ ] Accept no deterministic failure or additive timeout as flaky.
-- [ ] Record eligible provider or network nondeterminism only with same-commit pass evidence and owner sign-off.
+- [x] Accept no deterministic scaffold, generation-freshness, typecheck, lint, build, or package test failure as flaky.
 
 ## Orchestration Mode
-- [x] **Mono-branch**
-- [x] Keep all implementation on `feat/llm-mesh-gemini-37` with no subagent or review lane.
+- [x] **Mono-branch** with no implementation sub-agent; two independent blind h2a review legs are read-only gates.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Assessment and decisions**
-  - [x] Read project rules, package documentation, catalog, providers, routing targets, generated council, account service, and Cloud Code transport.
-  - [x] Verify the isolated worktree branch with `harness check branch`.
-  - [x] Trace agy from launch aliases through route selection, eligible Cloud Code accounts, runtime client, and the Antigravity wire envelope.
-  - [x] Decide direct Gemini profile plus Cloud Code transport; omit the unverified GCP variant.
-  - [x] Decide the 3.6 compatibility alias behavior and record it in the delivery report.
-  - [x] Run `make scope-check ENV=test-llm-mesh-g37` after defining branch scope.
+- [x] **Lot 0 — Baseline and exact scope**
+  - [x] Read project rules, workflow, sub-agent contract, project context, PLAN model-council constraint, and branch template.
+  - [x] Verify `feat/llm-model-update-runbook` mechanically with `harness check branch`.
+  - [x] Confirm HEAD equals `origin/main` merge PR #539 and study the complete PR #540 delta.
+  - [x] Locate catalog, providers, route definitions, capability sources, council generator/check, publish order, and internal consumers.
+  - [x] Confirm official OpenAI, Anthropic, and Gemini model registries are reachable.
 
-- [x] **Lot 1 — Real model profile and council coverage**
-  - [x] Add `gemini-3.7-flash` to provider lists and the catalog with 1,000,000 input tokens, 65,536 output tokens, and text, image, audio, and video inputs.
-  - [x] Add no GCP catalog profile without verified GCP availability.
-  - [x] Classify the new profile as non-equivalent and regenerate `generated-model-council.ts` through `make refresh-llm-model-equivalences ENV=test-llm-mesh-g37`.
-  - [x] Add facade catalog tests for identity, limits, modalities, and provider capability inheritance.
-  - [x] Bump `@sentropic/llm-mesh` from `0.15.1` to `0.16.0`.
-  - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make check-llm-model-equivalences ENV=test-llm-mesh-g37`.
+- [ ] **Lot 1 — Owner runbook**
+  - [ ] Add the anti-phantom evidence gate and copy-from-BASE procedure.
+  - [ ] Document catalog, provider, routing, council refresh/check, tests, all consumer bumps, semver, ordered publication, and external host notification.
+  - [ ] Add a precise current-tree file-and-line table and mark every unresolved external/source gap.
+  - [ ] Gate: Markdown paths and cited line anchors verified against the current tree.
 
-- [x] **Lot 2 — Faithful agy Cloud Code routing**
-  - [x] Add the faithful canonical `gemini-3.7-flash` Cloud Code target.
-  - [x] Route standard agy candidates and the Cloud Code default to `gemini-3.7-flash`.
-  - [x] Replace the default Cloud Code account inventory entry for 3.6 with 3.7.
-  - [x] Repoint the 3.6 compatibility capability source from 3.5 to 3.7.
-  - [x] Add routing, account inventory, and Cloud Code wire-default tests proving no 3.5 resolution.
-  - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make typecheck-llm-mesh ENV=test-llm-mesh-g37`.
+- [ ] **Lot 2 — Safe add-model scaffold**
+  - [ ] Add an idempotent script that plans or applies catalog, provider, and default-route stubs copied from `BASE`.
+  - [ ] Make dry-run side-effect free and print the manual evidence, council, consumer, test, version, publication, and host-default checklist.
+  - [ ] Add focused tests for valid stubs, dry-run immutability, idempotence, partial repair, and invalid input.
+  - [ ] Add `make llm-mesh-add-model MODEL=<id> BASE=<id>` under `BR75-EX1`.
+  - [ ] Gate: focused test and dry-run make invocation are green.
 
-- [x] **Lot 3 — PR review fixes**
-  - [x] Raise the gateway dependency floor to `@sentropic/llm-mesh@^0.16.0` and regenerate the root lockfile.
-  - [x] Prove the gateway lock entry links the workspace and run the real workspace gateway validation.
-  - [x] Route every Claude-tier Gemini equivalent directly to `gemini-3.7-flash`.
-  - [x] Repoint the retained 3.6 and 3.1 compatibility aliases to the real 3.7 capability source.
-  - [x] Add exhaustive Claude-tier candidate and capability-resolution regression coverage.
+- [ ] **Lot 3 — Standard MODEL UPDATE launch packet**
+  - [ ] Add copy-ready drumbeat and mesh-lane mandates for `MODEL=<X>` and `BASE=<Y>`.
+  - [ ] Specify Codex 5.6 Sol xhigh build, blind Opus 4.8 review, exact evidence/scope/test/publish gates, stop conditions, and report contract.
+  - [ ] Gate: packet requires one directive, one make scaffold, one blind review, and no merge.
 
-- [x] **Lot 4 — Final validation and delivery**
-  - [x] Run `make build ENV=test-llm-mesh-g37`.
-  - [x] Run `make typecheck ENV=test-llm-mesh-g37`.
-  - [x] Run `make lint ENV=test-llm-mesh-g37`.
-  - [x] Run deterministic `make test ENV=test-llm-mesh-g37` suites; record the isolated live-AI auth failure.
-  - [x] Run `make pack-llm-mesh ENV=test-llm-mesh-g37`; leave publication verification to CI.
-  - [x] Run `make scope-check ENV=test-llm-mesh-g37` and `harness check scope`.
-  - [x] Push `feat/llm-mesh-gemini-37` to the existing PR without merge.
-  - [x] Wait for green CI including `enforce-package-bump`, `validate-llm-mesh`, and `validate-llm-gateway`.
-  - [x] Write `.tmp/engage/g37-fix-report.md` with assessment first.
-  - [x] Deposit a valid `sentropic.h2a` v1.0 report for `claude:sentropic-drumbeat:21fe3355ad7d`.
-
-## Verification Evidence
-- [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 145 tests passed after Lot 1.
-- [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 147 tests passed after Lot 2.
-- [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 148 tests passed after the PR review fixes.
-- [x] Gateway workspace validation: typecheck and build passed; 16 files and 111 tests passed against `@sentropic/llm-mesh@0.16.0`.
-- [x] `make typecheck-llm-mesh ENV=test-llm-mesh-g37`: passed after Lot 2.
-- [x] `make build`, `make typecheck`, and `make lint`: passed in isolated `test-llm-mesh-g37`.
-- [x] Aggregate deterministic suites: unit 874 passed / 2 skipped; endpoints 658 passed aside from one parallel ARCH-11 isolation flake that passed scoped and with one worker.
-- [x] Targeted public catalog and exhaustive stream contracts: 4 and 94 tests passed respectively.
-- [x] `make pack-llm-mesh`: packed `@sentropic/llm-mesh@0.16.0`; council drift and scope gates passed.
-- [x] Live-AI aggregate attempted: 18 tests stopped uniformly because all provider auth variables are unset in this worktree.
-- [x] PR #540 CI run `31962450752`: success, including both LLM validations and the package-bump gate.
-- [x] Record exact commands, results, commit SHAs, PR URL, and CI run in `.tmp/engage/g37-fix-report.md`.
+- [ ] **Lot 4 — Final validation and PR-only delivery**
+  - [ ] Run `make scope-check`, `harness check scope`, council freshness, focused tests, dry run, build, typecheck, lint, and test gates.
+  - [ ] Run two eligible independent blind review legs on the exact diff and reconcile all findings.
+  - [ ] Verify `git branch --show-current` immediately before every commit.
+  - [ ] Push `feat/llm-model-update-runbook`, open the requested PR without merging, and verify CI.
+  - [ ] Write `.tmp/engage/model-update-runbook-report.md` and deposit a valid `sentropic.h2a` v1.0 report to `claude:sentropic-drumbeat:21fe3355ad7d`.
