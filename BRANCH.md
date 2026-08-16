@@ -1,7 +1,7 @@
 # Feature: Real Gemini 3.7 Flash Integration
 
 ## Objective
-- [ ] Add the real `gemini-3.7-flash` profile to `@sentropic/llm-mesh` with verified limits and input modalities.
+- [x] Add the real `gemini-3.7-flash` profile to `@sentropic/llm-mesh` with verified limits and input modalities.
 - [ ] Route agy Cloud Code execution to the real model without resolving through Gemini 3.5 Flash.
 
 ## Scope / Guardrails
@@ -16,12 +16,13 @@
 - [ ] **Allowed Paths (implementation scope)**
   - [ ] `BRANCH.md`
   - [ ] `packages/llm-mesh/**`
+  - [ ] `scripts/llm-model-equivalences/council.source.json` — owner-required generated-council source under `G37-EX1`.
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
   - [ ] `.cursor/rules/**`
 - [ ] **Conditional Paths**
-  - [ ] `scripts/llm-model-equivalences/council.source.json` — granted under `G37-EX1`.
+  - [ ] No additional conditional paths.
 - [ ] **Exception process**
   - [ ] Declare reason, impact, and rollback before changing a conditional path.
 
@@ -51,13 +52,13 @@
   - [x] Decide the 3.6 compatibility alias behavior and record it in the delivery report.
   - [x] Run `make scope-check ENV=test-llm-mesh-g37` after defining branch scope.
 
-- [ ] **Lot 1 — Real model profile and council coverage**
-  - [ ] Add `gemini-3.7-flash` to provider lists and the catalog with 1,000,000 input tokens, 65,536 output tokens, and text, image, audio, and video inputs.
-  - [ ] Add no GCP catalog profile without verified GCP availability.
-  - [ ] Classify the new profile as non-equivalent and regenerate `generated-model-council.ts` through `make refresh-llm-model-equivalences ENV=test-llm-mesh-g37`.
-  - [ ] Add facade catalog tests for identity, limits, modalities, and provider capability inheritance.
-  - [ ] Bump `@sentropic/llm-mesh` from `0.15.1` to `0.16.0`.
-  - [ ] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make check-llm-model-equivalences ENV=test-llm-mesh-g37`.
+- [x] **Lot 1 — Real model profile and council coverage**
+  - [x] Add `gemini-3.7-flash` to provider lists and the catalog with 1,000,000 input tokens, 65,536 output tokens, and text, image, audio, and video inputs.
+  - [x] Add no GCP catalog profile without verified GCP availability.
+  - [x] Classify the new profile as non-equivalent and regenerate `generated-model-council.ts` through `make refresh-llm-model-equivalences ENV=test-llm-mesh-g37`.
+  - [x] Add facade catalog tests for identity, limits, modalities, and provider capability inheritance.
+  - [x] Bump `@sentropic/llm-mesh` from `0.15.1` to `0.16.0`.
+  - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make check-llm-model-equivalences ENV=test-llm-mesh-g37`.
 
 - [ ] **Lot 2 — Faithful agy Cloud Code routing**
   - [ ] Add the faithful canonical `gemini-3.7-flash` Cloud Code target.
@@ -80,4 +81,5 @@
   - [ ] Send valid `sentropic.h2a` v1.0 reports to drumbeat and lane `llm-mesh`.
 
 ## Verification Evidence
-- [ ] Record exact commands, results, commit SHAs, PR URL, and CI run in the delivery report.
+- [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 145 tests passed after Lot 1.
+- [ ] Record remaining exact commands, results, commit SHAs, PR URL, and CI run in the delivery report.
