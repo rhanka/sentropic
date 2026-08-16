@@ -53,7 +53,11 @@ describe('Models API', () => {
       'gpt-5.6-sol',
       'gpt-5.6-terra',
     ]);
-    expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite', 'gemini-3.5-flash']);
+    expect(modelsByProvider('gemini')).toEqual([
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-3.7-flash',
+    ]);
     expect(modelsByProvider('anthropic')).toEqual([
       'claude-fable-5',
       'claude-opus-4-8',
@@ -68,7 +72,7 @@ describe('Models API', () => {
       'google/gemini-3.1-flash-lite@gcp',
       'google/gemini-3.5-flash@gcp',
     ]);
-    expect(data.models).toHaveLength(20);
+    expect(data.models).toHaveLength(21);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
