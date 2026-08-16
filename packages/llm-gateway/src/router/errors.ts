@@ -14,6 +14,7 @@
  */
 
 import type { GatewayWire } from '../ports/dispatch.js';
+import type { ResolvedTarget } from '../flow.js';
 
 export interface ProviderShapedError {
   readonly status: number;
@@ -41,6 +42,8 @@ export class GatewayError extends Error {
     message: string,
     /** Seconds for a `Retry-After` header, when the kind warrants one. */
     readonly retryAfterSeconds?: number,
+    /** Present only after a provider/model has been selected for dispatch. */
+    readonly servedTarget?: ResolvedTarget,
   ) {
     super(message);
     this.name = 'GatewayError';

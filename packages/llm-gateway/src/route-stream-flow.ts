@@ -1,6 +1,6 @@
 import type { PreparedRouteAttempt, StreamEvent } from '@sentropic/llm-mesh';
 import { encodeGatewayStream, estimateAnthropicInputTokens } from './canonical-stream.js';
-import type { GatewayFlowRequest, GatewayStreamResult, SettleUsage } from './flow.js';
+import type { GatewayFlowRequest, GatewayStreamResult, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage,
   type RouteAttemptSettlement, type RouteFlowDeps,
@@ -9,6 +9,16 @@ import { GatewayError } from './router/errors.js';
 
 const usageFromEvent = (event: StreamEvent): SettleUsage | undefined =>
   event.type === 'done' ? routeUsage(event.data.usage) : undefined;
+
+const servedTargetFor = (diagnostic: {
+  readonly actualProviderId: string;
+  readonly actualTransportProviderId: string;
+  readonly actualModelId: string;
+}): ResolvedTarget => ({
+  providerId: diagnostic.actualProviderId,
+  transportProviderId: diagnostic.actualTransportProviderId,
+  model: diagnostic.actualModelId,
+});
 
 export const runRouteStreamFlow = async (
   deps: RouteFlowDeps,
@@ -117,7 +127,7 @@ export const runRouteStreamFlow = async (
           ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) }
           : undefined,
       );
-      return { stream: (async function* () {
+      return { servedTarget: servedTargetFor(diagnostic), stream: (async function* () {
         try { yield* encoded; }
         finally {
           await encoded.return(undefined);
@@ -144,7 +154,9 @@ export const runRouteStreamFlow = async (
         outcome: classification.reason === 'cancelled' ? 'cancelled' : 'failed',
         usage: aggregateUsage(attempts), attempts,
       });
-      throw new GatewayError('pooled-account-unavailable', 'all planned streams failed');
+      throw new GatewayError(
+        'pooled-account-unavailable', 'all planned streams failed', undefined, servedTargetFor(diagnostic),
+      );
     }
   }
   throw new GatewayError('no-eligible-account', 'route plan has no candidates');
