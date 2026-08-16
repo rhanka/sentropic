@@ -31,6 +31,7 @@
 
 ## Feedback Loop
 - [x] Owner EVOL is authoritative; source gap: no persisted UBO table exists, so no UBO row re-key applies.
+- [x] Clear isolated root-owned `node_modules` only via `make clean-node-modules`; focused rerun is green.
 
 ## AI Flaky tests
 - [ ] Accept no deterministic or security failure as flaky; record eligible nondeterminism with owner sign-off.
@@ -49,8 +50,8 @@
   - [x] Re-key column and embedded tenant/UBO scope copies through `workspaces.tenant_id` only.
   - [x] Commit migration SQL and control journal atomically with this branch plan.
   - [x] Gate: `make db-migrate API_PORT=9055 UI_PORT=5255 MAILDEV_UI_PORT=1155 REGISTRY=local ENV=arch11g1a`.
-  - [ ] Add focused integration coverage in `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`.
-  - [ ] Gate: focused test, `make scope-check ENV=arch11g1a`, and `harness check scope`.
+  - [x] Add focused integration coverage in `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`.
+  - [x] Gate: focused test, `make scope-check ENV=arch11g1a`, and `harness check scope`.
 
 - [ ] **Lot 2 — Final validation and delivery**
   - [ ] Gate: `make build`, `make typecheck`, `make lint`, and `make test` with `ENV=arch11g1a` last.
