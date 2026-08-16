@@ -51,8 +51,8 @@
   - [x] Confirm official OpenAI, Anthropic, and Gemini model registries are reachable.
 
 - [ ] **Lot 1 — Owner runbook**
-  - [ ] Add the anti-phantom evidence gate and copy-from-BASE procedure.
-  - [ ] Document catalog, provider, routing, council refresh/check, tests, all consumer bumps, semver, ordered publication, and external host notification.
+  - [x] Add the anti-phantom evidence gate and copy-from-BASE procedure.
+  - [x] Document catalog, provider, routing, and council refresh/check gates.
   - [ ] Add a precise current-tree file-and-line table and mark every unresolved external/source gap.
   - [ ] Gate: Markdown paths and cited line anchors verified against the current tree.
 
