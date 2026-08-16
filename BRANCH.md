@@ -1,87 +1,133 @@
-# BR-FUSION-E1: L2 Fusion E1 owner-signature lives in h2a Track carnet
+# Feature: Cluster Mesh v1 Degenerate Runtime
 
 ## Objective
-Record owner-signature in shared h2a Track log with sentropic as gatekeeper (verify decision-owner-only), local carnet as documented non-authoritative journal, deferring crypto channel-attribution and opposable under-lock recheck to deployed-E2.
-
-## The honest trust-boundary
-> The fusion moves the trust boundary INTO sentropic. Track RECORDS but never verifies; `evidence.subject` (who signed) is payload, not channel identity. So this is an **author-signature (owner)** = sentropic's verification + record, distinct from a Track **freshness-signature** (a hash, e.g. branchSignature). In LOCAL E1 on the owner's own machine, **the Track carnet is a faithful journal, NOT a cryptographic proof**; the "owner-only, once" guarantee holds because **sentropic is the de-facto sole writer of author-signatures in the local single-user context — this is a CONVENTION, NOT an opposable constraint** (h-arch: habit-level). **Cryptographic channel-attribution (`signed`/M3) AND the opposable under-lock recheck (Y) are DEFERRED to deployed-E2 (multi-tenant, larger threat surface) — an explicit, acknowledged debt.**
+- [x] Deliver `@sentropic/cluster-mesh` with a working single-instance plus local-device runtime and a federal-shaped public API.
+- [x] Activate the package from the current API without observable behavior changes while keeping every multi-instance capability gated and fail-closed.
 
 ## Scope / Guardrails
-- Local E1 track signature fusion (Option ① / path 2).
-- No edits in `~/src/h2a` (esp. `registry.ts` / #199/#208 zone).
-- Write ONLY via `decision.add-artifact` path in `local-user`.
-- Make-only workflow, no direct Docker/npm commands.
-- All new text in English.
+- [x] Keep federation topology F-B/F-C and RFC 8693 broker behavior as typed seams only.
+- [x] Keep the shipped runtime to one Sentropic instance, local workstations, and local h2a NHI command mapping.
+- [x] Derive tenant identity only through a validated membership resolver and never from request input.
+- [x] Derive workspace references as `ws:sha256:<digest>` and never alias `tenantId` to `workspaceId`.
+- [x] Keep future OpenERP, immo, and design-system tenants app-neutral with no hard dependency.
+- [x] Use only make targets for build, typecheck, lint, test, and package operations.
+- [x] Use `ENV=test-cluster-mesh-v1` or `ENV=e2e-cluster-mesh-v1`, always as the last make argument.
+- [x] Keep root `ENV=dev` untouched and perform no merge, deploy, or publication.
+- [x] Keep each implementation commit under approximately 150 changed lines and stage explicit files only.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `Makefile` (`BR-FUSION-EX1` scope exception)
-  - `package.json`
-  - `package-lock.json`
-  - `api/package.json`
-  - `api/src/services/focus/**`
-  - `api/src/routes/api/focus.ts`
-  - `api/src/middleware/auth.ts`
-  - `api/src/utils/workspace-id.ts`
-  - `api/tests/unit/focus-*.test.ts`
-  - `api/tests/unit/track-*.test.ts`
-  - `api/tests/helpers/owner-sign-child.ts` (`BR-FUSION-EX2` scope exception)
-  - `api/tsconfig.json` (`BR-FUSION-EX3` scope exception)
-  - `apps/auth-idp/tsconfig.json` (`BR-FUSION-EX4` scope exception)
-  - `packages/focus/package.json`
-  - `packages/focus/src/**`
-  - `packages/focus/tests/**`
-- **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `~/src/h2a/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (`BR-FUSION-EX1`)
-  - `api/tests/helpers/owner-sign-child.ts` (`BR-FUSION-EX2`)
-  - `api/tsconfig.json` (`BR-FUSION-EX3`)
-  - `apps/auth-idp/tsconfig.json` (`BR-FUSION-EX4`)
-- **Exception process**:
-  - `BR-FUSION-EX1`: Makefile target `owner-sign` helper for dev-local UAT.
-  - `BR-FUSION-EX2`: PR #536 review F1a — the in-process real-race test cannot exercise the real cross-process Track file-lock (`ingest`'s lock section is synchronous, so `Promise.all` in one process never interleaves). Rationale: a genuine 2-OS-process race requires a spawned child script; `api/tests/helpers/` is the existing repo convention for test-only helper scripts. Impact: one new test-only file, no runtime/prod code path. Rollback: delete the file and the cross-process `it()` block in `track-event-owner-signature-port.test.ts`; the in-process dedup test still covers the deterministic-clientToken invariant.
-  - `BR-FUSION-EX3`: `make typecheck-api` was discovered broken on this branch (pre-existing since the `@sentropic/track` 0.91.0 bump, commit `ce5177fc2`): `api/tsconfig.json`'s classic `"moduleResolution": "Node"` cannot follow `@sentropic/track`'s `package.json#exports` subpaths (`/read`, `/ingest`), so `Cannot find module` errors block every typecheck run, including this branch's review-fix verification. Rationale: this is a directly-blocking regression on an already-allowed dependency bump, not new scope; the fix (`moduleResolution: "Bundler"`, pairing with the already-set `"module": "ESNext"`) matches the pattern `packages/focus/tsconfig.json` already uses successfully for the same dependency. Impact: type-checker resolution only — no runtime/build-output change (esbuild already resolves these imports independently of `tsc`). Rollback: revert `api/tsconfig.json` to `"moduleResolution": "Node"`.
-  - `BR-FUSION-EX4`: PR #536 post-rebase CI exposed the same `@sentropic/track` exports-resolution break in `make typecheck-idp`: `apps/auth-idp/tsconfig.json` includes `api/src` but retained classic `"moduleResolution": "Node"`, so the standalone IdP gate could not resolve `/read` and `/ingest` even though `make typecheck-api` and the API image were green. Rationale: align the IdP checker with the API sources it checks by using `"Bundler"`. Impact: type-checker resolution only; no runtime or build-output change. Rollback: restore `"Node"` after the IdP stops including API sources or those sources no longer consume package exports.
+- [ ] **Allowed Paths (implementation scope)**
+  - [ ] `BRANCH.md`
+  - [ ] `packages/cluster-mesh/**`
+  - [ ] `api/src/services/cluster-mesh-adapter.ts`
+  - [ ] `api/src/services/tenancy/resolve-tenant.ts`
+  - [ ] `api/src/routes/auth/device.ts`
+  - [ ] `api/tests/unit/cluster-mesh-adapter.test.ts`
+  - [ ] `api/tests/unit/device-route.test.ts`
+  - [ ] `api/tests/api/tenancy/arch11-resolve-tenant.test.ts`
+  - [ ] `api/package.json`
+  - [ ] `package-lock.json`
+- [ ] **Forbidden Paths (must not change in this branch)**
+  - [ ] `docker-compose*.yml`
+  - [ ] `.cursor/rules/**`
+  - [ ] `api/drizzle/**`
+  - [ ] Existing auth, tenant, workspace, and NHI persistence schemas
+  - [ ] RFC 8693 endpoints, trusted-issuer stores, and inter-server directory runtime code
+- [ ] **Conditional Paths**
+  - [ ] `Makefile` — granted under `BR72-EX1`
+  - [ ] `api/Dockerfile` — granted under `BR72-EX1`
+  - [ ] `ui/Dockerfile` — granted under `BR72-EX1`
+  - [ ] `.github/workflows/ci.yml` — granted under `BR72-EX1`
+- [ ] **Exception process**
+  - [ ] Use `BR72-EX1` only as this branch-local scope ID for the owner-mandated eight-point published-package wiring.
 
 ## Feedback Loop
-- `BR-FUSION-E1`: L2 Fusion E1 active.
+- [x] `BR72-EX1` (`acknowledge`, GRANTED) — owner explicitly requires package.json, lock, two Dockerfiles, Make target, prerequisites, API_VERSION, and CI wiring.
+  - [x] Reason: a published workspace package consumed by `api/` must be installed, built, hashed, and independently validated.
+  - [x] Impact: API/UI image dependency layers and API cache invalidation include `packages/cluster-mesh`; CI gains one focused validation lane.
+  - [x] Rollback: remove the package dependency, Dockerfile copies/build, Make targets/prerequisites/hash input, and CI filters/job as one mechanical reversal.
+- [x] No unresolved product or architecture decisions; dossier v2 plus independent Opus review and owner GO are authoritative.
+- [x] `CMV1-EX1` (`acknowledge`, GRANTED) — the owner-mandated fail-closed tenant boundary and blind review require an uncached membership check at the cluster-mesh authorization seam.
+  - [x] Reason: process-lifetime tenant cache entries must not outlive membership revocation for directory authorization.
+  - [x] Impact: add one uncached resolver entry point over the existing database query; no schema, alias, or ARCH-11 rollout-mode change.
+  - [x] Rollback: remove the entry point, its adapter injection, and the two focused regression tests together.
+- [x] Reconcile both blind-review rounds without waivers: membership shape, owner isolation, completion ordering, revocation freshness, aggregate coverage, and aggregate gate ordering are fixed with focused tests.
+- [x] Record the post-fix reviewer-runtime failure without inventing a PASS: three Opus 4.8 launches and one Sonnet launch exited before producing artifacts in gateway and direct modes.
 
 ## AI Flaky tests
-- Acceptance rule: Non-systematic provider/network nondeterminism only.
+- [ ] Do not accept additive timeouts or deterministic failures as flaky.
+- [ ] Record any eligible provider/network nondeterminism with same-commit pass evidence and owner sign-off.
 
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch** (single workstream for Fusion E1 signature port and validator).
+## Orchestration Mode
+- [ ] **Mono-branch**
+- [ ] Keep construction on `feat/cluster-mesh-v1`; use an independent Opus 4.8 h2a reviewer only after construction.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline, packages, and scope setup**
-  - [x] Verify branch `feat/track-signature-fusion-e1` off `origin/main`.
-  - [x] Bump `@sentropic/track` to 0.91.0 in `packages/focus/package.json` and lockfile.
-  - [x] Add `api/src/utils/workspace-id.ts` pure function helper using `@sentropic/track`.
-- [x] **Lot 1 — `TrackEventOwnerSignaturePort` & DecisionValidator**
-  - [x] Implement `TrackEventOwnerSignaturePort` in `api/src/services/focus/track-event-owner-signature-port.ts`.
-  - [x] Implement real `TrackDecisionValidator` in `api/src/services/focus/decision-validator.ts`.
-  - [x] Update `createApiFocusLiveSession` in `api/src/services/focus/live-session.ts` for local vs PG env selection.
-- [x] **Lot 2 — Route & identity unification**
-  - [x] Unify identity to verified email (`human:<email>`) and workspace in `api/src/routes/api/focus.ts`.
-  - [x] Update `api/src/middleware/auth.ts` to surface user `email`.
-- [x] **Lot 3 — Makefile helper & Tests**
-  - [x] Add `make owner-sign DECISION=<id>` target to `Makefile`.
-  - [x] Real-race atomicity test in `api/tests/unit/track-event-owner-signature-port.test.ts`.
-  - [x] Fail-closed matrix test in `api/tests/unit/focus-decision-validator.test.ts`.
-  - [x] Route test update in `api/tests/unit/focus-owner-signature-route.test.ts`.
-- [x] **Lot 4 — Final validation & Harness check**
-  - [x] Run `make typecheck-api`, `make test-focus`, and unit tests.
-  - [x] Verify `harness check scope` and `harness check branch`.
-- [ ] **Lot 5 — PR #536 opus 4.8 review fixes (3 MEDIUM)**
-  - [x] F1a: replace the misleading "real file-lock race" in-process test with an honestly-retitled in-process dedup test plus a real cross-process test (`api/tests/helpers/owner-sign-child.ts`, `BR-FUSION-EX2`).
-  - [x] F1b: derive `written`/`duplicate` from the persisted record's `idempotencyKey`, not a racy `readAll()` count bracket, in `track-event-owner-signature-port.ts`.
-  - [x] F2: `createApiFocusLiveSession` storeMode — fail-loud on an unrecognized `NODE_ENV` instead of silently defaulting to `local`; `postgres` for `production`, `local` only for known dev/test envs or explicit `TRACK_STORE_MODE=local`.
-  - [x] CI: pin `@sentropic/track` to `0.91.1` via a root `package.json` override (lockfile already resolved 0.91.1; override guards against a future accidental drift within the `^0.91.0` range).
-  - [x] F1b-residual (2nd opus 4.8 re-review): `idempotencyKey` legitimately repeats on a client retry, so it can't arbitrate written/duplicate — realigned on the durable `(owner, workspace, decision)` winner via a caller-supplied `newId` marker compared against the persisted event's own `id` (mirrors the Postgres port's `onConflictDoNothing().returning()` win-check). Same-idempotency-key sequential + cross-process concurrent tests added in `track-event-owner-signature-port.test.ts`.
-  - [x] Re-run `make typecheck-api`, `make lint-api`, and the affected unit suites; request a blind opus 4.8 re-review.
-  - [x] Post-rebase CI: align the standalone IdP tsconfig with the API's package-exports resolution (`BR-FUSION-EX4`).
-  - [x] Regression #536: keep the validator fail-closed contract intact (`track-store-unconfigured` when the Track file is absent; `decision-not-found` when a configured store has no matching decision) and give the real-validator route test an isolated empty Track store. Verified with `make test-api-unit` (107 files, 866 passed, 2 skipped), `make typecheck-api`, and `make lint-api`.
+- [ ] **Lot 0 — Baseline and contract map**
+  - [x] Read `rules/MASTER.md`, workflow, architecture, API, security, dossier v2, and the blind design review.
+  - [x] Verify the isolated worktree branch with `harness check branch`.
+  - [x] Open `harness brainstorm` and `harness plan` against the ratified design.
+  - [x] Run `make scope-check` after this branch plan exists.
+
+- [x] **Lot 1 — Membership, directory, and boundary primitives**
+  - [x] Add typed node, workstation, validated membership, residence, and workspace-reference contracts.
+  - [x] Implement single-node directory enumeration as self plus local workstations.
+  - [x] Implement fail-closed tenant resolution and `ws:sha256` workspace references.
+  - [x] Keep inter-server discovery and member revocation as unavailable typed ports.
+  - [x] Add focused membership, directory, and boundary tests.
+  - [x] Gate: `make typecheck-cluster-mesh ENV=test-cluster-mesh-v1` and `make test-cluster-mesh ENV=test-cluster-mesh-v1`.
+
+- [x] **Lot 2 — Trust exchange seam**
+  - [x] Add RFC 8693-shaped subject-token, audience, scope, actor-chain, and exchange result contracts.
+  - [x] Ship a fail-closed exchange implementation returning a typed gated-capability error.
+  - [x] Expose no HTTP broker route and persist no issuer trust relation.
+  - [x] Add tests proving all exchange attempts deny without invoking remote behavior.
+  - [x] Gate: focused package typecheck and tests.
+
+- [x] **Lot 3 — Identity, agent, memory, and NHI wrap**
+  - [x] Implement local W-A signed-reference projection contracts for human identity, agent identity, and memory snapshots.
+  - [x] Map attest, offboard, and export to injected `h2a nhi` command execution without interpreting h2a references.
+  - [x] Keep remote resolution and W-C replication as gated typed seams.
+  - [x] Add tests for local projection, exact h2a command mapping, and fail-closed remote access.
+  - [x] Gate: focused package typecheck and tests.
+
+- [x] **Lot 4 — Local workstation attachment and mesh facade**
+  - [x] Add a local attachment port matching the existing device-code issue, poll, and approve lifecycle.
+  - [x] Compose the five domains behind a single degenerate cluster-mesh facade.
+  - [x] Add tests for delegation fidelity and single-instance capability reporting.
+  - [x] Gate: focused package typecheck, tests, build, and pack.
+
+- [x] **Lot 5 — Current application adapter**
+  - [x] Add a thin API adapter that injects existing device-code functions and the authoritative tenant resolver.
+  - [x] Route existing device issue, poll, and approve calls through the adapter with byte-equivalent response behavior.
+  - [x] Add API unit tests proving exact delegation and no tenant fallback.
+  - [x] Gate: `make typecheck-api ENV=test-cluster-mesh-v1`, `make lint-api ENV=test-cluster-mesh-v1`, and scoped API tests.
+
+- [x] **Lot 6 — Published package wiring**
+  - [x] Add the API workspace dependency and regenerate the root lock through a make target.
+  - [x] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR72-EX1`.
+  - [x] Add CI change filters plus validate/package job; document first-publish bootstrap without publishing.
+  - [x] Serialize workspace installation before package prerequisites and return UI cache ownership after aggregate checks.
+  - [x] Gate: `make check-ci-version-filters ENV=test-cluster-mesh-v1`, package build/pack, and API image build.
+
+- [x] **Lot 7 — Final validation and independent review**
+  - [x] Run `make scope-check` and `harness check scope`.
+  - [x] Run package typecheck, test, build, pack plus API typecheck, lint, unit tests, and build.
+  - [x] Run the applicable security and CI-configuration gates.
+  - [x] Request a blind Opus 4.8 review with constructor not reviewer; reconcile every finding.
+  - [x] Re-run all affected gates after review fixes.
+
+## Verification Evidence
+- [x] `@sentropic/cluster-mesh`: typecheck, 7 files / 19 tests, build, and pack PASS at `0.1.0`.
+- [x] API focused suites: 24 assertions PASS across app adapter, device route/enrollment, and tenant resolution.
+- [x] `make build ... ENV=test-cluster-mesh-v1`: PASS, including API/UI builds and container audit gates.
+- [x] `make typecheck ... ENV=test-cluster-mesh-v1`: PASS with 0 errors; only historical UI warnings remain.
+- [x] `make lint ... ENV=test-cluster-mesh-v1`: PASS with 0 errors; only historical API warnings remain.
+- [x] `make check-ci-version-filters ... ENV=test-cluster-mesh-v1`: PASS for all API/UI hash inputs.
+- [x] `make scope-check ... ENV=test-cluster-mesh-v1` and `harness check scope`: PASS C2.
+
+- [x] **Lot 8 — Delivery**
+  - [x] Push `feat/cluster-mesh-v1` without merging or deploying.
+  - [x] Open draft PR #538 with this plan and exact verification evidence.
+  - [x] Write `.tmp/engage/cluster-mesh-v1-report.md` in the repository owner workspace.
+  - [x] Send valid `sentropic.h2a` envelopes to drumbeat and conductor, plus an `infra/WP-INFRA` lane-scoped envelope through the conductor because no sentropic infra-lane endpoint is registered; exclude unrelated infra sessions.
