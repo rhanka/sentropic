@@ -64,9 +64,9 @@
   - [ ] Gate: focused test and dry-run make invocation are green.
 
 - [ ] **Lot 3 — Standard MODEL UPDATE launch packet**
-  - [ ] Add copy-ready drumbeat and mesh-lane mandates for `MODEL=<X>` and `BASE=<Y>`.
-  - [ ] Specify Codex 5.6 Sol xhigh build, blind Opus 4.8 review, exact evidence/scope/test/publish gates, stop conditions, and report contract.
-  - [ ] Gate: packet requires one directive, one make scaffold, one blind review, and no merge.
+  - [x] Add copy-ready drumbeat and mesh-lane mandates for `MODEL=<X>` and `BASE=<Y>`.
+  - [x] Specify Codex 5.6 Sol xhigh build, blind Opus 4.8 review, exact evidence/scope/test/publish gates, stop conditions, and report contract.
+  - [x] Gate: packet requires one directive, one make scaffold, one blind review, and no merge.
 
 - [ ] **Lot 4 — Final validation and PR-only delivery**
   - [ ] Run `make scope-check`, `harness check scope`, council freshness, focused tests, dry run, build, typecheck, lint, and test gates.
