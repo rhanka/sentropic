@@ -36,6 +36,25 @@ describe('tenant boundaries', () => {
     ).rejects.toBeInstanceOf(TenantBoundaryError);
   });
 
+  it.each([
+    { tenantId: 'tenant-acme', userId: 'user-2', status: 'approved' },
+    { tenantId: 'tenant-acme', userId: 'user-1', status: 'pending' },
+    { tenantId: '   ', userId: 'user-1', status: 'approved' },
+  ])('should reject an invalid membership response: %o', async (membership) => {
+    const boundaries = createBoundaryDomain({
+      homeNodeId: 'node:sentropic-local',
+      memberships: {
+        async resolveApproved() {
+          return membership as never;
+        },
+      },
+    });
+
+    await expect(
+      boundaries.resolve({ workspaceId: 'workspace-1', userId: 'user-1' }),
+    ).rejects.toBeInstanceOf(TenantBoundaryError);
+  });
+
   it('should create a deterministic opaque workspace reference', async () => {
     const boundaries = createBoundaryDomain({
       homeNodeId: 'node:sentropic-local',

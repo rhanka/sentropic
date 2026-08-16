@@ -45,7 +45,15 @@ export function createBoundaryDomain(input: {
     workspaceReference: deriveWorkspaceReference,
     async resolve(lookup) {
       const membership = await input.memberships.resolveApproved(lookup);
-      if (!membership) throw new TenantBoundaryError();
+      if (
+        !membership
+        || membership.status !== 'approved'
+        || membership.userId !== lookup.userId
+        || typeof membership.tenantId !== 'string'
+        || membership.tenantId.trim().length === 0
+      ) {
+        throw new TenantBoundaryError();
+      }
       return {
         tid: membership.tenantId,
         workspace: await deriveWorkspaceReference(lookup.workspaceId),
