@@ -5,7 +5,7 @@
 - [x] Route agy Cloud Code execution to the real model without resolving through Gemini 3.5 Flash.
 
 ## Scope / Guardrails
-- [x] Keep implementation under `packages/llm-mesh/**` except the generated-council source exception.
+- [x] Keep implementation under `packages/llm-mesh/**` except owner-required gateway dependency and generated artifact paths.
 - [x] Use only make targets for build, typecheck, lint, test, and generated artifacts.
 - [x] Use `ENV=test-llm-mesh-g37`, always as the last make argument.
 - [x] Keep root `ENV=dev` untouched and perform no merge, deploy, publication, or in-branch review.
@@ -16,6 +16,8 @@
 - [ ] **Allowed Paths (implementation scope)**
   - [ ] `BRANCH.md`
   - [ ] `packages/llm-mesh/**`
+  - [ ] `packages/llm-gateway/package.json` — owner-required workspace consumer dependency correction under `G37-EX5`.
+  - [ ] `packages/llm-gateway/tests/target.test.ts` — downstream workspace routing assertion under `G37-EX5`.
   - [ ] `scripts/llm-model-equivalences/council.source.json` — owner-required generated-council source under `G37-EX1`.
   - [ ] `package-lock.json` — required workspace version synchronization under `G37-EX2`.
   - [ ] `api/tests/unit/llm-runtime-stream.test.ts` — exhaustive advertised-model stream fixture under `G37-EX3`.
@@ -46,7 +48,12 @@
   - [x] Reason: the endpoint contract asserts its exact provider/model response and total.
   - [x] Impact: add Gemini 3.7 to the expected Gemini list and increment the expected total only.
   - [x] Rollback: restore both expectations together with the catalog profile.
+- [x] `G37-EX5` (`acknowledge`, GRANTED) — the owner requires the sole gateway consumer to use mesh 0.16.0.
+  - [x] Reason: the gateway dependency range resolves an obsolete nested registry tarball instead of the workspace package.
+  - [x] Impact: raise the gateway mesh dependency floor, regenerate the root lockfile, and align its workspace routing assertion.
+  - [x] Rollback: restore the dependency range and regenerate the lockfile together.
 - [x] Keep `gemini-3.6-flash` as a compatibility-only capability alias repointed to 3.7; do not advertise it in the default Cloud Code inventory.
+- [x] Keep `gemini-3.1-pro` as a compatibility-only capability alias repointed to 3.7; no Claude route may target either legacy alias.
 - [x] Omit `google/gemini-3.7-flash@gcp`; agy uses Cloud Code and no supplied evidence verifies a GCP Model Garden key.
 - [x] Skip peer review in this branch because the owner explicitly reserved blind Opus review as a separate activity.
 
@@ -83,7 +90,14 @@
   - [x] Add routing, account inventory, and Cloud Code wire-default tests proving no 3.5 resolution.
   - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make typecheck-llm-mesh ENV=test-llm-mesh-g37`.
 
-- [ ] **Lot 3 — Final validation and delivery**
+- [ ] **Lot 3 — PR review fixes**
+  - [x] Raise the gateway dependency floor to `@sentropic/llm-mesh@^0.16.0` and regenerate the root lockfile.
+  - [x] Prove the gateway lock entry links the workspace and run the real workspace gateway validation.
+  - [ ] Route every Claude-tier Gemini equivalent directly to `gemini-3.7-flash`.
+  - [ ] Repoint the retained 3.6 and 3.1 compatibility aliases to the real 3.7 capability source.
+  - [ ] Add exhaustive Claude-tier candidate and capability-resolution regression coverage.
+
+- [ ] **Lot 4 — Final validation and delivery**
   - [x] Run `make build ENV=test-llm-mesh-g37`.
   - [x] Run `make typecheck ENV=test-llm-mesh-g37`.
   - [x] Run `make lint ENV=test-llm-mesh-g37`.
