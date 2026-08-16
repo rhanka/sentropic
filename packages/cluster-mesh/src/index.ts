@@ -1,3 +1,4 @@
 export * from './errors.js';
 export * from './boundaries.js';
 export * from './membership.js';
+export * from './trust.js';
