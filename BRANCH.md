@@ -1,7 +1,7 @@
 # Feature: ARCH-11 G1a Tenant Re-key Data Completion
 
 ## Objective
-- [ ] Complete only the residual G1a `control.event_outbox` re-key; preserve G1b+ aliases and reuse `resolveTenant`.
+- [x] Complete only the residual G1a `control.event_outbox` re-key; preserve G1b+ aliases and reuse `resolveTenant`.
 
 ## Scope / Guardrails
 - [x] Base assessment confirms G1a points 1-6 already exist on `main` at `df797880a`.
@@ -10,25 +10,25 @@
 - [x] Leave unresolved rows, absent JSONB paths, and unrelated JSONB unchanged.
 - [x] Keep UBO and Resource Plane contract types unchanged because no UBO persistence table exists.
 - [x] Keep all seven application alias sites unchanged for G1b+.
-- [ ] Use make-only commands, isolated `ENV=arch11g1a`, explicit staging, and sub-150-line commits.
+- [x] Use make-only commands, isolated `ENV=arch11g1a`, explicit staging, and sub-150-line commits.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**
-  - [ ] `BRANCH.md`
-  - [ ] `api/drizzle/control/0006_arch11_outbox_tenant_rekey.sql`
-  - [ ] `api/drizzle/control/meta/_journal.json`
-  - [ ] `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`
-  - [ ] `api/tests/api/tenancy/arch11-tenant-data.test.ts`
-- [ ] **Forbidden Paths (must not change in this branch)**
-  - [ ] `Makefile`
-  - [ ] `docker-compose*.yml`
-  - [ ] `.cursor/rules/**`
-  - [ ] Existing G1b+ tenant resolution and application alias sites under `api/src/**`
-  - [ ] `packages/ubo-contracts/**` and `api/src/services/resource-plane/**`
-- [ ] **Conditional Paths**
-  - [ ] `api/src/db/control-schema.ts`, `api/drizzle/*.sql`, `.github/workflows/**` only with an explicit exception.
-- [ ] **Exception process**
-  - [ ] Declare `ARCH11-G1A-EXn` before changing any conditional or forbidden path.
+- [x] **Allowed Paths (implementation scope)**
+  - [x] `BRANCH.md`
+  - [x] `api/drizzle/control/0006_arch11_outbox_tenant_rekey.sql`
+  - [x] `api/drizzle/control/meta/_journal.json`
+  - [x] `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`
+  - [x] `api/tests/api/tenancy/arch11-tenant-data.test.ts`
+- [x] **Forbidden Paths (must not change in this branch)**
+  - [x] `Makefile`
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+  - [x] Existing G1b+ tenant resolution and application alias sites under `api/src/**`
+  - [x] `packages/ubo-contracts/**` and `api/src/services/resource-plane/**`
+- [x] **Conditional Paths**
+  - [x] `api/src/db/control-schema.ts`, `api/drizzle/*.sql`, `.github/workflows/**` only with an explicit exception.
+- [x] **Exception process**
+  - [x] No conditional or forbidden path changed; no `ARCH11-G1A-EXn` required.
 
 ## Feedback Loop
 - [x] Owner EVOL is authoritative; source gap: no persisted UBO table exists, so no UBO row re-key applies.
@@ -36,18 +36,18 @@
 - [x] Replace the G1a backfill test's global one-second race with an assertion on the versioned migration statement.
 
 ## AI Flaky tests
-- [ ] Accept no deterministic or security failure as flaky; record eligible nondeterminism with owner sign-off.
+- [x] Accept no deterministic or security failure as flaky; record eligible nondeterminism with owner sign-off.
 
 ## Orchestration Mode
 - [x] **Mono-branch** on `feat/arch11-g1a`, without construction sub-agent or review phase.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Assessment and exact scope**
+- [x] **Lot 0 — Assessment and exact scope**
   - [x] Read `rules/MASTER.md`, workflow, testing rules, and the full ARCH-11 EVOL.
   - [x] Verify branch; confirm existing G1a-G1c, resolver, and the residual outbox carrier on `main`.
   - [x] Gate: `make scope-check ENV=arch11g1a`.
 
-- [ ] **Lot 1 — Residual DATA re-key**
+- [x] **Lot 1 — Residual DATA re-key**
   - [x] Add one idempotent control migration for legacy alias rows.
   - [x] Re-key column and embedded tenant/UBO scope copies through `workspaces.tenant_id` only.
   - [x] Commit migration SQL and control journal atomically with this branch plan.
@@ -56,7 +56,9 @@
   - [x] Gate: focused test, `make scope-check ENV=arch11g1a`, and `harness check scope`.
 
 - [ ] **Lot 2 — Final validation and delivery**
-  - [ ] Gate: `make build`, `make typecheck`, `make lint`, and `make test` with `ENV=arch11g1a` last.
-  - [ ] Verify branch scope mechanically and verify no application alias site changed.
+  - [x] Gate: `make build`, `make typecheck`, and `make lint` with `ENV=arch11g1a` last.
+  - [x] Gate: `make test` smoke, unit, endpoints, queue, and security categories are green.
+  - [x] Source gap: local AI tests require provider secrets supplied only by `.github/workflows/ci.yml:953-978`.
+  - [x] Verify branch scope mechanically and verify no application alias site changed.
   - [ ] Push, open the owner-requested PR without merging, and verify green CI.
   - [ ] Write the report and send valid `sentropic.h2a` envelopes to drumbeat and infra.
