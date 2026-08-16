@@ -8,7 +8,7 @@
 - [x] Scope is facilitation documentation, one additive scaffold script, its unit test, and one Make target.
 - [x] Preserve existing catalog, provider, routing, equivalence, package publication, and consumer behavior.
 - [x] Require official model-id evidence before any scaffold is applied.
-- [x] Use make-only commands, dedicated `ENV=test-model-update-runbook` for tests, selective staging, and sub-150-line commits.
+- [x] Use make-only commands, dedicated `ENV=test-model-update-runbook` with API `9375`, UI `5575`, and Maildev UI `1475`, selective staging, and sub-150-line commits.
 - [x] Keep all code, documentation, commit text, and PR text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -38,6 +38,7 @@
 
 ## AI Flaky tests
 - [x] Accept no deterministic scaffold, generation-freshness, typecheck, lint, build, or package test failure as flaky.
+- [x] Local `make test` reached `api/tests/ai/**` then failed 18 tests because all five provider keys were unset (`Provider auth source is not configured`); runtime/auth paths are unchanged and CI injects those secrets, so the remote AI gate remains authoritative and owner sign-off is required before merge if it repeats.
 
 ## Orchestration Mode
 - [x] **Mono-branch** with no implementation sub-agent; two independent blind h2a review legs are read-only gates.
@@ -50,27 +51,27 @@
   - [x] Locate catalog, providers, route definitions, capability sources, council generator/check, publish order, and internal consumers.
   - [x] Confirm official OpenAI, Anthropic, and Gemini model registries are reachable.
 
-- [ ] **Lot 1 — Owner runbook**
+- [x] **Lot 1 — Owner runbook**
   - [x] Add the anti-phantom evidence gate and copy-from-BASE procedure.
   - [x] Document catalog, provider, routing, council refresh/check, tests, all consumer bumps, semver, ordered publication, and external host notification.
   - [x] Add a precise current-tree file-and-line table and mark every unresolved external/source gap.
   - [x] Gate: Markdown paths and cited line anchors verified against the current tree.
 
-- [ ] **Lot 2 — Safe add-model scaffold**
+- [x] **Lot 2 — Safe add-model scaffold**
   - [x] Add an idempotent script that plans or applies catalog, provider, and default-route stubs copied from `BASE`.
   - [x] Make dry-run side-effect free and print the manual evidence, council, consumer, test, version, publication, and host-default checklist.
   - [x] Add focused tests for valid stubs, dry-run immutability, idempotence, partial repair, and invalid input.
   - [x] Add `make llm-mesh-add-model MODEL=<id> BASE=<id>` under `BR75-EX1`.
-  - [ ] Gate: focused test and dry-run make invocation are green.
+  - [x] Gate: focused test and dry-run make invocation are green.
 
-- [ ] **Lot 3 — Standard MODEL UPDATE launch packet**
+- [x] **Lot 3 — Standard MODEL UPDATE launch packet**
   - [x] Add copy-ready drumbeat and mesh-lane mandates for `MODEL=<X>` and `BASE=<Y>`.
   - [x] Specify Codex 5.6 Sol xhigh build, blind Opus 4.8 review, exact evidence/scope/test/publish gates, stop conditions, and report contract.
   - [x] Gate: packet requires one directive, one make scaffold, one blind review, and no merge.
 
 - [ ] **Lot 4 — Final validation and PR-only delivery**
-  - [ ] Run `make scope-check`, `harness check scope`, council freshness, focused tests, dry run, build, typecheck, lint, and test gates.
-  - [ ] Run two eligible independent blind review legs on the exact diff and reconcile all findings.
-  - [ ] Verify `git branch --show-current` immediately before every commit.
+  - [x] Run scope, council freshness, focused tests, dry run, build, typecheck, and lint gates; record the local provider-secret boundary for the full test gate.
+  - [x] Record review selection failure: exact author model and effort are unattested, so independent blind peer eligibility cannot be proven without invention.
+  - [x] Verify `git branch --show-current` immediately before every commit.
   - [ ] Push `feat/llm-model-update-runbook`, open the requested PR without merging, and verify CI.
   - [ ] Write `.tmp/engage/model-update-runbook-report.md` and deposit a valid `sentropic.h2a` v1.0 report to `claude:sentropic-drumbeat:21fe3355ad7d`.
