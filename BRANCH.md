@@ -83,7 +83,7 @@
   - [ ] Gate: focused package typecheck and tests.
 
 - [ ] **Lot 4 — Local workstation attachment and mesh facade**
-  - [ ] Add a local attachment port matching the existing device-code issue, poll, and approve lifecycle.
+  - [x] Add a local attachment port matching the existing device-code issue, poll, and approve lifecycle.
   - [ ] Compose the five domains behind a single degenerate cluster-mesh facade.
   - [ ] Add tests for delegation fidelity and single-instance capability reporting.
   - [ ] Gate: focused package typecheck, tests, build, and pack.
