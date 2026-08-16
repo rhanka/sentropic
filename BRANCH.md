@@ -77,7 +77,7 @@
 
 - [ ] **Lot 3 — Identity, agent, memory, and NHI wrap**
   - [x] Implement local W-A signed-reference projection contracts for human identity, agent identity, and memory snapshots.
-  - [ ] Map attest, offboard, and export to injected `h2a nhi` command execution without interpreting h2a references.
+  - [x] Map attest, offboard, and export to injected `h2a nhi` command execution without interpreting h2a references.
   - [x] Keep remote resolution as a gated typed seam.
   - [ ] Add tests for local projection, exact h2a command mapping, and fail-closed remote access.
   - [ ] Gate: focused package typecheck and tests.
