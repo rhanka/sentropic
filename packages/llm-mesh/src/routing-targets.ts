@@ -54,18 +54,18 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
 
 type StandardRouteDefinition = readonly [string, string, string, string?];
 const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
-  ['claude-opus-5', 'gpt-5.6-terra', 'claude-opus-4-6-thinking'],
-  ['claude-opus-5-high', 'gpt-5.6-terra', 'claude-opus-4-6-thinking', 'high'],
-  ['claude-opus-5-xhigh', 'gpt-5.6-terra', 'claude-opus-4-6-thinking', 'xhigh'],
-  ['claude-opus-4-8', 'gpt-5.6-terra', 'claude-opus-4-6-thinking'],
-  ['claude-opus-4-8-xhigh', 'gpt-5.6-terra', 'claude-opus-4-6-thinking', 'xhigh'],
+  ['claude-opus-5', 'gpt-5.6-terra', 'gemini-3.7-flash'],
+  ['claude-opus-5-high', 'gpt-5.6-terra', 'gemini-3.7-flash', 'high'],
+  ['claude-opus-5-xhigh', 'gpt-5.6-terra', 'gemini-3.7-flash', 'xhigh'],
+  ['claude-opus-4-8', 'gpt-5.6-terra', 'gemini-3.7-flash'],
+  ['claude-opus-4-8-xhigh', 'gpt-5.6-terra', 'gemini-3.7-flash', 'xhigh'],
   ['claude-sonnet-5', 'gpt-5.6-luna', 'gemini-3.7-flash'],
   ['claude-sonnet-5-xhigh', 'gpt-5.6-luna', 'gemini-3.7-flash', 'xhigh'],
   ['claude-sonnet-4-6', 'gpt-5.6-luna', 'gemini-3.7-flash'],
-  ['claude-fable-5', 'gpt-5.6-sol', 'gemini-3.1-pro'],
-  ['claude-fable-5-high', 'gpt-5.6-sol', 'gemini-3.1-pro', 'high'],
-  ['claude-fable-5-xhigh', 'gpt-5.6-sol', 'gemini-3.1-pro', 'xhigh'],
-  ['claude-fable-5-max', 'gpt-5.6-sol', 'gemini-3.1-pro', 'max'],
+  ['claude-fable-5', 'gpt-5.6-sol', 'gemini-3.7-flash'],
+  ['claude-fable-5-high', 'gpt-5.6-sol', 'gemini-3.7-flash', 'high'],
+  ['claude-fable-5-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
+  ['claude-fable-5-max', 'gpt-5.6-sol', 'gemini-3.7-flash', 'max'],
 ];
 const codexTarget = (model: string, effort?: string): TargetMapping => ({
   providerId: 'openai', transportProviderId: 'codex', model,
@@ -82,7 +82,7 @@ const CLOUD_CODE_CAPABILITY_SOURCE_BY_MODEL: Readonly<
 > = {
   'claude-opus-4-6-thinking': ['anthropic', 'claude-opus-4-8'],
   'gemini-3.6-flash': ['gemini', 'gemini-3.7-flash'],
-  'gemini-3.1-pro': ['gemini', 'gemini-3.5-flash'],
+  'gemini-3.1-pro': ['gemini', 'gemini-3.7-flash'],
 };
 
 export const resolveTargetCapabilitySource = (target: TargetMapping): TargetMapping => {
