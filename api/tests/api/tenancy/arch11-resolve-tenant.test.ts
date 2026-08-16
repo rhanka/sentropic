@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../../src/db/client';
 import { serviceClients, tenantMemberships, tenants, workspaces } from '../../../src/db/schema';
@@ -8,6 +8,7 @@ import {
   reconcileTenantId,
   resetResolveTenantCache,
   resolveTenant,
+  resolveTenantAuthoritatively,
   TenantResolutionError,
 } from '../../../src/services/tenancy/resolve-tenant';
 import {
@@ -117,6 +118,23 @@ describe('ARCH-11 G1b — resolveTenant seam + SHADOW mode', () => {
     await seedMembership(ORG_A, pending.id, 'requested');
 
     expect(await resolveTenant({ workspaceId: wsA, userId: pending.id })).toEqual({ error: 'ambiguous_tenant' });
+  });
+
+  it('authoritative membership resolution observes revocation despite a cached approval', async () => {
+    const member = await seedUser('Revoked Member');
+    const wsA = `ws-${ORG_A}-${crypto.randomUUID()}`;
+    await seedWorkspace(wsA, ORG_A, member.id);
+    await seedMembership(ORG_A, member.id, 'approved');
+
+    expect(await resolveTenant({ workspaceId: wsA, userId: member.id })).toEqual({ tenantId: ORG_A });
+    await db
+      .update(tenantMemberships)
+      .set({ status: 'suspended' })
+      .where(and(eq(tenantMemberships.tenantId, ORG_A), eq(tenantMemberships.userId, member.id)));
+
+    expect(await resolveTenantAuthoritatively({ workspaceId: wsA, userId: member.id })).toEqual({
+      error: 'ambiguous_tenant',
+    });
   });
 
   it('{ clientId } resolves service_clients.tenant_id (NOT oauth_clients); a miss is unknown', async () => {
