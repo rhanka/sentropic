@@ -25,6 +25,7 @@ export interface ClusterMeshAppAdapter {
   readonly membership: MembershipDomain;
   readonly devices: DeviceDomain;
   readonly boundaries: BoundaryDomain;
+  completeDeviceAttachment(outcome: Extract<DevicePollOutcome, { status: 'approved' }>): void;
 }
 
 export interface ClusterMeshAppDependencies {
@@ -49,21 +50,16 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
   const devices = createLocalDeviceDomain({
     issueDeviceCode: deps.issueDeviceCode,
     approveDeviceCode: deps.approveDeviceCode,
-    pollDeviceCode(deviceCode) {
-      const outcome = deps.pollDeviceCode(deviceCode);
-      if (outcome.status === 'approved') {
-        const key = `${outcome.userId}\0${outcome.deviceName}`;
-        if (!attached.has(key)) {
-          attached.set(key, {
-            kind: 'workstation',
-            deviceId: deps.createWorkstationId?.() ?? `device:${crypto.randomUUID()}`,
-            displayName: outcome.deviceName,
-            ownerSubject: outcome.userId,
-            state: 'attached',
-          });
-        }
-      }
-      return outcome;
+    pollDeviceCode: deps.pollDeviceCode,
+  });
+  const boundaries = createBoundaryDomain({
+    homeNodeId: deps.self.nodeId,
+    memberships: {
+      async resolveApproved(input) {
+        const result = await deps.resolveTenant(input);
+        if ('error' in result) return null;
+        return { tenantId: result.tenantId, userId: input.userId, status: 'approved' };
+      },
     },
   });
 
@@ -71,18 +67,21 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
     devices,
     membership: createSingleNodeMembership({
       self: deps.self,
+      boundaries,
       workstations: { async listAttached() { return [...attached.values()]; } },
     }),
-    boundaries: createBoundaryDomain({
-      homeNodeId: deps.self.nodeId,
-      memberships: {
-        async resolveApproved(input) {
-          const result = await deps.resolveTenant(input);
-          if ('error' in result) return null;
-          return { tenantId: result.tenantId, userId: input.userId, status: 'approved' };
-        },
-      },
-    }),
+    boundaries,
+    completeDeviceAttachment(outcome) {
+      const key = `${outcome.userId}\0${outcome.deviceName}`;
+      if (attached.has(key)) return;
+      attached.set(key, {
+        kind: 'workstation',
+        deviceId: deps.createWorkstationId?.() ?? `device:${crypto.randomUUID()}`,
+        displayName: outcome.deviceName,
+        ownerSubject: outcome.userId,
+        state: 'attached',
+      });
+    },
   };
 }
 

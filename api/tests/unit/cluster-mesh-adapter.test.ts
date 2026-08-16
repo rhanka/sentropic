@@ -33,7 +33,7 @@ function dependencies(
 }
 
 describe('cluster mesh app adapter', () => {
-  it('should preserve device results and add an approved workstation to the local directory', async () => {
+  it('should attach an approved workstation only after enrollment completion', async () => {
     const approved = {
       status: 'approved' as const,
       userId: 'user-1',
@@ -41,10 +41,19 @@ describe('cluster mesh app adapter', () => {
       deviceName: 'Laptop',
     };
     const pollDeviceCode = vi.fn(() => approved);
-    const adapter = createClusterMeshAppAdapter(dependencies({ pollDeviceCode }));
+    const adapter = createClusterMeshAppAdapter(dependencies({
+      pollDeviceCode,
+      async resolveTenant() { return { tenantId: 'tenant-acme' }; },
+    }));
 
     expect(adapter.devices.pollDeviceCode('device-code')).toBe(approved);
-    expect(await adapter.membership.listDirectory()).toEqual([
+    await expect(
+      adapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' }),
+    ).resolves.toEqual([expect.objectContaining({ kind: 'server' })]);
+
+    adapter.completeDeviceAttachment(approved);
+
+    expect(await adapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' })).toEqual([
       expect.objectContaining({ kind: 'server', nodeId: 'node:sentropic-local' }),
       expect.objectContaining({
         kind: 'workstation',

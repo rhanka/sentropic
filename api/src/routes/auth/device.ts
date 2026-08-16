@@ -94,6 +94,8 @@ deviceRouter.post('/poll', async (c) => {
         .where(eq(users.id, outcome.userId))
         .limit(1);
 
+      clusterMeshAdapter.completeDeviceAttachment(outcome);
+
       return c.json({
         status: 'approved',
         sessionToken: issued.sessionToken,
