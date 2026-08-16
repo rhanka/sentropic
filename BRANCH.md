@@ -90,12 +90,12 @@
   - [x] Add routing, account inventory, and Cloud Code wire-default tests proving no 3.5 resolution.
   - [x] Gate: `make test-llm-mesh ENV=test-llm-mesh-g37` and `make typecheck-llm-mesh ENV=test-llm-mesh-g37`.
 
-- [ ] **Lot 3 — PR review fixes**
+- [x] **Lot 3 — PR review fixes**
   - [x] Raise the gateway dependency floor to `@sentropic/llm-mesh@^0.16.0` and regenerate the root lockfile.
   - [x] Prove the gateway lock entry links the workspace and run the real workspace gateway validation.
-  - [ ] Route every Claude-tier Gemini equivalent directly to `gemini-3.7-flash`.
-  - [ ] Repoint the retained 3.6 and 3.1 compatibility aliases to the real 3.7 capability source.
-  - [ ] Add exhaustive Claude-tier candidate and capability-resolution regression coverage.
+  - [x] Route every Claude-tier Gemini equivalent directly to `gemini-3.7-flash`.
+  - [x] Repoint the retained 3.6 and 3.1 compatibility aliases to the real 3.7 capability source.
+  - [x] Add exhaustive Claude-tier candidate and capability-resolution regression coverage.
 
 - [ ] **Lot 4 — Final validation and delivery**
   - [x] Run `make build ENV=test-llm-mesh-g37`.
