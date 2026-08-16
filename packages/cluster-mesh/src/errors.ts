@@ -24,3 +24,12 @@ export class TenantBoundaryError extends Error {
     this.name = 'TenantBoundaryError';
   }
 }
+
+export class InvalidProjectionReferenceError extends Error {
+  readonly code = 'invalid_projection_reference';
+
+  constructor() {
+    super('The signed projection reference is invalid');
+    this.name = 'InvalidProjectionReferenceError';
+  }
+}
