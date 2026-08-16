@@ -20,8 +20,11 @@
   - [ ] `BRANCH.md`
   - [ ] `packages/cluster-mesh/**`
   - [ ] `api/src/services/cluster-mesh-adapter.ts`
+  - [ ] `api/src/services/tenancy/resolve-tenant.ts`
   - [ ] `api/src/routes/auth/device.ts`
   - [ ] `api/tests/unit/cluster-mesh-adapter.test.ts`
+  - [ ] `api/tests/unit/device-route.test.ts`
+  - [ ] `api/tests/api/tenancy/arch11-resolve-tenant.test.ts`
   - [ ] `api/package.json`
   - [ ] `package-lock.json`
 - [ ] **Forbidden Paths (must not change in this branch)**
@@ -44,6 +47,10 @@
   - [ ] Impact: API/UI image dependency layers and API cache invalidation include `packages/cluster-mesh`; CI gains one focused validation lane.
   - [ ] Rollback: remove the package dependency, Dockerfile copies/build, Make targets/prerequisites/hash input, and CI filters/job as one mechanical reversal.
 - [ ] No unresolved product or architecture decisions; dossier v2 plus independent Opus review and owner GO are authoritative.
+- [ ] `CMV1-EX1` (`acknowledge`, GRANTED) — the owner-mandated fail-closed tenant boundary and blind review require an uncached membership check at the cluster-mesh authorization seam.
+  - [ ] Reason: process-lifetime tenant cache entries must not outlive membership revocation for directory authorization.
+  - [ ] Impact: add one uncached resolver entry point over the existing database query; no schema, alias, or ARCH-11 rollout-mode change.
+  - [ ] Rollback: remove the entry point, its adapter injection, and the two focused regression tests together.
 
 ## AI Flaky tests
 - [ ] Do not accept additive timeouts or deterministic failures as flaky.
