@@ -98,6 +98,7 @@
   - [x] Add the API workspace dependency and regenerate the root lock through a make target.
   - [x] Wire both Dockerfiles, the Make package targets, runtime prerequisites, and `API_VERSION` under `BR72-EX1`.
   - [x] Add CI change filters plus validate/package job; document first-publish bootstrap without publishing.
+  - [x] Serialize workspace installation before package prerequisites and return UI cache ownership after aggregate checks.
   - [ ] Gate: `make check-ci-version-filters ENV=test-cluster-mesh-v1`, package build/pack, and API image build.
 
 - [ ] **Lot 7 — Final validation and independent review**
