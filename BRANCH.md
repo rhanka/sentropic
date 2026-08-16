@@ -112,6 +112,7 @@
 ## Verification Evidence
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 145 tests passed after Lot 1.
 - [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 147 tests passed after Lot 2.
+- [x] `make test-llm-mesh ENV=test-llm-mesh-g37`: 25 files and 148 tests passed after the PR review fixes.
 - [x] `make typecheck-llm-mesh ENV=test-llm-mesh-g37`: passed after Lot 2.
 - [x] `make build`, `make typecheck`, and `make lint`: passed in isolated `test-llm-mesh-g37`.
 - [x] Aggregate deterministic suites: unit 874 passed / 2 skipped; endpoints 658 passed aside from one parallel ARCH-11 isolation flake that passed scoped and with one worker.
