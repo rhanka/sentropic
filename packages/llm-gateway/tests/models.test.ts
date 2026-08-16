@@ -26,6 +26,7 @@ describe('GET /v1/models', () => {
     const ids = body.data.map((m) => m.id).sort();
     expect(ids).toEqual(['claude-opus-4-7', 'claude-sonnet-4-6']);
     expect(body.data.every((m) => m.owned_by === 'anthropic')).toBe(true);
+    expect(res.headers.get('X-Sentropic-Served')).toBeNull();
     // No account ids/tokens.
     const text = JSON.stringify(body);
     expect(text).not.toContain('acct-alpha');

@@ -130,6 +130,8 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     });
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('X-Sentropic-Served'))
+      .toBe('provider=openai; model=gpt-5.6-terra');
     expect(await response.json()).toMatchObject({
       type: 'message', model: 'gpt-5.6-terra', content: [{ type: 'text', text: 'ok' }],
     });
@@ -206,6 +208,8 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(response.headers.get('X-Sentropic-Served'))
+      .toBe('provider=openai; model=gpt-5.6-terra');
     expect(JSON.parse(frames[0]!.data).message.usage.input_tokens).toBeGreaterThan(0);
     expect(JSON.parse(frames.at(-2)!.data).usage).toEqual({ output_tokens: 8 });
     expect(settlements).toHaveLength(1);
