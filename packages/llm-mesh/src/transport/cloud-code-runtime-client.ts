@@ -10,6 +10,8 @@ import type { StreamEvent, TokenUsage } from '../streaming.js';
 import type { ToolCall } from '../tools.js';
 import { CloudCodeProviderAdapter } from './cloud-code-transport.js';
 
+const DEFAULT_CLOUD_CODE_MODEL_ID = 'gemini-3.7-flash';
+
 const asSchema = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -183,7 +185,8 @@ const providerRequest = (request: GenerateRequest): ProviderRequest => {
   const droppedConstraints = projections.flatMap(({ projection }) =>
     projection.droppedConstraints);
   return {
-    modelId: request.modelId ?? (typeof request.model === 'string' ? request.model : ''),
+    modelId: request.modelId
+      ?? (typeof request.model === 'string' ? request.model : DEFAULT_CLOUD_CODE_MODEL_ID),
     contents: contents(request.messages),
     systemInstruction: {
       parts: request.messages
@@ -299,7 +302,7 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
     }
     return {
       id: 'cloud_code_response', providerId: 'gemini',
-      modelId: request.modelId ?? 'gemini-3.5-flash',
+      modelId: request.modelId ?? DEFAULT_CLOUD_CODE_MODEL_ID,
       message: { role: 'assistant', content: text, ...(calls.length ? { toolCalls: calls } : {}) },
       text, toolCalls: calls, finishReason: calls.length ? 'tool_calls' : 'stop',
       ...(finalUsage ? { usage: finalUsage } : {}),
