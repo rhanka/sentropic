@@ -269,6 +269,8 @@ const settle = async (
 export interface GatewayJsonResult {
   readonly status: number;
   readonly body: unknown;
+  /** Gateway-resolved provider and model that received the request. */
+  readonly servedTarget: ResolvedTarget;
   /** Provider response headers (#4); the router forwards the allowlist. */
   readonly headers?: ProviderResponseHeaders;
 }
@@ -303,7 +305,7 @@ export const runJsonFlow = async (
       response = await deps.config.dispatch.dispatch(dispatchRequest);
     } catch {
       await settle(deps, request, prepared, 'failed', undefined);
-      throw new GatewayError('pooled-account-unavailable', 'dispatch failed');
+      throw new GatewayError('pooled-account-unavailable', 'dispatch failed', undefined, prepared.target);
     }
 
     const ok = response.status >= 200 && response.status < 300;
@@ -333,6 +335,7 @@ export const runJsonFlow = async (
     return {
       status: response.status,
       body: response.body,
+      servedTarget: prepared.target,
       ...(response.headers ? { headers: response.headers } : {}),
     };
   }
@@ -347,6 +350,8 @@ export const runJsonFlow = async (
  */
 export interface GatewayStreamResult {
   readonly headers?: ProviderResponseHeaders;
+  /** Gateway-resolved provider and model that received the request. */
+  readonly servedTarget: ResolvedTarget;
   readonly stream: AsyncGenerator<GatewayDispatchStreamEvent, void, unknown>;
 }
 
@@ -403,7 +408,9 @@ export const runStreamFlow = async (
         }
       }
       await settle(deps, request, prepared, 'failed', undefined);
-      throw new GatewayError('pooled-account-unavailable', 'stream failed before first byte');
+      throw new GatewayError(
+        'pooled-account-unavailable', 'stream failed before first byte', undefined, prepared.target,
+      );
     }
   }
 
@@ -441,6 +448,7 @@ export const runStreamFlow = async (
 
   return {
     ...(dispatchStream.headers ? { headers: dispatchStream.headers } : {}),
+    servedTarget: prepared.target,
     stream,
   };
 };
