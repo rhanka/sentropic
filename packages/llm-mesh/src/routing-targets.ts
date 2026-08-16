@@ -124,8 +124,8 @@ export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
 };
 
 export const LAUNCH_ALIAS_TARGET_MAPPINGS = Object.fromEntries(
-  STANDARD_ROUTE_DEFINITIONS.filter(([, , , effort]) => effort)
-    .map(([requestedId]) => [requestedId, LAUNCH_ALIAS_ROUTE_MAPPINGS[requestedId]![0]!]),
+  Object.entries(LAUNCH_ALIAS_ROUTE_MAPPINGS)
+    .map(([requestedId, targets]) => [requestedId, targets[0]!]),
 );
 
 export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> =
