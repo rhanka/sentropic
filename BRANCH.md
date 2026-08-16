@@ -126,8 +126,8 @@
 - [x] `make check-ci-version-filters ... ENV=test-cluster-mesh-v1`: PASS for all API/UI hash inputs.
 - [x] `make scope-check ... ENV=test-cluster-mesh-v1` and `harness check scope`: PASS C2.
 
-- [ ] **Lot 8 — Delivery**
-  - [ ] Push `feat/cluster-mesh-v1` without merging or deploying.
-  - [ ] Open a draft PR with this plan and exact verification evidence.
-  - [ ] Write `.tmp/engage/cluster-mesh-v1-report.md` in the repository owner workspace.
-  - [ ] Send valid `sentropic.h2a` envelopes to drumbeat, conductor, and the infra lane with package, API, seam/gate, commits, and PR facts.
+- [x] **Lot 8 — Delivery**
+  - [x] Push `feat/cluster-mesh-v1` without merging or deploying.
+  - [x] Open draft PR #538 with this plan and exact verification evidence.
+  - [x] Write `.tmp/engage/cluster-mesh-v1-report.md` in the repository owner workspace.
+  - [x] Send valid `sentropic.h2a` envelopes to drumbeat and conductor, plus an `infra/WP-INFRA` lane-scoped envelope through the conductor because no sentropic infra-lane endpoint is registered; exclude unrelated infra sessions.
