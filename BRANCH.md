@@ -19,6 +19,7 @@
   - [ ] `scripts/llm-model-equivalences/council.source.json` — owner-required generated-council source under `G37-EX1`.
   - [ ] `package-lock.json` — required workspace version synchronization under `G37-EX2`.
   - [ ] `api/tests/unit/llm-runtime-stream.test.ts` — exhaustive advertised-model stream fixture under `G37-EX3`.
+  - [ ] `api/tests/api/models.test.ts` — exact public catalog response under `G37-EX4`.
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
   - [ ] `docker-compose*.yml`
@@ -41,6 +42,10 @@
   - [x] Reason: the API stream contract rejects any catalog model without a normalization fixture.
   - [x] Impact: add one Gemini 3.7 row to the exhaustive fixture matrix; production API code is unchanged.
   - [x] Rollback: remove the row together with the Gemini 3.7 catalog profile.
+- [x] `G37-EX4` (`acknowledge`, GRANTED) — the owner requires Gemini 3.7 in the public model catalog.
+  - [x] Reason: the endpoint contract asserts its exact provider/model response and total.
+  - [x] Impact: add Gemini 3.7 to the expected Gemini list and increment the expected total only.
+  - [x] Rollback: restore both expectations together with the catalog profile.
 - [x] Keep `gemini-3.6-flash` as a compatibility-only capability alias repointed to 3.7; do not advertise it in the default Cloud Code inventory.
 - [x] Omit `google/gemini-3.7-flash@gcp`; agy uses Cloud Code and no supplied evidence verifies a GCP Model Garden key.
 - [x] Skip peer review in this branch because the owner explicitly reserved blind Opus review as a separate activity.
