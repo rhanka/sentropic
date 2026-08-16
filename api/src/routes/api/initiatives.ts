@@ -20,6 +20,8 @@ import { isObjectLockedError, requireLockOwnershipForMutation } from '../../serv
 import { resolveLocaleFromHeaders } from '../../utils/locale';
 import { isNeutralWorkspace } from '../../services/workspace-access';
 import { evaluateGate } from '../../services/gate-service';
+import { generateZodFromJsonSchema } from '../../services/object-registry/json-schema-to-zod';
+import { OPPORTUNITY_JSON_SCHEMA } from '../../services/object-registry/opportunity-type';
 
 async function notifyInitiativeEvent(initiativeId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ initiative_id: initiativeId });
@@ -43,41 +45,10 @@ async function notifyFolderEvent(folderId: string): Promise<void> {
 
 // folder_name prompt now in ORGANIZATION_PROMPTS (default-chat-system.ts) - currently unused
 
-const scoreEntry = z.object({
-  axisId: z.string(),
-  rating: z.number().min(0).max(100),
-  description: z.string()
-});
-
-const initiativeInput = z.object({
-  folderId: z.string(),
-  organizationId: z.string().optional(),
-  name: z.string().min(1),
-  description: z.string().optional(), // 30-60 caractères
-  // Nouveaux champs pour data JSONB
-  problem: z.string().optional(), // 40-80 caractères
-  solution: z.string().optional(), // 40-80 caractères
-  // Champs métier (seront dans data JSONB)
-  process: z.string().optional(),
-  domain: z.string().optional(),
-  technologies: z.array(z.string()).optional(),
-  deadline: z.string().optional(),
-  contact: z.string().optional(),
-  benefits: z.array(z.string()).optional(),
-  metrics: z.array(z.string()).optional(),
-  risks: z.array(z.string()).optional(),
-  constraints: z.array(z.string()).optional(),
-  nextSteps: z.array(z.string()).optional(),
-  dataSources: z.array(z.string()).optional(),
-  dataObjects: z.array(z.string()).optional(),
-  references: z.array(z.object({
-    title: z.string(),
-    url: z.string(),
-    excerpt: z.string().optional(),
-  })).optional(),
-  valueScores: z.array(scoreEntry).optional(),
-  complexityScores: z.array(scoreEntry).optional()
-});
+// BR-59-act (DD2a=B): the registry's `opportunity` JSON Schema is the single
+// source of truth; this zod validator is GENERATED from it, not hand-written.
+// See services/object-registry/opportunity-type.ts.
+const initiativeInput = generateZodFromJsonSchema(OPPORTUNITY_JSON_SCHEMA);
 
 type InitiativeInput = z.infer<typeof initiativeInput>;
 
