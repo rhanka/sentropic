@@ -68,17 +68,17 @@
   - [x] Add focused membership, directory, and boundary tests.
   - [x] Gate: `make typecheck-cluster-mesh ENV=test-cluster-mesh-v1` and `make test-cluster-mesh ENV=test-cluster-mesh-v1`.
 
-- [ ] **Lot 2 — Trust exchange seam**
+- [x] **Lot 2 — Trust exchange seam**
   - [x] Add RFC 8693-shaped subject-token, audience, scope, actor-chain, and exchange result contracts.
   - [x] Ship a fail-closed exchange implementation returning a typed gated-capability error.
   - [x] Expose no HTTP broker route and persist no issuer trust relation.
   - [x] Add tests proving all exchange attempts deny without invoking remote behavior.
-  - [ ] Gate: focused package typecheck and tests.
+  - [x] Gate: focused package typecheck and tests.
 
 - [ ] **Lot 3 — Identity, agent, memory, and NHI wrap**
-  - [ ] Implement local W-A signed-reference projection contracts for human identity, agent identity, and memory snapshots.
+  - [x] Implement local W-A signed-reference projection contracts for human identity, agent identity, and memory snapshots.
   - [ ] Map attest, offboard, and export to injected `h2a nhi` command execution without interpreting h2a references.
-  - [ ] Keep remote resolution and W-C replication as gated typed seams.
+  - [x] Keep remote resolution as a gated typed seam.
   - [ ] Add tests for local projection, exact h2a command mapping, and fail-closed remote access.
   - [ ] Gate: focused package typecheck and tests.
 
