@@ -64,19 +64,20 @@ if (!catalog.includes(`    modelId: '${model}',`)) {
 }
 
 let providers = original.providers;
-const addProviderId = (source, startMarker, endMarker, indentation) => {
-  const start = source.indexOf(startMarker);
+const addProviderId = (source, startMarker, endMarker, indentation, offset = 0) => {
+  const start = source.indexOf(startMarker, offset);
   const end = source.indexOf(endMarker, start);
   if (start < 0 || end < 0) throw new Error(`Could not isolate provider list: ${startMarker}`);
   const segment = source.slice(start, end);
   if (segment.includes(`'${model}'`)) return source;
-  const pattern = new RegExp(`^${indentation}'${quoted(base)}',\\s*$`, 'm');
+  const pattern = new RegExp(`^${indentation}'${quoted(base)}',[ \\t]*$`, 'm');
   if (!pattern.test(segment)) throw new Error(`BASE ${base} not found in ${startMarker}`);
   const updated = segment.replace(pattern, (line) => `${line}\n${indentation}'${model}',`);
   return `${source.slice(0, start)}${updated}${source.slice(end)}`;
 };
 providers = addProviderId(providers, 'export const knownModelIds = [', '] as const', '  ');
-providers = addProviderId(providers, `  ${provider}: [`, '],', '    ');
+providers = addProviderId(providers, `  ${provider}: [`, '],', '    ',
+  providers.indexOf('export const knownModelIdsByProvider = {'));
 
 let routing = original.routing;
 const routingSectionEnd = routing.indexOf('\n};', routing.indexOf('DEFAULT_TARGET_MAPPINGS'));
