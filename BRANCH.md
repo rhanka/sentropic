@@ -1,45 +1,46 @@
-# Feature: ARCH-11 G1a Tenant Re-key Data Completion
+# Feature: Real Gemini 3.7 Flash Integration
 
 ## Objective
-- [x] Complete only the residual G1a `control.event_outbox` re-key; preserve G1b+ aliases and reuse `resolveTenant`.
+- [ ] Add the real `gemini-3.7-flash` profile to `@sentropic/llm-mesh` with verified limits and input modalities.
+- [ ] Route agy Cloud Code execution to the real model without resolving through Gemini 3.5 Flash.
 
 ## Scope / Guardrails
-- [x] Base assessment confirms G1a points 1-6 already exist on `main` at `df797880a`.
-- [x] Base assessment confirms `resolveTenant` and cluster-mesh deny-as-missing wiring already exist.
-- [x] Re-key only proven aliases in the column plus `envelope.tenant.tenantId` and `envelope.scope.tenantId`.
-- [x] Leave unresolved rows, absent JSONB paths, and unrelated JSONB unchanged.
-- [x] Keep UBO and Resource Plane contract types unchanged because no UBO persistence table exists.
-- [x] Keep all seven application alias sites unchanged for G1b+.
-- [x] Use make-only commands, isolated `ENV=arch11g1a`, explicit staging, and sub-150-line commits.
+- [x] Keep implementation under `packages/llm-mesh/**` except the generated-council source exception.
+- [x] Use only make targets for build, typecheck, lint, test, and generated artifacts.
+- [x] Use `ENV=test-llm-mesh-g37`, always as the last make argument.
+- [x] Keep root `ENV=dev` untouched and perform no merge, deploy, publication, or in-branch review.
+- [x] Keep each commit under 150 changed lines and stage explicit files only.
+- [x] Use owner-supplied verified specifications only; add no unverified capability or GCP variant.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**
-  - [x] `BRANCH.md`
-  - [x] `api/drizzle/control/0006_arch11_outbox_tenant_rekey.sql`
-  - [x] `api/drizzle/control/meta/_journal.json`
-  - [x] `api/tests/api/tenancy/arch11-outbox-rekey.test.ts`
-  - [x] `api/tests/api/tenancy/arch11-tenant-data.test.ts`
-- [x] **Forbidden Paths (must not change in this branch)**
-  - [x] `Makefile`
-  - [x] `docker-compose*.yml`
-  - [x] `.cursor/rules/**`
-  - [x] Existing G1b+ tenant resolution and application alias sites under `api/src/**`
-  - [x] `packages/ubo-contracts/**` and `api/src/services/resource-plane/**`
-- [x] **Conditional Paths**
-  - [x] `api/src/db/control-schema.ts`, `api/drizzle/*.sql`, `.github/workflows/**` only with an explicit exception.
-- [x] **Exception process**
-  - [x] No conditional or forbidden path changed; no `ARCH11-G1A-EXn` required.
+- [ ] **Allowed Paths (implementation scope)**
+  - [ ] `packages/llm-mesh/**`
+- [ ] **Forbidden Paths (must not change in this branch)**
+  - [ ] `Makefile`
+  - [ ] `docker-compose*.yml`
+  - [ ] `.cursor/rules/**`
+- [ ] **Conditional Paths**
+  - [ ] `BRANCH.md` — owner-mandated branch plan.
+  - [ ] `scripts/llm-model-equivalences/council.source.json` — granted under `G37-EX1`.
+- [ ] **Exception process**
+  - [ ] Declare reason, impact, and rollback before changing a conditional path.
 
 ## Feedback Loop
-- [x] Owner EVOL is authoritative; source gap: no persisted UBO table exists, so no UBO row re-key applies.
-- [x] Clear isolated root-owned `node_modules` only via `make clean-node-modules`; focused rerun is green.
-- [x] Replace the G1a backfill test's global one-second race with an assertion on the versioned migration statement.
+- [x] `G37-EX1` (`acknowledge`, GRANTED) — the owner requires regeneration of the model council instead of manual generated-file edits.
+  - [x] Reason: the generator reads its canonical exclusions from `scripts/llm-model-equivalences/council.source.json`.
+  - [x] Impact: classify the new Gemini profile as non-equivalent without modifying council policy or generator code.
+  - [x] Rollback: remove the new exclusion and regenerate the artifact with the existing make target.
+- [x] Keep `gemini-3.6-flash` as a compatibility-only capability alias repointed to 3.7; do not advertise it in the default Cloud Code inventory.
+- [x] Omit `google/gemini-3.7-flash@gcp`; agy uses Cloud Code and no supplied evidence verifies a GCP Model Garden key.
+- [x] Skip peer review in this branch because the owner explicitly reserved blind Opus review as a separate activity.
 
 ## AI Flaky tests
-- [x] Accept no deterministic or security failure as flaky; record eligible nondeterminism with owner sign-off.
+- [ ] Accept no deterministic failure or additive timeout as flaky.
+- [ ] Record eligible provider or network nondeterminism only with same-commit pass evidence and owner sign-off.
 
 ## Orchestration Mode
-- [x] **Mono-branch** on `feat/arch11-g1a`, without construction sub-agent or review phase.
+- [x] **Mono-branch**
+- [x] Keep all implementation on `feat/llm-mesh-gemini-37` with no subagent or review lane.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Assessment and exact scope**
