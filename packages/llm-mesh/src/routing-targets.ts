@@ -72,10 +72,13 @@ const codexTarget = (model: string, effort?: string): TargetMapping => ({
   ...(effort ? { effort } : {}),
 });
 
-export const LAUNCH_ALIAS_TARGET_MAPPINGS = Object.fromEntries(
-  STANDARD_ROUTE_DEFINITIONS.filter(([, , , effort]) => effort)
-    .map(([requestedId, model, , effort]) => [requestedId, codexTarget(model, effort)]),
-);
+const claudeTarget = (model: string, effort?: string): TargetMapping => ({
+  providerId: 'anthropic', transportProviderId: 'claude-code', model,
+  ...(effort ? { effort } : {}),
+});
+
+const faithfulClaudeModel = (requestedId: string): string =>
+  requestedId.replace(/-(?:high|xhigh|max)$/, '');
 
 const CLOUD_CODE_CAPABILITY_SOURCE_BY_MODEL: Readonly<
   Record<string, readonly [string, string]>
@@ -93,14 +96,14 @@ export const resolveTargetCapabilitySource = (target: TargetMapping): TargetMapp
 
 /**
  * A launch alias is an explicit user-facing routing contract, not benchmark
- * equivalence evidence. Keep the historical Codex target first for backwards
- * compatibility while exposing the owner-ratified Cloud Code target to route
- * policy ordering and bounded pre-byte fallback.
+ * equivalence evidence. A known Claude id must reach its Anthropic target
+ * before the permitted Codex and Cloud Code fallbacks.
  */
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
 > = Object.fromEntries(STANDARD_ROUTE_DEFINITIONS.map(
   ([requestedId, codexModel, cloudModel, effort]) => [requestedId, [
+    claudeTarget(faithfulClaudeModel(requestedId), effort),
     codexTarget(codexModel, effort),
     {
       providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel,
@@ -109,11 +112,6 @@ export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   ]],
 ));
 
-export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
-  ...DEFAULT_TARGET_MAPPINGS,
-  ...LAUNCH_ALIAS_TARGET_MAPPINGS,
-};
-
 export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
 > = {
@@ -121,12 +119,19 @@ export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
     ([requestedId, target]) => [requestedId, [target]],
   )),
   ...Object.fromEntries(Object.entries(LAUNCH_ALIAS_ROUTE_MAPPINGS).map(
-    ([requestedId, targets]) => [requestedId, [
-      ...(DEFAULT_TARGET_MAPPINGS[requestedId] ? [DEFAULT_TARGET_MAPPINGS[requestedId]!] : []),
-      ...targets,
-    ]],
+    ([requestedId, targets]) => [requestedId, targets],
   )),
 };
+
+export const LAUNCH_ALIAS_TARGET_MAPPINGS = Object.fromEntries(
+  STANDARD_ROUTE_DEFINITIONS.filter(([, , , effort]) => effort)
+    .map(([requestedId]) => [requestedId, LAUNCH_ALIAS_ROUTE_MAPPINGS[requestedId]![0]!]),
+);
+
+export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> =
+  Object.fromEntries(Object.entries(CANONICAL_TARGET_ROUTE_MAPPINGS)
+    .map(([requestedId, targets]) => [requestedId, targets[0]!]),
+  );
 
 export const createStaticTargetResolver = (options: {
   readonly mappings: Readonly<Record<string, TargetMapping>>;
@@ -157,4 +162,4 @@ export const describeCanonicalTargetRoutes = (): readonly TargetRouteDescription
       kind: requestedId === target.model ? 'faithful' as const : 'alias' as const,
     })))
     .sort((left, right) => left.requestedId.localeCompare(right.requestedId)
-      || left.transportProviderId.localeCompare(right.transportProviderId));
+    );
