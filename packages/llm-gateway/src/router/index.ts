@@ -70,7 +70,7 @@ const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
 const SERVED_HEADER = 'X-Sentropic-Served';
 
 const servedHeaderValue = (target: ResolvedTarget): string =>
-  `provider=${target.providerId}; model=${target.model}`;
+  `provider=${target.providerId}; model=${target.model}; transport=${target.transportProviderId}`;
 
 /**
  * Allowlist of provider response headers the gateway FORWARDS (#4) for faithful

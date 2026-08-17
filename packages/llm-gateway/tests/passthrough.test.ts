@@ -59,7 +59,7 @@ describe('faithful non-stream passthrough', () => {
     // Gateway-added but invisible: only the request-id header.
     expect(res.headers.get('X-Sentropic-Request-Id')).toBe('req_fixture_id');
     expect(res.headers.get('X-Sentropic-Served'))
-      .toBe('provider=anthropic; model=claude-sonnet-4-6');
+      .toBe('provider=anthropic; model=claude-sonnet-4-6; transport=claude-code');
     // The pooled credential was swapped in (transport saw it), invisible on wire.
     expect(transport.seenMaterials).toHaveLength(1);
     assertNoPoolSecrets(JSON.stringify(body));
@@ -101,7 +101,7 @@ describe('faithful non-stream passthrough', () => {
 
     expect(res.status).toBe(429);
     expect(res.headers.get('X-Sentropic-Served'))
-      .toBe('provider=anthropic; model=claude-sonnet-4-6');
+      .toBe('provider=anthropic; model=claude-sonnet-4-6; transport=claude-code');
     // With retry-with-rotation, both pool accounts are tried (and both return 429).
     // The pool has 2 Claude-Code accounts: first settles rate_limited, retry
     // rotates to the second which also gets 429 and settles rate_limited.
@@ -126,7 +126,7 @@ describe('faithful SSE passthrough framing', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     expect(res.headers.get('X-Sentropic-Served'))
-      .toBe('provider=anthropic; model=claude-sonnet-4-6');
+      .toBe('provider=anthropic; model=claude-sonnet-4-6; transport=claude-code');
     const text = await res.text();
     // The relayed bytes equal the joined native frames (faithful framing).
     expect(text).toBe(frames.join(''));
@@ -270,7 +270,7 @@ describe('no-retry-after-stream (spec §2)', () => {
     // No byte streamed -> a real provider-shaped HTTP error, not an empty 200.
     expect(res.status).toBe(503);
     expect(res.headers.get('X-Sentropic-Served'))
-      .toBe('provider=anthropic; model=claude-sonnet-4-6');
+      .toBe('provider=anthropic; model=claude-sonnet-4-6; transport=claude-code');
     const body = (await res.json()) as { error: { type: string } };
     expect(body.error.type).toBe('overloaded_error');
     // The flow still settled exactly once (failure), and never leaks pool detail.
@@ -310,7 +310,7 @@ describe('#4 provider response header passthrough', () => {
     // Gateway request id always present.
     expect(res.headers.get('x-sentropic-request-id')).toBe('req_fixture_id');
     expect(res.headers.get('x-sentropic-served'))
-      .toBe('provider=anthropic; model=claude-sonnet-4-6');
+      .toBe('provider=anthropic; model=claude-sonnet-4-6; transport=claude-code');
     // Off-allowlist headers dropped (no pool internal rides out).
     expect(res.headers.get('x-gateway-lease')).toBeNull();
     expect(res.headers.get('set-cookie')).toBeNull();
@@ -333,9 +333,27 @@ describe('#4 provider response header passthrough', () => {
     expect(res.headers.get('content-type')).toContain('text/event-stream');
     expect(res.headers.get('anthropic-request-id')).toBe('req_stream_xyz');
     expect(res.headers.get('x-sentropic-served'))
-      .toBe('provider=anthropic; model=claude-sonnet-4-6');
+      .toBe('provider=anthropic; model=claude-sonnet-4-6; transport=claude-code');
     expect(res.headers.get('x-internal')).toBeNull();
     await res.text();
+  });
+
+  it('fails on missing transport class in served header', async () => {
+    const transport = new FixtureTransport({
+      jsonResponse: { status: 200, body: anthropicMessageResponse },
+    });
+    const { app } = buildHarness({ transport });
+
+    const res = await app.request('/v1/messages', {
+      method: 'POST',
+      headers: authHeaders('user-a'),
+      body: JSON.stringify(anthropicRequest(false)),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Sentropic-Served'))
+      .toBe('provider=anthropic; model=claude-sonnet-4-6; transport=claude-code');
+    expect(res.headers.get('X-Sentropic-Served')?.includes('transport=claude-code')).toBe(true);
   });
 });
 

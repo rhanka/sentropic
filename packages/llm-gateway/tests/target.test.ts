@@ -53,7 +53,7 @@ describe('launch-alias target-map', () => {
     }
   });
 
-  it('routes the owner-ratified Opus 4.8 and Sonnet 5 xhigh aliases', () => {
+  it('routes RATIFICATION PENDING Opus 4.8 and Sonnet 5 xhigh aliases', () => {
     expect(resolve('claude-opus-4-8-xhigh')).toEqual({
       providerId: 'anthropic', transportProviderId: 'claude-code',
       model: 'claude-opus-4-8', effort: 'xhigh',
