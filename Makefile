@@ -590,6 +590,15 @@ refresh-llm-model-equivalences: ## Regenerate the pinned model-equivalence counc
 check-llm-model-equivalences: ## Check model-equivalence generation and freshness
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/llm-model-equivalences/refresh.mjs --check
 
+# BR75-EX1 — make-only entrypoint for the recurring LLM model-update scaffold.
+.PHONY: llm-mesh-add-model
+llm-mesh-add-model: ## Scaffold a model from BASE (set DRY_RUN=1 to preview)
+	@test -n "$(MODEL)" || { echo "ERROR: MODEL is required"; exit 1; }
+	@test -n "$(BASE)" || { echo "ERROR: BASE is required"; exit 1; }
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace \
+		$(LLM_MESH_NODE_IMAGE) node packages/llm-mesh/scripts/add-model.mjs \
+		--model "$(MODEL)" --base "$(BASE)" $(if $(filter 1 true,$(DRY_RUN)),--dry-run,)
+
 .PHONY: audit-llm-routing-package-versions
 audit-llm-routing-package-versions: ## Compare local LLM routing package versions with npm latest
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for package_dir in llm-mesh llm-gateway; do package="$$(node -p "require(\"./packages/$$package_dir/package.json\").name")"; local_version="$$(node -p "require(\"./packages/$$package_dir/package.json\").version")"; registry_version="$$(npm view "$$package" version)"; printf "%s local=%s registry=%s\n" "$$package" "$$local_version" "$$registry_version"; done'
