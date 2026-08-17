@@ -43,6 +43,9 @@ const LEGACY_MODEL_CUTOVER_RULES: LegacyModelCutoverRule[] = [
     toModelId: 'gemini-3.5-flash',
   },
   {
+    // RATIFICATION PENDING (owner decision not yet traced; see PR body):
+    // this legacy Anthropic succession was introduced with eb9a0edac without a traceable
+    // owner ratification reference in this file.
     providerId: 'anthropic',
     fromModelId: 'claude-sonnet-4-6',
     toModelId: 'claude-sonnet-5',
