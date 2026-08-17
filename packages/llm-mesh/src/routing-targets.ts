@@ -169,7 +169,7 @@ const launchAliasTargetsFor = (
   };
 
   return [
-    ...(hasModelProfile(faithfulTarget) ? [faithfulTarget] : []),
+    ...(faithfulTarget ? [faithfulTarget] : []),
     codexCandidate,
     cloudCandidate,
   ];
