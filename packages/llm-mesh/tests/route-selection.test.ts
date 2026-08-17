@@ -96,7 +96,7 @@ describe('route candidate selection', () => {
     expect(candidates.map((candidate) => candidate.target.transportProviderId)).toEqual(['codex']);
   });
 
-  it('uses a non-Anthropic fallback when faithful Claude target is not resolvable', () => {
+  it('uses a non-Anthropic fallback when faithful Anthropic account is unavailable', () => {
     const selection = selectRouteCandidates({
       request: {
         requestedModel: 'claude-sonnet-4-6',
