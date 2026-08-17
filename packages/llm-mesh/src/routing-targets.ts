@@ -73,8 +73,8 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
 
 const CLAUDE_SUCCESSION_MAP: Readonly<Record<string, string>> = {
-  // Owner-ratified model succession from
-  // api/src/services/model-selection-legacy.ts:
+  // RATIFICATION PENDING (owner decision not yet traced; see PR body):
+  // model succession from api/src/services/model-selection-legacy.ts:
   // claude-sonnet-4-6 -> claude-sonnet-5
   'claude-sonnet-4-6': 'claude-sonnet-5',
 };
