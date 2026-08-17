@@ -26,14 +26,19 @@ const accounts = [
   },
 ];
 
+const candidatesOf = (selection: ReturnType<typeof selectRouteCandidates>) => {
+  if (selection.kind !== 'candidates') throw new Error(`Expected candidates, got ${selection.kind}`);
+  return selection.candidates;
+};
+
 const select = (policy = DEFAULT_ROUTE_POLICY, roundRobinOffset = 0) =>
-  selectRouteCandidates({
+  candidatesOf(selectRouteCandidates({
     request: { requestedModel: 'gemini-3.5-flash' },
     policy,
     council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
     accounts,
     roundRobinOffset,
-  });
+  }));
 
 describe('route candidate selection', () => {
   it('tries the last enrolled account first by default', () => {
@@ -55,7 +60,7 @@ describe('route candidate selection', () => {
     expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
   });
 
-  it('inverts one launch alias between enrolled Codex and Cloud Code transports', () => {
+  it('uses the next canonical fallback only when no Anthropic account is enrolled', () => {
     const launchAccounts = [
       {
         accountRef: 'codex-internal',
@@ -78,35 +83,49 @@ describe('route candidate selection', () => {
         revision: 'r1',
       },
     ];
-    const choose = (first: 'codex' | 'cloud-code') => selectRouteCandidates({
+    const candidates = candidatesOf(selectRouteCandidates({
       request: {
         requestedModel: 'claude-opus-5-xhigh',
         requiredCapabilities: ['tools', 'streaming'],
       },
-      policy: {
-        ...DEFAULT_ROUTE_POLICY,
-        strategy: {
-          kind: 'ordered',
-          preferences: [
-            { transportProviderId: first },
-            { transportProviderId: first === 'codex' ? 'cloud-code' : 'codex' },
-          ],
-        },
-      },
+      policy: DEFAULT_ROUTE_POLICY,
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts: launchAccounts,
-    });
+    }));
 
-    expect(choose('codex').map((candidate) => candidate.target.transportProviderId))
-      .toEqual(['codex', 'cloud-code']);
-    expect(choose('cloud-code').map((candidate) => candidate.target.transportProviderId))
-      .toEqual(['cloud-code', 'codex']);
+    expect(candidates.map((candidate) => candidate.target.transportProviderId)).toEqual(['codex']);
   });
 
-  it('allows an owner-scoped target profile override without a consumer default table', () => {
-    const candidates = selectRouteCandidates({
+  it('uses a non-Anthropic fallback when faithful Anthropic account is unavailable', () => {
+    const selection = selectRouteCandidates({
       request: {
         requestedModel: 'claude-sonnet-4-6',
+        requiredCapabilities: ['tools', 'streaming'],
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'codex-internal',
+        diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai',
+        transportProviderId: 'codex',
+        supportedModelIds: ['gpt-5.6-luna'],
+        enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready',
+        revision: 'r1',
+      }],
+    });
+
+    expect(selection.kind).toBe('candidates');
+    expect(selection.candidates[0]).toMatchObject({
+      target: { providerId: 'openai', modelId: 'gpt-5.6-luna' },
+    });
+  });
+
+  it('allows an owner-scoped target profile override for a non-Claude model', () => {
+    const candidates = candidatesOf(selectRouteCandidates({
+      request: {
+        requestedModel: 'gemini-3.5-flash',
         targetCandidatesOverride: [{
           providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.1-flash-lite',
         }],
@@ -119,13 +138,13 @@ describe('route candidate selection', () => {
         supportedModelIds: ['gemini-3.1-flash-lite'],
         enrollmentCompletedAt: '2026-08-02T00:00:00Z', readiness: 'ready', revision: 'r1',
       }],
-    });
+    }));
 
     expect(candidates[0]?.target.modelId).toBe('gemini-3.1-flash-lite');
   });
 
   it('keeps a bare provider model faithful when another transport is preferred', () => {
-    const candidates = selectRouteCandidates({
+    const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gpt-5.6-terra' },
       policy: {
         ...DEFAULT_ROUTE_POLICY,
@@ -148,7 +167,7 @@ describe('route candidate selection', () => {
         readiness: 'ready',
         revision: 'r1',
       }],
-    });
+    }));
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.target).toMatchObject({
@@ -183,7 +202,7 @@ describe('route candidate selection', () => {
     const requiredCapabilities = JSON.parse(
       '[{"required":true,"capability":"input:image"}]',
     );
-    const candidates = selectRouteCandidates({
+    const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash', requiredCapabilities },
       policy: {
         ...DEFAULT_ROUTE_POLICY,
@@ -198,13 +217,13 @@ describe('route candidate selection', () => {
       },
       council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
       accounts,
-    });
+    }));
 
     expect(candidates[0]?.target.transportProviderId).toBe('cloud-code');
   });
 
   it('rejects an equivalent that cannot preserve a requested capability', () => {
-    const candidates = selectRouteCandidates({
+    const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:image'] },
       policy: DEFAULT_ROUTE_POLICY,
       council: {
@@ -226,14 +245,14 @@ describe('route candidate selection', () => {
         targetProviderId: 'openai', transportProviderId: 'codex',
         supportedModelIds: ['gpt-4.1-nano'],
       }],
-    });
+    }));
 
     expect(candidates.map((candidate) => candidate.target.modelId))
       .not.toContain('gpt-4.1-nano');
   });
 
   it('keeps the exact route but fails closed on stale equivalence evidence', () => {
-    const candidates = selectRouteCandidates({
+    const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash' },
       policy: DEFAULT_ROUTE_POLICY,
       council: {
@@ -256,14 +275,14 @@ describe('route candidate selection', () => {
         supportedModelIds: ['gpt-4.1-nano'],
       }],
       now: new Date('2026-08-08T00:00:00Z'),
-    });
+    }));
 
     expect(candidates.map((candidate) => candidate.target.modelId))
       .toEqual(['gemini-3.5-flash', 'gemini-3.5-flash']);
   });
 
   it('orders exact routes before same-transport equivalents', () => {
-    const candidates = selectRouteCandidates({
+    const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'gemini-3.5-flash' },
       policy: DEFAULT_ROUTE_POLICY,
       council: {
@@ -293,9 +312,65 @@ describe('route candidate selection', () => {
         supportedModelIds: ['gpt-5.6-terra'], enrollmentCompletedAt: '2026-08-03T00:00:00Z',
       }],
       now: new Date('2026-08-08T00:00:00Z'),
-    });
+    }));
 
     expect(candidates.map((candidate) => candidate.account.diagnosticAccountRef))
       .toEqual(['acct_new', 'acct_old', 'openai-cloud']);
+  });
+
+  it('keeps the canonical Anthropic target first when an override tries to route Claude elsewhere', () => {
+    const selection = selectRouteCandidates({
+      request: {
+        requestedModel: 'claude-opus-5',
+        targetCandidatesOverride: [{
+          providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+        }],
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [
+        {
+          accountRef: 'anthropic-internal', diagnosticAccountRef: 'anthropic-redacted',
+          targetProviderId: 'anthropic', transportProviderId: 'claude-code',
+          supportedModelIds: ['claude-opus-5'], enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+        {
+          accountRef: 'cloud-internal', diagnosticAccountRef: 'cloud-redacted',
+          targetProviderId: 'gemini', transportProviderId: 'cloud-code',
+          supportedModelIds: ['gemini-3.7-flash'], enrollmentCompletedAt: '2026-08-02T00:00:00Z',
+          readiness: 'ready', revision: 'r1',
+        },
+      ],
+    });
+
+    expect(selection.kind).toBe('candidates');
+    if (selection.kind === 'candidates') {
+      expect(selection.candidates[0]?.target.providerId).toBe('anthropic');
+      expect(selection.candidates).toHaveLength(1);
+    }
+  });
+
+  it('distinguishes unknown ids, unmet capabilities, and no eligible account', () => {
+    const selectSignal = (request: Parameters<typeof selectRouteCandidates>[0]['request'], accountsForSignal = accounts) =>
+      selectRouteCandidates({
+        request,
+        policy: DEFAULT_ROUTE_POLICY,
+        council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+        accounts: accountsForSignal,
+      });
+
+    expect(selectSignal({
+      requestedModel: 'unknown-contract-model',
+      targetCandidatesOverride: [{
+        providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
+      }],
+    })).toMatchObject({ kind: 'unknown-model' });
+    expect(selectSignal({
+      requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:audio'],
+    })).toMatchObject({ kind: 'capabilities-unmet' });
+    expect(selectSignal({ requestedModel: 'gemini-3.5-flash' }, [])).toMatchObject({
+      kind: 'no-eligible-account',
+    });
   });
 });

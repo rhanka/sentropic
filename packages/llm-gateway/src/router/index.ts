@@ -19,7 +19,7 @@ import { Hono } from 'hono';
 import type { RoutePlanner } from '@sentropic/llm-mesh';
 
 import type { GatewayConfig } from '../config.js';
-import type { GatewayFlowDeps, MeteringSink, TargetResolver } from '../flow.js';
+import type { GatewayFlowDeps, MeteringSink, ResolvedTarget, TargetResolver } from '../flow.js';
 import { runJsonFlow, runStreamFlow } from '../flow.js';
 import { runRouteJsonFlow } from '../route-json-flow.js';
 import { runRouteStreamFlow } from '../route-stream-flow.js';
@@ -33,6 +33,7 @@ import {
   mapGatewayError,
   notImplemented,
   toProviderShapedError,
+  GatewayError,
   type ProviderShapedError,
 } from './errors.js';
 import { SSE_CONTENT_TYPE, readModel, readStream } from '../wire.js';
@@ -66,6 +67,10 @@ export interface CreateGatewayRouterOptions {
 }
 
 const REQUEST_ID_HEADER = 'X-Sentropic-Request-Id';
+const SERVED_HEADER = 'X-Sentropic-Served';
+
+const servedHeaderValue = (target: ResolvedTarget): string =>
+  `provider=${target.providerId}; model=${target.model}; transport=${target.transportProviderId}`;
 
 /**
  * Allowlist of provider response headers the gateway FORWARDS (#4) for faithful
@@ -134,6 +139,7 @@ const sendError = (
   c: import('hono').Context,
   error: ProviderShapedError,
   requestId: string,
+  servedTarget?: ResolvedTarget,
 ): Response => {
   if (error.headers) {
     for (const [key, value] of Object.entries(error.headers)) {
@@ -141,8 +147,12 @@ const sendError = (
     }
   }
   c.header(REQUEST_ID_HEADER, requestId);
+  if (servedTarget) c.header(SERVED_HEADER, servedHeaderValue(servedTarget));
   return c.json(error.body as object, error.status as 400);
 };
+
+const servedTargetForError = (error: unknown): ResolvedTarget | undefined =>
+  error instanceof GatewayError ? error.servedTarget : undefined;
 
 /**
  * Build the gateway Hono app. With flow deps the provider-compat routes run the
@@ -216,9 +226,10 @@ export const createGatewayRouter = (
           : await runJsonFlow(flowDeps!, flowRequest);
         forwardProviderHeaders(c, result.headers); // #4 allowlisted provider headers
         c.header(REQUEST_ID_HEADER, id);
+        c.header(SERVED_HEADER, servedHeaderValue(result.servedTarget));
         return c.json(result.body as object, result.status as 200);
       } catch (error) {
-        return sendError(c, toProviderShapedError(wire, error), id);
+        return sendError(c, toProviderShapedError(wire, error), id, servedTargetForError(error));
       }
     }
 
@@ -232,13 +243,14 @@ export const createGatewayRouter = (
         ? await runRouteStreamFlow(routeFlowDeps, flowRequest)
         : await runStreamFlow(flowDeps!, flowRequest);
     } catch (error) {
-      return sendError(c, toProviderShapedError(wire, error), id);
+      return sendError(c, toProviderShapedError(wire, error), id, servedTargetForError(error));
     }
 
     forwardProviderHeaders(c, streamResult.headers); // #4 allowlisted provider headers
     c.header('Content-Type', SSE_CONTENT_TYPE);
     c.header('Cache-Control', 'no-cache');
     c.header(REQUEST_ID_HEADER, id);
+    c.header(SERVED_HEADER, servedHeaderValue(streamResult.servedTarget));
     // B3: relay provider frames VERBATIM. The gateway synthesizes NO terminator —
     // a real OpenAI transport emits its own `[DONE]`; Anthropic uses message_stop.
     // On a mid-stream error the stream simply ends (no synthetic [DONE]).

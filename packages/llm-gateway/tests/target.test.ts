@@ -1,13 +1,9 @@
 /**
  * Launch-alias routing + route DISCOVERY (single source of truth in the gateway
  * target-map). Owner decision 2026-07-25:
- *   - Opus 5  high/xhigh      -> gpt-5.6-terra at the same effort
- *   - Opus 4.8 xhigh          -> gpt-5.6-terra xhigh
- *   - Fable 5 high/xhigh/max  -> gpt-5.6-sol   at the same effort
- *   - Sonnet 5 xhigh          -> gpt-5.6-luna  xhigh
- *   - BARE ids stay provider-faithful (the real Anthropic models stay reachable)
- *   - suffixed aliases expose ratified Codex + Cloud Code candidates to policy
- *   - bare ids stay provider-faithful; unknown id -> undefined -> router 400
+ *   - Every known Claude id resolves to Anthropic first at its declared effort
+ *   - Codex and Cloud Code remain the ordered fallback candidates
+ *   - unknown id -> undefined -> router 400
  * Consumers read `describeTargetRoutes()` instead of duplicating a route table.
  */
 
@@ -31,40 +27,40 @@ const MERGED = { ...DEFAULT_TARGET_MAPPINGS, ...LAUNCH_ALIAS_TARGET_MAPPINGS };
 describe('launch-alias target-map', () => {
   const resolve = createStaticTargetResolver({ mappings: MERGED });
 
-  it('routes the Opus 5 launch aliases to gpt-5.6-terra at the requested effort', () => {
+  it('routes the Opus 5 launch aliases to Anthropic at the requested effort', () => {
     expect(resolve('claude-opus-5-high')).toEqual({
-      providerId: 'openai',
-      transportProviderId: 'codex',
-      model: 'gpt-5.6-terra',
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-opus-5',
       effort: 'high',
     });
     expect(resolve('claude-opus-5-xhigh')).toEqual({
-      providerId: 'openai',
-      transportProviderId: 'codex',
-      model: 'gpt-5.6-terra',
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-opus-5',
       effort: 'xhigh',
     });
   });
 
-  it('routes the Fable 5 launch aliases to gpt-5.6-sol at high/xhigh/max', () => {
+  it('routes the Fable 5 launch aliases to Anthropic at high/xhigh/max', () => {
     for (const effort of ['high', 'xhigh', 'max'] as const) {
       expect(resolve(`claude-fable-5-${effort}`)).toEqual({
-        providerId: 'openai',
-        transportProviderId: 'codex',
-        model: 'gpt-5.6-sol',
+        providerId: 'anthropic',
+        transportProviderId: 'claude-code',
+        model: 'claude-fable-5',
         effort,
       });
     }
   });
 
-  it('routes the owner-ratified Opus 4.8 and Sonnet 5 xhigh aliases', () => {
+  it('routes RATIFICATION PENDING Opus 4.8 and Sonnet 5 xhigh aliases', () => {
     expect(resolve('claude-opus-4-8-xhigh')).toEqual({
-      providerId: 'openai', transportProviderId: 'codex',
-      model: 'gpt-5.6-terra', effort: 'xhigh',
+      providerId: 'anthropic', transportProviderId: 'claude-code',
+      model: 'claude-opus-4-8', effort: 'xhigh',
     });
     expect(resolve('claude-sonnet-5-xhigh')).toEqual({
-      providerId: 'openai', transportProviderId: 'codex',
-      model: 'gpt-5.6-luna', effort: 'xhigh',
+      providerId: 'anthropic', transportProviderId: 'claude-code',
+      model: 'claude-sonnet-5', effort: 'xhigh',
     });
   });
 
@@ -122,9 +118,9 @@ describe('describeTargetRoutes (discovery)', () => {
   it('marks a launch alias as kind=alias with its upstream and effort', () => {
     expect(byId('claude-opus-5-xhigh')).toEqual({
       requestedId: 'claude-opus-5-xhigh',
-      providerId: 'openai',
-      transportProviderId: 'codex',
-      model: 'gpt-5.6-terra',
+      providerId: 'anthropic',
+      transportProviderId: 'claude-code',
+      model: 'claude-opus-5',
       effort: 'xhigh',
       kind: 'alias',
     });
@@ -148,6 +144,12 @@ describe('describeTargetRoutes (discovery)', () => {
     expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-opus-5-xhigh']).toEqual([
       MERGED['claude-opus-5-xhigh'],
       {
+        providerId: 'openai',
+        transportProviderId: 'codex',
+        model: 'gpt-5.6-terra',
+        effort: 'xhigh',
+      },
+      {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
         model: 'gemini-3.7-flash',
@@ -160,15 +162,15 @@ describe('describeTargetRoutes (discovery)', () => {
     );
 
     const resolve = createCanonicalTargetResolver();
-    expect(resolve('claude-opus-5-xhigh')?.model).toBe('gpt-5.6-terra');
+    expect(resolve('claude-opus-5-xhigh')?.model).toBe('claude-opus-5');
     expect(resolve('claude-opus-5')?.model).toBe('claude-opus-5');
-    expect(resolve('claude-opus-4-8-xhigh')?.model).toBe('gpt-5.6-terra');
-    expect(resolve('claude-sonnet-5-xhigh')?.model).toBe('gpt-5.6-luna');
+    expect(resolve('claude-opus-4-8-xhigh')?.model).toBe('claude-opus-4-8');
+    expect(resolve('claude-sonnet-5-xhigh')?.model).toBe('claude-sonnet-5');
 
     const resolveCandidates = createCanonicalTargetCandidatesResolver();
     expect(resolveCandidates('claude-opus-5-xhigh').map(
       (target) => target.transportProviderId,
-    )).toEqual(['codex', 'cloud-code']);
+    )).toEqual(['claude-code', 'codex', 'cloud-code']);
   });
 
   it('describes every servable id exactly once, sorted, with no credential data', () => {

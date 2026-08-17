@@ -13,6 +13,54 @@ import { parseSse } from '../src/wire.js';
 const buildApp = () => createGatewayRouter({ config: stubGatewayConfig });
 
 describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
+  const createOpenAiRoutePlanner = (
+    actualTransportProviderId: string,
+    options?: {
+      onGenerate?: (request: { signal?: AbortSignal }) => void;
+    },
+  ): RoutePlanner => ({
+    async plan() { return {
+      planRef: 'plan-1', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: ['candidate-1'],
+      policy: {
+        strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+        negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+        stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+      },
+      councilRevision: 'fixture',
+      diagnostics: [{
+        candidateRef: 'candidate-1', diagnosticAccountRef: 'redacted',
+        requestedModel: 'claude-opus-5-high', actualProviderId: 'openai',
+        actualModelId: 'gpt-5.6-terra', actualTransportProviderId,
+        reason: 'alias', cacheContinuityRisk: false,
+      }],
+    }; },
+    async prepareAttempt() { return {
+      attemptRef: 'attempt-1',
+      async generate(request) {
+        options?.onGenerate?.(request);
+        return {
+          id: 'response-1', providerId: 'openai', modelId: 'gpt-5.6-terra',
+          message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [],
+          finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 },
+        };
+      },
+      async stream() { return { async *[Symbol.asyncIterator]() {
+        yield { type: 'content_delta' as const, data: { delta: 'ok' } };
+        yield {
+          type: 'done' as const,
+          data: {
+            finishReason: 'stop' as const,
+            usage: { inputTokens: 321, outputTokens: 8, totalTokens: 329 },
+          },
+        };
+      } }; },
+      async recordOutcome() {}, async markCommitted() {}, async complete() {},
+      async releaseCancelled() {},
+    }; },
+    describeAffinity() { return null; }, promoteAffinity() { throw new Error('unused'); },
+    rebindAffinity() { throw new Error('unused'); }, resetAffinity() { return false; },
+  });
+
   it('mounts and serves a real /healthz', async () => {
     const app = buildApp();
     const res = await app.request('/healthz');
@@ -81,39 +129,11 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
         },
       }; } },
     };
-    const routePlanner: RoutePlanner = {
-      async plan() { return {
-        planRef: 'plan-1', expiresAt: '2027-01-01T00:00:00Z', candidateRefs: ['candidate-1'],
-        policy: {
-          strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
-          negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
-          stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
-        },
-        councilRevision: 'fixture',
-        diagnostics: [{
-          candidateRef: 'candidate-1', diagnosticAccountRef: 'redacted',
-          requestedModel: 'claude-opus-5-high', actualProviderId: 'openai',
-          actualModelId: 'gpt-5.6-terra', actualTransportProviderId: 'codex',
-          reason: 'alias', cacheContinuityRisk: false,
-        }],
-      }; },
-      async prepareAttempt() { return {
-        attemptRef: 'attempt-1',
-        async generate(request) {
-          observedSignal = request.signal;
-          return {
-          id: 'response-1', providerId: 'openai', modelId: 'gpt-5.6-terra',
-          message: { role: 'assistant', content: 'ok' }, text: 'ok', toolCalls: [],
-          finishReason: 'stop', usage: { inputTokens: 2, outputTokens: 1 },
-          };
-        },
-        async stream() { return { async *[Symbol.asyncIterator]() {} }; },
-        async recordOutcome() {}, async markCommitted() {}, async complete() {},
-        async releaseCancelled() {},
-      }; },
-      describeAffinity() { return null; }, promoteAffinity() { throw new Error('unused'); },
-      rebindAffinity() { throw new Error('unused'); }, resetAffinity() { return false; },
-    };
+    const routePlanner = createOpenAiRoutePlanner('codex', {
+      onGenerate: (request) => {
+        observedSignal = request.signal;
+      },
+    });
     const app = createGatewayRouter({
       config, routePlanner,
       routeMetering: { settleRoute(value) { settlements.push(value); } },
@@ -130,6 +150,8 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     });
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('X-Sentropic-Served'))
+      .toBe('provider=openai; model=gpt-5.6-terra; transport=codex');
     expect(await response.json()).toMatchObject({
       type: 'message', model: 'gpt-5.6-terra', content: [{ type: 'text', text: 'ok' }],
     });
@@ -152,42 +174,7 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
         },
       }; } },
     };
-    const routePlanner: RoutePlanner = {
-      async plan() { return {
-        planRef: 'plan-stream', expiresAt: '2027-01-01T00:00:00Z',
-        candidateRefs: ['candidate-stream'],
-        policy: {
-          strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
-          negativeCacheTtlMs: 300_000, maxAttempts: 1, preferSameTransport: true,
-          stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
-        },
-        councilRevision: 'fixture',
-        diagnostics: [{
-          candidateRef: 'candidate-stream', diagnosticAccountRef: 'redacted',
-          requestedModel: 'claude-opus-5-high', actualProviderId: 'openai',
-          actualModelId: 'gpt-5.6-terra', actualTransportProviderId: 'codex',
-          reason: 'alias', cacheContinuityRisk: false,
-        }],
-      }; },
-      async prepareAttempt() { return {
-        attemptRef: 'attempt-stream',
-        async generate() { throw new Error('unused'); },
-        async stream() { return { async *[Symbol.asyncIterator]() {
-          yield { type: 'content_delta' as const, data: { delta: 'ok' } };
-          yield {
-            type: 'done' as const,
-            data: {
-              finishReason: 'stop' as const,
-              usage: { inputTokens: 321, outputTokens: 8, totalTokens: 329 },
-            },
-          };
-        } }; },
-        async recordOutcome() {}, async markCommitted() {}, async complete() {},
-        async releaseCancelled() {},
-      }; },
-      describeAffinity() { return null; }, promoteAffinity() { throw new Error('unused'); },
-      rebindAffinity() { throw new Error('unused'); }, resetAffinity() { return false; },
-    };
+    const routePlanner = createOpenAiRoutePlanner('codex');
     const app = createGatewayRouter({
       config, routePlanner,
       routeMetering: { settleRoute(value) { settlements.push(value); } },
@@ -206,11 +193,52 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
+    expect(response.headers.get('X-Sentropic-Served'))
+      .toBe('provider=openai; model=gpt-5.6-terra; transport=codex');
     expect(JSON.parse(frames[0]!.data).message.usage.input_tokens).toBeGreaterThan(0);
     expect(JSON.parse(frames.at(-2)!.data).usage).toEqual({ output_tokens: 8 });
     expect(settlements).toHaveLength(1);
     expect(settlements[0]).toMatchObject({
       usage: { inputTokens: 321, outputTokens: 8, estimated: false },
     });
+  });
+
+  it('distinguishes different transports for the same served provider/model', async () => {
+    const runMeshRequest = async (transportProviderId: string): Promise<string> => {
+      const settlements: unknown[] = [];
+      const config = {
+        ...stubGatewayConfig,
+        callerAuth: { async verify() { return {
+          ok: true,
+          cost: {
+            tenantId: 'tenant-1', principalId: 'user-1', source: 'test',
+            correlationId: `transport-${transportProviderId}`,
+          },
+        }; } },
+      };
+      const app = createGatewayRouter({
+        config,
+        routePlanner: createOpenAiRoutePlanner(transportProviderId),
+        routeMetering: { settleRoute(value) { settlements.push(value); } },
+      });
+
+      const response = await app.request('/v1/messages', {
+        method: 'POST', headers: { authorization: 'Bearer gateway-session' },
+        body: JSON.stringify({
+          model: 'claude-opus-5-high', max_tokens: 100,
+          messages: [{ role: 'user', content: 'hello' }],
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(settlements).toHaveLength(1);
+      return response.headers.get('X-Sentropic-Served') ?? '';
+    };
+
+    const codexServed = await runMeshRequest('codex');
+    const cloudCodeServed = await runMeshRequest('cloud-code');
+    expect(codexServed).toBe('provider=openai; model=gpt-5.6-terra; transport=codex');
+    expect(cloudCodeServed).toBe('provider=openai; model=gpt-5.6-terra; transport=cloud-code');
+    expect(codexServed).not.toBe(cloudCodeServed);
   });
 });
