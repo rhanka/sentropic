@@ -18,6 +18,20 @@ describe('opaque route planner', () => {
     expect(JSON.stringify(plan)).not.toContain('internal-new');
   });
 
+  it('surfaces unknown models, unmet capabilities, and empty pools as distinct outcomes', async () => {
+    const planner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory() });
+    const emptyPoolPlanner = new InMemoryRoutePlanner({ directory: new FakeRouteDirectory([]) });
+
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'unknown-contract-model',
+    })).rejects.toMatchObject({ code: 'unknown-model' });
+    await expect(planner.plan(routingSubject(), {
+      requestedModel: 'gemini-3.5-flash', requiredCapabilities: ['input:audio'],
+    })).rejects.toMatchObject({ code: 'capabilities-unmet' });
+    await expect(emptyPoolPlanner.plan(routingSubject(), request))
+      .rejects.toMatchObject({ code: 'no-route' });
+  });
+
   it('rejects owner replay and candidate-index substitution', async () => {
     const directory = new FakeRouteDirectory();
     const planner = new InMemoryRoutePlanner({ directory });

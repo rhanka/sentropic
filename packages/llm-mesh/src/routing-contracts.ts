@@ -37,7 +37,7 @@ export interface PlannedRouteTarget {
 
 export interface RoutePlanInput {
   readonly requestedModel: string;
-  /** Optional owner-scoped replacement for the library's standard target profile. */
+  /** Optional owner-scoped replacement; known Claude ids retain their Anthropic-first target. */
   readonly targetCandidatesOverride?: readonly TargetMapping[];
   readonly intent?: 'coding' | 'general' | 'reasoning' | 'fast';
   readonly requiredCapabilities?: readonly CapabilityRequirement[];

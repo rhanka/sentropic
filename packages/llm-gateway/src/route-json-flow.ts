@@ -1,6 +1,6 @@
 import type { PreparedRouteAttempt, RouteAttemptUsage } from '@sentropic/llm-mesh';
 import { encodeGatewayResponse, type CanonicalGatewayResponse } from './canonical-egress.js';
-import type { GatewayFlowRequest, SettleUsage } from './flow.js';
+import type { GatewayFlowRequest, ResolvedTarget, SettleUsage } from './flow.js';
 import {
   aggregateUsage, attemptUsage, classifyRouteError, prepareRouteFlow, routeUsage,
   type RouteAttemptSettlement, type RouteFlowDeps,
@@ -13,10 +13,24 @@ const errorUsage = (error: unknown): SettleUsage => {
   return usage ? { ...usage } : routeUsage();
 };
 
+export interface RouteGatewayJsonResult extends CanonicalGatewayResponse {
+  readonly servedTarget: ResolvedTarget;
+}
+
+const servedTargetFor = (diagnostic: {
+  readonly actualProviderId: string;
+  readonly actualTransportProviderId: string;
+  readonly actualModelId: string;
+}): ResolvedTarget => ({
+  providerId: diagnostic.actualProviderId,
+  transportProviderId: diagnostic.actualTransportProviderId,
+  model: diagnostic.actualModelId,
+});
+
 export const runRouteJsonFlow = async (
   deps: RouteFlowDeps,
   request: GatewayFlowRequest,
-): Promise<CanonicalGatewayResponse> => {
+): Promise<RouteGatewayJsonResult> => {
   const prepared = await prepareRouteFlow(deps, request);
   const attempts: RouteAttemptSettlement[] = [];
   for (let index = 0; index < prepared.plan.candidateRefs.length; index += 1) {
@@ -43,7 +57,7 @@ export const runRouteJsonFlow = async (
         cost: prepared.cost, wire: request.wire, requestedModel: request.model,
         outcome: 'success', usage: aggregateUsage(attempts), attempts,
       });
-      return encodeGatewayResponse(request.wire, response);
+      return { ...encodeGatewayResponse(request.wire, response), servedTarget: servedTargetFor(diagnostic) };
     } catch (error) {
       const classification = classifyRouteError(error, request.signal?.aborted);
       const usage = errorUsage(error);
@@ -64,7 +78,9 @@ export const runRouteJsonFlow = async (
         cost: prepared.cost, wire: request.wire, requestedModel: request.model,
         outcome, usage: aggregateUsage(attempts), attempts,
       });
-      throw new GatewayError('pooled-account-unavailable', 'all planned routes failed');
+      throw new GatewayError(
+        'pooled-account-unavailable', 'all planned routes failed', undefined, servedTargetFor(diagnostic),
+      );
     }
   }
   throw new GatewayError('no-eligible-account', 'route plan has no candidates');
