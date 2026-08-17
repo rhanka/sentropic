@@ -51,7 +51,7 @@ type RequestedTargetResolution =
   transportProviderId?: string;
   effort?: string;
   reason: 'exact' | 'alias';
-}[] }
+}[]; readonly useFaithfulAnthropicTarget: boolean }
   | { readonly kind: 'unknown-model'; readonly requestedModel: string };
 
 const sameTarget = (left: {
@@ -78,8 +78,11 @@ const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolu
   const faithfulClaudeTarget = requestedModel.startsWith('claude-')
     ? standardTargets.find((target) => target.providerId === 'anthropic')
     : undefined;
+  const useFaithfulAnthropicTarget = faithfulClaudeTarget
+    && modelProfiles.some((profile) => profile.providerId === faithfulClaudeTarget.providerId
+      && profile.modelId === faithfulClaudeTarget.model);
   const override = request.targetCandidatesOverride;
-  const targets = override && faithfulClaudeTarget
+  const targets = override && useFaithfulAnthropicTarget
     ? [
       faithfulClaudeTarget,
       ...override.filter((target) => !sameTarget(faithfulClaudeTarget, target)),
@@ -91,6 +94,7 @@ const resolveRequestedTargets = (request: RoutePlanInput): RequestedTargetResolu
     ...target,
     reason: requestedModel === target.model ? 'exact' as const : 'alias' as const,
     })),
+    useFaithfulAnthropicTarget: Boolean(useFaithfulAnthropicTarget),
   };
 };
 
@@ -149,7 +153,9 @@ export const selectRouteCandidates = (input: {
       && profile.modelId === capabilitySource.model);
     return supportsCapabilities(targetProfile, input.request.requiredCapabilities);
   };
-  const faithfulClaude = input.request.requestedModel.startsWith('claude-');
+  const faithfulClaude = resolution.kind === 'known'
+    && input.request.requestedModel.startsWith('claude-')
+    && resolution.useFaithfulAnthropicTarget;
   if (faithfulClaude && targets[0] && !supportsTargetCapabilities(targets[0])) {
     return { kind: 'capabilities-unmet', requestedModel: input.request.requestedModel };
   }
