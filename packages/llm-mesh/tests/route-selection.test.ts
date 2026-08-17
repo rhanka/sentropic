@@ -96,6 +96,32 @@ describe('route candidate selection', () => {
     expect(candidates.map((candidate) => candidate.target.transportProviderId)).toEqual(['codex']);
   });
 
+  it('uses a non-Anthropic fallback when faithful Claude target is not resolvable', () => {
+    const selection = selectRouteCandidates({
+      request: {
+        requestedModel: 'claude-sonnet-4-6',
+        requiredCapabilities: ['tools', 'streaming'],
+      },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'codex-internal',
+        diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai',
+        transportProviderId: 'codex',
+        supportedModelIds: ['gpt-5.6-luna'],
+        enrollmentCompletedAt: '2026-08-01T00:00:00Z',
+        readiness: 'ready',
+        revision: 'r1',
+      }],
+    });
+
+    expect(selection.kind).toBe('candidates');
+    expect(selection.candidates[0]).toMatchObject({
+      target: { providerId: 'openai', modelId: 'gpt-5.6-luna' },
+    });
+  });
+
   it('allows an owner-scoped target profile override for a non-Claude model', () => {
     const candidates = candidatesOf(selectRouteCandidates({
       request: {
