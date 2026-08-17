@@ -1,3 +1,5 @@
+import { modelProfiles } from './catalog.js';
+
 export interface TargetMapping {
   readonly providerId: string;
   readonly transportProviderId: string;
@@ -94,22 +96,50 @@ export const resolveTargetCapabilitySource = (target: TargetMapping): TargetMapp
   return source ? { ...target, providerId: source[0], model: source[1] } : target;
 };
 
+const hasModelProfile = (target: Pick<TargetMapping, 'providerId' | 'model'>): boolean =>
+  modelProfiles.some(
+    (profile) =>
+      profile.providerId === target.providerId && profile.modelId === target.model,
+  );
+
+const firstTargetThatResolvesProfile = (
+  targets: readonly TargetMapping[],
+): TargetMapping =>
+  targets.find((target) => hasModelProfile(target)) ?? targets[0]!;
+
 /**
  * A launch alias is an explicit user-facing routing contract, not benchmark
  * equivalence evidence. A known Claude id must reach its Anthropic target
  * before the permitted Codex and Cloud Code fallbacks.
  */
+const launchAliasTargetsFor = (
+  requestedId: string,
+  codexModel: string,
+  cloudModel: string,
+  effort?: string,
+): readonly TargetMapping[] => {
+  const faithfulTarget = claudeTarget(faithfulClaudeModel(requestedId), effort);
+  const codexCandidate = codexTarget(codexModel, effort);
+  const cloudCandidate: TargetMapping = {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel,
+    ...(effort ? { effort } : {}),
+  };
+
+  return [
+    ...(hasModelProfile(faithfulTarget) ? [faithfulTarget] : []),
+    codexCandidate,
+    cloudCandidate,
+  ];
+};
+
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
 > = Object.fromEntries(STANDARD_ROUTE_DEFINITIONS.map(
-  ([requestedId, codexModel, cloudModel, effort]) => [requestedId, [
-    claudeTarget(faithfulClaudeModel(requestedId), effort),
-    codexTarget(codexModel, effort),
-    {
-      providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel,
-      ...(effort ? { effort } : {}),
-    },
-  ]],
+  ([
+    requestedId, codexModel, cloudModel, effort,
+  ]) => [requestedId, launchAliasTargetsFor(
+    requestedId, codexModel, cloudModel, effort,
+  )],
 ));
 
 export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
@@ -125,12 +155,12 @@ export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
 
 export const LAUNCH_ALIAS_TARGET_MAPPINGS = Object.fromEntries(
   Object.entries(LAUNCH_ALIAS_ROUTE_MAPPINGS)
-    .map(([requestedId, targets]) => [requestedId, targets[0]!]),
+    .map(([requestedId, targets]) => [requestedId, firstTargetThatResolvesProfile(targets)]),
 );
 
 export const CANONICAL_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> =
   Object.fromEntries(Object.entries(CANONICAL_TARGET_ROUTE_MAPPINGS)
-    .map(([requestedId, targets]) => [requestedId, targets[0]!]),
+    .map(([requestedId, targets]) => [requestedId, firstTargetThatResolvesProfile(targets)]),
   );
 
 export const createStaticTargetResolver = (options: {
