@@ -55,7 +55,7 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
 };
 
 type StandardRouteDefinition = readonly [string, string, string, string?];
-const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
+export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   ['claude-opus-5', 'gpt-5.6-terra', 'gemini-3.7-flash'],
   ['claude-opus-5-high', 'gpt-5.6-terra', 'gemini-3.7-flash', 'high'],
   ['claude-opus-5-xhigh', 'gpt-5.6-terra', 'gemini-3.7-flash', 'xhigh'],
@@ -69,6 +69,22 @@ const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   ['claude-fable-5-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
   ['claude-fable-5-max', 'gpt-5.6-sol', 'gemini-3.7-flash', 'max'],
 ];
+
+const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
+
+const CLAUDE_SUCCESSION_MAP: Readonly<Record<string, string>> = {
+  // Owner-ratified model succession from
+  // api/src/services/model-selection-legacy.ts:
+  // claude-sonnet-4-6 -> claude-sonnet-5
+  'claude-sonnet-4-6': 'claude-sonnet-5',
+};
+
+const isFaithfulAnthropicTransport = (transportProviderId: string | undefined): boolean => (
+  transportProviderId
+    ? ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS.includes(transportProviderId)
+    : false
+);
+
 const codexTarget = (model: string, effort?: string): TargetMapping => ({
   providerId: 'openai', transportProviderId: 'codex', model,
   ...(effort ? { effort } : {}),
@@ -102,6 +118,33 @@ const hasModelProfile = (target: Pick<TargetMapping, 'providerId' | 'model'>): b
       profile.providerId === target.providerId && profile.modelId === target.model,
   );
 
+const hasFaithfulAnthropicProfile = (target: {
+  readonly providerId: string;
+  readonly transportProviderId?: string;
+  readonly model: string;
+}): boolean =>
+  target.providerId === 'anthropic'
+  && isFaithfulAnthropicTransport(target.transportProviderId)
+  && hasModelProfile(target);
+
+const resolveFaithfulAnthropicTarget = (
+  requestedId: string,
+  effort?: string,
+): TargetMapping | undefined => {
+  let faithfulModel = faithfulClaudeModel(requestedId);
+  const seen = new Set<string>();
+
+  while (!seen.has(faithfulModel)) {
+    seen.add(faithfulModel);
+    const candidate = claudeTarget(faithfulModel, effort);
+    if (hasFaithfulAnthropicProfile(candidate)) return candidate;
+    const successor = CLAUDE_SUCCESSION_MAP[faithfulModel];
+    if (!successor) break;
+    faithfulModel = successor;
+  }
+  return undefined;
+};
+
 const firstTargetThatResolvesProfile = (
   targets: readonly TargetMapping[],
 ): TargetMapping =>
@@ -118,7 +161,7 @@ const launchAliasTargetsFor = (
   cloudModel: string,
   effort?: string,
 ): readonly TargetMapping[] => {
-  const faithfulTarget = claudeTarget(faithfulClaudeModel(requestedId), effort);
+  const faithfulTarget = resolveFaithfulAnthropicTarget(requestedId, effort);
   const codexCandidate = codexTarget(codexModel, effort);
   const cloudCandidate: TargetMapping = {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel,
