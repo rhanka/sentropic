@@ -1,78 +1,34 @@
-# Feature: BR-75 Recurring LLM Model Update Runbook
+# Fix(ci): cluster-mesh bootstrap publish fails on provenance (provider: null)
 
 ## Objective
-- [x] Make recurring LLM model updates repeatable through one owner directive, one safe scaffold command, explicit evidence gates, and blind review.
+- [x] Unblock the first publish of `@sentropic/cluster-mesh@0.1.0`: the bootstrap recipe `publish-cluster-mesh-token` ran `npm publish` inside a container that carries no GitHub Actions env, so `publishConfig.provenance:true` failed with `EUSAGE Automatic provenance generation not supported for provider: null` (CI run 32079323845). Disable provenance on the token bootstrap only; steady-state OIDC publish keeps provenance.
 
 ## Scope / Guardrails
-- [x] Base is `origin/main` at merge PR #540; its Gemini 3.7 cutover is the canonical model-update reference.
-- [x] Scope is facilitation documentation, one additive scaffold script, its unit test, and one Make target.
-- [x] Preserve existing catalog, provider, routing, equivalence, package publication, and consumer behavior.
-- [x] Require official model-id evidence before any scaffold is applied.
-- [x] Use make-only commands, dedicated `ENV=test-model-update-runbook` with API `9375`, UI `5575`, and Maildev UI `1475`, selective staging, and sub-150-line commits.
-- [x] Keep all code, documentation, commit text, and PR text in English.
+- [x] `Makefile` `publish-cluster-mesh-token`: append `--no-provenance` to the bootstrap `npm publish`. No change to the OIDC steady-state recipe `publish-cluster-mesh` (which forwards `GITHUB_*` + `ACTIONS_ID_TOKEN_REQUEST_*` and keeps provenance) and no change to `ci.yml`.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**
-  - [x] `BRANCH.md`
-  - [x] `spec/SPEC_RUNBOOK_LLM_MODEL_UPDATE.md`
-  - [x] `docs/runbooks/model-update-launch-packet.md`
-  - [x] `packages/llm-mesh/scripts/add-model.mjs`
-  - [x] `packages/llm-mesh/tests/add-model-script.test.ts`
-  - [x] `.tmp/engage/model-update-runbook-report.md`
-  - [x] `.tmp/engage/pr541-rebase-report.md`
-- [x] **Forbidden Paths (must not change in this branch)**
-  - [x] `docker-compose*.yml`
-  - [x] `.cursor/rules/**`
-  - [x] `.github/workflows/**`
-  - [x] Existing `packages/llm-mesh/src/**` model data and generated council output.
-  - [x] Package manifests and lockfiles; this branch does not ship a model or package runtime change.
-- [x] **Conditional Paths**
-  - [x] `Makefile` only under `BR75-EX1`.
-- [x] **Exception process**
-  - [x] Declare an exception before changing any other conditional or forbidden path.
+- **Allowed Paths**: `BRANCH.md`
+- **Forbidden Paths**: everything else.
+- **Conditional Paths**: `Makefile` (only the `publish-cluster-mesh-token` recipe, one line) — see `BR-CMPROV-EX1`.
+
+## Scope Exceptions
+- [x] `BR-CMPROV-EX1` — `Makefile` is default-forbidden. Rationale: the blocker IS the Makefile bootstrap recipe; the fix is a single flag on one CI-plumbing line owned by the infra lane. Impact: bootstrap-only (steady-state OIDC untouched). Rollback: drop `--no-provenance` from `publish-cluster-mesh-token`.
 
 ## Feedback Loop
-- [x] `BR75-EX1` accepted by owner request: change the normally forbidden `Makefile` because the repository's make-only policy requires an entrypoint for this recurring job; impact is one additive target plus one script; rollback removes that target and script.
-- [x] Post-rebase context: PR #540 is merged into this branch base; preserve its `@sentropic/llm-mesh` 0.16.0 package and lockfile state while keeping this branch documentation/scaffold-only.
-- [x] Source gap: vendor documentation is mutable; every future update must capture its dated official model-id evidence in its PR.
-- [x] Source gap: host defaults for h-cond/h2a-runtime, including agy, live outside this repository and require a notification handoff rather than an in-repo edit.
+- [x] `CMPROV-RCA` — `npm whoami` returned `rhk` (token auth OK) and the tarball built; the failure was provenance generation (`provider: null`) because the token recipe container carries no GitHub Actions env. Root cause is provenance, not auth.
+- [x] `CMPROV-FLEET` — All 20+ non-private packages carry `publishConfig.provenance:true` and were bootstrapped without provenance, then publish provenance via steady-state OIDC. This fix keeps cluster-mesh consistent with that fleet convention.
+- [ ] `CMPROV-FOLLOWUP` — Latent: every other `publish-<pkg>-token` recipe shares the same pattern and would fail an identical way on a future first-publish (dormant today since those packages are already published). Track a durable fix (either `--no-provenance` fleet-wide on the token recipes, or forward env + add `id-token: write` to `bootstrap-publish`).
+- [ ] `CMPROV-OIDC-ATTACH` — After publish, attach the OIDC trusted publisher on `npmjs.com -> @sentropic/cluster-mesh -> Settings -> Trusted Publisher` -> `rhanka/sentropic` workflow `ci.yml` (owner action; enables steady-state provenance publishes).
 
 ## AI Flaky tests
-- [x] Accept no deterministic scaffold, generation-freshness, typecheck, lint, build, or package test failure as flaky.
-- [x] Local `make test` reached `api/tests/ai/**` then failed 18 tests because all five provider keys were unset (`Provider auth source is not configured`); runtime/auth paths are unchanged and CI injects those secrets, so the remote AI gate remains authoritative and owner sign-off is required before merge if it repeats.
+- Not applicable: Makefile CI-plumbing one-liner.
 
-## Orchestration Mode
-- [x] **Mono-branch** with no implementation sub-agent; two independent blind h2a review legs are read-only gates.
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch + cherry-pick.
+- [ ] Multi-branch.
+- Rationale: single-line CI recipe fix; infra-lane plumbing.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and exact scope**
-  - [x] Read project rules, workflow, sub-agent contract, project context, PLAN model-council constraint, and branch template.
-  - [x] Verify `feat/llm-model-update-runbook` mechanically with `harness check branch`.
-  - [x] Confirm the original base at merge PR #539, study the complete PR #540 delta, then rebase onto merge PR #540 without losing the runbook commits.
-  - [x] Locate catalog, providers, route definitions, capability sources, council generator/check, publish order, and internal consumers.
-  - [x] Confirm official OpenAI, Anthropic, and Gemini model registries are reachable.
-
-- [x] **Lot 1 — Owner runbook**
-  - [x] Add the anti-phantom evidence gate and copy-from-BASE procedure.
-  - [x] Document catalog, provider, routing, council refresh/check, tests, all consumer bumps, semver, ordered publication, and external host notification.
-  - [x] Add a precise current-tree file-and-line table and mark every unresolved external/source gap.
-  - [x] Gate: Markdown paths and cited line anchors verified against the current tree.
-
-- [x] **Lot 2 — Safe add-model scaffold**
-  - [x] Add an idempotent script that plans or applies catalog, provider, and default-route stubs copied from `BASE`.
-  - [x] Make dry-run side-effect free and print the manual evidence, council, consumer, test, version, publication, and host-default checklist.
-  - [x] Add focused tests for valid stubs, dry-run immutability, idempotence, partial repair, and invalid input.
-  - [x] Add `make llm-mesh-add-model MODEL=<id> BASE=<id>` under `BR75-EX1`.
-  - [x] Gate: focused test and dry-run make invocation are green.
-
-- [x] **Lot 3 — Standard MODEL UPDATE launch packet**
-  - [x] Add copy-ready drumbeat and mesh-lane mandates for `MODEL=<X>` and `BASE=<Y>`.
-  - [x] Specify Codex 5.6 Sol xhigh build, blind Opus 4.8 review, exact evidence/scope/test/publish gates, stop conditions, and report contract.
-  - [x] Gate: packet requires one directive, one make scaffold, one blind review, and no merge.
-
-- [x] **Lot 4 — Final validation and PR-only delivery**
-  - [x] Run scope, council freshness, focused tests, dry run, build, typecheck, and lint gates; record the local provider-secret boundary for the full test gate.
-  - [x] Record review selection failure: exact author model and effort are unattested, so independent blind peer eligibility cannot be proven without invention.
-  - [x] Verify `git branch --show-current` immediately before every commit.
-  - [x] Push `feat/llm-model-update-runbook`, open the requested PR without merging, and verify CI.
-  - [x] Write the delivery reports and deposit a valid `sentropic.h2a` v1.0 report to `claude:sentropic-drumbeat:21fe3355ad7d`.
+- [x] Lot 0 — RCA from run 32079323845 logs: provenance `provider: null`, not token/auth.
+- [x] Lot 1 — Append `--no-provenance` to `publish-cluster-mesh-token`; OIDC recipe untouched.
+- [ ] Lot 2 — PR CI green -> merge to main -> re-trigger bootstrap `workflow_dispatch bootstrap_publish_target=cluster-mesh` -> verify `@sentropic/cluster-mesh@0.1.0` on npm -> report; then owner attaches OIDC trusted publisher.
