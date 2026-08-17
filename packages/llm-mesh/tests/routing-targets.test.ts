@@ -64,7 +64,7 @@ describe('canonical model targets', () => {
     });
   });
 
-  it('resolves only ratified suffixed aliases', () => {
+  it('resolves only RATIFICATION PENDING suffixed aliases', () => {
     expect(resolve('claude-opus-5-xhigh')).toEqual({
       providerId: 'anthropic',
       transportProviderId: 'claude-code',
@@ -85,7 +85,7 @@ describe('canonical model targets', () => {
     });
   });
 
-  it('exposes owner-ratified Codex and Cloud Code candidates for launch aliases', () => {
+  it('exposes RATIFICATION PENDING Codex and Cloud Code candidates for launch aliases', () => {
     expect(resolveCandidates('claude-opus-5-xhigh')).toEqual([
       {
         providerId: 'anthropic',
