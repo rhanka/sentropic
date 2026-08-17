@@ -1,15 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type TargetMapping,
   createCanonicalTargetCandidatesResolver,
   createCanonicalTargetResolver,
+  CANONICAL_TARGET_MAPPINGS,
   describeCanonicalTargetRoutes,
   LAUNCH_ALIAS_TARGET_MAPPINGS,
+  LAUNCH_ALIAS_ROUTE_MAPPINGS,
   resolveTargetCapabilitySource,
 } from '../src/routing-targets.js';
+import { modelProfiles } from '../src/catalog.js';
 
 describe('canonical model targets', () => {
   const resolve = createCanonicalTargetResolver();
   const resolveCandidates = createCanonicalTargetCandidatesResolver();
+  const faithfulClaudeModel = (requestedId: string): string =>
+    requestedId.replace(/-(?:high|xhigh|max)$/, '');
+  const hasModelProfile = (providerId: string, model: string): boolean =>
+    modelProfiles.some((candidate) =>
+      candidate.providerId === providerId && candidate.modelId === model);
+
+  const expectedSelectionFirstTarget = (requestedId: string): TargetMapping => {
+    const canonicalTargets = resolveCandidates(requestedId);
+    if (canonicalTargets.length === 0) {
+      const profile = modelProfiles.find((candidate) => candidate.modelId === requestedId);
+      throw new Error(`No canonical target found for ${requestedId} (${String(profile?.providerId)})`);
+    }
+
+    const faithfulClaudeTarget = requestedId.startsWith('claude-')
+      ? canonicalTargets.find((target) => target.providerId === 'anthropic')
+      : undefined;
+    if (faithfulClaudeTarget &&
+      hasModelProfile(faithfulClaudeTarget.providerId, faithfulClaudeTarget.model)) {
+      return faithfulClaudeTarget;
+    }
+
+    return canonicalTargets[0]!;
+  };
 
   it('keeps bare ids provider-faithful', () => {
     expect(resolve('claude-opus-5')).toEqual({
@@ -68,11 +95,6 @@ describe('canonical model targets', () => {
     ]);
     expect(resolveCandidates('claude-sonnet-4-6')).toEqual([
       {
-        providerId: 'anthropic',
-        transportProviderId: 'claude-code',
-        model: 'claude-sonnet-4-6',
-      },
-      {
         providerId: 'openai',
         transportProviderId: 'codex',
         model: 'gpt-5.6-luna',
@@ -109,7 +131,7 @@ describe('canonical model targets', () => {
     ]);
   });
 
-  it('puts an Anthropic target first for every known Claude route while retaining Gemini 3.7 Flash', () => {
+  it('keeps faithful Anthropic routes only when profile-backed and keeps canonical alias kind', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
       'claude-opus-4-8', 'claude-opus-4-8-xhigh',
@@ -121,16 +143,25 @@ describe('canonical model targets', () => {
     const descriptions = describeCanonicalTargetRoutes();
     for (const alias of aliases) {
       const candidates = resolveCandidates(alias);
-      expect(candidates[0]).toMatchObject({
-        providerId: 'anthropic', transportProviderId: 'claude-code',
-      });
+      const hasFaithfulProfile = hasModelProfile('anthropic', faithfulClaudeModel(alias));
+      const expectedPrimary = hasFaithfulProfile ? {
+        providerId: 'anthropic',
+        transportProviderId: 'claude-code',
+      } : {
+        providerId: 'openai',
+        transportProviderId: 'codex',
+      };
+      const expectedPrimaryModel = candidates[0]?.model ?? '';
+      expect(candidates[0]).toMatchObject(expectedPrimary);
       expect(candidates).toContainEqual(expect.objectContaining({
         providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
       }));
-      expect(descriptions.find((route) => route.requestedId === alias)).toMatchObject({
-        providerId: 'anthropic', transportProviderId: 'claude-code',
-        kind: alias === candidates[0]?.model ? 'faithful' : 'alias',
-      });
+      expect(descriptions.find((route) => route.requestedId === alias))
+        .toMatchObject({
+          ...expectedPrimary,
+          kind: hasFaithfulProfile && alias === expectedPrimaryModel
+            ? 'faithful' as const : 'alias' as const,
+        });
     }
   });
 
@@ -188,5 +219,23 @@ describe('canonical model targets', () => {
     expect(JSON.stringify(describeCanonicalTargetRoutes())).not.toMatch(
       /token|secret|accountId/i,
     );
+  });
+
+  it('keeps CANONICAL_TARGET_MAPPINGS aligned with the selection-first target for each model', () => {
+    for (const [requestedId, canonicalTarget] of Object.entries(CANONICAL_TARGET_MAPPINGS)) {
+      expect(canonicalTarget).toEqual(expectedSelectionFirstTarget(requestedId));
+    }
+  });
+
+  it('keeps launch alias single-target mappings aligned with the first route target', () => {
+    for (const [requestedId, targets] of Object.entries(LAUNCH_ALIAS_ROUTE_MAPPINGS)) {
+      if (targets.length > 0) {
+        const expectedPrimary = expectedSelectionFirstTarget(requestedId);
+        expect(
+          expectedPrimary.providerId === targets[0]!.providerId
+          && expectedPrimary.model === targets[0]!.model
+        ).toBe(true);
+      }
+    }
   });
 });
