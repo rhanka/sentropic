@@ -64,6 +64,7 @@ export interface ProviderAdapter {
 export interface KeyringAdapter {
   getSecret(key: string): Promise<string | null>;
   setSecret(key: string, secret: string): Promise<void>;
+  setSecretIfAbsent?(key: string, secret: string): Promise<boolean>;
   deleteSecret(key: string): Promise<void>;
 }
 

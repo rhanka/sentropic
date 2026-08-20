@@ -16,6 +16,7 @@
   - `BRANCH.md`
   - `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_ADMINISTRATION.md`
   - `packages/llm-mesh/src/account-transports.ts`
+  - `packages/llm-mesh/src/node/keyring/**`
   - `packages/llm-mesh/src/service/facade.ts`
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
   - `packages/llm-mesh/tests/**`
@@ -44,7 +45,7 @@
 - [x] Final review accepted: discovery indexing must not race with a newer generation.
 - [x] Final review accepted: active account IDs remain isolated across owners.
 - [x] CI feedback: keep account administration additive and synchronize internal consumers.
-- [ ] Closure review: concurrent owner collisions require an atomic durable claim.
+- [x] Closure review: concurrent owner collisions require an atomic durable claim.
 
 ## AI Flaky tests
 - [x] None; all tests are deterministic and use an in-memory keyring.
@@ -61,7 +62,7 @@
 - [x] Lot 1 — add and observe failing facade account lifecycle tests.
 - [x] Lot 2 — implement the facade/service/coordinator contract and bump the package minor.
 - [x] Lot 2b — add a durable removal barrier and concurrency/failure regression tests.
-- [x] Lot 3 — rerun `make test-llm-mesh ENV=test-llm-mesh-account-admin` (166/166).
+- [x] Lot 3 — rerun `make test-llm-mesh ENV=test-llm-mesh-account-admin` (168/168).
 - [x] Lot 3 — run `make typecheck-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [x] Lot 3 — run `make build-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [x] Lot 3 — run `make pack-llm-mesh ENV=test-llm-mesh-account-admin`.
