@@ -25,6 +25,17 @@ export class EnvKeyring implements KeyringAdapter {
     this.memoryFallback.set(key, secret);
   }
 
+  async setSecretIfAbsent(key: string, secret: string): Promise<boolean> {
+    const scopedKey = this.envKey(key);
+    const envVal = process.env[scopedKey] ?? process.env[key];
+    if ((typeof envVal === 'string' && envVal.length > 0) || this.memoryFallback.has(key)) {
+      return false;
+    }
+    process.env[scopedKey] = secret;
+    this.memoryFallback.set(key, secret);
+    return true;
+  }
+
   async deleteSecret(key: string): Promise<void> {
     delete process.env[this.envKey(key)];
     this.memoryFallback.delete(key);

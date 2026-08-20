@@ -84,20 +84,7 @@ export class EncryptedFileKeyring implements KeyringAdapter {
   }
 
   async setSecret(key: string, secret: string): Promise<void> {
-    const masterKey = await this.readMasterKey(true);
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', masterKey, iv);
-    cipher.setAAD(Buffer.from(key, 'utf8'));
-    const encrypted = Buffer.concat([
-      cipher.update(Buffer.from(secret, 'utf8')),
-      cipher.final(),
-    ]);
-    const record: EncryptedRecord = {
-      v: 1,
-      iv: iv.toString('base64'),
-      tag: cipher.getAuthTag().toString('base64'),
-      data: encrypted.toString('base64'),
-    };
+    const record = await this.encryptSecret(key, secret);
     const destination = this.secretPath(key);
     const temporary = `${destination}.${randomBytes(8).toString('hex')}.tmp`;
     try {
@@ -110,6 +97,25 @@ export class EncryptedFileKeyring implements KeyringAdapter {
     }
   }
 
+  async setSecretIfAbsent(key: string, secret: string): Promise<boolean> {
+    const record = await this.encryptSecret(key, secret);
+    const destination = this.secretPath(key);
+    const temporary = `${destination}.${randomBytes(8).toString('hex')}.tmp`;
+    await writeFile(temporary, JSON.stringify(record), { flag: 'wx', mode: 0o600 });
+    try {
+      try {
+        await link(temporary, destination);
+      } catch (error) {
+        if (isErrorCode(error, 'EEXIST')) return false;
+        throw error;
+      }
+      await chmod(destination, 0o600);
+      return true;
+    } finally {
+      await this.unlinkIfPresent(temporary);
+    }
+  }
+
   async deleteSecret(key: string): Promise<void> {
     await this.unlinkIfPresent(this.secretPath(key));
   }
@@ -117,6 +123,23 @@ export class EncryptedFileKeyring implements KeyringAdapter {
   private secretPath(key: string): string {
     const filename = createHash('sha256').update(key).digest('hex');
     return join(this.directory, `${filename}.json`);
+  }
+
+  private async encryptSecret(key: string, secret: string): Promise<EncryptedRecord> {
+    const masterKey = await this.readMasterKey(true);
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', masterKey, iv);
+    cipher.setAAD(Buffer.from(key, 'utf8'));
+    const encrypted = Buffer.concat([
+      cipher.update(Buffer.from(secret, 'utf8')),
+      cipher.final(),
+    ]);
+    return {
+      v: 1,
+      iv: iv.toString('base64'),
+      tag: cipher.getAuthTag().toString('base64'),
+      data: encrypted.toString('base64'),
+    };
   }
 
   private async readMasterKey(create: boolean): Promise<Buffer> {
