@@ -35,7 +35,7 @@ owner is the only operation that supersedes that barrier generation. The
 marker remains durable: old service instances compare their local account
 generation with the persisted marker, discard stale credentials, and can then
 restore the newly enrolled generation. An enrollment for another owner cannot
-supersede the barrier.
+supersede the barrier or replace an active account with a colliding identifier.
 
 An acquisition that returned before removal may finish with the credential it
 already received; local deletion cannot revoke a copied upstream token. Its

@@ -260,11 +260,6 @@ export class LocalAccountTransportService {
     this.accountRemovalBarrierRefs.delete(accountId);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
     await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
-    const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
-    await this.keyring.setSecret(
-      LocalAccountTransportService.accountIndexKey,
-      JSON.stringify(this.parseAccountIndex(rawIndex).filter((id) => id !== accountId)),
-    );
     return { accountId, removed: true };
   }
 
@@ -673,6 +668,10 @@ export class LocalAccountTransportService {
     accountId: string,
     ownerScopeRef: string,
   ): Promise<string | undefined> {
+    const existing = await this.readPublicRecord(accountId);
+    if (existing && existing.account.ownerScopeRef !== ownerScopeRef) {
+      throw new Error(`Account '${accountId}' belongs to another owner scope`);
+    }
     const tombstone = await this.readRemovalTombstone(accountId);
     if (!tombstone) return undefined;
     if (tombstone.ownerScopeRef !== ownerScopeRef) {
@@ -697,11 +696,6 @@ export class LocalAccountTransportService {
       await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
       await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
     }
-    const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
-    await this.keyring.setSecret(
-      LocalAccountTransportService.accountIndexKey,
-      JSON.stringify(this.parseAccountIndex(rawIndex).filter((id) => id !== accountId)),
-    );
   }
 
   private async readPublicRecord(accountId: string): Promise<AccountPublicRecord | null> {
