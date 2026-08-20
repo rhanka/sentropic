@@ -46,7 +46,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — prove the missing public seam and define the owner/security contract.
-- [ ] Lot 1 — add and observe failing facade account lifecycle tests.
+- [x] Lot 1 — add and observe failing facade account lifecycle tests.
 - [ ] Lot 2 — implement the smallest facade/service/coordinator change and bump the package patch.
 - [ ] Lot 3 — run `make test-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [ ] Lot 3 — run `make typecheck-llm-mesh ENV=test-llm-mesh-account-admin`.
