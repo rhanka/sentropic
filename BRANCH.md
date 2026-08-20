@@ -44,6 +44,7 @@
 - [x] Final review accepted: discovery indexing must not race with a newer generation.
 - [x] Final review accepted: active account IDs remain isolated across owners.
 - [x] CI feedback: keep account administration additive and synchronize internal consumers.
+- [ ] Closure review: concurrent owner collisions require an atomic durable claim.
 
 ## AI Flaky tests
 - [x] None; all tests are deterministic and use an in-memory keyring.
