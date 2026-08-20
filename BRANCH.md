@@ -5,7 +5,8 @@
 - [x] Keep credentials and keyring layout private to llm-mesh.
 
 ## Scope / Guardrails
-- [x] Scope is limited to the local account service, facade contract, package metadata, tests, and spec.
+- [x] Scope is limited to the local account service, facade contract, package metadata,
+  required llm-gateway dependency/lock synchronization, tests, and spec.
 - [x] Worktree is `tmp/worktrees/llm-mesh-account-admin` on `fix/llm-mesh-account-admin`.
 - [x] Tests use `ENV=test-llm-mesh-account-admin`; no dev environment or live credentials.
 - [x] All commands use Make targets and all new text is English.
@@ -19,7 +20,9 @@
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
   - `packages/llm-mesh/tests/**`
   - `packages/llm-mesh/package.json`
+  - `packages/llm-gateway/package.json`
   - `package-lock.json`
+  - `api/package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -40,6 +43,7 @@
 - [x] Review accepted: a racing writer cannot restore the removed index entry.
 - [x] Final review accepted: discovery indexing must not race with a newer generation.
 - [x] Final review accepted: active account IDs remain isolated across owners.
+- [x] CI feedback: keep account administration additive and synchronize internal consumers.
 
 ## AI Flaky tests
 - [x] None; all tests are deterministic and use an in-memory keyring.
@@ -60,4 +64,6 @@
 - [x] Lot 3 — run `make typecheck-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [x] Lot 3 — run `make build-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [x] Lot 3 — run `make pack-llm-mesh ENV=test-llm-mesh-account-admin`.
+- [x] Lot 3 — run `make install-internal-packages ENV=test-llm-mesh-account-admin`.
+- [x] Lot 3 — run llm-gateway typecheck, tests (113/113), build, and pack gates.
 - [ ] Lot 4 — scope-check, review, PR, CI, merge, tag, and CI publication.
