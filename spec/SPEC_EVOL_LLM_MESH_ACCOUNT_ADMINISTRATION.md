@@ -36,6 +36,12 @@ marker remains durable: old service instances compare their local account
 generation with the persisted marker, discard stale credentials, and can then
 restore the newly enrolled generation. An enrollment for another owner cannot
 supersede the barrier or replace an active account with a colliding identifier.
+Before writing credentials, every enrollment atomically creates an immutable,
+durable owner claim through the keyring. Concurrent completions for the same
+account identifier therefore select exactly one owner, and every subsequent
+durable write revalidates that claim. Removal never deletes the owner claim;
+only the same owner may re-enroll the identifier. Existing owner-scoped records
+acquire the same claim when they are restored after upgrading.
 
 An acquisition that returned before removal may finish with the credential it
 already received; local deletion cannot revoke a copied upstream token. Its
@@ -50,4 +56,7 @@ deterministic regressions inject a keyring deletion failure followed by a
 service restart, and pause a token refresh across removal, proving both paths
 remain fail-closed and leave no selectable account. Cross-instance
 re-enrollment, foreign-owner identifier collision, and enrollment/removal index
-interleaving tests cover barrier generation coherence.
+interleaving tests cover barrier generation coherence. Two simultaneous service
+instances with different owners also prove that only one completion can claim a
+shared account identifier, while a real encrypted file keyring test proves
+conditional creation is atomic across instances.

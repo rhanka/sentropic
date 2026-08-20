@@ -41,6 +41,12 @@ interface AccountRemovalTombstone {
   removedAt: string;
 }
 
+interface AccountOwnerClaim {
+  v: 1;
+  accountId: string;
+  ownerScopeRef: string;
+}
+
 // Cloud Code does not currently return a per-account model inventory during
 // enrollment. Advertise only the model proven executable by the live transport
 // contract; explicit account.modelIds may override this after provider evidence.
@@ -69,6 +75,7 @@ export class LocalAccountTransportService {
   private readonly credentialVersions = new Map<string, string>();
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
   private readonly accountRemovalBarrierRefs = new Map<string, string>();
+  private readonly claimedOwnerScopes = new Map<string, string>();
   private routeAttemptSequence = 0;
 
   constructor(
@@ -213,6 +220,7 @@ export class LocalAccountTransportService {
         !record
         || record.account.ownerScopeRef !== scope
         || await this.isPublicRecordRemoved(record)
+        || !(await this.isPublicRecordOwnerClaimValid(record))
       ) continue;
       accounts.push({
         accountId: record.accountId,
@@ -234,10 +242,12 @@ export class LocalAccountTransportService {
     await this.restorePersistedAccounts();
     const record = await this.readPublicRecord(accountId);
     const existingTombstone = await this.readRemovalTombstone(accountId);
+    const ownerClaim = await this.readOwnerClaim(accountId);
     if (
       (!record && !existingTombstone)
       || (record && record.account.ownerScopeRef !== scope)
       || (existingTombstone && existingTombstone.ownerScopeRef !== scope)
+      || (ownerClaim && ownerClaim.ownerScopeRef !== scope)
     ) {
       throw new Error(`Account '${accountId}' not found`);
     }
@@ -547,6 +557,7 @@ export class LocalAccountTransportService {
     account: AccountTransportAccount,
   ): Promise<void> {
     const removalBarrierRef = this.accountRemovalBarrierRefs.get(pub.accountId);
+    await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
     if (await this.isAccountRemoved(pub.accountId)) {
       throw new Error(`Account '${pub.accountId}' has been removed`);
     }
@@ -561,7 +572,9 @@ export class LocalAccountTransportService {
       account: persistedAccount,
       ...(removalBarrierRef ? { removalBarrierRef } : {}),
     };
+    await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
     await this.keyring.setSecret(`sentropic-llm-mesh:${pub.accountId}:envelope`, JSON.stringify(env));
+    await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
     await this.keyring.setSecret(
       `sentropic-llm-mesh:${pub.accountId}:public`,
       JSON.stringify(publicRecord),
@@ -570,6 +583,7 @@ export class LocalAccountTransportService {
       await this.cleanupRemovedPersistence(pub.accountId, removalBarrierRef);
       throw new Error(`Account '${pub.accountId}' has been removed`);
     }
+    await this.assertAccountOwnerClaim(pub.accountId, account.ownerScopeRef);
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     const accountIds = this.parseAccountIndex(rawIndex);
     if (!accountIds.includes(pub.accountId)) {
@@ -586,6 +600,7 @@ export class LocalAccountTransportService {
   }
 
   private async persistAccountState(account: AccountTransportAccount): Promise<void> {
+    await this.assertAccountOwnerClaim(account.accountId, account.ownerScopeRef);
     if (await this.isAccountRemoved(account.accountId)) return;
     const key = `sentropic-llm-mesh:${account.accountId}:public`;
     const raw = await this.keyring.getSecret(key);
@@ -633,6 +648,59 @@ export class LocalAccountTransportService {
     return `sentropic-llm-mesh:${accountId}:removed`;
   }
 
+  private ownerClaimKey(accountId: string): string {
+    return `sentropic-llm-mesh:${accountId}:owner`;
+  }
+
+  private async readOwnerClaim(accountId: string): Promise<AccountOwnerClaim | null> {
+    const raw = await this.keyring.getSecret(this.ownerClaimKey(accountId));
+    if (!raw) return null;
+    try {
+      const value = JSON.parse(raw) as Partial<AccountOwnerClaim>;
+      if (
+        value.v !== 1
+        || value.accountId !== accountId
+        || typeof value.ownerScopeRef !== 'string'
+        || !value.ownerScopeRef
+      ) throw new Error('invalid owner claim');
+      return value as AccountOwnerClaim;
+    } catch {
+      throw new Error(`Account '${accountId}' owner claim is corrupt`);
+    }
+  }
+
+  private async claimAccountOwner(accountId: string, ownerScopeRef: string): Promise<void> {
+    if (!this.keyring.setSecretIfAbsent) {
+      throw new Error('Keyring adapter does not support atomic account owner claims');
+    }
+    const claim: AccountOwnerClaim = { v: 1, accountId, ownerScopeRef };
+    const created = await this.keyring.setSecretIfAbsent(
+      this.ownerClaimKey(accountId),
+      JSON.stringify(claim),
+    );
+    const durableClaim = created ? claim : await this.readOwnerClaim(accountId);
+    if (!durableClaim || durableClaim.ownerScopeRef !== ownerScopeRef) {
+      throw new Error(`Account '${accountId}' belongs to another owner scope`);
+    }
+    this.claimedOwnerScopes.set(accountId, ownerScopeRef);
+  }
+
+  private async assertAccountOwnerClaim(
+    accountId: string,
+    ownerScopeRef?: string,
+  ): Promise<void> {
+    const claim = await this.readOwnerClaim(accountId);
+    if (!claim) {
+      if (this.claimedOwnerScopes.has(accountId)) {
+        throw new Error(`Account '${accountId}' owner claim is missing`);
+      }
+      return;
+    }
+    if (!ownerScopeRef || claim.ownerScopeRef !== ownerScopeRef) {
+      throw new Error(`Account '${accountId}' belongs to another owner scope`);
+    }
+  }
+
   private async readRemovalTombstone(accountId: string): Promise<AccountRemovalTombstone | null> {
     const raw = await this.keyring.getSecret(this.removalKey(accountId));
     if (!raw) return null;
@@ -664,12 +732,22 @@ export class LocalAccountTransportService {
       || record.removalBarrierRef !== tombstone.removedAt;
   }
 
+  private async isPublicRecordOwnerClaimValid(record: AccountPublicRecord): Promise<boolean> {
+    const claim = await this.readOwnerClaim(record.accountId);
+    return !claim || claim.ownerScopeRef === record.account.ownerScopeRef;
+  }
+
   private async removalBarrierForEnrollment(
     accountId: string,
     ownerScopeRef: string,
   ): Promise<string | undefined> {
     const existing = await this.readPublicRecord(accountId);
     if (existing && existing.account.ownerScopeRef !== ownerScopeRef) {
+      throw new Error(`Account '${accountId}' belongs to another owner scope`);
+    }
+    await this.claimAccountOwner(accountId, ownerScopeRef);
+    const confirmed = await this.readPublicRecord(accountId);
+    if (confirmed && confirmed.account.ownerScopeRef !== ownerScopeRef) {
       throw new Error(`Account '${accountId}' belongs to another owner scope`);
     }
     const tombstone = await this.readRemovalTombstone(accountId);
@@ -719,7 +797,11 @@ export class LocalAccountTransportService {
 
   private async restorePersistedAccounts(): Promise<void> {
     for (const accountId of [...this.accountsMap.keys()]) {
-      if (!(await this.isAccountRemoved(accountId))) continue;
+      const account = this.accountsMap.get(accountId);
+      const ownerClaim = await this.readOwnerClaim(accountId);
+      const ownerClaimMismatch = ownerClaim
+        && ownerClaim.ownerScopeRef !== account?.ownerScopeRef;
+      if (!ownerClaimMismatch && !(await this.isAccountRemoved(accountId))) continue;
       this.coordinator.removeAccount(accountId);
       this.accountsMap.delete(accountId);
       this.credentialVersions.delete(accountId);
@@ -749,6 +831,16 @@ export class LocalAccountTransportService {
             ? { ownerScopeRef: this.legacyAccountOwnerScopeRef }
             : {}),
         };
+        let ownerClaim = await this.readOwnerClaim(accountId);
+        if (
+          ownerClaim
+          && restoredAccount.ownerScopeRef
+          && ownerClaim.ownerScopeRef !== restoredAccount.ownerScopeRef
+        ) continue;
+        if (restoredAccount.ownerScopeRef && !ownerClaim) {
+          await this.claimAccountOwner(accountId, restoredAccount.ownerScopeRef);
+          ownerClaim = await this.readOwnerClaim(accountId);
+        }
         this.registerAccount(
           {
             ...restoredAccount,
@@ -763,6 +855,9 @@ export class LocalAccountTransportService {
           envelope.authClientConfigVersion,
           publicRecord.removalBarrierRef,
         );
+        if (ownerClaim && ownerClaim.ownerScopeRef === restoredAccount.ownerScopeRef) {
+          this.claimedOwnerScopes.set(accountId, ownerClaim.ownerScopeRef);
+        }
         if (migrateLegacyOwner && restoredAccount.ownerScopeRef) {
           await this.keyring.setSecret(
             `sentropic-llm-mesh:${accountId}:public`,
