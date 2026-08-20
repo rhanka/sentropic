@@ -33,6 +33,8 @@
 ## Feedback Loop
 - [x] H2A consumer evidence: `@sentropic/llm-mesh@0.16.1` has enrollment but no inventory/removal seam.
 - [x] Consumer acceptance: list public metadata by owner and remove one owned account without keyring access.
+- [x] Review accepted: durable cleanup failures must remain fail-closed and retryable across restart.
+- [ ] Review accepted: an in-flight refresh must not repersist a removed account.
 
 ## AI Flaky tests
 - [x] None; all tests are deterministic and use an in-memory keyring.
@@ -48,6 +50,7 @@
 - [x] Lot 0 — prove the missing public seam and define the owner/security contract.
 - [x] Lot 1 — add and observe failing facade account lifecycle tests.
 - [x] Lot 2 — implement the smallest facade/service/coordinator change and bump the package patch.
+- [ ] Lot 2b — add a durable removal barrier and concurrency/failure regression tests.
 - [x] Lot 3 — run `make test-llm-mesh ENV=test-llm-mesh-account-admin` (160/160).
 - [x] Lot 3 — run `make typecheck-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [x] Lot 3 — run `make build-llm-mesh ENV=test-llm-mesh-account-admin`.
