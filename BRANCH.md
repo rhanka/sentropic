@@ -1,40 +1,55 @@
-# Design: chat surfaces & placement (SPEC_EVOL) — drawer/floating/DnD
+# Feature: owner-scoped llm-mesh account administration
 
 ## Objective
-Ratify the full surface/placement taxonomy for `@sentropic/chat-ui` (drawer left|right, floating left|center|right, full, DnD, occupancy fallback), driven by the vscode drawer need, as a design-system surface option. This branch is SPEC-ONLY (no code) — the review vehicle for the design-system co-review gate (D10) before any implementation lot.
+- [x] Expose public owner-scoped account inventory and removal through `LlmMeshFacade`.
+- [x] Keep credentials and keyring layout private to llm-mesh.
 
 ## Scope / Guardrails
-- Scope: `spec/SPEC_EVOL_CHAT_SURFACES.md` + `BRANCH.md` only. No code.
-- Cross-cutting: DS-owned Drawer/DropZone (D10) require design-system lane co-review before implementation.
-- Owner batched decisions + Opus/Codex adversarial review captured in the EVOL.
+- [x] Scope is limited to the local account service, facade contract, package metadata, tests, and spec.
+- [x] Worktree is `tmp/worktrees/llm-mesh-account-admin` on `fix/llm-mesh-account-admin`.
+- [x] Tests use `ENV=test-llm-mesh-account-admin`; no dev environment or live credentials.
+- [x] All commands use Make targets and all new text is English.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths**: `spec/SPEC_EVOL_CHAT_SURFACES.md`, `BRANCH.md`
-- **Forbidden Paths**: everything else (spec-only branch) — `packages/**`, `ui/**`, `api/**`, `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
-- **Conditional Paths**: none
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `spec/SPEC_EVOL_LLM_MESH_ACCOUNT_ADMINISTRATION.md`
+  - `packages/llm-mesh/src/account-transports.ts`
+  - `packages/llm-mesh/src/service/facade.ts`
+  - `packages/llm-mesh/src/service/local-account-transport-service.ts`
+  - `packages/llm-mesh/tests/**`
+  - `packages/llm-mesh/package.json`
+  - `package-lock.json`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `PLAN.md`
+  - `plan/**`
+- **Conditional Paths (allowed only with an explicit exception)**:
+  - `.github/workflows/**`
+  - `api/drizzle/*.sql`
 
 ## Feedback Loop
-- `attendu` — design-system lane co-review of D10 (Drawer/DropZone API, tokens/density, drag-affordance ownership) before implementation lots L2+.
+- [x] H2A consumer evidence: `@sentropic/llm-mesh@0.16.1` has enrollment but no inventory/removal seam.
+- [x] Consumer acceptance: list public metadata by owner and remove one owned account without keyring access.
 
 ## AI Flaky tests
-- None (spec-only).
+- [x] None; all tests are deterministic and use an in-memory keyring.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**
-- [ ] **Multi-branch**
-- Rationale: single spec artifact; implementation split into lots (D12) after DS review.
+- [x] Mono-branch; one small package contract and one consumer.
+- [ ] Multi-branch.
 
 ## UAT Management (in orchestration context)
-- No app UAT (spec-only). Owner ratifies the EVOL; DS lane co-reviews DS-owned parts.
+- [x] Package UAT uses a temporary in-memory keyring; no web, extension, or live OAuth UAT applies.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Brainstorm & EVOL**
-  - [x] STUDY → Opus+Codex adversarial review → owner batched decisions.
-  - [x] SPEC_EVOL_CHAT_SURFACES.md with D1–D13 + full taxonomy + controller contract.
-  - [x] Codex 5.5-xhigh hardening pass (verdict needs-revision) reconciled: D13 async prepare/commit protocol, controller contract enriched, taxonomy normalized, D7 corrected (runtime-extraction lot L0), persistence adapter, D5 impl contract, lot re-ordering.
-- [x] **Lot 1 — Design-system co-review** — ENDORSE-with-conditions (#32, 2026-07-13); 5 conditions folded into D10.
-- [ ] **Lot 2+ — Implementation** (deferred to harness/plan after DS review)
-  - [ ] L0 session-runtime extraction (prerequisite; D7).
-  - [ ] L1 controller + capability negotiation + persistence/fallback + "Move to…" + migrate floating|docked (incl. floating.right + drawer.right.primary).
-  - [ ] L2 DS Drawer/DropZone (entry gate #32) + left drawer + web DnD.
-  - [ ] L3 floating.left/center + full ; L4 vscode native mapping (no stacked before L5) ; L5 smart stacked occupancy.
+- [x] Lot 0 — prove the missing public seam and define the owner/security contract.
+- [ ] Lot 1 — add and observe failing facade account lifecycle tests.
+- [ ] Lot 2 — implement the smallest facade/service/coordinator change and bump the package patch.
+- [ ] Lot 3 — run `make test-llm-mesh ENV=test-llm-mesh-account-admin`.
+- [ ] Lot 3 — run `make typecheck-llm-mesh ENV=test-llm-mesh-account-admin`.
+- [ ] Lot 3 — run `make build-llm-mesh ENV=test-llm-mesh-account-admin`.
+- [ ] Lot 3 — run `make pack-llm-mesh ENV=test-llm-mesh-account-admin`.
+- [ ] Lot 4 — scope-check, review, PR, CI, merge, tag, and CI publication.
