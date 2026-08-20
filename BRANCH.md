@@ -35,6 +35,9 @@
 - [x] Consumer acceptance: list public metadata by owner and remove one owned account without keyring access.
 - [x] Review accepted: durable cleanup failures must remain fail-closed and retryable across restart.
 - [x] Review accepted: an in-flight refresh must not repersist a removed account.
+- [ ] Review accepted: owner collisions cannot clear a removal barrier.
+- [ ] Review accepted: re-enrollment is coherent across service instances.
+- [ ] Review accepted: a racing writer cannot restore the removed index entry.
 
 ## AI Flaky tests
 - [x] None; all tests are deterministic and use an in-memory keyring.
