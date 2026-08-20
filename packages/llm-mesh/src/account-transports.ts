@@ -212,6 +212,17 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     return stored;
   }
 
+  removeAccount(accountId: string): boolean {
+    const removed = this.accounts.delete(accountId);
+    for (const [key, lease] of this.leases) {
+      if (lease.accountId === accountId) this.leases.delete(key);
+    }
+    for (const [key, reservation] of this.reservations) {
+      if (reservation.accountId === accountId) this.reservations.delete(key);
+    }
+    return removed;
+  }
+
   /**
    * Advance time-based lifecycle state without acquiring an account.
    * Returns account ids whose cooldown expired so a durable host can persist

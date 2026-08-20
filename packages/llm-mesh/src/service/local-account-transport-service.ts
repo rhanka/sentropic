@@ -177,6 +177,50 @@ export class LocalAccountTransportService {
     }
   }
 
+  async listAccounts(ownerScope: string): Promise<readonly AccountPublic[]> {
+    const scope = this.requireOwnerScope(ownerScope);
+    await this.restorePersistedAccounts();
+    const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
+    const accounts: AccountPublic[] = [];
+    for (const accountId of this.parseAccountIndex(rawIndex)) {
+      const record = await this.readPublicRecord(accountId);
+      if (!record || record.account.ownerScopeRef !== scope) continue;
+      accounts.push({
+        accountId: record.accountId,
+        ...(record.accountLabel ? { accountLabel: record.accountLabel } : {}),
+        providerId: record.providerId,
+        status: record.status,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      });
+    }
+    return accounts;
+  }
+
+  async removeAccount(
+    accountId: string,
+    ownerScope: string,
+  ): Promise<{ accountId: string; removed: true }> {
+    const scope = this.requireOwnerScope(ownerScope);
+    await this.restorePersistedAccounts();
+    const record = await this.readPublicRecord(accountId);
+    if (!record || record.account.ownerScopeRef !== scope) {
+      throw new Error(`Account '${accountId}' not found`);
+    }
+
+    this.coordinator.removeAccount(accountId);
+    this.accountsMap.delete(accountId);
+    this.credentialVersions.delete(accountId);
+    await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:envelope`);
+    await this.keyring.deleteSecret(`sentropic-llm-mesh:${accountId}:public`);
+    const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
+    await this.keyring.setSecret(
+      LocalAccountTransportService.accountIndexKey,
+      JSON.stringify(this.parseAccountIndex(rawIndex).filter((id) => id !== accountId)),
+    );
+    return { accountId, removed: true };
+  }
+
   // ── Account Registration for Coordinator ──────────────────────────────
   registerAccount(account: AccountTransportAccount, configVersion = 'v1.0.0'): void {
     const executableAccount = this.coordinator.addAccount(account);
@@ -490,6 +534,31 @@ export class LocalAccountTransportService {
         : [];
     } catch {
       return [];
+    }
+  }
+
+  private requireOwnerScope(ownerScope: string): string {
+    const scope = ownerScope.trim();
+    if (!scope) throw new Error('ownerScope is required');
+    return scope;
+  }
+
+  private async readPublicRecord(accountId: string): Promise<AccountPublicRecord | null> {
+    const raw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`);
+    if (!raw) return null;
+    try {
+      const record = JSON.parse(raw) as Partial<AccountPublicRecord>;
+      if (
+        record.accountId !== accountId
+        || typeof record.providerId !== 'string'
+        || typeof record.status !== 'string'
+        || typeof record.createdAt !== 'string'
+        || typeof record.updatedAt !== 'string'
+        || !record.account
+      ) return null;
+      return record as AccountPublicRecord;
+    } catch {
+      return null;
     }
   }
 
