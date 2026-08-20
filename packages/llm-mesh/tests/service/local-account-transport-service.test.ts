@@ -734,6 +734,7 @@ describe('LocalAccountTransportService', () => {
         await store.setSecret(key, secret);
         if (key === 'sentropic-llm-mesh:acct_index_race:envelope') envelopeWritten = true;
       },
+      setSecretIfAbsent: (key, secret) => store.setSecretIfAbsent(key, secret),
       deleteSecret: (key) => store.deleteSecret(key),
     };
     const provider = {
