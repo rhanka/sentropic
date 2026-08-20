@@ -490,4 +490,60 @@ describe('LocalAccountTransportService', () => {
       }),
     ).rejects.toThrow(AccountTransportAcquireError);
   });
+
+  it('does not repersist an account when refresh finishes after removal', async () => {
+    const keyring = new InMemoryKeyring();
+    let signalRefreshStarted!: () => void;
+    let finishRefresh!: (credential: PreparedCredential) => void;
+    const refreshStarted = new Promise<void>((resolve) => { signalRefreshStarted = resolve; });
+    const refreshResult = new Promise<PreparedCredential>((resolve) => { finishRefresh = resolve; });
+    const provider: EnrollmentProvider = {
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() {
+        signalRefreshStarted();
+        return refreshResult;
+      },
+    };
+    const providers = new Map<string, EnrollmentProvider>([['codex', provider]]);
+    const resolver = { async resolveConfig() { return {}; } };
+    const accountId = 'acct_refresh_removal';
+    const ownerScopeRef = 'owner-a';
+    const createdAt = '2026-08-20T10:00:00.000Z';
+    await keyring.setSecret('sentropic-llm-mesh:accounts:index', JSON.stringify([accountId]));
+    await keyring.setSecret(`sentropic-llm-mesh:${accountId}:public`, JSON.stringify({
+      accountId, accountLabel: 'Codex', providerId: 'codex', status: 'active',
+      createdAt, updatedAt: createdAt,
+      account: {
+        accountId, ownerScopeRef, accountLabel: 'Codex', targetProviderId: 'openai',
+        transportProviderId: 'codex', status: 'active', enrollmentCompletedAt: createdAt,
+      },
+    }));
+    await keyring.setSecret(`sentropic-llm-mesh:${accountId}:envelope`, JSON.stringify({
+      accountId, accessToken: 'expired-access', refreshToken: 'refresh-token',
+      expiresAt: '2020-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+    }));
+    const service = new LocalAccountTransportService(keyring, providers, resolver);
+
+    const pendingAcquire = service.acquire({
+      ownerScopeRef, targetProviderId: 'openai', transportProviderId: 'codex',
+    });
+    await refreshStarted;
+    await service.removeAccount(accountId, ownerScopeRef);
+    finishRefresh({
+      accountId, accessToken: 'resurrected-access', refreshToken: 'resurrected-refresh',
+      expiresAt: '2099-01-01T00:00:00.000Z', authClientConfigVersion: 'v1.0.0',
+    });
+
+    await expect(pendingAcquire).rejects.toThrow(AccountTransportAcquireError);
+    await expect(keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`))
+      .resolves.toBeNull();
+    await expect(keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`))
+      .resolves.toBeNull();
+    const restarted = new LocalAccountTransportService(keyring, providers, resolver);
+    await expect(restarted.acquire({
+      ownerScopeRef, targetProviderId: 'openai', transportProviderId: 'codex',
+    })).rejects.toThrow(AccountTransportAcquireError);
+  });
 });
