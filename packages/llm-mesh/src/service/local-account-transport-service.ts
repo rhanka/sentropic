@@ -33,6 +33,13 @@ interface AccountPublicRecord extends AccountPublic {
   account: PersistedAccountTransportAccount;
 }
 
+interface AccountRemovalTombstone {
+  v: 1;
+  accountId: string;
+  ownerScopeRef: string;
+  removedAt: string;
+}
+
 // Cloud Code does not currently return a per-account model inventory during
 // enrollment. Advertise only the model proven executable by the live transport
 // contract; explicit account.modelIds may override this after provider evidence.
@@ -60,6 +67,7 @@ export class LocalAccountTransportService {
   private readonly accountsMap = new Map<string, AccountTransportAccount>();
   private readonly credentialVersions = new Map<string, string>();
   private readonly refreshInFlight = new Map<string, Promise<PreparedCredential>>();
+  private readonly removedAccountIds = new Set<string>();
   private routeAttemptSequence = 0;
 
   constructor(
@@ -87,6 +95,7 @@ export class LocalAccountTransportService {
     }
     const res = await provider.waitForCallback(enrollmentId);
     if (res.credential) {
+      await this.clearRemovalTombstone(res.accountId);
       const now = new Date().toISOString();
       const account: AccountTransportAccount = {
         accountId: res.accountId,
@@ -131,6 +140,7 @@ export class LocalAccountTransportService {
     }
     const res = await provider.pollForCompletion(enrollmentId);
     if (res.credential) {
+      await this.clearRemovalTombstone(res.accountId);
       const now = new Date().toISOString();
       // P0-4: Persist credentials obtained via device flow poll into keyring/accounts
       const account: AccountTransportAccount = {
@@ -183,6 +193,7 @@ export class LocalAccountTransportService {
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     const accounts: AccountPublic[] = [];
     for (const accountId of this.parseAccountIndex(rawIndex)) {
+      if (await this.isAccountRemoved(accountId)) continue;
       const record = await this.readPublicRecord(accountId);
       if (!record || record.account.ownerScopeRef !== scope) continue;
       accounts.push({
@@ -204,9 +215,22 @@ export class LocalAccountTransportService {
     const scope = this.requireOwnerScope(ownerScope);
     await this.restorePersistedAccounts();
     const record = await this.readPublicRecord(accountId);
-    if (!record || record.account.ownerScopeRef !== scope) {
+    const existingTombstone = await this.readRemovalTombstone(accountId);
+    const persistedOwnerScope = record?.account.ownerScopeRef ?? existingTombstone?.ownerScopeRef;
+    if (persistedOwnerScope !== scope) {
       throw new Error(`Account '${accountId}' not found`);
     }
+
+    if (!existingTombstone) {
+      const tombstone: AccountRemovalTombstone = {
+        v: 1,
+        accountId,
+        ownerScopeRef: scope,
+        removedAt: new Date().toISOString(),
+      };
+      await this.keyring.setSecret(this.removalKey(accountId), JSON.stringify(tombstone));
+    }
+    this.removedAccountIds.add(accountId);
 
     this.coordinator.removeAccount(accountId);
     this.accountsMap.delete(accountId);
@@ -245,6 +269,15 @@ export class LocalAccountTransportService {
       );
     }
 
+    const acquiredAccountId = acquisition.material.accountId ?? acquisition.lease.accountId;
+    if (await this.isAccountRemoved(acquiredAccountId)) {
+      await acquisition.release?.();
+      throw new AccountTransportAcquireError(
+        `Account ${acquiredAccountId} has been removed`,
+        'no_active_account',
+      );
+    }
+
     const account = this.accountsMap.get(acquisition.material.accountId ?? '');
     const nowMs = typeof input.now === 'number' ? input.now : Date.now();
 
@@ -259,6 +292,14 @@ export class LocalAccountTransportService {
             refreshToken: account.refreshToken ?? undefined,
             credentialVersion: version,
           });
+
+          if (await this.isAccountRemoved(account.accountId)) {
+            await acquisition.release?.();
+            throw new AccountTransportAcquireError(
+              `Account ${account.accountId} has been removed`,
+              'no_active_account',
+            );
+          }
 
           // Atomic persistence of updated credentials
           account.accessToken = refreshed.accessToken;
@@ -478,6 +519,9 @@ export class LocalAccountTransportService {
     env: CredentialEnvelope,
     account: AccountTransportAccount,
   ): Promise<void> {
+    if (await this.isAccountRemoved(pub.accountId)) {
+      throw new Error(`Account '${pub.accountId}' has been removed`);
+    }
     const {
       accessToken: _accessToken,
       refreshToken: _refreshToken,
@@ -490,6 +534,11 @@ export class LocalAccountTransportService {
       JSON.stringify(publicRecord),
     );
     await this.keyring.setSecret(`sentropic-llm-mesh:${pub.accountId}:envelope`, JSON.stringify(env));
+    if (await this.isAccountRemoved(pub.accountId)) {
+      await this.keyring.deleteSecret(`sentropic-llm-mesh:${pub.accountId}:envelope`);
+      await this.keyring.deleteSecret(`sentropic-llm-mesh:${pub.accountId}:public`);
+      throw new Error(`Account '${pub.accountId}' has been removed`);
+    }
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     const accountIds = this.parseAccountIndex(rawIndex);
     if (!accountIds.includes(pub.accountId)) {
@@ -502,6 +551,7 @@ export class LocalAccountTransportService {
   }
 
   private async persistAccountState(account: AccountTransportAccount): Promise<void> {
+    if (await this.isAccountRemoved(account.accountId)) return;
     const key = `sentropic-llm-mesh:${account.accountId}:public`;
     const raw = await this.keyring.getSecret(key);
     if (!raw) return;
@@ -514,6 +564,7 @@ export class LocalAccountTransportService {
         expiresAt: _expiresAt,
         ...persistedAccount
       } = account;
+      if (await this.isAccountRemoved(account.accountId)) return;
       await this.keyring.setSecret(key, JSON.stringify({
         ...current,
         status: account.status ?? current.status,
@@ -543,6 +594,39 @@ export class LocalAccountTransportService {
     return scope;
   }
 
+  private removalKey(accountId: string): string {
+    return `sentropic-llm-mesh:${accountId}:removed`;
+  }
+
+  private async readRemovalTombstone(accountId: string): Promise<AccountRemovalTombstone | null> {
+    const raw = await this.keyring.getSecret(this.removalKey(accountId));
+    if (!raw) return null;
+    try {
+      const value = JSON.parse(raw) as Partial<AccountRemovalTombstone>;
+      if (
+        value.v !== 1
+        || value.accountId !== accountId
+        || typeof value.ownerScopeRef !== 'string'
+        || !value.ownerScopeRef
+        || typeof value.removedAt !== 'string'
+      ) return null;
+      this.removedAccountIds.add(accountId);
+      return value as AccountRemovalTombstone;
+    } catch {
+      return null;
+    }
+  }
+
+  private async isAccountRemoved(accountId: string): Promise<boolean> {
+    if (this.removedAccountIds.has(accountId)) return true;
+    return (await this.readRemovalTombstone(accountId)) !== null;
+  }
+
+  private async clearRemovalTombstone(accountId: string): Promise<void> {
+    await this.keyring.deleteSecret(this.removalKey(accountId));
+    this.removedAccountIds.delete(accountId);
+  }
+
   private async readPublicRecord(accountId: string): Promise<AccountPublicRecord | null> {
     const raw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`);
     if (!raw) return null;
@@ -563,8 +647,20 @@ export class LocalAccountTransportService {
   }
 
   private async restorePersistedAccounts(): Promise<void> {
+    for (const accountId of [...this.accountsMap.keys()]) {
+      if (!(await this.isAccountRemoved(accountId))) continue;
+      this.coordinator.removeAccount(accountId);
+      this.accountsMap.delete(accountId);
+      this.credentialVersions.delete(accountId);
+    }
     const rawIndex = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     for (const accountId of this.parseAccountIndex(rawIndex)) {
+      if (await this.isAccountRemoved(accountId)) {
+        this.coordinator.removeAccount(accountId);
+        this.accountsMap.delete(accountId);
+        this.credentialVersions.delete(accountId);
+        continue;
+      }
       if (this.accountsMap.has(accountId)) continue;
       const publicRaw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:public`);
       const envelopeRaw = await this.keyring.getSecret(`sentropic-llm-mesh:${accountId}:envelope`);

@@ -21,10 +21,23 @@ never returned.
 Removal fails with the same not-found result for an absent account and an
 account owned by another scope. A successful removal deletes durable public
 and credential records, removes the index entry, clears in-memory selection
-state, and makes future acquisition impossible.
+state, and makes future acquisition impossible. Before cleanup starts, the
+service persists an owner-scoped removal tombstone. That barrier remains after
+cleanup so a partial keyring failure, a process restart, or an already-running
+credential refresh cannot make the account selectable or persist it again.
+The same owner may retry an interrupted removal idempotently. A later,
+successfully completed OAuth enrollment for the same account identifier is the
+only operation that clears the barrier.
+
+An acquisition that returned before removal may finish with the credential it
+already received; local deletion cannot revoke a copied upstream token. Its
+completion and outcome recording must not recreate durable account state.
 
 ## Verification
 
 A deterministic facade test seeds two owner scopes in an in-memory keyring and
 proves public projection, owner isolation, foreign-owner refusal, durable
-deletion, and immediate acquisition refusal after removal.
+deletion, and immediate acquisition refusal after removal. Additional
+deterministic regressions inject a keyring deletion failure followed by a
+service restart, and pause a token refresh across removal, proving both paths
+remain fail-closed and leave no selectable account.
