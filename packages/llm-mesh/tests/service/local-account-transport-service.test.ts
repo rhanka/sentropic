@@ -679,6 +679,7 @@ describe('LocalAccountTransportService', () => {
     resumeIndexRead();
 
     await expect(pendingEnrollment).rejects.toThrow("Account 'acct_index_race' has been removed");
-    await expect(store.getSecret(indexKey)).resolves.toBe(JSON.stringify([]));
+    await expect(store.getSecret(indexKey))
+      .resolves.toBe(JSON.stringify(['acct_index_race']));
   });
 });

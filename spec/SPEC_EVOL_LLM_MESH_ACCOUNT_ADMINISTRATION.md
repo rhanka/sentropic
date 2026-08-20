@@ -20,8 +20,12 @@ never returned.
 
 Removal fails with the same not-found result for an absent account and an
 account owned by another scope. A successful removal deletes durable public
-and credential records, removes the index entry, clears in-memory selection
-state, and makes future acquisition impossible. Before cleanup starts, the
+and credential records, clears in-memory selection state, and makes future
+acquisition impossible. The credential-free account identifier remains in an
+append-only discovery index: selection always validates the public record and
+barrier generation, while never deleting the identifier avoids non-atomic
+remove/re-enroll races in keyring adapters that do not expose compare-and-swap.
+Before cleanup starts, the
 service persists an owner-scoped removal tombstone. That barrier remains after
 cleanup so a partial keyring failure, a process restart, or an already-running
 credential refresh cannot make the account selectable or persist it again.

@@ -38,6 +38,7 @@
 - [x] Review accepted: owner collisions cannot clear a removal barrier.
 - [x] Review accepted: re-enrollment is coherent across service instances.
 - [x] Review accepted: a racing writer cannot restore the removed index entry.
+- [ ] Final review accepted: discovery indexing must not race with a newer generation.
 
 ## AI Flaky tests
 - [x] None; all tests are deterministic and use an in-memory keyring.
