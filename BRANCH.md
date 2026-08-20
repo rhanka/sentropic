@@ -35,9 +35,9 @@
 - [x] Consumer acceptance: list public metadata by owner and remove one owned account without keyring access.
 - [x] Review accepted: durable cleanup failures must remain fail-closed and retryable across restart.
 - [x] Review accepted: an in-flight refresh must not repersist a removed account.
-- [ ] Review accepted: owner collisions cannot clear a removal barrier.
-- [ ] Review accepted: re-enrollment is coherent across service instances.
-- [ ] Review accepted: a racing writer cannot restore the removed index entry.
+- [x] Review accepted: owner collisions cannot clear a removal barrier.
+- [x] Review accepted: re-enrollment is coherent across service instances.
+- [x] Review accepted: a racing writer cannot restore the removed index entry.
 
 ## AI Flaky tests
 - [x] None; all tests are deterministic and use an in-memory keyring.
@@ -52,9 +52,9 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — prove the missing public seam and define the owner/security contract.
 - [x] Lot 1 — add and observe failing facade account lifecycle tests.
-- [x] Lot 2 — implement the smallest facade/service/coordinator change and bump the package patch.
+- [x] Lot 2 — implement the facade/service/coordinator contract and bump the package minor.
 - [x] Lot 2b — add a durable removal barrier and concurrency/failure regression tests.
-- [x] Lot 3 — run `make test-llm-mesh ENV=test-llm-mesh-account-admin` (162/162).
+- [x] Lot 3 — rerun `make test-llm-mesh ENV=test-llm-mesh-account-admin` (165/165).
 - [x] Lot 3 — run `make typecheck-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [x] Lot 3 — run `make build-llm-mesh ENV=test-llm-mesh-account-admin`.
 - [x] Lot 3 — run `make pack-llm-mesh ENV=test-llm-mesh-account-admin`.
