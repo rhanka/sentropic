@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AccountTransportAcquireError } from '../../src/account-transports.js';
 import type { EnrollmentProvider, PreparedCredential } from '../../src/enrollment/contracts.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
+import type { KeyringAdapter } from '../../src/service/facade.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
 describe('LocalAccountTransportService', () => {
@@ -545,5 +546,139 @@ describe('LocalAccountTransportService', () => {
     await expect(restarted.acquire({
       ownerScopeRef, targetProviderId: 'openai', transportProviderId: 'codex',
     })).rejects.toThrow(AccountTransportAcquireError);
+  });
+
+  it('does not let a foreign-owner enrollment clear a removal barrier', async () => {
+    const keyring = new InMemoryKeyring();
+    let ownerScope = 'owner-a';
+    const provider = {
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() { return {
+        accountId: 'acct_owner_collision', label: 'Codex', ownerScope,
+        credential: {
+          accountId: 'acct_owner_collision', accessToken: `token-${ownerScope}`,
+          authClientConfigVersion: 'v1.0.0',
+        },
+        metadata: {},
+      }; },
+    } satisfies EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string; label: string; ownerScope: string;
+        credential: PreparedCredential; metadata: Record<string, unknown>;
+      }>;
+    };
+    const service = new LocalAccountTransportService(
+      keyring, new Map([['codex', provider]]), { async resolveConfig() { return {}; } },
+    );
+    await service.pollForCompletion('owner-a-enrollment');
+    await service.removeAccount('acct_owner_collision', 'owner-a');
+
+    ownerScope = 'owner-b';
+    await expect(service.pollForCompletion('owner-b-enrollment'))
+      .rejects.toThrow("Account 'acct_owner_collision' belongs to another owner scope");
+    await expect(service.listAccounts('owner-a')).resolves.toEqual([]);
+    await expect(service.listAccounts('owner-b')).resolves.toEqual([]);
+    await expect(keyring.getSecret('sentropic-llm-mesh:acct_owner_collision:removed'))
+      .resolves.not.toBeNull();
+  });
+
+  it('observes same-owner re-enrollment across service instances', async () => {
+    const keyring = new InMemoryKeyring();
+    let accessToken = 'old-token';
+    const provider = {
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() { return {
+        accountId: 'acct_cross_process', label: 'Codex', ownerScope: 'owner-a',
+        credential: {
+          accountId: 'acct_cross_process', accessToken,
+          authClientConfigVersion: 'v1.0.0',
+        },
+        metadata: {},
+      }; },
+    } satisfies EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string; label: string; ownerScope: string;
+        credential: PreparedCredential; metadata: Record<string, unknown>;
+      }>;
+    };
+    const providers = new Map<string, EnrollmentProvider>([['codex', provider]]);
+    const resolver = { async resolveConfig() { return {}; } };
+    const first = new LocalAccountTransportService(keyring, providers, resolver);
+    const second = new LocalAccountTransportService(keyring, providers, resolver);
+    await first.pollForCompletion('initial');
+    await second.removeAccount('acct_cross_process', 'owner-a');
+    await expect(first.acquire({
+      ownerScopeRef: 'owner-a', targetProviderId: 'openai', transportProviderId: 'codex',
+    })).rejects.toThrow(AccountTransportAcquireError);
+
+    accessToken = 'new-token';
+    await second.pollForCompletion('reenrollment');
+    await expect(first.acquire({
+      ownerScopeRef: 'owner-a', targetProviderId: 'openai', transportProviderId: 'codex',
+    })).resolves.toMatchObject({ material: { accessToken: 'new-token' } });
+  });
+
+  it('does not reinsert an account index entry when enrollment races with removal', async () => {
+    const store = new InMemoryKeyring();
+    let envelopeWritten = false;
+    let indexReadBlocked = false;
+    let signalIndexRead!: () => void;
+    let resumeIndexRead!: () => void;
+    const indexRead = new Promise<void>((resolve) => { signalIndexRead = resolve; });
+    const indexResume = new Promise<void>((resolve) => { resumeIndexRead = resolve; });
+    const indexKey = 'sentropic-llm-mesh:accounts:index';
+    const keyring: KeyringAdapter = {
+      async getSecret(key) {
+        if (key === indexKey && envelopeWritten && !indexReadBlocked) {
+          indexReadBlocked = true;
+          const snapshot = await store.getSecret(key);
+          signalIndexRead();
+          await indexResume;
+          return snapshot;
+        }
+        return store.getSecret(key);
+      },
+      async setSecret(key, secret) {
+        await store.setSecret(key, secret);
+        if (key === 'sentropic-llm-mesh:acct_index_race:envelope') envelopeWritten = true;
+      },
+      deleteSecret: (key) => store.deleteSecret(key),
+    };
+    const provider = {
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() { return {
+        accountId: 'acct_index_race', label: 'Codex', ownerScope: 'owner-a',
+        credential: {
+          accountId: 'acct_index_race', accessToken: 'token',
+          authClientConfigVersion: 'v1.0.0',
+        },
+        metadata: {},
+      }; },
+    } satisfies EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string; label: string; ownerScope: string;
+        credential: PreparedCredential; metadata: Record<string, unknown>;
+      }>;
+    };
+    const service = new LocalAccountTransportService(
+      keyring, new Map([['codex', provider]]), { async resolveConfig() { return {}; } },
+    );
+
+    const pendingEnrollment = service.pollForCompletion('racing-enrollment');
+    await indexRead;
+    await service.removeAccount('acct_index_race', 'owner-a');
+    resumeIndexRead();
+
+    await expect(pendingEnrollment).rejects.toThrow("Account 'acct_index_race' has been removed");
+    await expect(store.getSecret(indexKey)).resolves.toBe(JSON.stringify([]));
   });
 });
