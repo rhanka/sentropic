@@ -585,6 +585,46 @@ describe('LocalAccountTransportService', () => {
       .resolves.not.toBeNull();
   });
 
+  it('does not let a foreign-owner enrollment replace an active account', async () => {
+    const keyring = new InMemoryKeyring();
+    let ownerScope = 'owner-a';
+    const provider = {
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() { return {
+        accountId: 'acct_active_collision', label: 'Codex', ownerScope,
+        credential: {
+          accountId: 'acct_active_collision', accessToken: `token-${ownerScope}`,
+          authClientConfigVersion: 'v1.0.0',
+        },
+        metadata: {},
+      }; },
+    } satisfies EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string; label: string; ownerScope: string;
+        credential: PreparedCredential; metadata: Record<string, unknown>;
+      }>;
+    };
+    const service = new LocalAccountTransportService(
+      keyring, new Map([['codex', provider]]), { async resolveConfig() { return {}; } },
+    );
+    await service.pollForCompletion('owner-a-enrollment');
+
+    ownerScope = 'owner-b';
+    await expect(service.pollForCompletion('owner-b-enrollment'))
+      .rejects.toThrow("Account 'acct_active_collision' belongs to another owner scope");
+    await expect(service.acquire({
+      ownerScopeRef: 'owner-a', targetProviderId: 'openai', transportProviderId: 'codex',
+    })).resolves.toMatchObject({ material: { accessToken: 'token-owner-a' } });
+    await expect(service.acquire({
+      ownerScopeRef: 'owner-b', targetProviderId: 'openai', transportProviderId: 'codex',
+    })).rejects.toThrow(AccountTransportAcquireError);
+    const persisted = await keyring.getSecret('sentropic-llm-mesh:acct_active_collision:public');
+    expect(JSON.parse(persisted ?? '{}').account.ownerScopeRef).toBe('owner-a');
+  });
+
   it('observes same-owner re-enrollment across service instances', async () => {
     const keyring = new InMemoryKeyring();
     let accessToken = 'old-token';
