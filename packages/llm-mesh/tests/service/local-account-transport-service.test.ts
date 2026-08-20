@@ -625,6 +625,52 @@ describe('LocalAccountTransportService', () => {
     expect(JSON.parse(persisted ?? '{}').account.ownerScopeRef).toBe('owner-a');
   });
 
+  it('atomically assigns a colliding account ID to only one concurrent owner', async () => {
+    const keyring = new InMemoryKeyring();
+    const providerFor = (ownerScope: string): EnrollmentProvider & {
+      pollForCompletion(enrollmentId: string): Promise<{
+        accountId: string; label: string; ownerScope: string;
+        credential: PreparedCredential; metadata: Record<string, unknown>;
+      }>;
+    } => ({
+      async start() { throw new Error('Not implemented'); },
+      async complete() { throw new Error('Not implemented'); },
+      async resolve() { return {}; },
+      async refresh() { throw new Error('Not implemented'); },
+      async pollForCompletion() { return {
+        accountId: 'acct_concurrent_collision', label: 'Codex', ownerScope,
+        credential: {
+          accountId: 'acct_concurrent_collision', accessToken: `token-${ownerScope}`,
+          authClientConfigVersion: 'v1.0.0',
+        },
+        metadata: {},
+      }; },
+    });
+    const resolver = { async resolveConfig() { return {}; } };
+    const ownerA = new LocalAccountTransportService(
+      keyring, new Map([['codex', providerFor('owner-a')]]), resolver,
+    );
+    const ownerB = new LocalAccountTransportService(
+      keyring, new Map([['codex', providerFor('owner-b')]]), resolver,
+    );
+
+    const outcomes = await Promise.allSettled([
+      ownerA.pollForCompletion('owner-a'),
+      ownerB.pollForCompletion('owner-b'),
+    ]);
+    expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const winner = outcomes[0]?.status === 'fulfilled' ? 'owner-a' : 'owner-b';
+    const loser = winner === 'owner-a' ? 'owner-b' : 'owner-a';
+    const restored = new LocalAccountTransportService(keyring, new Map(), resolver);
+    await expect(restored.acquire({
+      ownerScopeRef: winner, targetProviderId: 'openai', transportProviderId: 'codex',
+    })).resolves.toMatchObject({ material: { accessToken: `token-${winner}` } });
+    await expect(restored.acquire({
+      ownerScopeRef: loser, targetProviderId: 'openai', transportProviderId: 'codex',
+    })).rejects.toThrow(AccountTransportAcquireError);
+  });
+
   it('observes same-owner re-enrollment across service instances', async () => {
     const keyring = new InMemoryKeyring();
     let accessToken = 'old-token';
