@@ -35,4 +35,20 @@ describe('EncryptedFileKeyring', () => {
     await reader.deleteSecret('sentropic-llm-mesh:acct_1:envelope');
     await expect(writer.getSecret('sentropic-llm-mesh:acct_1:envelope')).resolves.toBeNull();
   });
+
+  it('creates an encrypted owner claim exactly once across instances', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(directory);
+    const first = new EncryptedFileKeyring(directory);
+    const second = new EncryptedFileKeyring(directory);
+    const key = 'sentropic-llm-mesh:acct_collision:owner';
+
+    const created = await Promise.all([
+      first.setSecretIfAbsent(key, 'owner-a'),
+      second.setSecretIfAbsent(key, 'owner-b'),
+    ]);
+
+    expect(created.sort()).toEqual([false, true]);
+    await expect(first.getSecret(key)).resolves.toMatch(/^owner-[ab]$/);
+  });
 });
