@@ -16,6 +16,13 @@ export class LinuxSecretstoreKeyring implements KeyringAdapter {
     this.memoryStore.set(`${this.serviceName}:${key}`, secret);
   }
 
+  async setSecretIfAbsent(key: string, secret: string): Promise<boolean> {
+    const scopedKey = `${this.serviceName}:${key}`;
+    if (this.memoryStore.has(scopedKey)) return false;
+    this.memoryStore.set(scopedKey, secret);
+    return true;
+  }
+
   async deleteSecret(key: string): Promise<void> {
     this.memoryStore.delete(`${this.serviceName}:${key}`);
   }
