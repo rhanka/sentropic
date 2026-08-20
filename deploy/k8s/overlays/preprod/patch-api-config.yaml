@@ -15,9 +15,27 @@ metadata:
 data:
   WEBAUTHN_RP_ID: "preprod.sentropic.sent-tech.ca"
   WEBAUTHN_ORIGIN: "https://preprod.sentropic.sent-tech.ca"
-  # Public base URL for user-facing callbacks (magic-link login emails + Google
-  # Drive OAuth redirect_uri base) — must be the preprod product host.
+  # Public base URL for magic-link login emails, and the base of the POST-OAuth app RETURN url
+  # (`resolveGoogleDriveAppReturnBaseUrl`, google-drive-oauth.ts:190) — must be the preprod product
+  # host.
+  #
+  # It is NOT the Google OAuth `redirect_uri` base, contrary to what this comment claimed until now.
+  # `resolveCallbackBaseUrl` (google-drive-oauth.ts:158) never reads this key: its chain is
+  # GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL → the `google_drive_oauth_callback_base_url` setting → the
+  # request origin. The two keys look interchangeable and are not.
   AUTH_CALLBACK_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
+  # The Google OAuth `redirect_uri` base, for BOTH connectors — Gmail resolves it through the same
+  # function (gmail-oauth.ts:29 reuses `resolveCallbackBaseUrl`), so this one key fixes:
+  #   https://preprod.sentropic.sent-tech.ca/api/v1/google-drive/oauth/callback
+  #   https://preprod.sentropic.sent-tech.ca/api/v1/gmail/oauth/callback
+  # Both must be registered verbatim on the Google OAuth client (exact-string match).
+  #
+  # Pinned for homogeneity with every other host-derived value in this overlay. Unpinned, the chain
+  # falls through to its last candidate, the REQUEST origin (`x-forwarded-host`), which happens to
+  # yield the right host behind this ingress — but it is derived rather than declared, so any call
+  # arriving without that header would build a redirect_uri Google has never seen, and the failure
+  # (`redirect_uri_mismatch`) would point at the Console rather than at the deployment.
+  GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL: "https://preprod.sentropic.sent-tech.ca"
   # Rollout condition A for owner UAT of the Gmail/Drive MCP resource server (L4,
   # PR #489). The surface is OFF by default (api/src/routes/api/mcp.ts reads this
   # flag at request time and 404s the whole /api/v1/mcp/* prefix while disabled);
