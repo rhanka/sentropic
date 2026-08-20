@@ -144,7 +144,7 @@ describe('LlmMeshFacade', () => {
     await expect(keyring.getSecret('sentropic-llm-mesh:acct-owner-a:envelope'))
       .resolves.toBeNull();
     await expect(keyring.getSecret('sentropic-llm-mesh:accounts:index'))
-      .resolves.toBe(JSON.stringify(['acct-owner-b']));
+      .resolves.toBe(JSON.stringify(['acct-owner-a', 'acct-owner-b']));
     await expect(facade.acquire({
       ownerScopeRef: 'owner-a',
       targetProviderId: 'openai',
