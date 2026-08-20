@@ -5,7 +5,7 @@ import {
   type ConfigResolver,
   type FacadeOptions,
   type KeyringAdapter,
-  type LlmMeshFacade,
+  type LlmMeshAdministrativeFacade,
 } from '../../src/service/facade.js';
 
 const seedPersistedAccount = async (
@@ -51,7 +51,7 @@ describe('LlmMeshFacade', () => {
       mode: 'cli',
     };
 
-    const facade: LlmMeshFacade = createLlmMeshFacade(options);
+    const facade: LlmMeshAdministrativeFacade = createLlmMeshFacade(options);
 
     expect(facade).toBeDefined();
     expect(typeof facade.enroll).toBe('function');
