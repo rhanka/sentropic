@@ -168,7 +168,25 @@ export const createIdpApp = (): Hono => {
   // Serve the built static front (login/register/magic-link/consent screens)
   // same-origin with the OIDC API. Hashed assets under /_app are immutable.
   app.use('/_app/*', serveStatic({ root: IDP_WEB_BUILD_DIR }));
+  // Root-level assets from `web/static/` are NOT under /_app (they keep their plain names), so
+  // each one needs its own route: anything not matched here falls through to the SPA fallback
+  // below and is answered with `404.html`, i.e. HTML where the browser expects an image — which
+  // renders as a broken-image placeholder rather than as a visible 404.
+  //
+  // That is what happened to the brand mark: `+layout.svelte:27` asks for /SENT-logo-squared.svg,
+  // the file ships correctly in the build, and it was simply never routed. The bug was present in
+  // every tier from the start, production included. `favicon.ico` had already hit it and was
+  // patched file-by-file — the same trap, one file earlier.
+  //
+  // Kept file-by-file rather than serving the build root wholesale: a broad `serveStatic` here
+  // would also start answering route paths with prerendered HTML instead of the SPA fallback, and
+  // changing how the production auth screens resolve is not a change this fix should smuggle in.
+  // `web/static/` holds exactly these two files today; a third one needs a line here too.
   app.use('/favicon.ico', serveStatic({ path: join(IDP_WEB_BUILD_DIR, 'favicon.ico') }));
+  app.use(
+    '/SENT-logo-squared.svg',
+    serveStatic({ path: join(IDP_WEB_BUILD_DIR, 'SENT-logo-squared.svg') }),
+  );
 
   // SPA fallback: any other GET (e.g. /auth/login, /auth/oauth/consent) returns
   // the static `404.html` entry so client-side routing can take over. API and
