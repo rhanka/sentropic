@@ -88,6 +88,14 @@ export interface RemoveAccountResult {
   removed: true;
 }
 
+export interface LlmMeshAccountAdministration {
+  listAccounts(input: AccountOwnerInput): Promise<readonly AccountPublic[]>;
+  removeAccount(
+    accountId: string,
+    input: AccountOwnerInput,
+  ): Promise<RemoveAccountResult>;
+}
+
 export interface LlmMeshFacade {
   // CLI enrollment
   enroll(
@@ -97,11 +105,6 @@ export interface LlmMeshFacade {
   waitForCallback(enrollmentId: string): Promise<{ accountId: string; label: string }>;
   pollForCompletion(enrollmentId: string): Promise<{ accountId: string; label: string }>;
   cancel(enrollmentId: string): Promise<void>;
-  listAccounts(input: AccountOwnerInput): Promise<readonly AccountPublic[]>;
-  removeAccount(
-    accountId: string,
-    input: AccountOwnerInput,
-  ): Promise<RemoveAccountResult>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
   acquire(input: AccountTransportAcquireInput): Promise<AccountTransportAcquisition>;
@@ -115,7 +118,10 @@ export interface LlmMeshFacade {
   ): RoutePlanner;
 }
 
-export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
+export interface LlmMeshAdministrativeFacade
+  extends LlmMeshFacade, LlmMeshAccountAdministration {}
+
+export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrativeFacade {
   if (!options) {
     throw new Error('LlmMeshFacade: options is required');
   }
