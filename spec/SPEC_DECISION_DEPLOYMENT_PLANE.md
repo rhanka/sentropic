@@ -13,6 +13,15 @@ status. Nothing is built until its line says RATIFIED.
 > immediately below; the 2026-06-19/20 sections are kept for provenance with `⊘ SUPERSEDED` markers
 > where they conflict.
 
+> **+ AMENDED 2026-08-20 (owner rhanka) — Login-A:** the single non-prod tier is **deployed as
+> `preprod.*`**, not `dev.*` (DV1 naming drift resolved to the deployed names). DV4 (parent RP ID
+> `sent-tech.ca` at the IdP + prod-user/`webauthn_credentials` import) is now **carried into the
+> deployed overlay** (`overlays/preprod/patch-auth-idp-config.yaml`), which until now still reflected
+> the ⊘ SUPERSEDED synthetic three-tier posture. Scope: **auth-IdP only** — the product API stays on
+> its isolated RP ID (deliberate mixed state). DV3 (non-public ingress once real PII lands) and DV5
+> (regenerate keys, drop imported `id_token_signing_keys`) are execution prerequisites. Full record:
+> **`SPEC_AMENDMENT_D11R_LOGIN_A.md`**.
+
 ---
 
 ## REVISION 2026-06-22 (owner) — THREE-tier → **TWO-tier: a single `dev` tier + prod**
