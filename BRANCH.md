@@ -33,7 +33,7 @@
   - [ ] Declare any exception in `## Feedback Loop` before touching an unlisted path.
 
 ## Feedback Loop
-- [ ] `BRW33-EX1 attention`: npm lockfile metadata may exceed the 150-line commit guideline; keep only reproducible resolver output for the named bumps, inspect every hunk, and roll back by reverting the atomic lockfile commit.
+- [x] `BRW33-EX1 attention`: npm lockfile metadata may exceed the 150-line commit guideline; keep only reproducible resolver output for the named bumps, inspect every hunk, and roll back by reverting the atomic lockfile commit.
 - [x] `attention`: #345 is already satisfied on fresh `origin/main` with `packages/focus/package.json` and its root lock entry at Vitest `4.1.0`; verify without changing it.
 - [x] `attention`: the PR is a batch integration candidate only and carries no approval or merge authorization.
 - [x] `attention`: generated UI Vite caches are written as UID/GID `65534:65534` by the isolated service; `make down` plus `make clean-node-modules` was required before later Make-managed installs. No tracked file was affected.
@@ -85,8 +85,8 @@
   - [x] Run focused API and UI npm audit validation through repository Make targets; record the out-of-scope residual findings above.
 
 - [ ] **Lot 4 — Rebase, PR, and complete CI**
-  - [ ] Run `make scope-check ENV=test-w33-secu-sweep` before every commit.
-  - [ ] Fetch and rebase on latest `origin/main`; rerun branch and scope checks.
+  - [x] Run `make scope-check ENV=test-w33-secu-sweep` before every commit.
+  - [x] Fetch and rebase on latest `origin/main` (`ed25c0628914c7a038a6650f3ee4d81bb8960758`); rerun branch and scope checks.
   - [ ] Push `chore/w33-dependabot-security-sweep` without merge authorization.
   - [ ] Open a clearly marked batch integration PR to `main` using this file as the body.
   - [ ] Launch the repository complete CI and report its run URL/status.
