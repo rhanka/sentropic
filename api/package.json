@@ -59,7 +59,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-s3": "^3.980.0",
-    "@hono/node-server": "^1.19.13",
+    "@hono/node-server": "^1.19.15",
     "@hono/zod-validator": "^0.7.6",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@sentropic/auth-client": "file:../packages/auth-client",
@@ -68,8 +68,8 @@
     "@sentropic/cluster-mesh": "file:../packages/cluster-mesh",
     "@sentropic/comments": "file:../packages/comments",
     "@sentropic/connector-host": "file:../packages/connector-host",
-    "@sentropic/focus": "file:../packages/focus",
     "@sentropic/flow": "file:../packages/flow",
+    "@sentropic/focus": "file:../packages/focus",
     "@sentropic/llm-mesh": "file:../packages/llm-mesh",
     "@sentropic/mcp-auth": "file:../packages/mcp-auth",
     "@sentropic/mcp-connector-google": "file:../packages/mcp-connector-google",
