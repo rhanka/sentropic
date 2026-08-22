@@ -4,6 +4,7 @@ import type {
 } from '../account-transports.js';
 import type { AccountTransportProviderId } from '../auth.js';
 import type {
+  AccountPublic,
   EnrollmentProvider,
   EnrollmentSession,
   StartEnrollmentInput,
@@ -63,6 +64,7 @@ export interface ProviderAdapter {
 export interface KeyringAdapter {
   getSecret(key: string): Promise<string | null>;
   setSecret(key: string, secret: string): Promise<void>;
+  setSecretIfAbsent?(key: string, secret: string): Promise<boolean>;
   deleteSecret(key: string): Promise<void>;
 }
 
@@ -76,6 +78,23 @@ export interface FacadeOptions {
   mode: 'cli' | 'portal';
   /** Explicit owner used only to bind pre-ownerScope local keyring records. */
   legacyAccountOwnerScopeRef?: string;
+}
+
+export interface AccountOwnerInput {
+  ownerScope: string;
+}
+
+export interface RemoveAccountResult {
+  accountId: string;
+  removed: true;
+}
+
+export interface LlmMeshAccountAdministration {
+  listAccounts(input: AccountOwnerInput): Promise<readonly AccountPublic[]>;
+  removeAccount(
+    accountId: string,
+    input: AccountOwnerInput,
+  ): Promise<RemoveAccountResult>;
 }
 
 export interface LlmMeshFacade {
@@ -100,7 +119,10 @@ export interface LlmMeshFacade {
   ): RoutePlanner;
 }
 
-export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
+export interface LlmMeshAdministrativeFacade
+  extends LlmMeshFacade, LlmMeshAccountAdministration {}
+
+export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrativeFacade {
   if (!options) {
     throw new Error('LlmMeshFacade: options is required');
   }
@@ -140,6 +162,12 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshFacade {
     },
     async cancel(enrollmentId) {
       return service.cancel(enrollmentId);
+    },
+    async listAccounts(input) {
+      return service.listAccounts(input.ownerScope);
+    },
+    async removeAccount(accountId, input) {
+      return service.removeAccount(accountId, input.ownerScope);
     },
     async acquire(input) {
       return service.acquire(input);
