@@ -580,7 +580,7 @@ publish-cluster-mesh-token: build-cluster-mesh ## Bootstrap-publish @sentropic/c
 		-v "$(CURDIR):/workspace" \
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/cluster-mesh \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cluster-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cluster-mesh@$$version already exists; skipping publish"; else npm publish --access public; fi'
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/cluster-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/cluster-mesh@$$version already exists; skipping publish"; else npm publish --access public --no-provenance; fi'
 
 .PHONY: refresh-llm-model-equivalences
 refresh-llm-model-equivalences: ## Regenerate the pinned model-equivalence council
