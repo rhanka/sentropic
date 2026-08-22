@@ -26,10 +26,25 @@ data:
   WEBAUTHN_RP_ID: "sent-tech.ca"
   WEBAUTHN_RP_NAME: "Sentropic"
   WEBAUTHN_ORIGIN: "https://sentropic.sent-tech.ca"
-  # Public base URL for user-facing callbacks. Builds magic-link login emails
-  # (auth/magic-link.ts, else defaults to http://localhost:5173) and the Google
-  # Drive OAuth redirect_uri base. Must be the public host.
+  # Public base URL for magic-link login emails (auth/magic-link.ts, else defaults to
+  # http://localhost:5173) and for the POST-OAuth app RETURN url
+  # (`resolveGoogleDriveAppReturnBaseUrl`, google-drive-oauth.ts:190). Must be the public host.
+  #
+  # It is NOT the Google OAuth `redirect_uri` base, contrary to what this comment claimed until now
+  # (and to the copy of it that had been carried into the preprod overlay). `resolveCallbackBaseUrl`
+  # (google-drive-oauth.ts:158) never reads this key — see the next one.
   AUTH_CALLBACK_BASE_URL: "https://sentropic.sent-tech.ca"
+  # The Google OAuth `redirect_uri` base, for BOTH connectors: Gmail resolves it through the same
+  # function (gmail-oauth.ts:29 reuses `resolveCallbackBaseUrl`), so this one key fixes
+  # `<base>/api/v1/google-drive/oauth/callback` and `<base>/api/v1/gmail/oauth/callback`. Both must
+  # be registered verbatim on the Google OAuth client — redirect matching is exact-string.
+  #
+  # Declared rather than derived, like every other host-shaped value here. Unset, the chain falls
+  # through to its last candidate, the REQUEST origin (`x-forwarded-host`, gmail.ts:49), which
+  # yields the right host behind the ingress but is not a property of the deployment: a call
+  # arriving without that header builds a redirect_uri Google has never seen, and the resulting
+  # `redirect_uri_mismatch` sends the investigation to the Console instead of here.
+  GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL: "https://sentropic.sent-tech.ca"
 ---
 apiVersion: v1
 kind: Service

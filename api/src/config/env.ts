@@ -159,6 +159,19 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().optional(),
   // Test Configuration
   DISABLE_RATE_LIMIT: z.string().optional(),
+  // PREFERRED: comma-separated CIDRs of the reverse proxies WE operate (Traefik
+  // pods, ingress LB, the ui/nginx pod). When set, `X-Forwarded-For` is walked from
+  // the right skipping trusted entries — robust to a proxy that does not append, or
+  // appends several. Leave unset only if the CIDRs are genuinely unknown.
+  TRUSTED_PROXY_CIDRS: z.string().optional(),
+  // FALLBACK when TRUSTED_PROXY_CIDRS is unset: number of reverse proxies WE operate
+  // in front of this app. Only the rightmost `TRUSTED_PROXY_HOPS` entries of
+  // `X-Forwarded-For` come from our own infrastructure. MUST match the deployed
+  // topology and differs per host (product API is behind Traefik + ui/nginx; the
+  // standalone IdP is behind Traefik only) — so pin it explicitly per overlay
+  // rather than relying on this default. Too HIGH reads attacker-supplied data;
+  // too LOW collapses every client into one bucket (self-inflicted login DoS).
+  TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
   HTTP_LOG: z.string().default('true'),
 
   // Chat tracing (debug / audit)
