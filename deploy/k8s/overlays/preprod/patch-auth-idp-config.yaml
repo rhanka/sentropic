@@ -6,9 +6,30 @@
 # pair (the `*.sent-tech.ca` single-label wildcard does NOT match nested preprod
 # hosts, so they are listed verbatim).
 #
-# WebAuthn RP-ID isolation (D11R, FORK-2): WebAuthn ceremonies happen at the IdP;
-# RP ID = the IdP's own preprod host, a valid suffix of its origin and fully
-# isolated from prod's RP ID.
+# WebAuthn RP ID = parent `sent-tech.ca` (Login-A). This REVERSES the earlier
+# synthetic-isolation posture (the old "distinct preprod RP ID, D11R/FORK-2"
+# comment) and instead APPLIES the already-ratified 2026-06-22 decision DV4
+# (SPEC_DECISION_DEPLOYMENT_PLANE.md): the single non-prod tier — deployed here
+# as `preprod.*`, the tier the spec names `dev` — imports real prod users and
+# uses the PARENT RP ID so an existing PROD passkey verifies at this IdP with
+# zero re-enrolment. The stale synthetic wording described the superseded
+# three-tier model (spec line 89, marked ⊘ SUPERSEDED). Full reconciliation:
+# spec/SPEC_AMENDMENT_D11R_LOGIN_A.md. Owner re-affirmed 2026-08-20.
+#
+# ANTI-REPLAY (DV4 must-enforce — the parent RP ID is only safe WITH these):
+#   - WEBAUTHN_ORIGIN stays this IdP's OWN preprod host (below), NOT the parent —
+#     a shared parent RP ID with a pinned distinct origin is what keeps a preprod
+#     assertion from being a prod assertion. The IdP MUST allow ONLY
+#     https://preprod.auth.sent-tech.ca as a WebAuthn assertion origin and REJECT
+#     prod origins; prod MUST never add a preprod origin to its allowed set;
+#     server challenges stay single-use.
+#   - Trust-domain isolation is preserved on the crypto axis by DV5 (distinct KEK
+#     / signing keys / client secrets, sessions NOT imported), so a preprod
+#     session can never mint a prod-valid token even with RP ID parity.
+# PREREQUISITE (do NOT merge/apply before the seed runbook is scheduled): this
+# key alone breaks passkey login until the prod-data seed lands (the current
+# preprod credential is bound to the old preprod RP ID; prod credentials do not
+# exist here until the seed). RP-ID change and DV3/DV5 seed land together.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -18,5 +39,5 @@ data:
   UI_BASE_URL: "https://preprod.auth.sent-tech.ca"
   AUTH_CALLBACK_BASE_URL: "https://preprod.auth.sent-tech.ca"
   CORS_ALLOWED_ORIGINS: "https://preprod.auth.sent-tech.ca,https://preprod.sentropic.sent-tech.ca"
-  WEBAUTHN_RP_ID: "preprod.auth.sent-tech.ca"
+  WEBAUTHN_RP_ID: "sent-tech.ca"
   WEBAUTHN_ORIGIN: "https://preprod.auth.sent-tech.ca"
