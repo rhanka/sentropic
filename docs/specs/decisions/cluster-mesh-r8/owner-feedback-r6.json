@@ -1,0 +1,42 @@
+{
+  "dossier": "cluster-mesh-shared-engine",
+  "revision": "2026-08-29-r6",
+  "architectureHash": "4efadd5d8be4930f1ea8919ffb064ef245c3470d71bfb47feacb5be058d28c13",
+  "capturedAt": "2026-08-29T13:35:32.986Z",
+  "capturedFrom": "focus decision kit",
+  "answers": {
+    "D1": { "option": "B", "note": "" },
+    "D2": { "option": "C", "note": "" },
+    "D3": { "option": "C", "note": "" },
+    "D4": { "option": "C", "note": "" },
+    "D5": { "option": "C", "note": "" },
+    "D6": {
+      "option": "C",
+      "note": "pas clair: pour moi\nle coeur doit tout wrapper\nle mcp est dans la lib sentropic\ntu dois représenter ca"
+    },
+    "D7": {
+      "option": "C",
+      "note": "pour une session locale, quand on sera sur app on devra avoir toujours la copie y compris en streaming. et regarde comme fonction remote. on donne des instruction remote via l'app (cf claude remote-control) - elle transite quand meme en premier par l'app meme si le gisement est le remote (sur le pc). il faut être plus au clair sur le mécanisme transactionnel de session dans ce contexte\ndonc il faut faire attention quand meme."
+    },
+    "D8": {
+      "option": null,
+      "note": "y a deja un conception entre h2a et graphify. cluster-mesh doit capitaliser dessus. tu as l'air de l'avoir totalement ignorée. il faut itérer proprement"
+    },
+    "D9": {
+      "option": "C",
+      "note": "Dans tout le cas ce doit être un composant design system qui fait ce rendu + une skill dans le focus (eventuellement un bout de tool intégré au focus). a ce stade, je ne peux pas valider, le rendu n'était pas satisfaisant, d'ailleurs avec des cartes rondes a bord qui sont interdites dans le design system. On attendra peut être diagram + un modele ArchtectureView mais dans un decision dossier a prendre côté h2a/focus, pas ici. a ce stade, utilisons le C si c'est ce que tu as utilisé la mais avec une demande de réétudier ca pour plus tard, et quand meme a capitaliser en design system"
+    },
+    "D10": {
+      "option": null,
+      "note": "ce n'est pas assez motivé par titre ni aligné aux standards de l'industrie, il faut une itération plus profonde sur ce sujet c'est quasi un dossier a part ou en tout cas un chapitre d'approfondissement"
+    },
+    "D11": {
+      "option": "C",
+      "note": "encore une fois pas assez approfondi, et doit  bien être authoré par la lib mcp sentropic que tu ne mentionnes meme pas. C est l'orientation mais je veux une vraie présentation. le schema pertinent doit être intégré a la décision le cas échéant poru que la décision soit mieux motivée"
+    },
+    "D12": {
+      "option": "C",
+      "note": "app et h2a doivent partager un mécanisme - si h2a a l'enrolement initial, il doit pouvoir être poussé sur app et reciproquement. donc c semble la bonne solution\nje crois que tu as mis un graph mais faut le mettre dans le meme écran/fiche que la proposition de décision poru avoir une vue consistante"
+    }
+  }
+}
