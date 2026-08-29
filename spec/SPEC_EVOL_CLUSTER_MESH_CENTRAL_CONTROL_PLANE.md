@@ -2,14 +2,14 @@
 
 ## Status and authority
 
-- Status: **accepted r8 architecture, build specification**.
-- Owner acceptance: `2026-08-29`; choices D1=C, D2=C, D3=A, D4=C, D5=C, D6=A, D7=C, D8=baseline, D9=C, D10=security chapter without a wire-profile choice, D11=C, D12=C.
+- Status: **accepted r8 architecture with r9/r10 owner clarifications, build specification**.
+- Owner acceptance: `2026-08-29`; current choices D1=B, D2=C, D3=A, D4=C, D5=C, D6=A, D7=C, D8=baseline, D9=C, D10=security schema and invariants with no active wire-profile option, D11=C, D12=C.
 - Decision source of truth: `.tmp/focus-cluster-mesh-decision-kit/dossier.json` at revision `2026-08-29-r8`.
-- Acceptance and r8 amendments: `.tmp/engage/cluster-mesh-shared-core-owner-feedback-r8.json` and the owner's build instruction that created this specification.
+- Acceptance and r9/r10 amendments: `.tmp/engage/cluster-mesh-shared-core-owner-feedback-r8.json` and the owner's fold-in instruction for this specification.
 - Supporting synthesis: `.tmp/engage/cluster-mesh-shared-core-synthesis-r7.md`.
-- Archived immutable evidence: `docs/specs/decisions/cluster-mesh-r8/`.
+- Committed reference evidence: `docs/specs/decisions/cluster-mesh-r8/`.
 
-The archived r8 JSON still contains the pre-acceptance workflow marker `owner-input-required` and the earlier D1 open-boundary warning. Those fields are historical evidence, not the current decision status. The r8 feedback says that the dossier is accepted as a reference, and the owner's present instruction ratifies D1=C while supplying the missing per-library and MCP-runtime boundaries. This specification is the closure artifact; it does not rewrite the archived evidence.
+The archived r8 round records preserve the pre-acceptance `owner-input-required` state, the earlier D1 open-boundary warning, and the provisional D1=C slope as historical evidence. They are not the current decision status. Owner round r10 supersedes that slope with D1=B and a transverse modularity invariant: every library remains independently integrable and disableable, keeps its own runtime, data, and secrets, and is never runtime-captive to Cluster Mesh. D6=A means integrated and offered as a capability, not captive or exclusive. The committed dossier appends r9/r10 without rewriting its r6/r7/r8 history.
 
 ## Reading convention
 
@@ -22,9 +22,9 @@ Repository-relative locators refer to Sentropic. Absolute locators are read-only
 
 ## Objective
 
-Create one neutral control plane through which h2a, the Sentropic application, MCP clients, and native agents invoke workspace capabilities. The minimum useful slice centralizes an h2a invocation through `WorkspaceRuntime`, `CapabilityRegistry`, and `PolicyRouter`; subsequent slices converge MCP, sessions, persistence, memory bindings, shared enrollments, security enforcement, and the accepted architecture renderer on the same runtime.
+Create a neutral, optional control plane through which h2a, the Sentropic application, MCP clients, and native agents can compose workspace capabilities. The minimum useful slice centralizes an h2a invocation through `WorkspaceRuntime`, `CapabilityRegistry`, and `PolicyRouter`; subsequent slices converge the Sentropic central composition for MCP, sessions, persistence, memory bindings, shared enrollments, security enforcement, and the accepted architecture renderer.
 
-The target is a **control plane**, not a new owner for every provider's semantics. Cluster Mesh owns cross-provider workspace binding, routing, policy, invocation lifecycle, transactions, receipts, enrollment bindings, and authority transfer. MCP, LLM Mesh, Focus, Track, Graphify, and the host-local h2a runtime retain their provider semantics and are composed behind neutral contracts.
+The target is a **control plane**, not a new owner or mandatory runtime for provider libraries. For capabilities composed through it, Cluster Mesh owns cross-provider workspace binding, routing, policy, invocation lifecycle, transactions, receipts, enrollment bindings, and authority transfer. MCP, LLM Mesh, Focus, Track, Graphify, and the host-local h2a runtime retain their provider semantics, runtimes, data, and secrets; each remains independently integrable outside Cluster Mesh and each capability remains disableable.
 
 ## Non-goals
 
@@ -36,6 +36,7 @@ The target is a **control plane**, not a new owner for every provider's semantic
 - No dual-writer session mode and no offline reconciliation of concurrent writers.
 - No selection in this specification of JOSE/JCS, DSSE, COSE/CBOR, HPKE, group-key, or other D10 wire profile.
 - No direct source change to the external h2a or Graphify repositories from this Sentropic branch.
+- No runtime captivity: no provider library requires Cluster Mesh for standalone use, and no capability becomes impossible to disable.
 
 ## Evidence baseline
 
@@ -43,7 +44,7 @@ The target is a **control plane**, not a new owner for every provider's semantic
 |---|---|---|
 | Cluster Mesh | `packages/cluster-mesh/README.md` describes a degenerate single-instance v1 and gated federation seams; `packages/cluster-mesh/src/mesh.ts:createDegenerateClusterMesh` composes membership, trust, device, boundary, projection, and memory-replication seam objects only. | Evolve the package into the neutral runtime; never label the current package a central control plane. |
 | Application adapter | `api/src/services/cluster-mesh-adapter.ts:createAppClusterMeshAdapter` stores workstations in a process-local `Map` and exposes tenant-scoped membership/device/boundary methods. | Replace process-local control state with injected, mode-aware stores and expose the runtime through the adapter. |
-| MCP ingress | `api/src/routes/api/mcp.ts` authenticates and resolves connector hosts directly; its sample MCP resource surface is gated off. | Make runtime HTTP ingress the first hop and compose MCP Platform/Auth as an internal runtime module. |
+| MCP ingress | `api/src/routes/api/mcp.ts` authenticates and resolves connector hosts directly; its sample MCP resource surface is gated off. | Make runtime HTTP ingress the first hop for the Sentropic central composition and compose MCP Platform/Auth as an integrated capability while preserving their standalone runtime. |
 | MCP authoring | `packages/mcp-auth/src/core.ts:verifyMcpAccessToken` implements OAuth audience, tenant, scope, and DPoP checks; `packages/mcp-platform/src/runtime.ts` authors MCP session, consent, enrollment, and connector context contracts. | Reuse these packages; Cluster Mesh coordinates them but does not re-author their protocol or security semantics. |
 | MCP durability | `packages/mcp-platform/src/persistence.ts` provides mock/in-memory/file-test persistence; `packages/mcp-broker/src/broker.ts` is a private proof with direct provider dispatch. | Add injected durable adapters, absorb useful broker orchestration behind the MCP module, then remove the bypass/proof path. |
 | Connector execution | `packages/connector-host/src/mount.ts:mountConnectorHost` mounts provider adapters per workspace; `packages/mcp-platform/src/runtime.ts:StpConnectorContext` carries verified references but can resolve secrets directly through a port. | Route connector effects through the central invocation supervisor while retaining connector-owned codecs and secret ports. |
@@ -58,36 +59,101 @@ The target is a **control plane**, not a new owner for every provider's semantic
 
 | Decision | Owner choice | Accepted requirement and justification |
 |---|---|---|
-| D1 — Runtime ownership | **C** | Cluster Mesh owns all cross-provider control domains behind one runtime, with the stopping rule specified below. This prevents alternate orchestration paths while preserving provider authorship. The current narrow runtime is evidenced by `packages/cluster-mesh/src/mesh.ts`; the exact target boundary comes from r8 D3 and D6. |
+| D1 — Runtime ownership | **B** | Cluster Mesh is the policy/composition core for capabilities composed through it. It optimizes and applies cross-provider guarantees without becoming the mandatory runtime of any library; every library remains independently integrable, disableable, and owner of its runtime, data, and secrets. |
 | D2 — Workspace authority | **C** | Bind repository authority and product-workspace authority explicitly. h2a already has durable repository IDs and fenced bindings (`workspace-id.ts`, `bindings.ts`); the app supplies tenant/workspace authority through `api/src/services/cluster-mesh-adapter.ts`. A mapping is required; neither identifier silently replaces the other. |
 | D3 — Capitalization | **A** | Perform maximal reasoned capitalization now: extract genuinely neutral contracts, contract-first evolving seams, and compose already separated providers. This minimizes duplicated semantics without pretending unfinished provider designs are shipped. |
 | D4 — Persistence | **C** | Select persistence by data-domain semantics and authority mode. A `LOCAL_ONLY` domain has exactly one host-local writer and no application mirror. Application PostgreSQL mirror/ledger exists only for `APP_MANAGED` remote control. Host inbox and delivery metadata are SQLite-first. |
 | D5 — Agent identity | **C** | Use linked principals: human/product identity, workload/NHI identity, short-lived mandate, and terminal custody are distinct references. h2a carries the NHI proof until the normative OAuth/MCP/NHI join is defined. This avoids treating a courier, a user session, and an executing agent as the same authority. |
-| D6 — MCP runtime placement | **A** | Integrate `mcp-platform` and `mcp-auth` fully as the internal MCP module of Cluster Mesh. Offer the resulting capability to h2a. The first hop is MCP client → Cluster Mesh runtime HTTP → internal MCP module → connector/provider. Direct API-to-connector and permanent `mcp-broker` paths are forbidden after cutover. |
+| D6 — MCP runtime placement | **A** | Integrate and offer `mcp-platform` and `mcp-auth` as the MCP capability in the Cluster Mesh composition. This does not make either package runtime-captive or exclusive: both remain usable standalone and disableable. Within the Sentropic composed path, the first hop is MCP client → Cluster Mesh runtime HTTP → integrated MCP capability → connector/provider; direct API-to-connector and permanent `mcp-broker` bypasses are forbidden after cutover. |
 | D7 — Session authority | **C** | Support both `LOCAL_ONLY` and `APP_MANAGED` with a fenced authority transfer. `LOCAL_ONLY` has one host writer. `APP_MANAGED` has the application ledger as canonical, absorbs transcript/journal/payload events, and uses a derived PC inbox/spool. Adopt/detach requires epoch, checkpoint, and high-water fencing. |
 | D8 — Memory baseline | **Baseline, not a new choice** | Reuse the existing h2a↔Graphify contract and the committed Graphify memory substrate. Cluster Mesh binds and invokes memory; it does not own canonical memory, ranking, Graphify schemas, or rebuild logic. Activation waits for the external contract/release gates. |
 | D9 — Architecture view | **C** | Use a renderer-neutral architecture model plus adapters. The branch must reverse the accepted kit's generic `ArchitectureView`, node/edge components, and deterministic routing into Focus and published design-system primitives. Scene-specific dossier data remains documentation evidence, not a general library contract. |
-| D10 — Security | **Chapter; no profile decision** | Freeze the authority and verification invariants, diagram the proof chain, and map controls to NIST SP 800-63-4 and SP 800-207. OAuth+MCP carry product identity, roles, and MCP security; h2a carries NHI proof until the normative join. Do not choose a serialization, signature, recipient-encryption, or credential profile here. |
+| D10 — Security | **Schema/table sediment; no active profile option** | Retain the authority diagram and verification-invariants table as the decision sediment. OAuth+MCP carry product identity, roles, and security; h2a carries NHI proof until the normative join, with NIST SP 800-63-4 and SP 800-207 as anchors. JOSE/DSSE/COSE wire profiles are removed from the active decision. |
 | D11 — MCP enrollment | **C** | Support per-host and shared connector instances through explicit workspace bindings, consent/grant/revocation, non-secret auth references, proof of possession where required, and one active custodian. MCP Platform authors both enrollment forms; Cluster Mesh binds and routes them. |
 | D12 — LLM enrollment | **C** | LLM Mesh is the shared enrollment authority. Store non-secret descriptors centrally, evaluate global policy then workspace policy, and enforce one credential custodian per account and epoch. Transfer is fenced; raw secret copying is never the fallback. |
 
+## Remarques owner r9/r10 + réponses
+
+The French owner remarks below are preserved verbatim. A decision with no new r9 remark is identified explicitly; no owner remark is inferred or fabricated.
+
+### D1
+
+- Round: r10 only; D1 has no r9 item.
+- Owner remark (verbatim): "La modularité doit rester entière: chaque lib intégrable indépendamment hors cluster-mesh et chaque fonction désactivable; chacune conserve son runtime, ses données, ses secrets; le tout optimisé dans cluster-mesh mais cluster-mesh n'est le runtime obligatoire d'AUCUNE lib. Préférence B plutôt que C."
+- Response: "D1 tranché sur B (noyau politique/composition), pas C. INVARIANT TRANSVERSE de modularité ajouté: aucune lib runtime-captive; cluster-mesh compose/optimise/applique la politique sans être runtime obligatoire. Réconciliation D6=A: 'intégré/offert comme capacité', pas 'runtime captif/exclusif' — mcp-platform/mcp-auth restent utilisables en standalone et désactivables."
+
+### D2
+
+- Owner remark: None recorded in r9; no remark is fabricated.
+- Response: Confirmed, no new remark.
+
+### D3
+
+- Owner remark r9 (verbatim): "attention pour graphify: il y a déjà un contrat h2a/graphify. cluster-mesh doit le reprendre et splitter h2a en h2a/sentropic très précisément (graphify memory en cours de build)."
+- Response: Reuse the existing h2a↔Graphify contract unchanged. At the memory-contract level, split h2a precisely into generic `h2a/` and Sentropic-specific `sentropic/` responsibilities. All other per-library targets remain unchanged, and `graphify-memory` activation remains gated while its build is in progress.
+
+### D4
+
+- Owner remark r9 (verbatim): "LOCAL_ONLY: host local SEUL writer, aucune promesse de miroir app = non-miroir app dès remote control. à concevoir rapidement."
+- Response: `LOCAL_ONLY` has the local host as its unique writer and no application mirror. The PostgreSQL application mirror/ledger exists only for `APP_MANAGED` remote control. `LOCAL_ONLY` → `APP_MANAGED` is an explicit fenced adoption and is a priority early lot.
+
+### D5
+
+- Owner remark: None recorded in r9; no remark is fabricated.
+- Response: Confirmed, no new remark.
+
+### D6
+
+- Owner remark: None recorded in r9; no remark is fabricated.
+- Response: Confirmed, no new remark. The D1/r10 ruling clarifies that D6=A means integrated/offered as a capability, not runtime-captive or exclusive.
+
+### D7
+
+- Owner remark: None recorded in r9; no remark is fabricated.
+- Response: Confirmed, no new remark.
+
+### D8
+
+- Owner remark: None recorded in r9; no remark is fabricated.
+- Response: Confirmed, no new remark.
+
+### D9
+
+- Owner remark r9 (verbatim): "ce dossier est parfait, à committer comme référence, et un reversement vers h2a/focus + éléments design system le cas échéant."
+- Response: Commit the dossier as the reference under `docs/specs/decisions/cluster-mesh-r8/`. Treat the `ArchitectureView` renderer and its routed-edge and design-system-node components as a reversal deliverable toward h2a/Focus and the design system in a dedicated `BRANCH.md` lot.
+
+### D10
+
+- Owner remark r9 (verbatim): "ok pour schéma+tableau comme décision, les options (profils wire) ne semblent pas utiles, laisser sédimenter."
+- Response: Remove JOSE/DSSE/COSE wire profiles from the active decision and retain the schema and invariants table as sediment. OAuth+MCP carry identity, roles, and security; h2a carries NHI until the normative join, with NIST SP 800-63-4 and SP 800-207 as references.
+
+### D11
+
+- Owner remark: None recorded in r9; no remark is fabricated.
+- Response: Confirmed, no new remark.
+
+### D12
+
+- Owner remark: None recorded in r9; no remark is fabricated.
+- Response: Confirmed, no new remark.
+
 ## D1/D3 ownership and capitalization boundary
 
-The runtime owns a domain when it must coordinate more than one provider or authority surface. A provider keeps a domain when its semantics remain meaningful without Cluster Mesh. Runtime-owned state is limited to neutral identifiers, bindings, policy decisions, command/event/receipt metadata, transaction/outbox state, authority epochs, and audit correlation.
+Within a Cluster Mesh composition, the control plane owns only the transverse state needed to coordinate more than one provider or authority surface. A provider keeps its runtime and every domain whose semantics remain meaningful without Cluster Mesh. Control-plane state is limited to neutral identifiers, bindings, policy decisions, command/event/receipt metadata, transaction/outbox state, authority epochs, and audit correlation.
 
 | Library/domain | TARGET action | Ownership stopping rule | CURRENT locator |
 |---|---|---|---|
 | `capability-contract` | Extract now into `@sentropic/contracts`. | Neutral capability ID, descriptor, request, result, and error only; no MCP tool or LLM-provider DTO. | `packages/contracts/src/index.ts`; `packages/cluster-mesh/src/mesh.ts` |
 | `workspace-binding-contract` | Extract now into `@sentropic/contracts`. | Carries repository/product references and binding epoch; resolution remains in host/app adapters. | h2a `workspace-id.ts`, `bindings.ts`; `api/src/services/cluster-mesh-adapter.ts` |
 | `identity-reference` | Extract now into `@sentropic/contracts`. | DTO-only linked references; no token validation, credential minting, or NHI attestation. | `packages/contracts/src/index.ts`; `packages/mcp-auth/src/core.ts`; h2a `packages/h2a/src/types.ts` |
-| `secure-agent-message` | Contract first. | Neutral verification inputs/results and mandate references; wire profile remains open under D10. | h2a `envelope.ts`, `signature.ts`, `replay.ts` |
+| `secure-agent-message` | Contract first. | Neutral verification inputs/results and mandate references; D10 has no active wire-profile option, so the normative join must supply interoperable evidence without making the contract profile-specific. | h2a `envelope.ts`, `signature.ts`, `replay.ts` |
 | `event-contract` | Contract first in `@sentropic/events`/contracts. | Correlation, causation, idempotency, epoch, receipt, and payload codec reference; provider owns payload schema. | `packages/events/src/index.ts`; h2a `remote-protocol/src/types.ts` |
 | `persistence-contract` | Contract first with host SQLite and app PostgreSQL adapters. | Ports describe authority and atomicity; no universal storage model or cross-mode mirroring. | `packages/mcp-platform/src/persistence.ts`; `api/src/db/control-schema.ts` |
-| MCP Platform/Auth | Compose as the runtime's internal MCP module. | MCP protocol, OAuth verification, consent, connector session, and elicitation semantics remain MCP-authored. | `packages/mcp-platform/src/runtime.ts`; `packages/mcp-auth/src/core.ts` |
+| MCP Platform/Auth | Integrate and offer as a composed MCP capability; preserve standalone use and disableability. | MCP protocol, OAuth verification, consent, connector session, and elicitation semantics remain MCP-authored. | `packages/mcp-platform/src/runtime.ts`; `packages/mcp-auth/src/core.ts` |
 | LLM Mesh/Gateway | Compose as providers. | Enrollment, route selection, account preparation, and LLM streaming remain LLM-authored. | `packages/llm-mesh/src/service/facade.ts`; `packages/llm-gateway/src/ports/*.ts` |
 | Focus | Compose as a presentation provider; reverse generic architecture rendering into it. | Focus owns deterministic document/view rendering, not runtime policy. | `packages/focus/src/index.ts`; accepted kit `src/ArchitectureCanvas.svelte` |
 | Track | Compose as an activity provider. | Track owns its event log, hash chain, codecs, and local writer; core sees evidence/cursors only. | h2a `packages/track/src/events/store.ts`, `src/ingest/contract.ts` |
-| Graphify memory | Contract first, then bind the separately published provider. | Graphify owns canonical memory, ranking, graph/vector projections, revalidation, and retention semantics. | Graphify `SPEC_EVOL_AGENT_MEMORY_SUBSTRATE.md:CanonicalMemoryStorePort`; h2a memory study `GraphifyMemoryPortV2` |
+| Graphify memory | Reuse the existing h2a↔Graphify contract unchanged, split its memory-contract responsibilities into generic `h2a/` and Sentropic-specific `sentropic/`, then bind the separately published provider. | Graphify owns canonical memory, ranking, graph/vector projections, revalidation, and retention semantics; activation remains gated while `graphify-memory` is in progress. | Graphify `SPEC_EVOL_AGENT_MEMORY_SUBSTRATE.md:CanonicalMemoryStorePort`; h2a memory study `GraphifyMemoryPortV2` |
 | `h2a-runtime` | Remains host-local. | Terminal/PTY lifecycle, local process custody, peer transport, and host session execution do not move into Sentropic. | h2a `packages/h2a-runtime/package.json`; `packages/h2a-runtime/src/**` |
 
 ## Three-level target architecture
@@ -137,7 +203,7 @@ flowchart TB
   F -. renders evidence .-> A
 ```
 
-All effectful entry paths cross Level 2. Level 3 providers may call one another only through a capability registered with the runtime or through a provider-internal call that has no cross-workspace/control-plane effect. A provider authoring boundary is not an invocation bypass.
+For capabilities enabled in this Cluster Mesh composition, all effectful entry paths cross Level 2. Level 3 providers may call one another inside the composition only through a capability registered with the control plane or through a provider-internal call that has no cross-workspace/control-plane effect. Independent standalone use of a provider library is outside this diagram and remains valid. A provider authoring boundary is not an invocation bypass.
 
 ## Minimum centralized h2a slice
 
@@ -150,24 +216,24 @@ The first executable target slice is deliberately small:
 5. Execute through `InvocationSupervisor` with idempotency, correlation, event, receipt, and audit records.
 6. Return the provider result without introducing MCP, memory, or remote write semantics into the slice.
 
-This slice proves centralization and stopping rules before the broader providers are cut over. It does not claim that the external h2a checkout has been released against the new package; cross-repository consumption remains a publication/compatibility gate.
+This slice proves central composition and stopping rules before broader Sentropic paths are cut over. It does not claim that the external h2a checkout has been released against the new package; cross-repository consumption remains a publication/compatibility gate.
 
-## D6 internal MCP module
+## D6 integrated MCP capability
 
-The only production MCP effect path is:
+For MCP enabled through the Sentropic Cluster Mesh composition, the canonical production effect path is:
 
 ```text
 MCP client
   -> Cluster Mesh HTTP ingress
   -> WorkspaceRuntime binding and linked-principal context
-  -> internal MCP Auth verification
-  -> internal MCP Platform session/consent/enrollment module
+  -> integrated MCP Auth verification capability
+  -> integrated MCP Platform session/consent/enrollment capability
   -> PolicyRouter and InvocationSupervisor
   -> Connector Host / provider
   -> transaction, receipt, audit, and response
 ```
 
-`mcp-auth` remains the source of OAuth resource/audience/scope/tenant/DPoP validation. `mcp-platform` remains the source of MCP session, consent, enrollment, elicitation, cancellation, and connector-context semantics. Cluster Mesh supplies the HTTP first hop, workspace binding, cross-provider policy, transaction boundary, and audit. The current direct route in `api/src/routes/api/mcp.ts` and the private proof dispatch in `packages/mcp-broker/src/broker.ts` must be retired after conformance tests demonstrate one path.
+`mcp-auth` remains the source of OAuth resource/audience/scope/tenant/DPoP validation. `mcp-platform` remains the source of MCP session, consent, enrollment, elicitation, cancellation, and connector-context semantics. Both packages retain their independent runtimes and may be integrated outside Cluster Mesh or disabled. Cluster Mesh supplies the HTTP first hop, workspace binding, cross-provider policy, transaction boundary, and audit for the Sentropic composed path. The current direct route in `api/src/routes/api/mcp.ts` and the private proof dispatch in `packages/mcp-broker/src/broker.ts` must be retired after conformance tests demonstrate one Sentropic path.
 
 ## D7 session authority model
 
@@ -246,10 +312,10 @@ OAuth and MCP carry product identity, roles/scopes, resource audience, tenant, a
 | Human/product identity | Authenticator/session assurance context, subject, tenant, role/scope, resource audience | Reject actionable request; read-only degradation requires an explicit policy | NIST SP 800-63-4 digital identity assurance model |
 | Workload/NHI | Stable subject reference, current key proof, attested binding when available, key status | Reject unknown, stale, revoked, or falsely attested workload | NIST SP 800-207 subject/device/workload-aware policy enforcement |
 | Mandate | Issuer, subject, workspace, capability/action, audience, issued/expiry time, delegation depth, policy/binding revision | Reject expired, over-broad, stale-revision, or unauthorized delegation | SP 800-207 least privilege and continuous evaluation |
-| Message integrity | Versioned canonical bytes/profile reference, sender proof, recipient/audience, correlation, causation, idempotency, epoch | Verify before act; courier delivery is never authorization | Profile deliberately left open by D10 |
+| Message integrity | Versioned canonical bytes/profile reference, sender proof, recipient/audience, correlation, causation, idempotency, epoch | Verify before act; courier delivery is never authorization | No active D10 wire-profile option; the normative join must supply interoperable evidence |
 | Replay and revocation | Durable replay key/status, command state, mandate/key/account revocation, custody epoch | Fail closed when required status is unavailable | SP 800-207 continuous verification |
 | Effect custody | Singular reachable custodian, capability policy, transactional command/receipt | No effect on ambiguous custody or writer epoch | D4/D7/D11/D12 accepted invariants |
-| Confidentiality | Transport protection now; recipient/payload confidentiality only after a selected profile and key-discovery model | Do not label transport-only encryption end-to-end | Profile deliberately left open by D10 |
+| Confidentiality | Transport protection now; recipient/payload confidentiality only after an interoperable normative join and key-discovery model | Do not label transport-only encryption end-to-end | No active D10 wire-profile option; schema/table retained as sediment |
 
 The build may expose profile-neutral verification ports and adapt the current h2a Ed25519 primitive, but it must not publish that custom canonicalization as the cross-language standard. No remote actionable capability is enabled until required verification, durable replay/revocation, transaction, and negative conformance vectors pass. D10 remains a sedimented chapter, not an implicit profile decision.
 
@@ -269,20 +335,24 @@ Decision-specific r8 scenes, prose, and options stay in the archived dossier/kit
 
 1. Land neutral contracts before runtime implementations; every contract has a version and compatibility fixture.
 2. Prove the minimum read-only h2a slice before enabling MCP, session, enrollment, or memory effects.
-3. Introduce a single runtime HTTP ingress and cut each provider over behind conformance tests.
+3. Introduce a single runtime HTTP ingress for the Sentropic Cluster Mesh composition and cut each in-scope application path over behind conformance tests; standalone provider integration remains valid.
 4. Remove the prior effect path in the same cutover lot; no permanent dual route or feature-flag fallback.
 5. Create at most one application migration for the control-plane schema.
 6. Migrate metadata and non-secret references first. Existing secrets stay with their current custodian.
 7. Activate `APP_MANAGED` writes only after ledger/outbox/recovery and authority-transfer tests pass.
 8. Keep `LOCAL_ONLY` host-only. An application projection of that data is a contract violation, not an optimization.
 9. Gate Graphify activation on its published release, contract digest, and L0–L7 exit evidence.
-10. Gate remote actionable messages on the future D10 profile decision; the current branch implements invariants and denial paths without choosing the profile.
+10. Gate remote actionable messages on a completed normative join and conformance evidence; no D10 wire-profile option remains active, and the current branch implements invariants and denial paths without selecting one.
 11. Publish Focus renderer components from Sentropic before changing any external h2a consumer.
 12. Cross-repository consumer upgrades are release coordination against the committed Sentropic package SHAs, not hidden edits from this branch.
 
 ## Convergence invariants
 
-1. Every effectful entry surface reaches one `WorkspaceRuntime` and one `InvocationSupervisor` before provider execution.
+### Invariant transverse de modularité (D1/r10)
+
+No library is runtime-captive to Cluster Mesh. Every library remains independently integrable outside Cluster Mesh, every capability remains disableable, and each library retains its own runtime, data, and secrets. Cluster Mesh composes, optimizes, and applies policy for enabled capabilities without becoming their mandatory runtime. D6=A therefore means that `mcp-platform` and `mcp-auth` are integrated and offered as capabilities in the Sentropic composition, while remaining usable standalone and disableable.
+
+1. Every effectful entry surface enabled in a Cluster Mesh composition reaches one `WorkspaceRuntime` and one `InvocationSupervisor` before provider execution.
 2. Every durable namespace has one canonical writer for a given authority mode and epoch.
 3. `LOCAL_ONLY` means host-local sole writer and no application mirror.
 4. `APP_MANAGED` session control means application PostgreSQL ledger canonical and host SQLite inbox/meta derived.
@@ -291,7 +361,7 @@ Decision-specific r8 scenes, prose, and options stay in the archived dossier/kit
 7. Verify-before-act includes audience, scope/action, workspace binding, policy revision, replay, revocation, epoch, custody, and reachability.
 8. Delivery is at least once; idempotent transaction/effect handling replaces any exactly-once claim.
 9. Provider payloads remain opaque to the core except for versioned neutral envelope metadata.
-10. MCP protocol/auth/session/consent/enrollment semantics stay authored by MCP Platform/Auth even though the module is runtime-internal.
+10. MCP protocol/auth/session/consent/enrollment semantics stay authored by MCP Platform/Auth when their capability is integrated into Cluster Mesh; the packages remain standalone and disableable.
 11. LLM Mesh is the single LLM enrollment authority; application code is an adapter, not a parallel authority.
 12. Track remains provider-owned and single-writer; Cluster Mesh consumes evidence/cursors, not Track internals.
 13. Graphify alone owns canonical memory, ranking, projections, final eligibility revalidation, and rebuild semantics.
@@ -304,7 +374,7 @@ Decision-specific r8 scenes, prose, and options stay in the archived dossier/kit
 ## Acceptance criteria
 
 - One read-only h2a capability crosses the central runtime with a versioned workspace binding, linked-principal context, policy decision, invocation record, and receipt.
-- MCP HTTP ingress reaches the internal MCP module only through Cluster Mesh, and conformance tests prove no direct connector bypass.
+- Sentropic MCP HTTP ingress reaches the integrated MCP capability only through Cluster Mesh, and conformance tests prove no direct connector bypass in that composed path.
 - `LOCAL_ONLY` and `APP_MANAGED` session UAT proves singular writer authority, adopt/detach fencing, restart recovery, duplicate delivery handling, and absence of a local-only app mirror.
 - Persistence tests prove atomic command/outbox/receipt behavior and deterministic recovery for every implemented adapter.
 - Graphify compatibility tests use the published provider contract/digest or remain fail-closed when its release gate is unmet.
@@ -315,7 +385,7 @@ Decision-specific r8 scenes, prose, and options stay in the archived dossier/kit
 
 ## Source ledger
 
-- Accepted decision snapshot: `docs/specs/decisions/cluster-mesh-r8/dossier.json` (r8 decision IDs D1–D12).
+- Accepted decision reference: `docs/specs/decisions/cluster-mesh-r8/dossier.json` (r8 baseline with appended r9/r10 history; decision IDs D1–D12).
 - Accepted architecture/security/persistence synthesis: `docs/specs/decisions/cluster-mesh-r8/synthesis-r7.md`.
 - Owner evolution trail: `docs/specs/decisions/cluster-mesh-r8/owner-feedback-r6.json`, `owner-feedback-r7.json`, `owner-feedback-r8.json`.
 - Current Sentropic core: `packages/cluster-mesh/src/mesh.ts`, `trust.ts`, `projection.ts`, `memory.ts`.
