@@ -1,0 +1,347 @@
+{
+  "schema": "sentropic.focus.decision-kit/v4",
+  "id": "cluster-mesh-shared-engine",
+  "title": "cluster-mesh — moteur commun de h2a et Sentropic",
+  "revision": "2026-08-29-r8",
+  "status": "owner-input-required",
+  "architectureHash": "aaf7cebfbd5ffed33493d3ffe084175374b8c502a66b41475d3d759ee3a3fab9",
+  "summary": "Décider d’une cible unique où h2a et l’application Sentropic s’appuient sur cluster-mesh pour exécuter les capacités d’un espace de travail, sans transformer le cœur en monolithe ni dupliquer les protocoles, les données ou les secrets des fournisseurs.",
+  "truthBanner": "La cible reste une architecture, pas l’état déjà livré. D1 est bloquée en attente de la remarque owner de périmètre reformulée : le choix C est enregistré, pas ratifié. Graphify reste la baseline mémoire imposée. MCP Platform/Auth sont totalement intégrés au runtime cluster-mesh dans l’option D6-A ; toute invocation MCP arrive d’abord sur sa couche HTTP.",
+  "convergence": {
+    "status": "r8-owner-remarks-answered",
+    "reviewers": ["cluster-mesh-shared-core-r7-fable.md", "cluster-mesh-shared-core-r7-sol.md"]
+  },
+  "facts": [
+    "h2a CLI et l’API Sentropic deviennent des racines de composition du même cœur cluster-mesh.",
+    "Les providers Track, Focus, terminal, OAuth, MCP, LLM Mesh, agents, Flow et Graphify gardent leurs domaines, données, secrets et cycles de vie.",
+    "Le cœur vérifie le contexte, autorise, corrèle, déduplique, route et audite chaque invocation transverse.",
+    "LOCAL_ONLY appartient au journal PC ; APP_MANAGED appartient au ledger app même lorsque l’exécuteur reste sur le PC.",
+    "Les enrollments MCP et LLM sont partagés par descriptor et binding ; les credentials restent chez un custodian unique par epoch.",
+    "D10 est une baseline sécurité imposée, pas une option : OAuth + MCP portent l’identification et la certification des rôles ; h2a porte le NHI agent jusqu’à la jointure normative."
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "title": "Quel périmètre pour le cœur cluster-mesh ?",
+      "context": "Le besoin owner fait de cluster-mesh le moteur commun tout en exigeant des contrats et adaptateurs pour des bibliothèques complémentaires, sans monolithe.",
+      "question": "Quel périmètre retenir pour le cœur cluster-mesh ?",
+      "source": "Dossier r7 · D1 ; raw spec lignes 34-44 et 206-212.",
+      "ownerChoice": "C",
+      "decisionStatus": "blocked-awaiting-owner-reformulation",
+      "statusLabel": "En attente de la remarque owner re-formulée",
+      "recommended": null,
+      "recommendation": "Le choix C est enregistré comme pente owner, sans ratification. C fait de cluster-mesh le runtime propriétaire : il absorbe les transactions et états runtime des domaines, alors que B ne possède que les garanties transverses et laisse chaque provider posséder son runtime. La limite exacte d’absorption reste bloquée sur la remarque owner perdue à reformuler.",
+      "ownerRemarks": [
+        { "round": "r7", "text": "J'avais émis une remarque pour changer le périmètre de la décision. tu devrais tracer ma demande. bloquant je veux ma réponse initiale" }
+      ],
+      "response": [
+        { "round": "r8", "text": "Perte reconnue explicitement : avant r7, le kit ne possédait aucun modèle persistant de remarques par décision ; la remarque antérieure de périmètre et sa réponse initiale sont introuvables dans les fichiers persistés. Nous ne fabriquons ni la remarque ni une fausse réponse initiale. D1 reste en attente de la remarque owner re-formulée. Le choix C est enregistré comme pente : contrairement à B, où cluster-mesh porte seulement admission/politique/transaction/audit en laissant les runtimes aux providers, C rend cluster-mesh propriétaire du runtime MCP, Track, sessions, LLM, mémoire et workflows ; la frontière exacte doit être reformulée par l’owner." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Registre minimal", "consequence": "Le cœur découvre et route, mais laisse l’autorisation, la transaction, la reprise et l’audit se fragmenter entre les hôtes." },
+        { "key": "B", "title": "Noyau de politique et de composition", "consequence": "Le cœur possède les garanties transverses — contexte, autorisation, corrélation, transaction, reprise et audit — mais chaque provider garde son runtime, ses données et ses secrets." },
+        { "key": "C", "title": "Runtime propriétaire de tous les domaines", "consequence": "Le cœur absorbe les runtimes et états transactionnels MCP, Track, sessions, LLM, mémoire et workflows ; les librairies de domaine deviennent des modules internes du runtime cluster-mesh. La limite exacte reste à reformuler." }
+      ]
+    },
+    {
+      "key": "D2",
+      "title": "Quelle autorité pour l’identité d’un workspace ?",
+      "context": "Le workspace produit et le repository h2a/Track ont des cycles de vie et des autorités distincts ; la cible doit les lier explicitement au lieu d’inventer une équivalence silencieuse.",
+      "question": "Quelle autorité retenir pour l’identité d’un workspace ?",
+      "source": "Dossier r7 · D2 ; synthesis r1 lignes 30-31 et 178-186.",
+      "ownerChoice": "C",
+      "recommended": "C",
+      "recommendation": "Confirmer C. La liaison explicite évite une troisième identité canonique implicite et préserve à la fois le mode local h2a et la gouvernance produit. Elle rend aussi les erreurs de binding visibles et révocables.",
+      "ownerRemarks": [
+        { "round": "r7", "text": "" }
+      ],
+      "response": [
+        { "round": "r8", "text": "Option C confirmée sans remarque textuelle additionnelle : les deux autorités workspace restent reliées par un binding explicite et révocable." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Identifiant produit universel", "consequence": "Le workspace Sentropic remplace l’identité repository, y compris hors produit." },
+        { "key": "B", "title": "Identifiant Git universel", "consequence": "L’identité repository remplace le workspace produit et sa gouvernance tenant/membership." },
+        { "key": "C", "title": "Liaison explicite des deux autorités", "consequence": "Chaque autorité conserve sa sémantique ; un binding vérifié relie leurs clés pour un profil de déploiement." }
+      ]
+    },
+    {
+      "key": "D3",
+      "title": "Quelle cible de capitalisation pour chaque bibliothèque ?",
+      "context": "La généricité maximale ne signifie pas créer aveuglément un package par nom : elle extrait maintenant les frontières stables et déjà multi-consommateurs, fige d’abord les contrats encore normativement ouverts, et laisse app-local uniquement la composition et les adapters d’infrastructure.",
+      "question": "Valider la cible A de capitalisation maximale raisonnée, bibliothèque par bibliothèque ?",
+      "source": "Owner feedback r7 · D3 ; h2a packages/*/package.json ; h2a remote-protocol/src/schemas/events.ts:165-184 ; h2a track/src/ingest/contract.ts:1-4 ; h2a docs/specs/2026-08-15-SPEC_STUDY_memory-core-graphify-max.md:18-44 ; graphify spec/SPEC_EVOL_AGENT_MEMORY_SUBSTRATE.md:11-32.",
+      "ownerChoice": "A",
+      "recommended": "A",
+      "recommendation": "Retenir A comme programme de capitalisation maximale à date, avec une sous-décision explicite par bibliothèque. Les packages de domaine déjà neutres sont capitalisés maintenant ; identité, message sécurisé, persistence et event passent contrat-d’abord pour ne pas figer D10 ni confondre des autorités ; seuls les adapters de composition et de stores concrets restent app-local.",
+      "ownerRemarks": [
+        { "round": "r7", "text": "bloquant: je veux la cible des librairies au meilleur des possibilités a date. il n'y a eu aucune réflexion. Meme si tu était sur C: tu définirais une logique. il faut une logique de capitalisation et généricité maximale. Dans CETTE page je veux un schéma qui reprend la comparaison avant apres et la proposition par librairie, quitte a proposer autant de décision que de librairies." }
+      ],
+      "response": [
+        { "round": "r8", "text": "La fiche remplace le choix temporel abstrait par une vraie logique de capitalisation et des sous-décisions par bibliothèque. Extraire maintenant les DTO/contracts neutres capability, workspace et identity-reference ; contractualiser d’abord secure-agent-message, event, persistence et graphify-memory ; garder mcp-platform/auth, llm-mesh, Focus et Track comme providers déjà séparés intégrés par composition, et h2a-runtime host-local. Le schéma AVANT/APRÈS et le tableau donnent chaque cible avec locators." }
+      ],
+      "diagram": { "scene": "D3", "title": "AVANT/APRÈS et cible par bibliothèque" },
+      "sections": [
+        {
+          "title": "Sous-décisions de capitalisation par bibliothèque",
+          "columns": ["Bibliothèque / contrat", "Cible r8", "Justification et locator"],
+          "rows": [
+            ["capability-contract", "EXTRAIRE MAINTENANT · D3a", "DTO invocation/capability/receipt neutres déjà esquissés dans le protocole remote (h2a/packages/remote-protocol/src/index.ts:15-18 ; types.ts:73-125)."],
+            ["workspace-binding-contract", "EXTRAIRE MAINTENANT · D3b", "Clé/binding neutre entre repository et workspace produit ; les structures existent côté remote et identité h2a (h2a/packages/remote-protocol/src/types.ts:73-90 ; h2a/packages/h2a/src/runtime/identity/workspace-id.ts:1-20,32-48)."],
+            ["identity-reference", "EXTRAIRE MAINTENANT, DTO-ONLY · D3c", "Extraire subjectRef/keyRef/bindingRef sans fournisseur OAuth, keyring ni policy (h2a/packages/h2a/src/types.ts:66-102 ; runtime/identity/bindings.ts:1-25,43-68,107-124)."],
+            ["secure-agent-message", "CONTRAT D’ABORD · D3c", "Figer après la jointure D10 ; réutiliser signature/canonicalisation sans prétendre que l’actuel certifie le mandat, et remplacer le replay mémoire pour production (h2a/packages/h2a/src/envelope.ts:52-70,83-103 ; signature.ts:6-47 ; replay.ts:76-115)."],
+            ["persistence-contract", "CONTRAT D’ABORD · ADAPTERS APP/HOST-LOCAL · D3d", "Extraire Transaction/Outbox/Replay/Store ports ; garder SQLite, PgSQL, fichiers et keyring comme adapters d’autorités hétérogènes (cluster-mesh-shared-core-synthesis-r7.md:304-316)."],
+            ["event-contract", "CONTRAT D’ABORD · D3d", "Extraire seulement métadonnées event/corrélation/receipt ; Track WorkEvent et RemoteEvent gardent leurs payloads d’autorité distincts (h2a/packages/remote-protocol/src/types.ts:174-188 ; track/src/ingest/contract.ts:1-4)."],
+            ["mcp-platform + mcp-auth", "RESTER PROVIDER · INTÉGRATION PAR COMPOSITION D6-A · D3e", "Packages de domaine, totalement intégrés au runtime cluster-mesh sans copier leur sémantique dans le contrat neutre (cluster-mesh-shared-core-r7-fable.md:24-43,59-69)."],
+            ["llm-mesh", "RESTER PROVIDER · D3e", "Autorité sémantique de comptes/routing/policies ; h2a et app composent la même façade, pas un deuxième package de compte (h2a/docs/specs/2026-08-20-SPEC_STUDY_llm-mesh-enrollment-registry.md:95-118)."],
+            ["graphify-memory", "CONTRAT D’ABORD · PROVIDER SÉPARÉ · D3d", "Réutiliser les ports committed-design après gates ; aucun moteur mémoire cluster-mesh (graphify/spec/SPEC_EVOL_AGENT_MEMORY_SUBSTRATE.md:11-20,1148-1163,1181)."],
+            ["focus", "RESTER PROVIDER DÉJÀ EXTRAIT · D3e", "Runtime document read-only déterministe ; expose modèle et bindings, pas de dépendance app UI (h2a/packages/focus/package.json:2-4,14-26,41-43)."],
+            ["track", "RESTER PROVIDER DÉJÀ EXTRAIT · D3e", "System of record provider-owned ; conserver event codec et append-only chez Track, exposer read/ingest (h2a/packages/track/README.md:3-5,21,68)."],
+            ["h2a-runtime", "RESTER HOST-LOCAL · D3e", "Sessions, tunnel, terminal et infrastructure lourde appartiennent au host et ne deviennent pas une lib neutre du mesh (h2a/packages/h2a-runtime/package.json:2-13,49-52)."]
+          ]
+        }
+      ],
+      "options": [
+        { "key": "A", "title": "Capitalisation maximale raisonnée à date", "consequence": "Sous-décision par bibliothèque : capitaliser maintenant les frontières stables ; contrat-d’abord pour les normes ouvertes ; app-local uniquement pour composition et infrastructure." },
+        { "key": "B", "title": "Tout absorber dans cluster-mesh", "consequence": "Maximise la centralisation, mais confond généricité et monolithe en important les sémantiques de domaine dans le cœur." },
+        { "key": "C", "title": "Extraction seulement après second consommateur", "consequence": "Réduit le nombre de packages maintenant, mais laisse les contrats transverses se dupliquer avant leur extraction." }
+      ]
+    },
+    {
+      "key": "D4",
+      "title": "Quelle topologie de persistance locale ?",
+      "context": "Les données à persister n’ont ni la même autorité ni le même mode de reprise : Track est append-only, les transactions/outbox demandent une base transactionnelle, et les clés/secrets doivent rester hors de la persistance générique.",
+      "question": "Quelle topologie de persistance locale retenir ?",
+      "source": "Owner feedback r7 · D4 ; h2a Track package.json:2-4 ; h2a remote-protocol/src/schemas/events.ts:165-184 ; h2a docs/specs/2026-08-15-SPEC_STUDY_memory-core-graphify-max.md:18-44,80-134 ; graphify spec/SPEC_EVOL_AGENT_MEMORY_SUBSTRATE.md:1148-1181.",
+      "ownerChoice": "C",
+      "recommended": "C",
+      "recommendation": "Maintenir C. La persistance suit l’autorité du domaine plutôt qu’un dogme de stockage. Le cœur choisit et coordonne des adapters, mais ne devient ni le codec Track, ni le store mémoire, ni le coffre de secrets.",
+      "ownerRemarks": [
+        { "round": "r7", "text": "Nécessairement on est sur C. Mais je veux une décomposition par donnée sur ce qui est prime en local vs fichier: track (étant run = SQL + dump fichier pour chaque branche au merge?), memoire (idem?), contenu session (cli claude ou codex ou agy local, mais agent natif = local+SQLite et PgSQL miroir pour app en remote control), inbox + meta données session (live etc) = SQLite first? Il faut une présentation domaine de donnée par domaine de données. Pour graphify memoire on se repose sur l'orientation h2a+graphify deja existant pas de niaisage." }
+      ],
+      "response": [
+        { "round": "r8", "text": "C est décomposé domaine par domaine sur la fiche. Cible r8 — pas état actuel : Track passerait à SQL/SQLite comme prime opérationnel du run et produirait un dump append-only par branche au merge ; aujourd’hui Track reste fichier append-only .track/events.jsonl. La mémoire reprend strictement le design h2a+Graphify, SQLite canonique local et projections/fichiers reconstruisibles ; les sessions CLI Claude/Codex/agy restent provider-locales ; en APP_MANAGED natif, SQLite PC conserve inbox/spool/payloads et le ledger PgSQL app porte la copie canonique remote-control ; inbox et métadonnées live sont SQLite-first, avec projection PgSQL seulement pour APP_MANAGED." }
+      ],
+      "diagram": null,
+      "sections": [
+        {
+          "title": "Prime locale vs fichier / miroir, domaine par domaine",
+          "columns": ["Domaine", "Prime local / writer", "Fichier, miroir ou managed", "Règle d’autorité"],
+          "rows": [
+            ["Track — CIBLE r8", "SQL/SQLite du run actif", "Dump append-only par branche au merge", "Cible, pas actuel : Track actuel écrit .track/events.jsonl append-only (h2a/packages/track/README.md:3-5,21 ; track/src/events/store.ts:33-40). Track garde codec/provenance ; le dump de merge n’est pas un second writer."],
+            ["Mémoire", "SQLite canonique Graphify fenced", "Projections/fichiers reconstruisibles ; PgSQL seulement après gate de parité", "Reprise intégrale du design h2a↔Graphify, sans re-conception cluster-mesh (h2a/docs/specs/2026-08-15-SPEC_STUDY_memory-core-graphify-max.md:18-44,80-134 ; graphify/spec/SPEC_EVOL_AGENT_MEMORY_SUBSTRATE.md:1148-1181)."],
+            ["Session CLI Claude/Codex/agy", "Journal/contenu provider-local du CLI", "Export ou projection explicite seulement", "LOCAL_ONLY : host local seul writer ; aucune promesse de miroir app."],
+            ["Agent natif APP_MANAGED", "SQLite PC : inbox, dedup, spool, payloads d’exécution", "PgSQL app : ledger/copie canonique remote-control et replay UI", "cluster-mesh absorbe transcript, journal et payloads pour ce mode C+A ; commit app avant ACK/affichage (r7-sol.md:280-376)."],
+            ["Inbox + métadonnées live", "SQLite-first : commands, receipts, cursors, presence/session metadata", "Projection PgSQL lorsque la session est APP_MANAGED", "At-least-once, idempotency et epoch fencing ; la projection n’autorise pas un second writer (h2a/packages/remote-protocol/src/schemas/events.ts:165-184)."]
+          ]
+        }
+      ],
+      "options": [
+        { "key": "A", "title": "Fichiers uniquement", "consequence": "Simple pour certains journaux, mais faible pour l’atomicité multi-enregistrements, les outbox et les fences." },
+        { "key": "B", "title": "SQLite uniquement", "consequence": "Uniforme physiquement, mais force des autorités et codecs hétérogènes dans un même modèle." },
+        { "key": "C", "title": "Hybride par sémantique", "consequence": "Fichiers provider-owned quand ils sont l’autorité, SQLite/SQL pour transactions et bindings, keyring/secret provider séparé." }
+      ]
+    },
+    {
+      "key": "D5",
+      "title": "Comment articuler OAuth, NHI, délégation et custody terminale ?",
+      "context": "L’identité humaine/service, la clé NHI, le mandat d’action et le droit d’écrire dans un terminal prouvent des choses différentes ; la spec exige de les articuler explicitement.",
+      "question": "Comment articuler OAuth, NHI, délégation et custody terminale ?",
+      "source": "Dossier r7 · D5 ; raw spec lignes 101-113 et 192-200.",
+      "ownerChoice": "C",
+      "recommended": "C",
+      "recommendation": "Maintenir C. Une identité reconnue n’autorise pas automatiquement une action, et une action autorisée ne donne pas automatiquement le terminal. Cette séparation réduit l’effet d’une clé compromise et permet révocation, expiry et fencing ciblés.",
+      "ownerRemarks": [
+        { "round": "r7", "text": "" }
+      ],
+      "response": [
+        { "round": "r8", "text": "Option C confirmée sans remarque textuelle additionnelle : OAuth, NHI, mandat d’action et custody terminale restent des preuves distinctes et révocables." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Alias d’identité", "consequence": "OAuth, NHI et rôle sont traités comme des noms équivalents, sans preuve de délégation." },
+        { "key": "B", "title": "Credentials de service statiques", "consequence": "Une clé longue durée porte implicitement identité, autorisation et contrôle du terminal." },
+        { "key": "C", "title": "Principaux liés, mandat court et custody distincte", "consequence": "L’autorité lie principal, NHI, workspace et capacités dans un mandat révocable ; la custody terminale reste un lease séparé." }
+      ]
+    },
+    {
+      "key": "D6",
+      "title": "Où vit le proxy MCP si le cœur wrappe toute invocation ?",
+      "context": "Le client MCP tape d’abord le runtime cluster-mesh et sa couche HTTP. Dans A, @sentropic/mcp-platform et @sentropic/mcp-auth constituent la lib runtime MCP totalement intégrée au cluster ; NativeMcpIngress est leur composant, pas une troisième lib. C garde la même entrée cluster-mesh mais appelle ensuite un provider MCP hors cœur.",
+      "question": "Intégrer totalement mcp-platform + mcp-auth au runtime cluster-mesh (A), ou les appeler comme provider hors cœur (C) ?",
+      "source": "Dossier r7 · D6 ; revues r7 Fable lignes 24-43 et Sol lignes 216-224.",
+      "ownerChoice": "A",
+      "recommended": "A",
+      "recommendation": "Retenir A selon la condition owner : cluster-mesh expose le premier endpoint HTTP MCP et intègre totalement mcp-platform + mcp-auth comme son module runtime MCP ; h2a reçoit cette capacité via cluster-mesh. Les libs gardent leurs packages et authoring, mais ne forment pas un provider runtime externe. C aurait le même premier hop HTTP, puis une frontière provider hors cœur explicite.",
+      "ownerRemarks": [
+        { "round": "r6", "text": "pas clair: pour moi\nle coeur doit tout wrapper\nle mcp est dans la lib sentropic\ntu dois représenter ca" },
+        { "round": "r7", "text": "ton schema est pas clair. je dirais A si le mcp-platform et mcp-auth sont totalement intégrés a cluster-mesh et en ce sens offre cette capacité a h2a. Le pb du schema c que t'en a fait qu'un je suppose pour présenter C, et je ne comprend pas, si la lib mcp runtime est bien la lib mcp-platform ou non. or, pour moi le mcp client va deja taper en premier dans le runtime sur le cluster mesh (couche http) qui va router vers la lib mcp. donc tu es bon pour clarifier. si C est ce que j'ai dit, c ok pour C, mais faut quand meme mieux représenter ca ici" }
+      ],
+      "response": [
+        { "round": "r7", "text": "La fiche sépare désormais les deux dimensions : au runtime, MCP client, h2a et app passent par l’ingress MCP puis cluster-mesh avant le provider et l’upstream ; à l’authoring, @sentropic/mcp-platform et @sentropic/mcp-auth possèdent la sémantique MCP et l’adapter, tandis que cluster-mesh possède l’invocation neutre et les garanties transverses. Il n’existe donc aucun chemin d’effet MCP hors du wrap." },
+        { "round": "r8", "text": "Le schéma montre maintenant le premier hop commun puis deux modèles distincts. Dans A retenu, MCP client → runtime cluster-mesh HTTP → module MCP interne composé de @sentropic/mcp-platform + @sentropic/mcp-auth → connecteur ; cette capacité est offerte à h2a par cluster-mesh. NativeMcpIngress appartient à mcp-platform : ce n’est pas une lib runtime différente. Dans C, le premier hop reste cluster-mesh HTTP, mais il route ensuite par un port vers un provider mcp-platform/auth hors cœur. A signifie intégration runtime totale ; C signifie provider externe, jamais bypass." }
+      ],
+      "diagram": { "scene": "D6", "title": "A intégré totalement vs C provider hors cœur" },
+      "options": [
+        { "key": "A", "title": "mcp-platform + mcp-auth totalement intégrés", "consequence": "Le runtime cluster-mesh HTTP est le premier hop et compose les deux libs comme module interne ; h2a consomme la capacité du cluster. Les libs authorent toujours MCP, le cœur ne réimplémente pas le protocole." },
+        { "key": "B", "title": "Connecteurs privés par hôte, hors wrap", "consequence": "L’app et h2a gardent des chemins d’effet directs ; cette option viole l’invariant owner et est éliminée." },
+        { "key": "C", "title": "Provider MCP hors cœur après le premier hop", "consequence": "Le client tape toujours cluster-mesh HTTP d’abord ; le cœur admet puis route par un port vers mcp-platform/auth comme provider externe." }
+      ]
+    },
+    {
+      "key": "D7",
+      "title": "Qui possède la transaction d’une session locale ou remote-via-app ?",
+      "context": "L’app possède déjà un stream durable ordonné et rejouable ; le contrôle distant h2a est encore principalement live/in-memory. La transaction partagée est donc une cible, pas un fait actuel.",
+      "question": "Qui possède la transaction d’une session locale ou remote-via-app ?",
+      "source": "Dossier r7 · D7 ; synthèse Sol lignes 55-70 et 280-376.",
+      "ownerChoice": "C",
+      "recommended": "C",
+      "recommendation": "Confirmer C avec extension A strictement bornée au mode APP_MANAGED remote-control : l’autorité reste explicite par mode, mais cluster-mesh absorbe transcript, journal et payloads de la session pilotée par l’app. LOCAL_ONLY reste provider-local et n’est pas absorbé.",
+      "ownerRemarks": [
+        { "round": "r6", "text": "pour une session locale, quand on sera sur app on devra avoir toujours la copie y compris en streaming. et regarde comme fonction remote. on donne des instruction remote via l'app (cf claude remote-control) - elle transite quand meme en premier par l'app meme si le gisement est le remote (sur le pc). il faut être plus au clair sur le mécanisme transactionnel de session dans ce contexte\ndonc il faut faire attention quand meme." },
+        { "round": "r7", "text": "encore une fois, le schema vs les options est pas clair. je dirais C, mais pour C avec remote control, cluster-mesh absorbe transcript, journal et payloads (donc C+A)" }
+      ],
+      "response": [
+        { "round": "r7", "text": "Deux modes autoritaires sont explicités. LOCAL_ONLY écrit dans le journal PC. APP_MANAGED commite d’abord CommandAccepted + revision + outbox dans l’app, persiste et revalide côté PC avant effet, puis commite les événements dans le ledger app avant ACK et affichage streaming/replay. Adoption et detach imposent pause, checkpoint/hash/high-water, fence de l’ancien writer et nouvel epoch ; aucune double écriture n’est admise." },
+        { "round": "r8", "text": "Choix C enregistré avec son extension C+A : en remote-control APP_MANAGED uniquement, cluster-mesh absorbe transcript, journal et payloads et les porte dans la transaction app/PC. Le diagramme marque cette zone absorbée de CommandAccepted/outbox à ledger/stream. LOCAL_ONLY conserve le journal provider-local. L’absorption ne crée pas deux autorités : PgSQL app reste canonique pour APP_MANAGED ; SQLite PC est inbox/spool/durabilité d’exécution dérivée." }
+      ],
+      "diagram": { "scene": "D7", "title": "LOCAL_ONLY et APP_MANAGED" },
+      "options": [
+        { "key": "A", "title": "Session universelle possédée par le cœur", "consequence": "cluster-mesh absorbe transcript, journal et payloads de tous les providers." },
+        { "key": "B", "title": "Deux historiques avec synchronisation best-effort", "consequence": "Le PC et l’app acceptent des écritures concurrentes puis tentent de réconcilier ordre et effets." },
+        { "key": "C", "title": "Autorité par mode + absorption C+A en remote-control", "consequence": "LOCAL_ONLY appartient au provider PC. APP_MANAGED appartient au ledger app et cluster-mesh absorbe transcript, journal et payloads dans la transaction remote-control ; adoption/detach transfèrent l’autorité par epoch." }
+      ]
+    },
+    {
+      "key": "D8",
+      "title": "Comment intégrer la mémoire durable existante ?",
+      "context": "L’owner a déjà tranché le vecteur mémoire : capitaliser au maximum sur Graphify, sans moteur bespoke h2a. h2a fournit configuration et faits d’activité ; Graphify possède capture, lifecycle, ranking, projections et revalidation.",
+      "question": "Confirmer le socle h2a ↔ Graphify comme baseline de binding cluster-mesh, ou demander un dossier explicite de supersession ?",
+      "source": "Dossier r7 · D8 ; décision mémoire h2a lignes 691-700 et SPEC_STUDY Graphify lignes 18-44, 80-134.",
+      "ownerChoice": null,
+      "recommended": null,
+      "recommendation": "Ne pas redécider l’architecture mémoire ici. Adopter le design existant comme baseline de binding cluster-mesh et reporter seulement l’activation jusqu’aux gates Graphify. Toute divergence demanderait un dossier de supersession h2a/Graphify explicite.",
+      "ownerRemarks": [
+        { "round": "r6", "text": "y a deja un conception entre h2a et graphify. cluster-mesh doit capitaliser dessus. tu as l'air de l'avoir totalement ignorée. il faut itérer proprement" },
+        { "round": "r7", "text": "ok donc pas une décision si je comprends" }
+      ],
+      "response": [
+        { "round": "r7", "text": "Les anciennes options snapshot/log/rebuild sont supprimées. La fiche prend le design h2a↔Graphify existant comme point de départ imposé : h2a/Track produit l’ActivityEvidenceSource, cluster-mesh wrappe et lie l’invocation, Graphify possède les épisodes, le ranking, les projections et la revalidation. L’activation reste bloquée sur les exit gates Graphify ; aucun store mémoire de substitution n’est proposé." },
+        { "round": "r8", "text": "Confirmé : D8 n’est pas une décision. C’est la baseline imposée h2a↔Graphify ; seule sa readiness reste gatée." }
+      ],
+      "diagram": { "scene": "D8", "title": "Socle h2a ↔ Graphify capitalisé" },
+      "options": []
+    },
+    {
+      "key": "D9",
+      "title": "Quel rendu d’architecture pour Focus ?",
+      "context": "Le rendu r6 n’était pas suffisamment satisfaisant pour ratifier une technologie ; l’architecture doit néanmoins rester comparable sur les mêmes niveaux, lanes et ancres.",
+      "question": "Quel rendu d’architecture utiliser provisoirement dans Focus ?",
+      "source": "Dossier r7 · D9 ; raw spec lignes 150-178.",
+      "ownerChoice": "C",
+      "recommended": "C",
+      "recommendation": "Utiliser C provisoirement, sans ratifier le renderer comme choix durable. La valeur à conserver est le modèle sémantique renderer-neutral et son adapter DS, pas une dépendance particulière.",
+      "ownerRemarks": [
+        { "round": "r6", "text": "Dans tout le cas ce doit être un composant design system qui fait ce rendu + une skill dans le focus (eventuellement un bout de tool intégré au focus). a ce stade, je ne peux pas valider, le rendu n'était pas satisfaisant, d'ailleurs avec des cartes rondes a bord qui sont interdites dans le design system. On attendra peut être diagram + un modele ArchtectureView mais dans un decision dossier a prendre côté h2a/focus, pas ici. a ce stade, utilisons le C si c'est ce que tu as utilisé la mais avec une demande de réétudier ca pour plus tard, et quand meme a capitaliser en design system" },
+        { "round": "r7", "text": "ok. TU devrais render les graphes et regarder pourquoi ca va encore pas au niveau overlap edge / carte sur les premiers" }
+      ],
+      "response": [
+        { "round": "r7", "text": "La solution C est explicitement provisoire. Le rendu est présenté comme ArchitectureView renderer-neutral, composé avec les primitives/tokens du design system et sans cartes à bords arrondis. Son appel doit passer par une skill ou un port Focus. Le choix définitif du renderer et l’outillage diagram sont renvoyés à un dossier h2a/Focus séparé ; ils ne sont pas ratifiés ici." },
+        { "round": "r8", "text": "Les 13 scènes générales et par-fiche sont rendues en SVG déterministes inspectables ; 110 arêtes et 110 labels passent à zéro edge↔node, edge↔edge, edge↔label et label↔label, avec séparation tenant compte de l’épaisseur des traits. Les empreintes de flèche passent aussi à zéro contre nœud, arête, label et autre flèche (dist/architecture/manifest.json). Le routeur n’a aucun fallback qui ignore les arêtes déjà placées. La limite est déclarée : le kit ne possède aucun runner navigateur, donc cette preuve est une inspection de géométrie SVG déterministe et non une mesure DOM/Chromium." }
+      ],
+      "diagram": { "scene": "D9", "title": "Contrat de rendu et preuve anti-overlap" },
+      "options": [
+        { "key": "A", "title": "Mermaid seul", "consequence": "Bon artefact textuel/export, mais interaction, nœuds DS et stabilité cross-state restent à prouver." },
+        { "key": "B", "title": "Étendre le renderer Graphify", "consequence": "Capitalise un renderer interne, mais couple potentiellement l’architecture aux préoccupations de graphes mémoire." },
+        { "key": "C", "title": "Modèle renderer-neutral avec adapter interactif provisoire", "consequence": "Préserve les sémantiques et ancres ; la technologie reste remplaçable derrière un port Focus/DS." }
+      ]
+    },
+    {
+      "key": "D10",
+      "title": "Qui peut ordonner quelle action à quel agent, pendant combien de temps, et avec quelles preuves ?",
+      "context": "Baseline sécurité imposée : OAuth et MCP portent l’identification agent, la certification des rôles et les auth transportées ; MCP elicitation prolonge consentement/interaction sans devenir une preuve d’autorité. Jusqu’à une jointure normative complète, h2a porte le NHI et la certification agent ; à terme h2a reste la norme de rôles et MCP couvre la sécurité d’accès.",
+      "question": "Ratifier ultérieurement la jointure normative OAuth/MCP/h2a après définition du profil wire, des revocations et des vectors ; aucun choix demandé en r8.",
+      "source": "Owner feedback r7 · D10 ; h2a packages/h2a/src/envelope.ts:27-38,52-102 ; signature.ts:6-47 ; r7-sol.md:82-97,431-545 ; NIST SP 800-63-4 https://doi.org/10.6028/NIST.SP.800-63-4 ; NIST SP 800-207 https://doi.org/10.6028/NIST.SP.800-207.",
+      "ownerChoice": null,
+      "recommended": null,
+      "recommendation": "Pas de choix A/B/C en r8 : cette fiche fixe la baseline et les responsabilités. L’implémentation actuelle h2a signe Ed25519 et contrôle un vocabulaire de rôles, mais ne certifie pas encore ces rôles. La jointure cible doit aligner OAuth/MCP, NIST SP 800-63-4 et SP 800-207, puis publier des vectors interop avant toute action remote.",
+      "ownerRemarks": [
+        { "round": "r6", "text": "ce n'est pas assez motivé par titre ni aligné aux standards de l'industrie, il faut une itération plus profonde sur ce sujet c'est quasi un dossier a part ou en tout cas un chapitre d'approfondissement" },
+        { "round": "r7", "text": "continuité autour d'oauth, mcp elicitation stp. il faut voir les normes nist aussi. a ce stade, j'estime que t'as pas travaillé, je ne sais pas si cela te freine. pour moi: mcp et oauth sont les lib qui portent les standards. le sujet nhi doit être porté par h2a pour la certification agent tant que tu n'as pas mis la jointure normative. et a 3 on doit s'assurer d'avoir les normes de sécurité de bout en bout. normalement mcp+oauth devraient suffir pour l'identification des agents, la certification des roles. h2a devrait a terme rester en norme des rôles et mcp couvrir la partie sécu si c'est bien fait" }
+      ],
+      "response": [
+        { "round": "r7", "text": "D10 devient un chapitre sécurité autonome : RFC 9700, 8693, 9396, 7800, 9449, 7662, 7009 et 9180 sont ancrées avec leurs limites ; les invariants de mandat court, signature end-to-end, replay durable, révocation revalidée, confidentialité recipient-bound et receipts corrélés sont séparés. Les profils JOSE/JCS, DSSE et COSE/CBOR restent réellement ouverts. La matière manque encore pour une recommandation ferme : aucun remote actionable command ne doit être activé avant ratification et test-vectors cross-language positifs/négatifs." },
+        { "round": "r8", "text": "La continuité cible est maintenant explicite : OAuth + MCP portent identification agent, certification des rôles, consentement/elicitation et transport sécurisé des auth ; MCP elicitation reste une interaction, jamais une autorité auto-signée. Tant que la jointure normative n’est pas publiée, h2a porte le NHI et la certification agent. À la cible, h2a reste la norme des rôles et MCP couvre la sécurité d’accès. Le chapitre ajoute NIST SP 800-63-4 pour l’identité numérique et SP 800-207 pour le zero trust, en les distinguant des preuves locales : h2a actuel signe Ed25519 et valide un vocabulaire fermé, il ne certifie pas encore les rôles. Aucun remote actionable avant profil + vectors end-to-end." }
+      ],
+      "diagram": { "scene": "D10", "title": "Jointure OAuth · MCP · h2a · NIST" },
+      "sections": [
+        {
+          "title": "Continuité normative et responsabilité",
+          "columns": ["Couche", "Responsabilité cible", "Norme / preuve / limite"],
+          "rows": [
+            ["OAuth/OIDC", "Authentifier le principal et émettre/échanger un mandat audience-bound", "RFC 9700, 8693, 9396, 7800, 9449 ; statut/révocation RFC 7662 et 7009 (r7-sol.md:82-97,431-545)."],
+            ["MCP + elicitation", "Identifier l’agent sur la surface MCP, transporter auth/PoP, consentement et elicitation, appliquer la certification de rôle issue de l’autorité", "Cible r8 ; elicitation ne signe ni rôle ni mandat. mcp-platform + mcp-auth sont totalement intégrés par D6-A."],
+            ["h2a NHI / rôles", "Jusqu’à la jointure : certifier l’agent/NHI et porter la norme des rôles ; après jointure : rester source du vocabulaire/semantics de rôles", "Actuel limité : rôle ∈ vocabulaire dans envelope.ts:27-38 ; signature Ed25519 dans signature.ts:6-47 ; aucune certification d’autorité actuelle n’est revendiquée."],
+            ["NIST identité", "Assurance, lifecycle d’authenticator et fédération de l’identité numérique", "Norme cible officielle : NIST SP 800-63-4 — https://doi.org/10.6028/NIST.SP.800-63-4 ; non présente comme implémentation prouvée dans les sources locales."],
+            ["NIST zero trust", "Vérifier explicitement sujet, ressource, contexte et policy à chaque action ; aucun réseau implicite de confiance", "Norme cible officielle : NIST SP 800-207 — https://doi.org/10.6028/NIST.SP.800-207 ; non présente comme implémentation prouvée dans les sources locales."],
+            ["Enveloppe E2E", "Mandat court key-bound + signature enveloppe + replay durable + action-time revocation + confidentialité recipient-bound + receipts", "JOSE/JCS, DSSE ou COSE restent à profiler ; aucun choix owner r8 et aucun remote actionable avant vectors positifs/négatifs." ]
+          ]
+        }
+      ],
+      "options": [
+        { "key": "A", "title": "JOSE/JCS JSON", "strengths": "JWS RFC 7515 + JCS RFC 8785 ; continuité naturelle avec OAuth/DPoP ; JWE RFC 7516 disponible.", "openPoints": "Profil exact du mandat, canonicalisation inter-langages, classes JWE/HPKE, statut offline et limites de délégation." },
+        { "key": "B", "title": "DSSE pour l’enveloppe", "strengths": "Sépare clairement type de payload et signature ; forme adaptée aux attestations et receipts.", "openPoints": "DSSE ne décide ni le credential de mandat ni le chiffrement ; ces couches restent à profiler sans doubler les formats." },
+        { "key": "C", "title": "COSE/CBOR-first", "strengths": "RFC 9052 offre une enveloppe compacte et un chemin binaire cohérent.", "openPoints": "Coût d’intégration JSON/OAuth, profil credential, debug/interop, chiffrement et vectors cross-language." }
+      ]
+    },
+    {
+      "key": "D11",
+      "title": "Quel modèle de connector instance, binding et invocation MCP ?",
+      "context": "MCP Platform porte déjà manifest, session, consent, enrollment, authz et durable call, mais sa persistance actuelle ne prouve pas encore un control plane partagé de production.",
+      "question": "Quel modèle de connector instance, binding et invocation MCP retenir ?",
+      "source": "Dossier r7 · D11 ; Sol lignes 50-54 et 226-271.",
+      "ownerChoice": "C",
+      "recommended": "C",
+      "recommendation": "Confirmer C avec obligation portée par mcp-platform : gérer simultanément instances per-host et partagées, faciliter création/révocation des bindings et transporter les auth par références/proofs protégés. Aucun binding implicite ; chaque lien est explicite, scope-bound, révisé et audité.",
+      "ownerRemarks": [
+        { "round": "r6", "text": "encore une fois pas assez approfondi, et doit  bien être authoré par la lib mcp sentropic que tu ne mentionnes meme pas. C est l'orientation mais je veux une vraie présentation. le schema pertinent doit être intégré a la décision le cas échéant poru que la décision soit mieux motivée" },
+        { "round": "r7", "text": "mcp platform doit garantir la possibilité de gérer les 2 et faciliter la gestion des binding et le transport des auth, avec binding explicite et sécurisé" }
+      ],
+      "response": [
+        { "round": "r7", "text": "La fiche nomme @sentropic/mcp-platform et @sentropic/mcp-auth comme auteurs, intègre le schéma d’invocation et de binding, et sépare les responsabilités : MCP Platform authore ingress/session/consent/enrollment, cluster-mesh admet et audite, McpProviderBinding ne conserve que des références opaques et le credential custodian conserve seul les secrets. La topologie de production du broker/store reste à fermer sans déplacer cet ownership." },
+        { "round": "r8", "text": "mcp-platform doit garantir les deux topologies : instance per-host et instance partagée. Il fournit l’API de binding, sa revision/révocation et le transport des auth via authContextRef/credentialCustodianRef/PoP, sans copier de token. cluster-mesh impose binding explicite et sécurisé avant route ; mcp-auth vérifie l’auth transportée. Le schéma de la fiche montre les deux branches convergeant sur le même Binding Gate." }
+      ],
+      "diagram": { "scene": "D11", "title": "Invocation et binding MCP provider-owned" },
+      "options": [
+        { "key": "A", "title": "Enrôlement séparé par hôte", "consequence": "h2a et l’app dupliquent account, consentement, token et chemin d’invocation." },
+        { "key": "B", "title": "Compte global implicite", "consequence": "Un enrollment devient visible/utilisable partout sans binding workspace explicite." },
+        { "key": "C", "title": "Instances per-host + partagées, bindings explicites", "consequence": "mcp-platform gère les deux, facilite binding/revoke/revision et transporte les auth par références et preuves protégées ; les deux surfaces partagent le même chemin wrappé." }
+      ]
+    },
+    {
+      "key": "D12",
+      "title": "Comment partager l’enrôlement LLM entre h2a et l’app sans partager le secret ?",
+      "context": "LLM Mesh est le domicile sémantique de l’enrollment, de l’éligibilité, du refresh, de la santé et de l’affinité ; l’app conserve aujourd’hui une implémentation parallèle, donc la convergence est une cible et non l’état actuel.",
+      "question": "Comment partager l’enrôlement LLM entre h2a et l’app sans partager le secret ?",
+      "source": "Dossier r7 · D12 ; Sol lignes 57-58 et 575-644.",
+      "ownerChoice": "C",
+      "recommended": "C",
+      "recommendation": "Confirmer C et étendre le contrat LLM Mesh : même autorité d’enrollment/custody, routing partagé, policies globales et policies par workspace. Le mapping gateway est une policy workspace explicite, héritant d’un défaut global et révocable sans déplacer le secret.",
+      "ownerRemarks": [
+        { "round": "r6", "text": "app et h2a doivent partager un mécanisme - si h2a a l'enrolement initial, il doit pouvoir être poussé sur app et reciproquement. donc c semble la bonne solution\nje crois que tu as mis un graph mais faut le mettre dans le meme écran/fiche que la proposition de décision poru avoir une vue consistante" },
+        { "round": "r7", "text": "le llm mesh doit pouvoir permettre, comme mcp, permettre le routage et des policy globales et par workspace (ex du mapping gw)" }
+      ],
+      "response": [
+        { "round": "r7", "text": "La fiche intègre le graphe et sépare le SharedAccountDescriptor non secret de la custody physique. Un enrollment initié côté h2a publie descriptor + binding vers l’app tout en routant l’usage vers le custodian PC ; l’inverse route h2a vers le custodian managé. L’écriture est bidirectionnelle, idempotente, consentie et révocable. Un transfert de custody fence l’ancien lease, réauthentifie, active atomiquement un nouvel epoch/route et révoque l’ancien secret ; aucune copie silencieuse n’est permise." },
+        { "round": "r8", "text": "LLM Mesh porte désormais explicitement, comme MCP, le routing et deux niveaux de policy : global default puis override par workspace. Un mapping gateway est un WorkspaceRoutePolicy versionné qui sélectionne route/custodian/provider sous consentement et health ; il peut être révoqué sans copier le credential. Le graphe D12 montre l’héritage global→workspace avant la résolution de route." }
+      ],
+      "diagram": { "scene": "D12", "title": "Descriptor partagé et custody routée" },
+      "options": [
+        { "key": "A", "title": "Custody h2a locale uniquement", "consequence": "L’app ne peut pas partager l’account sans copier le secret ou maintenir un mécanisme parallèle." },
+        { "key": "B", "title": "Custody portail uniquement", "consequence": "Les enrollments locaux perdent leur valeur ou imposent une migration centralisée de credentials." },
+        { "key": "C", "title": "Autorité LLM Mesh partagée + routing/policies à deux niveaux", "consequence": "Les deux surfaces voient le même compte ; global policy puis workspace policy (ex. mapping gateway) choisissent la route vers le custodian actif sans copier le secret." }
+      ]
+    }
+  ]
+}
