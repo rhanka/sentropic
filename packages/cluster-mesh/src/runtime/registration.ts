@@ -37,6 +37,7 @@ export interface ActuationRequest {
 
 export interface ActuationResult {
   readonly effectRef: string;
+  readonly actedTargets?: readonly string[];
 }
 
 export interface PtyActuatorPort {

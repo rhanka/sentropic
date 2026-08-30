@@ -37,7 +37,7 @@ const createAuthorPort = (key: NamespaceCutoverKey) => {
                 idempotencyKey: 'shadow-intent',
               });
             },
-          });
+          }).finally(() => { activation = undefined; });
           await activation;
           record = await control.cutovers.find(key);
         }
