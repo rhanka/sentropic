@@ -209,6 +209,7 @@
     - [x] Control ports persist command lifecycle and LOST reconciliation, accept root-specific mounts, and keep PTY actuation injectable.
     - [x] The session router fences every control intent through author, verified context, registration, admission, command state, actuation and receipts.
   - [ ] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
+    - [x] The application adapter composes the durable stores, generation runtime, injected PTY registration gate, target inspection and explicit `BR75-SG1` source-gap state.
   - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
     - [x] The cutover coordinator requires matching read snapshots plus a validated drive intent before persisting the single active author.
   - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
