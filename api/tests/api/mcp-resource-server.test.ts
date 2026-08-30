@@ -195,6 +195,7 @@ describe('MCP connector-host routes', () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ ok: true, output: { messages: [{ id: 'message-1' }] } });
     const googleCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('https://gmail.googleapis.com/'));
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toHaveLength(1);
     expect((googleCall?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${gmailAccessToken}` });
     expect(JSON.stringify(body)).not.toContain(gmailAccessToken);
   });
@@ -276,6 +277,22 @@ describe('MCP connector-host routes', () => {
     await expect(response.json()).resolves.toMatchObject({ ok: true, output: { id: 'message-1' } });
   });
 
+  it('returns deterministic initialize responses without provider effects', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken([]);
+    const initialize = () => app.request('/api/v1/mcp', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'initialize' }),
+    });
+
+    const first = await (await initialize()).json();
+    const second = await (await initialize()).json();
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({ result: { protocolVersion: '2025-06-18' } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('returns a non-descriptive 400 for a malformed connector request', async () => {
     const token = await issueToken(['mcp:tools:invoke']);
 
@@ -325,13 +342,25 @@ describe('MCP authorization server selection', () => {
     // side effects (the skill registry parses SKILL.md files, among others) fails for reasons that
     // have nothing to do with what is under test here.
     vi.resetModules();
-    const { mcpRouter } = await import('../../src/routes/api/mcp');
-    const freshApp = new Hono();
-    freshApp.route('/api/v1/mcp', mcpRouter);
-
-    const res = await freshApp.request('/api/v1/mcp/.well-known/oauth-protected-resource');
-    expect(res.status).toBe(200);
-    const doc = (await res.json()) as { authorization_servers: string[] };
-    expect(doc.authorization_servers).toEqual(['https://idp.example.test']);
+    const [{ mcpRouter }, { productMcpModule }] = await Promise.all([
+      import('../../src/routes/api/mcp'),
+      import('../../src/routes/namespaces/mcp'),
+    ]);
+    const legacy = new Hono().route('/api/v1/mcp', mcpRouter);
+    const candidate = new Hono().route('/api/v1/mcp', productMcpModule.createRouter({
+      context: { async verify() { throw new Error('not used by PRM'); } },
+      receipts: { async append() { throw new Error('not used by PRM'); } },
+    }));
+    const path = '/api/v1/mcp/.well-known/oauth-protected-resource';
+    const [legacyResponse, candidateResponse] = await Promise.all([
+      legacy.request(path),
+      candidate.request(path),
+    ]);
+    expect(legacyResponse.status).toBe(200);
+    expect(candidateResponse.status).toBe(200);
+    const legacyDoc = await legacyResponse.json() as { authorization_servers: string[] };
+    const candidateDoc = await candidateResponse.json() as { authorization_servers: string[] };
+    expect(candidateDoc).toEqual(legacyDoc);
+    expect(candidateDoc.authorization_servers).toEqual(['https://idp.example.test']);
   });
 });
