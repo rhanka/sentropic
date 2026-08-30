@@ -205,13 +205,14 @@
 
 - [ ] **Lot 4 — `/session` socle cutover and internally closable gates**
   - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Add `packages/cluster-mesh/src/hono/session-router.ts` and `api/src/routes/namespaces/session.ts`; inject product session/device ports and the h2a PTY registration adapter port, with real adapter evidence tracked only by `BR75-SG1`.
+  - [x] Add `packages/cluster-mesh/src/hono/session-router.ts` and `api/src/routes/namespaces/session.ts`; inject product session/device ports and the h2a PTY registration adapter port, with real adapter evidence tracked only by `BR75-SG1`.
     - [x] Control ports persist command lifecycle and LOST reconciliation, accept root-specific mounts, and keep PTY actuation injectable.
     - [x] The session router fences every control intent through author, verified context, registration, admission, command state, actuation and receipts.
     - [x] Product session lifecycle handlers are injected from the application namespace with read-only session/device shadow snapshots.
     - [x] Product device-code attachment handlers are injected through the same `/session` namespace boundary.
-  - [ ] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
+  - [x] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
     - [x] The application adapter composes the durable stores, generation runtime, injected PTY registration gate, target inspection and explicit `BR75-SG1` source-gap state.
+    - [x] Product and IdP compose the same module while projecting `/session` to their established `/api/v1/auth` public facade.
   - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
     - [x] The cutover coordinator requires matching read snapshots plus a validated drive intent before persisting the single active author.
   - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
