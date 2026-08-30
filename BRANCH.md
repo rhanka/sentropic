@@ -213,9 +213,9 @@
   - [x] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
     - [x] The application adapter composes the durable stores, generation runtime, injected PTY registration gate, target inspection and explicit `BR75-SG1` source-gap state.
     - [x] Product and IdP compose the same module while projecting `/session` to their established `/api/v1/auth` public facade.
-  - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
+  - [x] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
     - [x] The cutover coordinator requires matching read snapshots plus a validated drive intent before persisting the single active author.
-  - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
+  - [x] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
     - [x] Package proof persists the active author only after shadow validation and restores the checkpointed previous generation.
     - [x] Legacy extension-session writer code was removed after the replacement mount.
     - [x] Legacy current-session reader code was removed after shadow comparison.
@@ -223,6 +223,7 @@
     - [x] `api/src/routes/auth/session.ts` was deleted after its final refresh/logout routes moved.
     - [x] Legacy device polling/session-minting writer code was removed after replacement.
     - [x] Legacy device-code issuer writer code was removed after replacement.
+    - [x] `api/src/routes/auth/device.ts` was deleted after its final approval route moved; no legacy mount remains.
   - [ ] Reject missing/stale registration before PTY and reconcile dead/parked targets to LOST; acted receipt plus a real target tick remains the external `BR75-SG1` proof rather than a Lot 4 progression gate.
   - [ ] Tests new: `packages/cluster-mesh/tests/session-router.spec.ts`, `api/tests/api/cluster-mesh-session.test.ts`.
     - [x] Package coverage proves projected handlers, missing/stale fail-closed behavior, parked-to-LOST reconciliation, and 12/13 pre-actuation admission.
