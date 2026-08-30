@@ -207,6 +207,7 @@
   - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
   - [ ] Add `packages/cluster-mesh/src/hono/session-router.ts` and `api/src/routes/namespaces/session.ts`; inject product session/device ports and the h2a PTY registration adapter port, with real adapter evidence tracked only by `BR75-SG1`.
     - [x] Control ports persist command lifecycle and LOST reconciliation, accept root-specific mounts, and keep PTY actuation injectable.
+    - [x] The session router fences every control intent through author, verified context, registration, admission, command state, actuation and receipts.
   - [ ] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
   - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
     - [x] The cutover coordinator requires matching read snapshots plus a validated drive intent before persisting the single active author.
