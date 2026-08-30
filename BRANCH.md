@@ -217,6 +217,7 @@
     - [x] The cutover coordinator requires matching read snapshots plus a validated drive intent before persisting the single active author.
   - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
     - [x] Package proof persists the active author only after shadow validation and restores the checkpointed previous generation.
+    - [x] Legacy extension-session writer code was removed after the replacement mount.
   - [ ] Reject missing/stale registration before PTY and reconcile dead/parked targets to LOST; acted receipt plus a real target tick remains the external `BR75-SG1` proof rather than a Lot 4 progression gate.
   - [ ] Tests new: `packages/cluster-mesh/tests/session-router.spec.ts`, `api/tests/api/cluster-mesh-session.test.ts`.
     - [x] Package coverage proves projected handlers, missing/stale fail-closed behavior, parked-to-LOST reconciliation, and 12/13 pre-actuation admission.
