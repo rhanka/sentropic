@@ -203,8 +203,8 @@
     - [x] Fable m3/m4/m5 follow-up: persistence contracts and Postgres adapters expose custody/lease/lifecycle fields plus receipt `commandId`, and capacity retries return explicit idempotent success instead of refusal.
     - [x] Fable m7 follow-up: all twelve `0007` CHECK constraints and receipt invocation-stage uniqueness reject real invalid writes; package and scoped Postgres tests pass.
 
-- [ ] **Lot 4 — `/session` socle cutover and internally closable gates**
-  - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
+- [x] **Lot 4 — `/session` socle cutover and internally closable gates**
+  - [x] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
   - [x] Add `packages/cluster-mesh/src/hono/session-router.ts` and `api/src/routes/namespaces/session.ts`; inject product session/device ports and the h2a PTY registration adapter port, with real adapter evidence tracked only by `BR75-SG1`.
     - [x] Control ports persist command lifecycle and LOST reconciliation, accept root-specific mounts, and keep PTY actuation injectable.
     - [x] The session router fences every control intent through author, verified context, registration, admission, command state, actuation and receipts.
@@ -231,11 +231,11 @@
   - [x] UI tests updated: `ui/tests/chat/session-adapter.test.ts`, `ui/tests/stores/session.test.ts`, `ui/tests/components/chat/AppChatPanel-session-state.test.ts`.
   - [x] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` A1 session A→B, non-empty relaunch and LOST case; execute in Lot 33.
     - [x] The scenario requires real h2a evidence/registration/tick/park/LOST locators and skips under the explicit `BR75-SG1` source-gap; it is not executed in Lot 4.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/cluster-mesh-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-session.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/chat/session-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot-blocking internal gates only: A3 fail-closed registration, A4 real cap enforcement, and one-author session cutover/rollback; real A1 drive/wake evidence remains explicitly blocked in `BR75-SG1` and must close in Lots 33/34 without blocking progression here.
+  - [x] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/cluster-mesh-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-session.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/chat/session-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot-blocking internal gates only: A3 fail-closed registration, A4 real cap enforcement, and one-author session cutover/rollback; real A1 drive/wake evidence remains explicitly blocked in `BR75-SG1` and must close in Lots 33/34 without blocking progression here.
 
 - [ ] **Lot 5 — `/mcp` reusable wrapping and logical singleton cutover**
   - [ ] Namespace: `/mcp`; type: reusable wrapping, plugin mount, D11 cutover and legacy deletion.
