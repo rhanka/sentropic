@@ -122,23 +122,32 @@ export function createSessionNamespaceModule(input: {
           await input.control.runtime.receipts.verified(coordinates, 'accepted');
           await input.control.store.updateCommand(intent.commandId, { status: 'accepted' });
           try {
-            const result = await decision.actuator.actuate({
-              registration: decision.registration,
-              action,
-              commandRef: intent.commandId,
-            });
+            let result;
+            try {
+              result = await decision.actuator.actuate({
+                registration: decision.registration,
+                action,
+                commandRef: intent.commandId,
+              });
+            } catch {
+              await input.control.store.updateCommand(intent.commandId, {
+                status: 'failed', refusalReason: 'actuation_failed',
+              });
+              return c.json({ error: 'actuation_failed' }, 502);
+            }
             const actedAt = (input.control.now ?? (() => new Date()))().toISOString();
-            await input.control.store.updateCommand(intent.commandId, { status: 'acted', actedAt });
-            await input.control.runtime.receipts.acted(coordinates, result.effectRef);
+            try {
+              await input.control.store.updateCommand(intent.commandId, { status: 'acted', actedAt });
+              await input.control.runtime.receipts.acted(coordinates, result.effectRef);
+            } catch {
+              return c.json({
+                error: 'post_effect_persistence_failed', status: 'acted', effectRef: result.effectRef,
+              }, 500);
+            }
             return c.json({
               status: 'acted', effectRef: result.effectRef,
               ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),
             });
-          } catch {
-            await input.control.store.updateCommand(intent.commandId, {
-              status: 'failed', refusalReason: 'actuation_failed',
-            });
-            return c.json({ error: 'actuation_failed' }, 502);
           } finally {
             input.control.runtime.admission.release(intent.commandId);
           }
