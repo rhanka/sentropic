@@ -1,15 +1,9 @@
 import { createAuthSessionRouteHandlers } from '@sentropic/auth-hono';
 import { Hono } from 'hono';
-import { logger } from '../../logger';
 import {
   authHonoCookiePort,
   authHonoSessionService,
 } from '../../services/auth/session-adapter';
-import {
-  listUserSessions,
-  revokeAllSessions,
-  validateSession,
-} from '../../services/session-manager';
 
 /**
  * Session Management Routes
@@ -43,65 +37,3 @@ sessionRouter.post('/refresh', sessionHandlers.refreshSession!);
  * Logout current session (@sentropic/auth-hono)
  */
 sessionRouter.delete('/', sessionHandlers.logout!);
-
-/**
- * DELETE /auth/session/all
- * Logout all sessions (revoke all user sessions)
- */
-sessionRouter.delete('/all', async (c) => {
-  try {
-    const sessionToken =
-      c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
-      c.req.header('authorization')?.replace('Bearer ', '');
-
-    if (!sessionToken) {
-      return c.json({ error: 'No session token provided' }, 401);
-    }
-
-    const session = await validateSession(sessionToken);
-
-    if (!session) {
-      return c.json({ error: 'Invalid session' }, 401);
-    }
-
-    await revokeAllSessions(session.userId);
-
-    c.header('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0');
-
-    logger.info({ userId: session.userId }, 'All sessions logged out');
-
-    return c.json({ success: true, message: 'Logged out from all devices' });
-  } catch (error) {
-    logger.error({ err: error }, 'Error logging out all sessions');
-    return c.json({ error: 'Failed to logout from all devices' }, 500);
-  }
-});
-
-/**
- * GET /auth/session/list
- * List all active sessions for current user
- */
-sessionRouter.get('/list', async (c) => {
-  try {
-    const sessionToken =
-      c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
-      c.req.header('authorization')?.replace('Bearer ', '');
-
-    if (!sessionToken) {
-      return c.json({ error: 'No session token provided' }, 401);
-    }
-
-    const session = await validateSession(sessionToken);
-
-    if (!session) {
-      return c.json({ error: 'Invalid session' }, 401);
-    }
-
-    const sessions = await listUserSessions(session.userId);
-
-    return c.json({ sessions });
-  } catch (error) {
-    logger.error({ err: error }, 'Error listing sessions');
-    return c.json({ error: 'Failed to list sessions' }, 500);
-  }
-});
