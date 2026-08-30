@@ -197,3 +197,9 @@ export function clearAll(): void {
   byDeviceCode.clear();
   byUserCode.clear();
 }
+
+export function readDeviceCodeSnapshot(): Record<DeviceCodeStatus, number> {
+  const snapshot = { pending: 0, approved: 0, denied: 0 };
+  for (const entry of byDeviceCode.values()) snapshot[entry.status] += 1;
+  return snapshot;
+}
