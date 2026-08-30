@@ -46,3 +46,5 @@ export type StreamEvent =
   | { type: 'abort'; reason: string };
 
 export type StreamEventEnvelope = EventEnvelope<StreamEvent>;
+
+export * from './invocation-receipt.js';
