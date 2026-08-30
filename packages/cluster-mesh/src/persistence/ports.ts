@@ -51,10 +51,15 @@ export interface StoredClusterMeshCommand {
 export interface ClusterMeshRuntimeStore extends RegistrationLookupPort, InvocationReceiptPort {
   saveGeneration(generation: StoredClusterMeshGeneration): Promise<void>;
   saveRegistration(registration: ClusterMeshRegistration): Promise<void>;
+  markRegistrationLost(registrationId: string, lostAt: string): Promise<boolean>;
   reserveCapacity(lease: StoredCapacityLease): Promise<StoredCapacityReservationResult>;
   reclaimExpiredCapacity(now: string): Promise<number>;
   saveMcpServer(server: StoredMcpServer): Promise<void>;
   enqueueCommand(command: StoredClusterMeshCommand): Promise<boolean>;
+  updateCommand(
+    commandId: string,
+    update: Pick<StoredClusterMeshCommand, 'status' | 'refusalReason' | 'actedAt'>,
+  ): Promise<boolean>;
 }
 
 export interface NamespaceCutoverKey {
