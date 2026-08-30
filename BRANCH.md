@@ -229,7 +229,8 @@
     - [x] Package coverage proves projected handlers, missing/stale fail-closed behavior, parked-to-LOST reconciliation, and 12/13 pre-actuation admission.
   - [x] Tests updated: `api/tests/unit/cluster-mesh-adapter.test.ts`, `api/tests/api/auth-device-code.spec.ts`, `api/tests/api/auth/session.test.ts`.
   - [x] UI tests updated: `ui/tests/chat/session-adapter.test.ts`, `ui/tests/stores/session.test.ts`, `ui/tests/components/chat/AppChatPanel-session-state.test.ts`.
-  - [ ] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` A1 session A→B, non-empty relaunch and LOST case; execute in Lot 33.
+  - [x] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` A1 session A→B, non-empty relaunch and LOST case; execute in Lot 33.
+    - [x] The scenario requires real h2a evidence/registration/tick/park/LOST locators and skips under the explicit `BR75-SG1` source-gap; it is not executed in Lot 4.
   - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/cluster-mesh-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-session.test.ts ENV=test-cluster-mesh-central-control-plane`.
