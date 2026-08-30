@@ -114,6 +114,7 @@
 - [x] `BR75-RV2` — `acknowledge` — Fable Lot 4 M1 is closed: the session author fence applies only to session/device/control handlers, and product plus IdP tests prove login and OAuth remain available after a `/session` rollback.
 - [x] `BR75-RV3` — `acknowledge` — Fable Lot 4 receipt minor is closed: a post-effect persistence failure preserves the acted command/effect and is distinct from an actuation failure.
 - [x] `BR75-RV4` — `acknowledge` — Fable Lot 4 M2 and partial-activation minor are closed: production records parity-suite evidence without a tautological shadow claim, package tests compare independent snapshots, and a persisted `shadow` record resumes to `active`.
+- [x] `BR75-RV5` — `acknowledge` — Lot 5 pre-deletion evidence is captured in commit `8b7b38c0e`: independent legacy/candidate PRM responses matched, validated provider intent produced exactly one egress, and deterministic initialize responses produced none.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -246,8 +247,8 @@
   - [x] Add reusable Hono ingress in `packages/mcp-platform/src/hono.ts`, composed with `mcpAuthRoutes(createMcpAuth(...))` and injected connector/invocation ports.
   - [x] Add `packages/cluster-mesh/src/runtime/mcp-supervisor.ts` enforcing one logical server/supervisor lease per generation and zero server ownership per session.
   - [x] Mount `/mcp` through the plugin; shadow PRM/read intent and deterministic protocol responses without duplicating provider effects.
-  - [ ] Select one MCP author, prove generation handover rollback, move product adapters to `api/src/routes/namespaces/mcp.ts`, delete `api/src/routes/api/mcp.ts` and remove direct connector dispatch.
-  - [ ] Own the `mcp-broker` bypass decision in this lot only: its locator is N-A from Lot 0; remove the verified direct connector dispatch in `api/src/routes/api/mcp.ts` after `mcp-platform` coverage and keep connector providers autonomous.
+  - [x] Select one MCP author, prove generation handover rollback, move product adapters to `api/src/routes/namespaces/mcp.ts`, delete `api/src/routes/api/mcp.ts` and remove direct connector dispatch.
+  - [x] Own the `mcp-broker` bypass decision in this lot only: its locator is N-A from Lot 0; remove the verified direct connector dispatch in `api/src/routes/api/mcp.ts` after `mcp-platform` coverage and keep connector providers autonomous.
   - [ ] Tests new: `packages/mcp-platform/tests/hono.test.ts`, `packages/cluster-mesh/tests/mcp-supervisor.spec.ts`, `api/tests/api/cluster-mesh-mcp-singleton.test.ts`.
   - [ ] Tests updated: `packages/mcp-auth/tests/core.test.ts`, `packages/mcp-auth/tests/hono.test.ts`, `packages/mcp-platform/tests/authz.test.ts`, `packages/mcp-platform/tests/durable.test.ts`, `packages/mcp-platform/tests/elicitation.test.ts`, `packages/mcp-platform/tests/persistence.test.ts`, `packages/mcp-platform/tests/transport.test.ts`, `packages/connector-host/tests/mount.test.ts`, `api/tests/api/mcp-resource-server.test.ts`, `api/tests/unit/connector-host.test.ts`.
   - [ ] UI tests: N-A; no UI source change.
