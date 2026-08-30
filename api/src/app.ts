@@ -7,6 +7,9 @@ import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
 import { logger } from './logger';
+import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
+import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
+import { productSessionModule } from './routes/namespaces/session';
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -118,6 +121,11 @@ app.use('*', async (c, next) => {
 applyAuthRateLimiters(app);
 
 app.route('/.well-known', wellKnownRouter);
+app.route('/api/v1', createClusterMeshPlugin({
+  runtime: clusterMeshAdapter.sessionControl!.runtime,
+  namespaces: [productSessionModule],
+  mounts: { '/session': '/auth' },
+}));
 app.route('/api/v1', apiRouter);
 app.route('/api/v1/auth', authRouter);
 

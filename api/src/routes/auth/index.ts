@@ -1,11 +1,9 @@
 import { Hono } from 'hono';
 import { registerRouter } from './register';
 import { loginRouter } from './login';
-import { sessionRouter } from './session';
 import { credentialsRouter } from './credentials';
 import { magicLinkRouter } from './magic-link';
 import { emailRouter } from './email';
-import { deviceRouter } from './device';
 import { oauthRouter } from './oauth';
 import { federationRouter } from './federation';
 import { serviceS2sRouter } from './service-s2s';
@@ -16,7 +14,7 @@ import { serviceS2sRouter } from './service-s2s';
  * Main auth router that aggregates all auth-related routes:
  * - /auth/register/* - WebAuthn registration
  * - /auth/login/* - WebAuthn authentication
- * - /auth/session/* - Session management
+ * Session and device lifecycle routes are authored by the Cluster Mesh `/session` module.
  * - /auth/credentials/* - Credential management
  * - /auth/magic-link/* - Magic link authentication
  */
@@ -26,11 +24,9 @@ export const authRouter = new Hono();
 // Mount sub-routers
 authRouter.route('/register', registerRouter);
 authRouter.route('/login', loginRouter);
-authRouter.route('/session', sessionRouter);
 authRouter.route('/credentials', credentialsRouter);
 authRouter.route('/magic-link', magicLinkRouter);
 authRouter.route('/email', emailRouter);
-authRouter.route('/device', deviceRouter);
 authRouter.route('/oauth', oauthRouter);
 authRouter.route('/federation', federationRouter);
 authRouter.route('/s2s', serviceS2sRouter);
