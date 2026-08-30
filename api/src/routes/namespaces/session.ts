@@ -1,12 +1,10 @@
 import {
   activateSessionCutover,
   createSessionNamespaceModule,
-  isValidSessionControlIntent,
   type ClusterMeshHonoNamespaceModule,
   type NamespaceCutoverKey,
   type SessionPathProjection,
 } from '@sentropic/cluster-mesh';
-import { readSessionShadowSnapshot } from '../../services/auth/session-adapter';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { sessionDeviceHandlers } from './session-device';
 import { sessionLifecycleHandlers } from './session-lifecycle';
@@ -21,32 +19,28 @@ const createAuthorPort = (key: NamespaceCutoverKey) => {
     async ensureAuthor() {
       try {
         let record = await control.cutovers.find(key);
-        if (!record) {
+        if (!record || record.status === 'shadow') {
           activation ??= activateSessionCutover({
             store: control.cutovers,
             key,
             generationId: control.runtime.generation.generationId,
             previousGenerationId: `legacy-auth-session-${key.compositionRoot}`,
             author: AUTHOR,
-            readLegacy: readSessionShadowSnapshot,
-            readCandidate: readSessionShadowSnapshot,
-            async validateDriveIntent() {
-              return isValidSessionControlIntent({
-                commandId: 'shadow-command',
-                targetRegistrationId: 'shadow-registration',
-                idempotencyKey: 'shadow-intent',
-              });
-            },
+            strategy: 'parity-suite',
+            suiteRefs: [
+              'api/tests/api/auth/session.test.ts',
+              'api/tests/api/auth-device-code.spec.ts',
+              'api/tests/unit/device-route.test.ts',
+            ],
+            intentValidationRef: 'packages/cluster-mesh/tests/session-router.spec.ts',
           }).finally(() => { activation = undefined; });
           await activation;
           record = await control.cutovers.find(key);
         }
-        return {
-          ok: record?.status === 'active'
-            && record.activeAuthor === AUTHOR
-            && record.selectedGenerationId === control.runtime.generation.generationId,
-          reason: 'wrong_author' as const,
-        };
+        const ok = record?.status === 'active'
+          && record.activeAuthor === AUTHOR
+          && record.selectedGenerationId === control.runtime.generation.generationId;
+        return ok ? { ok: true } : { ok: false, reason: 'wrong_author' as const };
       } catch {
         return { ok: false, reason: 'cutover_unavailable' as const };
       }

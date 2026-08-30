@@ -113,6 +113,8 @@
 - [x] `BR75-RV1` — `acknowledge` — Fable socle review M1 and the registration custody, refusal coverage, configuration coverage and actuator-spread minors are closed before Lot 3; the Phase A typecheck/test gate passes 38 tests.
 - [x] `BR75-RV2` — `acknowledge` — Fable Lot 4 M1 is closed: the session author fence applies only to session/device/control handlers, and product plus IdP tests prove login and OAuth remain available after a `/session` rollback.
 - [x] `BR75-RV3` — `acknowledge` — Fable Lot 4 receipt minor is closed: a post-effect persistence failure preserves the acted command/effect and is distinct from an actuation failure.
+- [x] `BR75-RV4` — `acknowledge` — Fable Lot 4 M2 and partial-activation minor are closed: production records parity-suite evidence without a tautological shadow claim, package tests compare independent snapshots, and a persisted `shadow` record resumes to `active`.
+- [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
 ## AI Flaky tests
