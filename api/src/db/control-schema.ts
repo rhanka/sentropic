@@ -490,3 +490,86 @@ export const clusterMeshRegistrations = controlSchema.table(
 
 export type ClusterMeshRegistrationRow = typeof clusterMeshRegistrations.$inferSelect;
 export type ClusterMeshRegistrationInsert = typeof clusterMeshRegistrations.$inferInsert;
+
+export const clusterMeshCapacityLeases = controlSchema.table(
+  'cluster_mesh_capacity_leases',
+  {
+    leaseId: text('lease_id').primaryKey(),
+    generationId: text('generation_id').notNull(),
+    subjectRef: text('subject_ref').notNull(),
+    status: text('status').notNull().default('reserved'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    recoveryIdx: index('cluster_mesh_capacity_leases_recovery_idx').on(
+      table.generationId,
+      table.status,
+      table.leaseExpiresAt,
+      table.expiresAt,
+    ),
+    statusCheck: check(
+      'cluster_mesh_capacity_leases_status_check',
+      sql`${table.status} IN ('reserved', 'active', 'released', 'expired')`,
+    ),
+  }),
+);
+
+export const clusterMeshMcpServers = controlSchema.table(
+  'cluster_mesh_mcp_servers',
+  {
+    serverId: text('server_id').primaryKey(),
+    generationId: text('generation_id').notNull(),
+    supervisorRef: text('supervisor_ref').notNull(),
+    status: text('status').notNull().default('starting'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    generationUnique: uniqueIndex('cluster_mesh_mcp_servers_generation_unique').on(table.generationId),
+    leaseIdx: index('cluster_mesh_mcp_servers_lease_idx').on(table.status, table.leaseExpiresAt),
+    statusCheck: check(
+      'cluster_mesh_mcp_servers_status_check',
+      sql`${table.status} IN ('starting', 'active', 'stopped', 'lost')`,
+    ),
+  }),
+);
+
+export const clusterMeshCommands = controlSchema.table(
+  'cluster_mesh_commands',
+  {
+    commandId: text('command_id').primaryKey(),
+    generationId: text('generation_id').notNull(),
+    targetRegistrationId: text('target_registration_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    action: text('action').notNull(),
+    status: text('status').notNull().default('pending'),
+    refusalReason: text('refusal_reason'),
+    actedAt: timestamp('acted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    targetIdempotencyUnique: uniqueIndex('cluster_mesh_commands_target_idempotency_unique').on(
+      table.targetRegistrationId,
+      table.idempotencyKey,
+    ),
+    pendingTargetIdx: index('cluster_mesh_commands_pending_target_idx').on(
+      table.generationId,
+      table.targetRegistrationId,
+      table.status,
+    ),
+    actionCheck: check(
+      'cluster_mesh_commands_action_check',
+      sql`${table.action} IN ('drive', 'wake', 'relaunch')`,
+    ),
+    statusCheck: check(
+      'cluster_mesh_commands_status_check',
+      sql`${table.status} IN ('pending', 'accepted', 'refused', 'acted', 'failed')`,
+    ),
+  }),
+);
