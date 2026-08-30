@@ -244,7 +244,7 @@
 - [ ] **Lot 5 — `/mcp` reusable wrapping and logical singleton cutover**
   - [ ] Namespace: `/mcp`; type: reusable wrapping, plugin mount, D11 cutover and legacy deletion.
   - [ ] Add reusable Hono ingress in `packages/mcp-platform/src/hono.ts`, composed with `mcpAuthRoutes(createMcpAuth(...))` and injected connector/invocation ports.
-  - [ ] Add `packages/cluster-mesh/src/runtime/mcp-supervisor.ts` enforcing one logical server/supervisor lease per generation and zero server ownership per session.
+  - [x] Add `packages/cluster-mesh/src/runtime/mcp-supervisor.ts` enforcing one logical server/supervisor lease per generation and zero server ownership per session.
   - [ ] Mount `/mcp` through the plugin; shadow PRM/read intent and deterministic protocol responses without duplicating provider effects.
   - [ ] Select one MCP author, prove generation handover rollback, move product adapters to `api/src/routes/namespaces/mcp.ts`, delete `api/src/routes/api/mcp.ts` and remove direct connector dispatch.
   - [ ] Own the `mcp-broker` bypass decision in this lot only: its locator is N-A from Lot 0; remove the verified direct connector dispatch in `api/src/routes/api/mcp.ts` after `mcp-platform` coverage and keep connector providers autonomous.
