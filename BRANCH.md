@@ -199,6 +199,7 @@
   - [x] Lot gate: `make test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C1 migration/backfill/rollback before every app cutover; C3 injected persistence; `BR75-SG7` independently closed before any SQL generation or build blocked.
     - [x] Evidence: activation retains the previous generation, rollback requires its checkpoint and the migration test restores the root-specific namespace author.
+    - [x] Fable M1/m6 follow-up: `0007` carries an executable operator-gated down block, and the location-independent migration test proves apply → rollback restores the pre-0007 schema while retaining `event_outbox`.
 
 - [ ] **Lot 4 — `/session` socle cutover and internally closable gates**
   - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
