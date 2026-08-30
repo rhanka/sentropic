@@ -187,7 +187,7 @@
   - [ ] Create generations, registrations, capacity leases, logical MCP servers, commands, receipts and namespace cutovers in the control schema; reuse `control.event_outbox`.
   - [ ] Key namespace cutovers by `(compositionRoot, namespace)` and include the SG7 covering indexes, per-target command idempotency uniqueness and crash-safe capacity lease/expiry reclamation in this migration before generating SQL.
   - [ ] Add `api/src/services/cluster-mesh/postgres-runtime-store.ts`, `postgres-cutover-store.ts` and rollback/backfill verification ports.
-  - [ ] Add `packages/cluster-mesh/src/persistence/ports.ts`; keep adapters injected and keep `LOCAL_ONLY` free of app mirrors.
+  - [x] Add `packages/cluster-mesh/src/persistence/ports.ts`; keep adapters injected and keep `LOCAL_ONLY` free of app mirrors.
   - [ ] Record C1 backfill exactly as `N-A-from-empty`: CURRENT attachment state is a process-local `Map`, so no durable rows exist to migrate.
   - [ ] Tests new: `api/tests/unit/cluster-mesh-postgres-runtime.test.ts`, `api/tests/api/cluster-mesh-migration.test.ts`, `packages/cluster-mesh/tests/persistence-ports.spec.ts`.
   - [ ] Tests updated: `api/tests/outbox/outbox-round-trip.test.ts` for receipt/outbox integration without a duplicate outbox.
