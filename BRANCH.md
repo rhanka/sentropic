@@ -165,21 +165,16 @@
   - [x] Lot gate: `make scope-check ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C4 conductor-normalized provenance; C5 superseded synthesis language; D17 internal classification.
 
-- [ ] **Lot 1 — Neutral capability, workspace, identity-reference, event, and persistence contracts**
-  - [ ] Add `packages/contracts/src/capability.ts` with versioned capability descriptors, invocation request/result, typed failure, and provider-opaque payload references.
-  - [ ] Add `packages/contracts/src/workspace-binding.ts` with distinct repository/product workspace references, authority mode, binding revision, and `homeEpoch`.
-  - [ ] Add `packages/contracts/src/identity-reference.ts` with linked human/product, workload/NHI, mandate, custody, and verifier-result references; keep it DTO-only.
-  - [ ] Add `packages/contracts/src/secure-agent-message.ts` with profile-neutral verification inputs/results and no selected wire encoding.
-  - [ ] Update `packages/contracts/src/index.ts` and `packages/contracts/package.json` exports/version.
-  - [ ] Add `packages/events/src/control-plane.ts` with correlation, causation, idempotency, epoch, command, event, receipt, and provider codec-reference envelopes.
-  - [ ] Update `packages/events/src/index.ts` and `packages/events/package.json` exports/version.
-  - [ ] Add `packages/cluster-mesh/src/persistence/contracts.ts` with mode-aware transaction, outbox, replay, checkpoint, and binding store ports.
-  - [ ] Add contract compatibility fixtures under `packages/contracts/tests/fixtures/` for current h2a workspace/event/envelope shapes without importing h2a-owned semantics.
-  - [ ] Add `packages/contracts/tests/capability.spec.ts`, `workspace-binding.spec.ts`, `identity-reference.spec.ts`, and `secure-agent-message.spec.ts`.
-  - [ ] Add `packages/events/tests/control-plane.spec.ts` for versioning, opaque payloads, idempotency, epoch, correlation/causation, and receipt round trips.
-  - [ ] Lot gate: `make typecheck-contracts build-contracts typecheck-events build-events ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-packages SCOPE=packages/contracts/tests ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-packages SCOPE=packages/events/tests ENV=test-cluster-mesh-central-control-plane`.
+- [x] **Lot 1 — Neutral `VerifiedInvocationContext` and namespace module contracts**
+  - [x] Namespace: shared socle; type: contract extraction.
+  - [x] Add `packages/contracts/src/verified-invocation-context.ts`, `packages/contracts/src/cluster-mesh-namespace.ts` and neutral reference/port exports; update `packages/contracts/src/index.ts` and package version.
+  - [x] Add `packages/events/src/invocation-receipt.ts` for transported/verified/acted stages, generation, correlation and idempotency; update exports/version.
+  - [x] Keep every field secret-free and provider-neutral; do not import Cluster Mesh from contracts/events.
+  - [x] Tests new: `packages/cluster-mesh/tests/verified-invocation-context.spec.ts` and `packages/cluster-mesh/tests/namespace-module-contract.spec.ts` using a synthetic injected context.
+  - [x] API/UI/E2E tests: N-A; no application mount changes.
+  - [x] Lot gate: `make typecheck-contracts build-contracts typecheck-events build-events ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Internal gates: C3 neutral injectable context; A5 standalone contract foundation.
 
 - [ ] **Lot 2 — Minimum centralized h2a runtime**
   - [ ] Add `packages/cluster-mesh/src/runtime/workspace-runtime.ts` as the sole entry for workspace resolution and provider composition.
