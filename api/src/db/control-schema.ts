@@ -573,3 +573,74 @@ export const clusterMeshCommands = controlSchema.table(
     ),
   }),
 );
+
+export const clusterMeshReceipts = controlSchema.table(
+  'cluster_mesh_receipts',
+  {
+    receiptId: text('receipt_id').primaryKey(),
+    commandId: text('command_id'),
+    invocationId: text('invocation_id').notNull(),
+    correlationId: text('correlation_id').notNull(),
+    generationId: text('generation_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    stage: text('stage').notNull(),
+    decision: text('decision'),
+    refusalReason: text('refusal_reason'),
+    effectRef: text('effect_ref'),
+    outboxEventId: text('outbox_event_id').notNull().references(() => eventOutbox.id),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    outboxEventUnique: uniqueIndex('cluster_mesh_receipts_outbox_event_unique').on(table.outboxEventId),
+    invocationStageUnique: uniqueIndex('cluster_mesh_receipts_invocation_stage_unique').on(
+      table.invocationId,
+      table.stage,
+    ),
+    commandStageIdx: index('cluster_mesh_receipts_command_stage_idx').on(table.commandId, table.stage),
+    stageCheck: check(
+      'cluster_mesh_receipts_stage_check',
+      sql`${table.stage} IN ('transported', 'verified', 'acted')`,
+    ),
+    decisionCheck: check(
+      'cluster_mesh_receipts_decision_check',
+      sql`${table.decision} IS NULL OR ${table.decision} IN ('accepted', 'refused')`,
+    ),
+  }),
+);
+
+export const clusterMeshNamespaceCutovers = controlSchema.table(
+  'cluster_mesh_namespace_cutovers',
+  {
+    compositionRoot: text('composition_root').notNull(),
+    namespace: text('namespace').notNull(),
+    selectedGenerationId: text('selected_generation_id').notNull(),
+    previousGenerationId: text('previous_generation_id'),
+    activeAuthor: text('active_author').notNull(),
+    status: text('status').notNull().default('shadow'),
+    shadowComparison: jsonb('shadow_comparison'),
+    rollbackCheckpoint: jsonb('rollback_checkpoint'),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.compositionRoot, table.namespace],
+      name: 'cluster_mesh_namespace_cutovers_pk',
+    }),
+    activeIdx: index('cluster_mesh_namespace_cutovers_active_idx').on(
+      table.compositionRoot,
+      table.status,
+      table.selectedGenerationId,
+    ),
+    rootCheck: check(
+      'cluster_mesh_namespace_cutovers_root_check',
+      sql`${table.compositionRoot} IN ('product', 'auth-idp')`,
+    ),
+    statusCheck: check(
+      'cluster_mesh_namespace_cutovers_status_check',
+      sql`${table.status} IN ('shadow', 'active', 'rolled_back', 'disabled')`,
+    ),
+  }),
+);
