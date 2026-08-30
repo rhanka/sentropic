@@ -214,6 +214,7 @@
   - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
   - [ ] Reject missing/stale registration before PTY and reconcile dead/parked targets to LOST; acted receipt plus a real target tick remains the external `BR75-SG1` proof rather than a Lot 4 progression gate.
   - [ ] Tests new: `packages/cluster-mesh/tests/session-router.spec.ts`, `api/tests/api/cluster-mesh-session.test.ts`.
+    - [x] Package coverage proves projected handlers, missing/stale fail-closed behavior, parked-to-LOST reconciliation, and 12/13 pre-actuation admission.
   - [ ] Tests updated: `api/tests/unit/cluster-mesh-adapter.test.ts`, `api/tests/api/auth-device-code.spec.ts`, `api/tests/api/auth/session.test.ts`.
   - [ ] UI tests updated: `ui/tests/chat/session-adapter.test.ts`, `ui/tests/stores/session.test.ts`, `ui/tests/components/chat/AppChatPanel-session-state.test.ts`.
   - [ ] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` A1 session A→B, non-empty relaunch and LOST case; execute in Lot 33.
