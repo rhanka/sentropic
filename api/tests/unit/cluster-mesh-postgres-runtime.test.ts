@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
+import { idempotencyKey } from '@sentropic/contracts';
 import { db } from '../../src/db/client';
 import {
   clusterMeshCapacityLeases,
@@ -48,10 +49,12 @@ describe('PostgresClusterMeshRuntimeStore', () => {
       generationId: 'generation-test',
       principalId: 'nhi-test',
       workspaceId: 'workspace-test',
+      custodyHolderPrincipalId: 'custodian-test',
       custodyEpoch: 4,
       actuatorRef: 'pty:test',
       status: 'active',
       expiresAt: future,
+      leaseExpiresAt: '2026-08-31T23:00:00.000Z',
     });
 
     await expect(store.find('registration-test')).resolves.toEqual({
@@ -59,10 +62,14 @@ describe('PostgresClusterMeshRuntimeStore', () => {
       generationId: 'generation-test',
       principalId: 'nhi-test',
       workspaceId: 'workspace-test',
+      custodyHolderPrincipalId: 'custodian-test',
       custodyEpoch: 4,
       actuatorRef: 'pty:test',
       status: 'active',
       expiresAt: future,
+      leaseExpiresAt: '2026-08-31T23:00:00.000Z',
+      revokedAt: undefined,
+      lostAt: undefined,
     });
   });
 
@@ -77,9 +84,22 @@ describe('PostgresClusterMeshRuntimeStore', () => {
       leaseExpiresAt: future,
     });
 
-    await expect(store.reserveCapacity(lease('lease-1'))).resolves.toBe(true);
-    await expect(store.reserveCapacity(lease('lease-2'))).resolves.toBe(true);
-    await expect(store.reserveCapacity(lease('lease-3'))).resolves.toBe(false);
+    await expect(store.reserveCapacity(lease('lease-1'))).resolves.toEqual({
+      ok: true,
+      outcome: 'reserved',
+    });
+    await expect(store.reserveCapacity(lease('lease-1'))).resolves.toEqual({
+      ok: true,
+      outcome: 'idempotent_retry',
+    });
+    await expect(store.reserveCapacity(lease('lease-2'))).resolves.toEqual({
+      ok: true,
+      outcome: 'reserved',
+    });
+    await expect(store.reserveCapacity(lease('lease-3'))).resolves.toEqual({
+      ok: false,
+      reason: 'capacity_exhausted',
+    });
     await saveGeneration('lost', past);
     await expect(store.reclaimExpiredCapacity('2026-08-30T00:00:00.000Z')).resolves.toBe(2);
     const expired = await db.select().from(clusterMeshCapacityLeases)
@@ -117,5 +137,30 @@ describe('PostgresClusterMeshRuntimeStore', () => {
     await expect(store.enqueueCommand(command('command-1', 'target-1'))).resolves.toBe(true);
     await expect(store.enqueueCommand(command('command-2', 'target-1'))).resolves.toBe(false);
     await expect(store.enqueueCommand(command('command-3', 'target-2'))).resolves.toBe(true);
+  });
+
+  it('should persist the command linked to a receipt and enforce one stage per invocation', async () => {
+    const receipt = {
+      receiptId: 'receipt-1',
+      commandId: 'command-1',
+      invocationId: 'invocation-1',
+      correlationId: 'correlation-1',
+      generationId: 'generation-test',
+      idempotencyKey: idempotencyKey('idempotency-receipt'),
+      stage: 'acted' as const,
+      effectRef: 'effect-1',
+      occurredAt: '2026-08-30T12:00:00.000Z',
+    };
+    await store.append(receipt);
+
+    const [persisted] = await db.select({ commandId: clusterMeshReceipts.commandId })
+      .from(clusterMeshReceipts).where(eq(clusterMeshReceipts.receiptId, receipt.receiptId));
+    expect(persisted?.commandId).toBe(receipt.commandId);
+
+    const failure: unknown = await store.append({ ...receipt, receiptId: 'receipt-2' })
+      .catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      cause: { constraint: 'cluster_mesh_receipts_invocation_stage_unique' },
+    });
   });
 });
