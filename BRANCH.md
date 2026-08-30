@@ -146,15 +146,24 @@
 
 ## Plan / Todo (lot-based)
 
-- [ ] **Lot 0 — Baseline, accepted contracts, and migration inventory**
-  - [ ] Re-read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `rules/security.md`, this plan, the accepted spec, and the archived r8 evidence.
-  - [ ] Run `harness check branch` and `make scope-check` before implementation.
-  - [ ] Pin the `origin/main` base SHA, Node/package versions, h2a evidence SHA, Graphify evidence SHA, and accepted r8 dossier digest in this file.
-  - [ ] Inventory current direct effect paths in `api/src/routes/api/mcp.ts`, `packages/mcp-broker/src/broker.ts`, `api/src/services/llm-account-transports.ts`, and session persistence; record the removal gate for each.
-  - [ ] Inventory current schema and reserve exactly one migration identifier; declare `CMCP-EX1` before generation.
-  - [ ] Confirm test environments and non-conflicting ports: API `8788`, UI `5174`, Maildev UI `1084`.
-  - [ ] Confirm no external h2a/Graphify source modification is required to deliver a truthful Sentropic package and compatibility proof.
-  - [ ] Lot gate: `make scope-check ENV=test-cluster-mesh-central-control-plane`.
+- [x] **Lot 0 — r13 baseline, source ledger and execution inventory**
+  - [x] Namespace: N-A; type: read-only baseline and conductor gate preparation.
+  - [x] Verify branch with `harness check branch`, record base SHA and run `make scope-check ENV=test-cluster-mesh-central-control-plane` before implementation.
+    - [x] Evidence: branch `feat/cluster-mesh-central-control-plane`; base SHA `90c7f5c81f03a8cf9fab4e9e18cb0987455a6cc0`; harness `PASS C1`; scope `PASS C2`.
+  - [x] Reconcile all 56 route files with `api/src/routes/api/index.ts`, `api/src/app.ts`, `api/src/routes/auth/index.ts`, `api/src/routes/well-known.ts` and `apps/auth-idp/idp-app.ts`.
+    - [x] Evidence: 44 API files, 11 auth files and one well-known file; product mounts `/.well-known`, `/api/v1` and `/api/v1/auth`; IdP mounts `/.well-known` and `/api/v1/auth`.
+  - [x] Confirm 29 namespace keys, current owners, target owners, legacy deletion locator and package semver impact.
+    - [x] Evidence: the 29-row D13 inventory is reconciled; Lots 1–2 require minor bumps for `contracts`, `events` and `cluster-mesh`; legacy removals remain assigned to their cutover lots.
+  - [x] Freeze the `mcp-broker` bypass locator as N-A because no reference exists in `api/src/**` or `api/package.json`; Lot 5 is the sole owner of the verified direct MCP-to-connector dispatch removal, and Lot 14 has no bypass-removal ownership.
+  - [x] Confirm free migration ids public 0042/control 0007 and approve only `BR75-EX1`.
+    - [x] Evidence: latest files are public `0041_track_owner_signatures.sql` and control `0006_arch11_outbox_tenant_rekey.sql`; no SQL is created in this leg.
+  - [x] Reproduce h2a CURRENT A1/A2 failure counters without changing h2a and attach evidence to `BR75-SG1`.
+    - [x] `BR75-SG1` evidence: pinned qualification records 0 central listeners, 44 per-session `mcp-serve` sidecars, `missing-registration`, `relanced:[]` and ghost presence; the build-host live snapshot found 0 central listener processes and 0 active sidecars, so 44 is retained as pinned qualification evidence rather than a live count.
+  - [x] Archive a durable digest of the r13 dossier/route inventory needed by the build without modifying the dossier.
+    - [x] Evidence: dossier SHA-256 `7e45fb1fb026e85f974ffaa79279745b6a0587af5ef7c9f55a58fb2747591fc3`; sorted route-path SHA-256 `9ee50300f4c4e2df6dbafdfb4770a4e9188d150a77932961264b1e34d2fb82d4`; route tree `1a395d0ebe704371bb9e74b80aa49660810f5d99`.
+  - [x] Tests by file: N-A; this lot changes only plan/evidence text.
+  - [x] Lot gate: `make scope-check ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Internal gates: C4 conductor-normalized provenance; C5 superseded synthesis language; D17 internal classification.
 
 - [ ] **Lot 1 — Neutral capability, workspace, identity-reference, event, and persistence contracts**
   - [ ] Add `packages/contracts/src/capability.ts` with versioned capability descriptors, invocation request/result, typed failure, and provider-opaque payload references.
