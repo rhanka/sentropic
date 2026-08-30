@@ -1,3 +1,4 @@
+import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const doubles = vi.hoisted(() => ({
@@ -33,7 +34,9 @@ vi.mock('../../src/db/client', () => ({
   },
 }));
 
-import { deviceRouter } from '../../src/routes/auth/device';
+import { sessionDeviceHandlers } from '../../src/routes/namespaces/session-device';
+
+const deviceRouter = new Hono().post('/poll', sessionDeviceHandlers.poll);
 
 describe('device enrollment route', () => {
   beforeEach(() => {

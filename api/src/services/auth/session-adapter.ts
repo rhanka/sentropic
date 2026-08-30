@@ -18,7 +18,7 @@ import { readDeviceCodeSnapshot } from '../device-code-store';
 /**
  * Sentropic adapters for `@sentropic/auth-hono` session route handlers.
  *
- * Shared by `api/src/routes/auth/session.ts` and reusable by the auth middleware
+ * Shared by the Cluster Mesh session namespace and reusable by the auth middleware
  * and WebAuthn login/register rewirings. The session service implements only the
  * methods consumed by the package session route handlers (`refreshSession`,
  * `validateSessionToken`, `revokeSession`); `createSession`, `listUserSessions`,
