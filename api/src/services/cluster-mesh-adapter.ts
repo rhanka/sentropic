@@ -1,6 +1,8 @@
 import {
   createBoundaryDomain,
+  createClusterMeshRuntime,
   createLocalDeviceDomain,
+  createRegistrationGate,
   createSingleNodeMembership,
   type BoundaryDomain,
   type ClusterNodeDescriptor,
@@ -10,8 +12,14 @@ import {
   type DeviceApprovalResult,
   type LocalWorkstationDescriptor,
   type MembershipDomain,
+  type ClusterMeshCutoverStore,
+  type ClusterMeshRuntime,
+  type ClusterMeshRuntimeStore,
+  type PtyActuatorPort,
+  type SessionTargetStatePort,
   type WorkstationId,
 } from '@sentropic/cluster-mesh';
+import type { VerifiedInvocationContextPort } from '@sentropic/contracts';
 
 import { env } from '../config/env';
 import {
@@ -20,11 +28,22 @@ import {
   pollDeviceCode,
 } from './device-code-store';
 import { resolveTenantAuthoritatively } from './tenancy/resolve-tenant';
+import { PostgresClusterMeshCutoverStore } from './cluster-mesh/postgres-cutover-store';
+import { PostgresClusterMeshRuntimeStore } from './cluster-mesh/postgres-runtime-store';
+
+export interface ClusterMeshSessionControl {
+  readonly runtime: ClusterMeshRuntime;
+  readonly store: ClusterMeshRuntimeStore;
+  readonly cutovers: ClusterMeshCutoverStore;
+  readonly targets: SessionTargetStatePort;
+  readonly ptyEvidence: 'adapter_available' | 'BR75-SG1_source_gap';
+}
 
 export interface ClusterMeshAppAdapter {
   readonly membership: MembershipDomain;
   readonly devices: DeviceDomain;
   readonly boundaries: BoundaryDomain;
+  readonly sessionControl?: ClusterMeshSessionControl;
   completeDeviceAttachment(outcome: Extract<DevicePollOutcome, { status: 'approved' }>): void;
 }
 
@@ -43,6 +62,15 @@ export interface ClusterMeshAppDependencies {
     userId: string;
   }): Promise<{ tenantId: string } | { error: 'unknown' | 'ambiguous_tenant' }>;
   createWorkstationId?(): WorkstationId;
+  readonly sessionControl?: {
+    readonly generationId: string;
+    readonly context: VerifiedInvocationContextPort;
+    readonly runtimeStore: ClusterMeshRuntimeStore;
+    readonly cutovers: ClusterMeshCutoverStore;
+    readonly pty: PtyActuatorPort;
+    readonly targets: SessionTargetStatePort;
+    readonly ptyEvidence: ClusterMeshSessionControl['ptyEvidence'];
+  };
 }
 
 export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): ClusterMeshAppAdapter {
@@ -62,6 +90,24 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
       },
     },
   });
+  const control = deps.sessionControl;
+  const sessionControl = control ? {
+    runtime: createClusterMeshRuntime({
+      generationId: control.generationId,
+      config: { capacity: { poolSize: 4 } },
+      context: control.context,
+      registration: createRegistrationGate({
+        generationId: control.generationId,
+        registrations: control.runtimeStore,
+        pty: control.pty,
+      }),
+      receipts: control.runtimeStore,
+    }),
+    store: control.runtimeStore,
+    cutovers: control.cutovers,
+    targets: control.targets,
+    ptyEvidence: control.ptyEvidence,
+  } satisfies ClusterMeshSessionControl : undefined;
 
   return {
     devices,
@@ -71,6 +117,7 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
       workstations: { async listAttached() { return [...attached.values()]; } },
     }),
     boundaries,
+    sessionControl,
     completeDeviceAttachment(outcome) {
       const key = `${outcome.userId}\0${outcome.deviceName}`;
       if (attached.has(key)) return;
@@ -88,6 +135,13 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
 const localEndpoint = (process.env.API_BASE_URL || env.OAUTH_ISSUER_URL || `http://localhost:${env.PORT}`)
   .replace(/\/$/, '');
 
+const runtimeStore = new PostgresClusterMeshRuntimeStore();
+const unavailableH2aPtyPort: PtyActuatorPort = {
+  kind: 'pty',
+  async isAvailable() { return false; },
+  async actuate() { throw new Error('BR75-SG1 h2a PTY adapter is unavailable'); },
+};
+
 export const clusterMeshAdapter = createClusterMeshAppAdapter({
   self: {
     kind: 'server',
@@ -100,4 +154,17 @@ export const clusterMeshAdapter = createClusterMeshAppAdapter({
   pollDeviceCode,
   approveDeviceCode,
   resolveTenant: resolveTenantAuthoritatively,
+  sessionControl: {
+    generationId: 'cluster-mesh-session-v1',
+    context: {
+      async verify() {
+        throw new Error('verified session control evidence is unavailable');
+      },
+    },
+    runtimeStore,
+    cutovers: new PostgresClusterMeshCutoverStore(),
+    pty: unavailableH2aPtyPort,
+    targets: { async inspect() { return 'unknown'; } },
+    ptyEvidence: 'BR75-SG1_source_gap',
+  },
 });
