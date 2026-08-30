@@ -14,6 +14,7 @@ export * from './hono/session-router.js';
 export * from './persistence/ports.js';
 export * from './runtime/admission.js';
 export * from './runtime/generation.js';
+export * from './runtime/mcp-supervisor.js';
 export * from './runtime/namespace-registry.js';
 export * from './runtime/receipts.js';
 export * from './runtime/registration.js';
