@@ -56,6 +56,11 @@ describe('Device-code enrollment API', () => {
     expect(payload.expires_in).toBe(600);
   });
 
+  it('has no second device-code path outside the root projection', async () => {
+    const response = await unauthenticatedRequest(app, 'POST', '/api/v1/session/device/code');
+    expect(response.status).toBe(404);
+  });
+
   it('returns authorization_pending before approval', async () => {
     const { device_code } = await issueCode();
 
