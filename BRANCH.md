@@ -110,6 +110,7 @@
 - [ ] `BR75-SG7` — `attention` — before any Lot 3 SQL generation, independently challenge the unique migration and freeze `cluster_mesh_namespace_cutovers` on key `(compositionRoot, namespace)`; the same migration must include covering indexes for A1/A3 active-registration queries by `(generation, workspace, NHI)` with expiry/lease, command idempotency-key uniqueness per target, and lease/expiry reclamation of `capacity_leases` after a generation crash. A second SQL file is forbidden.
 - [ ] `BR75-SG8` — `attention` — r12 n2/n3 concern the decision-kit HTML provenance rendering and three labels at the accepted 210px cap; this router/runtime branch records them as N-A unless `/focus` expands into renderer work.
 - [ ] `BR75-SG9` — `attention` — the reported 16 design-system findings are unverified dependency-bundle observations, not a gate without a separately authorized global dependency lint.
+- [x] `BR75-RV1` — `acknowledge` — Fable socle review M1 and the registration custody, refusal coverage, configuration coverage and actuator-spread minors are closed before Lot 3; the Phase A typecheck/test gate passes 38 tests.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
 ## AI Flaky tests

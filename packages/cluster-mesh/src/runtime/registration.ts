@@ -88,7 +88,8 @@ export function createRegistrationGate(input: {
       const registration = await input.registrations.find(reference.registrationId);
       if (!registration) return { ok: false, reason: 'missing_registration' };
       if (registration.status === 'revoked') return { ok: false, reason: 'revoked_registration' };
-      if (registration.status === 'lost' || Date.parse(registration.expiresAt) <= now().getTime()) {
+      const expiry = Date.parse(registration.expiresAt);
+      if (registration.status === 'lost' || !Number.isFinite(expiry) || expiry <= now().getTime()) {
         return { ok: false, reason: 'stale_registration' };
       }
       if (
@@ -106,12 +107,17 @@ export function createRegistrationGate(input: {
       if (
         registration.custodyEpoch !== reference.custodyEpoch
         || (context.custody && context.custody.epoch !== registration.custodyEpoch)
+        || (context.custody && context.custody.holderPrincipalId !== registration.principalId)
       ) return { ok: false, reason: 'custody_mismatch' };
       if (
         reference.actuatorRef !== registration.actuatorRef
         || reference.expiresAt !== registration.expiresAt
       ) return { ok: false, reason: 'stale_registration' };
-      const actuator = await selectPreferredActuator({ ...input, actuatorRef: registration.actuatorRef });
+      const actuator = await selectPreferredActuator({
+        actuatorRef: registration.actuatorRef,
+        pty: input.pty,
+        secondary: input.secondary,
+      });
       if (!actuator) return { ok: false, reason: 'actuator_unavailable' };
       return { ok: true, registration, actuator };
     },

@@ -52,8 +52,12 @@ function actuatorPorts(ptyAvailable: boolean, secondaryAvailable = true) {
   return { pty, secondary };
 }
 
-function gate(record: ClusterMeshRegistration | null, ptyAvailable = true) {
-  const actuators = actuatorPorts(ptyAvailable);
+function gate(
+  record: ClusterMeshRegistration | null,
+  ptyAvailable = true,
+  secondaryAvailable = true,
+) {
+  const actuators = actuatorPorts(ptyAvailable, secondaryAvailable);
   return {
     actuators,
     gate: createRegistrationGate({
@@ -90,6 +94,13 @@ describe('registration gate', () => {
       .resolves.toEqual({ ok: false, reason: 'stale_registration' });
   });
 
+  it('should reject a registration with an invalid expiry as stale', async () => {
+    await expect(gate({ ...registration, expiresAt: 'not-a-date' }).gate.authorize({
+      ...context,
+      registration: { ...context.registration!, expiresAt: 'not-a-date' },
+    })).resolves.toEqual({ ok: false, reason: 'stale_registration' });
+  });
+
   it('should reject a registration from another generation before actuation', async () => {
     const mismatch = gate({ ...registration, generationId: 'generation-old' });
     await expect(mismatch.gate.authorize(context)).resolves.toEqual({
@@ -97,5 +108,18 @@ describe('registration gate', () => {
       reason: 'generation_mismatch',
     });
     expect(mismatch.actuators.pty.isAvailable).not.toHaveBeenCalled();
+  });
+
+  it('should reject principal, workspace, custody and actuator mismatches distinctly', async () => {
+    await expect(gate({ ...registration, principalId: 'workload-other' }).gate.authorize(context))
+      .resolves.toEqual({ ok: false, reason: 'principal_mismatch' });
+    await expect(gate({ ...registration, workspaceId: 'workspace-other' }).gate.authorize(context))
+      .resolves.toEqual({ ok: false, reason: 'workspace_mismatch' });
+    await expect(gate(registration).gate.authorize({
+      ...context,
+      custody: { ...context.custody!, holderPrincipalId: 'workload-other' },
+    })).resolves.toEqual({ ok: false, reason: 'custody_mismatch' });
+    await expect(gate(registration, false, false).gate.authorize(context))
+      .resolves.toEqual({ ok: false, reason: 'actuator_unavailable' });
   });
 });

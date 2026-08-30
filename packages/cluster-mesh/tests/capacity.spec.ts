@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveClusterMeshConfig } from '../src/config.js';
+import { ClusterMeshConfigError, resolveClusterMeshConfig } from '../src/config.js';
 import { createCapacityAdmission } from '../src/runtime/admission.js';
 
 describe('cluster mesh capacity admission', () => {
@@ -42,5 +42,18 @@ describe('cluster mesh capacity admission', () => {
       ok: false,
       reason: 'capacity_exhausted',
     });
+  });
+
+  it.each([
+    [{ capacity: { maxConcurrent: 0, poolSize: 1 } }, 'maxConcurrent'],
+    [{ capacity: { maxConcurrent: 1.5, poolSize: 1 } }, 'maxConcurrent'],
+    [{ capacity: { maxConcurrent: 2, poolSize: 0 } }, 'poolSize'],
+    [{ capacity: { maxConcurrent: 2, poolSize: 1.5 } }, 'poolSize'],
+    [{ capacity: { maxConcurrent: 2, poolSize: 3 } }, 'poolSize'],
+  ])('should reject invalid capacity config %#', (input, field) => {
+    expect(() => resolveClusterMeshConfig(input)).toThrowError(ClusterMeshConfigError);
+    expect(() => resolveClusterMeshConfig(input)).toThrowError(
+      expect.objectContaining({ message: expect.stringContaining(field) }),
+    );
   });
 });
