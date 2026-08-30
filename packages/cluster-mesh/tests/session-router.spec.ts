@@ -34,6 +34,7 @@ function fixture(input: {
   pty?: PtyActuatorPort;
   target?: 'alive' | 'dead' | 'parked' | 'unknown';
   context?: (invocationId: string) => VerifiedInvocationContext;
+  receiptFailureStage?: 'acted';
 } = {}) {
   const receipts: unknown[] = [];
   const pty = input.pty ?? {
@@ -49,7 +50,12 @@ function fixture(input: {
       registrations: { async find() { return input.record === undefined ? registration : input.record; } },
       pty, now: () => new Date('2026-08-30T12:00:00.000Z'),
     }),
-    receipts: { async append(receipt) { receipts.push(receipt); } },
+    receipts: {
+      async append(receipt) {
+        receipts.push(receipt);
+        if (receipt.stage === input.receiptFailureStage) throw new Error('receipt persistence failed');
+      },
+    },
     now: () => new Date('2026-08-30T12:00:00.000Z'),
   });
   const store = {
@@ -140,5 +146,23 @@ describe('session namespace router', () => {
     expect(pty.actuate).toHaveBeenCalledTimes(12);
     release();
     await Promise.all(requests);
+  });
+
+  it('preserves the acted command when receipt persistence fails after the effect', async () => {
+    const { app, pty, store } = fixture({ receiptFailureStage: 'acted' });
+
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-post-effect-failure')),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'post_effect_persistence_failed', status: 'acted', effectRef: 'tick-1',
+    });
+    expect(pty.actuate).toHaveBeenCalledOnce();
+    expect(store.updateCommand.mock.calls.map(([, update]) => update.status)).toEqual([
+      'accepted', 'acted',
+    ]);
   });
 });
