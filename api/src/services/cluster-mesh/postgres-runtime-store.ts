@@ -18,11 +18,13 @@ import {
 } from '../../db/control-schema';
 import { outboxWriter } from '../outbox/outbox-writer';
 const date = (value: string) => new Date(value);
+const nullableDate = (value?: string) => value ? date(value) : null;
 export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore {
   async saveGeneration(value: StoredClusterMeshGeneration): Promise<void> {
     const row = {
       ...value,
       supervisorLeaseExpiresAt: date(value.supervisorLeaseExpiresAt),
+      stoppedAt: nullableDate(value.stoppedAt),
       updatedAt: new Date(),
     };
     await db.insert(clusterMeshGenerations).values(row).onConflictDoUpdate({
@@ -31,18 +33,19 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
     });
   }
   async saveRegistration(value: Parameters<ClusterMeshRuntimeStore['saveRegistration']>[0]): Promise<void> {
-    const expiry = date(value.expiresAt);
     const row = {
       registrationId: value.registrationId,
       generationId: value.generationId,
       workspaceId: value.workspaceId,
       nhiPrincipalId: value.principalId,
-      custodyHolderPrincipalId: value.principalId,
+      custodyHolderPrincipalId: value.custodyHolderPrincipalId,
       custodyEpoch: value.custodyEpoch,
       actuatorRef: value.actuatorRef,
       status: value.status,
-      expiresAt: expiry,
-      leaseExpiresAt: expiry,
+      expiresAt: date(value.expiresAt),
+      leaseExpiresAt: date(value.leaseExpiresAt),
+      revokedAt: nullableDate(value.revokedAt),
+      lostAt: nullableDate(value.lostAt),
       updatedAt: new Date(),
     };
     await db.insert(clusterMeshRegistrations).values(row).onConflictDoUpdate({
@@ -58,20 +61,38 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
       generationId: row.generationId,
       principalId: row.nhiPrincipalId,
       workspaceId: row.workspaceId,
+      custodyHolderPrincipalId: row.custodyHolderPrincipalId,
       custodyEpoch: row.custodyEpoch,
       actuatorRef: row.actuatorRef,
       status: row.status as 'active' | 'revoked' | 'lost',
       expiresAt: row.expiresAt.toISOString(),
+      leaseExpiresAt: row.leaseExpiresAt.toISOString(),
+      revokedAt: row.revokedAt?.toISOString(),
+      lostAt: row.lostAt?.toISOString(),
     } : null;
   }
-  async reserveCapacity(value: StoredCapacityLease): Promise<boolean> {
+  async reserveCapacity(value: StoredCapacityLease) {
     return db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${value.generationId}))`);
+      const findExisting = async () => {
+        const result = await tx.execute(sql`
+          SELECT generation_id = ${value.generationId} AND subject_ref = ${value.subjectRef} AS matches,
+            status IN ('reserved', 'active') AS active
+          FROM control.cluster_mesh_capacity_leases WHERE lease_id = ${value.leaseId}
+        `);
+        return result.rows[0] as { matches: boolean; active: boolean } | undefined;
+      };
+      const existing = await findExisting();
+      if (existing) {
+        return existing.matches && existing.active
+          ? { ok: true as const, outcome: 'idempotent_retry' as const }
+          : { ok: false as const, reason: 'reservation_conflict' as const };
+      }
       const result = await tx.execute(sql`
         INSERT INTO control.cluster_mesh_capacity_leases
-          (lease_id, generation_id, subject_ref, status, expires_at, lease_expires_at)
+          (lease_id, generation_id, subject_ref, status, expires_at, lease_expires_at, released_at)
         SELECT ${value.leaseId}, ${value.generationId}, ${value.subjectRef}, ${value.status},
-          ${date(value.expiresAt)}, ${date(value.leaseExpiresAt)}
+          ${date(value.expiresAt)}, ${date(value.leaseExpiresAt)}, ${nullableDate(value.releasedAt)}
         WHERE (SELECT count(*) FROM control.cluster_mesh_capacity_leases
           WHERE generation_id = ${value.generationId} AND status IN ('reserved', 'active')
             AND expires_at > now() AND lease_expires_at > now())
@@ -79,7 +100,20 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
              WHERE generation_id = ${value.generationId} AND status IN ('starting', 'active'))
         ON CONFLICT DO NOTHING RETURNING lease_id
       `);
-      return result.rows.length === 1;
+      if (result.rows.length === 1) return { ok: true as const, outcome: 'reserved' as const };
+      const concurrentRetry = await findExisting();
+      if (concurrentRetry) {
+        return concurrentRetry.matches && concurrentRetry.active
+          ? { ok: true as const, outcome: 'idempotent_retry' as const }
+          : { ok: false as const, reason: 'reservation_conflict' as const };
+      }
+      const generation = await tx.execute(sql`
+        SELECT 1 FROM control.cluster_mesh_generations
+        WHERE generation_id = ${value.generationId} AND status IN ('starting', 'active')
+      `);
+      return generation.rows.length === 0
+        ? { ok: false as const, reason: 'generation_unavailable' as const }
+        : { ok: false as const, reason: 'capacity_exhausted' as const };
     });
   }
   async reclaimExpiredCapacity(now: string): Promise<number> {
@@ -107,7 +141,11 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
   }
 
   async enqueueCommand(value: StoredClusterMeshCommand): Promise<boolean> {
-    const inserted = await db.insert(clusterMeshCommands).values(value)
+    const inserted = await db.insert(clusterMeshCommands).values({
+      ...value,
+      actedAt: nullableDate(value.actedAt),
+      updatedAt: new Date(),
+    })
       .onConflictDoNothing().returning({ commandId: clusterMeshCommands.commandId });
     return inserted.length === 1;
   }

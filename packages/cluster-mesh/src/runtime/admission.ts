@@ -1,6 +1,6 @@
 import type { ClusterMeshConfig } from '../config.js';
 
-export type AdmissionRefusalReason = 'capacity_exhausted' | 'reservation_exists';
+export type AdmissionRefusalReason = 'capacity_exhausted';
 
 export interface CapacityReservation {
   readonly reservationId: string;
@@ -10,7 +10,11 @@ export interface CapacityReservation {
 }
 
 export type CapacityReservationResult =
-  | { readonly ok: true; readonly reservation: CapacityReservation }
+  | {
+      readonly ok: true;
+      readonly outcome: 'reserved' | 'idempotent_retry';
+      readonly reservation: CapacityReservation;
+    }
   | { readonly ok: false; readonly reason: AdmissionRefusalReason };
 
 export interface CapacityAdmission {
@@ -38,7 +42,11 @@ export function createCapacityAdmission(input: {
     },
     reserveBeforeSpawn(candidate) {
       if (reservations.has(candidate.reservationId)) {
-        return { ok: false, reason: 'reservation_exists' };
+        return {
+          ok: true,
+          outcome: 'idempotent_retry',
+          reservation: reservations.get(candidate.reservationId)!,
+        };
       }
       if (reservations.size >= input.config.maxConcurrent) {
         return { ok: false, reason: 'capacity_exhausted' };
@@ -49,7 +57,7 @@ export function createCapacityAdmission(input: {
         reservedAt: now().toISOString(),
       };
       reservations.set(reservation.reservationId, reservation);
-      return { ok: true, reservation };
+      return { ok: true, outcome: 'reserved', reservation };
     },
     release(reservationId) {
       return reservations.delete(reservationId);
