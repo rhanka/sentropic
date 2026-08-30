@@ -1,8 +1,5 @@
 import { createAuthSessionRouteHandlers } from '@sentropic/auth-hono';
-import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db } from '../../db/client';
-import { users } from '../../db/schema';
 import { logger } from '../../logger';
 import {
   authHonoCookiePort,
@@ -33,45 +30,6 @@ export const sessionRouter = new Hono();
 const sessionHandlers = createAuthSessionRouteHandlers({
   cookies: authHonoCookiePort,
   service: authHonoSessionService,
-});
-
-/**
- * GET /auth/session
- * Get current session info (requires valid session)
- */
-sessionRouter.get('/', async (c) => {
-  try {
-    const sessionToken =
-      c.req.header('cookie')?.match(/session=([^;]+)/)?.[1] ||
-      c.req.header('authorization')?.replace('Bearer ', '');
-
-    if (!sessionToken) {
-      return c.json({ error: 'No session token provided' }, 401);
-    }
-
-    const session = await validateSession(sessionToken);
-
-    if (!session) {
-      return c.json({ error: 'Invalid or expired session' }, 401);
-    }
-
-    const [userRecord] = await db
-      .select({ email: users.email, displayName: users.displayName })
-      .from(users)
-      .where(eq(users.id, session.userId))
-      .limit(1);
-
-    return c.json({
-      userId: session.userId,
-      sessionId: session.sessionId,
-      role: session.role,
-      email: userRecord?.email ?? null,
-      displayName: userRecord?.displayName ?? null,
-    });
-  } catch (error) {
-    logger.error({ err: error }, 'Error getting session info');
-    return c.json({ error: 'Failed to get session info' }, 500);
-  }
 });
 
 /**
