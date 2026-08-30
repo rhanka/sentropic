@@ -206,6 +206,7 @@
 - [ ] **Lot 4 — `/session` socle cutover and internally closable gates**
   - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
   - [ ] Add `packages/cluster-mesh/src/hono/session-router.ts` and `api/src/routes/namespaces/session.ts`; inject product session/device ports and the h2a PTY registration adapter port, with real adapter evidence tracked only by `BR75-SG1`.
+    - [x] Control ports persist command lifecycle and LOST reconciliation, accept root-specific mounts, and keep PTY actuation injectable.
   - [ ] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
   - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
   - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.

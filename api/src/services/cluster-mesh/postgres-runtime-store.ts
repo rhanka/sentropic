@@ -71,6 +71,17 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
       lostAt: row.lostAt?.toISOString(),
     } : null;
   }
+  async markRegistrationLost(registrationId: string, lostAt: string): Promise<boolean> {
+    const updated = await db.update(clusterMeshRegistrations).set({
+      status: 'lost',
+      lostAt: date(lostAt),
+      updatedAt: date(lostAt),
+    }).where(and(
+      eq(clusterMeshRegistrations.registrationId, registrationId),
+      eq(clusterMeshRegistrations.status, 'active'),
+    )).returning({ registrationId: clusterMeshRegistrations.registrationId });
+    return updated.length === 1;
+  }
   async reserveCapacity(value: StoredCapacityLease) {
     return db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${value.generationId}))`);
@@ -148,6 +159,20 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
     })
       .onConflictDoNothing().returning({ commandId: clusterMeshCommands.commandId });
     return inserted.length === 1;
+  }
+
+  async updateCommand(
+    commandId: string,
+    update: Pick<StoredClusterMeshCommand, 'status' | 'refusalReason' | 'actedAt'>,
+  ): Promise<boolean> {
+    const updated = await db.update(clusterMeshCommands).set({
+      status: update.status,
+      refusalReason: update.refusalReason ?? null,
+      actedAt: nullableDate(update.actedAt),
+      updatedAt: new Date(),
+    }).where(eq(clusterMeshCommands.commandId, commandId))
+      .returning({ commandId: clusterMeshCommands.commandId });
+    return updated.length === 1;
   }
 
   async append(receipt: InvocationReceipt): Promise<void> {

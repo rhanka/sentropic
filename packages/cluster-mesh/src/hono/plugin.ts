@@ -1,4 +1,5 @@
 import type {
+  ClusterMeshNamespace,
   ClusterMeshNamespaceModule,
   VerifiedInvocationContextPort,
 } from '@sentropic/contracts';
@@ -16,6 +17,7 @@ export type ClusterMeshHonoNamespaceModule = ClusterMeshNamespaceModule<
 export interface ClusterMeshPluginOptions {
   readonly runtime: ClusterMeshRuntime;
   readonly namespaces: readonly ClusterMeshHonoNamespaceModule[];
+  readonly mounts?: Partial<Record<ClusterMeshNamespace, string>>;
 }
 
 export function createClusterMeshPlugin(options: ClusterMeshPluginOptions): Hono {
@@ -26,7 +28,7 @@ export function createClusterMeshPlugin(options: ClusterMeshPluginOptions): Hono
       context: options.runtime.context,
       receipts: options.runtime.receiptPort,
     });
-    plugin.route(module.namespace, router);
+    plugin.route(options.mounts?.[module.namespace] ?? module.namespace, router);
   }
   return plugin;
 }
