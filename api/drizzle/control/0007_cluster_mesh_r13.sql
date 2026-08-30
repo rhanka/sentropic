@@ -123,6 +123,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS "cluster_mesh_receipts_invocation_stage_unique
 CREATE INDEX IF NOT EXISTS "cluster_mesh_receipts_command_stage_idx" ON "control"."cluster_mesh_receipts" USING btree ("command_id","stage");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "cluster_mesh_registrations_active_lookup_idx" ON "control"."cluster_mesh_registrations" USING btree ("generation_id","workspace_id","nhi_principal_id","status","expires_at","lease_expires_at");
 
--- Reversible rollback evidence (operator-gated): deactivate cutovers and drain active leases first,
--- then drop receipts, commands, namespace cutovers, MCP servers, capacity leases, registrations,
--- and generations. control.event_outbox is intentionally retained because this migration reuses it.
+-- cluster-mesh-r13-down: execute this block with sentropic.cluster_mesh_r13_rollback=on
+-- after deactivating cutovers and draining active leases. event_outbox is intentionally retained.
+DO $cluster_mesh_r13_down$ BEGIN
+	IF current_setting('sentropic.cluster_mesh_r13_rollback', true) = 'on' THEN
+		DROP TABLE IF EXISTS "control"."cluster_mesh_receipts";
+		DROP TABLE IF EXISTS "control"."cluster_mesh_commands";
+		DROP TABLE IF EXISTS "control"."cluster_mesh_namespace_cutovers";
+		DROP TABLE IF EXISTS "control"."cluster_mesh_mcp_servers";
+		DROP TABLE IF EXISTS "control"."cluster_mesh_capacity_leases";
+		DROP TABLE IF EXISTS "control"."cluster_mesh_registrations";
+		DROP TABLE IF EXISTS "control"."cluster_mesh_generations";
+	END IF;
+END $cluster_mesh_r13_down$;
