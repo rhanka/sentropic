@@ -1,5 +1,5 @@
 import { idempotencyKey } from '@sentropic/contracts';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import type { ClusterMeshHonoNamespaceModule } from './plugin.js';
 import type {
   DeviceRouteHandlers,
@@ -42,23 +42,23 @@ export function createSessionNamespaceModule(input: {
     enabled: input.enabled ?? true,
     createRouter(ports) {
       const router = new Hono();
-      router.use('*', async (c, next) => {
+      const ensureAuthor: MiddlewareHandler = async (c, next) => {
         const author = await input.control.author.ensureAuthor();
         if (!author.ok) return c.json({ error: author.reason }, 503);
         return next();
-      });
-      router.get(path(input.projection.session), input.handlers.current);
-      router.post(path(input.projection.session, '/refresh'), input.handlers.refresh);
-      router.post(path(input.projection.session, '/extension-token'), input.handlers.extensionToken);
-      router.delete(path(input.projection.session), input.handlers.logout);
-      router.delete(path(input.projection.session, '/all'), input.handlers.logoutAll);
-      router.get(path(input.projection.session, '/list'), input.handlers.list);
-      router.post(path(input.projection.device, '/code'), input.devices.issue);
-      router.post(path(input.projection.device, '/poll'), input.devices.poll);
-      router.post(path(input.projection.device, '/approve'), input.devices.approve);
+      };
+      router.get(path(input.projection.session), ensureAuthor, input.handlers.current);
+      router.post(path(input.projection.session, '/refresh'), ensureAuthor, input.handlers.refresh);
+      router.post(path(input.projection.session, '/extension-token'), ensureAuthor, input.handlers.extensionToken);
+      router.delete(path(input.projection.session), ensureAuthor, input.handlers.logout);
+      router.delete(path(input.projection.session, '/all'), ensureAuthor, input.handlers.logoutAll);
+      router.get(path(input.projection.session, '/list'), ensureAuthor, input.handlers.list);
+      router.post(path(input.projection.device, '/code'), ensureAuthor, input.devices.issue);
+      router.post(path(input.projection.device, '/poll'), ensureAuthor, input.devices.poll);
+      router.post(path(input.projection.device, '/approve'), ensureAuthor, input.devices.approve);
 
       for (const action of ['drive', 'wake', 'relaunch'] as const) {
-        router.post(path(input.projection.control, `/${action}`), async (c) => {
+        router.post(path(input.projection.control, `/${action}`), ensureAuthor, async (c) => {
           const intent = parseIntent(await c.req.json().catch(() => null));
           if (!intent) return c.json({ error: 'invalid_control_intent' }, 400);
           let context;

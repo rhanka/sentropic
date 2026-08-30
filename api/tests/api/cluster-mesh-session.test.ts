@@ -48,6 +48,17 @@ describe('cluster mesh session cutover', () => {
     const blocked = await app.request('/api/v1/auth/session');
     expect(blocked.status).toBe(503);
     await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+
+    const login = await app.request('/api/v1/auth/login/options', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(login.status).toBe(200);
+    const oauth = await app.request('/api/v1/auth/oauth/end_session', {
+      headers: { 'sec-fetch-mode': 'navigate' },
+    });
+    expect(oauth.status).toBe(200);
   });
 
   it('projects the same session module beneath the standalone IdP root', async () => {
@@ -63,5 +74,17 @@ describe('cluster mesh session cutover', () => {
       activeAuthor: 'cluster-mesh-session-module',
       status: 'active',
     });
+
+    const active = await store.find(key('auth-idp'));
+    await store.rollback(key('auth-idp'), active!.previousGenerationId!);
+    expect((await idp.request('/api/v1/auth/session')).status).toBe(503);
+    expect((await idp.request('/api/v1/auth/login/options', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })).status).toBe(200);
+    expect((await idp.request('/api/v1/auth/oauth/end_session', {
+      headers: { 'sec-fetch-mode': 'navigate' },
+    })).status).toBe(200);
   });
 });
