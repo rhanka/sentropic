@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type {
   ClusterMeshRuntimeStore,
+  McpSupervisorClaim,
   StoredCapacityLease,
   StoredClusterMeshCommand,
   StoredClusterMeshGeneration,
@@ -148,6 +149,51 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
     await db.insert(clusterMeshMcpServers).values(row).onConflictDoUpdate({
       target: clusterMeshMcpServers.generationId,
       set: row,
+    });
+  }
+
+  async findMcpServer(generationId: string): Promise<StoredMcpServer | null> {
+    const [row] = await db.select().from(clusterMeshMcpServers)
+      .where(eq(clusterMeshMcpServers.generationId, generationId)).limit(1);
+    return row ? {
+      serverId: row.serverId,
+      generationId: row.generationId,
+      supervisorRef: row.supervisorRef,
+      status: row.status as StoredMcpServer['status'],
+      leaseExpiresAt: row.leaseExpiresAt.toISOString(),
+    } : null;
+  }
+
+  async claimMcpServer(value: StoredMcpServer, now: string): Promise<McpSupervisorClaim> {
+    return db.transaction(async (tx) => {
+      const at = date(now);
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${'mcp:' + value.generationId}))`);
+      const [generation] = await tx.select().from(clusterMeshGenerations)
+        .where(eq(clusterMeshGenerations.generationId, value.generationId)).limit(1);
+      if (!generation) return { ok: false as const, reason: 'missing_registration' as const };
+      if (
+        !['starting', 'active'].includes(generation.status)
+        || generation.supervisorRef !== value.supervisorRef
+        || generation.supervisorLeaseExpiresAt <= at
+      ) {
+        return { ok: false as const, reason: 'stale_registration' as const };
+      }
+      const [existing] = await tx.select().from(clusterMeshMcpServers)
+        .where(eq(clusterMeshMcpServers.generationId, value.generationId)).limit(1);
+      if (
+        existing
+        && existing.status === 'active'
+        && existing.leaseExpiresAt > at
+        && (existing.serverId !== value.serverId || existing.supervisorRef !== value.supervisorRef)
+      ) {
+        return { ok: false as const, reason: 'logical_server_exists' as const };
+      }
+      const row = { ...value, leaseExpiresAt: date(value.leaseExpiresAt), updatedAt: at };
+      await tx.insert(clusterMeshMcpServers).values(row).onConflictDoUpdate({
+        target: clusterMeshMcpServers.generationId,
+        set: row,
+      });
+      return { ok: true as const };
     });
   }
 

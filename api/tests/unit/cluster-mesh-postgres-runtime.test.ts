@@ -109,22 +109,26 @@ describe('PostgresClusterMeshRuntimeStore', () => {
 
   it('should enforce one MCP server per generation and command idempotency per target', async () => {
     await saveGeneration();
-    await store.saveMcpServer({
+    await expect(store.claimMcpServer({
       serverId: 'mcp-1',
       generationId: 'generation-test',
-      supervisorRef: 'supervisor-1',
+      supervisorRef: 'supervisor-test',
       status: 'active',
       leaseExpiresAt: future,
-    });
-    await store.saveMcpServer({
+    }, '2026-08-30T12:00:00.000Z')).resolves.toEqual({ ok: true });
+    await expect(store.claimMcpServer({
       serverId: 'mcp-2',
       generationId: 'generation-test',
-      supervisorRef: 'supervisor-2',
+      supervisorRef: 'supervisor-test',
       status: 'active',
       leaseExpiresAt: future,
+    }, '2026-08-30T12:00:00.000Z')).resolves.toEqual({
+      ok: false,
+      reason: 'logical_server_exists',
     });
     const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(clusterMeshMcpServers);
     expect(Number(count)).toBe(1);
+    await expect(store.findMcpServer('generation-test')).resolves.toMatchObject({ serverId: 'mcp-1' });
 
     const command = (commandId: string, targetRegistrationId: string) => ({
       commandId,
