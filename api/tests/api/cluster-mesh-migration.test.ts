@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import {
@@ -14,7 +15,47 @@ import {
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 
 const store = new PostgresClusterMeshCutoverStore();
-const migrationDirectory = '/workspace/api/drizzle/control';
+const defaultMigrationDirectory = fileURLToPath(new URL('../../drizzle/control', import.meta.url));
+
+function readClusterMeshMigration(directory = defaultMigrationDirectory) {
+  const files = readdirSync(directory).filter((file) => /^000[78]_/.test(file));
+  if (files.length !== 1) throw new Error(`expected one cluster mesh migration, found ${files.length}`);
+  return { files, source: readFileSync(`${directory}/${files[0]}`, 'utf8') };
+}
+
+function rollbackSection(source: string) {
+  const marker = source.indexOf('-- cluster-mesh-r13-down:');
+  if (marker < 0) throw new Error('cluster mesh rollback section is missing');
+  return source.slice(marker);
+}
+
+async function executeRollback(source: string) {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('sentropic.cluster_mesh_r13_rollback', 'on', true)`);
+    await tx.execute(sql.raw(rollbackSection(source)));
+  });
+}
+
+async function schemaState() {
+  const tables = await db.execute(sql`
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'control' AND table_name LIKE 'cluster_mesh_%'
+    ORDER BY table_name
+  `);
+  const indexes = await db.execute(sql`
+    SELECT indexname FROM pg_indexes
+    WHERE schemaname = 'control' AND indexname LIKE 'cluster_mesh_%'
+    ORDER BY indexname
+  `);
+  const [{ event_outbox }] = (await db.execute(sql`
+    SELECT to_regclass('control.event_outbox') IS NOT NULL AS event_outbox
+  `)).rows;
+  return {
+    tables: tables.rows.map((row) => row.table_name),
+    indexes: indexes.rows.map((row) => row.indexname),
+    eventOutbox: event_outbox,
+  };
+}
 
 async function cleanup() {
   await db.delete(clusterMeshReceipts);
@@ -77,12 +118,27 @@ describe('cluster mesh control migration', () => {
     );
     expect(definitions.get('cluster_mesh_mcp_servers_generation_unique')).toContain('UNIQUE');
 
-    const files = readdirSync(migrationDirectory).filter((file) => /^000[78]_/.test(file));
+    const { files, source: migration } = readClusterMeshMigration();
     expect(files).toEqual(['0007_cluster_mesh_r13.sql']);
-    const migration = readFileSync(`${migrationDirectory}/${files[0]}`, 'utf8');
     expect(migration).not.toContain('CREATE TABLE IF NOT EXISTS "control"."event_outbox"');
     expect(migration).toContain('REFERENCES "control"."event_outbox"');
-    expect(migration).toContain('Reversible rollback evidence');
+  });
+
+  it('should restore the schema that preceded the unique migration', async () => {
+    const { source: migration } = readClusterMeshMigration();
+    await executeRollback(migration);
+    const before = await schemaState();
+
+    try {
+      await db.execute(sql.raw(migration));
+      expect((await schemaState()).tables).toHaveLength(7);
+
+      await executeRollback(migration);
+      expect(await schemaState()).toEqual(before);
+      expect(before).toEqual({ tables: [], indexes: [], eventOutbox: true });
+    } finally {
+      await db.execute(sql.raw(migration));
+    }
   });
 
   it('should rollback a root-specific namespace author to the previous generation', async () => {
