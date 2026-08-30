@@ -176,21 +176,17 @@
   - [x] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C3 neutral injectable context; A5 standalone contract foundation.
 
-- [ ] **Lot 2 — Minimum centralized h2a runtime**
-  - [ ] Add `packages/cluster-mesh/src/runtime/workspace-runtime.ts` as the sole entry for workspace resolution and provider composition.
-  - [ ] Add `packages/cluster-mesh/src/runtime/capability-registry.ts` with versioned provider registration and no provider-specific DTOs.
-  - [ ] Add `packages/cluster-mesh/src/runtime/policy-router.ts` with global-then-workspace policy, authority mode, custody, reachability, and revision evidence.
-  - [ ] Add `packages/cluster-mesh/src/runtime/invocation-supervisor.ts` with idempotent command/event/receipt lifecycle and fail-closed recovery hooks.
-  - [ ] Add `packages/cluster-mesh/src/runtime/transaction.ts` with injected transaction/outbox ports and no exactly-once claim.
-  - [ ] Add `packages/cluster-mesh/src/providers/h2a.ts` as a host-local capability adapter boundary using neutral contract fixtures only.
-  - [ ] Evolve `packages/cluster-mesh/src/mesh.ts` and `src/index.ts` to expose `WorkspaceRuntime` while retaining narrow v1 APIs only until their in-branch call sites are cut over.
-  - [ ] Evolve `api/src/services/cluster-mesh-adapter.ts` to inject the runtime and remove the process-local `Map` as authoritative state.
-  - [ ] Add `packages/cluster-mesh/tests/workspace-runtime.spec.ts`, `capability-registry.spec.ts`, `policy-router.spec.ts`, `invocation-supervisor.spec.ts`, and `h2a-provider.spec.ts`.
-  - [ ] Update `api/tests/unit/cluster-mesh-adapter.test.ts` for explicit repository/product binding, missing binding, stale epoch, unreachable custody, idempotent retry, and correlated receipt.
-  - [ ] Prove one read-only h2a capability crosses registry, policy, supervisor, transaction, and receipt with no MCP/memory/session coupling.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE=cluster-mesh-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: pack the resulting package through an existing Make target or stop for an explicit exception; compare its neutral fixture digest against the pinned h2a evidence without editing h2a.
+- [x] **Lot 2 — Hono plugin, integrated runtime, registration and capacity socle**
+  - [x] Namespace: shared socle; type: plugin/runtime implementation without app cutover.
+  - [x] Add `packages/cluster-mesh/src/hono/plugin.ts`, `src/runtime/generation.ts`, `admission.ts`, `registration.ts`, `receipts.ts`, `namespace-registry.ts` and `src/config.ts`; export `createClusterMeshPlugin`.
+  - [x] Implement `clusterMesh.capacity.maxConcurrent` default 12 and configurable `clusterMesh.capacity.poolSize` with pre-spawn reservation.
+  - [x] Define preferred `PtyActuatorPort`, secondary fallback adapter selection and fail-closed registration reasons; do not implement a fake production PTY driver.
+  - [x] Preserve `createDegenerateClusterMesh` only for current callers until their same-branch cutover; mark its removal locator.
+  - [x] Tests new: `packages/cluster-mesh/tests/hono-plugin.spec.ts`, `packages/cluster-mesh/tests/generation.spec.ts`, `packages/cluster-mesh/tests/registration.spec.ts`, `packages/cluster-mesh/tests/capacity.spec.ts`, `packages/cluster-mesh/tests/namespace-registry.spec.ts`.
+  - [x] Tests updated: `packages/cluster-mesh/tests/mesh.spec.ts` for coexistence only before cutover.
+  - [x] API/UI/E2E tests: N-A; no application mount changes.
+  - [x] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Internal gates: C3 provider-neutral runtime ports; A4 hermetic 12/13 pre-spawn proof; A5 plugin disableability partial.
 
 - [ ] **Lot 3 — D6 runtime-internal MCP gateway and bypass removal**
   - [ ] Add `packages/mcp-platform/src/runtime-module.ts` to compose MCP session, consent, enrollment, elicitation, cancellation, and connector dispatch behind a neutral capability.
