@@ -7,6 +7,7 @@ import type {
 } from '@sentropic/events';
 
 export interface ReceiptCoordinates {
+  readonly commandId?: string;
   readonly invocationId: string;
   readonly correlationId: string;
   readonly idempotencyKey: IdempotencyKey;

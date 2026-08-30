@@ -9,6 +9,7 @@ export interface StoredClusterMeshGeneration {
   readonly supervisorLeaseExpiresAt: string;
   readonly maxConcurrent: number;
   readonly poolSize: number;
+  readonly stoppedAt?: string;
 }
 
 export interface StoredCapacityLease {
@@ -18,7 +19,15 @@ export interface StoredCapacityLease {
   readonly status: 'reserved' | 'active' | 'released' | 'expired';
   readonly expiresAt: string;
   readonly leaseExpiresAt: string;
+  readonly releasedAt?: string;
 }
+
+export type StoredCapacityReservationResult =
+  | { readonly ok: true; readonly outcome: 'reserved' | 'idempotent_retry' }
+  | {
+      readonly ok: false;
+      readonly reason: 'capacity_exhausted' | 'generation_unavailable' | 'reservation_conflict';
+    };
 
 export interface StoredMcpServer {
   readonly serverId: string;
@@ -36,12 +45,13 @@ export interface StoredClusterMeshCommand {
   readonly action: 'drive' | 'wake' | 'relaunch';
   readonly status: 'pending' | 'accepted' | 'refused' | 'acted' | 'failed';
   readonly refusalReason?: string;
+  readonly actedAt?: string;
 }
 
 export interface ClusterMeshRuntimeStore extends RegistrationLookupPort, InvocationReceiptPort {
   saveGeneration(generation: StoredClusterMeshGeneration): Promise<void>;
   saveRegistration(registration: ClusterMeshRegistration): Promise<void>;
-  reserveCapacity(lease: StoredCapacityLease): Promise<boolean>;
+  reserveCapacity(lease: StoredCapacityLease): Promise<StoredCapacityReservationResult>;
   reclaimExpiredCapacity(now: string): Promise<number>;
   saveMcpServer(server: StoredMcpServer): Promise<void>;
   enqueueCommand(command: StoredClusterMeshCommand): Promise<boolean>;
@@ -59,6 +69,7 @@ export interface NamespaceCutoverRecord extends NamespaceCutoverKey {
   readonly status: 'shadow' | 'active' | 'rolled_back' | 'disabled';
   readonly shadowComparison?: unknown;
   readonly rollbackCheckpoint?: unknown;
+  readonly activatedAt?: string;
 }
 
 export interface ClusterMeshCutoverStore {

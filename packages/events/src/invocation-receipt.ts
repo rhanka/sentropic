@@ -10,6 +10,7 @@ export type InvocationReceiptStage = (typeof INVOCATION_RECEIPT_STAGES)[number];
 
 interface InvocationReceiptBase {
   readonly receiptId: string;
+  readonly commandId?: string;
   readonly invocationId: string;
   readonly correlationId: string;
   readonly generationId: string;

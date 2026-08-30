@@ -27,6 +27,7 @@ export class PostgresClusterMeshCutoverStore implements
       status: row.status as NamespaceCutoverRecord['status'],
       shadowComparison: row.shadowComparison ?? undefined,
       rollbackCheckpoint: row.rollbackCheckpoint ?? undefined,
+      activatedAt: row.activatedAt?.toISOString(),
     } : null;
   }
 
@@ -41,7 +42,9 @@ export class PostgresClusterMeshCutoverStore implements
         previousGenerationId: record.previousGenerationId ?? current?.selectedGenerationId ?? null,
         shadowComparison: record.shadowComparison ?? null,
         rollbackCheckpoint: record.rollbackCheckpoint ?? null,
-        activatedAt: record.status === 'active' ? new Date() : null,
+        activatedAt: record.status === 'active'
+          ? new Date(record.activatedAt ?? Date.now())
+          : null,
         updatedAt: new Date(),
       };
       await tx.insert(clusterMeshNamespaceCutovers).values(row).onConflictDoUpdate({

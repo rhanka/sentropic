@@ -15,10 +15,14 @@ export interface ClusterMeshRegistration {
   readonly generationId: string;
   readonly principalId: string;
   readonly workspaceId: string;
+  readonly custodyHolderPrincipalId: string;
   readonly custodyEpoch: number;
   readonly actuatorRef: string;
   readonly status: 'active' | 'revoked' | 'lost';
   readonly expiresAt: string;
+  readonly leaseExpiresAt: string;
+  readonly revokedAt?: string;
+  readonly lostAt?: string;
 }
 
 export interface RegistrationLookupPort {
@@ -89,7 +93,13 @@ export function createRegistrationGate(input: {
       if (!registration) return { ok: false, reason: 'missing_registration' };
       if (registration.status === 'revoked') return { ok: false, reason: 'revoked_registration' };
       const expiry = Date.parse(registration.expiresAt);
-      if (registration.status === 'lost' || !Number.isFinite(expiry) || expiry <= now().getTime()) {
+      const leaseExpiry = Date.parse(registration.leaseExpiresAt);
+      if (
+        registration.status === 'lost'
+        || !Number.isFinite(expiry)
+        || !Number.isFinite(leaseExpiry)
+        || Math.min(expiry, leaseExpiry) <= now().getTime()
+      ) {
         return { ok: false, reason: 'stale_registration' };
       }
       if (
@@ -107,7 +117,8 @@ export function createRegistrationGate(input: {
       if (
         registration.custodyEpoch !== reference.custodyEpoch
         || (context.custody && context.custody.epoch !== registration.custodyEpoch)
-        || (context.custody && context.custody.holderPrincipalId !== registration.principalId)
+        || (context.custody
+          && context.custody.holderPrincipalId !== registration.custodyHolderPrincipalId)
       ) return { ok: false, reason: 'custody_mismatch' };
       if (
         reference.actuatorRef !== registration.actuatorRef
