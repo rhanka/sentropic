@@ -249,7 +249,7 @@
   - [x] Mount `/mcp` through the plugin; shadow PRM/read intent and deterministic protocol responses without duplicating provider effects.
   - [x] Select one MCP author, prove generation handover rollback, move product adapters to `api/src/routes/namespaces/mcp.ts`, delete `api/src/routes/api/mcp.ts` and remove direct connector dispatch.
   - [x] Own the `mcp-broker` bypass decision in this lot only: its locator is N-A from Lot 0; remove the verified direct connector dispatch in `api/src/routes/api/mcp.ts` after `mcp-platform` coverage and keep connector providers autonomous.
-  - [ ] Tests new: `packages/mcp-platform/tests/hono.test.ts`, `packages/cluster-mesh/tests/mcp-supervisor.spec.ts`, `api/tests/api/cluster-mesh-mcp-singleton.test.ts`.
+  - [x] Tests new: `packages/mcp-platform/tests/hono.test.ts`, `packages/cluster-mesh/tests/mcp-supervisor.spec.ts`, `api/tests/api/cluster-mesh-mcp-singleton.test.ts`.
   - [ ] Tests updated: `packages/mcp-auth/tests/core.test.ts`, `packages/mcp-auth/tests/hono.test.ts`, `packages/mcp-platform/tests/authz.test.ts`, `packages/mcp-platform/tests/durable.test.ts`, `packages/mcp-platform/tests/elicitation.test.ts`, `packages/mcp-platform/tests/persistence.test.ts`, `packages/mcp-platform/tests/transport.test.ts`, `packages/connector-host/tests/mount.test.ts`, `api/tests/api/mcp-resource-server.test.ts`, `api/tests/unit/connector-host.test.ts`.
   - [ ] UI tests: N-A; no UI source change.
   - [ ] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` N sessions, one logical MCP server/generation, zero per-session server, missing-registration refusal.
