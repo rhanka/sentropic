@@ -219,6 +219,7 @@
     - [x] Package proof persists the active author only after shadow validation and restores the checkpointed previous generation.
     - [x] Legacy extension-session writer code was removed after the replacement mount.
     - [x] Legacy current-session reader code was removed after shadow comparison.
+    - [x] Legacy list and revoke-all session handlers were removed after cutover.
   - [ ] Reject missing/stale registration before PTY and reconcile dead/parked targets to LOST; acted receipt plus a real target tick remains the external `BR75-SG1` proof rather than a Lot 4 progression gate.
   - [ ] Tests new: `packages/cluster-mesh/tests/session-router.spec.ts`, `api/tests/api/cluster-mesh-session.test.ts`.
     - [x] Package coverage proves projected handlers, missing/stale fail-closed behavior, parked-to-LOST reconciliation, and 12/13 pre-actuation admission.
