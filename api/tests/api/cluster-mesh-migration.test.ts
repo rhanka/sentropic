@@ -141,6 +141,24 @@ describe('cluster mesh control migration', () => {
     }
   });
 
+  it.each([
+    ['cluster_mesh_capacity_leases_status_check', `INSERT INTO control.cluster_mesh_capacity_leases (lease_id, generation_id, subject_ref, status, expires_at, lease_expires_at) VALUES ('check-capacity', 'g', 's', 'invalid', now(), now())`],
+    ['cluster_mesh_commands_action_check', `INSERT INTO control.cluster_mesh_commands (command_id, generation_id, target_registration_id, idempotency_key, action, status) VALUES ('check-command-action', 'g', 'r', 'i', 'invalid', 'pending')`],
+    ['cluster_mesh_commands_status_check', `INSERT INTO control.cluster_mesh_commands (command_id, generation_id, target_registration_id, idempotency_key, action, status) VALUES ('check-command-status', 'g', 'r', 'i', 'drive', 'invalid')`],
+    ['cluster_mesh_generations_status_check', `INSERT INTO control.cluster_mesh_generations (generation_id, status, supervisor_ref, supervisor_lease_expires_at, max_concurrent, pool_size) VALUES ('check-generation-status', 'invalid', 's', now(), 1, 1)`],
+    ['cluster_mesh_generations_capacity_check', `INSERT INTO control.cluster_mesh_generations (generation_id, status, supervisor_ref, supervisor_lease_expires_at, max_concurrent, pool_size) VALUES ('check-generation-capacity', 'active', 's', now(), 1, 2)`],
+    ['cluster_mesh_mcp_servers_status_check', `INSERT INTO control.cluster_mesh_mcp_servers (server_id, generation_id, supervisor_ref, status, lease_expires_at) VALUES ('check-mcp', 'g', 's', 'invalid', now())`],
+    ['cluster_mesh_namespace_cutovers_root_check', `INSERT INTO control.cluster_mesh_namespace_cutovers (composition_root, namespace, selected_generation_id, active_author, status) VALUES ('invalid', '/session', 'g', 'a', 'active')`],
+    ['cluster_mesh_namespace_cutovers_status_check', `INSERT INTO control.cluster_mesh_namespace_cutovers (composition_root, namespace, selected_generation_id, active_author, status) VALUES ('product', '/session', 'g', 'a', 'invalid')`],
+    ['cluster_mesh_receipts_stage_check', `INSERT INTO control.cluster_mesh_receipts (receipt_id, invocation_id, correlation_id, generation_id, idempotency_key, stage, outbox_event_id, occurred_at) VALUES ('check-receipt-stage', 'i', 'c', 'g', 'k', 'invalid', 'missing', now())`],
+    ['cluster_mesh_receipts_decision_check', `INSERT INTO control.cluster_mesh_receipts (receipt_id, invocation_id, correlation_id, generation_id, idempotency_key, stage, decision, outbox_event_id, occurred_at) VALUES ('check-receipt-decision', 'i', 'c', 'g', 'k', 'verified', 'invalid', 'missing', now())`],
+    ['cluster_mesh_registrations_status_check', `INSERT INTO control.cluster_mesh_registrations (registration_id, generation_id, workspace_id, nhi_principal_id, custody_holder_principal_id, custody_epoch, actuator_ref, status, expires_at, lease_expires_at) VALUES ('check-registration-status', 'g', 'w', 'n', 'c', 0, 'a', 'invalid', now(), now())`],
+    ['cluster_mesh_registrations_custody_epoch_check', `INSERT INTO control.cluster_mesh_registrations (registration_id, generation_id, workspace_id, nhi_principal_id, custody_holder_principal_id, custody_epoch, actuator_ref, status, expires_at, lease_expires_at) VALUES ('check-registration-custody', 'g', 'w', 'n', 'c', -1, 'a', 'active', now(), now())`],
+  ])('should enforce %s', async (constraint, statement) => {
+    const failure: unknown = await db.execute(sql.raw(statement)).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ cause: { constraint } });
+  });
+
   it('should rollback a root-specific namespace author to the previous generation', async () => {
     const key = { compositionRoot: 'product' as const, namespace: '/session' as const };
     await store.activate({
