@@ -342,25 +342,17 @@ describe('MCP authorization server selection', () => {
     // side effects (the skill registry parses SKILL.md files, among others) fails for reasons that
     // have nothing to do with what is under test here.
     vi.resetModules();
-    const [{ mcpRouter }, { productMcpModule }] = await Promise.all([
-      import('../../src/routes/api/mcp'),
-      import('../../src/routes/namespaces/mcp'),
-    ]);
-    const legacy = new Hono().route('/api/v1/mcp', mcpRouter);
+    // Commit 8b7b38c0e captured the independent legacy/candidate PRM comparison before
+    // deleting the legacy module. Keep exercising the surviving author after deletion.
+    const { productMcpModule } = await import('../../src/routes/namespaces/mcp');
     const candidate = new Hono().route('/api/v1/mcp', productMcpModule.createRouter({
       context: { async verify() { throw new Error('not used by PRM'); } },
       receipts: { async append() { throw new Error('not used by PRM'); } },
     }));
     const path = '/api/v1/mcp/.well-known/oauth-protected-resource';
-    const [legacyResponse, candidateResponse] = await Promise.all([
-      legacy.request(path),
-      candidate.request(path),
-    ]);
-    expect(legacyResponse.status).toBe(200);
+    const candidateResponse = await candidate.request(path);
     expect(candidateResponse.status).toBe(200);
-    const legacyDoc = await legacyResponse.json() as { authorization_servers: string[] };
     const candidateDoc = await candidateResponse.json() as { authorization_servers: string[] };
-    expect(candidateDoc).toEqual(legacyDoc);
     expect(candidateDoc.authorization_servers).toEqual(['https://idp.example.test']);
   });
 });
