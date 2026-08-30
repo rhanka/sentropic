@@ -9,6 +9,7 @@ export * from './projection.js';
 export * from './trust.js';
 export * from './config.js';
 export * from './hono/plugin.js';
+export * from './persistence/ports.js';
 export * from './runtime/admission.js';
 export * from './runtime/generation.js';
 export * from './runtime/namespace-registry.js';
