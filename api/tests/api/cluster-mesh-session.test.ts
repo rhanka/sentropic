@@ -36,8 +36,17 @@ describe('cluster mesh session cutover', () => {
       previousGenerationId: 'legacy-auth-session-product',
       activeAuthor: 'cluster-mesh-session-module',
       status: 'active',
-      shadowComparison: { shadowMatched: true, driveIntentValidated: true },
+      shadowComparison: {
+        strategy: 'parity-suite',
+        suiteRefs: [
+          'api/tests/api/auth/session.test.ts',
+          'api/tests/api/auth-device-code.spec.ts',
+          'api/tests/unit/device-route.test.ts',
+        ],
+        intentValidationRef: 'packages/cluster-mesh/tests/session-router.spec.ts',
+      },
     });
+    expect(active?.shadowComparison).not.toHaveProperty('shadowMatched');
     expect((await app.request('/api/v1/session')).status).toBe(404);
 
     await store.rollback(key('product'), active!.previousGenerationId!);
@@ -86,5 +95,20 @@ describe('cluster mesh session cutover', () => {
     expect((await idp.request('/api/v1/auth/oauth/end_session', {
       headers: { 'sec-fetch-mode': 'navigate' },
     })).status).toBe(200);
+  });
+
+  it('resumes activation when a prior attempt persisted only the shadow record', async () => {
+    await store.activate({
+      ...key('product'),
+      selectedGenerationId: 'cluster-mesh-session-v1',
+      previousGenerationId: 'legacy-auth-session-product',
+      activeAuthor: 'cluster-mesh-session-module',
+      status: 'shadow',
+      shadowComparison: { strategy: 'parity-suite' },
+      rollbackCheckpoint: { generationId: 'legacy-auth-session-product' },
+    });
+
+    expect((await app.request('/api/v1/auth/session')).status).toBe(401);
+    await expect(store.find(key('product'))).resolves.toMatchObject({ status: 'active' });
   });
 });

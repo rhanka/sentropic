@@ -4,11 +4,32 @@ import type {
   NamespaceCutoverRecord,
 } from '../persistence/ports.js';
 
-export interface SessionCutoverProof {
+export interface SessionRuntimeShadowProof {
+  readonly strategy: 'runtime-shadow';
   readonly shadowMatched: boolean;
   readonly driveIntentValidated: boolean;
   readonly previousGenerationId: string;
 }
+
+export interface SessionParitySuiteProof {
+  readonly strategy: 'parity-suite';
+  readonly suiteRefs: readonly string[];
+  readonly intentValidationRef: string;
+  readonly previousGenerationId: string;
+}
+
+export type SessionCutoverProof = SessionRuntimeShadowProof | SessionParitySuiteProof;
+
+type SessionCutoverEvidence = {
+  readonly strategy: 'runtime-shadow';
+  readonly readLegacy: () => Promise<unknown>;
+  readonly readCandidate: () => Promise<unknown>;
+  readonly validateDriveIntent: () => Promise<boolean>;
+} | {
+  readonly strategy: 'parity-suite';
+  readonly suiteRefs: readonly string[];
+  readonly intentValidationRef: string;
+};
 
 export async function activateSessionCutover(input: {
   readonly store: ClusterMeshCutoverStore;
@@ -16,24 +37,31 @@ export async function activateSessionCutover(input: {
   readonly generationId: string;
   readonly previousGenerationId: string;
   readonly author: string;
-  readonly readLegacy: () => Promise<unknown>;
-  readonly readCandidate: () => Promise<unknown>;
-  readonly validateDriveIntent: () => Promise<boolean>;
-}): Promise<NamespaceCutoverRecord> {
-  const [legacy, candidate, driveIntentValidated] = await Promise.all([
-    input.readLegacy(),
-    input.readCandidate(),
-    input.validateDriveIntent(),
-  ]);
-  const shadowMatched = JSON.stringify(legacy) === JSON.stringify(candidate);
-  if (!shadowMatched || !driveIntentValidated) {
-    throw new Error('session cutover shadow proof failed');
+} & SessionCutoverEvidence): Promise<NamespaceCutoverRecord> {
+  let proof: SessionCutoverProof;
+  if (input.strategy === 'runtime-shadow') {
+    const [legacy, candidate, driveIntentValidated] = await Promise.all([
+      input.readLegacy(),
+      input.readCandidate(),
+      input.validateDriveIntent(),
+    ]);
+    if (JSON.stringify(legacy) !== JSON.stringify(candidate) || !driveIntentValidated) {
+      throw new Error('session cutover shadow proof failed');
+    }
+    proof = {
+      strategy: 'runtime-shadow', shadowMatched: true, driveIntentValidated: true,
+      previousGenerationId: input.previousGenerationId,
+    };
+  } else {
+    if (input.suiteRefs.length === 0 || !input.intentValidationRef) {
+      throw new Error('session cutover parity-suite evidence is missing');
+    }
+    proof = {
+      strategy: 'parity-suite', suiteRefs: input.suiteRefs,
+      intentValidationRef: input.intentValidationRef,
+      previousGenerationId: input.previousGenerationId,
+    };
   }
-  const proof: SessionCutoverProof = {
-    shadowMatched,
-    driveIntentValidated,
-    previousGenerationId: input.previousGenerationId,
-  };
   const shadow: NamespaceCutoverRecord = {
     ...input.key,
     selectedGenerationId: input.generationId,
@@ -43,7 +71,7 @@ export async function activateSessionCutover(input: {
     shadowComparison: proof,
     rollbackCheckpoint: {
       generationId: input.previousGenerationId,
-      activeAuthor: 'legacy-session',
+      activeAuthor: 'unavailable-after-replacement',
     },
   };
   await input.store.activate(shadow);
