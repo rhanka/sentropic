@@ -417,3 +417,76 @@ export const costLedger = controlSchema.table(
 
 export type CostLedgerRow = typeof costLedger.$inferSelect;
 export type CostLedgerInsert = typeof costLedger.$inferInsert;
+
+export const clusterMeshGenerations = controlSchema.table(
+  'cluster_mesh_generations',
+  {
+    generationId: text('generation_id').primaryKey(),
+    status: text('status').notNull().default('starting'),
+    supervisorRef: text('supervisor_ref').notNull(),
+    supervisorLeaseExpiresAt: timestamp('supervisor_lease_expires_at', { withTimezone: true }).notNull(),
+    maxConcurrent: integer('max_concurrent').notNull(),
+    poolSize: integer('pool_size').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+    stoppedAt: timestamp('stopped_at', { withTimezone: true }),
+  },
+  (table) => ({
+    supervisorLeaseIdx: index('cluster_mesh_generations_supervisor_lease_idx').on(
+      table.status,
+      table.supervisorLeaseExpiresAt,
+    ),
+    statusCheck: check(
+      'cluster_mesh_generations_status_check',
+      sql`${table.status} IN ('starting', 'active', 'draining', 'stopped', 'lost')`,
+    ),
+    capacityCheck: check(
+      'cluster_mesh_generations_capacity_check',
+      sql`${table.maxConcurrent} > 0 AND ${table.poolSize} > 0 AND ${table.poolSize} <= ${table.maxConcurrent}`,
+    ),
+  }),
+);
+
+export type ClusterMeshGenerationRow = typeof clusterMeshGenerations.$inferSelect;
+export type ClusterMeshGenerationInsert = typeof clusterMeshGenerations.$inferInsert;
+
+export const clusterMeshRegistrations = controlSchema.table(
+  'cluster_mesh_registrations',
+  {
+    registrationId: text('registration_id').primaryKey(),
+    generationId: text('generation_id').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    nhiPrincipalId: text('nhi_principal_id').notNull(),
+    custodyHolderPrincipalId: text('custody_holder_principal_id').notNull(),
+    custodyEpoch: integer('custody_epoch').notNull(),
+    actuatorRef: text('actuator_ref').notNull(),
+    status: text('status').notNull().default('active'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    lostAt: timestamp('lost_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    activeLookupIdx: index('cluster_mesh_registrations_active_lookup_idx').on(
+      table.generationId,
+      table.workspaceId,
+      table.nhiPrincipalId,
+      table.status,
+      table.expiresAt,
+      table.leaseExpiresAt,
+    ),
+    statusCheck: check(
+      'cluster_mesh_registrations_status_check',
+      sql`${table.status} IN ('active', 'revoked', 'lost')`,
+    ),
+    custodyEpochCheck: check(
+      'cluster_mesh_registrations_custody_epoch_check',
+      sql`${table.custodyEpoch} >= 0`,
+    ),
+  }),
+);
+
+export type ClusterMeshRegistrationRow = typeof clusterMeshRegistrations.$inferSelect;
+export type ClusterMeshRegistrationInsert = typeof clusterMeshRegistrations.$inferInsert;
