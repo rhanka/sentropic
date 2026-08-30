@@ -9,7 +9,7 @@ import type {
 } from './session-contracts.js';
 
 const path = (base: string, suffix = ''): string =>
-  `${base === '/' ? '' : base}${suffix || '/'}`;
+  suffix ? `${base === '/' ? '' : base}${suffix}` : base;
 
 interface ControlIntent {
   readonly commandId: string;
@@ -130,7 +130,10 @@ export function createSessionNamespaceModule(input: {
             const actedAt = (input.control.now ?? (() => new Date()))().toISOString();
             await input.control.store.updateCommand(intent.commandId, { status: 'acted', actedAt });
             await input.control.runtime.receipts.acted(coordinates, result.effectRef);
-            return c.json({ status: 'acted', effectRef: result.effectRef });
+            return c.json({
+              status: 'acted', effectRef: result.effectRef,
+              ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),
+            });
           } catch {
             await input.control.store.updateCommand(intent.commandId, {
               status: 'failed', refusalReason: 'actuation_failed',
