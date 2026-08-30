@@ -1,11 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { logger } from '../../logger';
-import { validateSession, createSession } from '../../services/session-manager';
+import { validateSession } from '../../services/session-manager';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
-import { db } from '../../db/client';
-import { users } from '../../db/schema';
-import { eq } from 'drizzle-orm';
 
 /**
  * Device-Code Enrollment Routes (RFC 8628-style)
@@ -23,10 +20,6 @@ export const deviceRouter = new Hono();
 
 const issueSchema = z.object({
   deviceName: z.string().min(1).max(100).optional(),
-});
-
-const pollSchema = z.object({
-  device_code: z.string().min(1),
 });
 
 const approveSchema = z.object({
@@ -63,64 +56,6 @@ deviceRouter.post('/code', async (c) => {
     }
     logger.error({ err: error }, 'Error issuing device code');
     return c.json({ error: 'Failed to issue device code' }, 500);
-  }
-});
-
-/**
- * POST /auth/device/poll
- * Poll a device code. No auth. Returns the token pair once approved (single-use).
- */
-deviceRouter.post('/poll', async (c) => {
-  try {
-    const body = await c.req.json().catch(() => ({}));
-    const { device_code } = pollSchema.parse(body);
-
-    const outcome = clusterMeshAdapter.devices.pollDeviceCode(device_code);
-
-    if (outcome.status === 'approved') {
-      const issued = await createSession(outcome.userId, outcome.role, {
-        name: outcome.deviceName,
-        ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || undefined,
-        userAgent: c.req.header('user-agent') || undefined,
-      });
-
-      const [userRecord] = await db
-        .select({
-          email: users.email,
-          displayName: users.displayName,
-          role: users.role,
-        })
-        .from(users)
-        .where(eq(users.id, outcome.userId))
-        .limit(1);
-
-      if (!userRecord) {
-        throw new Error('Device enrollment user lookup returned no row');
-      }
-
-      clusterMeshAdapter.completeDeviceAttachment(outcome);
-
-      return c.json({
-        status: 'approved',
-        sessionToken: issued.sessionToken,
-        refreshToken: issued.refreshToken,
-        expiresAt: issued.expiresAt.toISOString(),
-        user: {
-          id: outcome.userId,
-          email: userRecord.email,
-          displayName: userRecord.displayName,
-          role: userRecord.role,
-        },
-      });
-    }
-
-    return c.json({ status: outcome.status });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    logger.error({ err: error }, 'Error polling device code');
-    return c.json({ error: 'Failed to poll device code' }, 500);
   }
 });
 
