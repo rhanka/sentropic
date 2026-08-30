@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/mcp-platform",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Generic Sentropic/STP MCP provider platform contract: manifest/adapter/context schemas, session/consent/enrollment/secret records, elicitation, per-request authz, discovery/visibility and durable-call refs (SPEC_EVOL_APP_MCP_PROVIDER_PLATFORM). Broker-aware public surface — DRAFT, not frozen. In-memory mocks are a test harness only.",
   "type": "module",
   "license": "MIT",
@@ -24,6 +24,10 @@
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
+    },
+    "./hono": {
+      "types": "./dist/hono.d.ts",
+      "import": "./dist/hono.js"
     }
   },
   "typesVersions": {
@@ -33,6 +37,9 @@
       ],
       "testing": [
         "./dist/testing.d.ts"
+      ],
+      "hono": [
+        "./dist/hono.d.ts"
       ]
     }
   },
@@ -50,6 +57,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests"
+  },
+  "peerDependencies": {
+    "hono": "^4.10.7"
+  },
+  "peerDependenciesMeta": {
+    "hono": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@microsoft/api-extractor": "^7.58.9",
