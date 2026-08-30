@@ -11,7 +11,7 @@ function ports(): ClusterMeshPersistencePorts {
       append: vi.fn(async () => undefined),
       saveGeneration: vi.fn(async () => undefined),
       saveRegistration: vi.fn(async () => undefined),
-      reserveCapacity: vi.fn(async () => true),
+      reserveCapacity: vi.fn(async () => ({ ok: true, outcome: 'reserved' as const })),
       reclaimExpiredCapacity: vi.fn(async () => 0),
       saveMcpServer: vi.fn(async () => undefined),
       enqueueCommand: vi.fn(async () => true),

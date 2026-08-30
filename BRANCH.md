@@ -201,6 +201,7 @@
     - [x] Evidence: activation retains the previous generation, rollback requires its checkpoint and the migration test restores the root-specific namespace author.
     - [x] Fable M1/m6 follow-up: `0007` carries an executable operator-gated down block, and the location-independent migration test proves apply → rollback restores the pre-0007 schema while retaining `event_outbox`.
     - [x] Fable m3/m4/m5 follow-up: persistence contracts and Postgres adapters expose custody/lease/lifecycle fields plus receipt `commandId`, and capacity retries return explicit idempotent success instead of refusal.
+    - [x] Fable m7 follow-up: all twelve `0007` CHECK constraints and receipt invocation-stage uniqueness reject real invalid writes; package and scoped Postgres tests pass.
 
 - [ ] **Lot 4 — `/session` socle cutover and internally closable gates**
   - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.

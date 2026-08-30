@@ -44,6 +44,21 @@ describe('cluster mesh capacity admission', () => {
     });
   });
 
+  it('should accept an idempotent reservation retry without consuming capacity', () => {
+    const admission = createCapacityAdmission({
+      generationId: 'generation-retry',
+      config: { maxConcurrent: 1, poolSize: 1 },
+    });
+    const request = { reservationId: 'same', subjectRef: 'subject' };
+
+    expect(admission.reserveBeforeSpawn(request)).toMatchObject({ ok: true, outcome: 'reserved' });
+    expect(admission.reserveBeforeSpawn(request)).toMatchObject({
+      ok: true,
+      outcome: 'idempotent_retry',
+    });
+    expect(admission.reserved).toBe(1);
+  });
+
   it.each([
     [{ capacity: { maxConcurrent: 0, poolSize: 1 } }, 'maxConcurrent'],
     [{ capacity: { maxConcurrent: 1.5, poolSize: 1 } }, 'maxConcurrent'],

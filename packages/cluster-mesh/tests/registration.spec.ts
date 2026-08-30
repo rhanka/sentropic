@@ -12,10 +12,12 @@ const registration: ClusterMeshRegistration = {
   generationId: 'generation-1',
   principalId: 'workload-1',
   workspaceId: 'workspace-1',
+  custodyHolderPrincipalId: 'workload-1',
   custodyEpoch: 3,
   actuatorRef: 'actuator-1',
   status: 'active',
   expiresAt: '2026-08-31T12:00:00.000Z',
+  leaseExpiresAt: '2026-08-31T11:00:00.000Z',
 };
 
 const context: VerifiedInvocationContext = {
@@ -99,6 +101,13 @@ describe('registration gate', () => {
       ...context,
       registration: { ...context.registration!, expiresAt: 'not-a-date' },
     })).resolves.toEqual({ ok: false, reason: 'stale_registration' });
+  });
+
+  it('should reject an expired registration lease as stale', async () => {
+    await expect(gate({
+      ...registration,
+      leaseExpiresAt: '2026-08-29T12:00:00.000Z',
+    }).gate.authorize(context)).resolves.toEqual({ ok: false, reason: 'stale_registration' });
   });
 
   it('should reject a registration from another generation before actuation', async () => {
