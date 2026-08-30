@@ -209,6 +209,7 @@
     - [x] Control ports persist command lifecycle and LOST reconciliation, accept root-specific mounts, and keep PTY actuation injectable.
   - [ ] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
   - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
+    - [x] The cutover coordinator requires matching read snapshots plus a validated drive intent before persisting the single active author.
   - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
   - [ ] Reject missing/stale registration before PTY and reconcile dead/parked targets to LOST; acted receipt plus a real target tick remains the external `BR75-SG1` proof rather than a Lot 4 progression gate.
   - [ ] Tests new: `packages/cluster-mesh/tests/session-router.spec.ts`, `api/tests/api/cluster-mesh-session.test.ts`.
