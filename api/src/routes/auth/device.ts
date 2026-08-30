@@ -18,45 +18,9 @@ import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 
 export const deviceRouter = new Hono();
 
-const issueSchema = z.object({
-  deviceName: z.string().min(1).max(100).optional(),
-});
-
 const approveSchema = z.object({
   user_code: z.string().min(1),
   device_name: z.string().min(1).max(100).optional(),
-});
-
-const DEVICE_CODE_TTL_SEC = 10 * 60;
-
-/**
- * POST /auth/device/code
- * Issue a short-lived single-use device code. No auth — the binary is not yet enrolled.
- */
-deviceRouter.post('/code', async (c) => {
-  try {
-    const body = await c.req.json().catch(() => ({}));
-    const { deviceName } = issueSchema.parse(body);
-
-    const issued = clusterMeshAdapter.devices.issueDeviceCode(deviceName);
-
-    const origin = (c.req.header('origin') || '').trim();
-    const verificationUri = origin ? `${origin}/auth/devices/pair` : '/auth/devices/pair';
-
-    return c.json({
-      device_code: issued.deviceCode,
-      user_code: issued.userCode,
-      verification_uri: verificationUri,
-      interval: issued.intervalSec,
-      expires_in: DEVICE_CODE_TTL_SEC,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    logger.error({ err: error }, 'Error issuing device code');
-    return c.json({ error: 'Failed to issue device code' }, 500);
-  }
 });
 
 /**
