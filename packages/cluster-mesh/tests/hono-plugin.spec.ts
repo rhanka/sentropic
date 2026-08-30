@@ -42,4 +42,26 @@ describe('cluster mesh Hono plugin', () => {
     expect(createHealthRouter).toHaveBeenCalledOnce();
     expect(createAdminRouter).not.toHaveBeenCalled();
   });
+
+  it('projects a namespace beneath a composition-root-specific path', async () => {
+    const runtime = createClusterMeshRuntime({
+      generationId: 'generation-1',
+      config: { capacity: { poolSize: 1 } },
+      context: { async verify() { throw new Error('not invoked'); } },
+      registration: { async authorize() { return { ok: false, reason: 'missing_registration' }; } },
+      receipts: { async append() {} },
+    });
+    const plugin = createClusterMeshPlugin({
+      runtime,
+      namespaces: [{
+        namespace: '/session',
+        enabled: true,
+        createRouter: () => new Hono().get('/session', (c) => c.text('projected')),
+      }],
+      mounts: { '/session': '/' },
+    });
+
+    expect((await plugin.request('/session')).status).toBe(200);
+    expect((await plugin.request('/session')).status).not.toBe(404);
+  });
 });

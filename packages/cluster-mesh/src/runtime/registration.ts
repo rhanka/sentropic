@@ -31,7 +31,7 @@ export interface RegistrationLookupPort {
 
 export interface ActuationRequest {
   readonly registration: ClusterMeshRegistration;
-  readonly action: 'drive' | 'wake';
+  readonly action: 'drive' | 'wake' | 'relaunch';
   readonly commandRef: string;
 }
 
