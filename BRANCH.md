@@ -111,6 +111,7 @@
 - [ ] `BR75-SG8` — `attention` — r12 n2/n3 concern the decision-kit HTML provenance rendering and three labels at the accepted 210px cap; this router/runtime branch records them as N-A unless `/focus` expands into renderer work.
 - [ ] `BR75-SG9` — `attention` — the reported 16 design-system findings are unverified dependency-bundle observations, not a gate without a separately authorized global dependency lint.
 - [x] `BR75-RV1` — `acknowledge` — Fable socle review M1 and the registration custody, refusal coverage, configuration coverage and actuator-spread minors are closed before Lot 3; the Phase A typecheck/test gate passes 38 tests.
+- [x] `BR75-RV2` — `acknowledge` — Fable Lot 4 M1 is closed: the session author fence applies only to session/device/control handlers, and product plus IdP tests prove login and OAuth remain available after a `/session` rollback.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
 ## AI Flaky tests
