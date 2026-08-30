@@ -15,6 +15,7 @@ import {
   type ClusterMeshCutoverStore,
   type ClusterMeshRuntime,
   type ClusterMeshRuntimeStore,
+  type McpSupervisorStore,
   type PtyActuatorPort,
   type SessionTargetStatePort,
   type WorkstationId,
@@ -39,11 +40,20 @@ export interface ClusterMeshSessionControl {
   readonly ptyEvidence: 'adapter_available' | 'BR75-SG1_source_gap';
 }
 
+export interface ClusterMeshMcpControl {
+  readonly runtime: ClusterMeshRuntime;
+  readonly store: McpSupervisorStore & Pick<ClusterMeshRuntimeStore, 'saveGeneration'>;
+  readonly cutovers: ClusterMeshCutoverStore;
+  readonly supervisorRef: string;
+  readonly serverId: string;
+}
+
 export interface ClusterMeshAppAdapter {
   readonly membership: MembershipDomain;
   readonly devices: DeviceDomain;
   readonly boundaries: BoundaryDomain;
   readonly sessionControl?: ClusterMeshSessionControl;
+  readonly mcpControl?: ClusterMeshMcpControl;
   completeDeviceAttachment(outcome: Extract<DevicePollOutcome, { status: 'approved' }>): void;
 }
 
@@ -66,6 +76,7 @@ export interface ClusterMeshAppDependencies {
     readonly generationId: string;
     readonly context: VerifiedInvocationContextPort;
     readonly runtimeStore: ClusterMeshRuntimeStore;
+    readonly mcpStore?: ClusterMeshMcpControl['store'];
     readonly cutovers: ClusterMeshCutoverStore;
     readonly pty: PtyActuatorPort;
     readonly targets: SessionTargetStatePort;
@@ -108,6 +119,13 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
     targets: control.targets,
     ptyEvidence: control.ptyEvidence,
   } satisfies ClusterMeshSessionControl : undefined;
+  const mcpControl = control?.mcpStore && sessionControl ? {
+    runtime: sessionControl.runtime,
+    store: control.mcpStore,
+    cutovers: control.cutovers,
+    supervisorRef: `mcp-supervisor:${control.generationId}`,
+    serverId: `mcp-server:${control.generationId}`,
+  } satisfies ClusterMeshMcpControl : undefined;
 
   return {
     devices,
@@ -118,6 +136,7 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
     }),
     boundaries,
     sessionControl,
+    mcpControl,
     completeDeviceAttachment(outcome) {
       const key = `${outcome.userId}\0${outcome.deviceName}`;
       if (attached.has(key)) return;
@@ -162,6 +181,7 @@ export const clusterMeshAdapter = createClusterMeshAppAdapter({
       },
     },
     runtimeStore,
+    mcpStore: runtimeStore,
     cutovers: new PostgresClusterMeshCutoverStore(),
     pty: unavailableH2aPtyPort,
     targets: { async inspect() { return 'unknown'; } },
