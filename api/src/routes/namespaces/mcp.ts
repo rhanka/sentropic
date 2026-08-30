@@ -4,12 +4,12 @@ import {
   createMcpSupervisor,
   type ClusterMeshHonoNamespaceModule,
 } from '@sentropic/cluster-mesh';
-import { createMcpPlatformHono } from '@sentropic/mcp-platform/hono';
 import type {
   McpConnectorPort,
   McpHonoOptions,
   McpInvocation,
-} from '@sentropic/mcp-platform/hono';
+} from '../../../../packages/mcp-platform/src/hono';
+import { createMcpPlatformHono } from '../../../../packages/mcp-platform/src/hono';
 import { fromJwksPort } from '@sentropic/oauth-verify';
 
 import { env } from '../../config/env';

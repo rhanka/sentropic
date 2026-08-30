@@ -10,6 +10,7 @@ import { logger } from './logger';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
 import { productSessionModule } from './routes/namespaces/session';
+import { productMcpModule } from './routes/namespaces/mcp';
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -123,7 +124,7 @@ applyAuthRateLimiters(app);
 app.route('/.well-known', wellKnownRouter);
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
-  namespaces: [productSessionModule],
+  namespaces: [productSessionModule, productMcpModule],
   mounts: { '/session': '/auth' },
 }));
 app.route('/api/v1', apiRouter);
