@@ -1,95 +1,73 @@
-# Feature: Cluster Mesh Central Control Plane
+# Feature: Cluster Mesh Central Control Plane r13
 
 ## Objective
 
-- [ ] Build the accepted r8 Cluster Mesh central control plane in one branch, delivering the minimum centralized h2a capability first and then converging MCP, sessions, persistence, Graphify memory binding, shared enrollments, security enforcement, and the reusable Focus architecture renderer.
-- [ ] Preserve provider authorship and the `LOCAL_ONLY`/`APP_MANAGED` writer boundaries defined by `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md`.
+- [ ] Deliver the r13 Cluster Mesh target as an optional Hono plugin with an integrated runtime, neutral `VerifiedInvocationContext`, preferred PTY actuation, fail-closed registration, configurable capacity and one logical MCP server authority per generation.
+- [ ] Migrate exactly 29 namespaces in order from real reusable factories first and TARGET extractions second, using D11 shadow comparison, single-author cutover, rollback proof and same-lot legacy-path deletion.
+- [ ] Preserve D1=B: every provider/router remains independently mountable, testable and disableable, and no provider package depends on `@sentropic/cluster-mesh`.
 
 ## Scope / Guardrails
 
-- [ ] Treat `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` and `docs/specs/decisions/cluster-mesh-r8/` as the accepted architecture baseline.
-- [ ] Keep the entire implementation on `feat/cluster-mesh-central-control-plane`; do not create implementation sub-branches.
-- [ ] Execute the build with Codex 5.6 Sol at max reasoning effort.
-- [ ] Assign the independent plan/build review to Gemini 3.7 at max reasoning effort; builder and reviewer must differ.
-- [ ] Do not merge without explicit owner GO after review, CI, and UAT.
-- [ ] Use `make` targets only; do not invoke Docker, npm, package managers, migrations, test runners, linters, or typecheckers directly.
-- [ ] Pass `ENV=<env>` as the final argument of every `make` command.
-- [ ] Run all branch development in `tmp/feat-cluster-mesh-central-control-plane`.
-- [ ] Run automated tests only in `ENV=test-cluster-mesh-central-control-plane` or `ENV=e2e-cluster-mesh-central-control-plane`, never in `ENV=dev`.
-- [ ] Reserve the root `/home/antoinefa/src/sentropic` checkout for owner UAT and keep it stable.
-- [ ] Ensure the UAT checkout is commit-identical to the pushed branch HEAD before sign-off; record both SHAs in this file.
-- [ ] Add at most one generated application migration in `api/drizzle/*.sql`.
-- [ ] Keep all new source, test, documentation, migration, and commit text in English.
-- [ ] Keep commits atomic and run `make scope-check` before each commit.
-- [ ] Remove each legacy effect path in the same lot that activates its central-runtime replacement; no permanent dual path or fallback flag.
-- [ ] Keep `/home/antoinefa/src/h2a` and `/home/antoinefa/src/graphify` read-only; validate them through pinned releases and compatibility fixtures.
-- [ ] Do not claim external h2a consumer cutover or Graphify activation without the corresponding published package/release gate.
+- [ ] Treat `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` and the r13 dossier as the build authority; treat older mandatory/universal runtime wording as superseded history.
+- [ ] Use the conductor-confirmed plan identifier BR-75 for exception IDs and port allocation; BR-74 exists at `plan/done/74-BRANCH_fix-llm-gateway-compaction-usage.md`.
+- [ ] Keep implementation on `feat/cluster-mesh-central-control-plane` in `tmp/feat-cluster-mesh-central-control-plane`.
+- [ ] Use `make` targets only and pass `ENV=<env>` as the final argument of every `make` command.
+- [ ] Require `SCOPE=<lot-specific-test-file(s)>` on every `make test-api-%` gate; an unscoped `test-api-api` or `test-api-unit` pattern gate is invalid.
+- [ ] Run automated tests only in `ENV=test-cluster-mesh-central-control-plane` or `ENV=e2e-cluster-mesh-central-control-plane`, never `ENV=dev`.
+- [ ] Reserve the root checkout and its API 8787, UI 5173 and Maildev 1080 ports for user activity.
+- [ ] Reserve BR-75 slot 0 for API 9375, UI 5575 and Maildev 1475; reserve slot 1 API 9376 for concurrent IdP qualification.
+- [ ] Verify port ownership before every dev/E2E launch and configure exact OAuth redirects/origins for API 9375, IdP 9376 and UI 5575 before cross-root auth tests.
+- [ ] Run `make down API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 ENV=<env>` after every lot that starts services.
+- [ ] Add exactly one SQL migration file, `api/drizzle/control/0007_cluster_mesh_r13.sql`; do not add any public `0042` migration or second control migration.
+- [ ] Land the migration/backfill/rollback proof before the first product API or IdP namespace cutover.
+- [ ] Keep all provider secrets, OAuth tokens, NHI private keys and PTY handles outside Cluster Mesh; store opaque references only.
+- [ ] Use `createClusterMeshAppAdapter`, `createMcpAuth`, `createAuthRouter`, `createOAuthRouter`, `createWellKnownRouter`, `createGatewayRouter` and `createChatServer` as the real integration symbols.
+- [ ] Treat each lot as a conductor gate and split its checklist into selective atomic commits below 150 changed lines; run `make scope-check` before each commit.
+- [ ] Delete the replaced legacy mount/import/file in the cutover lot; never leave a feature-flag fallback or two effect authors.
+- [ ] Shadow reads and validated write intent only; never duplicate writes, PTY actions, LLM calls, connector calls or queue jobs.
+- [ ] Bump every changed publishable package version before the package's final gate; verify the version is above the published version through the project publication workflow.
+- [ ] Keep `/home/antoinefa/src/h2a` and `/home/antoinefa/src/graphify` read-only; cross-repository acceptance uses pinned packages, fixtures and h-cond evidence.
+- [ ] Enforce C1–C5 and A1–A5 internally through the conductor; do not add owner-ratification checkboxes for D17.
+- [ ] Do not push, merge or publish without separate explicit authority; D17 completion does not grant repository-release authority.
+- [ ] Keep the planning changes from this task uncommitted; the implementation conductor owns gates and commits.
 
 ## Branch Scope Boundaries (MANDATORY)
 
 - [ ] **Allowed Paths (implementation scope)**
   - [ ] `BRANCH.md`
   - [ ] `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md`
-  - [ ] `docs/specs/decisions/cluster-mesh-r8/**`
-  - [ ] `packages/contracts/src/**`
-  - [ ] `packages/contracts/tests/**`
-  - [ ] `packages/contracts/package.json`
-  - [ ] `packages/events/src/**`
-  - [ ] `packages/events/tests/**`
-  - [ ] `packages/events/package.json`
-  - [ ] `packages/cluster-mesh/src/**`
-  - [ ] `packages/cluster-mesh/tests/**`
-  - [ ] `packages/cluster-mesh/README.md`
-  - [ ] `packages/cluster-mesh/package.json`
-  - [ ] `packages/mcp-platform/src/**`
-  - [ ] `packages/mcp-platform/tests/**`
-  - [ ] `packages/mcp-platform/README.md`
-  - [ ] `packages/mcp-platform/package.json`
-  - [ ] `packages/mcp-platform/etc/mcp-platform.api.md`
-  - [ ] `packages/mcp-auth/src/**`
-  - [ ] `packages/mcp-auth/tests/**`
-  - [ ] `packages/mcp-auth/README.md`
-  - [ ] `packages/mcp-auth/package.json`
-  - [ ] `packages/mcp-broker/**`
-  - [ ] `packages/connector-host/src/**`
-  - [ ] `packages/connector-host/tests/**`
-  - [ ] `packages/connector-host/package.json`
-  - [ ] `packages/llm-mesh/src/**`
-  - [ ] `packages/llm-mesh/tests/**`
-  - [ ] `packages/llm-mesh/README.md`
-  - [ ] `packages/llm-mesh/package.json`
-  - [ ] `packages/llm-gateway/src/**`
-  - [ ] `packages/llm-gateway/tests/**`
-  - [ ] `packages/llm-gateway/package.json`
-  - [ ] `packages/focus/src/**`
-  - [ ] `packages/focus/tests/**`
-  - [ ] `packages/focus/README.md`
-  - [ ] `packages/focus/package.json`
-  - [ ] `api/src/services/cluster-mesh-adapter.ts`
-  - [ ] `api/src/services/cluster-mesh/**`
-  - [ ] `api/src/services/llm-account-transports.ts`
-  - [ ] `api/src/routes/api/mcp.ts`
-  - [ ] `api/src/routes/api/cluster-mesh.ts`
-  - [ ] `api/src/routes/api/index.ts`
-  - [ ] `api/src/db/schema.ts`
+  - [ ] `packages/contracts/**`
+  - [ ] `packages/events/**`
+  - [ ] `packages/cluster-mesh/**`
+  - [ ] `packages/mcp-platform/**`
+  - [ ] `packages/mcp-auth/**`
+  - [ ] `packages/llm-gateway/**`
+  - [ ] `packages/llm-mesh/**`
+  - [ ] `packages/connector-host/**`
+  - [ ] `packages/focus/**`
+  - [ ] `packages/flow/**`
+  - [ ] `packages/chat-core/**`
+  - [ ] `packages/chat-server/**`
+  - [ ] `packages/comments/**`
+  - [ ] `packages/auth-hono/**`
+  - [ ] `packages/auth-client/**`
+  - [ ] `packages/oauth-verify/**`
+  - [ ] `packages/harness/**`
+  - [ ] `packages/cli/**`
+  - [ ] `packages/build-cli/**`
+  - [ ] `api/src/app.ts`
+  - [ ] `api/src/index.ts`
+  - [ ] `api/src/config/env.ts`
+  - [ ] `api/src/routes/**`
+  - [ ] `api/src/services/**`
+  - [ ] `api/src/upstream/**` — Lot 27 bookmarklet URL removal.
   - [ ] `api/src/db/control-schema.ts`
-  - [ ] `api/tests/unit/cluster-mesh-*.test.ts`
-  - [ ] `api/tests/unit/llm-account-transports.test.ts`
-  - [ ] `api/tests/unit/connector-host.test.ts`
-  - [ ] `api/tests/api/mcp-resource-server.test.ts`
-  - [ ] `api/tests/api/cluster-mesh-control-plane.test.ts`
-  - [ ] `api/tests/api/cluster-mesh-session-authority.test.ts`
-  - [ ] `api/tests/api/cluster-mesh-enrollment.test.ts`
-  - [ ] `ui/src/lib/cluster-mesh/**`
-  - [ ] `ui/src/lib/components/cluster-mesh/**`
-  - [ ] `ui/src/lib/components/chat/AppChatPanel.svelte`
-  - [ ] `ui/src/lib/chat/session-adapter.ts`
-  - [ ] `ui/src/lib/stores/session.ts`
-  - [ ] `ui/tests/cluster-mesh/**`
-  - [ ] `ui/tests/components/chat/AppChatPanel-session-state.test.ts`
-  - [ ] `ui/tests/chat/session-adapter.test.ts`
-  - [ ] `ui/tests/stores/session.test.ts`
-  - [ ] `e2e/tests/13-cluster-mesh-control-plane.spec.ts`
+  - [ ] `api/tests/**`
+  - [ ] `api/package.json`
+  - [ ] `apps/auth-idp/**`
+  - [ ] `ui/src/**`
+  - [ ] `ui/tests/**`
+  - [ ] `e2e/tests/**`
   - [ ] `package-lock.json`
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
@@ -100,49 +78,63 @@
   - [ ] `plan/NN-BRANCH_*.md`
   - [ ] `rules/**`
   - [ ] `infra/**`
+  - [ ] `deploy/**`
+  - [ ] `api/src/db/schema.ts`
+  - [ ] `api/drizzle/0042_*.sql`
+  - [ ] `api/drizzle/control/0008_*.sql`
   - [ ] `packages/mcp-connector-*/**`
   - [ ] `/home/antoinefa/src/h2a/**`
   - [ ] `/home/antoinefa/src/graphify/**`
-- [ ] **Conditional Paths (allowed only through the exception process)**
-  - [ ] `api/drizzle/0042_cluster_mesh_control_plane.sql` and its generated `api/drizzle/meta/**` entries; one migration total; requires `CMCP-EX1` before generation.
-  - [ ] `package.json`; only if workspace/package export wiring cannot be expressed in package-local manifests; requires `CMCP-EX2`.
-  - [ ] `.security/**`; only for an expiring security exception accepted by the owner; requires `CMCP-EX3`.
+- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**
+  - [ ] `api/drizzle/control/0007_cluster_mesh_r13.sql` and `api/drizzle/control/meta/**` through `BR75-EX1`; one SQL file total.
+  - [ ] `package.json` through `BR75-EX2` only if root workspace wiring cannot be expressed in package-local manifests.
+  - [ ] `.security/**` through `BR75-EX3` only for a bounded, expiring security exception.
 - [ ] **Exception process**
-  - [ ] Declare `CMCP-EXn` in `## Feedback Loop` before touching a conditional path.
-  - [ ] Record reason, exact paths, impact, rollback strategy, owner status, and closing commit.
-  - [ ] Never use an exception to introduce a second writer, bypass the runtime, select a D10 wire profile, or modify the external h2a/Graphify repositories.
+  - [ ] Declare `BR75-EXn` in `## Feedback Loop` before touching a conditional path.
+  - [ ] Record reason, exact path, impact, rollback and conductor disposition.
+  - [ ] Never use an exception for a second migration, provider-to-cluster-mesh dependency, dual writer, raw secret copy, runtime bypass or external h2a/Graphify edit.
 
 ## Feedback Loop
 
-- [ ] Use `blocked`, `deferred`, `cancelled`, or `attention` only when a lot cannot safely proceed or a consequential owner decision is required.
-- [ ] Record the owner/reviewer response as `clarification`, `acknowledge`, or `refuse` beside the affected lot before resuming.
-- [ ] `CMCP-EX1` — pending only if the build reaches the single PostgreSQL migration; expected paths are `api/drizzle/0042_cluster_mesh_control_plane.sql` and generated metadata; rollback is migration rollback plus removal of unused schema bindings.
-- [ ] Graphify publication gate — `blocked` for activation until the neutral `graphify-memory` contract exists and its L0–L7 evidence is available; neutral fixtures and fail-closed adapter work may proceed.
-- [ ] D10 profile gate — `deferred` by owner r8; no remote actionable activation and no cross-language message-profile promise may proceed until a separate owner decision.
-- [ ] External h2a consumption — `attention`; this Sentropic branch proves package compatibility but does not edit or release the external h2a consumer.
+- [ ] `BR75-ID1` — `acknowledge` — resolved: BR-75 is confirmed because BR-74 exists; slot 0 is API 9375/UI 5575/Maildev 1475, slot 1 is API 9376 for the IdP, and every non-E2E gate ends with `ENV=test-cluster-mesh-central-control-plane`.
+- [ ] `BR75-ID2` — `attention` — E2E groups 09 and 10 are outside the `ci.yml` matrix (09 is pre-existing); C2 remains satisfied locally by the Lot 33 matrix, while registering group 10 in CI is owned by a dedicated post-merge follow-up branch and `.github/workflows/**` remains forbidden here.
+- [ ] `BR75-EX1` — `attention` — reason: C1 needs all runtime/generation/registration/capacity/MCP/cutover durable state before app cutover; path: `api/drizzle/control/0007_cluster_mesh_r13.sql` plus generated control metadata; impact: one additive control-schema migration and no public schema change; rollback: deactivate namespace cutovers, drain leases, drop only the new control tables/indexes, restore the prior control journal; disposition: conductor-enforced before generation.
+- [ ] `BR75-EX2` — `deferred` — root `package.json` remains untouched unless package-local wiring proves insufficient; impact and rollback must be supplied before use.
+- [ ] `BR75-EX3` — `deferred` — no security exception is planned; any use must state expiry, compensating control and deletion gate.
+- [ ] `BR75-SG1` — `blocked` — real A1 PTY drive/wake evidence is externally blocked on the absent h2a PTY adapter; this blocks A1 acceptance, not progression beyond Lot 4's internally closable gates. The conductor opens an inter-repository h-cond escalation to the h2a adapter owner with the pinned adapter contract/digest, reproduction evidence, requested delivery and A1 acceptance proof; close in Lot 33 when executable there or at the latest in Lot 34 with real A→B tick, acted receipt, non-empty relaunch and LOST evidence. An in-memory or fake driver cannot close it.
+- [ ] `BR75-SG2` — `attention` — `packages/track` is absent; `/track` remains disabled/fail-closed until an external package contract and digest are pinned.
+- [ ] `BR75-SG3` — `attention` — Graphify source/release is absent; `/memory` remains disabled/fail-closed until the existing h2a↔Graphify contract is pinned.
+- [ ] `BR75-SG4` — `attention` — bookmarklet CORP middleware and emitted URLs exist without a mounted router; `/clients` must locate a real handler or delete the stale middleware/script branch.
+- [ ] `BR75-SG5` — `attention` — the complete raw r9/r10 owner capture is absent; C4 requires conductor-normalized provenance language throughout.
+- [ ] `BR75-SG6` — `attention` — the residual non-ratified UI branch was not located by repository search; no deletion is authorized without a concrete locator.
+- [ ] `BR75-SG7` — `attention` — before any Lot 3 SQL generation, independently challenge the unique migration and freeze `cluster_mesh_namespace_cutovers` on key `(compositionRoot, namespace)`; the same migration must include covering indexes for A1/A3 active-registration queries by `(generation, workspace, NHI)` with expiry/lease, command idempotency-key uniqueness per target, and lease/expiry reclamation of `capacity_leases` after a generation crash. A second SQL file is forbidden.
+- [ ] `BR75-SG8` — `attention` — r12 n2/n3 concern the decision-kit HTML provenance rendering and three labels at the accepted 210px cap; this router/runtime branch records them as N-A unless `/focus` expands into renderer work.
+- [ ] `BR75-SG9` — `attention` — the reported 16 design-system findings are unverified dependency-bundle observations, not a gate without a separately authorized global dependency lint.
+- [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
 ## AI Flaky tests
 
-- [ ] Accept only non-systematic provider, network, or model nondeterminism as `flaky accepted`.
-- [ ] Require at least one success on the same commit and same command before classifying a failure as non-systematic.
-- [ ] Never add timeouts to silence a failure.
-- [ ] Compare the signature with `main`; a related failure blocks the lot.
-- [ ] Record command, commit, failing test file, signature, successful rerun, impact analysis, and explicit owner sign-off in this file before merge.
+- [ ] Accept only non-systematic provider, network or model nondeterminism after one success on the same commit and exact command.
+- [ ] Never add or increase a timeout to suppress a failure.
+- [ ] Treat every related failure as blocking and investigate against the branch baseline.
+- [ ] Record command, commit, file, signature, successful rerun and impact before any `flaky accepted` classification.
+- [ ] Obtain separate explicit user sign-off before merge for every accepted AI-flaky case; this is release authority, not a D17 gate.
 
 ## Orchestration Mode (AI-selected)
 
-- [x] **Mono-branch + cherry-pick** — template mode label selected for a single integration branch; execution uses direct sequential commits on `feat/cluster-mesh-central-control-plane` and no cherry-picks or sub-branches.
-- [ ] **Multi-branch** — prohibited for this build by the owner's one-branch instruction.
-- [ ] Rationale: the lots are causally ordered, share contract/schema cutovers, and must be reviewed as one converged control plane.
+- [x] **Mono-branch + cherry-pick** — template label selected; execution is sequential in the single feature worktree with no implementation sub-branches and no cherry-picks.
+- [ ] **Multi-branch** — not selected because the migration and namespace-author records impose one ordered writer.
+- [ ] Rationale: all lots share the plugin contract, one migration and ordered cutovers; independent reviewers remain read-only and do not create integration branches.
 
 ## UAT Management (in orchestration context)
 
-- [ ] Run development and automated tests in `tmp/feat-cluster-mesh-central-control-plane` only.
-- [ ] Push the branch before each owner UAT checkpoint.
-- [ ] Make the root checkout commit-identical to the branch HEAD before UAT; record source SHA and UAT SHA in this file.
-- [ ] Run owner UAT from `/home/antoinefa/src/sentropic` with `ENV=dev` only after the owner confirms the root environment is available.
-- [ ] Return to the branch worktree after each UAT checkpoint.
-- [ ] Do not merge or remove `BRANCH.md` until final Gemini review and explicit owner GO.
+- [ ] Develop and run automated gates in `tmp/feat-cluster-mesh-central-control-plane` only.
+- [ ] Run conductor qualification against slot 0 API 9375/UI 5575/Maildev 1475 and slot 1 IdP 9376; never reuse root dev ports.
+- [ ] Verify exact OAuth redirect URIs and JavaScript origins before IdP/product cross-root UAT.
+- [ ] Require the tested checkout and any user-visible UAT checkout to be commit-identical; record both SHAs before sign-off.
+- [ ] Treat A1–A5 as conductor acceptance; request user interaction only when the real terminal or browser action cannot be automated.
+- [ ] Stop services with the matching `make down ... ENV=<env>` command after each UAT session.
+- [ ] Do not turn UAT completion into permission to push, merge or publish.
 
 ## Plan / Todo (lot-based)
 
@@ -188,169 +180,458 @@
   - [x] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C3 provider-neutral runtime ports; A4 hermetic 12/13 pre-spawn proof; A5 plugin disableability partial.
 
-- [ ] **Lot 3 — D6 runtime-internal MCP gateway and bypass removal**
-  - [ ] Add `packages/mcp-platform/src/runtime-module.ts` to compose MCP session, consent, enrollment, elicitation, cancellation, and connector dispatch behind a neutral capability.
-  - [ ] Add `packages/mcp-platform/src/http-ingress.ts` as an HTTP-neutral handler consumed by Cluster Mesh, not a second server/runtime owner.
-  - [ ] Replace mock-only production defaults in `packages/mcp-platform/src/persistence.ts` and `stores.ts` with required injected durable ports; retain in-memory stores in testing exports only.
-  - [ ] Evolve `packages/mcp-auth/src/core.ts` and `hono.ts` only where needed to return linked verified-principal references without moving OAuth/MCP semantics into Cluster Mesh.
-  - [ ] Add `packages/cluster-mesh/src/providers/mcp.ts` and register the internal MCP module with `WorkspaceRuntime`.
-  - [ ] Evolve `packages/connector-host/src/mount.ts` so effects require the invocation supervisor context and cannot resolve a workspace through an alternate route.
-  - [ ] Move reusable private proof orchestration from `packages/mcp-broker/src/` into the internal MCP module, update package references, and delete `packages/mcp-broker` after the conformance gate.
-  - [ ] Replace direct connector dispatch in `api/src/routes/api/mcp.ts` with MCP client → runtime HTTP → internal MCP module.
-  - [ ] Add `packages/mcp-platform/tests/runtime-module.test.ts`, `http-ingress.test.ts`, and durable restart/cancel/elicitation tests.
-  - [ ] Update `packages/mcp-auth/tests/core.test.ts` and `hono.test.ts` for linked references, audience, tenant, scope, DPoP, and fail-closed verifier status.
-  - [ ] Update `packages/connector-host/tests/mount.test.ts` for required supervisor context and bypass refusal.
-  - [ ] Replace `packages/mcp-broker/tests/broker.test.ts` with internal-module conformance coverage before deleting the package.
-  - [ ] Update `api/tests/api/mcp-resource-server.test.ts` to prove HTTP first hop, auth-before-policy, workspace binding, consent, invocation receipt, streaming/cancellation, and no direct connector path.
-  - [ ] Update `api/tests/unit/connector-host.test.ts` to prove effects cannot execute without a verified runtime command.
+- [ ] **Lot 3 — Unique control migration and durable stores before cutover**
+  - [ ] Namespace: shared persistence; type: schema/migration/backfill/rollback.
+  - [ ] Approve `BR75-EX1`, update `api/src/db/control-schema.ts` and generate only `api/drizzle/control/0007_cluster_mesh_r13.sql` plus control metadata.
+  - [ ] Create generations, registrations, capacity leases, logical MCP servers, commands, receipts and namespace cutovers in the control schema; reuse `control.event_outbox`.
+  - [ ] Key namespace cutovers by `(compositionRoot, namespace)` and include the SG7 covering indexes, per-target command idempotency uniqueness and crash-safe capacity lease/expiry reclamation in this migration before generating SQL.
+  - [ ] Add `api/src/services/cluster-mesh/postgres-runtime-store.ts`, `postgres-cutover-store.ts` and rollback/backfill verification ports.
+  - [ ] Add `packages/cluster-mesh/src/persistence/ports.ts`; keep adapters injected and keep `LOCAL_ONLY` free of app mirrors.
+  - [ ] Record C1 backfill exactly as `N-A-from-empty`: CURRENT attachment state is a process-local `Map`, so no durable rows exist to migrate.
+  - [ ] Tests new: `api/tests/unit/cluster-mesh-postgres-runtime.test.ts`, `api/tests/api/cluster-mesh-migration.test.ts`, `packages/cluster-mesh/tests/persistence-ports.spec.ts`.
+  - [ ] Tests updated: `api/tests/outbox/outbox-round-trip.test.ts` for receipt/outbox integration without a duplicate outbox.
+  - [ ] UI/E2E tests: N-A; migration is proven before application mounting.
+  - [ ] Lot gate: `make typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-unit SCOPE=tests/unit/cluster-mesh-postgres-runtime.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-migration.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 migration/backfill/rollback before every app cutover; C3 injected persistence; `BR75-SG7` independently closed before any SQL generation or build blocked.
+
+- [ ] **Lot 4 — `/session` socle cutover and internally closable gates**
+  - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `packages/cluster-mesh/src/hono/session-router.ts` and `api/src/routes/namespaces/session.ts`; inject product session/device ports and the h2a PTY registration adapter port, with real adapter evidence tracked only by `BR75-SG1`.
+  - [ ] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
+  - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.
+  - [ ] Prove rollback to the previous generation, then remove session/device mounts from `api/src/routes/auth/index.ts` and delete replaced router code from `api/src/routes/auth/session.ts` and `device.ts`.
+  - [ ] Reject missing/stale registration before PTY and reconcile dead/parked targets to LOST; acted receipt plus a real target tick remains the external `BR75-SG1` proof rather than a Lot 4 progression gate.
+  - [ ] Tests new: `packages/cluster-mesh/tests/session-router.spec.ts`, `api/tests/api/cluster-mesh-session.test.ts`.
+  - [ ] Tests updated: `api/tests/unit/cluster-mesh-adapter.test.ts`, `api/tests/api/auth-device-code.spec.ts`, `api/tests/api/auth/session.test.ts`.
+  - [ ] UI tests updated: `ui/tests/chat/session-adapter.test.ts`, `ui/tests/stores/session.test.ts`, `ui/tests/components/chat/AppChatPanel-session-state.test.ts`.
+  - [ ] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` A1 session A→B, non-empty relaunch and LOST case; execute in Lot 33.
+  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/cluster-mesh-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-session.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/chat/session-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot-blocking internal gates only: A3 fail-closed registration, A4 real cap enforcement, and one-author session cutover/rollback; real A1 drive/wake evidence remains explicitly blocked in `BR75-SG1` and must close in Lots 33/34 without blocking progression here.
+
+- [ ] **Lot 5 — `/mcp` reusable wrapping and logical singleton cutover**
+  - [ ] Namespace: `/mcp`; type: reusable wrapping, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add reusable Hono ingress in `packages/mcp-platform/src/hono.ts`, composed with `mcpAuthRoutes(createMcpAuth(...))` and injected connector/invocation ports.
+  - [ ] Add `packages/cluster-mesh/src/runtime/mcp-supervisor.ts` enforcing one logical server/supervisor lease per generation and zero server ownership per session.
+  - [ ] Mount `/mcp` through the plugin; shadow PRM/read intent and deterministic protocol responses without duplicating provider effects.
+  - [ ] Select one MCP author, prove generation handover rollback, move product adapters to `api/src/routes/namespaces/mcp.ts`, delete `api/src/routes/api/mcp.ts` and remove direct connector dispatch.
+  - [ ] Own the `mcp-broker` bypass decision in this lot only: its locator is N-A from Lot 0; remove the verified direct connector dispatch in `api/src/routes/api/mcp.ts` after `mcp-platform` coverage and keep connector providers autonomous.
+  - [ ] Tests new: `packages/mcp-platform/tests/hono.test.ts`, `packages/cluster-mesh/tests/mcp-supervisor.spec.ts`, `api/tests/api/cluster-mesh-mcp-singleton.test.ts`.
+  - [ ] Tests updated: `packages/mcp-auth/tests/core.test.ts`, `packages/mcp-auth/tests/hono.test.ts`, `packages/mcp-platform/tests/authz.test.ts`, `packages/mcp-platform/tests/durable.test.ts`, `packages/mcp-platform/tests/elicitation.test.ts`, `packages/mcp-platform/tests/persistence.test.ts`, `packages/mcp-platform/tests/transport.test.ts`, `packages/connector-host/tests/mount.test.ts`, `api/tests/api/mcp-resource-server.test.ts`, `api/tests/unit/connector-host.test.ts`.
+  - [ ] UI tests: N-A; no UI source change.
+  - [ ] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` N sessions, one logical MCP server/generation, zero per-session server, missing-registration refusal.
   - [ ] Lot gate: `make typecheck-mcp-auth test-mcp-auth build-mcp-auth typecheck-mcp-platform test-mcp-platform build-mcp-platform ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-connector-host test-connector-host build-connector-host ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=mcp-resource-server.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE=connector-host.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-connector-host test-connector-host build-connector-host typecheck-cluster-mesh test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE="tests/api/mcp-resource-server.test.ts tests/api/cluster-mesh-mcp-singleton.test.ts" ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 MCP/registration state already migrated; C3 MCP packages standalone; A2 logical singleton; A3 registration-gated fail-closed.
 
-- [ ] **Lot 4 — D7 singular session authority and remote-control surface**
-  - [ ] Add `packages/cluster-mesh/src/session/contracts.ts` with `LOCAL_ONLY`, `ADOPTING`, `APP_MANAGED`, and `DETACHING`, plus command/event/receipt/checkpoint/high-water contracts.
-  - [ ] Add `packages/cluster-mesh/src/session/authority.ts` with fenced adopt/detach transitions and exactly one writer per `sessionId/homeEpoch`.
-  - [ ] Add `packages/cluster-mesh/src/session/provider.ts` for host-local h2a session/terminal custody without moving PTY execution into the app.
-  - [ ] Add `api/src/services/cluster-mesh/session-ledger.ts` and `session-inbox.ts` adapters; app ledger is canonical only in `APP_MANAGED` and host inbox/meta remain SQLite-first derived structures.
-  - [ ] Add `api/src/routes/api/cluster-mesh.ts` session command/event/receipt/adopt/detach endpoints and register them in `api/src/routes/api/index.ts`.
-  - [ ] Add `ui/src/lib/cluster-mesh/session-authority.ts` and `ui/src/lib/components/cluster-mesh/SessionAuthorityStatus.svelte`.
-  - [ ] Update `ui/src/lib/chat/session-adapter.ts`, `ui/src/lib/stores/session.ts`, and `AppChatPanel.svelte` to present canonical/reconstructible versus explicitly ephemeral data truthfully.
-  - [ ] Add `packages/cluster-mesh/tests/session-authority.spec.ts` and `session-recovery.spec.ts` for writer fencing, duplicate delivery, stale epochs, crash windows, high-water recovery, and detach/adopt.
-  - [ ] Add `api/tests/api/cluster-mesh-session-authority.test.ts` for ledger atomicity, restart, ordered/duplicate/out-of-order events, local-only no-mirror, and app-managed command-before-effect.
-  - [ ] Add `ui/tests/cluster-mesh/session-authority.test.ts` and update `ui/tests/chat/session-adapter.test.ts`, `ui/tests/stores/session.test.ts`, and `ui/tests/components/chat/AppChatPanel-session-state.test.ts`.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=cluster-mesh-session-authority.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/cluster-mesh/session-authority.test.ts ENV=test-cluster-mesh-central-control-plane`.
+- [ ] **Lot 6 — `/oauth` reusable factory and two-root cutover**
+  - [ ] Namespace: `/oauth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
+  - [ ] Wrap real `createOAuthRouter` and `createWellKnownRouter` in an autonomous module with product ports; keep `createMcpAuth` resource metadata delegation explicit.
+  - [ ] Mount product `/api/v1/oauth/*` plus `/.well-known/*`; mount the same module under the established IdP `/api/v1/auth/oauth/*` projection plus `/.well-known/*`.
+  - [ ] Shadow metadata/token validation intent, select one author per root, prove rollback, then delete replaced code/mounts in `api/src/routes/auth/oauth.ts`, `service-s2s.ts` and `api/src/routes/well-known.ts`.
+  - [ ] Update `api/src/routes/auth/index.ts`, `api/src/app.ts`, `apps/auth-idp/idp-app.ts`, `packages/auth-client/src/**` and UI OAuth transports for the product canonical path without changing the IdP public projection.
+  - [ ] Tests updated: `packages/auth-hono/tests/oauth-router-factory.test.ts`, `packages/auth-hono/tests/oauth-wellknown.test.ts`, `packages/auth-hono/tests/oauth-token.test.ts`, `packages/auth-hono/tests/oauth-revoke.test.ts`, `packages/auth-hono/tests/oauth-introspect.test.ts`, `packages/auth-hono/tests/oauth-client-credentials.test.ts`, `packages/auth-hono/tests/oauth-service-obo.test.ts`, `packages/oauth-verify/tests/verify-access-token.test.ts`, `packages/oauth-verify/tests/verify-dpop-proof.test.ts`.
+  - [ ] API tests updated: `api/tests/api/auth/oauth-authorize.test.ts`, `api/tests/api/auth/oauth-token.test.ts`, `api/tests/api/auth/oauth-revoke-introspect.test.ts`, `api/tests/api/auth/oauth-userinfo.test.ts`, `api/tests/api/auth/oauth-wellknown.test.ts`, `api/tests/api/auth/arch11-service-obo.test.ts`.
+  - [ ] IdP/UI tests updated: `ui/tests/utils/oauth-transport.test.ts`, `apps/auth-idp/web/src/lib/oauth-transport.ts`; new `api/tests/api/cluster-mesh-oauth-roots.test.ts`.
+  - [ ] E2E updated: `e2e/tests/02-auth-oauth-authorization-code.spec.ts`, `e2e/tests/02-auth-oauth-revoke.spec.ts`, `e2e/tests/02-auth-oauth-wellknown.spec.ts`, `e2e/tests/02-auth-s2s-client-credentials.spec.ts`.
+  - [ ] Lot gate: `make typecheck-auth-hono test-auth-hono build-auth-hono typecheck-oauth-verify test-oauth-verify build-oauth-verify typecheck-auth-client test-auth-client ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-idp typecheck-idp-web typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-oauth-roots.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-ui SCOPE=tests/utils/oauth-transport.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 auth data unchanged and one route author/root; C3 auth/oauth modules standalone; frozen auth/oauth/session facade.
 
-- [ ] **Lot 5 — D4 domain persistence, PostgreSQL ledger, SQLite-first host stores, and migration**
-  - [ ] Declare `CMCP-EX1`, generate exactly `api/drizzle/0042_cluster_mesh_control_plane.sql` plus required metadata, and do not add a second migration.
-  - [ ] Evolve `api/src/db/control-schema.ts` and `schema.ts` for workspace bindings, policy revisions, invocation/outbox/receipts, app-managed session ledger, enrollment bindings, custody epochs, and security verifier status.
-  - [ ] Add `packages/cluster-mesh/src/persistence/sqlite.ts` for host-local runtime, inbox/meta, replay, and local binding stores through an injected SQLite driver boundary.
-  - [ ] Add `api/src/services/cluster-mesh/postgres.ts` for app-managed transactional stores and recovery queries.
-  - [ ] Add `packages/cluster-mesh/src/persistence/mode-guard.ts` that rejects app mirroring for every `LOCAL_ONLY` domain.
-  - [ ] Add `packages/cluster-mesh/tests/persistence-contract.spec.ts`, `sqlite-persistence.spec.ts`, and `mode-guard.spec.ts`.
-  - [ ] Add `api/tests/unit/cluster-mesh-postgres.test.ts` and `api/tests/api/cluster-mesh-control-plane.test.ts` for commit/outbox/effect crash windows, restart, replay, retention boundaries, one writer, and local-only no-mirror.
-  - [ ] Add migration forward/backward/empty/existing-data coverage to `api/tests/api/cluster-mesh-control-plane.test.ts` using the repository's migration harness.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=cluster-mesh-postgres.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=cluster-mesh-control-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
+- [ ] **Lot 7 — `/auth` reusable factory and two-root cutover**
+  - [ ] Namespace: `/auth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
+  - [ ] Wrap real `createAuthRouter` with product WebAuthn/email/magic-link/federation/account ports; exclude `/oauth`, `/session` and LLM settings.
+  - [ ] Mount the same identity module in product and IdP roots, shadow safe reads/validated intents, select one author per root and prove rollback.
+  - [ ] Extract the identity subset of `api/src/routes/api/me.ts`; leave only explicitly assigned `/llm-mesh` and `/config` subsets until their lots.
+  - [ ] Remove replaced mounts/files `api/src/routes/auth/register.ts`, `api/src/routes/auth/login.ts`, `api/src/routes/auth/credentials.ts`, `api/src/routes/auth/magic-link.ts`, `api/src/routes/auth/email.ts`, `api/src/routes/auth/federation.ts` and their legacy imports from `auth/index.ts` after cutover.
+  - [ ] Tests updated: `packages/auth-hono/tests/router-factory.test.ts`, `packages/auth-hono/tests/credential-route-handlers.test.ts`, `packages/auth-hono/tests/email-route-handlers.test.ts`, `packages/auth-hono/tests/magic-link-route-handlers.test.ts`, `packages/auth-hono/tests/webauthn-registration-route-handlers.test.ts`, `packages/auth-hono/tests/webauthn-authentication-route-handlers.test.ts`, `packages/auth-hono/tests/federation-resolve-user.test.ts`.
+  - [ ] API tests updated: `api/tests/api/auth/authentication.test.ts`, `api/tests/api/auth/credentials.test.ts`, `api/tests/api/auth/magic-link.test.ts`, `api/tests/api/auth/registration.test.ts`, `api/tests/api/auth/tenancy.test.ts`, `api/tests/api/auth/tenant-membership.test.ts`, `api/tests/api/me.test.ts`; new `api/tests/api/cluster-mesh-auth-roots.test.ts`.
+  - [ ] UI tests updated: `ui/tests/utils/extension-auth-ui.test.ts`; IdP screen transport/build files under `apps/auth-idp/web/src/**`.
+  - [ ] E2E updated: `e2e/tests/02-auth-routes.spec.ts`, `e2e/tests/02-auth-simple.spec.ts`, `e2e/tests/02-auth-webauthn.spec.ts`, `e2e/tests/02-auth-workflow.spec.ts`, `e2e/tests/00-access-control.spec.ts`.
+  - [ ] Lot gate: `make typecheck-auth-hono test-auth-hono build-auth-hono typecheck-idp typecheck-idp-web ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-auth-roots.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing identity schema reused and one author/root; C3 standalone auth factory; frozen auth/oauth/session facade.
 
-- [ ] **Lot 6 — D8 existing h2a↔Graphify memory contract reuse**
-  - [ ] Pin the published Graphify memory contract version and fixture digest; if absent, keep activation blocked and record the missing L0–L7 evidence.
-  - [ ] Add `packages/cluster-mesh/src/providers/graphify-memory.ts` that maps neutral workspace/grant/activity inputs to the published Graphify port and returns provider-opaque receipt/cursor references.
-  - [ ] Add `packages/cluster-mesh/tests/fixtures/graphify-memory-contract.json` from the published contract only; do not derive a substitute from internal Graphify source.
-  - [ ] Add `packages/cluster-mesh/tests/graphify-memory-provider.spec.ts` for authorization mapping, activity-evidence boundary, final revalidation refusal, cursor/receipt persistence, unavailable provider, and contract digest mismatch.
-  - [ ] Prove Cluster Mesh stores no canonical episode, graph/vector projection, ranking score, or Graphify rebuild state.
-  - [ ] Prove `LOCAL_ONLY` Graphify SQLite has no app mirror and managed PostgreSQL is selected only by the Graphify provider mode.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: activation remains fail closed if the external release gate is unmet; fixture-only compatibility is an acceptable branch outcome and must be reported as such, not called production memory.
+- [ ] **Lot 8 — `/gw` existing gateway factory mount and client cutover**
+  - [ ] Namespace: `/gw`; type: existing-factory wrapping, plugin mount and D11 cutover.
+  - [ ] Mount real `createGatewayRouter` through `api/src/routes/namespaces/gw.ts` with neutral caller ownership context; keep gateway/mesh secrets and route selection provider-owned.
+  - [ ] Shadow deterministic request normalization and route intent against the current internal egress without sending a second LLM request.
+  - [ ] Cut application callers to `/gw`, prove rollback to the prior adapter generation and delete the verified direct gateway-bypass branch; record N-A if no legacy HTTP route exists.
+  - [ ] Tests updated: `packages/llm-gateway/tests/router.test.ts`, `packages/llm-gateway/tests/caller-ownership.test.ts`, `packages/llm-gateway/tests/canonical-ingress.test.ts`, `packages/llm-gateway/tests/canonical-egress.test.ts`, `packages/llm-gateway/tests/canonical-stream.test.ts`, `packages/llm-gateway/tests/passthrough.test.ts`.
+  - [ ] API tests updated: `api/tests/unit/provider-mesh-contract-proof.test.ts`, `api/tests/unit/llm-runtime-stream.test.ts`; new `api/tests/api/cluster-mesh-gw.test.ts`.
+  - [ ] UI/E2E tests: N-A for this transport-only mount; provider UI coverage remains in Lot 11/33.
+  - [ ] Lot gate: `make typecheck-llm-gateway test-llm-gateway build-llm-gateway typecheck-llm-mesh test-llm-mesh build-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-unit SCOPE="tests/unit/provider-mesh-contract-proof.test.ts tests/unit/llm-runtime-stream.test.ts" ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-gw.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C3 gateway/mesh standalone with injected context; A5 module disableability partial.
 
-- [ ] **Lot 7 — D11/D12 shared connector and LLM enrollments**
-  - [ ] Add `packages/cluster-mesh/src/enrollment/binding-registry.ts` with non-secret descriptor bindings, global-then-workspace policy, singular custodian, reachability, revision, and epoch.
-  - [ ] Evolve `packages/mcp-platform/src/runtime.ts`, `stores.ts`, and `durable.ts` for per-host and shared connector instances under explicit workspace consent/grant/revocation bindings.
-  - [ ] Evolve `packages/llm-mesh/src/enrollment/contracts.ts`, `routing-policy.ts`, `account-transports.ts`, and `service/facade.ts` so LLM Mesh is the single enrollment authority with global then workspace policy.
-  - [ ] Evolve `packages/llm-gateway/src/ports/caller-auth.ts` and `authz.ts` to require the verified runtime context for shared-account dispatch.
-  - [ ] Convert `api/src/services/llm-account-transports.ts` to a persistence/custody adapter and remove parallel provider enrollment/routing semantics.
-  - [ ] Add enrollment endpoints to `api/src/routes/api/cluster-mesh.ts` without exposing raw secrets.
-  - [ ] Add `packages/cluster-mesh/tests/enrollment-binding-registry.spec.ts` for reachability, revision, epoch, global/workspace precedence, and fenced custody transfer.
-  - [ ] Update `packages/mcp-platform/tests/durable.test.ts`, `authz.test.ts`, and `secrets.test.ts` for both instance modes, PoP, revocation, and no token copying.
-  - [ ] Update `packages/llm-mesh/tests/enrollment/contracts.test.ts`, `routing-policy.test.ts`, `account-transports.test.ts`, and `service/facade.test.ts` for one authority and one custodian.
-  - [ ] Update `packages/llm-gateway/tests/caller-ownership.test.ts` and `passthrough.test.ts` for verified binding/custody context and alternate-path refusal.
-  - [ ] Update `api/tests/unit/llm-account-transports.test.ts` and add `api/tests/api/cluster-mesh-enrollment.test.ts` for metadata migration, reauthentication, reachability truth, revocation, and fenced transfer.
-  - [ ] Lot gate: `make typecheck-mcp-platform test-mcp-platform build-mcp-platform ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-llm-mesh test-llm-mesh build-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-llm-gateway test-llm-gateway build-llm-gateway ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE=llm-account-transports.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=cluster-mesh-enrollment.test.ts ENV=test-cluster-mesh-central-control-plane`.
+- [ ] **Lot 9 — `/chat` existing chat-server factory completion and cutover**
+  - [ ] Namespace: `/chat`; type: existing-factory wrapping/extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Extend `createChatServer` ports for remaining endpoints currently authored in `api/src/routes/api/chat.ts`; keep chat-core/runtime/persistence provider-owned.
+  - [ ] Mount through `api/src/routes/namespaces/chat.ts`, shadow chat reads and validated mutation intent, select one author and prove rollback.
+  - [ ] Delete `api/src/routes/api/chat.ts` and its direct mount after the replacement passes; keep stream transport assigned to `/streams`.
+  - [ ] Tests updated: `packages/chat-server/tests/wire-contract.spec.ts`, `packages/chat-server/tests/ports-contract.spec.ts`, `packages/chat-server/tests/in-memory-roundtrip.spec.ts`, `packages/chat-server/tests/capability-gate.spec.ts`, `packages/chat-core/tests/integration/full-flow.test.ts`.
+  - [ ] API tests updated: `api/tests/api/chat-server-mount.test.ts`, `api/tests/api/chat-characterization.spec.ts`, `api/tests/api/chat-bootstrap-contract.test.ts`, `api/tests/api/chat-checkpoint-contract.test.ts`, `api/tests/api/chat-persistence-write-order.test.ts`, `api/tests/api/chat.test.ts`; new `api/tests/api/cluster-mesh-chat-cutover.test.ts`.
+  - [ ] UI tests updated: `ui/tests/chat/session-adapter.test.ts`, `ui/tests/components/chat/ChatTimeline.test.ts`, `ui/tests/components/chat/AppChatPanel-boundary.test.ts`.
+  - [ ] E2E updated: `e2e/tests/03-chat.spec.ts`, `e2e/tests/08-chat-checkpoint-restore.spec.ts`, `e2e/tests/09-chat-freeze-terminal.spec.ts`.
+  - [ ] Lot gate: `make typecheck-chat-server test-chat-server build-chat-server typecheck-chat-core build-chat-core ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-chat-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing chat persistence remains canonical; C3 chat packages standalone; A5 reusable factory.
 
-- [ ] **Lot 8 — D5/D10 linked-principal security and deny-before-profile gates**
-  - [ ] Add `packages/cluster-mesh/src/security/linked-principal.ts` to join already verified product identity, NHI, mandate, workspace binding, custody, policy revision, and reachability references.
-  - [ ] Add `packages/cluster-mesh/src/security/message-verifier.ts` as a profile-neutral verifier/replay/revocation port; adapt the current h2a Ed25519 fixture without blessing it as the normative profile.
-  - [ ] Add durable replay and revocation adapters to `packages/cluster-mesh/src/persistence/sqlite.ts` and `api/src/services/cluster-mesh/postgres.ts`.
-  - [ ] Require verify-before-act in `invocation-supervisor.ts` for audience, workspace, action/scope, mandate time/depth, policy/binding revision, epoch, replay, revocation, custody, and reachability.
-  - [ ] Keep remote actionable capabilities disabled behind an explicit fail-closed capability gate until the separate D10 wire-profile decision and vectors are accepted.
-  - [ ] Add `packages/cluster-mesh/tests/linked-principal.spec.ts`, `message-verifier.spec.ts`, and `security-negative-vectors.spec.ts`.
-  - [ ] Add negative vectors for wrong audience/workspace, over-broad action, expired/revoked mandate, replay, stale epoch/revision, ambiguous custody, unreachable custodian, unknown verifier status, and courier-only proof.
-  - [ ] Update `packages/mcp-auth/tests/core.test.ts` and `service-auth.test.ts` for the OAuth/MCP half of the normative join without adding NHI semantics to MCP Auth.
-  - [ ] Add `api/tests/unit/cluster-mesh-security.test.ts` for durable restart/replay/revocation and zero-effect rejection.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-mcp-auth test-mcp-auth build-mcp-auth ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE=cluster-mesh-security.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-security-sast ENV=test-cluster-mesh-central-control-plane`.
+- [ ] **Lot 10 — `/focus` TARGET reusable-package extraction**
+  - [ ] Namespace: `/focus`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `packages/focus/src/hono.ts` with injected decision validator, owner-signature, Track and tenancy ports; no direct API DB import.
+  - [ ] Mount through `api/src/routes/namespaces/focus.ts`, shadow read/signature intent, select one author, prove rollback and delete `api/src/routes/api/focus.ts`.
+  - [ ] Keep Track external and fail closed when its port is unavailable; do not copy Track codecs/log state.
+  - [ ] Tests new: `packages/focus/tests/hono.spec.ts`, `api/tests/api/cluster-mesh-focus-cutover.test.ts`.
+  - [ ] Tests updated: `packages/focus/tests/live.spec.ts`, `packages/focus/tests/track.spec.ts`, `api/tests/unit/focus-decision-validator.test.ts`, `api/tests/unit/focus-owner-signature-route.test.ts`, `api/tests/unit/track-owner-signature-adapter.test.ts`.
+  - [ ] UI/E2E tests: N-A; current Focus surface is API-only.
+  - [ ] Lot gate: `make typecheck-focus test-focus build-focus pack-focus ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-unit SCOPE="tests/unit/focus-decision-validator.test.ts tests/unit/focus-owner-signature-route.test.ts" ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-focus-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing owner-signature persistence reused; C3/A5 Focus standalone; `BR75-SG2` stays visible.
 
-- [ ] **Lot 9 — D9 reverse ArchitectureView and components into Focus/design system**
-  - [ ] Add `packages/focus/src/architecture/model.ts` with renderer-neutral scene/node/edge/port/status/overlap contracts.
-  - [ ] Add `packages/focus/src/architecture/routing.ts` by capitalizing the accepted deterministic orthogonal router and removing decision-specific scene knowledge.
-  - [ ] Add `packages/focus/src/architecture/verify.ts` for deterministic overlap and manifest evidence.
-  - [ ] Add `packages/focus/src/svelte/ArchitectureView.svelte`, `ArchitectureNode.svelte`, and `ArchitectureEdge.svelte` using published design-system primitives/tokens and XYFlow as optional peer UI dependencies.
-  - [ ] Update `packages/focus/src/index.ts`, package subpath exports, README, peer dependencies, build/typecheck/test scripts, and semver.
-  - [ ] Add `packages/focus/tests/architecture-model.spec.ts`, `architecture-routing.spec.ts`, `architecture-manifest.spec.ts`, and `architecture-view.dom.spec.ts`.
-  - [ ] Use neutral/golden fixtures only; do not copy r8 decision prose/options/scenes into the public package.
-  - [ ] Prove deterministic output, all accepted golden edge/label overlap counters at zero, keyboard/ARIA semantics, square-card DS styling, and stable server-side import without optional UI peers.
-  - [ ] Prove the canonical Sentropic Focus package can replace the duplicate h2a package through a packed-artifact compatibility check without editing h2a.
-  - [ ] Lot gate: `make typecheck-focus test-focus build-focus ENV=test-cluster-mesh-central-control-plane`.
+- [ ] **Lot 11 — `/llm-mesh` TARGET enrollment and pool router extraction**
+  - [ ] Namespace: `/llm-mesh`; type: TARGET reusable router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `packages/llm-mesh/src/hono.ts` over enrollment/catalog/pool ports; keep credentials/keyring and provider transport outside the router/plugin.
+  - [ ] Extract `/models`, provider-connection settings and `/me/ai-settings` subsets into `api/src/routes/namespaces/llm-mesh.ts` adapters.
+  - [ ] Shadow catalog/account availability and validated enrollment intent, select one authority/custodian, prove rollback and delete replaced route branches from `models.ts`, `me.ts` and provider settings.
+  - [ ] Tests new: `packages/llm-mesh/tests/hono.test.ts`, `api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts`.
+  - [ ] Tests updated: `packages/llm-mesh/tests/routing-policy.test.ts`, `packages/llm-mesh/tests/account-transports.test.ts`, `packages/llm-mesh/tests/facade.test.ts`, `packages/llm-mesh/tests/route-selection.test.ts`, `packages/llm-mesh/tests/enrollment/contracts.test.ts`, `api/tests/api/models.test.ts`, `api/tests/api/provider-connections-admin.test.ts`, `api/tests/unit/llm-account-transports.test.ts`.
+  - [ ] UI tests updated: `ui/tests/settings/provider-connections-admin.test.ts`, `ui/tests/utils/model-display.test.ts`, `ui/tests/utils/user-ai-settings-events.test.ts`.
+  - [ ] E2E updated: `e2e/tests/06-settings-codex-provider.spec.ts`, `e2e/tests/06-settings.spec.ts`.
+  - [ ] Lot gate: `make typecheck-llm-mesh test-llm-mesh build-llm-mesh pack-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-llm-mesh-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 one enrollment authority/custodian; C3/A5 llm-mesh standalone.
 
-- [ ] **Lot 10 — Integrated API/UI/E2E validation and owner UAT**
-  - [ ] Add `e2e/tests/13-cluster-mesh-control-plane.spec.ts` with independent scenarios for minimum h2a capability, MCP first hop, app-managed session adopt/restart/detach, local-only no-mirror, connector enrollment, LLM custody, and security denial.
-  - [ ] Add `ui/tests/cluster-mesh/control-plane.test.ts` for authority/custody/reachability state presentation and command disabling when verification is incomplete.
-  - [ ] API scoped gate: `make test-api-api SCOPE=cluster-mesh-control-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] API scoped gate: `make test-api-api SCOPE=cluster-mesh-session-authority.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] API scoped gate: `make test-api-api SCOPE=cluster-mesh-enrollment.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] UI scoped gate: `make test-ui SCOPE=tests/cluster-mesh/control-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Prepare E2E: `make build-api build-ui-image API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-cluster-mesh-central-control-plane`.
-  - [ ] E2E scoped gate: `make test-e2e E2E_SPEC=tests/13-cluster-mesh-control-plane.spec.ts API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 ENV=e2e-cluster-mesh-central-control-plane`.
-  - [ ] Push the exact candidate SHA and record it before UAT.
-  - [ ] Owner UAT — minimum h2a: invoke the declared read-only capability and verify the UI/API evidence shows workspace binding, policy revision, provider, correlation, and receipt.
-  - [ ] Owner UAT — MCP: use an MCP client through runtime HTTP, revoke its grant, and confirm the next call is refused before connector execution.
-  - [ ] Owner UAT — `LOCAL_ONLY`: create and use a local session, inspect the app, and confirm no transcript/journal/payload projection or remote-control affordance exists.
-  - [ ] Owner UAT — `APP_MANAGED`: adopt a session, issue an app and terminal command, restart the host delivery process, verify recovery/no duplicate effect, then detach and verify stale app commands are fenced.
-  - [ ] Owner UAT — enrollment: exercise one per-host connector, one shared connector, and one local-custody LLM account; verify scope, reachability, custody, revocation, and no secret-copy prompt/path.
-  - [ ] Owner UAT — memory: verify the Graphify capability is active only when the pinned release gate passes; otherwise verify the explicit fail-closed unavailable state.
-  - [ ] Owner UAT — ArchitectureView: inspect representative current/target/transition scenes for deterministic layout, no node/label overlap, DS visual consistency, keyboard navigation, and readable narrow viewport behavior.
-  - [ ] Record owner UAT result and exact candidate SHA; any fix invalidates sign-off and requires a new push/UAT cycle.
+- [ ] **Lot 12 — `/workflows` TARGET flow router extraction**
+  - [ ] Namespace: `/workflows`; type: TARGET reusable router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `packages/flow/src/hono.ts` with injected plan/todo/task/run/definition/queue ports and product adapters under `api/src/routes/namespaces/workflows.ts`.
+  - [ ] Shadow workflow reads and validated transition/job intent, select one author, prove rollback and delete direct mounts/files `plans.ts`, `todos.ts`, `tasks.ts`, `runs.ts`, `workflow-config.ts`, `queue.ts` after extraction.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-workflows-cutover.test.ts`, `api/tests/services/flow/hono-router.spec.ts`.
+  - [ ] Tests updated: `api/tests/api/plans.test.ts`, `api/tests/api/todos.test.ts`, `api/tests/api/tasks.test.ts`, `api/tests/api/runs-control.test.ts`, `api/tests/api/workflow-config.test.ts`, `api/tests/api/workspace-type-workflows.test.ts`, `api/tests/services/flow/flow-runtime.spec.ts`, `api/tests/services/flow/job-queue.spec.ts`, `api/tests/services/flow/replay.spec.ts`, `api/tests/queue/workflow-transition-runtime.test.ts`.
+  - [ ] UI tests updated: `ui/tests/stores/todo-runtime.test.ts`, `ui/tests/utils/todo-api.test.ts`, `ui/tests/utils/workflow-config-api.test.ts`.
+  - [ ] E2E updated: `e2e/tests/07-workflow.spec.ts`, `e2e/tests/09-run-steering-core.spec.ts`, `e2e/tests/09-todo-runtime-panel-actions.spec.ts`.
+  - [ ] Lot gate: `make typecheck-flow build-flow typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-workflows-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-ui SCOPE=tests/stores/todo-runtime.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing workflow/queue tables remain canonical; C3/A5 flow standalone.
 
-- [ ] **Lot 11 — Documentation and package consolidation**
-  - [ ] Update package READMEs with current versus target/shipped truth, authority modes, integration examples, removal notes, and security gates.
-  - [ ] Update `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` only for implementation evidence and accepted clarifications; do not silently change owner decisions.
-  - [ ] Record package versions, packed artifact digests, Graphify contract status, h2a compatibility result, migration identifier, and all legacy path removals in this file.
-  - [ ] Verify each changed `packages/*/src/**` package has the required semver bump and publication dependency ordering.
-  - [ ] Verify no temporary compatibility package, fallback route, copied secret, dossier-specific Focus API, or application mirror of local-only data remains.
+- [ ] **Lot 13 — `/comments` TARGET comments router extraction**
+  - [ ] Namespace: `/comments`; type: TARGET reusable router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `packages/comments/src/hono.ts` with injected store/event/tenant/authz ports; no API DB import.
+  - [ ] Mount through `api/src/routes/namespaces/comments.ts`, shadow reads/validated mutation intent, select one author, prove rollback and delete `api/src/routes/api/comments.ts`.
+  - [ ] Tests new: `packages/comments/tests/hono.spec.ts`, `api/tests/api/cluster-mesh-comments-cutover.test.ts`.
+  - [ ] Tests updated: `packages/comments/tests/tenant-scoping.spec.ts`, `packages/comments/tests/threading.spec.ts`, `packages/comments/tests/wire-events.spec.ts`, `api/tests/api/comments.test.ts`, `api/tests/api/comments-wire.test.ts`, `api/tests/api/pg-comment-store.test.ts`, `api/tests/api/pg-notify-comment-event-sink.test.ts`.
+  - [ ] UI tests updated: `ui/tests/chat/comment-adapter.test.ts`, `ui/tests/utils/comments.test.ts`, `ui/tests/utils/comment-counts.test.ts`.
+  - [ ] E2E updated: `e2e/tests/07_comment_assistant.spec.ts`.
+  - [ ] Lot gate: `make typecheck-comments test-comments build-comments pack-comments ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-comments-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-ui SCOPE=tests/utils/comments.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing comment store remains canonical; C3/A5 comments standalone.
+
+- [ ] **Lot 14 — `/connectors` TARGET connector administration extraction**
+  - [ ] Namespace: `/connectors`; type: TARGET reusable/application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add connector administration Hono factory in `packages/connector-host/src/hono.ts` plus product OAuth/account/picker adapters in `api/src/routes/namespaces/connectors.ts`.
+  - [ ] Preserve the frozen catalog/resources/MCP/connectors split; connector-host owns provider execution/codecs/secrets, not discovery or MCP protocol.
+  - [ ] Shadow account/readiness reads and validated admin intent, select one author, prove rollback and delete `google-drive.ts`, `gmail.ts` and replaced connector-account route branches.
+  - [ ] Tests new: `packages/connector-host/tests/hono.test.ts`, `api/tests/api/cluster-mesh-connectors-cutover.test.ts`.
+  - [ ] Tests updated: `packages/connector-host/tests/mount.test.ts`, `api/tests/api/google-drive-files.test.ts`, `api/tests/api/google-drive-oauth.test.ts`, `api/tests/api/documents-google-drive.test.ts`, `api/tests/api/connector-grant-teardown.test.ts`, `api/tests/unit/gmail-connector-host.test.ts`, `api/tests/unit/gmail-oauth.test.ts`, `api/tests/unit/google-drive-connector-accounts.test.ts`, `api/tests/unit/google-drive-oauth.test.ts`, `api/tests/unit/google-drive-picker.test.ts`.
+  - [ ] UI tests updated: `ui/tests/utils/gmail.test.ts`, `ui/tests/utils/google-drive.test.ts`, `ui/tests/utils/google-drive-picker.test.ts`.
+  - [ ] E2E updated: `e2e/tests/04-google-drive-composer.spec.ts`, `e2e/tests/04-google-drive-settings-documents.spec.ts`.
+  - [ ] Lot gate: `make typecheck-connector-host test-connector-host build-connector-host typecheck-mcp-platform test-mcp-platform ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-connectors-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing connector enrollment tables reused; C3/A5 connector-host standalone; frozen facade contract.
+
+- [ ] **Lot 15 — `/track` TARGET fail-closed adapter module**
+  - [ ] Namespace: `/track`; type: TARGET adapter extraction/mount/cutover gate.
+  - [ ] Add a neutral Track router adapter in `api/src/routes/namespaces/track.ts` over a pinned external `@sentropic/track` port; do not copy Track source, codec or log.
+  - [ ] Mount disabled by default, shadow only deterministic evidence/cursor reads when the pinned provider exists, and select one author only after digest compatibility.
+  - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct Focus Track HTTP projection discovered during inventory.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-track.test.ts`, `api/tests/unit/track-namespace-adapter.test.ts`.
+  - [ ] Tests updated: `packages/focus/tests/track.spec.ts`, `api/tests/unit/track-event-owner-signature-port.test.ts`.
+  - [ ] UI/E2E tests: N-A while the module remains fail-closed.
+  - [ ] Lot gate: `make typecheck-focus test-focus build-focus typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-unit SCOPE=tests/unit/track-namespace-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C3 standalone adapter; A5 disabled-module behavior; `BR75-SG2` blocks production activation, not truthful fail-closed delivery.
+
+- [ ] **Lot 16 — `/memory` TARGET Graphify adapter module**
+  - [ ] Namespace: `/memory`; type: TARGET adapter extraction/mount/cutover gate.
+  - [ ] Add `api/src/routes/namespaces/memory.ts` over the versioned h2a↔Graphify public port and provider-opaque cursor/receipt references.
+  - [ ] Mount disabled/fail-closed until contract version, fixture digest and Graphify release evidence are pinned; never create a substitute memory DTO.
+  - [ ] Shadow only deterministic eligibility/query intent when provider evidence exists; one Graphify author remains canonical.
+  - [ ] Legacy path deletion: N-A because no current HTTP mount exists; delete any discovered temporary memory adapter bypass in the same cutover.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-memory.test.ts`, `packages/cluster-mesh/tests/graphify-memory-adapter.spec.ts`.
+  - [ ] Tests cover unavailable provider, digest mismatch, authz mapping, final revalidation refusal and proof that no canonical episode/ranking/projection is stored locally.
+  - [ ] UI/E2E tests: N-A while fail-closed; Lot 33 asserts explicit unavailable state.
+  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-memory.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 no app memory mirror; C3/A5 standalone adapter; D8 split; `BR75-SG3` remains explicit.
+
+- [ ] **Lot 17 — `/agents` TARGET application router extraction**
+  - [ ] Namespace: `/agents`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/agents.ts` over flow/skills/catalog ports; absorb agent-config and prompt-profile surfaces without owning catalog discovery.
+  - [ ] Shadow reads and validated configuration intent, select one author, prove rollback and delete `agent-config.ts`, `prompts.ts` mounts/files after extraction.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-agents-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/agent-config.test.ts`, `api/tests/api/prompts.test.ts`, `api/tests/services/catalog/agent-template-source.spec.ts`, `api/tests/unit/todo-orchestration-chat-progression.test.ts`.
+  - [ ] UI tests updated: `ui/tests/utils/agent-config-api.test.ts`, `ui/tests/chat/agents-feed-adapter.test.ts`.
+  - [ ] E2E updated: `e2e/tests/09-run-steering-core.spec.ts` agent configuration scenario.
+  - [ ] Lot gate: `make typecheck-flow build-flow typecheck-skills test-skills typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-agents-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing config tables reused; C3/A5 injectable application module.
+
+- [ ] **Lot 18 — `/cli` TARGET command adapter without second session authority**
+  - [ ] Namespace: `/cli`; type: TARGET adapter extraction, plugin mount and cutover gate.
+  - [ ] Add `packages/cluster-mesh/src/hono/cli-router.ts` over neutral command-runner ports and adapters from `packages/cli`, `build-cli`, `harness` and Focus CLI.
+  - [ ] Delegate every drive/wake/relaunch effect to `/session`; reject direct process/PTY authority and missing registration.
+  - [ ] Mount disabled until a real PTY adapter exists; shadow command parsing/intent only, then select one author and remove any verified direct HTTP command path.
+  - [ ] Tests new: `packages/cluster-mesh/tests/cli-router.spec.ts`, `api/tests/api/cluster-mesh-cli.test.ts`.
+  - [ ] Tests updated: `packages/harness/tests/cli/mechanical-verbs.spec.ts`, `packages/cli/tests/dispatch.spec.ts`, `packages/cli/tests/surface-cli.spec.ts`, `packages/focus/tests/cli.spec.ts`.
+  - [ ] UI tests: N-A.
+  - [ ] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` missing-registration refusal and delegated session receipt.
+  - [ ] Lot gate: `make typecheck-harness test-harness build-harness typecheck-cli test-cli build-cli typecheck-cluster-mesh test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-cli.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C3 neutral command ports; A3 fail-closed registration; A5 disabled CLI module; `BR75-SG1` blocks real activation.
+
+- [ ] **Lot 19 — `/streams` TARGET transport-only extraction**
+  - [ ] Namespace: `/streams`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/streams.ts` receiving domain stream ports for chat/jobs/business/workspaces/comments/locks.
+  - [ ] Source every stream port from existing services, including lock, presence, business and workspace services; do not hardcode ports or wait for the later namespace-router extractions in Lots 20/21/23.
+  - [ ] Remove direct imports of `hydrateInitiative`, `hydrateOrganization`, lock mutation and domain DB schemas from the transport router.
+  - [ ] Shadow envelope/cursor/replay output, select one transport author, prove rollback and delete `api/src/routes/api/streams.ts`.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-streams-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/streams.test.ts`, `api/tests/unit/stream-service.test.ts`, `api/tests/services/stream-purge.test.ts`, `api/tests/api/queue-stream-bootstrap-contract.test.ts`.
+  - [ ] UI tests updated: `ui/tests/stores/streamHub.test.ts`, `ui/tests/utils/localToolStreamSync.test.ts`.
+  - [ ] E2E updated: `e2e/tests/06-streams.spec.ts`, `e2e/tests/08-chat-heavy.spec.ts`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-streams-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-ui SCOPE=tests/stores/streamHub.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing stream/outbox data reused; C3/A5 transport module standalone; frozen streams/domain facade.
+
+- [ ] **Lot 20 — `/locks` TARGET collaboration router extraction**
+  - [ ] Namespace: `/locks`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/locks.ts` with injected lock/presence/authz ports and a domain stream port.
+  - [ ] Shadow reads and validated mutation intent, select one author, prove rollback and delete `api/src/routes/api/locks.ts`.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-locks-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/locks.test.ts`, `api/tests/unit/lock-service.test.ts`, `api/tests/unit/lock-presence.test.ts`, `api/tests/security/collaboration-security.test.ts`.
+  - [ ] UI tests: N-A; current lock behavior is exercised through affected business UI in Lot 21/33.
+  - [ ] E2E updated: `e2e/tests/05-usecase-detail.spec.ts` lock scenario.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-locks-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-unit SCOPE="tests/unit/lock-service.test.ts tests/unit/lock-presence.test.ts" ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 one lock/presence author; C3/A5 injectable module.
+
+- [ ] **Lot 21 — `/business` TARGET business router extraction**
+  - [ ] Namespace: `/business`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add modular factories under `api/src/routes/namespaces/business/**` for organizations, folders, initiatives, solutions, products, proposals and view templates over injected services.
+  - [ ] Move DOCX generation out to `/documents`; decide and test the canonical status of `/use-cases` and `/bids` aliases before deleting their legacy mounts.
+  - [ ] Shadow reads/validated mutation intent, select one business author, prove rollback and delete replaced route files `organizations.ts`, `folders.ts`, `initiatives.ts`, `solutions.ts`, `products.ts`, `proposals.ts`, `bids.ts`, `view-templates.ts`.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-business-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/companies.test.ts`, `api/tests/api/folders.test.ts`, `api/tests/api/initiatives.test.ts`, `api/tests/api/extended-objects.test.ts`, `api/tests/api/view-templates.test.ts`, `api/tests/api/gate-evaluation.test.ts`, `api/tests/unit/context-initiative-detail-contract.test.ts`, `api/tests/unit/context-initiative-domain-normalization.test.ts`, `api/tests/unit/usecase-list-normalization.test.ts`.
+  - [ ] UI tests updated: `ui/tests/stores/organizations.test.ts`, `ui/tests/stores/folders.test.ts`, `ui/tests/stores/initiatives.test.ts`, `ui/tests/stores/viewTemplateCache.test.ts`, `ui/tests/components/TemplateRenderer.test.ts`.
+  - [ ] E2E updated: `e2e/tests/01-organizations-detail.spec.ts`, `e2e/tests/02-organizations.spec.ts`, `e2e/tests/05-folders.spec.ts`, `e2e/tests/05-usecase-detail.spec.ts`, `e2e/tests/06-usecase.spec.ts`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-business-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE="tests/stores/organizations.test.ts tests/stores/folders.test.ts tests/stores/initiatives.test.ts" ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing business tables/outbox remain canonical; C3/A5 modular factories; commit slices below 150 lines per sub-router.
+
+- [ ] **Lot 22 — `/analytics` TARGET analytics router extraction**
+  - [ ] Namespace: `/analytics`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/analytics.ts` with injected query/queue/settings/locale ports and no import from the business router.
+  - [ ] Shadow deterministic aggregate reads and validated job intent, select one author, prove rollback and delete `api/src/routes/api/analytics.ts`.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-analytics-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/analytics.test.ts`, `api/tests/unit/matrix.test.ts`, `api/tests/unit/scoring.test.ts`.
+  - [ ] UI tests updated: `ui/tests/utils/dashboard-docx-state.test.ts`, `ui/tests/utils/scoring.test.ts`.
+  - [ ] E2E updated: `e2e/tests/03-dashboard.spec.ts`, `e2e/tests/03-prioritization-matrix.spec.ts`, `e2e/tests/07-matrix.spec.ts`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-analytics-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-ui SCOPE=tests/utils/scoring.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing analytics sources remain canonical; C3/A5 injectable module.
+
+- [ ] **Lot 23 — `/workspaces` TARGET tenancy/workspace router extraction**
+  - [ ] Namespace: `/workspaces`; type: TARGET cluster/application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add workspace router factory in `packages/cluster-mesh/src/hono/workspaces-router.ts` with product tenancy ports supplied by `api/src/routes/namespaces/workspaces.ts`.
+  - [ ] Absorb workspaces, tenants and neutral surfaces while keeping repository/product workspace IDs distinct and epoch-bound.
+  - [ ] Shadow reads/validated membership intent, select one author, prove rollback and delete `workspaces.ts`, `tenants.ts`, `neutral.ts` legacy route files.
+  - [ ] Tests new: `packages/cluster-mesh/tests/workspaces-router.spec.ts`, `api/tests/api/cluster-mesh-workspaces-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/workspaces.test.ts`, `api/tests/api/workspace-types.test.ts`, `api/tests/api/auth/tenant-membership.test.ts`, `api/tests/api/tenancy/arch11-resolve-tenant.test.ts`, `api/tests/api/tenancy/arch11-tenant-data.test.ts`.
+  - [ ] UI tests updated: `ui/tests/stores/workspaceScope.test.ts`, `ui/tests/chat-tool-scope-workspace-type.test.ts`.
+  - [ ] E2E updated: `e2e/tests/04-tenancy-workspaces.spec.ts`, `e2e/tests/08-chat-workspace-switch.spec.ts`.
+  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-workspaces-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-ui SCOPE=tests/stores/workspaceScope.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 one workspace/tenant author; C3/A5 module standalone.
+
+- [ ] **Lot 24 — `/config` TARGET configuration router extraction**
+  - [ ] Namespace: `/config`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/config.ts` for generic settings, business config and admin AI settings; delegate LLM accounts/models to `/llm-mesh` and connector/client settings to their namespaces.
+  - [ ] Shadow reads/validated mutation intent, select one author, prove rollback and delete `settings.ts`, `business-config.ts`, `ai-settings.ts` plus remaining config branches in `me.ts`.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-config-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/settings.test.ts`, `api/tests/api/business-config.test.ts`, `api/tests/api/ai-settings.test.ts`, `api/tests/unit/queue-manager-contract.test.ts`.
+  - [ ] UI tests updated: `ui/tests/utils/user-ai-settings-events.test.ts`, `ui/tests/utils/model-display.test.ts`, `ui/tests/settings/provider-connections-admin.test.ts` only for boundary regression.
+  - [ ] E2E updated: `e2e/tests/06-settings.spec.ts`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-config-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing settings tables remain canonical; C3/A5 module standalone; LLM/connectors/clients boundary frozen.
+
+- [ ] **Lot 25 — `/documents` TARGET document router extraction**
+  - [ ] Namespace: `/documents`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add modular factories under `api/src/routes/namespaces/documents/**` for documents, DOCX, PPTX and XLSX over storage/queue/business-read ports.
+  - [ ] Move business DOCX projection to this namespace, shadow metadata/download reads and validated generation/upload intent, select one author and prove rollback.
+  - [ ] Delete `documents.ts`, `docx.ts`, `pptx.ts`, `xlsx.ts` legacy route files and the replaced `/use-cases/:id/docx` branch.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-documents-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/documents.test.ts`, `api/tests/api/documents-google-drive.test.ts`, `api/tests/api/docx.test.ts`, `api/tests/api/pptx.test.ts`, `api/tests/api/xlsx.test.ts`, `api/tests/unit/document-text.test.ts`, `api/tests/unit/document-text-office-extension.test.ts`, `api/tests/unit/documents-tool-service.test.ts`, `api/tests/unit/docx-freeform-helpers.test.ts`, `api/tests/unit/pptx-freeform-helpers.test.ts`, `api/tests/unit/xlsx-sheet-query.test.ts`.
+  - [ ] UI tests updated: `ui/tests/chat/document-adapter.test.ts`, `ui/tests/utils/documents.test.ts`, `ui/tests/utils/docx.test.ts`, `ui/tests/utils/pptx.test.ts`, `ui/tests/utils/document-source-menu.test.ts`.
+  - [ ] E2E updated: `e2e/tests/04-documents-ui-actions.spec.ts`, `e2e/tests/08-document-summary-formats.spec.ts`, `e2e/tests/08-documents-summary.spec.ts`, `e2e/tests/08-pptx-org-generation.spec.ts`, `e2e/tests/08-xlsx-multisheet-query.spec.ts`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-documents-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing document/storage/job tables remain canonical; C3/A5 modular factory.
+
+- [ ] **Lot 26 — `/transfers` TARGET import/export router extraction**
+  - [ ] Namespace: `/transfers`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/transfers.ts` with injected storage/domain/authz ports and bounded archive/hash handling.
+  - [ ] Shadow manifests/read metadata and validated import/export intent, select one author, prove rollback and delete `api/src/routes/api/import-export.ts`.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-transfers-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/import-export.test.ts`, `api/tests/artifact-store/artifact-store.test.ts`.
+  - [ ] UI tests: N-A; current transfer UI behavior is covered through E2E.
+  - [ ] E2E updated: `e2e/tests/07-import-export.spec.ts`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-transfers-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing storage/domain tables remain canonical; C3/A5 injectable module.
+
+- [ ] **Lot 27 — `/clients` TARGET extension/desktop router extraction and bookmarklet resolution**
+  - [ ] Namespace: `/clients`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/clients.ts` over Chrome, VSCode, Cowork, tab-registry and auth-client ports.
+  - [ ] Prove whether bookmarklet handlers exist; either mount them in this module with CORP tests or delete stale middleware in `api/src/app.ts` and emitted URLs in `api/src/upstream/injected-script.ts` in the same cutover.
+  - [ ] Shadow metadata/token reads and validated registration intent, select one author, prove rollback and delete `chrome-extension.ts`, `vscode-extension.ts`, `cowork-desktop.ts` legacy files.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-clients-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/chrome-extension-download.test.ts`, `api/tests/api/chrome-extension-register.test.ts`, `api/tests/api/vscode-extension-download.test.ts`, `api/tests/api/vscode-extension-token.test.ts`, `api/tests/api/cowork-desktop-download.test.ts`, `api/tests/unit/tab-registry.test.ts`.
+  - [ ] UI tests updated: `ui/tests/upstream/bridge.test.ts`, `ui/tests/upstream/chrome-host-adapter.test.ts`, `ui/tests/upstream/injected-script.test.ts`, `ui/tests/utils/chrome-extension-download.test.ts`, `ui/tests/utils/vscode-extension-download.test.ts`, `ui/tests/utils/sentropic-extension-contract.test.ts`, `ui/tests/vscode-ext/auth-bridge.test.ts`, `ui/tests/vscode-ext/extension-runtime.test.ts`, `ui/tests/vscode-ext/host-bridge-runtime.test.ts`.
+  - [ ] E2E updated: `e2e/tests/03-chat-chrome-extension.spec.ts`, `e2e/tests/03-chat-chrome-extension-auth.spec.ts`; VSCode lane `e2e/tests/vscode/01-vscode-chat-streaming.spec.ts` if its HTTP client path changes.
+  - [ ] Lot gate: `make typecheck-cowork-bridge test-cowork-bridge build-cowork-bridge typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-clients-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/upstream/injected-script.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing client registries remain canonical; C3/A5 module standalone; `BR75-SG4` closed and `BR75-SG6` resolved or retained with evidence.
+
+- [ ] **Lot 28 — `/admin` TARGET admin router extraction**
+  - [ ] Namespace: `/admin`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `api/src/routes/namespaces/admin.ts` with injected admin/tenant-metrics/RBAC ports and preserve admin-role separation.
+  - [ ] Shadow reads/validated mutations, select one author, prove rollback and delete `api/src/routes/api/admin.ts`.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-admin-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/admin.test.ts`, `api/tests/api/admin-users.test.ts`, `api/tests/api/tenant-resolution-metrics.test.ts`, `api/tests/unit/auth/admin-registration.test.ts`.
+  - [ ] UI tests: N-A; admin pages retain existing client contract.
+  - [ ] E2E updated: `e2e/tests/01-admin-users.spec.ts`, `e2e/tests/00-access-control.spec.ts`.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-admin-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing admin/tenant tables remain canonical; C3/A5 module standalone.
+
+- [ ] **Lot 29 — `/health` TARGET aggregate probe extraction**
+  - [ ] Namespace: `/health`; type: TARGET reusable aggregator extraction, plugin mount, D11 cutover and legacy deletion.
+  - [ ] Add `packages/cluster-mesh/src/hono/health-router.ts` over injected package/domain probes and generation/module state.
+  - [ ] Ensure aggregate health never claims domain readiness from process presence; expose stable degraded/unavailable reasons.
+  - [ ] Shadow current health response, select one author, prove rollback and delete `api/src/routes/api/health.ts`.
+  - [ ] Tests new: `packages/cluster-mesh/tests/health-router.spec.ts`, `api/tests/api/cluster-mesh-health-cutover.test.ts`.
+  - [ ] Tests updated: `api/tests/api/health.test.ts`, `api/tests/smoke/api-health.test.ts`.
+  - [ ] UI/E2E tests: N-A; readiness is covered by Make wait targets and Lot 33.
+  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-health-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C3/A5 probe module standalone; D12 observable reasons.
+
+- [ ] **Lot 30 — `/apps` TARGET app-control-plane HTTP extraction**
+  - [ ] Namespace: `/apps`; type: TARGET application router extraction, plugin mount and single-author activation.
+  - [ ] Add `api/src/routes/namespaces/apps.ts` over the real `api/src/services/app-control-plane/**` ports; build-cli remains a client.
+  - [ ] Shadow deterministic template/instance reads and validated lifecycle intent, select one author and prove rollback.
+  - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct app-control HTTP shim found during Lot 0.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-apps.test.ts`.
+  - [ ] Tests updated: `api/tests/unit/app-control-plane.test.ts`.
+  - [ ] UI/E2E tests: N-A; no current app-control UI route is verified.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/app-control-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-apps.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 existing control app tables precede activation; C3/A5 injectable module.
+
+- [ ] **Lot 31 — `/catalog` TARGET discovery router extraction**
+  - [ ] Namespace: `/catalog`; type: TARGET application router extraction, plugin mount and single-author activation.
+  - [ ] Add `api/src/routes/namespaces/catalog.ts` over `CompositeCatalogRegistry`; expose search/discovery only and reject effect execution without delegated verified authorization.
+  - [ ] Shadow deterministic search results, select one catalog author and prove rollback.
+  - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any duplicate search tool HTTP shim if discovered.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-catalog.test.ts`.
+  - [ ] Tests updated: `api/tests/services/catalog/composite-registry.spec.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/services/catalog/mcp-source.spec.ts`, `api/tests/services/catalog/search-catalog-tool.spec.ts`, `api/tests/services/catalog/standalone-tool-source.spec.ts`, `api/tests/services/catalog-characterization.spec.ts`.
+  - [ ] UI/E2E tests: N-A; catalog consumers are covered by chat/workflow regression in Lot 33.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-catalog.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-unit SCOPE=tests/services/catalog/composite-registry.spec.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 no new table after migration; C3/A5 injectable catalog module; frozen catalog/resources/MCP/connectors facade.
+
+- [ ] **Lot 32 — `/resources` TARGET resource projection router extraction**
+  - [ ] Namespace: `/resources`; type: TARGET application router extraction, plugin mount and single-author activation.
+  - [ ] Add `api/src/routes/namespaces/resources.ts` over `ResourceDispatcher`, verified principal/provenance ports and delegated catalog/MCP/connector providers.
+  - [ ] Preserve uniform `list/stat/read/grep/edit/invoke` projection without becoming a second registry or provider.
+  - [ ] Shadow read/list/stat/grep results and validated edit/invoke intent, select one author and prove rollback.
+  - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct resource-dispatch HTTP shim found during inventory.
+  - [ ] Tests new: `api/tests/api/cluster-mesh-resources.test.ts`.
+  - [ ] Tests updated: `api/tests/unit/resource-plane.test.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/api/generic-dispatch.test.ts`.
+  - [ ] UI/E2E tests: N-A; resource effects are covered by MCP/connector/chat scenarios in Lot 33.
+  - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/resource-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-resources.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C1 no second migration; C3/A5 injectable module; frozen facade contract.
+
+- [ ] **Lot 33 — Integrated API/UI/E2E matrix and C2 execution**
+  - [ ] Namespace: all 29; type: integrated acceptance and regression.
+  - [ ] Add `e2e/tests/10-cluster-mesh-control-plane.spec.ts` with independent A1 session, A2 singleton MCP, A3 registration denial, A4 12/13 capacity, A5 module-disable and representative namespace cutover scenarios.
+  - [ ] Add `api/tests/api/cluster-mesh-namespace-inventory.test.ts` proving exactly 29 keys, one author each, root-specific IdP projections and no legacy mount in `api/src/routes/api/index.ts`.
+  - [ ] Add `ui/tests/cluster-mesh/control-plane.test.ts` for LOST/capacity/registration/disabled-module presentation if UI status is introduced; otherwise record N-A with no UI source change.
+  - [ ] Prepare E2E with `make build-api build-ui-image API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 ENV=e2e-cluster-mesh-central-control-plane`.
+  - [ ] Scoped E2E gate: `make test-e2e E2E_SPEC=tests/10-cluster-mesh-control-plane.spec.ts API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 ENV=e2e-cluster-mesh-central-control-plane`.
+  - [ ] Matrix gate: `make clean test-e2e API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 E2E_GROUPS="00 01 02 03" ENV=e2e-cluster-mesh-central-control-plane`.
+  - [ ] Matrix gate: `make clean test-e2e API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 E2E_GROUPS="04 05 06 07" ENV=e2e-cluster-mesh-central-control-plane`.
+  - [ ] Matrix gate: `make clean test-e2e API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 E2E_GROUPS="08 09 10" ENV=e2e-cluster-mesh-central-control-plane`.
+  - [ ] Include groups 07/08/09 because workflows, transfers, documents, chat and steering are impacted; do not claim an exclusion.
+  - [ ] Keep C2 satisfied by this local 00–10 matrix; do not edit the forbidden CI workflow, and carry group 10 registration only through the `BR75-ID2` post-merge follow-up branch.
+  - [ ] Close `BR75-SG1` here if the real h2a adapter can execute in the E2E environment; otherwise retain the h-cond escalation and close it no later than Lot 34.
+  - [ ] Stop services: `make down API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 ENV=e2e-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C2 exact space-separated local matrix and group 10 included; A2–A5 integrated evidence; A1 closes here or remains explicitly blocked only until Lot 34; no skipped new spec.
+
+- [ ] **Lot 34 — Cross-root and real-terminal conductor UAT**
+  - [ ] Namespace: product root, IdP root, `/session`, `/mcp`, `/clients`; type: conductor qualification.
+  - [ ] Start product and IdP in the same `ENV=test-cluster-mesh-central-control-plane` compose project and shared DB, with distinct API_PORT 9375 for product and API_PORT 9376 for IdP, UI 5575 and Maildev 1475; configure exact OAuth callbacks and record generation id and tested SHA.
+  - [ ] Verify product and IdP auth/oauth flows use the same module implementations with root-specific paths and no duplicate author.
+  - [ ] Drive/wake a real live h2a session B from session A, observe B tick and acted receipt, verify non-empty relaunch set, then verify dead/parked target becomes LOST.
+  - [ ] Close `BR75-SG1` from this real-terminal evidence if Lot 33 did not close it; A1 cannot remain blocked after this lot.
+  - [ ] Run N sessions and prove one logical MCP server/supervisor authority per generation and zero per-session server; count thin stdio bridges separately.
+  - [ ] Exercise configured capacity default 12 and a non-default cap, proving refusal before spawn.
+  - [ ] Disable Cluster Mesh and verify h2a degraded standalone mode plus standalone provider router construction.
+  - [ ] Verify representative read/write cutovers, rollback checkpoints and removed legacy URLs across auth, chat, business, documents, connectors and workflows.
+  - [ ] Record any interaction bug only in `## Feedback Loop`; fixes invalidate the tested SHA and require rerun.
+  - [ ] Stop services with matching `make down` targets.
+  - [ ] Internal gates: A1–A5 final real-effect qualification; C1 single-author observation; D17 conductor-enforced.
+
+- [ ] **Lot 35 — Documentation, semver and legacy-path consolidation**
+  - [ ] Namespace: all 29; type: documentation/package consolidation.
+  - [ ] Update `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` only with implementation evidence and accepted source-gap outcomes.
+  - [ ] Update affected package READMEs, exports and versions; verify every changed publishable package `src/**` has a semver bump.
+  - [ ] Record the unique migration id/digest, 29 module owners, root projections, A1–A5 evidence and every deleted legacy path.
+  - [ ] Prove no provider package manifest lists `@sentropic/cluster-mesh`, while each module's standalone build/test and disabled-plugin test pass.
+  - [ ] Prove `api/src/routes/api/index.ts` contains no replaced direct mounts and auth-idp contains no forked auth implementation.
+  - [ ] Prove Track/Graphify/PTY/bookmarklet source-gaps remain explicitly partial/fail-closed/N-A where unresolved.
+  - [ ] Tests by file: no new behavior tests; rerun affected package gates named in Lots 1–32.
   - [ ] Lot gate: `make scope-check ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Internal gates: C3 and A5 full modularity audit; C4/C5 final wording scan.
 
-- [ ] **Lot 12 — Independent Gemini review, final validation, and owner GO**
-  - [ ] Run independent Gemini 3.7 max review after implementation; reviewer must not be the Codex 5.6 Sol max builder.
-  - [ ] Require Gemini to inspect the accepted r8 evidence, spec, plan, complete diff, schema/migration, current-path deletions, and test evidence.
-  - [ ] Require Gemini to challenge the D1/D3 stopping rule, D4 no-mirror proof, D6 single ingress, D7 writer fencing, D8 external gate truth, D10 no-profile boundary, D11/D12 singular custody, and D9 Focus packaging.
-  - [ ] Reconcile every Gemini finding in this file as fixed, rejected with evidence, deferred by owner, or blocking.
+- [ ] **Lot 36 — Independent review, final gates and non-release handoff**
+  - [ ] Namespace: all 29; type: independent review and final verification.
+  - [ ] Run an independent reviewer distinct from the builder against the r13 dossier, spec, complete diff, migration, 29 namespace inventory, legacy deletions and exact test evidence.
+  - [ ] Require explicit challenge of C1–C5, A1–A5, D1=B, logical-per-generation MCP semantics, PTY/registration, IdP second root and all three facade boundaries.
+  - [ ] Reconcile every finding in `## Feedback Loop` as fixed, rejected with evidence, deferred with bounded source-gap or blocking.
   - [ ] Final type/lint gate: `make typecheck lint ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final package gate: `make typecheck-contracts build-contracts typecheck-events build-events typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final MCP gate: `make typecheck-mcp-auth test-mcp-auth build-mcp-auth typecheck-mcp-platform test-mcp-platform build-mcp-platform typecheck-connector-host test-connector-host build-connector-host ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final LLM gate: `make typecheck-llm-mesh test-llm-mesh build-llm-mesh typecheck-llm-gateway test-llm-gateway build-llm-gateway ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final Focus gate: `make typecheck-focus test-focus build-focus ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Final package gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-mcp-auth test-mcp-auth typecheck-mcp-platform test-mcp-platform typecheck-llm-gateway test-llm-gateway typecheck-llm-mesh test-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Final package gate: `make typecheck-auth-hono test-auth-hono typecheck-auth-client test-auth-client typecheck-chat-server test-chat-server typecheck-comments test-comments typecheck-focus test-focus typecheck-flow build-flow typecheck-connector-host test-connector-host ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Final API gate: `make test-api ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Final UI gate: `make test-ui ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final E2E matrix gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 E2E_GROUP=00,01,02 ENV=e2e-cluster-mesh-central-control-plane`.
-  - [ ] Final E2E matrix gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 E2E_GROUP=03,04,05 ENV=e2e-cluster-mesh-central-control-plane`.
-  - [ ] Final E2E matrix gate: `make clean test-e2e API_PORT=8788 UI_PORT=5174 MAILDEV_UI_PORT=1084 E2E_GROUP=06 ENV=e2e-cluster-mesh-central-control-plane`.
   - [ ] Final security gate: `make test-security ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Record any AI-flaky signatures and obtain explicit owner sign-off for each accepted case.
+  - [ ] Re-run the Lot 33 E2E matrix on the exact candidate SHA if any final change occurred.
   - [ ] Run `make scope-check ENV=test-cluster-mesh-central-control-plane` and `harness check scope` on the final diff.
-  - [ ] Create or update the PR using this `BRANCH.md` as its source-of-truth body; push and verify branch CI.
-  - [ ] Present the reconciled review, CI, UAT, external gates, and exact HEAD SHA to the owner.
-  - [ ] Obtain explicit owner GO; nothing is merged before this checkbox is complete.
-  - [ ] Only after owner GO, commit removal of `BRANCH.md`, push, and execute the separately authorized merge lifecycle.
-
-## Questions / Notes
-
-- [ ] Gemini review point: does the D1 stopping rule keep provider protocol/domain semantics out of the core while still eliminating every effectful bypass?
-- [ ] Gemini review point: are h2a and Graphify publication/consumer gates truthful enough to prevent this one Sentropic branch from claiming external cutover?
-- [ ] Gemini review point: does every D4 domain have exactly one writer and does every `LOCAL_ONLY` path prove absence of an app mirror?
-- [ ] Gemini review point: is the D7 app-ledger/host-inbox split sufficient for transcript, journal, payload, raw PTY, crash-window, and adopt/detach semantics?
-- [ ] Gemini review point: does D6 fully internalize MCP Platform/Auth while retaining MCP authorship and deleting direct API/broker dispatch?
-- [ ] Gemini review point: does the one-migration schema avoid duplicating current chat, connector, and LLM account authority?
-- [ ] Gemini review point: do D11/D12 preserve one custodian per account/epoch and prohibit secret copying during transfer?
-- [ ] Gemini review point: does D10 implement all deny gates without implicitly selecting or standardizing the current h2a Ed25519 wire format?
-- [ ] Gemini review point: is the Focus extraction genuinely renderer-neutral, reusable, design-system based, and free of dossier-specific public API?
-- [ ] Owner gate: review acceptance does not authorize merge; explicit owner GO remains mandatory.
+  - [ ] Hand off the internally accepted candidate and evidence without pushing; this deliberate template divergence assumes the conductor/release owner owns every later push, PR and merge action.
+  - [ ] Do not create/update a PR, push, merge or publish without a separate explicit instruction.
