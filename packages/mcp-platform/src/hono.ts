@@ -40,17 +40,16 @@ export interface McpHonoOptions {
     routes: Hono;
     require(requiredScopes: string[]): MiddlewareHandler;
     context(c: Context): McpPrincipal;
-    scopes: { invoke: string; read: string };
+    scopes: { discover: string; invoke: string; read: string };
   };
   connector: McpConnectorPort;
   invocation?: McpInvocationPort;
   enabled?: () => boolean;
 }
 
-const parseIntent = async (c: Context): Promise<McpConnectorIntent | null> => {
-  const body: unknown = await c.req.json().catch(() => undefined);
-  if (!body || typeof body !== 'object') return null;
-  const value = body as Record<string, unknown>;
+const asIntent = (input: unknown): McpConnectorIntent | null => {
+  if (!input || typeof input !== 'object') return null;
+  const value = input as Record<string, unknown>;
   if (typeof value.connectorId !== 'string' || value.connectorId.length === 0) return null;
   if (typeof value.capabilityRef !== 'string' || value.capabilityRef.length === 0) return null;
   if (value.workspaceRef !== undefined && typeof value.workspaceRef !== 'string') return null;
@@ -63,6 +62,9 @@ const parseIntent = async (c: Context): Promise<McpConnectorIntent | null> => {
     ...(value.accountSelectorHint ? { accountSelectorHint: value.accountSelectorHint } : {}),
   };
 };
+
+const parseIntent = async (c: Context): Promise<McpConnectorIntent | null> =>
+  asIntent(await c.req.json().catch(() => undefined));
 
 const statusFor = (result: unknown): 200 | 404 | 409 | 502 => {
   if (!result || typeof result !== 'object') return 404;
@@ -93,9 +95,7 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
   });
   app.route('/', options.auth.routes);
 
-  const handle = (operation: 'invoke' | 'read') => async (c: Context): Promise<Response> => {
-    const intent = await parseIntent(c);
-    if (!intent) return c.json({ error: { code: 'invalid_request', message: 'Request body is invalid.' } }, 400);
+  const dispatch = async (operation: 'invoke' | 'read', c: Context, intent: McpConnectorIntent) => {
     const context = options.auth.context(c);
     const request: McpInvocation = {
       ...intent,
@@ -107,21 +107,70 @@ export const createMcpPlatformHono = (options: McpHonoOptions): Hono => {
       },
     };
     const decision = await authorize({ operation, request });
-    if (!decision.allowed) {
-      return c.json(
-        { error: { code: 'invocation_refused', message: decision.reason } },
-        decision.status ?? 503,
-      );
-    }
+    if (!decision.allowed) return { allowed: false as const, decision };
     const result = operation === 'invoke'
       ? await options.connector.invoke(request)
       : await options.connector.readResource(request);
-    return respond(c, result);
+    return { allowed: true as const, result };
+  };
+
+  const handle = (operation: 'invoke' | 'read') => async (c: Context): Promise<Response> => {
+    const intent = await parseIntent(c);
+    if (!intent) return c.json({ error: { code: 'invalid_request', message: 'Request body is invalid.' } }, 400);
+    const outcome = await dispatch(operation, c, intent);
+    if (!outcome.allowed) {
+      return c.json(
+        { error: { code: 'invocation_refused', message: outcome.decision.reason } },
+        outcome.decision.status ?? 503,
+      );
+    }
+    return respond(c, outcome.result);
   };
 
   app.use('/invoke', options.auth.require([options.auth.scopes.invoke]));
   app.post('/invoke', handle('invoke'));
   app.use('/resources/read', options.auth.require([options.auth.scopes.read]));
   app.post('/resources/read', handle('read'));
+
+  app.use('/', options.auth.require([]));
+  app.post('/', async (c) => {
+    const body: unknown = await c.req.json().catch(() => undefined);
+    const rpc = body && typeof body === 'object' ? body as Record<string, unknown> : null;
+    const id = rpc?.id ?? null;
+    if (!rpc || rpc.jsonrpc !== '2.0' || typeof rpc.method !== 'string') {
+      return c.json({ jsonrpc: '2.0', id, error: { code: -32600, message: 'Invalid Request' } }, 400);
+    }
+    if (rpc.method === 'initialize') {
+      return c.json({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          protocolVersion: '2025-06-18',
+          capabilities: { resources: {}, tools: {} },
+          serverInfo: { name: '@sentropic/mcp-platform', version: '0.2.0' },
+        },
+      });
+    }
+    const operation = rpc.method === 'tools/call'
+      ? 'invoke'
+      : rpc.method === 'resources/read' ? 'read' : null;
+    if (!operation) {
+      return c.json({ jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } });
+    }
+    const intent = asIntent(rpc.params);
+    if (!intent) {
+      return c.json({ jsonrpc: '2.0', id, error: { code: -32602, message: 'Invalid params' } }, 400);
+    }
+    const principal = options.auth.context(c);
+    const scope = operation === 'invoke' ? options.auth.scopes.invoke : options.auth.scopes.read;
+    if (!principal.scopes.includes(scope)) {
+      return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: 'Insufficient scope' } }, 403);
+    }
+    const outcome = await dispatch(operation, c, intent);
+    if (!outcome.allowed) {
+      return c.json({ jsonrpc: '2.0', id, error: { code: -32003, message: outcome.decision.reason } }, outcome.decision.status ?? 503);
+    }
+    return c.json({ jsonrpc: '2.0', id, result: outcome.result });
+  });
   return app;
 };
