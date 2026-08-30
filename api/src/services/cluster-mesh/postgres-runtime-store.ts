@@ -9,7 +9,6 @@ import type {
 import type { InvocationReceipt } from '@sentropic/events';
 import { db } from '../../db/client';
 import {
-  clusterMeshCapacityLeases,
   clusterMeshCommands,
   clusterMeshGenerations,
   clusterMeshMcpServers,
