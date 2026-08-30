@@ -28,6 +28,8 @@ const parseIntent = (value: unknown): ControlIntent | null => {
   return body as unknown as ControlIntent;
 };
 
+export const isValidSessionControlIntent = (value: unknown): boolean => parseIntent(value) !== null;
+
 export function createSessionNamespaceModule(input: {
   readonly handlers: SessionRouteHandlers;
   readonly devices: DeviceRouteHandlers;

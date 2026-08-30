@@ -208,6 +208,7 @@
   - [ ] Add `packages/cluster-mesh/src/hono/session-router.ts` and `api/src/routes/namespaces/session.ts`; inject product session/device ports and the h2a PTY registration adapter port, with real adapter evidence tracked only by `BR75-SG1`.
     - [x] Control ports persist command lifecycle and LOST reconciliation, accept root-specific mounts, and keep PTY actuation injectable.
     - [x] The session router fences every control intent through author, verified context, registration, admission, command state, actuation and receipts.
+    - [x] Product session lifecycle handlers are injected from the application namespace with read-only session/device shadow snapshots.
   - [ ] Update `createClusterMeshAppAdapter`, `api/src/app.ts` and `apps/auth-idp/idp-app.ts` to mount the session module with root-specific path projection.
     - [x] The application adapter composes the durable stores, generation runtime, injected PTY registration gate, target inspection and explicit `BR75-SG1` source-gap state.
   - [ ] Shadow read-only session/device state and validated drive intent; select one session author through the durable cutover record.

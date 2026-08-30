@@ -5,7 +5,7 @@ import type {
   AuthHonoSessionService,
   AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { userSessions, users } from '../../db/schema';
 import {
@@ -13,6 +13,7 @@ import {
   revokeSession as revokeSessionById,
   validateSession,
 } from '../session-manager';
+import { readDeviceCodeSnapshot } from '../device-code-store';
 
 /**
  * Sentropic adapters for `@sentropic/auth-hono` session route handlers.
@@ -158,3 +159,20 @@ export const authHonoSessionService: AuthHonoSessionService = {
     };
   },
 };
+
+export async function findSessionUser(userId: string) {
+  const [user] = await db.select({
+    email: users.email,
+    displayName: users.displayName,
+    role: users.role,
+  }).from(users).where(eq(users.id, userId)).limit(1);
+  return user ?? null;
+}
+
+export async function readSessionShadowSnapshot() {
+  const [sessions] = await db.select({ value: count() }).from(userSessions);
+  return {
+    sessions: sessions?.value ?? 0,
+    devices: readDeviceCodeSnapshot(),
+  };
+}
