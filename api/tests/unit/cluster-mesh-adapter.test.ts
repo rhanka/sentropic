@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ClusterMeshRuntimeStore, PtyActuatorPort } from '@sentropic/cluster-mesh';
 
 import {
   createClusterMeshAppAdapter,
@@ -82,5 +83,43 @@ describe('cluster mesh app adapter', () => {
     await expect(
       adapter.boundaries.resolve({ workspaceId: 'workspace-1', userId: 'user-1' }),
     ).rejects.toMatchObject({ code: 'tenant_membership_required' });
+  });
+
+  it('should inject the PTY registration gate and fail closed before actuation', async () => {
+    const pty: PtyActuatorPort = {
+      kind: 'pty', isAvailable: vi.fn(async () => true),
+      actuate: vi.fn(async () => ({ effectRef: 'must-not-run' })),
+    };
+    const runtimeStore: ClusterMeshRuntimeStore = {
+      append: vi.fn(async () => undefined),
+      enqueueCommand: vi.fn(async () => true), find: vi.fn(async () => null),
+      markRegistrationLost: vi.fn(async () => true), reclaimExpiredCapacity: vi.fn(async () => 0),
+      reserveCapacity: vi.fn(async () => ({ ok: true, outcome: 'reserved' })),
+      saveGeneration: vi.fn(async () => undefined), saveMcpServer: vi.fn(async () => undefined),
+      saveRegistration: vi.fn(async () => undefined), updateCommand: vi.fn(async () => true),
+    };
+    const adapter = createClusterMeshAppAdapter(dependencies({
+      sessionControl: {
+        generationId: 'generation-1', runtimeStore, pty,
+        context: { async verify() { throw new Error('not used'); } },
+        cutovers: {
+          async find() { return null; }, async activate() {}, async rollback() {},
+        },
+        targets: { async inspect() { return 'unknown'; } },
+        ptyEvidence: 'BR75-SG1_source_gap',
+      },
+    }));
+
+    const decision = await adapter.sessionControl!.runtime.registration.authorize({
+      invocationId: 'invocation-1', correlationId: 'correlation-1', generationId: 'generation-1',
+      principal: { principalId: 'workload-1', kind: 'workload', verifierId: 'test' },
+      workspace: { bindingId: 'binding-1', workspaceId: 'workspace-1', revision: '1' },
+      scopes: ['session:drive'], policyRevision: '1', issuedAt: new Date().toISOString(),
+    });
+
+    expect(decision).toEqual({ ok: false, reason: 'missing_registration' });
+    expect(pty.isAvailable).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+    expect(adapter.sessionControl?.ptyEvidence).toBe('BR75-SG1_source_gap');
   });
 });
