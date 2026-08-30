@@ -33,6 +33,7 @@ export interface ClusterMesh {
   };
 }
 
+/** @deprecated Removal locator: delete after its remaining callers cut over in Lots 4–32. */
 export function createDegenerateClusterMesh(input: {
   readonly self: ClusterNodeDescriptor;
   readonly workstations: LocalWorkstationDirectoryPort;
