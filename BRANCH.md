@@ -181,22 +181,24 @@
   - [x] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C3 provider-neutral runtime ports; A4 hermetic 12/13 pre-spawn proof; A5 plugin disableability partial.
 
-- [ ] **Lot 3 — Unique control migration and durable stores before cutover**
-  - [ ] Namespace: shared persistence; type: schema/migration/backfill/rollback.
-  - [ ] Approve `BR75-EX1`, update `api/src/db/control-schema.ts` and generate only `api/drizzle/control/0007_cluster_mesh_r13.sql` plus control metadata.
-  - [ ] Create generations, registrations, capacity leases, logical MCP servers, commands, receipts and namespace cutovers in the control schema; reuse `control.event_outbox`.
-  - [ ] Key namespace cutovers by `(compositionRoot, namespace)` and include the SG7 covering indexes, per-target command idempotency uniqueness and crash-safe capacity lease/expiry reclamation in this migration before generating SQL.
+- [x] **Lot 3 — Unique control migration and durable stores before cutover**
+  - [x] Namespace: shared persistence; type: schema/migration/backfill/rollback.
+  - [x] Approve `BR75-EX1`, update `api/src/db/control-schema.ts` and generate only `api/drizzle/control/0007_cluster_mesh_r13.sql` plus control metadata.
+  - [x] Create generations, registrations, capacity leases, logical MCP servers, commands, receipts and namespace cutovers in the control schema; reuse `control.event_outbox`.
+  - [x] Key namespace cutovers by `(compositionRoot, namespace)` and include the SG7 covering indexes, per-target command idempotency uniqueness and crash-safe capacity lease/expiry reclamation in this migration before generating SQL.
   - [x] Add `api/src/services/cluster-mesh/postgres-runtime-store.ts`, `postgres-cutover-store.ts` and rollback/backfill verification ports.
   - [x] Add `packages/cluster-mesh/src/persistence/ports.ts`; keep adapters injected and keep `LOCAL_ONLY` free of app mirrors.
-  - [ ] Record C1 backfill exactly as `N-A-from-empty`: CURRENT attachment state is a process-local `Map`, so no durable rows exist to migrate.
-  - [ ] Tests new: `api/tests/unit/cluster-mesh-postgres-runtime.test.ts`, `api/tests/api/cluster-mesh-migration.test.ts`, `packages/cluster-mesh/tests/persistence-ports.spec.ts`.
-  - [ ] Tests updated: `api/tests/outbox/outbox-round-trip.test.ts` for receipt/outbox integration without a duplicate outbox.
-  - [ ] UI/E2E tests: N-A; migration is proven before application mounting.
-  - [ ] Lot gate: `make typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE=tests/unit/cluster-mesh-postgres-runtime.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-migration.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 migration/backfill/rollback before every app cutover; C3 injected persistence; `BR75-SG7` independently closed before any SQL generation or build blocked.
+  - [x] Record C1 backfill exactly as `N-A-from-empty`: CURRENT attachment state is a process-local `Map`, so no durable rows exist to migrate.
+    - [x] Evidence: the migration test observes zero rows across the seven new tables and the cutover store reports `{ strategy: 'N-A-from-empty', sourceRows: 0, migratedRows: 0 }`.
+  - [x] Tests new: `api/tests/unit/cluster-mesh-postgres-runtime.test.ts`, `api/tests/api/cluster-mesh-migration.test.ts`, `packages/cluster-mesh/tests/persistence-ports.spec.ts`.
+  - [x] Tests updated: `api/tests/outbox/outbox-round-trip.test.ts` for receipt/outbox integration without a duplicate outbox.
+  - [x] UI/E2E tests: N-A; migration is proven before application mounting.
+  - [x] Lot gate: `make typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make test-api-unit SCOPE=tests/unit/cluster-mesh-postgres-runtime.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-migration.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Internal gates: C1 migration/backfill/rollback before every app cutover; C3 injected persistence; `BR75-SG7` independently closed before any SQL generation or build blocked.
+    - [x] Evidence: activation retains the previous generation, rollback requires its checkpoint and the migration test restores the root-specific namespace author.
 
 - [ ] **Lot 4 — `/session` socle cutover and internally closable gates**
   - [ ] Namespace: `/session`; type: extraction/wrapping, plugin mount, D11 cutover and legacy deletion.
