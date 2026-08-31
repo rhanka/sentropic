@@ -41,7 +41,7 @@ const ensureChatAuthor = async (): Promise<boolean> => {
         status: 'shadow' as const,
         shadowComparison: {
           strategy: 'pre-deletion-shadow-suite',
-          safeReadRef: 'api/tests/api/cluster-mesh-chat-cutover.test.ts',
+          safeReadRef: 'historical:f3515b78b:api/tests/api/cluster-mesh-chat-cutover.test.ts',
           validatedIntentRef: 'packages/chat-server/tests/wire-contract.spec.ts',
           effectsDuplicated: false,
         },
