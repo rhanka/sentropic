@@ -23,18 +23,17 @@ import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } fro
 /**
  * BR-39e Lot 1 — federation broker routes (upstream of the OAuth server, §6).
  *
- * `GET /auth/federation/:provider/start`    → build the provider auth URL, set the bound flow-state
+ * `GET /api/v1/auth/federation/:provider/start` → build the provider auth URL and bind flow state
  *                                             cookie carrying only the opaque pointer, 302 upstream.
- * `GET|POST /auth/federation/:provider/callback` → GET for ordinary providers; Apple's `form_post`
+ * `GET|POST /api/v1/auth/federation/:provider/callback` → GET ordinarily; Apple uses `form_post`
  *                                                  body carries code/state and its one-time profile.
  *
  * This router is the thin HTTP/cookie transport; every security invariant lives in the pure broker
  * (`services/auth/federation/broker.ts`). Active only when the host wires the `federation?` port.
  */
 
-// The API is mounted at `/api/v1` (`api/src/app.ts`: `app.route('/api/v1/auth', authRouter)`), and
-// this router is nested at `/federation` under it (`api/src/routes/auth/index.ts`:
-// `authRouter.route('/federation', federationRouter)`) — so the callback is REALLY served at
+// Both Cluster Mesh auth projections nest this adapter at `/api/v1/auth/federation`, so the
+// callback is served at
 // `/api/v1/auth/federation/<provider>/callback`. The default redirect URI (used whenever the
 // provider-specific `*_OAUTH_REDIRECT_URI` env is unset) must carry that full mount prefix, mirroring
 // the OAuth `oauthPathPrefix` convention (`packages/auth-hono/.../wellknown-handler.ts`, default
@@ -219,7 +218,7 @@ federationRouter.get('/:provider/start', async (c) => {
   setCookie(c, FLOW_COOKIE, result.flowStateId, {
     httpOnly: true,
     maxAge: FLOW_TTL_SECONDS,
-    path: '/auth/federation',
+    path: FEDERATION_CALLBACK_PREFIX,
     sameSite: crossSitePostCallback ? 'None' : 'Lax',
     secure: crossSitePostCallback ? true : isProduction(),
   });
@@ -249,15 +248,15 @@ const callbackHandler = async (c: Context) => {
     // Fresh Sentropic session (rotation, D10) as an HttpOnly cookie; the external tokens never
     // reach the browser (D1). The one-time flow-state cookie is cleared.
     setSessionCookie(c, result.session.sessionToken);
-    deleteCookie(c, FLOW_COOKIE, { path: '/auth/federation' });
+    deleteCookie(c, FLOW_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
     return c.redirect(result.location, 302);
   }
 
   if (result.kind === 'email-challenge') {
     // D9 — no usable verified email; NO user was created. Stash the pending identity server-side,
     // reference it by a bound cookie, and hand the browser to the local email-verification challenge
-    // (which POSTs to /auth/federation/challenge/complete once an email is proven).
-    deleteCookie(c, FLOW_COOKIE, { path: '/auth/federation' });
+    // (which POSTs to the federation challenge endpoint once an email is proven).
+    deleteCookie(c, FLOW_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_SECONDS * 1000);
     const challengeId = pendingFederationStore.put(
       {
@@ -271,7 +270,7 @@ const callbackHandler = async (c: Context) => {
     setCookie(c, CHALLENGE_COOKIE, challengeId, {
       httpOnly: true,
       maxAge: CHALLENGE_TTL_SECONDS,
-      path: '/auth/federation',
+      path: FEDERATION_CALLBACK_PREFIX,
       sameSite: 'Lax',
       secure: isProduction(),
     });
@@ -279,7 +278,7 @@ const callbackHandler = async (c: Context) => {
     return c.redirect(`${uiBase}/auth/federation/verify-email?provider=${result.provider}`, 302);
   }
 
-  if (result.clearFlowCookie) deleteCookie(c, FLOW_COOKIE, { path: '/auth/federation' });
+  if (result.clearFlowCookie) deleteCookie(c, FLOW_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
   return c.json(result.body, result.status as 400 | 401 | 409 | 500);
 };
 
@@ -321,7 +320,7 @@ federationRouter.get('/:provider/link/start', async (c) => {
   setCookie(c, LINK_FLOW_COOKIE, result.flowStateId, {
     httpOnly: true,
     maxAge: FLOW_TTL_SECONDS,
-    path: '/auth/federation',
+    path: FEDERATION_CALLBACK_PREFIX,
     sameSite: crossSitePostCallback ? 'None' : 'Lax',
     secure: crossSitePostCallback ? true : isProduction(),
   });
@@ -352,12 +351,12 @@ const linkCallbackHandler = async (c: Context) => {
   });
 
   if (result.kind === 'linked') {
-    deleteCookie(c, LINK_FLOW_COOKIE, { path: '/auth/federation' });
+    deleteCookie(c, LINK_FLOW_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
     const uiBase = resolveOAuthUiBaseUrl(c.req.raw);
     return c.redirect(`${uiBase}/settings/security?linked=${provider.id}`, 302);
   }
 
-  if (result.clearFlowCookie) deleteCookie(c, LINK_FLOW_COOKIE, { path: '/auth/federation' });
+  if (result.clearFlowCookie) deleteCookie(c, LINK_FLOW_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
   return c.json(result.body, result.status as 400 | 401 | 409 | 500);
 };
 
@@ -408,7 +407,7 @@ federationRouter.post('/challenge/complete', async (c) => {
 
   // Verify-and-DELETE the pending pointer (single-use + TTL) only AFTER the email proof succeeds.
   const pending = pendingFederationStore.consume(challengeId, new Date());
-  deleteCookie(c, CHALLENGE_COOKIE, { path: '/auth/federation' });
+  deleteCookie(c, CHALLENGE_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
   if (!pending) {
     return c.json(
       { error: { code: 'federation_challenge_invalid', message: 'Challenge is missing, expired, or already used.' } },
