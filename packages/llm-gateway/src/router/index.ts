@@ -29,6 +29,7 @@ import {
   type RouteMeteringSink,
 } from '../route-flow-core.js';
 import type { GatewayWire, ProviderResponseHeaders } from '../ports/dispatch.js';
+import type { CostContext } from '../ports/cost-context.js';
 import {
   mapGatewayError,
   notImplemented,
@@ -62,6 +63,12 @@ export interface CreateGatewayRouterOptions {
   readonly routeMetering?: RouteMeteringSink;
   /** Trusted host/workspace/request policy projection; never reads body ownership. */
   readonly routeInput?: RouteFlowDeps['routeInput'];
+  /** Host-authenticated caller ownership; body fields are never consulted. */
+  readonly resolveCallerOwnership?: (
+    context: import('hono').Context,
+  ) => Promise<CostContext> | CostContext;
+  /** Deterministic ingress/route-intent comparison; it must not dispatch. */
+  readonly shadowRouteIntent?: RouteFlowDeps['shadowRouteIntent'];
   /** `X-Sentropic-Request-Id` source (spec §3b). Defaults to a per-call id. */
   readonly requestId?: () => string;
 }
@@ -187,6 +194,7 @@ export const createGatewayRouter = (
     ? {
         config, routePlanner: options.routePlanner, metering: options.routeMetering,
         ...(options.routeInput ? { routeInput: options.routeInput } : {}),
+        ...(options.shadowRouteIntent ? { shadowRouteIntent: options.shadowRouteIntent } : {}),
       }
     : undefined;
 
@@ -214,8 +222,15 @@ export const createGatewayRouter = (
 
     const headers = readHeaders(c.req.raw.headers);
     const stream = readStream(body);
+    let verifiedCost: CostContext | undefined;
+    try {
+      verifiedCost = await options.resolveCallerOwnership?.(c);
+    } catch {
+      return sendError(c, mapGatewayError(wire, 'caller-auth-failed'), id);
+    }
     const flowRequest = {
       wire, headers, body, model, stream,
+      ...(verifiedCost ? { verifiedCost } : {}),
       signal: c.req.raw.signal,
     };
 
@@ -278,7 +293,15 @@ export const createGatewayRouter = (
     const id = requestId();
     // Filtered by caller/pool policy (spec §3). Caller-auth gates the catalog:
     // an unauthenticated caller gets a provider-shaped 401, never the pool.
-    const auth = await config.callerAuth.verify(readHeaders(c.req.raw.headers));
+    let auth;
+    try {
+      const verifiedCost = await options.resolveCallerOwnership?.(c);
+      auth = verifiedCost
+        ? { ok: true as const, cost: verifiedCost }
+        : await config.callerAuth.verify(readHeaders(c.req.raw.headers));
+    } catch {
+      auth = { ok: false as const };
+    }
     if (!auth.ok || !auth.cost) {
       return sendError(
         c,
