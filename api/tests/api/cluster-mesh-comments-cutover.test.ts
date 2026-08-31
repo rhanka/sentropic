@@ -72,6 +72,18 @@ describe('cluster mesh comments cutover', () => {
     }));
   };
 
+  it('root-mounts comments without gating anonymous health', async () => {
+    expect((await productApp.request('/api/v1/health')).status).toBe(200);
+    expect((await productApp.request('/api/v1/comments')).status).toBe(401);
+    const doubled = await authenticatedRequest(
+      productApp,
+      'GET',
+      '/api/v1/comments/comments',
+      user.sessionToken!,
+    );
+    expect(doubled.status).toBe(404);
+  });
+
   it('selects one author and fails closed after verified rollback', async () => {
     const app = pluginApp();
     const path = `/api/v1/comments?context_type=organization&context_id=${organizationId}`;
