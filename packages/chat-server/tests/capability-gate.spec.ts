@@ -124,6 +124,30 @@ describe('chat-server capability gate', () => {
       expect(res.status).toBe(200);
       expect(enqueueInputs[0].vscodeCodeAgent).toBeUndefined();
     });
+
+    it('does not apply message-body capability filtering to extension permission ports', async () => {
+      const { app } = buildServer(locked);
+      const put = await app.request('/chat/tool-permissions', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          toolName: 'tab_read:dom',
+          origin: 'https://example.com',
+          policy: 'allow',
+        }),
+      });
+      expect(put.status).toBe(200);
+
+      const listed = await app.request('/chat/tool-permissions');
+      expect(await listed.json()).toEqual({
+        items: [{
+          toolName: 'tab_read:dom',
+          origin: 'https://example.com',
+          policy: 'allow',
+          updatedAt: new Date(0).toISOString(),
+        }],
+      });
+    });
   });
 
   describe('permissive default (trusted mount, capabilities omitted)', () => {
