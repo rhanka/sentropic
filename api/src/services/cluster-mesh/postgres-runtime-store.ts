@@ -31,9 +31,10 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
     const saved = await db.insert(clusterMeshGenerations).values(row).onConflictDoUpdate({
       target: clusterMeshGenerations.generationId,
       set: row,
-      setWhere: sql`${clusterMeshGenerations.status} NOT IN ('stopped', 'lost')`,
+      setWhere: sql`${clusterMeshGenerations.status} NOT IN ('stopped', 'lost')
+        AND ${clusterMeshGenerations.supervisorRef} = ${value.supervisorRef}`,
     }).returning({ generationId: clusterMeshGenerations.generationId });
-    if (saved.length === 0) throw new Error('cluster_mesh_generation_terminal');
+    if (saved.length === 0) throw new Error('cluster_mesh_generation_fenced');
   }
   async saveRegistration(value: Parameters<ClusterMeshRuntimeStore['saveRegistration']>[0]): Promise<void> {
     const row = {
