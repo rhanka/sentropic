@@ -7,16 +7,16 @@ import {
 } from '@sentropic/auth-hono';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { env } from '../../config/env';
-import { db } from '../../db/client';
-import { users, webauthnCredentials } from '../../db/schema';
-import { logger } from '../../logger';
-import { authHonoWebAuthnRegistrationService } from '../../services/auth/webauthn-adapter';
-import { createInviteStoreAdapter, hashInviteToken } from '../../services/auth/invite-store-adapter';
-import { verifyValidationToken } from '../../services/email-verification';
-import { createSession } from '../../services/session-manager';
-import { ensureWorkspaceForUser } from '../../services/workspace-service';
-import { deriveDisplayNameFromEmail } from '../../utils/display-name';
+import { env } from '../../../config/env';
+import { db } from '../../../db/client';
+import { users, webauthnCredentials } from '../../../db/schema';
+import { logger } from '../../../logger';
+import { authHonoWebAuthnRegistrationService } from '../../../services/auth/webauthn-adapter';
+import { createInviteStoreAdapter, hashInviteToken } from '../../../services/auth/invite-store-adapter';
+import { verifyValidationToken } from '../../../services/email-verification';
+import { createSession } from '../../../services/session-manager';
+import { ensureWorkspaceForUser } from '../../../services/workspace-service';
+import { deriveDisplayNameFromEmail } from '../../../utils/display-name';
 
 /**
  * BR-39r L4 — single-use invitation tokens (invitation → direct device enrollment).

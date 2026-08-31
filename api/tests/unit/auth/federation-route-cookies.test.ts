@@ -54,7 +54,7 @@ vi.mock('../../../src/services/session-manager', () => ({
   validateSession: vi.fn(async () => ({ role: 'user', sessionId: 'session-1', userId: 'user-1' })),
 }));
 
-const { federationRouter, parseFederationCallback } = await import('../../../src/routes/auth/federation');
+const { federationRouter, parseFederationCallback } = await import('../../../src/routes/namespaces/auth/federation');
 
 interface ParsedCookie {
   name: string;

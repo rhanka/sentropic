@@ -4,18 +4,18 @@ import {
 } from '@sentropic/auth-hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { logger } from '../../logger';
+import { logger } from '../../../logger';
 import {
   generateMagicLink,
   verifyMagicLink,
   sendMagicLinkEmail,
-} from '../../services/magic-link';
-import { createSession } from '../../services/session-manager';
-import { env } from '../../config/env';
-import { db } from '../../db/client';
-import { users, webauthnCredentials } from '../../db/schema';
+} from '../../../services/magic-link';
+import { createSession } from '../../../services/session-manager';
+import { env } from '../../../config/env';
+import { db } from '../../../db/client';
+import { users, webauthnCredentials } from '../../../db/schema';
 import { eq, desc } from 'drizzle-orm';
-import { ensureWorkspaceForUser } from '../../services/workspace-service';
+import { ensureWorkspaceForUser } from '../../../services/workspace-service';
 
 /**
  * Magic Link Authentication Routes
