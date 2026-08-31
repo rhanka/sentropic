@@ -359,7 +359,7 @@ test.describe('Chat checkpoint restore', () => {
         ),
         page.keyboard.press('Enter'),
       ]);
-      expect(postRestoreReq.url()).toContain('/api/v1/chat/messages');
+      expect(new URL(postRestoreReq.url()).pathname).toBe('/api/v1/chat/messages');
       expect(sendObserved).toBeTruthy();
 
       expect(pageErrors, `pageerrors: ${pageErrors.join(' | ')}`).toHaveLength(0);

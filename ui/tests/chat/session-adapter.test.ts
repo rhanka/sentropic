@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chatMessageFeedbackUrl,
+  chatMessageRuntimeDetailsUrl,
   chatMessageRetryUrl,
   chatMessageStopUrl,
   chatMessageToolResultsUrl,
@@ -32,6 +33,9 @@ describe('chat session adapter', () => {
       '/chat/sessions/session%2F1/checkpoints/checkpoint%2F1/restore',
     );
     expect(chatMessagesUrl()).toBe('/chat/messages');
+    expect(chatMessageRuntimeDetailsUrl('message/1')).toBe(
+      '/chat/messages/message%2F1/runtime-details',
+    );
     expect(chatMessageRetryUrl('message/1')).toBe('/chat/messages/message%2F1/retry');
     expect(chatMessageStopUrl('message/1')).toBe('/chat/messages/message%2F1/stop');
     expect(chatMessageFeedbackUrl('message/1')).toBe(

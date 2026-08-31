@@ -129,6 +129,7 @@ test.describe('Chat completed run leaves a terminal (non-frozen) UI', () => {
       sendBtn.click(),
     ]);
     expect(res.status()).toBeLessThan(400);
+    expect(new URL(res.url()).pathname).toBe('/api/v1/chat/messages');
     const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
     return {
       jobId: String(data?.jobId ?? ''),
