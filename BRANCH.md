@@ -472,6 +472,7 @@
 - [ ] **Lot 17 — `/agents` TARGET application router extraction**
   - [ ] Namespace: `/agents`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
   - [ ] Add `api/src/routes/namespaces/agents.ts` over flow/skills/catalog ports; absorb agent-config and prompt-profile surfaces without owning catalog discovery.
+    - [x] Extract injected flow, skills and prompt-profile catalog ports without exposing catalog discovery.
   - [ ] Shadow reads and validated configuration intent, select one author, prove rollback and delete `agent-config.ts`, `prompts.ts` mounts/files after extraction.
   - [ ] Tests new: `api/tests/api/cluster-mesh-agents-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/agent-config.test.ts`, `api/tests/api/prompts.test.ts`, `api/tests/services/catalog/agent-template-source.spec.ts`, `api/tests/unit/todo-orchestration-chat-progression.test.ts`.
