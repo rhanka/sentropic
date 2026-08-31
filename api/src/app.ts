@@ -17,7 +17,7 @@ import { productAuthPlugin } from './routes/namespaces/auth';
 import { productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
 import { productFocusModule } from './routes/namespaces/focus';
-import { productTrackModule } from './routes/namespaces/track';
+import { productTrackModule, TRACK_READ_PATHS } from './routes/namespaces/track';
 import {
   LLM_MESH_ADMIN_PATHS,
   productLlmMeshModule,
@@ -50,6 +50,30 @@ export interface RootMountedNamespaceRegistration {
   readonly authPaths: readonly string[] | null;
   readonly privilegedFences?: readonly PrivilegedPathFence[];
 }
+
+export interface PrefixMountedNamespaceRegistration extends RootMountedNamespaceRegistration {
+  readonly mount: string;
+}
+
+const productOAuthModule = createOAuthNamespaceModule({
+  compositionRoot: 'product',
+  publicPath: '/api/v1/oauth',
+});
+
+export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
+  { namespace: '/session', module: productSessionModule, mount: '/auth', authPaths: null },
+  { namespace: '/mcp', module: productMcpModule, mount: '/mcp', authPaths: null },
+  { namespace: '/oauth', module: productOAuthModule, mount: '/oauth', authPaths: null },
+  { namespace: '/gw', module: productGwModule, mount: '/gw', authPaths: null },
+  { namespace: '/chat', module: productChatModule, mount: '/chat', authPaths: null },
+  { namespace: '/focus', module: productFocusModule, mount: '/focus', authPaths: null },
+  {
+    namespace: '/track',
+    module: productTrackModule,
+    mount: '/track',
+    authPaths: TRACK_READ_PATHS,
+  },
+] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
   {
@@ -94,11 +118,14 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
   },
 ] as const satisfies readonly RootMountedNamespaceRegistration[];
 
+export const MOUNTED_NAMESPACE_REGISTRY = [
+  ...PREFIX_MOUNTED_NAMESPACE_REGISTRY,
+  ...ROOT_MOUNTED_NAMESPACE_REGISTRY,
+] as const;
+
 export const ROOT_MOUNT_REMAPS = Object.fromEntries(
   ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => [namespace, '/']),
 );
-const [productAuthRootRegistration, ...productFencedRootRegistrations] =
-  ROOT_MOUNTED_NAMESPACE_REGISTRY;
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -219,17 +246,7 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
 } as const;
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
-  namespaces: [
-    productSessionModule,
-    productMcpModule,
-    createOAuthNamespaceModule({ compositionRoot: 'product', publicPath: '/api/v1/oauth' }),
-    productAuthRootRegistration.module,
-    productGwModule,
-    productChatModule,
-    productFocusModule,
-    productTrackModule,
-    ...productFencedRootRegistrations.map(({ module }) => module),
-  ],
+  namespaces: MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
   mounts: PRODUCT_CLUSTER_MESH_MOUNTS,
 }));
 app.route('/api/v1', apiRouter);
