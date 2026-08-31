@@ -146,10 +146,6 @@ apiRouter.route('/workspace-types', workspaceTypeWorkflowsRouter);
 apiRouter.use('/locks/*', requireAuth);
 apiRouter.route('/locks', locksRouter);
 
-// Focus owner signatures are session-authenticated; the route supplies its own-principal,
-// trusted HTTP relayer, and tenancy-aware workspace authorization to the durable composition.
-apiRouter.use('/focus/*', requireAuth);
-
 // Streaming routes: read-only for users; allow any authenticated user.
 apiRouter.use('/streams/*', requireAuth);
 apiRouter.route('/streams', streamsRouter);
