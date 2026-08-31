@@ -5,7 +5,7 @@ import { db } from "../../src/db/client";
 import { executionEvents, executionRuns, plans, tasks, todos, workspaceMemberships } from "../../src/db/schema";
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
 
-describe("Todos API", () => {
+describe("Todos API through the root-mounted workflows namespace", () => {
   let editor: any;
   let owner: any;
   let viewer: any;
