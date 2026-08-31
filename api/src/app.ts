@@ -26,6 +26,11 @@ import { productWorkflowsModule } from './routes/namespaces/workflows';
 import { WORKFLOW_PATHS } from './routes/namespaces/workflows-cutover';
 import { productCommentsModule } from './routes/namespaces/comments';
 import { COMMENTS_PATHS } from './routes/namespaces/comments-cutover';
+import { productConnectorsModule } from './routes/namespaces/connectors';
+import {
+  CONNECTOR_ADMIN_PATHS,
+  CONNECTOR_PATHS,
+} from './routes/namespaces/connectors-cutover';
 
 export interface PrivilegedPathFence {
   readonly name: string;
@@ -60,6 +65,16 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     namespace: '/comments',
     module: productCommentsModule,
     authPaths: COMMENTS_PATHS,
+  },
+  {
+    namespace: '/connectors',
+    module: productConnectorsModule,
+    authPaths: CONNECTOR_PATHS,
+    privilegedFences: [{
+      name: 'admin',
+      paths: CONNECTOR_ADMIN_PATHS,
+      pathPrefixes: ['/settings/connector-accounts'],
+    }],
   },
 ] as const satisfies readonly RootMountedNamespaceRegistration[];
 
