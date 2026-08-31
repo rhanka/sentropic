@@ -10,7 +10,7 @@ describe('google drive picker utils', () => {
     resetGoogleDrivePickerApiForTests();
   });
 
-  it('returns selected file ids from the picker callback', async () => {
+  it('keeps picker execution client-side after connector-host administration cutover', async () => {
     const setMimeTypes = vi.fn();
     const setIncludeFolders = vi.fn();
     const setSelectFolderEnabled = vi.fn();
