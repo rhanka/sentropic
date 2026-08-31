@@ -11,11 +11,9 @@ import { tenantsRouter } from './tenants';
 import { meRouter } from './me';
 import { streamsRouter } from './streams';
 import { documentsRouter } from './documents';
-import promptsRouter from './prompts';
 import aiSettingsRouter from './ai-settings';
 import { workspacesRouter } from './workspaces';
 import { neutralRouter } from './neutral';
-import { agentConfigRouter } from './agent-config';
 import { locksRouter } from './locks';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
@@ -108,10 +106,6 @@ apiRouter.route('/workspaces', workspacesRouter);
 apiRouter.use('/neutral/*', requireAuth);
 apiRouter.route('/neutral', neutralRouter);
 
-// Runtime configuration routes (authenticated; workspace role checks are enforced per endpoint)
-apiRouter.use('/agent-config/*', requireAuth);
-apiRouter.route('/agent-config', agentConfigRouter);
-
 // Locks (authenticated; read is allowed, mutations require workspace editor/admin)
 apiRouter.use('/locks/*', requireAuth);
 apiRouter.route('/locks', locksRouter);
@@ -136,9 +130,6 @@ apiRouter.route('/settings', settingsRouter);
 
 apiRouter.use('/business-config/*', requireAuth, requireAdmin);
 apiRouter.route('/business-config', businessConfigRouter);
-
-apiRouter.use('/prompts/*', requireAuth, requireAdmin);
-apiRouter.route('/prompts', promptsRouter);
 
 apiRouter.use('/ai-settings/*', requireAuth, requireAdmin);
 apiRouter.route('/ai-settings', aiSettingsRouter);
