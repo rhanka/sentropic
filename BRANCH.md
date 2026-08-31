@@ -135,6 +135,8 @@
 - [x] `BR75-RV17` — `acknowledge` — Fable Lot 7 minor is closed: the `/auth` shadow evidence is pinned to `historical:1918af23f:api/tests/api/cluster-mesh-auth-roots.test.ts` because the current file no longer contains the pre-deletion comparison.
 - [x] `BR75-RV18` — `acknowledge` — Fable Lot 7 minor is closed: the Lot 7 test inventory now distinguishes the five changed/new test or IdP transport files from unchanged parity coverage.
 - [x] `BR75-RV19` — `acknowledge` — Fable Lot 7 minor is accepted: `/auth` rollback also fences `PATCH /api/v1/me`, the residual configuration subset, because the exact `/me` fence is method-wide. The later `/config` cutover owns narrowing this bounded effect; this correction does not expand the Lot 7 boundary.
+- [x] `BR75-RV20` — `acknowledge` — Lot 8 repository searches found no product HTTP gateway route or application caller targeting `/v1/messages` or `/v1/chat/completions` outside `packages/llm-gateway`; direct bypass deletion and caller rewriting are therefore N-A. The new `/api/v1/gw` plugin mount is the sole product HTTP gateway author, and its rollback test restores the prior `application-llm-adapter-v1` checkpoint without a fallback HTTP path.
+- [ ] `BR75-RV21` — `attention` — Fable Lot 8 must challenge the API packaging boundary: the API container build does not prebuild or install `@sentropic/llm-gateway`, so the allowed API mount bundles the existing package source entry directly. The mounted symbol is the real `createGatewayRouter`, standalone package typecheck/test/build gates pass, and no gateway implementation is copied into the API; a package-name production import would require build-manifest work outside this lot's implementation surface.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -310,18 +312,18 @@
   - [x] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-auth-roots.test.ts ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C1 existing identity schema reused and one author/root; C3 standalone auth factory; frozen auth/oauth/session facade.
 
-- [ ] **Lot 8 — `/gw` existing gateway factory mount and client cutover**
-  - [ ] Namespace: `/gw`; type: existing-factory wrapping, plugin mount and D11 cutover.
-  - [ ] Mount real `createGatewayRouter` through `api/src/routes/namespaces/gw.ts` with neutral caller ownership context; keep gateway/mesh secrets and route selection provider-owned.
-  - [ ] Shadow deterministic request normalization and route intent against the current internal egress without sending a second LLM request.
-  - [ ] Cut application callers to `/gw`, prove rollback to the prior adapter generation and delete the verified direct gateway-bypass branch; record N-A if no legacy HTTP route exists.
-  - [ ] Tests updated: `packages/llm-gateway/tests/router.test.ts`, `packages/llm-gateway/tests/caller-ownership.test.ts`, `packages/llm-gateway/tests/canonical-ingress.test.ts`, `packages/llm-gateway/tests/canonical-egress.test.ts`, `packages/llm-gateway/tests/canonical-stream.test.ts`, `packages/llm-gateway/tests/passthrough.test.ts`.
-  - [ ] API tests updated: `api/tests/unit/provider-mesh-contract-proof.test.ts`, `api/tests/unit/llm-runtime-stream.test.ts`; new `api/tests/api/cluster-mesh-gw.test.ts`.
-  - [ ] UI/E2E tests: N-A for this transport-only mount; provider UI coverage remains in Lot 11/33.
-  - [ ] Lot gate: `make typecheck-llm-gateway test-llm-gateway build-llm-gateway typecheck-llm-mesh test-llm-mesh build-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE="tests/unit/provider-mesh-contract-proof.test.ts tests/unit/llm-runtime-stream.test.ts" ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-gw.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C3 gateway/mesh standalone with injected context; A5 module disableability partial.
+- [x] **Lot 8 — `/gw` existing gateway factory mount and client cutover**
+  - [x] Namespace: `/gw`; type: existing-factory wrapping, plugin mount and D11 cutover.
+  - [x] Mount real `createGatewayRouter` through `api/src/routes/namespaces/gw.ts` with neutral caller ownership context; keep gateway/mesh secrets and route selection provider-owned.
+  - [x] Shadow deterministic request normalization and route intent against the current internal egress without sending a second LLM request.
+  - [x] Cut application callers to `/gw`, prove rollback to the prior adapter generation and delete the verified direct gateway-bypass branch; application caller rewrite and bypass deletion are N-A under `BR75-RV20` because no legacy HTTP route or caller exists.
+  - [x] Tests updated: `packages/llm-gateway/tests/router.test.ts`, `packages/llm-gateway/tests/caller-ownership.test.ts`, `packages/llm-gateway/tests/canonical-ingress.test.ts`, `packages/llm-gateway/tests/canonical-egress.test.ts`, `packages/llm-gateway/tests/canonical-stream.test.ts`, `packages/llm-gateway/tests/passthrough.test.ts`.
+  - [x] API tests updated: `api/tests/unit/provider-mesh-contract-proof.test.ts`, `api/tests/unit/llm-runtime-stream.test.ts`; new `api/tests/api/cluster-mesh-gw.test.ts`.
+  - [x] UI/E2E tests: N-A for this transport-only mount; provider UI coverage remains in Lot 11/33.
+  - [x] Lot gate: `make typecheck-llm-gateway test-llm-gateway build-llm-gateway typecheck-llm-mesh test-llm-mesh build-llm-mesh ENV=test-cluster-mesh-central-control-plane` — gateway 16 files/117 tests and mesh 26 files/168 tests pass; both typechecks and builds exit 0.
+  - [x] Lot gate: `make test-api-unit SCOPE="tests/unit/provider-mesh-contract-proof.test.ts tests/unit/llm-runtime-stream.test.ts" ENV=test-cluster-mesh-central-control-plane` — 2 files pass, 98 tests pass and 1 pre-existing test is skipped.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-gw.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/3 tests pass.
+  - [x] Internal gates: C3 gateway/mesh standalone with injected caller, planning and dispatch context; A5 module disableability partial returns 404 and creates no cutover author.
 
 - [ ] **Lot 9 — `/chat` existing chat-server factory completion and cutover**
   - [ ] Namespace: `/chat`; type: existing-factory wrapping/extraction, plugin mount, D11 cutover and legacy deletion.
