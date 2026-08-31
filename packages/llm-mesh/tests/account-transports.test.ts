@@ -54,6 +54,8 @@ describe('InMemoryAccountTransportCoordinator', () => {
       accountProviderId: 'codex',
       accountId: first.lease.accountId,
     });
+    expect(second.descriptor).not.toHaveProperty('accessToken');
+    expect(second.descriptor).not.toHaveProperty('refreshToken');
   });
 
   it('balances new sessions across accounts by current and historical load', async () => {
