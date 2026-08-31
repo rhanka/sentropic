@@ -16,6 +16,10 @@ export default defineConfig({
   // still consume the published package entry — this alias is test-only.
   resolve: {
     alias: {
+      '@sentropic/llm-mesh/hono': fileURLToPath(
+        new URL('../packages/llm-mesh/src/hono.ts', import.meta.url),
+      ),
+      '@sentropic/llm-mesh': pkgSrc('llm-mesh'),
       '@sentropic/connector-host': pkgSrc('connector-host'),
       '@sentropic/mcp-connector-google': pkgSrc('mcp-connector-google'),
       '@sentropic/mcp-platform': pkgSrc('mcp-platform'),
