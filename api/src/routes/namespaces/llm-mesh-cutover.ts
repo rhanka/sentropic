@@ -31,8 +31,8 @@ const ensureLlmMeshAuthor = async (): Promise<boolean> => {
         status: 'shadow' as const,
         shadowComparison: {
           strategy: 'catalog-account-availability-and-validated-enrollment-intent',
-          safeReadRef: 'api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts',
-          validatedIntentRef: 'api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts',
+          safeReadRef: 'historical:7862bf45f:api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts',
+          validatedIntentRef: 'historical:7862bf45f:api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts',
           effectsDuplicated: false,
         },
         rollbackCheckpoint: {
