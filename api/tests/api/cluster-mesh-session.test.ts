@@ -64,7 +64,7 @@ describe('cluster mesh session cutover', () => {
       body: '{}',
     });
     expect(login.status).toBe(200);
-    const oauth = await app.request('/api/v1/auth/oauth/end_session', {
+    const oauth = await app.request('/api/v1/oauth/end_session', {
       headers: { 'sec-fetch-mode': 'navigate' },
     });
     expect(oauth.status).toBe(200);

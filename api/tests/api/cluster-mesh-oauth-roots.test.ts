@@ -3,6 +3,8 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createIdpApp } from '../../../apps/auth-idp/idp-app';
+import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
@@ -35,6 +37,16 @@ const buildRoot = (compositionRoot: OAuthCompositionRoot, oauthPath: string): Ho
 afterEach(async () => Promise.all([clear('product'), clear('auth-idp')]));
 
 describe('cluster mesh OAuth roots', () => {
+  it('exposes only the final public projection in each composition root', async () => {
+    await Promise.all([clear('product'), clear('auth-idp')]);
+    const idp = createIdpApp();
+
+    expect((await productApp.request('/api/v1/oauth/end_session')).status).toBe(200);
+    expect((await productApp.request('/api/v1/auth/oauth/end_session')).status).toBe(404);
+    expect((await idp.request('/api/v1/auth/oauth/end_session')).status).toBe(200);
+    expect((await idp.request('/api/v1/oauth/token', { method: 'POST' })).status).toBe(404);
+  });
+
   it.each([
     ['product', '/api/v1/oauth'],
     ['auth-idp', '/api/v1/auth/oauth'],
