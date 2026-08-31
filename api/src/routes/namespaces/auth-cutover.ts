@@ -27,7 +27,7 @@ const ensureAuthAuthor = async (compositionRoot: AuthCompositionRoot): Promise<b
           status: 'shadow' as const,
           shadowComparison: {
             strategy: 'pre-deletion-shadow-suite',
-            safeReadRef: 'api/tests/api/cluster-mesh-auth-roots.test.ts',
+            safeReadRef: 'historical:1918af23f:api/tests/api/cluster-mesh-auth-roots.test.ts',
             validatedIntentRef: 'packages/auth-hono/tests/router-factory.test.ts',
             effectsDuplicated: false,
           },
