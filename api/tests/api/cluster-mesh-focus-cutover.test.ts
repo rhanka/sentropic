@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
@@ -83,6 +84,11 @@ const buildCandidate = () => {
 describe('cluster mesh focus cutover', () => {
   beforeEach(clearCutover);
   afterEach(clearCutover);
+
+  it('mounts the Focus factory on the product root', async () => {
+    expect((await productApp.request('/api/v1/focus/decisions/decision-1')).status).toBe(401);
+    expect((await productApp.request('/api/v1/api/v1/focus/decisions/decision-1')).status).toBe(404);
+  });
 
   it('shadows the Track read and signature intent, selects one author, and rolls back', async () => {
     const candidate = buildCandidate();
