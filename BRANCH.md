@@ -286,19 +286,19 @@
   - [x] Lot gate: `make test-ui SCOPE=tests/utils/oauth-transport.test.ts ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C1 auth data unchanged and one route author/root; C3 auth/oauth modules standalone; frozen auth/oauth/session facade.
 
-- [ ] **Lot 7 — `/auth` reusable factory and two-root cutover**
-  - [ ] Namespace: `/auth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
-  - [ ] Wrap real `createAuthRouter` with product WebAuthn/email/magic-link/federation/account ports; exclude `/oauth`, `/session` and LLM settings.
-  - [ ] Mount the same identity module in product and IdP roots, shadow safe reads/validated intents, select one author per root and prove rollback.
-  - [ ] Extract the identity subset of `api/src/routes/api/me.ts`; leave only explicitly assigned `/llm-mesh` and `/config` subsets until their lots.
-  - [ ] Remove replaced mounts/files `api/src/routes/auth/register.ts`, `api/src/routes/auth/login.ts`, `api/src/routes/auth/credentials.ts`, `api/src/routes/auth/magic-link.ts`, `api/src/routes/auth/email.ts`, `api/src/routes/auth/federation.ts` and their legacy imports from `auth/index.ts` after cutover.
-  - [ ] Tests updated: `packages/auth-hono/tests/router-factory.test.ts`, `packages/auth-hono/tests/credential-route-handlers.test.ts`, `packages/auth-hono/tests/email-route-handlers.test.ts`, `packages/auth-hono/tests/magic-link-route-handlers.test.ts`, `packages/auth-hono/tests/webauthn-registration-route-handlers.test.ts`, `packages/auth-hono/tests/webauthn-authentication-route-handlers.test.ts`, `packages/auth-hono/tests/federation-resolve-user.test.ts`.
-  - [ ] API tests updated: `api/tests/api/auth/authentication.test.ts`, `api/tests/api/auth/credentials.test.ts`, `api/tests/api/auth/magic-link.test.ts`, `api/tests/api/auth/registration.test.ts`, `api/tests/api/auth/tenancy.test.ts`, `api/tests/api/auth/tenant-membership.test.ts`, `api/tests/api/me.test.ts`; new `api/tests/api/cluster-mesh-auth-roots.test.ts`.
-  - [ ] UI tests updated: `ui/tests/utils/extension-auth-ui.test.ts`; IdP screen transport/build files under `apps/auth-idp/web/src/**`.
-  - [ ] E2E updated: `e2e/tests/02-auth-routes.spec.ts`, `e2e/tests/02-auth-simple.spec.ts`, `e2e/tests/02-auth-webauthn.spec.ts`, `e2e/tests/02-auth-workflow.spec.ts`, `e2e/tests/00-access-control.spec.ts`.
-  - [ ] Lot gate: `make typecheck-auth-hono test-auth-hono build-auth-hono typecheck-idp typecheck-idp-web ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-auth-roots.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 existing identity schema reused and one author/root; C3 standalone auth factory; frozen auth/oauth/session facade.
+- [x] **Lot 7 — `/auth` reusable factory and two-root cutover**
+  - [x] Namespace: `/auth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
+  - [x] Wrap real `createAuthRouter` with product WebAuthn/email/magic-link/federation/account ports; exclude `/oauth`, `/session` and LLM settings.
+  - [x] Mount the same identity module in product and IdP roots, shadow safe reads/validated intents, select one author per root and prove rollback.
+  - [x] Extract the identity subset of `api/src/routes/api/me.ts`; leave only explicitly assigned `/llm-mesh` and `/config` subsets until their lots.
+  - [x] Remove replaced mounts/files `api/src/routes/auth/register.ts`, `api/src/routes/auth/login.ts`, `api/src/routes/auth/credentials.ts`, `api/src/routes/auth/magic-link.ts`, `api/src/routes/auth/email.ts`, `api/src/routes/auth/federation.ts` and their legacy imports from `auth/index.ts` after cutover.
+  - [x] Tests updated: `packages/auth-hono/tests/router-factory.test.ts`, `packages/auth-hono/tests/credential-route-handlers.test.ts`, `packages/auth-hono/tests/email-route-handlers.test.ts`, `packages/auth-hono/tests/magic-link-route-handlers.test.ts`, `packages/auth-hono/tests/webauthn-registration-route-handlers.test.ts`, `packages/auth-hono/tests/webauthn-authentication-route-handlers.test.ts`, `packages/auth-hono/tests/federation-resolve-user.test.ts`.
+  - [x] API tests updated: `api/tests/api/auth/authentication.test.ts`, `api/tests/api/auth/credentials.test.ts`, `api/tests/api/auth/magic-link.test.ts`, `api/tests/api/auth/registration.test.ts`, `api/tests/api/auth/tenancy.test.ts`, `api/tests/api/auth/tenant-membership.test.ts`, `api/tests/api/me.test.ts`; new `api/tests/api/cluster-mesh-auth-roots.test.ts`.
+  - [x] UI tests updated: `ui/tests/utils/extension-auth-ui.test.ts`; IdP screen transport/build files under `apps/auth-idp/web/src/**`.
+  - [x] E2E updated: `e2e/tests/02-auth-routes.spec.ts`, `e2e/tests/02-auth-simple.spec.ts`, `e2e/tests/02-auth-webauthn.spec.ts`, `e2e/tests/02-auth-workflow.spec.ts`, `e2e/tests/00-access-control.spec.ts`.
+  - [x] Lot gate: `make typecheck-auth-hono test-auth-hono build-auth-hono typecheck-idp typecheck-idp-web ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-auth-roots.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Internal gates: C1 existing identity schema reused and one author/root; C3 standalone auth factory; frozen auth/oauth/session facade.
 
 - [ ] **Lot 8 — `/gw` existing gateway factory mount and client cutover**
   - [ ] Namespace: `/gw`; type: existing-factory wrapping, plugin mount and D11 cutover.
