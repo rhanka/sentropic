@@ -50,7 +50,7 @@ test.describe('OAuth2 / OIDC authorization code flow', () => {
       expect(typeof idTokenClaims.auth_time).toBe('number');
       expect(typeof idTokenClaims.sub).toBe('string');
 
-      const userInfoResponse = await api.get('/api/v1/auth/oauth/userinfo', {
+      const userInfoResponse = await api.get('/api/v1/oauth/userinfo', {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       });
       await expectOk(userInfoResponse, 'userinfo');
@@ -68,7 +68,7 @@ test.describe('OAuth2 / OIDC authorization code flow', () => {
 });
 
 const buildAuthorizeUrl = (input: { nonce: string; state: string }): string => {
-  const url = new URL('/api/v1/auth/oauth/authorize', API_BASE_URL);
+  const url = new URL('/api/v1/oauth/authorize', API_BASE_URL);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', CLIENT_ID);
   url.searchParams.set('redirect_uri', `${UI_BASE_URL}/auth/oauth/callback`);
@@ -84,7 +84,7 @@ const exchangeCode = async (
   api: Awaited<ReturnType<typeof request.newContext>>,
   code: string,
 ): Promise<OAuthTokenResponse> => {
-  const response = await api.post('/api/v1/auth/oauth/token', {
+  const response = await api.post('/api/v1/oauth/token', {
     form: {
       client_id: CLIENT_ID,
       code,
