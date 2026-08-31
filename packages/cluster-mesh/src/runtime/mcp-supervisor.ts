@@ -41,7 +41,9 @@ export function createMcpSupervisor(input: {
   const now = input.now ?? (() => new Date());
 
   const register = async (registration: McpSupervisorRegistration): Promise<McpSupervisorResult> => {
-    if (registration.sessionRef) return { ok: false, reason: 'session_server_forbidden' };
+    if (registration.sessionRef !== undefined) {
+      return { ok: false, reason: 'session_server_forbidden' };
+    }
     if (new Date(registration.leaseExpiresAt).getTime() <= now().getTime()) {
       return { ok: false, reason: 'stale_registration' };
     }
@@ -84,12 +86,12 @@ export function createMcpSupervisor(input: {
   };
 
   const rollback = async (checkpoint: McpHandoverCheckpoint): Promise<McpSupervisorResult> => {
+    if (new Date(checkpoint.previous.leaseExpiresAt).getTime() <= now().getTime()) {
+      return { ok: false, reason: 'stale_registration' };
+    }
     const selected = await input.store.findMcpServer(checkpoint.selected.generationId);
     if (selected?.serverId === checkpoint.selected.serverId) {
       await input.store.saveMcpServer({ ...selected, status: 'stopped' });
-    }
-    if (new Date(checkpoint.previous.leaseExpiresAt).getTime() <= now().getTime()) {
-      return { ok: false, reason: 'stale_registration' };
     }
     const restored = { ...checkpoint.previous, status: 'active' as const };
     await input.store.saveMcpServer(restored);
