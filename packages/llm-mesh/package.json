@@ -24,6 +24,10 @@
       "types": "./dist/enrollment/index.d.ts",
       "import": "./dist/enrollment/index.js"
     },
+    "./hono": {
+      "types": "./dist/hono.d.ts",
+      "import": "./dist/hono.js"
+    },
     "./node": {
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
@@ -46,5 +50,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "hono": "^4.10.7"
   }
 }
