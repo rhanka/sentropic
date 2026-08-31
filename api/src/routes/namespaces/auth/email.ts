@@ -3,11 +3,11 @@ import {
   type AuthHonoEmailVerificationService,
 } from '@sentropic/auth-hono';
 import { Hono } from 'hono';
-import { logger } from '../../logger';
+import { logger } from '../../../logger';
 import {
   generateEmailVerificationCode,
   verifyEmailCode,
-} from '../../services/email-verification';
+} from '../../../services/email-verification';
 
 /**
  * Email Verification Routes

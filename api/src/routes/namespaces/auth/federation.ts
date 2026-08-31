@@ -5,20 +5,20 @@ import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 
-import { createFederationBroker } from '../../services/auth/federation/broker';
-import { pendingFederationStore } from '../../services/auth/federation/pending-store';
+import { createFederationBroker } from '../../../services/auth/federation/broker';
+import { pendingFederationStore } from '../../../services/auth/federation/pending-store';
 import {
   isFederationProviderSupported,
   resolveFederationProvider,
-} from '../../services/auth/federation/registry';
+} from '../../../services/auth/federation/registry';
 import type {
   FederationCallbackProfile,
   FederationProvider,
-} from '../../services/auth/federation/types';
-import { verifyValidationToken } from '../../services/email-verification';
-import { validateSession } from '../../services/session-manager';
-import { ensureWorkspaceForUser } from '../../services/workspace-service';
-import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } from './oauth';
+} from '../../../services/auth/federation/types';
+import { verifyValidationToken } from '../../../services/email-verification';
+import { validateSession } from '../../../services/session-manager';
+import { ensureWorkspaceForUser } from '../../../services/workspace-service';
+import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } from '../../auth/oauth';
 
 /**
  * BR-39e Lot 1 — federation broker routes (upstream of the OAuth server, §6).
