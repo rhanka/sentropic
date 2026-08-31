@@ -5,8 +5,8 @@ const maxForks = process.env.VITEST_MAX_WORKERS
   ? Number(process.env.VITEST_MAX_WORKERS)
   : undefined;
 
-const pkgSrc = (name: string): string =>
-  fileURLToPath(new URL(`../packages/${name}/src/index.ts`, import.meta.url));
+const pkgSrc = (name: string, entry = 'index.ts'): string =>
+  fileURLToPath(new URL(`../packages/${name}/src/${entry}`, import.meta.url));
 
 export default defineConfig({
   cacheDir: '/tmp/sentropic-api-vitest-cache',
@@ -16,17 +16,32 @@ export default defineConfig({
   // still consume the published package entry — this alias is test-only.
   resolve: {
     alias: {
-      '@sentropic/flow/hono': fileURLToPath(
-        new URL('../packages/flow/src/hono.ts', import.meta.url),
-      ),
-      '@sentropic/flow': pkgSrc('flow'),
-      '@sentropic/llm-mesh/hono': fileURLToPath(
-        new URL('../packages/llm-mesh/src/hono.ts', import.meta.url),
-      ),
-      '@sentropic/llm-mesh': pkgSrc('llm-mesh'),
+      '#mcp-platform-hono': pkgSrc('mcp-platform', 'hono.ts'),
+      '@sentropic/comments/hono': pkgSrc('comments', 'hono.ts'),
+      '@sentropic/flow/hono': pkgSrc('flow', 'hono.ts'),
+      '@sentropic/focus/hono': pkgSrc('focus', 'hono.ts'),
+      '@sentropic/focus/track': pkgSrc('focus', 'track/index.ts'),
+      '@sentropic/llm-mesh/hono': pkgSrc('llm-mesh', 'hono.ts'),
+      '@sentropic/mcp-auth/hono': pkgSrc('mcp-auth', 'hono.ts'),
+      '@sentropic/mcp-platform/hono': pkgSrc('mcp-platform', 'hono.ts'),
+      '@sentropic/auth-client': pkgSrc('auth-client'),
+      '@sentropic/auth-hono': pkgSrc('auth-hono'),
+      '@sentropic/chat-core': pkgSrc('chat-core'),
+      '@sentropic/chat-server': pkgSrc('chat-server'),
+      '@sentropic/cluster-mesh': pkgSrc('cluster-mesh'),
+      '@sentropic/comments': pkgSrc('comments'),
       '@sentropic/connector-host': pkgSrc('connector-host'),
+      '@sentropic/contracts': pkgSrc('contracts'),
+      '@sentropic/events': pkgSrc('events'),
+      '@sentropic/flow': pkgSrc('flow'),
+      '@sentropic/focus': pkgSrc('focus'),
+      '@sentropic/llm-mesh': pkgSrc('llm-mesh'),
+      '@sentropic/mcp-auth': pkgSrc('mcp-auth'),
       '@sentropic/mcp-connector-google': pkgSrc('mcp-connector-google'),
       '@sentropic/mcp-platform': pkgSrc('mcp-platform'),
+      '@sentropic/oauth-verify': pkgSrc('oauth-verify'),
+      '@sentropic/skills': pkgSrc('skills'),
+      '@sentropic/ubo-contracts': pkgSrc('ubo-contracts'),
     },
   },
   test: {
