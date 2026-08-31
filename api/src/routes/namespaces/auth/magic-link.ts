@@ -1,6 +1,7 @@
 import {
   createAuthMagicLinkRouteHandlers,
   type AuthHonoMagicLinkService,
+  type AuthHonoRouteHandlers,
 } from '@sentropic/auth-hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -60,13 +61,13 @@ const magicLinkRequestHandlers = createAuthMagicLinkRouteHandlers({
   service: magicLinkRequestService,
 });
 
-magicLinkRouter.post('/request', magicLinkRequestHandlers.requestMagicLink!);
-
 /**
  * POST /auth/magic-link/verify
  * Verify magic link token and create session
  */
-magicLinkRouter.post('/verify', async (c) => {
+export const magicLinkHandlers: AuthHonoRouteHandlers = {
+  ...magicLinkRequestHandlers,
+  async verifyMagicLink(c) {
   try {
     const body = await c.req.json();
     const { token } = verifyMagicLinkSchema.parse(body);
@@ -243,4 +244,8 @@ magicLinkRouter.post('/verify', async (c) => {
     logger.error({ err: error }, 'Error verifying magic link');
     return c.json({ error: 'Failed to verify magic link' }, 500);
   }
-});
+  },
+};
+
+magicLinkRouter.post('/request', magicLinkHandlers.requestMagicLink!);
+magicLinkRouter.post('/verify', magicLinkHandlers.verifyMagicLink!);
