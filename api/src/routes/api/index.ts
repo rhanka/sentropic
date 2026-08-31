@@ -12,16 +12,10 @@ import { meRouter } from './me';
 import { streamsRouter } from './streams';
 import { documentsRouter } from './documents';
 import promptsRouter from './prompts';
-import queueRouter from '../namespaces/workflows-queue';
 import aiSettingsRouter from './ai-settings';
 import { workspacesRouter } from './workspaces';
 import { neutralRouter } from './neutral';
-import { plansRouter } from '../namespaces/workflows-plan';
-import { todosRouter } from '../namespaces/workflows-todo';
-import { tasksRouter } from '../namespaces/workflows-task';
-import { runsRouter } from '../namespaces/workflows-run';
 import { agentConfigRouter } from './agent-config';
-import { workflowConfigRouter, workspaceTypeWorkflowsRouter } from '../namespaces/workflows-definition';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
@@ -117,29 +111,9 @@ apiRouter.route('/workspaces', workspacesRouter);
 apiRouter.use('/neutral/*', requireAuth);
 apiRouter.route('/neutral', neutralRouter);
 
-// TODO orchestration routes (authenticated; workspace role checks are enforced per endpoint)
-apiRouter.use('/plans/*', requireAuth);
-apiRouter.route('/plans', plansRouter);
-
-apiRouter.use('/todos/*', requireAuth);
-apiRouter.route('/todos', todosRouter);
-
-apiRouter.use('/tasks/*', requireAuth);
-apiRouter.route('/tasks', tasksRouter);
-
-apiRouter.use('/runs/*', requireAuth);
-apiRouter.route('/runs', runsRouter);
-
 // Runtime configuration routes (authenticated; workspace role checks are enforced per endpoint)
 apiRouter.use('/agent-config/*', requireAuth);
 apiRouter.route('/agent-config', agentConfigRouter);
-
-apiRouter.use('/workflow-config/*', requireAuth);
-apiRouter.route('/workflow-config', workflowConfigRouter);
-
-// Workspace type workflow registry (§11.5)
-apiRouter.use('/workspace-types/*', requireAuth);
-apiRouter.route('/workspace-types', workspaceTypeWorkflowsRouter);
 
 // Locks (authenticated; read is allowed, mutations require workspace editor/admin)
 apiRouter.use('/locks/*', requireAuth);
@@ -196,8 +170,3 @@ apiRouter.route('/admin', adminRouter);
 // authorization (approve/reject/suspend/list) is enforced inside the service per path tenant.
 apiRouter.use('/tenants/*', requireAuth);
 apiRouter.route('/tenants', tenantsRouter);
-
-// Queue monitoring is workspace-scoped and available to authenticated users.
-// Destructive actions remain admin-only at the router level.
-apiRouter.use('/queue/*', requireAuth);
-apiRouter.route('/queue', queueRouter);

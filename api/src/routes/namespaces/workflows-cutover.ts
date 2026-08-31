@@ -57,8 +57,8 @@ const ensureWorkflowsAuthor = async (): Promise<boolean> => {
         status: 'shadow' as const,
         shadowComparison: {
           strategy: 'workflow-read-and-validated-transition-job-intent',
-          safeReadRef: 'api/tests/api/cluster-mesh-workflows-cutover.test.ts',
-          validatedIntentRef: 'api/tests/api/cluster-mesh-workflows-cutover.test.ts',
+          safeReadRef: 'historical:47a8a5963:api/tests/api/cluster-mesh-workflows-cutover.test.ts',
+          validatedIntentRef: 'historical:47a8a5963:api/tests/api/cluster-mesh-workflows-cutover.test.ts',
           effectsDuplicated: false,
         },
         rollbackCheckpoint: {

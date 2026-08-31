@@ -18,6 +18,7 @@ import { productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
 import { productFocusModule } from './routes/namespaces/focus';
 import { productLlmMeshModule } from './routes/namespaces/llm-mesh';
+import { productWorkflowsModule } from './routes/namespaces/workflows';
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -144,8 +145,9 @@ app.route('/api/v1', createClusterMeshPlugin({
     productChatModule,
     productFocusModule,
     productLlmMeshModule,
+    productWorkflowsModule,
   ],
-  mounts: { '/session': '/auth', '/auth': authPlugin.mount, '/llm-mesh': '/' },
+  mounts: { '/session': '/auth', '/auth': authPlugin.mount, '/llm-mesh': '/', '/workflows': '/' },
 }));
 app.route('/api/v1', apiRouter);
 
