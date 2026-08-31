@@ -1081,7 +1081,12 @@ export function createInMemoryChatServerDeps(
 ): ChatServerDeps {
   const user = options.user ?? { userId: 'test-user', workspaceId: 'test-workspace' };
   const assistantReply = options.assistantReply ?? 'Hello from chat-server.';
-  const sessions = new Map<string, { id: string; userId: string; workspaceId: string | null }>();
+  const sessions = new Map<string, {
+    id: string;
+    userId: string;
+    workspaceId: string | null;
+    title: string | null;
+  }>();
   const messages = new Map<string, ChatServerMessage>();
   const streamEvents = new Map<string, ChatServerStreamEvent[]>();
   const checkpoints = new Map<string, Array<Record<string, unknown>>>();
@@ -1092,6 +1097,7 @@ export function createInMemoryChatServerDeps(
         id: sessionId,
         userId: owner.userId,
         workspaceId: owner.workspaceId ?? null,
+        title: null,
       });
     }
     return sessions.get(sessionId)!;
@@ -1173,6 +1179,50 @@ export function createInMemoryChatServerDeps(
 
   const deps: ChatServerDeps = {
     getUser: () => user,
+    sessions: {
+      async listSessions(input) {
+        return Array.from(sessions.values()).filter((session) =>
+          session.userId === input.userId
+          && (input.workspaceId == null || session.workspaceId === input.workspaceId),
+        ).slice(0, input.limit);
+      },
+      async createSession(input) {
+        const sessionId = randomUUID();
+        sessions.set(sessionId, {
+          id: sessionId,
+          userId: input.userId,
+          workspaceId: input.workspaceId ?? null,
+          title: input.title ?? null,
+        });
+        return { sessionId };
+      },
+      async getSessionHistory(input) {
+        const session = sessions.get(input.sessionId);
+        if (!session || session.userId !== input.userId) {
+          throw new Error('Session not found');
+        }
+        return {
+          sessionId: session.id,
+          title: session.title,
+          todoRuntime: null,
+          checkpoints: checkpoints.get(session.id) ?? [],
+          documents: [],
+          items: listSessionMessages(session.id),
+        };
+      },
+      async deleteSession(input) {
+        const session = sessions.get(input.sessionId);
+        if (!session || session.userId !== input.userId) {
+          throw new Error('Session not found');
+        }
+        sessions.delete(input.sessionId);
+        checkpoints.delete(input.sessionId);
+        for (const message of listSessionMessages(input.sessionId)) {
+          messages.delete(message.id);
+          streamEvents.delete(message.id);
+        }
+      },
+    },
     messages: {
       createUserMessageWithAssistantPlaceholder: (input) => {
         options.onCreateMessage?.(input);
