@@ -267,10 +267,10 @@
   - [x] Internal gates: C1 MCP/registration state already migrated; C3 MCP packages standalone; A2 logical singleton; A3 registration-gated fail-closed.
 
 - [ ] **Lot 6 — `/oauth` reusable factory and two-root cutover**
-  - [ ] Namespace: `/oauth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
+  - [x] Namespace: `/oauth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
   - [x] Wrap real `createOAuthRouter` and `createWellKnownRouter` in an autonomous module with product ports; keep `createMcpAuth` resource metadata delegation explicit.
-  - [ ] Mount product `/api/v1/oauth/*` plus `/.well-known/*`; mount the same module under the established IdP `/api/v1/auth/oauth/*` projection plus `/.well-known/*`.
-  - [ ] Shadow metadata/token validation intent, select one author per root, prove rollback, then delete replaced code/mounts in `api/src/routes/auth/oauth.ts`, `service-s2s.ts` and `api/src/routes/well-known.ts`.
+  - [x] Mount product `/api/v1/oauth/*` plus `/.well-known/*`; mount the same module under the established IdP `/api/v1/auth/oauth/*` projection plus `/.well-known/*`.
+  - [x] Shadow metadata/token validation intent, select one author per root, prove rollback, then delete replaced code/mounts in `api/src/routes/auth/oauth.ts`, `service-s2s.ts` and `api/src/routes/well-known.ts`.
   - [ ] Update `api/src/routes/auth/index.ts`, `api/src/app.ts`, `apps/auth-idp/idp-app.ts`, `packages/auth-client/src/**` and UI OAuth transports for the product canonical path without changing the IdP public projection.
   - [ ] Tests updated: `packages/auth-hono/tests/oauth-router-factory.test.ts`, `packages/auth-hono/tests/oauth-wellknown.test.ts`, `packages/auth-hono/tests/oauth-token.test.ts`, `packages/auth-hono/tests/oauth-revoke.test.ts`, `packages/auth-hono/tests/oauth-introspect.test.ts`, `packages/auth-hono/tests/oauth-client-credentials.test.ts`, `packages/auth-hono/tests/oauth-service-obo.test.ts`, `packages/oauth-verify/tests/verify-access-token.test.ts`, `packages/oauth-verify/tests/verify-dpop-proof.test.ts`.
   - [ ] API tests updated: `api/tests/api/auth/oauth-authorize.test.ts`, `api/tests/api/auth/oauth-token.test.ts`, `api/tests/api/auth/oauth-revoke-introspect.test.ts`, `api/tests/api/auth/oauth-userinfo.test.ts`, `api/tests/api/auth/oauth-wellknown.test.ts`, `api/tests/api/auth/arch11-service-obo.test.ts`.

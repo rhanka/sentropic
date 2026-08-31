@@ -4,9 +4,7 @@ import { loginRouter } from './login';
 import { credentialsRouter } from './credentials';
 import { magicLinkRouter } from './magic-link';
 import { emailRouter } from './email';
-import { oauthRouter } from './oauth';
 import { federationRouter } from './federation';
-import { serviceS2sRouter } from './service-s2s';
 
 /**
  * Authentication Routes
@@ -27,9 +25,7 @@ authRouter.route('/login', loginRouter);
 authRouter.route('/credentials', credentialsRouter);
 authRouter.route('/magic-link', magicLinkRouter);
 authRouter.route('/email', emailRouter);
-authRouter.route('/oauth', oauthRouter);
 authRouter.route('/federation', federationRouter);
-authRouter.route('/s2s', serviceS2sRouter);
 
 // Health check
 authRouter.get('/health', (c) => {

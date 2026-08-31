@@ -24,8 +24,8 @@ It is Phase A0 of `spec/SPEC_EVOL_AUTH_IDP_STANDALONE.md`:
 
 | Mounted path | Reused from | Already composes |
 |---|---|---|
-| `/.well-known/openid-configuration`, `/.well-known/jwks.json` | `api/src/routes/well-known.ts` (`wellKnownRouter`) | `createWellKnownRouter` (`@sentropic/auth-hono`) + JWKS adapter |
-| `/api/v1/auth/oauth/*` | `api/src/routes/auth/index.ts` → `oauth.ts` (`oauthRouter`) | `createOAuth*Handler` factories + Postgres state-store + JWKS adapters |
+| `/.well-known/openid-configuration`, `/.well-known/jwks.json` | Cluster Mesh `/oauth` well-known projection | `createWellKnownRouter` (`@sentropic/auth-hono`) + JWKS adapter |
+| `/api/v1/auth/oauth/*` | Cluster Mesh `/oauth` module | `createOAuthRouter` (`@sentropic/auth-hono`) + Postgres state-store + JWKS adapters |
 | `/api/v1/auth/{register,login,session,credentials,magic-link,email,device}/*` | `authRouter` sub-routers | existing handlers + session/cookie adapters |
 
 The login / register / magic-link / consent **screens** (Phase A0-bis) are a

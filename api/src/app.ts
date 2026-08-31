@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { apiRouter } from './routes/api';
 import { authRouter } from './routes/auth';
-import { wellKnownRouter } from './routes/well-known';
 import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
@@ -11,6 +10,10 @@ import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
 import { productSessionModule } from './routes/namespaces/session';
 import { productMcpModule } from './routes/namespaces/mcp';
+import {
+  createOAuthNamespaceModule,
+  createOAuthWellKnownProjection,
+} from './routes/namespaces/oauth';
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -121,10 +124,17 @@ app.use('*', async (c, next) => {
 // api/src/middleware/auth-rate-limiters.ts. Order matters; the helper owns it.
 applyAuthRateLimiters(app);
 
-app.route('/.well-known', wellKnownRouter);
+app.route('/.well-known', createOAuthWellKnownProjection({
+  compositionRoot: 'product',
+  publicPath: '/api/v1/oauth',
+}));
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
-  namespaces: [productSessionModule, productMcpModule],
+  namespaces: [
+    productSessionModule,
+    productMcpModule,
+    createOAuthNamespaceModule({ compositionRoot: 'product', publicPath: '/api/v1/oauth' }),
+  ],
   mounts: { '/session': '/auth' },
 }));
 app.route('/api/v1', apiRouter);
