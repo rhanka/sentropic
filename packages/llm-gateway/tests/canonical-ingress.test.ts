@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { normalizeGatewayIngress } from '../src/canonical-ingress.js';
 
 describe('canonical gateway ingress', () => {
+  it('normalizes an equivalent route intent deterministically', () => {
+    const body = {
+      model: 'gpt-5.6-terra', stream: false,
+      messages: [{ role: 'user', content: 'hello' }],
+    };
+    const first = normalizeGatewayIngress('openai-chat-completions', structuredClone(body));
+    const second = normalizeGatewayIngress('openai-chat-completions', structuredClone(body));
+
+    expect(first.requiredCapabilities).toEqual(second.requiredCapabilities);
+    expect(first.request).toEqual(second.request);
+  });
+
   it('preserves Anthropic system, image, tools and the original body', () => {
     const body = {
       model: 'claude-opus-5-high',
