@@ -161,6 +161,7 @@
 - [x] `BR75-RV41` — `acknowledge` — Fable Lot 14 N1 is closed before `/track`: the exported product plugin mounts are composed from the root-mount registry, including the `/auth` root projection, and the invariant rejects a synthetic raw `'/fixture-bypass': '/'` remap outside that registry; the focused regression passes 9/9.
 - [x] `BR75-RV42` — `acknowledge` — Fable Lot 14 N2 is closed before `/track`: the invariant walks registered Hono middleware and requires every path wired to the real `requireAdmin` handler to belong to a declared privileged sub-fence, independent of prefix hints. It first exposed both existing workflow admin paths, then passes 10/10 after their explicit sub-fence was registered; a future out-of-prefix fixture fails closed.
 - [x] `BR75-RV43` — `acknowledge` — Fable Lot 14 N6 is folded into the `/track` shadow discipline: with a synthetically pinned compatible provider, deterministic evidence/cursor reads each call one read author, while a fully typed valid owner-signature intent sent during the read-only shadow receives 404 and an effect-boundary spy remains at zero calls; the selected Track event port regression drives a valid intent through the same typed boundary exactly once and persists one artifact event.
+- [x] `BR75-RV44` — `acknowledge` — Lot 15 delivers the `/track` adapter as a prefix-mounted fail-closed route shell with no provider activation, copied Track codec/log or write surface. Product requests return explicit 503 while the provider is absent; exact descriptor/digest compatibility gates the synthetic deterministic read author, disabled construction remains 404, and `BR75-SG2` stays open as the production-activation blocker. The Focus package passes 5 files/102 tests, the adapter passes 1 file/5 tests, the product integration passes 1 file/3 tests, the Track event port passes 1 file/6 tests, and the root-mount invariants pass 1 file/10 tests.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -436,17 +437,18 @@
   - [x] Root-mount gate: cold `make down` then `make up-api-test` reaches API healthy; unscoped smoke passes 2 files/6 tests, including the API-health subset at 4/4 with anonymous health 200 and all 11 enumerated connector paths gated at 401.
   - [x] Internal gates: C1 reuses `document_connector_accounts` and the existing settings store with no schema/migration change; C3 standalone injected connector-host factory passes typecheck/build and 22/22 tests; A5 shadow parity, one-author selection, rollback and disableability pass 3/3; the facade receives no provider client or credential and the catalog/resources/MCP/connectors split remains frozen.
 
-- [ ] **Lot 15 — `/track` TARGET fail-closed adapter module**
-  - [ ] Namespace: `/track`; type: TARGET adapter extraction/mount/cutover gate.
+- [x] **Lot 15 — `/track` TARGET fail-closed adapter module**
+  - [x] Namespace: `/track`; type: TARGET adapter extraction/mount/cutover gate.
   - [x] Add a neutral Track router adapter in `api/src/routes/namespaces/track.ts` over a pinned external `@sentropic/track` port; do not copy Track source, codec or log — the port exposes opaque evidence/cursor references only and pins package `0.91.1`, read-contract major `1` and the lockfile artifact digest.
   - [x] Mount disabled by default, shadow only deterministic evidence/cursor reads when the pinned provider exists, and select one author only after digest compatibility — factory construction defaults disabled; the product registers only a 503 route shell, and the compatible-provider fixture selects one read author after the exact artifact digest check.
   - [x] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct Focus Track HTTP projection discovered during inventory — the route/source sweep finds no prior `/track` HTTP projection in API or Focus.
   - [x] Tests new: `api/tests/api/cluster-mesh-track.test.ts`, `api/tests/unit/track-namespace-adapter.test.ts` — 3/3 and 5/5 pass respectively.
   - [x] Tests updated: `packages/focus/tests/track.spec.ts`, `api/tests/unit/track-event-owner-signature-port.test.ts` — Focus passes 5 files/102 tests, including deterministic evidence/cursor replay, and the Track event port passes 1 file/6 tests with the valid-intent boundary spy.
   - [x] UI/E2E tests: N-A while the module remains fail-closed.
-  - [ ] Lot gate: `make typecheck-focus test-focus build-focus typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE=tests/unit/track-namespace-adapter.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C3 standalone adapter; A5 disabled-module behavior; `BR75-SG2` blocks production activation, not truthful fail-closed delivery.
+  - [x] Lot gate: `make typecheck-focus test-focus build-focus typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane` — package/API typechecks and builds exit 0; Focus passes 5 files/102 tests; API lint exits 0 with 208 warnings and no errors.
+  - [x] Lot gate: `make test-api-unit SCOPE=tests/unit/track-namespace-adapter.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/5 tests pass.
+  - [x] Root-mount cold-boot gate: N-A because `/track` is prefix-mounted at `/track` and is not remapped to `/`; the product integration gate proves the absent provider returns 503 without an authentication leak.
+  - [x] Internal gates: C3 standalone adapter construction passes 5/5; A5 default-disabled and product fail-closed behavior pass 3/3; `BR75-SG2` remains open and blocks production activation, not truthful fail-closed delivery.
 
 - [ ] **Lot 16 — `/memory` TARGET Graphify adapter module**
   - [ ] Namespace: `/memory`; type: TARGET adapter extraction/mount/cutover gate.
