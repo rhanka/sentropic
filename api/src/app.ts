@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { apiRouter } from './routes/api';
-import { authRouter } from './routes/auth';
 import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
@@ -14,6 +13,7 @@ import {
   createOAuthNamespaceModule,
   createOAuthWellKnownProjection,
 } from './routes/namespaces/oauth';
+import { productAuthPlugin } from './routes/namespaces/auth';
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -128,16 +128,17 @@ app.route('/.well-known', createOAuthWellKnownProjection({
   compositionRoot: 'product',
   publicPath: '/api/v1/oauth',
 }));
+const authPlugin = productAuthPlugin();
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
   namespaces: [
     productSessionModule,
     productMcpModule,
     createOAuthNamespaceModule({ compositionRoot: 'product', publicPath: '/api/v1/oauth' }),
+    authPlugin.module,
   ],
-  mounts: { '/session': '/auth' },
+  mounts: { '/session': '/auth', '/auth': authPlugin.mount },
 }));
 app.route('/api/v1', apiRouter);
-app.route('/api/v1/auth', authRouter);
 
 app.get('/', (c) => c.json({ name: 'Sentropic API', version: '0.1.0' }));
