@@ -8,9 +8,9 @@ const LLM_MESH_PATHS = [
   '/models/catalog',
   '/models/provider-readiness',
   '/me/ai-settings',
-  '/provider-connections',
-  '/provider-connections/openai/mode',
-  '/provider-connections/:providerId/enrollment/:action',
+  '/settings/provider-connections',
+  '/settings/provider-connections/openai/mode',
+  '/settings/provider-connections/:providerId/enrollment/:action',
 ] as const;
 
 const control = clusterMeshAdapter.sessionControl;

@@ -128,8 +128,8 @@ export const createLlmMeshNamespaceModule = (
   createRouter() {
     const router = new Hono();
     router.use('*', options.authenticate ?? requireAuth);
-    router.use('/provider-connections', options.authorizeAdmin ?? requireAdmin);
-    router.use('/provider-connections/*', options.authorizeAdmin ?? requireAdmin);
+    router.use('/settings/provider-connections', options.authorizeAdmin ?? requireAdmin);
+    router.use('/settings/provider-connections/*', options.authorizeAdmin ?? requireAdmin);
     applyLlmMeshAuthorFence(router);
     router.route('/', createLlmMeshRouter(
       options.routerOptions ?? createProductLlmMeshRouterOptions(),
