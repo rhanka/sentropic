@@ -22,8 +22,8 @@ const ensureAgentsAuthor = async (): Promise<boolean> => {
         status: 'shadow' as const,
         shadowComparison: {
           strategy: 'agent-config-prompt-profile-read-and-validated-config-intent',
-          safeReadRef: 'current:api/tests/api/cluster-mesh-agents-cutover.test.ts',
-          validatedIntentRef: 'current:api/tests/api/cluster-mesh-agents-cutover.test.ts',
+          safeReadRef: 'historical:b51d1503f:api/tests/api/cluster-mesh-agents-cutover.test.ts',
+          validatedIntentRef: 'historical:b51d1503f:api/tests/api/cluster-mesh-agents-cutover.test.ts',
           effectsDuplicated: false,
         },
         rollbackCheckpoint: {

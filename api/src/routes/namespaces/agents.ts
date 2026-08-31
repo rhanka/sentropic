@@ -19,7 +19,7 @@ export const AGENT_PATHS = [
   '/prompts/test-tavily',
 ] as const;
 
-const AGENT_ADMIN_PATHS = ['/prompts', '/prompts/test-tavily'] as const;
+export const AGENT_ADMIN_PATHS = ['/prompts', '/prompts/test-tavily'] as const;
 
 export interface CreateAgentsNamespaceModuleOptions {
   readonly enabled?: boolean;

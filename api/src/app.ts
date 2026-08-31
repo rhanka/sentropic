@@ -37,6 +37,11 @@ import {
   CONNECTOR_ADMIN_PATHS,
   CONNECTOR_PATHS,
 } from './routes/namespaces/connectors-cutover';
+import {
+  AGENT_ADMIN_PATHS,
+  AGENT_PATHS,
+  productAgentsModule,
+} from './routes/namespaces/agents';
 
 const authPlugin = productAuthPlugin();
 
@@ -123,6 +128,12 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
       paths: CONNECTOR_ADMIN_PATHS,
       pathPrefixes: ['/settings/connector-accounts'],
     }],
+  },
+  {
+    namespace: '/agents',
+    module: productAgentsModule,
+    authPaths: AGENT_PATHS,
+    privilegedFences: [{ name: 'admin', paths: AGENT_ADMIN_PATHS, pathPrefixes: [] }],
   },
 ] as const satisfies readonly RootMountedNamespaceRegistration[];
 
