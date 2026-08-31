@@ -95,6 +95,38 @@ describe('route flow core', () => {
     });
   });
 
+  it('shadows the canonical route intent before the single planner call', async () => {
+    const order: string[] = [];
+    const routePlanner = {
+      async plan() {
+        order.push('plan');
+        return {
+          planRef: 'plan-shadow', expiresAt: '2027-08-08T12:01:00Z', candidateRefs: [],
+          policy: {
+            strategy: { kind: 'last-enrolled' }, rules: [], fallbackMode: 'retest-preferred',
+            negativeCacheTtlMs: 300_000, maxAttempts: 3, preferSameTransport: true,
+            stickyAccount: true, rotateEquivalentAccounts: false, allowEquivalentModels: true,
+          }, councilRevision: 'fixture', diagnostics: [],
+        };
+      },
+    } as unknown as RoutePlanner;
+    await prepareRouteFlow({
+      config: stubGatewayConfig, routePlanner, metering: { settleRoute() {} },
+      shadowRouteIntent({ route, canonical }) {
+        order.push('shadow');
+        expect(route.requestedModel).toBe('gpt-5.6-terra');
+        expect(canonical.request.messages[0]).toMatchObject({ role: 'user', content: 'hello' });
+      },
+    }, {
+      wire: 'openai-chat-completions', headers: {}, model: 'gpt-5.6-terra', stream: false,
+      verifiedCost: {
+        tenantId: 'tenant', principalId: 'user', source: 'test', correlationId: 'request',
+      },
+      body: { model: 'gpt-5.6-terra', messages: [{ role: 'user', content: 'hello' }] },
+    });
+    expect(order).toEqual(['shadow', 'plan']);
+  });
+
   it('classifies retryable availability without making auth retryable', () => {
     expect(classifyRouteError({ status: 429, retryAfterMs: 42_000 })).toEqual({
       reason: 'rate-limited', retryable: true, retryAfterMs: 42_000,
