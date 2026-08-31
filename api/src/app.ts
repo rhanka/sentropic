@@ -17,9 +17,55 @@ import { productAuthPlugin } from './routes/namespaces/auth';
 import { productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
 import { productFocusModule } from './routes/namespaces/focus';
-import { productLlmMeshModule } from './routes/namespaces/llm-mesh';
+import {
+  LLM_MESH_ADMIN_PATHS,
+  productLlmMeshModule,
+} from './routes/namespaces/llm-mesh';
+import { LLM_MESH_PATHS } from './routes/namespaces/llm-mesh-cutover';
 import { productWorkflowsModule } from './routes/namespaces/workflows';
+import { WORKFLOW_PATHS } from './routes/namespaces/workflows-cutover';
 import { productCommentsModule } from './routes/namespaces/comments';
+import { COMMENTS_PATHS } from './routes/namespaces/comments-cutover';
+
+export interface PrivilegedPathFence {
+  readonly name: string;
+  readonly paths: readonly string[];
+  readonly pathPrefixes: readonly string[];
+}
+
+export interface RootMountedNamespaceRegistration {
+  readonly namespace: string;
+  readonly module: typeof productLlmMeshModule;
+  readonly authPaths: readonly string[];
+  readonly privilegedFences?: readonly PrivilegedPathFence[];
+}
+
+export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/llm-mesh',
+    module: productLlmMeshModule,
+    authPaths: LLM_MESH_PATHS,
+    privilegedFences: [{
+      name: 'admin',
+      paths: LLM_MESH_ADMIN_PATHS,
+      pathPrefixes: ['/settings/provider-connections'],
+    }],
+  },
+  {
+    namespace: '/workflows',
+    module: productWorkflowsModule,
+    authPaths: WORKFLOW_PATHS,
+  },
+  {
+    namespace: '/comments',
+    module: productCommentsModule,
+    authPaths: COMMENTS_PATHS,
+  },
+] as const satisfies readonly RootMountedNamespaceRegistration[];
+
+export const ROOT_MOUNT_REMAPS = Object.fromEntries(
+  ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => [namespace, '/']),
+);
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -145,16 +191,12 @@ app.route('/api/v1', createClusterMeshPlugin({
     productGwModule,
     productChatModule,
     productFocusModule,
-    productLlmMeshModule,
-    productWorkflowsModule,
-    productCommentsModule,
+    ...ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
   ],
   mounts: {
     '/session': '/auth',
     '/auth': authPlugin.mount,
-    '/llm-mesh': '/',
-    '/workflows': '/',
-    '/comments': '/',
+    ...ROOT_MOUNT_REMAPS,
   },
 }));
 app.route('/api/v1', apiRouter);
