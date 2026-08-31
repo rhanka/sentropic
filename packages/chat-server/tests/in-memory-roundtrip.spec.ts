@@ -219,4 +219,35 @@ describe('chat-server in-memory roundtrip', () => {
       }),
     );
   });
+
+  it('edits messages and exposes provider-owned runtime details', async () => {
+    const app = createChatServer(createInMemoryChatServerDeps(), {
+      routes: 'app-contract',
+    });
+    const created = await (await app.request('/chat/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'Before edit' }),
+    })).json();
+
+    const edited = await app.request(`/chat/messages/${created.userMessageId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'After edit' }),
+    });
+    expect(edited.status).toBe(200);
+    expect(await edited.json()).toEqual({ messageId: created.userMessageId });
+
+    const runtime = await app.request(
+      `/chat/messages/${created.assistantMessageId}/runtime-details`,
+    );
+    expect(runtime.status).toBe(200);
+    expect(await runtime.json()).toEqual({
+      messageId: created.assistantMessageId,
+      items: [
+        expect.objectContaining({ eventType: 'content_delta' }),
+        expect.objectContaining({ eventType: 'done' }),
+      ],
+    });
+  });
 });
