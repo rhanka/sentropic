@@ -75,6 +75,21 @@ describe('Gmail connector host', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('does not expose connector administration through the execution host', async () => {
+    const resolveToken = vi.fn(async () => token());
+    const driver = createGmailConnectorHost({
+      sessionUser: user,
+      loadAccounts: async () => [account()],
+      resolveToken,
+      checkWorkspaceAccess: async () => undefined,
+    });
+
+    await expect(driver.invoke(hostRequest({ capabilityRef: 'oauth.start' }))).resolves.toMatchObject({
+      error: { code: 'connector_not_found' },
+    });
+    expect(resolveToken).not.toHaveBeenCalled();
+  });
+
   it('keeps unavailable and unreadable Gmail secrets as distinct connector errors', async () => {
     const selected = account();
     const unavailable = createGmailConnectorHost({

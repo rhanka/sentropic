@@ -121,6 +121,20 @@ describe('Documents API (Google Drive attach)', () => {
     await expect(res.json()).resolves.toMatchObject({
       message: 'Google Drive account is not connected',
     });
+
+    const doubled = await app.request('/api/v1/connectors/documents/google-drive', {
+      method: 'POST',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        context_type: 'folder',
+        context_id: 'f_1',
+        file_ids: ['file_1'],
+      }),
+    });
+    expect(doubled.status).toBe(404);
   });
 
   it('attaches Google Drive document refs (no S3 upload) and enqueues document_summary', async () => {
