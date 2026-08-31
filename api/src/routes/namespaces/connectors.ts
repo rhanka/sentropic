@@ -1,12 +1,16 @@
 import { zValidator } from '@hono/zod-validator';
+import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
 import {
+  createConnectorAdminRouter,
   type ConnectorAccountLimitAdapter,
   type ConnectorAdminProviderAdapter,
   type CreateConnectorAdminRouterOptions,
 } from '@sentropic/connector-host/hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 
-import type { AuthUser } from '../../middleware/auth';
+import { requireAuth, type AuthUser } from '../../middleware/auth';
+import { requireAdmin } from '../../middleware/rbac';
 import {
   disconnectGmail,
   readGmailConnection,
@@ -29,6 +33,11 @@ import {
   CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
   settingsService,
 } from '../../services/settings';
+import {
+  applyConnectorsAuthorFence,
+  CONNECTOR_ADMIN_PATHS,
+  CONNECTOR_PATHS,
+} from './connectors-cutover';
 
 const connectorAccountsMaxPerProviderSchema = z.object({
   maxPerProvider: z.number().int().min(1),
@@ -86,3 +95,33 @@ export const createProductConnectorAdminRouterOptions = (): CreateConnectorAdmin
   providers: [googleDriveAdminAdapter, gmailAdminAdapter],
   accountLimits: accountLimitAdapter,
 });
+
+export interface CreateConnectorsNamespaceModuleOptions {
+  enabled?: boolean;
+  authenticate?: MiddlewareHandler;
+  authorizeAdmin?: MiddlewareHandler;
+  routerOptions?: CreateConnectorAdminRouterOptions;
+}
+
+export const createConnectorsNamespaceModule = (
+  options: CreateConnectorsNamespaceModuleOptions = {},
+): ClusterMeshHonoNamespaceModule => ({
+  namespace: '/connectors',
+  enabled: options.enabled ?? true,
+  createRouter() {
+    const router = new Hono();
+    for (const path of CONNECTOR_PATHS) {
+      router.use(path, options.authenticate ?? requireAuth);
+    }
+    for (const path of CONNECTOR_ADMIN_PATHS) {
+      router.use(path, options.authorizeAdmin ?? requireAdmin);
+    }
+    applyConnectorsAuthorFence(router);
+    router.route('/', createConnectorAdminRouter(
+      options.routerOptions ?? createProductConnectorAdminRouterOptions(),
+    ));
+    return router;
+  },
+});
+
+export const productConnectorsModule = createConnectorsNamespaceModule();
