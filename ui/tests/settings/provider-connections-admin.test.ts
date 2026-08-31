@@ -8,8 +8,8 @@ import {
   type ProviderConnectionState,
 } from '../../src/lib/utils/provider-connections-api';
 
-describe('provider connections admin utils', () => {
-  it('returns provider list from settings provider-connections payload', async () => {
+describe('llm-mesh provider connections admin wire contract', () => {
+  it('keeps the public settings projection for the provider list', async () => {
     const providers: ProviderConnectionState[] = [
       {
         providerId: 'codex',
@@ -32,6 +32,7 @@ describe('provider connections admin utils', () => {
     const result = await fetchProviderConnectionsWith(requester);
 
     expect(requester).toHaveBeenCalledWith('/settings/provider-connections');
+    expect(requester.mock.calls.flat().join(' ')).not.toContain('/llm-mesh');
     expect(result).toEqual(providers);
   });
 
