@@ -8,32 +8,12 @@ import {
   CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
   settingsService,
 } from '../../services/settings';
-import {
-  completeCodexEnrollment,
-  disconnectCodexEnrollment,
-  getAnthropicTransportMode,
-  getOpenAITransportMode,
-  listProviderConnections,
-  setOpenAITransportMode,
-  startCodexEnrollment,
-} from '../../services/provider-connections';
 
 const settingsSchema = z.object({
   openaiModels: z.record(z.string()).default({}),
   prompts: z.record(z.any()).default({}),
   generationLimits: z.record(z.any()).default({})
 });
-
-const codexEnrollmentStartSchema = z.object({
-  accountLabel: z.string().trim().max(120).optional().nullable(),
-});
-
-const codexEnrollmentCompleteSchema = z.object({
-  enrollmentId: z.string().trim().min(1),
-  accountLabel: z.string().trim().max(120).optional().nullable(),
-});
-
-const openaiTransportModeSchema = z.object({ mode: z.enum(['codex', 'token']) });
 
 const connectorAccountsMaxPerProviderSchema = z.object({
   maxPerProvider: z.number().int().min(1),
@@ -190,16 +170,6 @@ settingsRouter.delete('/vscode-extension-token', async (c) => {
   });
 });
 
-settingsRouter.get('/provider-connections', async (c) => {
-  const user = c.get('user') as { userId?: string } | undefined;
-  const [providers, openaiTransportMode, anthropicTransportMode] = await Promise.all([
-    listProviderConnections({ userId: user?.userId ?? null }),
-    getOpenAITransportMode(),
-    getAnthropicTransportMode(),
-  ]);
-  return c.json({ providers, openaiTransportMode, anthropicTransportMode });
-});
-
 settingsRouter.get('/connector-accounts/max-per-provider', async (c) => {
   return c.json({
     maxPerProvider: await settingsService.getConnectorAccountsMaxPerProvider(),
@@ -219,63 +189,6 @@ settingsRouter.put(
     return c.json({ maxPerProvider });
   },
 );
-
-settingsRouter.post(
-  '/provider-connections/openai/mode',
-  zValidator('json', openaiTransportModeSchema),
-  async (c) => c.json({ mode: await setOpenAITransportMode(c.req.valid('json').mode) }),
-);
-
-settingsRouter.post(
-  '/provider-connections/codex/enrollment/start',
-  zValidator('json', codexEnrollmentStartSchema),
-  async (c) => {
-    const user = c.get('user') as { userId?: string } | undefined;
-    if (!user?.userId) {
-      return c.json({ message: 'Authentication required' }, 401);
-    }
-    const payload = c.req.valid('json');
-    const provider = await startCodexEnrollment({
-      accountLabel: payload.accountLabel ?? null,
-      updatedByUserId: user.userId,
-    });
-    return c.json({ provider });
-  },
-);
-
-settingsRouter.post(
-  '/provider-connections/codex/enrollment/complete',
-  zValidator('json', codexEnrollmentCompleteSchema),
-  async (c) => {
-    const user = c.get('user') as { userId?: string } | undefined;
-    if (!user?.userId) {
-      return c.json({ message: 'Authentication required' }, 401);
-    }
-    const payload = c.req.valid('json');
-    try {
-      const provider = await completeCodexEnrollment({
-        enrollmentId: payload.enrollmentId,
-        accountLabel: payload.accountLabel ?? null,
-        updatedByUserId: user.userId,
-      });
-      return c.json({ provider });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Enrollment completion failed';
-      return c.json({ message }, 400);
-    }
-  },
-);
-
-settingsRouter.post('/provider-connections/codex/enrollment/disconnect', async (c) => {
-  const user = c.get('user') as { userId?: string } | undefined;
-  if (!user?.userId) {
-    return c.json({ message: 'Authentication required' }, 401);
-  }
-  const provider = await disconnectCodexEnrollment({
-    updatedByUserId: user.userId,
-  });
-  return c.json({ provider });
-});
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur
