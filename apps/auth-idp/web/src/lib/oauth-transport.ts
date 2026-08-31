@@ -14,13 +14,15 @@ interface CreateIdpOAuthConsentTransportOptions {
   onUnauthorized?: () => void;
 }
 
+const IDP_OAUTH_PATH = '/api/v1/auth/oauth';
+
 export const createIdpOAuthConsentTransport = (
   options: CreateIdpOAuthConsentTransportOptions = {},
 ): OAuthConsentTransport => ({
   async getConsent({ state }): Promise<OAuthConsentDetails> {
     return withUnauthorizedHandler(options, async () => {
       const params = new URLSearchParams({ state });
-      const response = await apiFetch(`/api/v1/auth/oauth/consent?${params.toString()}`, {
+      const response = await apiFetch(`${IDP_OAUTH_PATH}/consent?${params.toString()}`, {
         method: 'GET',
       });
       return response.json() as Promise<OAuthConsentDetails>;
@@ -29,7 +31,7 @@ export const createIdpOAuthConsentTransport = (
 
   async submitConsentDecision(input): Promise<{ redirectTo: string }> {
     return withUnauthorizedHandler(options, async () => {
-      const response = await apiFetch('/api/v1/auth/oauth/consent/decision', {
+      const response = await apiFetch(`${IDP_OAUTH_PATH}/consent/decision`, {
         body: JSON.stringify(input),
         headers: {
           Accept: 'application/json',
@@ -46,7 +48,7 @@ export const createIdpOAuthConsentTransport = (
 // here we re-enter the same-origin authorize endpoint with that continuation.
 export const resolveOAuthAuthorizeContinuationUrl = (continuation: string): string => {
   const params = new URLSearchParams({ continue: continuation });
-  return `/api/v1/auth/oauth/authorize?${params.toString()}`;
+  return `${IDP_OAUTH_PATH}/authorize?${params.toString()}`;
 };
 
 const withUnauthorizedHandler = async <T>(

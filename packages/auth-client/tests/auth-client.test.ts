@@ -16,7 +16,7 @@ import { createAuthClient, type FetchLike } from '../src/index.js';
 
 const issuer = 'http://localhost:9197';
 const resource = 'http://localhost:9197';
-const tokenEndpoint = `${issuer}/api/v1/auth/oauth/token`;
+const tokenEndpoint = `${issuer}/api/v1/oauth/token`;
 
 const clock = {
   addSeconds: (date: Date, seconds: number) => new Date(date.getTime() + seconds * 1000),
@@ -108,7 +108,7 @@ const buildHarness = async (client: ServiceClientRecord): Promise<Harness> => {
 
   const app = new Hono();
   app.route(
-    '/api/v1/auth/oauth',
+    '/api/v1/oauth',
     createOAuthRouter({
       consentUrl: `${issuer}/consent`,
       issuer,
