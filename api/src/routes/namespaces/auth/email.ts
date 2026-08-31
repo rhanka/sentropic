@@ -2,7 +2,6 @@ import {
   createAuthEmailRouteHandlers,
   type AuthHonoEmailVerificationService,
 } from '@sentropic/auth-hono';
-import { Hono } from 'hono';
 import { logger } from '../../../logger';
 import {
   generateEmailVerificationCode,
@@ -20,7 +19,6 @@ import {
  * error shapes follow the package's structured contract.
  */
 
-export const emailRouter = new Hono();
 
 const emailVerificationService: AuthHonoEmailVerificationService = {
   async requestEmailCode({ email }) {
@@ -72,6 +70,3 @@ const emailVerificationService: AuthHonoEmailVerificationService = {
 };
 
 export const emailHandlers = createAuthEmailRouteHandlers({ service: emailVerificationService });
-
-emailRouter.post('/verify-request', emailHandlers.requestEmailCode!);
-emailRouter.post('/verify-code', emailHandlers.verifyEmailCode!);

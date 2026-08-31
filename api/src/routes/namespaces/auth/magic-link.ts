@@ -3,7 +3,6 @@ import {
   type AuthHonoMagicLinkService,
   type AuthHonoRouteHandlers,
 } from '@sentropic/auth-hono';
-import { Hono } from 'hono';
 import { z } from 'zod';
 import { logger } from '../../../logger';
 import {
@@ -25,7 +24,6 @@ import { ensureWorkspaceForUser } from '../../../services/workspace-service';
  * POST /auth/magic-link/verify - Verify magic link token
  */
 
-export const magicLinkRouter = new Hono();
 
 // Request schemas
 const verifyMagicLinkSchema = z.object({
@@ -246,6 +244,3 @@ export const magicLinkHandlers: AuthHonoRouteHandlers = {
   }
   },
 };
-
-magicLinkRouter.post('/request', magicLinkHandlers.requestMagicLink!);
-magicLinkRouter.post('/verify', magicLinkHandlers.verifyMagicLink!);
