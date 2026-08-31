@@ -11,7 +11,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { db } from '../../src/db/client';
 import { trackOwnerSignatures } from '../../src/db/schema';
-import { createApiFocusLiveSession } from '../../src/services/focus/live-session';
+import {
+  createApiFocusLiveSession,
+  createApiFocusTrackPort,
+} from '../../src/services/focus/live-session';
 import { PostgresTrackOwnerSignaturePort } from '../../src/services/focus/postgres-owner-signature-port';
 
 const OWNER: AuthenticatedOwnPrincipal = {
@@ -54,6 +57,10 @@ afterEach(async () => {
 });
 
 describe('PostgresTrackOwnerSignaturePort', () => {
+  it('should reuse the existing Postgres owner-signature persistence for the Focus Track port', () => {
+    expect(createApiFocusTrackPort({ storeMode: 'postgres' })).toBeInstanceOf(PostgresTrackOwnerSignaturePort);
+  });
+
   it('should atomically persist one canonical signature for concurrent distinct retries', async () => {
     const target = createTarget();
     const writes = [writeFor(target, 'retry-a'), writeFor(target, 'retry-b')];

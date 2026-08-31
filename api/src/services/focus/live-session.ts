@@ -17,6 +17,8 @@ export interface CreateApiFocusLiveSessionOptions {
   trackPort?: TrackOwnerSignaturePort;
 }
 
+export type CreateApiFocusTrackPortOptions = Omit<CreateApiFocusLiveSessionOptions, 'trackPort'>;
+
 /** NODE_ENV values where a local Track events.jsonl is known-safe (contained dev/test envs). */
 const LOCAL_SAFE_NODE_ENVS = new Set(['development', 'test']);
 
@@ -46,6 +48,13 @@ const resolveStoreMode = (): 'local' | 'postgres' => {
   );
 };
 
+export const createApiFocusTrackPort = (
+  options: CreateApiFocusTrackPortOptions = {},
+): TrackOwnerSignaturePort =>
+  (options.storeMode ?? resolveStoreMode()) === 'local'
+    ? new TrackEventOwnerSignaturePort({ eventsPath: options.eventsPath })
+    : new PostgresTrackOwnerSignaturePort();
+
 /**
  * The API composition point for Focus live signatures.
  * Selects local TrackEventOwnerSignaturePort (in local E1 fusion) or PostgresTrackOwnerSignaturePort (deployed E2).
@@ -56,9 +65,7 @@ export const createApiFocusLiveSession = (
 ): FocusLiveSession => {
   const trackPort =
     options.trackPort ??
-    ((options.storeMode ?? resolveStoreMode()) === 'local'
-      ? new TrackEventOwnerSignaturePort({ eventsPath: options.eventsPath })
-      : new PostgresTrackOwnerSignaturePort());
+    createApiFocusTrackPort(options);
 
   return new FocusLiveSessionDriver({
     ...dependencies,
