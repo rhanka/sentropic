@@ -53,7 +53,7 @@ const dispatch = async (
   handler: (input: LlmMeshPortRequest) => Promise<Response>,
 ): Promise<Response> => {
   const input = await requestFor(context, options);
-  if (!input) return context.json({ error: 'Authentication required' }, 401);
+  if (!input) return context.json({ message: 'Authentication required' }, 401);
   return handler(input);
 };
 
