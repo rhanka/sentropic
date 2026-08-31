@@ -18,6 +18,7 @@ export default defineConfig({
     alias: {
       '#mcp-platform-hono': pkgSrc('mcp-platform', 'hono.ts'),
       '@sentropic/comments/hono': pkgSrc('comments', 'hono.ts'),
+      '@sentropic/connector-host/hono': pkgSrc('connector-host', 'hono.ts'),
       '@sentropic/flow/hono': pkgSrc('flow', 'hono.ts'),
       '@sentropic/focus/hono': pkgSrc('focus', 'hono.ts'),
       '@sentropic/focus/track': pkgSrc('focus', 'track/index.ts'),
