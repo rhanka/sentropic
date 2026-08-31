@@ -5,7 +5,7 @@ import { setUser, clearUser } from '../../src/lib/stores/session';
 import { setWorkspaceScope, workspaceScope } from '../../src/lib/stores/workspaceScope';
 import { mockFetchJsonOnce, resetFetchMock } from '../test-setup';
 
-describe('todo-api chat client behavior', () => {
+describe('todo-api chat client behavior after workflow cutover', () => {
   beforeEach(() => {
     resetFetchMock();
     clearUser();
