@@ -28,10 +28,12 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
       stoppedAt: nullableDate(value.stoppedAt),
       updatedAt: new Date(),
     };
-    await db.insert(clusterMeshGenerations).values(row).onConflictDoUpdate({
+    const saved = await db.insert(clusterMeshGenerations).values(row).onConflictDoUpdate({
       target: clusterMeshGenerations.generationId,
       set: row,
-    });
+      setWhere: sql`${clusterMeshGenerations.status} NOT IN ('stopped', 'lost')`,
+    }).returning({ generationId: clusterMeshGenerations.generationId });
+    if (saved.length === 0) throw new Error('cluster_mesh_generation_terminal');
   }
   async saveRegistration(value: Parameters<ClusterMeshRuntimeStore['saveRegistration']>[0]): Promise<void> {
     const row = {
