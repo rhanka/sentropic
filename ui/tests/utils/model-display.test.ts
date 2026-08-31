@@ -18,7 +18,7 @@ vi.mock('$lib/stores/modelCatalog', () => {
 
 import { formatCompactModelLabel } from '../../src/lib/utils/model-display';
 
-describe('model display utils', () => {
+describe('llm-mesh catalog model display contract', () => {
   it('returns empty string for missing or blank values', () => {
     expect(formatCompactModelLabel(undefined)).toBe('');
     expect(formatCompactModelLabel(null)).toBe('');
@@ -34,5 +34,7 @@ describe('model display utils', () => {
 
   it('returns raw model id for unknown models', () => {
     expect(formatCompactModelLabel('some-future-model')).toBe('some-future-model');
+    expect(formatCompactModelLabel('anthropic/claude-opus-4-6@gcp'))
+      .toBe('anthropic/claude-opus-4-6@gcp');
   });
 });
