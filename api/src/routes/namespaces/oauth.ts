@@ -45,7 +45,7 @@ const ensureAuthor = async (compositionRoot: OAuthCompositionRoot): Promise<bool
           status: 'shadow' as const,
           shadowComparison: {
             strategy: 'pre-deletion-shadow-suite',
-            metadataReadRef: 'api/tests/api/cluster-mesh-oauth-roots.test.ts',
+            metadataReadRef: 'historical:64cee8cce:api/tests/api/cluster-mesh-oauth-roots.test.ts',
             tokenValidationIntentRef: 'packages/auth-hono/tests/oauth-token.test.ts',
             effectsDuplicated: false,
           },
