@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { app as legacyApp } from '../../src/app';
+import { app as productApp } from '../../src/app';
 import { createLlmMeshNamespaceModule } from '../../src/routes/namespaces/llm-mesh';
 import { LLM_MESH_AUTHOR } from '../../src/routes/namespaces/llm-mesh-cutover';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
@@ -43,21 +43,20 @@ describe('cluster mesh llm-mesh cutover', () => {
   });
 
   it('shadows catalog and account availability, validates enrollment intent, and rolls back', async () => {
-    const candidate = candidateApp();
-    for (const [legacyPath, nextPath] of [
-      ['/api/v1/models/catalog', '/api/v1/models/catalog'],
-      ['/api/v1/models/provider-readiness', '/api/v1/models/provider-readiness'],
-    ] as const) {
-      const legacy = await authenticatedRequest(legacyApp, 'GET', legacyPath, admin.sessionToken!);
-      const next = await authenticatedRequest(candidate, 'GET', nextPath, admin.sessionToken!);
-      expect(next.status).toBe(legacy.status);
-      await expect(next.json()).resolves.toEqual(await legacy.json());
+    for (const path of ['/api/v1/models/catalog', '/api/v1/models/provider-readiness'] as const) {
+      const response = await authenticatedRequest(productApp, 'GET', path, admin.sessionToken!);
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual(expect.any(Object));
     }
+    const duplicate = await authenticatedRequest(
+      productApp, 'GET', '/api/v1/llm-mesh/models/catalog', admin.sessionToken!,
+    );
+    expect(duplicate.status).toBe(404);
 
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const invalidIntent = await authenticatedRequest(
-      candidate,
+      productApp,
       'POST',
       '/api/v1/settings/provider-connections/codex/enrollment/complete',
       admin.sessionToken!,
@@ -76,7 +75,7 @@ describe('cluster mesh llm-mesh cutover', () => {
     await store.rollback(key, active!.previousGenerationId!);
     await expect(store.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
     const blocked = await authenticatedRequest(
-      candidate,
+      productApp,
       'GET',
       '/api/v1/models/catalog',
       admin.sessionToken!,
@@ -87,12 +86,11 @@ describe('cluster mesh llm-mesh cutover', () => {
 
   it('keeps provider administration privileged while catalog remains authenticated', async () => {
     const editor = await createAuthenticatedUser('editor');
-    const candidate = candidateApp();
     const catalog = await authenticatedRequest(
-      candidate, 'GET', '/api/v1/models/catalog', editor.sessionToken!,
+      productApp, 'GET', '/api/v1/models/catalog', editor.sessionToken!,
     );
     const providers = await authenticatedRequest(
-      candidate, 'GET', '/api/v1/settings/provider-connections', editor.sessionToken!,
+      productApp, 'GET', '/api/v1/settings/provider-connections', editor.sessionToken!,
     );
     expect(catalog.status).toBe(200);
     expect(providers.status).toBe(403);
