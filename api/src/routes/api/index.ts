@@ -24,7 +24,6 @@ import { runsRouter } from './runs';
 import { agentConfigRouter } from './agent-config';
 import { workflowConfigRouter, workspaceTypeWorkflowsRouter } from './workflow-config';
 import { locksRouter } from './locks';
-import { focusRouter } from './focus';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
@@ -150,7 +149,6 @@ apiRouter.route('/locks', locksRouter);
 // Focus owner signatures are session-authenticated; the route supplies its own-principal,
 // trusted HTTP relayer, and tenancy-aware workspace authorization to the durable composition.
 apiRouter.use('/focus/*', requireAuth);
-apiRouter.route('/focus', focusRouter);
 
 // Streaming routes: read-only for users; allow any authenticated user.
 apiRouter.use('/streams/*', requireAuth);

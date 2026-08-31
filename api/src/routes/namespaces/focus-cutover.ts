@@ -27,7 +27,7 @@ const ensureFocusAuthor = async (): Promise<boolean> => {
         status: 'shadow' as const,
         shadowComparison: {
           strategy: 'pre-deletion-shadow-suite',
-          safeReadRef: 'api/tests/api/cluster-mesh-focus-cutover.test.ts',
+          safeReadRef: 'historical:97a3c4837:api/tests/api/cluster-mesh-focus-cutover.test.ts',
           validatedIntentRef: 'api/tests/unit/focus-owner-signature-route.test.ts',
           effectsDuplicated: false,
         },

@@ -16,6 +16,7 @@ import {
 import { productAuthPlugin } from './routes/namespaces/auth';
 import { productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
+import { productFocusModule } from './routes/namespaces/focus';
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -140,6 +141,7 @@ app.route('/api/v1', createClusterMeshPlugin({
     authPlugin.module,
     productGwModule,
     productChatModule,
+    productFocusModule,
   ],
   mounts: { '/session': '/auth', '/auth': authPlugin.mount },
 }));
