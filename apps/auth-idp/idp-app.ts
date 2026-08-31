@@ -29,7 +29,6 @@ import { secureHeaders } from 'hono/secure-headers';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 
 import { env } from '../../api/src/config/env';
-import { authRouter } from '../../api/src/routes/auth';
 import { applyAuthRateLimiters } from '../../api/src/middleware/auth-rate-limiters';
 import { isOriginAllowed, parseAllowedOrigins } from '../../api/src/utils/cors';
 import { clusterMeshAdapter } from '../../api/src/services/cluster-mesh-adapter';
@@ -38,6 +37,7 @@ import {
   createOAuthNamespaceModule,
   createOAuthWellKnownProjection,
 } from '../../api/src/routes/namespaces/oauth';
+import { idpAuthPlugin } from '../../api/src/routes/namespaces/auth';
 
 // BR-39m A0-bis — the human-facing login/register/magic-link/consent screens are
 // a minimal SvelteKit static front (apps/auth-idp/web) built to `web/build` with
@@ -166,6 +166,7 @@ export const createIdpApp = (): Hono => {
     compositionRoot: 'auth-idp',
     publicPath: '/api/v1/auth/oauth',
   }));
+  const authPlugin = idpAuthPlugin();
   app.route('/api/v1/auth', createClusterMeshPlugin({
     runtime: clusterMeshAdapter.sessionControl!.runtime,
     namespaces: [
@@ -174,10 +175,10 @@ export const createIdpApp = (): Hono => {
         compositionRoot: 'auth-idp',
         publicPath: '/api/v1/auth/oauth',
       }),
+      authPlugin.module,
     ],
-    mounts: { '/session': '/' },
+    mounts: { '/session': '/', '/auth': authPlugin.mount },
   }));
-  app.route('/api/v1/auth', authRouter);
 
   // Lightweight liveness/identity endpoint (kept off the SPA root path).
   app.get('/healthz', (c) =>

@@ -3,9 +3,10 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createIdpApp } from '../../../apps/auth-idp/idp-app';
+import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { authRouter as legacyAuthRouter } from '../../src/routes/auth';
 import {
   createAuthNamespaceModule,
   type CreateAuthNamespaceModuleOptions,
@@ -61,29 +62,38 @@ const buildCandidate = (compositionRoot: AuthCompositionRoot): Hono => {
 afterEach(async () => Promise.all([clear('product'), clear('auth-idp')]));
 
 describe('cluster mesh auth roots', () => {
+  it('exposes one final identity projection in each application root', async () => {
+    await Promise.all([clear('product'), clear('auth-idp')]);
+    const idp = createIdpApp();
+
+    expect((await productApp.request('/api/v1/auth/health')).status).toBe(200);
+    expect((await idp.request('/api/v1/auth/health')).status).toBe(200);
+    expect((await productApp.request('/api/v1/auth/oauth/authorize')).status).toBe(404);
+    expect((await idp.request('/api/v1/oauth/token', { method: 'POST' })).status).toBe(404);
+    expect((await productApp.request('/api/v1/me')).status).toBe(401);
+    expect((await idp.request('/api/v1/auth/me')).status).toBe(401);
+  });
+
   it.each(['product', 'auth-idp'] as const)(
-    'matches safe reads and validated intents before deleting the %s legacy mount',
+    'keeps exact %s routes fenced through rollback without intercepting adjacent facades',
     async (compositionRoot) => {
       await clear(compositionRoot);
-      const legacy = new Hono().route('/api/v1/auth', legacyAuthRouter);
       const candidate = buildCandidate(compositionRoot);
 
-      const legacyHealth = await legacy.request('/api/v1/auth/health');
       const candidateHealth = await candidate.request('/api/v1/auth/health');
-      expect(candidateHealth.status).toBe(legacyHealth.status);
-      expect(await candidateHealth.json()).toEqual(await legacyHealth.json());
+      expect(candidateHealth.status).toBe(200);
+      await expect(candidateHealth.json()).resolves.toEqual({ status: 'ok', service: 'auth' });
 
       const request = new Request('http://localhost/api/v1/auth/email/verify-request', {
         body: JSON.stringify({ email: 'invalid' }),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       });
-      const [legacyIntent, candidateIntent] = await Promise.all([
-        legacy.request(request.clone()),
-        candidate.request(request.clone()),
-      ]);
-      expect(candidateIntent.status).toBe(legacyIntent.status);
-      expect(await candidateIntent.json()).toEqual(await legacyIntent.json());
+      const candidateIntent = await candidate.request(request);
+      expect(candidateIntent.status).toBe(400);
+      await expect(candidateIntent.json()).resolves.toMatchObject({
+        error: { code: 'invalid_input' },
+      });
 
       const active = await store.find(key(compositionRoot));
       expect(active).toMatchObject({ activeAuthor: AUTH_AUTHOR, status: 'active' });
