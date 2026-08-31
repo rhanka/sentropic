@@ -130,8 +130,13 @@ export const createLlmMeshNamespaceModule = (
     for (const path of LLM_MESH_PATHS) {
       router.use(path, options.authenticate ?? requireAuth);
     }
-    router.use('/settings/provider-connections', options.authorizeAdmin ?? requireAdmin);
-    router.use('/settings/provider-connections/*', options.authorizeAdmin ?? requireAdmin);
+    for (const path of [
+      '/settings/provider-connections',
+      '/settings/provider-connections/openai/mode',
+      '/settings/provider-connections/:providerId/enrollment/:action',
+    ] as const) {
+      router.use(path, options.authorizeAdmin ?? requireAdmin);
+    }
     applyLlmMeshAuthorFence(router);
     router.route('/', createLlmMeshRouter(
       options.routerOptions ?? createProductLlmMeshRouterOptions(),
