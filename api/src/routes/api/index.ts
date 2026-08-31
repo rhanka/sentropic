@@ -12,7 +12,7 @@ import { meRouter } from './me';
 import { streamsRouter } from './streams';
 import { documentsRouter } from './documents';
 import promptsRouter from './prompts';
-import queueRouter from './queue';
+import queueRouter from '../namespaces/workflows-queue';
 import aiSettingsRouter from './ai-settings';
 import { workspacesRouter } from './workspaces';
 import { neutralRouter } from './neutral';
