@@ -12,8 +12,8 @@ import { toolService } from '../../src/services/tool-service';
  * BR-42d Lot 0 — wire-payload characterization.
  *
  * Pins the FULL per-(origin,event) `NOTIFY comment_events` wire-key matrix byte-for-byte.
- * All comment NOTIFY emissions (REST `comments.ts`, AI `tool-service.ts`, auto path) go
- * through the SAME `pool` singleton from `db/client`, so a single spy on `pool.connect`
+ * All comment NOTIFY emissions (REST comments namespace, AI `tool-service.ts`, auto path)
+ * go through the SAME `pool` singleton from `db/client`, so a single spy on `pool.connect`
  * captures every emission while still delegating to the real client (the NOTIFY actually
  * executes and the awaited round-trip back-pressure is preserved).
  */
@@ -113,9 +113,9 @@ describe('Comments wire-payload characterization (BR-42d Lot 0)', () => {
     await cleanupAuthData();
   });
 
-  // --- REST origin: every event keyed by comment_id (comments.ts:205,254,283,312,337) ---
+  // --- REST namespace origin: every event keyed by comment_id ---
 
-  it('REST POST with NO assignee emits EXACTLY ONE {created, comment_id} (comments.ts:205)', async () => {
+  it('REST POST with NO assignee emits EXACTLY ONE {created, comment_id}', async () => {
     const res = await authenticatedRequest(app, 'POST', '/api/v1/comments', user.sessionToken!, {
       context_type: 'initiative',
       context_id: initiativeId,
@@ -126,7 +126,7 @@ describe('Comments wire-payload characterization (BR-42d Lot 0)', () => {
     expect(captured).toEqual([{ action: 'created', comment_id: id }]);
   });
 
-  it('REST POST WITH assignee still emits EXACTLY ONE {created, comment_id} despite the cascade (comments.ts:198-205)', async () => {
+  it('REST POST WITH assignee still emits EXACTLY ONE {created, comment_id} despite the cascade', async () => {
     const res = await authenticatedRequest(app, 'POST', '/api/v1/comments', user.sessionToken!, {
       context_type: 'initiative',
       context_id: initiativeId,
@@ -139,7 +139,7 @@ describe('Comments wire-payload characterization (BR-42d Lot 0)', () => {
     expect(captured).toEqual([{ action: 'created', comment_id: id }]);
   });
 
-  it('REST PATCH with assignment emits EXACTLY ONE {updated, comment_id} (comments.ts:254)', async () => {
+  it('REST PATCH with assignment emits EXACTLY ONE {updated, comment_id}', async () => {
     const rootRes = await authenticatedRequest(app, 'POST', '/api/v1/comments', user.sessionToken!, {
       context_type: 'initiative',
       context_id: initiativeId,
@@ -156,7 +156,7 @@ describe('Comments wire-payload characterization (BR-42d Lot 0)', () => {
     expect(captured).toEqual([{ action: 'updated', comment_id: rootId }]);
   });
 
-  it('REST close emits {closed, comment_id} and reopen emits {reopened, comment_id} (comments.ts:283,312)', async () => {
+  it('REST close emits {closed, comment_id} and reopen emits {reopened, comment_id}', async () => {
     const rootRes = await authenticatedRequest(app, 'POST', '/api/v1/comments', user.sessionToken!, {
       context_type: 'initiative',
       context_id: initiativeId,
@@ -175,7 +175,7 @@ describe('Comments wire-payload characterization (BR-42d Lot 0)', () => {
     expect(captured).toEqual([{ action: 'reopened', comment_id: rootId }]);
   });
 
-  it('REST delete emits {deleted, comment_id} (comments.ts:337)', async () => {
+  it('REST delete emits {deleted, comment_id}', async () => {
     const rootRes = await authenticatedRequest(app, 'POST', '/api/v1/comments', user.sessionToken!, {
       context_type: 'initiative',
       context_id: initiativeId,
