@@ -476,7 +476,7 @@
     - [x] Extract the agent configuration router over the existing Flow agent-template port.
     - [x] Extract prompt-profile reads/validation through catalog and skills ports with preserved wires.
   - [ ] Shadow reads and validated configuration intent, select one author, prove rollback and delete `agent-config.ts`, `prompts.ts` mounts/files after extraction.
-  - [ ] Tests new: `api/tests/api/cluster-mesh-agents-cutover.test.ts`.
+  - [x] Tests new: `api/tests/api/cluster-mesh-agents-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/agent-config.test.ts`, `api/tests/api/prompts.test.ts`, `api/tests/services/catalog/agent-template-source.spec.ts`, `api/tests/unit/todo-orchestration-chat-progression.test.ts`.
   - [ ] UI tests updated: `ui/tests/utils/agent-config-api.test.ts`, `ui/tests/chat/agents-feed-adapter.test.ts`.
   - [ ] E2E updated: `e2e/tests/09-run-steering-core.spec.ts` agent configuration scenario.
