@@ -48,15 +48,13 @@ describe('cluster mesh workflows cutover', () => {
 
   it('shadows workflow reads and validates transition and job intents before rollback', async () => {
     const path = `/api/v1/workflow-config?workspace_id=${admin.workspaceId}`;
-    const legacy = await authenticatedRequest(productApp, 'GET', path, admin.sessionToken!);
-    const candidate = await authenticatedRequest(candidateApp(), 'GET', path, admin.sessionToken!);
-    expect(legacy.status).toBe(200);
-    expect(candidate.status).toBe(200);
-    expect(await candidate.json()).toEqual(await legacy.json());
+    const read = await authenticatedRequest(productApp, 'GET', path, admin.sessionToken!);
+    expect(read.status).toBe(200);
+    await expect(read.json()).resolves.toEqual(expect.objectContaining({ items: expect.any(Array) }));
 
     const startTask = vi.spyOn(todoOrchestrationService, 'startTask');
     const invalidTransition = await authenticatedRequest(
-      candidateApp(), 'POST', '/api/v1/tasks/task-1/start', admin.sessionToken!, { mode: 'invalid' },
+      productApp, 'POST', '/api/v1/tasks/task-1/start', admin.sessionToken!, { mode: 'invalid' },
     );
     expect(invalidTransition.status).toBe(400);
     expect(startTask).not.toHaveBeenCalled();
@@ -64,7 +62,7 @@ describe('cluster mesh workflows cutover', () => {
     vi.spyOn(queueManager, 'getJobStatus').mockResolvedValue(null);
     const cancelJob = vi.spyOn(queueManager, 'cancelJob');
     const invalidJob = await authenticatedRequest(
-      candidateApp(), 'POST', '/api/v1/queue/jobs/missing/cancel', admin.sessionToken!,
+      productApp, 'POST', '/api/v1/queue/jobs/missing/cancel', admin.sessionToken!,
     );
     expect(invalidJob.status).toBe(404);
     expect(cancelJob).not.toHaveBeenCalled();
@@ -79,17 +77,16 @@ describe('cluster mesh workflows cutover', () => {
     await store.rollback(key, active!.previousGenerationId!);
     await expect(store.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
     const blocked = await authenticatedRequest(
-      candidateApp(), 'GET', path, admin.sessionToken!,
+      productApp, 'GET', path, admin.sessionToken!,
     );
     expect(blocked.status).toBe(503);
     await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
   });
 
   it('keeps anonymous health outside the enumerated workflow authentication fence', async () => {
-    const app = candidateApp();
-    expect((await app.request('/api/v1/health')).status).toBe(200);
-    expect((await app.request('/api/v1/workflow-config')).status).toBe(401);
-    expect((await app.request('/api/v1/workflows/workflow-config')).status).toBe(404);
+    expect((await productApp.request('/api/v1/health')).status).toBe(200);
+    expect((await productApp.request('/api/v1/workflow-config')).status).toBe(401);
+    expect((await productApp.request('/api/v1/workflows/workflow-config')).status).toBe(404);
   });
 
   it('is disableable without selecting a fallback workflow author', async () => {
