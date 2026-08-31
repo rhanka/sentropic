@@ -4,11 +4,12 @@ Collaborative annotation (comments and threads) over messages, canvas, artifacts
 fields and records for Sentropic-compatible apps.
 
 This package owns the comment domain model, pure-TS type guards, the
-`CommentStore` port, an in-memory reference adapter, and a transport-agnostic
-comment lifecycle event taxonomy. Persistence, identity/authorization, assignee
-membership validation, and realtime transport stay behind the host so the
-package can run with either Postgres-backed app adapters or the deterministic
-in-memory adapter.
+`CommentStore` port, an in-memory reference adapter, a reusable Hono router, and
+a transport-agnostic comment lifecycle event taxonomy. Persistence,
+identity/authorization, assignee membership validation, and realtime transport
+stay behind injected host ports so the package can run with either
+Postgres-backed app adapters or the deterministic in-memory adapter. The package
+does not import an application database or schema.
 
 ## Surface
 
@@ -20,6 +21,9 @@ in-memory adapter.
 - Reference adapter: `InMemoryCommentStore`.
 - Pure-TS guards: `isComment`, `isCommentTarget`, `isCommentEvent`,
   `isCommentThreadSummary` (no `zod` dependency).
+- Hono subpath: `@sentropic/comments/hono` exports `createCommentsRouter` and
+  the injected store, event, tenant, and authorization port contracts. Only
+  this HTTP subpath uses Hono and Zod.
 
 ## Target round-trip
 

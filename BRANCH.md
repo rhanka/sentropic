@@ -154,6 +154,7 @@
 - [ ] `BR75-RV34` — `deferred` — Fable Lot 11 F4 remains intentionally unchanged: restoring both unknown enrollment route 404 parity and the legacy zValidator error payload is a wire-contract change larger than the sub-10-line Phase A allowance; Lot 33 parity review owns the explicit compatibility decision while the updated UI suites remain green.
 - [x] `BR75-RV35` — `acknowledge` — Lot 12 extracts the reusable Flow Hono router behind injected plan/todo/task/run/definition/queue ports, root-mounts it as the sole product author, pins pre-deletion read and validated-intent evidence to `historical:47a8a5963`, proves disableability and rollback, and removes all six direct workflow route files plus their imports, mounts, middleware and obsolete path comment. `WORKFLOW_PATHS` enumerates only clean preserved paths and no wildcard auth exists. Flow 0.2.0 typechecks, builds and packs with the Hono export; the cutover gate passes 3/3, the required UI gate passes 3/3, cold boot reports the API healthy, the live anonymous probe returns health 200/workflow 401, and smoke passes 6/6 overall with the API-health subset 4/4.
 - [ ] `BR75-RV36` — `attention` — Lot 12 formal harness consensus is not attested. Two author-complementary, Claude-hosted h2a legs (Terra correctness/root-mount and Luna security/evidence) were selected against the committed Lot 12 range, but both launches were rejected before session start because their external gateways could transmit private repository content without explicit destination authorization. No reviewer ran and no consensus verdict is claimed; the failure dossier is at `/home/antoinefa/src/sentropic/.tmp/engage/cm-review-lot12-consensus.md`. Fable Lot 12 must independently challenge fence completeness/root-mount containment, the historical D11 proof and rollback, and the router-port/DB-isolation boundary.
+- [x] `BR75-RV37` — `acknowledge` — Fable Lot 12 F1/F2 are closed before Lot 13. A reusable root-mount completeness invariant walks every registered Hono route and requires it to be present in the namespace's exported enumerated fence; it covers workflows, llm-mesh and comments, while a deliberate missing-route fixture proves the invariant fails closed. The llm-mesh fence now includes every registered provider-connection path, and API Vitest resolves both `@sentropic/flow` and `@sentropic/flow/hono` from local source. The invariant passes 4/4; API typecheck and lint pass with 0 errors and 208 warnings.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -401,18 +402,19 @@
   - [x] Root-mount gate: cold `make down` then `make up-api-test` exits 0 with the API healthy; unscoped smoke passes 2 files/6 tests, its API-health subset passes 4/4, and the live anonymous probe returns health 200 while `/api/v1/workflow-config` remains 401.
   - [x] Internal gates: C1 reuses the existing workflow/queue tables and product adapters with no Flow-package DB import; C3 typecheck/build/pack succeeds for `@sentropic/flow@0.2.0` and its injected router test passes 2/2; A5 read/intent, one-author, disableability and rollback paths pass in the 3-test cutover gate.
 
-- [ ] **Lot 13 — `/comments` TARGET comments router extraction**
-  - [ ] Namespace: `/comments`; type: TARGET reusable router extraction, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Add `packages/comments/src/hono.ts` with injected store/event/tenant/authz ports; no API DB import.
-  - [ ] Mount through `api/src/routes/namespaces/comments.ts`, shadow reads/validated mutation intent, select one author, prove rollback and delete `api/src/routes/api/comments.ts`.
-  - [ ] Tests new: `packages/comments/tests/hono.spec.ts`, `api/tests/api/cluster-mesh-comments-cutover.test.ts`.
-  - [ ] Tests updated: `packages/comments/tests/tenant-scoping.spec.ts`, `packages/comments/tests/threading.spec.ts`, `packages/comments/tests/wire-events.spec.ts`, `api/tests/api/comments.test.ts`, `api/tests/api/comments-wire.test.ts`, `api/tests/api/pg-comment-store.test.ts`, `api/tests/api/pg-notify-comment-event-sink.test.ts`.
-  - [ ] UI tests updated: `ui/tests/chat/comment-adapter.test.ts`, `ui/tests/utils/comments.test.ts`, `ui/tests/utils/comment-counts.test.ts`.
-  - [ ] E2E updated: `e2e/tests/07_comment_assistant.spec.ts`.
-  - [ ] Lot gate: `make typecheck-comments test-comments build-comments pack-comments ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-comments-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-ui SCOPE=tests/utils/comments.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 existing comment store remains canonical; C3/A5 comments standalone.
+- [x] **Lot 13 — `/comments` TARGET comments router extraction**
+  - [x] Namespace: `/comments`; type: TARGET reusable router extraction, root plugin mount, D11 cutover and legacy deletion, with authentication and author selection limited to the exported enumerated `COMMENTS_PATHS` fence.
+  - [x] Add `packages/comments/src/hono.ts` with injected store/event/tenant/authz ports; no API DB import.
+  - [x] Mount through `api/src/routes/namespaces/comments.ts`, pin byte-identical read and validated mutation-intent evidence to `historical:4d3e251c4`, select `comments-hono-module` as the sole author, prove rollback and disableability, and delete `api/src/routes/api/comments.ts` plus its mount/import.
+  - [x] Tests new: `packages/comments/tests/hono.spec.ts`, `api/tests/api/cluster-mesh-comments-cutover.test.ts`.
+  - [x] Tests updated: `packages/comments/tests/tenant-scoping.spec.ts`, `packages/comments/tests/threading.spec.ts`, `packages/comments/tests/wire-events.spec.ts`, `api/tests/api/comments.test.ts`, `api/tests/api/comments-wire.test.ts`, `api/tests/api/pg-comment-store.test.ts`, `api/tests/api/pg-notify-comment-event-sink.test.ts`.
+  - [x] UI tests updated: `ui/tests/chat/comment-adapter.test.ts`, `ui/tests/utils/comments.test.ts`, `ui/tests/utils/comment-counts.test.ts`.
+  - [x] E2E updated: `e2e/tests/07_comment_assistant.spec.ts`; execution remains assigned to Lot 33.
+  - [x] Lot gate: `make typecheck-comments test-comments build-comments pack-comments ENV=test-cluster-mesh-central-control-plane` — exit 0; typecheck/build/pack pass for `@sentropic/comments@0.2.0`, with 8 files/34 tests passing.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-comments-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/3 tests pass.
+  - [x] Lot gate: `make test-ui SCOPE=tests/utils/comments.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/7 tests pass.
+  - [x] Root-mount gate: cold `make down` then `make up-api-test` exits 0 with the API healthy; unscoped smoke passes 2 files/6 tests, including the API-health subset at 4/4. The cutover regression preserves anonymous health 200, gates anonymous comments at 401, and rejects the doubled comments path at 404.
+  - [x] Internal gates: C1 reuses the existing `PgCommentStore` and `PgNotifyCommentEventSink` with no schema/migration change; C3 typecheck/build/pack succeeds for the standalone injected router; A5 read/intent, one-author, disableability and rollback paths pass in the 3-test cutover gate.
 
 - [ ] **Lot 14 — `/connectors` TARGET connector administration extraction**
   - [ ] Namespace: `/connectors`; type: TARGET reusable/application router extraction, plugin mount, D11 cutover and legacy deletion.
