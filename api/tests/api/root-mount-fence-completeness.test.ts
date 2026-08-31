@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
+import { createCommentsNamespaceModule } from '../../src/routes/namespaces/comments';
+import { COMMENTS_PATHS } from '../../src/routes/namespaces/comments-cutover';
 import { createLlmMeshNamespaceModule } from '../../src/routes/namespaces/llm-mesh';
 import { LLM_MESH_PATHS } from '../../src/routes/namespaces/llm-mesh-cutover';
 import { createWorkflowsNamespaceModule } from '../../src/routes/namespaces/workflows';
@@ -22,6 +24,14 @@ const assertFenceComplete = (
 };
 
 describe('root-mount fence completeness', () => {
+  it('covers every registered comments path', () => {
+    assertFenceComplete(
+      '/comments',
+      createCommentsNamespaceModule().createRouter(),
+      COMMENTS_PATHS,
+    );
+  });
+
   it('covers every registered workflows path', () => {
     assertFenceComplete(
       '/workflows',
