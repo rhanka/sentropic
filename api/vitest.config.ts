@@ -9,6 +9,7 @@ const pkgSrc = (name: string): string =>
   fileURLToPath(new URL(`../packages/${name}/src/index.ts`, import.meta.url));
 
 export default defineConfig({
+  cacheDir: '/tmp/sentropic-api-vitest-cache',
   // Resolve the connector-host stack workspace packages from their TypeScript source,
   // so the api unit tests do not depend on a pre-built dist entry (which vite's package
   // entry resolver cannot always locate for a file: workspace dep). Runtime/app builds
