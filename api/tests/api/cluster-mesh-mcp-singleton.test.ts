@@ -86,10 +86,20 @@ describe('cluster-mesh MCP durable singleton', () => {
     });
 
     await expect(saveGeneration('generation-1', 'supervisor-1'))
-      .rejects.toThrow('cluster_mesh_generation_terminal');
+      .rejects.toThrow('cluster_mesh_generation_fenced');
     const [generation] = await db.select().from(clusterMeshGenerations)
       .where(eq(clusterMeshGenerations.generationId, 'generation-1'));
     expect(generation).toMatchObject({ status });
+  });
+
+  it('refuses to replace the active generation supervisor', async () => {
+    await saveGeneration('generation-1', 'foreign-supervisor');
+
+    await expect(saveGeneration('generation-1', 'supervisor-1'))
+      .rejects.toThrow('cluster_mesh_generation_fenced');
+    const [generation] = await db.select().from(clusterMeshGenerations)
+      .where(eq(clusterMeshGenerations.generationId, 'generation-1'));
+    expect(generation).toMatchObject({ status: 'active', supervisorRef: 'foreign-supervisor' });
   });
 
   it('persists generation handover rollback to the previous author', async () => {

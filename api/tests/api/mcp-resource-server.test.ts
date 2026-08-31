@@ -5,12 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
+import {
+  clusterMeshGenerations,
+  clusterMeshMcpServers,
+  clusterMeshNamespaceCutovers,
+} from '../../src/db/control-schema';
 import { documentConnectorAccounts } from '../../src/db/schema';
 import { GMAIL_PROVIDER } from '../../src/services/gmail-oauth';
 import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
 import { createJwksAdapter, type JwksAdapter } from '../../src/services/auth/jwks-adapter';
 import { cleanupAuthData, createTestUser, type TestUser } from '../utils/auth-helper';
 import { encryptSecret } from '../../src/services/secret-crypto';
+import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
+import { PostgresClusterMeshRuntimeStore } from '../../src/services/cluster-mesh/postgres-runtime-store';
 
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
@@ -208,6 +215,64 @@ describe('MCP connector-host routes', () => {
 
     expect(response.status).toBe(401);
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
+  });
+
+  it('refuses provider effects after the product MCP author rolls back', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+    const cutovers = new PostgresClusterMeshCutoverStore();
+    const key = { compositionRoot: 'product' as const, namespace: '/mcp' as const };
+    await cutovers.activate({
+      ...key,
+      selectedGenerationId: 'cluster-mesh-session-v1',
+      previousGenerationId: 'legacy-api-mcp-v1',
+      activeAuthor: 'cluster-mesh-mcp-module',
+      status: 'active',
+      rollbackCheckpoint: { generationId: 'legacy-api-mcp-v1' },
+    });
+    await cutovers.rollback(key, 'legacy-api-mcp-v1');
+
+    try {
+      const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'invocation_refused', message: 'wrong_author' },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      await db.delete(clusterMeshNamespaceCutovers).where(and(
+        eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+        eq(clusterMeshNamespaceCutovers.namespace, '/mcp'),
+      ));
+    }
+  });
+
+  it('refuses provider effects when the MCP generation has a foreign supervisor', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+    const runtimeStore = new PostgresClusterMeshRuntimeStore();
+    await db.delete(clusterMeshMcpServers);
+    await db.delete(clusterMeshGenerations);
+    await runtimeStore.saveGeneration({
+      generationId: 'cluster-mesh-session-v1',
+      status: 'active',
+      supervisorRef: 'foreign-supervisor',
+      supervisorLeaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      maxConcurrent: 12,
+      poolSize: 4,
+    });
+
+    try {
+      const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'invocation_refused', message: 'mcp_control_unavailable' },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      await db.delete(clusterMeshMcpServers);
+      await db.delete(clusterMeshGenerations);
+    }
   });
 
   it('denies unallowlisted Gmail capabilities and unknown connectors without Google egress', async () => {
