@@ -84,7 +84,7 @@ describe('createLlmMeshRouter', () => {
     const response = await createLlmMeshRouter(options).request('/models/catalog');
 
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({ error: 'Authentication required' });
+    await expect(response.json()).resolves.toEqual({ message: 'Authentication required' });
     expect(options.catalog.readCatalog).not.toHaveBeenCalled();
   });
 });
