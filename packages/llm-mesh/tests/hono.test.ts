@@ -36,8 +36,8 @@ describe('createLlmMeshRouter', () => {
     await expect((await router.request('/models/provider-readiness')).json()).resolves.toEqual({ source: 'availability' });
     await expect((await router.request('/me/ai-settings')).json()).resolves.toEqual({ source: 'settings' });
     await expect((await router.request('/me/ai-settings', { method: 'PUT' })).json()).resolves.toEqual({ source: 'settings-update' });
-    await expect((await router.request('/provider-connections')).json()).resolves.toEqual({ source: 'connections' });
-    await expect((await router.request('/provider-connections/openai/mode', { method: 'POST' })).json()).resolves.toEqual({ source: 'transport-mode' });
+    await expect((await router.request('/settings/provider-connections')).json()).resolves.toEqual({ source: 'connections' });
+    await expect((await router.request('/settings/provider-connections/openai/mode', { method: 'POST' })).json()).resolves.toEqual({ source: 'transport-mode' });
 
     expect(options.catalog.readCatalog).toHaveBeenCalledOnce();
     expect(options.catalog.readUserSettings).toHaveBeenCalledOnce();
@@ -59,7 +59,7 @@ describe('createLlmMeshRouter', () => {
     });
     const router = createLlmMeshRouter(options);
 
-    const response = await router.request('/provider-connections/anthropic/enrollment/import', {
+    const response = await router.request('/settings/provider-connections/anthropic/enrollment/import', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ accessToken: 'opaque-access', refreshToken: 'opaque-refresh' }),

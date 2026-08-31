@@ -25,6 +25,7 @@ const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
 const candidateApp = (enabled = true) => new Hono().route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
   namespaces: [createLlmMeshNamespaceModule({ enabled })],
+  mounts: { '/llm-mesh': '/' },
 }));
 
 describe('cluster mesh llm-mesh cutover', () => {
@@ -44,8 +45,8 @@ describe('cluster mesh llm-mesh cutover', () => {
   it('shadows catalog and account availability, validates enrollment intent, and rolls back', async () => {
     const candidate = candidateApp();
     for (const [legacyPath, nextPath] of [
-      ['/api/v1/models/catalog', '/api/v1/llm-mesh/models/catalog'],
-      ['/api/v1/models/provider-readiness', '/api/v1/llm-mesh/models/provider-readiness'],
+      ['/api/v1/models/catalog', '/api/v1/models/catalog'],
+      ['/api/v1/models/provider-readiness', '/api/v1/models/provider-readiness'],
     ] as const) {
       const legacy = await authenticatedRequest(legacyApp, 'GET', legacyPath, admin.sessionToken!);
       const next = await authenticatedRequest(candidate, 'GET', nextPath, admin.sessionToken!);
@@ -58,7 +59,7 @@ describe('cluster mesh llm-mesh cutover', () => {
     const invalidIntent = await authenticatedRequest(
       candidate,
       'POST',
-      '/api/v1/llm-mesh/provider-connections/codex/enrollment/complete',
+      '/api/v1/settings/provider-connections/codex/enrollment/complete',
       admin.sessionToken!,
       { enrollmentId: '' },
     );
@@ -77,7 +78,7 @@ describe('cluster mesh llm-mesh cutover', () => {
     const blocked = await authenticatedRequest(
       candidate,
       'GET',
-      '/api/v1/llm-mesh/models/catalog',
+      '/api/v1/models/catalog',
       admin.sessionToken!,
     );
     expect(blocked.status).toBe(503);
@@ -88,10 +89,10 @@ describe('cluster mesh llm-mesh cutover', () => {
     const editor = await createAuthenticatedUser('editor');
     const candidate = candidateApp();
     const catalog = await authenticatedRequest(
-      candidate, 'GET', '/api/v1/llm-mesh/models/catalog', editor.sessionToken!,
+      candidate, 'GET', '/api/v1/models/catalog', editor.sessionToken!,
     );
     const providers = await authenticatedRequest(
-      candidate, 'GET', '/api/v1/llm-mesh/provider-connections', editor.sessionToken!,
+      candidate, 'GET', '/api/v1/settings/provider-connections', editor.sessionToken!,
     );
     expect(catalog.status).toBe(200);
     expect(providers.status).toBe(403);
@@ -100,7 +101,7 @@ describe('cluster mesh llm-mesh cutover', () => {
   it('is disableable without selecting a fallback enrollment authority', async () => {
     const disabled = candidateApp(false);
     const response = await authenticatedRequest(
-      disabled, 'GET', '/api/v1/llm-mesh/models/catalog', admin.sessionToken!,
+      disabled, 'GET', '/api/v1/models/catalog', admin.sessionToken!,
     );
     expect(response.status).toBe(404);
     expect(await store.find(key)).toBeNull();
