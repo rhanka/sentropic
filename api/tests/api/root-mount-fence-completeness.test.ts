@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { requireAdmin } from '../../src/middleware/rbac';
 import {
+  MOUNTED_NAMESPACE_REGISTRY,
   PRODUCT_CLUSTER_MESH_MOUNTS,
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
   ROOT_MOUNT_REMAPS,
@@ -36,7 +37,7 @@ const assertFenceComplete = (
 ): void => {
   const fencedPaths = new Set(fence);
   const missing = registeredPaths(router).filter((path) => !fencedPaths.has(path));
-  expect(missing, `${namespace} root-mount fence is missing registered paths`).toEqual([]);
+  expect(missing, `${namespace} mounted namespace fence is missing registered paths`).toEqual([]);
 };
 
 const assertPrivilegedFenceComplete = (
@@ -82,8 +83,8 @@ const assertRequireAdminSubFenceComplete = (
   ).toEqual([]);
 };
 
-describe('root-mount fence completeness', () => {
-  it.each(ROOT_MOUNTED_NAMESPACE_REGISTRY)(
+describe('mounted namespace fence completeness', () => {
+  it.each(MOUNTED_NAMESPACE_REGISTRY)(
     'covers every registered path and privileged sub-fence for $namespace',
     ({ namespace, module, authPaths, ...registration }) => {
       expect(module.namespace).toBe(namespace);
@@ -121,13 +122,13 @@ describe('root-mount fence completeness', () => {
     )).toThrowError('plugin mounts contain root remaps outside the root-mount registry');
   });
 
-  it('fails when a registered path is absent from its fence', () => {
-    const router = new Hono();
-    router.get('/listed', (context) => context.body(null, 204));
-    router.post('/missing', (context) => context.body(null, 204));
+  it('fails when the prefixed Track namespace gains a route outside its fence', () => {
+    const registration = MOUNTED_NAMESPACE_REGISTRY.find(({ namespace }) => namespace === '/track')!;
+    const router = registration.module.createRouter();
+    router.get('/probe-unfenced/:workspace', (context) => context.json({ exposed: true }));
 
-    expect(() => assertFenceComplete('/fixture', router, ['/listed'])).toThrowError(
-      '/fixture root-mount fence is missing registered paths',
+    expect(() => assertFenceComplete('/track', router, registration.authPaths!)).toThrowError(
+      '/track mounted namespace fence is missing registered paths',
     );
   });
 
