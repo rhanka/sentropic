@@ -6,6 +6,7 @@ const A1_REGISTRATION = process.env.CLUSTER_MESH_A1_TARGET_REGISTRATION;
 const A1_TICK_URL = process.env.CLUSTER_MESH_A1_TARGET_TICK_URL;
 const A1_PARK_URL = process.env.CLUSTER_MESH_A1_PARK_TARGET_URL;
 const A1_LOST_URL = process.env.CLUSTER_MESH_A1_LOST_STATUS_URL;
+const MCP_QUALIFICATION_URL = process.env.CLUSTER_MESH_MCP_QUALIFICATION_URL;
 const qualificationAvailable = [
   A1_EVIDENCE, A1_REGISTRATION, A1_TICK_URL, A1_PARK_URL, A1_LOST_URL,
 ].every(Boolean);
@@ -58,6 +59,30 @@ test.describe('Cluster Mesh central control plane A1 qualification', () => {
       }).toBe('lost');
     } finally {
       await api.dispose();
+      await qualifier.dispose();
+    }
+  });
+});
+
+test.describe('Cluster Mesh MCP singleton qualification', () => {
+  test.skip(!MCP_QUALIFICATION_URL, 'real MCP singleton qualification endpoint is unavailable');
+
+  test('N sessions share one generation server and missing registration fails before effects', async () => {
+    const qualifier = await request.newContext();
+    try {
+      const response = await qualifier.get(MCP_QUALIFICATION_URL!);
+      expect(response.ok()).toBeTruthy();
+      const evidence = await response.json() as {
+        sessionCount: number;
+        logicalServers: number;
+        perSessionServers: number;
+        missingRegistration: { status: number; providerEffects: number };
+      };
+      expect(evidence.sessionCount).toBeGreaterThan(1);
+      expect(evidence.logicalServers).toBe(1);
+      expect(evidence.perSessionServers).toBe(0);
+      expect(evidence.missingRegistration).toEqual({ status: 503, providerEffects: 0 });
+    } finally {
       await qualifier.dispose();
     }
   });
