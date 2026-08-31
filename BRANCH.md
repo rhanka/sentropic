@@ -89,6 +89,7 @@
   - [ ] `api/drizzle/control/0007_cluster_mesh_r13.sql` and `api/drizzle/control/meta/**` through `BR75-EX1`; one SQL file total.
   - [ ] `package.json` through `BR75-EX2` only if root workspace wiring cannot be expressed in package-local manifests.
   - [ ] `.security/**` through `BR75-EX3` only for a bounded, expiring security exception.
+  - [x] `api/src/middleware/auth-rate-limiters.ts` through `BR75-EX4` only to restore product OAuth rate limiting after the canonical path cutover.
 - [ ] **Exception process**
   - [ ] Declare `BR75-EXn` in `## Feedback Loop` before touching a conditional path.
   - [ ] Record reason, exact path, impact, rollback and conductor disposition.
@@ -101,6 +102,7 @@
 - [x] `BR75-EX1` — `acknowledge` — reason: C1 needs all runtime/generation/registration/capacity/MCP/cutover durable state before app cutover; path: `api/drizzle/control/0007_cluster_mesh_r13.sql` plus generated control metadata; impact: one additive control-schema migration and no public schema change; rollback: deactivate namespace cutovers, drain leases, drop only the new control tables/indexes, restore the prior control journal; disposition: approved after the independent SG7 challenge.
 - [ ] `BR75-EX2` — `deferred` — root `package.json` remains untouched unless package-local wiring proves insufficient; impact and rollback must be supplied before use.
 - [ ] `BR75-EX3` — `deferred` — no security exception is planned; any use must state expiry, compensating control and deletion gate.
+- [x] `BR75-EX4` — `acknowledge` — reason: the Lot 6 canonical product OAuth cutover moved handlers outside the shared auth limiter paths; path: `api/src/middleware/auth-rate-limiters.ts`; impact: restore rate limiting on `/api/v1/oauth/*` while preserving the IdP root limiter; rollback: revert the product OAuth matcher and its regression test; disposition: approved by the conductor for M1-L6 before exposure.
 - [ ] `BR75-SG1` — `blocked` — real A1 PTY drive/wake evidence is externally blocked on the absent h2a PTY adapter; this blocks A1 acceptance, not progression beyond Lot 4's internally closable gates. The conductor opens an inter-repository h-cond escalation to the h2a adapter owner with the pinned adapter contract/digest, reproduction evidence, requested delivery and A1 acceptance proof; close in Lot 33 when executable there or at the latest in Lot 34 with real A→B tick, acted receipt, non-empty relaunch and LOST evidence. An in-memory or fake driver cannot close it.
 - [ ] `BR75-SG2` — `attention` — `packages/track` is absent; `/track` remains disabled/fail-closed until an external package contract and digest are pinned.
 - [ ] `BR75-SG3` — `attention` — Graphify source/release is absent; `/memory` remains disabled/fail-closed until the existing h2a↔Graphify contract is pinned.
@@ -124,7 +126,7 @@
 - [x] `BR75-RV11` — `acknowledge` — Lot 6 pre-deletion shadow evidence is committed before cutover: the legacy OAuth handlers and real `createOAuthRouter` factory return identical invalid-token intent, discovery metadata and logout responses without duplicate token effects.
 - [x] `BR75-RV12` — `acknowledge` — Lot 6 root-contract coverage proves exact OAuth and well-known subpaths, one durable author per product/IdP root, fail-closed rollback, and zero interception of `/session` or the future `/auth` namespace.
 - [x] `BR75-RV13` — `acknowledge` — OAuth authorization-code tokens derive their default userinfo audience from the mounted token path, so product and IdP roots validate only their own projection; the complete auth-hono suite passes 172 tests.
-- [ ] `BR75-RV14` — `attention` — product `/api/v1/oauth/{token,introspect}` no longer matches the shared limiter's IdP-only `/api/v1/auth/oauth/*` paths; `api/src/middleware/auth-rate-limiters.ts` is outside Lot 6 Allowed Paths, so an authorized follow-up must restore equivalent product rate-limit coverage.
+- [x] `BR75-RV14` — `acknowledge` — resolved through `BR75-EX4`: dedicated token/introspect and general product `/api/v1/oauth/*` bindings restore rate limiting for authorize, revoke, userinfo and S2S while retaining the IdP root; the focused middleware test proves all seven projections emit limiter policy.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 

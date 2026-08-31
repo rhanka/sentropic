@@ -79,6 +79,9 @@ export const oauthIntrospectRateLimiter = rateLimiter({
 export const applyAuthRateLimiters = (app: Hono): void => {
   if (env.DISABLE_RATE_LIMIT) return;
 
+  app.use('/api/v1/oauth/token', oauthTokenRateLimiter);
+  app.use('/api/v1/oauth/introspect', oauthIntrospectRateLimiter);
+  app.use('/api/v1/oauth/*', authRateLimiter);
   app.use('/api/v1/auth/session*', authSessionRateLimiter);
   app.use('/api/v1/auth/login/*', authLoginRateLimiter);
   app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
