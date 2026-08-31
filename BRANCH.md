@@ -267,7 +267,7 @@
 
 - [ ] **Lot 6 — `/oauth` reusable factory and two-root cutover**
   - [ ] Namespace: `/oauth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
-  - [ ] Wrap real `createOAuthRouter` and `createWellKnownRouter` in an autonomous module with product ports; keep `createMcpAuth` resource metadata delegation explicit.
+  - [x] Wrap real `createOAuthRouter` and `createWellKnownRouter` in an autonomous module with product ports; keep `createMcpAuth` resource metadata delegation explicit.
   - [ ] Mount product `/api/v1/oauth/*` plus `/.well-known/*`; mount the same module under the established IdP `/api/v1/auth/oauth/*` projection plus `/.well-known/*`.
   - [ ] Shadow metadata/token validation intent, select one author per root, prove rollback, then delete replaced code/mounts in `api/src/routes/auth/oauth.ts`, `service-s2s.ts` and `api/src/routes/well-known.ts`.
   - [ ] Update `api/src/routes/auth/index.ts`, `api/src/app.ts`, `apps/auth-idp/idp-app.ts`, `packages/auth-client/src/**` and UI OAuth transports for the product canonical path without changing the IdP public projection.
