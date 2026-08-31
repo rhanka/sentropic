@@ -1,5 +1,4 @@
 import {
-  createCanonicalTargetResolver,
   type PlannedRouteTarget,
   type PreparedRouteAttempt,
   type RoutePlan,
@@ -14,6 +13,7 @@ import {
   applicationGatewayRuntime,
   type GatewayRuntimeDispatchPort,
 } from './gateway-wire-adapter';
+import { resolveRuntimeSelection } from './index';
 
 export interface GatewayRouteIntentEvidence {
   readonly requestedModel: string;
@@ -35,26 +35,20 @@ const policy = {
   allowEquivalentModels: true,
 };
 
-const canonicalTarget = createCanonicalTargetResolver();
-
-const resolveTarget = (requestedModel: string): PlannedRouteTarget => {
-  const routed = canonicalTarget(requestedModel);
-  if (routed) return {
-    requestedModel,
-    providerId: routed.providerId,
-    modelId: routed.model,
-    transportProviderId: routed.transportProviderId,
-    ...(routed.effort ? { effort: routed.effort } : {}),
-    reason: routed.model === requestedModel ? 'exact' : 'alias',
-  };
-  const exact = providerRegistry.listModels().filter((model) => model.modelId === requestedModel);
-  if (exact.length !== 1) throw new Error(`unknown or ambiguous gateway model: ${requestedModel}`);
+const resolveTarget = async (
+  subject: VerifiedRoutingSubject,
+  requestedModel: string,
+): Promise<PlannedRouteTarget> => {
+  const selected = await resolveRuntimeSelection({
+    model: requestedModel,
+    userId: subject.principalRef,
+  });
   return {
     requestedModel,
-    providerId: exact[0]!.providerId,
-    modelId: requestedModel,
-    transportProviderId: exact[0]!.providerId,
-    reason: 'exact',
+    providerId: selected.providerId,
+    modelId: selected.model,
+    transportProviderId: 'application-runtime',
+    reason: selected.model === requestedModel ? 'exact' : 'alias',
   };
 };
 
@@ -78,8 +72,8 @@ export const createApplicationGatewayRoutePlane = (options?: {
   }>();
   let sequence = 0;
 
-  const shadowRouteIntent: NonNullable<RouteFlowDeps['shadowRouteIntent']> = (input) => {
-    const target = resolveTarget(input.route.requestedModel);
+  const shadowRouteIntent: NonNullable<RouteFlowDeps['shadowRouteIntent']> = async (input) => {
+    const target = await resolveTarget(input.subject, input.route.requestedModel);
     shadowTargets.set(subjectKey(input.subject, input.route), target);
     options?.observeShadow?.({
       requestedModel: input.route.requestedModel,
@@ -99,7 +93,7 @@ export const createApplicationGatewayRoutePlane = (options?: {
     },
     async plan(subject, input): Promise<RoutePlan> {
       const key = subjectKey(subject, input);
-      const target = shadowTargets.get(key) ?? resolveTarget(input.requestedModel);
+      const target = shadowTargets.get(key) ?? await resolveTarget(subject, input.requestedModel);
       shadowTargets.delete(key);
       sequence += 1;
       const planRef = `application-gateway-plan-${sequence}`;

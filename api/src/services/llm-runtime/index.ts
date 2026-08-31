@@ -101,12 +101,12 @@ const dispatchAntigravityStream = async (input: {
     ...(input.signal ? { signal: input.signal } : {}),
   })) as AsyncIterable<unknown>;
 
-type RuntimeSelection = {
+export type RuntimeSelection = {
   providerId: ProviderId;
   model: string;
 };
 
-const resolveRuntimeSelection = async (input: {
+export const resolveRuntimeSelection = async (input: {
   providerId?: string | null;
   model?: string | null;
   userId?: string | null;

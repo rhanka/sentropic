@@ -25,10 +25,34 @@ export interface GatewayRuntimeDispatchPort {
     request: StreamRequest,
   ): Promise<StreamResult>;
 }
-const textContent = (content: GenerateRequest['messages'][number]['content']): string =>
-  typeof content === 'string'
-    ? content
-    : content.map((part) => 'text' in part ? part.text : part.url ?? '').join('');
+type OpenAiIngressPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+const toOpenAiContent = (
+  content: GenerateRequest['messages'][number]['content'],
+): string | OpenAiIngressPart[] => {
+  if (typeof content === 'string') return content;
+  const mapped: OpenAiIngressPart[] = [];
+  for (const part of content) {
+    if (part.type === 'text' || part.type === 'reasoning') {
+      mapped.push({ type: 'text', text: part.text });
+      continue;
+    }
+    if (part.type === 'image') {
+      const url = part.url ?? (part.data
+        ? `data:${part.mediaType ?? 'application/octet-stream'};base64,${part.data}`
+        : undefined);
+      if (url) mapped.push({ type: 'image_url', image_url: { url } });
+      continue;
+    }
+    mapped.push({
+      type: 'text',
+      text: part.url ?? part.filename ?? (part.data ? `[file:${part.mediaType ?? 'unknown'}]` : ''),
+    });
+  }
+  return mapped;
+};
 const toMessages = (
   messages: GenerateRequest['messages'],
 ): OpenAI.Chat.Completions.ChatCompletionMessageParam[] => messages.map((message) => {
@@ -41,7 +65,7 @@ const toMessages = (
         : JSON.stringify(message.toolResult.output),
     };
   }
-  const base = { role: message.role, content: textContent(message.content) };
+  const base = { role: message.role, content: toOpenAiContent(message.content) };
   if (message.role !== 'assistant' || !message.toolCalls?.length) {
     return base as OpenAI.Chat.Completions.ChatCompletionMessageParam;
   }
@@ -53,7 +77,7 @@ const toMessages = (
       type: 'function' as const,
       function: { name: tool.name, arguments: tool.argumentsText },
     })),
-  };
+  } as OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam;
 });
 const toTools = (request: GenerateRequest): OpenAI.Chat.Completions.ChatCompletionTool[] | undefined =>
   request.tools?.map((tool) => ({
