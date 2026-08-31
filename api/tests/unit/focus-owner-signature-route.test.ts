@@ -3,10 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
 import type { FocusLiveSession, OwnerSignatureRequest } from '@sentropic/focus';
+import { createFocusRouter } from '@sentropic/focus/hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createApiFocusLiveSessionMock, isTenantAdminMock, requireWorkspaceAccessMock, resolveTenantMock } = vi.hoisted(() => ({
+const { createApiFocusLiveSessionMock, createApiFocusTrackPortMock, isTenantAdminMock, requireWorkspaceAccessMock, resolveTenantMock } = vi.hoisted(() => ({
   createApiFocusLiveSessionMock: vi.fn(),
+  createApiFocusTrackPortMock: vi.fn(),
   isTenantAdminMock: vi.fn(),
   requireWorkspaceAccessMock: vi.fn(),
   resolveTenantMock: vi.fn(),
@@ -14,6 +16,7 @@ const { createApiFocusLiveSessionMock, isTenantAdminMock, requireWorkspaceAccess
 
 vi.mock('../../src/services/focus/live-session', () => ({
   createApiFocusLiveSession: createApiFocusLiveSessionMock,
+  createApiFocusTrackPort: createApiFocusTrackPortMock,
 }));
 
 vi.mock('../../src/services/workspace-access', () => ({
@@ -26,6 +29,7 @@ vi.mock('../../src/services/auth/tenant-membership', () => ({
 
 vi.mock('../../src/services/tenancy/resolve-tenant', () => ({
   resolveTenant: resolveTenantMock,
+  resolveTenantAuthoritatively: vi.fn(),
 }));
 
 const HTTP_RELAYER = Object.freeze({
@@ -37,9 +41,22 @@ const HTTP_RELAYER = Object.freeze({
   }),
 });
 
-const { focusRouter } = await import('../../src/routes/api/focus');
+const { createProductFocusRouterOptions } = await import('../../src/routes/namespaces/focus');
 const { failClosedDecisionValidator } = await import('../../src/services/focus/decision-validator');
 const { createApiFocusLiveSession } = await import('../../src/services/focus/live-session');
+
+const productOptions = createProductFocusRouterOptions();
+const focusRouter = createFocusRouter({
+  ...productOptions,
+  track: {
+    readDecision: async () => ({ status: 'unavailable' }),
+    getOwnerSignaturePort: async () => ({
+      contractVersion: 'track-owner-signature/1.0.0',
+      appendOwnerSignature: async () => ({ status: 'written', recordId: 'unit-track-record' }),
+      readOwnerSignature: async () => undefined,
+    }),
+  },
+});
 
 const originalTrackEventsPath = process.env.TRACK_EVENTS_PATH;
 let trackStoreDir: string;
@@ -159,7 +176,7 @@ describe('Focus owner-signature route', () => {
     expect(createApiFocusLiveSessionMock).toHaveBeenCalledOnce();
     expect(capturedRequest).toEqual({
       target: { workspace: 'workspace-from-auth-context', decisionId: 'decision-42' },
-      authentication: { kind: 'own-principal', proof: { sessionId: 'authenticated-session' } },
+      authentication: { kind: 'own-principal', proof: 'authenticated-session' },
       idempotencyKey: 'request-retry-42',
     });
     expect(capturedDependencies).toBeDefined();
