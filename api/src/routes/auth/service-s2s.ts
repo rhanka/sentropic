@@ -92,8 +92,3 @@ const createSelfCheckHandler = (options: CreateServiceS2sRouterOptions) => async
 export const createServiceS2sRouter = (options: CreateServiceS2sRouterOptions): Hono => new Hono()
   .get('/ping', requireServicePing, handleServicePing)
   .get('/self-check', createSelfCheckHandler(options));
-
-export const serviceS2sRouter = createServiceS2sRouter({
-  oauthPublicPath: '/api/v1/auth/oauth',
-  servicePublicPath: '/api/v1/auth/s2s',
-});
