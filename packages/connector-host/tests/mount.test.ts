@@ -343,6 +343,15 @@ describe('connector host mount', () => {
     expect(accountResolve).not.toHaveBeenCalled();
   });
 
+  it('never resolves a provider secret for unknown connector or capability requests', async () => {
+    const resolveSecret = vi.fn(async () => secretValue);
+    const { driver } = createHost({ secret: { resolve: resolveSecret } });
+
+    expectMissing(await driver.invoke(invokeRequest({ connectorId: 'unknown' })));
+    expectMissing(await driver.invoke(invokeRequest({ capabilityRef: 'unknown' })));
+    expect(resolveSecret).not.toHaveBeenCalled();
+  });
+
   it('refuses a resolver principal mismatch through the explicit P1 structural guard', async () => {
     const { driver } = createHost({
       tenantResolution: { ...defaultResolution, principalSub: 'another-user' },
