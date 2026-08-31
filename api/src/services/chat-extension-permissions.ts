@@ -79,7 +79,7 @@ export const chatExtensionPermissionService = {
     return rows.map((row) => ({
       toolName: row.toolName,
       origin: row.origin,
-      policy: row.policy,
+      policy: row.policy as 'allow' | 'deny',
       updatedAt: row.updatedAt instanceof Date
         ? row.updatedAt.toISOString()
         : new Date(row.updatedAt as unknown as string).toISOString(),
