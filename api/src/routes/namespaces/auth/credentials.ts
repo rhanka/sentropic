@@ -97,7 +97,7 @@ const credentialPort: AuthHonoCredentialPort = {
   },
 };
 
-const handlers = createAuthCredentialRouteHandlers({
+export const credentialHandlers = createAuthCredentialRouteHandlers({
   credentials: credentialPort,
   resolveSession: async (c) => {
     const sessionToken =
@@ -113,9 +113,9 @@ const handlers = createAuthCredentialRouteHandlers({
   },
 });
 
-credentialsRouter.get('/', handlers.listCredentials!);
-credentialsRouter.put('/:id', handlers.renameCredential!);
-credentialsRouter.delete('/:id', handlers.revokeCredential!);
+credentialsRouter.get('/', credentialHandlers.listCredentials!);
+credentialsRouter.put('/:id', credentialHandlers.renameCredential!);
+credentialsRouter.delete('/:id', credentialHandlers.revokeCredential!);
 
 const serializePublicKey = (publicKey: Uint8Array | ArrayBuffer | string): string => {
   if (typeof publicKey === 'string') {

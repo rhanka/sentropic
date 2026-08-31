@@ -71,7 +71,7 @@ const emailVerificationService: AuthHonoEmailVerificationService = {
   },
 };
 
-const emailHandlers = createAuthEmailRouteHandlers({ service: emailVerificationService });
+export const emailHandlers = createAuthEmailRouteHandlers({ service: emailVerificationService });
 
 emailRouter.post('/verify-request', emailHandlers.requestEmailCode!);
 emailRouter.post('/verify-code', emailHandlers.verifyEmailCode!);
