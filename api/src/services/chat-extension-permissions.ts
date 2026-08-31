@@ -61,6 +61,9 @@ const normalizedInput = (input: { toolName: string; origin: string }) => {
   return { toolName, origin };
 };
 
+const normalizeStoredPolicy = (policy: string): 'allow' | 'deny' =>
+  policy === 'allow' ? 'allow' : 'deny';
+
 export const chatExtensionPermissionService = {
   async list(input: { userId: string; workspaceId: string }) {
     const rows = await db
@@ -79,7 +82,7 @@ export const chatExtensionPermissionService = {
     return rows.map((row) => ({
       toolName: row.toolName,
       origin: row.origin,
-      policy: row.policy as 'allow' | 'deny',
+      policy: normalizeStoredPolicy(row.policy),
       updatedAt: row.updatedAt instanceof Date
         ? row.updatedAt.toISOString()
         : new Date(row.updatedAt as unknown as string).toISOString(),

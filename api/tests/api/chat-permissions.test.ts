@@ -85,6 +85,42 @@ describe('Chat tool permissions API', () => {
     expect(rows[0].policy).toBe('deny');
   });
 
+  it('fails closed when a stored permission policy is unknown', async () => {
+    const put = await authenticatedRequest(
+      app,
+      'PUT',
+      '/api/v1/chat/tool-permissions',
+      user.sessionToken!,
+      {
+        toolName: 'tab_read:dom',
+        origin: 'https://example.com',
+        policy: 'allow',
+      },
+    );
+    expect(put.status).toBe(200);
+
+    await db
+      .update(extensionToolPermissions)
+      .set({ policy: 'future-policy' })
+      .where(and(
+        eq(extensionToolPermissions.userId, user.id),
+        eq(extensionToolPermissions.workspaceId, user.workspaceId!),
+        eq(extensionToolPermissions.toolName, 'tab_read:dom'),
+        eq(extensionToolPermissions.origin, 'https://example.com'),
+      ));
+
+    const list = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/chat/tool-permissions',
+      user.sessionToken!,
+    );
+    expect(list.status).toBe(200);
+    const listBody = await list.json();
+    expect(listBody.items).toHaveLength(1);
+    expect(listBody.items[0].policy).toBe('deny');
+  });
+
   it('deletes an existing permission policy', async () => {
     const put = await authenticatedRequest(
       app,
