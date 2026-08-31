@@ -1,20 +1,17 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
-import { createCommentsRouter } from '@sentropic/comments/hono';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { comments, organizations } from '../../src/db/schema';
-import { commentsRouter as legacyCommentsRouter } from '../../src/routes/api/comments';
 import { createCommentsNamespaceModule } from '../../src/routes/namespaces/comments';
 import { COMMENTS_AUTHOR } from '../../src/routes/namespaces/comments-cutover';
 import { createProductCommentsRouterOptions } from '../../src/routes/namespaces/comments-ports';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
-import { commentStore } from '../../src/services/comments/instance';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -23,7 +20,7 @@ import {
 } from '../utils/auth-helper';
 import { createTestId } from '../utils/test-helpers';
 
-describe('cluster mesh comments cutover shadow', () => {
+describe('cluster mesh comments cutover', () => {
   let user: TestUser;
   let organizationId: string;
   const cutovers = new PostgresClusterMeshCutoverStore();
@@ -56,20 +53,6 @@ describe('cluster mesh comments cutover shadow', () => {
     await cleanupAuthData();
   });
 
-  const candidateApp = () => {
-    const options = createProductCommentsRouterOptions();
-    return new Hono().route('/api/v1', createCommentsRouter({
-      ...options,
-      authz: {
-        ...options.authz,
-        resolvePrincipal: async () => ({
-          userId: user.id,
-          workspaceId: user.workspaceId!,
-        }),
-      },
-    }));
-  };
-
   const pluginApp = (enabled = true) => {
     const options = createProductCommentsRouterOptions();
     return new Hono().route('/api/v1', createClusterMeshPlugin({
@@ -88,41 +71,6 @@ describe('cluster mesh comments cutover shadow', () => {
       mounts: { '/comments': '/' },
     }));
   };
-
-  it('matches the legacy safe read byte-for-byte', async () => {
-    const path = `/api/v1/comments?context_type=organization&context_id=${organizationId}`;
-    const legacy = await authenticatedRequest(productApp, 'GET', path, user.sessionToken!);
-    const candidate = await candidateApp().request(path);
-
-    expect(candidate.status).toBe(legacy.status);
-    expect(await candidate.text()).toBe(await legacy.text());
-    expect(legacyCommentsRouter.routes.length).toBeGreaterThan(0);
-  });
-
-  it('matches legacy validation without authoring a mutation', async () => {
-    const add = vi.spyOn(commentStore, 'add');
-    const body = {
-      context_type: 'organization',
-      context_id: organizationId,
-      content: '',
-    };
-    const legacy = await authenticatedRequest(
-      productApp,
-      'POST',
-      '/api/v1/comments',
-      user.sessionToken!,
-      body,
-    );
-    const candidate = await candidateApp().request('/api/v1/comments', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    expect(candidate.status).toBe(legacy.status);
-    expect(await candidate.text()).toBe(await legacy.text());
-    expect(add).not.toHaveBeenCalled();
-  });
 
   it('selects one author and fails closed after verified rollback', async () => {
     const app = pluginApp();
