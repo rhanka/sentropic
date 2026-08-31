@@ -34,6 +34,7 @@ describe('agent-config api client', () => {
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(`${API_BASE_URL}/agent-config?workspace_id=ws-21`);
+    expect(String(url)).not.toContain('/agents/agent-config');
     expect(init?.method).toBe('GET');
   });
 
