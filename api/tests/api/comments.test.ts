@@ -70,6 +70,23 @@ describe('Comments API', () => {
     await cleanupAuthData();
   });
 
+  it('keeps one canonical comments URL after the root mount cutover', async () => {
+    const canonical = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/comments?context_type=initiative&context_id=${initiativeId}`,
+      user.sessionToken!,
+    );
+    expect(canonical.status).toBe(200);
+    const doubled = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/comments/comments',
+      user.sessionToken!,
+    );
+    expect(doubled.status).toBe(404);
+  });
+
   it('returns tool_call_id in list responses', async () => {
     const threadId = createId();
     const commentId = createId();
