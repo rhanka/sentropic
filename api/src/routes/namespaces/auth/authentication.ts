@@ -17,7 +17,7 @@ import { ensureWorkspaceForUser } from '../../../services/workspace-service';
 
 export const loginRouter = new Hono();
 
-const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
+export const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
   finalizeAuthentication: async ({ credentialId, request, userId }, c) => {
     const [user] = await db
       .select({

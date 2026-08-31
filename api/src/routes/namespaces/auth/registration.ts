@@ -449,7 +449,7 @@ const resolveRegistrationBeforePersist = (
   };
 };
 
-const registerHandlers = createAuthWebAuthnRegistrationRouteHandlers({
+export const registerHandlers = createAuthWebAuthnRegistrationRouteHandlers({
   finalizeRegistration: finalizeSentropicRegistration,
   prepareRegistrationOptions: prepareSentropicRegistrationOptions,
   resolveBeforePersist: (input) =>
