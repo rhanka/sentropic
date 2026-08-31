@@ -16,7 +16,7 @@ export interface CreateOAuthNamespaceModuleOptions {
 }
 
 const AUTHOR = 'auth-hono-oauth-module';
-const OAUTH_PATHS = [
+export const OAUTH_PATHS = [
   '/authorize', '/consent', '/consent/decision', '/token', '/userinfo',
   '/revoke', '/introspect', '/end_session', '/s2s/ping', '/s2s/self-check',
 ] as const;

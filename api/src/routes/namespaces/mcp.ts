@@ -1,4 +1,11 @@
-import { createMcpAuth, MCP_SCOPES, type McpAuth } from '@sentropic/mcp-auth';
+import {
+  createMcpAuth,
+  legacyProtectedResourceMetadataPath,
+  MCP_SCOPES,
+  PROTECTED_RESOURCE_METADATA_PATH,
+  protectedResourceMetadataPath,
+  type McpAuth,
+} from '@sentropic/mcp-auth';
 import { getMcpAuthContext, mcpAuthRoutes, requireMcpAuth } from '@sentropic/mcp-auth/hono';
 import {
   createMcpSupervisor,
@@ -27,10 +34,26 @@ const isEnabled = (): boolean => {
 
 let cachedMcp: McpAuth | null = null;
 
+const resolveMcpResource = (request?: Request): string => {
+  const issuer = resolveOAuthIssuer(request);
+  return env.MCP_RESOURCE_URI ?? `${issuer}/api/v1/mcp`;
+};
+
+const productMcpResource = resolveMcpResource();
+export const MCP_PATHS = [
+  '/*',
+  protectedResourceMetadataPath(productMcpResource),
+  PROTECTED_RESOURCE_METADATA_PATH,
+  legacyProtectedResourceMetadataPath(productMcpResource),
+  '/invoke',
+  '/resources/read',
+  '/',
+] as const;
+
 const getMcpAuth = (request?: Request): McpAuth => {
   if (cachedMcp) return cachedMcp;
   const issuer = resolveOAuthIssuer(request);
-  const resource = env.MCP_RESOURCE_URI ?? `${issuer}/api/v1/mcp`;
+  const resource = resolveMcpResource(request);
   cachedMcp = createMcpAuth({
     resource,
     authorizationServers: [env.MCP_AUTHORIZATION_SERVER_URL ?? issuer],

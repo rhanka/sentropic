@@ -11,6 +11,20 @@ import { sessionLifecycleHandlers } from './session-lifecycle';
 
 const AUTHOR = 'cluster-mesh-session-module';
 
+export const SESSION_PATHS = [
+  '/session',
+  '/session/refresh',
+  '/session/extension-token',
+  '/session/all',
+  '/session/list',
+  '/device/code',
+  '/device/poll',
+  '/device/approve',
+  '/session/control/drive',
+  '/session/control/wake',
+  '/session/control/relaunch',
+] as const;
+
 const createAuthorPort = (key: NamespaceCutoverKey) => {
   const control = clusterMeshAdapter.sessionControl;
   if (!control) throw new Error('cluster mesh session control is not configured');
