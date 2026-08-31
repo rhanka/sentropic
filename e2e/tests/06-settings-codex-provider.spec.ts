@@ -4,6 +4,11 @@ test.describe('Codex provider settings', () => {
   test.use({ storageState: './.auth/state.json' });
 
   test('admin can follow a mocked Codex device flow from settings', async ({ page }) => {
+    const duplicateNamespaceRequests: string[] = [];
+    page.on('request', (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith('/api/v1/llm-mesh')) duplicateNamespaceRequests.push(path);
+    });
     let openaiTransportMode: 'codex' | 'token' = 'token';
     const postedModes: string[] = [];
     let providerState = {
@@ -173,5 +178,6 @@ test.describe('Codex provider settings', () => {
 
     await page.getByRole('button', { name: /Disconnect|Déconnecter/i }).click();
     await expect(page.getByText('Non prêt', { exact: true }).first()).toBeVisible();
+    expect(duplicateNamespaceRequests).toEqual([]);
   });
 });

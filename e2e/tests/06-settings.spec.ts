@@ -82,6 +82,23 @@ test.describe('Page Paramètres', () => {
     }
   });
 
+  test('devrait conserver les projections publiques llm-mesh sans double chemin', async ({ browser }) => {
+    const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
+    try {
+      const [catalog, settings, duplicate] = await Promise.all([
+        page.request.get('/api/v1/models/catalog'),
+        page.request.get('/api/v1/me/ai-settings'),
+        page.request.get('/api/v1/llm-mesh/models/catalog'),
+      ]);
+
+      expect(catalog.status()).toBe(200);
+      expect(settings.status()).toBe(200);
+      expect(duplicate.status()).toBe(404);
+    } finally {
+      await context.close();
+    }
+  });
+
   test('devrait afficher la carte de téléchargement de l’extension Chrome', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, ADMIN_STATE, workspaceAlphaId);
     try {
