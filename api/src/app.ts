@@ -18,6 +18,7 @@ import { productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
 import { productFocusModule } from './routes/namespaces/focus';
 import { productTrackModule, TRACK_READ_PATHS } from './routes/namespaces/track';
+import { MEMORY_PATHS, productMemoryModule } from './routes/namespaces/memory';
 import {
   LLM_MESH_ADMIN_PATHS,
   productLlmMeshModule,
@@ -72,6 +73,12 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
     module: productTrackModule,
     mount: '/track',
     authPaths: TRACK_READ_PATHS,
+  },
+  {
+    namespace: '/memory',
+    module: productMemoryModule,
+    mount: '/memory',
+    authPaths: MEMORY_PATHS,
   },
 ] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
