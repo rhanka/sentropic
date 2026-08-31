@@ -64,13 +64,13 @@ export const createLlmMeshRouter = (options: CreateLlmMeshRouterOptions): Hono =
   router.get('/models/provider-readiness', (c) => dispatch(c, options, options.pool.readAvailability.bind(options.pool)));
   router.get('/me/ai-settings', (c) => dispatch(c, options, options.catalog.readUserSettings.bind(options.catalog)));
   router.put('/me/ai-settings', (c) => dispatch(c, options, options.catalog.updateUserSettings.bind(options.catalog)));
-  router.get('/provider-connections', (c) => dispatch(c, options, options.pool.readConnections.bind(options.pool)));
-  router.post('/provider-connections/openai/mode', (c) => dispatch(
+  router.get('/settings/provider-connections', (c) => dispatch(c, options, options.pool.readConnections.bind(options.pool)));
+  router.post('/settings/provider-connections/openai/mode', (c) => dispatch(
     c,
     options,
     (input) => options.pool.updateTransportMode({ ...input, providerId: 'openai' }),
   ));
-  router.post('/provider-connections/:providerId/enrollment/:action', (c) => dispatch(
+  router.post('/settings/provider-connections/:providerId/enrollment/:action', (c) => dispatch(
     c,
     options,
     (input) => options.enrollment.handle({
