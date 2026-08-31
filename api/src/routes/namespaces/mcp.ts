@@ -8,8 +8,8 @@ import type {
   McpConnectorPort,
   McpHonoOptions,
   McpInvocation,
-} from '../../../../packages/mcp-platform/src/hono';
-import { createMcpPlatformHono } from '../../../../packages/mcp-platform/src/hono';
+} from '@sentropic/mcp-platform/hono';
+import { createMcpPlatformHono } from '#mcp-platform-hono';
 import { fromJwksPort } from '@sentropic/oauth-verify';
 
 import { env } from '../../config/env';

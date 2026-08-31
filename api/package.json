@@ -2,6 +2,9 @@
   "name": "sentropic-api",
   "version": "0.1.1",
   "type": "module",
+  "imports": {
+    "#mcp-platform-hono": "@sentropic/mcp-platform/hono"
+  },
   "overrides": {
     "glob": "^11.1.0",
     "fast-xml-parser": "^5.3.6",
