@@ -1,55 +1,24 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
-import { createConnectorAdminRouter } from '@sentropic/connector-host/hono';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { documentConnectorAccounts } from '../../src/db/schema';
-import { requireAuth } from '../../src/middleware/auth';
-import { requireAdmin } from '../../src/middleware/rbac';
-import { gmailRouter } from '../../src/routes/api/gmail';
-import { googleDriveRouter } from '../../src/routes/api/google-drive';
-import { settingsRouter } from '../../src/routes/api/settings';
-import {
-  createConnectorsNamespaceModule,
-  createProductConnectorAdminRouterOptions,
-} from '../../src/routes/namespaces/connectors';
+import { createConnectorsNamespaceModule } from '../../src/routes/namespaces/connectors';
 import { CONNECTORS_AUTHOR } from '../../src/routes/namespaces/connectors-cutover';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
 import { GMAIL_PROVIDER } from '../../src/services/gmail-oauth';
-import { settingsService } from '../../src/services/settings';
 import {
   cleanupAuthData,
   createAuthenticatedUser,
   type TestUser,
 } from '../utils/auth-helper';
 import { createConnectedGoogleDriveToken } from '../utils/google-drive-helper';
-
-const mountLegacy = (): Hono => {
-  const app = new Hono();
-  app.use('/api/v1/google-drive/*', requireAuth);
-  app.route('/api/v1/google-drive', googleDriveRouter);
-  app.use('/api/v1/gmail/*', requireAuth);
-  app.route('/api/v1/gmail', gmailRouter);
-  app.use('/api/v1/settings/*', requireAuth, requireAdmin);
-  app.route('/api/v1/settings', settingsRouter);
-  return app;
-};
-
-const mountCandidate = (): Hono => {
-  const app = new Hono();
-  app.use('/api/v1/google-drive/*', requireAuth);
-  app.use('/api/v1/gmail/*', requireAuth);
-  app.use('/api/v1/settings/connector-accounts/max-per-provider', requireAuth, requireAdmin);
-  app.route('/api/v1', createConnectorAdminRouter(
-    createProductConnectorAdminRouterOptions(),
-  ));
-  return app;
-};
 
 const cutovers = new PostgresClusterMeshCutoverStore();
 const cutoverKey = { compositionRoot: 'product' as const, namespace: '/connectors' as const };
@@ -84,7 +53,7 @@ const requestWire = async (
   return { status: response.status, body: await response.text() };
 };
 
-describe('cluster mesh connectors pre-cutover shadow', () => {
+describe('cluster mesh connectors cutover', () => {
   let user: TestUser;
 
   beforeEach(async () => {
@@ -118,33 +87,23 @@ describe('cluster mesh connectors pre-cutover shadow', () => {
     await cleanupAuthData();
   });
 
-  it('keeps legacy routers live while populated account and readiness reads are byte-identical', async () => {
-    expect(googleDriveRouter.routes.length).toBeGreaterThan(0);
-    expect(gmailRouter.routes.length).toBeGreaterThan(0);
-    const legacy = mountLegacy();
-    const candidate = mountCandidate();
-
-    for (const path of [
-      '/api/v1/google-drive/connection',
-      '/api/v1/gmail/connection',
-    ] as const) {
-      const legacyWire = await requestWire(legacy, user, 'GET', path);
-      const candidateWire = await requestWire(candidate, user, 'GET', path);
-      expect(legacyWire.status).toBe(200);
-      expect(candidateWire).toEqual(legacyWire);
-      expect(JSON.parse(candidateWire.body).account.connected).toBe(true);
-    }
-  });
-
-  it('validates privileged account-limit intent without executing either author', async () => {
-    const setSetting = vi.spyOn(settingsService, 'set');
-    const path = '/api/v1/settings/connector-accounts/max-per-provider';
-    const legacyWire = await requestWire(mountLegacy(), user, 'PUT', path, { maxPerProvider: 0 });
-    const candidateWire = await requestWire(mountCandidate(), user, 'PUT', path, { maxPerProvider: 0 });
-
-    expect(legacyWire.status).toBe(400);
-    expect(candidateWire).toEqual(legacyWire);
-    expect(setSetting).not.toHaveBeenCalled();
+  it('root-mounts connector paths without gating health and keeps settings privileged', async () => {
+    expect((await productApp.request('/api/v1/health')).status).toBe(200);
+    expect((await productApp.request('/api/v1/google-drive/connection')).status).toBe(401);
+    expect((await productApp.request('/api/v1/gmail/connection')).status).toBe(401);
+    expect((await productApp.request(
+      '/api/v1/settings/connector-accounts/max-per-provider',
+    )).status).toBe(401);
+    const editor = await createAuthenticatedUser('editor');
+    expect((await requestWire(
+      productApp, editor, 'GET', '/api/v1/google-drive/connection',
+    )).status).toBe(200);
+    expect((await requestWire(
+      productApp, editor, 'GET', '/api/v1/settings/connector-accounts/max-per-provider',
+    )).status).toBe(403);
+    expect((await requestWire(
+      productApp, user, 'GET', '/api/v1/connectors/google-drive/connection',
+    )).status).toBe(404);
   });
 
   it('selects one connector author and fails closed after verified rollback', async () => {

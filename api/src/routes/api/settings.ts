@@ -4,19 +4,11 @@ import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
 import { createSession, revokeSession } from '../../services/session-manager';
-import {
-  CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
-  settingsService,
-} from '../../services/settings';
 
 const settingsSchema = z.object({
   openaiModels: z.record(z.string()).default({}),
   prompts: z.record(z.any()).default({}),
   generationLimits: z.record(z.any()).default({})
-});
-
-const connectorAccountsMaxPerProviderSchema = z.object({
-  maxPerProvider: z.number().int().min(1),
 });
 
 export const settingsRouter = new Hono();
@@ -169,26 +161,6 @@ settingsRouter.delete('/vscode-extension-token', async (c) => {
     meta: toPublicMeta(revokedMeta),
   });
 });
-
-settingsRouter.get('/connector-accounts/max-per-provider', async (c) => {
-  return c.json({
-    maxPerProvider: await settingsService.getConnectorAccountsMaxPerProvider(),
-  });
-});
-
-settingsRouter.put(
-  '/connector-accounts/max-per-provider',
-  zValidator('json', connectorAccountsMaxPerProviderSchema),
-  async (c) => {
-    const { maxPerProvider } = c.req.valid('json');
-    await settingsService.set(
-      CONNECTOR_ACCOUNTS_MAX_PER_PROVIDER_SETTING,
-      maxPerProvider.toString(),
-      'Maximum connector accounts per provider',
-    );
-    return c.json({ maxPerProvider });
-  },
-);
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur
