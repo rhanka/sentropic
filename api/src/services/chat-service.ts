@@ -1609,7 +1609,7 @@ export class ChatService {
    * BR14b Lot 10 — body migrated verbatim into
    * `ChatRuntime.acceptLocalToolResult` (and its private helper
    * `extractAwaitingLocalToolState`). Public signature preserved so
-   * routes/api/chat.ts and tests in api/tests/unit/chat-service-tools.test.ts
+   * chat-server-provider.ts and tests in api/tests/unit/chat-service-tools.test.ts
    * call sites are unchanged.
    */
   async acceptLocalToolResult(options: {
