@@ -40,6 +40,15 @@ describe('AppChatPanel boundary', () => {
     expect(source).toContain('attachments: capturedAttachments');
   });
 
+  it('keeps chat HTTP and stream transport behind their host adapters', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
+    expect(source).toContain("from '$lib/chat/session-adapter'");
+    expect(source).toContain("from '$lib/stores/streamHub'");
+    expect(source).toContain('chatSessionsUrl()');
+    expect(source).not.toContain('/api/v1/chat');
+    expect(source).not.toContain('/api/v1/streams');
+  });
+
   it('renders a pending-only attachment band with click-to-enlarge, not a persistent session-doc band', () => {
     const source = readFileSync(appPanelPath, 'utf8');
     // Band items are now built via the @sentropic/chat-ui/documents helper and

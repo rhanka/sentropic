@@ -7,11 +7,14 @@ import type { ProjectedRunSegment } from '@sentropic/chat-ui/utils/chat-run-proj
 
 type Message = ChatProjectionMessage & { sequence: number };
 
-const assistant = (content: string): Message => ({
+const assistant = (
+  content: string,
+  localStatus: Message['_localStatus'] = 'processing',
+): Message => ({
   id: 'assistant-1',
   role: 'assistant',
   content,
-  _localStatus: 'processing',
+  _localStatus: localStatus,
   _streamId: 'stream-1',
   sequence: 2,
 });
@@ -45,12 +48,12 @@ const timelineFor = (message: Message, segments: ProjectedRunSegment[]) =>
   });
 
 describe('ChatTimeline projection stability', () => {
-  it('keeps runtime and assistant segment keys stable across late content deltas', () => {
+  it('keeps segment keys stable from live deltas to history hydration', () => {
     const before = timelineFor(assistant('hel'), [
       runtimeSegment,
       assistantSegment('hel'),
     ]);
-    const after = timelineFor(assistant('hello'), [
+    const after = timelineFor(assistant('hello', 'completed'), [
       runtimeSegment,
       assistantSegment('hello'),
     ]);
