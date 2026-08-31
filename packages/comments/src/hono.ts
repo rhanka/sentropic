@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import type { CommentsHttpPrincipal, CreateCommentsRouterOptions } from './hono-ports.js';
-import { ThreadNotFoundError } from './store.js';
+import { CommentNotFoundError, ThreadNotFoundError } from './store.js';
 import { targetFromLive } from './types.js';
 
 export type {
@@ -36,6 +36,10 @@ const createSchema = z.object({
   content: z.string().min(1),
   assigned_to: z.string().optional(),
   thread_id: z.string().optional(),
+});
+const updateSchema = z.object({
+  content: z.string().min(1).optional(),
+  assigned_to: z.string().nullable().optional(),
 });
 
 const principalFor = async (
@@ -190,6 +194,70 @@ export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono
       origin: 'rest',
     });
     return context.json({ id: created.id, thread_id: created.threadId }, 201);
+  });
+
+  router.patch('/comments/:id', async (context) => {
+    const principal = await principalFor(context, options, 'comment');
+    if (isResponse(principal)) return principal;
+    const parsed = await updateSchema.safeParseAsync(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success) return context.json(parsed, 400);
+
+    const tenant = await options.tenant.resolve(principal);
+    const id = context.req.param('id');
+    const row = await options.store.get(tenant, id);
+    if (!row) return context.json({ message: 'Not found' }, 404);
+    if (row.author.id !== principal.userId && !await options.authz.authorize({
+      principal,
+      action: 'admin',
+    })) return context.json({ message: 'Insufficient permissions' }, 403);
+
+    const body = parsed.data;
+    const hasContent = typeof body.content === 'string';
+    const nextContent = hasContent ? body.content!.trim() : undefined;
+    let nextAssigned: string | undefined;
+    if (body.assigned_to !== undefined) {
+      nextAssigned = body.assigned_to ?? row.author.id;
+      if (!await options.tenant.memberExists({
+        userId: nextAssigned,
+        workspaceId: principal.workspaceId,
+      })) return context.json({ message: 'Assigned user not in workspace' }, 400);
+    }
+    if (!hasContent && nextAssigned === undefined) {
+      return context.json({ message: 'No updates' }, 400);
+    }
+
+    try {
+      if (nextAssigned !== undefined) {
+        if (hasContent) {
+          await options.store.editThread(tenant, row.threadId, {
+            content: nextContent!,
+            assignedTo: nextAssigned,
+          });
+        } else {
+          await options.store.assign(tenant, row.threadId, nextAssigned);
+        }
+      } else {
+        await options.store.edit(tenant, id, { body: nextContent });
+      }
+    } catch (error) {
+      if (error instanceof CommentNotFoundError || error instanceof ThreadNotFoundError) {
+        return context.json({ message: 'Not found' }, 404);
+      }
+      throw error;
+    }
+
+    await options.events.emit({
+      workspaceId: principal.workspaceId,
+      contextType: row.target.recordType ?? row.target.kind,
+      contextId: row.target.id,
+      action: 'updated',
+      key: 'comment_id',
+      commentId: id,
+      origin: 'rest',
+    });
+    return context.json({ success: true });
   });
 
   return router;
