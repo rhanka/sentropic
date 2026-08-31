@@ -57,8 +57,6 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 // verified-email collisions route to the authenticated manual-link flow below.
 const AUTO_LINK_PROVIDERS: ReadonlySet<string> = new Set(['google']);
 
-export const federationRouter = new Hono();
-
 const isProduction = (): boolean => process.env.NODE_ENV === 'production';
 
 const deviceInfoFrom = (c: Context): AuthHonoDeviceInfo => ({
@@ -138,7 +136,11 @@ const setSessionCookie = (c: Context, sessionToken: string): void => {
   });
 };
 
-const brokerFor = (c: Context, provider: FederationProvider) => {
+const brokerFor = (
+  c: Context,
+  provider: FederationProvider,
+  oauthAuthorizePath: string,
+) => {
   const ports = getSentropicOAuthPorts();
   const sessionService = createAuthSessionService({ ports });
   const issuer = resolveOAuthIssuer(c.req.raw);
@@ -150,7 +152,7 @@ const brokerFor = (c: Context, provider: FederationProvider) => {
     clock: ports.clock,
     config: {
       // D11: resume the sealed continuation via the authorize endpoint, else a FIXED internal page.
-      authorizeUrl: `${issuer}/auth/oauth/authorize`,
+      authorizeUrl: `${issuer}${oauthAuthorizePath}`,
       autoLinkProviders: AUTO_LINK_PROVIDERS,
       flowStateTtlSeconds: FLOW_TTL_SECONDS,
       landingUrl: `${uiBase}/`,
@@ -195,11 +197,14 @@ const resolveOrRespond = (c: Context): FederationProvider | Response => {
   return provider;
 };
 
+export const createFederationRouter = (oauthAuthorizePath: string): Hono => {
+const federationRouter = new Hono();
+
 federationRouter.get('/:provider/start', async (c) => {
   const provider = resolveOrRespond(c);
   if (provider instanceof Response) return provider;
 
-  const result = await brokerFor(c, provider).start({
+  const result = await brokerFor(c, provider, oauthAuthorizePath).start({
     continuation: c.req.query('continue') ?? null,
     deviceInfo: deviceInfoFrom(c),
   });
@@ -231,7 +236,7 @@ const callbackHandler = async (c: Context) => {
     query: (name) => c.req.query(name),
   });
 
-  const result = await brokerFor(c, provider).callback({
+  const result = await brokerFor(c, provider, oauthAuthorizePath).callback({
     code: params.code,
     deviceInfo: deviceInfoFrom(c),
     error: params.error,
@@ -304,7 +309,7 @@ federationRouter.get('/:provider/link/start', async (c) => {
   }
 
   // A link flow carries NO downstream OAuth continuation — it always lands the user back internally.
-  const result = await brokerFor(c, provider).start({
+  const result = await brokerFor(c, provider, oauthAuthorizePath).start({
     continuation: null,
     deviceInfo: deviceInfoFrom(c),
   });
@@ -336,7 +341,7 @@ const linkCallbackHandler = async (c: Context) => {
     query: (name) => c.req.query(name),
   });
 
-  const result = await brokerFor(c, provider).linkCallback({
+  const result = await brokerFor(c, provider, oauthAuthorizePath).linkCallback({
     code: params.code,
     deviceInfo: deviceInfoFrom(c),
     error: params.error,
@@ -421,7 +426,7 @@ federationRouter.post('/challenge/complete', async (c) => {
     return c.json({ error: { code: 'provider_not_configured', message: `Provider "${providerId}" is not configured.` } }, 503);
   }
 
-  const result = await brokerFor(c, provider).completeEmailChallenge({
+  const result = await brokerFor(c, provider, oauthAuthorizePath).completeEmailChallenge({
     continuation: pending.continuation,
     deviceInfo: deviceInfoFrom(c),
     provider: providerId,
@@ -444,3 +449,8 @@ federationRouter.post('/challenge/complete', async (c) => {
   }
   return c.json(result.body, result.status as 400 | 401 | 409 | 500);
 });
+
+return federationRouter;
+};
+
+export const federationRouter = createFederationRouter('/api/v1/oauth/authorize');
