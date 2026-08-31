@@ -4,10 +4,9 @@
 // MUST be confirmed with the user before merge (feedback_no_unvalidated_naming).
 //
 // Phase A0 (BR-39m): a THIN standalone IdP composition that REUSES the existing
-// auth surface with ZERO new auth code. It mounts the already-wired
-// `authRouter` (register/login/consent handlers) plus the reusable Cluster Mesh
-// session and OAuth modules — all backed by the shared-DB Postgres adapters and
-// the JWKS adapter — onto a fresh Hono app.
+// auth surface with ZERO new auth code. It mounts the reusable Cluster Mesh
+// auth, session, and OAuth modules — all backed by the shared-DB Postgres
+// adapters and the JWKS adapter — onto a fresh Hono app.
 //
 // SHARED PHYSICAL DB (fork F1+F3 default): this module imports the SAME db
 // client and routers used by `api/`. It does NOT create a new database, does
@@ -66,8 +65,8 @@ const readSpaFallback = (): string | null => {
  *   - *    /api/v1/auth/oauth/*        (authorize, token, userinfo, consent, revoke, introspect)
  *   - *    /api/v1/auth/{register,login,session,credentials,magic-link,email,device}/*
  *
- * Rate limiting: this app builds its OWN `new Hono()` and mounts `authRouter`
- * directly, so the limiters declared on the product app in `api/src/app.ts` were
+ * Rate limiting: this app builds its OWN `new Hono()` and mounts the auth module
+ * directly, so limiters declared only on the product app in `api/src/app.ts` are
  * NEVER applied here — a previous comment claimed otherwise and was wrong. Since
  * `auth.sent-tech.ca` is a PUBLIC host serving
  * `/api/v1/auth/{login,register,magic-link}/*` against the same `users` table,
