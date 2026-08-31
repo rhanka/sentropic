@@ -1,4 +1,12 @@
 export { mountConnectorHost } from './mount.js';
+export { createConnectorAdminRouter } from './hono.js';
+export type {
+  ConnectorAccountLimitAdapter,
+  ConnectorAdminHandlerInput,
+  ConnectorAdminPrincipal,
+  ConnectorAdminProviderAdapter,
+  CreateConnectorAdminRouterOptions,
+} from './hono.js';
 export type {
   ConnectorHostDriver,
   ConnectorHostExposurePolicy,
