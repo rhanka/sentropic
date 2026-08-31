@@ -117,9 +117,15 @@ describe('@sentropic/mcp-auth/hono', () => {
       method: 'POST',
       headers: { authorization: 'Bearer good' },
     });
+    const next = await app.request('/mcp/invoke', {
+      method: 'POST',
+      headers: { authorization: 'Bearer next' },
+    });
     expect(res.status).toBe(200);
+    expect(next.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ ok: true, sub: 'user-7', scopes: ['mcp:tools:invoke'] });
+    expect(verifyAccessToken).toHaveBeenCalledTimes(2);
   });
 
   it('returns 403 insufficient_scope when the token lacks the required scope', async () => {

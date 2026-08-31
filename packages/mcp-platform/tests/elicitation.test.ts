@@ -43,6 +43,8 @@ describe('ElicitationManager — fail-closed state machine', () => {
     driveToResumed(m, 'el-1', human('user-1'));
     expect(m.get('el-1')?.state).toBe('resumed');
     expect(m.isGateReleased('el-1')).toBe(true);
+    m.create(baseInput({ id: 'el-2', sessionRef: 'sess-2' }));
+    expect(m.isGateReleased('el-2')).toBe(false);
   });
 
   it('cancel is a terminal that denies the gate and is absorbing', () => {
