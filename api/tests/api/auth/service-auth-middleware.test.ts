@@ -12,8 +12,8 @@ const ISSUER = 'http://localhost:9197';
 const RESOURCE = ISSUER;
 const CLIENT_ID = 'test-service-rp';
 const CLIENT_SECRET = 'test-service-rp-secret-dev-only';
-const PING_URL = `${ISSUER}/api/v1/auth/s2s/ping`;
-const TOKEN_URL = `${ISSUER}/api/v1/auth/oauth/token`;
+const PING_URL = `${ISSUER}/api/v1/oauth/s2s/ping`;
+const TOKEN_URL = `${ISSUER}/api/v1/oauth/token`;
 
 describe('S2S createRequireServiceAuth host route', () => {
   beforeEach(async () => {

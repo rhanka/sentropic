@@ -49,7 +49,7 @@ describe('OAuth consent persistence API route', () => {
     const sealedState = firstLocation.searchParams.get('state') ?? '';
 
     // 2) Approve → auth code issued AND grant row saved.
-    const decision = await app.request('http://localhost:9197/api/v1/auth/oauth/consent/decision', {
+    const decision = await app.request('http://localhost:9197/api/v1/oauth/consent/decision', {
       body: JSON.stringify({ decision: 'approve', state: sealedState }),
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', Cookie: cookie },
       method: 'POST',
@@ -98,7 +98,7 @@ describe('OAuth consent persistence API route', () => {
     });
     const sealedState = new URL(authorize.headers.get('location') ?? '').searchParams.get('state') ?? '';
 
-    const decision = await app.request('http://localhost:9197/api/v1/auth/oauth/consent/decision', {
+    const decision = await app.request('http://localhost:9197/api/v1/oauth/consent/decision', {
       body: JSON.stringify({ decision: 'deny', state: sealedState }),
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', Cookie: cookie },
       method: 'POST',
@@ -110,7 +110,7 @@ describe('OAuth consent persistence API route', () => {
 });
 
 const buildAuthorizeUrl = (scope: string): string => {
-  const url = new URL('http://localhost:9197/api/v1/auth/oauth/authorize');
+  const url = new URL('http://localhost:9197/api/v1/oauth/authorize');
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', CLIENT_ID);
   url.searchParams.set('redirect_uri', REDIRECT_URI);
