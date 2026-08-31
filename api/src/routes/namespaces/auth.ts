@@ -78,7 +78,7 @@ export const createAuthNamespaceModule = (
       handlers: identityHandlers,
       ports: getSentropicOAuthPorts(),
       routePrefix: authPath,
-      serviceName: 'sentropic-auth',
+      serviceName: 'auth',
     }));
     router.route(joinPath(authPath, '/federation'), createFederationRouter(oauthAuthorizePath));
     router.route(accountPath, accountRouter);
