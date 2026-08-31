@@ -17,6 +17,7 @@ import { productAuthPlugin } from './routes/namespaces/auth';
 import { productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
 import { productFocusModule } from './routes/namespaces/focus';
+import { productTrackModule } from './routes/namespaces/track';
 import {
   LLM_MESH_ADMIN_PATHS,
   productLlmMeshModule,
@@ -226,6 +227,7 @@ app.route('/api/v1', createClusterMeshPlugin({
     productGwModule,
     productChatModule,
     productFocusModule,
+    productTrackModule,
     ...productFencedRootRegistrations.map(({ module }) => module),
   ],
   mounts: PRODUCT_CLUSTER_MESH_MOUNTS,
