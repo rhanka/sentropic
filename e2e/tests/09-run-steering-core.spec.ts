@@ -229,4 +229,62 @@ test.describe('chat steering core after the Flow cutover', () => {
       await api.dispose();
     }
   });
+
+  test('configures an agent through the root-remapped public path', async () => {
+    const api = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: DEFAULT_AUTH_STATE,
+    });
+    let workspaceId = '';
+    let createdId = '';
+
+    try {
+      const workspacesRes = await api.get('/api/v1/workspaces');
+      expect(workspacesRes.ok()).toBeTruthy();
+      const payload = (await workspacesRes.json()) as { items?: WorkspaceItem[] };
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const writableWorkspace = items.find((entry) => entry.role !== 'viewer') ?? items[0];
+      workspaceId = String(writableWorkspace?.id ?? '');
+      expect(workspaceId).toBeTruthy();
+
+      const key = `e2e-agent-${Date.now()}`;
+      const path = `/api/v1/agent-config?workspace_id=${encodeURIComponent(workspaceId)}`;
+      const putRes = await api.put(path, {
+        data: {
+          items: [{
+            key,
+            name: 'E2E agent configuration',
+            config: { model: 'gpt-4.1-nano' },
+            sourceLevel: 'user',
+          }],
+        },
+      });
+      expect(putRes.status()).toBe(200);
+      const putPayload = (await putRes.json()) as {
+        items?: Array<{ id?: string; key?: string; config?: unknown }>;
+      };
+      const created = putPayload.items?.find((item) => item.key === key);
+      createdId = String(created?.id ?? '');
+      expect(created).toMatchObject({ key, config: { model: 'gpt-4.1-nano' } });
+      expect(createdId).toBeTruthy();
+
+      const listRes = await api.get(path);
+      expect(listRes.status()).toBe(200);
+      const listPayload = (await listRes.json()) as { items?: Array<{ id?: string }> };
+      expect(listPayload.items?.some((item) => item.id === createdId)).toBe(true);
+
+      const doubled = await api.get(
+        `/api/v1/agents/agent-config?workspace_id=${encodeURIComponent(workspaceId)}`,
+      );
+      expect(doubled.status()).toBe(404);
+    } finally {
+      if (workspaceId && createdId) {
+        const deleted = await api.delete(
+          `/api/v1/agent-config/${encodeURIComponent(createdId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
+        );
+        expect(deleted.status()).toBe(204);
+      }
+      await api.dispose();
+    }
+  });
 });
