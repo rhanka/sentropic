@@ -14,7 +14,7 @@ import {
 import { EventStore } from '@sentropic/track';
 import { ingest } from '@sentropic/track/ingest';
 import { TrackReader } from '@sentropic/track/read';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TrackEventOwnerSignaturePort } from '../../src/services/focus/track-event-owner-signature-port';
 
@@ -304,5 +304,27 @@ describe('TrackEventOwnerSignaturePort (Real Track Store Atomicity)', () => {
     expect(persisted?.recordId).toBe(receipt.recordId);
     expect(persisted?.attestation.attester.canonicalIdentity.subject).toBe(`human:${OWNER_EMAIL}`);
     expect(persisted?.idempotencyKey).toBe('single-write-idempotency');
+  });
+
+  it('executes exactly one Track effect boundary for a valid owner-signature intent', async () => {
+    const workspace = 'ws:valid-intent-effect-boundary';
+    const target: TrackNativeDecisionTarget = {
+      workspace,
+      decisionId: seedDecisionInStore(workspace, OWNER_EMAIL),
+    };
+    const port = new TrackEventOwnerSignaturePort({ eventsPath });
+    const effectBoundary = vi.fn((write: TrackOwnerSignatureWrite) => port.appendOwnerSignature(write));
+    const write: TrackOwnerSignatureWrite = {
+      contractVersion: FOCUS_OWNER_SIGNATURE_CONTRACT_VERSION,
+      target,
+      attestation: { attester: OWNER },
+      relayer: RELAYER,
+      idempotencyKey: 'valid-intent-effect-boundary',
+    };
+
+    await expect(effectBoundary(write)).resolves.toMatchObject({ status: 'written' });
+    expect(effectBoundary).toHaveBeenCalledOnce();
+    const events = new TrackReader(eventsPath).reportSnapshot({ decisions: true }).events;
+    expect(events.filter((event) => event.type === 'decision.artifact-added')).toHaveLength(1);
   });
 });

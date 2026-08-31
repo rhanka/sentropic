@@ -77,6 +77,12 @@ describe("readDecisionDossier (real @sentropic/track/read binding)", () => {
     expect(major).toBe(EXPECTED_TRACK_READ_MAJOR);
   });
 
+  it("keeps evidence and cursor projections deterministic for adapter shadow reads", () => {
+    const repeated = readDecisionDossier(eventsPath, query, READ_AT);
+    expect({ hash: repeated.hash, cursor: repeated.cursor, evidence: repeated.provenance.comprehensionEvidence })
+      .toEqual({ hash: doc.hash, cursor: doc.cursor, evidence: doc.provenance.comprehensionEvidence });
+  });
+
   it("maps a real DecisionDossierView into a concrete decision-dossier document", () => {
     expect(doc.ref).toBe(DECISION_ID);
     // subject is derived from the view.workspace (the corrected shape carries id/title/workspace).
