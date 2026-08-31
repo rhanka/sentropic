@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import type { CommentsHttpPrincipal, CreateCommentsRouterOptions } from './hono-ports.js';
+import { ThreadNotFoundError } from './store.js';
 import { targetFromLive } from './types.js';
 
 export type {
@@ -27,6 +28,14 @@ const listQuerySchema = z.object({
   context_id: z.string().min(1),
   section_key: z.string().optional(),
   status: statusSchema.optional(),
+});
+const createSchema = z.object({
+  context_type: contextTypeSchema,
+  context_id: z.string().min(1),
+  section_key: z.string().optional(),
+  content: z.string().min(1),
+  assigned_to: z.string().optional(),
+  thread_id: z.string().optional(),
 });
 
 const principalFor = async (
@@ -113,6 +122,74 @@ export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono
       created_by_user: usersById.get(row.author.id) ?? null,
       assigned_to_user: row.assignedTo ? usersById.get(row.assignedTo) ?? null : null,
     })) });
+  });
+
+  router.post('/comments', async (context) => {
+    const principal = await principalFor(context, options, 'comment');
+    if (isResponse(principal)) return principal;
+    const parsed = await createSchema.safeParseAsync(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success) return context.json(parsed, 400);
+    const body = parsed.data;
+    if (!await options.tenant.contextExists({
+      contextType: body.context_type,
+      contextId: body.context_id,
+      workspaceId: principal.workspaceId,
+    })) return context.json({ message: 'Not found' }, 404);
+
+    const tenant = await options.tenant.resolve(principal);
+    let existingThreadAssignee: string | null = null;
+    if (body.thread_id?.trim()) {
+      const threadRows = await options.store.listThread(tenant, body.thread_id.trim());
+      const threadInTarget = threadRows.filter(
+        (row) => (row.target.recordType ?? row.target.kind) === body.context_type
+          && row.target.id === body.context_id,
+      );
+      if (threadInTarget.length === 0) {
+        return context.json({ message: 'Thread not found' }, 404);
+      }
+      existingThreadAssignee = threadInTarget.find((row) => row.assignedTo)?.assignedTo ?? null;
+    }
+
+    const assignedTo = body.assigned_to ?? existingThreadAssignee ?? principal.userId;
+    if (!await options.tenant.memberExists({
+      userId: assignedTo,
+      workspaceId: principal.workspaceId,
+    })) return context.json({ message: 'Assigned user not in workspace' }, 400);
+
+    let created;
+    try {
+      created = await options.store.add(tenant, {
+        tenant,
+        target: targetFromLive({
+          contextType: body.context_type,
+          contextId: body.context_id,
+          sectionKey: body.section_key ?? null,
+        }),
+        author: { id: principal.userId },
+        body: body.content.trim(),
+        ...(body.thread_id?.trim() ? { threadId: body.thread_id.trim() } : {}),
+        assignedTo,
+      });
+    } catch (error) {
+      if (error instanceof ThreadNotFoundError) {
+        return context.json({ message: 'Thread not found' }, 404);
+      }
+      throw error;
+    }
+    if (body.assigned_to) await options.store.assign(tenant, created.threadId, assignedTo);
+
+    await options.events.emit({
+      workspaceId: principal.workspaceId,
+      contextType: body.context_type,
+      contextId: body.context_id,
+      action: 'created',
+      key: 'comment_id',
+      commentId: created.id,
+      origin: 'rest',
+    });
+    return context.json({ id: created.id, thread_id: created.threadId }, 201);
   });
 
   return router;
