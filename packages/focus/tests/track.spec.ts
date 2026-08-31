@@ -27,6 +27,7 @@ import {
 import { TrackReader } from "@sentropic/track/read";
 import { renderHtml, renderMd, renderTerminal } from "../src/index.js";
 import type { HtmlRenderHooks } from "../src/index.js";
+import type { FocusTrackPort } from "../src/hono.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const eventsPath = join(here, ".track", "events.jsonl");
@@ -45,6 +46,30 @@ const hooks: HtmlRenderHooks = {
 
 describe("readDecisionDossier (real @sentropic/track/read binding)", () => {
   const doc = readDecisionDossier(eventsPath, query, READ_AT);
+
+  it("adapts the external Track read without manufacturing a signature port", async () => {
+    const port: FocusTrackPort = {
+      async readDecision(target) {
+        return {
+          status: "found",
+          document: readDecisionDossier(
+            eventsPath,
+            { ...query, workspace: target.workspace, decisionId: target.decisionId },
+            READ_AT,
+          ),
+        };
+      },
+      async getOwnerSignaturePort() {
+        return undefined;
+      },
+    };
+
+    await expect(port.readDecision({ workspace: query.workspace, decisionId: query.decisionId })).resolves.toEqual({
+      status: "found",
+      document: doc,
+    });
+    await expect(port.getOwnerSignaturePort()).resolves.toBeUndefined();
+  });
 
   it("binds against a contract whose major matches the expected one", () => {
     const reader = new TrackReader(eventsPath);
