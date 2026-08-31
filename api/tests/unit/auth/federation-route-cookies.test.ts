@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  *
  * A route-level test that drives the real `federationRouter` handlers so a future edit that flips a
  * cookie attribute fails CI. The broker + registry + ports are stubbed so the test exercises ONLY the
- * HTTP/cookie transport (`routes/auth/federation.ts`), asserting the Set-Cookie attributes on:
+ * HTTP/cookie transport (`routes/namespaces/auth/federation.ts`), asserting the Set-Cookie attributes on:
  *  - the flow-state cookie set by `/:provider/start`, and
  *  - the fresh session cookie set by `/:provider/callback` (authenticated),
  * for httpOnly, sameSite=Lax, path, maxAge, and `secure` toggled by production mode.
@@ -118,7 +118,7 @@ describe('federation route Set-Cookie flags (BR-39e Lot 1, N4)', () => {
     expect(cookie.value).toBe('flow-pointer-abc');
     expect(cookie.flags.httponly).toBe(true);
     expect(cookie.flags.samesite).toBe('Lax');
-    expect(cookie.flags.path).toBe('/auth/federation');
+    expect(cookie.flags.path).toBe('/api/v1/auth/federation');
     expect(cookie.flags['max-age']).toBe('600');
     expect(cookie.flags.secure).toBeUndefined();
   });
@@ -131,7 +131,7 @@ describe('federation route Set-Cookie flags (BR-39e Lot 1, N4)', () => {
     expect(cookie.flags.secure).toBe(true);
     expect(cookie.flags.httponly).toBe(true);
     expect(cookie.flags.samesite).toBe('Lax');
-    expect(cookie.flags.path).toBe('/auth/federation');
+    expect(cookie.flags.path).toBe('/api/v1/auth/federation');
   });
 
   it('session cookie from /callback is HttpOnly, SameSite=Lax, root-scoped, TTL-bound (non-prod: no Secure)', async () => {
@@ -230,7 +230,7 @@ describe('federation route Set-Cookie flags (BR-39e Lot 1, N4)', () => {
     expect(cookie.flags.samesite).toBe('None');
     expect(cookie.flags.secure).toBe(true);
     expect(cookie.flags.httponly).toBe(true);
-    expect(cookie.flags.path).toBe('/auth/federation');
+    expect(cookie.flags.path).toBe('/api/v1/auth/federation');
   });
 
   it('K-APPLE-XSITE: GET-callback providers keep SameSite=Lax on /start (no blanket None)', async () => {
@@ -256,6 +256,6 @@ describe('federation route Set-Cookie flags (BR-39e Lot 1, N4)', () => {
     expect(cookie.flags.samesite).toBe('None');
     expect(cookie.flags.secure).toBe(true);
     expect(cookie.flags.httponly).toBe(true);
-    expect(cookie.flags.path).toBe('/auth/federation');
+    expect(cookie.flags.path).toBe('/api/v1/auth/federation');
   });
 });
