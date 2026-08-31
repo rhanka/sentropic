@@ -31,6 +31,11 @@ const aiSettingsSchema = z.object({
   { message: 'At least one field is required' },
 );
 const transportModeSchema = z.object({ mode: z.enum(['codex', 'token']) });
+export const LLM_MESH_ADMIN_PATHS = [
+  '/settings/provider-connections',
+  '/settings/provider-connections/openai/mode',
+  '/settings/provider-connections/:providerId/enrollment/:action',
+] as const;
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), {
   status,
   headers: { 'content-type': 'application/json' },
@@ -130,11 +135,7 @@ export const createLlmMeshNamespaceModule = (
     for (const path of LLM_MESH_PATHS) {
       router.use(path, options.authenticate ?? requireAuth);
     }
-    for (const path of [
-      '/settings/provider-connections',
-      '/settings/provider-connections/openai/mode',
-      '/settings/provider-connections/:providerId/enrollment/:action',
-    ] as const) {
+    for (const path of LLM_MESH_ADMIN_PATHS) {
       router.use(path, options.authorizeAdmin ?? requireAdmin);
     }
     applyLlmMeshAuthorFence(router);
