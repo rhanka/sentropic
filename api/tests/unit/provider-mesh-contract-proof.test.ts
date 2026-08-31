@@ -88,4 +88,43 @@ describe('API LLM mesh contract proof', () => {
     expect(plan.diagnostics[0]?.diagnosticAccountRef).toBe('provider-owned');
     expect(JSON.stringify(plan)).not.toContain('credential');
   });
+
+  it('evicts route plans after every terminal attempt settlement', async () => {
+    const plane = createApplicationGatewayRoutePlane({
+      dispatch: { generate: vi.fn(), stream: vi.fn() },
+    });
+    const subject = { principalRef: 'user-1', ownerScopeRef: 'workspace-1:user-1' };
+    const route = {
+      requestedModel: 'gpt-5.6-terra', requiredCapabilities: [],
+      workspaceId: 'workspace-1', affinityKey: 'request-1',
+    };
+    const prepare = async () => {
+      const plan = await plane.planner.plan(subject, route);
+      const candidateRef = plan.candidateRefs[0]!;
+      const attempt = await plane.planner.prepareAttempt(
+        subject, plan.planRef, candidateRef, 'request-1', 0,
+      );
+      return { attempt, candidateRef, planRef: plan.planRef };
+    };
+    const expectEvicted = async (planRef: string, candidateRef: string) => {
+      await expect(plane.planner.prepareAttempt(
+        subject, planRef, candidateRef, 'request-1', 0,
+      )).rejects.toThrow('gateway route plan does not belong to the caller');
+    };
+
+    const completed = await prepare();
+    await completed.attempt.complete({ inputTokens: 1, outputTokens: 1, estimated: false });
+    await expectEvicted(completed.planRef, completed.candidateRef);
+
+    const failed = await prepare();
+    await failed.attempt.recordOutcome(
+      { reason: 'provider-5xx', retryable: false, healthScope: 'route' },
+      { inputTokens: 0, outputTokens: 0, estimated: true },
+    );
+    await expectEvicted(failed.planRef, failed.candidateRef);
+
+    const cancelled = await prepare();
+    await cancelled.attempt.releaseCancelled();
+    await expectEvicted(cancelled.planRef, cancelled.candidateRef);
+  });
 });

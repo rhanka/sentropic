@@ -127,8 +127,10 @@ export const createApplicationGatewayRoutePlane = (options?: {
         attemptRef: `${candidateRef}:attempt`,
         generate: (request) => dispatch.generate(subject, planned.workspaceId, planned.target, request),
         stream: (request) => dispatch.stream(subject, planned.workspaceId, planned.target, request),
-        async recordOutcome() {}, async markCommitted() {}, async complete() {},
-        async releaseCancelled() {},
+        async recordOutcome() { plans.delete(planRef); },
+        async markCommitted() {},
+        async complete() { plans.delete(planRef); },
+        async releaseCancelled() { plans.delete(planRef); },
       };
     },
     describeAffinity() { return null; },
