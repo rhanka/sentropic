@@ -149,6 +149,7 @@
 - [x] `BR75-RV29` — `acknowledge` — Lot 10 extracts the `/focus` TARGET router behind injected product ports, mounts one D11 author with tested rollback, deletes the legacy route, and keeps external Track unavailable/fail-closed under open `BR75-SG2`; the Focus package gate passes 5 files/101 tests, the focused API unit gate 2 files/14 tests, and the cutover gate 1 file/3 tests.
 - [x] `BR75-RV30` — `acknowledge` — Fable Lot 10 F1 is closed before Lot 11: the stale `/focus/*` auth middleware and its obsolete comment are deleted, the legacy mount/import sweep is empty, API typecheck and lint pass with zero errors, and the Focus cutover regression passes 1 file/3 tests.
 - [x] `BR75-RV31` — `acknowledge` — Lot 11 mounts the reusable `/llm-mesh` router as the sole author of the preserved `/models`, provider-connection settings and `/me/ai-settings` wires; pre-deletion catalog/account and validated-intent evidence is pinned to `historical:7862bf45f`, rollback and disableability pass, and the path-by-path sweep finds no legacy handler, mount, middleware or obsolete comment. The package gate passes 27 files/171 tests at `@sentropic/llm-mesh@0.18.0` above registry `0.17.0`, the provider-owned account test passes 1 file/11 tests, and the cutover gate passes 1 file/3 tests. One injected enrollment custodian receives opaque requests while credential parsing, keyrings and provider transports remain outside `packages/llm-mesh/src/hono.ts`; the `/gw` consumer and matching lock dependency are aligned to `^0.18.0`, and gateway typecheck/build pass. The two Lot 11 E2E specs are updated but intentionally not executed before Lot 33.
+- [ ] `BR75-RV32` — `attention` — every namespace mounted or remapped to `/` must enumerate authentication over its own exported path fence and must never use `use('*')`; every root-mount lot must gate on a cold API boot plus the anonymous health smoke because authenticated in-process scoping cannot detect cross-namespace middleware leaks. Lot 11 remains open until the cold boot is healthy and the smoke suite passes 4/4.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -364,10 +365,11 @@
   - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-focus-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/3 tests pass.
   - [x] Internal gates: C1 existing owner-signature persistence adapter reused and its focused proof passes 1 file/4 tests; C3 standalone package gate passes; A5 disable/author/rollback paths pass in the cutover gate; `BR75-SG2` stays visible and open.
 
-- [x] **Lot 11 — `/llm-mesh` TARGET enrollment and pool router extraction**
+- [ ] **Lot 11 — `/llm-mesh` TARGET enrollment and pool router extraction**
   - [x] Namespace: `/llm-mesh`; type: TARGET reusable router extraction, plugin mount, D11 cutover and legacy deletion.
   - [x] Add `packages/llm-mesh/src/hono.ts` over enrollment/catalog/pool ports; keep credentials/keyring and provider transport outside the router/plugin.
   - [x] Extract `/models`, provider-connection settings and `/me/ai-settings` subsets into `api/src/routes/namespaces/llm-mesh.ts` adapters.
+  - [x] Scope authentication to the exported `LLM_MESH_PATHS` fence; anonymous product health remains 200 while llm-mesh paths remain 401.
   - [x] Shadow catalog/account availability and validated enrollment intent, select one authority/custodian, prove rollback and delete replaced route branches from `models.ts`, `me.ts` and provider settings.
   - [x] Tests new: `packages/llm-mesh/tests/hono.test.ts`, `api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts`.
   - [x] Tests updated: `packages/llm-mesh/tests/routing-policy.test.ts`, `packages/llm-mesh/tests/account-transports.test.ts`, `packages/llm-mesh/tests/facade.test.ts`, `packages/llm-mesh/tests/route-selection.test.ts`, `packages/llm-mesh/tests/enrollment/contracts.test.ts`, `api/tests/api/models.test.ts`, `api/tests/api/provider-connections-admin.test.ts`, `api/tests/unit/llm-account-transports.test.ts`.
@@ -375,7 +377,8 @@
   - [x] E2E updated: `e2e/tests/06-settings-codex-provider.spec.ts`, `e2e/tests/06-settings.spec.ts`; execution remains assigned to Lot 33.
   - [x] Lot gate: `make typecheck-llm-mesh test-llm-mesh build-llm-mesh pack-llm-mesh ENV=test-cluster-mesh-central-control-plane` — typecheck/build/pack exit 0; 27 files/171 tests pass; tarball is `@sentropic/llm-mesh@0.18.0` and contains the Hono export.
   - [x] Lot gate: `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/11 tests pass.
-  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-llm-mesh-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/3 tests pass.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-llm-mesh-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/4 tests pass, including the anonymous health boundary regression.
+  - [ ] Root-mount gate: cold `make up-api-test` must report the API healthy, then `make test-api-smoke SCOPE=tests/smoke/api-health.test.ts ENV=test-cluster-mesh-central-control-plane` must pass 4/4 with anonymous `/api/v1/health` returning 200.
   - [x] Internal gates: C1 one enrollment authority/custodian; C3 standalone 27-file package gate; A5 disableability returns 404 without creating an author, while rollback restores and verifies the historical generation checkpoint.
 
 - [ ] **Lot 12 — `/workflows` TARGET flow router extraction**

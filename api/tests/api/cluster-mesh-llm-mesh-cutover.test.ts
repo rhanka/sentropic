@@ -96,6 +96,14 @@ describe('cluster mesh llm-mesh cutover', () => {
     expect(providers.status).toBe(403);
   });
 
+  it('keeps public health outside the llm-mesh authentication fence', async () => {
+    const health = await productApp.request('/api/v1/health');
+    const catalog = await productApp.request('/api/v1/models/catalog');
+
+    expect(health.status).toBe(200);
+    expect(catalog.status).toBe(401);
+  });
+
   it('is disableable without selecting a fallback enrollment authority', async () => {
     const disabled = candidateApp(false);
     const response = await authenticatedRequest(
