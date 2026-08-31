@@ -17,7 +17,6 @@ import { workspacesRouter } from './workspaces';
 import { neutralRouter } from './neutral';
 import { agentConfigRouter } from './agent-config';
 import { locksRouter } from './locks';
-import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { pptxRouter } from './pptx';
@@ -134,10 +133,6 @@ apiRouter.route('/google-drive', googleDriveRouter);
 // Gmail connector routes: authenticated; workspace checks are enforced per endpoint.
 apiRouter.use('/gmail/*', requireAuth);
 apiRouter.route('/gmail', gmailRouter);
-
-// Comments routes: allow reads for any authenticated user. Mutations are gated inside the router by workspace role.
-apiRouter.use('/comments/*', requireAuth);
-apiRouter.route('/comments', commentsRouter);
 
 // Import/Export routes: authenticated, role checks enforced per endpoint.
 apiRouter.use('/exports/*', requireAuth);
