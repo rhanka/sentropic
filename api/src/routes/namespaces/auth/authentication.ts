@@ -1,12 +1,12 @@
 import { createAuthWebAuthnAuthenticationRouteHandlers } from '@sentropic/auth-hono';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db } from '../../db/client';
-import { users } from '../../db/schema';
-import { logger } from '../../logger';
-import { authHonoWebAuthnAuthenticationService } from '../../services/auth/webauthn-adapter';
-import { createSession } from '../../services/session-manager';
-import { ensureWorkspaceForUser } from '../../services/workspace-service';
+import { db } from '../../../db/client';
+import { users } from '../../../db/schema';
+import { logger } from '../../../logger';
+import { authHonoWebAuthnAuthenticationService } from '../../../services/auth/webauthn-adapter';
+import { createSession } from '../../../services/session-manager';
+import { ensureWorkspaceForUser } from '../../../services/workspace-service';
 
 /**
  * WebAuthn Authentication Routes (`@sentropic/auth-hono`)

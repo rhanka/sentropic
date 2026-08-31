@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import { registerRouter } from './register';
-import { loginRouter } from './login';
-import { credentialsRouter } from './credentials';
-import { magicLinkRouter } from './magic-link';
-import { emailRouter } from './email';
-import { federationRouter } from './federation';
+import { registerRouter } from '../namespaces/auth/registration';
+import { loginRouter } from '../namespaces/auth/authentication';
+import { credentialsRouter } from '../namespaces/auth/credentials';
+import { magicLinkRouter } from '../namespaces/auth/magic-link';
+import { emailRouter } from '../namespaces/auth/email';
+import { federationRouter } from '../namespaces/auth/federation';
 
 /**
  * Authentication Routes

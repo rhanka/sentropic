@@ -6,9 +6,9 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
-import { db } from '../../db/client';
-import { webauthnCredentials } from '../../db/schema';
-import { validateSession } from '../../services/session-manager';
+import { db } from '../../../db/client';
+import { webauthnCredentials } from '../../../db/schema';
+import { validateSession } from '../../../services/session-manager';
 
 export const credentialsRouter = new Hono();
 

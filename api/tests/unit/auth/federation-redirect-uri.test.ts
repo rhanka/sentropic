@@ -63,7 +63,7 @@ vi.mock('../../../src/services/session-manager', () => ({
   validateSession: vi.fn(async () => ({ role: 'user', sessionId: 'session-1', userId: 'user-1' })),
 }));
 
-const { federationRouter } = await import('../../../src/routes/auth/federation');
+const { federationRouter } = await import('../../../src/routes/namespaces/auth/federation');
 
 // The path at which `federationRouter` is ACTUALLY mounted in production, per `api/src/app.ts`
 // (`app.route('/api/v1/auth', authRouter)`) + `api/src/routes/auth/index.ts`
