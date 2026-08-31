@@ -4,13 +4,11 @@ import {
   type AuthHonoCredentialRecord,
 } from '@sentropic/auth-hono';
 import { and, eq } from 'drizzle-orm';
-import { Hono } from 'hono';
 
 import { db } from '../../../db/client';
 import { webauthnCredentials } from '../../../db/schema';
 import { validateSession } from '../../../services/session-manager';
 
-export const credentialsRouter = new Hono();
 
 const credentialPort: AuthHonoCredentialPort = {
   async create(input) {
@@ -113,9 +111,6 @@ export const credentialHandlers = createAuthCredentialRouteHandlers({
   },
 });
 
-credentialsRouter.get('/', credentialHandlers.listCredentials!);
-credentialsRouter.put('/:id', credentialHandlers.renameCredential!);
-credentialsRouter.delete('/:id', credentialHandlers.revokeCredential!);
 
 const serializePublicKey = (publicKey: Uint8Array | ArrayBuffer | string): string => {
   if (typeof publicKey === 'string') {

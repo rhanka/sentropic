@@ -452,5 +452,3 @@ federationRouter.post('/challenge/complete', async (c) => {
 
 return federationRouter;
 };
-
-export const federationRouter = createFederationRouter('/api/v1/oauth/authorize');
