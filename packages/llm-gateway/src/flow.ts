@@ -104,6 +104,8 @@ export interface GatewayFlowRequest {
   readonly body: unknown;
   readonly model: string;
   readonly stream: boolean;
+  /** Trusted host projection; never populated from the provider-compatible body. */
+  readonly verifiedCost?: CostContext;
   readonly signal?: AbortSignal;
 }
 
@@ -142,7 +144,9 @@ const prepare = async (
   }
 
   // 1. caller-auth -> CostContext (from the VERIFIED identity, never the body).
-  const auth = await config.callerAuth.verify(request.headers);
+  const auth = request.verifiedCost
+    ? { ok: true as const, cost: request.verifiedCost }
+    : await config.callerAuth.verify(request.headers);
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
