@@ -33,7 +33,9 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/contracts": "^0.1.1"
+    "@sentropic/contracts": "^0.1.1",
+    "hono": "^4.10.7",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",
