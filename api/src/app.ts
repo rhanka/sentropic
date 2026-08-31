@@ -23,7 +23,10 @@ import {
 } from './routes/namespaces/llm-mesh';
 import { LLM_MESH_PATHS } from './routes/namespaces/llm-mesh-cutover';
 import { productWorkflowsModule } from './routes/namespaces/workflows';
-import { WORKFLOW_PATHS } from './routes/namespaces/workflows-cutover';
+import {
+  WORKFLOW_ADMIN_PATHS,
+  WORKFLOW_PATHS,
+} from './routes/namespaces/workflows-cutover';
 import { productCommentsModule } from './routes/namespaces/comments';
 import { COMMENTS_PATHS } from './routes/namespaces/comments-cutover';
 import { productConnectorsModule } from './routes/namespaces/connectors';
@@ -67,6 +70,11 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     namespace: '/workflows',
     module: productWorkflowsModule,
     authPaths: WORKFLOW_PATHS,
+    privilegedFences: [{
+      name: 'admin',
+      paths: WORKFLOW_ADMIN_PATHS,
+      pathPrefixes: [],
+    }],
   },
   {
     namespace: '/comments',

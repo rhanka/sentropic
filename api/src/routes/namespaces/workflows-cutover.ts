@@ -39,6 +39,11 @@ export const WORKFLOW_PATHS = [
   '/queue/cancel-all',
 ] as const;
 
+export const WORKFLOW_ADMIN_PATHS = [
+  '/workspace-types/:type/workflows',
+  '/workspace-types/:type/workflows/:id',
+] as const;
+
 const control = clusterMeshAdapter.sessionControl;
 if (!control) throw new Error('cluster mesh workflows cutover control is not configured');
 let activation: Promise<void> | undefined;
