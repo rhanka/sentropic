@@ -61,6 +61,12 @@ const makeProvider = (input: {
 });
 
 describe('Graphify memory adapter', () => {
+  const shadow = (provider: H2aGraphifyMemoryPort<FixtureAuthorization, FixtureQueryIntent>) =>
+    createGraphifyMemoryAdapter({ provider, expectedEvidence: evidence }).shadowQuery({
+      context,
+      queryIntent: { questionRef: 'question:1' },
+    });
+
   it('should fail closed when provider or pinned release evidence is unavailable', async () => {
     const absent = createGraphifyMemoryAdapter({});
     expect(absent.availability()).toBe('memory_provider_unavailable');
@@ -110,6 +116,42 @@ describe('Graphify memory adapter', () => {
     expect(provider.evaluateEligibility).toHaveBeenCalledOnce();
     expect(provider.shadowQueryIntent).toHaveBeenCalledOnce();
     expect(provider.revalidateFinal).toHaveBeenCalledOnce();
+  });
+
+  it('should refuse when provider authorization cannot be mapped', async () => {
+    const provider = makeProvider();
+    vi.mocked(provider.mapAuthorization).mockResolvedValueOnce(undefined);
+    await expect(shadow(provider)).resolves.toEqual({
+      ok: false, reason: 'memory_authorization_unavailable',
+    });
+  });
+
+  it('should refuse an invalid provider query intent', async () => {
+    const provider = makeProvider();
+    vi.mocked(provider.mapQueryIntent).mockResolvedValueOnce(undefined);
+    await expect(shadow(provider)).resolves.toEqual({
+      ok: false, reason: 'memory_query_intent_invalid',
+    });
+  });
+
+  it('should refuse an ineligible provider query', async () => {
+    const provider = makeProvider();
+    vi.mocked(provider.evaluateEligibility).mockResolvedValueOnce({
+      eligible: false, receiptRef: 'graphify:eligibility-refusal:1',
+    });
+    await expect(shadow(provider)).resolves.toEqual({
+      ok: false, reason: 'memory_query_ineligible',
+    });
+  });
+
+  it('should refuse an invalid provider response', async () => {
+    const provider = makeProvider();
+    vi.mocked(provider.evaluateEligibility).mockResolvedValueOnce({
+      eligible: true, receiptRef: '',
+    });
+    await expect(shadow(provider)).resolves.toEqual({
+      ok: false, reason: 'memory_provider_response_invalid',
+    });
   });
 
   it('should refuse a query when final canonical revalidation rejects it', async () => {

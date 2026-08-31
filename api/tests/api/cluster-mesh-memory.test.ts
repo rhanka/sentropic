@@ -65,6 +65,15 @@ const makeProvider = (
 const appWith = (module: ReturnType<typeof createMemoryNamespaceModule>) =>
   new Hono().route('/api/v1', createClusterMeshPlugin({ runtime, namespaces: [module] }));
 
+const availableAdapter = () => ({
+  availability: () => 'available' as const,
+  shadowQuery: vi.fn(async () => ({
+    ok: true as const,
+    cursorRef: 'graphify:cursor:17',
+    receiptRef: 'graphify:query-receipt:1',
+  })),
+});
+
 describe('cluster mesh Graphify memory adapter', () => {
   it('mounts a truthful 503 shell while the external provider is absent', async () => {
     const response = await productApp.request('/api/v1/memory/query-intents', { method: 'POST' });
@@ -92,6 +101,35 @@ describe('cluster mesh Graphify memory adapter', () => {
     await expect(response.json()).resolves.toEqual({ error: 'memory_provider_incompatible' });
     expect(authenticate).not.toHaveBeenCalled();
     expect(provider.mapAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when the invocation reference is missing', async () => {
+    const response = await appWith(createMemoryNamespaceModule({
+      enabled: true, adapter: availableAdapter(), authenticate: passAuth, generationId: 'generation-1',
+    })).request('/api/v1/memory/query-intents', { method: 'POST' });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'memory_invocation_reference_required' });
+  });
+
+  it('returns 503 when the runtime generation is unavailable', async () => {
+    const response = await appWith(createMemoryNamespaceModule({
+      enabled: true, adapter: availableAdapter(), authenticate: passAuth,
+    })).request('/api/v1/memory/query-intents', {
+      method: 'POST', headers: { 'x-cluster-mesh-invocation-id': 'invocation-1' },
+    });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: 'memory_runtime_unavailable' });
+  });
+
+  it('returns 401 when the invocation context is unverified', async () => {
+    vi.mocked(runtime.context.verify).mockRejectedValueOnce(new Error('unverified'));
+    const response = await appWith(createMemoryNamespaceModule({
+      enabled: true, adapter: availableAdapter(), authenticate: passAuth, generationId: 'generation-1',
+    })).request('/api/v1/memory/query-intents', {
+      method: 'POST', headers: { 'x-cluster-mesh-invocation-id': 'invocation-1' },
+    });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: 'memory_invocation_unverified' });
   });
 
   it('maps authz below the route and refuses failed final revalidation', async () => {
