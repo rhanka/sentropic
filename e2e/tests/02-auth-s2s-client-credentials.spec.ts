@@ -10,8 +10,8 @@ import { expect, request, test } from '@playwright/test';
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8787';
 const CLIENT_ID = 'example-service-rp';
 const CLIENT_SECRET = 'example-service-rp-secret-dev-only';
-const PING_PATH = '/api/v1/auth/s2s/ping';
-const TOKEN_PATH = '/api/v1/auth/oauth/token';
+const PING_PATH = '/api/v1/oauth/s2s/ping';
+const TOKEN_PATH = '/api/v1/oauth/token';
 
 const basicAuth = (): string =>
   `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`, 'utf8').toString('base64')}`;
