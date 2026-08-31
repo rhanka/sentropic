@@ -108,6 +108,11 @@ describe('chat comment adapter', () => {
       rootId: 'c_1',
     });
     expect(map.get('t_1')?.map((comment) => comment.id)).toEqual(['c_1', 'c_2']);
+    expect(map.get('t_1')?.[0]).toMatchObject({
+      context_type: 'usecase',
+      context_id: 'ctx_1',
+      section_key: 'problem',
+    });
   });
 
   it('keeps section and timestamp formatting outside the Svelte component', () => {
