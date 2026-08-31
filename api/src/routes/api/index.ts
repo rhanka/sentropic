@@ -10,7 +10,6 @@ import { adminRouter, tenantResolutionMetricsRouter } from './admin';
 import { tenantsRouter } from './tenants';
 import { meRouter } from './me';
 import { streamsRouter } from './streams';
-import { chatRouter } from './chat';
 import { documentsRouter } from './documents';
 import promptsRouter from './prompts';
 import queueRouter from './queue';
@@ -156,10 +155,6 @@ apiRouter.route('/focus', focusRouter);
 // Streaming routes: read-only for users; allow any authenticated user.
 apiRouter.use('/streams/*', requireAuth);
 apiRouter.route('/streams', streamsRouter);
-
-// Chat routes: allow reads for any authenticated user. Mutations are gated inside the router by workspace role.
-apiRouter.use('/chat/*', requireAuth);
-apiRouter.route('/chat', chatRouter);
 
 // Documents routes: allow reads for any authenticated user. Upload/delete are gated inside the router by workspace role.
 apiRouter.use('/documents/*', requireAuth);

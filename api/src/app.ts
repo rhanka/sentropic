@@ -15,6 +15,7 @@ import {
 } from './routes/namespaces/oauth';
 import { productAuthPlugin } from './routes/namespaces/auth';
 import { productGwModule } from './routes/namespaces/gw';
+import { productChatModule } from './routes/namespaces/chat';
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -138,6 +139,7 @@ app.route('/api/v1', createClusterMeshPlugin({
     createOAuthNamespaceModule({ compositionRoot: 'product', publicPath: '/api/v1/oauth' }),
     authPlugin.module,
     productGwModule,
+    productChatModule,
   ],
   mounts: { '/session': '/auth', '/auth': authPlugin.mount },
 }));
