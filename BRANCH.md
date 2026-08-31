@@ -146,6 +146,7 @@
 - [x] `BR75-RV26` — `acknowledge` — Fable Lot 9 L1 is closed in `dc0291479`: the AWS lambda-invoke-store lock entry again matches its 0.3.0 tarball/integrity and `^0.3.0` consumer, while the chat-server workspace entry matches its 0.4.0 manifest; Docker-first `npm ci` passes and leaves lock digest `cc4f4ee40ea953a40ea8548fa61a607a12e2f6c0d61aadf45d45275f5d6496bc` unchanged.
 - [x] `BR75-RV27` — `acknowledge` — Fable Lot 9 L2 is closed through `BR75-EX6`: the live UI dev server creates `/tmp/sentropic-ui-vite-cache`, the uid/gid 65534:65534 residual was removed from `ui/node_modules/.vite`, and the post-run scan finds no mounted `node_modules/.vite` under API, UI or packages.
 - [x] `BR75-RV28` — `acknowledge` — Fable Lot 9 L3 is closed at the persistence adapter: an unknown stored extension permission policy now narrows to `deny`; the focused regression first failed 1/7 by returning `future-policy`, then passed 7/7 after the runtime fail-closed validation.
+- [x] `BR75-RV29` — `acknowledge` — Lot 10 extracts the `/focus` TARGET router behind injected product ports, mounts one D11 author with tested rollback, deletes the legacy route, and keeps external Track unavailable/fail-closed under open `BR75-SG2`; the Focus package gate passes 5 files/101 tests, the focused API unit gate 2 files/14 tests, and the cutover gate 1 file/3 tests.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -348,18 +349,18 @@
   - [x] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-cluster-mesh-central-control-plane` — typecheck reports 0 errors, lint exits 0 and the scoped test passes 1 file/4 tests.
   - [x] Internal gates: C1 existing chat persistence remains canonical; C3 chat packages standalone; A5 reusable factory.
 
-- [ ] **Lot 10 — `/focus` TARGET reusable-package extraction**
-  - [ ] Namespace: `/focus`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Add `packages/focus/src/hono.ts` with injected decision validator, owner-signature, Track and tenancy ports; no direct API DB import.
-  - [ ] Mount through `api/src/routes/namespaces/focus.ts`, shadow read/signature intent, select one author, prove rollback and delete `api/src/routes/api/focus.ts`.
-  - [ ] Keep Track external and fail closed when its port is unavailable; do not copy Track codecs/log state.
-  - [ ] Tests new: `packages/focus/tests/hono.spec.ts`, `api/tests/api/cluster-mesh-focus-cutover.test.ts`.
-  - [ ] Tests updated: `packages/focus/tests/live.spec.ts`, `packages/focus/tests/track.spec.ts`, `api/tests/unit/focus-decision-validator.test.ts`, `api/tests/unit/focus-owner-signature-route.test.ts`, `api/tests/unit/track-owner-signature-adapter.test.ts`.
-  - [ ] UI/E2E tests: N-A; current Focus surface is API-only.
-  - [ ] Lot gate: `make typecheck-focus test-focus build-focus pack-focus ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-unit SCOPE="tests/unit/focus-decision-validator.test.ts tests/unit/focus-owner-signature-route.test.ts" ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-focus-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 existing owner-signature persistence reused; C3/A5 Focus standalone; `BR75-SG2` stays visible.
+- [x] **Lot 10 — `/focus` TARGET reusable-package extraction**
+  - [x] Namespace: `/focus`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [x] Add `packages/focus/src/hono.ts` with injected decision validator, owner-signature, Track and tenancy ports; no direct API DB import.
+  - [x] Mount through `api/src/routes/namespaces/focus.ts`, shadow read/signature intent, select one author, prove rollback and delete `api/src/routes/api/focus.ts`.
+  - [x] Keep Track external and fail closed when its port is unavailable; do not copy Track codecs/log state.
+  - [x] Tests new: `packages/focus/tests/hono.spec.ts`, `api/tests/api/cluster-mesh-focus-cutover.test.ts`.
+  - [x] Tests updated: `packages/focus/tests/live.spec.ts`, `packages/focus/tests/track.spec.ts`, `api/tests/unit/focus-decision-validator.test.ts`, `api/tests/unit/focus-owner-signature-route.test.ts`, `api/tests/unit/track-owner-signature-adapter.test.ts`.
+  - [x] UI/E2E tests: N-A; current Focus surface is API-only.
+  - [x] Lot gate: `make typecheck-focus test-focus build-focus pack-focus ENV=test-cluster-mesh-central-control-plane` — typecheck/build/pack exit 0; 5 files/101 tests pass; package is `@sentropic/focus@0.5.0`.
+  - [x] Lot gate: `make test-api-unit SCOPE="tests/unit/focus-decision-validator.test.ts tests/unit/focus-owner-signature-route.test.ts" ENV=test-cluster-mesh-central-control-plane` — 2 files/14 tests pass.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-focus-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/3 tests pass.
+  - [x] Internal gates: C1 existing owner-signature persistence adapter reused and its focused proof passes 1 file/4 tests; C3 standalone package gate passes; A5 disable/author/rollback paths pass in the cutover gate; `BR75-SG2` stays visible and open.
 
 - [ ] **Lot 11 — `/llm-mesh` TARGET enrollment and pool router extraction**
   - [ ] Namespace: `/llm-mesh`; type: TARGET reusable router extraction, plugin mount, D11 cutover and legacy deletion.
