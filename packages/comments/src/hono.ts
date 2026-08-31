@@ -65,6 +65,17 @@ const principalFor = async (
 const isResponse = (value: CommentsHttpPrincipal | Response): value is Response =>
   value instanceof Response;
 
+const isAdmin = async (
+  principal: CommentsHttpPrincipal,
+  options: CreateCommentsRouterOptions,
+): Promise<boolean> => {
+  try {
+    return await options.authz.authorize({ principal, action: 'admin' });
+  } catch {
+    return false;
+  }
+};
+
 export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono => {
   const router = new Hono();
 
@@ -208,10 +219,9 @@ export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono
     const id = context.req.param('id');
     const row = await options.store.get(tenant, id);
     if (!row) return context.json({ message: 'Not found' }, 404);
-    if (row.author.id !== principal.userId && !await options.authz.authorize({
-      principal,
-      action: 'admin',
-    })) return context.json({ message: 'Insufficient permissions' }, 403);
+    if (row.author.id !== principal.userId && !await isAdmin(principal, options)) {
+      return context.json({ message: 'Insufficient permissions' }, 403);
+    }
 
     const body = parsed.data;
     const hasContent = typeof body.content === 'string';
@@ -253,6 +263,75 @@ export const createCommentsRouter = (options: CreateCommentsRouterOptions): Hono
       contextType: row.target.recordType ?? row.target.kind,
       contextId: row.target.id,
       action: 'updated',
+      key: 'comment_id',
+      commentId: id,
+      origin: 'rest',
+    });
+    return context.json({ success: true });
+  });
+
+  router.post('/comments/:id/close', async (context) => {
+    const principal = await principalFor(context, options, 'comment');
+    if (isResponse(principal)) return principal;
+    const tenant = await options.tenant.resolve(principal);
+    const id = context.req.param('id');
+    const row = await options.store.get(tenant, id);
+    if (!row) return context.json({ message: 'Not found' }, 404);
+    if (row.author.id !== principal.userId && !await isAdmin(principal, options)) {
+      return context.json({ message: 'Only the creator or admin can close the comment' }, 403);
+    }
+    await options.store.setState(tenant, row.threadId, 'resolved');
+    await options.events.emit({
+      workspaceId: principal.workspaceId,
+      contextType: row.target.recordType ?? row.target.kind,
+      contextId: row.target.id,
+      action: 'closed',
+      key: 'comment_id',
+      commentId: id,
+      origin: 'rest',
+    });
+    return context.json({ success: true });
+  });
+
+  router.post('/comments/:id/reopen', async (context) => {
+    const principal = await principalFor(context, options, 'comment');
+    if (isResponse(principal)) return principal;
+    const tenant = await options.tenant.resolve(principal);
+    const id = context.req.param('id');
+    const row = await options.store.get(tenant, id);
+    if (!row) return context.json({ message: 'Not found' }, 404);
+    if (row.author.id !== principal.userId && !await isAdmin(principal, options)) {
+      return context.json({ message: 'Only the creator or admin can reopen the comment' }, 403);
+    }
+    await options.store.setState(tenant, row.threadId, 'open');
+    await options.events.emit({
+      workspaceId: principal.workspaceId,
+      contextType: row.target.recordType ?? row.target.kind,
+      contextId: row.target.id,
+      action: 'reopened',
+      key: 'comment_id',
+      commentId: id,
+      origin: 'rest',
+    });
+    return context.json({ success: true });
+  });
+
+  router.delete('/comments/:id', async (context) => {
+    const principal = await principalFor(context, options, 'comment');
+    if (isResponse(principal)) return principal;
+    const tenant = await options.tenant.resolve(principal);
+    const id = context.req.param('id');
+    const row = await options.store.get(tenant, id);
+    if (!row) return context.json({ message: 'Not found' }, 404);
+    if (row.author.id !== principal.userId && !await isAdmin(principal, options)) {
+      return context.json({ message: 'Insufficient permissions' }, 403);
+    }
+    await options.store.delete(tenant, id);
+    await options.events.emit({
+      workspaceId: principal.workspaceId,
+      contextType: row.target.recordType ?? row.target.kind,
+      contextId: row.target.id,
+      action: 'deleted',
       key: 'comment_id',
       commentId: id,
       origin: 'rest',
