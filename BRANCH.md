@@ -163,6 +163,8 @@
 - [x] `BR75-RV43` — `acknowledge` — Fable Lot 14 N6 is folded into the `/track` shadow discipline: with a synthetically pinned compatible provider, deterministic evidence/cursor reads each call one read author, while a fully typed valid owner-signature intent sent during the read-only shadow receives 404 and an effect-boundary spy remains at zero calls; the selected Track event port regression drives a valid intent through the same typed boundary exactly once and persists one artifact event.
 - [x] `BR75-RV44` — `acknowledge` — Lot 15 delivers the `/track` adapter as a prefix-mounted fail-closed route shell with no provider activation, copied Track codec/log or write surface. Product requests return explicit 503 while the provider is absent; exact descriptor/digest compatibility gates the synthetic deterministic read author, disabled construction remains 404, and `BR75-SG2` stays open as the production-activation blocker. The Focus package passes 5 files/102 tests, the adapter passes 1 file/5 tests, the product integration passes 1 file/3 tests, the Track event port passes 1 file/6 tests, and the root-mount invariants pass 1 file/10 tests.
 - [x] `BR75-RV45` — `acknowledge` — Fable Lot 15 F1 and notes are closed before `/memory`: one registry now drives every product-mounted namespace and the invariant walks all 12 modules for direct `requireAdmin` sub-fence coverage. Prefix-mounted `/track` binds its registered routes to `TRACK_READ_PATHS`; a permanent mutation adds an unfenced Track route and proves the invariant fails. The clean invariant passes 1 file/17 tests, API typecheck passes, and lint exits with 0 errors/208 warnings. Future exactly-once spies must sit below the driven route or facade rather than wrap the direct call.
+- [x] `BR75-RV46` — `acknowledge` — the first Lot 16 package gate was red because Vitest collected the native `node:test` A1 replay, which imports an absolute host-only h2a dist under `BR75-EX5`. `packages/cluster-mesh/vitest.config.ts` now excludes only `tests/a1-integration/**` from Vitest; the adapter remains in the package suite, which passes 19 files/59 tests. The separate native replay was not executed in Lot 16 and real A1 remains gated by `BR75-SG1`.
+- [x] `BR75-RV47` — `acknowledge` — Lot 16 mounts a version-evidence-gated `/memory` shell over the generic h2a↔Graphify port without a local memory DTO or canonical store. With Graphify absent under `BR75-SG3`, cold boot reaches a healthy API and the live memory query-intent probe returns explicit 503 `memory_provider_unavailable`; incompatible fixture evidence also refuses before auth/provider dispatch. The standalone adapter passes 5/5, the API gate passes 5/5, and the generalized namespace invariant passes 18/18 with `/memory` fenced.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -451,18 +453,19 @@
   - [x] Root-mount cold-boot gate: N-A because `/track` is prefix-mounted at `/track` and is not remapped to `/`; the product integration gate proves the absent provider returns 503 without an authentication leak.
   - [x] Internal gates: C3 standalone adapter construction passes 5/5; A5 default-disabled and product fail-closed behavior pass 3/3; `BR75-SG2` remains open and blocks production activation, not truthful fail-closed delivery.
 
-- [ ] **Lot 16 — `/memory` TARGET Graphify adapter module**
-  - [ ] Namespace: `/memory`; type: TARGET adapter extraction/mount/cutover gate.
-  - [ ] Add `api/src/routes/namespaces/memory.ts` over the versioned h2a↔Graphify public port and provider-opaque cursor/receipt references.
-  - [ ] Mount disabled/fail-closed until contract version, fixture digest and Graphify release evidence are pinned; never create a substitute memory DTO.
-  - [ ] Shadow only deterministic eligibility/query intent when provider evidence exists; one Graphify author remains canonical.
-  - [ ] Legacy path deletion: N-A because no current HTTP mount exists; delete any discovered temporary memory adapter bypass in the same cutover.
-  - [ ] Tests new: `api/tests/api/cluster-mesh-memory.test.ts`, `packages/cluster-mesh/tests/graphify-memory-adapter.spec.ts`.
-  - [ ] Tests cover unavailable provider, digest mismatch, authz mapping, final revalidation refusal and proof that no canonical episode/ranking/projection is stored locally.
-  - [ ] UI/E2E tests: N-A while fail-closed; Lot 33 asserts explicit unavailable state.
-  - [ ] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-memory.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 no app memory mirror; C3/A5 standalone adapter; D8 split; `BR75-SG3` remains explicit.
+- [x] **Lot 16 — `/memory` TARGET Graphify adapter module**
+  - [x] Namespace: `/memory`; type: TARGET adapter extraction/mount/cutover gate.
+  - [x] Add `api/src/routes/namespaces/memory.ts` over the versioned h2a↔Graphify public port and provider-opaque cursor/receipt references.
+  - [x] Mount disabled/fail-closed until contract version, fixture digest and Graphify release evidence are pinned; never create a substitute memory DTO.
+  - [x] Shadow only deterministic eligibility/query intent when provider evidence exists; one Graphify author remains canonical.
+  - [x] Legacy path deletion: N-A because no current HTTP mount exists; no temporary memory adapter bypass was found.
+  - [x] Tests new: `api/tests/api/cluster-mesh-memory.test.ts`, `packages/cluster-mesh/tests/graphify-memory-adapter.spec.ts` — 5/5 each.
+  - [x] Tests cover unavailable provider, digest mismatch, authz mapping, final revalidation refusal and proof that no canonical episode/ranking/projection is stored locally.
+  - [x] UI/E2E tests: N-A while fail-closed; Lot 33 asserts explicit unavailable state.
+  - [x] Lot gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane` — exit 0; package tests pass 19 files/59 tests; API lint reports 0 errors/208 warnings.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-memory.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/5 tests pass.
+  - [x] Cold-boot gate: rebuilt API reaches healthy; live health probe returns 200 and `/api/v1/memory/query-intents` returns 503 `memory_provider_unavailable`.
+  - [x] Internal gates: C1 no app memory mirror; C3/A5 standalone adapter passes 5/5; D8 keeps provider eligibility/query/revalidation canonical; `BR75-SG3` remains explicit and open.
 
 - [ ] **Lot 17 — `/agents` TARGET application router extraction**
   - [ ] Namespace: `/agents`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
