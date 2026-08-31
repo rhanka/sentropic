@@ -72,7 +72,7 @@ const accountLimitAdapter: ConnectorAccountLimitAdapter = {
     });
   },
   async update({ context }) {
-    const validJson = context.req.valid as unknown as (
+    const validJson = context.req.valid.bind(context.req) as unknown as (
       target: 'json',
     ) => z.infer<typeof connectorAccountsMaxPerProviderSchema>;
     const { maxPerProvider } = validJson('json');
