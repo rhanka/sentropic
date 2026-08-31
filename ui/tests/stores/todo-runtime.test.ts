@@ -5,7 +5,7 @@ import { setUser, clearUser } from '../../src/lib/stores/session';
 import { setWorkspaceScope, workspaceScope } from '../../src/lib/stores/workspaceScope';
 import { mockFetchJsonOnce, resetFetchMock } from '../test-setup';
 
-describe('todo runtime api flows', () => {
+describe('todo runtime flows over clean root-mounted workflow paths', () => {
   beforeEach(() => {
     resetFetchMock();
     clearUser();

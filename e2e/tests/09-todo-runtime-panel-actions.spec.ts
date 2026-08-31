@@ -5,7 +5,7 @@ type WorkspaceItem = {
   role?: string | null;
 };
 
-test.describe('TODO runtime panel actions', () => {
+test.describe('TODO runtime panel actions over clean workflow paths', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const DEFAULT_AUTH_STATE = './.auth/state.json';
 
