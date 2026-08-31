@@ -479,7 +479,7 @@
   - [x] Tests new: `api/tests/api/cluster-mesh-agents-cutover.test.ts`.
   - [x] Tests updated: `api/tests/api/agent-config.test.ts`, `api/tests/api/prompts.test.ts`, `api/tests/services/catalog/agent-template-source.spec.ts`, `api/tests/unit/todo-orchestration-chat-progression.test.ts`.
   - [x] UI tests updated: `ui/tests/utils/agent-config-api.test.ts`, `ui/tests/chat/agents-feed-adapter.test.ts`.
-  - [ ] E2E updated: `e2e/tests/09-run-steering-core.spec.ts` agent configuration scenario.
+  - [x] E2E updated: `e2e/tests/09-run-steering-core.spec.ts` agent configuration scenario (full execution deferred to Lot 33).
   - [ ] Lot gate: `make typecheck-flow build-flow typecheck-skills test-skills typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-agents-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Internal gates: C1 existing config tables reused; C3/A5 injectable application module.
