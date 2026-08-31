@@ -18,6 +18,7 @@ describe('route policy', () => {
       rotateEquivalentAccounts: false,
     });
     expect(() => validateRoutePolicy(DEFAULT_ROUTE_POLICY)).not.toThrow();
+    expect(JSON.stringify(DEFAULT_ROUTE_POLICY)).not.toMatch(/accessToken|refreshToken|keyring/);
   });
 
   it('rejects unsafe cache, attempt and ordered-strategy bounds', () => {

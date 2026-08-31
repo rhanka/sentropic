@@ -301,5 +301,7 @@ describe('createLlmMesh', () => {
   it('advertises executable account transports for OpenAI and Anthropic families', () => {
     expect(getProviderProfile('openai').capabilities.auth.accountTransports).toContain('codex');
     expect(getProviderProfile('anthropic').capabilities.auth.accountTransports).toContain('claude-code');
+    expect(getProviderProfile('openai').capabilities.auth).not.toHaveProperty('credentials');
+    expect(getProviderProfile('anthropic').capabilities.auth).not.toHaveProperty('keyring');
   });
 });
