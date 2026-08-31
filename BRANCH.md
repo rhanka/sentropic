@@ -372,6 +372,7 @@
   - [x] Scope authentication to the exported `LLM_MESH_PATHS` fence; anonymous product health remains 200 while llm-mesh paths remain 401.
   - [x] Shadow catalog/account availability and validated enrollment intent, select one authority/custodian, prove rollback and delete replaced route branches from `models.ts`, `me.ts` and provider settings.
   - [x] Delete the unreferenced empty `api/src/routes/api/models.ts` residue after the importer sweep returns no matches.
+  - [x] Resolve `@sentropic/llm-mesh` and its Hono subpath from local source in API Vitest so scoped tests cannot consume stale package dist; CI rebuild behavior remains unchanged.
   - [x] Tests new: `packages/llm-mesh/tests/hono.test.ts`, `api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts`.
   - [x] Tests updated: `packages/llm-mesh/tests/routing-policy.test.ts`, `packages/llm-mesh/tests/account-transports.test.ts`, `packages/llm-mesh/tests/facade.test.ts`, `packages/llm-mesh/tests/route-selection.test.ts`, `packages/llm-mesh/tests/enrollment/contracts.test.ts`, `api/tests/api/models.test.ts`, `api/tests/api/provider-connections-admin.test.ts`, `api/tests/unit/llm-account-transports.test.ts`.
   - [x] UI tests updated: `ui/tests/settings/provider-connections-admin.test.ts`, `ui/tests/utils/model-display.test.ts`, `ui/tests/utils/user-ai-settings-events.test.ts`; the three scoped suites pass 3 files/11 tests.
