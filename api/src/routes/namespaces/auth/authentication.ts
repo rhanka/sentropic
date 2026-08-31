@@ -1,6 +1,5 @@
 import { createAuthWebAuthnAuthenticationRouteHandlers } from '@sentropic/auth-hono';
 import { eq } from 'drizzle-orm';
-import { Hono } from 'hono';
 import { db } from '../../../db/client';
 import { users } from '../../../db/schema';
 import { logger } from '../../../logger';
@@ -15,7 +14,6 @@ import { ensureWorkspaceForUser } from '../../../services/workspace-service';
  * POST /auth/login/verify  - Verify authentication response + finalize session
  */
 
-export const loginRouter = new Hono();
 
 export const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
   finalizeAuthentication: async ({ credentialId, request, userId }, c) => {
@@ -133,15 +131,3 @@ export const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
   },
   service: authHonoWebAuthnAuthenticationService,
 });
-
-/**
- * POST /auth/login/options
- * Generate WebAuthn authentication options.
- */
-loginRouter.post('/options', loginHandlers.createPasskeyAuthenticationOptions!);
-
-/**
- * POST /auth/login/verify
- * Verify WebAuthn authentication response + create session (via finalizeAuthentication).
- */
-loginRouter.post('/verify', loginHandlers.verifyPasskeyAuthentication!);

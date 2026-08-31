@@ -6,7 +6,6 @@ import {
   type AuthHonoResolveRegistrationUser,
 } from '@sentropic/auth-hono';
 import { desc, eq } from 'drizzle-orm';
-import { Hono } from 'hono';
 import { env } from '../../../config/env';
 import { db } from '../../../db/client';
 import { users, webauthnCredentials } from '../../../db/schema';
@@ -52,7 +51,6 @@ const inviteMatchesEmail = async (token: string, normalizedEmail: string): Promi
  * POST /auth/register/verify  - Verify registration response + create session
  */
 
-export const registerRouter = new Hono();
 
 // C3 no-account-enumeration: the generic "verify your email to continue" outcome. EVERY invalid
 // invite state (unknown / expired / consumed / email-mismatch) AND a cold register without proof
@@ -457,15 +455,3 @@ export const registerHandlers = createAuthWebAuthnRegistrationRouteHandlers({
   resolveRegistrationUser: resolveSentropicRegistrationUser,
   service: authHonoWebAuthnRegistrationService,
 });
-
-/**
- * POST /auth/register/options
- * Generate WebAuthn registration options.
- */
-registerRouter.post('/options', registerHandlers.createPasskeyRegistrationOptions!);
-
-/**
- * POST /auth/register/verify
- * Verify WebAuthn registration response + create session (via finalizeRegistration).
- */
-registerRouter.post('/verify', registerHandlers.verifyPasskeyRegistration!);
