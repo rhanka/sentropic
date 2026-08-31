@@ -3,7 +3,7 @@ import { httpRequest, authenticatedHttpRequest } from '../utils/test-helpers';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('API Health', () => {
-  it('keeps health anonymous while gating every connector administration path', async () => {
+  it('keeps health anonymous while gating connector and agent administration paths', async () => {
     const response = await httpRequest('/api/v1/health');
     expect(response.status).toBe(200);
     const data = await response.json();
@@ -21,6 +21,8 @@ describe('API Health', () => {
       ['GET', '/api/v1/gmail/oauth/callback'],
       ['POST', '/api/v1/gmail/disconnect'],
       ['PUT', '/api/v1/settings/connector-accounts/max-per-provider'],
+      ['GET', '/api/v1/agent-config'],
+      ['GET', '/api/v1/prompts'],
     ];
     for (const [method, path] of connectorPaths) {
       const gatedResponse = await httpRequest(path, { method });
