@@ -81,10 +81,13 @@ const grant = (over: Partial<ConsentGrant> = {}): ConsentGrant => ({
 describe('§11 Session persistence (§6.3)', () => {
   it('restart lookup: an active session resolves after a simulated restart', () => {
     const path = tmpPath();
-    new PersistentSessionStore(new FileRecordStore<McpSession>(path)).put(session());
+    const initial = new PersistentSessionStore(new FileRecordStore<McpSession>(path));
+    initial.put(session());
+    initial.put(session({ id: 'sess-2', clientId: 'client-2' }));
     const restarted = new PersistentSessionStore(new FileRecordStore<McpSession>(path));
     expect(restarted.get('sess-1')?.principalSub).toBe('user-1');
     expect(restarted.resolveActive('sess-1', T)).toBeDefined();
+    expect(restarted.resolveActive('sess-2', T)?.clientId).toBe('client-2');
   });
 
   it('expiry: an expired session is denied fail-closed after reload', () => {
