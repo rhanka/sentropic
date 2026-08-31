@@ -42,7 +42,7 @@ describe('Settings API', () => {
     });
   });
 
-  describe('connector account maximum', () => {
+  describe('root-mounted connector account maximum', () => {
     it('allows an admin to read and update the global maximum', async () => {
       const initialResponse = await authenticatedRequest(
         app,
@@ -63,6 +63,14 @@ describe('Settings API', () => {
       expect(updateResponse.status).toBe(200);
       expect(await updateResponse.json()).toEqual({ maxPerProvider: 1 });
       expect(await settingsService.getConnectorAccountsMaxPerProvider()).toBe(1);
+
+      const doubled = await authenticatedRequest(
+        app,
+        'GET',
+        '/api/v1/connectors/settings/connector-accounts/max-per-provider',
+        user.sessionToken!,
+      );
+      expect(doubled.status).toBe(404);
     });
 
     it('rejects connector account maximum changes by non-admin users', async () => {
