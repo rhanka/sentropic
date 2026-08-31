@@ -81,7 +81,13 @@ export const applyAuthRateLimiters = (app: Hono): void => {
 
   app.use('/api/v1/oauth/token', oauthTokenRateLimiter);
   app.use('/api/v1/oauth/introspect', oauthIntrospectRateLimiter);
-  app.use('/api/v1/oauth/*', authRateLimiter);
+  // Keep the product OAuth catch-all disjoint from endpoint-specific budgets.
+  app.use('/api/v1/oauth/*', (c, next) => {
+    if (c.req.path === '/api/v1/oauth/token' || c.req.path === '/api/v1/oauth/introspect') {
+      return next();
+    }
+    return authRateLimiter(c, next);
+  });
   app.use('/api/v1/auth/session*', authSessionRateLimiter);
   app.use('/api/v1/auth/login/*', authLoginRateLimiter);
   app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
@@ -92,6 +98,6 @@ export const applyAuthRateLimiters = (app: Hono): void => {
   // needs the permissive limiter; per-code throttling/single-use/expiry is enforced
   // in the device-code store.
   app.use('/api/v1/auth/device/*', authSessionRateLimiter);
-  // General auth routes last (excludes the already-matched routes above).
+  // General identity routes last; their baseline overlap with dedicated auth limiters is unchanged.
   app.use('/api/v1/auth/*', authRateLimiter);
 };
