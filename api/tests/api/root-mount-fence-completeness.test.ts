@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import {
+  PRODUCT_CLUSTER_MESH_MOUNTS,
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
   ROOT_MOUNT_REMAPS,
   type PrivilegedPathFence,
@@ -11,6 +12,21 @@ type RootMountedRouter = Pick<Hono, 'routes'>;
 
 const registeredPaths = (router: RootMountedRouter): string[] =>
   [...new Set(router.routes.map(({ path }) => path))].sort();
+
+const assertRootRemapsRegistered = (
+  mounts: Readonly<Record<string, string>>,
+  namespaces: readonly string[],
+): void => {
+  const registeredNamespaces = new Set(namespaces);
+  const unregisteredRootRemaps = Object.entries(mounts)
+    .filter(([, mount]) => mount === '/')
+    .map(([namespace]) => namespace)
+    .filter((namespace) => !registeredNamespaces.has(namespace));
+  expect(
+    unregisteredRootRemaps,
+    'plugin mounts contain root remaps outside the root-mount registry',
+  ).toEqual([]);
+};
 
 const assertFenceComplete = (
   namespace: string,
@@ -55,6 +71,10 @@ describe('root-mount fence completeness', () => {
     ({ namespace, module, authPaths, ...registration }) => {
       expect(module.namespace).toBe(namespace);
       const router = module.createRouter();
+      if (authPaths === null) {
+        expect(registration.privilegedFences ?? []).toEqual([]);
+        return;
+      }
       assertFenceComplete(namespace, router, authPaths);
       for (const privilegedFence of registration.privilegedFences ?? []) {
         assertPrivilegedFenceComplete(namespace, router, authPaths, privilegedFence);
@@ -62,13 +82,24 @@ describe('root-mount fence completeness', () => {
     },
   );
 
-  it('derives every root remap from the exported registry', () => {
+  it('binds every composed plugin root remap to the exported registry', () => {
     expect(Object.keys(ROOT_MOUNT_REMAPS)).toEqual(
       ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
     );
     expect(Object.values(ROOT_MOUNT_REMAPS)).toEqual(
       ROOT_MOUNTED_NAMESPACE_REGISTRY.map(() => '/'),
     );
+    assertRootRemapsRegistered(
+      PRODUCT_CLUSTER_MESH_MOUNTS,
+      ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
+    );
+  });
+
+  it('fails when the composed plugin mounts contain an unregistered root remap', () => {
+    expect(() => assertRootRemapsRegistered(
+      { ...PRODUCT_CLUSTER_MESH_MOUNTS, '/fixture-bypass': '/' },
+      ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
+    )).toThrowError('plugin mounts contain root remaps outside the root-mount registry');
   });
 
   it('fails when a registered path is absent from its fence', () => {

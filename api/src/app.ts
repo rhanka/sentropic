@@ -32,6 +32,8 @@ import {
   CONNECTOR_PATHS,
 } from './routes/namespaces/connectors-cutover';
 
+const authPlugin = productAuthPlugin();
+
 export interface PrivilegedPathFence {
   readonly name: string;
   readonly paths: readonly string[];
@@ -41,11 +43,16 @@ export interface PrivilegedPathFence {
 export interface RootMountedNamespaceRegistration {
   readonly namespace: string;
   readonly module: typeof productLlmMeshModule;
-  readonly authPaths: readonly string[];
+  readonly authPaths: readonly string[] | null;
   readonly privilegedFences?: readonly PrivilegedPathFence[];
 }
 
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/auth',
+    module: authPlugin.module,
+    authPaths: null,
+  },
   {
     namespace: '/llm-mesh',
     module: productLlmMeshModule,
@@ -81,6 +88,8 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
 export const ROOT_MOUNT_REMAPS = Object.fromEntries(
   ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => [namespace, '/']),
 );
+const [productAuthRootRegistration, ...productFencedRootRegistrations] =
+  ROOT_MOUNTED_NAMESPACE_REGISTRY;
 
 export const app = new Hono();
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
@@ -195,24 +204,23 @@ app.route('/.well-known', createOAuthWellKnownProjection({
   compositionRoot: 'product',
   publicPath: '/api/v1/oauth',
 }));
-const authPlugin = productAuthPlugin();
+export const PRODUCT_CLUSTER_MESH_MOUNTS = {
+  '/session': '/auth',
+  ...ROOT_MOUNT_REMAPS,
+} as const;
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
   namespaces: [
     productSessionModule,
     productMcpModule,
     createOAuthNamespaceModule({ compositionRoot: 'product', publicPath: '/api/v1/oauth' }),
-    authPlugin.module,
+    productAuthRootRegistration.module,
     productGwModule,
     productChatModule,
     productFocusModule,
-    ...ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
+    ...productFencedRootRegistrations.map(({ module }) => module),
   ],
-  mounts: {
-    '/session': '/auth',
-    '/auth': authPlugin.mount,
-    ...ROOT_MOUNT_REMAPS,
-  },
+  mounts: PRODUCT_CLUSTER_MESH_MOUNTS,
 }));
 app.route('/api/v1', apiRouter);
 
