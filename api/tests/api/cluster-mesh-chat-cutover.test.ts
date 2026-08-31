@@ -50,7 +50,7 @@ describe('cluster mesh chat cutover', () => {
     })],
   }));
 
-  it('shadows safe reads and validated mutation intent without duplicate effects', async () => {
+  it('selects one author and preserves the validated rollback checkpoint', async () => {
     const created = await authenticatedRequest(
       productApp,
       'POST',
@@ -60,34 +60,31 @@ describe('cluster mesh chat cutover', () => {
     );
     expect(created.status).toBe(200);
 
-    const legacyRead = await authenticatedRequest(
+    const mountedRead = await authenticatedRequest(
       productApp,
       'GET',
       '/api/v1/chat/sessions',
       user.sessionToken!,
     );
-    const candidate = buildCandidate();
-    const candidateRead = await candidate.request('/api/v1/chat/sessions');
-    expect(candidateRead.status).toBe(200);
-    expect(await candidateRead.json()).toEqual(await legacyRead.json());
+    expect(mountedRead.status).toBe(200);
+    expect((await mountedRead.json()).sessions).toHaveLength(1);
 
     const invalidPayload = { primaryContextType: 'invalid-context' };
-    const legacyIntent = await authenticatedRequest(
+    const invalidIntent = await authenticatedRequest(
       productApp,
       'POST',
       '/api/v1/chat/sessions',
       user.sessionToken!,
       invalidPayload,
     );
-    const candidateIntent = await candidate.request('/api/v1/chat/sessions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(invalidPayload),
-    });
-    expect(legacyIntent.status).toBe(400);
-    expect(candidateIntent.status).toBe(400);
+    expect(invalidIntent.status).toBe(400);
 
-    const afterIntent = await candidate.request('/api/v1/chat/sessions');
+    const afterIntent = await authenticatedRequest(
+      productApp,
+      'GET',
+      '/api/v1/chat/sessions',
+      user.sessionToken!,
+    );
     expect((await afterIntent.json()).sessions).toHaveLength(1);
     const active = await store.find(key);
     expect(active).toMatchObject({
@@ -99,7 +96,12 @@ describe('cluster mesh chat cutover', () => {
 
     await store.rollback(key, active!.previousGenerationId!);
     await expect(store.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
-    const blocked = await candidate.request('/api/v1/chat/sessions');
+    const blocked = await authenticatedRequest(
+      productApp,
+      'GET',
+      '/api/v1/chat/sessions',
+      user.sessionToken!,
+    );
     expect(blocked.status).toBe(503);
     await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
   });
