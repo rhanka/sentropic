@@ -88,4 +88,24 @@ describe('comments Hono router', () => {
     expect(response.status).toBe(400);
     expect(add).not.toHaveBeenCalled();
   });
+
+  it('updates, resolves, reopens, and deletes through one host event per request', async () => {
+    const { app, events, store } = buildApp();
+    const created = await app.request('/api/v1/comments', jsonRequest('POST', {
+      context_type: 'initiative', context_id: 'initiative-1', content: 'Root',
+    }));
+    const { id } = await created.json() as { id: string };
+
+    expect((await app.request(`/api/v1/comments/${id}`, jsonRequest('PATCH', {
+      content: 'Updated', assigned_to: 'user-1',
+    }))).status).toBe(200);
+    expect((await app.request(`/api/v1/comments/${id}/close`, jsonRequest('POST'))).status).toBe(200);
+    expect((await app.request(`/api/v1/comments/${id}/reopen`, jsonRequest('POST'))).status).toBe(200);
+    expect((await app.request(`/api/v1/comments/${id}`, jsonRequest('DELETE'))).status).toBe(200);
+
+    expect(events.map((event) => (event as { action: string }).action)).toEqual([
+      'created', 'updated', 'closed', 'reopened', 'deleted',
+    ]);
+    expect(await store.get(tenant, id)).toBeNull();
+  });
 });
