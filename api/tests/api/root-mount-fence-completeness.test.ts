@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
+import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin } from '../../src/middleware/rbac';
 import {
   MOUNTED_NAMESPACE_REGISTRY,
+  PREFIX_MOUNTED_NAMESPACE_REGISTRY,
   PRODUCT_CLUSTER_MESH_MOUNTS,
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
   ROOT_MOUNT_REMAPS,
@@ -38,6 +40,24 @@ const assertFenceComplete = (
   const fencedPaths = new Set(fence);
   const missing = registeredPaths(router).filter((path) => !fencedPaths.has(path));
   expect(missing, `${namespace} mounted namespace fence is missing registered paths`).toEqual([]);
+};
+
+const assertGlobalAuthenticationFence = (
+  namespace: string,
+  router: RootMountedRouter,
+): void => {
+  const firstRoute = router.routes[0];
+  expect(firstRoute?.path, `${namespace} null fence must start with a global guard`).toBe('/*');
+  expect(firstRoute?.handler, `${namespace} null fence must start with requireAuth`).toBe(requireAuth);
+};
+
+const assertPrefixMountsMatchRegistry = (
+  mounts: Readonly<Record<string, string>>,
+): void => {
+  const mismatches = PREFIX_MOUNTED_NAMESPACE_REGISTRY
+    .filter(({ namespace, mount }) => (mounts[namespace] ?? namespace) !== mount)
+    .map(({ namespace }) => namespace);
+  expect(mismatches, 'prefix namespace registry mounts differ from plugin mounts').toEqual([]);
 };
 
 const assertPrivilegedFenceComplete = (
@@ -93,6 +113,9 @@ describe('mounted namespace fence completeness', () => {
       assertRequireAdminSubFenceComplete(namespace, router, privilegedFences);
       if (authPaths === null) {
         expect(privilegedFences).toEqual([]);
+        if (PREFIX_MOUNTED_NAMESPACE_REGISTRY.some((item) => item.namespace === namespace)) {
+          assertGlobalAuthenticationFence(namespace, router);
+        }
         return;
       }
       assertFenceComplete(namespace, router, authPaths);
@@ -103,6 +126,7 @@ describe('mounted namespace fence completeness', () => {
   );
 
   it('binds every composed plugin root remap to the exported registry', () => {
+    assertPrefixMountsMatchRegistry(PRODUCT_CLUSTER_MESH_MOUNTS);
     expect(Object.keys(ROOT_MOUNT_REMAPS)).toEqual(
       ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
     );
@@ -113,6 +137,13 @@ describe('mounted namespace fence completeness', () => {
       PRODUCT_CLUSTER_MESH_MOUNTS,
       ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
     );
+  });
+
+  it('fails when a prefix registry mount differs from the plugin mount', () => {
+    expect(() => assertPrefixMountsMatchRegistry({
+      ...PRODUCT_CLUSTER_MESH_MOUNTS,
+      '/memory': '/fixture-mismatch',
+    })).toThrowError('prefix namespace registry mounts differ from plugin mounts');
   });
 
   it('fails when the composed plugin mounts contain an unregistered root remap', () => {
@@ -129,6 +160,17 @@ describe('mounted namespace fence completeness', () => {
 
     expect(() => assertFenceComplete('/track', router, registration.authPaths!)).toThrowError(
       '/track mounted namespace fence is missing registered paths',
+    );
+  });
+
+  it('fails when the prefixed gateway gains an anonymous route outside its fence', () => {
+    const registration = MOUNTED_NAMESPACE_REGISTRY.find(({ namespace }) => namespace === '/gw')!;
+    expect(registration.authPaths).not.toBeNull();
+    const router = registration.module.createRouter();
+    router.get('/probe-unfenced/:workspace', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/gw', router, registration.authPaths ?? [])).toThrowError(
+      '/gw mounted namespace fence is missing registered paths',
     );
   });
 
