@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
+  cacheDir: '/tmp/sentropic-ui-vitest-cache',
   resolve: {
     alias: {
       '$lib': path.resolve(__dirname, './src/lib'),
