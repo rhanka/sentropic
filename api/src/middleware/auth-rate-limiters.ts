@@ -5,10 +5,10 @@ import { env } from '../config/env';
 import { resolveClientIp } from '../utils/client-ip';
 
 /**
- * Auth rate limiters, shared by every app that mounts `authRouter`.
+ * Auth rate limiters, shared by every app that mounts a router from `createAuthRouter`.
  *
  * These MUST live outside `api/src/app.ts`: the standalone IdP
- * (`apps/auth-idp/idp-app.ts`) builds its own `new Hono()` and mounts `authRouter`
+ * (`apps/auth-idp/idp-app.ts`) builds its own `new Hono()` and mounts the factory router
  * directly, so it never instantiates the product app. Declaring the limiters only
  * on the product app left `auth.sent-tech.ca` — a public host serving
  * `/api/v1/auth/{login,register,magic-link}/*` against the same `users` table —
@@ -72,7 +72,7 @@ export const oauthIntrospectRateLimiter = rateLimiter({
 });
 
 /**
- * Register the auth limiters on an app that mounts `authRouter` under `/api/v1/auth`.
+ * Register the auth limiters on an app that mounts a router from `createAuthRouter` under `/api/v1/auth`.
  * Order matters: most specific route first, the catch-all last.
  * No-op when `DISABLE_RATE_LIMIT` is set (test environments).
  */
