@@ -72,6 +72,7 @@ describe('cluster mesh auth roots', () => {
     expect((await idp.request('/api/v1/oauth/token', { method: 'POST' })).status).toBe(404);
     expect((await productApp.request('/api/v1/me')).status).toBe(401);
     expect((await idp.request('/api/v1/auth/me')).status).toBe(401);
+    expect((await idp.request('/api/v1/auth/me', { method: 'DELETE' })).status).toBe(401);
   });
 
   it.each(['product', 'auth-idp'] as const)(
