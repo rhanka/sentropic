@@ -116,7 +116,7 @@ const seedMultiOrgUser = async (): Promise<{ cookie: string; userId: string }> =
 };
 
 const authorize = (cookie: string, scope: string, tenant: string): Promise<Response> => {
-  const url = new URL('http://localhost:9197/api/v1/auth/oauth/authorize');
+  const url = new URL('http://localhost:9197/api/v1/oauth/authorize');
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', CLIENT_ID);
   url.searchParams.set('redirect_uri', REDIRECT_URI);
@@ -133,7 +133,7 @@ const approve = async (cookie: string, tenant: string): Promise<void> => {
   const authorizeResponse = await authorize(cookie, 'openid profile email', tenant);
   const sealedState = new URL(authorizeResponse.headers.get('location') ?? '').searchParams.get('state') ?? '';
   expect(sealedState).toBeTruthy();
-  const decision = await app.request('http://localhost:9197/api/v1/auth/oauth/consent/decision', {
+  const decision = await app.request('http://localhost:9197/api/v1/oauth/consent/decision', {
     body: JSON.stringify({ decision: 'approve', state: sealedState }),
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', Cookie: cookie },
     method: 'POST',

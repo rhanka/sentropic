@@ -43,7 +43,7 @@ describe('OAuth revoke and introspect API routes', () => {
       token_type: 'access_token',
     });
 
-    const revoke = await app.request(`${ISSUER}/api/v1/auth/oauth/revoke`, {
+    const revoke = await app.request(`${ISSUER}/api/v1/oauth/revoke`, {
       body: new URLSearchParams({ token: accessToken }).toString(),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       method: 'POST',
@@ -57,7 +57,7 @@ describe('OAuth revoke and introspect API routes', () => {
 });
 
 const introspect = (token: string): Promise<Response> =>
-  app.request(`${ISSUER}/api/v1/auth/oauth/introspect`, {
+  app.request(`${ISSUER}/api/v1/oauth/introspect`, {
     body: new URLSearchParams({ token }).toString(),
     headers: {
       Authorization: basicClientAuth(),
@@ -91,7 +91,7 @@ const issueStoredAccessToken = async () => {
       scope: 'openid profile email',
     },
     {
-      audience: `${ISSUER}/api/v1/auth/oauth/userinfo`,
+      audience: `${ISSUER}/api/v1/oauth/userinfo`,
       expiresAt,
       issuer: ISSUER,
       jti,
@@ -103,7 +103,7 @@ const issueStoredAccessToken = async () => {
   await createOauthStateStoreAdapter({ now: () => now }).saveTokenMeta(
     jti,
     {
-      audience: `${ISSUER}/api/v1/auth/oauth/userinfo`,
+      audience: `${ISSUER}/api/v1/oauth/userinfo`,
       clientId: CLIENT_ID,
       createdAt: now,
       dpopJkt: null,
