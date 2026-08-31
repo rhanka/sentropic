@@ -10,13 +10,15 @@ interface CreateSentropicOAuthConsentTransportOptions {
   onUnauthorized?: () => void;
 }
 
+const PRODUCT_OAUTH_PATH = '/oauth';
+
 export const createSentropicOAuthConsentTransport = (
   options: CreateSentropicOAuthConsentTransportOptions = {},
 ): OAuthConsentTransport => ({
   async getConsent({ state }): Promise<OAuthConsentDetails> {
     return withUnauthorizedHandler(options, async () => {
       const params = new URLSearchParams({ state });
-      const response = await apiFetch(`/auth/oauth/consent?${params.toString()}`, {
+      const response = await apiFetch(`${PRODUCT_OAUTH_PATH}/consent?${params.toString()}`, {
         method: 'GET',
       });
       return response.json() as Promise<OAuthConsentDetails>;
@@ -25,7 +27,7 @@ export const createSentropicOAuthConsentTransport = (
 
   async submitConsentDecision(input): Promise<{ redirectTo: string }> {
     return withUnauthorizedHandler(options, async () => {
-      const response = await apiFetch('/auth/oauth/consent/decision', {
+      const response = await apiFetch(`${PRODUCT_OAUTH_PATH}/consent/decision`, {
         body: JSON.stringify(input),
         headers: {
           Accept: 'application/json',
@@ -39,7 +41,7 @@ export const createSentropicOAuthConsentTransport = (
 
 export const resolveOAuthAuthorizeContinuationUrl = (continuation: string): string => {
   const params = new URLSearchParams({ continue: continuation });
-  return `${API_BASE_URL}/auth/oauth/authorize?${params.toString()}`;
+  return `${API_BASE_URL}${PRODUCT_OAUTH_PATH}/authorize?${params.toString()}`;
 };
 
 const withUnauthorizedHandler = async <T>(

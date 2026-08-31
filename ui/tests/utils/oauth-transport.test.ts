@@ -29,7 +29,7 @@ describe('Sentropic OAuth consent transport', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe(`${API_BASE_URL}/auth/oauth/consent?state=sealed+state`);
+    expect(String(url)).toBe(`${API_BASE_URL}/oauth/consent?state=sealed+state`);
     expect(init?.method).toBe('GET');
   });
 
@@ -48,7 +48,7 @@ describe('Sentropic OAuth consent transport', () => {
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe(`${API_BASE_URL}/auth/oauth/consent/decision`);
+    expect(String(url)).toBe(`${API_BASE_URL}/oauth/consent/decision`);
     expect(init?.method).toBe('POST');
     expect(init?.body).toBe(JSON.stringify({ decision: 'approve', state: 'sealed-state' }));
     expect(init?.headers).toMatchObject({
@@ -72,7 +72,7 @@ describe('Sentropic OAuth consent transport', () => {
 
   it('builds the API authorize resume URL for post-login OAuth continuations', () => {
     expect(resolveOAuthAuthorizeContinuationUrl('sealed state')).toBe(
-      `${API_BASE_URL}/auth/oauth/authorize?continue=sealed+state`,
+      `${API_BASE_URL}/oauth/authorize?continue=sealed+state`,
     );
   });
 });

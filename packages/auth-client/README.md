@@ -85,7 +85,7 @@ the token request proof and all subsequent request proofs.
 | `scope`              | `undefined`                              | Default scopes (string or array).                |
 | `resource`           | `undefined`                              | Default RFC 8707 resource indicator.             |
 | `dpop`               | `false`                                  | Opt-in DPoP-bound tokens.                        |
-| `tokenEndpoint`      | `${issuer}/api/v1/auth/oauth/token`      | Override if the IdP path differs.                |
+| `tokenEndpoint`      | `${issuer}/api/v1/oauth/token`           | Override for the IdP projection.                 |
 | `refreshSkewSeconds` | `30`                                     | Refresh this long before expiry.                 |
 | `fetch`              | global `fetch`                           | Injectable for testing/proxying.                 |
 | `now`                | `() => new Date()`                       | Injectable clock for testing.                    |

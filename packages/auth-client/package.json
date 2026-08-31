@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/auth-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node-only OAuth2 client_credentials helper for Sentropic service-to-service auth: scoped, audience-bound, optionally DPoP-bound access tokens with in-memory caching.",
   "type": "module",
   "license": "MIT",
