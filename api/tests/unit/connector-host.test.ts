@@ -104,6 +104,8 @@ describe('Google Drive connector host ports', () => {
       audit: { emit: async (event) => { audit.push(event); } },
     });
     await expect(driver.readResource(hostRequest())).resolves.toMatchObject({ ok: true });
+    await expect(driver.readResource(hostRequest())).resolves.toMatchObject({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${accessToken}` });
     expect(JSON.stringify(audit)).not.toContain(accessToken);
 
