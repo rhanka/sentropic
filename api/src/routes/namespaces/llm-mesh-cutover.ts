@@ -4,7 +4,7 @@ import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 
 export const LLM_MESH_AUTHOR = 'llm-mesh-hono-module';
 
-const LLM_MESH_PATHS = [
+export const LLM_MESH_PATHS = [
   '/models/catalog',
   '/models/provider-readiness',
   '/me/ai-settings',

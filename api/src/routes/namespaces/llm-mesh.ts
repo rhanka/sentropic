@@ -21,7 +21,7 @@ import {
 } from '../../services/provider-connections';
 import { settingsService } from '../../services/settings';
 import { productLlmMeshEnrollmentPort } from './llm-mesh-enrollment';
-import { applyLlmMeshAuthorFence } from './llm-mesh-cutover';
+import { applyLlmMeshAuthorFence, LLM_MESH_PATHS } from './llm-mesh-cutover';
 
 const aiSettingsSchema = z.object({
   defaultProviderId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local']).optional(),
@@ -127,7 +127,9 @@ export const createLlmMeshNamespaceModule = (
   enabled: options.enabled ?? true,
   createRouter() {
     const router = new Hono();
-    router.use('*', options.authenticate ?? requireAuth);
+    for (const path of LLM_MESH_PATHS) {
+      router.use(path, options.authenticate ?? requireAuth);
+    }
     router.use('/settings/provider-connections', options.authorizeAdmin ?? requireAdmin);
     router.use('/settings/provider-connections/*', options.authorizeAdmin ?? requireAdmin);
     applyLlmMeshAuthorFence(router);
