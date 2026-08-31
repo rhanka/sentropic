@@ -56,5 +56,6 @@ describe('canonical gateway egress', () => {
         reasoning_tokens: 3,
       },
     });
+    expect(JSON.stringify(encoded)).not.toContain('ownerScopeRef');
   });
 });

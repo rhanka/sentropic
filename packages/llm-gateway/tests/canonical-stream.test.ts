@@ -59,6 +59,22 @@ const collectCompleteArguments = async (
 };
 
 describe('canonical gateway streams', () => {
+  it('consumes one canonical source without a shadow replay', async () => {
+    let starts = 0;
+    const once = async function* (): AsyncGenerator<StreamEvent> {
+      starts += 1;
+      yield { type: 'content_delta', data: { delta: 'one' } };
+      yield { type: 'done', data: { finishReason: 'stop' } };
+    };
+    let output = '';
+    for await (const frame of encodeGatewayStream(
+      'openai-chat-completions', 'gpt-5.6-terra', 'response-once', once(),
+    )) output += frame.raw;
+
+    expect(starts).toBe(1);
+    expect(output).toContain('data: [DONE]');
+  });
+
   it('preserves Anthropic block boundaries and terminal ordering', async () => {
     const frames = await collect('anthropic-messages');
 
