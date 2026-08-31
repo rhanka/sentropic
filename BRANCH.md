@@ -331,19 +331,19 @@
   - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-gw.test.ts ENV=test-cluster-mesh-central-control-plane` — 1 file/3 tests pass.
   - [x] Internal gates: C3 gateway/mesh standalone with injected caller, planning and dispatch context; A5 module disableability partial returns 404 and creates no cutover author.
 
-- [ ] **Lot 9 — `/chat` existing chat-server factory completion and cutover**
-  - [ ] Namespace: `/chat`; type: existing-factory wrapping/extraction, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Extend `createChatServer` ports for remaining endpoints currently authored in `api/src/routes/api/chat.ts`; keep chat-core/runtime/persistence provider-owned.
-  - [ ] Mount through `api/src/routes/namespaces/chat.ts`, shadow chat reads and validated mutation intent, select one author and prove rollback.
-  - [ ] Delete `api/src/routes/api/chat.ts` and its direct mount after the replacement passes; keep stream transport assigned to `/streams`.
-  - [ ] Tests updated: `packages/chat-server/tests/wire-contract.spec.ts`, `packages/chat-server/tests/ports-contract.spec.ts`, `packages/chat-server/tests/in-memory-roundtrip.spec.ts`, `packages/chat-server/tests/capability-gate.spec.ts`, `packages/chat-core/tests/integration/full-flow.test.ts`.
-  - [ ] API tests updated: `api/tests/api/chat-server-mount.test.ts`, `api/tests/api/chat-characterization.spec.ts`, `api/tests/api/chat-bootstrap-contract.test.ts`, `api/tests/api/chat-checkpoint-contract.test.ts`, `api/tests/api/chat-persistence-write-order.test.ts`, `api/tests/api/chat.test.ts`; new `api/tests/api/cluster-mesh-chat-cutover.test.ts`.
-  - [ ] UI tests updated: `ui/tests/chat/session-adapter.test.ts`, `ui/tests/components/chat/ChatTimeline.test.ts`, `ui/tests/components/chat/AppChatPanel-boundary.test.ts`.
-  - [ ] E2E updated: `e2e/tests/03-chat.spec.ts`, `e2e/tests/08-chat-checkpoint-restore.spec.ts`, `e2e/tests/09-chat-freeze-terminal.spec.ts`.
-  - [ ] Lot gate: `make typecheck-chat-server test-chat-server build-chat-server typecheck-chat-core build-chat-core ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-chat-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 existing chat persistence remains canonical; C3 chat packages standalone; A5 reusable factory.
+- [x] **Lot 9 — `/chat` existing chat-server factory completion and cutover**
+  - [x] Namespace: `/chat`; type: existing-factory wrapping/extraction, plugin mount, D11 cutover and legacy deletion.
+  - [x] Extend `createChatServer` ports for remaining endpoints currently authored in `api/src/routes/api/chat.ts`; keep chat-core/runtime/persistence provider-owned.
+  - [x] Mount through `api/src/routes/namespaces/chat.ts`, shadow chat reads and validated mutation intent, select one author and prove rollback.
+  - [x] Delete `api/src/routes/api/chat.ts` and its direct mount after the replacement passes; keep stream transport assigned to `/streams`.
+  - [x] Tests updated: `packages/chat-server/tests/wire-contract.spec.ts`, `packages/chat-server/tests/ports-contract.spec.ts`, `packages/chat-server/tests/in-memory-roundtrip.spec.ts`, `packages/chat-server/tests/capability-gate.spec.ts`, `packages/chat-core/tests/integration/full-flow.test.ts`.
+  - [x] API tests updated: `api/tests/api/chat-server-mount.test.ts`, `api/tests/api/chat-characterization.spec.ts`, `api/tests/api/chat-bootstrap-contract.test.ts`, `api/tests/api/chat-checkpoint-contract.test.ts`, `api/tests/api/chat-persistence-write-order.test.ts`, `api/tests/api/chat.test.ts`; new `api/tests/api/cluster-mesh-chat-cutover.test.ts`.
+  - [x] UI tests updated: `ui/tests/chat/session-adapter.test.ts`, `ui/tests/components/chat/ChatTimeline.test.ts`, `ui/tests/components/chat/AppChatPanel-boundary.test.ts`.
+  - [x] E2E updated: `e2e/tests/03-chat.spec.ts`, `e2e/tests/08-chat-checkpoint-restore.spec.ts`, `e2e/tests/09-chat-freeze-terminal.spec.ts`.
+  - [x] Lot gate: `make typecheck-chat-server test-chat-server build-chat-server typecheck-chat-core build-chat-core ENV=test-cluster-mesh-central-control-plane` — chat-server passes 4 files/29 tests; all typecheck and build targets exit 0.
+  - [x] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-chat-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` — typecheck exits 0, lint reports 0 errors and the scoped test passes 1 file/2 tests.
+  - [x] Lot gate: `make typecheck-ui lint-ui test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-cluster-mesh-central-control-plane` — typecheck reports 0 errors, lint exits 0 and the scoped test passes 1 file/4 tests.
+  - [x] Internal gates: C1 existing chat persistence remains canonical; C3 chat packages standalone; A5 reusable factory.
 
 - [ ] **Lot 10 — `/focus` TARGET reusable-package extraction**
   - [ ] Namespace: `/focus`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
