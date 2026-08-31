@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { db } from '../../db/client';
+import { db } from '../../../db/client';
 import {
   chatSessions,
   chatGenerationTraces,
@@ -17,23 +17,23 @@ import {
   webauthnChallenges,
   webauthnCredentials,
   workspaces,
-} from '../../db/schema';
+} from '../../../db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
-import { settingsService } from '../../services/settings';
+import { settingsService } from '../../../services/settings';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
   resolveDefaultSelection,
-} from '../../services/model-catalog';
+} from '../../../services/model-catalog';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
   revokeCapturedConnectorGrants,
-} from '../../services/connector-grant-teardown';
+} from '../../../services/connector-grant-teardown';
 
-export const meRouter = new Hono();
+export const accountRouter = new Hono();
 
-meRouter.get('/', async (c) => {
+accountRouter.get('/', async (c) => {
   const { userId, workspaceId, role } = c.get('user');
 
   const [user] = await db
@@ -91,7 +91,7 @@ const patchMyAISettingsSchema = z
     { message: 'At least one field is required' }
   );
 
-meRouter.patch('/', zValidator('json', patchMeSchema), async (c) => {
+accountRouter.patch('/', zValidator('json', patchMeSchema), async (c) => {
   const { userId, workspaceId } = c.get('user');
   const { workspaceName } = c.req.valid('json');
 
@@ -115,7 +115,7 @@ meRouter.patch('/', zValidator('json', patchMeSchema), async (c) => {
   return c.json({ success: true });
 });
 
-meRouter.get('/ai-settings', async (c) => {
+accountRouter.get('/ai-settings', async (c) => {
   const { userId } = c.get('user');
 
   const [currentSettings, catalog] = await Promise.all([
@@ -137,7 +137,7 @@ meRouter.get('/ai-settings', async (c) => {
   });
 });
 
-meRouter.put(
+accountRouter.put(
   '/ai-settings',
   zValidator('json', patchMyAISettingsSchema),
   async (c) => {
@@ -186,7 +186,7 @@ meRouter.put(
   }
 );
 
-meRouter.post('/deactivate', async (c) => {
+accountRouter.post('/deactivate', async (c) => {
   const { userId } = c.get('user');
   const now = new Date();
 
@@ -210,7 +210,7 @@ meRouter.post('/deactivate', async (c) => {
  * DELETE /me
  * Immediate account suppression: delete user + workspace + all owned data.
  */
-meRouter.delete('/', async (c) => {
+accountRouter.delete('/', async (c) => {
   const { userId, workspaceId } = c.get('user');
 
   // Capture the external grants BEFORE anything is deleted: `document_connector_accounts` cascades
