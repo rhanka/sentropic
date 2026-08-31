@@ -1,4 +1,5 @@
 import { createMcpSupervisor } from '@sentropic/cluster-mesh';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { db } from '../../src/db/client';
@@ -70,6 +71,25 @@ describe('cluster-mesh MCP durable singleton', () => {
       ok: false,
       reason: 'logical_server_exists',
     });
+  });
+
+  it.each(['stopped', 'lost'] as const)('refuses to resurrect a %s generation', async (status) => {
+    await saveGeneration('generation-1', 'supervisor-1');
+    await store.saveGeneration({
+      generationId: 'generation-1',
+      status,
+      supervisorRef: 'supervisor-1',
+      supervisorLeaseExpiresAt: NOW,
+      maxConcurrent: 12,
+      poolSize: 4,
+      stoppedAt: NOW,
+    });
+
+    await expect(saveGeneration('generation-1', 'supervisor-1'))
+      .rejects.toThrow('cluster_mesh_generation_terminal');
+    const [generation] = await db.select().from(clusterMeshGenerations)
+      .where(eq(clusterMeshGenerations.generationId, 'generation-1'));
+    expect(generation).toMatchObject({ status });
   });
 
   it('persists generation handover rollback to the previous author', async () => {
