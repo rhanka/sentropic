@@ -20,7 +20,7 @@ import {
 // BR-39l Lot 2 — RFC 8707 `resource` → variable `aud` on the authorization_code flow.
 // Ratified conditions C1-C9 (spec/SPEC_DECISION_39L_RESOURCE_AUD_RATIFICATION.md); fixtures T1-T9.
 
-const userinfoAudience = 'http://localhost:9197/api/v1/auth/oauth/userinfo';
+const userinfoAudience = 'http://localhost:9197/oauth/userinfo';
 const mcpResource = 'https://mcp.example.com';
 
 const resourceClient = createOauthClient({ resourceIndicators: [mcpResource] });
