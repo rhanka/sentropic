@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import {
+  agentDefinitions,
   executionEvents,
   executionRuns,
   plans,
@@ -14,6 +15,7 @@ import {
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 import { todoOrchestrationService } from '../../src/services/todo-orchestration';
+import { PostgresAgentTemplate } from '../../src/services/flow/postgres-agent-template';
 
 describe('TodoOrchestrationService chat progression', () => {
   let userId: string;
@@ -39,9 +41,32 @@ describe('TodoOrchestrationService chat progression', () => {
     await db.delete(tasks).where(eq(tasks.workspaceId, workspaceId));
     await db.delete(todos).where(eq(todos.workspaceId, workspaceId));
     await db.delete(plans).where(eq(plans.workspaceId, workspaceId));
+    await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
     await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
+  });
+
+  it('reuses the canonical agent definition table through the Flow port', async () => {
+    const actor = { userId, role: 'editor', workspaceId };
+    const port = new PostgresAgentTemplate();
+
+    await port.upsertMany(actor, [{
+      key: 'chat-progression-agent',
+      name: 'Chat progression agent',
+      config: { model: 'gpt-4.1-nano' },
+      sourceLevel: 'user',
+    }]);
+
+    const listed = await port.list(actor);
+    expect(listed).toEqual([
+      expect.objectContaining({ key: 'chat-progression-agent', sourceLevel: 'user' }),
+    ]);
+    const [stored] = await db
+      .select({ config: agentDefinitions.config })
+      .from(agentDefinitions)
+      .where(eq(agentDefinitions.workspaceId, workspaceId));
+    expect(stored?.config).toEqual({ model: 'gpt-4.1-nano' });
   });
 
   it('progresses deferred tasks to done in one chat update call', async () => {
