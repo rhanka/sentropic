@@ -208,5 +208,25 @@ describe('chat-server mounted api contract', () => {
       expect.objectContaining({ eventType: 'content_delta', sequence: 1 }),
       expect.objectContaining({ eventType: 'done', sequence: 2 }),
     ]);
+
+    const sessions = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/chat/sessions',
+      user.sessionToken!,
+    );
+    expect(await sessions.json()).toEqual({
+      sessions: expect.arrayContaining([
+        expect.objectContaining({ id: created.sessionId }),
+      ]),
+    });
+
+    const misplacedStream = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/chat/streams/sse?streamIds=${created.assistantMessageId}`,
+      user.sessionToken!,
+    );
+    expect(misplacedStream.status).toBe(404);
   });
 });

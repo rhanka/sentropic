@@ -221,6 +221,28 @@ describe('chat API characterization contract', () => {
       },
     ]);
 
+    const runtimeDetails = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/chat/messages/${created.assistantMessageId}/runtime-details`,
+      user.sessionToken!,
+    );
+    expect(runtimeDetails.status).toBe(200);
+    const runtimeItems = (await runtimeDetails.json()).items;
+    expect(runtimeItems).toHaveLength(1);
+    expect(runtimeItems[0]).toMatchObject({
+      kind: 'assistant-segment',
+      isTerminal: true,
+      segment: {
+        kind: 'assistant',
+        content: 'Hello world',
+        events: [
+          expect.objectContaining({ eventType: 'content_delta', sequence: 1 }),
+          expect.objectContaining({ eventType: 'content_delta', sequence: 2 }),
+        ],
+      },
+    });
+
     const messages = await authenticatedRequest(
       app,
       'GET',
