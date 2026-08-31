@@ -437,7 +437,7 @@
 
 - [ ] **Lot 15 — `/track` TARGET fail-closed adapter module**
   - [ ] Namespace: `/track`; type: TARGET adapter extraction/mount/cutover gate.
-  - [ ] Add a neutral Track router adapter in `api/src/routes/namespaces/track.ts` over a pinned external `@sentropic/track` port; do not copy Track source, codec or log.
+  - [x] Add a neutral Track router adapter in `api/src/routes/namespaces/track.ts` over a pinned external `@sentropic/track` port; do not copy Track source, codec or log — the port exposes opaque evidence/cursor references only and pins package `0.91.1`, read-contract major `1` and the lockfile artifact digest.
   - [ ] Mount disabled by default, shadow only deterministic evidence/cursor reads when the pinned provider exists, and select one author only after digest compatibility.
   - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct Focus Track HTTP projection discovered during inventory.
   - [ ] Tests new: `api/tests/api/cluster-mesh-track.test.ts`, `api/tests/unit/track-namespace-adapter.test.ts`.
