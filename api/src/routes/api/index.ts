@@ -8,7 +8,7 @@ import { businessConfigRouter } from './business-config';
 import { analyticsRouter } from './analytics';
 import { adminRouter, tenantResolutionMetricsRouter } from './admin';
 import { tenantsRouter } from './tenants';
-import { accountRouter as meRouter } from '../namespaces/auth/account';
+import { meRouter } from './me';
 import { streamsRouter } from './streams';
 import { chatRouter } from './chat';
 import { documentsRouter } from './documents';
