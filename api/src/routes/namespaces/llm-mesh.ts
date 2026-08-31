@@ -1,7 +1,13 @@
-import type { CreateLlmMeshRouterOptions } from '@sentropic/llm-mesh/hono';
+import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
+import {
+  createLlmMeshRouter,
+  type CreateLlmMeshRouterOptions,
+} from '@sentropic/llm-mesh/hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 
-import type { AuthUser } from '../../middleware/auth';
+import { requireAuth, type AuthUser } from '../../middleware/auth';
+import { requireAdmin } from '../../middleware/rbac';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
@@ -105,3 +111,29 @@ export const createProductLlmMeshRouterOptions = (): CreateLlmMeshRouterOptions 
   },
   enrollment: productLlmMeshEnrollmentPort,
 });
+
+export interface CreateLlmMeshNamespaceModuleOptions {
+  readonly enabled?: boolean;
+  readonly authenticate?: MiddlewareHandler;
+  readonly authorizeAdmin?: MiddlewareHandler;
+  readonly routerOptions?: CreateLlmMeshRouterOptions;
+}
+
+export const createLlmMeshNamespaceModule = (
+  options: CreateLlmMeshNamespaceModuleOptions = {},
+): ClusterMeshHonoNamespaceModule => ({
+  namespace: '/llm-mesh',
+  enabled: options.enabled ?? true,
+  createRouter() {
+    const router = new Hono();
+    router.use('*', options.authenticate ?? requireAuth);
+    router.use('/provider-connections', options.authorizeAdmin ?? requireAdmin);
+    router.use('/provider-connections/*', options.authorizeAdmin ?? requireAdmin);
+    router.route('/', createLlmMeshRouter(
+      options.routerOptions ?? createProductLlmMeshRouterOptions(),
+    ));
+    return router;
+  },
+});
+
+export const productLlmMeshModule = createLlmMeshNamespaceModule();
