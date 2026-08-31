@@ -16,6 +16,13 @@ export interface CreateOAuthNamespaceModuleOptions {
 }
 
 const AUTHOR = 'auth-hono-oauth-module';
+const OAUTH_PATHS = [
+  '/authorize', '/consent', '/consent/decision', '/token', '/userinfo',
+  '/revoke', '/introspect', '/end_session', '/s2s/ping', '/s2s/self-check',
+] as const;
+const WELL_KNOWN_PATHS = [
+  '/openid-configuration', '/oauth-authorization-server', '/jwks.json',
+] as const;
 const control = clusterMeshAdapter.sessionControl;
 if (!control) throw new Error('cluster mesh OAuth cutover control is not configured');
 const activations = new Map<OAuthCompositionRoot, Promise<void>>();
@@ -61,15 +68,21 @@ const ensureAuthor = async (compositionRoot: OAuthCompositionRoot): Promise<bool
     && record.selectedGenerationId === control.runtime.generation.generationId;
 };
 
-const applyAuthorFence = (router: Hono, compositionRoot: OAuthCompositionRoot): void => {
-  router.use('*', async (c, next) => {
-    try {
-      if (!await ensureAuthor(compositionRoot)) return c.json({ error: 'wrong_author' }, 503);
-      await next();
-    } catch {
-      return c.json({ error: 'oauth_control_unavailable' }, 503);
-    }
-  });
+const applyAuthorFence = (
+  router: Hono,
+  compositionRoot: OAuthCompositionRoot,
+  paths: readonly string[],
+): void => {
+  for (const path of paths) {
+    router.use(path, async (c, next) => {
+      try {
+        if (!await ensureAuthor(compositionRoot)) return c.json({ error: 'wrong_author' }, 503);
+        await next();
+      } catch {
+        return c.json({ error: 'oauth_control_unavailable' }, 503);
+      }
+    });
+  }
 };
 
 export const createOAuthNamespaceModule = (
@@ -79,7 +92,7 @@ export const createOAuthNamespaceModule = (
   enabled: true,
   createRouter() {
     const router = new Hono();
-    applyAuthorFence(router, options.compositionRoot);
+    applyAuthorFence(router, options.compositionRoot, OAUTH_PATHS);
     router.route('/', createSentropicOAuthIngress(options.publicPath));
     router.route('/s2s', createServiceS2sRouter({
       oauthPublicPath: options.publicPath,
@@ -93,7 +106,7 @@ export const createOAuthWellKnownProjection = (
   options: CreateOAuthNamespaceModuleOptions,
 ): Hono => {
   const router = new Hono();
-  applyAuthorFence(router, options.compositionRoot);
+  applyAuthorFence(router, options.compositionRoot, WELL_KNOWN_PATHS);
   router.route('/', createSentropicWellKnownIngress(options.publicPath));
   return router;
 };

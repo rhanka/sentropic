@@ -1,51 +1,64 @@
+import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { oauthRouter } from '../../src/routes/auth/oauth';
+import { db } from '../../src/db/client';
+import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
-  createSentropicOAuthIngress,
-  createSentropicWellKnownIngress,
-} from '../../src/routes/namespaces/oauth-ingress';
-import { wellKnownRouter } from '../../src/routes/well-known';
+  createOAuthNamespaceModule,
+  createOAuthWellKnownProjection,
+  type OAuthCompositionRoot,
+} from '../../src/routes/namespaces/oauth';
+import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
+import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 
-const LEGACY_OAUTH_PATH = '/api/v1/auth/oauth';
+const store = new PostgresClusterMeshCutoverStore();
+const key = (compositionRoot: OAuthCompositionRoot) => ({ compositionRoot, namespace: '/oauth' as const });
+const clear = (compositionRoot: OAuthCompositionRoot) => db.delete(clusterMeshNamespaceCutovers).where(and(
+  eq(clusterMeshNamespaceCutovers.compositionRoot, compositionRoot),
+  eq(clusterMeshNamespaceCutovers.namespace, '/oauth'),
+));
 
-describe('cluster mesh OAuth pre-cutover shadow', () => {
-  it('matches deterministic protocol responses without executing token effects twice', async () => {
-    const legacy = new Hono().route(LEGACY_OAUTH_PATH, oauthRouter);
-    const candidate = new Hono().route(
-      LEGACY_OAUTH_PATH,
-      createSentropicOAuthIngress(LEGACY_OAUTH_PATH),
-    );
-    const request = (app: Hono) => app.request(`http://localhost:9197${LEGACY_OAUTH_PATH}/token`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: 'grant_type=unsupported',
+const buildRoot = (compositionRoot: OAuthCompositionRoot, oauthPath: string): Hono => {
+  const rootPath = compositionRoot === 'product' ? '/api/v1' : '/api/v1/auth';
+  return new Hono()
+    .route('/.well-known', createOAuthWellKnownProjection({ compositionRoot, publicPath: oauthPath }))
+    .route(rootPath, createClusterMeshPlugin({
+      runtime: clusterMeshAdapter.sessionControl!.runtime,
+      namespaces: [createOAuthNamespaceModule({ compositionRoot, publicPath: oauthPath })],
+    }))
+    .get('/api/v1/auth/session', (c) => c.body(null, 204))
+    .get('/api/v1/auth/future', (c) => c.body(null, 204));
+};
+
+afterEach(async () => Promise.all([clear('product'), clear('auth-idp')]));
+
+describe('cluster mesh OAuth roots', () => {
+  it.each([
+    ['product', '/api/v1/oauth'],
+    ['auth-idp', '/api/v1/auth/oauth'],
+  ] as const)('cuts over %s with exact routes and a working rollback', async (compositionRoot, oauthPath) => {
+    await clear(compositionRoot);
+    const app = buildRoot(compositionRoot, oauthPath);
+    const metadata = await app.request('http://localhost:9197/.well-known/openid-configuration');
+    expect(metadata.status).toBe(200);
+    await expect(metadata.json()).resolves.toMatchObject({
+      authorization_endpoint: `http://localhost:9197${oauthPath}/authorize`,
+      token_endpoint: `http://localhost:9197${oauthPath}/token`,
     });
+    expect((await app.request(`${oauthPath}/end_session`)).status).toBe(200);
 
-    const legacyResponse = await request(legacy);
-    const candidateResponse = await request(candidate);
-    expect(candidateResponse.status).toBe(legacyResponse.status);
-    expect(await candidateResponse.json()).toEqual(await legacyResponse.json());
-  });
+    const active = await store.find(key(compositionRoot));
+    expect(active).toMatchObject({ activeAuthor: 'auth-hono-oauth-module', status: 'active' });
+    expect(active?.shadowComparison).toMatchObject({ effectsDuplicated: false });
+    await store.rollback(key(compositionRoot), active!.previousGenerationId!);
+    await expect(store.verifyRollback(key(compositionRoot))).resolves.toMatchObject({ reversible: true });
+    const blocked = await app.request(`${oauthPath}/end_session`);
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
 
-  it('matches discovery metadata and logout projection before legacy deletion', async () => {
-    const legacy = new Hono()
-      .route('/.well-known', wellKnownRouter)
-      .route(LEGACY_OAUTH_PATH, oauthRouter);
-    const candidate = new Hono()
-      .route('/.well-known', createSentropicWellKnownIngress(LEGACY_OAUTH_PATH))
-      .route(LEGACY_OAUTH_PATH, createSentropicOAuthIngress(LEGACY_OAUTH_PATH));
-
-    for (const path of ['/.well-known/openid-configuration', `${LEGACY_OAUTH_PATH}/end_session`]) {
-      const legacyResponse = await legacy.request(`http://localhost:9197${path}`, {
-        headers: { 'sec-fetch-mode': 'navigate' },
-      });
-      const candidateResponse = await candidate.request(`http://localhost:9197${path}`, {
-        headers: { 'sec-fetch-mode': 'navigate' },
-      });
-      expect(candidateResponse.status).toBe(legacyResponse.status);
-      expect(await candidateResponse.text()).toBe(await legacyResponse.text());
-    }
+    expect((await app.request('/api/v1/auth/session')).status).toBe(204);
+    expect((await app.request('/api/v1/auth/future')).status).toBe(204);
   });
 });
