@@ -69,6 +69,9 @@ describe('cluster mesh OAuth roots', () => {
     const blocked = await app.request(`${oauthPath}/end_session`);
     expect(blocked.status).toBe(503);
     await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+    const blockedMetadata = await app.request('/.well-known/openid-configuration');
+    expect(blockedMetadata.status).toBe(503);
+    await expect(blockedMetadata.json()).resolves.toEqual({ error: 'wrong_author' });
 
     expect((await app.request('/api/v1/auth/session')).status).toBe(204);
     expect((await app.request('/api/v1/auth/future')).status).toBe(204);
