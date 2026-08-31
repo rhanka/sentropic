@@ -471,7 +471,7 @@
 
 - [ ] **Lot 17 — `/agents` TARGET application router extraction**
   - [ ] Namespace: `/agents`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Add `api/src/routes/namespaces/agents.ts` over flow/skills/catalog ports; absorb agent-config and prompt-profile surfaces without owning catalog discovery.
+  - [x] Add `api/src/routes/namespaces/agents.ts` over flow/skills/catalog ports; absorb agent-config and prompt-profile surfaces without owning catalog discovery.
     - [x] Extract injected flow, skills and prompt-profile catalog ports without exposing catalog discovery.
     - [x] Extract the agent configuration router over the existing Flow agent-template port.
     - [x] Extract prompt-profile reads/validation through catalog and skills ports with preserved wires.
