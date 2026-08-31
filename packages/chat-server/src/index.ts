@@ -891,6 +891,41 @@ export function createChatServer(
     return c.json({ ok: true });
   };
 
+  const messageRuntimeDetails = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.messages.getMessageRuntimeDetails) {
+      return c.json({ error: 'message runtime details are not configured' }, 501);
+    }
+    const result = await deps.messages.getMessageRuntimeDetails({
+      messageId: routeParam(c, 'messageId', 'id'),
+      userId: user.userId,
+    });
+    return c.json(result as Record<string, unknown>);
+  };
+
+  const editMessage = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'editMessage');
+    if (denied) return denied;
+    if (!deps.messages.updateUserMessageContent) {
+      return c.json({ error: 'message editing is not configured' }, 501);
+    }
+    const body = await readJson(c);
+    if (typeof body.content !== 'string' || body.content.length === 0) {
+      return c.json({ error: 'Unable to edit message' }, 400);
+    }
+    try {
+      const result = await deps.messages.updateUserMessageContent({
+        messageId: routeParam(c, 'messageId', 'id'),
+        userId: user.userId,
+        content: body.content,
+      });
+      return c.json({ messageId: result.messageId });
+    } catch (error) {
+      return controlErrorResponse(c, error, 'Unable to edit message');
+    }
+  };
+
   const stream = async (c: Context) => {
     const user = await resolveUser(c, deps);
     const sessionId = routeParam(c, 'sessionId', 'id');
@@ -1167,6 +1202,12 @@ export function createChatServer(
     app.get(routePath('/sessions/:sessionId/history'), sessionHistory);
     app.delete(routePath('/sessions/:sessionId'), deleteSession);
   }
+  if (deps.messages.getMessageRuntimeDetails) {
+    app.get(routePath('/messages/:messageId/runtime-details'), messageRuntimeDetails);
+  }
+  if (deps.messages.updateUserMessageContent) {
+    app.patch(routePath('/messages/:messageId'), editMessage);
+  }
 
   return app;
 }
@@ -1345,6 +1386,20 @@ export function createInMemoryChatServerDeps(
           documents: [],
           assistantDetailsByMessageId,
         };
+      },
+      async getMessageRuntimeDetails(input) {
+        const message = messages.get(input.messageId);
+        if (!message) throw new Error('Message not found');
+        return {
+          messageId: input.messageId,
+          items: streamEvents.get(input.messageId) ?? [],
+        };
+      },
+      async updateUserMessageContent(input) {
+        const message = messages.get(input.messageId);
+        if (!message || message.role !== 'user') throw new Error('Message not found');
+        messages.set(input.messageId, { ...message, content: input.content });
+        return { messageId: input.messageId };
       },
       async getMessageForUser(input) {
         return messages.get(input.messageId) ?? null;
