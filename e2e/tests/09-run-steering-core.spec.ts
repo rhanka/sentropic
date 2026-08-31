@@ -17,7 +17,7 @@ const isChatSteerRequest = (req: { method(): string; url(): string }) => {
   return /^\/api\/v1\/chat\/messages\/[^/]+\/steer\/?$/.test(pathname);
 };
 
-test.describe('chat steering core', () => {
+test.describe('chat steering core after the Flow cutover', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const DEFAULT_AUTH_STATE = './.auth/state.json';
 
