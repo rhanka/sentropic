@@ -25,6 +25,7 @@ export type ChatControlAction =
   | 'retry'
   | 'toolResults'
   | 'editMessage'
+  | 'listToolPermissions'
   | 'upsertToolPermission'
   | 'deleteToolPermission'
   | 'createCheckpoint'
@@ -926,6 +927,76 @@ export function createChatServer(
     }
   };
 
+  const extensionWorkspace = async (
+    c: Context,
+    action: Extract<ChatControlAction,
+      'listToolPermissions' | 'upsertToolPermission' | 'deleteToolPermission'>,
+  ): Promise<{ user: ChatServerUser; denied: Response | null }> => {
+    const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, action);
+    return {
+      user,
+      denied: denied ?? (!user.workspaceId
+        ? c.json({ error: 'Insufficient permissions' }, 403)
+        : null),
+    };
+  };
+
+  const listToolPermissions = async (c: Context) => {
+    const { user, denied } = await extensionWorkspace(c, 'listToolPermissions');
+    if (denied) return denied;
+    const items = await deps.extensions!.listToolPermissions({
+      userId: user.userId,
+      workspaceId: user.workspaceId!,
+    });
+    return c.json({ items });
+  };
+
+  const upsertToolPermission = async (c: Context) => {
+    const { user, denied } = await extensionWorkspace(c, 'upsertToolPermission');
+    if (denied) return denied;
+    const body = await readJson(c);
+    if (
+      typeof body.toolName !== 'string'
+      || typeof body.origin !== 'string'
+      || (body.policy !== 'allow' && body.policy !== 'deny')
+    ) {
+      return c.json({ error: 'Invalid tool permission payload' }, 400);
+    }
+    try {
+      const item = await deps.extensions!.upsertToolPermission({
+        userId: user.userId,
+        workspaceId: user.workspaceId!,
+        toolName: body.toolName,
+        origin: body.origin,
+        policy: body.policy,
+      });
+      return c.json({ ok: true, item });
+    } catch (error) {
+      return c.json({ error: errorMessage(error, 'Unable to update tool permission') }, 400);
+    }
+  };
+
+  const deleteToolPermission = async (c: Context) => {
+    const { user, denied } = await extensionWorkspace(c, 'deleteToolPermission');
+    if (denied) return denied;
+    const body = await readJson(c);
+    if (typeof body.toolName !== 'string' || typeof body.origin !== 'string') {
+      return c.json({ error: 'Invalid tool permission payload' }, 400);
+    }
+    try {
+      await deps.extensions!.deleteToolPermission({
+        userId: user.userId,
+        workspaceId: user.workspaceId!,
+        toolName: body.toolName,
+        origin: body.origin,
+      });
+      return c.json({ ok: true });
+    } catch (error) {
+      return c.json({ error: errorMessage(error, 'Unable to delete tool permission') }, 400);
+    }
+  };
+
   const stream = async (c: Context) => {
     const user = await resolveUser(c, deps);
     const sessionId = routeParam(c, 'sessionId', 'id');
@@ -1208,6 +1279,11 @@ export function createChatServer(
   if (deps.messages.updateUserMessageContent) {
     app.patch(routePath('/messages/:messageId'), editMessage);
   }
+  if (deps.extensions) {
+    app.get(routePath('/tool-permissions'), listToolPermissions);
+    app.put(routePath('/tool-permissions'), upsertToolPermission);
+    app.delete(routePath('/tool-permissions'), deleteToolPermission);
+  }
 
   return app;
 }
@@ -1226,6 +1302,7 @@ export function createInMemoryChatServerDeps(
   const messages = new Map<string, ChatServerMessage>();
   const streamEvents = new Map<string, ChatServerStreamEvent[]>();
   const checkpoints = new Map<string, Array<Record<string, unknown>>>();
+  const toolPermissions = new Map<string, ChatExtensionPermission>();
 
   const ensureSession = (sessionId: string, owner: ChatServerUser) => {
     if (!sessions.has(sessionId)) {
@@ -1357,6 +1434,24 @@ export function createInMemoryChatServerDeps(
           messages.delete(message.id);
           streamEvents.delete(message.id);
         }
+      },
+    },
+    extensions: {
+      async listToolPermissions() {
+        return Array.from(toolPermissions.values());
+      },
+      async upsertToolPermission(input) {
+        const item = {
+          toolName: input.toolName,
+          origin: input.origin,
+          policy: input.policy,
+          updatedAt: new Date(0).toISOString(),
+        };
+        toolPermissions.set(`${input.toolName}\u0000${input.origin}`, item);
+        return item;
+      },
+      async deleteToolPermission(input) {
+        toolPermissions.delete(`${input.toolName}\u0000${input.origin}`);
       },
     },
     messages: {
