@@ -59,4 +59,16 @@ describe('createAuthRouter', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
   });
+
+  it('excludes delegated routes without intercepting adjacent facades', async () => {
+    const router = createAuthRouter({
+      excludeRoutes: ['refreshSession', 'logout'],
+      routePrefix: '/auth',
+    });
+
+    expect((await router.request('/auth/login/options', { method: 'POST' })).status).toBe(501);
+    expect((await router.request('/auth/session/refresh', { method: 'POST' })).status).toBe(404);
+    expect((await router.request('/auth/session', { method: 'DELETE' })).status).toBe(404);
+    expect((await router.request('/auth/oauth/authorize')).status).toBe(404);
+  });
 });

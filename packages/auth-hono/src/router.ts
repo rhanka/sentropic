@@ -10,6 +10,7 @@ import type { AuthHonoPorts } from './ports.js';
 export interface CreateAuthRouterOptions {
   cookieNames?: AuthHonoCookieNames;
   emailCode?: AuthHonoEmailCodePolicy;
+  excludeRoutes?: readonly AuthHonoAuthUiMethod[];
   handlers?: AuthHonoRouteHandlers;
   magicLink?: AuthHonoMagicLinkPolicy;
   ports?: AuthHonoPorts;
@@ -106,12 +107,14 @@ export const createAuthHonoConfig = (options: CreateAuthRouterOptions = {}): Aut
 export const createAuthRouter = (options: CreateAuthRouterOptions = {}): Hono => {
   const router = new Hono();
   const config = createAuthHonoConfig(options);
+  const excludedRoutes = new Set(options.excludeRoutes ?? []);
 
   router.get(joinRoutePath(config.routePrefix, '/health'), (c) =>
     c.json({ status: 'ok', service: config.serviceName })
   );
 
   for (const routeName of Object.keys(config.routes) as AuthHonoAuthUiMethod[]) {
+    if (excludedRoutes.has(routeName)) continue;
     const contract = config.routes[routeName];
     const handler = options.handlers?.[routeName];
 
