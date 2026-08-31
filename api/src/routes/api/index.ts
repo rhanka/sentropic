@@ -21,7 +21,7 @@ import { todosRouter } from '../namespaces/workflows-todo';
 import { tasksRouter } from '../namespaces/workflows-task';
 import { runsRouter } from '../namespaces/workflows-run';
 import { agentConfigRouter } from './agent-config';
-import { workflowConfigRouter, workspaceTypeWorkflowsRouter } from './workflow-config';
+import { workflowConfigRouter, workspaceTypeWorkflowsRouter } from '../namespaces/workflows-definition';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
