@@ -18,11 +18,15 @@ export type ChatMessageAttachmentInput = {
 
 export type ChatControlAction =
   | 'createMessage'
+  | 'createSession'
   | 'stop'
   | 'steer'
   | 'feedback'
   | 'retry'
   | 'toolResults'
+  | 'editMessage'
+  | 'upsertToolPermission'
+  | 'deleteToolPermission'
   | 'createCheckpoint'
   | 'listCheckpoints'
   | 'restoreCheckpoint';
@@ -134,6 +138,8 @@ export type ChatServerOptions = {
    * same `name`. Default: none (client is the only source, as today).
    */
   localToolDefinitions?: ReadonlyArray<unknown>;
+  /** Maximum rows returned by `GET /sessions?scope=all`. Default: 200. */
+  allWorkspaceSessionLimit?: number;
 };
 
 export type CreatedChatMessage = {
@@ -171,6 +177,61 @@ export type ChatServerStreamEvent = {
   createdAt?: string | Date;
 };
 
+export type ChatSessionPort = {
+  listSessions(input: {
+    userId: string;
+    workspaceId?: string | null;
+    limit?: number;
+  }): Promise<ReadonlyArray<unknown>>;
+  createSession(input: {
+    userId: string;
+    workspaceId?: string | null;
+    primaryContextType?: string | null;
+    primaryContextId?: string | null;
+    title?: string | null;
+  }): Promise<{ sessionId: string }>;
+  getSessionHistory(input: {
+    sessionId: string;
+    userId: string;
+    detailMode: 'summary' | 'full';
+  }): Promise<{
+    sessionId: string;
+    title: string | null;
+    todoRuntime: unknown;
+    checkpoints: ReadonlyArray<unknown>;
+    documents: ReadonlyArray<unknown>;
+    items: ReadonlyArray<unknown>;
+  }>;
+  deleteSession(input: { sessionId: string; userId: string }): Promise<void>;
+};
+
+export type ChatExtensionPermission = {
+  toolName: string;
+  origin: string;
+  policy: 'allow' | 'deny';
+  updatedAt: string;
+};
+
+export type ChatExtensionPort = {
+  listToolPermissions(input: {
+    userId: string;
+    workspaceId: string;
+  }): Promise<ReadonlyArray<ChatExtensionPermission>>;
+  upsertToolPermission(input: {
+    userId: string;
+    workspaceId: string;
+    toolName: string;
+    origin: string;
+    policy: 'allow' | 'deny';
+  }): Promise<ChatExtensionPermission>;
+  deleteToolPermission(input: {
+    userId: string;
+    workspaceId: string;
+    toolName: string;
+    origin: string;
+  }): Promise<void>;
+};
+
 export type ChatMessagePort = {
   createUserMessageWithAssistantPlaceholder(input: {
     userId: string;
@@ -205,6 +266,17 @@ export type ChatMessagePort = {
     documents: ReadonlyArray<unknown>;
     assistantDetailsByMessageId: Record<string, ReadonlyArray<unknown>>;
   }>;
+
+  getMessageRuntimeDetails?(input: {
+    messageId: string;
+    userId: string;
+  }): Promise<unknown>;
+
+  updateUserMessageContent?(input: {
+    messageId: string;
+    userId: string;
+    content: string;
+  }): Promise<{ messageId: string }>;
 
   getMessageForUser?(input: {
     messageId: string;
@@ -311,6 +383,8 @@ export type ChatStreamPort = {
 export type ChatServerDeps = {
   getUser?: (c: Context) => ChatServerUser | null | Promise<ChatServerUser | null>;
   messages: ChatMessagePort;
+  sessions?: ChatSessionPort;
+  extensions?: ChatExtensionPort;
   queue: ChatQueuePort;
   stream: ChatStreamPort;
 };
