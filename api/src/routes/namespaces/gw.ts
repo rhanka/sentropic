@@ -13,8 +13,8 @@ import { createApplicationGatewayRoutePlane } from '../../services/llm-runtime/g
 import { resolveTenantAuthoritatively } from '../../services/tenancy/resolve-tenant';
 
 export const GW_AUTHOR = 'llm-gateway-module';
-const GW_PATHS = [
-  '/healthz', '/readyz', '/v1/models', '/v1/messages', '/v1/chat/completions',
+export const GW_PATHS = [
+  '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/chat/completions',
 ] as const;
 const control = clusterMeshAdapter.sessionControl;
 if (!control) throw new Error('cluster mesh gateway cutover control is not configured');

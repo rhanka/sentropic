@@ -7,14 +7,15 @@ import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
 import { logger } from './logger';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
-import { productSessionModule } from './routes/namespaces/session';
-import { productMcpModule } from './routes/namespaces/mcp';
+import { productSessionModule, SESSION_PATHS } from './routes/namespaces/session';
+import { MCP_PATHS, productMcpModule } from './routes/namespaces/mcp';
 import {
   createOAuthNamespaceModule,
   createOAuthWellKnownProjection,
+  OAUTH_PATHS,
 } from './routes/namespaces/oauth';
 import { productAuthPlugin } from './routes/namespaces/auth';
-import { productGwModule } from './routes/namespaces/gw';
+import { GW_PATHS, productGwModule } from './routes/namespaces/gw';
 import { productChatModule } from './routes/namespaces/chat';
 import { productFocusModule } from './routes/namespaces/focus';
 import { productTrackModule, TRACK_READ_PATHS } from './routes/namespaces/track';
@@ -62,10 +63,10 @@ const productOAuthModule = createOAuthNamespaceModule({
 });
 
 export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
-  { namespace: '/session', module: productSessionModule, mount: '/auth', authPaths: null },
-  { namespace: '/mcp', module: productMcpModule, mount: '/mcp', authPaths: null },
-  { namespace: '/oauth', module: productOAuthModule, mount: '/oauth', authPaths: null },
-  { namespace: '/gw', module: productGwModule, mount: '/gw', authPaths: null },
+  { namespace: '/session', module: productSessionModule, mount: '/auth', authPaths: SESSION_PATHS },
+  { namespace: '/mcp', module: productMcpModule, mount: '/mcp', authPaths: MCP_PATHS },
+  { namespace: '/oauth', module: productOAuthModule, mount: '/oauth', authPaths: OAUTH_PATHS },
+  { namespace: '/gw', module: productGwModule, mount: '/gw', authPaths: GW_PATHS },
   { namespace: '/chat', module: productChatModule, mount: '/chat', authPaths: null },
   { namespace: '/focus', module: productFocusModule, mount: '/focus', authPaths: null },
   {
