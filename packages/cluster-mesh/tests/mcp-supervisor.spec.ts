@@ -67,6 +67,10 @@ describe('MCP logical supervisor', () => {
       ok: false,
       reason: 'session_server_forbidden',
     });
+    await expect(supervisor.register({ ...registration(), sessionRef: '' })).resolves.toEqual({
+      ok: false,
+      reason: 'session_server_forbidden',
+    });
     for (let session = 0; session < 20; session += 1) {
       await expect(supervisor.authorize('generation-1', 'supervisor-1')).resolves.toMatchObject({ ok: true });
     }
@@ -107,6 +111,12 @@ describe('MCP logical supervisor', () => {
     expect(handover).toMatchObject({ ok: true });
     expect(store.servers.get('generation-1')?.status).toBe('stopped');
     if (!handover.ok) throw new Error('handover unexpectedly failed');
+    const expired = createMcpSupervisor({ store, now: () => new Date('2026-08-30T14:00:00.000Z') });
+    await expect(expired.rollback(handover.checkpoint)).resolves.toEqual({
+      ok: false,
+      reason: 'stale_registration',
+    });
+    expect(store.servers.get('generation-2')?.status).toBe('active');
     await expect(supervisor.rollback(handover.checkpoint)).resolves.toMatchObject({ ok: true });
     expect(store.servers.get('generation-1')?.status).toBe('active');
     expect(store.servers.get('generation-2')?.status).toBe('stopped');
