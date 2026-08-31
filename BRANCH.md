@@ -365,7 +365,7 @@
 
 - [ ] **Lot 11 — `/llm-mesh` TARGET enrollment and pool router extraction**
   - [ ] Namespace: `/llm-mesh`; type: TARGET reusable router extraction, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Add `packages/llm-mesh/src/hono.ts` over enrollment/catalog/pool ports; keep credentials/keyring and provider transport outside the router/plugin.
+  - [x] Add `packages/llm-mesh/src/hono.ts` over enrollment/catalog/pool ports; keep credentials/keyring and provider transport outside the router/plugin.
   - [ ] Extract `/models`, provider-connection settings and `/me/ai-settings` subsets into `api/src/routes/namespaces/llm-mesh.ts` adapters.
   - [ ] Shadow catalog/account availability and validated enrollment intent, select one authority/custodian, prove rollback and delete replaced route branches from `models.ts`, `me.ts` and provider settings.
   - [ ] Tests new: `packages/llm-mesh/tests/hono.test.ts`, `api/tests/api/cluster-mesh-llm-mesh-cutover.test.ts`.
