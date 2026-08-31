@@ -268,21 +268,21 @@
   - [x] Lot gate: `make test-api-api SCOPE="tests/api/mcp-resource-server.test.ts tests/api/cluster-mesh-mcp-singleton.test.ts" ENV=test-cluster-mesh-central-control-plane`.
   - [x] Internal gates: C1 MCP/registration state already migrated; C3 MCP packages standalone; A2 logical singleton; A3 registration-gated fail-closed.
 
-- [ ] **Lot 6 — `/oauth` reusable factory and two-root cutover**
+- [x] **Lot 6 — `/oauth` reusable factory and two-root cutover**
   - [x] Namespace: `/oauth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
   - [x] Wrap real `createOAuthRouter` and `createWellKnownRouter` in an autonomous module with product ports; keep `createMcpAuth` resource metadata delegation explicit.
   - [x] Mount product `/api/v1/oauth/*` plus `/.well-known/*`; mount the same module under the established IdP `/api/v1/auth/oauth/*` projection plus `/.well-known/*`.
   - [x] Shadow metadata/token validation intent, select one author per root, prove rollback, then delete replaced code/mounts in `api/src/routes/auth/oauth.ts`, `service-s2s.ts` and `api/src/routes/well-known.ts`.
   - [x] Update `api/src/routes/auth/index.ts`, `api/src/app.ts`, `apps/auth-idp/idp-app.ts`, `packages/auth-client/src/**` and UI OAuth transports for the product canonical path without changing the IdP public projection.
-  - [ ] Tests updated: `packages/auth-hono/tests/oauth-router-factory.test.ts`, `packages/auth-hono/tests/oauth-wellknown.test.ts`, `packages/auth-hono/tests/oauth-token.test.ts`, `packages/auth-hono/tests/oauth-revoke.test.ts`, `packages/auth-hono/tests/oauth-introspect.test.ts`, `packages/auth-hono/tests/oauth-client-credentials.test.ts`, `packages/auth-hono/tests/oauth-service-obo.test.ts`, `packages/oauth-verify/tests/verify-access-token.test.ts`, `packages/oauth-verify/tests/verify-dpop-proof.test.ts`.
+  - [x] Tests updated: `packages/auth-hono/tests/oauth-router-factory.test.ts`, `packages/auth-hono/tests/oauth-wellknown.test.ts`, `packages/auth-hono/tests/oauth-token.test.ts`, `packages/auth-hono/tests/oauth-revoke.test.ts`, `packages/auth-hono/tests/oauth-introspect.test.ts`, `packages/auth-hono/tests/oauth-client-credentials.test.ts`, `packages/auth-hono/tests/oauth-service-obo.test.ts`, `packages/oauth-verify/tests/verify-access-token.test.ts`, `packages/oauth-verify/tests/verify-dpop-proof.test.ts`.
   - [x] API tests updated: `api/tests/api/auth/oauth-authorize.test.ts`, `api/tests/api/auth/oauth-token.test.ts`, `api/tests/api/auth/oauth-revoke-introspect.test.ts`, `api/tests/api/auth/oauth-userinfo.test.ts`, `api/tests/api/auth/oauth-wellknown.test.ts`, `api/tests/api/auth/arch11-service-obo.test.ts`.
   - [x] IdP/UI tests updated: `ui/tests/utils/oauth-transport.test.ts`, `apps/auth-idp/web/src/lib/oauth-transport.ts`; new `api/tests/api/cluster-mesh-oauth-roots.test.ts`.
   - [x] E2E updated: `e2e/tests/02-auth-oauth-authorization-code.spec.ts`, `e2e/tests/02-auth-oauth-revoke.spec.ts`, `e2e/tests/02-auth-oauth-wellknown.spec.ts`, `e2e/tests/02-auth-s2s-client-credentials.spec.ts`.
-  - [ ] Lot gate: `make typecheck-auth-hono test-auth-hono build-auth-hono typecheck-oauth-verify test-oauth-verify build-oauth-verify typecheck-auth-client test-auth-client ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make typecheck-idp typecheck-idp-web typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-oauth-roots.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-ui SCOPE=tests/utils/oauth-transport.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 auth data unchanged and one route author/root; C3 auth/oauth modules standalone; frozen auth/oauth/session facade.
+  - [x] Lot gate: `make typecheck-auth-hono test-auth-hono build-auth-hono typecheck-oauth-verify test-oauth-verify build-oauth-verify typecheck-auth-client test-auth-client ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make typecheck-idp typecheck-idp-web typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-oauth-roots.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Lot gate: `make test-ui SCOPE=tests/utils/oauth-transport.test.ts ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Internal gates: C1 auth data unchanged and one route author/root; C3 auth/oauth modules standalone; frozen auth/oauth/session facade.
 
 - [ ] **Lot 7 — `/auth` reusable factory and two-root cutover**
   - [ ] Namespace: `/auth`; type: wrapping, product/IdP plugin mounts, D11 cutover and legacy deletion.
