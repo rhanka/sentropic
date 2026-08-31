@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
+import { requireAdmin } from '../../src/middleware/rbac';
 import {
   PRODUCT_CLUSTER_MESH_MOUNTS,
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
@@ -65,18 +66,36 @@ const assertPrivilegedFenceComplete = (
   ).toEqual([]);
 };
 
+const assertRequireAdminSubFenceComplete = (
+  namespace: string,
+  router: RootMountedRouter,
+  privilegedFences: readonly PrivilegedPathFence[],
+): void => {
+  const privilegedPaths = new Set(privilegedFences.flatMap(({ paths }) => paths));
+  const missing = router.routes
+    .filter(({ handler }) => handler === requireAdmin)
+    .map(({ path }) => path)
+    .filter((path) => !privilegedPaths.has(path));
+  expect(
+    [...new Set(missing)].sort(),
+    `${namespace} requireAdmin wiring is outside every privileged sub-fence`,
+  ).toEqual([]);
+};
+
 describe('root-mount fence completeness', () => {
   it.each(ROOT_MOUNTED_NAMESPACE_REGISTRY)(
     'covers every registered path and privileged sub-fence for $namespace',
     ({ namespace, module, authPaths, ...registration }) => {
       expect(module.namespace).toBe(namespace);
       const router = module.createRouter();
+      const privilegedFences = registration.privilegedFences ?? [];
+      assertRequireAdminSubFenceComplete(namespace, router, privilegedFences);
       if (authPaths === null) {
-        expect(registration.privilegedFences ?? []).toEqual([]);
+        expect(privilegedFences).toEqual([]);
         return;
       }
       assertFenceComplete(namespace, router, authPaths);
-      for (const privilegedFence of registration.privilegedFences ?? []) {
+      for (const privilegedFence of privilegedFences) {
         assertPrivilegedFenceComplete(namespace, router, authPaths, privilegedFence);
       }
     },
@@ -123,5 +142,13 @@ describe('root-mount fence completeness', () => {
       ['/admin/listed', '/admin/missing'],
       { name: 'admin', paths: ['/admin/listed'], pathPrefixes: ['/admin'] },
     )).toThrowError('/fixture admin sub-fence is missing privileged paths');
+  });
+
+  it('fails when requireAdmin is wired outside every privileged sub-fence', () => {
+    const router = new Hono();
+    router.post('/future-admin-action', requireAdmin, (context) => context.body(null, 204));
+
+    expect(() => assertRequireAdminSubFenceComplete('/fixture', router, []))
+      .toThrowError('/fixture requireAdmin wiring is outside every privileged sub-fence');
   });
 });
