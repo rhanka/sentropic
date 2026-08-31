@@ -474,6 +474,7 @@
   - [ ] Add `api/src/routes/namespaces/agents.ts` over flow/skills/catalog ports; absorb agent-config and prompt-profile surfaces without owning catalog discovery.
     - [x] Extract injected flow, skills and prompt-profile catalog ports without exposing catalog discovery.
     - [x] Extract the agent configuration router over the existing Flow agent-template port.
+    - [x] Extract prompt-profile reads/validation through catalog and skills ports with preserved wires.
   - [ ] Shadow reads and validated configuration intent, select one author, prove rollback and delete `agent-config.ts`, `prompts.ts` mounts/files after extraction.
   - [ ] Tests new: `api/tests/api/cluster-mesh-agents-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/agent-config.test.ts`, `api/tests/api/prompts.test.ts`, `api/tests/services/catalog/agent-template-source.spec.ts`, `api/tests/unit/todo-orchestration-chat-progression.test.ts`.
