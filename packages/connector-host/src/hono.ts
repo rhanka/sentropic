@@ -1,4 +1,4 @@
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 export type ConnectorAdminPrincipal = {
   userId: string;
@@ -31,6 +31,7 @@ export type ConnectorAdminProviderAdapter = {
 export type ConnectorAccountLimitAdapter = {
   /** Literal public path for the account-limit setting. */
   path: `/${string}`;
+  validateUpdate?: MiddlewareHandler;
   read: ConnectorAdminHandler;
   update: ConnectorAdminHandler;
 };
@@ -97,10 +98,12 @@ export const createConnectorAdminRouter = (
       options.accountLimits.path,
       withPrincipal(options, options.accountLimits.read),
     );
-    router.put(
-      options.accountLimits.path,
-      withPrincipal(options, options.accountLimits.update),
-    );
+    const update = withPrincipal(options, options.accountLimits.update);
+    if (options.accountLimits.validateUpdate) {
+      router.put(options.accountLimits.path, options.accountLimits.validateUpdate, update);
+    } else {
+      router.put(options.accountLimits.path, update);
+    }
   }
 
   return router;
