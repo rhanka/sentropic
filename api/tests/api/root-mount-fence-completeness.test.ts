@@ -1,12 +1,11 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 
-import { createCommentsNamespaceModule } from '../../src/routes/namespaces/comments';
-import { COMMENTS_PATHS } from '../../src/routes/namespaces/comments-cutover';
-import { createLlmMeshNamespaceModule } from '../../src/routes/namespaces/llm-mesh';
-import { LLM_MESH_PATHS } from '../../src/routes/namespaces/llm-mesh-cutover';
-import { createWorkflowsNamespaceModule } from '../../src/routes/namespaces/workflows';
-import { WORKFLOW_PATHS } from '../../src/routes/namespaces/workflows-cutover';
+import {
+  ROOT_MOUNTED_NAMESPACE_REGISTRY,
+  ROOT_MOUNT_REMAPS,
+  type PrivilegedPathFence,
+} from '../../src/app';
 
 type RootMountedRouter = Pick<Hono, 'routes'>;
 
@@ -23,28 +22,52 @@ const assertFenceComplete = (
   expect(missing, `${namespace} root-mount fence is missing registered paths`).toEqual([]);
 };
 
+const assertPrivilegedFenceComplete = (
+  namespace: string,
+  router: RootMountedRouter,
+  authFence: readonly string[],
+  privilegedFence: PrivilegedPathFence,
+): void => {
+  const registered = registeredPaths(router);
+  const authPaths = new Set(authFence);
+  const privilegedPaths = new Set(privilegedFence.paths);
+  const isFlagged = (path: string): boolean => privilegedFence.pathPrefixes.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+
+  expect(
+    privilegedFence.paths.filter((path) => !authPaths.has(path)),
+    `${namespace} ${privilegedFence.name} sub-fence is outside its auth fence`,
+  ).toEqual([]);
+  expect(
+    privilegedFence.paths.filter((path) => !registered.includes(path)),
+    `${namespace} ${privilegedFence.name} sub-fence contains unregistered paths`,
+  ).toEqual([]);
+  expect(
+    registered.filter((path) => isFlagged(path) && !privilegedPaths.has(path)),
+    `${namespace} ${privilegedFence.name} sub-fence is missing privileged paths`,
+  ).toEqual([]);
+};
+
 describe('root-mount fence completeness', () => {
-  it('covers every registered comments path', () => {
-    assertFenceComplete(
-      '/comments',
-      createCommentsNamespaceModule().createRouter(),
-      COMMENTS_PATHS,
-    );
-  });
+  it.each(ROOT_MOUNTED_NAMESPACE_REGISTRY)(
+    'covers every registered path and privileged sub-fence for $namespace',
+    ({ namespace, module, authPaths, ...registration }) => {
+      expect(module.namespace).toBe(namespace);
+      const router = module.createRouter();
+      assertFenceComplete(namespace, router, authPaths);
+      for (const privilegedFence of registration.privilegedFences ?? []) {
+        assertPrivilegedFenceComplete(namespace, router, authPaths, privilegedFence);
+      }
+    },
+  );
 
-  it('covers every registered workflows path', () => {
-    assertFenceComplete(
-      '/workflows',
-      createWorkflowsNamespaceModule().createRouter(),
-      WORKFLOW_PATHS,
+  it('derives every root remap from the exported registry', () => {
+    expect(Object.keys(ROOT_MOUNT_REMAPS)).toEqual(
+      ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
     );
-  });
-
-  it('covers every registered llm-mesh path', () => {
-    assertFenceComplete(
-      '/llm-mesh',
-      createLlmMeshNamespaceModule().createRouter(),
-      LLM_MESH_PATHS,
+    expect(Object.values(ROOT_MOUNT_REMAPS)).toEqual(
+      ROOT_MOUNTED_NAMESPACE_REGISTRY.map(() => '/'),
     );
   });
 
@@ -56,5 +79,18 @@ describe('root-mount fence completeness', () => {
     expect(() => assertFenceComplete('/fixture', router, ['/listed'])).toThrowError(
       '/fixture root-mount fence is missing registered paths',
     );
+  });
+
+  it('fails when a flagged privileged path is absent from its sub-fence', () => {
+    const router = new Hono();
+    router.get('/admin/listed', (context) => context.body(null, 204));
+    router.post('/admin/missing', (context) => context.body(null, 204));
+
+    expect(() => assertPrivilegedFenceComplete(
+      '/fixture',
+      router,
+      ['/admin/listed', '/admin/missing'],
+      { name: 'admin', paths: ['/admin/listed'], pathPrefixes: ['/admin'] },
+    )).toThrowError('/fixture admin sub-fence is missing privileged paths');
   });
 });
