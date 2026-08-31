@@ -42,8 +42,10 @@ const select = (policy = DEFAULT_ROUTE_POLICY, roundRobinOffset = 0) =>
 
 describe('route candidate selection', () => {
   it('tries the last enrolled account first by default', () => {
-    expect(select().map((candidate) => candidate.account.diagnosticAccountRef))
+    const candidates = select();
+    expect(candidates.map((candidate) => candidate.account.diagnosticAccountRef))
       .toEqual(['acct_new', 'acct_old']);
+    expect(JSON.stringify(candidates)).not.toMatch(/accessToken|refreshToken|keyring/);
   });
 
   it('honors an explicit ordered transport preference', () => {
