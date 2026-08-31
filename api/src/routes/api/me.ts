@@ -11,12 +11,8 @@ import {
   resolveDefaultSelection,
 } from '../../services/model-catalog';
 import { settingsService } from '../../services/settings';
-import { accountRouter } from '../namespaces/auth/account';
 
 export const meRouter = new Hono();
-
-// Identity-owned handlers remain composed here only until the `/auth` D11 cutover.
-meRouter.route('/', accountRouter);
 
 const patchMeSchema = z.object({
   workspaceName: z.string().min(1).max(128).optional(),
