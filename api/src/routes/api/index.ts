@@ -21,8 +21,6 @@ import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { pptxRouter } from './pptx';
 import { xlsxRouter } from './xlsx';
-import { googleDriveRouter } from './google-drive';
-import { gmailRouter } from './gmail';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { coworkDesktopRouter } from './cowork-desktop';
@@ -125,14 +123,6 @@ apiRouter.route('/streams', streamsRouter);
 // Documents routes: allow reads for any authenticated user. Upload/delete are gated inside the router by workspace role.
 apiRouter.use('/documents/*', requireAuth);
 apiRouter.route('/documents', documentsRouter);
-
-// Google Drive connector routes: authenticated; workspace checks are enforced per endpoint.
-apiRouter.use('/google-drive/*', requireAuth);
-apiRouter.route('/google-drive', googleDriveRouter);
-
-// Gmail connector routes: authenticated; workspace checks are enforced per endpoint.
-apiRouter.use('/gmail/*', requireAuth);
-apiRouter.route('/gmail', gmailRouter);
 
 // Import/Export routes: authenticated, role checks enforced per endpoint.
 apiRouter.use('/exports/*', requireAuth);
