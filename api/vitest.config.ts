@@ -16,6 +16,10 @@ export default defineConfig({
   // still consume the published package entry — this alias is test-only.
   resolve: {
     alias: {
+      '@sentropic/flow/hono': fileURLToPath(
+        new URL('../packages/flow/src/hono.ts', import.meta.url),
+      ),
+      '@sentropic/flow': pkgSrc('flow'),
       '@sentropic/llm-mesh/hono': fileURLToPath(
         new URL('../packages/llm-mesh/src/hono.ts', import.meta.url),
       ),
