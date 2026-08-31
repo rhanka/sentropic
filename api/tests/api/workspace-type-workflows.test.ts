@@ -12,7 +12,7 @@ import {
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
 import { createId } from "../../src/utils/id";
 
-describe("Workspace type workflow registry API", () => {
+describe("Workspace type registry through the root-mounted workflows namespace", () => {
   let admin: any;
   let editor: any;
 

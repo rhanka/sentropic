@@ -32,7 +32,7 @@ vi.mock('../../../src/services/stream-service', async () => ({
   },
 }));
 
-describe('PostgresJobQueue adapter', () => {
+describe('PostgresJobQueue injected workflow adapter', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
 
   beforeEach(async () => {
@@ -351,17 +351,18 @@ describe('PostgresJobQueue adapter', () => {
       },
     ]);
 
-    const [chatJob] = await postgresJobQueue.claimPendingJobsByClass('chat', 1);
-    const [publishingJob] = await postgresJobQueue.claimPendingJobsByClass('publishing', 1);
-    const [aiJob] = await postgresJobQueue.claimPendingJobsByClass('ai', 1);
+    const scope = { workspaceId: ADMIN_WORKSPACE_ID };
+    const [chatJob] = await postgresJobQueue.claimPendingJobsByClass('chat', 1, scope);
+    const [publishingJob] = await postgresJobQueue.claimPendingJobsByClass('publishing', 1, scope);
+    const [aiJob] = await postgresJobQueue.claimPendingJobsByClass('ai', 1, scope);
 
     expect(chatJob?.id).toBe(chatJobId);
     expect(publishingJob?.id).toBe(publishingJobId);
     expect(aiJob?.id).toBe(aiJobId);
-    await expect(postgresJobQueue.getProcessingCountByClass('chat')).resolves.toBe(1);
-    await expect(postgresJobQueue.getProcessingCountByClass('publishing')).resolves.toBe(1);
-    await expect(postgresJobQueue.getProcessingCountByClass('ai')).resolves.toBe(1);
-    await expect(postgresJobQueue.hasAnyPending()).resolves.toBe(false);
+    await expect(postgresJobQueue.getProcessingCountByClass('chat', scope)).resolves.toBe(1);
+    await expect(postgresJobQueue.getProcessingCountByClass('publishing', scope)).resolves.toBe(1);
+    await expect(postgresJobQueue.getProcessingCountByClass('ai', scope)).resolves.toBe(1);
+    await expect(postgresJobQueue.hasAnyPending(scope)).resolves.toBe(false);
   });
 
   it('queueManager.cancelJob delegates cancellation to the JobQueue adapter', async () => {
@@ -391,8 +392,7 @@ describe('PostgresJobQueue adapter', () => {
     });
   });
 
-  it('queueManager.addJob delegates admission and retry metadata to the JobQueue adapter', async () => {
-    const enqueueSpy = vi.spyOn(postgresJobQueue, 'enqueue');
+  it('exposes canonical queueManager admission through the JobQueue adapter', async () => {
     vi.spyOn(queueManager, 'processJobs').mockResolvedValue();
 
     const jobId = await queueManager.addJob(
@@ -401,11 +401,11 @@ describe('PostgresJobQueue adapter', () => {
       { workspaceId: ADMIN_WORKSPACE_ID, maxRetries: 2 },
     );
 
-    expect(enqueueSpy).toHaveBeenCalledWith(
-      'initiative_list',
-      { folderId: 'folder-2', organizationId: 'org-1' },
-      { workspaceId: ADMIN_WORKSPACE_ID, maxRetries: 2 },
-    );
+    await expect(postgresJobQueue.getJobStatus(jobId)).resolves.toMatchObject({
+      id: jobId,
+      status: 'pending',
+      workspaceId: ADMIN_WORKSPACE_ID,
+    });
     const [row] = await db
       .select({ status: jobQueue.status, data: jobQueue.data })
       .from(jobQueue)

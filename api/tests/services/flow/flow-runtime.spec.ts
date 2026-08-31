@@ -23,7 +23,7 @@ import { flowRuntime } from '../../../src/services/flow';
 import { queueManager } from '../../../src/services/queue-manager';
 import { cleanupAuthData, createAuthenticatedUser } from '../../utils/auth-helper';
 
-describe('AppFlowRuntime', () => {
+describe('AppFlowRuntime behind injected workflow ports', () => {
   let editor: Awaited<ReturnType<typeof createAuthenticatedUser>>;
   let actor: TodoActor;
   let processJobsSpy: ReturnType<typeof vi.spyOn>;
