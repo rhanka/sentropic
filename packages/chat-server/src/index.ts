@@ -803,6 +803,94 @@ export function createChatServer(
     return c.json({ sessionId, ...result });
   };
 
+  const listSessions = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    const allWorkspaces = c.req.query('scope') === 'all';
+    const sessions = await deps.sessions.listSessions({
+      userId: user.userId,
+      workspaceId: allWorkspaces ? null : user.workspaceId,
+      limit: allWorkspaces ? options.allWorkspaceSessionLimit ?? 200 : undefined,
+    });
+    return c.json({ sessions });
+  };
+
+  const createSession = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'createSession');
+    if (denied) return denied;
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    const body = await readJson(c);
+    const primaryContextType = body.primaryContextType;
+    const primaryContextId = body.primaryContextId;
+    const sessionTitle = body.sessionTitle;
+    const allowedContextTypes = new Set([
+      'organization', 'folder', 'initiative', 'usecase', 'executive_summary',
+    ]);
+    if (
+      (primaryContextType !== undefined
+        && (typeof primaryContextType !== 'string'
+          || !allowedContextTypes.has(primaryContextType)))
+      || (primaryContextId !== undefined && typeof primaryContextId !== 'string')
+      || (sessionTitle !== undefined && typeof sessionTitle !== 'string')
+    ) {
+      return c.json({ error: 'Invalid session payload' }, 400);
+    }
+    const result = await deps.sessions.createSession({
+      userId: user.userId,
+      workspaceId: user.workspaceId,
+      primaryContextType: primaryContextType ?? null,
+      primaryContextId: primaryContextId ?? null,
+      title: sessionTitle ?? null,
+    });
+    return c.json({ sessionId: result.sessionId });
+  };
+
+  const sessionHistory = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    const sessionId = routeParam(c, 'sessionId', 'id');
+    const detailMode = c.req.query('runtimeDetails') === 'full' ? 'full' : 'summary';
+    let result: Awaited<ReturnType<ChatSessionPort['getSessionHistory']>>;
+    try {
+      result = await deps.sessions.getSessionHistory({
+        sessionId,
+        userId: user.userId,
+        detailMode,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Session not found') {
+        return c.json({ message: 'Session not found' }, 404);
+      }
+      throw error;
+    }
+
+    const lines = [
+      {
+        type: 'session_meta',
+        sessionId: result.sessionId,
+        title: result.title,
+        todoRuntime: result.todoRuntime,
+        checkpoints: result.checkpoints,
+        documents: result.documents,
+      },
+      ...result.items.map((item) => ({ type: 'timeline_item', item })),
+    ];
+    c.header('Content-Type', 'application/x-ndjson; charset=utf-8');
+    c.header('Cache-Control', 'no-store');
+    return c.body(`${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  };
+
+  const deleteSession = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    await deps.sessions.deleteSession({
+      sessionId: routeParam(c, 'sessionId', 'id'),
+      userId: user.userId,
+    });
+    return c.json({ ok: true });
+  };
+
   const stream = async (c: Context) => {
     const user = await resolveUser(c, deps);
     const sessionId = routeParam(c, 'sessionId', 'id');
@@ -1071,6 +1159,13 @@ export function createChatServer(
     app.post(routePath('/messages/:messageId/feedback'), feedback);
     app.post(routePath('/messages/:messageId/retry'), retry);
     app.post(routePath('/messages/:messageId/tool-results'), toolResults);
+  }
+
+  if (deps.sessions) {
+    app.get(routePath('/sessions'), listSessions);
+    app.post(routePath('/sessions'), createSession);
+    app.get(routePath('/sessions/:sessionId/history'), sessionHistory);
+    app.delete(routePath('/sessions/:sessionId'), deleteSession);
   }
 
   return app;
