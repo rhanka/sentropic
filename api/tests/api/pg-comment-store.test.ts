@@ -19,14 +19,14 @@ import {
 import { PgCommentStore } from '../../src/services/comments/pg-comment-store';
 
 /**
- * BR-42d Lot 2 — `PgCommentStore` adapter-parity tests on a REAL test DB.
+ * BR-42d Lot 2 — canonical `PgCommentStore` adapter-parity tests on a REAL test DB.
  *
  * Reuses the in-memory adapter scenarios (CRUD, threading, thread cascade,
  * per-row edit, per-row hard delete, ordering tiebreaker, tenant scoping,
  * runId-drop) to prove `PgCommentStore` behaves IDENTICALLY to
  * `InMemoryCommentStore` for PERSISTENCE. Emission is NOT tested here — the
- * adapter is EMIT-FREE (SPEC §2/§4); wire emission is host-controlled and
- * covered by the wire test (Lot 4/5).
+ * adapter is EMIT-FREE (SPEC §2/§4); the extracted comments namespace injects
+ * this same canonical store while wire emission remains host-controlled.
  *
  * `created_by` / `assigned_to` carry FK to `users`; `workspace_id` to
  * `workspaces`. `context_type` / `context_id` are plain text (no FK), so a

@@ -17,7 +17,7 @@ import {
  * Drives the sink directly (NO routes, NO store) against the FULL Lot-0
  * per-(origin,event) wire-key matrix, asserting the emitted `NOTIFY
  * comment_events` payload is BYTE-IDENTICAL to the three live `notifyCommentEvent`
- * copies it will replace (`{workspace_id, context_type, context_id,
+ * contract preserved by the extracted namespace (`{workspace_id, context_type, context_id,
  * data:{action, <comment_id|thread_id>}}`). Spying on `pool.connect` mirrors the
  * Lot-0 wire test (`comments-wire.test.ts`): the spy delegates to the real
  * client so the NOTIFY actually executes and the awaited round-trip is
@@ -71,7 +71,7 @@ describe('PgNotifyCommentEventSink wire-payload (BR-42d Lot 3)', () => {
     return `NOTIFY comment_events, '${escapeNotifyPayload(payload)}'`;
   }
 
-  // --- REST origin: every event keyed by comment_id (comments.ts:205,254,283,312,337) ---
+  // --- REST namespace origin: every event keyed by comment_id ---
 
   it('REST created emits {created, comment_id} byte-identical to the live payload', async () => {
     const commentId = createId();
