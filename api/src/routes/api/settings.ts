@@ -9,16 +9,12 @@ import {
   settingsService,
 } from '../../services/settings';
 import {
-  completeClaudeCodeEnrollment,
   completeCodexEnrollment,
-  disconnectClaudeCodeEnrollment,
   disconnectCodexEnrollment,
   getAnthropicTransportMode,
-  importClaudeCodeEnrollment,
   getOpenAITransportMode,
   listProviderConnections,
   setOpenAITransportMode,
-  startClaudeCodeEnrollment,
   startCodexEnrollment,
 } from '../../services/provider-connections';
 
@@ -34,25 +30,6 @@ const codexEnrollmentStartSchema = z.object({
 
 const codexEnrollmentCompleteSchema = z.object({
   enrollmentId: z.string().trim().min(1),
-  accountLabel: z.string().trim().max(120).optional().nullable(),
-});
-
-const claudeCodeEnrollmentStartSchema = z.object({
-  accountLabel: z.string().trim().max(120).optional().nullable(),
-});
-
-const claudeCodeEnrollmentCompleteSchema = z.object({
-  enrollmentId: z.string().trim().min(1),
-  authorizationCode: z.string().trim().min(1),
-  accountLabel: z.string().trim().max(120).optional().nullable(),
-});
-
-const claudeCodeEnrollmentImportSchema = z.object({
-  accessToken: z.string().trim().min(1),
-  refreshToken: z.string().trim().min(1),
-  expiresAt: z.string().trim().optional().nullable(),
-  subscriptionType: z.string().trim().max(60).optional().nullable(),
-  rateLimitTier: z.string().trim().max(60).optional().nullable(),
   accountLabel: z.string().trim().max(120).optional().nullable(),
 });
 
@@ -299,85 +276,6 @@ settingsRouter.post('/provider-connections/codex/enrollment/disconnect', async (
   });
   return c.json({ provider });
 });
-
-settingsRouter.post(
-  '/provider-connections/anthropic/enrollment/start',
-  zValidator('json', claudeCodeEnrollmentStartSchema),
-  async (c) => {
-    const user = c.get('user') as { userId?: string } | undefined;
-    if (!user?.userId) {
-      return c.json({ message: 'Authentication required' }, 401);
-    }
-    const payload = c.req.valid('json');
-    const provider = await startClaudeCodeEnrollment({
-      accountLabel: payload.accountLabel ?? null,
-      updatedByUserId: user.userId,
-    });
-    return c.json({ provider });
-  },
-);
-
-settingsRouter.post(
-  '/provider-connections/anthropic/enrollment/complete',
-  zValidator('json', claudeCodeEnrollmentCompleteSchema),
-  async (c) => {
-    const user = c.get('user') as { userId?: string } | undefined;
-    if (!user?.userId) {
-      return c.json({ message: 'Authentication required' }, 401);
-    }
-    const payload = c.req.valid('json');
-    try {
-      const provider = await completeClaudeCodeEnrollment({
-        enrollmentId: payload.enrollmentId,
-        authorizationCode: payload.authorizationCode,
-        accountLabel: payload.accountLabel ?? null,
-        updatedByUserId: user.userId,
-      });
-      return c.json({ provider });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Enrollment completion failed';
-      return c.json({ message }, 400);
-    }
-  },
-);
-
-settingsRouter.post('/provider-connections/anthropic/enrollment/disconnect', async (c) => {
-  const user = c.get('user') as { userId?: string } | undefined;
-  if (!user?.userId) {
-    return c.json({ message: 'Authentication required' }, 401);
-  }
-  const provider = await disconnectClaudeCodeEnrollment({
-    updatedByUserId: user.userId,
-  });
-  return c.json({ provider });
-});
-
-settingsRouter.post(
-  '/provider-connections/anthropic/enrollment/import',
-  zValidator('json', claudeCodeEnrollmentImportSchema),
-  async (c) => {
-    const user = c.get('user') as { userId?: string } | undefined;
-    if (!user?.userId) {
-      return c.json({ message: 'Authentication required' }, 401);
-    }
-    const payload = c.req.valid('json');
-    try {
-      const provider = await importClaudeCodeEnrollment({
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken,
-        expiresAt: payload.expiresAt ?? null,
-        subscriptionType: payload.subscriptionType ?? null,
-        rateLimitTier: payload.rateLimitTier ?? null,
-        accountLabel: payload.accountLabel ?? null,
-        updatedByUserId: user.userId,
-      });
-      return c.json({ provider });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Import failed';
-      return c.json({ message }, 400);
-    }
-  },
-);
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur
