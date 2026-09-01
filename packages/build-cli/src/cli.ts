@@ -19,7 +19,7 @@ import { validateAppName, validateTargetDir } from './commands/validate.js';
 import { defaultChatAppManifestProvider } from './manifest/chat-app.js';
 
 /** Package version surfaced by `--version` (kept in sync with package.json on bump). */
-export const BUILD_CLI_VERSION = '0.2.0';
+export const BUILD_CLI_VERSION = '0.3.0';
 
 const HELP = `stp app — scaffold a runnable @sentropic chat application
 
