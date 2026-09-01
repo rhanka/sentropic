@@ -13,6 +13,7 @@ describe('Locks API', () => {
   let userA: any;
   let userB: any;
   let viewer: any;
+  let outsider: any;
   let workspaceId: string;
 
   beforeAll(async () => {
@@ -23,6 +24,7 @@ describe('Locks API', () => {
     userA = await createAuthenticatedUser('editor');
     userB = await createAuthenticatedUser('editor');
     viewer = await createAuthenticatedUser('viewer');
+    outsider = await createAuthenticatedUser('editor');
     workspaceId = userA.workspaceId;
 
     await db
@@ -146,5 +148,45 @@ describe('Locks API', () => {
     const listBJson = await listB.json();
     expect(listBJson.total).toBe(1);
     expect(listBJson.users?.[0]?.userId).toBe(userB.id);
+  });
+
+  it('keeps identical lock and presence object scopes isolated across workspaces', async () => {
+    const body = { objectType: 'folder', objectId: 'shared-object-id' };
+    expect((await authenticatedRequest(
+      app, 'POST', `/api/v1/locks?workspace_id=${workspaceId}`, userA.sessionToken, body,
+    )).status).toBe(201);
+
+    expect((await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/locks?workspace_id=${workspaceId}&objectType=folder&objectId=shared-object-id`,
+      outsider.sessionToken,
+    )).status).toBe(404);
+    expect((await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/locks/presence?workspace_id=${workspaceId}&objectType=folder&objectId=shared-object-id`,
+      outsider.sessionToken,
+    )).status).toBe(404);
+
+    expect((await authenticatedRequest(
+      app, 'POST', `/api/v1/locks?workspace_id=${outsider.workspaceId}`, outsider.sessionToken, body,
+    )).status).toBe(201);
+    const own = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/locks?workspace_id=${outsider.workspaceId}&objectType=folder&objectId=shared-object-id`,
+      outsider.sessionToken,
+    );
+    expect(own.status).toBe(200);
+    expect((await own.json()).lock?.lockedBy?.userId).toBe(outsider.id);
+
+    const original = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/locks?workspace_id=${workspaceId}&objectType=folder&objectId=shared-object-id`,
+      userA.sessionToken,
+    );
+    expect((await original.json()).lock?.lockedBy?.userId).toBe(userA.id);
   });
 });
