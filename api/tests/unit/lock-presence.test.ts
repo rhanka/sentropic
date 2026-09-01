@@ -1,5 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { recordPresence, listPresence, removePresence } from '../../src/services/lock-presence';
+import {
+  clearPresenceForUser,
+  recordPresence,
+  listPresence,
+  removePresence,
+} from '../../src/services/lock-presence';
 import { createTestUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('lock-presence', () => {
@@ -48,5 +53,20 @@ describe('lock-presence', () => {
       userId: user.id,
     });
     expect(removed.total).toBe(0);
+  });
+
+  it('clears only the disconnected user across workspace and object scopes', async () => {
+    const disconnected = await createTestUser({ role: 'editor', withSession: false });
+    const survivor = await createTestUser({ role: 'editor', withSession: false });
+    const shared = { workspaceId: disconnected.workspaceId!, objectType: 'organization' as const, objectId: 'shared' };
+    const isolated = { workspaceId: survivor.workspaceId!, objectType: 'folder' as const, objectId: 'isolated' };
+
+    await recordPresence({ ...shared, user: { userId: disconnected.id, email: null, displayName: null } });
+    await recordPresence({ ...shared, user: { userId: survivor.id, email: null, displayName: null } });
+    await recordPresence({ ...isolated, user: { userId: disconnected.id, email: null, displayName: null } });
+    await clearPresenceForUser(disconnected.id);
+
+    expect(listPresence(shared).users.map(({ userId }) => userId)).toEqual([survivor.id]);
+    expect(listPresence(isolated)).toEqual({ users: [], total: 0 });
   });
 });
