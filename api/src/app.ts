@@ -111,7 +111,7 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     privilegedFences: [{
       name: 'admin',
       paths: WORKFLOW_ADMIN_PATHS,
-      pathPrefixes: [],
+      pathPrefixes: ['/workspace-types'],
     }],
   },
   {
@@ -133,7 +133,11 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     namespace: '/agents',
     module: productAgentsModule,
     authPaths: AGENT_PATHS,
-    privilegedFences: [{ name: 'admin', paths: AGENT_ADMIN_PATHS, pathPrefixes: [] }],
+    privilegedFences: [{
+      name: 'admin',
+      paths: AGENT_ADMIN_PATHS,
+      pathPrefixes: ['/prompts'],
+    }],
   },
 ] as const satisfies readonly RootMountedNamespaceRegistration[];
 
