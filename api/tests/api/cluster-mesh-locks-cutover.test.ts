@@ -59,9 +59,9 @@ const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
   eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
   eq(clusterMeshNamespaceCutovers.namespace, '/locks'),
 ));
-const mounted = (enabled = true) => new Hono().route('/api/v1', createClusterMeshPlugin({
+const mounted = (enabled = true, ports: LocksNamespacePorts = productLocksPorts) => new Hono().route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
-  namespaces: [createLocksNamespaceModule({ enabled })],
+  namespaces: [createLocksNamespaceModule({ enabled, ports })],
   mounts: { '/locks': '/' },
 }));
 
@@ -151,10 +151,19 @@ describe('cluster mesh locks pre-deletion shadow', () => {
     expect((await mounted(false).request(path)).status).toBe(404);
     expect(await cutovers.find(cutoverKey)).toBeNull();
 
-    const app = mounted();
+    const ports = fakePorts();
+    const app = mounted(true, ports);
     expect((await authenticatedRequest(app, 'GET', path, user.sessionToken!)).status).toBe(200);
     expect((await authenticatedRequest(
       app, 'GET', '/api/v1/locks/locks?objectType=initiative&objectId=auth', user.sessionToken!,
     )).status).toBe(404);
+    expect((await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/locks',
+      user.sessionToken!,
+      { objectType: 'initiative', objectId: 'injected' },
+    )).status).toBe(201);
+    expect(ports.locks.acquire).toHaveBeenCalledTimes(1);
   });
 });
