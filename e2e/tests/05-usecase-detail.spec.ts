@@ -679,11 +679,12 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     const editableFieldA = pageA.locator('input:not([type="file"]):not(.hidden), textarea').first();
     await expect(editableFieldA).toBeVisible({ timeout: 10_000 });
-    await editableFieldA.click();
-    await pageA.waitForResponse(
+    const acquiredByA = pageA.waitForResponse(
       (res) => res.url().includes('/api/v1/locks') && res.request().method() === 'POST',
-      { timeout: 10_000 }
-    ).catch(() => {});
+      { timeout: 10_000 },
+    );
+    await editableFieldA.click();
+    expect((await acquiredByA).status()).toBe(201);
     await waitForNoLocker(pageA);
 
     await pageB.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
@@ -728,7 +729,11 @@ test.describe('Détail des cas d\'usage', () => {
 
     await waitForLockedByOther(pageB);
     const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');
+    const unlockRequested = pageB.waitForResponse(
+      (res) => res.url().includes('/api/v1/locks/request-unlock') && res.request().method() === 'POST',
+    );
     await requestButton.click();
+    expect((await unlockRequested).status()).toBe(200);
 
     const badgeA = pageA.locator('div[role="group"][aria-label="Verrou du document"]');
     const releaseButton = pageA.locator('button[aria-label^="Déverrouiller pour"]');
@@ -740,7 +745,11 @@ test.describe('Détail des cas d\'usage', () => {
         return releaseButton.count();
       }, { timeout: 15_000 })
       .toBe(1);
+    const unlockAccepted = pageA.waitForResponse(
+      (res) => res.url().includes('/api/v1/locks/accept-unlock') && res.request().method() === 'POST',
+    );
     await releaseButton.click();
+    expect((await unlockAccepted).status()).toBe(200);
 
     await waitForNoLocker(pageB);
 
