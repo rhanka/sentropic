@@ -168,6 +168,7 @@
 - [x] `BR75-RV48` — `acknowledge` — Fable Lot 16 F2/N1 are closed before `/agents`: session, MCP, OAuth and gateway prefix routers export enumerated fences, while the only remaining null prefix fences are `chat` and `focus`, whose first registered route is the real global `requireAuth` guard. The registry mount declaration is asserted against the plugin mount map. The permanent anonymous gateway-route mutation and mount-mismatch fixtures fail closed, and the clean invariant passes 20/20.
 - [x] `BR75-RV49` — `acknowledge` — Fable Lot 16 refusal coverage is closed before `/agents`: package tests exercise authorization unavailable, invalid query intent, ineligible query and invalid provider response, while HTTP tests exercise missing invocation reference 400, unverified invocation 401 and missing runtime generation 503. The focused package suite passes 9/9 and the memory API suite passes 8/8.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
+- [x] `BR75-SG14` — `acknowledge` — the Skills baseline at `90c7f5c81` reproducibly fails `packages/skills/tests/bundles/foundation.test.ts:743`: the assertion expects `entityType.enum` to equal `['initiative', 'folder']`, while the schema correctly exposes `['organization', 'initiative', 'folder']`. This is outside the Cluster Mesh scope and is fixed on main by PR #556 (`fix/skills-foundation-organization`); the owner signed off on patching main and continuing this lot. The full Skills gate becomes green when this branch rebases onto the merged fix.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
 ## AI Flaky tests
@@ -469,8 +470,8 @@
   - [x] Cold-boot gate: rebuilt API reaches healthy; live health probe returns 200 and `/api/v1/memory/query-intents` returns 503 `memory_provider_unavailable`.
   - [x] Internal gates: C1 no app memory mirror; C3/A5 standalone adapter passes 5/5; D8 keeps provider eligibility/query/revalidation canonical; `BR75-SG3` remains explicit and open.
 
-- [ ] **Lot 17 — `/agents` TARGET application router extraction**
-  - [ ] Namespace: `/agents`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
+- [x] **Lot 17 — `/agents` TARGET application router extraction**
+  - [x] Namespace: `/agents`; type: TARGET router extraction, plugin mount, D11 cutover and legacy deletion.
   - [x] Add `api/src/routes/namespaces/agents.ts` over flow/skills/catalog ports; absorb agent-config and prompt-profile surfaces without owning catalog discovery.
     - [x] Extract injected flow, skills and prompt-profile catalog ports without exposing catalog discovery.
     - [x] Extract the agent configuration router over the existing Flow agent-template port.
@@ -480,9 +481,9 @@
   - [x] Tests updated: `api/tests/api/agent-config.test.ts`, `api/tests/api/prompts.test.ts`, `api/tests/services/catalog/agent-template-source.spec.ts`, `api/tests/unit/todo-orchestration-chat-progression.test.ts`.
   - [x] UI tests updated: `ui/tests/utils/agent-config-api.test.ts`, `ui/tests/chat/agents-feed-adapter.test.ts`.
   - [x] E2E updated: `e2e/tests/09-run-steering-core.spec.ts` agent configuration scenario (full execution deferred to Lot 33).
-  - [ ] Lot gate: `make typecheck-flow build-flow typecheck-skills test-skills typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-agents-cutover.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C1 existing config tables reused; C3/A5 injectable application module.
+  - [x] Lot gate: `make typecheck-flow build-flow typecheck-skills typecheck-api lint-api ENV=test-cluster-mesh-central-control-plane` passes; `make test-skills ENV=test-cluster-mesh-central-control-plane` is 135/136, with the unique failure equal to the `BR75-SG14` baseline defect; the full gate becomes green when PR #556 is merged and rebased.
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-agents-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` passes 1 file/3 tests.
+  - [x] Internal gates: C1 existing config tables reused; C3/A5 injectable application module. The root-mount fence invariant passes 1 file/21 tests with `/agents`, `AGENT_PATHS` and `AGENT_ADMIN_PATHS` covered; a cold API boot reaches healthy, smoke passes 6/6 overall with the API-health subset at 4/4, anonymous health returns 200 and every registered agent/config/prompt method returns 401.
 
 - [ ] **Lot 18 — `/cli` TARGET command adapter without second session authority**
   - [ ] Namespace: `/cli`; type: TARGET adapter extraction, plugin mount and cutover gate.
