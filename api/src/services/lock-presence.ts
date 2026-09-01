@@ -8,6 +8,9 @@ type PresenceUser = {
   email: string | null;
   displayName: string | null;
   lastSeen: number;
+  workspaceId: string;
+  objectType: LockObjectType;
+  objectId: string;
 };
 
 export type PresenceSnapshot = {
@@ -84,7 +87,10 @@ export async function recordPresence(options: {
     userId: options.user.userId,
     email,
     displayName,
-    lastSeen: now
+    lastSeen: now,
+    workspaceId: options.workspaceId,
+    objectType: options.objectType,
+    objectId: options.objectId,
   });
   prune(map);
   if (map.size === 0) {
@@ -133,4 +139,22 @@ export async function removePresence(options: {
   const snapshot = toSnapshot(map);
   await notifyPresenceEvent(options);
   return snapshot;
+}
+
+export async function clearPresenceForUser(userId: string): Promise<void> {
+  const changed: Array<{ workspaceId: string; objectType: LockObjectType; objectId: string }> = [];
+  for (const [key, map] of presenceByObject.entries()) {
+    const entry = map.get(userId);
+    if (!entry) continue;
+    map.delete(userId);
+    prune(map);
+    if (map.size === 0) presenceByObject.delete(key);
+    else presenceByObject.set(key, map);
+    changed.push({
+      workspaceId: entry.workspaceId,
+      objectType: entry.objectType,
+      objectId: entry.objectId,
+    });
+  }
+  await Promise.all(changed.map((scope) => notifyPresenceEvent(scope)));
 }
