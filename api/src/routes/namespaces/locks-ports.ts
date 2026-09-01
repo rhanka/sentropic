@@ -53,8 +53,8 @@ export interface LocksAuthorizationPort {
 
 export interface LocksStreamPort {
   clearForUser(userId: string): Promise<void>;
-  readLock(scope: LockScope): Promise<unknown | null>;
-  readPresence(scope: LockScope): Promise<LockPresenceSnapshot>;
+  readLock(scope: Omit<LockScope, 'objectType'> & { objectType: string }): Promise<unknown | null>;
+  readPresence(scope: Omit<LockScope, 'objectType'> & { objectType: string }): Promise<LockPresenceSnapshot>;
 }
 
 export interface LocksNamespacePorts {
