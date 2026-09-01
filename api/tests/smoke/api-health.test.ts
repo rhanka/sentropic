@@ -30,6 +30,8 @@ describe('API Health', () => {
       ['PUT', '/api/v1/settings/connector-accounts/max-per-provider'],
       ['GET', '/api/v1/agent-config'],
       ['GET', '/api/v1/prompts'],
+      ['GET', '/api/v1/streams/active'],
+      ['GET', '/api/v1/streams/sse'],
     ];
     for (const [method, path] of connectorPaths) {
       const gatedResponse = await httpRequest(path, { method });
