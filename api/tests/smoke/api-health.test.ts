@@ -11,8 +11,10 @@ describe('API Health', () => {
 
     const disabledCli = await httpRequest('/api/v1/cli/intents', { method: 'POST' });
     expect(disabledCli.status).toBe(404);
-    const legacyCli = await httpRequest('/api/v1/commands', { method: 'POST' });
-    expect(legacyCli.status).toBe(404);
+    for (const path of ['/command', '/commands', '/terminal', '/shell']) {
+      const legacyCli = await httpRequest(`/api/v1${path}`, { method: 'POST' });
+      expect(legacyCli.status, path).toBe(404);
+    }
 
     const connectorPaths: ReadonlyArray<readonly [method: string, path: string]> = [
       ['GET', '/api/v1/google-drive/connection'],
