@@ -7,6 +7,7 @@ const A1_TICK_URL = process.env.CLUSTER_MESH_A1_TARGET_TICK_URL;
 const A1_PARK_URL = process.env.CLUSTER_MESH_A1_PARK_TARGET_URL;
 const A1_LOST_URL = process.env.CLUSTER_MESH_A1_LOST_STATUS_URL;
 const MCP_QUALIFICATION_URL = process.env.CLUSTER_MESH_MCP_QUALIFICATION_URL;
+const CLI_QUALIFICATION_URL = process.env.CLUSTER_MESH_CLI_QUALIFICATION_URL;
 const qualificationAvailable = [
   A1_EVIDENCE, A1_REGISTRATION, A1_TICK_URL, A1_PARK_URL, A1_LOST_URL,
 ].every(Boolean);
@@ -82,6 +83,39 @@ test.describe('Cluster Mesh MCP singleton qualification', () => {
       expect(evidence.logicalServers).toBe(1);
       expect(evidence.perSessionServers).toBe(0);
       expect(evidence.missingRegistration).toEqual({ status: 503, providerEffects: 0 });
+    } finally {
+      await qualifier.dispose();
+    }
+  });
+});
+
+test.describe('Cluster Mesh CLI session-delegation qualification', () => {
+  test.skip(!CLI_QUALIFICATION_URL, 'BR75-SG1: real CLI PTY adapter evidence is unavailable');
+
+  test('fails before effects without registration and returns the delegated session receipt', async () => {
+    const qualifier = await request.newContext();
+    try {
+      const response = await qualifier.get(CLI_QUALIFICATION_URL!);
+      expect(response.ok()).toBeTruthy();
+      const evidence = await response.json() as {
+        missingRegistration: { status: number; parses: number; sessionDelegations: number };
+        delegated: {
+          status: number;
+          action: 'drive' | 'wake' | 'relaunch';
+          path: string;
+          receiptRef?: string;
+          sessionDelegations: number;
+        };
+        survivingLegacyHttpPaths: string[];
+      };
+      expect(evidence.missingRegistration).toEqual({
+        status: 409, parses: 0, sessionDelegations: 0,
+      });
+      expect(evidence.delegated.status).toBe(200);
+      expect(evidence.delegated.path).toBe(`/auth/session/control/${evidence.delegated.action}`);
+      expect(evidence.delegated.receiptRef).toBeTruthy();
+      expect(evidence.delegated.sessionDelegations).toBe(1);
+      expect(evidence.survivingLegacyHttpPaths).toEqual([]);
     } finally {
       await qualifier.dispose();
     }
