@@ -13,7 +13,6 @@ import { documentsRouter } from './documents';
 import aiSettingsRouter from './ai-settings';
 import { workspacesRouter } from './workspaces';
 import { neutralRouter } from './neutral';
-import { locksRouter } from './locks';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { pptxRouter } from './pptx';
@@ -104,10 +103,6 @@ apiRouter.route('/workspaces', workspacesRouter);
 // Neutral orchestrator routes (authenticated; workspace-agnostic dashboard)
 apiRouter.use('/neutral/*', requireAuth);
 apiRouter.route('/neutral', neutralRouter);
-
-// Locks (authenticated; read is allowed, mutations require workspace editor/admin)
-apiRouter.use('/locks/*', requireAuth);
-apiRouter.route('/locks', locksRouter);
 
 // Documents routes: allow reads for any authenticated user. Upload/delete are gated inside the router by workspace role.
 apiRouter.use('/documents/*', requireAuth);

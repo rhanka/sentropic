@@ -44,6 +44,7 @@ import {
   productAgentsModule,
 } from './routes/namespaces/agents';
 import { productStreamsModule, STREAM_PATHS } from './routes/namespaces/streams';
+import { LOCK_PATHS, productLocksModule } from './routes/namespaces/locks';
 
 const authPlugin = productAuthPlugin();
 
@@ -146,6 +147,11 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     namespace: '/streams',
     module: productStreamsModule,
     authPaths: STREAM_PATHS,
+  },
+  {
+    namespace: '/locks',
+    module: productLocksModule,
+    authPaths: LOCK_PATHS,
   },
 ] as const satisfies readonly RootMountedNamespaceRegistration[];
 
