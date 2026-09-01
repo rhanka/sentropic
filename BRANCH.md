@@ -542,7 +542,7 @@
   - [ ] Namespace: `/business`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
   - [ ] Add modular factories under `api/src/routes/namespaces/business/**` for organizations, folders, initiatives, solutions, products, proposals and view templates over injected services.
     - [x] Define explicit neutral router ports and injectable organizations, folders, initiatives and solutions transport factories with no product service/schema imports.
-    - [ ] Add the products, proposals, bids and view-template factories plus the product adapter composition.
+    - [x] Add the products, proposals, bids and view-template factories plus the product adapter composition.
   - [ ] Move DOCX generation out to `/documents`; decide and test the canonical status of `/use-cases` and `/bids` aliases before deleting their legacy mounts.
   - [ ] Shadow reads/validated mutation intent, select one business author, prove rollback and delete replaced route files `organizations.ts`, `folders.ts`, `initiatives.ts`, `solutions.ts`, `products.ts`, `proposals.ts`, `bids.ts`, `view-templates.ts`.
   - [ ] Tests new: `api/tests/api/cluster-mesh-business-cutover.test.ts`.
