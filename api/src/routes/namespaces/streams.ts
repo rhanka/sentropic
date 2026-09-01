@@ -604,8 +604,6 @@ streamsRouter.get('/sse', async (c) => {
 return streamsRouter;
 };
 
-export const streamsRouter = createStreamsTransportRouter(createProductStreamsPorts());
-
 export const STREAM_PATHS = ['/streams/active', '/streams/sse'] as const;
 
 export interface CreateStreamsNamespaceModuleOptions {

@@ -22,8 +22,8 @@ const ensureStreamsAuthor = async (): Promise<boolean> => {
         status: 'shadow' as const,
         shadowComparison: {
           strategy: 'envelope-cursor-replay-and-read-only-route-intent',
-          safeReadRef: 'historical:1deef2cbd:api/tests/api/streams.test.ts',
-          validatedIntentRef: 'historical:1deef2cbd:api/src/routes/api/streams.ts',
+          safeReadRef: 'historical:0f3266c96:api/tests/api/cluster-mesh-streams-cutover.test.ts',
+          validatedIntentRef: 'historical:0f3266c96:api/tests/api/cluster-mesh-streams-cutover.test.ts',
           effectsDuplicated: false,
         },
         rollbackCheckpoint: {

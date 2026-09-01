@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { app as legacyApp } from '../../src/app';
+import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
@@ -45,12 +45,12 @@ describe('cluster mesh streams cutover', () => {
     await cleanupAuthData();
   });
 
-  it('shadows active envelopes and validates a read-only route intent', async () => {
+  it('preserves the shadowed active envelope and read-only route intent after cutover', async () => {
     const path = '/api/v1/streams/active?since_minutes=360&limit=200';
-    const legacy = await authenticatedRequest(legacyApp, 'GET', path, user.sessionToken!);
+    const product = await authenticatedRequest(productApp, 'GET', path, user.sessionToken!);
     const shadow = await authenticatedRequest(candidate(), 'GET', path, user.sessionToken!);
-    expect(shadow.status).toBe(legacy.status);
-    expect(await shadow.text()).toBe(await legacy.text());
+    expect(shadow.status).toBe(product.status);
+    expect(await shadow.text()).toBe(await product.text());
 
     const effectRoutes = createStreamsNamespaceModule().createRouter().routes
       .filter(({ method }) => method !== 'ALL')

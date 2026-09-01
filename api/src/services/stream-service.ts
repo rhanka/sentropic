@@ -8,7 +8,7 @@
  * Public surface (function names + signatures) is preserved verbatim so
  * existing call sites in chat-service.ts, queue-manager.ts,
  * context-document.ts, chat-server-provider.ts, routes/namespaces/workflows-queue.ts, and
- * routes/api/streams.ts compile and behave identically.
+ * routes/namespaces/streams.ts compile and behave identically.
  */
 import type { StreamEventType } from './llm-runtime';
 import type { StreamEventTypeName } from '../../../packages/chat-core/src/stream-port';
