@@ -103,6 +103,13 @@ const assertRequireAdminSubFenceComplete = (
   ).toEqual([]);
 };
 
+const withoutRequireAdminPath = (
+  router: RootMountedRouter,
+  path: string,
+): RootMountedRouter => ({
+  routes: router.routes.filter((route) => route.path !== path || route.handler !== requireAdmin),
+});
+
 describe('mounted namespace fence completeness', () => {
   it.each(MOUNTED_NAMESPACE_REGISTRY)(
     'covers every registered path and privileged sub-fence for $namespace',
@@ -194,4 +201,33 @@ describe('mounted namespace fence completeness', () => {
     expect(() => assertRequireAdminSubFenceComplete('/fixture', router, []))
       .toThrowError('/fixture requireAdmin wiring is outside every privileged sub-fence');
   });
+
+  it.each([
+    { namespace: '/agents', missingPath: '/prompts/test-tavily' },
+    { namespace: '/workflows', missingPath: '/workspace-types/:type/workflows/:id' },
+  ])(
+    'fails when $namespace admin wiring and its declared sub-fence shrink together',
+    ({ namespace, missingPath }) => {
+      const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+        (item) => item.namespace === namespace,
+      )!;
+      const router = withoutRequireAdminPath(registration.module.createRouter(), missingPath);
+      const privilegedFence = registration.privilegedFences![0];
+      const shrunkenFence = {
+        ...privilegedFence,
+        paths: privilegedFence.paths.filter((path) => path !== missingPath),
+      };
+
+      expect(registeredPaths(router)).toContain(missingPath);
+      expect(router.routes.some(
+        (route) => route.path === missingPath && route.handler === requireAdmin,
+      )).toBe(false);
+      expect(() => assertPrivilegedFenceComplete(
+        namespace,
+        router,
+        registration.authPaths!,
+        shrunkenFence,
+      )).toThrowError(`${namespace} admin sub-fence is missing privileged paths`);
+    },
+  );
 });
