@@ -9,6 +9,7 @@ export * from './projection.js';
 export * from './trust.js';
 export * from './config.js';
 export * from './hono/plugin.js';
+export * from './hono/cli-router.js';
 export * from './hono/session-contracts.js';
 export * from './hono/session-router.js';
 export * from './persistence/ports.js';

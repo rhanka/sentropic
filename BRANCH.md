@@ -488,6 +488,7 @@
 
 - [ ] **Lot 18 — `/cli` TARGET command adapter without second session authority**
   - [ ] Namespace: `/cli`; type: TARGET adapter extraction, plugin mount and cutover gate.
+  - [x] Define parse-only command-intent adapters and a canonical session-control HTTP delegate port with no process, PTY or session authority.
   - [ ] Add `packages/cluster-mesh/src/hono/cli-router.ts` over neutral command-runner ports and adapters from `packages/cli`, `build-cli`, `harness` and Focus CLI.
   - [ ] Delegate every drive/wake/relaunch effect to `/session`; reject direct process/PTY authority and missing registration.
   - [ ] Mount disabled until a real PTY adapter exists; shadow command parsing/intent only, then select one author and remove any verified direct HTTP command path.
