@@ -486,20 +486,20 @@
   - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-agents-cutover.test.ts ENV=test-cluster-mesh-central-control-plane` passes 1 file/3 tests.
   - [x] Internal gates: C1 existing config tables reused; C3/A5 injectable application module. The root-mount fence invariant passes 1 file/21 tests with `/agents`, `AGENT_PATHS` and `AGENT_ADMIN_PATHS` covered; a cold API boot reaches healthy, smoke passes 6/6 overall with the API-health subset at 4/4, anonymous health returns 200 and every registered agent/config/prompt method returns 401.
 
-- [ ] **Lot 18 — `/cli` TARGET command adapter without second session authority**
-  - [ ] Namespace: `/cli`; type: TARGET adapter extraction, plugin mount and cutover gate.
+- [x] **Lot 18 — `/cli` TARGET command adapter without second session authority**
+  - [x] Namespace: `/cli`; type: TARGET adapter extraction, explicitly fenced plugin registration and source-gap activation gate.
   - [x] Define parse-only command-intent adapters and a canonical session-control HTTP delegate port with no process, PTY or session authority.
   - [x] Prove shadow-only parsing, canonical drive delegation, missing-registration refusal, direct-authority denial, unavailable-port fail-close and independent disableability in the standalone router.
   - [x] Add `packages/cluster-mesh/src/hono/cli-router.ts` over neutral command-runner ports and parse-only structural adapters from `packages/cli`, `build-cli`, `harness` and Focus CLI.
-  - [ ] Delegate every drive/wake/relaunch effect to `/session`; reject direct process/PTY authority and missing registration.
-  - [ ] Mount disabled until a real PTY adapter exists; shadow command parsing/intent only, then select one author and remove any verified direct HTTP command path.
-  - [ ] Tests new: `packages/cluster-mesh/tests/cli-router.spec.ts`, `api/tests/api/cluster-mesh-cli.test.ts`.
-  - [ ] Tests updated: `packages/harness/tests/cli/mechanical-verbs.spec.ts`, `packages/cli/tests/dispatch.spec.ts`, `packages/cli/tests/surface-cli.spec.ts`, `packages/focus/tests/cli.spec.ts`.
-  - [ ] UI tests: N-A.
-  - [ ] E2E new scenario: `e2e/tests/10-cluster-mesh-control-plane.spec.ts` missing-registration refusal and delegated session receipt.
-  - [ ] Lot gate: `make typecheck-harness test-harness build-harness typecheck-cli test-cli build-cli typecheck-cluster-mesh test-cluster-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-cli.test.ts ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C3 neutral command ports; A3 fail-closed registration; A5 disabled CLI module; `BR75-SG1` blocks real activation.
+  - [x] Delegate every drive/wake/relaunch effect only to `/auth/session/control/:action`; direct process/PTY/session authority and missing registration are rejected before parsing or delegation.
+  - [x] The production mount remains disabled while `ptyEvidence` is `BR75-SG1_source_gap`; parsing is shadow-only. The D11 source/runtime sweep found no legacy direct HTTP command file or mount to delete, and probes prove `/command`, `/commands`, `/terminal` and `/shell` all remain 404, so `/session` is the sole effect author with no dual/surviving path.
+  - [x] Tests new: `packages/cluster-mesh/tests/cli-router.spec.ts` passes 8/8; `api/tests/api/cluster-mesh-cli.test.ts` passes 6/6.
+  - [x] Tests updated: Harness mechanical verbs passes within 84/84; CLI dispatch/surface passes within 74/74; build-cli doctor passes within 115/115 (5 pre-existing binary-smoke skips); Focus CLI passes within 103/103.
+  - [x] UI tests: N-A; the disabled target adapter has no UI surface.
+  - [x] E2E scenario added to `e2e/tests/10-cluster-mesh-control-plane.spec.ts` for missing-registration refusal and delegated session receipt; the scoped file executes with all 3 external qualifications explicitly skipped while `BR75-SG1`/provider evidence is absent.
+  - [x] Lot gate: `make typecheck-harness test-harness build-harness typecheck-cli test-cli build-cli typecheck-cluster-mesh test-cluster-mesh ENV=test-cluster-mesh-central-control-plane` passes (Harness 84, CLI 74, Cluster Mesh 71 tests; all typechecks/builds green).
+  - [x] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-cli.test.ts ENV=test-cluster-mesh-central-control-plane` passes 1 file/6 tests.
+  - [x] Internal gates: C3 neutral command ports; A3 fail-closed registration; A5 disabled CLI module. Lot-17 agents/workflows regressions pass 3/3 each and the independent live fence invariant passes 24/24 including both negative shrink probes. A cold `make down` + `make up-api-test` reaches healthy and smoke passes 4/4 with health 200, disabled `/cli` 404 and legacy `/commands` 404. API typecheck and lint pass (0 errors; 208 baseline warnings). No Lot-18 commit touches `api/drizzle/control/**` or `api/src/db/schema.ts`; `0007_cluster_mesh_r13.sql` remains the only Cluster Mesh control migration. `BR75-SG1` remains open and blocks real activation.
 
 - [ ] **Lot 19 — `/streams` TARGET transport-only extraction**
   - [ ] Namespace: `/streams`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
