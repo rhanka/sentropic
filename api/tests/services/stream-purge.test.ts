@@ -7,7 +7,7 @@
  * Tests:
  *   1. Old stream events are purged in batches (RED until Lot 2).
  *   2. Active stream events (<6h) are never purged (RED until Lot 2).
- *   3. since_minutes clamp is enforced on GET /streams/active (RED until Lot 2).
+ *   3. since_minutes clamp is enforced by the extracted GET /streams/active transport.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -18,7 +18,7 @@ import { createId } from '../../src/utils/id';
 import { app } from '../../src/app';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
-async function insertStreamEvent(createdAt: Date): Promise<string> {
+async function insertStreamEvent(createdAt: Date): Promise<{ id: string; streamId: string }> {
   const id = createId();
   const streamId = createId();
   await db.insert(chatStreamEvents).values({
@@ -29,7 +29,7 @@ async function insertStreamEvent(createdAt: Date): Promise<string> {
     sequence: 1,
     createdAt,
   });
-  return id;
+  return { id, streamId };
 }
 
 async function countStreamEvent(id: string): Promise<number> {
@@ -58,11 +58,11 @@ describe('Stream purge — characterization (BR-44 WI-2)', () => {
 
     // Insert an event 10 days ago (older than 7d retention).
     const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
-    const oldId = await insertStreamEvent(oldDate);
+    const oldEvent = await insertStreamEvent(oldDate);
 
     const deleted = await purgeOldStreamEvents(7);
     expect(deleted).toBeGreaterThanOrEqual(1);
-    expect(await countStreamEvent(oldId)).toBe(0);
+    expect(await countStreamEvent(oldEvent.id)).toBe(0);
   });
 
   it('should NOT purge active stream events (<6h old) (RED until Lot 2)', async () => {
@@ -76,14 +76,17 @@ describe('Stream purge — characterization (BR-44 WI-2)', () => {
 
     // Insert an event 1 hour ago (well within the 6h active window and 7d retention).
     const recentDate = new Date(Date.now() - 60 * 60 * 1000);
-    const recentId = await insertStreamEvent(recentDate);
+    const recentEvent = await insertStreamEvent(recentDate);
 
     await purgeOldStreamEvents(7);
-    expect(await countStreamEvent(recentId)).toBe(1);
+    expect(await countStreamEvent(recentEvent.id)).toBe(1);
   });
 
   it('should clamp since_minutes to retention floor on GET /streams/active (RED until Lot 2)', async () => {
     const user = await createAuthenticatedUser('admin_app');
+    const outsideRetention = await insertStreamEvent(
+      new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    );
     // since_minutes=99999 should be clamped to STREAM_RETENTION_DAYS*1440 (default 7*1440=10080).
     // The response must still return 200 without error.
     const res = await app.request('/api/v1/streams/active?since_minutes=99999', {
@@ -96,5 +99,6 @@ describe('Stream purge — characterization (BR-44 WI-2)', () => {
     const body = await res.json();
     expect(body).toHaveProperty('streamIds');
     expect(Array.isArray(body.streamIds)).toBe(true);
+    expect(body.streamIds).not.toContain(outsideRetention.streamId);
   });
 });

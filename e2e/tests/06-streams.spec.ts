@@ -116,6 +116,21 @@ test.describe('Streams — SSE scoping', () => {
     await userAApi.dispose();
   });
 
+  test('transport root remap exposes one canonical streams path', async () => {
+    const userAApi = await request.newContext({
+      baseURL: API_BASE_URL,
+      storageState: USER_A_STATE,
+    });
+
+    const canonical = await userAApi.get('/api/v1/streams/active?since_minutes=1&limit=1');
+    expect(canonical.status()).toBe(200);
+    await expect(canonical.json()).resolves.toEqual({ streamIds: expect.any(Array) });
+
+    const duplicatePrefix = await userAApi.get('/api/v1/streams/streams/active');
+    expect(duplicatePrefix.status()).toBe(404);
+    await userAApi.dispose();
+  });
+
   test('Chat bootstrap reste accessible après retry', async () => {
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
