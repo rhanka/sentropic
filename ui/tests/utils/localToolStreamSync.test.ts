@@ -64,6 +64,22 @@ describe('localToolStreamSync', () => {
     ]);
   });
 
+  it('does not treat non-awaiting replay status as a pending local-tool round', () => {
+    expect(parsePendingLocalToolCallsFromStatusPayload(
+      'stream-replay',
+      7,
+      {
+        state: 'running',
+        pending_local_tool_calls: [{
+          tool_call_id: 'call-stale',
+          name: 'bash',
+          args: { command: 'pwd' },
+        }],
+      },
+      isLocalToolName,
+    )).toEqual([]);
+  });
+
   it('resets execution state when the same tool_call_id is reused in a later round', () => {
     expect(
       shouldResetLocalToolStateForFreshRound(

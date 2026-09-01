@@ -64,11 +64,15 @@ test.describe('Chat heavy flows', () => {
     }
     try {
       if (streamId) {
-        const eventsRes = await page.request.get(`/api/v1/streams/events/${encodeURIComponent(streamId)}?limit=50`);
-        console.log('[08-chat-heavy] stream events:', eventsRes.status(), await eventsRes.text());
+        const activeRes = await page.request.get('/api/v1/streams/active?since_minutes=360&limit=200');
+        const activePayload = await activeRes.json().catch(() => null);
+        console.log('[08-chat-heavy] active stream:', activeRes.status(), {
+          streamId,
+          active: Array.isArray(activePayload?.streamIds) && activePayload.streamIds.includes(streamId),
+        });
       }
     } catch (error) {
-      console.log('[08-chat-heavy] failed to fetch stream events:', error);
+      console.log('[08-chat-heavy] failed to inspect active streams:', error);
     }
   }
 
