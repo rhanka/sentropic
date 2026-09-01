@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runSurfaceCli } from '../src/surface-cli.js';
 import type { ProcessCommand, ProcessRunner } from '../src/surface/build.js';
+import { sentropicCliCommandIntentAdapter } from '../src/command-intent.js';
 
 function capture() {
     const out: string[] = [];
@@ -20,6 +21,11 @@ function jsonManifest(): string {
 }
 
 describe('runSurfaceCli', () => {
+    it('projects a surface command intent without invoking its process runner', () => {
+        expect(sentropicCliCommandIntentAdapter.parseIntent(['surface', 'build', 'surface.json']))
+            .toMatchObject({ runnerId: 'sentropic-cli', argv: ['surface', 'build', 'surface.json'] });
+    });
+
     it('validates a manifest without invoking graphify', async () => {
         const { deps, out, err } = capture();
         const calls: ProcessCommand[] = [];

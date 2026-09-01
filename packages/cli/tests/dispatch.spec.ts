@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runCli, CLI_VERSION } from '../src/cli.js';
 import { SubcommandRegistry, type Subcommand } from '../src/registry.js';
 import { VerbRegistry } from '../src/verb-registry.js';
+import { sentropicCliCommandIntentAdapter } from '../src/command-intent.js';
 
 /** Capture log/error output so we can assert on rendered help/version/error text. */
 function capture() {
@@ -36,6 +37,12 @@ function registryWithApp(runAppCli: (argv: readonly string[]) => Promise<number>
 }
 
 describe('runCli', () => {
+    it('projects an app command intent without dispatching it', () => {
+        expect(sentropicCliCommandIntentAdapter.parseIntent(['app', 'doctor'])).toEqual({
+            runnerId: 'sentropic-cli', source: '@sentropic/cli', argv: ['app', 'doctor'],
+        });
+    });
+
     it('prints the CLI version plus each registered subcommand version', async () => {
         const { registry } = registryWithApp(async () => 0);
         const { deps, out } = capture();

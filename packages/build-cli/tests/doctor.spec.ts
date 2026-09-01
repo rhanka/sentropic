@@ -6,6 +6,7 @@ import {
     type DoctorDeps,
 } from '../src/commands/doctor.js';
 import type { ProcessResult } from '../src/commands/process.js';
+import { buildCliCommandIntentAdapter } from '../src/command-intent.js';
 
 /** Build deps with every probe mocked to a healthy default; override per test. */
 function healthyDeps(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
@@ -20,6 +21,12 @@ function healthyDeps(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
 }
 
 describe('runDoctor', () => {
+    it('projects doctor intent without running host probes', () => {
+        expect(buildCliCommandIntentAdapter.parseIntent(['doctor', '--github'])).toEqual({
+            runnerId: 'build-cli', source: '@sentropic/build-cli', argv: ['doctor', '--github'],
+        });
+    });
+
     it('passes every check on a healthy host (non-github)', async () => {
         const report = await runDoctor(healthyDeps());
         expect(report.ok).toBe(true);

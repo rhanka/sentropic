@@ -7,7 +7,7 @@
  * plugins are present.
  *
  * The registration mirrors `bin/stp.mjs` exactly:
- *   name: 'app', summary: (real bin summary), version: BUILD_CLI_VERSION ('0.2.0')
+ *   name: 'app', summary: (real bin summary), version: BUILD_CLI_VERSION ('0.3.0')
  * so the pinned text is byte-identical to what `stp` would print.
  */
 
@@ -29,14 +29,14 @@ function buildBinLikeRegistry(): SubcommandRegistry {
     registry.register({
         name: 'app',
         summary: 'Scaffold and operate a runnable @sentropic chat application (init, doctor).',
-        // BUILD_CLI_VERSION from @sentropic/build-cli — pinned at 0.2.0 for the oracle
-        version: '0.2.0',
+        // BUILD_CLI_VERSION from @sentropic/build-cli — pinned at 0.3.0 for the oracle
+        version: '0.3.0',
         run: async () => 0,
     });
     registry.register({
         name: 'surface',
         summary: 'Build multi-repo analysis surfaces from graphify graph.json files.',
-        version: '0.3.1',
+        version: '0.5.0',
         run: async () => 0,
     });
     return registry;
@@ -83,8 +83,8 @@ describe('Lot 0 characterization — stp output oracle', () => {
         expect(actual).toBe(fixture('stp-version.txt'));
         // Explicit sub-assertions for legibility in CI output
         expect(actual).toContain(`stp ${CLI_VERSION}`);
-        expect(actual).toContain('app 0.2.0');
-        expect(actual).toContain('surface 0.3.1');
+        expect(actual).toContain('app 0.3.0');
+        expect(actual).toContain('surface 0.5.0');
     });
 
     it('stp -v output is byte-identical to stp --version (alias parity)', async () => {
@@ -115,7 +115,7 @@ describe('Lot 0 characterization — stp output oracle', () => {
         registry.register({
             name: 'app',
             summary: 'Scaffold and operate a runnable @sentropic chat application (init, doctor).',
-            version: '0.2.0',
+            version: '0.3.0',
             run: async (argv) => {
                 appArgv = argv;
                 return 0;
@@ -131,7 +131,7 @@ describe('Lot 0 characterization — stp output oracle', () => {
         expect(err).toHaveLength(0);
     });
 
-    it('CLI_VERSION is the post-bump baseline 0.3.1 (version bump, not a regression)', () => {
-        expect(CLI_VERSION).toBe('0.3.1');
+    it('CLI_VERSION is the post-bump baseline 0.5.0 (version bump, not a regression)', () => {
+        expect(CLI_VERSION).toBe('0.5.0');
     });
 });
