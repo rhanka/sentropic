@@ -60,6 +60,7 @@ const controlAction = (value: string): CliControlAction | null =>
 
 export function createCliNamespaceModule(options: {
   readonly enabled?: boolean;
+  readonly generationId?: string;
   readonly authenticate?: MiddlewareHandler;
   readonly adapters?: readonly CliCommandIntentAdapter[];
   readonly session?: CliSessionDelegatePort;
@@ -78,6 +79,7 @@ export function createCliNamespaceModule(options: {
       for (const path of CLI_PATHS) router.use(path, options.authenticate ?? (async (_c, next) => next()));
 
       const prepare = async (c: Parameters<MiddlewareHandler>[0]) => {
+        if (!options.generationId) return { error: c.json({ error: 'cli_runtime_unavailable' }, 503) };
         const invocationId = c.req.header('x-cluster-mesh-invocation-id');
         if (!invocationId) return { error: c.json({ error: 'cli_invocation_reference_required' }, 400) };
         let verified;
@@ -85,7 +87,7 @@ export function createCliNamespaceModule(options: {
           verified = await ports.context.verify({
             invocationId,
             correlationId: c.req.header('x-correlation-id') ?? invocationId,
-            generationId: c.req.header('x-cluster-mesh-generation') ?? '',
+            generationId: options.generationId,
             method: c.req.method,
             path: c.req.path,
             authorizationEvidenceRef: c.req.header('x-cluster-mesh-evidence'),
