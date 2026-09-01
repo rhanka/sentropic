@@ -14,6 +14,7 @@ describe('Locks API', () => {
   let userB: any;
   let viewer: any;
   let outsider: any;
+  let admin: any;
   let workspaceId: string;
 
   beforeAll(async () => {
@@ -25,6 +26,7 @@ describe('Locks API', () => {
     userB = await createAuthenticatedUser('editor');
     viewer = await createAuthenticatedUser('viewer');
     outsider = await createAuthenticatedUser('editor');
+    admin = await createAuthenticatedUser('admin_org');
     workspaceId = userA.workspaceId;
 
     await db
@@ -34,6 +36,10 @@ describe('Locks API', () => {
     await db
       .insert(workspaceMemberships)
       .values({ workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
+      .onConflictDoNothing();
+    await db
+      .insert(workspaceMemberships)
+      .values({ workspaceId, userId: admin.id, role: 'admin', createdAt: new Date() })
       .onConflictDoNothing();
   });
 
@@ -114,6 +120,27 @@ describe('Locks API', () => {
     expect(getLock.status).toBe(200);
     const payload = await getLock.json();
     expect(payload.lock?.lockedBy?.userId).toBe(userB.id);
+  });
+
+  it('allows force unlock only for a workspace admin', async () => {
+    const body = { objectType: 'initiative', objectId: 'admin-scope' };
+    expect((await authenticatedRequest(
+      app, 'POST', `/api/v1/locks?workspace_id=${workspaceId}`, userA.sessionToken, body,
+    )).status).toBe(201);
+    expect((await authenticatedRequest(
+      app,
+      'POST',
+      `/api/v1/locks/force-unlock?workspace_id=${workspaceId}`,
+      userB.sessionToken,
+      body,
+    )).status).toBe(403);
+    expect((await authenticatedRequest(
+      app,
+      'POST',
+      `/api/v1/locks/force-unlock?workspace_id=${workspaceId}`,
+      admin.sessionToken,
+      body,
+    )).status).toBe(200);
   });
 
   it('scopes presence per workspace', async () => {
