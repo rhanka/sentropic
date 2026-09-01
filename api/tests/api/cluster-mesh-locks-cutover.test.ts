@@ -1,14 +1,22 @@
+import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { app as legacyApp } from '../../src/app';
+import { app as productApp } from '../../src/app';
+import { db } from '../../src/db/client';
+import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { requireAuth } from '../../src/middleware/auth';
 import {
   createLocksTransportRouter,
+  createLocksNamespaceModule,
   LOCK_PATHS,
 } from '../../src/routes/namespaces/locks';
+import { LOCKS_AUTHOR } from '../../src/routes/namespaces/locks-cutover';
 import type { LocksNamespacePorts } from '../../src/routes/namespaces/locks-ports';
 import { productLocksPorts } from '../../src/routes/namespaces/locks-product-ports';
+import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
+import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -45,21 +53,35 @@ const fakePorts = (): LocksNamespacePorts => ({
   },
 });
 
+const cutovers = new PostgresClusterMeshCutoverStore();
+const cutoverKey = { compositionRoot: 'product' as const, namespace: '/locks' as const };
+const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
+  eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+  eq(clusterMeshNamespaceCutovers.namespace, '/locks'),
+));
+const mounted = (enabled = true) => new Hono().route('/api/v1', createClusterMeshPlugin({
+  runtime: clusterMeshAdapter.sessionControl!.runtime,
+  namespaces: [createLocksNamespaceModule({ enabled })],
+  mounts: { '/locks': '/' },
+}));
+
 describe('cluster mesh locks pre-deletion shadow', () => {
   let user: TestUser;
 
   beforeEach(async () => {
+    await clearCutover();
     user = await createAuthenticatedUser('editor');
   });
 
   afterEach(async () => {
+    await clearCutover();
     await cleanupAuthData();
   });
 
   it('matches the legacy safe read and dispatches validated mutation intent once', async () => {
     const query = `workspace_id=${user.workspaceId}&objectType=organization&objectId=shadow-object`;
     const legacy = await authenticatedRequest(
-      legacyApp, 'GET', `/api/v1/locks?${query}`, user.sessionToken!,
+      productApp, 'GET', `/api/v1/locks?${query}`, user.sessionToken!,
     );
     const shadow = await authenticatedRequest(
       candidate(productLocksPorts), 'GET', `/api/v1/locks?${query}`, user.sessionToken!,
@@ -102,5 +124,37 @@ describe('cluster mesh locks pre-deletion shadow', () => {
       'POST /locks/presence/leave',
       'DELETE /locks/presence',
     ]);
+  });
+
+  it('selects one author and fails closed after verified rollback', async () => {
+    const app = mounted();
+    const path = `/api/v1/locks?workspace_id=${user.workspaceId}&objectType=folder&objectId=rollback`;
+    expect((await authenticatedRequest(app, 'GET', path, user.sessionToken!)).status).toBe(200);
+    const active = await cutovers.find(cutoverKey);
+    expect(active).toMatchObject({
+      activeAuthor: LOCKS_AUTHOR,
+      status: 'active',
+      previousGenerationId: 'legacy-api-locks-v1',
+      shadowComparison: { effectsDuplicated: false },
+    });
+    await cutovers.rollback(cutoverKey, active!.previousGenerationId!);
+    await expect(cutovers.verifyRollback(cutoverKey)).resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(app, 'GET', path, user.sessionToken!);
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('authenticates exact paths and disables without a fallback or duplicate prefix', async () => {
+    const path = '/api/v1/locks?objectType=initiative&objectId=auth';
+    expect((await mounted().request(path)).status).toBe(401);
+    expect(await cutovers.find(cutoverKey)).toBeNull();
+    expect((await mounted(false).request(path)).status).toBe(404);
+    expect(await cutovers.find(cutoverKey)).toBeNull();
+
+    const app = mounted();
+    expect((await authenticatedRequest(app, 'GET', path, user.sessionToken!)).status).toBe(200);
+    expect((await authenticatedRequest(
+      app, 'GET', '/api/v1/locks/locks?objectType=initiative&objectId=auth', user.sessionToken!,
+    )).status).toBe(404);
   });
 });
