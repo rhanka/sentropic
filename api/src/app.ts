@@ -8,6 +8,7 @@ import { logger } from './logger';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
 import { productSessionModule, SESSION_PATHS } from './routes/namespaces/session';
+import { CLI_PATHS, productCliModule } from './routes/namespaces/cli';
 import { MCP_PATHS, productMcpModule } from './routes/namespaces/mcp';
 import {
   createOAuthNamespaceModule,
@@ -69,6 +70,7 @@ const productOAuthModule = createOAuthNamespaceModule({
 
 export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
   { namespace: '/session', module: productSessionModule, mount: '/auth', authPaths: SESSION_PATHS },
+  { namespace: '/cli', module: productCliModule, mount: '/cli', authPaths: CLI_PATHS },
   { namespace: '/mcp', module: productMcpModule, mount: '/mcp', authPaths: MCP_PATHS },
   { namespace: '/oauth', module: productOAuthModule, mount: '/oauth', authPaths: OAUTH_PATHS },
   { namespace: '/gw', module: productGwModule, mount: '/gw', authPaths: GW_PATHS },
