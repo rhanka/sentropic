@@ -60,6 +60,16 @@ describe('Queue stream bootstrap contract', () => {
     expect(body.events).toHaveLength(3);
     expect(body.events[0].eventType).toBe('status');
     expect(body.events[2].eventType).toBe('done');
+
+    const activeResponse = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/streams/active?since_minutes=60&limit=200',
+      user.sessionToken!,
+    );
+    expect(activeResponse.status).toBe(200);
+    const activeBody = await activeResponse.json();
+    expect(activeBody.streamIds).not.toContain(`job_${jobId}`);
   });
 
   it('respects limit parameter', async () => {

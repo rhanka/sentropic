@@ -10,6 +10,7 @@ import { db } from '../../src/db/client';
 import { chatStreamEvents, chatMessages, chatSessions, users } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
+import { productStreamsOutboxPort } from '../../src/routes/namespaces/streams-product-events';
 
 describe('Stream Service', () => {
   let testStreamId: string;
@@ -359,6 +360,33 @@ describe('Stream Service', () => {
       expect(events.length).toBe(2); // sequences 4, 5 (3 est exclu car > 3)
       expect(events[0].sequence).toBe(4);
       expect(events[1].sequence).toBe(5);
+    });
+
+    it('exposes the canonical outbox sequence through the streams product port', async () => {
+      const events = await productStreamsOutboxPort.read({
+        streamId: testStreamId,
+        sinceSequence: 3,
+      });
+
+      expect(events.map(({ streamId, eventType, sequence, data }) => ({
+        streamId,
+        eventType,
+        sequence,
+        data,
+      }))).toEqual([
+        {
+          streamId: testStreamId,
+          eventType: 'content_delta',
+          sequence: 4,
+          data: { delta: 'C2' },
+        },
+        {
+          streamId: testStreamId,
+          eventType: 'done',
+          sequence: 5,
+          data: {},
+        },
+      ]);
     });
 
     it('should limit number of events returned', async () => {
