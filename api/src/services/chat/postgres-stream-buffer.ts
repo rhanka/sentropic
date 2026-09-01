@@ -57,7 +57,7 @@ const isOrphanMessageFkError = (error: unknown): boolean => {
  *
  * Per SPEC §7 anti-pattern: inline transport (SSE) does NOT leak into
  * chat-core. The PostgreSQL `NOTIFY` emit is an implementation detail of
- * this adapter (signaling the SSE listeners in routes/api/streams.ts);
+ * this adapter (signaling the SSE listeners in routes/namespaces/streams.ts);
  * the port itself stays transport-free.
  */
 export class PostgresStreamBuffer implements StreamBuffer {

@@ -181,6 +181,18 @@ describe('mounted namespace fence completeness', () => {
     );
   });
 
+  it('fails when root-mounted streams gains a route outside its explicit fence', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/streams',
+    )!;
+    expect(registration.authPaths).not.toBeNull();
+    const router = registration.module.createRouter();
+    router.get('/streams/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/streams', router, registration.authPaths ?? []))
+      .toThrowError('/streams mounted namespace fence is missing registered paths');
+  });
+
   it('fails when a flagged privileged path is absent from its sub-fence', () => {
     const router = new Hono();
     router.get('/admin/listed', (context) => context.body(null, 204));
