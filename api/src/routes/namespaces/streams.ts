@@ -1,4 +1,7 @@
-import { Hono, type Context } from 'hono';
+import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
+import { requireAuth } from '../../middleware/auth';
+import { applyStreamsAuthorFence } from './streams-cutover';
 import type {
   StreamNotification,
   StreamPrincipal,
@@ -602,3 +605,31 @@ return streamsRouter;
 };
 
 export const streamsRouter = createStreamsTransportRouter(createProductStreamsPorts());
+
+export const STREAM_PATHS = ['/streams/active', '/streams/sse'] as const;
+
+export interface CreateStreamsNamespaceModuleOptions {
+  readonly enabled?: boolean;
+  readonly authenticate?: MiddlewareHandler;
+  readonly ports?: StreamsNamespacePorts;
+}
+
+export const createStreamsNamespaceModule = (
+  options: CreateStreamsNamespaceModuleOptions = {},
+): ClusterMeshHonoNamespaceModule => ({
+  namespace: '/streams',
+  enabled: options.enabled ?? true,
+  createRouter() {
+    const router = new Hono();
+    for (const path of STREAM_PATHS) {
+      router.use(path, options.authenticate ?? requireAuth);
+    }
+    applyStreamsAuthorFence(router, STREAM_PATHS);
+    router.route('/streams', createStreamsTransportRouter(
+      options.ports ?? createProductStreamsPorts(),
+    ));
+    return router;
+  },
+});
+
+export const productStreamsModule = createStreamsNamespaceModule();
