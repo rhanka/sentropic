@@ -32,6 +32,16 @@ const assertRootRemapsRegistered = (
   ).toEqual([]);
 };
 
+const assertRootMountsMatchRegistry = (
+  mounts: Readonly<Record<string, string>>,
+  namespaces: readonly string[],
+): void => {
+  expect(
+    namespaces.filter((namespace) => mounts[namespace] !== '/'),
+    'root namespace registry mounts differ from plugin mounts',
+  ).toEqual([]);
+};
+
 const assertFenceComplete = (
   namespace: string,
   router: RootMountedRouter,
@@ -144,6 +154,10 @@ describe('mounted namespace fence completeness', () => {
       PRODUCT_CLUSTER_MESH_MOUNTS,
       ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
     );
+    assertRootMountsMatchRegistry(
+      PRODUCT_CLUSTER_MESH_MOUNTS,
+      ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
+    );
   });
 
   it('fails when a prefix registry mount differs from the plugin mount', () => {
@@ -158,6 +172,13 @@ describe('mounted namespace fence completeness', () => {
       { ...PRODUCT_CLUSTER_MESH_MOUNTS, '/fixture-bypass': '/' },
       ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
     )).toThrowError('plugin mounts contain root remaps outside the root-mount registry');
+  });
+
+  it('fails when the root-mounted locks namespace loses its root remap', () => {
+    expect(() => assertRootMountsMatchRegistry(
+      { ...PRODUCT_CLUSTER_MESH_MOUNTS, '/locks': '/locks' },
+      ROOT_MOUNTED_NAMESPACE_REGISTRY.map(({ namespace }) => namespace),
+    )).toThrowError('root namespace registry mounts differ from plugin mounts');
   });
 
   it('fails when the prefixed Track namespace gains a route outside its fence', () => {
@@ -191,6 +212,18 @@ describe('mounted namespace fence completeness', () => {
 
     expect(() => assertFenceComplete('/streams', router, registration.authPaths ?? []))
       .toThrowError('/streams mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when root-mounted locks gains a route outside its explicit fence', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/locks',
+    )!;
+    expect(registration.authPaths).not.toBeNull();
+    const router = registration.module.createRouter();
+    router.post('/locks/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/locks', router, registration.authPaths ?? []))
+      .toThrowError('/locks mounted namespace fence is missing registered paths');
   });
 
   it('fails when a flagged privileged path is absent from its sub-fence', () => {
