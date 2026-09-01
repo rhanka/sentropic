@@ -9,6 +9,11 @@ describe('API Health', () => {
     const data = await response.json();
     expect(data.status).toBe('ok');
 
+    const disabledCli = await httpRequest('/api/v1/cli/intents', { method: 'POST' });
+    expect(disabledCli.status).toBe(404);
+    const legacyCli = await httpRequest('/api/v1/commands', { method: 'POST' });
+    expect(legacyCli.status).toBe(404);
+
     const connectorPaths: ReadonlyArray<readonly [method: string, path: string]> = [
       ['GET', '/api/v1/google-drive/connection'],
       ['GET', '/api/v1/google-drive/picker-config'],
