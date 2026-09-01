@@ -1,16 +1,18 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
   createStreamsNamespaceModule,
+  createStreamsTransportRouter,
   STREAM_PATHS,
 } from '../../src/routes/namespaces/streams';
 import { STREAMS_AUTHOR } from '../../src/routes/namespaces/streams-cutover';
+import type { StreamsNamespacePorts } from '../../src/routes/namespaces/streams-ports';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import {
@@ -31,6 +33,35 @@ const candidate = (enabled = true) => new Hono().route('/api/v1', createClusterM
   namespaces: [createStreamsNamespaceModule({ enabled })],
   mounts: { '/streams': '/' },
 }));
+const fakePorts = (): StreamsNamespacePorts => ({
+  retentionDays: 7,
+  outbox: { listActive: vi.fn(async () => []), read: vi.fn(async () => []), readOne: vi.fn(async () => null) },
+  chat: { read: vi.fn(async ({ streamId }) => [
+    { streamId, eventType: 'content_delta', sequence: 2, data: { delta: 'B' } },
+  ]) },
+  jobs: {
+    canRead: vi.fn(async () => false),
+    listActive: vi.fn(async () => []),
+    readSnapshot: vi.fn(async () => null),
+  },
+  business: {
+    canRead: vi.fn(async () => false),
+    readOrganization: vi.fn(async () => null),
+    readFolder: vi.fn(async () => null),
+    readInitiative: vi.fn(async () => null),
+  },
+  workspaces: {
+    resolveTarget: vi.fn(async ({ principal }) => principal.workspaceId),
+    canObserve: vi.fn(async () => false),
+  },
+  comments: { canObserve: vi.fn(async () => false) },
+  locks: {
+    clearForUser: vi.fn(async () => undefined),
+    readSnapshot: vi.fn(async () => null),
+    readPresence: vi.fn(async () => []),
+  },
+  notifications: { subscribe: vi.fn(async () => async () => undefined) },
+});
 
 describe('cluster mesh streams cutover', () => {
   let user: TestUser;
@@ -81,5 +112,33 @@ describe('cluster mesh streams cutover', () => {
     expect(await cutovers.find(key)).toBeNull();
     expect((await candidate(false).request('/api/v1/streams/active')).status).toBe(404);
     expect(await cutovers.find(key)).toBeNull();
+  });
+
+  it('replays an injected cursor envelope and rejects oversized intent before dispatch', async () => {
+    const ports = fakePorts();
+    const transport = createStreamsTransportRouter(ports);
+    const app = new Hono();
+    app.use('/streams/sse', async (context, next) => {
+      context.set('user', { userId: user.id, workspaceId: user.workspaceId, role: 'editor' });
+      await next();
+    });
+    app.route('/streams', transport);
+    const oversized = new URLSearchParams();
+    for (let index = 0; index < 201; index += 1) oversized.append('streamIds', `s-${index}`);
+    expect((await app.request(`/streams/sse?${oversized}`)).status).toBe(400);
+    expect(ports.chat.read).not.toHaveBeenCalled();
+
+    const cursor = Buffer.from(JSON.stringify({ 'chat-1': 1 })).toString('base64url');
+    const abort = new AbortController();
+    const response = await app.request(`/streams/sse?streamIds=chat-1&cursor=${cursor}`, {
+      signal: abort.signal,
+    });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    const wire = decoder.decode((await reader.read()).value)
+      + decoder.decode((await reader.read()).value);
+    abort.abort();
+    expect(wire).toContain('event: content_delta\nid: chat-1:2');
+    expect(ports.chat.read).toHaveBeenCalledWith(expect.objectContaining({ sinceSequence: 1 }));
   });
 });
