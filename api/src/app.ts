@@ -69,6 +69,12 @@ import {
   productTransfersModule,
   TRANSFER_PATHS,
 } from './routes/namespaces/transfers-module';
+import {
+  CLIENT_ADMIN_PATHS,
+  CLIENT_EDITOR_PATHS,
+  CLIENT_PATHS,
+  productClientsModule,
+} from './routes/namespaces/clients-module';
 
 const authPlugin = productAuthPlugin();
 
@@ -117,6 +123,15 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
 ] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/clients',
+    module: productClientsModule,
+    authPaths: CLIENT_PATHS,
+    privilegedFences: [
+      { name: 'admin', paths: CLIENT_ADMIN_PATHS, pathPrefixes: ['/cowork-desktop/channel', '/settings/vscode-extension-token'] },
+      { name: 'editor', paths: CLIENT_EDITOR_PATHS, pathPrefixes: ['/vscode-extension/workspace-mapping/code-workspace'] },
+    ],
+  },
   {
     namespace: '/transfers',
     module: productTransfersModule,

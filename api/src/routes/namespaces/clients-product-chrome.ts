@@ -40,12 +40,13 @@ const buildFallbackDownloadUrlFromOrigin = (originHeader: string | undefined): s
 };
 
 export const chromeExtensionRouter = new Hono();
+export const clientTabsRouter = new Hono();
 
 // --- Tab registration / keepalive / unregister endpoints ---
 
 const VALID_TAB_SOURCES = new Set<TabSource>(['chrome_plugin', 'bookmarklet', 'desktop_cowork']);
 
-chromeExtensionRouter.post('/tabs/register', async (c) => {
+clientTabsRouter.post('/register', async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
   const tab_id = typeof body.tab_id === 'string' ? body.tab_id.trim() : '';
@@ -71,7 +72,7 @@ chromeExtensionRouter.post('/tabs/register', async (c) => {
   return c.json({ ok: true, tab_id: entry.tab_id });
 });
 
-chromeExtensionRouter.post('/tabs/keepalive', async (c) => {
+clientTabsRouter.post('/keepalive', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const tab_id = typeof body.tab_id === 'string' ? body.tab_id.trim() : '';
 
@@ -85,7 +86,7 @@ chromeExtensionRouter.post('/tabs/keepalive', async (c) => {
   return c.json({ ok: true, evicted_count: evicted.length });
 });
 
-chromeExtensionRouter.delete('/tabs/:tabId', async (c) => {
+clientTabsRouter.delete('/:tabId', async (c) => {
   const tabId = c.req.param('tabId');
   unregister(tabId);
   return c.json({ ok: true });
