@@ -571,6 +571,7 @@
   - [ ] Add `api/src/routes/namespaces/analytics.ts` with injected query/queue/settings/locale ports and no import from the business router.
     - [x] Define neutral query, queue, settings and locale contracts with normalized analytics projections and no product-authority import.
     - [x] Implement the standalone transport router over exact `ANALYTICS_PATHS`, with no database, schema, business-router or canonical-service import.
+    - [x] Supply canonical PostgreSQL, hydration, queue, settings and locale authorities only through the explicit product adapter.
   - [ ] Shadow deterministic aggregate reads and validated job intent, select one author, prove rollback and delete `api/src/routes/api/analytics.ts`.
   - [ ] Tests new: `api/tests/api/cluster-mesh-analytics-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/analytics.test.ts`, `api/tests/unit/matrix.test.ts`, `api/tests/unit/scoring.test.ts`.
