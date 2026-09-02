@@ -1,8 +1,8 @@
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { describe, expect, it } from 'vitest';
 
 import { requireAuth } from '../../src/middleware/auth';
-import { requireAdmin } from '../../src/middleware/rbac';
+import { requireAdmin, requireEditor } from '../../src/middleware/rbac';
 import {
   MOUNTED_NAMESPACE_REGISTRY,
   PREFIX_MOUNTED_NAMESPACE_REGISTRY,
@@ -97,19 +97,32 @@ const assertPrivilegedFenceComplete = (
   ).toEqual([]);
 };
 
-const assertRequireAdminSubFenceComplete = (
+const assertPrivilegedMiddlewareFencesComplete = (
   namespace: string,
   router: RootMountedRouter,
   privilegedFences: readonly PrivilegedPathFence[],
+  name: string,
+  handler: MiddlewareHandler,
 ): void => {
-  const privilegedPaths = new Set(privilegedFences.flatMap(({ paths }) => paths));
+  const namedFences = privilegedFences.filter((fence) => fence.name === name);
+  if (name !== 'admin' && namedFences.length === 0) return;
+  const privilegedPaths = new Set(namedFences.flatMap(({ paths }) => paths));
   const missing = router.routes
-    .filter(({ handler }) => handler === requireAdmin)
+    .filter((route) => route.handler === handler)
     .map(({ path }) => path)
     .filter((path) => !privilegedPaths.has(path));
   expect(
     [...new Set(missing)].sort(),
-    `${namespace} requireAdmin wiring is outside every privileged sub-fence`,
+    `${namespace} ${name} wiring is outside its privileged sub-fence`,
+  ).toEqual([]);
+  const missingHandlers = namedFences
+    .flatMap(({ paths }) => paths)
+    .filter((path) => !router.routes.some(
+      (route) => route.path === path && route.handler === handler,
+    ));
+  expect(
+    [...new Set(missingHandlers)].sort(),
+    `${namespace} ${name} fence is missing middleware wiring`,
   ).toEqual([]);
 };
 
@@ -127,7 +140,12 @@ describe('mounted namespace fence completeness', () => {
       expect(module.namespace).toBe(namespace);
       const router = module.createRouter();
       const privilegedFences = registration.privilegedFences ?? [];
-      assertRequireAdminSubFenceComplete(namespace, router, privilegedFences);
+      assertPrivilegedMiddlewareFencesComplete(
+        namespace, router, privilegedFences, 'admin', requireAdmin,
+      );
+      assertPrivilegedMiddlewareFencesComplete(
+        namespace, router, privilegedFences, 'editor', requireEditor,
+      );
       if (authPaths === null) {
         expect(privilegedFences).toEqual([]);
         if (PREFIX_MOUNTED_NAMESPACE_REGISTRY.some((item) => item.namespace === namespace)) {
@@ -255,8 +273,22 @@ describe('mounted namespace fence completeness', () => {
     const router = new Hono();
     router.post('/future-admin-action', requireAdmin, (context) => context.body(null, 204));
 
-    expect(() => assertRequireAdminSubFenceComplete('/fixture', router, []))
-      .toThrowError('/fixture requireAdmin wiring is outside every privileged sub-fence');
+    expect(() => assertPrivilegedMiddlewareFencesComplete(
+      '/fixture', router, [], 'admin', requireAdmin,
+    )).toThrowError('/fixture admin wiring is outside its privileged sub-fence');
+  });
+
+  it('fails when an editor fence loses its independent role middleware', () => {
+    const router = new Hono();
+    router.post('/editor-action', (context) => context.body(null, 204));
+
+    expect(() => assertPrivilegedMiddlewareFencesComplete(
+      '/fixture',
+      router,
+      [{ name: 'editor', paths: ['/editor-action'], pathPrefixes: ['/editor-action'] }],
+      'editor',
+      requireEditor,
+    )).toThrowError('/fixture editor fence is missing middleware wiring');
   });
 
   it.each([
