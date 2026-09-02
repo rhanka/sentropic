@@ -594,7 +594,7 @@
 - [ ] **Lot 23 — `/workspaces` TARGET tenancy/workspace router extraction**
   - [x] Phase A: fold forward the Fable Lot 22 condition with the independent immutable analytics editor requirement recorded in `BR75-RV60` before workspace extraction.
   - [ ] Namespace: `/workspaces`; type: TARGET cluster/application router extraction, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Add workspace router factory in `packages/cluster-mesh/src/hono/workspaces-router.ts` with product tenancy ports supplied by `api/src/routes/namespaces/workspaces.ts`.
+  - [x] Add workspace router factory in `packages/cluster-mesh/src/hono/workspaces-router.ts` with product tenancy ports supplied by `api/src/routes/namespaces/workspaces.ts`.
     - [x] Export the neutral injected transport contract and exact non-wildcard `WORKSPACE_PATHS`; bump `@sentropic/cluster-mesh` to `0.6.0` above published `0.1.0`.
     - [x] Prove standalone route enumeration, injected dispatch and unavailable-port refusal in `packages/cluster-mesh/tests/workspaces-router.spec.ts` (6/6).
     - [x] Relocate the canonical workspace lifecycle, hierarchy/member/admin security and durable mutation implementation behind the namespace adapter while retaining the single legacy mount until cutover.
@@ -602,11 +602,13 @@
     - [x] Relocate canonical neutral-dashboard hierarchy aggregation behind the namespace adapter while retaining the single legacy mount until cutover.
     - [x] Bind every exact transport operation to an explicit fail-closed product handler chain; the neutral package transport imports no product database, schema or canonical service.
     - [x] Define the product namespace module with exact method-aware auth/editor fences before author activation, direct `active` author `workspaces-hono-module`, rollback checkpoint `legacy-api-workspaces-v1`/`legacy-api-workspaces-router`, and 503 fail-close without fallback.
-  - [ ] Absorb workspaces, tenants and neutral surfaces while keeping repository/product workspace IDs distinct and epoch-bound.
-  - [ ] Shadow reads/validated membership intent, select one author, prove rollback and delete `workspaces.ts`, `tenants.ts`, `neutral.ts` legacy route files.
+  - [x] Absorb workspaces, tenants and neutral surfaces while keeping tenant and product workspace identifiers on distinct typed route/authority ports and retaining the Cluster Mesh generation epoch at the author fence.
+  - [x] Shadow reads/validated membership intent, select one author, prove rollback and delete `workspaces.ts`, `tenants.ts`, `neutral.ts` legacy route files.
     - [x] Pin the executable legacy `/tenants` router from `c94401b9a` as Git blob `f52667a442ee7f5fc9b53f0a7ec3810668c89ea0` with a test-only canonical tenant-membership authority bridge.
     - [x] Pin the executable legacy `/neutral` router from `c94401b9a` as Git blob `0bc4f0c2182a7ea1a0049254731868210afdaa15` with test-only canonical database/schema authority bridges.
     - [x] Execute both immutable routers before deletion: authenticated seeded neutral reads match status/body byte-for-byte, while candidate replay creates one durable requested membership only once, leaves its isolated historical tenant twin untouched, and the historical twin then produces one equivalent authoritative row/response (5/5 cutover tests).
+    - [x] Root-mount the actual `/workspaces` registry module behind explicit non-null `WORKSPACE_PATHS`, exact method-aware editor wiring and independent immutable editor requirements; live unfenced-route and simultaneous wiring/declaration-shrink adversarial proofs pass in the 39/39 root gate.
+    - [x] Remove all direct legacy imports, mounts and the three compatibility stubs after the candidate parity, activation and rollback proof; no production fixture import or alternate author remains.
   - [ ] Tests new: `packages/cluster-mesh/tests/workspaces-router.spec.ts`, `api/tests/api/cluster-mesh-workspaces-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/workspaces.test.ts`, `api/tests/api/workspace-types.test.ts`, `api/tests/api/auth/tenant-membership.test.ts`, `api/tests/api/tenancy/arch11-resolve-tenant.test.ts`, `api/tests/api/tenancy/arch11-tenant-data.test.ts`.
   - [ ] UI tests updated: `ui/tests/stores/workspaceScope.test.ts`, `ui/tests/chat-tool-scope-workspace-type.test.ts`.

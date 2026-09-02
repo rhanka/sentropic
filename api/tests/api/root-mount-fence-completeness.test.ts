@@ -15,6 +15,15 @@ import {
 type RootMountedRouter = Pick<Hono, 'routes'>;
 
 const IMMUTABLE_ANALYTICS_EDITOR_PATHS = ['/analytics/executive-summary'] as const;
+const IMMUTABLE_WORKSPACE_EDITOR_PATHS = [
+  '/workspaces',
+  '/workspaces/:id',
+  '/workspaces/:id/gate-config',
+  '/workspaces/:id/hide',
+  '/workspaces/:id/unhide',
+  '/workspaces/:id/members',
+  '/workspaces/:id/members/:userId',
+] as const;
 
 const registeredPaths = (router: RootMountedRouter): string[] =>
   [...new Set(router.routes.map(({ path }) => path))].sort();
@@ -181,6 +190,16 @@ describe('mounted namespace fence completeness', () => {
           IMMUTABLE_ANALYTICS_EDITOR_PATHS,
         );
       }
+      if (namespace === '/workspaces') {
+        assertImmutablePrivilegedRequirement(
+          namespace,
+          router,
+          privilegedFences,
+          'editor',
+          requireEditor,
+          IMMUTABLE_WORKSPACE_EDITOR_PATHS,
+        );
+      }
       if (authPaths === null) {
         expect(privilegedFences).toEqual([]);
         if (PREFIX_MOUNTED_NAMESPACE_REGISTRY.some((item) => item.namespace === namespace)) {
@@ -302,6 +321,17 @@ describe('mounted namespace fence completeness', () => {
       .toThrowError('/analytics mounted namespace fence is missing registered paths');
   });
 
+  it('fails when the live root-mounted workspace router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/workspaces',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/workspaces/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/workspaces', router, registration.authPaths!))
+      .toThrowError('/workspaces mounted namespace fence is missing registered paths');
+  });
+
   it('fails when the live analytics editor middleware is removed', () => {
     const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
       ({ namespace }) => namespace === '/analytics',
@@ -352,6 +382,41 @@ describe('mounted namespace fence completeness', () => {
         IMMUTABLE_ANALYTICS_EDITOR_PATHS,
       );
     }).toThrowError('/analytics editor immutable requirement is missing privileged paths');
+  });
+
+  it('fails when workspace editor wiring and its declared sub-fence shrink together', () => {
+    const missingPath = '/workspaces/:id/gate-config';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/workspaces',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter((route) => (
+        route.path !== missingPath || route.handler !== requireEditor
+      )),
+    };
+    const privilegedFence = registration.privilegedFences![0];
+    const shrunkenFence = {
+      ...privilegedFence,
+      paths: privilegedFence.paths.filter((path) => path !== missingPath),
+      pathPrefixes: privilegedFence.pathPrefixes.filter((path) => path !== missingPath),
+    };
+
+    expect(() => {
+      assertPrivilegedFenceComplete(
+        '/workspaces', mutation, registration.authPaths!, shrunkenFence,
+      );
+      assertPrivilegedMiddlewareFencesComplete(
+        '/workspaces', mutation, [shrunkenFence], 'editor', requireEditor,
+      );
+      assertImmutablePrivilegedRequirement(
+        '/workspaces',
+        mutation,
+        [shrunkenFence],
+        'editor',
+        requireEditor,
+        IMMUTABLE_WORKSPACE_EDITOR_PATHS,
+      );
+    }).toThrowError('/workspaces editor immutable requirement is missing privileged paths');
   });
 
   it('fails when a flagged privileged path is absent from its sub-fence', () => {
