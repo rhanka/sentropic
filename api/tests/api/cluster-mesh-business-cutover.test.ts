@@ -1,5 +1,6 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { and, eq } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app as productApp } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
+import { folders, initiatives, solutions, workspaces } from '../../src/db/schema';
+import { requireAuth } from '../../src/middleware/auth';
 import {
   createBusinessNamespaceModule,
   createBusinessTransportRouter,
@@ -17,6 +20,7 @@ import { BUSINESS_AUTHOR } from '../../src/routes/namespaces/business/cutover';
 import { productBusinessPorts } from '../../src/routes/namespaces/business/product-ports';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
+import { solutionsRouter as legacySolutionsRouter } from '../fixtures/historical/business-36a93f2b0/api/src/routes/api/solutions';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -36,6 +40,14 @@ const candidate = (ports: BusinessNamespacePorts = productBusinessPorts, enabled
     namespaces: [createBusinessNamespaceModule({ enabled, ports })],
     mounts: { '/business': '/' },
   }));
+const historicalLegacy = new Hono()
+  .use('/api/v1/solutions', requireAuth)
+  .use('/api/v1/solutions/*', requireAuth)
+  .route('/api/v1/solutions', legacySolutionsRouter);
+const historicalSourceUrl = new URL(
+  '../fixtures/historical/business-36a93f2b0/api/src/routes/api/solutions.ts',
+  import.meta.url,
+);
 
 describe('cluster mesh business cutover', () => {
   let user: TestUser;
@@ -47,17 +59,66 @@ describe('cluster mesh business cutover', () => {
 
   afterEach(async () => {
     await clearCutover();
+    if (user.workspaceId) {
+      await db.delete(solutions).where(eq(solutions.workspaceId, user.workspaceId));
+      await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
+      await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
+    }
     await cleanupAuthData();
+    if (user.workspaceId) await db.delete(workspaces).where(eq(workspaces.id, user.workspaceId));
   });
 
-  it('preserves the pinned safe read and dispatches one validated mutation intent', async () => {
-    const path = '/api/v1/organizations';
-    const legacy = await authenticatedRequest(productApp, 'GET', path, user.sessionToken!);
-    const shadow = await authenticatedRequest(candidate(), 'GET', path, user.sessionToken!);
-    const legacyBody = await legacy.text();
-    expect(shadow.status).toBe(legacy.status);
-    expect(await shadow.text()).toBe(legacyBody);
+  it('runs pinned legacy reads and one-effect DELETE parity on authoritative state', async () => {
+    const source = readFileSync(historicalSourceUrl);
+    const blobHash = createHash('sha1')
+      .update(`blob ${source.byteLength}\0`).update(source).digest('hex');
+    expect(blobHash).toBe('2a2357a24778eadc7724572321e67620b5c8aca3');
 
+    const folderId = crypto.randomUUID();
+    const initiativeId = crypto.randomUUID();
+    const candidateSolutionId = crypto.randomUUID();
+    const legacySolutionId = crypto.randomUUID();
+    await db.insert(folders).values({
+      id: folderId, workspaceId: user.workspaceId!, name: 'D11 parity', status: 'completed',
+    });
+    await db.insert(initiatives).values({
+      id: initiativeId, workspaceId: user.workspaceId!, folderId, data: { name: 'D11 parity' },
+    });
+    await db.insert(solutions).values([
+      { id: candidateSolutionId, workspaceId: user.workspaceId!, initiativeId, data: { kind: 'parity' } },
+      { id: legacySolutionId, workspaceId: user.workspaceId!, initiativeId, data: { kind: 'parity' } },
+    ]);
+
+    for (const path of [
+      `/api/v1/solutions?initiative_id=${initiativeId}`,
+      `/api/v1/solutions/${candidateSolutionId}`,
+    ]) {
+      const legacy = await authenticatedRequest(historicalLegacy, 'GET', path, user.sessionToken!);
+      const current = await authenticatedRequest(candidate(), 'GET', path, user.sessionToken!);
+      expect({ status: current.status, body: await current.text() })
+        .toEqual({ status: legacy.status, body: await legacy.text() });
+    }
+
+    const before = await db.select().from(solutions).where(eq(solutions.initiativeId, initiativeId));
+    const currentDelete = await authenticatedRequest(
+      candidate(), 'DELETE', `/api/v1/solutions/${candidateSolutionId}`, user.sessionToken!,
+    );
+    const afterCurrent = await db.select().from(solutions).where(eq(solutions.initiativeId, initiativeId));
+    expect(before.length - afterCurrent.length).toBe(1);
+    expect(afterCurrent.map(({ id }) => id)).toEqual([legacySolutionId]);
+
+    const legacyDelete = await authenticatedRequest(
+      historicalLegacy, 'DELETE', `/api/v1/solutions/${legacySolutionId}`, user.sessionToken!,
+    );
+    const afterLegacy = await db.select().from(solutions).where(eq(solutions.initiativeId, initiativeId));
+    expect(afterCurrent.length - afterLegacy.length).toBe(1);
+    expect(afterLegacy).toHaveLength(0);
+    expect({ status: currentDelete.status, body: await currentDelete.text() })
+      .toEqual({ status: legacyDelete.status, body: await legacyDelete.text() });
+  });
+
+  it('keeps the injected spy as dispatch-unit coverage rather than D11 proof', async () => {
+    const path = '/api/v1/organizations';
     const createIntent = vi.fn();
     const organizations = new Hono().post('/', (context) => {
       createIntent();
@@ -72,9 +133,6 @@ describe('cluster mesh business cutover', () => {
     );
     expect(intent.status).toBe(201);
     expect(createIntent).toHaveBeenCalledTimes(1);
-
-    const unchanged = await authenticatedRequest(productApp, 'GET', path, user.sessionToken!);
-    expect(await unchanged.text()).toBe(legacyBody);
   });
 
   it('enumerates every preserved business path without a transport catch-all', () => {
