@@ -1,11 +1,7 @@
 import { Hono } from 'hono';
 import { healthRouter } from './health';
-import { settingsRouter } from './settings';
-import { businessConfigRouter } from './business-config';
 import { adminRouter, tenantResolutionMetricsRouter } from './admin';
-import { meRouter } from './me';
 import { documentsRouter } from './documents';
-import aiSettingsRouter from './ai-settings';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { pptxRouter } from './pptx';
@@ -13,6 +9,7 @@ import { xlsxRouter } from './xlsx';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { coworkDesktopRouter } from './cowork-desktop';
+import { clientSettingsRouter } from './client-settings';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -33,10 +30,6 @@ apiRouter.route('/', pptxRouter);
 // XLSX export routes (BR-40c: async folder multi-tab workbook)
 apiRouter.use('/xlsx/*', requireAuth);
 apiRouter.route('/', xlsxRouter);
-
-// User self-service routes
-apiRouter.use('/me/*', requireAuth);
-apiRouter.route('/me', meRouter);
 
 // Chrome extension metadata route for authenticated users.
 apiRouter.use('/chrome-extension/*', requireAuth);
@@ -60,15 +53,9 @@ apiRouter.route('/exports', exportsRouter);
 apiRouter.use('/imports/*', requireAuth);
 apiRouter.route('/imports', importsRouter);
 
-// Admin routes (require admin_org or admin_app)
-apiRouter.use('/settings/*', requireAuth, requireAdmin);
-apiRouter.route('/settings', settingsRouter);
-
-apiRouter.use('/business-config/*', requireAuth, requireAdmin);
-apiRouter.route('/business-config', businessConfigRouter);
-
-apiRouter.use('/ai-settings/*', requireAuth, requireAdmin);
-apiRouter.route('/ai-settings', aiSettingsRouter);
+// Client bootstrap configuration remains with the future /clients extraction.
+apiRouter.use('/settings/vscode-extension-token', requireAuth, requireAdmin);
+apiRouter.route('/settings', clientSettingsRouter);
 
 // Tenant-resolution strict-cutover gate (available to both admin roles).
 apiRouter.use('/admin/tenant-resolution-metrics/*', requireAuth, requireAdmin);

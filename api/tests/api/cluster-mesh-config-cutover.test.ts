@@ -1,10 +1,15 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  app as productApp,
+  PRODUCT_CLUSTER_MESH_MOUNTS,
+  ROOT_MOUNTED_NAMESPACE_REGISTRY,
+} from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { businessConfig, workspaces } from '../../src/db/schema';
@@ -225,5 +230,25 @@ describe('cluster mesh config cutover', () => {
     ]) {
       await expect(app.request(path).then(({ status }) => status)).resolves.toBe(404);
     }
+  });
+
+  it('registers the real root author and leaves no production legacy config source', async () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/config',
+    );
+    expect(registration?.module.namespace).toBe('/config');
+    expect(registration?.authPaths).toEqual(CONFIG_PATHS);
+    expect(PRODUCT_CLUSTER_MESH_MOUNTS['/config']).toBe('/');
+    expect((await productApp.request('/api/v1/business-config')).status).toBe(401);
+    expect((await productApp.request('/api/v1/config/business-config')).status).toBe(404);
+
+    for (const name of ['settings', 'business-config', 'ai-settings', 'me']) {
+      expect(existsSync(new URL(`../../src/routes/api/${name}.ts`, import.meta.url))).toBe(false);
+    }
+    const apiIndex = readFileSync(
+      new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8',
+    );
+    expect(apiIndex).not.toMatch(/settingsRouter|businessConfigRouter|aiSettingsRouter|meRouter/);
+    expect(apiIndex).toContain('clientSettingsRouter');
   });
 });

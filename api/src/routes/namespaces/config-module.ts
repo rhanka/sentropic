@@ -9,8 +9,6 @@ import {
 } from './config-cutover';
 import { productConfigPorts } from './config-product-ports';
 import {
-  CONFIG_ADMIN_PATHS,
-  CONFIG_PATHS,
   CONFIG_ROUTES,
   createConfigTransportRouter,
   type ConfigNamespacePorts,

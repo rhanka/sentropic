@@ -56,6 +56,11 @@ import {
   WORKSPACE_EDITOR_PATHS,
   WORKSPACE_PATHS,
 } from './routes/namespaces/workspaces';
+import {
+  CONFIG_ADMIN_PATHS,
+  CONFIG_PATHS,
+  productConfigModule,
+} from './routes/namespaces/config-module';
 
 const authPlugin = productAuthPlugin();
 
@@ -104,6 +109,16 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
 ] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/config',
+    module: productConfigModule,
+    authPaths: CONFIG_PATHS,
+    privilegedFences: [{
+      name: 'admin',
+      paths: CONFIG_ADMIN_PATHS,
+      pathPrefixes: ['/settings', '/business-config', '/ai-settings'],
+    }],
+  },
   {
     namespace: '/auth',
     module: authPlugin.module,
