@@ -575,6 +575,7 @@
     - [x] Keep runtime state truthful with direct `active` author selection, exact legacy rollback checkpoint, and 503 fail-close without fallback.
   - [ ] Shadow deterministic aggregate reads and validated job intent, select one author, prove rollback and delete `api/src/routes/api/analytics.ts`.
     - [x] Execute the immutable legacy router and candidate independently against equivalent seeded PostgreSQL state; authenticated summary/scatter status and bodies match byte-for-byte.
+    - [x] Prove candidate and historical POSTs each create exactly one authoritative queue row and update only their isolated twin folder, with equivalent normalized response and job payload.
   - [ ] Tests new: `api/tests/api/cluster-mesh-analytics-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/analytics.test.ts`, `api/tests/unit/matrix.test.ts`, `api/tests/unit/scoring.test.ts`.
   - [ ] UI tests updated: `ui/tests/utils/dashboard-docx-state.test.ts`, `ui/tests/utils/scoring.test.ts`.
