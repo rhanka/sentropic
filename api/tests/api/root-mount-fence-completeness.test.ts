@@ -15,6 +15,13 @@ import {
 type RootMountedRouter = Pick<Hono, 'routes'>;
 
 const IMMUTABLE_ANALYTICS_EDITOR_PATHS = ['/analytics/executive-summary'] as const;
+const IMMUTABLE_CONFIG_ADMIN_PATHS = [
+  '/settings',
+  '/business-config',
+  '/ai-settings',
+  '/ai-settings/all',
+  '/ai-settings/:key',
+] as const;
 const IMMUTABLE_WORKSPACE_EDITOR_PATHS = [
   '/workspaces',
   '/workspaces/:id',
@@ -190,6 +197,16 @@ describe('mounted namespace fence completeness', () => {
           IMMUTABLE_ANALYTICS_EDITOR_PATHS,
         );
       }
+      if (namespace === '/config') {
+        assertImmutablePrivilegedRequirement(
+          namespace,
+          router,
+          privilegedFences,
+          'admin',
+          requireAdmin,
+          IMMUTABLE_CONFIG_ADMIN_PATHS,
+        );
+      }
       if (namespace === '/workspaces') {
         assertImmutablePrivilegedRequirement(
           namespace,
@@ -332,6 +349,17 @@ describe('mounted namespace fence completeness', () => {
       .toThrowError('/workspaces mounted namespace fence is missing registered paths');
   });
 
+  it('fails when the live root-mounted config router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/config',
+    )!;
+    const router = registration.module.createRouter();
+    router.put('/settings/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/config', router, registration.authPaths!))
+      .toThrowError('/config mounted namespace fence is missing registered paths');
+  });
+
   it('fails when the live analytics editor middleware is removed', () => {
     const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
       ({ namespace }) => namespace === '/analytics',
@@ -417,6 +445,35 @@ describe('mounted namespace fence completeness', () => {
         IMMUTABLE_WORKSPACE_EDITOR_PATHS,
       );
     }).toThrowError('/workspaces editor immutable requirement is missing privileged paths');
+  });
+
+  it('fails when config admin wiring and its declared sub-fence shrink together', () => {
+    const missingPath = '/ai-settings/:key';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/config',
+    )!;
+    const mutation = withoutRequireAdminPath(registration.module.createRouter(), missingPath);
+    const privilegedFence = registration.privilegedFences![0];
+    const shrunkenFence = {
+      ...privilegedFence,
+      paths: privilegedFence.paths.filter((path) => path !== missingPath),
+      pathPrefixes: privilegedFence.pathPrefixes.filter((path) => path !== '/ai-settings'),
+    };
+
+    expect(() => {
+      assertPrivilegedFenceComplete('/config', mutation, registration.authPaths!, shrunkenFence);
+      assertPrivilegedMiddlewareFencesComplete(
+        '/config', mutation, [shrunkenFence], 'admin', requireAdmin,
+      );
+      assertImmutablePrivilegedRequirement(
+        '/config',
+        mutation,
+        [shrunkenFence],
+        'admin',
+        requireAdmin,
+        IMMUTABLE_CONFIG_ADMIN_PATHS,
+      );
+    }).toThrowError('/config admin immutable requirement is missing privileged paths');
   });
 
   it('fails when a flagged privileged path is absent from its sub-fence', () => {
