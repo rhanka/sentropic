@@ -228,4 +228,56 @@ describe('cluster mesh clients cutover', () => {
       expect(JSON.parse(state[0].value ?? '{}').codeWorkspaceIds).toHaveLength(1);
     }
   });
+
+  it('selects one direct author and fails closed after the exact rollback checkpoint', async () => {
+    const app = candidate();
+    const path = '/api/v1/settings/vscode-extension-token';
+    expect((await authenticatedRequest(app, 'GET', path, admin.sessionToken!)).status).toBe(200);
+    const active = await cutovers.find(key);
+    expect(active).toMatchObject({
+      status: 'active',
+      activeAuthor: CLIENT_AUTHOR,
+      previousGenerationId: 'legacy-api-clients-v1',
+      rollbackCheckpoint: { activeAuthor: 'legacy-api-client-routers' },
+    });
+    expect(active?.shadowComparison).toBeUndefined();
+
+    await cutovers.rollback(key, active!.previousGenerationId!);
+    await expect(cutovers.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(app, 'GET', path, admin.sessionToken!);
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('has no disabled, duplicate, bookmarklet, or unavailable-control fallback', async () => {
+    const path = '/api/v1/settings/vscode-extension-token';
+    expect((await candidate().request(path)).status).toBe(401);
+    expect(await cutovers.find(key)).toBeNull();
+    expect((await candidate(false).request(path)).status).toBe(404);
+    expect((await authenticatedRequest(
+      candidate(), 'GET', '/api/v1/clients/settings/vscode-extension-token', admin.sessionToken!,
+    )).status).toBe(404);
+
+    for (const bookmarkletPath of [
+      '/api/v1/bookmarklet/injected-script.js', '/api/v1/bookmarklet/probe.js',
+      '/api/v1/bookmarklet/register', '/api/v1/bookmarklet/poll', '/api/v1/bookmarklet/result',
+    ]) {
+      const response = await productApp.request(bookmarkletPath);
+      expect(response.status, bookmarkletPath).toBe(404);
+      expect(response.headers.get('cross-origin-resource-policy'), bookmarkletPath).toBeNull();
+    }
+
+    const unavailable: ClientsCutoverControl = {
+      runtime: { generation: clusterMeshAdapter.sessionControl!.runtime.generation },
+      cutovers: {
+        find: vi.fn(async () => { throw new Error('control unavailable'); }),
+        activate: vi.fn(async () => undefined),
+      },
+    };
+    const blocked = await authenticatedRequest(
+      candidate(true, productClientsPorts, unavailable), 'GET', path, admin.sessionToken!,
+    );
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'client_control_unavailable' });
+  });
 });
