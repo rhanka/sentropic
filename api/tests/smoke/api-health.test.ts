@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { and, eq, sql } from 'drizzle-orm';
+
+import { db } from '../../src/db/client';
+import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { httpRequest, authenticatedHttpRequest } from '../utils/test-helpers';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
@@ -72,6 +76,59 @@ describe('API Health', () => {
         health: 200, canonicalBusinessAnonymous: 401, duplicateBusiness: 404,
         docxAnonymous: 401, docxAuthenticated: 410,
       });
+    });
+
+    it('emits the live client cutover and control-loss status map', async () => {
+      const register = (tabId: string) => authenticatedHttpRequest(
+        'POST', '/api/v1/chrome-extension/tabs/register', user.sessionToken!,
+        { tab_id: tabId, source: 'chrome_plugin', url: 'https://client.test', title: 'Lot 27 cold proof' },
+      );
+      const [health, anonymous, duplicate, bookmarklet, active] = await Promise.all([
+        httpRequest('/api/v1/health'),
+        httpRequest('/api/v1/chrome-extension/tabs/register', { method: 'POST' }),
+        httpRequest('/api/v1/clients/chrome-extension/tabs/register', { method: 'POST' }),
+        httpRequest('/api/v1/bookmarklet/injected-script.js'),
+        register(`lot27-cold-before-${user.id}`),
+      ]);
+      const records = await db.select().from(clusterMeshNamespaceCutovers).where(and(
+        eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+        eq(clusterMeshNamespaceCutovers.namespace, '/clients'),
+      ));
+      expect(records).toEqual([expect.objectContaining({
+        status: 'active', activeAuthor: 'clients-hono-module', shadowComparison: null,
+      })]);
+
+      await db.execute(sql.raw(
+        'ALTER TABLE control.cluster_mesh_namespace_cutovers '
+        + 'RENAME TO cluster_mesh_namespace_cutovers_lot27_probe',
+      ));
+      let unavailable: Response;
+      try {
+        unavailable = await register(`lot27-cold-unavailable-${user.id}`);
+      } finally {
+        await db.execute(sql.raw(
+          'ALTER TABLE control.cluster_mesh_namespace_cutovers_lot27_probe '
+          + 'RENAME TO cluster_mesh_namespace_cutovers',
+        ));
+      }
+      const recovered = await register(`lot27-cold-after-${user.id}`);
+      const statuses = {
+        health: health.status,
+        anonymousClient: anonymous.status,
+        duplicateClient: duplicate.status,
+        bookmarklet: bookmarklet.status,
+        bookmarkletCorp: bookmarklet.headers.get('cross-origin-resource-policy'),
+        activeClient: active.status,
+        controlUnavailable: unavailable.status,
+        recoveredClient: recovered.status,
+      };
+      console.info(`D11_CLIENT_PROBE ${JSON.stringify({ statuses, cutover: records[0] })}`);
+      expect(statuses).toEqual({
+        health: 200, anonymousClient: 401, duplicateClient: 404,
+        bookmarklet: 404, bookmarkletCorp: null, activeClient: 200,
+        controlUnavailable: 503, recoveredClient: 200,
+      });
+      await expect(unavailable.json()).resolves.toEqual({ error: 'client_control_unavailable' });
     });
 
     it('should have organizations endpoint accessible', async () => {
