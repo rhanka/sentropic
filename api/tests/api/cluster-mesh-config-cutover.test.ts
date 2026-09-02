@@ -259,6 +259,6 @@ describe('cluster mesh config cutover', () => {
       new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8',
     );
     expect(apiIndex).not.toMatch(/settingsRouter|businessConfigRouter|aiSettingsRouter|meRouter/);
-    expect(apiIndex).toContain('clientSettingsRouter');
+    expect(apiIndex).not.toContain('clientSettingsRouter');
   });
 });
