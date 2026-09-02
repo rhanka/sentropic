@@ -596,6 +596,7 @@
   - [ ] Namespace: `/workspaces`; type: TARGET cluster/application router extraction, plugin mount, D11 cutover and legacy deletion.
   - [ ] Add workspace router factory in `packages/cluster-mesh/src/hono/workspaces-router.ts` with product tenancy ports supplied by `api/src/routes/namespaces/workspaces.ts`.
     - [x] Export the neutral injected transport contract and exact non-wildcard `WORKSPACE_PATHS`; bump `@sentropic/cluster-mesh` to `0.6.0` above published `0.1.0`.
+    - [x] Prove standalone route enumeration, injected dispatch and unavailable-port refusal in `packages/cluster-mesh/tests/workspaces-router.spec.ts` (6/6).
   - [ ] Absorb workspaces, tenants and neutral surfaces while keeping repository/product workspace IDs distinct and epoch-bound.
   - [ ] Shadow reads/validated membership intent, select one author, prove rollback and delete `workspaces.ts`, `tenants.ts`, `neutral.ts` legacy route files.
   - [ ] Tests new: `packages/cluster-mesh/tests/workspaces-router.spec.ts`, `api/tests/api/cluster-mesh-workspaces-cutover.test.ts`.
