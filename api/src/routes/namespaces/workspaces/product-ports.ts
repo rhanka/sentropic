@@ -4,6 +4,7 @@ import type {
 } from '@sentropic/cluster-mesh';
 import type { Hono } from 'hono';
 
+import { requireEditor } from '../../../middleware/rbac';
 import { neutralRouter } from './product-neutral';
 import { tenantsRouter } from './product-tenants';
 import { workspacesRouter } from './product-workspaces';
@@ -11,7 +12,8 @@ import { workspacesRouter } from './product-workspaces';
 const handlers = (router: Hono, method: string, path: string): WorkspaceHandlerChain => {
   const chain = router.routes
     .filter((route) => route.method === method && route.path === path)
-    .map(({ handler }) => handler);
+    .map(({ handler }) => handler)
+    .filter((handler) => handler !== requireEditor);
   if (chain.length === 0) {
     throw new Error(`workspace product handler is unavailable: ${method} ${path}`);
   }
