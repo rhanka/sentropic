@@ -50,6 +50,30 @@ describe('API Health', () => {
       await cleanupAuthData();
     });
 
+    it('emits the live business cutover probe status map', async () => {
+      const [health, canonical, duplicate, anonymousDocx, authenticatedDocx] = await Promise.all([
+        httpRequest('/api/v1/health'),
+        httpRequest('/api/v1/organizations'),
+        httpRequest('/api/v1/business/organizations'),
+        httpRequest('/api/v1/use-cases/historical-id/docx'),
+        authenticatedHttpRequest(
+          'GET', '/api/v1/use-cases/historical-id/docx', user.sessionToken!,
+        ),
+      ]);
+      const statuses = {
+        health: health.status,
+        canonicalBusinessAnonymous: canonical.status,
+        duplicateBusiness: duplicate.status,
+        docxAnonymous: anonymousDocx.status,
+        docxAuthenticated: authenticatedDocx.status,
+      };
+      console.info(`D11_BUSINESS_PROBE ${JSON.stringify(statuses)}`);
+      expect(statuses).toEqual({
+        health: 200, canonicalBusinessAnonymous: 401, duplicateBusiness: 404,
+        docxAnonymous: 401, docxAuthenticated: 410,
+      });
+    });
+
     it('should have organizations endpoint accessible', async () => {
       const response = await authenticatedHttpRequest('GET', '/api/v1/organizations', user.sessionToken!);
       expect(response.status).toBe(200);
