@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { healthRouter } from './health';
 import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
-import { analyticsRouter } from './analytics';
 import { adminRouter, tenantResolutionMetricsRouter } from './admin';
 import { tenantsRouter } from './tenants';
 import { meRouter } from './me';
@@ -37,9 +36,6 @@ apiRouter.route('/', pptxRouter);
 // XLSX export routes (BR-40c: async folder multi-tab workbook)
 apiRouter.use('/xlsx/*', requireAuth);
 apiRouter.route('/', xlsxRouter);
-
-apiRouter.use('/analytics/*', requireAuth);
-apiRouter.route('/analytics', analyticsRouter);
 
 // User self-service routes
 apiRouter.use('/me/*', requireAuth);
