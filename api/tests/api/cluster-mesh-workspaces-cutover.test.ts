@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
-  folders, initiatives, tenantMemberships, tenants, workspaceMemberships, workspaces,
+  folders, initiatives, oauthClients, tenantMemberships, tenants, workspaceMemberships, workspaces,
 } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
 import {
@@ -29,6 +29,9 @@ import {
 
 const key = { compositionRoot: 'product' as const, namespace: '/workspaces' as const };
 const twinTenants = ['cm-workspace-candidate', 'cm-workspace-historical'] as const;
+const securityTenants = ['cm-workspace-security-a', 'cm-workspace-security-b'] as const;
+const allTestTenants = [...twinTenants, ...securityTenants];
+const securityClientId = 'cm-workspace-security-client';
 const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
   eq(clusterMeshNamespaceCutovers.compositionRoot, key.compositionRoot),
   eq(clusterMeshNamespaceCutovers.namespace, key.namespace),
@@ -65,8 +68,9 @@ describe('cluster mesh workspaces cutover', () => {
 
   afterEach(async () => {
     await clearCutover();
-    await db.delete(tenantMemberships).where(inArray(tenantMemberships.tenantId, twinTenants));
-    await db.delete(tenants).where(inArray(tenants.id, twinTenants));
+    await db.delete(oauthClients).where(eq(oauthClients.clientId, securityClientId));
+    await db.delete(tenantMemberships).where(inArray(tenantMemberships.tenantId, allTestTenants));
+    await db.delete(tenants).where(inArray(tenants.id, allTestTenants));
     if (user.workspaceId) {
       await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
       await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
@@ -220,6 +224,88 @@ describe('cluster mesh workspaces cutover', () => {
     expect(roles.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
       { userId: victim.id, role: 'editor' }, { userId: member.id, role: 'viewer' },
     ].sort((a, b) => a.userId.localeCompare(b.userId)));
+  });
+
+  it('denies cross-tenant and non-admin membership governance without DB mutation', async () => {
+    const [, tenantB] = securityTenants;
+    const memberB = await createAuthenticatedUser('guest');
+    const target = await createAuthenticatedUser('guest');
+    workspaceIds.push(memberB.workspaceId!, target.workspaceId!);
+    await db.insert(tenants).values(securityTenants.map((id) => ({ id, name: id, status: 'active' })));
+    await db.insert(tenantMemberships).values([
+      { tenantId: securityTenants[0], userId: user.id, status: 'approved', role: 'admin' },
+      { tenantId: tenantB, userId: memberB.id, status: 'approved', role: 'member' },
+      { tenantId: tenantB, userId: target.id, status: 'requested', role: 'member' },
+    ]);
+    await db.insert(oauthClients).values({
+      id: securityClientId, clientId: securityClientId, name: securityClientId,
+      redirectUris: ['https://security.invalid/callback'], allowedScopes: ['openid'],
+      tokenEndpointAuthMethod: 'none', tenantId: tenantB,
+    });
+
+    const paths = [
+      `/api/v1/tenants/${tenantB}/memberships`, `/api/v1/tenants/${tenantB}/clients`,
+      ...['approve', 'reject', 'suspend'].map(
+        (decision) => `/api/v1/tenants/${tenantB}/memberships/${target.id}/${decision}`,
+      ),
+    ];
+    for (const actor of [user, memberB]) {
+      for (const path of paths) {
+        const response = await authenticatedRequest(
+          candidate(), path.endsWith('memberships') || path.endsWith('clients') ? 'GET' : 'POST',
+          path, actor.sessionToken!,
+        );
+        expect(response.status, `${actor.id} ${path}`).toBe(403);
+      }
+    }
+    const [unchanged] = await db.select().from(tenantMemberships).where(and(
+      eq(tenantMemberships.tenantId, tenantB), eq(tenantMemberships.userId, target.id),
+    ));
+    expect(unchanged).toMatchObject({ status: 'requested', approvedByUserId: null, decidedAt: null });
+  });
+
+  it('transitions only path-tenant memberships and defines decision replay as conflict', async () => {
+    const [tenantA, tenantB] = securityTenants;
+    const targets = await Promise.all([
+      createAuthenticatedUser('guest'), createAuthenticatedUser('guest'),
+      createAuthenticatedUser('guest'),
+    ]);
+    workspaceIds.push(...targets.map(({ workspaceId }) => workspaceId!));
+    await db.insert(tenants).values(securityTenants.map((id) => ({ id, name: id, status: 'active' })));
+    await db.insert(tenantMemberships).values([
+      { tenantId: tenantB, userId: user.id, status: 'approved', role: 'admin' },
+      ...targets.flatMap(({ id }, index) => [
+        { tenantId: tenantA, userId: id, status: index === 2 ? 'approved' : 'requested', role: 'member' },
+        { tenantId: tenantB, userId: id, status: index === 2 ? 'approved' : 'requested', role: 'member' },
+      ]),
+    ]);
+
+    const decisions = [
+      { name: 'approve', target: targets[0], from: 'requested', to: 'approved' },
+      { name: 'reject', target: targets[1], from: 'requested', to: 'rejected' },
+      { name: 'suspend', target: targets[2], from: 'approved', to: 'suspended' },
+    ] as const;
+    for (const decision of decisions) {
+      const path = `/api/v1/tenants/${tenantB}/memberships/${decision.target.id}/${decision.name}`;
+      const accepted = await authenticatedRequest(candidate(), 'POST', path, user.sessionToken!);
+      expect(accepted.status).toBe(200);
+      await expect(accepted.json()).resolves.toEqual({ success: true, status: decision.to });
+      const rows = await db.select().from(tenantMemberships)
+        .where(eq(tenantMemberships.userId, decision.target.id));
+      expect(rows.find(({ tenantId }) => tenantId === tenantA)?.status).toBe(decision.from);
+      const changed = rows.find(({ tenantId }) => tenantId === tenantB)!;
+      expect(changed).toMatchObject({ status: decision.to, approvedByUserId: user.id });
+      expect(changed.decidedAt).not.toBeNull();
+
+      const replay = await authenticatedRequest(candidate(), 'POST', path, user.sessionToken!);
+      expect(replay.status).toBe(409);
+      await expect(replay.json()).resolves.toEqual({ error: 'Invalid transition' });
+      const [afterReplay] = await db.select().from(tenantMemberships).where(and(
+        eq(tenantMemberships.tenantId, tenantB), eq(tenantMemberships.userId, decision.target.id),
+      ));
+      expect(afterReplay).toMatchObject({ status: decision.to, approvedByUserId: user.id });
+      expect(afterReplay.decidedAt?.getTime()).toBe(changed.decidedAt?.getTime());
+    }
   });
 
   it('keeps transport authority-neutral and fails composition on unavailable ports', () => {
