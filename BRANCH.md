@@ -691,7 +691,7 @@
 
 - [ ] **Lot 27 — `/clients` TARGET extension/desktop router extraction and bookmarklet resolution**
   - [ ] Namespace: `/clients`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
-  - [ ] Add `api/src/routes/namespaces/clients.ts` over Chrome, VSCode, Cowork, tab-registry and auth-client ports.
+  - [x] Add `api/src/routes/namespaces/clients.ts` over Chrome, VSCode, Cowork, tab-registry and auth-client ports.
   - [ ] Prove whether bookmarklet handlers exist; either mount them in this module with CORP tests or delete stale middleware in `api/src/app.ts` and emitted URLs in `api/src/upstream/injected-script.ts` in the same cutover.
   - [ ] Shadow metadata/token reads and validated registration intent, select one author, prove rollback and delete `chrome-extension.ts`, `vscode-extension.ts`, `cowork-desktop.ts` legacy files.
   - [ ] Tests new: `api/tests/api/cluster-mesh-clients-cutover.test.ts`.
