@@ -113,3 +113,115 @@ const buildArchive = async (
   }), { createFolders: false });
   return zip.generateAsync({ type: 'uint8array' });
 };
+
+const bridges = [
+  ['db/client.ts', 'a26b33f68913593f17d07f288b855d14e0f21e537592673a42d5ae28606a5b99'],
+  ['db/schema.ts', 'becc16a83cdec26457f0dfe1f83f8d5c381a2e21b55491fd72abab584bdd8492'],
+  ['services/storage-s3.ts', '964b5aefd2f186ee2047c6b24b52e87fcacdde037f983fd49c450e2941966da5'],
+  ['services/workspace-access.ts', '128364cb1712e7b5c70d88b33a34199af1254b624b337e82e95cd230849fa110'],
+  ['utils/id.ts', '7148d17b36975340ed8d20ae49c96a1b06f7d107b9b2492e32e15fe169a24aa3'],
+] as const;
+
+describe('cluster mesh transfers cutover', () => {
+  let owner: TestUser;
+  let artifactRoot: string;
+  const workspaceIds = new Set<string>();
+
+  beforeEach(async () => {
+    await clearCutover();
+    artifactRoot = join(tmpdir(), `transfer-cutover-${process.pid}-${crypto.randomUUID()}`);
+    setArtifactStoreForTesting(new LocalFsArtifactStore(artifactRoot, 'transfer-cutover'));
+    owner = await createAuthenticatedUser('admin');
+    workspaceIds.add(owner.workspaceId!);
+  });
+
+  afterEach(async () => {
+    const ids = [...workspaceIds];
+    if (ids.length > 0) {
+      await db.delete(comments).where(inArray(comments.workspaceId, ids));
+      await db.delete(contextDocuments).where(inArray(contextDocuments.workspaceId, ids));
+      await db.delete(initiatives).where(inArray(initiatives.workspaceId, ids));
+      await db.delete(folders).where(inArray(folders.workspaceId, ids));
+      await db.delete(organizations).where(inArray(organizations.workspaceId, ids));
+      await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.workspaceId, ids));
+      await db.delete(workspaces).where(inArray(workspaces.id, ids));
+    }
+    workspaceIds.clear();
+    await clearCutover();
+    await cleanupAuthData();
+    setArtifactStoreForTesting(undefined);
+    await fs.rm(artifactRoot, { recursive: true, force: true });
+    vi.restoreAllMocks();
+  });
+
+  it('executes the pinned authenticated manifest and storage read parity', async () => {
+    const fixtureRoot = '../fixtures/historical/transfers-be37d69f6/api';
+    const source = readFileSync(new URL(`${fixtureRoot}/src/routes/api/import-export.ts`, import.meta.url));
+    expect(createHash('sha1').update(`blob ${source.byteLength}\0`).update(source).digest('hex'))
+      .toBe('07102840c30953ce293db51fd85adc85bb2e08c7');
+    const journal = readFileSync(new URL(`${fixtureRoot}/drizzle/meta/_journal.json`, import.meta.url));
+    expect(createHash('sha1').update(`blob ${journal.byteLength}\0`).update(journal).digest('hex'))
+      .toBe('afd23b5a944fe172bd77bcee5df43ea04c64c429');
+    for (const [path, digest] of bridges) {
+      const bridge = readFileSync(new URL(`${fixtureRoot}/src/${path}`, import.meta.url));
+      expect(createHash('sha256').update(bridge).digest('hex'), path).toBe(digest);
+    }
+
+    const orgId = crypto.randomUUID();
+    const folderId = crypto.randomUUID();
+    const initiativeId = crypto.randomUUID();
+    const documentId = crypto.randomUUID();
+    const storageKey = `transfers/${documentId}.txt`;
+    const now = new Date('2026-09-01T12:00:00.000Z');
+    await db.insert(organizations).values({
+      id: orgId, workspaceId: owner.workspaceId!, name: 'Parity org', status: 'completed',
+      data: {}, createdAt: now, updatedAt: now,
+    });
+    await db.insert(folders).values({
+      id: folderId, workspaceId: owner.workspaceId!, name: 'Parity folder', description: null,
+      organizationId: orgId, matrixConfig: null, executiveSummary: null,
+      status: 'completed', createdAt: now,
+    });
+    await db.insert(initiatives).values({
+      id: initiativeId, workspaceId: owner.workspaceId!, folderId, organizationId: orgId,
+      status: 'completed', model: null, data: { name: 'Parity initiative' }, createdAt: now,
+    });
+    const documentBytes = new TextEncoder().encode('authoritative storage parity');
+    await getArtifactStore().put({
+      bucket: getArtifactStore().defaultBucket(), key: storageKey, body: documentBytes,
+      contentType: 'text/plain',
+    });
+    await db.insert(contextDocuments).values({
+      id: documentId, workspaceId: owner.workspaceId!, contextType: 'initiative',
+      contextId: initiativeId, filename: 'parity.txt', mimeType: 'text/plain',
+      sizeBytes: documentBytes.byteLength, sourceType: 'local', storageKey,
+      status: 'ready', data: { summaryLang: 'en' }, version: 1,
+    });
+
+    vi.spyOn(Date.prototype, 'toISOString').mockReturnValue('2026-09-02T00:00:00.000Z');
+    const request = (app: Hono) => authenticatedRequest(
+      app, 'POST', '/api/v1/exports', owner.sessionToken!, {
+        scope: 'workspace', include_comments: false, include_documents: true,
+      },
+    );
+    const legacyResponse = await request(historical);
+    const candidateResponse = await request(candidate());
+    expect(candidateResponse.status).toBe(legacyResponse.status);
+    expect(candidateResponse.headers.get('content-type')).toBe(legacyResponse.headers.get('content-type'));
+    expect(candidateResponse.headers.get('content-disposition'))
+      .toBe(legacyResponse.headers.get('content-disposition'));
+    const legacyZip = await JSZip.loadAsync(await legacyResponse.arrayBuffer());
+    const candidateZip = await JSZip.loadAsync(await candidateResponse.arrayBuffer());
+    expect(Object.keys(candidateZip.files).sort()).toEqual(Object.keys(legacyZip.files).sort());
+    for (const path of ['manifest.json', 'meta.json']) {
+      expect(await candidateZip.file(path)!.async('string'))
+        .toBe(await legacyZip.file(path)!.async('string'));
+    }
+    const documentPath = Object.keys(candidateZip.files).find(
+      (path) => path.startsWith('documents/') && !path.endsWith('/'),
+    )!;
+    expect(await candidateZip.file(documentPath)!.async('uint8array'))
+      .toEqual(await legacyZip.file(documentPath)!.async('uint8array'));
+    expect(await candidateZip.file(documentPath)!.async('uint8array')).toEqual(documentBytes);
+  });
+});
