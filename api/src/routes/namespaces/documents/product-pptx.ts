@@ -9,8 +9,8 @@
  */
 
 import { Hono } from 'hono';
-import { queueManager } from '../../services/queue-manager';
-import { getDocumentsBucketName, getObjectBytes } from '../../services/storage-s3';
+import { queueManager } from '../../../services/queue-manager';
+import { getDocumentsBucketName, getObjectBytes } from '../../../services/storage-s3';
 
 export const pptxRouter = new Hono();
 
