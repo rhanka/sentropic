@@ -287,6 +287,85 @@ describe('cluster mesh transfers cutover', () => {
     await expect(fs.readdir(join(artifactRoot, 'blobs'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('denies cross-workspace imports through both admin and editor authorization', async () => {
+    const targetOwner = await createAuthenticatedUser('admin');
+    const targetWorkspaceId = targetOwner.workspaceId!;
+    workspaceIds.add(targetWorkspaceId);
+    expect(await db.select().from(workspaceMemberships).where(and(
+      eq(workspaceMemberships.workspaceId, targetWorkspaceId),
+      eq(workspaceMemberships.userId, owner.id),
+    ))).toHaveLength(0);
+
+    const durableState = async () => ({
+      workspaces: await db.select().from(workspaces).orderBy(workspaces.id),
+      memberships: await db.select().from(workspaceMemberships).where(
+        eq(workspaceMemberships.workspaceId, targetWorkspaceId),
+      ),
+      organizations: await db.select().from(organizations).where(
+        eq(organizations.workspaceId, targetWorkspaceId),
+      ),
+      folders: await db.select().from(folders).where(
+        eq(folders.workspaceId, targetWorkspaceId),
+      ),
+      initiatives: await db.select().from(initiatives).where(
+        eq(initiatives.workspaceId, targetWorkspaceId),
+      ),
+      comments: await db.select().from(comments).where(
+        eq(comments.workspaceId, targetWorkspaceId),
+      ),
+      documents: await db.select().from(contextDocuments).where(
+        eq(contextDocuments.workspaceId, targetWorkspaceId),
+      ),
+      artifactRootExists: existsSync(artifactRoot),
+    });
+    const before = await durableState();
+
+    for (const scope of ['workspace', 'folder'] as const) {
+      const sourceWorkspaceId = crypto.randomUUID();
+      const organizationId = crypto.randomUUID();
+      const folderId = crypto.randomUUID();
+      const initiativeId = crypto.randomUUID();
+      const documentId = crypto.randomUUID();
+      const archive = await buildArchive([
+        { path: 'workspaces.json', bytes: encodeJson([{
+          id: sourceWorkspaceId, name: `Denied ${scope} import`,
+        }]) },
+        { path: `organization_${organizationId}.json`, bytes: encodeJson({
+          id: organizationId, workspace_id: sourceWorkspaceId, name: 'Denied organization',
+        }) },
+        { path: `folder_${folderId}.json`, bytes: encodeJson({
+          id: folderId, workspace_id: sourceWorkspaceId, name: 'Denied folder',
+          organization_id: organizationId,
+        }) },
+        { path: `initiative_${initiativeId}.json`, bytes: encodeJson({
+          id: initiativeId, workspace_id: sourceWorkspaceId, folder_id: folderId,
+          organization_id: organizationId, data: { name: 'Denied initiative' },
+        }) },
+        {
+          path: `documents/${sourceWorkspaceId}/initiative/${initiativeId}/${documentId}-denied.txt`,
+          bytes: new TextEncoder().encode(`denied ${scope} artifact`),
+        },
+      ], {
+        scope,
+        scope_id: scope === 'folder' ? folderId : null,
+        include_comments: true,
+        include_documents: true,
+      });
+      const form = new FormData();
+      form.set('file', new File([archive], `${scope}.zip`, { type: 'application/zip' }));
+      form.set('target_workspace_id', targetWorkspaceId);
+
+      const response = await candidate().request('/api/v1/imports', {
+        method: 'POST',
+        headers: { Cookie: `session=${owner.sessionToken}` },
+        body: form,
+      });
+      expect(response.status, scope).toBe(403);
+      await expect(response.json()).resolves.toEqual({ message: 'Insufficient permissions' });
+      expect(await durableState(), scope).toEqual(before);
+    }
+  });
+
   it('executes one authoritative import effect per isolated historical twin', async () => {
     const sourceWorkspaceId = crypto.randomUUID();
     const organizationId = crypto.randomUUID();
