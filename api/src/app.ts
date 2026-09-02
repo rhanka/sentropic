@@ -61,6 +61,10 @@ import {
   CONFIG_PATHS,
   productConfigModule,
 } from './routes/namespaces/config-module';
+import {
+  DOCUMENT_PATHS,
+  productDocumentsModule,
+} from './routes/namespaces/documents';
 
 const authPlugin = productAuthPlugin();
 
@@ -109,6 +113,11 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
 ] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/documents',
+    module: productDocumentsModule,
+    authPaths: DOCUMENT_PATHS,
+  },
   {
     namespace: '/config',
     module: productConfigModule,
