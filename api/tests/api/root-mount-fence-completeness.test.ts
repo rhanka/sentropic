@@ -36,6 +36,31 @@ const IMMUTABLE_TRANSFER_AUTH_ROUTES = [
   ['POST', '/imports/preview'],
   ['POST', '/imports'],
 ] as const;
+const IMMUTABLE_CLIENT_AUTH_ROUTES = [
+  ['GET', '/chrome-extension/download'],
+  ['POST', '/chrome-extension/tabs/register'],
+  ['POST', '/chrome-extension/tabs/keepalive'],
+  ['DELETE', '/chrome-extension/tabs/:tabId'],
+  ['GET', '/vscode-extension/download'],
+  ['GET', '/vscode-extension/code-agent-prompt-profile'],
+  ['GET', '/vscode-extension/workspace-mapping'],
+  ['PUT', '/vscode-extension/workspace-mapping'],
+  ['POST', '/vscode-extension/workspace-mapping/code-workspace'],
+  ['POST', '/vscode-extension/workspace-mapping/not-now'],
+  ['GET', '/cowork-desktop/download'],
+  ['GET', '/cowork-desktop/channel'],
+  ['PUT', '/cowork-desktop/channel'],
+  ['GET', '/settings/vscode-extension-token'],
+  ['POST', '/settings/vscode-extension-token'],
+  ['DELETE', '/settings/vscode-extension-token'],
+] as const;
+const IMMUTABLE_CLIENT_ADMIN_PATHS = [
+  '/cowork-desktop/channel',
+  '/settings/vscode-extension-token',
+] as const;
+const IMMUTABLE_CLIENT_EDITOR_PATHS = [
+  '/vscode-extension/workspace-mapping/code-workspace',
+] as const;
 
 const registeredPaths = (router: RootMountedRouter): string[] =>
   [...new Set(router.routes.map(({ path }) => path))].sort();
@@ -250,6 +275,19 @@ describe('mounted namespace fence completeness', () => {
           IMMUTABLE_TRANSFER_AUTH_ROUTES,
         );
       }
+      if (namespace === '/clients') {
+        assertImmutableMethodRequirement(
+          namespace, router, authPaths ?? [], requireAuth, IMMUTABLE_CLIENT_AUTH_ROUTES,
+        );
+        assertImmutablePrivilegedRequirement(
+          namespace, router, privilegedFences, 'admin', requireAdmin,
+          IMMUTABLE_CLIENT_ADMIN_PATHS,
+        );
+        assertImmutablePrivilegedRequirement(
+          namespace, router, privilegedFences, 'editor', requireEditor,
+          IMMUTABLE_CLIENT_EDITOR_PATHS,
+        );
+      }
       if (authPaths === null) {
         expect(privilegedFences).toEqual([]);
         if (PREFIX_MOUNTED_NAMESPACE_REGISTRY.some((item) => item.namespace === namespace)) {
@@ -433,6 +471,72 @@ describe('mounted namespace fence completeness', () => {
         '/transfers', mutation, shrunkenFence, requireAuth, IMMUTABLE_TRANSFER_AUTH_ROUTES,
       );
     }).toThrowError('/transfers immutable auth requirement is missing paths');
+  });
+
+  it('fails when the live root-mounted clients router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/clients',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/chrome-extension/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/clients', router, registration.authPaths!))
+      .toThrowError('/clients mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when client routes and its mutable auth fence shrink together', () => {
+    const missingPath = '/chrome-extension/tabs/register';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/clients',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== missingPath,
+      ),
+    };
+    const shrunkenFence = registration.authPaths!.filter((path) => path !== missingPath);
+
+    expect(() => {
+      assertFenceComplete('/clients', mutation, shrunkenFence);
+      assertImmutableMethodRequirement(
+        '/clients', mutation, shrunkenFence, requireAuth, IMMUTABLE_CLIENT_AUTH_ROUTES,
+      );
+    }).toThrowError('/clients immutable auth requirement is missing paths');
+  });
+
+  it.each([
+    { name: 'admin', path: '/settings/vscode-extension-token', handler: requireAdmin },
+    {
+      name: 'editor',
+      path: '/vscode-extension/workspace-mapping/code-workspace',
+      handler: requireEditor,
+    },
+  ])('fails when client $name wiring and its sub-fence shrink together', ({ name, path, handler }) => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/clients',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== path || route.handler !== handler,
+      ),
+    };
+    const shrunkenFences = registration.privilegedFences!.map((fence) => fence.name === name
+      ? {
+          ...fence,
+          paths: fence.paths.filter((candidate) => candidate !== path),
+          pathPrefixes: fence.pathPrefixes.filter((candidate) => candidate !== path),
+        }
+      : fence);
+    const immutable = name === 'admin'
+      ? IMMUTABLE_CLIENT_ADMIN_PATHS
+      : IMMUTABLE_CLIENT_EDITOR_PATHS;
+
+    expect(() => {
+      assertPrivilegedMiddlewareFencesComplete('/clients', mutation, shrunkenFences, name, handler);
+      assertImmutablePrivilegedRequirement(
+        '/clients', mutation, shrunkenFences, name, handler, immutable,
+      );
+    }).toThrowError(`/clients ${name} immutable requirement is missing privileged paths`);
   });
 
   it('fails when the live analytics editor middleware is removed', () => {
