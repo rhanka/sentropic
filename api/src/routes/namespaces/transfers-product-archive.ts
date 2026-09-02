@@ -84,7 +84,7 @@ class BoundedJsZipArchive implements TransferArchive {
     assertSafePath(path);
     if (this.zip.file(path)) throw new TransferArchiveLimitError(`Duplicate archive path: ${path}`);
     this.reserve(path, bytes.byteLength);
-    this.zip.file(path, bytes, { createFolders: false });
+    this.zip.file(path, bytes);
   }
 
   async generate(): Promise<Uint8Array> {
