@@ -31,6 +31,11 @@ const IMMUTABLE_WORKSPACE_EDITOR_PATHS = [
   '/workspaces/:id/members',
   '/workspaces/:id/members/:userId',
 ] as const;
+const IMMUTABLE_TRANSFER_AUTH_ROUTES = [
+  ['POST', '/exports'],
+  ['POST', '/imports/preview'],
+  ['POST', '/imports'],
+] as const;
 
 const registeredPaths = (router: RootMountedRouter): string[] =>
   [...new Set(router.routes.map(({ path }) => path))].sort();
@@ -167,6 +172,25 @@ const assertImmutablePrivilegedRequirement = (
   ).toEqual([]);
 };
 
+const assertImmutableMethodRequirement = (
+  namespace: string,
+  router: RootMountedRouter,
+  authFence: readonly string[],
+  handler: MiddlewareHandler,
+  expectedRoutes: ReadonlyArray<readonly [string, string]>,
+): void => {
+  expect(
+    expectedRoutes.filter(([, path]) => !authFence.includes(path)),
+    `${namespace} immutable auth requirement is missing paths`,
+  ).toEqual([]);
+  expect(
+    expectedRoutes.filter(([method, path]) => !router.routes.some(
+      (route) => route.method === method && route.path === path && route.handler === handler,
+    )),
+    `${namespace} immutable auth requirement is missing method wiring`,
+  ).toEqual([]);
+};
+
 const withoutRequireAdminPath = (
   router: RootMountedRouter,
   path: string,
@@ -215,6 +239,15 @@ describe('mounted namespace fence completeness', () => {
           'editor',
           requireEditor,
           IMMUTABLE_WORKSPACE_EDITOR_PATHS,
+        );
+      }
+      if (namespace === '/transfers') {
+        assertImmutableMethodRequirement(
+          namespace,
+          router,
+          authPaths ?? [],
+          requireAuth,
+          IMMUTABLE_TRANSFER_AUTH_ROUTES,
         );
       }
       if (authPaths === null) {
@@ -369,6 +402,37 @@ describe('mounted namespace fence completeness', () => {
 
     expect(() => assertFenceComplete('/documents', router, registration.authPaths!))
       .toThrowError('/documents mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when the live root-mounted transfer router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/transfers',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/imports/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/transfers', router, registration.authPaths!))
+      .toThrowError('/transfers mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when transfer routes and its mutable auth fence shrink together', () => {
+    const missingPath = '/imports/preview';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/transfers',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== missingPath,
+      ),
+    };
+    const shrunkenFence = registration.authPaths!.filter((path) => path !== missingPath);
+
+    expect(() => {
+      assertFenceComplete('/transfers', mutation, shrunkenFence);
+      assertImmutableMethodRequirement(
+        '/transfers', mutation, shrunkenFence, requireAuth, IMMUTABLE_TRANSFER_AUTH_ROUTES,
+      );
+    }).toThrowError('/transfers immutable auth requirement is missing paths');
   });
 
   it('fails when the live analytics editor middleware is removed', () => {
