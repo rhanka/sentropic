@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
-  folders, initiatives, tenantMemberships, tenants, workspaces,
+  folders, initiatives, tenantMemberships, tenants, workspaceMemberships, workspaces,
 } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
 import {
@@ -188,6 +188,38 @@ describe('cluster mesh workspaces cutover', () => {
       '/workspaces/:id/members/:userId',
     ]);
     expect(paths).not.toContain('/*');
+  });
+
+  it('fails closed for cross-workspace member and lifecycle access without DB mutation', async () => {
+    const victim = await createAuthenticatedUser('editor');
+    const member = await createAuthenticatedUser('guest');
+    workspaceIds.push(victim.workspaceId!, member.workspaceId!);
+    await db.insert(workspaceMemberships).values({
+      workspaceId: victim.workspaceId!, userId: member.id, role: 'viewer', createdAt: new Date(),
+    });
+
+    const attempts = [
+      ['GET', `/api/v1/workspaces/${victim.workspaceId}/members`, undefined],
+      ['POST', `/api/v1/workspaces/${victim.workspaceId}/members`, { email: user.email, role: 'viewer' }],
+      ['PATCH', `/api/v1/workspaces/${victim.workspaceId}/members/${member.id}`, { role: 'admin' }],
+      ['DELETE', `/api/v1/workspaces/${victim.workspaceId}/members/${member.id}`, undefined],
+      ['POST', `/api/v1/workspaces/${victim.workspaceId}/hide`, {}],
+      ['POST', `/api/v1/workspaces/${victim.workspaceId}/unhide`, {}],
+      ['DELETE', `/api/v1/workspaces/${victim.workspaceId}`, undefined],
+    ] as const;
+    for (const [method, path, body] of attempts) {
+      const response = await authenticatedRequest(candidate(), method, path, user.sessionToken!, body);
+      expect(response.status, `${method} ${path}`).toBe(403);
+    }
+
+    const [workspace] = await db.select({ hiddenAt: workspaces.hiddenAt })
+      .from(workspaces).where(eq(workspaces.id, victim.workspaceId!));
+    const roles = await db.select({ userId: workspaceMemberships.userId, role: workspaceMemberships.role })
+      .from(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, victim.workspaceId!));
+    expect(workspace?.hiddenAt).toBeNull();
+    expect(roles.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
+      { userId: victim.id, role: 'editor' }, { userId: member.id, role: 'viewer' },
+    ].sort((a, b) => a.userId.localeCompare(b.userId)));
   });
 
   it('keeps transport authority-neutral and fails composition on unavailable ports', () => {

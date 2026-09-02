@@ -27,7 +27,6 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
 import { createId } from '../../../utils/id';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../../services/workspace-access';
-import { requireWorkspaceAccessRole } from '../../../middleware/workspace-rbac';
 import { getDefaultGateConfig } from '../../../services/gate-service';
 import { todoOrchestrationService } from '../../../services/todo-orchestration';
 import {
@@ -338,8 +337,14 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
 
 // --- Members management (admin-only) ---
 
-workspacesRouter.get('/:id/members', requireWorkspaceAccessRole(), async (c) => {
+workspacesRouter.get('/:id/members', async (c) => {
+  const user = c.get('user') as { userId: string };
   const workspaceId = c.req.param('id')!;
+  try {
+    await requireWorkspaceAccess(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
 
   const rows = await db
     .select({
