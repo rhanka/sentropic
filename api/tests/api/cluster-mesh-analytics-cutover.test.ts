@@ -10,10 +10,13 @@ import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { folders, initiatives, jobQueue, workspaces } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
 import {
+  ANALYTICS_AUTHOR,
   createAnalyticsNamespaceModule,
+  type AnalyticsNamespacePorts,
 } from '../../src/routes/namespaces/analytics';
 import { productAnalyticsPorts } from '../../src/routes/namespaces/analytics/product-ports';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
+import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import { analyticsRouter as legacyAnalyticsRouter } from '../fixtures/historical/analytics-f0a7e47eb/api/src/routes/api/analytics';
 import {
   authenticatedRequest,
@@ -27,11 +30,15 @@ const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
   eq(clusterMeshNamespaceCutovers.compositionRoot, key.compositionRoot),
   eq(clusterMeshNamespaceCutovers.namespace, key.namespace),
 ));
-const candidate = () => new Hono().route('/api/v1', createClusterMeshPlugin({
+const candidate = (
+  enabled = true,
+  ports: AnalyticsNamespacePorts = productAnalyticsPorts,
+) => new Hono().route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
-  namespaces: [createAnalyticsNamespaceModule({ ports: productAnalyticsPorts })],
+  namespaces: [createAnalyticsNamespaceModule({ enabled, ports })],
   mounts: { '/analytics': '/' },
 }));
+const cutovers = new PostgresClusterMeshCutoverStore();
 
 const historicalLegacy = new Hono()
   .use('/api/v1/analytics/*', requireAuth)
@@ -167,5 +174,51 @@ describe('cluster mesh analytics cutover', () => {
       body: { ...await response.json(), folder_id: '<twin>', jobId: '<job>' },
     });
     expect(await normalizeResponse(currentResponse)).toEqual(await normalizeResponse(legacyResponse));
+  });
+
+  it('records direct activation and fails closed after the exact rollback checkpoint', async () => {
+    const app = candidate();
+    const path = '/api/v1/analytics/summary?folder_id=missing';
+    expect((await authenticatedRequest(app, 'GET', path, user.sessionToken!)).status).toBe(404);
+    const active = await cutovers.find(key);
+    expect(active).toMatchObject({
+      activeAuthor: ANALYTICS_AUTHOR,
+      status: 'active',
+      previousGenerationId: 'legacy-api-analytics-v1',
+      rollbackCheckpoint: { activeAuthor: 'legacy-api-analytics-router' },
+    });
+    expect(active?.shadowComparison).toBeUndefined();
+
+    await cutovers.rollback(key, active!.previousGenerationId!);
+    await expect(cutovers.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(app, 'GET', path, user.sessionToken!);
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('enforces exact auth and editor fences without disabled or duplicate fallback', async () => {
+    const path = '/api/v1/analytics/summary?folder_id=missing';
+    expect((await candidate().request(path)).status).toBe(401);
+    expect(await cutovers.find(key)).toBeNull();
+    expect((await candidate(false).request(path)).status).toBe(404);
+    expect(await cutovers.find(key)).toBeNull();
+
+    const guest = await createAuthenticatedUser('guest');
+    const denied = await authenticatedRequest(
+      candidate(),
+      'POST',
+      '/api/v1/analytics/executive-summary',
+      guest.sessionToken!,
+      { folder_id: 'missing' },
+    );
+    expect(denied.status).toBe(403);
+    expect(await cutovers.find(key)).toBeNull();
+
+    expect((await authenticatedRequest(
+      candidate(),
+      'GET',
+      '/api/v1/analytics/analytics/summary?folder_id=missing',
+      user.sessionToken!,
+    )).status).toBe(404);
   });
 });
