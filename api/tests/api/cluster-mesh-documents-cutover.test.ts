@@ -71,6 +71,21 @@ const bridges = [
   ['utils/id.ts', '7148d17b36975340ed8d20ae49c96a1b06f7d107b9b2492e32e15fe169a24aa3'],
 ] as const;
 
+const documentRow = (id: string, workspaceId: string, contextId: string) => ({
+  id,
+  workspaceId,
+  contextType: 'folder',
+  contextId,
+  filename: `${contextId}.pdf`,
+  mimeType: 'application/pdf',
+  sizeBytes: 3,
+  sourceType: 'local',
+  storageKey: null,
+  status: 'ready',
+  data: { summary: 'Twin summary', summaryLang: 'en' },
+  version: 1,
+});
+
 describe('cluster mesh documents cutover', () => {
   let owner: TestUser;
   let outsider: TestUser;
@@ -128,5 +143,72 @@ describe('cluster mesh documents cutover', () => {
     expect((await authenticatedRequest(
       candidate(), 'GET', `/api/v1/documents/${id}`, outsider.sessionToken!,
     )).status).toBe(404);
+  });
+
+  it('executes one durable delete per isolated candidate and historical twin', async () => {
+    const candidateId = crypto.randomUUID();
+    const historicalId = crypto.randomUUID();
+    const candidateContext = crypto.randomUUID();
+    const historicalContext = crypto.randomUUID();
+    documentIds.push(candidateId, historicalId);
+    contextIds.push(candidateContext, historicalContext);
+    await db.insert(contextDocuments).values([
+      documentRow(candidateId, owner.workspaceId!, candidateContext),
+      documentRow(historicalId, owner.workspaceId!, historicalContext),
+    ]);
+
+    const candidateDelete = await authenticatedRequest(
+      candidate(), 'DELETE', `/api/v1/documents/${candidateId}`, owner.sessionToken!,
+    );
+    expect(candidateDelete.status).toBe(204);
+    expect(await db.select().from(contextDocuments).where(
+      eq(contextDocuments.id, candidateId),
+    )).toHaveLength(0);
+    expect(await db.select().from(contextDocuments).where(
+      eq(contextDocuments.id, historicalId),
+    )).toHaveLength(1);
+    expect(await db.select().from(contextModificationHistory).where(
+      eq(contextModificationHistory.contextId, candidateContext),
+    )).toHaveLength(1);
+
+    const replay = await authenticatedRequest(
+      candidate(), 'DELETE', `/api/v1/documents/${candidateId}`, owner.sessionToken!,
+    );
+    expect(replay.status).toBe(404);
+    expect(await db.select().from(contextModificationHistory).where(
+      eq(contextModificationHistory.contextId, candidateContext),
+    )).toHaveLength(1);
+
+    const historicalDelete = await authenticatedRequest(
+      historical, 'DELETE', `/api/v1/documents/${historicalId}`, owner.sessionToken!,
+    );
+    expect({ status: candidateDelete.status, body: await candidateDelete.text() })
+      .toEqual({ status: historicalDelete.status, body: await historicalDelete.text() });
+    expect(await db.select().from(contextDocuments).where(
+      inArray(contextDocuments.id, [candidateId, historicalId]),
+    )).toHaveLength(0);
+    expect(await db.select().from(contextModificationHistory).where(
+      eq(contextModificationHistory.contextId, historicalContext),
+    )).toHaveLength(1);
+  });
+
+  it('matches no-effect upload validation before any document write', async () => {
+    const invoke = (app: Hono) => {
+      const form = new FormData();
+      form.set('context_type', 'folder');
+      form.set('context_id', 'missing-file');
+      return app.request('/api/v1/documents', {
+        method: 'POST',
+        headers: { Cookie: `session=${owner.sessionToken}` },
+        body: form,
+      });
+    };
+    const legacy = await invoke(historical);
+    const active = await invoke(candidate());
+    expect({ status: active.status, body: await active.text() })
+      .toEqual({ status: legacy.status, body: await legacy.text() });
+    expect(await db.select().from(contextDocuments).where(
+      eq(contextDocuments.workspaceId, owner.workspaceId!),
+    )).toHaveLength(0);
   });
 });
