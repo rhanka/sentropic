@@ -550,6 +550,7 @@
     - [x] Add pre-deletion safe-read parity and a candidate-only validated organization mutation that reaches its injected effect spy exactly once while canonical product state remains unchanged.
     - [x] Prove one durable author, exact rollback fail-close, module disableability, duplicate `/business` prefix 404, the retained `/use-cases` compatibility wire and separate `/bids` versus `/proposals` authorities.
     - [x] Relocate the solution, product, proposal and bid implementations behind the injected product adapter without changing their still-legacy mount behavior before final cutover.
+    - [x] Relocate organization and folder implementations behind the same product adapter and keep Streams on the canonical organization hydration authority.
   - [ ] Tests new: `api/tests/api/cluster-mesh-business-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/companies.test.ts`, `api/tests/api/folders.test.ts`, `api/tests/api/initiatives.test.ts`, `api/tests/api/extended-objects.test.ts`, `api/tests/api/view-templates.test.ts`, `api/tests/api/gate-evaluation.test.ts`, `api/tests/unit/context-initiative-detail-contract.test.ts`, `api/tests/unit/context-initiative-domain-normalization.test.ts`, `api/tests/unit/usecase-list-normalization.test.ts`.
   - [ ] UI tests updated: `ui/tests/stores/organizations.test.ts`, `ui/tests/stores/folders.test.ts`, `ui/tests/stores/initiatives.test.ts`, `ui/tests/stores/viewTemplateCache.test.ts`, `ui/tests/components/TemplateRenderer.test.ts`.
