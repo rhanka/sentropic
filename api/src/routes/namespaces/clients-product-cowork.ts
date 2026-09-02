@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
 import { env } from '../../config/env';
-import { requireAdmin } from '../../middleware/rbac';
 import { settingsService } from '../../services/settings';
 
-// Mirrors api/src/routes/api/chrome-extension.ts download endpoint for the
+// Mirrors the client namespace Chrome download adapter for the
 // Sentropic Cowork desktop binary. The artifact is a single self-contained
 // `cowork.exe` (the native payload is embedded + extracted at first run, no zip),
 // produced by `make package-desktop-windows` into ui/static/cowork-desktop/
@@ -122,13 +121,13 @@ coworkDesktopRouter.get('/download', async (c) => {
 });
 
 // Admin-only: read the active distribution channel.
-coworkDesktopRouter.get('/channel', requireAdmin, async (c) => {
+coworkDesktopRouter.get('/channel', async (c) => {
   const channel = await getActiveChannel();
   return c.json({ channel });
 });
 
 // Admin-only: set the active distribution channel.
-coworkDesktopRouter.put('/channel', requireAdmin, async (c) => {
+coworkDesktopRouter.put('/channel', async (c) => {
   let body: unknown;
   try {
     body = await c.req.json();
