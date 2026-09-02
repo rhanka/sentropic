@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { folders, initiatives, organizations } from '../../db/schema';
 import { hydrateInitiative } from '../api/initiatives';
-import { hydrateOrganization } from '../api/organizations';
+import { hydrateOrganization } from '../../services/business/organizations';
 import type { StreamsBusinessPort } from './streams-ports';
 
 const parseJsonObject = (value: unknown): Record<string, unknown> | null => {

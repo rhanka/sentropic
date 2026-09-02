@@ -1,3 +1,4 @@
+// Canonical product adapter for the injected Cluster Mesh business transport.
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';

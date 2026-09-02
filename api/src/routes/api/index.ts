@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { organizationsRouter } from './organizations';
-import { foldersRouter } from './folders';
+import { organizationsRouter } from '../../services/business/organizations';
+import { foldersRouter } from '../../services/business/folders';
 import { initiativesRouter } from './initiatives';
 import { healthRouter } from './health';
 import { settingsRouter } from './settings';
