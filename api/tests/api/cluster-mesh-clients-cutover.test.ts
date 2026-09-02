@@ -172,4 +172,60 @@ describe('cluster mesh clients cutover', () => {
         .toEqual({ status: legacy.status, body: await legacy.text() });
     }
   });
+
+  it('drives actual candidate and historical tab registrations once each', async () => {
+    const register = (app: Hono, tabId: string) => authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/chrome-extension/tabs/register',
+      editor.sessionToken!,
+      { tab_id: tabId, source: 'chrome_plugin', url: 'https://client.test', title: 'D11' },
+    );
+    const active = await register(candidate(), 'candidate-tab');
+    const legacy = await register(historical, 'historical-tab');
+
+    expect({ status: active.status, body: await active.json() })
+      .toEqual({ status: 200, body: { ok: true, tab_id: 'candidate-tab' } });
+    expect({ status: legacy.status, body: await legacy.json() })
+      .toEqual({ status: 200, body: { ok: true, tab_id: 'historical-tab' } });
+    expect(getTab('candidate-tab')).toMatchObject({ userId: editor.id, status: 'active' });
+    expect(getTab('historical-tab')).toMatchObject({ userId: editor.id, status: 'active' });
+  });
+
+  it('creates one isolated durable code-workspace twin per direct author', async () => {
+    const historicalEditor = await createAuthenticatedUser('editor');
+    const invoke = (app: Hono, user: TestUser, fingerprint: string) => authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/vscode-extension/workspace-mapping/code-workspace',
+      user.sessionToken!,
+      { projectFingerprint: fingerprint, name: 'D11 isolated code workspace' },
+    );
+    const active = await invoke(candidate(), editor, 'candidate:d11');
+    const activeBody = await active.json() as { mappedWorkspaceId: string; mappedWorkspaceName: string };
+    createdWorkspaceIds.add(activeBody.mappedWorkspaceId);
+    expect(active.status).toBe(201);
+    expect(await db.select().from(workspaces).where(eq(workspaces.id, activeBody.mappedWorkspaceId)))
+      .toEqual([expect.objectContaining({ ownerUserId: editor.id, name: activeBody.mappedWorkspaceName })]);
+    expect(await db.select().from(workspaceMemberships).where(and(
+      eq(workspaceMemberships.workspaceId, activeBody.mappedWorkspaceId),
+      eq(workspaceMemberships.userId, editor.id),
+    ))).toEqual([expect.objectContaining({ role: 'admin' })]);
+
+    const legacy = await invoke(historical, historicalEditor, 'historical:d11');
+    const legacyBody = await legacy.json() as { mappedWorkspaceId: string; mappedWorkspaceName: string };
+    createdWorkspaceIds.add(legacyBody.mappedWorkspaceId);
+    expect({ status: active.status, name: activeBody.mappedWorkspaceName })
+      .toEqual({ status: legacy.status, name: legacyBody.mappedWorkspaceName });
+    expect(await db.select().from(workspaces).where(inArray(
+      workspaces.id, [activeBody.mappedWorkspaceId, legacyBody.mappedWorkspaceId],
+    ))).toHaveLength(2);
+    for (const userId of [editor.id, historicalEditor.id]) {
+      const state = await db.select().from(settings).where(and(
+        eq(settings.key, 'vscode_project_workspace_state_v1'), eq(settings.userId, userId),
+      ));
+      expect(state).toHaveLength(1);
+      expect(JSON.parse(state[0].value ?? '{}').codeWorkspaceIds).toHaveLength(1);
+    }
+  });
 });
