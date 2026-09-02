@@ -136,6 +136,9 @@ describe('cluster mesh config cutover', () => {
     twins = await db.select().from(workspaces).where(eq(workspaces.id, historicalOwner.workspaceId!));
     expect(twins).toHaveLength(1);
     expect(twins[0]?.name).toBe(historicalName);
+    expect((await db.select().from(workspaces).where(
+      eq(workspaces.id, candidateOwner.workspaceId!),
+    ))[0]?.name).toBe(candidateName);
     expect({ status: candidateMutation.status, body: await candidateMutation.text() })
       .toEqual({ status: historicalMutation.status, body: await historicalMutation.text() });
   });
@@ -241,6 +244,13 @@ describe('cluster mesh config cutover', () => {
     expect(PRODUCT_CLUSTER_MESH_MOUNTS['/config']).toBe('/');
     expect((await productApp.request('/api/v1/business-config')).status).toBe(401);
     expect((await productApp.request('/api/v1/config/business-config')).status).toBe(404);
+    for (const path of [
+      '/api/v1/settings/provider-connections',
+      '/api/v1/settings/connector-accounts/max-per-provider',
+      '/api/v1/settings/vscode-extension-token',
+    ]) {
+      expect((await productApp.request(path)).status).toBe(401);
+    }
 
     for (const name of ['settings', 'business-config', 'ai-settings', 'me']) {
       expect(existsSync(new URL(`../../src/routes/api/${name}.ts`, import.meta.url))).toBe(false);
