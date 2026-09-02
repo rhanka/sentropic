@@ -7,11 +7,8 @@ import { coworkDesktopRouter } from './cowork-desktop';
 import { clientSettingsRouter } from './client-settings';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
-import { createTransfersTransportRouter } from '../namespaces/transfers';
-import { productTransfersPorts } from '../namespaces/transfers-product-ports';
 
 export const apiRouter = new Hono();
-const transfersRouter = createTransfersTransportRouter(productTransfersPorts);
 
 // Public routes (no authentication required)
 apiRouter.route('/health', healthRouter);
@@ -31,11 +28,6 @@ apiRouter.route('/cowork-desktop', coworkDesktopRouter);
 // Client bootstrap configuration remains with the future /clients extraction.
 apiRouter.use('/settings/vscode-extension-token', requireAuth, requireAdmin);
 apiRouter.route('/settings', clientSettingsRouter);
-
-// Transfers use the extracted product adapter until the Cluster Mesh cutover commit.
-apiRouter.use('/exports/*', requireAuth);
-apiRouter.use('/imports/*', requireAuth);
-apiRouter.route('/', transfersRouter);
 
 // Tenant-resolution strict-cutover gate (available to both admin roles).
 apiRouter.use('/admin/tenant-resolution-metrics/*', requireAuth, requireAdmin);
