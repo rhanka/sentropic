@@ -570,6 +570,7 @@
   - [x] Pin the exact `f0a7e47eb` legacy analytics router as an executable test-only fixture with Git blob `10f7d7762a550343a51be08a37d812bc5b1c91ae`; production never imports or mounts it.
   - [ ] Add `api/src/routes/namespaces/analytics.ts` with injected query/queue/settings/locale ports and no import from the business router.
     - [x] Define neutral query, queue, settings and locale contracts with normalized analytics projections and no product-authority import.
+    - [x] Implement the standalone transport router over exact `ANALYTICS_PATHS`, with no database, schema, business-router or canonical-service import.
   - [ ] Shadow deterministic aggregate reads and validated job intent, select one author, prove rollback and delete `api/src/routes/api/analytics.ts`.
   - [ ] Tests new: `api/tests/api/cluster-mesh-analytics-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/analytics.test.ts`, `api/tests/unit/matrix.test.ts`, `api/tests/unit/scoring.test.ts`.
