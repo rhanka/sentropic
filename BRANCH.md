@@ -600,6 +600,7 @@
     - [x] Relocate the canonical workspace lifecycle, hierarchy/member/admin security and durable mutation implementation behind the namespace adapter while retaining the single legacy mount until cutover.
     - [x] Relocate canonical tenant membership decision and client-governance authority behind the namespace adapter while retaining the single legacy mount until cutover.
     - [x] Relocate canonical neutral-dashboard hierarchy aggregation behind the namespace adapter while retaining the single legacy mount until cutover.
+    - [x] Bind every exact transport operation to an explicit fail-closed product handler chain; the neutral package transport imports no product database, schema or canonical service.
   - [ ] Absorb workspaces, tenants and neutral surfaces while keeping repository/product workspace IDs distinct and epoch-bound.
   - [ ] Shadow reads/validated membership intent, select one author, prove rollback and delete `workspaces.ts`, `tenants.ts`, `neutral.ts` legacy route files.
     - [x] Pin the executable legacy `/tenants` router from `c94401b9a` as Git blob `f52667a442ee7f5fc9b53f0a7ec3810668c89ea0` with a test-only canonical tenant-membership authority bridge.
