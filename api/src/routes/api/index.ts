@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { healthRouter } from './health';
 import { adminRouter, tenantResolutionMetricsRouter } from './admin';
-import { documentsRouter } from './documents';
+import { documentsRouter } from '../namespaces/documents/product-documents';
 import { exportsRouter, importsRouter } from './import-export';
-import { docxRouter } from './docx';
-import { pptxRouter } from './pptx';
-import { xlsxRouter } from './xlsx';
+import { docxRouter } from '../namespaces/documents/product-docx';
+import { pptxRouter } from '../namespaces/documents/product-pptx';
+import { xlsxRouter } from '../namespaces/documents/product-xlsx';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { coworkDesktopRouter } from './cowork-desktop';

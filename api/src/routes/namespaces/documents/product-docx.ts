@@ -13,12 +13,12 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { queueManager } from '../../services/queue-manager';
+import { queueManager } from '../../../services/queue-manager';
 import {
   computeDocxSourceHash,
   getExpectedEntityType,
-} from '../../services/docx-generation';
-import { getDocumentsBucketName, getObjectBytes } from '../../services/storage-s3';
+} from '../../../services/docx-generation';
+import { getDocumentsBucketName, getObjectBytes } from '../../../services/storage-s3';
 
 const generateDocxSchema = z.object({
   templateId: z.enum(['usecase-onepage', 'executive-synthesis-multipage']),
