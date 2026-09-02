@@ -12,6 +12,7 @@ export * from './hono/plugin.js';
 export * from './hono/cli-router.js';
 export * from './hono/session-contracts.js';
 export * from './hono/session-router.js';
+export * from './hono/workspaces-router.js';
 export * from './persistence/ports.js';
 export * from './runtime/admission.js';
 export * from './runtime/generation.js';

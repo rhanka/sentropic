@@ -595,6 +595,7 @@
   - [x] Phase A: fold forward the Fable Lot 22 condition with the independent immutable analytics editor requirement recorded in `BR75-RV60` before workspace extraction.
   - [ ] Namespace: `/workspaces`; type: TARGET cluster/application router extraction, plugin mount, D11 cutover and legacy deletion.
   - [ ] Add workspace router factory in `packages/cluster-mesh/src/hono/workspaces-router.ts` with product tenancy ports supplied by `api/src/routes/namespaces/workspaces.ts`.
+    - [x] Export the neutral injected transport contract and exact non-wildcard `WORKSPACE_PATHS`; bump `@sentropic/cluster-mesh` to `0.6.0` above published `0.1.0`.
   - [ ] Absorb workspaces, tenants and neutral surfaces while keeping repository/product workspace IDs distinct and epoch-bound.
   - [ ] Shadow reads/validated membership intent, select one author, prove rollback and delete `workspaces.ts`, `tenants.ts`, `neutral.ts` legacy route files.
   - [ ] Tests new: `packages/cluster-mesh/tests/workspaces-router.spec.ts`, `api/tests/api/cluster-mesh-workspaces-cutover.test.ts`.
