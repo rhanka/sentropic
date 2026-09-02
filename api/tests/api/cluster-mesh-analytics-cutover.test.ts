@@ -235,6 +235,37 @@ describe('cluster mesh analytics cutover', () => {
     )).status).toBe(404);
   });
 
+  it('keeps aggregate reads and job creation private to the authenticated workspace', async () => {
+    const folderId = crypto.randomUUID();
+    await db.insert(folders).values({
+      id: folderId,
+      workspaceId: user.workspaceId!,
+      name: 'Private analytics folder',
+      status: 'completed',
+    });
+    const foreign = await createAuthenticatedUser('editor');
+
+    const read = await authenticatedRequest(
+      candidate(),
+      'GET',
+      `/api/v1/analytics/summary?folder_id=${folderId}`,
+      foreign.sessionToken!,
+    );
+    expect(read.status).toBe(404);
+    const mutation = await authenticatedRequest(
+      candidate(),
+      'POST',
+      '/api/v1/analytics/executive-summary',
+      foreign.sessionToken!,
+      { folder_id: folderId },
+    );
+    expect(mutation.status).toBe(404);
+    expect(await db.select().from(jobQueue).where(eq(jobQueue.workspaceId, foreign.workspaceId!)))
+      .toHaveLength(0);
+    expect((await db.select().from(folders).where(eq(folders.id, folderId)))[0]?.status)
+      .toBe('completed');
+  });
+
   it('enumerates the exact route fences and keeps transport sources authority-neutral', () => {
     const paths = [...new Set(
       createAnalyticsTransportRouter(fakePorts()).routes
