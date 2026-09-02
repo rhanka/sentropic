@@ -367,4 +367,107 @@ describe('cluster mesh transfers cutover', () => {
     expect(await db.select().from(workspaces).where(eq(workspaces.name, workspaceName)))
       .toHaveLength(2);
   });
+
+  it('selects one direct author and fails closed after the exact rollback checkpoint', async () => {
+    const app = candidate();
+    const first = await authenticatedRequest(app, 'POST', '/api/v1/exports', owner.sessionToken!, {
+      scope: 'workspace', include_comments: false, include_documents: false,
+    });
+    expect(first.status).toBe(200);
+    const active = await cutovers.find(key);
+    expect(active).toMatchObject({
+      status: 'active',
+      activeAuthor: TRANSFER_AUTHOR,
+      previousGenerationId: 'legacy-api-transfers-v1',
+      rollbackCheckpoint: { activeAuthor: 'legacy-api-import-export-router' },
+    });
+    expect(active?.shadowComparison).toBeUndefined();
+
+    await cutovers.rollback(key, active!.previousGenerationId!);
+    await expect(cutovers.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(
+      app, 'POST', '/api/v1/exports', owner.sessionToken!, { scope: 'workspace' },
+    );
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('has no anonymous, disabled, duplicate-prefix, or unavailable-control fallback', async () => {
+    const invoke = (app: Hono, path: string, authenticated: boolean) => {
+      const headers = authenticated ? { Cookie: `session=${owner.sessionToken}` } : undefined;
+      if (path === '/api/v1/exports') {
+        return app.request(path, {
+          method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'workspace' }),
+        });
+      }
+      return app.request(path, { method: 'POST', headers, body: new FormData() });
+    };
+    for (const path of ['/api/v1/exports', '/api/v1/imports/preview', '/api/v1/imports']) {
+      expect((await invoke(candidate(), path, false)).status, path).toBe(401);
+      expect((await invoke(candidate(false), path, true)).status, path).toBe(404);
+    }
+    expect(await cutovers.find(key)).toBeNull();
+    expect((await productApp.request('/api/v1/transfers/exports', { method: 'POST' })).status)
+      .toBe(404);
+    expect((await productApp.request('/api/v1/exports/exports', { method: 'POST' })).status)
+      .toBe(404);
+
+    const unavailable: TransfersCutoverControl = {
+      runtime: { generation: clusterMeshAdapter.sessionControl!.runtime.generation },
+      cutovers: {
+        find: vi.fn(async () => { throw new Error('control unavailable'); }),
+        activate: vi.fn(async () => undefined),
+      },
+    };
+    const unavailableApp = candidate(true, productTransfersPorts, unavailable);
+    for (const path of ['/api/v1/exports', '/api/v1/imports/preview', '/api/v1/imports']) {
+      const blocked = await invoke(unavailableApp, path, true);
+      expect(blocked.status, path).toBe(503);
+      await expect(blocked.json()).resolves.toEqual({ error: 'transfer_control_unavailable' });
+    }
+  });
+
+  it('registers exact method fences over a neutral injectable transport', async () => {
+    const immutableRoutes = [
+      ['POST', '/exports'], ['POST', '/imports/preview'], ['POST', '/imports'],
+    ] as const;
+    expect(TRANSFER_ROUTES).toEqual(immutableRoutes);
+    expect(TRANSFER_PATHS).toEqual(['/exports', '/imports/preview', '/imports']);
+    expect(TRANSFER_PATHS).not.toContain('/*');
+    const transportPaths = [...new Set(
+      createTransfersTransportRouter(productTransfersPorts).routes
+        .filter(({ method }) => method !== 'ALL')
+        .map(({ path }) => path),
+    )].sort();
+    expect(transportPaths).toEqual([...TRANSFER_PATHS].sort());
+    const routes = createTransfersNamespaceModule().createRouter().routes;
+    for (const [method, path] of immutableRoutes) {
+      expect(routes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ method, path, handler: requireAuth }),
+      ]));
+    }
+    const source = readFileSync(
+      new URL('../../src/routes/namespaces/transfers.ts', import.meta.url), 'utf8',
+    );
+    expect(source).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/);
+    expect(source).not.toMatch(/\.use\(['"]\*['"]/);
+    for (const missing of ['domain', 'storage', 'authorization', 'archive'] as const) {
+      expect(() => createTransfersTransportRouter({
+        ...productTransfersPorts, [missing]: undefined,
+      } as unknown as TransfersNamespacePorts), missing)
+        .toThrowError('transfer product ports are unavailable');
+    }
+
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/transfers',
+    );
+    expect(registration?.module.namespace).toBe('/transfers');
+    expect(registration?.authPaths).toEqual(TRANSFER_PATHS);
+    expect(PRODUCT_CLUSTER_MESH_MOUNTS['/transfers']).toBe('/');
+    expect((await productApp.request('/api/v1/exports', { method: 'POST' })).status).toBe(401);
+    expect(existsSync(new URL('../../src/routes/api/import-export.ts', import.meta.url))).toBe(false);
+    const apiIndex = readFileSync(new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8');
+    expect(apiIndex).not.toMatch(/import-export|exportsRouter|importsRouter|transfersRouter/);
+  });
 });
