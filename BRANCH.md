@@ -599,6 +599,7 @@
     - [x] Prove standalone route enumeration, injected dispatch and unavailable-port refusal in `packages/cluster-mesh/tests/workspaces-router.spec.ts` (6/6).
   - [ ] Absorb workspaces, tenants and neutral surfaces while keeping repository/product workspace IDs distinct and epoch-bound.
   - [ ] Shadow reads/validated membership intent, select one author, prove rollback and delete `workspaces.ts`, `tenants.ts`, `neutral.ts` legacy route files.
+    - [x] Pin the executable legacy `/tenants` router from `c94401b9a` as Git blob `f52667a442ee7f5fc9b53f0a7ec3810668c89ea0` with a test-only canonical tenant-membership authority bridge.
   - [ ] Tests new: `packages/cluster-mesh/tests/workspaces-router.spec.ts`, `api/tests/api/cluster-mesh-workspaces-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/workspaces.test.ts`, `api/tests/api/workspace-types.test.ts`, `api/tests/api/auth/tenant-membership.test.ts`, `api/tests/api/tenancy/arch11-resolve-tenant.test.ts`, `api/tests/api/tenancy/arch11-tenant-data.test.ts`.
   - [ ] UI tests updated: `ui/tests/stores/workspaceScope.test.ts`, `ui/tests/chat-tool-scope-workspace-type.test.ts`.
