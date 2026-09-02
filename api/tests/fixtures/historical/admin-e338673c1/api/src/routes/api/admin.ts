@@ -145,3 +145,98 @@ adminRouter.get('/users', async (c) => {
 
   return c.json({ items });
 });
+
+const approveSchema = z.object({
+  role: userRoleSchema.optional(),
+});
+
+adminRouter.post('/users/:id/approve', zValidator('json', approveSchema), async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('id');
+  const { role } = c.req.valid('json');
+  const now = new Date();
+
+  if (userId === admin.userId) {
+    return c.json({ error: 'Cannot approve self' }, 400);
+  }
+
+  // Approve: set active + audit fields, optionally adjust role
+  await db
+    .update(users)
+    .set({
+      ...(role ? { role } : {}),
+      accountStatus: 'active',
+      approvalDueAt: null,
+      approvedAt: now,
+      approvedByUserId: admin.userId,
+      disabledAt: null,
+      disabledReason: null,
+      updatedAt: now,
+    })
+    .where(eq(users.id, userId));
+
+  return c.json({ success: true });
+});
+
+const disableSchema = z.object({
+  reason: z.string().max(256).optional(),
+});
+
+adminRouter.post('/users/:id/disable', zValidator('json', disableSchema), async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('id');
+  const { reason } = c.req.valid('json');
+  const now = new Date();
+
+  if (userId === admin.userId) {
+    return c.json({ error: 'Cannot disable self' }, 400);
+  }
+
+  // Safety: never allow disabling platform/org admins.
+  const [target] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!target) return c.json({ error: 'User not found' }, 404);
+  if (target.role === 'admin_app' || target.role === 'admin_org') {
+    return c.json({ error: 'Cannot disable admin users' }, 400);
+  }
+
+  await db
+    .update(users)
+    .set({
+      accountStatus: 'disabled_by_admin',
+      disabledAt: now,
+      disabledReason: reason ?? 'disabled_by_admin',
+      updatedAt: now,
+    })
+    .where(eq(users.id, userId));
+
+  await db.delete(userSessions).where(eq(userSessions.userId, userId));
+  return c.json({ success: true });
+});
+
+adminRouter.post('/users/:id/reactivate', async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('id');
+  const now = new Date();
+
+  if (userId === admin.userId) {
+    return c.json({ error: 'Cannot reactivate self' }, 400);
+  }
+
+  await db
+    .update(users)
+    .set({
+      accountStatus: 'active',
+      approvalDueAt: null,
+      approvedAt: now,
+      approvedByUserId: admin.userId,
+      disabledAt: null,
+      disabledReason: null,
+      updatedAt: now,
+    })
+    .where(eq(users.id, userId));
+  return c.json({ success: true });
+});
