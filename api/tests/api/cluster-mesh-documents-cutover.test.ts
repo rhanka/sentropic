@@ -1,6 +1,6 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,8 +23,17 @@ import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { contextDocuments, contextModificationHistory, workspaces } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
+import {
+  app as productApp,
+  PRODUCT_CLUSTER_MESH_MOUNTS,
+  ROOT_MOUNTED_NAMESPACE_REGISTRY,
+} from '../../src/app';
 import type { DocumentsCutoverControl } from '../../src/routes/namespaces/documents/cutover';
 import {
+  DOCUMENT_AUTHOR,
+  DOCUMENT_PATHS,
+  DOCUMENT_ROUTES,
+  createDocumentsTransportRouter,
   createDocumentsNamespaceModule,
   type DocumentsNamespacePorts,
 } from '../../src/routes/namespaces/documents';
@@ -210,5 +219,107 @@ describe('cluster mesh documents cutover', () => {
     expect(await db.select().from(contextDocuments).where(
       eq(contextDocuments.workspaceId, owner.workspaceId!),
     )).toHaveLength(0);
+  });
+
+  it('selects one direct author and fails closed after the exact rollback checkpoint', async () => {
+    const app = candidate();
+    const path = '/api/v1/documents/missing';
+    expect((await authenticatedRequest(app, 'GET', path, owner.sessionToken!)).status).toBe(404);
+    const active = await cutovers.find(key);
+    expect(active).toMatchObject({
+      status: 'active',
+      activeAuthor: DOCUMENT_AUTHOR,
+      previousGenerationId: 'legacy-api-documents-v1',
+      rollbackCheckpoint: { activeAuthor: 'legacy-api-document-routers' },
+    });
+    expect(active?.shadowComparison).toBeUndefined();
+
+    await cutovers.rollback(key, active!.previousGenerationId!);
+    await expect(cutovers.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(app, 'GET', path, owner.sessionToken!);
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('has no disabled, duplicate-prefix, anonymous, or unavailable-control fallback', async () => {
+    const path = '/api/v1/documents/missing';
+    expect((await candidate().request(path)).status).toBe(401);
+    expect(await cutovers.find(key)).toBeNull();
+    expect((await candidate(false).request(path)).status).toBe(404);
+    expect((await authenticatedRequest(
+      candidate(), 'GET', '/api/v1/documents/documents/missing', owner.sessionToken!,
+    )).status).toBe(404);
+
+    const unavailable: DocumentsCutoverControl = {
+      runtime: { generation: clusterMeshAdapter.sessionControl!.runtime.generation },
+      cutovers: {
+        find: vi.fn(async () => { throw new Error('control unavailable'); }),
+        activate: vi.fn(async () => undefined),
+      },
+    };
+    const blocked = await authenticatedRequest(
+      candidate(true, productDocumentsPorts, unavailable), 'GET', path, owner.sessionToken!,
+    );
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'document_control_unavailable' });
+  });
+
+  it('keeps cross-workspace mutation authority in the product adapter', async () => {
+    const id = crypto.randomUUID();
+    documentIds.push(id);
+    await db.insert(contextDocuments).values(
+      documentRow(id, outsider.workspaceId!, crypto.randomUUID()),
+    );
+    const blocked = await authenticatedRequest(
+      candidate(), 'DELETE', `/api/v1/documents/${id}`, owner.sessionToken!,
+    );
+    expect(blocked.status).toBe(404);
+    expect(await db.select().from(contextDocuments).where(eq(contextDocuments.id, id)))
+      .toHaveLength(1);
+  });
+
+  it('uses exact auth fences and an authority-neutral injectable transport', () => {
+    const transportPaths = [...new Set(
+      createDocumentsTransportRouter(productDocumentsPorts).routes
+        .filter(({ method }) => method !== 'ALL')
+        .map(({ path }) => path),
+    )].sort();
+    expect(transportPaths).toEqual([...DOCUMENT_PATHS].sort());
+    expect(DOCUMENT_PATHS).not.toContain('/*');
+    expect(DOCUMENT_PATHS.every((path) => typeof path === 'string')).toBe(true);
+
+    const routes = createDocumentsNamespaceModule().createRouter().routes;
+    for (const [method, path] of DOCUMENT_ROUTES) {
+      expect(routes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ method, path, handler: requireAuth }),
+      ]));
+    }
+    for (const file of ['ports.ts', 'router.ts']) {
+      const source = readFileSync(
+        new URL(`../../src/routes/namespaces/documents/${file}`, import.meta.url), 'utf8',
+      );
+      expect(source).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/);
+    }
+    expect(() => createDocumentsTransportRouter({
+      ...productDocumentsPorts,
+      documents: undefined,
+    } as unknown as DocumentsNamespacePorts)).toThrowError('document product ports are unavailable');
+  });
+
+  it('registers one root author and leaves no production legacy document mount', async () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/documents',
+    );
+    expect(registration?.module.namespace).toBe('/documents');
+    expect(registration?.authPaths).toEqual(DOCUMENT_PATHS);
+    expect(PRODUCT_CLUSTER_MESH_MOUNTS['/documents']).toBe('/');
+    expect((await productApp.request('/api/v1/documents/missing')).status).toBe(401);
+    expect((await productApp.request('/api/v1/documents/documents/missing')).status).toBe(404);
+
+    for (const name of ['documents', 'docx', 'pptx', 'xlsx']) {
+      expect(existsSync(new URL(`../../src/routes/api/${name}.ts`, import.meta.url))).toBe(false);
+    }
+    const apiIndex = readFileSync(new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8');
+    expect(apiIndex).not.toMatch(/documentsRouter|docxRouter|pptxRouter|xlsxRouter/);
   });
 });
