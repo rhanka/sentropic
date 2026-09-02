@@ -65,6 +65,10 @@ import {
   DOCUMENT_PATHS,
   productDocumentsModule,
 } from './routes/namespaces/documents';
+import {
+  productTransfersModule,
+  TRANSFER_PATHS,
+} from './routes/namespaces/transfers-module';
 
 const authPlugin = productAuthPlugin();
 
@@ -113,6 +117,11 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
 ] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/transfers',
+    module: productTransfersModule,
+    authPaths: TRANSFER_PATHS,
+  },
   {
     namespace: '/documents',
     module: productDocumentsModule,
