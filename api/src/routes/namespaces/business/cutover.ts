@@ -11,32 +11,25 @@ let activation: Promise<void> | undefined;
 const ensureBusinessAuthor = async (): Promise<boolean> => {
   const key = { compositionRoot: 'product' as const, namespace: '/business' as const };
   let record = await control.cutovers.find(key);
-  if (!record || record.status === 'shadow') {
+  if (!record || record.status === 'shadow'
+    || (record.status === 'active' && record.shadowComparison !== undefined)) {
     activation ??= (async () => {
       const previousGenerationId = 'legacy-api-business-v1';
-      const shadow = {
+      // Historical parity is executed by the immutable test fixture. Runtime records
+      // direct single-author activation, not a shadow comparison it did not perform.
+      const activationRecord = {
         ...key,
         selectedGenerationId: control.runtime.generation.generationId,
         previousGenerationId,
         activeAuthor: BUSINESS_AUTHOR,
-        status: 'shadow' as const,
-        shadowComparison: {
-          strategy: 'safe-read-and-validated-mutation-intent',
-          safeReadRef: 'historical:36a93f2b0:api/tests/api/companies.test.ts;candidate:2d29d125e:api/tests/api/cluster-mesh-business-cutover.test.ts',
-          validatedIntentRef: 'candidate:2d29d125e:api/tests/api/cluster-mesh-business-cutover.test.ts',
-          effectsDuplicated: false,
-        },
+        status: 'active' as const,
         rollbackCheckpoint: {
           generationId: previousGenerationId,
           activeAuthor: 'legacy-api-business-routers',
         },
-      };
-      await control.cutovers.activate(shadow);
-      await control.cutovers.activate({
-        ...shadow,
-        status: 'active',
         activatedAt: new Date().toISOString(),
-      });
+      };
+      await control.cutovers.activate(activationRecord);
     })().finally(() => { activation = undefined; });
     await activation;
     record = await control.cutovers.find(key);
