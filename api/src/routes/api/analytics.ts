@@ -6,7 +6,7 @@ import { initiatives, folders } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
-import { hydrateInitiatives } from './initiatives';
+import { hydrateInitiatives } from '../../services/business/initiatives';
 import { requireEditor } from '../../middleware/rbac';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
 

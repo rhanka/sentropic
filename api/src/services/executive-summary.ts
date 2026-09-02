@@ -5,7 +5,7 @@ import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
 import { AI_PRIORITIES_AGENTS } from '../config/default-agents-ai-priorities';
 import { settingsService } from './settings';
-import { hydrateInitiatives } from '../routes/api/initiatives';
+import { hydrateInitiatives } from './business/initiatives';
 
 const STRUCTURED_JSON_REPAIR_PROMPT = `You are a strict JSON repair engine.
 
