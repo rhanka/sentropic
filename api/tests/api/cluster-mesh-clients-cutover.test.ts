@@ -5,7 +5,11 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { app as productApp } from '../../src/app';
+import {
+  app as productApp,
+  PRODUCT_CLUSTER_MESH_MOUNTS,
+  ROOT_MOUNTED_NAMESPACE_REGISTRY,
+} from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { settings, workspaceMemberships, workspaces } from '../../src/db/schema';
@@ -279,5 +283,50 @@ describe('cluster mesh clients cutover', () => {
     );
     expect(blocked.status).toBe(503);
     await expect(blocked.json()).resolves.toEqual({ error: 'client_control_unavailable' });
+  });
+
+  it('uses exact auth paths and an authority-neutral injectable transport', () => {
+    const transportPaths = [...new Set(
+      createClientsTransportRouter(productClientsPorts).routes
+        .filter(({ method }) => method !== 'ALL')
+        .map(({ path }) => path),
+    )].sort();
+    expect(transportPaths).toEqual([...CLIENT_PATHS].sort());
+    expect(CLIENT_PATHS).toHaveLength(12);
+    expect(CLIENT_PATHS).not.toContain('/*');
+    expect(CLIENT_ROUTES).toHaveLength(16);
+
+    const routes = createClientsNamespaceModule().createRouter().routes;
+    for (const [method, path] of CLIENT_ROUTES) {
+      expect(routes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ method, path, handler: requireAuth }),
+      ]));
+    }
+    const source = readFileSync(
+      new URL('../../src/routes/namespaces/clients.ts', import.meta.url), 'utf8',
+    );
+    expect(source).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/);
+  });
+
+  it('registers one root author and leaves no legacy client or bookmarklet source', async () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/clients',
+    );
+    expect(registration?.module.namespace).toBe('/clients');
+    expect(registration?.authPaths).toEqual(CLIENT_PATHS);
+    expect(PRODUCT_CLUSTER_MESH_MOUNTS['/clients']).toBe('/');
+    expect((await productApp.request('/api/v1/chrome-extension/download')).status).toBe(401);
+    expect((await productApp.request('/api/v1/clients/chrome-extension/download')).status).toBe(404);
+
+    for (const name of [
+      'chrome-extension', 'vscode-extension', 'cowork-desktop', 'client-settings',
+    ]) {
+      expect(existsSync(new URL(`../../src/routes/api/${name}.ts`, import.meta.url))).toBe(false);
+    }
+    expect(existsSync(new URL('../../src/upstream/injected-script.ts', import.meta.url))).toBe(false);
+    const apiIndex = readFileSync(new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8');
+    expect(apiIndex).not.toMatch(
+      /chromeExtensionRouter|vscodeExtensionRouter|coworkDesktopRouter|clientSettingsRouter/,
+    );
   });
 });
