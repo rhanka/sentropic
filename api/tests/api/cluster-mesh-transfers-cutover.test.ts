@@ -286,4 +286,85 @@ describe('cluster mesh transfers cutover', () => {
     expect(await db.select({ id: workspaces.id }).from(workspaces)).toEqual(before);
     await expect(fs.readdir(join(artifactRoot, 'blobs'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
+
+  it('executes one authoritative import effect per isolated historical twin', async () => {
+    const sourceWorkspaceId = crypto.randomUUID();
+    const organizationId = crypto.randomUUID();
+    const folderId = crypto.randomUUID();
+    const initiativeId = crypto.randomUUID();
+    const documentId = crypto.randomUUID();
+    const workspaceName = `Imported twin ${crypto.randomUUID()}`;
+    const documentBytes = new TextEncoder().encode('authoritative imported artifact');
+    const archive = await buildArchive([
+      { path: 'workspaces.json', bytes: encodeJson([{ id: sourceWorkspaceId, name: workspaceName }]) },
+      { path: `organization_${organizationId}.json`, bytes: encodeJson({
+        id: organizationId, workspace_id: sourceWorkspaceId, name: 'Imported organization',
+        status: 'completed', data: {}, created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
+      }) },
+      { path: `folder_${folderId}.json`, bytes: encodeJson({
+        id: folderId, workspace_id: sourceWorkspaceId, name: 'Imported folder',
+        description: null, organization_id: organizationId, matrix_config: null,
+        executive_summary: null, status: 'completed', created_at: '2026-09-01T00:00:00.000Z',
+      }) },
+      { path: `initiative_${initiativeId}.json`, bytes: encodeJson({
+        id: initiativeId, workspace_id: sourceWorkspaceId, folder_id: folderId,
+        organization_id: organizationId, status: 'completed', model: null,
+        data: { name: 'Imported initiative' }, created_at: '2026-09-01T00:00:00.000Z',
+      }) },
+      {
+        path: `documents/${sourceWorkspaceId}/initiative/${initiativeId}/${documentId}-proof.txt`,
+        bytes: documentBytes,
+      },
+    ], { include_documents: true });
+    const invoke = (app: Hono) => {
+      const form = new FormData();
+      form.set('file', new File([archive], 'import.zip', { type: 'application/zip' }));
+      return app.request('/api/v1/imports', {
+        method: 'POST', headers: { Cookie: `session=${owner.sessionToken}` }, body: form,
+      });
+    };
+    const assertTwin = async (workspaceId: string): Promise<void> => {
+      expect(await db.select().from(workspaceMemberships).where(
+        eq(workspaceMemberships.workspaceId, workspaceId),
+      )).toHaveLength(1);
+      expect(await db.select().from(organizations).where(
+        eq(organizations.workspaceId, workspaceId),
+      )).toHaveLength(1);
+      expect(await db.select().from(folders).where(eq(folders.workspaceId, workspaceId)))
+        .toHaveLength(1);
+      expect(await db.select().from(initiatives).where(eq(initiatives.workspaceId, workspaceId)))
+        .toHaveLength(1);
+      const [document] = await db.select().from(contextDocuments).where(
+        eq(contextDocuments.workspaceId, workspaceId),
+      );
+      expect(document).toBeTruthy();
+      expect(await getArtifactStore().getBytes({
+        bucket: getArtifactStore().defaultBucket(), key: document.storageKey!,
+      })).toEqual(documentBytes);
+    };
+
+    const candidateResponse = await invoke(candidate());
+    expect(candidateResponse.status).toBe(200);
+    const candidateBody = await candidateResponse.json() as Record<string, unknown>;
+    const candidateWorkspaceId = String(candidateBody.workspace_id);
+    workspaceIds.add(candidateWorkspaceId);
+    expect(candidateBody).toMatchObject({ scope: 'workspace', imported: true, target_folder_id: null });
+    await assertTwin(candidateWorkspaceId);
+    expect(await db.select().from(workspaces).where(eq(workspaces.name, workspaceName)))
+      .toHaveLength(1);
+
+    const historicalResponse = await invoke(historical);
+    expect(historicalResponse.status).toBe(candidateResponse.status);
+    const historicalBody = await historicalResponse.json() as Record<string, unknown>;
+    const historicalWorkspaceId = String(historicalBody.workspace_id);
+    workspaceIds.add(historicalWorkspaceId);
+    expect({ ...historicalBody, workspace_id: '<generated>' })
+      .toEqual({ ...candidateBody, workspace_id: '<generated>' });
+    expect(historicalWorkspaceId).not.toBe(candidateWorkspaceId);
+    await assertTwin(historicalWorkspaceId);
+    await assertTwin(candidateWorkspaceId);
+    expect(await db.select().from(workspaces).where(eq(workspaces.name, workspaceName)))
+      .toHaveLength(2);
+  });
 });
