@@ -51,6 +51,11 @@ import {
   ANALYTICS_PATHS,
   productAnalyticsModule,
 } from './routes/namespaces/analytics';
+import {
+  productWorkspacesModule,
+  WORKSPACE_EDITOR_PATHS,
+  WORKSPACE_PATHS,
+} from './routes/namespaces/workspaces';
 
 const authPlugin = productAuthPlugin();
 
@@ -172,6 +177,21 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
       name: 'editor',
       paths: ANALYTICS_EDITOR_PATHS,
       pathPrefixes: ['/analytics/executive-summary'],
+    }],
+  },
+  {
+    namespace: '/workspaces',
+    module: productWorkspacesModule,
+    authPaths: WORKSPACE_PATHS,
+    privilegedFences: [{
+      name: 'editor',
+      paths: WORKSPACE_EDITOR_PATHS,
+      pathPrefixes: [
+        '/workspaces/:id/gate-config',
+        '/workspaces/:id/hide',
+        '/workspaces/:id/unhide',
+        '/workspaces/:id/members/:userId',
+      ],
     }],
   },
 ] as const satisfies readonly RootMountedNamespaceRegistration[];
