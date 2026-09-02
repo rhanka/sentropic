@@ -577,6 +577,7 @@
     - [x] Execute the immutable legacy router and candidate independently against equivalent seeded PostgreSQL state; authenticated summary/scatter status and bodies match byte-for-byte.
     - [x] Prove candidate and historical POSTs each create exactly one authoritative queue row and update only their isolated twin folder, with equivalent normalized response and job payload.
     - [x] Select only `analytics-hono-module`, verify rollback to `legacy-api-analytics-v1`/`legacy-api-analytics-router`, and prove 503 fail-close plus 401/403/disabled/duplicate-prefix fences.
+    - [x] Prove exact route/editor fences, transport authority isolation and missing-port refusal; retain a spy only as supplemental dispatch-unit coverage.
   - [ ] Tests new: `api/tests/api/cluster-mesh-analytics-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/analytics.test.ts`, `api/tests/unit/matrix.test.ts`, `api/tests/unit/scoring.test.ts`.
   - [ ] UI tests updated: `ui/tests/utils/dashboard-docx-state.test.ts`, `ui/tests/utils/scoring.test.ts`.

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
@@ -11,7 +11,10 @@ import { folders, initiatives, jobQueue, workspaces } from '../../src/db/schema'
 import { requireAuth } from '../../src/middleware/auth';
 import {
   ANALYTICS_AUTHOR,
+  ANALYTICS_EDITOR_PATHS,
+  ANALYTICS_PATHS,
   createAnalyticsNamespaceModule,
+  createAnalyticsTransportRouter,
   type AnalyticsNamespacePorts,
 } from '../../src/routes/namespaces/analytics';
 import { productAnalyticsPorts } from '../../src/routes/namespaces/analytics/product-ports';
@@ -39,6 +42,16 @@ const candidate = (
   mounts: { '/analytics': '/' },
 }));
 const cutovers = new PostgresClusterMeshCutoverStore();
+const fakePorts = (enqueue = vi.fn(async () => 'job-1')): AnalyticsNamespacePorts => ({
+  query: {
+    folderExists: vi.fn(async () => true),
+    listItems: vi.fn(async () => []),
+    markFolderGenerating: vi.fn(async () => undefined),
+  },
+  queue: { enqueueExecutiveSummary: enqueue },
+  settings: { getDefaultModel: vi.fn(async () => 'model-default') },
+  locale: { resolve: vi.fn(() => 'en') },
+});
 
 const historicalLegacy = new Hono()
   .use('/api/v1/analytics/*', requireAuth)
@@ -220,5 +233,50 @@ describe('cluster mesh analytics cutover', () => {
       '/api/v1/analytics/analytics/summary?folder_id=missing',
       user.sessionToken!,
     )).status).toBe(404);
+  });
+
+  it('enumerates the exact route fences and keeps transport sources authority-neutral', () => {
+    const paths = [...new Set(
+      createAnalyticsTransportRouter(fakePorts()).routes
+        .filter(({ method }) => method !== 'ALL')
+        .map(({ path }) => path),
+    )].sort();
+    expect(paths).toEqual([...ANALYTICS_PATHS].sort());
+    expect(ANALYTICS_EDITOR_PATHS).toEqual(['/analytics/executive-summary']);
+    expect(paths).not.toContain('/*');
+
+    for (const name of ['ports', 'router']) {
+      const source = readFileSync(
+        new URL(`../../src/routes/namespaces/analytics/${name}.ts`, import.meta.url),
+        'utf8',
+      );
+      expect(source).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema|\/business\/)/);
+    }
+  });
+
+  it('keeps an enqueue spy as supplemental dispatch-unit coverage', async () => {
+    const enqueue = vi.fn(async () => 'job-spy');
+    const ports = fakePorts(enqueue);
+    const router = new Hono()
+      .use('*', async (context, next) => {
+        context.set('user', { workspaceId: 'workspace-spy', userId: 'user-spy' });
+        await next();
+      })
+      .route('/', createAnalyticsTransportRouter(ports));
+    const response = await router.request('/analytics/executive-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder_id: 'folder-spy' }),
+    });
+    expect(response.status).toBe(200);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(ports.query.markFolderGenerating).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails composition when a required product port is unavailable', () => {
+    expect(() => createAnalyticsTransportRouter({
+      ...fakePorts(),
+      queue: undefined,
+    } as unknown as AnalyticsNamespacePorts)).toThrowError('analytics product ports are unavailable');
   });
 });
