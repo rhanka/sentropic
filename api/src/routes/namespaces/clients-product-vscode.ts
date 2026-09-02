@@ -7,7 +7,6 @@ import { env } from '../../config/env';
 import { CHAT_SYSTEM_PROMPTS } from '../../config/default-chat-system';
 import { getUserWorkspaces } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
-import { requireEditor } from '../../middleware/rbac';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/vscode-ext';
@@ -416,7 +415,6 @@ vscodeExtensionRouter.put('/workspace-mapping', async (c) => {
 
 vscodeExtensionRouter.post(
   '/workspace-mapping/code-workspace',
-  requireEditor,
   async (c) => {
     const user = c.get('user') as { userId?: string } | undefined;
     if (!user?.userId) {
