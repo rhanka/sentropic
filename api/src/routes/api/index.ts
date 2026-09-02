@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { organizationsRouter } from '../../services/business/organizations';
 import { foldersRouter } from '../../services/business/folders';
-import { initiativesRouter } from './initiatives';
+import { initiativesRouter } from '../../services/business/initiatives';
 import { healthRouter } from './health';
 import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
@@ -24,7 +24,7 @@ import { solutionsRouter } from '../../services/business/solutions';
 import { productsRouter } from '../../services/business/products';
 import { bidsRouter } from '../../services/business/bids';
 import { proposalsRouter } from '../../services/business/proposals';
-import { viewTemplatesRouter } from './view-templates';
+import { viewTemplatesRouter } from '../../services/business/view-templates';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 

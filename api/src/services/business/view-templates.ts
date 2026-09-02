@@ -13,6 +13,8 @@
  *  DELETE /view-templates/:id            — delete user-created template (sourceLevel='user' + parentId=null)
  */
 
+// Canonical product adapter for the injected Cluster Mesh business transport.
+
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
