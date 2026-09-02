@@ -256,6 +256,33 @@ describe('mounted namespace fence completeness', () => {
       .toThrowError('/business mounted namespace fence is missing registered paths');
   });
 
+  it('fails when the live root-mounted analytics router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/analytics',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/analytics/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/analytics', router, registration.authPaths!))
+      .toThrowError('/analytics mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when the live analytics editor middleware is removed', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/analytics',
+    )!;
+    const router = registration.module.createRouter();
+    const mutation = {
+      routes: router.routes.filter((route) => (
+        route.path !== '/analytics/executive-summary' || route.handler !== requireEditor
+      )),
+    };
+
+    expect(() => assertPrivilegedMiddlewareFencesComplete(
+      '/analytics', mutation, registration.privilegedFences!, 'editor', requireEditor,
+    )).toThrowError('/analytics editor fence is missing middleware wiring');
+  });
+
   it('fails when a flagged privileged path is absent from its sub-fence', () => {
     const router = new Hono();
     router.get('/admin/listed', (context) => context.body(null, 204));

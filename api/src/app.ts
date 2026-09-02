@@ -46,6 +46,11 @@ import {
 import { productStreamsModule, STREAM_PATHS } from './routes/namespaces/streams';
 import { LOCK_PATHS, productLocksModule } from './routes/namespaces/locks';
 import { BUSINESS_PATHS, productBusinessModule } from './routes/namespaces/business';
+import {
+  ANALYTICS_EDITOR_PATHS,
+  ANALYTICS_PATHS,
+  productAnalyticsModule,
+} from './routes/namespaces/analytics';
 
 const authPlugin = productAuthPlugin();
 
@@ -158,6 +163,16 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     namespace: '/business',
     module: productBusinessModule,
     authPaths: BUSINESS_PATHS,
+  },
+  {
+    namespace: '/analytics',
+    module: productAnalyticsModule,
+    authPaths: ANALYTICS_PATHS,
+    privilegedFences: [{
+      name: 'editor',
+      paths: ANALYTICS_EDITOR_PATHS,
+      pathPrefixes: ['/analytics/executive-summary'],
+    }],
   },
 ] as const satisfies readonly RootMountedNamespaceRegistration[];
 
