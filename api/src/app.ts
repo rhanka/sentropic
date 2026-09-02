@@ -263,7 +263,6 @@ const allowedOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
 // secureHeaders() returns a middleware — invoke the factory ONCE, register the result.
 // NOTE: CORP and COEP are NOT set here because they block legitimate cross-origin
 // API requests from the frontend (e.g. localhost:5173 → localhost:8787).
-// CORP is applied selectively per-route below (e.g. bookmarklet endpoints).
 app.use(
   '*',
   secureHeaders({
@@ -290,18 +289,6 @@ app.use(
     referrerPolicy: 'strict-origin-when-cross-origin',
   }),
 );
-
-// Explicit CORP for public bookmarklet endpoints (must be cross-origin loadable).
-// Global CORP is disabled to allow cross-origin API requests; these endpoints
-// explicitly opt in to 'cross-origin' so browsers can load them from any origin.
-app.use('/api/v1/bookmarklet/injected-script.js', async (c, next) => {
-  await next();
-  c.res.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-});
-app.use('/api/v1/bookmarklet/probe.js', async (c, next) => {
-  await next();
-  c.res.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-});
 
 // Global HTTP logging (opt-in)
 app.use('*', async (c, next) => {
