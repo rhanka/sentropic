@@ -1,17 +1,19 @@
+import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { db } from '../../src/db/client';
-import { folders, initiatives, workspaces } from '../../src/db/schema';
+import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
+import { folders, initiatives, jobQueue, workspaces } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
 import {
-  ANALYTICS_PATHS,
-  createAnalyticsTransportRouter,
+  createAnalyticsNamespaceModule,
 } from '../../src/routes/namespaces/analytics';
 import { productAnalyticsPorts } from '../../src/routes/namespaces/analytics/product-ports';
+import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { analyticsRouter as legacyAnalyticsRouter } from '../fixtures/historical/analytics-f0a7e47eb/api/src/routes/api/analytics';
 import {
   authenticatedRequest,
@@ -20,12 +22,16 @@ import {
   type TestUser,
 } from '../utils/auth-helper';
 
-const candidateTransport = () => {
-  const router = new Hono();
-  for (const path of ANALYTICS_PATHS) router.use(path, requireAuth);
-  router.route('/', createAnalyticsTransportRouter(productAnalyticsPorts));
-  return new Hono().route('/api/v1', router);
-};
+const key = { compositionRoot: 'product' as const, namespace: '/analytics' as const };
+const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
+  eq(clusterMeshNamespaceCutovers.compositionRoot, key.compositionRoot),
+  eq(clusterMeshNamespaceCutovers.namespace, key.namespace),
+));
+const candidate = () => new Hono().route('/api/v1', createClusterMeshPlugin({
+  runtime: clusterMeshAdapter.sessionControl!.runtime,
+  namespaces: [createAnalyticsNamespaceModule({ ports: productAnalyticsPorts })],
+  mounts: { '/analytics': '/' },
+}));
 
 const historicalLegacy = new Hono()
   .use('/api/v1/analytics/*', requireAuth)
@@ -40,11 +46,14 @@ describe('cluster mesh analytics cutover', () => {
   let user: TestUser;
 
   beforeEach(async () => {
+    await clearCutover();
     user = await createAuthenticatedUser('editor');
   });
 
   afterEach(async () => {
+    await clearCutover();
     if (user.workspaceId) {
+      await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
       await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
       await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
     }
@@ -88,9 +97,75 @@ describe('cluster mesh analytics cutover', () => {
       `/api/v1/analytics/scatter?folder_id=${folderId}`,
     ]) {
       const legacy = await authenticatedRequest(historicalLegacy, 'GET', path, user.sessionToken!);
-      const candidate = await authenticatedRequest(candidateTransport(), 'GET', path, user.sessionToken!);
-      expect({ status: candidate.status, body: await candidate.text() })
+      const current = await authenticatedRequest(candidate(), 'GET', path, user.sessionToken!);
+      expect({ status: current.status, body: await current.text() })
         .toEqual({ status: legacy.status, body: await legacy.text() });
     }
+  });
+
+  it('creates exactly one durable job per isolated candidate and historical twin', async () => {
+    const candidateFolderId = crypto.randomUUID();
+    const legacyFolderId = crypto.randomUUID();
+    await db.insert(folders).values([
+      {
+        id: candidateFolderId,
+        workspaceId: user.workspaceId!,
+        name: 'Candidate mutation twin',
+        status: 'completed',
+      },
+      {
+        id: legacyFolderId,
+        workspaceId: user.workspaceId!,
+        name: 'Historical mutation twin',
+        status: 'completed',
+      },
+    ]);
+    const readJobs = () => db.select().from(jobQueue).where(and(
+      eq(jobQueue.workspaceId, user.workspaceId!),
+      eq(jobQueue.type, 'executive_summary'),
+    ));
+
+    const before = await readJobs();
+    expect(before).toHaveLength(0);
+    const currentResponse = await authenticatedRequest(
+      candidate(),
+      'POST',
+      '/api/v1/analytics/executive-summary',
+      user.sessionToken!,
+      { folder_id: candidateFolderId, value_threshold: 55, complexity_threshold: 34 },
+      { 'x-app-locale': 'en' },
+    );
+    const afterCandidate = await readJobs();
+    expect(afterCandidate.length - before.length).toBe(1);
+    const [candidateState, untouchedTwin] = await Promise.all([
+      db.select().from(folders).where(eq(folders.id, candidateFolderId)),
+      db.select().from(folders).where(eq(folders.id, legacyFolderId)),
+    ]);
+    expect(candidateState[0]?.status).toBe('generating');
+    expect(untouchedTwin[0]?.status).toBe('completed');
+
+    const legacyResponse = await authenticatedRequest(
+      historicalLegacy,
+      'POST',
+      '/api/v1/analytics/executive-summary',
+      user.sessionToken!,
+      { folder_id: legacyFolderId, value_threshold: 55, complexity_threshold: 34 },
+      { 'x-app-locale': 'en' },
+    );
+    const afterLegacy = await readJobs();
+    expect(afterLegacy.length - afterCandidate.length).toBe(1);
+    expect(afterLegacy).toHaveLength(2);
+    expect((await db.select().from(folders).where(eq(folders.id, legacyFolderId)))[0]?.status)
+      .toBe('generating');
+
+    const candidateJob = afterLegacy.find(({ id }) => id === afterCandidate[0]!.id)!;
+    const legacyJob = afterLegacy.find(({ id }) => id !== candidateJob.id)!;
+    const normalizeJob = (data: string) => ({ ...JSON.parse(data), folderId: '<twin>' });
+    expect(normalizeJob(candidateJob.data)).toEqual(normalizeJob(legacyJob.data));
+    const normalizeResponse = async (response: Response) => ({
+      status: response.status,
+      body: { ...await response.json(), folder_id: '<twin>', jobId: '<job>' },
+    });
+    expect(await normalizeResponse(currentResponse)).toEqual(await normalizeResponse(legacyResponse));
   });
 });
