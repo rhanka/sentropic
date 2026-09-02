@@ -79,6 +79,15 @@ const bridges = [
   ['services/workspace-access.ts', '89e13a21f2b309d14f36231bfd25170e32cec1385f48e1ef40dd5875769ed9f6'],
   ['utils/id.ts', '7148d17b36975340ed8d20ae49c96a1b06f7d107b9b2492e32e15fe169a24aa3'],
 ] as const;
+const immutableDocumentRoutes = [
+  ['GET', '/documents'], ['POST', '/documents'],
+  ['POST', '/documents/google-drive'],
+  ['GET', '/documents/:id'], ['DELETE', '/documents/:id'],
+  ['GET', '/documents/:id/content'], ['POST', '/documents/:id/resync'],
+  ['GET', '/use-cases/:id/docx'], ['POST', '/docx/generate'],
+  ['GET', '/docx/jobs/:id/download'], ['GET', '/pptx/jobs/:id/download'],
+  ['POST', '/xlsx/generate'], ['GET', '/xlsx/jobs/:id/download'],
+] as const;
 
 const documentRow = (id: string, workspaceId: string, contextId: string) => ({
   id,
@@ -287,9 +296,10 @@ describe('cluster mesh documents cutover', () => {
     expect(transportPaths).toEqual([...DOCUMENT_PATHS].sort());
     expect(DOCUMENT_PATHS).not.toContain('/*');
     expect(DOCUMENT_PATHS.every((path) => typeof path === 'string')).toBe(true);
+    expect(DOCUMENT_ROUTES).toEqual(immutableDocumentRoutes);
 
     const routes = createDocumentsNamespaceModule().createRouter().routes;
-    for (const [method, path] of DOCUMENT_ROUTES) {
+    for (const [method, path] of immutableDocumentRoutes) {
       expect(routes).toEqual(expect.arrayContaining([
         expect.objectContaining({ method, path, handler: requireAuth }),
       ]));
