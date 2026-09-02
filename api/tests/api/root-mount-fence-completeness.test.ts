@@ -360,6 +360,17 @@ describe('mounted namespace fence completeness', () => {
       .toThrowError('/config mounted namespace fence is missing registered paths');
   });
 
+  it('fails when the live root-mounted document router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/documents',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/documents/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/documents', router, registration.authPaths!))
+      .toThrowError('/documents mounted namespace fence is missing registered paths');
+  });
+
   it('fails when the live analytics editor middleware is removed', () => {
     const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
       ({ namespace }) => namespace === '/analytics',
