@@ -580,6 +580,7 @@
     - [x] Prove exact route/editor fences, transport authority isolation and missing-port refusal; retain a spy only as supplemental dispatch-unit coverage.
     - [x] Extend the live registry invariant so declared admin/editor sub-fences and their real role middleware cannot drift independently.
     - [x] Root-mount `/analytics` through the actual registry with exact auth/editor fences and remove the direct legacy import/mount without a dual production author.
+    - [x] Prove foreign-workspace aggregate reads and job creation return 404 with no queue row or folder-status change.
   - [ ] Tests new: `api/tests/api/cluster-mesh-analytics-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/analytics.test.ts`, `api/tests/unit/matrix.test.ts`, `api/tests/unit/scoring.test.ts`.
   - [ ] UI tests updated: `ui/tests/utils/dashboard-docx-state.test.ts`, `ui/tests/utils/scoring.test.ts`.
