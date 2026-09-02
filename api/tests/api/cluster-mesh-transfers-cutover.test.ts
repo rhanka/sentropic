@@ -224,4 +224,66 @@ describe('cluster mesh transfers cutover', () => {
       .toEqual(await legacyZip.file(documentPath)!.async('uint8array'));
     expect(await candidateZip.file(documentPath)!.async('uint8array')).toEqual(documentBytes);
   });
+
+  it('matches authenticated preview metadata without a durable effect', async () => {
+    const organizationId = crypto.randomUUID();
+    const folderId = crypto.randomUUID();
+    const initiativeId = crypto.randomUUID();
+    const archive = await buildArchive([
+      { path: `organization_${organizationId}.json`, bytes: encodeJson({
+        id: organizationId, name: 'Preview organization', comments: [{ id: 'comment' }],
+      }) },
+      { path: `folder_${folderId}.json`, bytes: encodeJson({
+        id: folderId, name: 'Preview folder', organization_id: organizationId,
+      }) },
+      { path: `initiative_${initiativeId}.json`, bytes: encodeJson({
+        id: initiativeId, data: { name: 'Preview initiative' }, folder_id: folderId,
+      }) },
+    ]);
+    const invoke = (app: Hono) => {
+      const form = new FormData();
+      form.set('file', new File([archive], 'preview.zip', { type: 'application/zip' }));
+      return app.request('/api/v1/imports/preview', {
+        method: 'POST', headers: { Cookie: `session=${owner.sessionToken}` }, body: form,
+      });
+    };
+
+    const before = await db.select({ id: workspaces.id }).from(workspaces);
+    const legacyResponse = await invoke(historical);
+    const candidateResponse = await invoke(candidate());
+    expect({ status: candidateResponse.status, body: await candidateResponse.text() })
+      .toEqual({ status: legacyResponse.status, body: await legacyResponse.text() });
+    expect(await db.select({ id: workspaces.id }).from(workspaces)).toEqual(before);
+    expect(await db.select().from(organizations).where(eq(organizations.id, organizationId)))
+      .toHaveLength(0);
+  });
+
+  it('rejects manifest limits before import writes or storage effects', async () => {
+    const meta = encodeJson({ source: 'bounded-input' });
+    const archive = await buildArchive([{ path: 'meta.json', bytes: meta }], {
+      files: [{
+        path: 'meta.json',
+        bytes: TRANSFER_ARCHIVE_LIMITS.maxEntryBytes + 1,
+        sha256: sha256(meta),
+      }],
+    });
+    const invoke = (path: string) => {
+      const form = new FormData();
+      form.set('file', new File([archive], 'bounded.zip', { type: 'application/zip' }));
+      return candidate().request(path, {
+        method: 'POST', headers: { Cookie: `session=${owner.sessionToken}` }, body: form,
+      });
+    };
+
+    const before = await db.select({ id: workspaces.id }).from(workspaces);
+    for (const path of ['/api/v1/imports/preview', '/api/v1/imports']) {
+      const response = await invoke(path);
+      expect(response.status).toBe(413);
+      await expect(response.json()).resolves.toEqual({
+        message: 'Manifest entry exceeds limit: meta.json',
+      });
+    }
+    expect(await db.select({ id: workspaces.id }).from(workspaces)).toEqual(before);
+    await expect(fs.readdir(join(artifactRoot, 'blobs'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 });
