@@ -22,8 +22,8 @@ const ensureBusinessAuthor = async (): Promise<boolean> => {
         status: 'shadow' as const,
         shadowComparison: {
           strategy: 'safe-read-and-validated-mutation-intent',
-          safeReadRef: 'historical:36a93f2b0:api/tests/api/companies.test.ts;candidate:api/tests/api/cluster-mesh-business-cutover.test.ts',
-          validatedIntentRef: 'candidate:api/tests/api/cluster-mesh-business-cutover.test.ts',
+          safeReadRef: 'historical:36a93f2b0:api/tests/api/companies.test.ts;candidate:2d29d125e:api/tests/api/cluster-mesh-business-cutover.test.ts',
+          validatedIntentRef: 'candidate:2d29d125e:api/tests/api/cluster-mesh-business-cutover.test.ts',
           effectsDuplicated: false,
         },
         rollbackCheckpoint: {

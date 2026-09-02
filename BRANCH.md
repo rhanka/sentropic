@@ -539,7 +539,7 @@
   - [x] Phase A: fold forward the independent Fable Lot 20 GO-WITH-CONDITIONS verdict without relying on its failed post-cold-probe author counts.
     - [x] Fresh stable-container evidence at `36a93f2b0`: cold `down` + `up-api-test` reached healthy on API 9375, smoke passed 1 file/4 tests, the required lock/collaboration/root-fence/Streams/CLI scope passed 8 files/61 tests, the lock/presence/stream service scope passed 4 files/38 tests, and the API remained healthy after execution.
     - [x] Preserve exact registered root fences, live negative route mutation, neutral injected product ports, selected author/rollback checkpoint, pre-deletion safe-read plus exactly-one mutation intent, and empty legacy source/import/mount sweeps; keep browser E2E explicitly deferred to Lot 33.
-  - [ ] Namespace: `/business`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [x] Namespace: `/business`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
   - [x] Add modular factories under `api/src/routes/namespaces/business/**` for organizations, folders, initiatives, solutions, products, proposals and view templates over injected services.
     - [x] Define explicit neutral router ports and injectable organizations, folders, initiatives and solutions transport factories with no product service/schema imports.
     - [x] Add the products, proposals, bids and view-template factories plus the product adapter composition.
@@ -552,6 +552,7 @@
     - [x] Relocate the solution, product, proposal and bid implementations behind the injected product adapter without changing their still-legacy mount behavior before final cutover.
     - [x] Relocate organization and folder implementations behind the same product adapter and keep Streams on the canonical organization hydration authority.
     - [x] Relocate initiative and view-template implementations behind the product adapter and repoint domain consumers to the single canonical initiative hydration implementation.
+    - [x] Register `/business` through the actual root-mounted namespace registry, delete every direct legacy import/mount from `apiRouter`, and pin safe-read/exactly-one-effect evidence to pre-deletion commit `2d29d125e`.
   - [ ] Tests new: `api/tests/api/cluster-mesh-business-cutover.test.ts`.
   - [ ] Tests updated: `api/tests/api/companies.test.ts`, `api/tests/api/folders.test.ts`, `api/tests/api/initiatives.test.ts`, `api/tests/api/extended-objects.test.ts`, `api/tests/api/view-templates.test.ts`, `api/tests/api/gate-evaluation.test.ts`, `api/tests/unit/context-initiative-detail-contract.test.ts`, `api/tests/unit/context-initiative-domain-normalization.test.ts`, `api/tests/unit/usecase-list-normalization.test.ts`.
   - [ ] UI tests updated: `ui/tests/stores/organizations.test.ts`, `ui/tests/stores/folders.test.ts`, `ui/tests/stores/initiatives.test.ts`, `ui/tests/stores/viewTemplateCache.test.ts`, `ui/tests/components/TemplateRenderer.test.ts`.
