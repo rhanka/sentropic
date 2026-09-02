@@ -26,6 +26,7 @@ export const apiRouter = new Hono();
 apiRouter.route('/health', healthRouter);
 
 // DOCX export routes
+apiRouter.use('/use-cases/:id/docx', requireAuth);
 apiRouter.use('/docx/*', requireAuth);
 apiRouter.route('/', docxRouter);
 
