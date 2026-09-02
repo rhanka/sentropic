@@ -240,3 +240,135 @@ adminRouter.post('/users/:id/reactivate', async (c) => {
     .where(eq(users.id, userId));
   return c.json({ success: true });
 });
+
+/**
+ * DELETE /admin/users/:id
+ * Immediate suppression: delete user + workspace + all owned data.
+ * Safety: user must be disabled first.
+ */
+adminRouter.delete('/users/:id', async (c) => {
+  const admin = c.get('user');
+  const userId = c.req.param('id');
+
+  if (userId === admin.userId) {
+    return c.json({ error: 'Cannot delete self' }, 400);
+  }
+
+  const [target] = await db
+    .select({ id: users.id, role: users.role, email: users.email, accountStatus: users.accountStatus })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!target) return c.json({ error: 'User not found' }, 404);
+  if (target.role === 'admin_app' || target.role === 'admin_org') {
+    return c.json({ error: 'Cannot delete admin users' }, 400);
+  }
+  if (target.accountStatus !== 'disabled_by_admin' && target.accountStatus !== 'disabled_by_user') {
+    return c.json({ error: 'User must be disabled before deletion' }, 400);
+  }
+
+  // Workspace owned by the user (should be 1:1)
+  const [ws] = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.ownerUserId, userId))
+    .limit(1);
+  const workspaceId = ws?.id ?? null;
+
+  // Capture external grants BEFORE the deletion — the connector rows cascade from both `users` and
+  // `workspaces`, and a cascade runs no application code, so afterwards nothing remains to revoke
+  // with. See services/connector-grant-teardown.ts.
+  const capturedGrants = await captureConnectorGrantsForTeardown({
+    userId,
+    ...(workspaceId ? { workspaceId } : {}),
+  });
+
+  await db.transaction(async (tx) => {
+    // Atomic with the destruction: tombstone and delete commit or roll back together.
+    await recordConnectorGrantTombstones(tx, capturedGrants);
+
+    if (workspaceId) {
+      // IMPORTANT: A workspace can be referenced by:
+      // - chat_sessions.workspace_id (including admin-owned sessions scoped to this workspace)
+      // - chat_generation_traces.workspace_id
+      // The FK is NO ACTION, so we must detach these references before deleting the workspace.
+      await tx.update(chatSessions).set({ workspaceId: null }).where(eq(chatSessions.workspaceId, workspaceId));
+      await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
+
+      // Collect object IDs for stream cleanup + history cleanup
+      const organizationRows = await tx
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(eq(organizations.workspaceId, workspaceId));
+      const folderRows = await tx.select({ id: folders.id }).from(folders).where(eq(folders.workspaceId, workspaceId));
+      const initiativeRows = await tx.select({ id: initiatives.id }).from(initiatives).where(eq(initiatives.workspaceId, workspaceId));
+
+      const organizationIds = organizationRows.map((r) => r.id);
+      const folderIds = folderRows.map((r) => r.id);
+      const initiativeIds = initiativeRows.map((r) => r.id);
+
+      // Stream events for structured generations (organization_/folder_/usecase_)
+      const streamIds: string[] = [];
+      for (const id of organizationIds) streamIds.push(`organization_${id}`);
+      for (const id of folderIds) streamIds.push(`folder_${id}`);
+      for (const id of initiativeIds) streamIds.push(`usecase_${id}`);
+      if (streamIds.length) {
+        await tx.delete(chatStreamEvents).where(inArray(chatStreamEvents.streamId, streamIds));
+      }
+
+      // Context modification history linked to these objects
+      if (organizationIds.length) {
+        await tx
+          .delete(contextModificationHistory)
+          .where(
+            and(
+              eq(contextModificationHistory.contextType, 'organization'),
+              inArray(contextModificationHistory.contextId, organizationIds)
+            )
+          );
+      }
+      if (folderIds.length) {
+        await tx
+          .delete(contextModificationHistory)
+          .where(and(eq(contextModificationHistory.contextType, 'folder'), inArray(contextModificationHistory.contextId, folderIds)));
+      }
+      if (initiativeIds.length) {
+        await tx
+          .delete(contextModificationHistory)
+          .where(and(eq(contextModificationHistory.contextType, 'initiative'), inArray(contextModificationHistory.contextId, initiativeIds)));
+      }
+
+      // Delete business objects (workspace scoped)
+      await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
+      await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
+      await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
+      await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
+
+      // Delete workspace
+      await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    }
+
+    // Auth artifacts
+    await tx.delete(userSessions).where(eq(userSessions.userId, userId));
+    await tx.delete(webauthnCredentials).where(eq(webauthnCredentials.userId, userId));
+    await tx.delete(webauthnChallenges).where(eq(webauthnChallenges.userId, userId));
+
+    // Email/magic link artifacts (best effort)
+    if (target.email) {
+      await tx.delete(emailVerificationCodes).where(eq(emailVerificationCodes.email, target.email));
+      await tx.delete(magicLinks).where(eq(magicLinks.email, target.email));
+    }
+
+    // Delete chat sessions (cascade deletes chat_messages/contexts; stream events with messageId also cascade)
+    await tx.delete(chatSessions).where(eq(chatSessions.userId, userId));
+
+    // Finally delete user
+    await tx.delete(users).where(eq(users.id, userId));
+  });
+
+  // Only after a successful commit — a rolled-back transaction must not leave a revoked grant
+  // behind for an account that still exists.
+  await revokeCapturedConnectorGrants(capturedGrants);
+
+  return c.json({ success: true });
+});
