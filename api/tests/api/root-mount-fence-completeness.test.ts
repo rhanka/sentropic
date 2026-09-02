@@ -14,6 +14,8 @@ import {
 
 type RootMountedRouter = Pick<Hono, 'routes'>;
 
+const IMMUTABLE_ANALYTICS_EDITOR_PATHS = ['/analytics/executive-summary'] as const;
+
 const registeredPaths = (router: RootMountedRouter): string[] =>
   [...new Set(router.routes.map(({ path }) => path))].sort();
 
@@ -126,6 +128,29 @@ const assertPrivilegedMiddlewareFencesComplete = (
   ).toEqual([]);
 };
 
+const assertImmutablePrivilegedRequirement = (
+  namespace: string,
+  router: RootMountedRouter,
+  privilegedFences: readonly PrivilegedPathFence[],
+  name: string,
+  handler: MiddlewareHandler,
+  expectedPaths: readonly string[],
+): void => {
+  const declaredPaths = new Set(
+    privilegedFences.filter((fence) => fence.name === name).flatMap(({ paths }) => paths),
+  );
+  expect(
+    expectedPaths.filter((path) => !declaredPaths.has(path)),
+    `${namespace} ${name} immutable requirement is missing privileged paths`,
+  ).toEqual([]);
+  expect(
+    expectedPaths.filter((path) => !router.routes.some(
+      (route) => route.path === path && route.handler === handler,
+    )),
+    `${namespace} ${name} immutable requirement is missing middleware wiring`,
+  ).toEqual([]);
+};
+
 const withoutRequireAdminPath = (
   router: RootMountedRouter,
   path: string,
@@ -146,6 +171,16 @@ describe('mounted namespace fence completeness', () => {
       assertPrivilegedMiddlewareFencesComplete(
         namespace, router, privilegedFences, 'editor', requireEditor,
       );
+      if (namespace === '/analytics') {
+        assertImmutablePrivilegedRequirement(
+          namespace,
+          router,
+          privilegedFences,
+          'editor',
+          requireEditor,
+          IMMUTABLE_ANALYTICS_EDITOR_PATHS,
+        );
+      }
       if (authPaths === null) {
         expect(privilegedFences).toEqual([]);
         if (PREFIX_MOUNTED_NAMESPACE_REGISTRY.some((item) => item.namespace === namespace)) {
@@ -281,6 +316,42 @@ describe('mounted namespace fence completeness', () => {
     expect(() => assertPrivilegedMiddlewareFencesComplete(
       '/analytics', mutation, registration.privilegedFences!, 'editor', requireEditor,
     )).toThrowError('/analytics editor fence is missing middleware wiring');
+  });
+
+  it('fails when analytics editor wiring and its declared sub-fence shrink together', () => {
+    const missingPath = '/analytics/executive-summary';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/analytics',
+    )!;
+    const router = registration.module.createRouter();
+    const mutation = {
+      routes: router.routes.filter((route) => (
+        route.path !== missingPath || route.handler !== requireEditor
+      )),
+    };
+    const privilegedFence = registration.privilegedFences![0];
+    const shrunkenFence = {
+      ...privilegedFence,
+      paths: privilegedFence.paths.filter((path) => path !== missingPath),
+      pathPrefixes: privilegedFence.pathPrefixes.filter((path) => path !== missingPath),
+    };
+
+    expect(() => {
+      assertPrivilegedFenceComplete(
+        '/analytics', mutation, registration.authPaths!, shrunkenFence,
+      );
+      assertPrivilegedMiddlewareFencesComplete(
+        '/analytics', mutation, [shrunkenFence], 'editor', requireEditor,
+      );
+      assertImmutablePrivilegedRequirement(
+        '/analytics',
+        mutation,
+        [shrunkenFence],
+        'editor',
+        requireEditor,
+        IMMUTABLE_ANALYTICS_EDITOR_PATHS,
+      );
+    }).toThrowError('/analytics editor immutable requirement is missing privileged paths');
   });
 
   it('fails when a flagged privileged path is absent from its sub-fence', () => {
