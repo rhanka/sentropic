@@ -226,6 +226,18 @@ describe('mounted namespace fence completeness', () => {
       .toThrowError('/locks mounted namespace fence is missing registered paths');
   });
 
+  it('fails when the live root-mounted business router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/business',
+    )!;
+    expect(registration.authPaths).not.toBeNull();
+    const router = registration.module.createRouter();
+    router.post('/organizations/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/business', router, registration.authPaths ?? []))
+      .toThrowError('/business mounted namespace fence is missing registered paths');
+  });
+
   it('fails when a flagged privileged path is absent from its sub-fence', () => {
     const router = new Hono();
     router.get('/admin/listed', (context) => context.body(null, 204));

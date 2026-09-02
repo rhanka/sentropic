@@ -1,7 +1,4 @@
 import { Hono } from 'hono';
-import { organizationsRouter } from '../../services/business/organizations';
-import { foldersRouter } from '../../services/business/folders';
-import { initiativesRouter } from '../../services/business/initiatives';
 import { healthRouter } from './health';
 import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
@@ -20,11 +17,6 @@ import { xlsxRouter } from './xlsx';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { coworkDesktopRouter } from './cowork-desktop';
-import { solutionsRouter } from '../../services/business/solutions';
-import { productsRouter } from '../../services/business/products';
-import { bidsRouter } from '../../services/business/bids';
-import { proposalsRouter } from '../../services/business/proposals';
-import { viewTemplatesRouter } from '../../services/business/view-templates';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -32,38 +24,6 @@ export const apiRouter = new Hono();
 
 // Public routes (no authentication required)
 apiRouter.route('/health', healthRouter);
-
-// Editor routes (require editor role or higher)
-apiRouter.use('/organizations/*', requireAuth);
-apiRouter.route('/organizations', organizationsRouter);
-
-apiRouter.use('/folders/*', requireAuth);
-apiRouter.route('/folders', foldersRouter);
-
-apiRouter.use('/initiatives/*', requireAuth);
-apiRouter.route('/initiatives', initiativesRouter);
-
-// Backward-compatible alias: /use-cases/* → /initiatives/*
-apiRouter.use('/use-cases/*', requireAuth);
-apiRouter.route('/use-cases', initiativesRouter);
-
-// Extended business objects (BR-04 Lot 6)
-apiRouter.use('/solutions/*', requireAuth);
-apiRouter.route('/solutions', solutionsRouter);
-
-apiRouter.use('/products/*', requireAuth);
-apiRouter.route('/products', productsRouter);
-
-apiRouter.use('/proposals/*', requireAuth);
-apiRouter.route('/proposals', proposalsRouter);
-
-// Backward-compatible alias: /bids/* -> /proposals/*
-apiRouter.use('/bids/*', requireAuth);
-apiRouter.route('/bids', bidsRouter);
-
-// View templates (authenticated; workspace role checks per endpoint)
-apiRouter.use('/view-templates/*', requireAuth);
-apiRouter.route('/view-templates', viewTemplatesRouter);
 
 // DOCX export routes
 apiRouter.use('/docx/*', requireAuth);
