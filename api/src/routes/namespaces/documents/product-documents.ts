@@ -1,22 +1,22 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
-import { db } from '../../db/client';
-import { chatSessions, contextDocuments, contextModificationHistory, jobQueue } from '../../db/schema';
-import { createId } from '../../utils/id';
-import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
-import { queueManager } from '../../services/queue-manager';
+import { db } from '../../../db/client';
+import { chatSessions, contextDocuments, contextModificationHistory, jobQueue } from '../../../db/schema';
+import { createId } from '../../../utils/id';
+import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../../services/storage-s3';
+import { queueManager } from '../../../services/queue-manager';
 import {
   buildGoogleDriveSourceData,
   loadContextDocumentContent,
   readContextDocumentSyncData,
   resolveContextDocumentSource,
   updateContextDocumentSyncData,
-} from '../../services/context-document-source';
-import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
-import { requireWorkspaceEditor } from '../../services/workspace-access';
-import { getGoogleDriveConnectorAccount, resolveGoogleDriveTokenSecret } from '../../services/google-drive-connector-accounts';
-import { isSupportedGoogleDriveMimeType, pickGoogleDriveExportMimeType, resolveGoogleDriveFileMetadata } from '../../services/google-drive-client';
+} from '../../../services/context-document-source';
+import { requireWorkspaceAccessRole } from '../../../middleware/workspace-rbac';
+import { requireWorkspaceEditor } from '../../../services/workspace-access';
+import { getGoogleDriveConnectorAccount, resolveGoogleDriveTokenSecret } from '../../../services/google-drive-connector-accounts';
+import { isSupportedGoogleDriveMimeType, pickGoogleDriveExportMimeType, resolveGoogleDriveFileMetadata } from '../../../services/google-drive-client';
 
 export const documentsRouter = new Hono();
 
