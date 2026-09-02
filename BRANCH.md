@@ -567,6 +567,7 @@
 
 - [ ] **Lot 22 — `/analytics` TARGET analytics router extraction**
   - [ ] Namespace: `/analytics`; type: TARGET application router extraction, plugin mount, D11 cutover and legacy deletion.
+  - [x] Pin the exact `f0a7e47eb` legacy analytics router as an executable test-only fixture with Git blob `10f7d7762a550343a51be08a37d812bc5b1c91ae`; production never imports or mounts it.
   - [ ] Add `api/src/routes/namespaces/analytics.ts` with injected query/queue/settings/locale ports and no import from the business router.
   - [ ] Shadow deterministic aggregate reads and validated job intent, select one author, prove rollback and delete `api/src/routes/api/analytics.ts`.
   - [ ] Tests new: `api/tests/api/cluster-mesh-analytics-cutover.test.ts`.
