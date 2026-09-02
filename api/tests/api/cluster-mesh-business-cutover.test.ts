@@ -145,7 +145,7 @@ describe('cluster mesh business cutover', () => {
     expect(paths).not.toContain('/*');
   });
 
-  it('selects one author and fails closed after the exact rollback checkpoint', async () => {
+  it('records direct activation and fails closed after the exact rollback checkpoint', async () => {
     const app = candidate();
     const path = '/api/v1/organizations';
     expect((await authenticatedRequest(app, 'GET', path, user.sessionToken!)).status).toBe(200);
@@ -155,8 +155,8 @@ describe('cluster mesh business cutover', () => {
       status: 'active',
       previousGenerationId: 'legacy-api-business-v1',
       rollbackCheckpoint: { activeAuthor: 'legacy-api-business-routers' },
-      shadowComparison: { effectsDuplicated: false },
     });
+    expect(active?.shadowComparison).toBeUndefined();
     await cutovers.rollback(key, active!.previousGenerationId!);
     await expect(cutovers.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
     const blocked = await authenticatedRequest(app, 'GET', path, user.sessionToken!);
