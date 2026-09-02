@@ -1,10 +1,10 @@
-import { bidsRouter } from '../../api/bids';
+import { bidsRouter } from '../../../services/business/bids';
 import { foldersRouter } from '../../api/folders';
 import { initiativesRouter } from '../../api/initiatives';
 import { organizationsRouter } from '../../api/organizations';
-import { productsRouter } from '../../api/products';
-import { proposalsRouter } from '../../api/proposals';
-import { solutionsRouter } from '../../api/solutions';
+import { productsRouter } from '../../../services/business/products';
+import { proposalsRouter } from '../../../services/business/proposals';
+import { solutionsRouter } from '../../../services/business/solutions';
 import { viewTemplatesRouter } from '../../api/view-templates';
 import type { BusinessNamespacePorts, BusinessRouterPort } from './ports';
 
