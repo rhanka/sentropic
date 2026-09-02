@@ -1,11 +1,7 @@
 import { Hono } from 'hono';
 import { healthRouter } from './health';
 import { adminRouter, tenantResolutionMetricsRouter } from './admin';
-import { documentsRouter } from '../namespaces/documents/product-documents';
 import { exportsRouter, importsRouter } from './import-export';
-import { docxRouter } from '../namespaces/documents/product-docx';
-import { pptxRouter } from '../namespaces/documents/product-pptx';
-import { xlsxRouter } from '../namespaces/documents/product-xlsx';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { coworkDesktopRouter } from './cowork-desktop';
@@ -18,19 +14,6 @@ export const apiRouter = new Hono();
 // Public routes (no authentication required)
 apiRouter.route('/health', healthRouter);
 
-// DOCX export routes
-apiRouter.use('/use-cases/:id/docx', requireAuth);
-apiRouter.use('/docx/*', requireAuth);
-apiRouter.route('/', docxRouter);
-
-// PPTX export routes (BR-21a: generated via chat tool)
-apiRouter.use('/pptx/*', requireAuth);
-apiRouter.route('/', pptxRouter);
-
-// XLSX export routes (BR-40c: async folder multi-tab workbook)
-apiRouter.use('/xlsx/*', requireAuth);
-apiRouter.route('/', xlsxRouter);
-
 // Chrome extension metadata route for authenticated users.
 apiRouter.use('/chrome-extension/*', requireAuth);
 apiRouter.route('/chrome-extension', chromeExtensionRouter);
@@ -42,10 +25,6 @@ apiRouter.route('/vscode-extension', vscodeExtensionRouter);
 // Cowork desktop binary metadata route for authenticated users.
 apiRouter.use('/cowork-desktop/*', requireAuth);
 apiRouter.route('/cowork-desktop', coworkDesktopRouter);
-
-// Documents routes: allow reads for any authenticated user. Upload/delete are gated inside the router by workspace role.
-apiRouter.use('/documents/*', requireAuth);
-apiRouter.route('/documents', documentsRouter);
 
 // Import/Export routes: authenticated, role checks enforced per endpoint.
 apiRouter.use('/exports/*', requireAuth);
