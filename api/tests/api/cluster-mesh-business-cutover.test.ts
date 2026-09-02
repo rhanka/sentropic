@@ -1,5 +1,6 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { and, eq } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -160,5 +161,27 @@ describe('cluster mesh business cutover', () => {
         },
       },
     })).toThrowError('organizations unavailable');
+  });
+
+  it('keeps every business transport module free of product authority imports', () => {
+    const transportModules = [
+      'ports',
+      'organizations',
+      'folders',
+      'initiatives',
+      'solutions',
+      'products',
+      'proposals',
+      'bids',
+      'view-templates',
+      'router',
+    ];
+    const sources = transportModules.map((name) => readFileSync(
+      new URL(`../../src/routes/namespaces/business/${name}.ts`, import.meta.url),
+      'utf8',
+    ));
+    for (const source of sources) {
+      expect(source).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/);
+    }
   });
 });

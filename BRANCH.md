@@ -550,6 +550,7 @@
     - [x] Define selected author `business-domain-hono-module`, exact legacy checkpoint `legacy-api-business-v1`/`legacy-api-business-routers`, and fail-closed author fencing over every enumerated business path.
     - [x] Add pre-deletion safe-read parity and a candidate-only validated organization mutation that reaches its injected effect spy exactly once while canonical product state remains unchanged.
     - [x] Prove one durable author, exact rollback fail-close, module disableability, duplicate `/business` prefix 404, the retained `/use-cases` compatibility wire and separate `/bids` versus `/proposals` authorities.
+    - [x] Prove every business transport module is free of direct database, schema and canonical product-service imports; only the explicit product adapter imports product authorities.
     - [x] Relocate the solution, product, proposal and bid implementations behind the injected product adapter without changing their still-legacy mount behavior before final cutover.
     - [x] Relocate organization and folder implementations behind the same product adapter and keep Streams on the canonical organization hydration authority.
     - [x] Relocate initiative and view-template implementations behind the product adapter and repoint domain consumers to the single canonical initiative hydration implementation.
