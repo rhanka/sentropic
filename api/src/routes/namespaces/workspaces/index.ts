@@ -7,6 +7,7 @@ import {
 import { Hono, type MiddlewareHandler } from 'hono';
 
 import { requireAuth } from '../../../middleware/auth';
+import { requireEditor } from '../../../middleware/rbac';
 import { applyWorkspacesAuthorFence } from './cutover';
 import { productWorkspacePorts } from './product-ports';
 
@@ -24,6 +25,19 @@ export const WORKSPACE_EDITOR_PATHS = [
   '/workspaces/:id/members/:userId',
 ] as const;
 
+const WORKSPACE_EDITOR_ROUTES = [
+  ['POST', '/workspaces'],
+  ['PUT', '/workspaces/:id'],
+  ['PATCH', '/workspaces/:id/gate-config'],
+  ['POST', '/workspaces/:id/hide'],
+  ['POST', '/workspaces/:id/unhide'],
+  ['DELETE', '/workspaces/:id'],
+  ['POST', '/workspaces/:id/members'],
+  ['PATCH', '/workspaces/:id/members/:userId'],
+  ['PUT', '/workspaces/:id/members/:userId'],
+  ['DELETE', '/workspaces/:id/members/:userId'],
+] as const;
+
 export interface CreateWorkspacesNamespaceModuleOptions {
   readonly enabled?: boolean;
   readonly authenticate?: MiddlewareHandler;
@@ -39,6 +53,9 @@ export const createWorkspacesNamespaceModule = (
     const router = new Hono();
     for (const path of WORKSPACE_PATHS) {
       router.use(path, options.authenticate ?? requireAuth);
+    }
+    for (const [method, path] of WORKSPACE_EDITOR_ROUTES) {
+      router.on(method, path, requireEditor);
     }
     applyWorkspacesAuthorFence(router, WORKSPACE_PATHS);
     router.route('/', createWorkspacesRouter(options.ports ?? productWorkspacePorts));
