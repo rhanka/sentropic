@@ -1,7 +1,7 @@
 import { bidsRouter } from '../../../services/business/bids';
-import { foldersRouter } from '../../api/folders';
+import { foldersRouter } from '../../../services/business/folders';
 import { initiativesRouter } from '../../api/initiatives';
-import { organizationsRouter } from '../../api/organizations';
+import { organizationsRouter } from '../../../services/business/organizations';
 import { productsRouter } from '../../../services/business/products';
 import { proposalsRouter } from '../../../services/business/proposals';
 import { solutionsRouter } from '../../../services/business/solutions';
