@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
-import { COWORK_DESKTOP_CHANNEL_KEY } from '../../src/routes/api/cowork-desktop';
+import { COWORK_DESKTOP_CHANNEL_KEY } from '../../src/routes/namespaces/clients-product-cowork';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 
 describe('Cowork desktop download metadata API', () => {
