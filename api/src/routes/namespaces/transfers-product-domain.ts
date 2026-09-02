@@ -1,8 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import JSZip from 'jszip';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
@@ -16,11 +14,12 @@ import {
 } from '../../db/schema';
 import { db } from '../../db/client';
 import { createId } from '../../utils/id';
-import { getDocumentsBucketName, getObjectBytes, putObject } from '../../services/storage-s3';
-import { requireWorkspaceAdmin, requireWorkspaceEditor } from '../../services/workspace-access';
-
-export const exportsRouter = new Hono();
-export const importsRouter = new Hono();
+import {
+  TransferArchiveLimitError,
+  type TransferDomainPort,
+  type TransferDomainRuntimePorts,
+  type TransferManifestFile,
+} from './transfers';
 
 const scopeSchema = z.enum(['workspace', 'folder', 'initiative', 'organization', 'matrix']);
 
@@ -43,7 +42,7 @@ const exportSchema = z.object({
   export_kind: z.enum(['organizations', 'folders']).optional(),
 });
 
-type ManifestFile = { path: string; bytes: number; sha256: string };
+type ManifestFile = TransferManifestFile;
 
 type ExportPayload = {
   workspaces: Array<Record<string, unknown>>;
@@ -54,27 +53,6 @@ type ExportPayload = {
   matrix: Array<Record<string, unknown>>;
   comments: Array<Record<string, unknown>>;
 };
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((v) => stableStringify(v)).join(',')}]`;
-  }
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
-}
-
-function sha256Bytes(bytes: Uint8Array): string {
-  return createHash('sha256').update(bytes).digest('hex');
-}
-
-function encodeJson(data: unknown): Uint8Array {
-  const text = stableStringify(data);
-  return new TextEncoder().encode(text);
-}
 
 function toIso(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -837,7 +815,8 @@ async function collectExportData(opts: {
   return { payload, documents };
 }
 
-exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
+const createExportsRouter = (ports: TransferDomainRuntimePorts): Hono => new Hono()
+  .post('/', zValidator('json', exportSchema), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const body = c.req.valid('json');
   const scopeId = ensureScopeId(body.scope, body.scope_id ?? null);
@@ -847,9 +826,9 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
 
   try {
     if (body.scope === 'workspace') {
-      await requireWorkspaceAdmin(user.userId, user.workspaceId);
+      await ports.authorization.requireWorkspaceAdmin(user.userId, user.workspaceId);
     } else {
-      await requireWorkspaceEditor(user.userId, user.workspaceId);
+      await ports.authorization.requireWorkspaceEditor(user.userId, user.workspaceId);
     }
   } catch {
     return c.json({ message: 'Insufficient permissions' }, 403);
@@ -890,17 +869,19 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
     includeInitiativeOrganization,
   });
 
-  const zip = new JSZip();
+  const zip = ports.archive.create();
   const manifestFiles: ManifestFile[] = [];
 
   const addZipFile = (path: string, bytes: Uint8Array) => {
-    zip.file(path, bytes);
-    manifestFiles.push({ path, bytes: bytes.byteLength, sha256: sha256Bytes(bytes) });
+    zip.write(path, bytes);
+    manifestFiles.push({ path, bytes: bytes.byteLength, sha256: ports.archive.sha256(bytes) });
   };
 
-  if (payload.workspaces.length > 0) addZipFile('workspaces.json', encodeJson(payload.workspaces));
+  if (payload.workspaces.length > 0) {
+    addZipFile('workspaces.json', ports.archive.encodeJson(payload.workspaces));
+  }
   if (payload.workspace_memberships.length > 0) {
-    addZipFile('workspace_memberships.json', encodeJson(payload.workspace_memberships));
+    addZipFile('workspace_memberships.json', ports.archive.encodeJson(payload.workspace_memberships));
   }
 
   const commentMap = new Map<string, Array<Record<string, unknown>>>();
@@ -926,17 +907,24 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
   for (const org of payload.organizations) {
     const orgId = String((org as Record<string, unknown>).id ?? '');
     if (!orgId) continue;
-    addZipFile(`organization_${orgId}.json`, encodeJson(withComments(org, 'organization', orgId)));
+    addZipFile(
+      `organization_${orgId}.json`,
+      ports.archive.encodeJson(withComments(org, 'organization', orgId)),
+    );
   }
   for (const folder of payload.folders) {
     const folderId = String((folder as Record<string, unknown>).id ?? '');
     if (!folderId) continue;
-    addZipFile(`folder_${folderId}.json`, encodeJson(withComments(folder, 'folder', folderId)));
+    addZipFile(`folder_${folderId}.json`, ports.archive.encodeJson(
+      withComments(folder, 'folder', folderId),
+    ));
   }
   for (const initiative of payload.use_cases) {
     const initiativeId = String((initiative as Record<string, unknown>).id ?? '');
     if (!initiativeId) continue;
-    addZipFile(`initiative_${initiativeId}.json`, encodeJson(withComments(initiative, 'initiative', initiativeId)));
+    addZipFile(`initiative_${initiativeId}.json`, ports.archive.encodeJson(
+      withComments(initiative, 'initiative', initiativeId),
+    ));
   }
   for (const matrix of payload.matrix) {
     const folderId = String((matrix as Record<string, unknown>).folder_id ?? '');
@@ -944,7 +932,7 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
     const matrixPayload = includeComments
       ? withComments(matrix as Record<string, unknown>, 'matrix', folderId)
       : (matrix as Record<string, unknown>);
-    addZipFile(`matrix_${folderId}.json`, encodeJson(matrixPayload));
+    addZipFile(`matrix_${folderId}.json`, ports.archive.encodeJson(matrixPayload));
   }
 
   const exportedDocuments = includeDocuments
@@ -953,11 +941,11 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
   const skippedExternalDocuments = includeDocuments ? Math.max(0, documents.length - exportedDocuments.length) : 0;
 
   if (includeDocuments) {
-    const bucket = getDocumentsBucketName();
+    const bucket = ports.storage.defaultBucket();
     for (const doc of exportedDocuments) {
       const filename = doc.filename.replace(/[^\w.\- ()]/g, '_');
       const path = `documents/${doc.workspaceId}/${doc.contextType}/${doc.contextId}/${doc.id}-${filename}`;
-      const bytes = await getObjectBytes({ bucket, key: doc.storageKey as string });
+      const bytes = await ports.storage.getBytes({ bucket, key: doc.storageKey as string });
       addZipFile(path, bytes);
     }
   }
@@ -971,7 +959,7 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
         ? [`Skipped ${skippedExternalDocuments} external documents (non-local sources are not exported).`]
         : [],
   };
-  addZipFile('meta.json', encodeJson(meta));
+  addZipFile('meta.json', ports.archive.encodeJson(meta));
 
   const manifestCore = {
     export_version: '1.0',
@@ -984,11 +972,11 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
     include: Array.from(includeSet),
     files: manifestFiles.map((f) => ({ path: f.path, bytes: f.bytes, sha256: f.sha256 })),
   };
-  const manifestHash = sha256Bytes(encodeJson(manifestCore));
+  const manifestHash = ports.archive.sha256(ports.archive.encodeJson(manifestCore));
   const manifest = { ...manifestCore, manifest_hash: manifestHash };
-  zip.file('manifest.json', encodeJson(manifest));
+  zip.write('manifest.json', ports.archive.encodeJson(manifest));
 
-  const zipBytes = await zip.generateAsync({ type: 'uint8array' });
+  const zipBytes = await zip.generate();
   const zipBuffer = Buffer.from(zipBytes);
   const fileInfo = await resolveExportFileInfo({
     workspaceId: user.workspaceId,
@@ -1005,9 +993,11 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
   c.header('Content-Disposition', `attachment; filename="${fileName}"`);
   c.header('Access-Control-Expose-Headers', 'Content-Disposition');
   return c.newResponse(zipBuffer, 200);
-});
+  });
 
-importsRouter.post('/preview', async (c) => {
+const createImportsRouter = (ports: TransferDomainRuntimePorts): Hono => {
+  const router = new Hono();
+  router.post('/preview', async (c) => {
   const form = await c.req.raw.formData();
   const file = form.get('file');
   if (!(file instanceof File)) {
@@ -1015,16 +1005,19 @@ importsRouter.post('/preview', async (c) => {
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  let zip: JSZip;
+  let zip;
   try {
-    zip = await JSZip.loadAsync(bytes);
-  } catch {
+    zip = await ports.archive.open(bytes);
+  } catch (error) {
+    if (error instanceof TransferArchiveLimitError) {
+      return c.json({ message: error.message }, 413);
+    }
     return c.json({ message: 'Invalid zip file' }, 400);
   }
 
-  const manifestFile = zip.file('manifest.json');
+  const manifestFile = zip.read('manifest.json');
   if (!manifestFile) return c.json({ message: 'Missing manifest.json' }, 400);
-  const manifestText = await manifestFile.async('string');
+  const manifestText = await manifestFile.text();
   let manifest: Record<string, unknown>;
   try {
     manifest = JSON.parse(manifestText) as Record<string, unknown>;
@@ -1034,16 +1027,27 @@ importsRouter.post('/preview', async (c) => {
   const manifestScope = scopeSchema.safeParse(manifest.scope);
   if (!manifestScope.success) return c.json({ message: 'Invalid scope' }, 400);
   const manifestFiles = Array.isArray(manifest.files) ? (manifest.files as ManifestFile[]) : [];
+  try {
+    ports.archive.validateManifest(manifestFiles);
+  } catch (error) {
+    if (error instanceof TransferArchiveLimitError) {
+      return c.json({ message: error.message }, 413);
+    }
+    throw error;
+  }
   const { manifest_hash, ...manifestCore } = manifest;
-  const expectedHash = sha256Bytes(encodeJson(manifestCore));
+  const expectedHash = ports.archive.sha256(ports.archive.encodeJson(manifestCore));
   if (typeof manifest_hash !== 'string' || manifest_hash !== expectedHash) {
     return c.json({ message: 'Manifest hash mismatch' }, 400);
   }
   for (const entry of manifestFiles) {
-    const fileEntry = zip.file(entry.path);
+    const fileEntry = zip.read(entry.path);
     if (!fileEntry) return c.json({ message: `Missing file ${entry.path}` }, 400);
-    const fileBytes = await fileEntry.async('uint8array');
-    if (sha256Bytes(fileBytes) !== entry.sha256) {
+    const fileBytes = await fileEntry.bytes();
+    if (fileBytes.byteLength !== entry.bytes) {
+      return c.json({ message: `Size mismatch for ${entry.path}` }, 400);
+    }
+    if (ports.archive.sha256(fileBytes) !== entry.sha256) {
       return c.json({ message: `Hash mismatch for ${entry.path}` }, 400);
     }
   }
@@ -1058,7 +1062,7 @@ importsRouter.post('/preview', async (c) => {
   for (const entry of manifestFiles) {
     if (!entry.path.endsWith('.json')) continue;
     if (entry.path.startsWith('organization_')) {
-      const text = await zip.file(entry.path)?.async('string');
+      const text = await zip.read(entry.path)?.text();
       if (!text) continue;
       const obj = JSON.parse(text) as Record<string, unknown>;
       const id = typeof obj.id === 'string' ? obj.id : '';
@@ -1068,7 +1072,7 @@ importsRouter.post('/preview', async (c) => {
       continue;
     }
     if (entry.path.startsWith('folder_')) {
-      const text = await zip.file(entry.path)?.async('string');
+      const text = await zip.read(entry.path)?.text();
       if (!text) continue;
       const obj = JSON.parse(text) as Record<string, unknown>;
       const id = typeof obj.id === 'string' ? obj.id : '';
@@ -1078,7 +1082,7 @@ importsRouter.post('/preview', async (c) => {
       continue;
     }
     if (entry.path.startsWith('initiative_')) {
-      const text = await zip.file(entry.path)?.async('string');
+      const text = await zip.read(entry.path)?.text();
       if (!text) continue;
       const obj = JSON.parse(text) as Record<string, unknown>;
       const id = typeof obj.id === 'string' ? obj.id : '';
@@ -1092,7 +1096,7 @@ importsRouter.post('/preview', async (c) => {
       continue;
     }
     if (entry.path.startsWith('matrix_')) {
-      const text = await zip.file(entry.path)?.async('string');
+      const text = await zip.read(entry.path)?.text();
       if (!text) continue;
       const obj = JSON.parse(text) as Record<string, unknown>;
       const match = entry.path.match(/^matrix_([^/]+)\.json$/);
@@ -1111,9 +1115,9 @@ importsRouter.post('/preview', async (c) => {
     has_comments: hasComments,
     has_documents: hasDocuments,
   });
-});
+  });
 
-importsRouter.post('/', async (c) => {
+  router.post('/', async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
   const form = await c.req.raw.formData();
   const file = form.get('file');
@@ -1169,16 +1173,19 @@ importsRouter.post('/', async (c) => {
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  let zip: JSZip;
+  let zip;
   try {
-    zip = await JSZip.loadAsync(bytes);
-  } catch {
+    zip = await ports.archive.open(bytes);
+  } catch (error) {
+    if (error instanceof TransferArchiveLimitError) {
+      return c.json({ message: error.message }, 413);
+    }
     return c.json({ message: 'Invalid zip file' }, 400);
   }
 
-  const manifestFile = zip.file('manifest.json');
+  const manifestFile = zip.read('manifest.json');
   if (!manifestFile) return c.json({ message: 'Missing manifest.json' }, 400);
-  const manifestText = await manifestFile.async('string');
+  const manifestText = await manifestFile.text();
   let manifest: Record<string, unknown>;
   try {
     manifest = JSON.parse(manifestText) as Record<string, unknown>;
@@ -1189,18 +1196,29 @@ importsRouter.post('/', async (c) => {
   const manifestScope = scopeSchema.safeParse(manifest.scope);
   if (!manifestScope.success) return c.json({ message: 'Invalid scope' }, 400);
   const manifestFiles = Array.isArray(manifest.files) ? (manifest.files as ManifestFile[]) : [];
+  try {
+    ports.archive.validateManifest(manifestFiles);
+  } catch (error) {
+    if (error instanceof TransferArchiveLimitError) {
+      return c.json({ message: error.message }, 413);
+    }
+    throw error;
+  }
 
   const { manifest_hash, ...manifestCore } = manifest;
-  const expectedHash = sha256Bytes(encodeJson(manifestCore));
+  const expectedHash = ports.archive.sha256(ports.archive.encodeJson(manifestCore));
   if (typeof manifest_hash !== 'string' || manifest_hash !== expectedHash) {
     return c.json({ message: 'Manifest hash mismatch' }, 400);
   }
 
   for (const entry of manifestFiles) {
-    const fileEntry = zip.file(entry.path);
+    const fileEntry = zip.read(entry.path);
     if (!fileEntry) return c.json({ message: `Missing file ${entry.path}` }, 400);
-    const fileBytes = await fileEntry.async('uint8array');
-    if (sha256Bytes(fileBytes) !== entry.sha256) {
+    const fileBytes = await fileEntry.bytes();
+    if (fileBytes.byteLength !== entry.bytes) {
+      return c.json({ message: `Size mismatch for ${entry.path}` }, 400);
+    }
+    if (ports.archive.sha256(fileBytes) !== entry.sha256) {
       return c.json({ message: `Hash mismatch for ${entry.path}` }, 400);
     }
   }
@@ -1208,9 +1226,9 @@ importsRouter.post('/', async (c) => {
   if (targetWorkspaceId) {
     try {
       if (manifestScope.data === 'workspace') {
-        await requireWorkspaceAdmin(user.userId, targetWorkspaceId);
+        await ports.authorization.requireWorkspaceAdmin(user.userId, targetWorkspaceId);
       } else {
-        await requireWorkspaceEditor(user.userId, targetWorkspaceId);
+        await ports.authorization.requireWorkspaceEditor(user.userId, targetWorkspaceId);
       }
     } catch {
       return c.json({ message: 'Insufficient permissions' }, 403);
@@ -1218,17 +1236,17 @@ importsRouter.post('/', async (c) => {
   }
 
   const readJsonArray = async (path: string): Promise<Array<Record<string, unknown>>> => {
-    const entry = zip.file(path);
+    const entry = zip.read(path);
     if (!entry) return [];
-    const text = await entry.async('string');
+    const text = await entry.text();
     const parsed = JSON.parse(text);
     return Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
   };
 
   const readJsonObject = async (path: string): Promise<Record<string, unknown> | null> => {
-    const entry = zip.file(path);
+    const entry = zip.read(path);
     if (!entry) return null;
-    const text = await entry.async('string');
+    const text = await entry.text();
     const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     return parsed as Record<string, unknown>;
@@ -1542,7 +1560,7 @@ importsRouter.post('/', async (c) => {
   });
 
   if (allowDocuments) {
-    const bucket = getDocumentsBucketName();
+    const bucket = ports.storage.defaultBucket();
     const docEntries = manifestFiles.filter((f) => f.path.startsWith('documents/'));
     for (const entry of docEntries) {
       const match = entry.path.match(/^documents\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)-(.+)$/);
@@ -1555,17 +1573,18 @@ importsRouter.post('/', async (c) => {
       if (contextType === 'initiative') newContextId = idMap.usecase.get(contextId) ?? null;
       if (!newContextId) continue;
 
-      const fileEntry = zip.file(entry.path);
+      const fileEntry = zip.read(entry.path);
       if (!fileEntry) continue;
-      const fileBytes = await fileEntry.async('uint8array');
+      const fileBytes = await fileEntry.bytes();
       const safeName = filename.replace(/[^\w.\- ()]/g, '_');
       const docId = createId();
       const storageKey = `documents/${targetWorkspace}/${contextType}/${newContextId}/${docId}-${safeName}`;
-      await putObject({
+      await ports.storage.put({
         bucket,
         key: storageKey,
         body: fileBytes,
         contentType: guessMimeType(safeName),
+        expectedChecksum: entry.sha256,
       });
       await db.insert(contextDocuments).values({
         id: docId,
@@ -1591,4 +1610,13 @@ importsRouter.post('/', async (c) => {
     imported: true,
     target_folder_id: targetFolder?.id ?? null,
   });
-});
+  });
+  return router;
+};
+
+export const productTransferDomainPort: TransferDomainPort = {
+  createRouters: (ports) => ({
+    exports: createExportsRouter(ports),
+    imports: createImportsRouter(ports),
+  }),
+};
