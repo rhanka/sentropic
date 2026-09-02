@@ -36,7 +36,7 @@ const candidate = (ports: BusinessNamespacePorts = productBusinessPorts, enabled
     mounts: { '/business': '/' },
   }));
 
-describe('cluster mesh business pre-deletion shadow', () => {
+describe('cluster mesh business cutover', () => {
   let user: TestUser;
 
   beforeEach(async () => {
@@ -49,7 +49,7 @@ describe('cluster mesh business pre-deletion shadow', () => {
     await cleanupAuthData();
   });
 
-  it('matches a safe legacy read and dispatches one validated mutation intent', async () => {
+  it('preserves the pinned safe read and dispatches one validated mutation intent', async () => {
     const path = '/api/v1/organizations';
     const legacy = await authenticatedRequest(productApp, 'GET', path, user.sessionToken!);
     const shadow = await authenticatedRequest(candidate(), 'GET', path, user.sessionToken!);
@@ -139,5 +139,26 @@ describe('cluster mesh business pre-deletion shadow', () => {
     expect((await authenticatedRequest(
       app, 'GET', '/api/v1/business/organizations', user.sessionToken!,
     )).status).toBe(404);
+  });
+
+  it('leaves the authenticated legacy DOCX tombstone with the documents owner', async () => {
+    const path = '/api/v1/use-cases/legacy-id/docx';
+    expect((await candidate().request(path)).status).toBe(404);
+    expect((await productApp.request(path)).status).toBe(401);
+    expect((await authenticatedRequest(
+      productApp, 'GET', path, user.sessionToken!,
+    )).status).toBe(410);
+    expect(BUSINESS_PATHS).not.toContain('/use-cases/:id/docx');
+  });
+
+  it('fails composition when an injected product dependency is unavailable', () => {
+    expect(() => createBusinessTransportRouter({
+      ...productBusinessPorts,
+      organizations: {
+        createRouter() {
+          throw new Error('organizations unavailable');
+        },
+      },
+    })).toThrowError('organizations unavailable');
   });
 });

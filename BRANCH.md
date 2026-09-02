@@ -543,8 +543,9 @@
   - [x] Add modular factories under `api/src/routes/namespaces/business/**` for organizations, folders, initiatives, solutions, products, proposals and view templates over injected services.
     - [x] Define explicit neutral router ports and injectable organizations, folders, initiatives and solutions transport factories with no product service/schema imports.
     - [x] Add the products, proposals, bids and view-template factories plus the product adapter composition.
-  - [ ] Move DOCX generation out to `/documents`; decide and test the canonical status of `/use-cases` and `/bids` aliases before deleting their legacy mounts.
+  - [x] Move DOCX generation out to `/documents`; decide and test the canonical status of `/use-cases` and `/bids` aliases before deleting their legacy mounts.
     - [x] Characterization: `/initiatives` is canonical while `/use-cases` remains a required compatibility wire; `/bids` is a distinct canonical object/router beside `/proposals`; DOCX remains excluded from business and owned by the existing document router pending Lot 25 extraction.
+    - [x] Preserve the exact authenticated `/use-cases/:id/docx` 410 tombstone under the document mount; the business-only module returns 404 and its explicit fence excludes the path.
   - [ ] Shadow reads/validated mutation intent, select one business author, prove rollback and delete replaced route files `organizations.ts`, `folders.ts`, `initiatives.ts`, `solutions.ts`, `products.ts`, `proposals.ts`, `bids.ts`, `view-templates.ts`.
     - [x] Define selected author `business-domain-hono-module`, exact legacy checkpoint `legacy-api-business-v1`/`legacy-api-business-routers`, and fail-closed author fencing over every enumerated business path.
     - [x] Add pre-deletion safe-read parity and a candidate-only validated organization mutation that reaches its injected effect spy exactly once while canonical product state remains unchanged.
