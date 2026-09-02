@@ -573,7 +573,7 @@
     - [x] Implement the standalone transport router over exact `ANALYTICS_PATHS`, with no database, schema, business-router or canonical-service import.
     - [x] Supply canonical PostgreSQL, hydration, queue, settings and locale authorities only through the explicit product adapter.
     - [x] Keep runtime state truthful with direct `active` author selection, exact legacy rollback checkpoint, and 503 fail-close without fallback.
-  - [ ] Shadow deterministic aggregate reads and validated job intent, select one author, prove rollback and delete `api/src/routes/api/analytics.ts`.
+  - [x] Shadow deterministic aggregate reads and validated job intent, select one author, prove rollback and delete `api/src/routes/api/analytics.ts`.
     - [x] Execute the immutable legacy router and candidate independently against equivalent seeded PostgreSQL state; authenticated summary/scatter status and bodies match byte-for-byte.
     - [x] Prove candidate and historical POSTs each create exactly one authoritative queue row and update only their isolated twin folder, with equivalent normalized response and job payload.
     - [x] Select only `analytics-hono-module`, verify rollback to `legacy-api-analytics-v1`/`legacy-api-analytics-router`, and prove 503 fail-close plus 401/403/disabled/duplicate-prefix fences.
