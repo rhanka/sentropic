@@ -713,7 +713,7 @@
   - [x] Add `api/src/routes/namespaces/admin.ts` with injected admin/tenant-metrics/RBAC ports and preserve admin-role separation.
   - [x] Execute immutable historical authenticated read parity and isolated authoritative mutation twins, select one direct author without a shadow claim, prove exact rollback/control-unavailable fail-close and delete `api/src/routes/api/admin.ts` plus its imports/mounts.
   - [x] Tests new: `api/tests/api/cluster-mesh-admin-cutover.test.ts` passes 1 file/8 tests.
-  - [x] Tests updated: `api/tests/api/admin.test.ts`, `api/tests/api/admin-users.test.ts`, `api/tests/api/tenant-resolution-metrics.test.ts`, `api/tests/unit/auth/admin-registration.test.ts`; with root-mount fence completeness the exact batch passes 5 files/65 tests.
+  - [x] Tests retained unchanged and re-run: `api/tests/api/admin.test.ts`, `api/tests/api/admin-users.test.ts`, `api/tests/api/tenant-resolution-metrics.test.ts`, `api/tests/unit/auth/admin-registration.test.ts`; with root-mount fence completeness the exact batch passes 5 files/65 tests.
   - [x] UI tests: N-A; admin pages retain the existing client contract and no UI execution is claimed.
   - [ ] E2E inventory retained unchanged: `e2e/tests/01-admin-users.spec.ts`, `e2e/tests/00-access-control.spec.ts`.
     - [ ] Browser execution remains explicitly deferred to Lot 33; no browser E2E or UI cold-start claim is made in Lot 28.
