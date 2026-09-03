@@ -1,8 +1,8 @@
 # Feature: Add Fable 5.1 and GPT-6 Astra routing
 
 ## Objective
-- [ ] Add `claude-fable-5-1` and `gpt-6-astra` to `@sentropic/llm-mesh` and expose the contract through `@sentropic/llm-gateway`.
-- [ ] Keep every Fable 5.1 Codex fallback on `gpt-5.6-sol`, including `max`, until GPT-6 reaches GA.
+- [x] Add `claude-fable-5-1` and `gpt-6-astra` to `@sentropic/llm-mesh` and expose the contract through `@sentropic/llm-gateway`.
+- [x] Keep every Fable 5.1 Codex fallback on `gpt-5.6-sol`, including `max`, until GPT-6 reaches GA.
 
 ## Scope / Guardrails
 - [x] Work only in `tmp/feat-mesh-fable51-astra` on `feat/mesh-add-fable51-astra` from `origin/main@7a565be20`.
@@ -25,6 +25,7 @@
 - [x] `attention`: the owner supplied the exact ids, transports, interim equivalence, and GA cutover instruction; no live provider call is required.
 - [x] `attention`: base `BRANCH.md` contained unrelated W33 residue; replace it before source commits.
 - [x] `attention`: regenerate the model council from its pinned source; never hand-edit the output.
+- [x] `evidence`: post-bump audit is mesh `0.18.0 > 0.17.0` and gateway `0.14.0 > 0.13.3` on npm.
 
 ## AI Flaky tests
 - [ ] Accept none without same-commit success and explicit owner sign-off; never add timeouts or weaken assertions.
@@ -48,7 +49,7 @@
   - [x] Raise mesh floor to `^0.18.0`; bump gateway minor to `0.14.0`; extend `target.test.ts`.
   - [x] Regenerate/inspect the root lock; focused gateway target test passes (10 tests).
 - [ ] **Lot 3 — Final gates and delivery**
-  - [ ] Run council check plus requested mesh typecheck/test/build/pack gates.
-  - [ ] Run requested gateway typecheck/test gates.
-  - [ ] Run `make scope-check` before each atomic `make commit`; inspect every hunk.
+  - [x] Council check and mesh typecheck/build/pack pass; full mesh suite passes (26 files, 174 tests).
+  - [x] Gateway typecheck passes; full gateway suite passes (16 files, 113 tests).
+  - [x] Run `make scope-check` before each atomic `make commit`; inspect every hunk.
   - [ ] Push the branch, open the requested PR, and record versions/tests/commit/PR/GA-switch evidence.
