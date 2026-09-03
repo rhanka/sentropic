@@ -75,6 +75,12 @@ import {
   CLIENT_PATHS,
   productClientsModule,
 } from './routes/namespaces/clients-module';
+import {
+  ADMIN_APP_PATHS,
+  ADMIN_PATHS,
+  ADMIN_TENANT_METRICS_PATHS,
+  productAdminModule,
+} from './routes/namespaces/admin-module';
 
 const authPlugin = productAuthPlugin();
 
@@ -88,6 +94,7 @@ export interface RootMountedNamespaceRegistration {
   readonly namespace: string;
   readonly module: typeof productLlmMeshModule;
   readonly authPaths: readonly string[] | null;
+  readonly authorPaths?: readonly string[];
   readonly privilegedFences?: readonly PrivilegedPathFence[];
 }
 
@@ -123,6 +130,24 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
 ] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/admin',
+    module: productAdminModule,
+    authPaths: ADMIN_PATHS,
+    authorPaths: ADMIN_PATHS,
+    privilegedFences: [
+      {
+        name: 'app-admin',
+        paths: ADMIN_APP_PATHS,
+        pathPrefixes: ['/admin/reset', '/admin/stats', '/admin/users'],
+      },
+      {
+        name: 'admin',
+        paths: ADMIN_TENANT_METRICS_PATHS,
+        pathPrefixes: ['/admin/tenant-resolution-metrics'],
+      },
+    ],
+  },
   {
     namespace: '/clients',
     module: productClientsModule,
