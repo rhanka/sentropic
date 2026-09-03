@@ -40,9 +40,9 @@
   - [x] Pre-bump audit: mesh `0.17.0`, gateway `0.13.3`, both equal npm latest.
   - [x] Repair the inline-provider defect; focused test and both dry-run previews pass.
 - [ ] **Lot 1 — Mesh models, routes, council, and tests**
-  - [ ] Apply both sanctioned scaffolds; verify profiles and faithful transports; remove markers.
-  - [ ] Add Fable 5.1 base/high/xhigh/max interim `gpt-5.6-sol` rows plus the GPT-6 GA switch comment.
-  - [ ] Classify both models, regenerate/check the council, and bump mesh to `0.18.0`.
+  - [x] Apply both sanctioned scaffolds; verify profiles and faithful transports; remove markers.
+  - [x] Add Fable 5.1 base/high/xhigh/max interim `gpt-5.6-sol` rows plus the GPT-6 GA switch comment.
+  - [x] Classify both models, regenerate/check the council, and bump mesh to `0.18.0`.
   - [ ] Extend add-model, routing-target, council, facade, and route-selection tests; run focused tests.
 - [ ] **Lot 2 — Gateway publication contract**
   - [ ] Raise mesh floor to `^0.18.0`; bump gateway minor to `0.14.0`; extend `target.test.ts`.
