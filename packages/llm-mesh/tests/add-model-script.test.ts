@@ -107,6 +107,20 @@ describe('add-model scaffold', () => {
       .toContain("  openai: ['gpt-base', 'gpt-next'],");
   });
 
+  it('should recognize the new repository models as already scaffolded', () => {
+    const root = resolve(process.cwd(), '../..');
+    for (const [model, base] of [
+      ['claude-fable-5-1', 'claude-fable-5'],
+      ['gpt-6-astra', 'gpt-5.6-sol'],
+    ]) {
+      const result = spawnSync(process.execPath, [
+        script, '--root', root, '--model', model, '--base', base, '--dry-run',
+      ], { encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain('Dry run: no changes');
+    }
+  });
+
   it('should reject invalid ids and a BASE without a faithful route before writing', async () => {
     const { root, files } = await fixture();
     const invalid = spawnSync(process.execPath, [
