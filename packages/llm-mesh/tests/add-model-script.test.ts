@@ -92,6 +92,21 @@ describe('add-model scaffold', () => {
     expect(await readFile(files.providers, 'utf8')).toContain("    'gpt-next',");
   });
 
+  it('should extend an inline provider registry', async () => {
+    const { root, files } = await fixture();
+    const providers = await readFile(files.providers, 'utf8');
+    await writeFile(files.providers, providers.replace(
+      "  openai: [\n    'gpt-base',\n  ],",
+      "  openai: ['gpt-base'],",
+    ));
+
+    const result = run(root);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(await readFile(files.providers, 'utf8'))
+      .toContain("  openai: ['gpt-base', 'gpt-next'],");
+  });
+
   it('should reject invalid ids and a BASE without a faithful route before writing', async () => {
     const { root, files } = await fixture();
     const invalid = spawnSync(process.execPath, [
