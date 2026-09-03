@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
-import { apiRouter } from './routes/api';
 import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
@@ -81,6 +80,10 @@ import {
   ADMIN_TENANT_METRICS_PATHS,
   productAdminModule,
 } from './routes/namespaces/admin-module';
+import {
+  createProductHealthNamespaceModule,
+  HEALTH_PATHS,
+} from './routes/namespaces/health';
 
 const authPlugin = productAuthPlugin();
 
@@ -129,7 +132,25 @@ export const PREFIX_MOUNTED_NAMESPACE_REGISTRY = [
   },
 ] as const satisfies readonly PrefixMountedNamespaceRegistration[];
 
+const productHealthModule = createProductHealthNamespaceModule({
+  state: {
+    snapshot: () => ({
+      generation: clusterMeshAdapter.sessionControl!.runtime.generation,
+      modules: MOUNTED_NAMESPACE_REGISTRY.map(({ namespace, module }) => ({
+        namespace,
+        enabled: module.enabled,
+      })),
+    }),
+  },
+});
+
 export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
+  {
+    namespace: '/health',
+    module: productHealthModule,
+    authPaths: HEALTH_PATHS,
+    authorPaths: HEALTH_PATHS,
+  },
   {
     namespace: '/admin',
     module: productAdminModule,
@@ -387,6 +408,5 @@ app.route('/api/v1', createClusterMeshPlugin({
   namespaces: MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
   mounts: PRODUCT_CLUSTER_MESH_MOUNTS,
 }));
-app.route('/api/v1', apiRouter);
 
 app.get('/', (c) => c.json({ name: 'Sentropic API', version: '0.1.0' }));
