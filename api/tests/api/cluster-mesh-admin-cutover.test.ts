@@ -146,4 +146,49 @@ describe('cluster mesh admin cutover', () => {
         .toEqual({ status: legacy.status, body: await legacy.text() });
     }
   });
+
+  it('performs isolated authoritative candidate and historical approval mutations', async () => {
+    const candidateTarget = await createAuthenticatedUser('editor');
+    const historicalTarget = await createAuthenticatedUser('editor');
+    const pendingState = {
+      accountStatus: 'pending_admin_approval' as const,
+      approvalDueAt: new Date('2026-09-04T00:00:00.000Z'),
+      approvedAt: null,
+      approvedByUserId: null,
+    };
+    await db.update(users).set(pendingState).where(eq(users.id, candidateTarget.id));
+    await db.update(users).set(pendingState).where(eq(users.id, historicalTarget.id));
+    const approve = (app: Hono, userId: string) => authenticatedRequest(
+      app,
+      'POST',
+      `/api/v1/admin/users/${userId}/approve`,
+      appAdmin.sessionToken!,
+      { role: 'guest' },
+    );
+
+    const active = await approve(candidate(), candidateTarget.id);
+    expect({ status: active.status, body: await active.json() })
+      .toEqual({ status: 200, body: { success: true } });
+    const [candidateRow] = await db.select().from(users)
+      .where(eq(users.id, candidateTarget.id)).limit(1);
+    const [untouchedHistoricalRow] = await db.select().from(users)
+      .where(eq(users.id, historicalTarget.id)).limit(1);
+    expect(candidateRow).toMatchObject({
+      role: 'guest', accountStatus: 'active', approvedByUserId: appAdmin.id,
+    });
+    expect(candidateRow.approvedAt).toBeInstanceOf(Date);
+    expect(untouchedHistoricalRow).toMatchObject({
+      role: 'editor', accountStatus: 'pending_admin_approval', approvedByUserId: null,
+    });
+
+    const legacy = await approve(historical, historicalTarget.id);
+    expect({ status: legacy.status, body: await legacy.json() })
+      .toEqual({ status: 200, body: { success: true } });
+    const [historicalRow] = await db.select().from(users)
+      .where(eq(users.id, historicalTarget.id)).limit(1);
+    expect(historicalRow).toMatchObject({
+      role: 'guest', accountStatus: 'active', approvedByUserId: appAdmin.id,
+    });
+    expect(historicalRow.approvedAt).toBeInstanceOf(Date);
+  });
 });
