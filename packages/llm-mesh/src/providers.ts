@@ -12,6 +12,7 @@ export type ModelTaskHint = 'chat' | 'structured' | 'summary' | 'doc';
 
 export const knownModelIds = [
   'gpt-5.6-sol',
+  'gpt-6-astra',
   'gpt-5.6-terra',
   'gpt-5.6-luna',
   'gpt-5.5',
@@ -24,6 +25,7 @@ export const knownModelIds = [
   'claude-opus-5',
   'claude-opus-4-8',
   'claude-fable-5',
+  'claude-fable-5-1',
   'mistral-small-2603',
   'magistral-medium-2509',
   'command-a-03-2025',
@@ -59,6 +61,7 @@ export type QualifiedModelId = `${ProviderId}:${string}`;
 export const knownModelIdsByProvider = {
   openai: [
     'gpt-5.6-sol',
+    'gpt-6-astra',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
     'gpt-5.5',
@@ -66,7 +69,7 @@ export const knownModelIdsByProvider = {
     'gpt-4.1-nano',
   ],
   gemini: ['gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
-  anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-fable-5'],
+  anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-fable-5', 'claude-fable-5-1'],
   mistral: ['mistral-small-2603', 'magistral-medium-2509'],
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
   gcp: ['google/gemini-3.5-flash@gcp', 'google/gemini-3.1-flash-lite@gcp', 'anthropic/claude-sonnet-4-6@gcp', 'anthropic/claude-opus-4-6@gcp'],

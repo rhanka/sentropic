@@ -1,11 +1,12 @@
 {
-  "revision": "2026-08-08.1",
-  "expiresAt": "2027-02-08T00:00:00.000Z",
+  "revision": "2026-09-03.1",
+  "expiresAt": "2027-03-03T00:00:00.000Z",
   "reason": "No pinned benchmark evidence authorizes automatic substitution.",
-  "reviewer": "BR-73 model council",
-  "provenance": "spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md",
+  "reviewer": "Fable 5.1 and GPT-6 Astra owner directive",
+  "provenance": "feat/mesh-add-fable51-astra owner task",
   "excludedModelKeys": [
     "anthropic:claude-fable-5",
+    "anthropic:claude-fable-5-1",
     "anthropic:claude-opus-4-8",
     "anthropic:claude-opus-5",
     "anthropic:claude-sonnet-5",
@@ -25,6 +26,7 @@
     "openai:gpt-5.5",
     "openai:gpt-5.6-luna",
     "openai:gpt-5.6-sol",
-    "openai:gpt-5.6-terra"
+    "openai:gpt-5.6-terra",
+    "openai:gpt-6-astra"
   ]
 }
