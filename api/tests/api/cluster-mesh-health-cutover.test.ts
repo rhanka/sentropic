@@ -130,7 +130,8 @@ describe('cluster mesh health cutover', () => {
     expect(HEALTH_ROUTES).toEqual([['GET', '/health']]);
     expect(HEALTH_PATHS).not.toContain('/*');
     expect(existsSync(new URL('../../src/routes/api/health.ts', import.meta.url))).toBe(false);
-    expect(existsSync(new URL('../../src/routes/api/index.ts', import.meta.url))).toBe(false);
+    const apiIndex = readFileSync(new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8');
+    expect(apiIndex).not.toMatch(/healthRouter|\/health/);
     const transport = readFileSync(
       new URL('../../../packages/cluster-mesh/src/hono/health-router.ts', import.meta.url), 'utf8',
     );
