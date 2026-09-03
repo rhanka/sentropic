@@ -338,9 +338,9 @@ describe('Connector grant teardown — the enumeration of deletion sites is comp
    * schedule, not a property.
    */
   const KNOWN_CASCADING_DELETERS = [
-    'api/admin.ts',
-    'api/workspaces.ts',
     'namespaces/auth/account.ts',
+    'namespaces/admin-product-authority.ts',
+    'namespaces/workspaces/product-workspaces.ts',
   ];
 
   // Relative to `src/routes`, so the expectation reads identically wherever the repo lives — the
