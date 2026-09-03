@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin, requireEditor } from '../../src/middleware/rbac';
+import { adminAuthorFence } from '../../src/routes/namespaces/admin-cutover';
+import { requireAdminApp } from '../../src/routes/namespaces/admin-product-ports';
 import {
   MOUNTED_NAMESPACE_REGISTRY,
   PREFIX_MOUNTED_NAMESPACE_REGISTRY,
@@ -15,6 +17,26 @@ import {
 type RootMountedRouter = Pick<Hono, 'routes'>;
 
 const IMMUTABLE_ANALYTICS_EDITOR_PATHS = ['/analytics/executive-summary'] as const;
+const IMMUTABLE_ADMIN_AUTH_ROUTES = [
+  ['POST', '/admin/reset'],
+  ['GET', '/admin/stats'],
+  ['GET', '/admin/users'],
+  ['POST', '/admin/users/:id/approve'],
+  ['POST', '/admin/users/:id/disable'],
+  ['POST', '/admin/users/:id/reactivate'],
+  ['DELETE', '/admin/users/:id'],
+  ['GET', '/admin/tenant-resolution-metrics'],
+] as const;
+const IMMUTABLE_ADMIN_APP_PATHS = [
+  '/admin/reset',
+  '/admin/stats',
+  '/admin/users',
+  '/admin/users/:id/approve',
+  '/admin/users/:id/disable',
+  '/admin/users/:id/reactivate',
+  '/admin/users/:id',
+] as const;
+const IMMUTABLE_ADMIN_PATHS = ['/admin/tenant-resolution-metrics'] as const;
 const IMMUTABLE_CONFIG_ADMIN_PATHS = [
   '/settings',
   '/business-config',
@@ -203,16 +225,17 @@ const assertImmutableMethodRequirement = (
   authFence: readonly string[],
   handler: MiddlewareHandler,
   expectedRoutes: ReadonlyArray<readonly [string, string]>,
+  fenceName = 'auth',
 ): void => {
   expect(
     expectedRoutes.filter(([, path]) => !authFence.includes(path)),
-    `${namespace} immutable auth requirement is missing paths`,
+    `${namespace} immutable ${fenceName} requirement is missing paths`,
   ).toEqual([]);
   expect(
     expectedRoutes.filter(([method, path]) => !router.routes.some(
       (route) => route.method === method && route.path === path && route.handler === handler,
     )),
-    `${namespace} immutable auth requirement is missing method wiring`,
+    `${namespace} immutable ${fenceName} requirement is missing method wiring`,
   ).toEqual([]);
 };
 
@@ -236,6 +259,32 @@ describe('mounted namespace fence completeness', () => {
       assertPrivilegedMiddlewareFencesComplete(
         namespace, router, privilegedFences, 'editor', requireEditor,
       );
+      if (namespace === '/admin') {
+        const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
+        expect(authorPaths).toEqual(IMMUTABLE_ADMIN_AUTH_ROUTES.map(([, path]) => path));
+        assertImmutableMethodRequirement(
+          namespace, router, authPaths ?? [], requireAuth, IMMUTABLE_ADMIN_AUTH_ROUTES,
+        );
+        assertImmutableMethodRequirement(
+          namespace,
+          router,
+          authorPaths ?? [],
+          adminAuthorFence,
+          IMMUTABLE_ADMIN_AUTH_ROUTES,
+          'author',
+        );
+        assertPrivilegedMiddlewareFencesComplete(
+          namespace, router, privilegedFences, 'app-admin', requireAdminApp,
+        );
+        assertImmutablePrivilegedRequirement(
+          namespace, router, privilegedFences, 'app-admin', requireAdminApp,
+          IMMUTABLE_ADMIN_APP_PATHS,
+        );
+        assertImmutablePrivilegedRequirement(
+          namespace, router, privilegedFences, 'admin', requireAdmin,
+          IMMUTABLE_ADMIN_PATHS,
+        );
+      }
       if (namespace === '/analytics') {
         assertImmutablePrivilegedRequirement(
           namespace,
@@ -482,6 +531,79 @@ describe('mounted namespace fence completeness', () => {
 
     expect(() => assertFenceComplete('/clients', router, registration.authPaths!))
       .toThrowError('/clients mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when the live root-mounted admin router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/admin',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/admin/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/admin', router, registration.authPaths!))
+      .toThrowError('/admin mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when admin routes and mutable auth/author fences shrink together', () => {
+    const missingPath = '/admin/users/:id/approve';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/admin',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== missingPath,
+      ),
+    };
+    const authPaths = registration.authPaths!.filter((path) => path !== missingPath);
+    const authorPaths = ('authorPaths' in registration ? registration.authorPaths : [])
+      .filter((path) => path !== missingPath);
+
+    expect(() => {
+      assertFenceComplete('/admin', mutation, authPaths);
+      assertImmutableMethodRequirement(
+        '/admin', mutation, authPaths, requireAuth, IMMUTABLE_ADMIN_AUTH_ROUTES,
+      );
+      assertImmutableMethodRequirement(
+        '/admin', mutation, authorPaths, adminAuthorFence, IMMUTABLE_ADMIN_AUTH_ROUTES, 'author',
+      );
+    }).toThrowError('/admin immutable auth requirement is missing paths');
+  });
+
+  it.each([
+    {
+      name: 'app-admin', path: '/admin/users/:id/approve', prefix: '/admin/users',
+      handler: requireAdminApp, immutable: IMMUTABLE_ADMIN_APP_PATHS,
+    },
+    {
+      name: 'admin', path: '/admin/tenant-resolution-metrics',
+      prefix: '/admin/tenant-resolution-metrics', handler: requireAdmin,
+      immutable: IMMUTABLE_ADMIN_PATHS,
+    },
+  ])('fails when admin $name wiring and its fence shrink together', ({
+    name, path, prefix, handler, immutable,
+  }) => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/admin',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== path || route.handler !== handler,
+      ),
+    };
+    const fences = registration.privilegedFences!.map((fence) => fence.name === name
+      ? {
+          ...fence,
+          paths: fence.paths.filter((candidate) => candidate !== path),
+          pathPrefixes: fence.pathPrefixes.filter((candidate) => candidate !== prefix),
+        }
+      : fence);
+
+    expect(() => {
+      assertPrivilegedMiddlewareFencesComplete('/admin', mutation, fences, name, handler);
+      assertImmutablePrivilegedRequirement(
+        '/admin', mutation, fences, name, handler, immutable,
+      );
+    }).toThrowError(`/admin ${name} immutable requirement is missing privileged paths`);
   });
 
   it('fails when client routes and its mutable auth fence shrink together', () => {
