@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
 import { healthRouter } from './health';
-import { adminRouter, tenantResolutionMetricsRouter } from './admin';
+import {
+  adminRouter,
+  tenantResolutionMetricsRouter,
+} from '../namespaces/admin-product-authority';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
