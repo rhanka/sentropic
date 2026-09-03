@@ -1,10 +1,15 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  app as productApp,
+  PRODUCT_CLUSTER_MESH_MOUNTS,
+  ROOT_MOUNTED_NAMESPACE_REGISTRY,
+} from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { users } from '../../src/db/schema';
@@ -12,9 +17,11 @@ import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin, requireRole } from '../../src/middleware/rbac';
 import type { AdminCutoverControl } from '../../src/routes/namespaces/admin-cutover';
 import {
+  ADMIN_APP_PATHS,
   ADMIN_AUTHOR,
   ADMIN_PATHS,
   ADMIN_ROUTES,
+  ADMIN_TENANT_METRICS_PATHS,
   createAdminNamespaceModule,
   createAdminTransportRouter,
   type AdminNamespacePorts,
@@ -255,5 +262,36 @@ describe('cluster mesh admin cutover', () => {
     expect(ADMIN_PATHS).toHaveLength(8);
     expect(ADMIN_PATHS).not.toContain('/*');
     expect(ADMIN_ROUTES).toHaveLength(8);
+  });
+
+  it('registers one root author and leaves no legacy mount or production source', async () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/admin',
+    );
+    expect(registration?.module.namespace).toBe('/admin');
+    expect(registration?.authPaths).toEqual(ADMIN_PATHS);
+    expect('authorPaths' in registration! ? registration.authorPaths : undefined)
+      .toEqual(ADMIN_PATHS);
+    expect(registration?.privilegedFences).toEqual([
+      expect.objectContaining({ name: 'app-admin', paths: ADMIN_APP_PATHS }),
+      expect.objectContaining({ name: 'admin', paths: ADMIN_TENANT_METRICS_PATHS }),
+    ]);
+    expect(PRODUCT_CLUSTER_MESH_MOUNTS['/admin']).toBe('/');
+    expect((await productApp.request('/api/v1/admin/users')).status).toBe(401);
+    expect((await authenticatedRequest(
+      productApp, 'GET', '/api/v1/admin/admin/users', appAdmin.sessionToken!,
+    )).status).toBe(404);
+
+    expect(existsSync(new URL('../../src/routes/api/admin.ts', import.meta.url))).toBe(false);
+    const apiIndex = readFileSync(new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8');
+    expect(apiIndex).not.toMatch(/adminRouter|tenantResolutionMetricsRouter|\/admin/);
+    const transport = readFileSync(
+      new URL('../../src/routes/namespaces/admin.ts', import.meta.url), 'utf8',
+    );
+    expect(transport).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/);
+    const productPorts = readFileSync(
+      new URL('../../src/routes/namespaces/admin-product-ports.ts', import.meta.url), 'utf8',
+    );
+    expect(productPorts).not.toContain('fixtures/historical');
   });
 });
