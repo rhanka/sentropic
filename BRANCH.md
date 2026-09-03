@@ -44,9 +44,9 @@
   - [x] Add Fable 5.1 base/high/xhigh/max interim `gpt-5.6-sol` rows plus the GPT-6 GA switch comment.
   - [x] Classify both models, regenerate/check the council, and bump mesh to `0.18.0`.
   - [x] Extend add-model, routing-target, council, facade, and route-selection tests; focused runs pass (51 tests).
-- [ ] **Lot 2 — Gateway publication contract**
-  - [ ] Raise mesh floor to `^0.18.0`; bump gateway minor to `0.14.0`; extend `target.test.ts`.
-  - [ ] Regenerate/inspect the root lock and run the focused gateway test.
+- [x] **Lot 2 — Gateway publication contract**
+  - [x] Raise mesh floor to `^0.18.0`; bump gateway minor to `0.14.0`; extend `target.test.ts`.
+  - [x] Regenerate/inspect the root lock; focused gateway target test passes (10 tests).
 - [ ] **Lot 3 — Final gates and delivery**
   - [ ] Run council check plus requested mesh typecheck/test/build/pack gates.
   - [ ] Run requested gateway typecheck/test gates.
