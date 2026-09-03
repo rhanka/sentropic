@@ -265,6 +265,26 @@ describe('createLlmMesh', () => {
     );
   });
 
+  it('exposes Fable 5.1 and GPT-6 Astra with their family capabilities', () => {
+    const fable = getModelProfile('anthropic', 'claude-fable-5-1');
+    const astra = getModelProfile('openai', 'gpt-6-astra');
+
+    expect(fable).toMatchObject({
+      providerId: 'anthropic', modelId: 'claude-fable-5-1', label: 'Fable 5.1',
+      reasoningTier: 'advanced',
+    });
+    expect(fable?.capabilities).toEqual(
+      getModelProfile('anthropic', 'claude-fable-5')?.capabilities,
+    );
+    expect(astra).toMatchObject({
+      providerId: 'openai', modelId: 'gpt-6-astra', label: 'GPT-6 Astra',
+      reasoningTier: 'advanced',
+    });
+    expect(astra?.capabilities).toEqual(
+      getModelProfile('openai', 'gpt-5.6-sol')?.capabilities,
+    );
+  });
+
   it('advertises image input only for verified vision-capable provider families', () => {
     expect(getModelProfile('openai', 'gpt-5.5')?.capabilities.modalities.input).toContain('image');
     expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
