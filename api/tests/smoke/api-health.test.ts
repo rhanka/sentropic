@@ -7,6 +7,47 @@ import { httpRequest, authenticatedHttpRequest } from '../utils/test-helpers';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
 describe('API Health', () => {
+  it('emits the live health cutover and control-loss status map', async () => {
+    const active = await httpRequest('/api/v1/health');
+    const duplicate = await httpRequest('/api/v1/health/health');
+    const records = await db.select().from(clusterMeshNamespaceCutovers).where(and(
+      eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+      eq(clusterMeshNamespaceCutovers.namespace, '/health'),
+    ));
+    expect(records).toEqual([expect.objectContaining({
+      status: 'active', activeAuthor: 'health-hono-module', shadowComparison: null,
+    })]);
+    const body = await active.json();
+    expect(body).toMatchObject({
+      status: 'ok', readiness: { status: 'ready', reasons: [] },
+      clusterMesh: { generation: { generationId: 'cluster-mesh-session-v1', status: 'active' } },
+    });
+
+    await db.execute(sql.raw(
+      'ALTER TABLE control.cluster_mesh_namespace_cutovers '
+      + 'RENAME TO cluster_mesh_namespace_cutovers_lot29_probe',
+    ));
+    let unavailable: Response;
+    try {
+      unavailable = await httpRequest('/api/v1/health');
+    } finally {
+      await db.execute(sql.raw(
+        'ALTER TABLE control.cluster_mesh_namespace_cutovers_lot29_probe '
+        + 'RENAME TO cluster_mesh_namespace_cutovers',
+      ));
+    }
+    const recovered = await httpRequest('/api/v1/health');
+    const statuses = {
+      active: active.status,
+      duplicate: duplicate.status,
+      controlUnavailable: unavailable.status,
+      recovered: recovered.status,
+    };
+    console.info(`D11_HEALTH_PROBE ${JSON.stringify({ statuses, cutover: records[0] })}`);
+    expect(statuses).toEqual({ active: 200, duplicate: 404, controlUnavailable: 503, recovered: 200 });
+    await expect(unavailable.json()).resolves.toEqual({ error: 'health_control_unavailable' });
+  });
+
   it('keeps health anonymous while gating connector and agent administration paths', async () => {
     const response = await httpRequest('/api/v1/health');
     expect(response.status).toBe(200);
