@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin, requireEditor } from '../../src/middleware/rbac';
 import { adminAuthorFence } from '../../src/routes/namespaces/admin-cutover';
+import { healthAuthorFence } from '../../src/routes/namespaces/health-cutover';
 import { requireAdminApp } from '../../src/routes/namespaces/admin-product-ports';
 import {
   MOUNTED_NAMESPACE_REGISTRY,
@@ -17,6 +18,7 @@ import {
 type RootMountedRouter = Pick<Hono, 'routes'>;
 
 const IMMUTABLE_ANALYTICS_EDITOR_PATHS = ['/analytics/executive-summary'] as const;
+const IMMUTABLE_HEALTH_ROUTES = [['GET', '/health']] as const;
 const IMMUTABLE_ADMIN_AUTH_ROUTES = [
   ['POST', '/admin/reset'],
   ['GET', '/admin/stats'],
@@ -239,6 +241,24 @@ const assertImmutableMethodRequirement = (
   ).toEqual([]);
 };
 
+const assertImmutableRouteRequirement = (
+  namespace: string,
+  router: RootMountedRouter,
+  fence: readonly string[],
+  expectedRoutes: ReadonlyArray<readonly [string, string]>,
+): void => {
+  expect(
+    expectedRoutes.filter(([, path]) => !fence.includes(path)),
+    `${namespace} immutable route requirement is missing paths`,
+  ).toEqual([]);
+  expect(
+    expectedRoutes.filter(([method, path]) => !router.routes.some(
+      (route) => route.method === method && route.path === path,
+    )),
+    `${namespace} immutable route requirement is missing method wiring`,
+  ).toEqual([]);
+};
+
 const withoutRequireAdminPath = (
   router: RootMountedRouter,
   path: string,
@@ -259,6 +279,16 @@ describe('mounted namespace fence completeness', () => {
       assertPrivilegedMiddlewareFencesComplete(
         namespace, router, privilegedFences, 'editor', requireEditor,
       );
+      if (namespace === '/health') {
+        const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
+        expect(authPaths).toEqual(IMMUTABLE_HEALTH_ROUTES.map(([, path]) => path));
+        expect(authorPaths).toEqual(IMMUTABLE_HEALTH_ROUTES.map(([, path]) => path));
+        expect(authPaths).not.toContain('/*');
+        assertImmutableRouteRequirement(namespace, router, authPaths ?? [], IMMUTABLE_HEALTH_ROUTES);
+        assertImmutableMethodRequirement(
+          namespace, router, authorPaths ?? [], healthAuthorFence, IMMUTABLE_HEALTH_ROUTES, 'author',
+        );
+      }
       if (namespace === '/admin') {
         const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
         expect(authorPaths).toEqual(IMMUTABLE_ADMIN_AUTH_ROUTES.map(([, path]) => path));
@@ -421,6 +451,17 @@ describe('mounted namespace fence completeness', () => {
 
     expect(() => assertFenceComplete('/streams', router, registration.authPaths ?? []))
       .toThrowError('/streams mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when the live root-mounted health router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/health',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/health/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/health', router, registration.authPaths!))
+      .toThrowError('/health mounted namespace fence is missing registered paths');
   });
 
   it('fails when root-mounted locks gains a route outside its explicit fence', () => {
