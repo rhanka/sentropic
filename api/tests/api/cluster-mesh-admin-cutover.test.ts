@@ -12,6 +12,9 @@ import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin, requireRole } from '../../src/middleware/rbac';
 import type { AdminCutoverControl } from '../../src/routes/namespaces/admin-cutover';
 import {
+  ADMIN_AUTHOR,
+  ADMIN_PATHS,
+  ADMIN_ROUTES,
   createAdminNamespaceModule,
   createAdminTransportRouter,
   type AdminNamespacePorts,
@@ -190,5 +193,67 @@ describe('cluster mesh admin cutover', () => {
       role: 'guest', accountStatus: 'active', approvedByUserId: appAdmin.id,
     });
     expect(historicalRow.approvedAt).toBeInstanceOf(Date);
+  });
+
+  it('selects one direct author and fails closed after the exact rollback checkpoint', async () => {
+    const app = candidate();
+    const path = '/api/v1/admin/users';
+    expect((await authenticatedRequest(app, 'GET', path, appAdmin.sessionToken!)).status).toBe(200);
+    const active = await cutovers.find(key);
+    expect(active).toMatchObject({
+      status: 'active',
+      activeAuthor: ADMIN_AUTHOR,
+      selectedGenerationId: clusterMeshAdapter.sessionControl!.runtime.generation.generationId,
+      previousGenerationId: 'legacy-api-admin-v1',
+      rollbackCheckpoint: { activeAuthor: 'legacy-api-admin-router' },
+    });
+    expect(active?.shadowComparison).toBeUndefined();
+
+    await cutovers.rollback(key, active!.previousGenerationId!);
+    await expect(cutovers.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(app, 'GET', path, appAdmin.sessionToken!);
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('has no disabled, duplicate, role, or unavailable-control fallback', async () => {
+    const path = '/api/v1/admin/users';
+    expect((await candidate().request(path)).status).toBe(401);
+    expect(await cutovers.find(key)).toBeNull();
+    expect((await candidate(false).request(path)).status).toBe(404);
+    expect((await authenticatedRequest(
+      candidate(), 'GET', '/api/v1/admin/admin/users', appAdmin.sessionToken!,
+    )).status).toBe(404);
+    expect((await authenticatedRequest(
+      candidate(), 'GET', path, tenantAdmin.sessionToken!,
+    )).status).toBe(403);
+
+    const unavailable: AdminCutoverControl = {
+      runtime: { generation: clusterMeshAdapter.sessionControl!.runtime.generation },
+      cutovers: {
+        find: vi.fn(async () => { throw new Error('control unavailable'); }),
+        activate: vi.fn(async () => undefined),
+      },
+    };
+    const blocked = await authenticatedRequest(
+      candidate(true, productAdminPorts, unavailable),
+      'GET',
+      path,
+      appAdmin.sessionToken!,
+    );
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'admin_control_unavailable' });
+  });
+
+  it('enumerates the exact transport methods and paths without a wildcard', () => {
+    const transportPaths = [...new Set(
+      createAdminTransportRouter(productAdminPorts).routes
+        .filter(({ method }) => method !== 'ALL')
+        .map(({ path }) => path),
+    )].sort();
+    expect(transportPaths).toEqual([...ADMIN_PATHS].sort());
+    expect(ADMIN_PATHS).toHaveLength(8);
+    expect(ADMIN_PATHS).not.toContain('/*');
+    expect(ADMIN_ROUTES).toHaveLength(8);
   });
 });
