@@ -86,6 +86,7 @@ import {
 } from './routes/namespaces/health';
 import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
+import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
 
 const authPlugin = productAuthPlugin();
 
@@ -169,6 +170,12 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     module: productCatalogModule,
     authPaths: CATALOG_PATHS,
     authorPaths: CATALOG_PATHS,
+  },
+  {
+    namespace: '/resources',
+    module: productResourcesModule,
+    authPaths: RESOURCE_PATHS,
+    authorPaths: RESOURCE_PATHS,
   },
   {
     namespace: '/admin',
