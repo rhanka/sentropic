@@ -227,6 +227,61 @@ describe('API Health', () => {
       await expect(unavailable.json()).resolves.toEqual({ error: 'admin_control_unavailable' });
     });
 
+    it('emits the live apps cutover and control-loss status map', async () => {
+      const appAdmin = await createAuthenticatedUser('admin_app');
+      const read = () => authenticatedHttpRequest(
+        'GET', '/api/v1/apps/templates', appAdmin.sessionToken!,
+      );
+      const [health, anonymous, duplicate, active] = await Promise.all([
+        httpRequest('/api/v1/health'),
+        httpRequest('/api/v1/apps/templates'),
+        authenticatedHttpRequest(
+          'GET', '/api/v1/apps/apps/templates', appAdmin.sessionToken!,
+        ),
+        read(),
+      ]);
+      const records = await db.select().from(clusterMeshNamespaceCutovers).where(and(
+        eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+        eq(clusterMeshNamespaceCutovers.namespace, '/apps'),
+      ));
+      expect(records).toEqual([expect.objectContaining({
+        status: 'active', activeAuthor: 'apps-hono-module', shadowComparison: null,
+      })]);
+
+      await db.execute(sql.raw(
+        'ALTER TABLE control.cluster_mesh_namespace_cutovers '
+        + 'RENAME TO cluster_mesh_namespace_cutovers_lot30_probe',
+      ));
+      let unavailable: Response;
+      try {
+        unavailable = await read();
+      } finally {
+        await db.execute(sql.raw(
+          'ALTER TABLE control.cluster_mesh_namespace_cutovers_lot30_probe '
+          + 'RENAME TO cluster_mesh_namespace_cutovers',
+        ));
+      }
+      const recovered = await read();
+      const statuses = {
+        health: health.status,
+        anonymousApps: anonymous.status,
+        duplicateApps: duplicate.status,
+        activeApps: active.status,
+        controlUnavailable: unavailable.status,
+        recoveredApps: recovered.status,
+      };
+      console.info(`LOT30_APPS_PROBE ${JSON.stringify({ statuses, cutover: records[0] })}`);
+      expect(statuses).toEqual({
+        health: 200,
+        anonymousApps: 401,
+        duplicateApps: 404,
+        activeApps: 200,
+        controlUnavailable: 503,
+        recoveredApps: 200,
+      });
+      await expect(unavailable.json()).resolves.toEqual({ error: 'apps_control_unavailable' });
+    });
+
     it('should have organizations endpoint accessible', async () => {
       const response = await authenticatedHttpRequest('GET', '/api/v1/organizations', user.sessionToken!);
       expect(response.status).toBe(200);
