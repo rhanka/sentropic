@@ -50,6 +50,8 @@ export interface ResourceHttpPrincipal {
   readonly userId: string;
   readonly scope: { readonly tenantId: string; readonly workspaceId: string };
   readonly context: {
+    readonly userId: string;
+    readonly role: string;
     readonly workspaceType?: string;
     readonly roles: readonly string[];
     readonly permissions: readonly string[];
