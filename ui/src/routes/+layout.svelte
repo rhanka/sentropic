@@ -210,9 +210,9 @@
     const currentScope = $workspaceScope.selectedId ?? null;
 
     if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
-      // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
-      // On nettoie uniquement les caches côté UI.
-      streamHub.clearCaches();
+      // A scope change changes the tenant fence on the SSE URL. Reconnect so
+      // events cannot remain bound to the previously selected workspace.
+      streamHub.reset();
       organizationsStore.set([]);
       currentOrganizationId.set(null);
       foldersStore.set([]);
