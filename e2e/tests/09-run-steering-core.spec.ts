@@ -30,43 +30,18 @@ test.describe('chat steering core after the Flow cutover', () => {
     });
 
     try {
-      const workspacesRes = await api.get('/api/v1/workspaces');
-      expect(workspacesRes.ok()).toBeTruthy();
-      const workspacesPayload = (await workspacesRes.json().catch(() => null)) as
-        | { items?: WorkspaceItem[] }
-        | null;
-      const items = Array.isArray(workspacesPayload?.items)
-        ? workspacesPayload.items
-        : [];
-      const writableWorkspace =
-        items.find((entry) => entry.role !== 'viewer') ?? items[0];
-      expect(writableWorkspace?.id).toBeTruthy();
-      const workspaceId = String(writableWorkspace?.id ?? '');
-
       const suffix = Date.now();
+      const workspaceRes = await api.post('/api/v1/workspaces', {
+        data: { name: `E2E chat steering ${suffix}` },
+      });
+      expect(workspaceRes.ok()).toBeTruthy();
+      const workspaceId = String((await workspaceRes.json().catch(() => null))?.id ?? '');
+      expect(workspaceId).toBeTruthy();
       const sessionTitle = `E2E chat steer ${suffix}`;
       const initialMessage =
         "Rédige 180 lignes numérotées sur l'analyse de la maintenance prédictive ferroviaire pour Bombardier Inc., avec exemples concrets, contraintes RGPD, cybersécurité OT, budget de 1M$ et délai de 6 mois. Ne pose aucune question et n'ajoute pas de résumé.";
       const steerMessage =
         'Concentre la suite sur les 3 points les plus prioritaires.';
-
-      const sessionsRes = await api.get(
-        `/api/v1/chat/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
-      );
-      expect(sessionsRes.ok()).toBeTruthy();
-      const sessionsPayload = (await sessionsRes
-        .json()
-        .catch(() => null)) as
-        | { sessions?: Array<{ id?: string }> }
-        | null;
-      for (const session of sessionsPayload?.sessions ?? []) {
-        const sessionId = String(session?.id ?? '').trim();
-        if (!sessionId) continue;
-        const deleteRes = await api.delete(
-          `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
-        );
-        expect(deleteRes.ok()).toBeTruthy();
-      }
 
       const createSessionRes = await api.post(
         `/api/v1/chat/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
@@ -79,6 +54,7 @@ test.describe('chat steering core after the Flow cutover', () => {
       );
       expect(createSessionRes.status()).toBe(200);
 
+      await page.addInitScript((id) => localStorage.setItem('workspaceScopeId', id), workspaceId);
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
 

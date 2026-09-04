@@ -82,13 +82,18 @@ test.describe('Chat completed run leaves a terminal (non-frozen) UI', () => {
     ).toHaveCount(0, { timeout: QUICK_UI_TIMEOUT });
   }
 
-  async function waitForQueueJobSettled(page: Page, jobId: string, timeout = AI_GENERATION_TIMEOUT) {
+  async function waitForQueueJobSettled(
+    page: Page,
+    jobId: string,
+    workspaceId: string,
+    timeout = AI_GENERATION_TIMEOUT,
+  ) {
     expect(jobId, 'POST /chat/messages must return a jobId').toBeTruthy();
     await expect
       .poll(
         async () => {
           const res = await page.request.get(
-            `${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}`,
+            `${API_BASE_URL}/api/v1/queue/jobs/${encodeURIComponent(jobId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
           );
           if (!res.ok()) return `http-${res.status()}`;
           const data = await res.json().catch(() => null);
@@ -160,7 +165,7 @@ test.describe('Chat completed run leaves a terminal (non-frozen) UI', () => {
       await openChat(page);
 
       const run = await typeAndSend(page, 'Reply with a short one-line greeting.');
-      await waitForQueueJobSettled(page, run.jobId);
+      await waitForQueueJobSettled(page, run.jobId, workspaceId);
 
       // The run completed server-side — the UI MUST reach terminal:
       // 1. an assistant bubble is rendered (content visible),
@@ -219,7 +224,7 @@ test.describe('Chat completed run leaves a terminal (non-frozen) UI', () => {
       expect(run.sessionId).toBeTruthy();
 
       // The run completes server-side even though the client got no live SSE.
-      await waitForQueueJobSettled(page, run.jobId);
+      await waitForQueueJobSettled(page, run.jobId, workspaceId);
       expect(sseBlocked, 'live SSE route should have been hit and aborted').toBeGreaterThan(0);
 
       // Lift the SSE block, then reload + reopen so the session history ndjson

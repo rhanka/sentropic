@@ -53,10 +53,12 @@ test.describe('Chat heavy flows', () => {
     };
   }
 
-  async function debugBackendState(page: any, jobId: string, streamId: string) {
+  async function debugBackendState(page: any, jobId: string, streamId: string, workspaceId: string) {
     try {
       if (jobId) {
-        const jobRes = await page.request.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+        const jobRes = await page.request.get(
+          `/api/v1/queue/jobs/${encodeURIComponent(jobId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
+        );
         console.log('[08-chat-heavy] job status:', jobRes.status(), await jobRes.text());
       }
     } catch (error) {
@@ -146,7 +148,7 @@ test.describe('Chat heavy flows', () => {
       await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
     } catch (error) {
       await debugAssistantState(page);
-      await debugBackendState(page, jobId, streamId);
+      await debugBackendState(page, jobId, streamId, adminWorkspaceId);
       throw error;
     }
 

@@ -33,8 +33,11 @@ test.describe('Chat organization_update tool', () => {
   const readOrgTechnologies = async (
     api: import('@playwright/test').APIRequestContext,
     orgId: string,
+    workspaceId: string,
   ): Promise<string> => {
-    const res = await api.get(`/api/v1/organizations/${orgId}`);
+    const res = await api.get(
+      `/api/v1/organizations/${orgId}?workspace_id=${encodeURIComponent(workspaceId)}`,
+    );
     if (!res.ok()) return '';
     const body = await res.json().catch(() => null);
     const data = (body?.data ?? {}) as Record<string, unknown>;
@@ -83,7 +86,7 @@ test.describe('Chat organization_update tool', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceId),
     });
 
-    const before = await readOrgTechnologies(scopedApi, orgId);
+    const before = await readOrgTechnologies(scopedApi, orgId, workspaceId);
     expect(before).toBe('Legacy mainframe');
 
     const context = await browser.newContext({
@@ -150,7 +153,7 @@ test.describe('Chat organization_update tool', () => {
       const start = Date.now();
       let after = '';
       while (Date.now() - start < 120_000) {
-        after = await readOrgTechnologies(scopedApi, orgId);
+        after = await readOrgTechnologies(scopedApi, orgId, workspaceId);
         if (after !== before && after.toLowerCase().includes('kubernetes')) break;
         await page.waitForTimeout(2000);
       }
