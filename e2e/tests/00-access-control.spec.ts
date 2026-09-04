@@ -252,6 +252,11 @@ test.describe('Access control — roles workspace', () => {
     });
     const editorPage = await editorContext.newPage();
     widget = await openComments(editorPage);
+    await expect(editorPage.locator('.editable-input, .editable-textarea').first()).toBeEnabled();
+    await expect(widget.locator('[role="textbox"][aria-label="Composer"]:visible')).toHaveAttribute(
+      'aria-disabled',
+      'false'
+    );
     const editable = widget.locator('[role="textbox"][aria-label="Composer"]:visible [contenteditable="true"]');
     await editable.click();
     await editorPage.keyboard.type('Commentaire editor');
@@ -264,7 +269,7 @@ test.describe('Access control — roles workspace', () => {
     await expect(widget.locator('.userMarkdown').filter({ hasText: 'Commentaire editor' })).toBeVisible();
     const resolveButtonEditor = widget.locator('button[aria-label*="Résoudre"], button[aria-label*="Resolve"]');
     if ((await resolveButtonEditor.count()) > 0) {
-      await expect(resolveButtonEditor.first()).toBeEnabled();
+      await expect(resolveButtonEditor.first()).toBeDisabled();
     }
     await editorContext.close();
 
@@ -276,7 +281,7 @@ test.describe('Access control — roles workspace', () => {
     widget = await openComments(adminPage);
     const resolveButtonAdmin = widget.locator('button[aria-label*="Résoudre"]:visible, button[aria-label*="Resolve"]:visible');
     if ((await resolveButtonAdmin.count()) > 0) {
-      await expect(resolveButtonAdmin.first()).toBeVisible();
+      await expect(resolveButtonAdmin.first()).toBeEnabled();
     }
     await adminContext.close();
   });
