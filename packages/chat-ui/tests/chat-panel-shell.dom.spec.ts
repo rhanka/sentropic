@@ -6,7 +6,7 @@
  *
  * Environment: jsdom via vitest.dom.config.ts (target: test-chat-ui-dom).
  */
-import { cleanup, render } from '@testing-library/svelte';
+import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import ChatPanelShell from '../src/components/ChatPanelShell.svelte';
 
@@ -82,7 +82,7 @@ describe('ChatPanelShell (gold shell assembly)', () => {
     getByText('HTTP 502: Unknown error');
   });
 
-  it('forwards the reactive workspace permission to the comments composer', () => {
+  it('reacts to workspace permission and comment input changes', async () => {
     const commentHost = {
       listComments: async () => ({ items: [] }),
       createComment: async () => ({ id: 'comment-1', thread_id: 'thread-1' }),
@@ -97,17 +97,26 @@ describe('ChatPanelShell (gold shell assembly)', () => {
       currentUser: () => null,
       subscribeCommentUpdates: () => () => {},
     } as never;
-    const { container } = render(ChatPanelShell, {
-      props: {
-        mode: 'comments',
-        labels: LABELS,
-        commentHost,
-        workspaceCanComment: false,
-      },
+    const props = {
+      mode: 'comments' as const,
+      labels: LABELS,
+      commentHost,
+      workspaceCanComment: false,
+      commentContextType: 'initiative',
+      commentContextId: 'initiative-1',
+    };
+    const { container, rerender } = render(ChatPanelShell, {
+      props,
     });
     const send = container.querySelector('button[aria-label="common.send"]');
     expect(send).not.toBeNull();
     expect((send as HTMLButtonElement).disabled).toBe(true);
+
+    await rerender({ ...props, workspaceCanComment: true });
+    const input = container.querySelector('textarea[aria-label="chat.composer.ariaLabel"]');
+    expect(input).not.toBeNull();
+    await fireEvent.input(input as HTMLTextAreaElement, { target: { value: 'Reply' } });
+    expect((send as HTMLButtonElement).disabled).toBe(false);
   });
 
   const assistantItem = {
