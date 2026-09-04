@@ -790,8 +790,8 @@
     - [x] Product integration matches the direct canonical dispatcher for list/stat/read/grep, keeps catalog edit/invoke unavailable, and derives tenant/workspace/role server-side.
     - [x] Add a standalone, independently disableable namespace module and direct fail-closed author control for all six routes.
     - [x] Register the real root remap with explicit non-null auth/author paths and independent live-unfenced plus simultaneous-shrink invariants.
-  - [ ] Shadow read/list/stat/grep results and validated edit/invoke intent, select one author and prove rollback.
-  - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct resource-dispatch HTTP shim found during inventory.
+  - [x] Direct canonical read/list/stat/grep parity and validated edit/invoke refusal replace invented shadow proof; select one author and prove rollback to the exact no-HTTP checkpoint.
+  - [x] Legacy path deletion: N-A because source inventory confirms no prior HTTP resource mount or direct resource-dispatch shim; `historicalFixture: not_applicable` and `replayIdempotencyClaim: false` remain explicit.
   - [ ] Tests new: `api/tests/api/cluster-mesh-resources.test.ts`.
     - [x] Cover exact neutral routes, no-service imports, six validated projections, preserved provenance and caller-scope/effect-intent refusal.
     - [x] Prove canonical direct-read parity plus opaque cross-tenant workspace denial and strict rejection of caller-supplied ref scope.
