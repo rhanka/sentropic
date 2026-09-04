@@ -7,7 +7,7 @@
  * across kinds, list pagination, read etag/provenance/byte-budget, stat, grep
  * delegation, edit-denied, authz deny-as-missing).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import { formatRef, parseRef, refIdentityEquals } from '../../src/services/resource-plane/ref';
 import { ResourceError, type ResourcePrincipal } from '../../src/services/resource-plane/contract';
@@ -127,12 +127,24 @@ describe('ResourceDispatcher', () => {
     ).rejects.toMatchObject({ code: 'provider_unavailable' });
   });
 
-  it('server-verifies scope: principal scope replaces caller-supplied ref.scope', async () => {
+  it('server-verifies scope before dispatching every verb', async () => {
     const provider = catalogProvider(registryWith(makeEntry('tool', 'foundation', 'a')));
     const d = new ResourceDispatcher().registerProvider(provider);
-    const evilRef = { provider: 'catalog', scope: { tenantId: 'EVIL' }, type: 'tool', id: 'tool:foundation:a' };
-    const res = await d.read(evilRef, {}, principal());
-    expect(res.ref.scope).toEqual(SCOPE);
+    const evilScope = { tenantId: 'EVIL', workspaceId: 'OTHER' };
+    const dir = { provider: 'catalog', scope: evilScope, type: 'tool', id: '' };
+    const leaf = { ...dir, id: 'tool:foundation:a' };
+    const spies = {
+      list: vi.spyOn(provider, 'list'), stat: vi.spyOn(provider, 'stat'),
+      read: vi.spyOn(provider, 'read'), grep: vi.spyOn(provider, 'grep'),
+      edit: vi.spyOn(provider, 'edit'), invoke: vi.spyOn(provider, 'invoke'),
+    };
+    await d.list(dir, {}, principal());
+    await d.stat(leaf, principal());
+    await d.read(leaf, {}, principal());
+    await d.grep(dir, { query: 'a' }, principal());
+    await expect(d.edit(leaf, { content: 'x' }, principal())).rejects.toMatchObject({ code: 'denied' });
+    await expect(d.invoke(leaf, { args: {} }, principal())).rejects.toMatchObject({ code: 'unsupported' });
+    for (const spy of Object.values(spies)) expect(spy.mock.calls[0][0].scope).toEqual(SCOPE);
   });
 
   it('resolves path aliases to canonical refs', async () => {

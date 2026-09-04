@@ -795,7 +795,7 @@
   - [ ] Tests new: `api/tests/api/cluster-mesh-resources.test.ts`.
     - [x] Cover exact neutral routes, no-service imports, six validated projections, preserved provenance and caller-scope/effect-intent refusal.
     - [x] Prove canonical direct-read parity plus opaque cross-tenant workspace denial and strict rejection of caller-supplied ref scope.
-  - [ ] Tests updated: `api/tests/unit/resource-plane.test.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/api/generic-dispatch.test.ts`.
+  - [x] Tests updated: `api/tests/unit/resource-plane.test.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/api/generic-dispatch.test.ts` prove six-verb scope replacement and keep resource reads/invoke refusal outside catalog/workflow execution seams.
   - [ ] UI/E2E tests: N-A; resource effects are covered by MCP/connector/chat scenarios in Lot 33.
   - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/resource-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Lot gate: `make test-api-api SCOPE=tests/api/cluster-mesh-resources.test.ts ENV=test-cluster-mesh-central-control-plane`.
