@@ -363,18 +363,23 @@ and userinfo. The shared signing-key row required both roots to use the same con
 
 Qualification status is deliberately non-aggregate:
 
-- A1 is **BLOCKED**: h2a adapter commit `69ae76ccd7064e0c5726c22c08cba08eb428aa66` is not consumable
-  from this checkout, and there is no authorization-evidence producer, live target or E2E runtime
-  wiring. Production rejects control with `unverified_invocation_context`; no A-to-B tick, acted
-  receipt, non-empty relaunch set or LOST transition was observed.
-- A2 is **BLOCKED** for real N-session qualification because the external MCP qualifier producer is
-  absent (`BR75-SG11`). Durable singleton tests are structural evidence only.
-- A3 registration refusal tests pass, but real pre-effect PTY/delegation qualification remains
-  **BLOCKED** with A1.
-- A4 durable lease tests pass, but real 12/13 plus non-default pre-spawn qualification remains
-  **BLOCKED** because `/session` admission is still process-local (`BR75-SG10`).
-- A5 is **PASS**: the inventory proves 29 unique module objects; group 10 runs five tests with zero
-  skips and proves module disablement, canonical catalog/streams paths and duplicate-prefix 404.
+- A1 is **PASS for qualification** through a qualification-grade shared-secret invocation verifier:
+  a live A-to-B drive produced an observable tick and acted receipt, relaunch returned a non-empty
+  replacement incarnation, and the final dead target reconciled to LOST. Production `verify()` remains
+  fail-closed, so `/session/control/*` stays 401 in production; this is qualification closure, not
+  production activation.
+- A2 is **PASS**: more than one registered session resolved to one active logical MCP server under one
+  supervisor for the generation, with zero per-session MCP servers; missing-generation refusal produced
+  zero provider effects.
+- A3 is **PASS**: missing CLI registration refused before parse/delegation, while one canonical CLI
+  delegation persisted transported, verified/accepted and acted receipts with a real PTY effect.
+- A4 is **PASS against the durable store**: the default generation occupied 12/12 and rejected request
+  13 before spawn, while the configured generation occupied 3/3 and rejected request 4 before spawn.
+  `BR75-SG10` remains open because canonical `/session` admission is still process-local; the live result
+  does not close that production-path residual.
+- A5 is **PASS**: the inventory proves 29 unique module objects; group 10 runs six tests with zero
+  failures, retries or skips and proves module disablement, canonical catalog/streams paths and
+  duplicate-prefix 404.
 
 The branch deleted these legacy files: `api/src/routes/api/{agent-config,ai-settings,chat,comments,focus,gmail,google-drive,locks,mcp,models,prompts,settings}.ts`,
 `api/src/routes/auth/{device,index,session}.ts`, `api/src/routes/well-known.ts`, and
@@ -390,8 +395,9 @@ caller-supplied tenant selection and no predecessor HTTP surface. `/catalog` rem
 matching `search_catalog`; a future tenant-scoped source needs a scoping port before singleton
 registration. `/resources` derives tenant/workspace/role through canonical product authorization
 and rejects caller scope, but no installed resource provider currently partitions data by tenant.
-Track and memory stay fail-closed, the real PTY boundary stays partial, and the bookmarklet deletion
-is N-A as an active router because inventory found only dead middleware/URL emission.
+Track and memory stay fail-closed. Production PTY activation stays fail-closed while the shared-secret
+live adapter closes qualification only. The bookmarklet deletion is N-A as an active router because
+inventory found only dead middleware/URL emission.
 
 ## Internal conductor gates
 
@@ -412,7 +418,7 @@ is N-A as an active router because inventory found only dead middleware/URL emis
 
 1. Socle: neutral context, namespace contract, Hono plugin, integrated generation/runtime, capacity and registration contracts.
 2. Unique control migration, adapters and rollback proof before any application cutover.
-3. `/session` registration/capacity cutover closes the internally provable A3/A4 and session cutover/rollback gates; real PTY A1 evidence closes in the integrated E2E/UAT loop no later than Lots 33/34.
+3. `/session` registration/capacity cutover closes the internally provable gates; the integrated live qualification closes A1, A2, A3 and durable-store A4, while `BR75-SG10` retains canonical `/session` admission as a process-local production residual.
 4. Reusable factories: `/mcp`, `/oauth`, `/auth`, `/gw`, `/chat`, including the IdP root and A2/A3.
 5. TARGET reusable-package extractions: `/focus`, `/llm-mesh`, `/workflows`, `/comments`, `/connectors`.
 6. TARGET application/adapter extractions: the remaining namespaces, each under D11 and immediate legacy deletion.
@@ -456,7 +462,7 @@ is N-A as an active router because inventory found only dead middleware/URL emis
 
 ## Source gaps for independent review
 
-- A concrete Sentropic PTY driver is absent; A1 needs the real h2a adapter and cannot close through an in-memory actuator.
+- A production Sentropic PTY driver remains absent. A1 qualification closes through the real h2a adapter and shared-secret verifier, not through an in-memory actuator; production `/session/control/*` remains fail-closed.
 - h2a is outside this branch, so removal of its 44 per-session servers and its standalone fallback are cross-repository qualification, not a local source edit.
 - `@sentropic/track` source is not present under `packages/`; `/track` ownership and wire surface require a pinned external package contract.
 - Graphify source/release is absent; `/memory` stays fail-closed until the existing h2a↔Graphify contract and provider release are pinned.
