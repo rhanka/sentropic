@@ -20,6 +20,8 @@ const qualificationAvailable = [
   A1_EVIDENCE, A1_REGISTRATION, A1_TICK_URL, A1_PARK_URL, A1_LOST_URL,
 ].every(Boolean);
 
+test.describe.configure({ mode: 'serial' });
+
 test.describe('Cluster Mesh central control plane A1 qualification', () => {
   test('executes real A1 or proves the production source-gap fence', async () => {
     const api = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
@@ -79,13 +81,6 @@ test.describe('Cluster Mesh central control plane A1 qualification', () => {
       expect(relaunchBody.effectRef).toBeTruthy();
       expect(relaunchBody.actedTargets).toContain(A1_REGISTRATION);
 
-      expect((await qualifier.post(A1_PARK_URL!)).ok()).toBeTruthy();
-      const wake = await invoke('wake', 'a1-wake-parked-b');
-      expect(wake.status()).toBe(409);
-      await expect.poll(async () => {
-        const response = await qualifier.get(A1_LOST_URL!);
-        return (await response.json()).status;
-      }).toBe('lost');
     } finally {
       await api.dispose();
       await qualifier.dispose();
@@ -221,7 +216,7 @@ test.describe('Cluster Mesh module and cutover qualification', () => {
       };
       expect(body.clusterMesh.modules.map(({ namespace }) => namespace)).toEqual(EXPECTED_NAMESPACES);
       expect(body.clusterMesh.modules.find(({ namespace }) => namespace === '/cli')).toEqual({
-        namespace: '/cli', enabled: false,
+        namespace: '/cli', enabled: qualificationAvailable,
       });
 
       expect((await api.get('/api/v1/catalog/entries')).status()).toBe(200);
@@ -233,6 +228,37 @@ test.describe('Cluster Mesh module and cutover qualification', () => {
       expect((await api.get(`/api/v1/streams/streams/active?workspace_id=${workspaceId}`)).status()).toBe(404);
     } finally {
       await api.dispose();
+    }
+  });
+});
+
+test.describe('Cluster Mesh final LOST qualification', () => {
+  test('kills the dedicated target last and marks its registration lost', async () => {
+    test.skip(!qualificationAvailable, 'live target qualification is not configured');
+    const api = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
+    const qualifier = await request.newContext();
+    try {
+      expect((await qualifier.post(A1_PARK_URL!)).ok()).toBeTruthy();
+      const wake = await api.post('/api/v1/auth/session/control/wake', {
+        headers: {
+          'content-type': 'application/json',
+          'x-cluster-mesh-evidence': A1_EVIDENCE!,
+          'x-correlation-id': 'a4-lost',
+        },
+        data: {
+          commandId: 'a4-wake-dead-target',
+          targetRegistrationId: A1_REGISTRATION,
+          idempotencyKey: 'a4-wake-dead-target',
+        },
+      });
+      expect(wake.status()).toBe(409);
+      await expect.poll(async () => {
+        const response = await qualifier.get(A1_LOST_URL!);
+        return (await response.json()).status;
+      }).toBe('lost');
+    } finally {
+      await api.dispose();
+      await qualifier.dispose();
     }
   });
 });

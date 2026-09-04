@@ -40,16 +40,11 @@ clusterMeshLiveQualificationRouter.get('/tick', async (context) => {
 });
 
 clusterMeshLiveQualificationRouter.post('/park', async (context) => {
-  cliQualification = await runLiveCliQualification();
-  if (cliQualification.delegated.status !== 200 || !cliQualification.delegated.receiptRef) {
-    return context.json({ error: 'cli_qualification_failed' }, 502);
-  }
   const stopped = await liveClusterMeshQualification!.ports.stop();
   return context.json({
     status: stopped.status,
     generation: stopped.generation,
     incarnation: stopped.incarnation,
-    cliReceiptRef: cliQualification.delegated.receiptRef,
   });
 });
 
@@ -98,8 +93,8 @@ clusterMeshLiveQualificationRouter.get('/mcp', async (context) => {
   });
 });
 
-clusterMeshLiveQualificationRouter.get('/cli', (context) => {
-  if (!cliQualification) return context.json({ error: 'cli_qualification_not_run' }, 409);
+clusterMeshLiveQualificationRouter.get('/cli', async (context) => {
+  cliQualification ??= await runLiveCliQualification();
   return context.json(cliQualification);
 });
 

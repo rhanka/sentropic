@@ -127,7 +127,7 @@ export function createLiveH2aPorts(input: { socketPath: string; root: string }) 
             id: targetId, generation: ticked.generation, incarnation: ticked.incarnation,
           });
           observed = await client.request<NativeState>('create', {
-            id: targetId, command: 'sleep', args: ['infinity'], cwd: '/tmp', env: {}, cols: 80, rows: 24,
+            id: targetId, command: '/usr/bin/sleep', args: ['infinity'], cwd: '/tmp', env: {}, cols: 80, rows: 24,
           });
         }
         const signature = createHash('sha256').update([
