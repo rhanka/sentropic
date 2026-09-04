@@ -49,6 +49,17 @@ function makeSeamFixture() {
 // ---------------------------------------------------------------------------
 
 describe('CatalogExecutionSeam — standalone tool dispatch', () => {
+  it('does not invoke effect handlers during list, detail, or search discovery', () => {
+    const { registry, standaloneSource } = makeSeamFixture();
+    const handler = vi.fn(async () => ({ effected: true }));
+    standaloneSource.register({ tool: makeSampleTool('discover_only'), handler });
+
+    registry.list();
+    registry.get('discover_only');
+    registry.search('discover only');
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('invokes the handler for a registered standalone tool and returns handled:true', async () => {
     const { seam, standaloneSource } = makeSeamFixture();
     const handler = vi.fn(async (args: Record<string, unknown>) => ({

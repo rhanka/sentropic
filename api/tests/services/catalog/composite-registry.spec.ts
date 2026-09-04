@@ -10,7 +10,7 @@
  *   - Empty registry behaviour.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CompositeCatalogRegistry } from '../../../src/services/catalog/composite-registry';
 import type { CatalogEntry, SkillEntry } from '../../../src/services/catalog/types';
@@ -265,6 +265,18 @@ describe('CompositeCatalogRegistry — addSource() and getSources()', () => {
     expect(sources).toHaveLength(2);
     expect(sources[0]?.id).toBe('first');
     expect(sources[1]?.id).toBe('second');
+  });
+
+  it('exposes source metadata without refreshing providers during discovery', () => {
+    const refresh = vi.fn(async () => undefined);
+    const source = { ...makeTestSource('remote', []), kind: 'mcp' as const, refresh };
+    const reg = new CompositeCatalogRegistry().addSource(source);
+    expect(reg.getSources().map(({ id, kind }) => ({ id, kind }))).toEqual([
+      { id: 'remote', kind: 'mcp' },
+    ]);
+    reg.list();
+    reg.search('anything');
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
 
