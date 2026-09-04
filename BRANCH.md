@@ -207,6 +207,11 @@
 - [x] `BR75-RV87` — `acknowledge` — independent Fable review returned GO WITH CONDITIONS for Lot 32 at `f77812d4f`. C1 is closed by the membership-authoritative, uncached workspace/user tenant resolver and focused 404 `resource_not_found` coverage for forged non-member workspace context plus unresolved tenant; after an initial missing-service environment non-pass, typecheck and lint pass with 0 errors/207 warnings and the exact resource suite passes 9/9. C2 is carried verbatim to Lots 34/35: no installed resource provider currently partitions data by tenant, so Lot 32 proves principal derivation and caller-scope rejection only. C3 classifies the prior ledger-corroborated counts as not independently re-run and assigns their independent re-run to Lot 36.
 - [x] `BR75-RV88` — `acknowledge` — Lot 33 group 10 has five runnable tests and zero skips. The scoped production-image run passes 5/5: A5 proves the exact 29-module inventory, disabled CLI, canonical catalog/streams routes and duplicate-stream 404; absent external producers are exercised only as truthful fail-closed/source-gap assertions and do not qualify A1, A2, A3 delegation, or durable A4. The no-cache API/UI build and both allowlist audit gates pass; services tear down successfully.
 - [ ] `BR75-SG10` — `attention` — Fable Lot 4 M3: the durable A4 cap must be wired for real A1. `capacity_leases` exists but `/session` still uses process-local admission; wiring is not a safe local change until generation bootstrap and target-lease renew/release semantics exist. Close before real A1/A4 acceptance in Lots 33/34.
+- [x] `BR75-RV89` — `acknowledge` — Lot 32 C1 is folded first in `f329d1853`: `/resources` resolves tenant only through authoritative user/workspace membership, forged non-member and unresolved-tenant contexts return opaque 404, and the focused suite passes 9/9. No migration was added.
+- [ ] `BR75-RV90` — `attention` — the complete Lot 33 00–10 E2E scope ran, including groups 07/08/09, but all three batches contain real failures. The Makefile loop masks a failing earlier group when the final group passes, so the 08–10 shell exit 0 is not green: group 08 has 5 failures, group 09 has 5, and group 10 alone passes 5/5. The other batches are also red (00–03: failures in every group; 04–07: failures in 04, 05 and 07, with the required group-06 Streams assertions green). No acceptance is claimed and the matrix must be rerun after its product/environment debt is resolved.
+- [ ] `BR75-RV91` — `attention` — Lot 34 shared-root UAT starts product 9375 and IdP 9376 against the shared database, verifies the same auth/OAuth module factories and passes discovery/authorize/consent/token/userinfo after both roots use the same signing KEK, then tears both roots down. Real A1 is blocked because the only identified h2a adapter is unpublished/unmerged commit `69ae76ccd7064e0c5726c22c08cba08eb428aa66` and this checkout has no evidence producer, live target, E2E socket or runtime wiring; A2, delegated A3 and durable A4 remain blocked by `BR75-SG11`, `BR75-SG1` and `BR75-SG10` respectively.
+- [x] `BR75-RV92` — `acknowledge` — Lot 35 consolidates the sole migration digest, 29 owners, two root projections, deleted legacy paths, semver audit and bounded source gaps in the r13 specification. All 16 packages with changed `src/**` have manifest bumps, no provider package manifest imports Cluster Mesh, the legacy API index is inert, and the package-owned Cluster Mesh README/manifest now describe the 0.7 central control plane without claiming PTY, external MCP or federation delivery.
+- [ ] `BR75-RV93` — `attention` — Lot 36 is not internally accepted. Type/lint, both package matrices, the fresh Lot 32 regression (131/131 with root fence 68/68), UI (76 files/471 tests), API smoke/unit/endpoints/queue/security subgates, and IaC are green. The full API aggregate is red because six live-AI files fail 18/32 tests with `OPENAI_API_KEY` absent; CI normally injects that secret. The aggregate security gate is red: the UI image has 60 unaccepted HIGH/CRITICAL findings, while API SCA and API-container npm audits timed out and were incorrectly accepted from empty reports by the existing recipes. SAST is zero-finding. No Fable or independent reviewer was launched per owner instruction.
 - [x] `BR75-SG14` — `acknowledge` — the Skills baseline at `90c7f5c81` reproducibly fails `packages/skills/tests/bundles/foundation.test.ts:743`: the assertion expects `entityType.enum` to equal `['initiative', 'folder']`, while the schema correctly exposes `['organization', 'initiative', 'folder']`. This is outside the Cluster Mesh scope and is fixed on main by PR #556 (`fix/skills-foundation-organization`); the owner signed off on patching main and continuing this lot. The full Skills gate becomes green when this branch rebases onto the merged fix.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
@@ -816,16 +821,16 @@
   - [ ] Matrix gate: `make clean test-e2e API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 E2E_GROUPS="00 01 02 03" ENV=e2e-cluster-mesh-central-control-plane`.
   - [ ] Matrix gate: `make clean test-e2e API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 E2E_GROUPS="04 05 06 07" ENV=e2e-cluster-mesh-central-control-plane`.
   - [ ] Matrix gate: `make clean test-e2e API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 E2E_GROUPS="08 09 10" ENV=e2e-cluster-mesh-central-control-plane`.
-  - [ ] Include groups 07/08/09 because workflows, transfers, documents, chat and steering are impacted; do not claim an exclusion.
+  - [x] Include groups 07/08/09 because workflows, transfers, documents, chat and steering are impacted; all were executed and their failures remain recorded rather than excluded.
   - [ ] Keep C2 satisfied by this local 00–10 matrix; do not edit the forbidden CI workflow, and carry group 10 registration only through the `BR75-ID2` post-merge follow-up branch.
   - [ ] Close `BR75-SG1` here if the real h2a adapter can execute in the E2E environment; otherwise retain the h-cond escalation and close it no later than Lot 34.
   - [x] Stop services: the exact `make down` command exits 0 after removing the scoped containers.
   - [ ] Internal gates: C2 exact space-separated local matrix and group 10 included; A2–A5 integrated evidence; A1 closes here or remains explicitly blocked only until Lot 34; no skipped new spec.
 
 - [ ] **Lot 34 — Cross-root and real-terminal conductor UAT**
-  - [ ] Namespace: product root, IdP root, `/session`, `/mcp`, `/clients`; type: conductor qualification.
-  - [ ] Start product and IdP in the same `ENV=test-cluster-mesh-central-control-plane` compose project and shared DB, with distinct API_PORT 9375 for product and API_PORT 9376 for IdP, UI 5575 and Maildev 1475; configure exact OAuth callbacks and record generation id and tested SHA.
-  - [ ] Verify product and IdP auth/oauth flows use the same module implementations with root-specific paths and no duplicate author.
+  - [x] Namespace: product root, IdP root, `/session`, `/mcp`, `/clients`; type: conductor qualification.
+  - [x] Start product and IdP in the same `ENV=test-cluster-mesh-central-control-plane` compose project and shared DB, with distinct API_PORT 9375 for product and API_PORT 9376 for IdP, UI 5575 and Maildev 1475; configure exact OAuth callbacks and record generation id and tested SHA.
+  - [x] Verify product and IdP auth/oauth flows use the same module implementations with root-specific paths and no duplicate author.
   - [ ] Drive/wake a real live h2a session B from session A, observe B tick and acted receipt, verify non-empty relaunch set, then verify dead/parked target becomes LOST.
   - [ ] Close `BR75-SG1` from this real-terminal evidence if Lot 33 did not close it; A1 cannot remain blocked after this lot.
   - [ ] Run N sessions and prove one logical MCP server/supervisor authority per generation and zero per-session server; count thin stdio bridges separately.
@@ -834,37 +839,37 @@
   - [ ] Verify representative read/write cutovers, rollback checkpoints and removed legacy URLs across auth, chat, business, documents, connectors and workflows.
   - [ ] Lot 30 design/UAT carry: `/apps/instances` is a global-admin control surface with cross-tenant GET (optional `tenantId` filter) and caller-supplied `tenantId` on POST, gated only by `admin_app`; no predecessor HTTP surface exists.
   - [ ] Lot 31 design/UAT carry: `/catalog` discovery is global (no tenant/workspace/role scoping, matching `search_catalog`); any future tenant-scoped MCP/DB catalog source must not be registered in the singleton `compositeCatalogRegistry` without a scoping port. Verify `/resources` continues deriving tenant/workspace/role from canonical authorization rather than caller scope; no installed resource provider currently partitions data by tenant, so this qualifies principal derivation and caller-scope rejection only.
-  - [ ] Record any interaction bug only in `## Feedback Loop`; fixes invalidate the tested SHA and require rerun.
-  - [ ] Stop services with matching `make down` targets.
+  - [x] Record every observed interaction/gate defect in `## Feedback Loop`; no unrecorded green retry is claimed.
+  - [x] Stop services with matching `make down` targets.
   - [ ] Internal gates: A1–A5 final real-effect qualification; C1 single-author observation; D17 conductor-enforced.
 
-- [ ] **Lot 35 — Documentation, semver and legacy-path consolidation**
-  - [ ] Namespace: all 29; type: documentation/package consolidation.
-  - [ ] Update `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` only with implementation evidence and accepted source-gap outcomes.
-  - [ ] Update affected package READMEs, exports and versions; verify every changed publishable package `src/**` has a semver bump.
-  - [ ] Record the unique migration id/digest, 29 module owners, root projections, A1–A5 evidence and every deleted legacy path.
-  - [ ] Prove no provider package manifest lists `@sentropic/cluster-mesh`, while each module's standalone build/test and disabled-plugin test pass.
-  - [ ] Prove `api/src/routes/api/index.ts` contains no replaced direct mounts and auth-idp contains no forked auth implementation.
-  - [ ] Prove Track/Graphify/PTY/bookmarklet source-gaps remain explicitly partial/fail-closed/N-A where unresolved.
-  - [ ] Preserve the Lot 30 `/apps/instances` global-admin design note: cross-tenant GET with optional `tenantId`, caller-supplied POST `tenantId`, `admin_app`-only gate and no predecessor HTTP surface.
-  - [ ] Preserve the Lot 31 global-discovery design note: `/catalog` matches unscoped `search_catalog`; a future tenant-scoped MCP/DB source requires a scoping port before singleton `compositeCatalogRegistry` registration. Preserve the Lot 32 proof that `/resources` derives tenant/workspace/role through canonical product authorization and rejects caller scope; no installed resource provider currently partitions data by tenant, so do not claim tenant-partitioned provider data proof.
-  - [ ] Tests by file: no new behavior tests; rerun affected package gates named in Lots 1–32.
-  - [ ] Lot gate: `make scope-check ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Internal gates: C3 and A5 full modularity audit; C4/C5 final wording scan.
+- [x] **Lot 35 — Documentation, semver and legacy-path consolidation**
+  - [x] Namespace: all 29; type: documentation/package consolidation.
+  - [x] Update `spec/SPEC_EVOL_CLUSTER_MESH_CENTRAL_CONTROL_PLANE.md` only with implementation evidence and accepted source-gap outcomes.
+  - [x] Update affected package READMEs, exports and versions; verify every changed publishable package `src/**` has a semver bump.
+  - [x] Record the unique migration id/digest, 29 module owners, root projections, A1–A5 evidence and every deleted legacy path.
+  - [x] Prove no provider package manifest lists `@sentropic/cluster-mesh`, while each module's standalone build/test and disabled-plugin test pass.
+  - [x] Prove `api/src/routes/api/index.ts` contains no replaced direct mounts and auth-idp contains no forked auth implementation.
+  - [x] Prove Track/Graphify/PTY/bookmarklet source-gaps remain explicitly partial/fail-closed/N-A where unresolved.
+  - [x] Preserve the Lot 30 `/apps/instances` global-admin design note: cross-tenant GET with optional `tenantId`, caller-supplied POST `tenantId`, `admin_app`-only gate and no predecessor HTTP surface.
+  - [x] Preserve the Lot 31 global-discovery design note: `/catalog` matches unscoped `search_catalog`; a future tenant-scoped MCP/DB source requires a scoping port before singleton `compositeCatalogRegistry` registration. Preserve the Lot 32 proof that `/resources` derives tenant/workspace/role through canonical product authorization and rejects caller scope; no installed resource provider currently partitions data by tenant, so do not claim tenant-partitioned provider data proof.
+  - [x] Tests by file: no new behavior tests; affected package gates named in Lots 1–32 were rerun through the two final package matrices.
+  - [x] Lot gate: `make scope-check ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Internal gates: C3 and A5 full modularity audit; C4/C5 final wording scan.
 
 - [ ] **Lot 36 — Independent review, final gates and non-release handoff**
-  - [ ] Namespace: all 29; type: independent review and final verification.
+  - [x] Namespace: all 29; type: independent review and final verification.
   - [ ] Run an independent reviewer distinct from the builder against the r13 dossier, spec, complete diff, migration, 29 namespace inventory, legacy deletions and exact test evidence.
   - [ ] Require explicit challenge of C1–C5, A1–A5, D1=B, logical-per-generation MCP semantics, PTY/registration, IdP second root and all three facade boundaries.
-  - [ ] Reconcile every finding in `## Feedback Loop` as fixed, rejected with evidence, deferred with bounded source-gap or blocking.
-  - [ ] Independently re-run the ledger-corroborated Lot 32 counts; do not relabel prior Fable corroboration as execution evidence.
-  - [ ] Final type/lint gate: `make typecheck lint ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final package gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-mcp-auth test-mcp-auth typecheck-mcp-platform test-mcp-platform typecheck-llm-gateway test-llm-gateway typecheck-llm-mesh test-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final package gate: `make typecheck-auth-hono test-auth-hono typecheck-auth-client test-auth-client typecheck-chat-server test-chat-server typecheck-comments test-comments typecheck-focus test-focus typecheck-flow build-flow typecheck-connector-host test-connector-host ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Reconcile every finding in `## Feedback Loop` as fixed, rejected with evidence, deferred with bounded source-gap or blocking.
+  - [x] Independently re-run the ledger-corroborated Lot 32 counts; do not relabel prior Fable corroboration as execution evidence.
+  - [x] Final type/lint gate: `make typecheck lint ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Final package gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-mcp-auth test-mcp-auth typecheck-mcp-platform test-mcp-platform typecheck-llm-gateway test-llm-gateway typecheck-llm-mesh test-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Final package gate: `make typecheck-auth-hono test-auth-hono typecheck-auth-client test-auth-client typecheck-chat-server test-chat-server typecheck-comments test-comments typecheck-focus test-focus typecheck-flow build-flow typecheck-connector-host test-connector-host ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Final API gate: `make test-api ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final UI gate: `make test-ui ENV=test-cluster-mesh-central-control-plane`.
+  - [x] Final UI gate: `make test-ui ENV=test-cluster-mesh-central-control-plane` passes 76 files/471 tests.
   - [ ] Final security gate: `make test-security ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Re-run the Lot 33 E2E matrix on the exact candidate SHA if any final change occurred.
-  - [ ] Run `make scope-check ENV=test-cluster-mesh-central-control-plane` and `harness check scope` on the final diff.
-  - [ ] Hand off the internally accepted candidate and evidence without pushing; this deliberate template divergence assumes the conductor/release owner owns every later push, PR and merge action.
-  - [ ] Do not create/update a PR, push, merge or publish without a separate explicit instruction.
+  - [x] Run `make scope-check ENV=test-cluster-mesh-central-control-plane` and `harness check scope` on the final diff; both report `PASS C2 (sentropic)`.
+  - [ ] Hand off the partial, not-internally-accepted candidate and evidence without pushing; the conductor/release owner owns every later push, PR and merge action.
+  - [x] Do not create/update a PR, push, merge or publish without a separate explicit instruction.
