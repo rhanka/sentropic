@@ -1,0 +1,42 @@
+{
+  "name": "@sentropic/annotate",
+  "version": "0.1.0",
+  "description": "Reusable SPATIAL annotation substrate: selection (point/rect/lasso/arrow), stable anchors (logical/geometric/group/arrow/freeform), geometry, numbered pins and a host-agnostic Svelte overlay bound through an AnchorResolver. Owns NO comment domain — the host bridges its AnnotationPort onto @sentropic/comments. A diagram is only one possible host.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/annotate"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./svelte": {
+      "types": "./src/svelte/index.ts",
+      "svelte": "./src/svelte/index.ts",
+      "import": "./src/svelte/index.ts"
+    },
+    "./AnnotationLayer.svelte": {
+      "types": "./src/svelte/AnnotationLayer.svelte.d.ts",
+      "svelte": "./src/svelte/AnnotationLayer.svelte",
+      "import": "./src/svelte/AnnotationLayer.svelte"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0"
+  }
+}
