@@ -32,10 +32,12 @@ import {
 // ---- App-local catalog façade (api/src/services/skills/catalog.ts) ----
 import {
   buildFoundationSkillsAuthz,
+  compositeCatalogRegistry,
   executeFoundationSearchSkills,
   foundationSkillsToolRegistry,
   resolveFoundationChatTools,
 } from '../../src/services/skills/catalog';
+import { productCatalogDiscovery } from '../../src/routes/namespaces/catalog-product-ports';
 
 // ---- Foundation executor (dispatch + unhandled surface) ----
 import type { ExecuteFoundationSkillToolInput } from '../../src/services/skills/foundation-executor';
@@ -46,6 +48,20 @@ import { executeFoundationSkillTool } from '../../src/services/skills/foundation
 // ---------------------------------------------------------------------------
 
 describe('FOUNDATION_SKILLS bundle', () => {
+  it('keeps the root discovery projection in canonical registry order', () => {
+    const expected = compositeCatalogRegistry.list().map(({ kind, sourceId, metadata }) => ({
+      kind,
+      sourceId,
+      metadata: {
+        name: metadata.name,
+        description: metadata.description,
+        ...(metadata.version === undefined ? {} : { version: metadata.version }),
+        ...(metadata.category === undefined ? {} : { category: metadata.category }),
+      },
+    }));
+    expect(productCatalogDiscovery.list({})).toEqual(expected);
+  });
+
   it('contains exactly 16 skills in canonical registration order', () => {
     // Oracle: the frozen array from packages/skills/src/bundles/foundation/index.ts:57-74.
     // Order is SIGNIFICANT — adapter.ts walks list() in insertion order (Map), so
@@ -102,7 +118,7 @@ function makeAllowlistInput(toolNames: string[]) {
   return {
     userId: 'user-char-001',
     workspaceId: 'ws-char-001',
-    workspaceType: 'ai-ideas' as string | null,
+    workspaceType: 'ai-priorities' as string | null,
     currentUserRole: 'editor' as string | null,
     allowedTools: toolNames,
   };
@@ -181,12 +197,12 @@ describe('resolveFoundationChatTools — live-chat oracle', () => {
 
   it('workspace_type filter: skills with contextFilter.workspaceTypes=[...] are excluded when wsType differs', () => {
     // history_analyze has no contextFilter → always visible.
-    // organizations has contextFilter.workspaceTypes: [neutral, ai-ideas, opportunity].
-    // With workspaceType='ai-ideas', organizations tools should be visible.
+    // organizations has contextFilter.workspaceTypes: [neutral, ai-priorities, opportunity].
+    // With workspaceType='ai-priorities', organizations tools should be visible.
     const toolsAiIdeas = resolveFoundationChatTools({
       userId: 'u1',
       workspaceId: 'ws1',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
@@ -492,7 +508,7 @@ describe('executeFoundationSearchSkills — search_skills semantics', () => {
   });
 
   it('workspaceType authz: organizations skill is absent when wsType=code', () => {
-    // organizations has contextFilter.workspaceTypes: [neutral, ai-ideas, opportunity].
+    // organizations has contextFilter.workspaceTypes: [neutral, ai-priorities, opportunity].
     // With wsType=code and allowlist including organizations_list, it should still be invisible.
     const hitsCode = executeFoundationSearchSkills({
       authz: {
@@ -515,7 +531,7 @@ describe('buildFoundationSkillsAuthz', () => {
     const authz = buildFoundationSkillsAuthz({
       userId: 'u1',
       workspaceId: 'ws1',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ['workspace_list', 'web_search'],
     });
@@ -523,7 +539,7 @@ describe('buildFoundationSkillsAuthz', () => {
     expect(authz.allowedTools).toEqual(['workspace_list', 'web_search']);
     expect(authz.tenant.workspaceId).toBe('ws1');
     expect(authz.tenant.userId).toBe('u1');
-    expect(authz.tenant.workspaceType).toBe('ai-ideas');
+    expect(authz.tenant.workspaceType).toBe('ai-priorities');
     expect(authz.roles).toEqual(['editor']);
   });
 
@@ -543,7 +559,7 @@ describe('buildFoundationSkillsAuthz', () => {
     const authz = buildFoundationSkillsAuthz({
       userId: 'u1',
       workspaceId: 'ws1',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ['workspace_list', 'workspace_list', 'web_search'],
     });
@@ -580,7 +596,7 @@ describe('executeFoundationSkillTool — dispatch oracle', () => {
       },
       streamSeq: 0,
       sessionWorkspaceId: 'ws-char',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: null,
       readOnly: true,
       allowedFolderIds: new Set<string>(),
@@ -667,7 +683,7 @@ describe('executeFoundationSkillTool — seam fall-through (Lot 2)', () => {
       },
       streamSeq: 0,
       sessionWorkspaceId: 'ws-lot2',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: null,
       readOnly: true,
       allowedFolderIds: new Set<string>(),

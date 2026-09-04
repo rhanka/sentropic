@@ -42,6 +42,7 @@ import {
   SEARCH_SKILLS_SKILL_NAME,
   SEARCH_SKILLS_RESOLVED_TOOL,
 } from '../../../../packages/skills/src/index';
+import { productCatalogDiscovery } from '../../../src/routes/namespaces/catalog-product-ports';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,7 +56,7 @@ function makeAllowlistInput(toolNames: string[]) {
   return {
     userId: 'user-sc-001',
     workspaceId: 'ws-sc-001',
-    workspaceType: 'ai-ideas' as string | null,
+    workspaceType: 'ai-priorities' as string | null,
     currentUserRole: 'editor' as string | null,
     allowedTools: toolNames,
   };
@@ -209,6 +210,21 @@ describe('search_catalog position in resolveFoundationChatTools', () => {
 // ---------------------------------------------------------------------------
 
 describe('executeFoundationSearchCatalog — cross-kind hits', () => {
+  it('matches the root discovery adapter for the same deterministic query', () => {
+    const toolHits = executeFoundationSearchCatalog({ query: 'workspace', limit: 3 }).hits;
+    const httpHits = productCatalogDiscovery.search({ query: 'workspace', limit: 3 })
+      .map(({ entry, score, matchedFields }) => ({
+        kind: entry.kind,
+        name: entry.metadata.name,
+        description: entry.metadata.description,
+        ...(entry.metadata.category === undefined ? {} : { category: entry.metadata.category }),
+        ...(entry.metadata.version === undefined ? {} : { version: entry.metadata.version }),
+        score,
+        matchedFields,
+      }));
+    expect(httpHits).toEqual(toolHits);
+  });
+
   it('returns { status: "completed", hits: [] } for empty query', () => {
     const result = executeFoundationSearchCatalog({ query: '' });
     expect(result.status).toBe('completed');
