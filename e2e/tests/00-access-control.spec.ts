@@ -193,7 +193,7 @@ test.describe('Access control — roles workspace', () => {
 
   test('permissions commentaires: viewer/editor/admin', async ({ browser }) => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
-    const commentRes = await userAApi.post('/api/v1/comments', {
+    const commentRes = await userAApi.post(`/api/v1/comments?workspace_id=${workspaceId}`, {
       data: {
         context_type: 'initiative',
         context_id: useCaseId,
