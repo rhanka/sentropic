@@ -126,6 +126,14 @@ export function createLiveH2aPorts(input: { socketPath: string; root: string }) 
           await client.request('stop-if-incarnation', {
             id: targetId, generation: ticked.generation, incarnation: ticked.incarnation,
           });
+          let stopped = await client.request<NativeState>('state', { id: targetId });
+          for (let attempt = 0; stopped.status !== 'exited' && attempt < 80; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            stopped = await client.request<NativeState>('state', { id: targetId });
+          }
+          if (stopped.status !== 'exited') {
+            throw new Error('native target did not exit before relaunch');
+          }
           observed = await client.request<NativeState>('create', {
             id: targetId, command: '/usr/bin/sleep', args: ['infinity'], cwd: '/tmp', env: {}, cols: 80, rows: 24,
           });
