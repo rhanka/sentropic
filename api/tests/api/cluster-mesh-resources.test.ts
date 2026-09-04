@@ -1,19 +1,29 @@
+import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { readFileSync } from 'node:fs';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { app as productApp } from '../../src/app';
+import {
+  app as productApp,
+  PRODUCT_CLUSTER_MESH_MOUNTS,
+  ROOT_MOUNTED_NAMESPACE_REGISTRY,
+} from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import { tenants, workspaces } from '../../src/db/schema';
 import {
   createResourcesTransportRouter,
+  createResourcesNamespaceModule,
   RESOURCE_PATHS,
   RESOURCE_ROUTES,
+  RESOURCES_AUTHOR,
+  RESOURCES_PREDECESSOR,
   type ResourceProjectionPort,
   type ResourcesNamespacePorts,
 } from '../../src/routes/namespaces/resources-module';
+import type { ResourcesCutoverControl } from '../../src/routes/namespaces/resources-cutover';
+import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { getResourceDispatcher } from '../../src/services/resource-plane';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import {
@@ -226,5 +236,97 @@ describe('cluster mesh resources product scope', () => {
     );
     expect(injected.status).toBe(400);
     await expect(injected.json()).resolves.toEqual({ error: 'resource_request_refused' });
+  });
+});
+
+const candidate = (enabled = true, control?: ResourcesCutoverControl) => new Hono()
+  .route('/api/v1', createClusterMeshPlugin({
+    runtime: clusterMeshAdapter.sessionControl!.runtime,
+    namespaces: [createResourcesNamespaceModule({ enabled, cutoverControl: control })],
+    mounts: { '/resources': '/' },
+  }));
+
+describe('cluster mesh resources product author', () => {
+  let user: TestUser;
+
+  beforeEach(async () => {
+    await clearResourceCutover();
+    user = await createAuthenticatedUser('editor');
+  });
+
+  afterEach(async () => {
+    await clearResourceCutover();
+    await cleanupAuthData();
+    await db.delete(workspaces).where(eq(workspaces.id, user.workspaceId!));
+  });
+
+  it('selects one direct author and fails closed after the no-HTTP rollback', async () => {
+    const app = candidate();
+    const path = '/api/v1/resources/list';
+    expect((await authenticatedRequest(
+      app, 'POST', path, user.sessionToken!, { path: '/' },
+    )).status).toBe(200);
+    const active = await resourceCutovers.find(resourceKey);
+    expect(active).toMatchObject({
+      status: 'active',
+      activeAuthor: RESOURCES_AUTHOR,
+      selectedGenerationId: clusterMeshAdapter.sessionControl!.runtime.generation.generationId,
+      previousGenerationId: RESOURCES_PREDECESSOR.previousGenerationId,
+      rollbackCheckpoint: { activeAuthor: RESOURCES_PREDECESSOR.rollbackAuthor },
+    });
+    expect(active?.shadowComparison).toBeUndefined();
+
+    await resourceCutovers.rollback(resourceKey, active!.previousGenerationId!);
+    await expect(resourceCutovers.verifyRollback(resourceKey))
+      .resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(
+      app, 'POST', path, user.sessionToken!, { path: '/' },
+    );
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('has no anonymous, disabled, duplicate, or unavailable-control fallback', async () => {
+    const path = '/api/v1/resources/list';
+    expect((await candidate().request(path, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"path":"/"}',
+    })).status).toBe(401);
+    expect((await authenticatedRequest(
+      candidate(false), 'POST', path, user.sessionToken!, { path: '/' },
+    )).status).toBe(404);
+    expect((await authenticatedRequest(
+      candidate(), 'POST', '/api/v1/resources/resources/list', user.sessionToken!, { path: '/' },
+    )).status).toBe(404);
+
+    const unavailable: ResourcesCutoverControl = {
+      runtime: { generation: clusterMeshAdapter.sessionControl!.runtime.generation },
+      cutovers: {
+        find: vi.fn(async () => { throw new Error('control unavailable'); }),
+        activate: vi.fn(async () => undefined),
+      },
+    };
+    const blocked = await authenticatedRequest(
+      candidate(true, unavailable), 'POST', path, user.sessionToken!, { path: '/' },
+    );
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'resources_control_unavailable' });
+  });
+
+  it('registers the sole root author and truthfully records no prior HTTP source', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/resources',
+    );
+    expect(registration?.module.namespace).toBe('/resources');
+    expect(registration?.authPaths).toEqual(RESOURCE_PATHS);
+    expect('authorPaths' in registration! ? registration.authorPaths : undefined)
+      .toEqual(RESOURCE_PATHS);
+    expect(PRODUCT_CLUSTER_MESH_MOUNTS['/resources']).toBe('/');
+    expect(RESOURCES_PREDECESSOR).toMatchObject({
+      historicalFixture: 'not_applicable', replayIdempotencyClaim: false,
+      rollbackAuthor: 'no-resources-http-author',
+    });
+
+    const apiIndex = readFileSync(new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8');
+    expect(apiIndex).not.toMatch(/resources|resourceDispatcher|ResourceDispatcher/);
   });
 });
