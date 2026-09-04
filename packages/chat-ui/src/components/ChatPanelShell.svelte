@@ -293,6 +293,7 @@
         sectionLabel={commentSectionLabel}
         bind:commentThreadId
         bind:commentLoading
+        workspaceCanComment={commentHost.canComment()}
         {labels}
         {renderComposerInput}
         {renderThreadMenuPopover}
