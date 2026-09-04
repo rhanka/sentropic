@@ -773,6 +773,7 @@
   - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-catalog.test.ts ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Lot gate: `make test-api-unit SCOPE=tests/services/catalog/composite-registry.spec.ts ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Internal gates: C1 no new table after migration; C3/A5 injectable catalog module; frozen catalog/resources/MCP/connectors facade.
+    - [x] Root fence uses independent immutable requirements and catches both live unfenced mutation and simultaneous route/auth/author declaration shrink.
 
 - [ ] **Lot 32 — `/resources` TARGET resource projection router extraction**
   - [ ] Namespace: `/resources`; type: TARGET application router extraction, plugin mount and single-author activation.

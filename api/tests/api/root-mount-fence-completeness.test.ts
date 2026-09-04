@@ -5,6 +5,7 @@ import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin, requireEditor } from '../../src/middleware/rbac';
 import { adminAuthorFence } from '../../src/routes/namespaces/admin-cutover';
 import { appsAuthorFence } from '../../src/routes/namespaces/apps-cutover';
+import { catalogAuthorFence } from '../../src/routes/namespaces/catalog-cutover';
 import { healthAuthorFence } from '../../src/routes/namespaces/health-cutover';
 import { requireAdminApp } from '../../src/routes/namespaces/admin-product-ports';
 import { requireAppsAdmin } from '../../src/routes/namespaces/apps-product-ports';
@@ -36,6 +37,12 @@ const IMMUTABLE_APP_AUTH_ROUTES = [
 const IMMUTABLE_APP_ADMIN_PATHS = [
   ...new Set(IMMUTABLE_APP_AUTH_ROUTES.map(([, path]) => path)),
 ];
+const IMMUTABLE_CATALOG_AUTH_ROUTES = [
+  ['GET', '/catalog/entries'],
+  ['GET', '/catalog/entries/:name'],
+  ['GET', '/catalog/search'],
+  ['GET', '/catalog/sources'],
+] as const;
 const IMMUTABLE_ADMIN_AUTH_ROUTES = [
   ['POST', '/admin/reset'],
   ['GET', '/admin/stats'],
@@ -325,6 +332,20 @@ describe('mounted namespace fence completeness', () => {
           IMMUTABLE_APP_ADMIN_PATHS,
         );
       }
+      if (namespace === '/catalog') {
+        const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
+        const immutablePaths = IMMUTABLE_CATALOG_AUTH_ROUTES.map(([, path]) => path);
+        expect(authPaths).toEqual(immutablePaths);
+        expect(authorPaths).toEqual(immutablePaths);
+        expect(authPaths).not.toContain('/*');
+        assertImmutableMethodRequirement(
+          namespace, router, authPaths ?? [], requireAuth, IMMUTABLE_CATALOG_AUTH_ROUTES,
+        );
+        assertImmutableMethodRequirement(
+          namespace, router, authorPaths ?? [], catalogAuthorFence,
+          IMMUTABLE_CATALOG_AUTH_ROUTES, 'author',
+        );
+      }
       if (namespace === '/admin') {
         const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
         expect(authorPaths).toEqual(IMMUTABLE_ADMIN_AUTH_ROUTES.map(([, path]) => path));
@@ -542,6 +563,43 @@ describe('mounted namespace fence completeness', () => {
         IMMUTABLE_APP_ADMIN_PATHS,
       );
     }).toThrowError('/apps immutable auth requirement is missing paths');
+  });
+
+  it('fails when the live root-mounted catalog router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/catalog',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/catalog/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/catalog', router, registration.authPaths!))
+      .toThrowError('/catalog mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when catalog routes and mutable auth/author fences shrink together', () => {
+    const missingPath = '/catalog/search';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/catalog',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== missingPath,
+      ),
+    };
+    const authPaths = registration.authPaths!.filter((path) => path !== missingPath);
+    const authorPaths = ('authorPaths' in registration ? registration.authorPaths : [])
+      .filter((path) => path !== missingPath);
+
+    expect(() => {
+      assertFenceComplete('/catalog', mutation, authPaths);
+      assertImmutableMethodRequirement(
+        '/catalog', mutation, authPaths, requireAuth, IMMUTABLE_CATALOG_AUTH_ROUTES,
+      );
+      assertImmutableMethodRequirement(
+        '/catalog', mutation, authorPaths, catalogAuthorFence,
+        IMMUTABLE_CATALOG_AUTH_ROUTES, 'author',
+      );
+    }).toThrowError('/catalog immutable auth requirement is missing paths');
   });
 
   it('fails when root-mounted locks gains a route outside its explicit fence', () => {
