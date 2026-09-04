@@ -1,10 +1,5 @@
 import { expect, request, test } from '@playwright/test';
 
-type WorkspaceItem = {
-  id: string;
-  role?: string | null;
-};
-
 test.describe('TODO runtime panel actions over clean workflow paths', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const DEFAULT_AUTH_STATE = './.auth/state.json';
@@ -16,38 +11,13 @@ test.describe('TODO runtime panel actions over clean workflow paths', () => {
     });
 
     try {
-      const workspacesRes = await api.get('/api/v1/workspaces');
-      expect(workspacesRes.ok()).toBeTruthy();
-      const workspacesPayload = (await workspacesRes.json().catch(() => null)) as
-        | { items?: WorkspaceItem[] }
-        | null;
-      const items = Array.isArray(workspacesPayload?.items)
-        ? workspacesPayload.items
-        : [];
-      const writableWorkspace =
-        items.find((entry) => entry.role !== 'viewer') ?? items[0];
-      expect(writableWorkspace?.id).toBeTruthy();
-      const workspaceId = String(writableWorkspace?.id ?? '');
-
-      const sessionsRes = await api.get(
-        `/api/v1/chat/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
-      );
-      expect(sessionsRes.ok()).toBeTruthy();
-      const sessionsPayload = (await sessionsRes
-        .json()
-        .catch(() => null)) as
-        | { sessions?: Array<{ id?: string }> }
-        | null;
-      for (const session of sessionsPayload?.sessions ?? []) {
-        const sessionId = String(session?.id ?? '').trim();
-        if (!sessionId) continue;
-        const deleteRes = await api.delete(
-          `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
-        );
-        expect(deleteRes.ok()).toBeTruthy();
-      }
-
       const suffix = Date.now();
+      const workspaceRes = await api.post('/api/v1/workspaces', {
+        data: { name: `E2E TODO panel ${suffix}` },
+      });
+      expect(workspaceRes.ok()).toBeTruthy();
+      const workspaceId = String((await workspaceRes.json().catch(() => null))?.id ?? '');
+      expect(workspaceId).toBeTruthy();
       const sessionTitle = `E2E TODO panel actions ${suffix}`;
       const createSessionRes = await api.post(
         `/api/v1/chat/sessions?workspace_id=${encodeURIComponent(workspaceId)}`,
@@ -108,6 +78,7 @@ test.describe('TODO runtime panel actions over clean workflow paths', () => {
       );
       expect(createTaskRes.status()).toBe(201);
 
+      await page.addInitScript((id) => localStorage.setItem('workspaceScopeId', id), workspaceId);
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
 
@@ -138,11 +109,12 @@ test.describe('TODO runtime panel actions over clean workflow paths', () => {
       await toggleButton.click();
       await expect(taskRow).toBeVisible();
 
-      page.once('dialog', async (dialog) => {
-        expect(dialog.type()).toBe('confirm');
-        await dialog.accept();
-      });
       await deleteButton.click();
+      const confirmDeleteButton = runtimePanel.getByRole('button', {
+        name: /Supprimer|Delete/i,
+      });
+      await expect(confirmDeleteButton).toBeVisible();
+      await confirmDeleteButton.click();
 
       await expect(runtimePanel).toBeHidden({ timeout: 10_000 });
     } finally {
