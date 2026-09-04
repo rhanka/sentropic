@@ -767,6 +767,7 @@
   - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any duplicate search tool HTTP shim if discovered.
   - [ ] Tests new: `api/tests/api/cluster-mesh-catalog.test.ts`.
     - [x] Neutral exact-route, no-service-import, read-only effect refusal and deterministic injected discovery coverage added.
+    - [x] Canonical projection parity, truthful no-predecessor metadata, direct author, rollback, root mount, duplicate, disabled and unavailable-control coverage added.
   - [ ] Tests updated: `api/tests/services/catalog/composite-registry.spec.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/services/catalog/mcp-source.spec.ts`, `api/tests/services/catalog/search-catalog-tool.spec.ts`, `api/tests/services/catalog/standalone-tool-source.spec.ts`, `api/tests/services/catalog-characterization.spec.ts`.
   - [ ] UI/E2E tests: N-A; catalog consumers are covered by chat/workflow regression in Lot 33.
   - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-catalog.test.ts ENV=test-cluster-mesh-central-control-plane`.
