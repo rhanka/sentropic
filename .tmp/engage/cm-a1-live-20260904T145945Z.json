@@ -40,6 +40,7 @@
   },
   "notes": [
     "The dedicated target was killed only by the final LOST scenario and was not restarted afterward.",
+    "The h2a op executable is not mounted in the API container; the final park endpoint therefore issued the equivalent fenced v1 stop-if-incarnation operation directly over the mounted read-write native socket, and a host-side h2a op state read confirmed exited 143/SIGTERM.",
     "BR75-SG10 remains attention: this run qualifies the durable capacity store directly, while the canonical /session admission path still has process-local admission wiring.",
     "Two earlier red diagnostic runs are recorded in BR75-RV96 and BR75-RV97 and are not counted as green retries."
   ]
