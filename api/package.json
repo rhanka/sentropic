@@ -24,7 +24,7 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:smoke": "vitest run tests/smoke --exclude tests/smoke/restore-validation.test.ts",
+    "test:smoke": "vitest run tests/smoke --exclude tests/smoke/restore-validation.test.ts --no-file-parallelism",
     "test:smoke:restore": "vitest run tests/smoke/restore-validation.test.ts",
     "test:api": "vitest run tests/api",
     "test:endpoints": "vitest run tests/api",
