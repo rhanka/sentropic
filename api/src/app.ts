@@ -84,6 +84,7 @@ import {
   createProductHealthNamespaceModule,
   HEALTH_PATHS,
 } from './routes/namespaces/health';
+import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 
 const authPlugin = productAuthPlugin();
 
@@ -150,6 +151,17 @@ export const ROOT_MOUNTED_NAMESPACE_REGISTRY = [
     module: productHealthModule,
     authPaths: HEALTH_PATHS,
     authorPaths: HEALTH_PATHS,
+  },
+  {
+    namespace: '/apps',
+    module: productAppsModule,
+    authPaths: APP_PATHS,
+    authorPaths: APP_PATHS,
+    privilegedFences: [{
+      name: 'app-admin',
+      paths: APP_PATHS,
+      pathPrefixes: ['/apps'],
+    }],
   },
   {
     namespace: '/admin',
