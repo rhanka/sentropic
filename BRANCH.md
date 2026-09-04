@@ -760,6 +760,7 @@
   - [ ] Namespace: `/catalog`; type: TARGET application router extraction, plugin mount and single-author activation.
   - [x] Add the neutral exact-GET catalog transport with injected discovery/authentication ports and no database, schema or service imports.
   - [x] Keep canonical `CompositeCatalogRegistry` access in the product adapter and project bounded entry/source metadata into the transport.
+  - [x] Record the truthful no-HTTP predecessor (`historicalFixture: not_applicable`, `replayIdempotencyClaim: false`) and direct fail-closed catalog author fence.
   - [ ] Add `api/src/routes/namespaces/catalog.ts` over `CompositeCatalogRegistry`; expose search/discovery only and reject effect execution without delegated verified authorization.
   - [ ] Shadow deterministic search results, select one catalog author and prove rollback.
   - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any duplicate search tool HTTP shim if discovered.
