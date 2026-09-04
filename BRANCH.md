@@ -785,6 +785,7 @@
   - [ ] Namespace: `/resources`; type: TARGET application router extraction, plugin mount and single-author activation.
   - [ ] Add `api/src/routes/namespaces/resources.ts` over `ResourceDispatcher`, verified principal/provenance ports and delegated catalog/MCP/connector providers.
     - [x] Add a neutral six-route transport with strict scope-free inputs, injected principal/dispatcher ports and provider-authored result/provenance preservation.
+    - [x] Add the product adapter over the canonical dispatcher with DB-backed workspace role/type and workspace-to-tenant resolution; effect allowlisting stays fail-closed.
   - [ ] Preserve uniform `list/stat/read/grep/edit/invoke` projection without becoming a second registry or provider.
   - [ ] Shadow read/list/stat/grep results and validated edit/invoke intent, select one author and prove rollback.
   - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct resource-dispatch HTTP shim found during inventory.
