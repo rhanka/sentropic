@@ -282,6 +282,61 @@ describe('API Health', () => {
       await expect(unavailable.json()).resolves.toEqual({ error: 'apps_control_unavailable' });
     });
 
+    it('emits the live catalog cutover and control-loss status map', async () => {
+      const catalogUser = await createAuthenticatedUser('editor');
+      const read = () => authenticatedHttpRequest(
+        'GET', '/api/v1/catalog/entries', catalogUser.sessionToken!,
+      );
+      const [health, anonymous, duplicate, active] = await Promise.all([
+        httpRequest('/api/v1/health'),
+        httpRequest('/api/v1/catalog/entries'),
+        authenticatedHttpRequest(
+          'GET', '/api/v1/catalog/catalog/entries', catalogUser.sessionToken!,
+        ),
+        read(),
+      ]);
+      const records = await db.select().from(clusterMeshNamespaceCutovers).where(and(
+        eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+        eq(clusterMeshNamespaceCutovers.namespace, '/catalog'),
+      ));
+      expect(records).toEqual([expect.objectContaining({
+        status: 'active', activeAuthor: 'catalog-hono-module', shadowComparison: null,
+      })]);
+
+      await db.execute(sql.raw(
+        'ALTER TABLE control.cluster_mesh_namespace_cutovers '
+        + 'RENAME TO cluster_mesh_namespace_cutovers_lot31_probe',
+      ));
+      let unavailable: Response;
+      try {
+        unavailable = await read();
+      } finally {
+        await db.execute(sql.raw(
+          'ALTER TABLE control.cluster_mesh_namespace_cutovers_lot31_probe '
+          + 'RENAME TO cluster_mesh_namespace_cutovers',
+        ));
+      }
+      const recovered = await read();
+      const statuses = {
+        health: health.status,
+        anonymousCatalog: anonymous.status,
+        duplicateCatalog: duplicate.status,
+        activeCatalog: active.status,
+        controlUnavailable: unavailable.status,
+        recoveredCatalog: recovered.status,
+      };
+      console.info(`LOT31_CATALOG_PROBE ${JSON.stringify({ statuses, cutover: records[0] })}`);
+      expect(statuses).toEqual({
+        health: 200,
+        anonymousCatalog: 401,
+        duplicateCatalog: 404,
+        activeCatalog: 200,
+        controlUnavailable: 503,
+        recoveredCatalog: 200,
+      });
+      await expect(unavailable.json()).resolves.toEqual({ error: 'catalog_control_unavailable' });
+    });
+
     it('should have organizations endpoint accessible', async () => {
       const response = await authenticatedHttpRequest('GET', '/api/v1/organizations', user.sessionToken!);
       expect(response.status).toBe(200);

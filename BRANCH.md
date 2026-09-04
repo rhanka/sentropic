@@ -771,6 +771,7 @@
     - [x] Canonical projection parity, truthful no-predecessor metadata, direct author, rollback, root mount, duplicate, disabled and unavailable-control coverage added.
   - [ ] Tests updated: `api/tests/services/catalog/composite-registry.spec.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/services/catalog/mcp-source.spec.ts`, `api/tests/services/catalog/search-catalog-tool.spec.ts`, `api/tests/services/catalog/standalone-tool-source.spec.ts`, `api/tests/services/catalog-characterization.spec.ts`.
     - [x] Additive regression assertions freeze source metadata, hot-path no-refresh, effect-free discovery, HTTP/meta-tool search parity and canonical projection order.
+  - [x] Tests updated: `api/tests/smoke/api-health.test.ts` with live health/auth/duplicate/author-control/recovery status evidence.
   - [ ] UI/E2E tests: N-A; catalog consumers are covered by chat/workflow regression in Lot 33.
   - [ ] Lot gate: `make typecheck-api lint-api test-api-api SCOPE=tests/api/cluster-mesh-catalog.test.ts ENV=test-cluster-mesh-central-control-plane`.
   - [ ] Lot gate: `make test-api-unit SCOPE=tests/services/catalog/composite-registry.spec.ts ENV=test-cluster-mesh-central-control-plane`.
