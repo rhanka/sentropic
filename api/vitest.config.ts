@@ -1,10 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-const maxForks = process.env.VITEST_MAX_WORKERS
-  ? Number(process.env.VITEST_MAX_WORKERS)
-  : undefined;
-
 const pkgSrc = (name: string, entry = 'index.ts'): string =>
   fileURLToPath(new URL(`../packages/${name}/src/${entry}`, import.meta.url));
 
@@ -47,12 +43,6 @@ export default defineConfig({
   },
   test: {
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        // Keep minForks bounded when maxForks is forced via env to avoid Tinypool conflicts.
-        ...(maxForks !== undefined ? { minForks: 1, maxForks } : {}),
-      }
-    },
     // Increase timeout for database operations and AI API calls
     testTimeout: 60000,
     hookTimeout: 60000,
