@@ -3121,6 +3121,7 @@
         class="w-full"
         role="textbox"
         aria-label={$_('chat.composer.ariaLabel')}
+        aria-disabled={p.disabled}
         aria-multiline="true"
         tabindex="0"
         on:keydown={p.onKeyDown}
