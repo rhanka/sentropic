@@ -784,6 +784,7 @@
   - [x] Phase A: record Lot 31 Fable GO WITH CONDITIONS at `9c9822590` in `BR75-RV85`, classify its non-static counts as ledger-corroborated/not-independently-re-run, and carry the global-catalog/future-scoping condition to Lots 34/35. Lot 32 must prove its product principal uses the canonical authorized workspace and resolved tenant, never a caller-supplied scope.
   - [ ] Namespace: `/resources`; type: TARGET application router extraction, plugin mount and single-author activation.
   - [ ] Add `api/src/routes/namespaces/resources.ts` over `ResourceDispatcher`, verified principal/provenance ports and delegated catalog/MCP/connector providers.
+    - [x] Add a neutral six-route transport with strict scope-free inputs, injected principal/dispatcher ports and provider-authored result/provenance preservation.
   - [ ] Preserve uniform `list/stat/read/grep/edit/invoke` projection without becoming a second registry or provider.
   - [ ] Shadow read/list/stat/grep results and validated edit/invoke intent, select one author and prove rollback.
   - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct resource-dispatch HTTP shim found during inventory.
