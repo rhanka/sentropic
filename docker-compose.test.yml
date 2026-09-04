@@ -1,6 +1,6 @@
 services:
   api:
-    user: "${API_UID:-1000}:${API_UID:-1000}"
+    user: "${API_UID:-0}:${API_GID:-0}"
     environment:
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT:-true}
       # BR70-CI1: the test api runs NODE_ENV=development, so its background outbox
@@ -30,7 +30,7 @@ services:
       - CLUSTER_MESH_CAPACITY_QUALIFICATION_URL=${CLUSTER_MESH_CAPACITY_QUALIFICATION_URL:-}
     volumes:
       - ${H2A_NATIVE_SOCKET:-/tmp/sentropic-h2a-disabled.sock}:${H2A_NATIVE_SOCKET:-/tmp/sentropic-h2a-disabled.sock}:rw
-      - ${H2A_ROOT:-/tmp/sentropic-h2a-disabled-root}:${H2A_ROOT:-/tmp/sentropic-h2a-disabled-root}:rw
+      - ${H2A_ROOT:-/tmp/sentropic-h2a-disabled-root}:${H2A_ROOT:-/tmp/sentropic-h2a-disabled-root}:ro
   e2e:
     network_mode: host
     image: ${REGISTRY}/${E2E_IMAGE_NAME:-sentropic-e2e}:${E2E_VERSION:-latest}
