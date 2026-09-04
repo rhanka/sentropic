@@ -1438,6 +1438,22 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 ];
 
+function addTransportEquivalentFixture(
+  providerId: string,
+  sourceModel: string,
+  model: string,
+  label: string,
+): void {
+  const source = STREAM_TEST_MATRIX.find(
+    (fixture) => fixture.providerId === providerId && fixture.model === sourceModel,
+  );
+  if (!source) throw new Error(`Missing stream fixture for ${providerId}:${sourceModel}`);
+  STREAM_TEST_MATRIX.push({ ...source, model, label });
+}
+
+addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
+addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Astra');
+
 // ---------------------------------------------------------------------------
 // Additional Cohere-specific tests that don't fit the matrix pattern
 // ---------------------------------------------------------------------------
