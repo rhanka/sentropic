@@ -792,6 +792,7 @@
   - [ ] Shadow read/list/stat/grep results and validated edit/invoke intent, select one author and prove rollback.
   - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct resource-dispatch HTTP shim found during inventory.
   - [ ] Tests new: `api/tests/api/cluster-mesh-resources.test.ts`.
+    - [x] Cover exact neutral routes, no-service imports, six validated projections, preserved provenance and caller-scope/effect-intent refusal.
   - [ ] Tests updated: `api/tests/unit/resource-plane.test.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/api/generic-dispatch.test.ts`.
   - [ ] UI/E2E tests: N-A; resource effects are covered by MCP/connector/chat scenarios in Lot 33.
   - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/resource-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
