@@ -82,6 +82,29 @@ describe('ChatPanelShell (gold shell assembly)', () => {
     getByText('HTTP 502: Unknown error');
   });
 
+  it('forwards the host comment permission to the comments composer', () => {
+    const commentHost = {
+      listComments: async () => ({ items: [] }),
+      createComment: async () => ({ id: 'comment-1', thread_id: 'thread-1' }),
+      updateComment: async () => ({ success: true }),
+      closeComment: async () => ({ success: true }),
+      reopenComment: async () => ({ success: true }),
+      deleteComment: async () => ({ success: true }),
+      listMentionMembers: async () => ({ items: [] }),
+      canComment: () => false,
+      canResolve: () => false,
+      resolveSectionLabel: () => null,
+      currentUser: () => null,
+      subscribeCommentUpdates: () => () => {},
+    } as never;
+    const { container } = render(ChatPanelShell, {
+      props: { mode: 'comments', labels: LABELS, commentHost },
+    });
+    const send = container.querySelector('button[aria-label="common.send"]');
+    expect(send).not.toBeNull();
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+  });
+
   const assistantItem = {
     kind: 'assistant-segment',
     key: 'as:a1:0',
