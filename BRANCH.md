@@ -805,10 +805,10 @@
   - [x] Internal gates: C1 adds no table or migration; C3/A5 use an injectable module and preserve the frozen catalog/resources/MCP/connectors split. The relevant nine-file regression passes 130/130, including root-fence 68/68; stopped-to-cold API-only smoke passes 11/11 and teardown is empty. Evidence uses the `cm-lot32-resources-fbba24416` stem.
 
 - [ ] **Lot 33 — Integrated API/UI/E2E matrix and C2 execution**
-  - [ ] Namespace: all 29; type: integrated acceptance and regression.
+  - [x] Namespace: all 29; type: integrated acceptance and regression.
   - [ ] Add `e2e/tests/10-cluster-mesh-control-plane.spec.ts` with independent A1 session, A2 singleton MCP, A3 registration denial, A4 12/13 capacity, A5 module-disable and representative namespace cutover scenarios.
   - [ ] Execute `e2e/tests/06-streams.spec.ts` and `e2e/tests/08-chat-heavy.spec.ts` against the selected transport, proving authenticated canonical `/api/v1/streams/active`, duplicate `/api/v1/streams/streams/active` 404, SSE cursor/replay and tenant isolation; updating these specs in earlier lots is not execution evidence.
-  - [ ] Add `api/tests/api/cluster-mesh-namespace-inventory.test.ts` proving exactly 29 keys, one author each, root-specific IdP projections and no legacy mount in `api/src/routes/api/index.ts`.
+  - [x] Add `api/tests/api/cluster-mesh-namespace-inventory.test.ts` proving exactly 29 keys, one author each, root-specific IdP projections and no legacy mount in `api/src/routes/api/index.ts`; focused gate passes 3/3 after one test-path correction.
   - [ ] Add `ui/tests/cluster-mesh/control-plane.test.ts` for LOST/capacity/registration/disabled-module presentation if UI status is introduced; otherwise record N-A with no UI source change.
   - [ ] Prepare E2E with `make build-api build-ui-image API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 ENV=e2e-cluster-mesh-central-control-plane`.
   - [ ] Scoped E2E gate: `make test-e2e E2E_SPEC=tests/10-cluster-mesh-control-plane.spec.ts API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 ENV=e2e-cluster-mesh-central-control-plane`.
