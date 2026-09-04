@@ -1,7 +1,15 @@
+import { and, eq, like } from 'drizzle-orm';
 import { readFileSync } from 'node:fs';
 import { Hono, type MiddlewareHandler } from 'hono';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { app as productApp } from '../../src/app';
+import { db } from '../../src/db/client';
+import {
+  appInstances,
+  appTemplates,
+  clusterMeshNamespaceCutovers,
+} from '../../src/db/control-schema';
 import {
   APP_PATHS,
   APP_ROUTES,
@@ -9,6 +17,13 @@ import {
   type AppsControlPlanePort,
   type AppsNamespacePorts,
 } from '../../src/routes/namespaces/apps-module';
+import { appControlPlane } from '../../src/services/app-control-plane';
+import {
+  authenticatedRequest,
+  cleanupAuthData,
+  createAuthenticatedUser,
+  type TestUser,
+} from '../utils/auth-helper';
 
 const pass: MiddlewareHandler = async (_context, next) => next();
 const templates = [{ id: 'template-1', appSlug: 'code', status: 'published' }];
@@ -83,5 +98,94 @@ describe('cluster mesh apps transport', () => {
     });
     expect(invalid.status).toBe(400);
     expect(controlPlane.transitionInstance).not.toHaveBeenCalled();
+  });
+});
+
+const key = { compositionRoot: 'product' as const, namespace: '/apps' as const };
+const slugPrefix = 'test-cm-apps-';
+const tenantId = 'test-cm-apps-tenant';
+
+const clearProductState = async () => {
+  await db.delete(appInstances).where(eq(appInstances.tenantId, tenantId));
+  await db.delete(appTemplates).where(like(appTemplates.appSlug, `${slugPrefix}%`));
+  await db.delete(clusterMeshNamespaceCutovers).where(and(
+    eq(clusterMeshNamespaceCutovers.compositionRoot, key.compositionRoot),
+    eq(clusterMeshNamespaceCutovers.namespace, key.namespace),
+  ));
+};
+
+describe('cluster mesh apps product authority', () => {
+  let admin: TestUser;
+
+  beforeEach(async () => {
+    await clearProductState();
+    admin = await createAuthenticatedUser('admin_app');
+  });
+
+  afterEach(async () => {
+    await clearProductState();
+    await cleanupAuthData();
+  });
+
+  it('matches direct canonical template and instance reads over seeded state', async () => {
+    const template = await appControlPlane.createTemplate({
+      appSlug: `${slugPrefix}reads`, version: '1.0.0', blueprint: { packages: ['core'] },
+    });
+    await appControlPlane.publishTemplate(template.id);
+    const instance = await appControlPlane.createInstance({
+      templateFamilyId: template.familyId,
+      templateVersion: template.version,
+      tenantId,
+    });
+    const directTemplates = await appControlPlane.listTemplates({ familyId: template.familyId });
+    const directInstance = await appControlPlane.getInstance(instance.id);
+
+    const templatesResponse = await authenticatedRequest(
+      productApp,
+      'GET',
+      `/api/v1/apps/templates?familyId=${template.familyId}`,
+      admin.sessionToken!,
+    );
+    const instanceResponse = await authenticatedRequest(
+      productApp, 'GET', `/api/v1/apps/instances/${instance.id}`, admin.sessionToken!,
+    );
+    expect({ status: templatesResponse.status, body: await templatesResponse.json() }).toEqual({
+      status: 200, body: { items: JSON.parse(JSON.stringify(directTemplates)) },
+    });
+    expect({ status: instanceResponse.status, body: await instanceResponse.json() }).toEqual({
+      status: 200, body: { item: JSON.parse(JSON.stringify(directInstance)) },
+    });
+  });
+
+  it('performs one real durable template and instance lifecycle through the selected route', async () => {
+    const createTemplate = await authenticatedRequest(
+      productApp, 'POST', '/api/v1/apps/templates', admin.sessionToken!,
+      { appSlug: `${slugPrefix}lifecycle`, version: '1.0.0', blueprint: { packages: [] } },
+    );
+    expect(createTemplate.status).toBe(201);
+    const template = (await createTemplate.json()).item;
+    const publish = await authenticatedRequest(
+      productApp, 'POST', `/api/v1/apps/templates/${template.id}/publish`, admin.sessionToken!,
+    );
+    expect((await publish.json()).item.status).toBe('published');
+
+    const createInstance = await authenticatedRequest(
+      productApp, 'POST', '/api/v1/apps/instances', admin.sessionToken!,
+      { templateFamilyId: template.familyId, templateVersion: '1.0.0', tenantId },
+    );
+    expect(createInstance.status).toBe(201);
+    const instance = (await createInstance.json()).item;
+    const activate = await authenticatedRequest(
+      productApp,
+      'POST',
+      `/api/v1/apps/instances/${instance.id}/transition`,
+      admin.sessionToken!,
+      { status: 'active' },
+    );
+    expect((await activate.json()).item.status).toBe('active');
+    await expect(db.select().from(appTemplates).where(eq(appTemplates.id, template.id)))
+      .resolves.toHaveLength(1);
+    await expect(db.select().from(appInstances).where(eq(appInstances.id, instance.id)))
+      .resolves.toEqual([expect.objectContaining({ status: 'active', tenantId })]);
   });
 });
