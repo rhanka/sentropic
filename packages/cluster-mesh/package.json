@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/cluster-mesh",
   "version": "0.7.0",
-  "description": "Federal-shaped cluster membership, trust, identity, device, and tenant-boundary contracts with a single-instance runtime.",
+  "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
   "repository": {
