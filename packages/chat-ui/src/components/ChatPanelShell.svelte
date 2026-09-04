@@ -47,6 +47,8 @@
   export let commentSectionLabel: string | null = null;
   export let commentThreadId: string | null = null;
   export let commentLoading = false;
+  /** Reactive host RBAC projection for the comments composer. */
+  export let workspaceCanComment = true;
 
   /** i18n — host-injected translator, zero domain strings in the module. */
   export let labels: (key: string, opts?: Record<string, unknown>) => string = (
@@ -293,7 +295,7 @@
         sectionLabel={commentSectionLabel}
         bind:commentThreadId
         bind:commentLoading
-        workspaceCanComment={commentHost.canComment()}
+        {workspaceCanComment}
         {labels}
         {renderComposerInput}
         {renderThreadMenuPopover}
