@@ -1,9 +1,14 @@
+import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { and, eq, like } from 'drizzle-orm';
 import { readFileSync } from 'node:fs';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { app as productApp } from '../../src/app';
+import {
+  app as productApp,
+  PRODUCT_CLUSTER_MESH_MOUNTS,
+  ROOT_MOUNTED_NAMESPACE_REGISTRY,
+} from '../../src/app';
 import { db } from '../../src/db/client';
 import {
   appInstances,
@@ -13,11 +18,17 @@ import {
 import {
   APP_PATHS,
   APP_ROUTES,
+  APPS_AUTHOR,
+  createAppsNamespaceModule,
   createAppsTransportRouter,
   type AppsControlPlanePort,
   type AppsNamespacePorts,
 } from '../../src/routes/namespaces/apps-module';
+import type { AppsCutoverControl } from '../../src/routes/namespaces/apps-cutover';
+import { productAppsPorts } from '../../src/routes/namespaces/apps-product-ports';
 import { appControlPlane } from '../../src/services/app-control-plane';
+import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
+import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -102,8 +113,17 @@ describe('cluster mesh apps transport', () => {
 });
 
 const key = { compositionRoot: 'product' as const, namespace: '/apps' as const };
+const cutovers = new PostgresClusterMeshCutoverStore();
 const slugPrefix = 'test-cm-apps-';
 const tenantId = 'test-cm-apps-tenant';
+const candidate = (enabled = true, control?: AppsCutoverControl) => new Hono()
+  .route('/api/v1', createClusterMeshPlugin({
+    runtime: clusterMeshAdapter.sessionControl!.runtime,
+    namespaces: [createAppsNamespaceModule({
+      enabled, ports: productAppsPorts, cutoverControl: control,
+    })],
+    mounts: { '/apps': '/' },
+  }));
 
 const clearProductState = async () => {
   await db.delete(appInstances).where(eq(appInstances.tenantId, tenantId));
@@ -187,5 +207,73 @@ describe('cluster mesh apps product authority', () => {
       .resolves.toHaveLength(1);
     await expect(db.select().from(appInstances).where(eq(appInstances.id, instance.id)))
       .resolves.toEqual([expect.objectContaining({ status: 'active', tenantId })]);
+  });
+
+  it('selects one direct author and fails closed after the exact no-HTTP rollback', async () => {
+    const app = candidate();
+    const path = '/api/v1/apps/templates';
+    expect((await authenticatedRequest(app, 'GET', path, admin.sessionToken!)).status).toBe(200);
+    const active = await cutovers.find(key);
+    expect(active).toMatchObject({
+      status: 'active',
+      activeAuthor: APPS_AUTHOR,
+      selectedGenerationId: clusterMeshAdapter.sessionControl!.runtime.generation.generationId,
+      previousGenerationId: 'pre-http-app-control-service-v1',
+      rollbackCheckpoint: { activeAuthor: 'no-apps-http-author' },
+    });
+    expect(active?.shadowComparison).toBeUndefined();
+
+    await cutovers.rollback(key, active!.previousGenerationId!);
+    await expect(cutovers.verifyRollback(key)).resolves.toMatchObject({ reversible: true });
+    const blocked = await authenticatedRequest(app, 'GET', path, admin.sessionToken!);
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('has no anonymous, role, disabled, duplicate, or unavailable-control fallback', async () => {
+    const path = '/api/v1/apps/templates';
+    const editor = await createAuthenticatedUser('editor');
+    expect((await candidate().request(path)).status).toBe(401);
+    expect((await authenticatedRequest(candidate(), 'GET', path, editor.sessionToken!)).status)
+      .toBe(403);
+    expect((await authenticatedRequest(candidate(false), 'GET', path, admin.sessionToken!)).status)
+      .toBe(404);
+    expect((await authenticatedRequest(
+      candidate(), 'GET', '/api/v1/apps/apps/templates', admin.sessionToken!,
+    )).status).toBe(404);
+
+    const unavailable: AppsCutoverControl = {
+      runtime: { generation: clusterMeshAdapter.sessionControl!.runtime.generation },
+      cutovers: {
+        find: vi.fn(async () => { throw new Error('control unavailable'); }),
+        activate: vi.fn(async () => undefined),
+      },
+    };
+    const blocked = await authenticatedRequest(
+      candidate(true, unavailable), 'GET', path, admin.sessionToken!,
+    );
+    expect(blocked.status).toBe(503);
+    await expect(blocked.json()).resolves.toEqual({ error: 'apps_control_unavailable' });
+  });
+
+  it('registers the sole root author and confirms the prior HTTP surface is absent', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/apps',
+    );
+    expect(registration?.module.namespace).toBe('/apps');
+    expect(registration?.authPaths).toEqual(APP_PATHS);
+    expect('authorPaths' in registration! ? registration.authorPaths : undefined)
+      .toEqual(APP_PATHS);
+    expect(registration?.privilegedFences).toEqual([
+      { name: 'app-admin', paths: APP_PATHS, pathPrefixes: ['/apps'] },
+    ]);
+    expect(PRODUCT_CLUSTER_MESH_MOUNTS['/apps']).toBe('/');
+
+    const apiIndex = readFileSync(new URL('../../src/routes/api/index.ts', import.meta.url), 'utf8');
+    expect(apiIndex).not.toMatch(/appControlPlane|app-control-plane|\/apps/);
+    const productPorts = readFileSync(
+      new URL('../../src/routes/namespaces/apps-product-ports.ts', import.meta.url), 'utf8',
+    );
+    expect(productPorts).not.toMatch(/build-cli|fixtures\/historical/);
   });
 });
