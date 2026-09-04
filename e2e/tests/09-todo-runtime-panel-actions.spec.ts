@@ -110,9 +110,9 @@ test.describe('TODO runtime panel actions over clean workflow paths', () => {
       await expect(taskRow).toBeVisible();
 
       await deleteButton.click();
-      const confirmDeleteButton = runtimePanel.getByRole('button', {
-        name: /Supprimer|Delete/i,
-      });
+      const confirmDeleteButton = runtimePanel
+        .locator('.chat-delete-confirm-surface')
+        .getByRole('button', { name: /^(Supprimer|Delete)$/i });
       await expect(confirmDeleteButton).toBeVisible();
       await confirmDeleteButton.click();
 
