@@ -337,6 +337,62 @@ describe('API Health', () => {
       await expect(unavailable.json()).resolves.toEqual({ error: 'catalog_control_unavailable' });
     });
 
+    it('emits the live resources cutover and control-loss status map', async () => {
+      const read = () => authenticatedHttpRequest(
+        'POST', '/api/v1/resources/list', user.sessionToken!, { path: '/' },
+      );
+      const [health, anonymous, duplicate, active] = await Promise.all([
+        httpRequest('/api/v1/health'),
+        httpRequest('/api/v1/resources/list', {
+          method: 'POST', body: JSON.stringify({ path: '/' }),
+        }),
+        authenticatedHttpRequest(
+          'POST', '/api/v1/resources/resources/list', user.sessionToken!, { path: '/' },
+        ),
+        read(),
+      ]);
+      const records = await db.select().from(clusterMeshNamespaceCutovers).where(and(
+        eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+        eq(clusterMeshNamespaceCutovers.namespace, '/resources'),
+      ));
+      expect(records).toEqual([expect.objectContaining({
+        status: 'active', activeAuthor: 'resources-hono-module', shadowComparison: null,
+      })]);
+
+      await db.execute(sql.raw(
+        'ALTER TABLE control.cluster_mesh_namespace_cutovers '
+        + 'RENAME TO cluster_mesh_namespace_cutovers_lot32_probe',
+      ));
+      let unavailable: Response;
+      try {
+        unavailable = await read();
+      } finally {
+        await db.execute(sql.raw(
+          'ALTER TABLE control.cluster_mesh_namespace_cutovers_lot32_probe '
+          + 'RENAME TO cluster_mesh_namespace_cutovers',
+        ));
+      }
+      const recovered = await read();
+      const statuses = {
+        health: health.status,
+        anonymousResources: anonymous.status,
+        duplicateResources: duplicate.status,
+        activeResources: active.status,
+        controlUnavailable: unavailable.status,
+        recoveredResources: recovered.status,
+      };
+      console.info(`LOT32_RESOURCES_PROBE ${JSON.stringify({ statuses, cutover: records[0] })}`);
+      expect(statuses).toEqual({
+        health: 200,
+        anonymousResources: 401,
+        duplicateResources: 404,
+        activeResources: 200,
+        controlUnavailable: 503,
+        recoveredResources: 200,
+      });
+      await expect(unavailable.json()).resolves.toEqual({ error: 'resources_control_unavailable' });
+    });
+
     it('should have organizations endpoint accessible', async () => {
       const response = await authenticatedHttpRequest('GET', '/api/v1/organizations', user.sessionToken!);
       expect(response.status).toBe(200);
