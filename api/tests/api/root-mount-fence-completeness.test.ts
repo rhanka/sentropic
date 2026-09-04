@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin, requireEditor } from '../../src/middleware/rbac';
 import { adminAuthorFence } from '../../src/routes/namespaces/admin-cutover';
+import { appsAuthorFence } from '../../src/routes/namespaces/apps-cutover';
 import { healthAuthorFence } from '../../src/routes/namespaces/health-cutover';
 import { requireAdminApp } from '../../src/routes/namespaces/admin-product-ports';
+import { requireAppsAdmin } from '../../src/routes/namespaces/apps-product-ports';
 import {
   MOUNTED_NAMESPACE_REGISTRY,
   PREFIX_MOUNTED_NAMESPACE_REGISTRY,
@@ -19,6 +21,21 @@ type RootMountedRouter = Pick<Hono, 'routes'>;
 
 const IMMUTABLE_ANALYTICS_EDITOR_PATHS = ['/analytics/executive-summary'] as const;
 const IMMUTABLE_HEALTH_ROUTES = [['GET', '/health']] as const;
+const IMMUTABLE_APP_AUTH_ROUTES = [
+  ['GET', '/apps/templates'],
+  ['POST', '/apps/templates'],
+  ['GET', '/apps/templates/:id'],
+  ['PATCH', '/apps/templates/:id'],
+  ['POST', '/apps/templates/:id/publish'],
+  ['POST', '/apps/templates/:id/deprecate'],
+  ['GET', '/apps/instances'],
+  ['POST', '/apps/instances'],
+  ['GET', '/apps/instances/:id'],
+  ['POST', '/apps/instances/:id/transition'],
+] as const;
+const IMMUTABLE_APP_ADMIN_PATHS = [
+  ...new Set(IMMUTABLE_APP_AUTH_ROUTES.map(([, path]) => path)),
+];
 const IMMUTABLE_ADMIN_AUTH_ROUTES = [
   ['POST', '/admin/reset'],
   ['GET', '/admin/stats'],
@@ -289,6 +306,25 @@ describe('mounted namespace fence completeness', () => {
           namespace, router, authorPaths ?? [], healthAuthorFence, IMMUTABLE_HEALTH_ROUTES, 'author',
         );
       }
+      if (namespace === '/apps') {
+        const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
+        expect(authPaths).toEqual(IMMUTABLE_APP_ADMIN_PATHS);
+        expect(authorPaths).toEqual(IMMUTABLE_APP_ADMIN_PATHS);
+        assertImmutableMethodRequirement(
+          namespace, router, authPaths ?? [], requireAuth, IMMUTABLE_APP_AUTH_ROUTES,
+        );
+        assertImmutableMethodRequirement(
+          namespace, router, authorPaths ?? [], appsAuthorFence,
+          IMMUTABLE_APP_AUTH_ROUTES, 'author',
+        );
+        assertPrivilegedMiddlewareFencesComplete(
+          namespace, router, privilegedFences, 'app-admin', requireAppsAdmin,
+        );
+        assertImmutablePrivilegedRequirement(
+          namespace, router, privilegedFences, 'app-admin', requireAppsAdmin,
+          IMMUTABLE_APP_ADMIN_PATHS,
+        );
+      }
       if (namespace === '/admin') {
         const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
         expect(authorPaths).toEqual(IMMUTABLE_ADMIN_AUTH_ROUTES.map(([, path]) => path));
@@ -462,6 +498,50 @@ describe('mounted namespace fence completeness', () => {
 
     expect(() => assertFenceComplete('/health', router, registration.authPaths!))
       .toThrowError('/health mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when the live root-mounted apps router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/apps',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/apps/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/apps', router, registration.authPaths!))
+      .toThrowError('/apps mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when apps routes and every mutable fence shrink together', () => {
+    const missingPath = '/apps/templates/:id/publish';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/apps',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== missingPath,
+      ),
+    };
+    const authPaths = registration.authPaths!.filter((path) => path !== missingPath);
+    const authorPaths = ('authorPaths' in registration ? registration.authorPaths : [])
+      .filter((path) => path !== missingPath);
+    const privilegedFences = registration.privilegedFences!.map((fence) => ({
+      ...fence,
+      paths: fence.paths.filter((path) => path !== missingPath),
+    }));
+
+    expect(() => {
+      assertFenceComplete('/apps', mutation, authPaths);
+      assertImmutableMethodRequirement(
+        '/apps', mutation, authPaths, requireAuth, IMMUTABLE_APP_AUTH_ROUTES,
+      );
+      assertImmutableMethodRequirement(
+        '/apps', mutation, authorPaths, appsAuthorFence, IMMUTABLE_APP_AUTH_ROUTES, 'author',
+      );
+      assertImmutablePrivilegedRequirement(
+        '/apps', mutation, privilegedFences, 'app-admin', requireAppsAdmin,
+        IMMUTABLE_APP_ADMIN_PATHS,
+      );
+    }).toThrowError('/apps immutable auth requirement is missing paths');
   });
 
   it('fails when root-mounted locks gains a route outside its explicit fence', () => {
