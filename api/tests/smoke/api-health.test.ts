@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
+import { tenantMemberships } from '../../src/db/schema';
 import { httpRequest, authenticatedHttpRequest } from '../utils/test-helpers';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
@@ -89,6 +90,9 @@ describe('API Health', () => {
 
     beforeEach(async () => {
       user = await createAuthenticatedUser('editor');
+      await db.insert(tenantMemberships).values({
+        tenantId: 'sentropic', userId: user.id, status: 'approved', role: 'member',
+      }).onConflictDoNothing();
     });
 
     afterEach(async () => {
