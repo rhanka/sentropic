@@ -787,12 +787,14 @@
     - [x] Add a neutral six-route transport with strict scope-free inputs, injected principal/dispatcher ports and provider-authored result/provenance preservation.
     - [x] Add the product adapter over the canonical dispatcher with DB-backed workspace role/type and workspace-to-tenant resolution; effect allowlisting stays fail-closed.
   - [ ] Preserve uniform `list/stat/read/grep/edit/invoke` projection without becoming a second registry or provider.
+    - [x] Product integration matches the direct canonical dispatcher for list/stat/read/grep, keeps catalog edit/invoke unavailable, and derives tenant/workspace/role server-side.
     - [x] Add a standalone, independently disableable namespace module and direct fail-closed author control for all six routes.
     - [x] Register the real root remap with explicit non-null auth/author paths and independent live-unfenced plus simultaneous-shrink invariants.
   - [ ] Shadow read/list/stat/grep results and validated edit/invoke intent, select one author and prove rollback.
   - [ ] Legacy path deletion: N-A because no current HTTP mount exists; remove any direct resource-dispatch HTTP shim found during inventory.
   - [ ] Tests new: `api/tests/api/cluster-mesh-resources.test.ts`.
     - [x] Cover exact neutral routes, no-service imports, six validated projections, preserved provenance and caller-scope/effect-intent refusal.
+    - [x] Prove canonical direct-read parity plus opaque cross-tenant workspace denial and strict rejection of caller-supplied ref scope.
   - [ ] Tests updated: `api/tests/unit/resource-plane.test.ts`, `api/tests/services/catalog/execution-seam.spec.ts`, `api/tests/api/generic-dispatch.test.ts`.
   - [ ] UI/E2E tests: N-A; resource effects are covered by MCP/connector/chat scenarios in Lot 33.
   - [ ] Lot gate: `make typecheck-api lint-api test-api-unit SCOPE=tests/unit/resource-plane.test.ts ENV=test-cluster-mesh-central-control-plane`.
