@@ -1,0 +1,46 @@
+{
+  "head": "666e3fd1550f16e7a823cdb1a6b8a16542681357",
+  "actuatorRef": "h2a-pty:v1:cm-a1-e2e-target",
+  "ptyEvidence_observed": "adapter_available",
+  "matrix_verdict": "green",
+  "test_run": {
+    "command": "make clean test-e2e API_PORT=9375 UI_PORT=5575 MAILDEV_UI_PORT=1475 E2E_GROUPS=\"10\" ENV=e2e-cluster-mesh-central-control-plane",
+    "result": "6 passed, 0 failed, 0 retried, 0 skipped",
+    "duration": "7.9s"
+  },
+  "per_scenario": {
+    "A1_tick": {
+      "status": "pass",
+      "signature": "initial incarnation a288408f-d967-4ac1-afd6-d1070cbe03b9; a1-drive-b acted as h2a-pty:acted:drive:cd0e3f9cb9b16e2ddb7d3920; a1-relaunch-b acted as h2a-pty:acted:relaunch:1cd6d5c5ae4a79412d8e9fe9; replacement incarnation bebaf968-fb3a-44dd-80b7-e704ad8c94f4"
+    },
+    "A2": {
+      "status": "pass",
+      "signature": "more than one registered session resolved to one active mcp-server:cluster-mesh-session-v1 under mcp-supervisor:cluster-mesh-session-v1; zero per-session servers"
+    },
+    "A3": {
+      "status": "pass",
+      "signature": "missing CLI registration returned 409 with zero parses/delegations; one canonical delegation acted as h2a-pty:acted:drive:bb6419eb47fa8761e1907c64; no legacy HTTP paths survived"
+    },
+    "A4_lost": {
+      "status": "pass",
+      "signature": "cm-a1-35c6732b-9f28-44cd-8eb3-85bd3d113a0a transitioned to lost at 2026-09-04T14:59:35.572Z; a4-wake-dead-target refused actuator_unavailable; native incarnation bebaf968-fb3a-44dd-80b7-e704ad8c94f4 exited 143/SIGTERM with latestSeq=1 and controlled=false"
+    },
+    "mcp": {
+      "status": "pass",
+      "signature": "server_id=mcp-server:cluster-mesh-session-v1 generation_id=cluster-mesh-session-v1 supervisor_ref=mcp-supervisor:cluster-mesh-session-v1 status=active; missing-generation request returned 503 with zero provider effects"
+    },
+    "cli": {
+      "status": "pass",
+      "signature": "cli-delegation-d4ba2a76-b708-4e4e-bb22-2a773fe8214d persisted transported, verified/accepted and acted receipts; acted effect h2a-pty:acted:drive:bb6419eb47fa8761e1907c64"
+    },
+    "capacity": {
+      "status": "pass",
+      "signature": "default generation capacity-qualification-12-a87e2839-9298-43a2-88be-7305489f914f occupied 12/12 and refused request 13 with 429; non-default generation capacity-qualification-3-b283d5ae-8308-493c-9124-113e1feaf736 occupied 3/3 and refused request 4 with 429; spawn counts remained 12 and 3"
+    }
+  },
+  "notes": [
+    "The dedicated target was killed only by the final LOST scenario and was not restarted afterward.",
+    "BR75-SG10 remains attention: this run qualifies the durable capacity store directly, while the canonical /session admission path still has process-local admission wiring.",
+    "Two earlier red diagnostic runs are recorded in BR75-RV96 and BR75-RV97 and are not counted as green retries."
+  ]
+}
