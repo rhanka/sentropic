@@ -87,6 +87,7 @@ import {
 import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
 import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
+import { clusterMeshLiveQualificationRouter } from './routes/cluster-mesh-live-qualification';
 
 const authPlugin = productAuthPlugin();
 
@@ -429,6 +430,7 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
   '/session': '/auth',
   ...ROOT_MOUNT_REMAPS,
 } as const;
+app.route('/api/v1/cluster-mesh/qualification', clusterMeshLiveQualificationRouter);
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
   namespaces: MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
