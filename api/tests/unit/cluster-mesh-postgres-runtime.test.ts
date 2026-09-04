@@ -14,8 +14,8 @@ import {
 import { PostgresClusterMeshRuntimeStore } from '../../src/services/cluster-mesh/postgres-runtime-store';
 
 const store = new PostgresClusterMeshRuntimeStore();
-const future = '2026-09-01T00:00:00.000Z';
-const past = '2026-08-01T00:00:00.000Z';
+const future = '2099-09-01T00:00:00.000Z';
+const past = '2000-08-01T00:00:00.000Z';
 
 async function cleanup() {
   await db.delete(clusterMeshReceipts);
