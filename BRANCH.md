@@ -13,6 +13,8 @@
 - [ ] **Allowed Paths**
   - [ ] `BRANCH.md`, `packages/llm-mesh/**`
   - [ ] `packages/llm-gateway/package.json`, `packages/llm-gateway/tests/target.test.ts`
+  - [ ] `api/tests/api/models.test.ts`, `api/tests/unit/claude-provider.test.ts`
+  - [ ] `api/tests/unit/llm-runtime-stream.test.ts`
   - [ ] `scripts/llm-model-equivalences/council.source.json`, `package-lock.json`
 - [ ] **Forbidden Paths**
   - [ ] `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`, `.github/workflows/**`
@@ -52,4 +54,5 @@
   - [x] Council check and mesh typecheck/build/pack pass; full mesh suite passes (26 files, 174 tests).
   - [x] Gateway typecheck passes; full gateway suite passes (16 files, 113 tests).
   - [x] Run `make scope-check` before each atomic `make commit`; inspect every hunk.
+  - [x] Update API catalog/stream consumer contracts after CI exposed stale exact-model assertions; focused endpoint 4/4 and unit 119/119 pass (1 existing skip).
   - [ ] Push the branch, open the requested PR, and record versions/tests/commit/PR/GA-switch evidence.
