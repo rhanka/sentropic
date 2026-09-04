@@ -40,11 +40,17 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'claude-fable-5': {
     providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-fable-5',
   },
+  'claude-fable-5-1': {
+    providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-fable-5-1',
+  },
   'gpt-5.6-luna': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-luna',
   },
   'gpt-5.6-sol': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol',
+  },
+  'gpt-6-astra': {
+    providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
   },
   'gemini-3.7-flash': {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
@@ -68,6 +74,11 @@ export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
   ['claude-fable-5-high', 'gpt-5.6-sol', 'gemini-3.7-flash', 'high'],
   ['claude-fable-5-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
   ['claude-fable-5-max', 'gpt-5.6-sol', 'gemini-3.7-flash', 'max'],
+  // Interim mapping: switch Fable 5.1 to GPT-6 Astra when GPT-6 reaches GA.
+  ['claude-fable-5-1', 'gpt-5.6-sol', 'gemini-3.7-flash'],
+  ['claude-fable-5-1-high', 'gpt-5.6-sol', 'gemini-3.7-flash', 'high'],
+  ['claude-fable-5-1-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
+  ['claude-fable-5-1-max', 'gpt-5.6-sol', 'gemini-3.7-flash', 'max'],
 ];
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];

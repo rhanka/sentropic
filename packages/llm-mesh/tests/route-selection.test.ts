@@ -96,6 +96,26 @@ describe('route candidate selection', () => {
     expect(candidates.map((candidate) => candidate.target.transportProviderId)).toEqual(['codex']);
   });
 
+  it('routes Fable 5.1 max to GPT-5.6 Sol max when no Anthropic account is enrolled', () => {
+    const candidates = candidatesOf(selectRouteCandidates({
+      request: { requestedModel: 'claude-fable-5-1-max' },
+      policy: DEFAULT_ROUTE_POLICY,
+      council: DEFAULT_MODEL_EQUIVALENCE_COUNCIL,
+      accounts: [{
+        accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
+        targetProviderId: 'openai', transportProviderId: 'codex',
+        supportedModelIds: ['gpt-5.6-sol'],
+        enrollmentCompletedAt: '2026-09-03T00:00:00Z',
+        readiness: 'ready', revision: 'r1',
+      }],
+    }));
+
+    expect(candidates[0]?.target).toMatchObject({
+      providerId: 'openai', transportProviderId: 'codex',
+      modelId: 'gpt-5.6-sol', effort: 'max', reason: 'alias',
+    });
+  });
+
   it('uses a non-Anthropic fallback when faithful Anthropic account is unavailable', () => {
     const selection = selectRouteCandidates({
       request: {
