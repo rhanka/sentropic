@@ -7,6 +7,7 @@ import { adminAuthorFence } from '../../src/routes/namespaces/admin-cutover';
 import { appsAuthorFence } from '../../src/routes/namespaces/apps-cutover';
 import { catalogAuthorFence } from '../../src/routes/namespaces/catalog-cutover';
 import { healthAuthorFence } from '../../src/routes/namespaces/health-cutover';
+import { resourcesAuthorFence } from '../../src/routes/namespaces/resources-cutover';
 import { requireAdminApp } from '../../src/routes/namespaces/admin-product-ports';
 import { requireAppsAdmin } from '../../src/routes/namespaces/apps-product-ports';
 import {
@@ -42,6 +43,14 @@ const IMMUTABLE_CATALOG_AUTH_ROUTES = [
   ['GET', '/catalog/entries/:name'],
   ['GET', '/catalog/search'],
   ['GET', '/catalog/sources'],
+] as const;
+const IMMUTABLE_RESOURCE_AUTH_ROUTES = [
+  ['POST', '/resources/list'],
+  ['POST', '/resources/stat'],
+  ['POST', '/resources/read'],
+  ['POST', '/resources/grep'],
+  ['POST', '/resources/edit'],
+  ['POST', '/resources/invoke'],
 ] as const;
 const IMMUTABLE_ADMIN_AUTH_ROUTES = [
   ['POST', '/admin/reset'],
@@ -346,6 +355,20 @@ describe('mounted namespace fence completeness', () => {
           IMMUTABLE_CATALOG_AUTH_ROUTES, 'author',
         );
       }
+      if (namespace === '/resources') {
+        const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
+        const immutablePaths = IMMUTABLE_RESOURCE_AUTH_ROUTES.map(([, path]) => path);
+        expect(authPaths).toEqual(immutablePaths);
+        expect(authorPaths).toEqual(immutablePaths);
+        expect(authPaths).not.toContain('/*');
+        assertImmutableMethodRequirement(
+          namespace, router, authPaths ?? [], requireAuth, IMMUTABLE_RESOURCE_AUTH_ROUTES,
+        );
+        assertImmutableMethodRequirement(
+          namespace, router, authorPaths ?? [], resourcesAuthorFence,
+          IMMUTABLE_RESOURCE_AUTH_ROUTES, 'author',
+        );
+      }
       if (namespace === '/admin') {
         const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
         expect(authorPaths).toEqual(IMMUTABLE_ADMIN_AUTH_ROUTES.map(([, path]) => path));
@@ -600,6 +623,43 @@ describe('mounted namespace fence completeness', () => {
         IMMUTABLE_CATALOG_AUTH_ROUTES, 'author',
       );
     }).toThrowError('/catalog immutable auth requirement is missing paths');
+  });
+
+  it('fails when the live root-mounted resources router gains an unfenced mutation', () => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/resources',
+    )!;
+    const router = registration.module.createRouter();
+    router.post('/resources/unfenced', (context) => context.json({ exposed: true }));
+
+    expect(() => assertFenceComplete('/resources', router, registration.authPaths!))
+      .toThrowError('/resources mounted namespace fence is missing registered paths');
+  });
+
+  it('fails when resources routes and mutable auth/author fences shrink together', () => {
+    const missingPath = '/resources/invoke';
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/resources',
+    )!;
+    const mutation = {
+      routes: registration.module.createRouter().routes.filter(
+        (route) => route.path !== missingPath,
+      ),
+    };
+    const authPaths = registration.authPaths!.filter((path) => path !== missingPath);
+    const authorPaths = ('authorPaths' in registration ? registration.authorPaths : [])
+      .filter((path) => path !== missingPath);
+
+    expect(() => {
+      assertFenceComplete('/resources', mutation, authPaths);
+      assertImmutableMethodRequirement(
+        '/resources', mutation, authPaths, requireAuth, IMMUTABLE_RESOURCE_AUTH_ROUTES,
+      );
+      assertImmutableMethodRequirement(
+        '/resources', mutation, authorPaths, resourcesAuthorFence,
+        IMMUTABLE_RESOURCE_AUTH_ROUTES, 'author',
+      );
+    }).toThrowError('/resources immutable auth requirement is missing paths');
   });
 
   it('fails when root-mounted locks gains a route outside its explicit fence', () => {
