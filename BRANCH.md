@@ -69,9 +69,13 @@
   - [ ] `ui/tests/**`
   - [ ] `e2e/tests/**`
   - [ ] `package-lock.json`
+  - [x] `docker-compose.test.yml` through owner-approved `BR75-EX8` only.
 - [ ] **Forbidden Paths (must not change in this branch)**
   - [ ] `Makefile`
-  - [ ] `docker-compose*.yml`
+  - [ ] `docker-compose.yml`
+  - [ ] `docker-compose.dev.yml`
+  - [ ] `docker-compose.idp.yml`
+  - [ ] `docker-compose.e2e-vscode.yml`
   - [ ] `.cursor/rules/**`
   - [ ] `.github/workflows/**`
   - [ ] `.track/**`
@@ -218,6 +222,7 @@
 - [ ] `BR75-RV93` — `attention` — Lot 36 is not internally accepted. Type/lint, both package matrices, the fresh Lot 32 regression (131/131 with root fence 68/68), UI (76 files/471 tests), API smoke/unit/endpoints/queue/security subgates, and IaC are green. The full API aggregate is red because six live-AI files fail 18/32 tests with `OPENAI_API_KEY` absent; CI normally injects that secret. The aggregate security gate is red: the UI image has 60 unaccepted HIGH/CRITICAL findings, while API SCA and API-container npm audits timed out and were incorrectly accepted from empty reports by the existing recipes. SAST is zero-finding. No Fable or independent reviewer was launched per owner instruction.
 - [ ] `BR75-RV94` — `blocked` — the owner-bounded final Lot 33 matrix ran each documented batch exactly once at `279cdf6d0f26732da4220a5c6dc2ea40b2c81f1a` on API 9375/UI 5575/Maildev 1475. Raw totals are 189 passed, 20 failed, 1 retry-pass flaky and 36 skipped/not-run across groups 00–10. The environment had no provider credential source (`Provider auth source is not configured`) and no `AUTH_CALLBACK_BASE_URL`; AI/document/chat jobs failed deterministically and the OAuth group never completed its authorization/token flows. Recurrences matching the six already-committed chat/lock/matrix fixes are classified as timing/environmental flakies and were not re-fixed. Group 10 alone passed 5/5, so the Makefile loop masked earlier group failures with a final shell exit 0. Verdict is `blocked-env`; no audit-endpoint outage occurred, no audit retry was used, no assertion or timeout changed, and the exact evidence is `.tmp/engage/cm-lot33-e2e-final-20260904T123354Z.json`.
 - [x] `BR75-SG14` — `acknowledge` — the Skills baseline at `90c7f5c81` reproducibly fails `packages/skills/tests/bundles/foundation.test.ts:743`: the assertion expects `entityType.enum` to equal `['initiative', 'folder']`, while the schema correctly exposes `['organization', 'initiative', 'folder']`. This is outside the Cluster Mesh scope and is fixed on main by PR #556 (`fix/skills-foundation-organization`); the owner signed off on patching main and continuing this lot. The full Skills gate becomes green when this branch rebases onto the merged fix.
+- [x] `BR75-RV95` — `acknowledge` — the live-wiring candidate consumes the dedicated native-terminal v1 Unix socket as uid 1000, validates the target in the isolated `H2A_ROOT`, persists one generation-bound registration, verifies an opaque invocation evidence value, enables the real CLI delegation path and exposes evidence-gated tick/park/lost/MCP/CLI/capacity qualification endpoints. API typecheck passes and lint returns 0 errors/207 existing warnings; no E2E acceptance is claimed before the owner-mandated live group-10 run.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
 ## AI Flaky tests
