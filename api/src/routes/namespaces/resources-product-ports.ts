@@ -10,7 +10,7 @@ import type {
 } from '../../services/resource-plane/contract';
 import { getResourceDispatcher } from '../../services/resource-plane';
 import type { ResourceRef } from '../../services/resource-plane/ref';
-import { resolveTenant } from '../../services/tenancy/resolve-tenant';
+import { resolveTenantAuthoritatively } from '../../services/tenancy/resolve-tenant';
 import { getWorkspaceRole, getWorkspaceType } from '../../services/workspace-access';
 import type {
   ResourceHttpPrincipal,
@@ -24,7 +24,7 @@ const resolvePrincipal: ResourcesNamespacePorts['principal']['resolve'] = async 
   const [role, workspaceType, tenant] = await Promise.all([
     getWorkspaceRole(user.userId, user.workspaceId),
     getWorkspaceType(user.workspaceId),
-    resolveTenant({ workspaceId: user.workspaceId }),
+    resolveTenantAuthoritatively({ workspaceId: user.workspaceId, userId: user.userId }),
   ]);
   if (!role || !workspaceType || 'error' in tenant) return null;
   return {
