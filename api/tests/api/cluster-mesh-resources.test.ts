@@ -11,7 +11,7 @@ import {
 } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { tenants, workspaces } from '../../src/db/schema';
+import { tenantMemberships, tenants, workspaces } from '../../src/db/schema';
 import {
   createResourcesTransportRouter,
   createResourcesNamespaceModule,
@@ -26,6 +26,7 @@ import type { ResourcesCutoverControl } from '../../src/routes/namespaces/resour
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { getResourceDispatcher } from '../../src/services/resource-plane';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
+import { productResourcesPorts } from '../../src/routes/namespaces/resources-product-ports';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -145,6 +146,9 @@ const clearResourceCutover = async () => {
     eq(clusterMeshNamespaceCutovers.namespace, resourceKey.namespace),
   ));
 };
+const grantDefaultTenant = (userId: string) => db.insert(tenantMemberships).values({
+  tenantId: 'sentropic', userId, status: 'approved', role: 'member',
+}).onConflictDoNothing();
 
 describe('cluster mesh resources product scope', () => {
   let user: TestUser;
@@ -154,6 +158,7 @@ describe('cluster mesh resources product scope', () => {
   beforeEach(async () => {
     await clearResourceCutover();
     user = await createAuthenticatedUser('editor');
+    await grantDefaultTenant(user.id);
     outsider = await createAuthenticatedUser('editor');
     outsiderTenant = `resources-${crypto.randomUUID()}`;
     await db.insert(tenants).values({ id: outsiderTenant, name: outsiderTenant, status: 'active' });
@@ -237,6 +242,23 @@ describe('cluster mesh resources product scope', () => {
     expect(injected.status).toBe(400);
     await expect(injected.json()).resolves.toEqual({ error: 'resource_request_refused' });
   });
+
+  it('returns resource_not_found for a forged workspace principal or unresolved tenant', async () => {
+    const withPrincipal = (userId: string, workspaceId: string) => new Hono()
+      .use('/api/v1/resources/*', async (context, next) => {
+        context.set('user', { userId, workspaceId, sessionId: 'forged', role: 'editor' });
+        await next();
+      })
+      .route('/api/v1', createResourcesTransportRouter(productResourcesPorts));
+    const forged = await request(withPrincipal(user.id, outsider.workspaceId!), '/resources/list', {
+      path: '/',
+    });
+    const unresolved = await request(withPrincipal(outsider.id, outsider.workspaceId!), '/resources/list', {
+      path: '/',
+    });
+    expect([forged.status, await forged.json()]).toEqual([404, { error: 'resource_not_found' }]);
+    expect([unresolved.status, await unresolved.json()]).toEqual([404, { error: 'resource_not_found' }]);
+  });
 });
 
 const candidate = (enabled = true, control?: ResourcesCutoverControl) => new Hono()
@@ -252,6 +274,7 @@ describe('cluster mesh resources product author', () => {
   beforeEach(async () => {
     await clearResourceCutover();
     user = await createAuthenticatedUser('editor');
+    await grantDefaultTenant(user.id);
   });
 
   afterEach(async () => {
