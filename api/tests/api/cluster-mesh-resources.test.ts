@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Hono, type MiddlewareHandler } from 'hono';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { app as productApp } from '../../src/app';
+import { db } from '../../src/db/client';
+import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
+import { tenants, workspaces } from '../../src/db/schema';
 import {
   createResourcesTransportRouter,
   RESOURCE_PATHS,
@@ -9,6 +14,14 @@ import {
   type ResourceProjectionPort,
   type ResourcesNamespacePorts,
 } from '../../src/routes/namespaces/resources-module';
+import { getResourceDispatcher } from '../../src/services/resource-plane';
+import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
+import {
+  authenticatedRequest,
+  cleanupAuthData,
+  createAuthenticatedUser,
+  type TestUser,
+} from '../utils/auth-helper';
 
 const pass: MiddlewareHandler = async (_context, next) => next();
 const principal = {
@@ -111,5 +124,107 @@ describe('cluster mesh resources transport', () => {
     expect(scoped.status).toBe(400);
     expect(invalidInvoke.status).toBe(400);
     expect(resources.dispatch).not.toHaveBeenCalled();
+  });
+});
+
+const resourceKey = { compositionRoot: 'product' as const, namespace: '/resources' as const };
+const resourceCutovers = new PostgresClusterMeshCutoverStore();
+const clearResourceCutover = async () => {
+  await db.delete(clusterMeshNamespaceCutovers).where(and(
+    eq(clusterMeshNamespaceCutovers.compositionRoot, resourceKey.compositionRoot),
+    eq(clusterMeshNamespaceCutovers.namespace, resourceKey.namespace),
+  ));
+};
+
+describe('cluster mesh resources product scope', () => {
+  let user: TestUser;
+  let outsider: TestUser;
+  let outsiderTenant: string;
+
+  beforeEach(async () => {
+    await clearResourceCutover();
+    user = await createAuthenticatedUser('editor');
+    outsider = await createAuthenticatedUser('editor');
+    outsiderTenant = `resources-${crypto.randomUUID()}`;
+    await db.insert(tenants).values({ id: outsiderTenant, name: outsiderTenant, status: 'active' });
+    await db.update(workspaces).set({ tenantId: outsiderTenant })
+      .where(eq(workspaces.id, outsider.workspaceId!));
+  });
+
+  afterEach(async () => {
+    await clearResourceCutover();
+    await cleanupAuthData();
+    await db.delete(workspaces).where(inArray(workspaces.id, [user.workspaceId!, outsider.workspaceId!]));
+    await db.delete(tenants).where(eq(tenants.id, outsiderTenant));
+  });
+
+  it('matches canonical dispatcher reads and keeps catalog effects unavailable', async () => {
+    const scope = { tenantId: 'sentropic', workspaceId: user.workspaceId! };
+    const canonical = {
+      scope,
+      context: {
+        userId: user.id,
+        role: 'editor',
+        workspaceType: 'ai-priorities',
+        roles: ['editor'], permissions: [], permissionMode: 'allowlist' as const, allowedTools: [],
+      },
+    };
+    const dispatcher = getResourceDispatcher();
+    const root = await authenticatedRequest(
+      productApp, 'POST', '/api/v1/resources/list', user.sessionToken!, { path: '/' },
+    );
+    expect(root.status).toBe(200);
+    await expect(root.json()).resolves.toEqual({ result: dispatcher.listRoot(canonical) });
+
+    const dir = (await dispatcher.resolvePath('/skills', canonical))!;
+    const directList = await dispatcher.list(dir, { limit: 1 }, canonical);
+    expect(directList.entries.length).toBeGreaterThan(0);
+    const list = await authenticatedRequest(
+      productApp, 'POST', '/api/v1/resources/list', user.sessionToken!,
+      { path: '/skills', limit: 1 },
+    );
+    await expect(list.json()).resolves.toEqual({ result: directList });
+    const entry = directList.entries[0];
+    const wireRef = {
+      provider: entry.ref.provider, type: entry.ref.type, id: entry.ref.id, etag: entry.ref.etag,
+    };
+    for (const [verb, body, direct] of [
+      ['stat', { ref: wireRef }, await dispatcher.stat(entry.ref, canonical)],
+      ['read', { ref: wireRef, maxBytes: 128 }, await dispatcher.read(entry.ref, { maxBytes: 128 }, canonical)],
+      ['grep', { path: '/skills', query: entry.name, limit: 2 },
+        await dispatcher.grep(dir, { query: entry.name, limit: 2 }, canonical)],
+    ] as const) {
+      const response = await authenticatedRequest(
+        productApp, 'POST', `/api/v1/resources/${verb}`, user.sessionToken!, body,
+      );
+      expect(response.status, verb).toBe(200);
+      await expect(response.json()).resolves.toEqual({ result: direct });
+    }
+    expect((await authenticatedRequest(
+      productApp, 'POST', '/api/v1/resources/edit', user.sessionToken!,
+      { ref: wireRef, content: 'no mutation' },
+    )).status).toBe(403);
+    expect((await authenticatedRequest(
+      productApp, 'POST', '/api/v1/resources/invoke', user.sessionToken!,
+      { ref: wireRef, args: {} },
+    )).status).toBe(422);
+  });
+
+  it('denies caller-selected cross-tenant workspace and ref scope without leaking', async () => {
+    const outside = await authenticatedRequest(
+      productApp, 'POST',
+      `/api/v1/resources/list?workspace_id=${outsider.workspaceId}`,
+      user.sessionToken!, { path: '/' },
+    );
+    expect(outside.status).toBe(404);
+    await expect(outside.json()).resolves.toEqual({ message: 'Not found' });
+
+    const injected = await authenticatedRequest(
+      productApp, 'POST', '/api/v1/resources/read', user.sessionToken!,
+      { ref: { provider: 'catalog', type: 'skill', id: 'skill:foundation:planner',
+        scope: { tenantId: outsiderTenant, workspaceId: outsider.workspaceId } } },
+    );
+    expect(injected.status).toBe(400);
+    await expect(injected.json()).resolves.toEqual({ error: 'resource_request_refused' });
   });
 });
