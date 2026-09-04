@@ -310,6 +310,89 @@ Every namespace lot follows the same four-stage gate:
 
 Shadow never duplicates writes, PTY actuation, connector calls, LLM calls, queue jobs or other effects. For write routes it compares validated intent before execution and invokes exactly one author.
 
+## r13 implementation evidence
+
+The behavior candidate qualified on 2026-09-04 is `1128d28b55f7d8eadfc8c0b364595b1bffdcf41d` on
+`feat/cluster-mesh-central-control-plane`. Documentation-only closure commits do not widen that
+tested behavior. The sole migration is `api/drizzle/control/0007_cluster_mesh_r13.sql`, SHA-256
+`248ce19dc427a43a34ecd0f2b1aee8fdca1be948e9ea647b7a16a83bd64068e0`; no second control or public
+migration exists.
+
+The product registry owns exactly these 29 entries; the owner is the exported module/factory, not
+the former direct route file:
+
+| Namespace | Product owner |
+|---|---|
+| `/session` | `productSessionModule` |
+| `/cli` | `productCliModule` |
+| `/mcp` | `productMcpModule` |
+| `/oauth` | `createOAuthNamespaceModule({ compositionRoot: 'product' })` |
+| `/gw` | `productGwModule` |
+| `/chat` | `productChatModule` |
+| `/focus` | `productFocusModule` |
+| `/track` | `productTrackModule` |
+| `/memory` | `productMemoryModule` |
+| `/health` | `createProductHealthNamespaceModule` |
+| `/apps` | `productAppsModule` |
+| `/catalog` | `productCatalogModule` |
+| `/resources` | `productResourcesModule` |
+| `/admin` | `productAdminModule` |
+| `/clients` | `productClientsModule` |
+| `/transfers` | `productTransfersModule` |
+| `/documents` | `productDocumentsModule` |
+| `/config` | `productConfigModule` |
+| `/auth` | `productAuthPlugin().module` |
+| `/llm-mesh` | `productLlmMeshModule` |
+| `/workflows` | `productWorkflowsModule` |
+| `/comments` | `productCommentsModule` |
+| `/connectors` | `productConnectorsModule` |
+| `/agents` | `productAgentsModule` |
+| `/streams` | `productStreamsModule` |
+| `/locks` | `productLocksModule` |
+| `/business` | `productBusinessModule` |
+| `/analytics` | `productAnalyticsModule` |
+| `/workspaces` | `productWorkspacesModule` |
+
+The first nine entries are prefix-mounted and the remaining twenty use root remaps. The standalone
+IdP composes the same session, OAuth and auth module factories at its established root-specific
+paths and projects the same well-known factory; it contains no forked auth handler. A shared-DB UAT
+ran the product on 9375 and the IdP on 9376. The product reported active generation
+`cluster-mesh-session-v1` and all 29 modules; IdP discovery reported issuer and OAuth endpoints at
+9376, and the deterministic authorization-code smoke passed consent, code exchange, token claims
+and userinfo. The shared signing-key row required both roots to use the same configured KEK.
+
+Qualification status is deliberately non-aggregate:
+
+- A1 is **BLOCKED**: h2a adapter commit `69ae76ccd7064e0c5726c22c08cba08eb428aa66` is not consumable
+  from this checkout, and there is no authorization-evidence producer, live target or E2E runtime
+  wiring. Production rejects control with `unverified_invocation_context`; no A-to-B tick, acted
+  receipt, non-empty relaunch set or LOST transition was observed.
+- A2 is **BLOCKED** for real N-session qualification because the external MCP qualifier producer is
+  absent (`BR75-SG11`). Durable singleton tests are structural evidence only.
+- A3 registration refusal tests pass, but real pre-effect PTY/delegation qualification remains
+  **BLOCKED** with A1.
+- A4 durable lease tests pass, but real 12/13 plus non-default pre-spawn qualification remains
+  **BLOCKED** because `/session` admission is still process-local (`BR75-SG10`).
+- A5 is **PASS**: the inventory proves 29 unique module objects; group 10 runs five tests with zero
+  skips and proves module disablement, canonical catalog/streams paths and duplicate-prefix 404.
+
+The branch deleted these legacy files: `api/src/routes/api/{agent-config,ai-settings,chat,comments,focus,gmail,google-drive,locks,mcp,models,prompts,settings}.ts`,
+`api/src/routes/auth/{device,index,session}.ts`, `api/src/routes/well-known.ts`, and
+`api/src/upstream/injected-script.ts`. `api/src/routes/api/index.ts` is now an inert ledger with no
+direct mount. There is no dual legacy route path.
+
+Every package whose `src/**` changed also changed its manifest version: `auth-client`, `auth-hono`,
+`build-cli`, `chat-server`, `cli`, `cluster-mesh`, `comments`, `connector-host`, `contracts`,
+`events`, `flow`, `focus`, `harness`, `llm-gateway`, `llm-mesh` and `mcp-platform`. The API and IdP
+are the only composition roots whose manifests/source import `@sentropic/cluster-mesh`; no provider
+package manifest lists it. `/apps/instances` remains a global `admin_app` surface with optional or
+caller-supplied tenant selection and no predecessor HTTP surface. `/catalog` remains global,
+matching `search_catalog`; a future tenant-scoped source needs a scoping port before singleton
+registration. `/resources` derives tenant/workspace/role through canonical product authorization
+and rejects caller scope, but no installed resource provider currently partitions data by tenant.
+Track and memory stay fail-closed, the real PTY boundary stays partial, and the bookmarklet deletion
+is N-A as an active router because inventory found only dead middleware/URL emission.
+
 ## Internal conductor gates
 
 | Gate | Blocking proof |
