@@ -363,7 +363,8 @@ and userinfo. The shared signing-key row required both roots to use the same con
 
 Qualification status is deliberately non-aggregate:
 
-- A1 is **PASS for qualification** through a qualification-grade shared-secret invocation verifier:
+- A1 is **PASS for qualification** through a qualification-grade shared-secret invocation verifier,
+  available only behind explicit opt-in outside production; production rejects shared-secret evidence:
   a live A-to-B drive produced an observable tick and acted receipt, relaunch returned a non-empty
   replacement incarnation, and the final dead target reconciled to LOST. Production `verify()` uses a
   dedicated Ed25519 mesh public-key ring (not OAuth JWKS), binds the request and ordered
@@ -398,8 +399,9 @@ caller-supplied tenant selection and no predecessor HTTP surface. `/catalog` rem
 matching `search_catalog`; a future tenant-scoped source needs a scoping port before singleton
 registration. `/resources` derives tenant/workspace/role through canonical product authorization
 and rejects caller scope, but no installed resource provider currently partitions data by tenant.
-Track and memory stay fail-closed. Production PTY activation stays fail-closed while the shared-secret
-live adapter closes qualification only. The bookmarklet deletion is N-A as an active router because
+Track and memory stay fail-closed. Production PTY activation stays fail-closed; the shared-secret live
+adapter can close non-production qualification only and cannot replace Ed25519 in production. The
+bookmarklet deletion is N-A as an active router because
 inventory found only dead middleware/URL emission.
 
 ## Internal conductor gates
@@ -465,7 +467,7 @@ inventory found only dead middleware/URL emission.
 
 ## Source gaps for independent review
 
-- A production Sentropic PTY driver remains absent. A1 qualification closes through the real h2a adapter and shared-secret verifier, not through an in-memory actuator; production `/session/control/*` remains fail-closed.
+- A production Sentropic PTY driver remains absent. A1 qualification closes through the real h2a adapter and a non-production-only shared-secret verifier, not through an in-memory actuator; production `/session/control/*` requires Ed25519 and remains fail-closed.
 - h2a is outside this branch, so removal of its 44 per-session servers and its standalone fallback are cross-repository qualification, not a local source edit.
 - `@sentropic/track` source is not present under `packages/`; `/track` ownership and wire surface require a pinned external package contract.
 - Graphify source/release is absent; `/memory` stays fail-closed until the existing h2a↔Graphify contract and provider release are pinned.

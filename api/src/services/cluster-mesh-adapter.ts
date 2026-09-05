@@ -208,16 +208,23 @@ const unavailableH2aPtyPort: PtyActuatorPort = {
   async actuate() { throw new Error('BR75-SG1 h2a PTY adapter is unavailable'); },
 };
 
-const liveConfig = process.env.H2A_NATIVE_SOCKET && process.env.H2A_ROOT
-  && process.env.CLUSTER_MESH_A1_EVIDENCE
-  && process.env.CLUSTER_MESH_A1_TARGET_REGISTRATION
-  ? {
-      socketPath: process.env.H2A_NATIVE_SOCKET,
-      root: process.env.H2A_ROOT,
-      evidence: process.env.CLUSTER_MESH_A1_EVIDENCE,
-      registrationId: process.env.CLUSTER_MESH_A1_TARGET_REGISTRATION,
-    }
-  : undefined;
+type QualificationEnvironment = Readonly<Record<string, string | undefined>>;
+export function resolveLiveQualificationConfig(source: QualificationEnvironment) {
+  if (source.NODE_ENV === 'production' && source.CLUSTER_MESH_A1_EVIDENCE) {
+    throw new Error('shared-secret cluster mesh qualification is forbidden in production');
+  }
+  if (source.CLUSTER_MESH_A1_QUALIFICATION !== '1') return undefined;
+  return source.H2A_NATIVE_SOCKET && source.H2A_ROOT
+    && source.CLUSTER_MESH_A1_EVIDENCE && source.CLUSTER_MESH_A1_TARGET_REGISTRATION
+    ? {
+        socketPath: source.H2A_NATIVE_SOCKET,
+        root: source.H2A_ROOT,
+        evidence: source.CLUSTER_MESH_A1_EVIDENCE,
+        registrationId: source.CLUSTER_MESH_A1_TARGET_REGISTRATION,
+      }
+    : undefined;
+}
+const liveConfig = resolveLiveQualificationConfig(process.env);
 const livePorts = liveConfig ? createLiveH2aPorts(liveConfig) : undefined;
 const liveExpiresAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
 const liveRegistration: ClusterMeshRegistration | undefined = liveConfig ? {
