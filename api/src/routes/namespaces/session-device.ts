@@ -38,15 +38,16 @@ export const sessionDeviceHandlers: DeviceRouteHandlers = {
   async poll(c) {
     try {
       const { device_code } = pollSchema.parse(await c.req.json().catch(() => ({})));
+      await clusterMeshAdapter.ensureDeviceAttachmentAvailable();
       const outcome = clusterMeshAdapter.devices.pollDeviceCode(device_code);
       if (outcome.status !== 'approved') return c.json({ status: outcome.status });
+      const user = await findSessionUser(outcome.userId);
+      if (!user) throw new Error('Device enrollment user lookup returned no row');
       const issued = await createSession(outcome.userId, outcome.role, {
         name: outcome.deviceName,
         ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || undefined,
         userAgent: c.req.header('user-agent') || undefined,
       });
-      const user = await findSessionUser(outcome.userId);
-      if (!user) throw new Error('Device enrollment user lookup returned no row');
       await clusterMeshAdapter.completeDeviceAttachment(outcome, issued);
       return c.json({
         status: 'approved',
@@ -63,6 +64,9 @@ export const sessionDeviceHandlers: DeviceRouteHandlers = {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return c.json({ error: 'Invalid request data', details: error.errors }, 400);
+      }
+      if (error instanceof Error && error.message === 'cluster_mesh_generation_unavailable') {
+        return c.json({ error: 'cluster_mesh_generation_unavailable' }, 503);
       }
       logger.error({ err: error }, 'Error polling device code');
       return c.json({ error: 'Failed to poll device code' }, 500);
