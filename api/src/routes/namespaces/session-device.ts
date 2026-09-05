@@ -47,7 +47,7 @@ export const sessionDeviceHandlers: DeviceRouteHandlers = {
       });
       const user = await findSessionUser(outcome.userId);
       if (!user) throw new Error('Device enrollment user lookup returned no row');
-      clusterMeshAdapter.completeDeviceAttachment(outcome);
+      await clusterMeshAdapter.completeDeviceAttachment(outcome, issued);
       return c.json({
         status: 'approved',
         sessionToken: issued.sessionToken,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ClusterMeshRuntimeStore, PtyActuatorPort } from '@sentropic/cluster-mesh';
+import type { ClusterMeshRuntimeStore, LocalWorkstationDescriptor, PtyActuatorPort } from '@sentropic/cluster-mesh';
 
 import {
   createClusterMeshAppAdapter,
@@ -34,7 +34,7 @@ function dependencies(
 }
 
 describe('cluster mesh app adapter', () => {
-  it('should attach an approved workstation only after enrollment completion', async () => {
+  it('should expose an admitted workstation through a second adapter instance', async () => {
     const approved = {
       status: 'approved' as const,
       userId: 'user-1',
@@ -42,8 +42,26 @@ describe('cluster mesh app adapter', () => {
       deviceName: 'Laptop',
     };
     const pollDeviceCode = vi.fn(() => approved);
+    const attached: LocalWorkstationDescriptor[] = [];
+    const admission = {
+      generationId: 'generation-1',
+      store: {
+        async admitWorkstation(input: { sessionId: string; displayName: string; ownerSubject: string }) {
+          attached.push({
+          kind: 'workstation', deviceId: `device:${input.sessionId}`,
+          displayName: input.displayName, ownerSubject: input.ownerSubject, state: 'attached',
+        }); },
+        async listAdmittedWorkstations() { return attached; },
+      },
+      async ensureGeneration() {},
+    };
     const adapter = createClusterMeshAppAdapter(dependencies({
       pollDeviceCode,
+      sessionAdmission: admission,
+      async resolveTenant() { return { tenantId: 'tenant-acme' }; },
+    }));
+    const secondAdapter = createClusterMeshAppAdapter(dependencies({
+      sessionAdmission: admission,
       async resolveTenant() { return { tenantId: 'tenant-acme' }; },
     }));
 
@@ -52,9 +70,11 @@ describe('cluster mesh app adapter', () => {
       adapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' }),
     ).resolves.toEqual([expect.objectContaining({ kind: 'server' })]);
 
-    adapter.completeDeviceAttachment(approved);
+    await adapter.completeDeviceAttachment(approved, {
+      sessionId: 'stable-test', expiresAt: new Date('2099-01-01T00:00:00Z'),
+    });
 
-    expect(await adapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' })).toEqual([
+    expect(await secondAdapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' })).toEqual([
       expect.objectContaining({ kind: 'server', nodeId: 'node:sentropic-local' }),
       expect.objectContaining({
         kind: 'workstation',

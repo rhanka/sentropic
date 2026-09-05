@@ -6,6 +6,7 @@ import type {
   StoredClusterMeshCommand,
   StoredClusterMeshGeneration,
   StoredMcpServer,
+  LocalWorkstationDescriptor,
 } from '@sentropic/cluster-mesh';
 import type { InvocationReceipt } from '@sentropic/events';
 import { db } from '../../db/client';
@@ -20,6 +21,7 @@ import {
 import { outboxWriter } from '../outbox/outbox-writer';
 const date = (value: string) => new Date(value);
 const nullableDate = (value?: string) => value ? date(value) : null;
+const WORKSTATION_REF = 'session-workstation:';
 export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore {
   async saveGeneration(value: StoredClusterMeshGeneration): Promise<void> {
     const row = {
@@ -35,6 +37,43 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
         AND ${clusterMeshGenerations.supervisorRef} = ${value.supervisorRef}`,
     }).returning({ generationId: clusterMeshGenerations.generationId });
     if (saved.length === 0) throw new Error('cluster_mesh_generation_fenced');
+  }
+  async admitWorkstation(value: {
+    generationId: string; sessionId: string; ownerSubject: string;
+    displayName: string; expiresAt: string;
+  }): Promise<void> {
+    const result = await db.execute(sql`
+      INSERT INTO control.cluster_mesh_registrations
+        (registration_id, generation_id, workspace_id, nhi_principal_id,
+         custody_holder_principal_id, custody_epoch, actuator_ref, status, expires_at, lease_expires_at)
+      SELECT ${`device:${value.sessionId}`}, ${value.generationId}, 'session-admission',
+        ${value.ownerSubject}, ${value.ownerSubject}, 0,
+        ${WORKSTATION_REF + Buffer.from(value.displayName).toString('base64url')}, 'active',
+        ${date(value.expiresAt)}, ${date(value.expiresAt)}
+      WHERE EXISTS (SELECT 1 FROM control.cluster_mesh_generations
+        WHERE generation_id = ${value.generationId} AND status IN ('starting', 'active')
+          AND supervisor_lease_expires_at > now())
+      ON CONFLICT (registration_id) DO UPDATE SET expires_at = EXCLUDED.expires_at,
+        lease_expires_at = EXCLUDED.lease_expires_at, updated_at = now()
+      RETURNING registration_id
+    `);
+    if (result.rows.length !== 1) throw new Error('cluster_mesh_generation_unavailable');
+  }
+  async listAdmittedWorkstations(generationId: string): Promise<readonly LocalWorkstationDescriptor[]> {
+    const result = await db.execute(sql`
+      SELECT registration_id, nhi_principal_id, actuator_ref
+      FROM control.cluster_mesh_registrations
+      WHERE generation_id = ${generationId} AND status = 'active'
+        AND expires_at > now() AND lease_expires_at > now()
+        AND actuator_ref LIKE ${WORKSTATION_REF + '%'} ORDER BY registration_id
+    `);
+    return result.rows.map((row) => ({
+      kind: 'workstation' as const,
+      deviceId: String(row.registration_id) as `device:${string}`,
+      displayName: Buffer.from(String(row.actuator_ref).slice(WORKSTATION_REF.length), 'base64url').toString(),
+      ownerSubject: String(row.nhi_principal_id),
+      state: 'attached' as const,
+    }));
   }
   async saveRegistration(value: Parameters<ClusterMeshRuntimeStore['saveRegistration']>[0]): Promise<void> {
     const row = {
