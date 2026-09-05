@@ -62,6 +62,13 @@ describe('canonical model targets', () => {
       transportProviderId: 'cloud-code',
       model: 'gemini-3.7-flash',
     });
+    expect(resolve('claude-fable-5-1')).toEqual({
+      providerId: 'anthropic', transportProviderId: 'claude-code',
+      model: 'claude-fable-5-1',
+    });
+    expect(resolve('gpt-6-astra')).toEqual({
+      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
+    });
   });
 
   it('resolves only RATIFICATION PENDING suffixed aliases', () => {
@@ -156,6 +163,8 @@ describe('canonical model targets', () => {
       'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max',
+      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
+      'claude-fable-5-1-max',
     ];
 
     const descriptions = describeCanonicalTargetRoutes();
@@ -204,6 +213,25 @@ describe('canonical model targets', () => {
     }
   });
 
+  it('keeps every Fable 5.1 Codex fallback on GPT-5.6 Sol until GPT-6 GA', () => {
+    for (const [alias, effort] of [
+      ['claude-fable-5-1', undefined],
+      ['claude-fable-5-1-high', 'high'],
+      ['claude-fable-5-1-xhigh', 'xhigh'],
+      ['claude-fable-5-1-max', 'max'],
+    ] as const) {
+      const candidates = resolveCandidates(alias);
+      expect(candidates[0]).toEqual({
+        providerId: 'anthropic', transportProviderId: 'claude-code',
+        model: 'claude-fable-5-1', ...(effort ? { effort } : {}),
+      });
+      expect(candidates[1]).toEqual({
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-5.6-sol', ...(effort ? { effort } : {}),
+      });
+    }
+  });
+
   it('routes every Claude tier to the real Gemini 3.7 Flash transport', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
@@ -211,6 +239,8 @@ describe('canonical model targets', () => {
       'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max',
+      'claude-fable-5-1', 'claude-fable-5-1-high', 'claude-fable-5-1-xhigh',
+      'claude-fable-5-1-max',
     ];
 
     for (const alias of aliases) {
