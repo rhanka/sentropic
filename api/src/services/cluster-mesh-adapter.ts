@@ -58,6 +58,7 @@ export interface ClusterMeshAppAdapter {
   readonly boundaries: BoundaryDomain;
   readonly sessionControl?: ClusterMeshSessionControl;
   readonly mcpControl?: ClusterMeshMcpControl;
+  ensureDeviceAttachmentAvailable(): Promise<void>;
   completeDeviceAttachment(
     outcome: Extract<DevicePollOutcome, { status: 'approved' }>,
     session: { readonly sessionId: string; readonly expiresAt: Date },
@@ -152,13 +153,16 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
       boundaries,
       workstations: { async listAttached() {
         if (!deps.sessionAdmission) return [];
-        await deps.sessionAdmission.ensureGeneration();
         return deps.sessionAdmission.store.listAdmittedWorkstations(deps.sessionAdmission.generationId);
       } },
     }),
     boundaries,
     sessionControl,
     mcpControl,
+    async ensureDeviceAttachmentAvailable() {
+      if (!deps.sessionAdmission) throw new Error('cluster mesh session admission is unavailable');
+      await deps.sessionAdmission.ensureGeneration();
+    },
     async completeDeviceAttachment(outcome, session) {
       if (!deps.sessionAdmission) throw new Error('cluster mesh session admission is unavailable');
       await deps.sessionAdmission.ensureGeneration();
@@ -185,14 +189,19 @@ const meshInvocationVerifier = createClusterMeshInvocationVerifier({
   audiences: [meshEvidenceAudience, ...(process.env.CLUSTER_MESH_LEGACY_AUDIENCES ?? '').split(',').map((value) => value.trim())],
   isReplayed: (invocationId) => runtimeStore.hasCommand(invocationId),
 });
-const ensureSessionGeneration = () => runtimeStore.saveGeneration({
-  generationId: sessionGenerationId,
-  status: 'active',
-  supervisorRef: `mcp-supervisor:${sessionGenerationId}`,
-  supervisorLeaseExpiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-  maxConcurrent: 12,
-  poolSize: 4,
-});
+const ensureSessionGeneration = async () => {
+  await runtimeStore.ensureGeneration({
+    generationId: sessionGenerationId,
+    status: 'active',
+    supervisorRef: `mcp-supervisor:${sessionGenerationId}`,
+    supervisorLeaseExpiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    maxConcurrent: 12,
+    poolSize: 4,
+  });
+  if (!await runtimeStore.isGenerationAvailable(sessionGenerationId)) {
+    throw new Error('cluster_mesh_generation_unavailable');
+  }
+};
 const unavailableH2aPtyPort: PtyActuatorPort = {
   kind: 'pty',
   async isAvailable() { return false; },
