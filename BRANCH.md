@@ -55,16 +55,69 @@ Reduce measured HIGH/CRITICAL findings in the production UI image and make API S
   - [x] Upgrade no UI dependency: workspace-scoped UI SCA measured 0 HIGH / 0 CRITICAL.
   - [x] Bump `sentropic-ui` from `0.1.0` to `0.1.1`.
   - [x] Add exact API SCA entries for irreducible image-size/pptxgenjs findings, expiring 2026-10-05.
-  - [x] Rebuild and rescan `local/sentropic-ui:21ba45`: non-empty 162,382-byte Trivy 0.74.0 report, 0 HIGH / 0 CRITICAL.
-- [ ] **Lot 2 — Audit fail-closed repair**
+  - [x] Rebuild and rescan `local/sentropic-ui:21ba45`: non-empty 162,381-byte Trivy 0.74.0 report, 0 HIGH / 0 CRITICAL.
+- [x] **Lot 2 — Audit fail-closed repair**
   - [x] Remove empty-report-as-green behavior, scope SCA to the named workspace, and scan both actual images with Trivy.
   - [x] Add focused parser verification for empty, malformed, synthetic-empty, npm-audit, and Trivy reports (`make test-security-parser`: PASS).
-  - [ ] Prove API SCA/container audits execute and produce non-empty reports.
+  - [x] Prove API SCA/container audits execute: SCA is 7,462 bytes with 2 HIGH / 0 CRITICAL; container is 748,780 bytes with 10 HIGH / 0 CRITICAL.
 - [ ] **Lot 3 — Final validation and PR**
-  - [ ] Run `make typecheck-ui` with isolated ports/environment.
-  - [ ] Run `make lint-ui` with isolated ports/environment.
-  - [ ] Run `make build-ui-image` with isolated ports/environment.
-  - [ ] Run the final UI image and API SCA/container audits.
-  - [ ] Run `make scope-check` before every atomic commit.
+  - [x] Run `make typecheck-ui` with isolated ports/environment (0 errors, 6 existing warnings).
+  - [x] Run `make lint-ui` with isolated ports/environment.
+  - [x] Run `make build-ui-image` with isolated ports/environment.
+  - [x] Run the final UI image and API SCA/container audits.
+  - [x] Run `make scope-check` before every atomic commit.
   - [ ] Push `fix/ui-image-security-highcrit` and create the requested PR against `main`.
-  - [ ] Stop before merge.
+  - [x] Stop before merge.
+
+## Measured security outcome
+
+The trusted baseline was already clean at the requested severity: the original production UI image had no HIGH or CRITICAL Trivy findings. This branch therefore preserves the measured count while moving both build stages to current, immutable patched bases and making the audit path fail closed.
+
+| Production UI image audit | Before (`local/sentropic-ui:cc0860`) | After (`local/sentropic-ui:21ba45`) |
+| --- | ---: | ---: |
+| HIGH | 0 | 0 |
+| CRITICAL | 0 | 0 |
+| HIGH + CRITICAL | 0 | 0 |
+| Raw Trivy report | 162,503 bytes | 162,381 bytes |
+
+The actual HIGH/CRITICAL list is empty before and after. Both reports are complete Trivy 0.74.0 image reports, not synthesized empty results.
+
+## Upgrades
+
+- UI builder: floating `node:24-alpine` to `node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf`.
+- UI runtime: floating `nginx:1.29-alpine` to `nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3`.
+- UI package version: `0.1.0` to `0.1.1`, including the root lockfile workspace version.
+- UI dependencies: no upgrade was warranted; the workspace-scoped UI SCA report measured 0 HIGH / 0 CRITICAL.
+
+## Register-deferred findings
+
+| Audit | Exact finding(s) | Disposition | Review due |
+| --- | --- | --- | --- |
+| API SCA | `image-size@1.2.1`, propagated `pptxgenjs@4.0.1` | No patched release; unreachable image parser chain; temporary exact exception | 2026-10-05 |
+| API image | `CVE-2026-14456` in `libcrypto3` and `libssl3` 3.5.7-r0 (fixed 3.5.8-r0) | Separate API-image base refresh required | 2026-09-12 |
+| API image | `CVE-2026-13149`, `CVE-2026-14257`, `CVE-2026-69152` in npm-bundled `brace-expansion@5.0.6` | Separate API-image npm bundle refresh required | 2026-09-12 |
+| API image | `CVE-2026-69192` in npm-bundled `ip-address@10.2.0` (fixed 10.3.1) | Separate API-image npm bundle refresh required | 2026-09-12 |
+| API image | `CVE-2026-9496` in npm-bundled `pacote@21.5.0` (fixed 21.5.1) | Separate API-image npm bundle refresh required | 2026-09-12 |
+| API image | `CVE-2026-12151` in npm-bundled `undici@6.26.0` (fixed 6.27.0) | Separate API-image npm bundle refresh required | 2026-09-12 |
+| API image | `CVE-2025-71329`, `CVE-2025-71330` in `image-size@1.2.1` | No patched release; same unreachable parser chain; temporary exact exception | 2026-10-05 |
+
+Every entry records scanner/version, installed version, embedded path, image digest where applicable, owner, rationale, fix goal, and expiry. The compliance gate rejects missing, non-exact, or expired entries.
+
+## API audit restoration
+
+| Audit | Before | After |
+| --- | --- | --- |
+| API SCA | Scanner returned a 25,635-byte report with 2 HIGH / 0 CRITICAL, but parsing overwrote it to zero and passed | 7,462-byte workspace report; 2 HIGH / 0 CRITICAL preserved and reconciled with exact entries expiring 2026-10-05 |
+| API container | Image-not-found produced a 0-byte report that passed | Actual production image scanned by Trivy; 748,780-byte report with 10 HIGH / 0 CRITICAL, all explicit and expiring |
+
+## Verification
+
+- `make test-security-parser`: pass; empty, malformed, and synthetic-empty reports are rejected, while real npm/Trivy schemas retain findings.
+- `make typecheck-ui`: pass with 0 errors and 6 existing warnings.
+- `make lint-ui`: pass.
+- `make build-ui-image`: pass with a fresh no-cache production build.
+- UI SCA/container audits: pass with non-empty reports and 0 HIGH / 0 CRITICAL.
+- API SCA/container audits: run to completion with non-empty reports and the findings above.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+https://claude.ai/code/session_0131Z8YVBEhYXvxGHb7oFcpm
