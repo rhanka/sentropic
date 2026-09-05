@@ -50,12 +50,12 @@ Reduce measured HIGH/CRITICAL findings in the production UI image and make API S
   - [x] Build the current UI image and save the raw baseline UI container report.
   - [x] Record the actual UI image count: 0 HIGH / 0 CRITICAL from a non-empty 162,503-byte Trivy 0.74.0 report.
   - [x] Record API baseline: SCA raw report 25,635 bytes with 2 HIGH / 0 CRITICAL was overwritten to zero; container raw report was empty after an image-not-found error and passed.
-- [ ] **Lot 1 — UI image remediation**
+- [x] **Lot 1 — UI image remediation**
   - [x] Update the UI builder/runtime bases to exact Node 24/Alpine 3.24 and Nginx 1.31.5/Alpine 3.24 digests.
   - [x] Upgrade no UI dependency: workspace-scoped UI SCA measured 0 HIGH / 0 CRITICAL.
   - [x] Bump `sentropic-ui` from `0.1.0` to `0.1.1`.
   - [x] Add exact API SCA entries for irreducible image-size/pptxgenjs findings, expiring 2026-10-05.
-  - [ ] Rebuild and rescan the UI image; record raw after report and counts.
+  - [x] Rebuild and rescan `local/sentropic-ui:21ba45`: non-empty 162,382-byte Trivy 0.74.0 report, 0 HIGH / 0 CRITICAL.
 - [ ] **Lot 2 — Audit fail-closed repair**
   - [x] Remove empty-report-as-green behavior and scope API/UI SCA to the named workspace.
   - [x] Add focused parser verification for empty, malformed, synthetic-empty, npm-audit, and Trivy reports (`make test-security-parser`: PASS).
