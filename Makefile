@@ -2764,10 +2764,11 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 	@mkdir -p .security
 	@echo "  📋 Step 1: Executing SCA scan..."
 	@if [ "$*" = "api" ] || [ "$*" = "ui" ]; then \
-		docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.23 sh -lc "npm audit --json || true" > .security/sca-$*.json; \
+		docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf sh -lc "npm audit --json --workspace sentropic-$* || true" > .security/sca-$*.json; \
 	else \
 		docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true; \
 	fi
+	@test -s .security/sca-$*.json || (echo "❌ SCA scanner emitted an empty report for $*" && exit 1)
 	@echo "  📋 Step 2: Parsing results to structured format..."
 	@bash scripts/security/security-parser.sh sca .security/sca-$*.json .security/sca-$*-parsed.yaml $* || exit 1
 	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
@@ -2776,6 +2777,7 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 
 .PHONY: test-security-parser
 test-security-parser: ## Verify security reports fail closed and preserve real findings
+	@bash -n scripts/security/security-parser.sh scripts/security/security-compliance.sh scripts/security/security-parser-test.sh
 	@bash scripts/security/security-parser-test.sh
 
 .PHONY: test-%-security-container
@@ -2790,13 +2792,13 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 	elif [ "$*" = "ui" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
-		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	else \
 		IMAGE_NAME="sentropic-$*:latest"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
-		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
-	fi; \
-	true
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
+	fi
+	@test -s .security/container-$*.json || (echo "❌ Container scanner emitted an empty report for $*" && exit 1)
 	@echo "  📋 Step 2: Parsing results to structured format..."
 	@bash scripts/security/security-parser.sh container .security/container-$*.json .security/container-$*-parsed.yaml $* || exit 1
 	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
