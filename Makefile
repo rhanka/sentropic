@@ -2774,6 +2774,10 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 	@bash scripts/security/security-compliance.sh sca $* || exit 1
 	@echo "✅ SCA scan completed for $*"
 
+.PHONY: test-security-parser
+test-security-parser: ## Verify security reports fail closed and preserve real findings
+	@bash scripts/security/security-parser-test.sh
+
 .PHONY: test-%-security-container
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
 	@echo "🔒 Security: Running container scan on $*..."

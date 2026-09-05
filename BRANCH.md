@@ -58,7 +58,7 @@ Reduce measured HIGH/CRITICAL findings in the production UI image and make API S
   - [ ] Rebuild and rescan the UI image; record raw after report and counts.
 - [ ] **Lot 2 — Audit fail-closed repair**
   - [ ] Remove empty-report-as-green behavior from API SCA/container targets.
-  - [x] Add focused parser verification for empty, malformed, synthetic-empty, npm-audit, and Trivy reports.
+  - [x] Add focused parser verification for empty, malformed, synthetic-empty, npm-audit, and Trivy reports (`make test-security-parser`: PASS).
   - [ ] Prove API SCA/container audits execute and produce non-empty reports.
 - [ ] **Lot 3 — Final validation and PR**
   - [ ] Run `make typecheck-ui` with isolated ports/environment.
