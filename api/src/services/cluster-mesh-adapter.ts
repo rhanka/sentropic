@@ -57,7 +57,17 @@ export interface ClusterMeshAppAdapter {
   readonly boundaries: BoundaryDomain;
   readonly sessionControl?: ClusterMeshSessionControl;
   readonly mcpControl?: ClusterMeshMcpControl;
-  completeDeviceAttachment(outcome: Extract<DevicePollOutcome, { status: 'approved' }>): void;
+  completeDeviceAttachment(
+    outcome: Extract<DevicePollOutcome, { status: 'approved' }>,
+    session: { readonly sessionId: string; readonly expiresAt: Date },
+  ): Promise<void>;
+}
+
+export interface ClusterMeshWorkstationAdmissionStore {
+  admitWorkstation(input: {
+    readonly generationId: string; readonly sessionId: string; readonly ownerSubject: string; readonly displayName: string; readonly expiresAt: string;
+  }): Promise<void>;
+  listAdmittedWorkstations(generationId: string): Promise<readonly LocalWorkstationDescriptor[]>;
 }
 
 export interface ClusterMeshAppDependencies {
@@ -75,6 +85,11 @@ export interface ClusterMeshAppDependencies {
     userId: string;
   }): Promise<{ tenantId: string } | { error: 'unknown' | 'ambiguous_tenant' }>;
   createWorkstationId?(): WorkstationId;
+  readonly sessionAdmission?: {
+    readonly generationId: string;
+    readonly store: ClusterMeshWorkstationAdmissionStore;
+    ensureGeneration(): Promise<void>;
+  };
   readonly sessionControl?: {
     readonly generationId: string;
     readonly context: VerifiedInvocationContextPort;
@@ -88,7 +103,6 @@ export interface ClusterMeshAppDependencies {
 }
 
 export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): ClusterMeshAppAdapter {
-  const attached = new Map<string, LocalWorkstationDescriptor>();
   const devices = createLocalDeviceDomain({
     issueDeviceCode: deps.issueDeviceCode,
     approveDeviceCode: deps.approveDeviceCode,
@@ -135,20 +149,24 @@ export function createClusterMeshAppAdapter(deps: ClusterMeshAppDependencies): C
     membership: createSingleNodeMembership({
       self: deps.self,
       boundaries,
-      workstations: { async listAttached() { return [...attached.values()]; } },
+      workstations: { async listAttached() {
+        if (!deps.sessionAdmission) return [];
+        await deps.sessionAdmission.ensureGeneration();
+        return deps.sessionAdmission.store.listAdmittedWorkstations(deps.sessionAdmission.generationId);
+      } },
     }),
     boundaries,
     sessionControl,
     mcpControl,
-    completeDeviceAttachment(outcome) {
-      const key = `${outcome.userId}\0${outcome.deviceName}`;
-      if (attached.has(key)) return;
-      attached.set(key, {
-        kind: 'workstation',
-        deviceId: deps.createWorkstationId?.() ?? `device:${crypto.randomUUID()}`,
-        displayName: outcome.deviceName,
+    async completeDeviceAttachment(outcome, session) {
+      if (!deps.sessionAdmission) throw new Error('cluster mesh session admission is unavailable');
+      await deps.sessionAdmission.ensureGeneration();
+      await deps.sessionAdmission.store.admitWorkstation({
+        generationId: deps.sessionAdmission.generationId,
+        sessionId: session.sessionId,
         ownerSubject: outcome.userId,
-        state: 'attached',
+        displayName: outcome.deviceName,
+        expiresAt: session.expiresAt.toISOString(),
       });
     },
   };
@@ -158,6 +176,15 @@ const localEndpoint = (process.env.API_BASE_URL || env.OAUTH_ISSUER_URL || `http
   .replace(/\/$/, '');
 
 const runtimeStore = new PostgresClusterMeshRuntimeStore();
+const sessionGenerationId = 'cluster-mesh-session-v1';
+const ensureSessionGeneration = () => runtimeStore.saveGeneration({
+  generationId: sessionGenerationId,
+  status: 'active',
+  supervisorRef: `mcp-supervisor:${sessionGenerationId}`,
+  supervisorLeaseExpiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+  maxConcurrent: 12,
+  poolSize: 4,
+});
 const unavailableH2aPtyPort: PtyActuatorPort = {
   kind: 'pty',
   async isAvailable() { return false; },
@@ -270,8 +297,13 @@ export const clusterMeshAdapter = createClusterMeshAppAdapter({
   pollDeviceCode,
   approveDeviceCode,
   resolveTenant: resolveTenantAuthoritatively,
+  sessionAdmission: {
+    generationId: sessionGenerationId,
+    store: runtimeStore,
+    ensureGeneration: ensureSessionGeneration,
+  },
   sessionControl: {
-    generationId: 'cluster-mesh-session-v1',
+    generationId: sessionGenerationId,
     context: livePorts ? { verify: verifyLiveEvidence } : {
       async verify() { throw new Error('verified session control evidence is unavailable'); },
     },
