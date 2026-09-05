@@ -152,6 +152,9 @@ const envSchema = z.object({
   // its own host, that IdP is the AS, and only it serves the RFC 8414 metadata a client must fetch.
   // Absent ⇒ falls back to this api's own resolved OAuth issuer (the co-located dev/test shape).
   MCP_AUTHORIZATION_SERVER_URL: z.string().optional(),
+  CLUSTER_MESH_ED25519_PUBLIC_KEYS_JSON: z.string().optional(),
+  CLUSTER_MESH_EVIDENCE_AUDIENCE: z.string().optional(),
+  CLUSTER_MESH_LEGACY_AUDIENCES: z.string().optional(),
   // Non-production A1 qualification only. Production rejects shared-secret evidence.
   CLUSTER_MESH_A1_QUALIFICATION: z.enum(['0', '1']).optional(),
   // Dev/test self-S2S dogfood client (BR39d-D10)

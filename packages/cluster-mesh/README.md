@@ -3,7 +3,7 @@
 Injectable Cluster Mesh control-plane contracts and a functional single-instance
 runtime.
 
-Version 0.7 adds the central generation, namespace, registration, admission,
+Version 0.8 adds the central generation, namespace, registration, admission,
 receipt, persistence-port, MCP-supervisor, and Hono plugin contracts used by the
 Sentropic product and standalone IdP composition roots. It retains the degenerate
 topology introduced in 0.1: one Sentropic server, its attached local workstations,
@@ -43,6 +43,17 @@ The public runtime contracts model real terminal actuation and external MCP
 qualification, but this package does not fabricate those integrations. A host
 must provide and qualify them before claiming PTY wake/relaunch, LOST detection,
 or multi-session MCP acceptance.
+
+Production invocation verification uses a dedicated Ed25519 key ring configured
+through `CLUSTER_MESH_ED25519_PUBLIC_KEYS_JSON`. Its JSON shape is
+`[{"kid":"...","alg":"EdDSA","crv":"Ed25519","publicKeyBase64Url":"..."}]`,
+where `publicKeyBase64Url` is base64url-encoded SPKI DER. Malformed JSON or keys
+abort startup; an absent or empty ring remains fail-closed. The audience defaults
+to the local session-control URL, can be set with `CLUSTER_MESH_EVIDENCE_AUDIENCE`,
+and accepts only explicit comma-separated additions from
+`CLUSTER_MESH_LEGACY_AUDIENCES`. Signed evidence has a maximum lifetime of 300
+seconds. Shared-secret A1 evidence is restricted to explicit non-production
+qualification and is rejected in production.
 
 ## Gated seams
 
