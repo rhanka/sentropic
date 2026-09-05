@@ -365,9 +365,12 @@ Qualification status is deliberately non-aggregate:
 
 - A1 is **PASS for qualification** through a qualification-grade shared-secret invocation verifier:
   a live A-to-B drive produced an observable tick and acted receipt, relaunch returned a non-empty
-  replacement incarnation, and the final dead target reconciled to LOST. Production `verify()` remains
-  fail-closed, so `/session/control/*` stays 401 in production; this is qualification closure, not
-  production activation.
+  replacement incarnation, and the final dead target reconciled to LOST. Production `verify()` uses a
+  dedicated Ed25519 mesh public-key ring (not OAuth JWKS), binds the request and ordered
+  `transported|verified|acted` receipt coordinates to the active generation, and accepts only the
+  deployment audience or its explicit legacy allowlist. Missing keys, invalid signature/audience/time,
+  missing generation and replay remain 401 before receipts, commands or PTY effects; production PTY
+  activation remains separately fail-closed.
 - A2 is **PASS**: more than one registered session resolved to one active logical MCP server under one
   supervisor for the generation, with zero per-session MCP servers; missing-generation refusal produced
   zero provider effects.

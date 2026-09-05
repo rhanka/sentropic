@@ -46,6 +46,9 @@ export interface VerifiedInvocationContextRequest {
   readonly generationId: string;
   readonly method: string;
   readonly path: string;
+  readonly targetRegistrationId?: string;
+  readonly idempotencyKey?: string;
+  readonly receiptStages?: readonly ['transported', 'verified', 'acted'];
   readonly authorizationEvidenceRef?: string;
 }
 

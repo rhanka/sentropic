@@ -249,6 +249,12 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
     return inserted.length === 1;
   }
 
+  async hasCommand(commandId: string): Promise<boolean> {
+    const [row] = await db.select({ commandId: clusterMeshCommands.commandId })
+      .from(clusterMeshCommands).where(eq(clusterMeshCommands.commandId, commandId)).limit(1);
+    return Boolean(row);
+  }
+
   async updateCommand(
     commandId: string,
     update: Pick<StoredClusterMeshCommand, 'status' | 'refusalReason' | 'actedAt'>,
