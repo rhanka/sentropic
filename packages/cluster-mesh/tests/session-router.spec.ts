@@ -108,6 +108,20 @@ describe('session namespace router', () => {
     expect(pty.actuate).not.toHaveBeenCalled();
   });
 
+  it('maps verifier rejection to 401 before receipts, commands or PTY effects', async () => {
+    const { app, pty, receipts, store } = fixture({
+      context() { throw new Error('invalid signed evidence'); },
+    });
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-unverified')),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(401);
+    expect(receipts).toEqual([]);
+    expect(store.enqueueCommand).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
   it('reconciles an unavailable parked target to LOST without actuation', async () => {
     const pty: PtyActuatorPort = {
       kind: 'pty', isAvailable: vi.fn(async () => false),
