@@ -52,5 +52,5 @@
 - [ ] **Lot 3 — Final gates and delivery**
   - [x] Pass mesh typecheck, lint, and full test suite (26 files, 176 tests).
   - [x] Pass gateway typecheck, lint, and full test suite (16 files, 114 tests).
-  - [x] Pass council freshness/test checks and route/version/diff inspections; final scope check runs before commit.
+  - [x] Pass council freshness/test checks and route/version/diff inspections; run `make scope-check` before both atomic commits.
   - [ ] Commit atomically with the owner-required trailers, push, create the PR, and verify CI status without merging.
