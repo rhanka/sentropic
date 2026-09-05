@@ -34,8 +34,7 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
   async isGenerationAvailable(generationId: string): Promise<boolean> {
     const result = await db.execute(sql`
       SELECT EXISTS (SELECT 1 FROM control.cluster_mesh_generations
-        WHERE generation_id = ${generationId} AND status IN ('starting', 'active')
-          AND supervisor_lease_expires_at > now()) AS available
+        WHERE generation_id = ${generationId} AND status IN ('starting', 'active')) AS available
     `);
     return result.rows[0]?.available === true;
   }
@@ -67,8 +66,7 @@ export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore 
         ${WORKSTATION_REF + Buffer.from(value.displayName).toString('base64url')}, 'active',
         ${date(value.expiresAt)}, ${date(value.expiresAt)}
       WHERE EXISTS (SELECT 1 FROM control.cluster_mesh_generations
-        WHERE generation_id = ${value.generationId} AND status IN ('starting', 'active')
-          AND supervisor_lease_expires_at > now())
+        WHERE generation_id = ${value.generationId} AND status IN ('starting', 'active'))
       ON CONFLICT (registration_id) DO UPDATE SET expires_at = EXCLUDED.expires_at,
         lease_expires_at = EXCLUDED.lease_expires_at, updated_at = now()
       RETURNING registration_id

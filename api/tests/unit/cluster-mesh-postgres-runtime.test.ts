@@ -27,7 +27,7 @@ async function cleanup() {
   await db.delete(clusterMeshGenerations);
 }
 
-async function saveGeneration(status: 'active' | 'lost' = 'active', lease = future) {
+async function saveGeneration(status: 'active' | 'stopped' | 'lost' = 'active', lease = future) {
   await store.saveGeneration({
     generationId: 'generation-test',
     status,
@@ -89,25 +89,37 @@ describe('PostgresClusterMeshRuntimeStore', () => {
     ]);
   });
 
-  it('should bootstrap a generation without resetting its status, lease or capacity', async () => {
-    await saveGeneration('lost', past);
+  it('should admit a workstation after the active generation supervisor lease expires', async () => {
+    await saveGeneration('active', past);
 
-    await store.ensureGeneration({
-      generationId: 'generation-test', status: 'active', supervisorRef: 'replacement-supervisor',
-      supervisorLeaseExpiresAt: future, maxConcurrent: 12, poolSize: 4,
-    });
-
-    const [generation] = await db.select().from(clusterMeshGenerations)
-      .where(eq(clusterMeshGenerations.generationId, 'generation-test'));
-    expect(generation).toMatchObject({
-      status: 'lost', supervisorRef: 'supervisor-test', supervisorLeaseExpiresAt: new Date(past),
-      maxConcurrent: 2, poolSize: 1,
-    });
+    await expect(store.isGenerationAvailable('generation-test')).resolves.toBe(true);
     await expect(store.admitWorkstation({
-      generationId: 'generation-test', sessionId: 'fenced', ownerSubject: 'user-test',
-      displayName: 'Fenced laptop', expiresAt: future,
-    })).rejects.toThrow('cluster_mesh_generation_unavailable');
+      generationId: 'generation-test', sessionId: 'lease-expired', ownerSubject: 'user-test',
+      displayName: 'Lease-expired laptop', expiresAt: future,
+    })).resolves.toBeUndefined();
   });
+
+  it.each(['stopped', 'lost'] as const)(
+    'should bootstrap a %s generation without resetting its status, lease or capacity', async (status) => {
+      await saveGeneration(status, past);
+
+      await store.ensureGeneration({
+        generationId: 'generation-test', status: 'active', supervisorRef: 'replacement-supervisor',
+        supervisorLeaseExpiresAt: future, maxConcurrent: 12, poolSize: 4,
+      });
+
+      const [generation] = await db.select().from(clusterMeshGenerations)
+        .where(eq(clusterMeshGenerations.generationId, 'generation-test'));
+      expect(generation).toMatchObject({
+        status, supervisorRef: 'supervisor-test', supervisorLeaseExpiresAt: new Date(past),
+        maxConcurrent: 2, poolSize: 1,
+      });
+      await expect(store.admitWorkstation({
+        generationId: 'generation-test', sessionId: 'fenced', ownerSubject: 'user-test',
+        displayName: 'Fenced laptop', expiresAt: future,
+      })).rejects.toThrow('cluster_mesh_generation_unavailable');
+    },
+  );
 
   it('should reclaim capacity after a generation crash', async () => {
     await saveGeneration();
