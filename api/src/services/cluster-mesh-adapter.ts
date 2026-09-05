@@ -24,7 +24,7 @@ import {
 import type { VerifiedInvocationContextPort } from '@sentropic/contracts';
 import { timingSafeEqual } from 'node:crypto';
 
-import { env } from '../config/env';
+import { env, requiresOAuthProductionSecrets } from '../config/env';
 import {
   approveDeviceCode,
   issueDeviceCode,
@@ -210,7 +210,7 @@ const unavailableH2aPtyPort: PtyActuatorPort = {
 
 type QualificationEnvironment = Readonly<Record<string, string | undefined>>;
 export function resolveLiveQualificationConfig(source: QualificationEnvironment) {
-  if (source.NODE_ENV === 'production' && source.CLUSTER_MESH_A1_EVIDENCE) {
+  if (requiresOAuthProductionSecrets(source) && source.CLUSTER_MESH_A1_EVIDENCE) {
     throw new Error('shared-secret cluster mesh qualification is forbidden in production');
   }
   if (source.CLUSTER_MESH_A1_QUALIFICATION !== '1') return undefined;

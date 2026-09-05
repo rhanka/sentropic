@@ -205,6 +205,12 @@ const envSchema = z.object({
 
 export type AppEnv = z.infer<typeof envSchema>;
 
+type ProductionRuntimeEnvironment = Readonly<{
+  NODE_ENV?: string;
+  DISABLE_RATE_LIMIT?: string;
+  ADMIN_EMAIL?: string;
+}>;
+
 export const env: AppEnv = (() => {
   const parsed = envSchema.parse(process.env);
   // TEM project id falls back to the shared Scaleway default project when unset.
@@ -223,10 +229,10 @@ export const env: AppEnv = (() => {
   return parsed;
 })();
 
-export const isE2eProductionImageRuntime = (value: AppEnv = env): boolean =>
+export const isE2eProductionImageRuntime = (value: ProductionRuntimeEnvironment = env): boolean =>
   value.NODE_ENV === 'production' &&
   value.DISABLE_RATE_LIMIT === 'true' &&
   value.ADMIN_EMAIL === 'e2e-admin@example.com';
 
-export const requiresOAuthProductionSecrets = (value: AppEnv = env): boolean =>
+export const requiresOAuthProductionSecrets = (value: ProductionRuntimeEnvironment = env): boolean =>
   value.NODE_ENV === 'production' && !isE2eProductionImageRuntime(value);
