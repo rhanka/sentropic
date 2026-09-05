@@ -63,7 +63,13 @@ describe('ClaudeProviderRuntime', () => {
   describe('listModels', () => {
     it('should return Claude model catalog entries', () => {
       const models = runtime.listModels();
-      expect(models).toHaveLength(4);
+      expect(models).toHaveLength(5);
+
+      const fable51 = models.find((m) => m.modelId === 'claude-fable-5-1');
+      expect(fable51).toBeDefined();
+      expect(fable51!.providerId).toBe('anthropic');
+      expect(fable51!.supportsTools).toBe(true);
+      expect(fable51!.supportsStreaming).toBe(true);
 
       const sonnet = models.find((m) => m.modelId === 'claude-sonnet-5');
       expect(sonnet).toBeDefined();

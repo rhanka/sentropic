@@ -53,6 +53,7 @@ describe('llm-mesh model projections', () => {
       'gpt-5.6-luna',
       'gpt-5.6-sol',
       'gpt-5.6-terra',
+      'gpt-6-astra',
     ]);
     expect(modelsByProvider('gemini')).toEqual([
       'gemini-3.1-flash-lite',
@@ -61,6 +62,7 @@ describe('llm-mesh model projections', () => {
     ]);
     expect(modelsByProvider('anthropic')).toEqual([
       'claude-fable-5',
+      'claude-fable-5-1',
       'claude-opus-4-8',
       'claude-opus-5',
       'claude-sonnet-5',
@@ -73,7 +75,7 @@ describe('llm-mesh model projections', () => {
       'google/gemini-3.1-flash-lite@gcp',
       'google/gemini-3.5-flash@gcp',
     ]);
-    expect(data.models).toHaveLength(21);
+    expect(data.models).toHaveLength(23);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
