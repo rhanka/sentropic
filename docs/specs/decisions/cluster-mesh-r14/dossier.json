@@ -1,0 +1,869 @@
+{
+  "schema": "sentropic.focus.decision-kit/v4",
+  "id": "cluster-mesh-shared-core",
+  "title": "cluster-mesh = plugin Hono · dossier de décisions owner",
+  "revision": "2026-09-05-r14",
+  "status": "v2 continuation — owner decisions pending",
+  "architectureHash": "f5d525cfbaeb37f9ed9234f3c19eadd02ac26f9c6b460f47c5ce3692640d0c60",
+  "summary": "Révision consolidée r13 : cluster-mesh devient le plugin Hono de composition de 29 namespaces mutualisés, son runtime est intégré, chaque module de routes reste autonome et désactivable, et les gates C1–C5/A1–A5 sont enforceées en interne par le conductor. Continuation r14 : D1–D17 sont conservées intégralement ; D18–D25 demandent seulement COMMENT intégrer la v2 déjà décidée, avec Context Projection, une boucle applicative universelle et des exécutions sans terminal.",
+  "truthBanner": "CURRENT et TARGET sont séparés. CURRENT est limité aux preuves du dépôt, aux 56 fichiers de routes inventoriés et à la qualification A1 : 0 listener central observé, 44 mcp-serve/session, missing-registration, relaunch-inbox vide et présences fantômes. TARGET est la décision owner corrigée ; tout router absent aujourd’hui est signalé cible, partiel, non vérifié ou source-gap. Ces compteurs restent une photo r13, pas une nouvelle mesure r14. v2 est DESIGN-ONLY : intégration décidée par la directive owner actuelle, modalités proposées et choix owner encore vides. packages/cluster-mesh/src/mesh.ts:20 reste single-node ; RegistrationGate et les reçus transported|verified|acted sont propres au worktree v1 non fusionné, source-gap sur main. Aucun gain calculé : 8-25% et 9-27% sont des priors. Les revues h2a/Astra et Fable 5.1 sont des sources de corrections, pas une ratification de ces nouvelles options.",
+  "convergence": {
+    "status": "v2-how-pending-with-source-gaps",
+    "rounds": ["r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14"],
+    "provenance": "Les choix D1–D12 sont les décisions acted r6–r10. Les formulations de ce dossier sont une consolidation conductor-normalized ; la capture owner brute complète r9/r10 n’est pas disponible dans les sources du kit. L’historique complet des fils r6–r9 reste référencé dans docs/specs/decisions/cluster-mesh-r8/dossier.json. r14 ajoute D18–D25 après le bloc r13 inchangé. Reviewed by h2a (h-cond /archi, executed by GPT-6-Astra) — MAJOR CORRECTIONS — 2026-09-05. Revue Fable 5.1 — MINOR CORRECTIONS — 2026-09-05 : précision des sources, sérialisation, autorité et direction du planner intégrées ; sources et empreintes dans D25. Ces revues portent sur les études/dossier v2 précurseurs, pas sur une exécution ou une approbation de ce kit r14.",
+    "ownerReviewNote": "L’owner n’a pas relu chaque carte : environ 90 % sont des remarques sans action de sa part. Il juge le dossier très complet et beau, et son attention r12 porte uniquement sur D17. Les gates C1–C5/A1–A5 sont internes et conductor-enforced ; une prochaine présentation owner ne doit remonter que de vraies décisions produit, pas re-soumettre tout le dossier. Ce constat décrit r12. En r14, seules les nouvelles modalités HOW D18–D25 sont à choisir : l’intégration v2 est déjà décidée, D1–D17 ne sont ni réouvertes ni réécrites. La dépendance complète de l’application à la boucle cluster-mesh ne change pas D1=B ni le fonctionnement standalone des bibliothèques et de h2a.",
+    "invalidatedModels": [
+      "daemon de contrôle hors cluster-mesh",
+      "tmux comme voie privilégiée V1",
+      "un mcp-serve par session comme cible"
+    ]
+  },
+  "facts": [
+    "CURRENT · packages/cluster-mesh expose createDegenerateClusterMesh : seam locale, sans router Hono central.",
+    "CURRENT · api/src/services/cluster-mesh-adapter.ts exporte createClusterMeshAppAdapter et conserve un registre process-local.",
+    "CURRENT · api/src/routes/api/mcp.ts contient le mcpRouter actuel ; packages/mcp-auth/src/core.ts exporte createMcpAuth.",
+    "CURRENT · llm-gateway possède déjà createGatewayRouter ; Focus, mcp-platform et llm-mesh n’exposent pas encore tous les routers TARGET décrits ici.",
+    "CURRENT inventorié · 56 fichiers de routes : 55 fichiers api/auth, dont les deux index, plus well-known ; la table api monte la surface métier, workflow, collaboration, contenu, identité, clients et exploitation.",
+    "PLAN TARGET · 29 namespaces couvrent la migration de cette API et les surfaces apps/catalog/resources déjà codées sans mount HTTP direct ; chacun reste standalone et désactivable selon D1=B.",
+    "CURRENT qualifié · 0 listener central, 44 mcp-serve/session, missing-registration et relaunch-inbox = [].",
+    "TARGET owner · plugin Hono cluster-mesh, runtime intégré, pool K, cap configurable par défaut 12, PTY privilégié et inscription fail-closed."
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "title": "Frontière de composition : invariant modulaire B",
+      "context": "cluster-mesh compose les bibliothèques ; il ne doit ni les absorber ni devenir une dépendance de leurs providers.",
+      "question": "Quelle frontière rend la cible composable sans capturer les bibliothèques ?",
+      "source": "Choix acted D1=B, corrigé par le modèle owner plugin Hono.",
+      "ownerChoice": "B",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted · invariant de modularité",
+      "recommended": "B",
+      "recommendation": "Chaque module de routes est constructible, testable et montable seul, peut être désactivé dans cluster-mesh, et n’importe jamais cluster-mesh depuis son provider. Le plugin injecte seulement des contrats neutres.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "D1=B est retenu avec la modularité standalone et désactivable." }
+      ],
+      "response": [
+        { "round": "r11", "text": "Le dossier rend l’invariant exécutable et marque comme source-gap l’absence de capture brute complète antérieure." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Absorption dans le cœur", "consequence": "Capture les providers et empêche leur montage autonome." },
+        { "key": "B", "title": "Routers autonomes composés", "consequence": "Chaque bibliothèque reste standalone et désactivable ; cluster-mesh compose." },
+        { "key": "C", "title": "Intégration ponctuelle", "consequence": "Laisse les frontières dépendre de chaque host et recrée les doublons." }
+      ]
+    },
+    {
+      "key": "D2",
+      "title": "Modèle d’autorisation : contexte vérifié injecté",
+      "context": "Les routes partagées ont besoin d’une décision cohérente sans importer une autorité produit dans chaque bibliothèque.",
+      "question": "Où établir et transmettre l’identité, le workspace, les scopes et le NHI ?",
+      "source": "Choix acted D2=C.",
+      "ownerChoice": "C",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted",
+      "recommended": "C",
+      "recommendation": "Le runtime intégré établit un VerifiedInvocationContext neutre et fail-closed ; chaque router applique ensuite ses règles de domaine.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Conserver une autorisation centralement vérifiée avec enforcement local." }
+      ],
+      "response": [
+        { "round": "r11", "text": "La composition Hono injecte le contexte sans créer de dépendance provider vers cluster-mesh." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Autorisation par host", "consequence": "Politiques divergentes et contexte non portable." },
+        { "key": "B", "title": "Autorisation seulement dans les providers", "consequence": "Les preuves de transport et de possession restent dispersées." },
+        { "key": "C", "title": "Contexte vérifié + enforcement local", "consequence": "Une garde commune et des règles de domaine autonomes." }
+      ]
+    },
+    {
+      "key": "D3",
+      "title": "Capitalisation par bibliothèque et split de propriété corrigé",
+      "context": "La révision r8 mélangeait contrats neutres, runtime h2a et un daemon externe. Le runtime est désormais intégré à cluster-mesh et la voie PTY est privilégiée.",
+      "question": "Qui possède le runtime, la collaboration et la mémoire dans la cible Hono ?",
+      "source": "Choix acted D3=A, split A1–A5 corrigé par l’owner.",
+      "ownerChoice": "A",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted · split corrigé",
+      "recommended": "A",
+      "recommendation": "Sentropic/cluster-mesh possède runtime intégré, transport, admission/lifecycle, PTY et enforcement neutre ; h2a possède la sémantique de collaboration, l’autorisation de ses tools, l’adapter consommateur et le pont stdio mince ; Graphify possède la mémoire.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Capitaliser au maximum, sans sortir le runtime de cluster-mesh ni faire de tmux la voie V1." }
+      ],
+      "response": [
+        { "round": "r11", "text": "Le split retire le daemon externe et place drive/wake privilégié sur PTY sous possession vérifiée." }
+      ],
+      "diagram": { "scene": "D3", "title": "Capitalisation et responsabilités" },
+      "options": [
+        { "key": "A", "title": "Contrats neutres et responsabilités explicites", "consequence": "Capitalisation maximale avec ownership stable." },
+        { "key": "B", "title": "Tout dans cluster-mesh", "consequence": "Capture h2a, Graphify et les providers." },
+        { "key": "C", "title": "Tout dans les hosts", "consequence": "Duplique les contrats et les gardes." }
+      ],
+      "sections": [
+        {
+          "title": "Matrice de capitalisation par bibliothèque",
+          "columns": ["Bibliothèque", "CURRENT vérifié", "TARGET / propriété"],
+          "rows": [
+            ["cluster-mesh", "createDegenerateClusterMesh ; pas de router Hono central", "Plugin Hono + runtime intégré + composition"],
+            ["API Sentropic", "createClusterMeshAppAdapter ; Map process-local", "Composition root qui monte le plugin"],
+            ["mcp-platform", "Contrats/runtime sans router Hono complet vérifié", "Router /mcp/* standalone"],
+            ["mcp-auth", "createMcpAuth", "Garde MCP injectée dans /mcp/*"],
+            ["connector-host", "mountConnectorHost et contexte partiel", "Provider autonome sous contexte neutre"],
+            ["llm-gateway", "createGatewayRouter existe", "Router /gw/* monté sans réimplémentation"],
+            ["llm-mesh", "Contrats d’enrôlement/routing ; router non vérifié", "Router /llm-mesh/* cible"],
+            ["focus", "Rendu dossier read-only ; API cible partielle", "Router /focus/* cible"],
+            ["track", "Source locale non vérifiée dans ce checkout", "Router /track/* cible, contrat à fermer"],
+            ["Graphify", "Baseline décrite, implémentation hors sources inspectées", "Router /memory/* ; sémantique mémoire owner Graphify"],
+            ["h2a", "mcp-serve/session et missing-registration observés", "Sémantique collaboration + adapter + pont stdio mince"],
+            ["session/runtime", "Présences fragmentées", "Router /session/* et PTY intégrés cluster-mesh"],
+            ["oauth-verify", "Vérification OAuth présente", "Router /oauth/* et autorité injectée"],
+            ["auth-hono + auth-client", "createAuthRouter, createOAuthRouter et createWellKnownRouter existent ; S2S client_credentials présent", "Routers /auth/* et /oauth/* montés avec les ports produit injectés"],
+            ["flow", "Façade et runtime de workflows présents ; adapters Postgres dans api/src/services/flow", "Router /workflows/* autonome pour plans, tâches, runs, définitions et queue"],
+            ["chat-core + chat-server", "createChatServer Hono est monté par api/src/routes/api/chat.ts", "Router /chat/* conservé dans chat-server ; adapters de persistance injectés"],
+            ["comments", "Contrats/store présents ; router Hono encore dans api/src/routes/api/comments.ts", "Router /comments/* extrait et montable seul"],
+            ["contracts + events", "TenantContext, AuthzContext et StreamEvent sont déjà transverses", "Contrats neutres pour /streams/*, /comments/* et tous les routers"],
+            ["skills + catalog API", "Catalogue composite et exécution de tools présents dans api/src/services/catalog", "Router /catalog/* TARGET, sans exposer un tool non autorisé"],
+            ["cli + build-cli + harness + focus/cli", "Dispatchers CLI et wrappers spawn génériques présents ; aucun driver PTY/tmux trouvé", "Router /cli/* TARGET ; adapter h2a/PTY à fermer comme source-gap"],
+            ["cowork-bridge + cowork-desktop", "Clients d’auth, device-code, registre et exécuteurs desktop présents", "Router /clients/* pour distribution et métadonnées, contrats clients injectés"],
+            ["ubo-contracts + API métier", "Enveloppe UBO et services context-* présents ; CRUD Hono encore dans api/", "Router /business/* pour les objets métier concrets"],
+            ["services documents/artifacts", "documents, docx, pptx, xlsx, S3 et artifact-store vivent dans api/", "Routers /documents/* et /transfers/* extraits ; package serveur dédié à créer"],
+            ["app-control-plane", "Lifecycle templates/instances codé sans route montée", "Router /apps/* TARGET standalone"],
+            ["resource-plane", "Dispatcher list/stat/read/grep/edit/invoke codé sans route montée", "Router /resources/* TARGET ; authz et provenance injectées"],
+            ["contrats neutres", "Répartis", "VerifiedInvocationContext sans dépendance au plugin"]
+          ]
+        },
+        {
+          "title": "Split D3 corrigé",
+          "columns": ["Propriétaire", "Possède", "Ne possède pas"],
+          "rows": [
+            ["Sentropic / cluster-mesh", "Runtime intégré, transport, admission/lifecycle, PTY, enforcement et contrats neutres", "Sémantique h2a ou mémoire Graphify"],
+            ["h2a", "Collaboration, authz tools, adapter consommateur, pont stdio MCP mince", "Daemon de contrôle externe ou stockage mémoire"],
+            ["Graphify", "Store, ranking, mémoire, projections", "Transport, PTY ou admission session"]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D4",
+      "title": "Persistance : migration avant bascule",
+      "context": "La composition Hono ne doit pas masquer les autorités de données ni créer deux auteurs.",
+      "question": "Comment basculer les données sans double écriture ni perte ?",
+      "source": "Choix acted D4=C et condition C1.",
+      "ownerChoice": "C",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted · C1 obligatoire",
+      "recommended": "C",
+      "recommendation": "Créer schéma, migration, backfill et preuve de rollback avant chaque cutover d’application ; un seul auteur reste actif par espace de noms.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "La persistance et la migration précèdent les bascules applicatives." }
+      ],
+      "response": [
+        { "round": "r11", "text": "C1 devient un gate de réalisation explicite, indépendant du montage Hono." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Double écriture durable", "consequence": "Deux autorités et divergence silencieuse." },
+        { "key": "B", "title": "Migration après cutover", "consequence": "Le rollback n’est pas prouvable." },
+        { "key": "C", "title": "Migration puis cutover", "consequence": "Backfill, vérification, bascule et rollback déterministes." }
+      ],
+      "sections": [
+        {
+          "title": "Matrice de persistance",
+          "columns": ["Domaine", "Autorité", "Gate"],
+          "rows": [
+            ["Sessions / présence", "Runtime cluster-mesh intégré", "Génération + LOST + reprise"],
+            ["Collaboration h2a", "h2a", "Un auteur inbox/outbox"],
+            ["Mémoire", "Graphify", "Baseline locale puis PgSQL après gate"],
+            ["MCP / enrôlement", "mcp-platform + coffre provider", "Références opaques ; aucun jeton dans le plugin"],
+            ["LLM comptes", "llm-mesh / keyring", "Références opaques et conformité fournisseur"]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D5",
+      "title": "Contrat d’événements et effets idempotents",
+      "context": "Le runtime intégré doit distinguer transport, effet, reçu et reprise.",
+      "question": "Quel contrat garantit la reprise sans dupliquer les effets ?",
+      "source": "Choix acted D5=C.",
+      "ownerChoice": "C",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted",
+      "recommended": "C",
+      "recommendation": "Enveloppe immuable, idempotency key, génération, outbox durable et reçus transporté/vérifié/agi.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Séparer livraison, autorisation et effet." }
+      ],
+      "response": [
+        { "round": "r11", "text": "A1 exige un effet observable et un reçu durable après drive/wake." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Best effort", "consequence": "Reprise et duplication non maîtrisées." },
+        { "key": "B", "title": "Accusé de transport", "consequence": "Ne prouve ni l’autorisation ni l’effet." },
+        { "key": "C", "title": "Outbox + idempotence + reçus", "consequence": "Effets re-jouables et auditables." }
+      ]
+    },
+    {
+      "key": "D6",
+      "title": "MCP non captif sous composition Hono",
+      "context": "Un serveur MCP unique ne doit pas rendre mcp-platform inutilisable hors cluster-mesh.",
+      "question": "Comment centraliser l’ingress tout en préservant l’autonomie MCP ?",
+      "source": "Choix acted D6=A, non-captivité explicitée.",
+      "ownerChoice": "A",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted · non captif",
+      "recommended": "A",
+      "recommendation": "mcp-platform et mcp-auth portent /mcp/* et restent montables seuls ; cluster-mesh compose ce router et supervise l’unique serveur. createMcpAuth est le symbole réel.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Intégrer MCP sans le rendre captif de cluster-mesh." }
+      ],
+      "response": [
+        { "round": "r11", "text": "L’intégration porte sur le montage et le runtime central, pas sur l’absorption des packages." }
+      ],
+      "diagram": { "scene": "D6", "title": "MCP composé et autonome" },
+      "options": [
+        { "key": "A", "title": "Router MCP autonome composé", "consequence": "Un ingress central et une bibliothèque réutilisable." },
+        { "key": "B", "title": "MCP privé au cœur", "consequence": "Capture du provider." },
+        { "key": "C", "title": "Sidecar par session", "consequence": "Reproduit l’état cassé mesuré." }
+      ]
+    },
+    {
+      "key": "D7",
+      "title": "Messages sécurisés et action PTY",
+      "context": "La livraison d’un message ne constitue jamais l’autorisation de réveiller ou piloter une session.",
+      "question": "Quelle chaîne de confiance précède drive/wake ?",
+      "source": "Choix acted D7=C+A.",
+      "ownerChoice": "C",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted · C+A",
+      "recommended": "C",
+      "recommendation": "C pour l’enveloppe signée et la vérification destinataire, avec A pour l’actionneur PTY privilégié après inscription, possession et autorisation.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Combiner enveloppe vérifiable et action native privilégiée." }
+      ],
+      "response": [
+        { "round": "r11", "text": "PTY devient la voie primaire ; tmux reste une option secondaire, pas le modèle V1." }
+      ],
+      "diagram": { "scene": "D7", "title": "Vérifier puis agir" },
+      "options": [
+        { "key": "A", "title": "Action native privilégiée", "consequence": "Drive/wake direct après possession vérifiée." },
+        { "key": "B", "title": "Transport implicite", "consequence": "Confond livraison et autorisation." },
+        { "key": "C", "title": "Enveloppe signée + garde destinataire", "consequence": "Identité, rôle, cible, rejeu et expiration vérifiés." }
+      ]
+    },
+    {
+      "key": "D8",
+      "title": "Baseline Graphify : graphifier la mémoire",
+      "context": "La mémoire h2a reste une responsabilité Graphify, distincte du runtime et du transport.",
+      "question": "Quelle baseline de mémoire la réalisation doit-elle respecter ?",
+      "source": "Décision acted D8 · baseline imposée.",
+      "ownerChoice": null,
+      "decisionStatus": "acted-baseline",
+      "statusLabel": "Baseline acted",
+      "recommended": null,
+      "recommendation": "Graphify possède store, ranking, revalidation et projections ; cluster-mesh compose /memory/* et h2a réutilise son contrat sans capturer la mémoire.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Graphify est la baseline mémoire." }
+      ],
+      "response": [
+        { "round": "r11", "text": "Le dossier conserve cette baseline sans proposer un nouveau choix A/B/C." }
+      ],
+      "diagram": { "scene": "D8", "title": "Contrat h2a ↔ Graphify" },
+      "options": []
+    },
+    {
+      "key": "D9",
+      "title": "Rendu déterministe et zéro-overlap",
+      "context": "La révision r11 change la topologie et ne peut reprendre les compteurs r8.",
+      "question": "Quelle preuve protège la lisibilité des scènes ?",
+      "source": "Choix acted D9=C, reversement et manifeste déterministe.",
+      "ownerChoice": "C",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted",
+      "recommended": "C",
+      "recommendation": "Générer toutes les scènes par routeScene/placeLabels, publier localement le manifeste r11, et maintenir edgeNode, edgeEdge, edgeLabel, labelLabel et arrow* à zéro.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Conserver le reversement et la preuve géométrique." }
+      ],
+      "response": [
+        { "round": "r11", "text": "Les attentes sceneCount/edgeCount/labelCount sont recalculées depuis la sortie r11, jamais copiées de r8." }
+      ],
+      "diagram": { "scene": "D9", "title": "Pipeline de rendu et validation" },
+      "options": [
+        { "key": "A", "title": "Inspection visuelle seule", "consequence": "Régressions non déterministes." },
+        { "key": "B", "title": "Tolérance d’overlap", "consequence": "Contrat de lisibilité affaibli." },
+        { "key": "C", "title": "Routage + manifeste + reversement", "consequence": "Preuve reproductible et rollback." }
+      ]
+    },
+    {
+      "key": "D10",
+      "title": "Sédiment sécurité OAuth + MCP + NIST/NHI",
+      "context": "Le plugin Hono compose des autorités mais ne détient pas les secrets de providers.",
+      "question": "Quel socle de sécurité est imposé à toutes les routes ?",
+      "source": "Décision acted D10 ; pas de nouveau choix A/B/C.",
+      "ownerChoice": null,
+      "decisionStatus": "acted-baseline",
+      "statusLabel": "Baseline sécurité acted",
+      "recommended": null,
+      "recommendation": "OAuth vérifié, DPoP selon le profil, audience et scopes, NHI, révocation, consentement MCP, références opaques et possession PTY sont des gates. createMcpAuth est le point d’intégration MCP réel.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Aligner OAuth, MCP et NIST/NHI comme sédiment commun." }
+      ],
+      "response": [
+        { "round": "r11", "text": "Le VerifiedInvocationContext transporte les preuves vérifiées ; chaque provider conserve secrets et règles de domaine." }
+      ],
+      "diagram": { "scene": "D10", "title": "Couches de sécurité" },
+      "options": [],
+      "sections": [
+        {
+          "title": "Matrice sécurité",
+          "columns": ["Couche", "Preuve", "Échec sûr"],
+          "rows": [
+            ["OAuth", "Issuer, audience, expiration, scopes", "401/403 sans contexte"],
+            ["DPoP / possession", "Clé liée à la requête selon profil", "Rejet avant provider"],
+            ["NHI", "Identité non humaine et rotation", "Révocation immédiate"],
+            ["MCP", "Consentement, binding et createMcpAuth", "Aucune invocation sans grant"],
+            ["Messages h2a", "Signature, cible, nonce, génération", "Rejet ou quarantaine"],
+            ["PTY", "Inscription + possession + autorisation", "Aucun wake"],
+            ["Secrets", "Coffre provider et références opaques", "Aucun jeton dans cluster-mesh"]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D11",
+      "title": "Stratégie de bascule : shadow, cutover et rollback",
+      "context": "Le runtime intégré remplace progressivement les chemins directs sans créer de second plan de contrôle.",
+      "question": "Comment migrer une capacité en gardant un seul auteur ?",
+      "source": "Choix acted D11=C.",
+      "ownerChoice": "C",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted",
+      "recommended": "C",
+      "recommendation": "Shadow read, comparaison, cutover d’un auteur, observation, puis suppression de l’ancien chemin ; rollback explicite par lot.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Bascule progressive avec preuve et retour arrière." }
+      ],
+      "response": [
+        { "round": "r11", "text": "La migration vise le runtime intégré au plugin, jamais un daemon externe concurrent." }
+      ],
+      "diagram": { "scene": "D11", "title": "Bascule sans double autorité" },
+      "options": [
+        { "key": "A", "title": "Big bang", "consequence": "Rollback et comparaison faibles." },
+        { "key": "B", "title": "Deux auteurs prolongés", "consequence": "Divergence de données et de présence." },
+        { "key": "C", "title": "Shadow puis cutover", "consequence": "Preuves et rollback par capacité." }
+      ]
+    },
+    {
+      "key": "D12",
+      "title": "Observabilité et acceptation par preuve",
+      "context": "La présence ou un process vivant ne prouvent ni l’inscription ni l’effet utilisateur.",
+      "question": "Quelles preuves ferment chaque lot ?",
+      "source": "Choix acted D12=C.",
+      "ownerChoice": "C",
+      "decisionStatus": "acted",
+      "statusLabel": "Acted",
+      "recommended": "C",
+      "recommendation": "Compteurs de génération et capacité, raisons de refus stables, corrélation, reçus d’effet, test de reprise et inspection des presences LOST.",
+      "ownerRemarks": [
+        { "round": "r10", "text": "Qualifier par effet observable, pas seulement par process." }
+      ],
+      "response": [
+        { "round": "r11", "text": "A1–A5 deviennent des critères vérifiables et fail-closed." }
+      ],
+      "diagram": { "scene": "D12", "title": "Preuves d’acceptation" },
+      "options": [
+        { "key": "A", "title": "Logs libres", "consequence": "Acceptation non reproductible." },
+        { "key": "B", "title": "Santé process", "consequence": "Ne détecte pas les présences fantômes." },
+        { "key": "C", "title": "Effets, raisons et corrélation", "consequence": "Qualification déterministe." }
+      ]
+    },
+    {
+      "key": "D13",
+      "title": "Split API par bibliothèque et namespaces",
+      "context": "La composition root doit reprendre toute l’API Sentropic existante et les plans de contrôle déjà codés, sans déplacer leurs implémentations dans cluster-mesh.",
+      "question": "Quels routers et namespaces le plugin monte-t-il pour couvrir tout le plan API mutualisé ?",
+      "source": "Correction owner r11 puis inventaire r13 de api/src/routes/**, api/src/services/** et packages/*.",
+      "ownerChoice": "A",
+      "decisionStatus": "owner-corrected",
+      "statusLabel": "TARGET owner",
+      "recommended": "A",
+      "recommendation": "Monter les 29 namespaces de la matrice depuis leurs bibliothèques ou adapters source. Les routes API actuelles migrent par shadow/cutover vers ces modules ; les surfaces sans router restent TARGET ou source-gap, jamais présentées comme CURRENT.",
+      "ownerRemarks": [
+        { "round": "r11", "text": "Chaque lib expose son API sous son namespace ; cluster-mesh la compose comme plugin Hono." }
+      ],
+      "response": [
+        { "round": "r11", "text": "La carte route-composition-per-lib matérialise chaque frontière et l’invariant D1=B." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Router par bibliothèque", "consequence": "Ownership de code et désactivation explicites." },
+        { "key": "B", "title": "Router monolithique cluster-mesh", "consequence": "Réimplémentation et capture des providers." },
+        { "key": "C", "title": "Routes sans namespace", "consequence": "Collisions et politique de montage implicite." }
+      ],
+      "sections": [
+        {
+          "title": "Composition des routes",
+          "columns": ["Namespace TARGET", "Source(s)", "Surface api/ absorbée", "Discipline CURRENT / TARGET", "Invariant D1=B"],
+          "rows": [
+            ["/mcp/*", "mcp-platform + mcp-auth + oauth-verify ; connector-host délégué", "/api/v1/mcp/*", "CURRENT : mcpRouter et mcpAuthRoutes ; connector-host fournit les providers, sans seconde autorité HTTP. TARGET : extraction et montage", "Router standalone + désactivable ; createMcpAuth injecté"],
+            ["/gw/*", "llm-gateway", "Aucun mount api/ direct", "CURRENT : createGatewayRouter. TARGET : montage sous /gw/*", "Router déjà standalone ; désactivable"],
+            ["/focus/*", "focus + @sentropic/track", "/api/v1/focus/owner-signatures", "CURRENT : route API et FocusLiveSession partiels. TARGET : router de bibliothèque", "Standalone + désactivable ; ports Track injectés"],
+            ["/llm-mesh/*", "llm-mesh + model-catalog + provider-connections + llm-account-transports + llm-runtime", "/api/v1/models/* + /settings/provider-connections* + /me/ai-settings", "CURRENT : contrats/routing llm-mesh et services API d’enrôlement/runtime. TARGET : router d’enrôlement et de pool", "Standalone + désactivable ; secrets hors plugin"],
+            ["/track/*", "@sentropic/track, dépendance externe de focus", "Aucun mount api/ direct", "CURRENT : consommation par Focus ; source package hors packages/*. TARGET : router à fermer", "Standalone + désactivable ; adapter neutre"],
+            ["/memory/*", "Graphify", "Aucun mount api/ direct", "CURRENT : implémentation non présente dans les sources inspectées. TARGET : adapter mémoire", "Standalone + désactivable ; source-gap visible"],
+            ["/session/*", "runtime cluster-mesh + adapter h2a/PTY", "/api/v1/auth/device/* pour l’attachement ; aucun drive/wake HTTP central", "CURRENT : createClusterMeshAppAdapter process-local. TARGET : propriétaire unique lifecycle, drive/wake PTY, fallback tmux et pool K", "Module HTTP standalone ; runtime injecté ; désactivable"],
+            ["/oauth/*", "auth-hono + oauth-verify + auth-client + mcp-auth", "/api/v1/auth/oauth/* + /auth/s2s/* + /.well-known/*", "CURRENT : createOAuthRouter/createWellKnownRouter et routes produit. TARGET : montage partagé", "Standalone + désactivable ; autorités injectées"],
+            ["/auth/*", "auth-hono + auth-client + ports identité produit", "/api/v1/auth/{register,login,session,credentials,magic-link,email,federation,health} + GET/PATCH /me + POST /me/deactivate + DELETE /me", "CURRENT : handlers réutilisables et seams produit ; /me orchestre ses dépendances par ports. TARGET : router identité consolidé hors oauth/device", "Standalone + désactivable ; aucun claim sur /me/ai-settings"],
+            ["/workflows/*", "flow + api/src/services/flow + todo-orchestration", "/plans/* + /todos/* + /tasks/* + /runs/* + /workflow-config/* + /workspace-types/* + /queue/*", "CURRENT : routes et runtime API. TARGET : router agentique extrait", "Standalone + désactivable ; stores/queue injectés"],
+            ["/agents/*", "api agent-config/prompts + todo-orchestration ; flow/skills en contrats TARGET", "/agent-config/* + /prompts/*", "CURRENT : configs API et ancien catalogue de prompts. TARGET : router profils/skills sur contrats flow/skills", "Standalone + désactivable ; providers sans cluster-mesh"],
+            ["/cli/*", "cli + build-cli + harness + focus/cli + cluster-mesh CommandRunnerPort", "Aucun mount api/ direct", "CURRENT : commandes, registry et spawn génériques ; aucun driver PTY/tmux trouvé. TARGET : adapters de process contrôlés qui délèguent drive/wake à /session/*", "Standalone + désactivable ; adapter PTY source-gap, aucune seconde autorité"],
+            ["/chat/*", "chat-core + chat-server", "/api/v1/chat/*", "CURRENT : createChatServer monté et endpoints API additionnels. TARGET : router canonique complet", "Standalone + désactivable ; persistence/queue injectées"],
+            ["/streams/*", "chat-server + events + contracts + outbox + projections API transverses", "/api/v1/streams/* : chat, jobs, organizations/folders/initiatives, workspaces/memberships, locks/presence et comments", "CURRENT : SSE, replay et projections transverses dans api/. TARGET : router streaming extrait, domaines délégués", "Standalone + désactivable ; Event/Stream ports injectés"],
+            ["/comments/*", "comments + contracts", "/api/v1/comments/*", "CURRENT : package store/événements, router dans api/. TARGET : router extrait", "Standalone + désactivable ; store et tenant injectés"],
+            ["/locks/*", "api/src/services/lock-service + lock-presence", "/api/v1/locks/*", "CURRENT : route/service API seulement. TARGET : module de collaboration dédié", "Standalone + désactivable ; package cible à extraire"],
+            ["/business/*", "ubo-contracts + api/src/services/context-* + DB métier", "/organizations/* + /folders/* + /initiatives/* + /use-cases/* sauf GET /use-cases/:id/docx + /solutions/* + /products/* + /proposals/* + /bids/* + /view-templates/*", "CURRENT : CRUD Hono dans api/. TARGET : router métier par adapters ; génération DOCX déléguée à /documents/*", "Standalone + désactivable ; données/ports injectés"],
+            ["/analytics/*", "api/src/routes/api/analytics + services queue/settings", "/api/v1/analytics/*", "CURRENT : route API. TARGET : router analytics extrait", "Standalone + désactivable ; aucune dépendance cluster-mesh"],
+            ["/workspaces/*", "contracts + cluster-mesh boundaries + services workspace/tenancy", "/workspaces/* + /tenants/* + /neutral/*", "CURRENT : routes et résolution tenant API. TARGET : router workspace/tenant partagé", "Standalone + désactivable ; contexte tenant injecté"],
+            ["/config/*", "flow + llm-mesh + api/src/services/settings", "/settings/* hors sous-surfaces LLM/connecteurs/clients + /business-config/* + /ai-settings/*", "CURRENT : routes API. TARGET : router de configuration extrait", "Standalone + désactivable ; stores injectés"],
+            ["/documents/*", "api/src/services/document-* + artifact-store + storage-s3", "/documents/* + GET /use-cases/:id/docx + routers racine docx/pptx/xlsx", "CURRENT : routes/génération API. TARGET : package serveur et router documents ; données métier déléguées", "Standalone + désactivable ; stockage/queue injectés"],
+            ["/transfers/*", "api/src/routes/api/import-export + storage-s3", "/exports/* + /imports/*", "CURRENT : import/export API. TARGET : router de transfert extrait", "Standalone + désactivable ; stockage injecté"],
+            ["/connectors/*", "API google-drive-oauth/client/accounts/picker + gmail-oauth + connector-host + mcp-broker ; mcp-connector-* comme preuves variables", "/google-drive/* + /gmail/* + /settings/connector-accounts*", "CURRENT : routes produit Google/Gmail et host/broker MCP ; packages synthétiques/benchmark non promus production. TARGET : administration partagée déléguant les providers", "Standalone + désactivable ; comptes/secrets injectés"],
+            ["/clients/*", "cowork-bridge/desktop + tab-registry + config + workspace-access ; auth-ui/chat-ui consommateurs", "/chrome-extension/* + /vscode-extension/* + /cowork-desktop/* + /settings/vscode-extension-token*", "CURRENT : métadonnées/distribution API et services clients ; UI non propriétaires HTTP. TARGET : router clients", "Standalone + désactivable ; plateformes injectées"],
+            ["/admin/*", "api/src/routes/api/admin + services tenancy", "/admin/* + /admin/tenant-resolution-metrics/*", "CURRENT : admin Hono dans api/. TARGET : router admin extrait", "Standalone + désactivable ; RBAC injecté"],
+            ["/health/*", "api/src/routes/api/health + probes des routers", "/api/v1/health", "CURRENT : probe API et probes propres aux libs. TARGET : agrégateur de santé", "Standalone + désactivable ; probes injectées"],
+            ["/apps/*", "api/src/services/app-control-plane ; build-cli adjacent/scaffolding", "Aucun mount api/ direct", "CURRENT : lifecycle templates/instances codé, sans couplage build-cli démontré. TARGET : router apps ; build-cli reste client possible", "Standalone + désactivable ; control-plane injecté"],
+            ["/catalog/*", "skills + flow seeds + api/src/services/catalog", "Aucun mount api/ direct", "CURRENT : registre composite et exécution de tools. TARGET : découverte/recherche canonique, sans seconde source de vérité", "Standalone + désactivable ; authz fail-closed"],
+            ["/resources/*", "api/src/services/resource-plane + contracts + mcp-platform, projection du catalogue", "Aucun mount api/ direct", "CURRENT : dispatcher list/stat/read/grep/edit/invoke sans Hono. TARGET : projection universelle déléguant registre /catalog et providers /mcp,/connectors", "Standalone + désactivable ; principal/provenance injectés"]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D14",
+      "title": "cluster-mesh comme plugin Hono avec runtime intégré",
+      "context": "Le modèle antérieur d’un daemon de contrôle hors cluster-mesh est invalidé par la correction owner.",
+      "question": "Où vivent composition HTTP et runtime de contrôle ?",
+      "source": "Correction owner r11.",
+      "ownerChoice": "A",
+      "decisionStatus": "owner-corrected",
+      "statusLabel": "TARGET owner",
+      "recommended": "A",
+      "recommendation": "cluster-mesh expose le plugin Hono, monte les routers et intègre le runtime de contrôle. L’API Sentropic utilise le symbole réel createClusterMeshAppAdapter pour composer l’application.",
+      "ownerRemarks": [
+        { "round": "r11", "text": "Le runtime est intégré dans cluster-mesh ; le daemon extérieur est un ancien modèle invalide." }
+      ],
+      "response": [
+        { "round": "r11", "text": "La scène AFTER montre une seule frontière plugin/runtime au lieu de deux autorités." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Plugin Hono + runtime intégré", "consequence": "Une composition root et un lifecycle cohérent." },
+        { "key": "B", "title": "Daemon hors cluster-mesh", "consequence": "Option invalidée : double ownership et split incorrect." },
+        { "key": "C", "title": "Adapters host-only", "consequence": "Reproduit les chemins directs actuels." }
+      ]
+    },
+    {
+      "key": "D15",
+      "title": "Un seul serveur MCP",
+      "context": "La qualification compte 44 mcp-serve liés aux sessions et aucun listener central.",
+      "question": "Quelle topologie MCP remplace l’état cassé ?",
+      "source": "Correction owner r11 + preuve A1/A2.",
+      "ownerChoice": "A",
+      "decisionStatus": "owner-corrected",
+      "statusLabel": "TARGET owner",
+      "recommended": "A",
+      "recommendation": "Un singleton MCP central est supervisé par le runtime intégré ; aucune session ne lance son propre serveur. Un pont stdio mince peut rester côté consommateur sans devenir un serveur de contrôle. TARGET — singleton logique par génération, pas un process unique ; frontière à figer en spec+plan.",
+      "ownerRemarks": [
+        { "round": "r11", "text": "Les 44 mcp-serve/session sont le broken current à retirer, pas un objectif." }
+      ],
+      "response": [
+        { "round": "r11", "text": "A2 exige 1 superviseur, 1 génération, 0 mcp-server/session et tolère seulement un bridge stdio mince." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Singleton MCP central", "consequence": "Une autorité et zéro serveur par session." },
+        { "key": "B", "title": "Pool de serveurs MCP", "consequence": "Multiplie les autorités de contrôle." },
+        { "key": "C", "title": "Un serveur par session", "consequence": "Conserve exactement l’état cassé." }
+      ]
+    },
+    {
+      "key": "D16",
+      "title": "PTY privilégié, inscription fail-closed et capacité K",
+      "context": "missing-registration, relaunch-inbox vide et présences fantômes empêchent une preuve de wake fiable.",
+      "question": "Quelles gardes contrôlent admission, drive/wake et saturation ?",
+      "source": "Correction owner r11 + acceptations A1, A3 et A4.",
+      "ownerChoice": "A",
+      "decisionStatus": "owner-corrected",
+      "statusLabel": "TARGET owner",
+      "recommended": "A",
+      "recommendation": "PTY est l’actionneur privilégié après inscription, NHI, génération, possession et autorisation. Le pool accepte K sessions jusqu’au cap configurable, 12 par défaut, et refuse la 13e avant spawn avec une raison stable. TARGET — clé de configuration clusterMesh.capacity.maxConcurrent, à figer en spec+plan.",
+      "ownerRemarks": [
+        { "round": "r11", "text": "Fin de missing-registration ; PTY privilégié ; capacité paramétrable et cap par défaut 12." }
+      ],
+      "response": [
+        { "round": "r11", "text": "Le runtime intégré réconcilie les sessions mortes en LOST et produit un reçu d’effet durable." }
+      ],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "PTY + registre fail-closed + cap K", "consequence": "Wake autorisé, saturation prévisible et reprise prouvable." },
+        { "key": "B", "title": "tmux privilégié sans registre", "consequence": "Option pré-correction invalidée." },
+        { "key": "C", "title": "Admission sans cap", "consequence": "Spawn non borné et saturation tardive." }
+      ]
+    },
+    {
+      "key": "D17",
+      "title": "Gates de réalisation C1–C5 et acceptation A1–A5",
+      "context": "Ces conditions ne sont pas un choix produit à soumettre à l’owner. Le conductor les enforce en interne pour empêcher une migration incomplète, une autorisation ouverte ou une qualification fondée seulement sur des process vivants.",
+      "question": "Quels contrôles internes bloquent la réalisation et quelles preuves ferment la qualification ?",
+      "source": "Résolution conductor r13, fondée sur cm-review-fable-specplan.md et cm-qualif-plan-commun.md réconciliés en r11.",
+      "ownerChoice": null,
+      "decisionStatus": "internal-conductor-gates",
+      "statusLabel": "Gates internes — conductor-enforced",
+      "recommended": null,
+      "recommendation": "Le conductor applique C1–C5 avant et pendant la réalisation, puis exige A1–A5 avant de fermer la qualification. D17 ne demande aucun choix owner ; toute source absente reste explicitement source-gap.",
+      "briefProvenance": {
+        "round": "r11",
+        "source": "cm-review-fable-specplan.md + cm-qualif-plan-commun.md",
+        "text": "Plier les deux revues dans le dossier sans réintroduire daemon extérieur ni tmux V1. La résolution r13 classe leurs conditions et acceptations comme gates internes conductor-enforced, non comme décision produit owner."
+      },
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [],
+      "sections": [
+        {
+          "title": "Conditions Fable C1–C5",
+          "columns": ["Condition", "Contexte projet", "Vérification conductor"],
+          "rows": [
+            ["C1", "Chaque namespace persistant prépare son schéma, sa migration, son backfill et son rollback avant le cutover applicatif. Cet ordre évite la perte de données et deux auteurs concurrents pendant la bascule.", "Le conductor exige la preuve du backfill et du rollback, puis vérifie qu’un seul auteur reste actif par domaine avant de couper l’ancien chemin."],
+            ["C2", "La matrice E2E déclare E2E_GROUPS comme une liste séparée par des espaces et garantit le nouveau spec/groupe inclus dans le lancement réel. La spec+plan tranche la numérotation 10 vs 13 et motive explicitement l’exclusion de 07/08/09.", "Le conductor relit la ligne E2E, la commande make et le résultat du groupe exécuté ; aucun spec nouveau ne peut être vert seulement parce qu’il manque à la sélection."],
+            ["C3", "Chaque provider reçoit un VerifiedInvocationContext neutre et injectable ; il ne construit pas son identité en important cluster-mesh. Cette frontière préserve la modularité D1=B et les usages hors plugin.", "Le provider doit build et tester seul avec un contexte de test injecté ; le même test passe lorsque son montage cluster-mesh est désactivé."],
+            ["C4", "Les décisions r9/r10 sont connues par consolidation, mais la capture owner brute complète n’est pas dans les sources du kit. Les présenter comme verbatim créerait une provenance inventée.", "Le dossier marque ce point source-gap et distingue le texte conductor-normalized de toute remarque owner réellement capturée."],
+            ["C5", "cluster-mesh-shared-core-synthesis-r7 précède les corrections owner r9/r10 : daemon externe et tmux V1 y sont historiques, pas normatifs. La cible r13 suit le plugin Hono, le runtime intégré et PTY privilégié.", "Le conductor vérifie que la spec+plan n’utilise aucun ancien langage mandatory/universal pour réintroduire un modèle invalidé."]
+          ]
+        },
+        {
+          "title": "Acceptations A1–A5",
+          "columns": ["Acceptation", "Ce qu’on prouve", "Comment on le voit"],
+          "rows": [
+            ["A1", "Depuis le terminal d'une session, en réveiller une autre par PTY drive/wake marche de bout en bout : le wake réel est prouvé et la clé d'enrôlement est présente (fin des « missing-registration »).", "On réveille une session vivante → elle répond ; une session morte/parquée = signalée PERDUE (LOST), jamais faussement « rattachée » ; la relance produit un relaunch-inbox non vide quand elle a agi. Les compteurs restent une photo de qualification CURRENT à re-mesurer."],
+            ["A2", "Quel que soit N sessions, UN seul serveur MCP (1 génération), donc un seul superviseur par génération, pas un mcp-serve par session ; les ~76 process actuels — CURRENT, ordre de grandeur mesuré — disparaissent.", "N sessions → 1 serveur, 0 par session et 0 mcp-serve par session ; un pont stdio mince (sans registre propre) toléré pour les hôtes qui l'exigent, compté à part."],
+            ["A3", "Le droit de piloter découle de l'enrôlement/registration, pas d'une revendication ; enrôlement manquant échoue proprement (registration-gated et fail-closed), avant toute action PTY.", "Sans registration, accès refusé avec raison claire et distincte — jamais une présence fantôme ; aucun pilotage n'a lieu."],
+            ["A4", "Plafond paramétrable (défaut 12), appliqué AVANT tout lancement ; le cap est réel, pas un simple compteur après coup.", "À 12 on lance 12 ; la 13e est refusée avant spawn, avant qu'aucun process n'existe — donc sans process créé —, pas par un compteur de façade."],
+            ["A5", "Chaque module (mcp, gw, focus, mémoire, session, track…) est montable seul et désactivable ; selon la modularité D1=B, cluster-mesh n'est jamais un runtime obligatoire.", "On désactive cluster-mesh → h2a tourne quand même en mode standalone (mode dégradé par session), sans import cluster-mesh ; on monte un module seul → il fonctionne isolé."]
+          ]
+        },
+        {
+          "title": "D3 split appliqué aux gates",
+          "columns": ["Concern", "Owner", "Gate"],
+          "rows": [
+            ["Runtime / transport / lifecycle / PTY", "Sentropic / cluster-mesh intégré", "A1–A4"],
+            ["Collaboration / tool authz / bridge stdio", "h2a", "A1, A2, A5"],
+            ["Mémoire / ranking / projections", "Graphify", "D8 et gates de persistance"]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D18",
+      "title": "Context Projection : placement et points d’intégration",
+      "context": "DÉCIDÉ · intégrer Context Projection dans la v2, avec un nom et une implémentation indépendants. rtk est la source majeure d’inspiration, élargie aux outils comparables. DESIGN · le corpus décrit un port injecté dans le moteur de session sur des segments post-policy/redaction/scan ; le package, son placement et les options ci-dessous sont des propositions, source-gap comme ratifications historiques ou runtime existant.",
+      "question": "Comment placer Context Projection et ses ports dans la composition cluster-mesh ?",
+      "source": "Directive owner du lancement r14 ; cm-v2-hcond-h2a-review-astra-20260905.md G1/G2/G5/G6 et annexe G2/G6, étude de reproduction §§1.2–1.3, 3–4, 7–8 ; cm-v2-fable-review-20260905.md F3/F5/F7/F10. Références d’étude rapportées par les revues ; aucun upstream nouvellement qualifié ici.",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · un module autonome Context Projection, composé une seule fois par cluster-mesh et injecté via des ports neutres dans la boucle. Le nom de package packages/context-projection reste proposé. Le module possède codecs et composition ; Graphify conserve ses responsabilités D8, et la sécurité possède l’admission et l’autorisation. Cette préférence est un jugement d’architecture, sans gain comparatif mesuré.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Module autonome injecté", "consequence": "Créer un module Context Projection indépendant, exposant des ports de proposition, projection de résultat et composition avant requête ; cluster-mesh fournit l’unique instance applicative.", "strengths": "Contrat réutilisable hors application et codecs testables seuls, conformément à D1=B.", "openPoints": "Coût : nouveau contrat public et gestion des versions. Repli : sélectionner P0 admis par le même port ; aucun contournement de sécurité." },
+        { "key": "B", "title": "Module de la bibliothèque de session", "consequence": "Implémenter les mêmes ports neutres dans la bibliothèque de session autonome, instanciée une fois par cluster-mesh pour tous les workflows.", "strengths": "Réutilise le cycle de vie du moteur de session et réduit la coordination de versions de packages.", "openPoints": "Coût : couplage des livraisons session/projection. Une extraction ultérieure doit préserver le contrat, les oracles et les références ; le provider n’importe jamais cluster-mesh." }
+      ],
+      "sections": [
+        {
+          "title": "Séquence proposée et deux contrôles distincts — DESIGN-ONLY",
+          "columns": ["Étape", "Contrat", "Échec / limite"],
+          "rows": [
+            ["S1 · proposition structurée", "Autorisation initiale de l’appel original, puis producer projection (PP) optionnelle sur une révision immuable avec preuve de sous-périmètre. PP est distincte de L0/L1.", "Sans preuve adapter/oracle, conserver l’appel original autorisé ; ne jamais exécuter une proposition plus large."],
+            ["Avant exécution", "Ré-autorisation de l’appel projeté exact par le PDP d’effet, puis consommation au PEP AVANT exécution. Ce contrôle est distinct de l’autorisation initiale S1.", "deny ou indeterminate bloque avec raison typée ; aucune exécution avant cette décision, aucun retour à un appel non autorisé."],
+            ["S2 · résultat admis", "Policy, redaction et scan précèdent P0/L0/L1. P0 est la représentation de référence admise ; L0 est exact ; L1 doit être récupérable selon un oracle consommateur sur la même révision.", "L2 génératif est exclu de Context Projection. Une projection inutilisable retourne à P0 seulement si P0 est encore admis."],
+            ["S3 · composition et envoi", "Au sérialiseur réel du provider, envoyer Q1 uniquement si tokens(Q1) < tokens(Q0) ET si toutes les références L1 sont revalidées et épinglées sous la politique courante. Q0 est la requête de référence composée à partir de P0 admis.", "Sinon retourner à Q0/P0 encore admis, avec raison projection-expanded ou référence périmée. Un refus de sécurité bloque ; il ne déclenche jamais un repli qui contourne la politique."],
+            ["Exactitude", "Le déterminisme couvre les codecs et la composition P0/L0/L1 ainsi que les sélecteurs PP sur une révision immuable.", "DeliveryEnvelope est hors déterminisme : verdicts policy/redaction/scan, révocation, époque de politique, expiration, pins et permissions de livraison portent des valeurs non déterministes."]
+          ]
+        },
+        {
+          "title": "Inspirations comparées — principes, pas dépendances ratifiées",
+          "columns": ["Source", "Principe retenu / comparaison", "Limite de preuve"],
+          "rows": [
+            ["rtk · inspiration majeure", "Proxy de commandes via Bash hook : hook → commande réécrite → exécution → filtrage ; sortie inchangée si aucune réécriture. SQLite porte les statistiques du proxy.", "README et tracking.rs:1657 rapportés par h2a ; upstream non relu ici. bytes/4 est une estimation ; jusqu’à 90% est un claim unverified, pas un gain global de tâche."],
+            ["Aider", "Comparer la sélection de contexte et la cartographie du dépôt pour des consommateurs structurés.", "Comparateur, pas une implémentation à copier ; équivalence exacte et version à qualifier, unverified ici."],
+            ["LLMLingua", "Comparer les méthodes de réduction de prompt et leurs pertes possibles.", "Ne prouve ni exactitude L0 ni récupérabilité L1 ; méthodes génératives/pertes hors contrat à exclure ou qualifier séparément."],
+            ["LangChain / LangGraph", "Comparer composition, état et transformations aux points d’entrée du workflow.", "Ne remplace ni la boucle unique cluster-mesh ni l’autorité d’effet ; capacités exactes unverified ici."],
+            ["Provider context editing", "Comparer l’édition de contexte côté fournisseur avec les transformations locales au sérialiseur.", "Dépend du provider ; mesurer le wire réel. Aucun gain ni contrôle portable de sécurité déduit de cette seule fonction."]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D19",
+      "title": "Admission du contexte : stockage et revalidation",
+      "context": "DÉCIDÉ · Context Projection consomme uniquement du contenu admis. DESIGN · l’admission de sécurité est extérieure au runtime agent contraint et aux codecs. packages/llm-gateway/src/redaction.ts:1 protège les logs/traces d’authentification ; ce fichier ne démontre pas une chaîne complète d’admission de contenu, ni son absence ailleurs. La couverture globale reste source-gap à inventorier.",
+      "question": "Comment persister et relire les segments admis sans créer une seconde autorité de contenu ?",
+      "source": "Directive owner r14 ; h2a/Astra G2/G6, build §5.2 autorisant la réutilisation du journal ; Fable 5.1, V2-02 et vérification de redaction.ts:1. D8 conserve l’ownership Graphify ; D4/D17 conservent les obligations de persistance et de rollback.",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · réutiliser un journal existant derrière un port d’admission possédé par la sécurité, après preuve de ses contrôles, de sa rétention et de son isolation. Références opaques, révisions immuables et revalidation à chaque lecture restent obligatoires. Réutilisation et économie de stockage sont des hypothèses à vérifier, pas un bénéfice acquis.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Journal existant derrière le port d’admission", "consequence": "Adapter un journal qualifié aux segments admis et à leurs références ; la sécurité garde un seul verdict et Graphify son ownership de mémoire.", "strengths": "Peut réutiliser rétention, audit et sauvegarde sans imposer un nouveau store.", "openPoints": "Coût : démontrer l’isolation et les règles de relecture du store existant. Si elles manquent, un autre adapter peut remplacer le stockage sans changer le contrat d’admission." },
+        { "key": "B", "title": "Store de contenu admis dédié", "consequence": "Fournir un adapter dédié à des révisions admises derrière le même port de sécurité ; Graphify ne reçoit que les références autorisées et garde ses fonctions D8.", "strengths": "Cycle de rétention et effacement explicitement séparés de la mémoire de travail.", "openPoints": "Coût : exploitation et migration supplémentaires ; risque de duplication de stockage à évaluer. Aucun double auteur ni deuxième migration v2 hors budget D23 ; retour au journal par adapter et backfill vérifié." }
+      ],
+      "sections": [
+        {
+          "title": "Contrat d’admission commun aux deux options — DESIGN-ONLY",
+          "columns": ["Frontière", "Règle", "Preuve attendue"],
+          "rows": [
+            ["Entrée", "Policy → redaction → scan → persistance de segments admis ; jamais de contenu brut contournant ce chemin.", "Tracer identité, tenant/workspace, révision et verdict ; inventaire de couverture marqué partial ou source-gap tant que non établi."],
+            ["Lecture / replay", "Réévaluer droits, révocation, époque de politique et expiration à chaque lecture ; aucune référence opaque n’est une permission permanente.", "Refus explicite si contenu expiré ou révoqué ; purge/retention et audit sans secret brut."],
+            ["Envoi L1", "Oracle consommateur sur la même révision, revalidation et pin avant sérialisation/envoi ; livraison liée au verdict courant.", "Un changement de politique invalide l’envoi. Si Q0/P0 est également interdit, bloquer au lieu de replier."],
+            ["Autorité", "Context Projection transforme ; la sécurité admet ; cluster-mesh transporte les références et preuves signées sans émettre d’autorité.", "deny/indeterminate reste bloquant dans chaque adapter, y compris hors terminal et pendant la reprise."]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D20",
+      "title": "Boucle agentique universelle : composition et ownership",
+      "context": "DÉCIDÉ · l’application repose complètement sur cluster-mesh pour TOUS ses workflows agentiques, dans tous les cas, avec une seule composition de boucle. Cela ne transforme pas cluster-mesh en dépendance des providers : D1=B et le standalone h2a/D17-A5 restent intacts. Les options portent sur le port de la boucle et sa composition, jamais sur une exception applicative.",
+      "question": "Comment composer une seule boucle cluster-mesh commune à toutes les entrées agentiques de l’application ?",
+      "source": "Directive owner r14 ; intérêt transverse r13 workflows agentiques et wrapping CLI/PTY ; Fable 5.1 V2-03 et F2 ; vérification locale packages/llm-gateway/src/route-flow-core.ts:3–4,35,74 (prepareRouteFlow appelle RoutePlanner.plan).",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · cluster-mesh compose un port de boucle commun injecté dans chaque router applicatif, avec adapters de domaine. Les providers autonomes reçoivent des contrats neutres et n’importent pas cluster-mesh. Le même pipeline couvre modèle, outils, admission, effets et reçus ; aucune seconde boucle applicative cachée dans chat, workflow, MCP ou CLI.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Port de boucle injecté dans les routers", "consequence": "Composer la boucle une fois au montage Hono, puis injecter le même port dans tous les routers de l’application ; les adapters de domaine fournissent les opérations.", "strengths": "Trajet court et composition explicite ; les bibliothèques restent testables seules avec un port injecté.", "openPoints": "Coût : remplacer chaque boucle applicative existante par l’adapter commun et inventorier les chemins de reprise. Repli vers l’implémentation précédente de la boucle commune, sans dédoubler l’ownership." },
+        { "key": "B", "title": "Dispatcher de runs commun dans le runtime", "consequence": "Tous les routers soumettent un run typé à un dispatcher cluster-mesh unique, qui utilise la même boucle et les mêmes adapters dans le runtime intégré.", "strengths": "Traçabilité et scheduling centralisés pour les entrées synchrones et asynchrones.", "openPoints": "Coût : corrélation, attente et gestion de file même pour les appels courts. Dispatcher intégré, aucun daemon externe ; les providers restent autonomes derrière les mêmes ports." }
+      ],
+      "sections": [
+        {
+          "title": "Couverture obligatoire de l’application — cible v2",
+          "columns": ["Entrée", "Passage commun", "Critère de couverture"],
+          "rows": [
+            ["Chat interactif", "Adapter chat → boucle composée cluster-mesh", "Même run/corrélation, reprise et refus que les autres entrées ; aucune boucle locale bis."],
+            ["Tools / appels d’agents", "Adapter d’outil → boucle commune → PDP/PEP", "Appels imbriqués rattachés au run et contrôlés avant effet ; aucun accès direct non médié."],
+            ["MCP / collaboration h2a", "Router autonome et adapter consommateur → boucle commune dans l’application", "Singleton logique par génération de D15 ; sémantique collaboration et tool authz h2a préservées."],
+            ["CLI / PTY", "Wrapper → contexte de run commun → actionneur PTY", "Enrôlement et possession avant mutation ; tmux ne remplace pas la voie privilégiée D16."],
+            ["Workflows en file / arrière-plan", "Scheduler → même boucle → adapter worker", "Retry/reprise/cancel suivent génération et capacité, sans boucle privée du scheduler."],
+            ["Workflows sans terminal", "Worker, callback ou service typé → même boucle", "Aucun terminal artificiel, aucun identifiant PTY requis ; admission et reçus communs selon D21."],
+            ["Autres cas présents ou futurs", "Toute nouvelle entrée agentique doit composer ce même port", "Inventaire exhaustif des appels de modèle/outils et des reprises avant cutover ; absence d’un cas = couverture partial, jamais exemption."]
+          ]
+        },
+        {
+          "title": "Direction du routage et limite de preuve",
+          "columns": ["Sujet", "Fait / cible", "Responsabilité"],
+          "rows": [
+            ["Planner provider · CURRENT", "gateway → llm-mesh : prepareRouteFlow appelle deps.routePlanner.plan à route-flow-core.ts:74 ; le planner n’appelle pas le gateway dans ce chemin.", "La boucle cible appelle /gw ; /gw planifie via @sentropic/llm-mesh. Cluster-mesh désigne ici la composition et le transport de contrôle, pas le planner llm-mesh."],
+            ["Contexte et wire · DESIGN", "Context Projection possède réduction/composition ; llm-gateway garde traduction wire et sérialisation provider.", "Vérifier tokens(Q1) < tokens(Q0) au sérialiseur réel ; ne pas attribuer la compression au gateway."],
+            ["Maturité", "packages/cluster-mesh/src/mesh.ts:20 est single-node sur main ; boucle universelle v2 et contrôle sans terminal restent DESIGN-ONLY, source-gap runtime.", "Les contrats du worktree v1 non fusionné ne sont pas une preuve de couverture de toutes les entrées sur main."]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D21",
+      "title": "Exécution sans terminal : registre, capacité et reçus",
+      "context": "DÉCIDÉ · le contexte d’exécution des workflows sans CLI appartient aussi au mesh. DESIGN · un run sans terminal doit être enregistré, actionné et observé avec identité, génération, capacité et lease, sans fabriquer un terminal. RegistrationGate et transported|verified|acted existent uniquement dans le worktree v1 non fusionné ; leur présence sur main et leur extension aux workers sont source-gap. D16 reste la référence PTY et cap configurable, défaut 12.",
+      "question": "Comment inscrire et comptabiliser les runs sans terminal dans le lifecycle commun du mesh ?",
+      "source": "Directive owner r14 sur le contexte non-CLI ; h2a/Astra G4 ; Fable 5.1 V2-04 et F9. Preuves v1 rapportées : tmp/feat-cluster-mesh-central-control-plane/packages/cluster-mesh/src/runtime/registration.ts:77 et runtime/receipts.ts:17–62 ; absentes du runtime main mesh.ts:20.",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · un registre de runs logique commun, avec type d’actionneur terminal/worker/callback et un budget de capacité partagé. Réserver avant dispatch, clôturer sur preuve ou signaler LOST, et appliquer génération/fence à chaque commande. Un lease de contrôle n’est jamais une autorisation d’effet ; les mutations terminal restent bornées selon D16/D22.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Registre et budget communs à tous les runs", "consequence": "Chaque run logique réserve une place avant activation, terminal ou non ; les adapters partagent le cap K configurable, défaut 12, sans recompter un terminal attaché au même run.", "strengths": "Une seule limite d’admission et une vue cohérente des générations, reprises et présences LOST.", "openPoints": "Coût : définir la durée d’occupation pour les workflows longs et l’équité worker/PTY. Le passage d’un type à l’autre doit transférer la réservation sans créer une seconde place." },
+        { "key": "B", "title": "Registre commun avec sous-budgets par actionneur", "consequence": "Conserver le même registre et le plafond global K, puis répartir des quotas explicites entre PTY, workers et callbacks ; leur somme ne dépasse pas K, défaut 12.", "strengths": "Protège la capacité interactive contre une file de travaux de fond.", "openPoints": "Coût : arbitrage et risque de capacité réservée inutilisée ; reconfiguration atomique des quotas sous le même fence. Revenir au budget unique conserve les identités et reçus." }
+      ],
+      "sections": [
+        {
+          "title": "Contrat de run transverse — DESIGN-ONLY, qualification par adapter",
+          "columns": ["Phase", "Invariant", "Évidence ou refus"],
+          "rows": [
+            ["Registration", "Lier run, principal/NHI, tenant/workspace, actionneur et génération ; terminalRef est optionnel et absent pour un worker pur.", "Sans inscription vérifiée, refus avant activation ; aucune présence rattachée sur simple revendication."],
+            ["Admission de capacité", "Réserver avant spawn ou dispatch ; un retry réutilise son identité logique et ne crée pas une seconde exécution concurrente.", "Cap atteint : raison stable et zéro lancement. Le 13e run au cap 12 ne part pas ; la règle PTY D16 reste intacte."],
+            ["Actuation", "Adapter typé worker/callback/service pour start, pause, cancel, resume ; identité, génération et lease vérifiés. Aucun recours obligatoire à CLI, PTY ou tmux.", "Toute action couverte par l’autorité d’effet repasse au PDP/PEP D22, y compris un contrôle de run qui déclenche un effet."],
+            ["Lease et reprise", "Lease borné de scheduling/contrôle, expiration et fence de génération ; une génération périmée ne peut plus actionner le run.", "Après perte du worker, LOST ou résultat inconnu explicite ; re-dispatch seulement après réconciliation, jamais sur un accusé de transport seul."],
+            ["Reçus", "Séparer transported, verified et acted ; l’adapter produit une preuve d’action corrélée au run et à la commande, pas une simple preuve de livraison.", "Un reçu de début d’effet prouve une tentative autorisée, pas sa réussite. Completion, échec et inconnu sont distincts ; contrat v2 proposé, qualification runtime source-gap."],
+            ["Acceptation transverse", "Exécuter les mêmes cas de saturation, révocation, génération périmée, perte et reprise pour PTY et non-terminal.", "Pas de couverture universelle déclarée avant preuves par famille D20 ; mesure de performance séparée de la décision d’intégrer."]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D22",
+      "title": "Autorité d’effet : frontière PDP/PEP et preuves signées",
+      "context": "DÉCIDÉ · reprendre le principe GREYWALL d’autorité indépendante et de refus fermé, élargi aux mécanismes comparables ; ne copier ni son code ni son implémentation exacte. DESIGN-ONLY · le mesh transporte des reçus signés et n’émet JAMAIS d’autorité. Le PDP de mandat h2a atteste allow/deny/indeterminate ; seul le PDP/kernel Sentropic peut émettre l’autorisation d’effet. Aucun déploiement qualifié n’est affirmé ici.",
+      "question": "Comment raccorder le PDP Sentropic aux PEP des actionneurs en conservant une seule autorité d’effet ?",
+      "source": "Directive owner r14 ; h2a/Astra G4/G5 et annexe GREYWALL §§2.1,2.4,3.1,7.2 ; Fable 5.1 V2-05, F4/F6. Les anciennes cibles suspendues GREYWALL §12.2 sont une autre arbitration et ne ratifient aucune option ci-dessous.",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · un port PDP de sécurité commun et des PEP spécifiques à chaque actionneur, extérieurs au runtime agent contraint. Vérifier le mandat signé puis ré-autoriser l’appel projeté exact AVANT exécution. Le PEP consomme durablement l’autorisation et inscrit le début de tentative avant dispatch. Ce choix simplifie la cohérence de politique ; cette appréciation n’est pas une preuve de production.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Port PDP commun, PEP par actionneur", "consequence": "La sécurité expose une décision signée uniforme ; chaque adapter qualifie son PEP local pour consommer l’autorisation avant l’effet exact.", "strengths": "Une politique et des raisons de refus communes, avec enforcement au plus près de la ressource.", "openPoints": "Coût : latence, disponibilité et durabilité de la consommation. Une indisponibilité bloque ; changer de provider PDP ne doit jamais ouvrir un chemin direct." },
+        { "key": "B", "title": "Service de sécurité regroupant PDP et adapters PEP", "consequence": "Un service possédé par la sécurité combine évaluation et dispatch via des adapters qualifiés, tout en restant indépendant de la boucle agent et de cluster-mesh.", "strengths": "Réduit la distribution du protocole décision/consommation et centralise la qualification des adapters.", "openPoints": "Coût : frontière réseau, exploitation et concentration de charge. Ce service n’est pas un daemon de contrôle mesh ; revenir aux PEP distribués doit conserver les mêmes reçus, révocations et fences." }
+      ],
+      "sections": [
+        {
+          "title": "Chaîne d’autorité proposée — DESIGN-ONLY, jamais un runtime qualifié",
+          "columns": ["Acteur", "Droit et ordre", "Interdiction / arrêt"],
+          "rows": [
+            ["PDP de mandat h2a", "Émet un reçu signé allow/deny/indeterminate sur le mandat.", "Ce reçu n’est pas une autorisation d’effet ; deny ou indeterminate bloque la chaîne."],
+            ["PDP/kernel Sentropic", "Vérifie identité, délégation, capacité, posture et fence ; seul émetteur de l’autorisation liée à l’appel effectif exact, à la ressource, à la génération et à son expiration.", "Deux contrôles distincts : autorisation initiale, puis ré-autorisation après PP AVANT exécution. Aucune extension implicite de scope."],
+            ["PEP cible", "Vérifie la décision courante, consomme durablement l’autorisation et écrit un reçu de début avant dispatch de l’appel exact.", "Refus, indeterminate, expiration ou rejeu non admissible : zéro effet. Le reçu de début ne prouve ni completion ni succès."],
+            ["Transport cluster-mesh", "Transporte les reçus signés et références avec leur intégrité ; corrèle transport, vérification et preuve d’action.", "N’émet jamais d’autorité, ne transforme ni transport ni lease en allow. Un contrôleur ne peut pas se donner une autorisation d’effet."],
+            ["Lease de contrôleur", "Autorise uniquement des mutations terminal bornées, sous identité, possession, génération et périmètre vérifiés.", "Ne couvre jamais les actions relevant de l’autorisation d’effet ; des commandes arbitraires via terminal ne deviennent pas autorisées par le lease."],
+            ["Cross-domain EXECUTE", "Refusé par défaut en v2, not-armed : refus typé non nul, zéro effet. Un grant explicite seul n’arme pas le protocole.", "Armer exige une évolution séparément ratifiée, des grants distincts et l’enforcement qualifié des deux côtés ; aucune option A/B de cette carte ne l’active."]
+          ]
+        },
+        {
+          "title": "Comparateurs d’autorité — aucun outil ratifié comme dépendance",
+          "columns": ["Approche", "Principe comparable", "Frontière à qualifier"],
+          "rows": [
+            ["GREYWALL", "Indépendance de l’autorité et refus fermé ; copier le principe.", "Contrats DESIGN-ONLY ; aucun code ni production démontrés par cette comparaison."],
+            ["OPA / Cedar", "Évaluation de politiques et séparation de la décision et de l’enforcement.", "La bibliothèque de politique seule ne garantit ni identité, ni consommation, ni PEP ; intégration et version unverified."],
+            ["PDP / PEP, dont XACML", "Mandat, décision d’effet et enforcement sont des responsabilités distinctes.", "Chaque adapter doit refuser deny/indeterminate et prouver la frontière avant effet."],
+            ["gVisor / Landlock / Capsicum", "Isolation et confinement complètent les limites des actionneurs.", "Un sandbox n’émet pas un mandat ni une autorisation métier ; couverture dépendante de la plateforme, unverified ici."]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D23",
+      "title": "Migration v1 → v2 : coexistence et rollback",
+      "context": "DÉCIDÉ · intégrer la v2 en conservant la v1 et son histoire. Le seul fichier de migration v1 est 0007_cluster_mesh_r13.sql dans le worktree v1 non fusionné ; il est immuable. Au maximum UNE migration v2 distincte, séparément ratifiée, pourra être ajoutée. Le présent HOW ne ratifie ni SQL ni numéro futur ; aucun fichier de migration n’est créé par ce dossier.",
+      "question": "Comment organiser la coexistence et le cutover v2 avec un rollback prouvé et au plus une migration séparée ?",
+      "source": "Directive owner r14 ; D4/D11/D17-C1 conservées ; Fable 5.1 V2-06 et contrôle de api/drizzle/control/0007_cluster_mesh_r13.sql dans tmp/feat-cluster-mesh-central-control-plane, SHA-256 248ce19dc427a43a34ecd0f2b1aee8fdca1be948e9ea647b7a16a83bd64068e0 rapporté par la revue.",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · compatibilité de lecture et shadow sans effet, puis cutover par domaine sous un fence garantissant un seul auteur. Geler 0007_cluster_mesh_r13.sql ; rassembler tous les besoins nouveaux dans au plus une migration v2 séparément ratifiée. Retour vers l’auteur v1 après drain, réconciliation et vérification de compatibilité, sans supprimer l’audit v2.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Lecture compatible, shadow puis cutover borné", "consequence": "Préparer schéma/backfill/rollback, comparer les lectures sans effet, puis transférer l’écriture domaine par domaine. Une seule génération écrit dans chaque domaine.", "strengths": "Réduit l’interruption et permet une comparaison observable avant chaque bascule.", "openPoints": "Coût : adapters temporaires et contrôle de compatibilité. Retour v1 uniquement après drain et réconciliation ; si une donnée n’est pas représentable en v1, le cutover est bloqué jusqu’à preuve du rollback." },
+        { "key": "B", "title": "Fenêtre de maintenance avec drain global", "consequence": "Suspendre les admissions, drainer les runs, sauvegarder, appliquer l’unique migration v2 ratifiée si nécessaire, puis démarrer une seule génération d’auteurs v2.", "strengths": "Réduit la durée de coexistence et le nombre de chemins compatibles temporaires.", "openPoints": "Coût : indisponibilité planifiée. Avant réouverture, retour par sauvegarde ; après nouveaux writes v2, retour seulement avec réconciliation et compatibilité prouvées, jamais par restauration aveugle." }
+      ],
+      "sections": [
+        {
+          "title": "Budget de migration et règles de retour",
+          "columns": ["Objet", "Invariant", "Preuve préalable"],
+          "rows": [
+            ["v1 gelée", "Ne jamais modifier, renuméroter ou compléter 0007_cluster_mesh_r13.sql ; ne jamais ajouter une seconde migration à v1.", "Comparer son SHA-256 au baseline avant tout travail d’implémentation et après qualification ; fichier non touché par ce kit."],
+            ["v2 distincte", "Zéro nouvelle migration si le schéma suffit, sinon au plus UNE migration séparément ratifiée ; aucun nom numérique spéculatif ici.", "Faire approuver le SQL concret avec schéma, backfill et rollback. Un besoin supplémentaire rouvre ce budget pour décision explicite, pas de deuxième fichier glissé en cours de réalisation."],
+            ["Coexistence", "Shadow en lecture uniquement, aucun effet doublé, un seul auteur par domaine ; génération, outbox et reçus conservés.", "Comparer les résultats puis transférer les fences ; empêcher retries et anciennes générations d’écrire après bascule."],
+            ["Retour applicatif", "Arrêter les nouvelles admissions v2, drainer ou réconcilier les runs, vérifier la lecture v1 puis transférer le fence à l’auteur précédent.", "Exercer une panne et un rollback avec données post-cutover ; conserver les reçus et effets déjà actés. Un échec de compatibilité interdit de promettre un retour immédiat."],
+            ["Clôture", "Supprimer les chemins temporaires après acceptation, sans effacer la lignée r13 ni l’audit de migration.", "D17 reste conductor-enforced ; la mesure des gains D24 valide le comportement mais ne redécide pas l’intégration."]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D24",
+      "title": "Mesure : validation et attribution des gains",
+      "context": "DÉCIDÉ par la directive owner actuelle · la mesure valide l’intégration, elle n’est pas un gate pour décider de la faire. Le corpus antérieur demandait un gain net positif avant admission L1 ; cette condition de GO est explicitement supersédée par cette directive, pas présentée comme consensus historique. Sécurité, exactitude et sélection locale Q1 restent obligatoires. G0/G1 est un baseline partial ; le pilote historique a produit zéro occurrence admissible sous son instrument exigeant. Aucun gain calculé ; 8-25% et 9-27% sont des priors, pas des mesures.",
+      "question": "Comment instrumenter la v2 pour valider chaque tour et attribuer les effets sans transformer un gain attendu en condition d’intégration ?",
+      "source": "Directive owner r14, mesure = validation ; h2a/Astra G3/G6 et annexe docs/specs/2026-08-15-RTK-pilot-result.md, méthode de mesure §§8,18 ; Fable 5.1 V2-07, F3/F8. Mesures historiques rapportées par les revues, aucune nouvelle exécution de pilote ici.",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · journal par tour admis au niveau du sérialiseur réel, corrélé à l’usage provider, aux appels projetés et aux preuves de récupération. Publier les dénominateurs applied/skipped/ineligible/blocked et les coûts annexes. Envoyer Q1 seulement si tokens(Q1) < tokens(Q0) et références L1 revalidées/pinnées ; sinon Q0/P0 admis. Aucun objectif agrégé positif n’est un gate d’intégration.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Journal minimal sur tous les tours admis", "consequence": "Collecter pour chaque tour admis les totaux d’usage observés, le serializer, la révision, le statut de projection et la corrélation ; réserver les détails de contenu au stockage admis.", "strengths": "Dénominateurs complets et attribution directe, y compris les retours P0 et les tours inéligibles.", "openPoints": "Coût : volume et latence d’instrumentation à mesurer. Rétention bornée et références opaques ; données manquantes signalées partial, sans gain extrapolé." },
+        { "key": "B", "title": "Totaux universels et cohortes détaillées", "consequence": "Garder les totaux et statuts par tour pour toute l’application ; échantillonner les preuves détaillées de récupération et comparaisons contrefactuelles dans des cohortes déclarées.", "strengths": "Réduit le coût de diagnostic détaillé tout en conservant les dénominateurs globaux.", "openPoints": "Coût : choix et biais des cohortes ; aucune généralisation au-delà de la couverture publiée. Étendre une cohorte améliore la validation, sans rouvrir le GO v2." }
+      ],
+      "sections": [
+        {
+          "title": "Lecture des résultats et conditions locales",
+          "columns": ["Mesure", "Règle", "Interprétation autorisée"],
+          "rows": [
+            ["Instrument", "Tracer clé serveur, wire bytes, preuve du sérialiseur, modèle/révision et usage réel par tour admis.", "Usage provider observé et tokenisation locale sont distingués ; bytes/4 ou un pourcentage marketing ne remplacent pas les compteurs provider."],
+            ["Sélection locale", "Q1 uniquement si tokens(Q1) < tokens(Q0) au vrai serializer ET L1 revalidé/pinné ; sinon Q0/P0 encore admis, raison explicite.", "Une expansion locale écarte le candidat projeté ; un refus de sécurité bloque. Cette règle ne mesure pas un gain net global et ne remet pas en question l’intégration."],
+            ["Attribution", "Séparer PP, L0, L1, récupération, retries, cache, latence et coûts d’admission.", "Totaux par tour exacts quand observés ; gains contrefactuels seulement bornés, avec hypothèses et même révision/oracle consommateur."],
+            ["Dénominateurs", "Publier applied, skipped, ineligible et blocked, ainsi que manquants, erreurs et étendue des cohortes.", "Zéro occurrence admissible ne signifie pas zéro coût ni un gain démontré ; résultat N-A ou partial selon la couverture."],
+            ["État actuel", "8-25% / 9-27% = priors ; jusqu’à 90% = claim upstream unverified ; aucun gain calculé.", "Pas de gain agrégé, seuil positif ou taux de flotte imposé comme gate d’intégration. Les obligations de sécurité et de correction restent bloquantes."]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "D25",
+      "title": "Lignée r13 → r14 : archivage et provenance",
+      "context": "DÉCIDÉ · compléter le vrai dossier sans reconstruire son histoire : D1–D17, choix, remarques round-stamped, réponses, options, recommandations, sections et diagrammes sont conservés byte pour byte. Les clés D18–D25 sont nouvelles. La méthode d’archivage reste un HOW ; les remarques conductor-normalized ne deviennent pas du verbatim owner par copie. Les études Focus précurseurs et les rounds shared-core ont des lignées distinctes même lorsqu’ils réutilisent un identifiant D.",
+      "question": "Comment archiver la continuation et ses preuves tout en conservant la lignée et les limites de provenance r13 ?",
+      "source": "Directive owner r14 de préservation absolue et d’archivage ; convergence r13 et D17-C4/C5 inchangées ; cm-v2-hcond-h2a-review-astra-20260905.md (h2a /archi, GPT-6-Astra) et cm-v2-fable-review-20260905.md (Fable 5.1), corrections F1/F9 et remarques de lignée. Les empreintes ci-dessous ont été lues/calculées sur ces fichiers de review.",
+      "ownerChoice": null,
+      "decisionStatus": "proposed-how",
+      "statusLabel": "v2 · HOW à choisir · DESIGN-ONLY",
+      "recommended": "A",
+      "recommendation": "PROPOSITION A · conserver un snapshot r13 immuable et publier chaque continuation avec son manifeste de sources et son export de réponses lié à la révision. Comparer mécaniquement le bloc D1–D17 avant publication. La capture brute manquante reste source-gap ; aucun contenu ni choix n’est reconstitué à partir d’un identifiant seul.",
+      "ownerRemarks": [],
+      "response": [],
+      "diagram": null,
+      "options": [
+        { "key": "A", "title": "Snapshots par révision et manifeste de sources", "consequence": "Archiver r13 et r14 séparément avec empreintes, sources et réponses ; garder D1–D17 dans chaque dossier consultable pour une lecture autonome.", "strengths": "Comparaison directe et archive portable complète, sans dépendre d’un service de reconstruction.", "openPoints": "Coût : duplication contrôlée de snapshots et règles de rétention. Le manifeste doit distinguer contenu du kit, preuves runtime et références absentes ; aucun snapshot ne vaut ratification." },
+        { "key": "B", "title": "Snapshot r13 et registre append-only de continuations", "consequence": "Garder le baseline r13 et enregistrer les ajouts/réponses comme événements liés à la révision, tout en produisant un dossier HTML complet à chaque publication.", "strengths": "Provenance fine des changements et moins de copies de travail ; l’export demeure autonome.", "openPoints": "Coût : reconstruction déterministe et vérification des événements. Repli : exporter un snapshot complet ; ne pas prétendre avoir écrit dans Track ni signé une décision owner depuis ce prototype." }
+      ],
+      "sections": [
+        {
+          "title": "Sources de correction intégrées et limites de leur verdict",
+          "columns": ["Source", "Attribution / portée", "SHA-256"],
+          "rows": [
+            ["/home/antoinefa/src/sentropic/.tmp/engage/cm-v2-hcond-h2a-review-astra-20260905.md", "Reviewed by h2a (h-cond /archi, executed by GPT-6-Astra) — MAJOR CORRECTIONS — 2026-09-05. Études précurseurs : ordre d’autorisation, PP/L0/L1, source-gap runtime, mesure et direction du planner ; substance intégrée dans D18–D24.", "bf3adabaccfe76da774b0167ac340cd60bc15d8270636a047c799f6911742bb7"],
+            ["/home/antoinefa/src/sentropic/.tmp/engage/cm-v2-fable-review-20260905.md", "Fable 5.1 — MINOR CORRECTIONS — 2026-09-05. Revue du dossier v2 précurseur : attribution, token gate normatif, refus cross-domain, enveloppe non déterministe et direction gateway → llm-mesh. Aucun verdict d’exécution ou de revue de ce kit r14.", "dbaca5a78b59e1bec0914e09b5756047a31be30e9ea3f62808644a31c9588eec"],
+            ["dossier.json · baseline 2026-08-29-r13 avant édition", "Baseline local validé vert ; D1–D17 présents avec leur structure et historique exacts. Cette empreinte est celle du JSON r13 entier, pas celle du nouveau dossier.", "7e45fb1fb026e85f974ffaa79279745b6a0587af5ef7c9f55a58fb2747591fc3"],
+            ["Bloc brut D1–D17 · r13", "43 839 octets, du début de l’objet D1 à la fin de D17, séparateurs entre décisions inclus ; même bloc dans r14, avant les nouveaux objets.", "13367d51b7a0cd942b7a0c15a4da990c31bad5b426aaec8e3025302fe0a26c8b"]
+          ]
+        },
+        {
+          "title": "Fidélité et frontière documentaire",
+          "columns": ["Élément", "Ce qui reste vrai", "Ce qui n’est pas affirmé"],
+          "rows": [
+            ["D1–D17", "Objets originaux inchangés ; D17 reste conductor-enforced sans choix owner. Nouveaux HOW seulement après D17.", "Aucune réécriture de choix, aucune réponse créée au nom de l’owner, aucune fusion des décisions par simple clé D."],
+            ["r1–r13 / précurseurs", "L’historique r6–r9 référencé reste docs/specs/decisions/cluster-mesh-r8/dossier.json ; r9/r10 conserve la réserve conductor-normalized. Les sources antérieures sont citées avec famille, round et titre lorsqu’ils sont disponibles.", "Le kit ne fournit pas une capture owner brute complète r1–r13. Sources absentes = source-gap ; aucune nouvelle complétude déduite de la revue d’un autre dossier."],
+            ["Code v1 vs main", "main : mesh.ts single-node. Worktree v1 non fusionné : RegistrationGate, reçus transported|verified|acted et /session/control rapportés par les revues.", "Les preuves de cette branche ne valent ni merge sur main ni implémentation de la v2 ; autorité d’effet et extension non-terminal restent DESIGN-ONLY."],
+            ["Export interactif", "Choix et notes restent locaux, copiables avec révision et architectureHash ; un changement de révision a sa propre clé de stockage.", "Aucune signature owner, écriture Track ou réception par un agent n’est produite par le kit. Les nouveaux champs ownerRemarks/response restent vides."]
+          ]
+        }
+      ]
+    }
+  ]
+}
