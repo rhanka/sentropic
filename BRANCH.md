@@ -19,12 +19,14 @@
 - [ ] **Conditional Paths**
   - [ ] `Makefile` only under `BR38m-EX1` if no existing scoped lint gate can satisfy the owner-required package lint checks.
   - [ ] `docs/reviews/llm-mesh-gemini38-routing/**` only under `BR38m-EX2` for the mandatory harness review dossier.
+  - [ ] `api/tests/api/models.test.ts` and `api/tests/unit/llm-runtime-stream.test.ts` only under `BR38m-EX3` to keep API canonical catalog and stream fixtures complete for the newly advertised model.
 
 ## Feedback Loop
 - [x] `attention`: owner supplied the exact model, routes, versions, commit trailers, PR title/body ending, and no-merge boundary.
 - [x] `attention`: replace the stale prior-feature branch record before implementation.
 - [x] `BR38m-EX1 attention`: package-specific lint Make targets are absent on the base; add only the smallest Make-only lint entrypoints. Impact is package quality-gate wiring only; rollback is reverting those target hunks.
 - [x] `BR38m-EX2 attention`: the harness requires a repo-local review dossier, but exact author model/effort metadata is unavailable. Impact is one `selection-failed` process artifact with no peer legs; rollback is deleting that dossier.
+- [x] `BR38m-EX3 attention`: remote CI exposed two API canonical assertions that enumerate every advertised model. Impact is test-only coverage for Gemini 3.8 Flash; rollback is reverting those two assertion/fixture additions.
 
 ## AI Flaky tests
 - [ ] Accept none without same-commit success and explicit owner sign-off; never add timeouts or weaken assertions.
@@ -53,4 +55,5 @@
   - [x] Pass mesh typecheck, lint, and full test suite (26 files, 176 tests).
   - [x] Pass gateway typecheck, lint, and full test suite (16 files, 114 tests).
   - [x] Pass council freshness/test checks and route/version/diff inspections; run `make scope-check` before both atomic commits.
-  - [ ] Commit atomically with the owner-required trailers, push, create the PR, and verify CI status without merging.
+  - [x] Commit atomically with the owner-required trailers, push, and create the PR without merging.
+  - [ ] Add the two API canonical expectations exposed by remote CI, run their scoped gates, commit/push atomically, and verify final CI status.
