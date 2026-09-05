@@ -377,10 +377,12 @@ Qualification status is deliberately non-aggregate:
   zero provider effects.
 - A3 is **PASS**: missing CLI registration refused before parse/delegation, while one canonical CLI
   delegation persisted transported, verified/accepted and acted receipts with a real PTY effect.
-- A4 is **PASS against the durable store**: the default generation occupied 12/12 and rejected request
-  13 before spawn, while the configured generation occupied 3/3 and rejected request 4 before spawn.
-  `BR75-SG10` is closed by canonical `/session` admission through generation-fenced durable registrations;
-  a second adapter/store instance observes the admission and a missing generation refuses it.
+- A4 is **PASS in the qualification router against the durable store**: the default generation occupied
+  12/12 and rejected request 13 before spawn, while the configured generation occupied 3/3 and rejected
+  request 4 before spawn. Canonical `/session/control/*` still reserves through process-local
+  `createCapacityAdmission`; `BR75-SG10` remains open as a bounded residual while the API deployment is
+  `replicas: 1`. Durable device registration across adapter processes does not make canonical capacity
+  admission durable.
 - A5 is **PASS**: the inventory proves 29 unique module objects; group 10 runs six tests with zero
   failures, retries or skips and proves module disablement, canonical catalog/streams paths and
   duplicate-prefix 404.
@@ -423,7 +425,7 @@ inventory found only dead middleware/URL emission.
 
 1. Socle: neutral context, namespace contract, Hono plugin, integrated generation/runtime, capacity and registration contracts.
 2. Unique control migration, adapters and rollback proof before any application cutover.
-3. `/session` registration/capacity cutover closes the internally provable gates; the integrated live qualification closes A1, A2, A3 and durable-store A4, and `BR75-SG10` closes canonical `/session` admission through the same generation-fenced durable store.
+3. `/session` registration cutover closes the internally provable device-admission gates; the integrated live qualification closes A1, A2, A3 and durable-store A4 in the qualification router. `BR75-SG10` remains open for canonical `/session/control/*` process-local capacity, bounded while the API deployment is `replicas: 1`.
 4. Reusable factories: `/mcp`, `/oauth`, `/auth`, `/gw`, `/chat`, including the IdP root and A2/A3.
 5. TARGET reusable-package extractions: `/focus`, `/llm-mesh`, `/workflows`, `/comments`, `/connectors`.
 6. TARGET application/adapter extractions: the remaining namespaces, each under D11 and immediate legacy deletion.
