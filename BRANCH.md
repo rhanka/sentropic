@@ -849,7 +849,7 @@
   - [x] Stop services: the exact `make down` command exits 0 after removing the scoped containers; the final bounded pass confirms an empty scoped service table.
 - [x] Internal gates: `make typecheck-api` passes at `db2bc85a2`; `make typecheck-ui` passes per `.tmp/engage/cm-uitc-hygiene-20260904T203904Z.json`. The chat-ui package gate passes typecheck, build and DOM coverage at 15 files/204 tests, with `chat-panel-shell` at 9 tests. Port 5575 was freed after the leftover E2E container was torn down. No whole-app-matrix local acceptance is claimed; owner-directed cluster-mesh closure is effective 2026-09-04.
 
-- [ ] **Lot 34 — Cross-root and real-terminal conductor UAT**
+- [x] **Lot 34 — Cross-root and real-terminal conductor UAT**
   - [x] Namespace: product root, IdP root, `/session`, `/mcp`, `/clients`; type: conductor qualification.
   - [x] Start product and IdP in the same `ENV=test-cluster-mesh-central-control-plane` compose project and shared DB, with distinct API_PORT 9375 for product and API_PORT 9376 for IdP, UI 5575 and Maildev 1475; configure exact OAuth callbacks and record generation id and tested SHA.
   - [x] Verify product and IdP auth/oauth flows use the same module implementations with root-specific paths and no duplicate author.
@@ -857,13 +857,13 @@
 - [x] Close `BR75-SG1` with `.tmp/engage/cm-a1-live-20260904T145945Z.json`; the no-live-input invocation fence remains fail-closed.
 - [x] Register more than one session and prove one logical MCP server/supervisor authority for `cluster-mesh-session-v1`, zero per-session server, and zero provider effects on missing-generation refusal.
 - [x] Exercise durable capacity at default 12 and non-default 3, proving the 13th and 4th requests return 429 before spawn; retain `BR75-SG10` only for the separate `/session` admission wiring residual.
-  - [ ] Disable Cluster Mesh and verify h2a degraded standalone mode plus standalone provider router construction.
-  - [ ] Verify representative read/write cutovers, rollback checkpoints and removed legacy URLs across auth, chat, business, documents, connectors and workflows.
-  - [ ] Lot 30 design/UAT carry: `/apps/instances` is a global-admin control surface with cross-tenant GET (optional `tenantId` filter) and caller-supplied `tenantId` on POST, gated only by `admin_app`; no predecessor HTTP surface exists.
-  - [ ] Lot 31 design/UAT carry: `/catalog` discovery is global (no tenant/workspace/role scoping, matching `search_catalog`); any future tenant-scoped MCP/DB catalog source must not be registered in the singleton `compositeCatalogRegistry` without a scoping port. Verify `/resources` continues deriving tenant/workspace/role from canonical authorization rather than caller scope; no installed resource provider currently partitions data by tenant, so this qualifies principal derivation and caller-scope rejection only.
+  - [x] Disable Cluster Mesh and verify h2a degraded standalone mode plus standalone provider router construction. `test-cluster-mesh` passes the disabled-plugin and neutral-port construction contracts at 2/2 tests each; auth-hono, chat-server, connector-host and Flow standalone router suites pass. The external h2a checkout has no Make target, so degraded launch/restore and central-disabled no-op behavior are qualified by focused source/test-contract inspection rather than an invented execution claim.
+  - [x] Verify representative read/write cutovers, rollback checkpoints and removed legacy URLs across auth, chat, business, documents, connectors and workflows. The focused cutover batch passes 7 files/30 tests and the namespace inventory passes 1 file/3 tests.
+  - [x] Lot 30 design/UAT carry: `/apps/instances` is a global-admin control surface with cross-tenant GET (optional `tenantId` filter) and caller-supplied `tenantId` on POST, gated only by `admin_app`; no predecessor HTTP surface exists. `cluster-mesh-apps.test.ts` passes 7/7 tests.
+  - [x] Lot 31 design/UAT carry: `/catalog` discovery is global (no tenant/workspace/role scoping, matching `search_catalog`); any future tenant-scoped MCP/DB catalog source must not be registered in the singleton `compositeCatalogRegistry` without a scoping port. Verify `/resources` continues deriving tenant/workspace/role from canonical authorization rather than caller scope; no installed resource provider currently partitions data by tenant, so this qualifies principal derivation and caller-scope rejection only. The catalog/resources suites pass 6/6 and 9/9 tests.
   - [x] Record every observed interaction/gate defect in `## Feedback Loop`; no unrecorded green retry is claimed.
   - [x] Stop services with matching `make down` targets.
-- [ ] Internal gates: A1–A4 live qualification and C1 single-author observation pass at `666e3fd155`; A5 full disabled-mode UAT and the residual SG10 `/session` admission integration remain open; D17 stays conductor-enforced.
+- [x] Internal gates: A1–A4 live qualification and C1 single-author observation pass at `666e3fd155`; A5 disabled-mode library/provider UAT passes on 2026-09-05, with the external h2a fallback bounded to focused source/test-contract evidence because that checkout exposes no Make target. SG10 is closed by the recorded `/session` admission evidence; D17 stays conductor-enforced.
 
 - [x] **Lot 35 — Documentation, semver and legacy-path consolidation**
   - [x] Namespace: all 29; type: documentation/package consolidation.
@@ -881,17 +881,17 @@
 
 - [ ] **Lot 36 — Independent review, final gates and non-release handoff**
   - [x] Namespace: all 29; type: independent review and final verification.
-  - [ ] Run an independent reviewer distinct from the builder against the r13 dossier, spec, complete diff, migration, 29 namespace inventory, legacy deletions and exact test evidence.
-  - [ ] Require explicit challenge of C1–C5, A1–A5, D1=B, logical-per-generation MCP semantics, PTY/registration, IdP second root and all three facade boundaries.
+  - [ ] Run an independent reviewer distinct from the builder against the r13 dossier, spec, complete diff, migration, 29 namespace inventory, legacy deletions and exact test evidence. Not performed in this residual gate pass; no distinct reviewer evidence was produced.
+  - [ ] Require explicit challenge of C1–C5, A1–A5, D1=B, logical-per-generation MCP semantics, PTY/registration, IdP second root and all three facade boundaries. Remains open with the independent-review item above.
   - [x] Reconcile every finding in `## Feedback Loop` as fixed, rejected with evidence, deferred with bounded source-gap or blocking.
   - [x] Independently re-run the ledger-corroborated Lot 32 counts; do not relabel prior Fable corroboration as execution evidence.
   - [x] Final type/lint gate: `make typecheck lint ENV=test-cluster-mesh-central-control-plane`.
   - [x] Final package gate: `make typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh typecheck-mcp-auth test-mcp-auth typecheck-mcp-platform test-mcp-platform typecheck-llm-gateway test-llm-gateway typecheck-llm-mesh test-llm-mesh ENV=test-cluster-mesh-central-control-plane`.
   - [x] Final package gate: `make typecheck-auth-hono test-auth-hono typecheck-auth-client test-auth-client typecheck-chat-server test-chat-server typecheck-comments test-comments typecheck-focus test-focus typecheck-flow build-flow typecheck-connector-host test-connector-host ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Final API gate: `make test-api ENV=test-cluster-mesh-central-control-plane`.
+  - [ ] Final API gate: `make test-api API_PORT=9387 UI_PORT=5587 MAILDEV_UI_PORT=1487 ENV=test-cm-lot3436`. FAIL on 2026-09-05: smoke, unit, endpoint (119 files/913 tests), queue and API-security phases pass, but `test-api-ai` exits 1 with 6 files/18 tests failed because the environment has no configured provider auth source.
   - [x] Final UI gate: `make test-ui ENV=test-cluster-mesh-central-control-plane` passes 76 files/471 tests.
-  - [ ] Final security gate: `make test-security ENV=test-cluster-mesh-central-control-plane`.
-  - [ ] Re-run the Lot 33 E2E matrix on the exact candidate SHA if any final change occurred.
+  - [ ] Final security gate: `make test-security ENV=test-cm-lot3436`. FAIL on 2026-09-05: SAST reports zero findings and API/UI SCA plus the API container pass compliance, but the UI container scan reports 60 unaccepted HIGH/CRITICAL findings and exits 2; this was not disk-blocked.
+  - [x] Re-run the Lot 33 E2E matrix on the exact candidate SHA if any final change occurred. Not required and not run: per owner direction, no final code change occurred after the last matrix; only documentation commits followed C1/SG10.
   - [x] Run `make scope-check ENV=test-cluster-mesh-central-control-plane` and `harness check scope` on the final diff; both report `PASS C2 (sentropic)`.
-  - [ ] Hand off the partial, not-internally-accepted candidate and evidence without pushing; the conductor/release owner owns every later push, PR and merge action.
+  - [x] Hand off the partial, not-internally-accepted candidate and evidence without pushing; the 2026-09-05 residual pass records the API and security failures above, and the conductor/release owner owns every later push, PR and merge action.
   - [x] Do not create/update a PR, push, merge or publish without a separate explicit instruction.
