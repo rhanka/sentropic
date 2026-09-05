@@ -155,6 +155,8 @@ describe('PostgresClusterMeshRuntimeStore', () => {
       status: 'pending' as const,
     });
     await expect(store.enqueueCommand(command('command-1', 'target-1'))).resolves.toBe(true);
+    await expect(store.hasCommand('command-1')).resolves.toBe(true);
+    await expect(store.hasCommand('missing-command')).resolves.toBe(false);
     await expect(store.enqueueCommand(command('command-2', 'target-1'))).resolves.toBe(false);
     await expect(store.enqueueCommand(command('command-3', 'target-2'))).resolves.toBe(true);
   });
