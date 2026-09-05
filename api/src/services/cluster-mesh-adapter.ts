@@ -33,6 +33,7 @@ import {
 import { resolveTenantAuthoritatively } from './tenancy/resolve-tenant';
 import { PostgresClusterMeshCutoverStore } from './cluster-mesh/postgres-cutover-store';
 import { PostgresClusterMeshRuntimeStore } from './cluster-mesh/postgres-runtime-store';
+import { createClusterMeshInvocationVerifier } from './cluster-mesh/invocation-verifier';
 import { createLiveH2aPorts, LIVE_H2A_ACTUATOR_REF } from './h2a-native-terminal';
 
 export interface ClusterMeshSessionControl {
@@ -177,6 +178,13 @@ const localEndpoint = (process.env.API_BASE_URL || env.OAUTH_ISSUER_URL || `http
 
 const runtimeStore = new PostgresClusterMeshRuntimeStore();
 const sessionGenerationId = 'cluster-mesh-session-v1';
+const meshEvidenceAudience = process.env.CLUSTER_MESH_EVIDENCE_AUDIENCE
+  ?? `${localEndpoint}/api/v1/auth/session/control`;
+const meshInvocationVerifier = createClusterMeshInvocationVerifier({
+  publicKeysJson: process.env.CLUSTER_MESH_ED25519_PUBLIC_KEYS_JSON,
+  audiences: [meshEvidenceAudience, ...(process.env.CLUSTER_MESH_LEGACY_AUDIENCES ?? '').split(',').map((value) => value.trim())],
+  isReplayed: (invocationId) => runtimeStore.hasCommand(invocationId),
+});
 const ensureSessionGeneration = () => runtimeStore.saveGeneration({
   generationId: sessionGenerationId,
   status: 'active',
@@ -305,7 +313,7 @@ export const clusterMeshAdapter = createClusterMeshAppAdapter({
   sessionControl: {
     generationId: sessionGenerationId,
     context: livePorts ? { verify: verifyLiveEvidence } : {
-      async verify() { throw new Error('verified session control evidence is unavailable'); },
+      verify: meshInvocationVerifier.verify,
     },
     runtimeStore,
     mcpStore: runtimeStore,

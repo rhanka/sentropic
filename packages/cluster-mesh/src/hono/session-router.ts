@@ -69,6 +69,9 @@ export function createSessionNamespaceModule(input: {
               generationId: input.control.runtime.generation.generationId,
               method: c.req.method,
               path: c.req.path,
+              targetRegistrationId: intent.targetRegistrationId,
+              idempotencyKey: intent.idempotencyKey,
+              receiptStages: ['transported', 'verified', 'acted'],
               authorizationEvidenceRef: c.req.header('x-cluster-mesh-evidence'),
             });
           } catch {
