@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/contracts",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Transverse contracts shared across @sentropic/* packages (tenant, authz, cost, idempotency, checkpoint version, event envelope).",
   "type": "module",
   "license": "MIT",
