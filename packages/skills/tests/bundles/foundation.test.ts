@@ -740,7 +740,7 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
         ?.properties;
       expect(props?.action?.enum).toEqual(['generate']);
       expect(props?.format?.enum).toEqual(['docx', 'pptx']);
-      expect(props?.entityType?.enum).toEqual(['initiative', 'folder']);
+      expect(props?.entityType?.enum).toEqual(['organization', 'initiative', 'folder']);
       expect(tool?.sideEffect).toBe(true);
       expect(tool?.requiresApproval).toBe(false);
     });

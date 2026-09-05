@@ -71,8 +71,13 @@ const addProviderId = (source, startMarker, endMarker, indentation, offset = 0) 
   const segment = source.slice(start, end);
   if (segment.includes(`'${model}'`)) return source;
   const pattern = new RegExp(`^${indentation}'${quoted(base)}',[ \\t]*$`, 'm');
-  if (!pattern.test(segment)) throw new Error(`BASE ${base} not found in ${startMarker}`);
-  const updated = segment.replace(pattern, (line) => `${line}\n${indentation}'${model}',`);
+  const inlinePattern = new RegExp(`'${quoted(base)}'(?=\\s*(?:,|$))`);
+  if (!pattern.test(segment) && !inlinePattern.test(segment)) {
+    throw new Error(`BASE ${base} not found in ${startMarker}`);
+  }
+  const updated = pattern.test(segment)
+    ? segment.replace(pattern, (line) => `${line}\n${indentation}'${model}',`)
+    : segment.replace(inlinePattern, (entry) => `${entry}, '${model}'`);
   return `${source.slice(0, start)}${updated}${source.slice(end)}`;
 };
 providers = addProviderId(providers, 'export const knownModelIds = [', '] as const', '  ');

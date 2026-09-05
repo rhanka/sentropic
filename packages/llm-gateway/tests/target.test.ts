@@ -42,14 +42,13 @@ describe('launch-alias target-map', () => {
     });
   });
 
-  it('routes the Fable 5 launch aliases to Anthropic at high/xhigh/max', () => {
-    for (const effort of ['high', 'xhigh', 'max'] as const) {
-      expect(resolve(`claude-fable-5-${effort}`)).toEqual({
-        providerId: 'anthropic',
-        transportProviderId: 'claude-code',
-        model: 'claude-fable-5',
-        effort,
-      });
+  it('routes the Fable 5 and 5.1 launch aliases to Anthropic at high/xhigh/max', () => {
+    for (const model of ['claude-fable-5', 'claude-fable-5-1']) {
+      for (const effort of ['high', 'xhigh', 'max'] as const) {
+        expect(resolve(`${model}-${effort}`)).toEqual({
+          providerId: 'anthropic', transportProviderId: 'claude-code', model, effort,
+        });
+      }
     }
   });
 
@@ -74,6 +73,13 @@ describe('launch-alias target-map', () => {
       providerId: 'anthropic',
       transportProviderId: 'claude-code',
       model: 'claude-fable-5',
+    });
+    expect(resolve('claude-fable-5-1')).toEqual({
+      providerId: 'anthropic', transportProviderId: 'claude-code',
+      model: 'claude-fable-5-1',
+    });
+    expect(resolve('gpt-6-astra')).toEqual({
+      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
     });
     // Superseded as the default Opus, still explicitly selectable.
     expect(resolve('claude-opus-4-8')).toEqual({
@@ -156,6 +162,17 @@ describe('describeTargetRoutes (discovery)', () => {
         effort: 'xhigh',
       },
     ]);
+    expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-fable-5-1-max']).toEqual([
+      MERGED['claude-fable-5-1-max'],
+      {
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-5.6-sol', effort: 'max',
+      },
+      {
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-3.7-flash', effort: 'max',
+      },
+    ]);
     expect(describeCanonicalTargetRoutes()).toHaveLength(
       Object.values(CANONICAL_TARGET_ROUTE_MAPPINGS)
         .reduce((total, targets) => total + targets.length, 0),
@@ -171,6 +188,9 @@ describe('describeTargetRoutes (discovery)', () => {
     expect(resolveCandidates('claude-opus-5-xhigh').map(
       (target) => target.transportProviderId,
     )).toEqual(['claude-code', 'codex', 'cloud-code']);
+    expect(resolveCandidates('claude-fable-5-1-max')[1]).toMatchObject({
+      transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'max',
+    });
   });
 
   it('describes every servable id exactly once, sorted, with no credential data', () => {
