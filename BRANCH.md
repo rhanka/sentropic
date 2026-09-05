@@ -33,6 +33,7 @@ Reduce measured HIGH/CRITICAL findings in the production UI image and make API S
 
 ## Feedback Loop
 - [x] `BR74-EX1 attention` — `Makefile` is required because the existing SCA/container recipes intentionally discard scanner failures and synthesize an empty successful report. Impact: only security targets change to preserve scanner exit/report integrity. Rollback: revert the target-only hunk.
+- [ ] `BR74-FL1 blocking-for-merge` — Owner: repository owner. Status: selection-failed. The consensus-review selector requires the author's exact model ID and effort, which this host does not expose; guessing is forbidden. Evidence: `.security/reviews/ui-security-consensus-review.md`. Rerun the two-peer review with explicit author metadata before merge.
 
 ## AI Flaky tests
 - [x] No AI-dependent checks are in scope.
