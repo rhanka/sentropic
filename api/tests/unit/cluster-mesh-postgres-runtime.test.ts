@@ -89,6 +89,26 @@ describe('PostgresClusterMeshRuntimeStore', () => {
     ]);
   });
 
+  it('should bootstrap a generation without resetting its status, lease or capacity', async () => {
+    await saveGeneration('lost', past);
+
+    await store.ensureGeneration({
+      generationId: 'generation-test', status: 'active', supervisorRef: 'replacement-supervisor',
+      supervisorLeaseExpiresAt: future, maxConcurrent: 12, poolSize: 4,
+    });
+
+    const [generation] = await db.select().from(clusterMeshGenerations)
+      .where(eq(clusterMeshGenerations.generationId, 'generation-test'));
+    expect(generation).toMatchObject({
+      status: 'lost', supervisorRef: 'supervisor-test', supervisorLeaseExpiresAt: new Date(past),
+      maxConcurrent: 2, poolSize: 1,
+    });
+    await expect(store.admitWorkstation({
+      generationId: 'generation-test', sessionId: 'fenced', ownerSubject: 'user-test',
+      displayName: 'Fenced laptop', expiresAt: future,
+    })).rejects.toThrow('cluster_mesh_generation_unavailable');
+  });
+
   it('should reclaim capacity after a generation crash', async () => {
     await saveGeneration();
     const lease = (leaseId: string) => ({

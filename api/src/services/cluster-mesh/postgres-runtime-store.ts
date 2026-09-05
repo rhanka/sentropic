@@ -23,6 +23,22 @@ const date = (value: string) => new Date(value);
 const nullableDate = (value?: string) => value ? date(value) : null;
 const WORKSTATION_REF = 'session-workstation:';
 export class PostgresClusterMeshRuntimeStore implements ClusterMeshRuntimeStore {
+  async ensureGeneration(value: StoredClusterMeshGeneration): Promise<void> {
+    await db.insert(clusterMeshGenerations).values({
+      ...value,
+      supervisorLeaseExpiresAt: date(value.supervisorLeaseExpiresAt),
+      stoppedAt: nullableDate(value.stoppedAt),
+      updatedAt: new Date(),
+    }).onConflictDoNothing({ target: clusterMeshGenerations.generationId });
+  }
+  async isGenerationAvailable(generationId: string): Promise<boolean> {
+    const result = await db.execute(sql`
+      SELECT EXISTS (SELECT 1 FROM control.cluster_mesh_generations
+        WHERE generation_id = ${generationId} AND status IN ('starting', 'active')
+          AND supervisor_lease_expires_at > now()) AS available
+    `);
+    return result.rows[0]?.available === true;
+  }
   async saveGeneration(value: StoredClusterMeshGeneration): Promise<void> {
     const row = {
       ...value,
