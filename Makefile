@@ -2788,7 +2788,7 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 	@if [ "$*" = "api" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
-		docker run --rm "$$IMAGE_NAME" sh -lc "npm audit --omit=dev --json || true" > .security/container-$*.json; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	elif [ "$*" = "ui" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
