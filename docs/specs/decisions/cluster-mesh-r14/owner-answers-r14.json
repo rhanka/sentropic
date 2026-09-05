@@ -1,0 +1,398 @@
+{
+  "dossier": "cluster-mesh-shared-core",
+  "revision": "2026-09-05-r14",
+  "architectureHash": "f5d525cfbaeb37f9ed9234f3c19eadd02ac26f9c6b460f47c5ce3692640d0c60",
+  "capturedAt": "2026-09-05T22:30:44.563Z",
+  "capturedFrom": "focus decision kit",
+  "answers": {
+    "D1": {
+      "option": "B",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "D1=B est retenu avec la modularité standalone et désactivable."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "Le dossier rend l’invariant exécutable et marque comme source-gap l’absence de capture brute complète antérieure."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D2": {
+      "option": "C",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Conserver une autorisation centralement vérifiée avec enforcement local."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "La composition Hono injecte le contexte sans créer de dépendance provider vers cluster-mesh."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D3": {
+      "option": "A",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Capitaliser au maximum, sans sortir le runtime de cluster-mesh ni faire de tmux la voie V1."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "Le split retire le daemon externe et place drive/wake privilégié sur PTY sous possession vérifiée."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D4": {
+      "option": "C",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "La persistance et la migration précèdent les bascules applicatives."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "C1 devient un gate de réalisation explicite, indépendant du montage Hono."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D5": {
+      "option": "C",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Séparer livraison, autorisation et effet."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "A1 exige un effet observable et un reçu durable après drive/wake."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D6": {
+      "option": "A",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Intégrer MCP sans le rendre captif de cluster-mesh."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "L’intégration porte sur le montage et le runtime central, pas sur l’absorption des packages."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D7": {
+      "option": "C",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Combiner enveloppe vérifiable et action native privilégiée."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "PTY devient la voie primaire ; tmux reste une option secondaire, pas le modèle V1."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D8": {
+      "option": null,
+      "decisionStatus": "acted-baseline",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Graphify est la baseline mémoire."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "Le dossier conserve cette baseline sans proposer un nouveau choix A/B/C."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D9": {
+      "option": "C",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Conserver le reversement et la preuve géométrique."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "Les attentes sceneCount/edgeCount/labelCount sont recalculées depuis la sortie r11, jamais copiées de r8."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D10": {
+      "option": null,
+      "decisionStatus": "acted-baseline",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Aligner OAuth, MCP et NIST/NHI comme sédiment commun."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "Le VerifiedInvocationContext transporte les preuves vérifiées ; chaque provider conserve secrets et règles de domaine."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D11": {
+      "option": "C",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Bascule progressive avec preuve et retour arrière."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "La migration vise le runtime intégré au plugin, jamais un daemon externe concurrent."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D12": {
+      "option": "C",
+      "decisionStatus": "acted",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r10",
+          "text": "Qualifier par effet observable, pas seulement par process."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "A1–A5 deviennent des critères vérifiables et fail-closed."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D13": {
+      "option": "A",
+      "decisionStatus": "owner-corrected",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r11",
+          "text": "Chaque lib expose son API sous son namespace ; cluster-mesh la compose comme plugin Hono."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "La carte route-composition-per-lib matérialise chaque frontière et l’invariant D1=B."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D14": {
+      "option": "A",
+      "decisionStatus": "owner-corrected",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r11",
+          "text": "Le runtime est intégré dans cluster-mesh ; le daemon extérieur est un ancien modèle invalide."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "La scène AFTER montre une seule frontière plugin/runtime au lieu de deux autorités."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D15": {
+      "option": "A",
+      "decisionStatus": "owner-corrected",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r11",
+          "text": "Les 44 mcp-serve/session sont le broken current à retirer, pas un objectif."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "A2 exige 1 superviseur, 1 génération, 0 mcp-server/session et tolère seulement un bridge stdio mince."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D16": {
+      "option": "A",
+      "decisionStatus": "owner-corrected",
+      "note": "",
+      "ownerRemarks": [
+        {
+          "round": "r11",
+          "text": "Fin de missing-registration ; PTY privilégié ; capacité paramétrable et cap par défaut 12."
+        }
+      ],
+      "briefProvenance": null,
+      "responses": [
+        {
+          "round": "r11",
+          "text": "Le runtime intégré réconcilie les sessions mortes en LOST et produit un reçu d’effet durable."
+        }
+      ],
+      "remarkComplement": ""
+    },
+    "D17": {
+      "option": null,
+      "decisionStatus": "internal-conductor-gates",
+      "note": "",
+      "ownerRemarks": [],
+      "briefProvenance": {
+        "round": "r11",
+        "source": "cm-review-fable-specplan.md + cm-qualif-plan-commun.md",
+        "text": "Plier les deux revues dans le dossier sans réintroduire daemon extérieur ni tmux V1. La résolution r13 classe leurs conditions et acceptations comme gates internes conductor-enforced, non comme décision produit owner."
+      },
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D18": {
+      "option": "A",
+      "decisionStatus": "proposed-how",
+      "note": "ce doit être une lib autonome\nelle doit pouvoir être activée :\n- en hook comme rtk pour chaque chaque cli (claude, ...)\n- éventuellement en gw (il me faut une évaluation)\n- en hook dans les workflow agentique sentropic\n\nLe dossier actuel ne présente pas assez l'architecture, ni les capacités de projection de contexte (benchmark rtk, autres, ce qu'on propose)\n\nFaut aussi être au clair avec notre lib qui fera l'équivalent grewyall mais aussi graphify (indexation code économie token) et memoire graphify (la c pour le contexte - a voir avec graphify). tout doit pas être dans cette page, mais il faut bien comprendre comment les appels seront fait pour pas faire n'importe quoi",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D19": {
+      "option": null,
+      "decisionStatus": "proposed-how",
+      "note": "c pas clair, faudrait m'explique comment font les autres (rtk, autre) et comment tu proposes de faire\npour graphify, tu sembles pas faire la différence entre le graphify memoire et le graphify code. donc je pense que ma remarque pour la décision précédente était justifiée",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D20": {
+      "option": "A",
+      "decisionStatus": "proposed-how",
+      "note": "ca manque aussi de schema\nil faut bien différencier boucle et log session / observabilité + optimisations (contexte, memoire), et ca qu'on fasse en mode : h2a run claude (cli locale), le meme en remote sur k8s, h2a run claude en remote controle via app etc.\n\na ce stade A ou B c'est vraiment pas clair",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D21": {
+      "option": null,
+      "decisionStatus": "proposed-how",
+      "note": "idem précédent, manque de schema pour décider, manque de comparaison au fonctoinnement des différentes cli et des claude.ai codex chatgpt etc., pas assez schematisé ni illustré",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D22": {
+      "option": null,
+      "decisionStatus": "proposed-how",
+      "note": "PDP PEP meme pas définis\nGreywall cité mais principes et comparaison non présentés\naucun schema\na reprendre et probablement en plus de question, bien articulé avec rtk, et graphify memoire et graphify code",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D23": {
+      "option": "B",
+      "decisionStatus": "proposed-how",
+      "note": "a ce stade on n'a rien déployé. je ne sais pas ce qu'est v1 ou v2.\nv1 n'est pas fini de dev, si ca se trouve mieux vaut que tu planifies la suites des design a la suite des 38 lots et ca ne fera qu'une version",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D24": {
+      "option": "A",
+      "decisionStatus": "proposed-how",
+      "note": "",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    },
+    "D25": {
+      "option": "A",
+      "decisionStatus": "proposed-how",
+      "note": "commite bien les dossiers stp avec les révision",
+      "ownerRemarks": [],
+      "briefProvenance": null,
+      "responses": [],
+      "remarkComplement": ""
+    }
+  }
+}
