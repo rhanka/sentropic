@@ -3,6 +3,7 @@ import { createPublicKey, verify, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
 
 export const CLUSTER_MESH_RECEIPT_STAGES = ['transported', 'verified', 'acted'] as const;
+const MAX_EVIDENCE_TTL_SECONDS = 300;
 const keySchema = z.object({
   kid: z.string().min(1), alg: z.literal('EdDSA'), crv: z.literal('Ed25519'),
   publicKeyBase64Url: z.string().min(1),
@@ -44,7 +45,10 @@ export function createClusterMeshInvocationVerifier(input: {
       if (key.asymmetricKeyType !== 'ed25519') throw new Error('invalid key type');
       keys.set(record.kid, key);
     }
-  } catch { keys.clear(); }
+  } catch (error) {
+    keys.clear();
+    throw new Error('invalid cluster mesh Ed25519 public-key ring', { cause: error });
+  }
   const audiences = new Set(input.audiences.filter(Boolean));
   const consumed = new Map<string, number>();
   return { async verify(request) {
@@ -63,14 +67,16 @@ export function createClusterMeshInvocationVerifier(input: {
       || evidence.idempotencyKey !== request.idempotencyKey
       || request.receiptStages?.join('|') !== CLUSTER_MESH_RECEIPT_STAGES.join('|')
       || evidence.expiresAt <= now || evidence.issuedAt > now + 30
+      || evidence.expiresAt - evidence.issuedAt > MAX_EVIDENCE_TTL_SECONDS
       || evidence.issuedAt >= evidence.expiresAt || evidence.registrationExpiresAt < evidence.expiresAt
       || !keys.get(evidence.kid) || !verify(null, canonical, keys.get(evidence.kid)!, signature)) {
       throw new Error('mesh evidence verification failed');
     }
     for (const [nonce, expiry] of consumed) if (expiry <= now) consumed.delete(nonce);
     if (consumed.has(evidence.nonce)) throw new Error('mesh evidence replayed');
-    consumed.set(evidence.nonce, evidence.expiresAt);
     if (await input.isReplayed?.(evidence.invocationId)) throw new Error('mesh evidence replayed');
+    if (consumed.has(evidence.nonce)) throw new Error('mesh evidence replayed');
+    consumed.set(evidence.nonce, evidence.expiresAt);
     return {
       invocationId: evidence.invocationId, correlationId: evidence.correlationId,
       generationId: evidence.generationId,

@@ -182,11 +182,11 @@ const localEndpoint = (process.env.API_BASE_URL || env.OAUTH_ISSUER_URL || `http
 
 const runtimeStore = new PostgresClusterMeshRuntimeStore();
 const sessionGenerationId = 'cluster-mesh-session-v1';
-const meshEvidenceAudience = process.env.CLUSTER_MESH_EVIDENCE_AUDIENCE
+const meshEvidenceAudience = env.CLUSTER_MESH_EVIDENCE_AUDIENCE
   ?? `${localEndpoint}/api/v1/auth/session/control`;
 const meshInvocationVerifier = createClusterMeshInvocationVerifier({
-  publicKeysJson: process.env.CLUSTER_MESH_ED25519_PUBLIC_KEYS_JSON,
-  audiences: [meshEvidenceAudience, ...(process.env.CLUSTER_MESH_LEGACY_AUDIENCES ?? '').split(',').map((value) => value.trim())],
+  publicKeysJson: env.CLUSTER_MESH_ED25519_PUBLIC_KEYS_JSON,
+  audiences: [meshEvidenceAudience, ...(env.CLUSTER_MESH_LEGACY_AUDIENCES ?? '').split(',').map((value) => value.trim())],
   isReplayed: (invocationId) => runtimeStore.hasCommand(invocationId),
 });
 const ensureSessionGeneration = async () => {

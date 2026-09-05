@@ -231,6 +231,7 @@
 - [x] `BR75-RV101` — `acknowledge` — the Fable C1/SG10 M1 fold makes session-generation bootstrap insert-only, removes generation mutation from directory reads, preserves existing status/lease/capacity on re-pair, and refuses a fenced generation before device-code consumption or session persistence.
 - [x] `BR75-RV102` — `acknowledge` — the A1 shared-secret verifier now requires explicit non-production qualification opt-in; production configuration fails at startup and therefore cannot replace the mandatory Ed25519 verifier.
 - [x] `BR75-RV103` — `acknowledge` — `@sentropic/contracts` is bumped to 0.3.0 over npm 0.1.1 and `@sentropic/cluster-mesh` to 0.8.0 over npm 0.1.0 for the public invocation-contract and wire-behavior changes.
+- [x] `BR75-RV104` — `acknowledge` — the Fable LOW fold declares and documents Ed25519 environment inputs, fails loudly on malformed key rings, caps evidence at 300 seconds, checks durable replay before nonce consumption, and covers the cheap negative fences.
 - [ ] Record build/review bugs only in this section with `blocked`, `deferred`, `cancelled` or `attention`; record conductor responses with `clarification`, `acknowledge` or `refuse`.
 
 ## AI Flaky tests

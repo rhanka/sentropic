@@ -42,6 +42,11 @@ const verifier = (replayed = false) => createClusterMeshInvocationVerifier({
   isReplayed: async () => replayed,
 });
 describe('cluster mesh Ed25519 invocation verifier', () => {
+  it('should fail startup loudly when the key ring JSON is malformed', () => {
+    expect(() => createClusterMeshInvocationVerifier({ publicKeysJson: '{', audiences: [base.audience] }))
+      .toThrow('invalid cluster mesh Ed25519 public-key ring');
+  });
+
   it('accepts a canonical receipt-chain envelope from a dedicated mesh key', async () => {
     await expect(verifier().verify(request(token(base)))).resolves.toMatchObject({
       generationId: base.generationId,
@@ -56,9 +61,41 @@ describe('cluster mesh Ed25519 invocation verifier', () => {
     ['wrong audience', () => token({ ...base, audience: 'https://wrong.example.test' }), false],
     ['absent audience', () => token({ ...base, audience: undefined }, trusted.privateKey, false), false],
     ['expired evidence', () => token({ ...base, issuedAt: seconds - 60, expiresAt: seconds - 1 }), false],
+    ['excessive evidence lifetime', () => token({ ...base, expiresAt: seconds + 301 }), false],
+    ['future evidence', () => token({ ...base, issuedAt: seconds + 31 }), false],
+    ['registration expiring before evidence', () => token({ ...base, registrationExpiresAt: seconds + 30 }), false],
     ['missing generation', () => token({ ...base, generationId: undefined }, trusted.privateKey, false), false],
+    ['unknown key', () => token({ ...base, kid: 'unknown-key' }), false],
+    ['non-canonical evidence', () => token(Object.fromEntries(Object.entries(base).reverse()), trusted.privateKey, false), false],
+    ['invocation binding mismatch', () => token({ ...base, invocationId: 'command-2' }), false],
+    ['correlation binding mismatch', () => token({ ...base, correlationId: 'correlation-2' }), false],
+    ['method binding mismatch', () => token({ ...base, method: 'PATCH' }), false],
+    ['path binding mismatch', () => token({ ...base, path: '/wrong' }), false],
+    ['registration binding mismatch', () => token({ ...base, targetRegistrationId: 'registration-2' }), false],
+    ['idempotency binding mismatch', () => token({ ...base, idempotencyKey: 'idempotency-2' }), false],
     ['replayed evidence', () => token(base), true],
   ])('rejects %s before the control boundary', async (_name, evidence, replayed) => {
     await expect(verifier(replayed).verify(request(evidence()))).rejects.toThrow();
+  });
+
+  it('should reject a reused nonce and an omitted receipt-stage binding', async () => {
+    const candidate = verifier();
+    await expect(candidate.verify(request(token(base)))).resolves.toBeTruthy();
+    await expect(candidate.verify(request(token(base)))).rejects.toThrow('mesh evidence replayed');
+    await expect(verifier().verify({ ...request(token(base)), receiptStages: undefined })).rejects.toThrow();
+  });
+
+  it('should check durable replay before consuming the in-process nonce', async () => {
+    let attempts = 0;
+    const candidate = createClusterMeshInvocationVerifier({
+      publicKeysJson, audiences: [base.audience], now: () => now,
+      isReplayed: async () => {
+        if (attempts++ === 0) throw new Error('replay store unavailable');
+        return false;
+      },
+    });
+
+    await expect(candidate.verify(request(token(base)))).rejects.toThrow('replay store unavailable');
+    await expect(candidate.verify(request(token(base)))).resolves.toBeTruthy();
   });
 });
