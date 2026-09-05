@@ -73,6 +73,22 @@ describe('PostgresClusterMeshRuntimeStore', () => {
     });
   });
 
+  it('should share workstation admission across stores and refuse a missing generation', async () => {
+    const secondStore = new PostgresClusterMeshRuntimeStore();
+    await expect(store.admitWorkstation({
+      generationId: 'missing', sessionId: 'missing', ownerSubject: 'user-test',
+      displayName: 'Missing', expiresAt: future,
+    })).rejects.toThrow('cluster_mesh_generation_unavailable');
+    await saveGeneration();
+    await store.admitWorkstation({
+      generationId: 'generation-test', sessionId: 'shared', ownerSubject: 'user-test',
+      displayName: 'Shared laptop', expiresAt: future,
+    });
+    await expect(secondStore.listAdmittedWorkstations('generation-test')).resolves.toEqual([
+      { kind: 'workstation', deviceId: 'device:shared', displayName: 'Shared laptop', ownerSubject: 'user-test', state: 'attached' },
+    ]);
+  });
+
   it('should reclaim capacity after a generation crash', async () => {
     await saveGeneration();
     const lease = (leaseId: string) => ({
