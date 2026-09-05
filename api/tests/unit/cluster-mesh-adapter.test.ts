@@ -3,6 +3,7 @@ import type { ClusterMeshRuntimeStore, LocalWorkstationDescriptor, PtyActuatorPo
 
 import {
   createClusterMeshAppAdapter,
+  resolveLiveQualificationConfig,
   type ClusterMeshAppDependencies,
 } from '../../src/services/cluster-mesh-adapter';
 
@@ -34,6 +35,22 @@ function dependencies(
 }
 
 describe('cluster mesh app adapter', () => {
+  it('should reject shared-secret qualification configuration in production', () => {
+    const qualification = {
+      CLUSTER_MESH_A1_QUALIFICATION: '1',
+      H2A_NATIVE_SOCKET: '/tmp/h2a.sock', H2A_ROOT: '/tmp/h2a',
+      CLUSTER_MESH_A1_EVIDENCE: 'qualification-secret',
+      CLUSTER_MESH_A1_TARGET_REGISTRATION: 'registration-1',
+    };
+
+    expect(() => resolveLiveQualificationConfig({ ...qualification, NODE_ENV: 'production' }))
+      .toThrow('shared-secret cluster mesh qualification is forbidden in production');
+    expect(resolveLiveQualificationConfig({ ...qualification, NODE_ENV: 'development' }))
+      .toMatchObject({ evidence: 'qualification-secret', registrationId: 'registration-1' });
+    expect(resolveLiveQualificationConfig({ ...qualification, CLUSTER_MESH_A1_QUALIFICATION: undefined }))
+      .toBeUndefined();
+  });
+
   it('should expose an admitted workstation through a second adapter instance', async () => {
     const approved = {
       status: 'approved' as const,
