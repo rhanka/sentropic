@@ -112,6 +112,7 @@ describe('add-model scaffold', () => {
     for (const [model, base] of [
       ['claude-fable-5-1', 'claude-fable-5'],
       ['gpt-6-astra', 'gpt-5.6-sol'],
+      ['gemini-3.8-flash', 'gemini-3.7-flash'],
     ]) {
       const result = spawnSync(process.execPath, [
         script, '--root', root, '--model', model, '--base', base, '--dry-run',
