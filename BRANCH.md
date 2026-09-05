@@ -57,7 +57,7 @@ Reduce measured HIGH/CRITICAL findings in the production UI image and make API S
   - [x] Add exact API SCA entries for irreducible image-size/pptxgenjs findings, expiring 2026-10-05.
   - [x] Rebuild and rescan `local/sentropic-ui:21ba45`: non-empty 162,382-byte Trivy 0.74.0 report, 0 HIGH / 0 CRITICAL.
 - [ ] **Lot 2 — Audit fail-closed repair**
-  - [x] Remove empty-report-as-green behavior and scope API/UI SCA to the named workspace.
+  - [x] Remove empty-report-as-green behavior, scope SCA to the named workspace, and scan both actual images with Trivy.
   - [x] Add focused parser verification for empty, malformed, synthetic-empty, npm-audit, and Trivy reports (`make test-security-parser`: PASS).
   - [ ] Prove API SCA/container audits execute and produce non-empty reports.
 - [ ] **Lot 3 — Final validation and PR**
