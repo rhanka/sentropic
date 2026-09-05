@@ -54,10 +54,10 @@ Reduce measured HIGH/CRITICAL findings in the production UI image and make API S
   - [x] Update the UI builder/runtime bases to exact Node 24/Alpine 3.24 and Nginx 1.31.5/Alpine 3.24 digests.
   - [x] Upgrade no UI dependency: workspace-scoped UI SCA measured 0 HIGH / 0 CRITICAL.
   - [x] Bump `sentropic-ui` from `0.1.0` to `0.1.1`.
-  - [ ] Add only exact, bounded, expiring register entries for irreducible findings.
+  - [x] Add exact API SCA entries for irreducible image-size/pptxgenjs findings, expiring 2026-10-05.
   - [ ] Rebuild and rescan the UI image; record raw after report and counts.
 - [ ] **Lot 2 — Audit fail-closed repair**
-  - [ ] Remove empty-report-as-green behavior from API SCA/container targets.
+  - [x] Remove empty-report-as-green behavior and scope API/UI SCA to the named workspace.
   - [x] Add focused parser verification for empty, malformed, synthetic-empty, npm-audit, and Trivy reports (`make test-security-parser`: PASS).
   - [ ] Prove API SCA/container audits execute and produce non-empty reports.
 - [ ] **Lot 3 — Final validation and PR**
