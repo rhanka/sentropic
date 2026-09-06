@@ -79,7 +79,7 @@
     "@sentropic/mcp-platform": "file:../packages/mcp-platform",
     "@sentropic/oauth-verify": "file:../packages/oauth-verify",
     "@sentropic/ubo-contracts": "file:../packages/ubo-contracts",
-    "@simplewebauthn/server": "^13.2.2",
+    "@simplewebauthn/server": "^13.3.2",
     "@xmldom/xmldom": "0.9.10",
     "arctic": "^3.7.0",
     "better-queue": "^3.8.12",
