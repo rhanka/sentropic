@@ -81,6 +81,9 @@ describe('launch-alias target-map', () => {
     expect(resolve('gpt-6-astra')).toEqual({
       providerId: 'openai', transportProviderId: 'codex', model: 'gpt-6-astra',
     });
+    expect(resolve('gemini-3.8-flash')).toEqual({
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
+    });
     // Superseded as the default Opus, still explicitly selectable.
     expect(resolve('claude-opus-4-8')).toEqual({
       providerId: 'anthropic',
@@ -152,7 +155,7 @@ describe('describeTargetRoutes (discovery)', () => {
       {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-5.6-terra',
+        model: 'gpt-5.6-sol',
         effort: 'xhigh',
       },
       {
@@ -166,11 +169,11 @@ describe('describeTargetRoutes (discovery)', () => {
       MERGED['claude-fable-5-1-max'],
       {
         providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-5.6-sol', effort: 'max',
+        model: 'gpt-6-astra', effort: 'max',
       },
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash', effort: 'max',
+        model: 'gemini-3.8-flash', effort: 'max',
       },
     ]);
     expect(describeCanonicalTargetRoutes()).toHaveLength(
@@ -189,8 +192,26 @@ describe('describeTargetRoutes (discovery)', () => {
       (target) => target.transportProviderId,
     )).toEqual(['claude-code', 'codex', 'cloud-code']);
     expect(resolveCandidates('claude-fable-5-1-max')[1]).toMatchObject({
-      transportProviderId: 'codex', model: 'gpt-5.6-sol', effort: 'max',
+      transportProviderId: 'codex', model: 'gpt-6-astra', effort: 'max',
     });
+  });
+
+  it('exports every remapped Codex and Cloud Code fallback', () => {
+    const resolveCandidates = createCanonicalTargetCandidatesResolver();
+    for (const [model, efforts, codexModel, cloudModel] of [
+      ['claude-fable-5', [undefined, 'high', 'xhigh', 'max'], 'gpt-6-astra', 'gemini-3.8-flash'],
+      ['claude-fable-5-1', [undefined, 'high', 'xhigh', 'max'], 'gpt-6-astra', 'gemini-3.8-flash'],
+      ['claude-opus-5', [undefined, 'high', 'xhigh'], 'gpt-5.6-sol', 'gemini-3.7-flash'],
+    ] as const) {
+      for (const effort of efforts) {
+        const alias = effort ? `${model}-${effort}` : model;
+        const suffix = effort ? { effort } : {};
+        expect(resolveCandidates(alias).slice(1)).toEqual([
+          { providerId: 'openai', transportProviderId: 'codex', model: codexModel, ...suffix },
+          { providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel, ...suffix },
+        ]);
+      }
+    }
   });
 
   it('describes every servable id exactly once, sorted, with no credential data', () => {

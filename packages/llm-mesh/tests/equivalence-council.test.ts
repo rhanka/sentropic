@@ -17,12 +17,13 @@ describe('model equivalence council', () => {
     )).not.toThrow();
   });
 
-  it('classifies Fable 5.1 and GPT-6 Astra explicitly', () => {
+  it('classifies Gemini 3.8 Flash, Fable 5.1, and GPT-6 Astra explicitly', () => {
     const excluded = DEFAULT_MODEL_EQUIVALENCE_COUNCIL.exclusions.map(
       ({ providerId, modelId }) => `${providerId}:${modelId}`,
     );
 
     expect(excluded).toContain('anthropic:claude-fable-5-1');
+    expect(excluded).toContain('gemini:gemini-3.8-flash');
     expect(excluded).toContain('openai:gpt-6-astra');
   });
 
