@@ -6,7 +6,10 @@ import {
   type RoutePlanner,
   type VerifiedRoutingSubject,
 } from '@sentropic/llm-mesh';
-import type { RouteFlowDeps } from '../../../../packages/llm-gateway/src/index';
+import type {
+  CanonicalIngressResult,
+  CostContext,
+} from '../../../../packages/llm-gateway/src/index';
 
 import { providerRegistry } from '../provider-registry';
 import {
@@ -21,6 +24,13 @@ export interface GatewayRouteIntentEvidence {
   readonly modelId: string;
   readonly transportProviderId: string;
   readonly requiredCapabilities: readonly unknown[];
+}
+
+export interface GatewayShadowRouteIntentInput {
+  readonly cost: CostContext;
+  readonly subject: VerifiedRoutingSubject;
+  readonly canonical: CanonicalIngressResult;
+  readonly route: RoutePlanInput;
 }
 
 const policy = {
@@ -60,7 +70,7 @@ export const createApplicationGatewayRoutePlane = (options?: {
   readonly observeShadow?: (evidence: GatewayRouteIntentEvidence) => void;
 }): {
   readonly planner: RoutePlanner;
-  readonly shadowRouteIntent: NonNullable<RouteFlowDeps['shadowRouteIntent']>;
+  readonly shadowRouteIntent: (input: GatewayShadowRouteIntentInput) => Promise<void>;
 } => {
   const dispatch = options?.dispatch ?? applicationGatewayRuntime;
   const shadowTargets = new Map<string, PlannedRouteTarget>();
@@ -72,7 +82,7 @@ export const createApplicationGatewayRoutePlane = (options?: {
   }>();
   let sequence = 0;
 
-  const shadowRouteIntent: NonNullable<RouteFlowDeps['shadowRouteIntent']> = async (input) => {
+  const shadowRouteIntent = async (input: GatewayShadowRouteIntentInput): Promise<void> => {
     const target = await resolveTarget(input.subject, input.route.requestedModel);
     shadowTargets.set(subjectKey(input.subject, input.route), target);
     options?.observeShadow?.({
@@ -93,7 +103,18 @@ export const createApplicationGatewayRoutePlane = (options?: {
     },
     async plan(subject, input): Promise<RoutePlan> {
       const key = subjectKey(subject, input);
-      const target = shadowTargets.get(key) ?? await resolveTarget(subject, input.requestedModel);
+      let target = shadowTargets.get(key);
+      if (!target) {
+        target = await resolveTarget(subject, input.requestedModel);
+        options?.observeShadow?.({
+          requestedModel: input.requestedModel,
+          providerId: target.providerId,
+          modelId: target.modelId,
+          transportProviderId: target.transportProviderId,
+          requiredCapabilities: [...(input.requiredCapabilities ?? [])].sort((left, right) =>
+            JSON.stringify(left).localeCompare(JSON.stringify(right))),
+        });
+      }
       shadowTargets.delete(key);
       sequence += 1;
       const planRef = `application-gateway-plan-${sequence}`;
