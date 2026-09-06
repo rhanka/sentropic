@@ -426,10 +426,11 @@ lock-root: ## Update root package-lock.json using Node container (workspace root
 	@echo "🔒 Updating root package-lock.json..."
 	docker run --rm \
 		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
 		-v "$$(pwd):/workspace" \
 		-w /workspace \
 		node:24-alpine \
-		sh -lc "npm install --package-lock-only --workspaces --include-workspace-root"
+		sh -lc "npm install --workspaces --include-workspace-root --ignore-scripts --no-audit --no-fund"
 
 .PHONY: lock-e2e
 lock-e2e: ## Update e2e package-lock.json using Node container (no compose service)
@@ -546,13 +547,13 @@ lint-llm-mesh lint-llm-gateway: lint-llm-%: ## Lint an LLM routing package
 		"$$tool_dir/node_modules/.bin/eslint" --config "$$tool_dir/eslint.config.mjs" src tests'
 
 .PHONY: typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh publish-cluster-mesh publish-cluster-mesh-token
-typecheck-cluster-mesh: ## Run @sentropic/cluster-mesh type checks
+typecheck-cluster-mesh: build-events ## Run @sentropic/cluster-mesh type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
-test-cluster-mesh: ## Run @sentropic/cluster-mesh tests
+test-cluster-mesh: build-events ## Run @sentropic/cluster-mesh tests
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/cluster-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.5 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
-build-cluster-mesh: ## Build @sentropic/cluster-mesh dist package
+build-cluster-mesh: build-events ## Build @sentropic/cluster-mesh dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf dist; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
 pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
@@ -707,11 +708,11 @@ publish-llm-gateway-token: build-llm-gateway ## Publish @sentropic/llm-gateway u
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-gateway@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-gateway@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
 .PHONY: typecheck-flow
-typecheck-flow: ## Run @sentropic/flow type checks
+typecheck-flow: install-internal-packages ## Run @sentropic/flow type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
 .PHONY: build-flow
-build-flow: ## Build @sentropic/flow dist package
+build-flow: install-internal-packages ## Build @sentropic/flow dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'rm -rf dist'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
 
@@ -1042,25 +1043,25 @@ publish-mcp-auth-token: build-mcp-auth ## Publish @sentropic/mcp-auth using NPM_
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/mcp-auth@"$$version" version >/dev/null 2>&1; then echo "@sentropic/mcp-auth@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
 .PHONY: typecheck-mcp-platform
-typecheck-mcp-platform: ## Run @sentropic/mcp-platform type checks
+typecheck-mcp-platform: install-internal-packages ## Run @sentropic/mcp-platform type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: build-mcp-platform
-build-mcp-platform: ## Build @sentropic/mcp-platform dist package
+build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-mcp-platform
-test-mcp-platform: ## Run @sentropic/mcp-platform tests
+test-mcp-platform: install-internal-packages ## Run @sentropic/mcp-platform tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/mcp-platform/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: api-extract-mcp-platform
-api-extract-mcp-platform: ## Verify @sentropic/mcp-platform public API golden report (api-extractor CI mode; fails on any etc/mcp-platform.api.md drift)
+api-extract-mcp-platform: install-internal-packages ## Verify @sentropic/mcp-platform public API golden report (api-extractor CI mode; fails on any etc/mcp-platform.api.md drift)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules temp'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node @microsoft/api-extractor@7.58.9 >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules temp" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json; "$$tool_dir/node_modules/.bin/api-extractor" run'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules temp'
@@ -1568,12 +1569,12 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 	@echo "✅ Windows .exe packaged in ui/static/cowork-desktop/"
 
 .PHONY: install-internal-packages
-install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow,focus} into node_modules (no api/ui)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --workspace=packages/focus --include-workspace-root --ignore-scripts --no-audit --no-fund'
+install-internal-packages: ## Install workspace deps and link internal packages into node_modules (no api/ui)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/cluster-mesh --workspace=packages/flow --workspace=packages/focus --workspace=packages/mcp-platform --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
 .PHONY: build-contracts
 build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npm run build'
 
 .PHONY: build-events
 build-events: build-contracts ## Build @sentropic/events dist package (depends on contracts dist)
