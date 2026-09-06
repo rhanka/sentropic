@@ -1453,6 +1453,7 @@ function addTransportEquivalentFixture(
 
 addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Astra');
+addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 'Gemini 3.8 Flash');
 
 // ---------------------------------------------------------------------------
 // Additional Cohere-specific tests that don't fit the matrix pattern

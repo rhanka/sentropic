@@ -55,6 +55,9 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   'gemini-3.7-flash': {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
   },
+  'gemini-3.8-flash': {
+    providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
+  },
   'gpt-5.6-terra': {
     providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-terra',
   },
@@ -62,23 +65,23 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
 
 type StandardRouteDefinition = readonly [string, string, string, string?];
 export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
-  ['claude-opus-5', 'gpt-5.6-terra', 'gemini-3.7-flash'],
-  ['claude-opus-5-high', 'gpt-5.6-terra', 'gemini-3.7-flash', 'high'],
-  ['claude-opus-5-xhigh', 'gpt-5.6-terra', 'gemini-3.7-flash', 'xhigh'],
+  ['claude-opus-5', 'gpt-5.6-sol', 'gemini-3.7-flash'],
+  ['claude-opus-5-high', 'gpt-5.6-sol', 'gemini-3.7-flash', 'high'],
+  ['claude-opus-5-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
   ['claude-opus-4-8', 'gpt-5.6-terra', 'gemini-3.7-flash'],
   ['claude-opus-4-8-xhigh', 'gpt-5.6-terra', 'gemini-3.7-flash', 'xhigh'],
   ['claude-sonnet-5', 'gpt-5.6-luna', 'gemini-3.7-flash'],
   ['claude-sonnet-5-xhigh', 'gpt-5.6-luna', 'gemini-3.7-flash', 'xhigh'],
   ['claude-sonnet-4-6', 'gpt-5.6-luna', 'gemini-3.7-flash'],
-  ['claude-fable-5', 'gpt-5.6-sol', 'gemini-3.7-flash'],
-  ['claude-fable-5-high', 'gpt-5.6-sol', 'gemini-3.7-flash', 'high'],
-  ['claude-fable-5-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
-  ['claude-fable-5-max', 'gpt-5.6-sol', 'gemini-3.7-flash', 'max'],
-  // Interim mapping: switch Fable 5.1 to GPT-6 Astra when GPT-6 reaches GA.
-  ['claude-fable-5-1', 'gpt-5.6-sol', 'gemini-3.7-flash'],
-  ['claude-fable-5-1-high', 'gpt-5.6-sol', 'gemini-3.7-flash', 'high'],
-  ['claude-fable-5-1-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
-  ['claude-fable-5-1-max', 'gpt-5.6-sol', 'gemini-3.7-flash', 'max'],
+  // GA switch applied: Fable 5 and 5.1 now use GPT-6 Astra.
+  ['claude-fable-5', 'gpt-6-astra', 'gemini-3.8-flash'],
+  ['claude-fable-5-high', 'gpt-6-astra', 'gemini-3.8-flash', 'high'],
+  ['claude-fable-5-xhigh', 'gpt-6-astra', 'gemini-3.8-flash', 'xhigh'],
+  ['claude-fable-5-max', 'gpt-6-astra', 'gemini-3.8-flash', 'max'],
+  ['claude-fable-5-1', 'gpt-6-astra', 'gemini-3.8-flash'],
+  ['claude-fable-5-1-high', 'gpt-6-astra', 'gemini-3.8-flash', 'high'],
+  ['claude-fable-5-1-xhigh', 'gpt-6-astra', 'gemini-3.8-flash', 'xhigh'],
+  ['claude-fable-5-1-max', 'gpt-6-astra', 'gemini-3.8-flash', 'max'],
 ];
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
