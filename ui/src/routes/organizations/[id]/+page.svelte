@@ -31,6 +31,7 @@
   import { fetchFolders } from '$lib/stores/folders';
   import { Lock } from '@lucide/svelte';
   import { normalizeMarkdownLineEndings } from '$lib/utils/markdown';
+  import { buildLockScopeKey } from '$lib/utils/lock-scope';
 
   let organization: Organization | null = null;
   let error = '';
@@ -41,6 +42,7 @@
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let lockTargetId: string | null = null;
+  let activeLockScopeKey: string | null = null;
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
@@ -304,7 +306,13 @@
     setupOrganizationHub(organizationId);
   }
 
-  $: if (organizationId && organizationId !== lockTargetId) {
+  $: readyLockScopeKey = buildLockScopeKey({
+    hydrated: $workspaceScopeHydrated,
+    userId: $session.user?.id,
+    workspaceId,
+    targetId: organizationId,
+  });
+  $: if (readyLockScopeKey && readyLockScopeKey !== activeLockScopeKey && organizationId) {
     if (lockTargetId) {
       void leavePresence('organization', lockTargetId);
       void releaseCurrentLock();
@@ -312,6 +320,7 @@
     lock = null;
     presenceUsers = [];
     presenceTotal = 0;
+    activeLockScopeKey = readyLockScopeKey;
     lockTargetId = organizationId;
     subscribeLock(lockTargetId);
     void syncLock();

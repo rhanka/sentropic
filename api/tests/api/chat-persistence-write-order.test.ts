@@ -30,13 +30,14 @@ import { createTestId } from '../utils/test-helpers';
  * an unhandled FK violation, which fails the chat job → the shard sees missing
  * tool-call events and times out.
  *
- * The invariant under test: a stream event / generation trace whose referenced
+ * The namespace provider keeps these stores canonical. The invariant under
+ * test: a stream event / generation trace whose referenced
  * `chat_messages` / `chat_sessions` parent row no longer exists must NOT crash
  * the generation with an unhandled FK violation. The write of an orphaned
  * reference is a no-op (the parent — and by cascade these children — are gone),
  * not a fatal error for the job.
  */
-describe('chat persistence write-order FK race', () => {
+describe('chat namespace canonical persistence write-order FK race', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
   let sessionId: string;
   let assistantMessageId: string;

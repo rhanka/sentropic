@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chatMessageFeedbackUrl,
+  chatMessageRuntimeDetailsUrl,
   chatMessageRetryUrl,
   chatMessageStopUrl,
   chatMessageToolResultsUrl,
@@ -17,6 +18,7 @@ import {
 describe('chat session adapter', () => {
   it('builds chat session and message endpoint URLs in one place', () => {
     expect(chatSessionsUrl()).toBe('/chat/sessions');
+    expect(chatSessionsUrl()).not.toBe('/session');
     expect(chatSessionUrl('session/1')).toBe('/chat/sessions/session%2F1');
     expect(chatSessionHistoryUrl('session/1', 'summary')).toBe(
       '/chat/sessions/session%2F1/history?runtimeDetails=summary',
@@ -31,6 +33,9 @@ describe('chat session adapter', () => {
       '/chat/sessions/session%2F1/checkpoints/checkpoint%2F1/restore',
     );
     expect(chatMessagesUrl()).toBe('/chat/messages');
+    expect(chatMessageRuntimeDetailsUrl('message/1')).toBe(
+      '/chat/messages/message%2F1/runtime-details',
+    );
     expect(chatMessageRetryUrl('message/1')).toBe('/chat/messages/message%2F1/retry');
     expect(chatMessageStopUrl('message/1')).toBe('/chat/messages/message%2F1/stop');
     expect(chatMessageFeedbackUrl('message/1')).toBe(
@@ -39,6 +44,11 @@ describe('chat session adapter', () => {
     expect(chatMessageToolResultsUrl('message/1')).toBe(
       '/chat/messages/message%2F1/tool-results',
     );
+  });
+
+  it('keeps chat-session transport separate from the root-projected runtime session facade', () => {
+    expect(chatSessionsUrl()).toMatch(/^\/chat\//);
+    expect(chatSessionsUrl()).not.toMatch(/^\/auth\/session/);
   });
 
   it('formats API errors structurally without importing the API client', () => {

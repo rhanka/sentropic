@@ -53,10 +53,12 @@ test.describe('Chat heavy flows', () => {
     };
   }
 
-  async function debugBackendState(page: any, jobId: string, streamId: string) {
+  async function debugBackendState(page: any, jobId: string, streamId: string, workspaceId: string) {
     try {
       if (jobId) {
-        const jobRes = await page.request.get(`/api/v1/queue/jobs/${encodeURIComponent(jobId)}`);
+        const jobRes = await page.request.get(
+          `/api/v1/queue/jobs/${encodeURIComponent(jobId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
+        );
         console.log('[08-chat-heavy] job status:', jobRes.status(), await jobRes.text());
       }
     } catch (error) {
@@ -64,11 +66,15 @@ test.describe('Chat heavy flows', () => {
     }
     try {
       if (streamId) {
-        const eventsRes = await page.request.get(`/api/v1/streams/events/${encodeURIComponent(streamId)}?limit=50`);
-        console.log('[08-chat-heavy] stream events:', eventsRes.status(), await eventsRes.text());
+        const activeRes = await page.request.get('/api/v1/streams/active?since_minutes=360&limit=200');
+        const activePayload = await activeRes.json().catch(() => null);
+        console.log('[08-chat-heavy] active stream:', activeRes.status(), {
+          streamId,
+          active: Array.isArray(activePayload?.streamIds) && activePayload.streamIds.includes(streamId),
+        });
       }
     } catch (error) {
-      console.log('[08-chat-heavy] failed to fetch stream events:', error);
+      console.log('[08-chat-heavy] failed to inspect active streams:', error);
     }
   }
 
@@ -142,7 +148,7 @@ test.describe('Chat heavy flows', () => {
       await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
     } catch (error) {
       await debugAssistantState(page);
-      await debugBackendState(page, jobId, streamId);
+      await debugBackendState(page, jobId, streamId, adminWorkspaceId);
       throw error;
     }
 

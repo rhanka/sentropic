@@ -34,6 +34,7 @@ describe('comments utils', () => {
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(`${API_BASE_URL}/comments?`);
+    expect(String(url)).not.toContain('/comments/comments');
     expect(String(url)).toContain('context_type=usecase');
     expect(String(url)).toContain('context_id=uc_1');
     expect(String(url)).toContain('section_key=description');
@@ -57,6 +58,7 @@ describe('comments utils', () => {
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(`${API_BASE_URL}/comments`);
+    expect(String(url)).not.toContain('/comments/comments');
     expect(init?.method).toBe('POST');
     const body = JSON.parse(String(init?.body ?? '{}'));
     expect(body).toEqual({

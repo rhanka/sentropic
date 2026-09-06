@@ -6,7 +6,7 @@ import {
   createAuthenticatedUser,
 } from '../utils/auth-helper';
 
-describe('Models API', () => {
+describe('llm-mesh model projections', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
 
   beforeEach(async () => {
@@ -30,6 +30,7 @@ describe('Models API', () => {
 
     expect(Array.isArray(data.providers)).toBe(true);
     expect(Array.isArray(data.models)).toBe(true);
+    expect(JSON.stringify(data)).not.toMatch(/accessToken|refreshToken|keyring/);
 
     const providerIds = data.providers.map((provider: { provider_id: string }) => provider.provider_id);
     expect(providerIds).toContain('openai');

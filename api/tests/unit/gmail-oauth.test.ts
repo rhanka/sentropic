@@ -63,6 +63,7 @@ describe('Gmail OAuth security primitives', () => {
       expect(config?.redirectUri).toBe(
         'https://api.example.test/api/v1/google-drive/oauth/callback',
       );
+      expect(config?.redirectUri).not.toContain('/connectors/');
       if (!config) throw new Error('Expected Gmail OAuth configuration.');
 
       const url = new URL(buildGmailAuthorizationUrl({

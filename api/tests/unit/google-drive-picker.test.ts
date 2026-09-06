@@ -35,5 +35,7 @@ describe('Google Drive Picker helpers', () => {
       appId: '924600787940',
       oauthToken: 'oauth-token',
     });
+    expect(picker).not.toHaveProperty('clientSecret');
+    expect(picker).not.toHaveProperty('redirectUri');
   });
 });

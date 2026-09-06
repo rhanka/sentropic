@@ -77,6 +77,24 @@ describe('chat checkpoint contract endpoints', () => {
     expect(Array.isArray(listed.checkpoints)).toBe(true);
     expect(listed.checkpoints.length).toBeGreaterThan(0);
 
+    const history = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/chat/sessions/${sessionId}/history`,
+      user.sessionToken!,
+    );
+    expect(history.status).toBe(200);
+    expect(history.headers.get('content-type')).toContain('application/x-ndjson');
+    const [sessionMeta] = (await history.text())
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(sessionMeta).toMatchObject({
+      type: 'session_meta',
+      sessionId,
+      checkpoints: [expect.objectContaining({ id: checkpointId })],
+    });
+
     const restore = await authenticatedRequest(
       app,
       'POST',

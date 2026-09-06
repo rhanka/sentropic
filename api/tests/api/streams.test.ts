@@ -126,6 +126,21 @@ describe('Streams API Endpoints', () => {
     await cleanupAuthData();
   });
 
+  it('serves the canonical root-remapped namespace exactly once', async () => {
+    const canonical = await app.request('/api/v1/streams/active?limit=1', {
+      headers: { cookie: `session=${user.sessionToken}` },
+    });
+    expect(canonical.status).toBe(200);
+    await expect(canonical.json()).resolves.toEqual({
+      streamIds: expect.any(Array),
+    });
+
+    const duplicatePrefix = await app.request('/api/v1/streams/streams/active', {
+      headers: { cookie: `session=${user.sessionToken}` },
+    });
+    expect(duplicatePrefix.status).toBe(404);
+  });
+
   describe('GET /api/v1/streams/sse (tenancy)', () => {
     it('should not leak company updates across workspaces (admin_app stays isolated by default)', async () => {
       const suffix = createTestId();

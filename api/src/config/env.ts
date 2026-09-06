@@ -152,6 +152,11 @@ const envSchema = z.object({
   // its own host, that IdP is the AS, and only it serves the RFC 8414 metadata a client must fetch.
   // Absent ⇒ falls back to this api's own resolved OAuth issuer (the co-located dev/test shape).
   MCP_AUTHORIZATION_SERVER_URL: z.string().optional(),
+  CLUSTER_MESH_ED25519_PUBLIC_KEYS_JSON: z.string().optional(),
+  CLUSTER_MESH_EVIDENCE_AUDIENCE: z.string().optional(),
+  CLUSTER_MESH_LEGACY_AUDIENCES: z.string().optional(),
+  // Non-production A1 qualification only. Production rejects shared-secret evidence.
+  CLUSTER_MESH_A1_QUALIFICATION: z.enum(['0', '1']).optional(),
   // Dev/test self-S2S dogfood client (BR39d-D10)
   OAUTH_SELF_SERVICE_CLIENT_ID: z.string().optional(),
   OAUTH_SELF_SERVICE_CLIENT_SECRET: z.string().optional(),
@@ -200,6 +205,12 @@ const envSchema = z.object({
 
 export type AppEnv = z.infer<typeof envSchema>;
 
+type ProductionRuntimeEnvironment = Readonly<{
+  NODE_ENV?: string;
+  DISABLE_RATE_LIMIT?: string;
+  ADMIN_EMAIL?: string;
+}>;
+
 export const env: AppEnv = (() => {
   const parsed = envSchema.parse(process.env);
   // TEM project id falls back to the shared Scaleway default project when unset.
@@ -218,10 +229,10 @@ export const env: AppEnv = (() => {
   return parsed;
 })();
 
-export const isE2eProductionImageRuntime = (value: AppEnv = env): boolean =>
+export const isE2eProductionImageRuntime = (value: ProductionRuntimeEnvironment = env): boolean =>
   value.NODE_ENV === 'production' &&
   value.DISABLE_RATE_LIMIT === 'true' &&
   value.ADMIN_EMAIL === 'e2e-admin@example.com';
 
-export const requiresOAuthProductionSecrets = (value: AppEnv = env): boolean =>
+export const requiresOAuthProductionSecrets = (value: ProductionRuntimeEnvironment = env): boolean =>
   value.NODE_ENV === 'production' && !isE2eProductionImageRuntime(value);

@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/connector-host",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Pure provider-agnostic mount for @sentropic/mcp-platform connector adapters with injected deny-by-default host ports.",
   "type": "module",
@@ -16,6 +16,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./hono": {
+      "types": "./dist/hono.d.ts",
+      "import": "./dist/hono.js"
     }
   },
   "sideEffects": false,
@@ -25,7 +29,8 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/mcp-platform": "^0.1.0"
+    "@sentropic/mcp-platform": "^0.2.0",
+    "hono": "^4.12.18"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",

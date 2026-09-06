@@ -32,7 +32,7 @@ describe('OAuth userinfo API route', () => {
   it('returns scoped user claims for an active bearer access token', async () => {
     const { accessToken, user } = await issueStoredAccessToken();
 
-    const res = await app.request(`${ISSUER}/api/v1/auth/oauth/userinfo`, {
+    const res = await app.request(`${ISSUER}/api/v1/oauth/userinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
@@ -71,7 +71,7 @@ const issueStoredAccessToken = async () => {
       scope: 'openid profile email',
     },
     {
-      audience: `${ISSUER}/api/v1/auth/oauth/userinfo`,
+      audience: `${ISSUER}/api/v1/oauth/userinfo`,
       expiresAt,
       issuer: ISSUER,
       jti,
@@ -83,7 +83,7 @@ const issueStoredAccessToken = async () => {
   await createOauthStateStoreAdapter({ now: () => now }).saveTokenMeta(
     jti,
     {
-      audience: `${ISSUER}/api/v1/auth/oauth/userinfo`,
+      audience: `${ISSUER}/api/v1/oauth/userinfo`,
       clientId: CLIENT_ID,
       createdAt: now,
       dpopJkt: null,

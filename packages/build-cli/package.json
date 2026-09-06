@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/build-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The `stp app` processes of the Sentropic umbrella CLI: a deterministic, dependency-light scaffolding substrate (token substitution + scaffold manifest + generator core) that materialises a runnable chat-app whose backend mounts the published @sentropic/chat-server canonical routes. Behind an interface designed for later @sentropic/harness adoption (R5).",
   "type": "module",
   "license": "MIT",

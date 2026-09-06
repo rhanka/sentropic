@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventStore } from '@sentropic/track';
@@ -86,6 +86,17 @@ describe('TrackDecisionValidator (Fail-Closed Matrix)', () => {
     });
     expect(res.authorized).toBe(false);
     expect(res.reason).toBe('track-store-unconfigured');
+  });
+
+  it('1b. unreadable Track log → deny', async () => {
+    writeFileSync(eventsPath, '{not-json}\n');
+    const res = await new TrackDecisionValidator({ eventsPath }).validate({
+      workspace: 'ws:sha256-ws1',
+      decisionId: 'dec-1',
+      userId: 'user-1',
+      userEmail: 'owner@example.com',
+    });
+    expect(res).toEqual({ authorized: false, reason: 'decision-validation-failed' });
   });
 
   it('2. not-found → deny', async () => {

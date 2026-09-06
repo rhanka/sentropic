@@ -197,7 +197,8 @@
     return labels('chat.comments.placeholder.write');
   };
 
-  const canSend = (): boolean =>
+  let commentCanSend = false;
+  $: commentCanSend =
     workspaceCanComment &&
     !snap.commentThreadResolved &&
     !!contextType &&
@@ -525,12 +526,12 @@
         {/if}
       </div>
       {#if renderSendButton}
-        {@render renderSendButton({ disabled: !canSend(), onSend: () => void state.actions.sendComment() })}
+        {@render renderSendButton({ disabled: !commentCanSend, onSend: () => void state.actions.sendComment() })}
       {:else}
         <button
           class="rounded bg-primary hover:bg-primary/90 text-white w-8 h-8 flex items-center justify-center disabled:opacity-60"
           on:click={() => void state.actions.sendComment()}
-          disabled={!canSend()}
+          disabled={!commentCanSend}
           type="button"
           aria-label={labels('common.send')}
           title={labels('common.send')}

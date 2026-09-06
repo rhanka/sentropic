@@ -6,6 +6,7 @@ import { db } from '../../src/db/client';
 import { contextDocuments, workspaceMemberships } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { __test_clearLocksForUser } from '../../src/services/lock-service';
+import { productLocksPorts } from '../../src/routes/namespaces/locks-product-ports';
 
 const mockPutObject = vi.fn();
 const mockDeleteObject = vi.fn();
@@ -227,7 +228,7 @@ describe('Collaboration security', () => {
     expect(payload.lock).toBeNull();
   });
 
-  it('clears all locks when SSE connections drop to zero', async () => {
+  it('clears all locks and presence when SSE connections drop to zero', async () => {
     const locks = [
       { objectType: 'organization', objectId: `org_${createTestId()}` },
       { objectType: 'folder', objectId: `folder_${createTestId()}` },
@@ -242,9 +243,17 @@ describe('Collaboration security', () => {
         { objectType, objectId }
       );
       expect(res.status).toBe(201);
+      const presence = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/locks/presence?workspace_id=${encodeURIComponent(workspaceId)}`,
+        editor.sessionToken!,
+        { objectType, objectId },
+      );
+      expect(presence.status).toBe(200);
     }
 
-    await __test_clearLocksForUser(editor.id);
+    await productLocksPorts.stream.clearForUser(editor.id);
 
     for (const { objectType, objectId } of locks) {
       const check = await authenticatedRequest(
@@ -256,6 +265,15 @@ describe('Collaboration security', () => {
       expect(check.status).toBe(200);
       const payload = await check.json();
       expect(payload.lock).toBeNull();
+
+      const presence = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/locks/presence?workspace_id=${encodeURIComponent(workspaceId)}&objectType=${objectType}&objectId=${objectId}`,
+        otherEditor.sessionToken!,
+      );
+      expect(presence.status).toBe(200);
+      expect(await presence.json()).toEqual({ users: [], total: 0 });
     }
   });
 

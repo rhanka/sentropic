@@ -15,7 +15,7 @@ export interface CreateAuthClientOptions {
   resource?: string;
   /** Opt-in DPoP-bound access tokens (BR39d-D1). */
   dpop?: boolean;
-  /** Explicit token endpoint; defaults to `${issuer}/api/v1/auth/oauth/token`. */
+  /** Explicit token endpoint; defaults to `${issuer}/api/v1/oauth/token`. */
   tokenEndpoint?: string;
   /** Refresh tokens this many seconds before they expire (default 30). */
   refreshSkewSeconds?: number;
@@ -82,7 +82,7 @@ export const createAuthClient = (options: CreateAuthClientOptions): AuthClient =
   }
   const now = options.now ?? (() => new Date());
   const refreshSkewSeconds = options.refreshSkewSeconds ?? 30;
-  const tokenEndpoint = options.tokenEndpoint ?? `${trimTrailingSlash(options.issuer)}/api/v1/auth/oauth/token`;
+  const tokenEndpoint = options.tokenEndpoint ?? `${trimTrailingSlash(options.issuer)}/api/v1/oauth/token`;
   const defaultScope = normalizeScope(options.scope);
 
   const cache = new Map<string, ServiceAccessToken>();

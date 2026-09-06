@@ -101,4 +101,9 @@ describe('generateInjectedScript', () => {
   it('references bridge iframe by #__topai_bridge', () => {
     expect(script).toContain('__topai_bridge');
   });
+
+  it('does not emit URLs for the removed bookmarklet transport', () => {
+    expect(script).not.toContain('/api/v1/bookmarklet');
+    expect(script).not.toContain('__TOPAI_JSONP_MODE');
+  });
 });

@@ -1,22 +1,13 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import {
-  createOAuthAuthorizeHandler,
-  createOAuthConsentDecisionHandler,
-  createOAuthConsentDetailsHandler,
-  createOAuthEndSessionHandler,
   createOAuthHmacStateCodec,
-  createOAuthIntrospectHandler,
-  createOAuthRevokeHandler,
-  createOAuthTokenHandler,
-  createOAuthUserInfoHandler,
   type AuthHonoAccountStatus,
   type AuthHonoPorts,
   type AuthHonoSessionRecord,
   type AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
 import { and, eq, sql } from 'drizzle-orm';
-import { Hono, type Context } from 'hono';
 import { jwtVerify, SignJWT } from 'jose';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
@@ -53,18 +44,6 @@ const JWT_SECRET = new TextEncoder().encode(resolveSessionTokenSecret());
 const unsupportedOAuthPort = async (): Promise<never> => {
   throw new Error('This AuthHono port is not used by the Sentropic OAuth host routes.');
 };
-
-export const oauthRouter = new Hono();
-
-oauthRouter.get('/authorize', withOAuthOptions(createOAuthAuthorizeHandler));
-oauthRouter.get('/consent', withOAuthOptions(createOAuthConsentDetailsHandler));
-oauthRouter.post('/consent/decision', withOAuthOptions(createOAuthConsentDecisionHandler));
-oauthRouter.post('/token', withOAuthOptions(createOAuthTokenHandler));
-oauthRouter.get('/userinfo', withOAuthOptions(createOAuthUserInfoHandler));
-oauthRouter.post('/userinfo', withOAuthOptions(createOAuthUserInfoHandler));
-oauthRouter.post('/revoke', withOAuthOptions(createOAuthRevokeHandler));
-oauthRouter.post('/introspect', withOAuthOptions(createOAuthIntrospectHandler));
-oauthRouter.get('/end_session', withOAuthOptions(createOAuthEndSessionHandler));
 
 let cachedPorts: AuthHonoPorts | null = null;
 
@@ -115,12 +94,6 @@ export const resolveOAuthServiceResource = (request?: Request): string =>
   env.OAUTH_SERVICE_RESOURCE_URI
     ? trimTrailingSlash(env.OAUTH_SERVICE_RESOURCE_URI)
     : resolveOAuthIssuer(request);
-
-function withOAuthOptions(
-  factory: (options: ReturnType<typeof createSentropicOAuthOptions>) => (c: Context) => Promise<Response>,
-): (c: Context) => Promise<Response> {
-  return (c) => factory(createSentropicOAuthOptions(c.req.raw))(c);
-}
 
 const createSentropicOAuthPorts = (): AuthHonoPorts => ({
   accountPolicy: {

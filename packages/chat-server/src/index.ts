@@ -18,11 +18,16 @@ export type ChatMessageAttachmentInput = {
 
 export type ChatControlAction =
   | 'createMessage'
+  | 'createSession'
   | 'stop'
   | 'steer'
   | 'feedback'
   | 'retry'
   | 'toolResults'
+  | 'editMessage'
+  | 'listToolPermissions'
+  | 'upsertToolPermission'
+  | 'deleteToolPermission'
   | 'createCheckpoint'
   | 'listCheckpoints'
   | 'restoreCheckpoint';
@@ -134,6 +139,8 @@ export type ChatServerOptions = {
    * same `name`. Default: none (client is the only source, as today).
    */
   localToolDefinitions?: ReadonlyArray<unknown>;
+  /** Maximum rows returned by `GET /sessions?scope=all`. Default: 200. */
+  allWorkspaceSessionLimit?: number;
 };
 
 export type CreatedChatMessage = {
@@ -171,6 +178,61 @@ export type ChatServerStreamEvent = {
   createdAt?: string | Date;
 };
 
+export type ChatSessionPort = {
+  listSessions(input: {
+    userId: string;
+    workspaceId?: string | null;
+    limit?: number;
+  }): Promise<ReadonlyArray<unknown>>;
+  createSession(input: {
+    userId: string;
+    workspaceId?: string | null;
+    primaryContextType?: string | null;
+    primaryContextId?: string | null;
+    title?: string | null;
+  }): Promise<{ sessionId: string }>;
+  getSessionHistory(input: {
+    sessionId: string;
+    userId: string;
+    detailMode: 'summary' | 'full';
+  }): Promise<{
+    sessionId: string;
+    title: string | null;
+    todoRuntime: unknown;
+    checkpoints: ReadonlyArray<unknown>;
+    documents: ReadonlyArray<unknown>;
+    items: ReadonlyArray<unknown>;
+  }>;
+  deleteSession(input: { sessionId: string; userId: string }): Promise<void>;
+};
+
+export type ChatExtensionPermission = {
+  toolName: string;
+  origin: string;
+  policy: 'allow' | 'deny';
+  updatedAt: string;
+};
+
+export type ChatExtensionPort = {
+  listToolPermissions(input: {
+    userId: string;
+    workspaceId: string;
+  }): Promise<ReadonlyArray<ChatExtensionPermission>>;
+  upsertToolPermission(input: {
+    userId: string;
+    workspaceId: string;
+    toolName: string;
+    origin: string;
+    policy: 'allow' | 'deny';
+  }): Promise<ChatExtensionPermission>;
+  deleteToolPermission(input: {
+    userId: string;
+    workspaceId: string;
+    toolName: string;
+    origin: string;
+  }): Promise<void>;
+};
+
 export type ChatMessagePort = {
   createUserMessageWithAssistantPlaceholder(input: {
     userId: string;
@@ -205,6 +267,17 @@ export type ChatMessagePort = {
     documents: ReadonlyArray<unknown>;
     assistantDetailsByMessageId: Record<string, ReadonlyArray<unknown>>;
   }>;
+
+  getMessageRuntimeDetails?(input: {
+    messageId: string;
+    userId: string;
+  }): Promise<unknown>;
+
+  updateUserMessageContent?(input: {
+    messageId: string;
+    userId: string;
+    content: string;
+  }): Promise<{ messageId: string }>;
 
   getMessageForUser?(input: {
     messageId: string;
@@ -311,6 +384,8 @@ export type ChatStreamPort = {
 export type ChatServerDeps = {
   getUser?: (c: Context) => ChatServerUser | null | Promise<ChatServerUser | null>;
   messages: ChatMessagePort;
+  sessions?: ChatSessionPort;
+  extensions?: ChatExtensionPort;
   queue: ChatQueuePort;
   stream: ChatStreamPort;
 };
@@ -729,6 +804,199 @@ export function createChatServer(
     return c.json({ sessionId, ...result });
   };
 
+  const listSessions = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    const allWorkspaces = c.req.query('scope') === 'all';
+    const sessions = await deps.sessions.listSessions({
+      userId: user.userId,
+      workspaceId: allWorkspaces ? null : user.workspaceId,
+      limit: allWorkspaces ? options.allWorkspaceSessionLimit ?? 200 : undefined,
+    });
+    return c.json({ sessions });
+  };
+
+  const createSession = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'createSession');
+    if (denied) return denied;
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    const body = await readJson(c);
+    const primaryContextType = body.primaryContextType;
+    const primaryContextId = body.primaryContextId;
+    const sessionTitle = body.sessionTitle;
+    const allowedContextTypes = new Set([
+      'organization', 'folder', 'initiative', 'usecase', 'executive_summary',
+    ]);
+    if (
+      (primaryContextType !== undefined
+        && (typeof primaryContextType !== 'string'
+          || !allowedContextTypes.has(primaryContextType)))
+      || (primaryContextId !== undefined && typeof primaryContextId !== 'string')
+      || (sessionTitle !== undefined && typeof sessionTitle !== 'string')
+    ) {
+      return c.json({ error: 'Invalid session payload' }, 400);
+    }
+    const result = await deps.sessions.createSession({
+      userId: user.userId,
+      workspaceId: user.workspaceId,
+      primaryContextType: primaryContextType ?? null,
+      primaryContextId: primaryContextId ?? null,
+      title: sessionTitle ?? null,
+    });
+    return c.json({ sessionId: result.sessionId });
+  };
+
+  const sessionHistory = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    const sessionId = routeParam(c, 'sessionId', 'id');
+    const detailMode = c.req.query('runtimeDetails') === 'full' ? 'full' : 'summary';
+    let result: Awaited<ReturnType<ChatSessionPort['getSessionHistory']>>;
+    try {
+      result = await deps.sessions.getSessionHistory({
+        sessionId,
+        userId: user.userId,
+        detailMode,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Session not found') {
+        return c.json({ message: 'Session not found' }, 404);
+      }
+      throw error;
+    }
+
+    const lines = [
+      {
+        type: 'session_meta',
+        sessionId: result.sessionId,
+        title: result.title,
+        todoRuntime: result.todoRuntime,
+        checkpoints: result.checkpoints,
+        documents: result.documents,
+      },
+      ...result.items.map((item) => ({ type: 'timeline_item', item })),
+    ];
+    c.header('Content-Type', 'application/x-ndjson; charset=utf-8');
+    c.header('Cache-Control', 'no-store');
+    return c.body(`${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
+  };
+
+  const deleteSession = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.sessions) return c.json({ error: 'sessions are not configured' }, 501);
+    await deps.sessions.deleteSession({
+      sessionId: routeParam(c, 'sessionId', 'id'),
+      userId: user.userId,
+    });
+    return c.json({ ok: true });
+  };
+
+  const messageRuntimeDetails = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    if (!deps.messages.getMessageRuntimeDetails) {
+      return c.json({ error: 'message runtime details are not configured' }, 501);
+    }
+    const result = await deps.messages.getMessageRuntimeDetails({
+      messageId: routeParam(c, 'messageId', 'id'),
+      userId: user.userId,
+    });
+    return c.json(result as Record<string, unknown>);
+  };
+
+  const editMessage = async (c: Context) => {
+    const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, 'editMessage');
+    if (denied) return denied;
+    if (!deps.messages.updateUserMessageContent) {
+      return c.json({ error: 'message editing is not configured' }, 501);
+    }
+    const body = await readJson(c);
+    if (typeof body.content !== 'string' || body.content.length === 0) {
+      return c.json({ error: 'Unable to edit message' }, 400);
+    }
+    try {
+      const result = await deps.messages.updateUserMessageContent({
+        messageId: routeParam(c, 'messageId', 'id'),
+        userId: user.userId,
+        content: body.content,
+      });
+      return c.json({ messageId: result.messageId });
+    } catch (error) {
+      return controlErrorResponse(c, error, 'Unable to edit message');
+    }
+  };
+
+  const extensionWorkspace = async (
+    c: Context,
+    action: Extract<ChatControlAction,
+      'listToolPermissions' | 'upsertToolPermission' | 'deleteToolPermission'>,
+  ): Promise<{ user: ChatServerUser; denied: Response | null }> => {
+    const user = await resolveUser(c, deps);
+    const denied = await authorize(c, user, action);
+    return {
+      user,
+      denied: denied ?? (!user.workspaceId
+        ? c.json({ error: 'Insufficient permissions' }, 403)
+        : null),
+    };
+  };
+
+  const listToolPermissions = async (c: Context) => {
+    const { user, denied } = await extensionWorkspace(c, 'listToolPermissions');
+    if (denied) return denied;
+    const items = await deps.extensions!.listToolPermissions({
+      userId: user.userId,
+      workspaceId: user.workspaceId!,
+    });
+    return c.json({ items });
+  };
+
+  const upsertToolPermission = async (c: Context) => {
+    const { user, denied } = await extensionWorkspace(c, 'upsertToolPermission');
+    if (denied) return denied;
+    const body = await readJson(c);
+    if (
+      typeof body.toolName !== 'string'
+      || typeof body.origin !== 'string'
+      || (body.policy !== 'allow' && body.policy !== 'deny')
+    ) {
+      return c.json({ error: 'Invalid tool permission payload' }, 400);
+    }
+    try {
+      const item = await deps.extensions!.upsertToolPermission({
+        userId: user.userId,
+        workspaceId: user.workspaceId!,
+        toolName: body.toolName,
+        origin: body.origin,
+        policy: body.policy,
+      });
+      return c.json({ ok: true, item });
+    } catch (error) {
+      return c.json({ error: errorMessage(error, 'Unable to update tool permission') }, 400);
+    }
+  };
+
+  const deleteToolPermission = async (c: Context) => {
+    const { user, denied } = await extensionWorkspace(c, 'deleteToolPermission');
+    if (denied) return denied;
+    const body = await readJson(c);
+    if (typeof body.toolName !== 'string' || typeof body.origin !== 'string') {
+      return c.json({ error: 'Invalid tool permission payload' }, 400);
+    }
+    try {
+      await deps.extensions!.deleteToolPermission({
+        userId: user.userId,
+        workspaceId: user.workspaceId!,
+        toolName: body.toolName,
+        origin: body.origin,
+      });
+      return c.json({ ok: true });
+    } catch (error) {
+      return c.json({ error: errorMessage(error, 'Unable to delete tool permission') }, 400);
+    }
+  };
+
   const stream = async (c: Context) => {
     const user = await resolveUser(c, deps);
     const sessionId = routeParam(c, 'sessionId', 'id');
@@ -999,6 +1267,24 @@ export function createChatServer(
     app.post(routePath('/messages/:messageId/tool-results'), toolResults);
   }
 
+  if (deps.sessions) {
+    app.get(routePath('/sessions'), listSessions);
+    app.post(routePath('/sessions'), createSession);
+    app.get(routePath('/sessions/:sessionId/history'), sessionHistory);
+    app.delete(routePath('/sessions/:sessionId'), deleteSession);
+  }
+  if (deps.messages.getMessageRuntimeDetails) {
+    app.get(routePath('/messages/:messageId/runtime-details'), messageRuntimeDetails);
+  }
+  if (deps.messages.updateUserMessageContent) {
+    app.patch(routePath('/messages/:messageId'), editMessage);
+  }
+  if (deps.extensions) {
+    app.get(routePath('/tool-permissions'), listToolPermissions);
+    app.put(routePath('/tool-permissions'), upsertToolPermission);
+    app.delete(routePath('/tool-permissions'), deleteToolPermission);
+  }
+
   return app;
 }
 
@@ -1007,10 +1293,16 @@ export function createInMemoryChatServerDeps(
 ): ChatServerDeps {
   const user = options.user ?? { userId: 'test-user', workspaceId: 'test-workspace' };
   const assistantReply = options.assistantReply ?? 'Hello from chat-server.';
-  const sessions = new Map<string, { id: string; userId: string; workspaceId: string | null }>();
+  const sessions = new Map<string, {
+    id: string;
+    userId: string;
+    workspaceId: string | null;
+    title: string | null;
+  }>();
   const messages = new Map<string, ChatServerMessage>();
   const streamEvents = new Map<string, ChatServerStreamEvent[]>();
   const checkpoints = new Map<string, Array<Record<string, unknown>>>();
+  const toolPermissions = new Map<string, ChatExtensionPermission>();
 
   const ensureSession = (sessionId: string, owner: ChatServerUser) => {
     if (!sessions.has(sessionId)) {
@@ -1018,6 +1310,7 @@ export function createInMemoryChatServerDeps(
         id: sessionId,
         userId: owner.userId,
         workspaceId: owner.workspaceId ?? null,
+        title: null,
       });
     }
     return sessions.get(sessionId)!;
@@ -1099,6 +1392,68 @@ export function createInMemoryChatServerDeps(
 
   const deps: ChatServerDeps = {
     getUser: () => user,
+    sessions: {
+      async listSessions(input) {
+        return Array.from(sessions.values()).filter((session) =>
+          session.userId === input.userId
+          && (input.workspaceId == null || session.workspaceId === input.workspaceId),
+        ).slice(0, input.limit);
+      },
+      async createSession(input) {
+        const sessionId = randomUUID();
+        sessions.set(sessionId, {
+          id: sessionId,
+          userId: input.userId,
+          workspaceId: input.workspaceId ?? null,
+          title: input.title ?? null,
+        });
+        return { sessionId };
+      },
+      async getSessionHistory(input) {
+        const session = sessions.get(input.sessionId);
+        if (!session || session.userId !== input.userId) {
+          throw new Error('Session not found');
+        }
+        return {
+          sessionId: session.id,
+          title: session.title,
+          todoRuntime: null,
+          checkpoints: checkpoints.get(session.id) ?? [],
+          documents: [],
+          items: listSessionMessages(session.id),
+        };
+      },
+      async deleteSession(input) {
+        const session = sessions.get(input.sessionId);
+        if (!session || session.userId !== input.userId) {
+          throw new Error('Session not found');
+        }
+        sessions.delete(input.sessionId);
+        checkpoints.delete(input.sessionId);
+        for (const message of listSessionMessages(input.sessionId)) {
+          messages.delete(message.id);
+          streamEvents.delete(message.id);
+        }
+      },
+    },
+    extensions: {
+      async listToolPermissions() {
+        return Array.from(toolPermissions.values());
+      },
+      async upsertToolPermission(input) {
+        const item = {
+          toolName: input.toolName,
+          origin: input.origin,
+          policy: input.policy,
+          updatedAt: new Date(0).toISOString(),
+        };
+        toolPermissions.set(`${input.toolName}\u0000${input.origin}`, item);
+        return item;
+      },
+      async deleteToolPermission(input) {
+        toolPermissions.delete(`${input.toolName}\u0000${input.origin}`);
+      },
+    },
     messages: {
       createUserMessageWithAssistantPlaceholder: (input) => {
         options.onCreateMessage?.(input);
@@ -1126,6 +1481,20 @@ export function createInMemoryChatServerDeps(
           documents: [],
           assistantDetailsByMessageId,
         };
+      },
+      async getMessageRuntimeDetails(input) {
+        const message = messages.get(input.messageId);
+        if (!message) throw new Error('Message not found');
+        return {
+          messageId: input.messageId,
+          items: streamEvents.get(input.messageId) ?? [],
+        };
+      },
+      async updateUserMessageContent(input) {
+        const message = messages.get(input.messageId);
+        if (!message || message.role !== 'user') throw new Error('Message not found');
+        messages.set(input.messageId, { ...message, content: input.content });
+        return { messageId: input.messageId };
       },
       async getMessageForUser(input) {
         return messages.get(input.messageId) ?? null;

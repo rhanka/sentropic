@@ -25,6 +25,7 @@
   import FileMenu from '$lib/components/FileMenu.svelte';
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { AUTOSAVE_DEBOUNCE_MS } from '$lib/constants/autosave';
+  import { buildLockScopeKey } from '$lib/utils/lock-scope';
 
   // Helper to create array of indices for iteration
   const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -53,6 +54,7 @@
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let lockTargetId: string | null = null;
+  let activeLockScopeKey: string | null = null;
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
@@ -413,7 +415,13 @@
   };
 
 
-  $: if ($currentFolderId && $currentFolderId !== lockTargetId) {
+  $: readyLockScopeKey = buildLockScopeKey({
+    hydrated: $workspaceScopeHydrated,
+    userId: $session.user?.id,
+    workspaceId: $selectedWorkspace?.id,
+    targetId: $currentFolderId,
+  });
+  $: if (readyLockScopeKey && readyLockScopeKey !== activeLockScopeKey && $currentFolderId) {
     if (lockTargetId) {
       void leavePresence('folder', lockTargetId);
       void releaseCurrentLock();
@@ -421,6 +429,7 @@
     lock = null;
     presenceUsers = [];
     presenceTotal = 0;
+    activeLockScopeKey = readyLockScopeKey;
     lockTargetId = $currentFolderId;
     subscribeLock($currentFolderId);
     void syncLock();

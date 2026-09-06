@@ -66,6 +66,17 @@ describe('AppControlPlane — templates', () => {
     expect(versions).toHaveLength(2);
   });
 
+  it('returns deterministic template reads from canonical filtered state', async () => {
+    const alpha = await acp.createTemplate(draft('read-alpha'));
+    await acp.createTemplate(draft('read-alpha', '1.1.0', alpha.familyId));
+    await acp.createTemplate(draft('read-beta'));
+
+    await expect(acp.getTemplate(alpha.id)).resolves.toMatchObject({ id: alpha.id });
+    const family = await acp.listTemplates({ familyId: alpha.familyId });
+    expect(family.map(({ version }) => version).sort()).toEqual(['1.0.0', '1.1.0']);
+    expect(family.every(({ appSlug }) => appSlug === `${SLUG_PREFIX}read-alpha`)).toBe(true);
+  });
+
   it('enforces family = one app_slug (rejects a version bound to a different slug)', async () => {
     const v1 = await acp.createTemplate(draft('mono', '1.0.0'));
     await expect(

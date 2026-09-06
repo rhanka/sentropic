@@ -35,17 +35,17 @@ test.describe('OAuth2 token revocation', () => {
       expect(tokens.token_type).toBe('Bearer');
       const accessToken = tokens.access_token!;
 
-      const beforeRevoke = await api.get('/api/v1/auth/oauth/userinfo', {
+      const beforeRevoke = await api.get('/api/v1/oauth/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       await expectOk(beforeRevoke, 'userinfo before revoke');
 
-      const revoke = await api.post('/api/v1/auth/oauth/revoke', {
+      const revoke = await api.post('/api/v1/oauth/revoke', {
         form: { token: accessToken },
       });
       await expectOk(revoke, 'token revoke');
 
-      const afterRevoke = await api.get('/api/v1/auth/oauth/userinfo', {
+      const afterRevoke = await api.get('/api/v1/oauth/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       expect(afterRevoke.status()).toBe(401);
@@ -56,7 +56,7 @@ test.describe('OAuth2 token revocation', () => {
 });
 
 const buildAuthorizeUrl = (state: string): string => {
-  const url = new URL('/api/v1/auth/oauth/authorize', API_BASE_URL);
+  const url = new URL('/api/v1/oauth/authorize', API_BASE_URL);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', CLIENT_ID);
   url.searchParams.set('redirect_uri', `${UI_BASE_URL}/auth/oauth/callback`);
@@ -71,7 +71,7 @@ const exchangeCode = async (
   api: Awaited<ReturnType<typeof request.newContext>>,
   code: string,
 ): Promise<OAuthTokenResponse> => {
-  const response = await api.post('/api/v1/auth/oauth/token', {
+  const response = await api.post('/api/v1/oauth/token', {
     form: {
       client_id: CLIENT_ID,
       code,

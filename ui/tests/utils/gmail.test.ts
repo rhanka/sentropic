@@ -29,6 +29,7 @@ describe('gmail utils', () => {
     const result = await fetchGmailConnectionWith(requester);
 
     expect(requester).toHaveBeenCalledWith('/gmail/connection');
+    expect(requester).not.toHaveBeenCalledWith(expect.stringContaining('/connectors/'));
     expect(result).toEqual(disconnectedAccount);
   });
 

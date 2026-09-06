@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ACCESS_TOKEN_TYPE,
+  createClusterMeshPlugin,
   createDegenerateClusterMesh,
   RFC8693_GRANT_TYPE,
   type SignedProjectionReference,
@@ -13,6 +14,7 @@ const ref: SignedProjectionReference = {
 
 describe('degenerate cluster mesh', () => {
   it('should compose five federal domains with only local capabilities available', async () => {
+    expect(typeof createClusterMeshPlugin).toBe('function');
     const run = vi.fn(async () => ({ exitCode: 0, stdout: '', stderr: '' }));
     const mesh = createDegenerateClusterMesh({
       self: { kind: 'server', nodeId: 'node:local', issuer: ref.issuer, endpoint: 'https://app.example.test', state: 'active' },

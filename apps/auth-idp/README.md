@@ -20,13 +20,14 @@ It is Phase A0 of `spec/SPEC_EVOL_AUTH_IDP_STANDALONE.md`:
 
 ## How it composes (zero new auth code)
 
-`idp-app.ts` builds a fresh Hono app and **reuses the existing routers**:
+`idp-app.ts` builds a fresh Hono app and **reuses the Cluster Mesh namespace modules**:
 
 | Mounted path | Reused from | Already composes |
 |---|---|---|
-| `/.well-known/openid-configuration`, `/.well-known/jwks.json` | `api/src/routes/well-known.ts` (`wellKnownRouter`) | `createWellKnownRouter` (`@sentropic/auth-hono`) + JWKS adapter |
-| `/api/v1/auth/oauth/*` | `api/src/routes/auth/index.ts` → `oauth.ts` (`oauthRouter`) | `createOAuth*Handler` factories + Postgres state-store + JWKS adapters |
-| `/api/v1/auth/{register,login,session,credentials,magic-link,email,device}/*` | `authRouter` sub-routers | existing handlers + session/cookie adapters |
+| `/.well-known/openid-configuration`, `/.well-known/jwks.json` | Cluster Mesh `/oauth` well-known projection | `createWellKnownRouter` (`@sentropic/auth-hono`) + JWKS adapter |
+| `/api/v1/auth/oauth/*` | Cluster Mesh `/oauth` module | `createOAuthRouter` (`@sentropic/auth-hono`) + Postgres state-store + JWKS adapters |
+| `/api/v1/auth/{register,login,credentials,magic-link,email,federation}/*` | Cluster Mesh `/auth` module | `createAuthRouter` (`@sentropic/auth-hono`) + identity adapters |
+| `/api/v1/auth/{session,device}/*` | Cluster Mesh `/session` module | session/device handlers + session/cookie adapters |
 
 The login / register / magic-link / consent **screens** (Phase A0-bis) are a
 **minimal SvelteKit static front** under `apps/auth-idp/web/` that mounts the
@@ -83,5 +84,5 @@ The make target + compose service that wire this are gated behind exception
 ## Reversibility
 
 Deleting `apps/auth-idp/` removes the standalone shell with **no schema or data
-side effects**. The product API (`api/src/app.ts`) is untouched and keeps
-serving the identical auth surface in-app.
+side effects**. The product API independently composes the same `/auth`,
+`/oauth`, and `/session` modules.

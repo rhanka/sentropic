@@ -144,5 +144,22 @@ describe('chat session bootstrap contract', () => {
     expect(body.checkpoints[0]?.title).toBe('Bootstrap checkpoint');
     expect(body.documents[0]?.filename).toBe('bootstrap-brief.md');
     expect(body.documents[0]?.summary).toBe('Bootstrap summary');
+
+    const runtimeDetails = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/chat/messages/${assistantMessageId}/runtime-details`,
+      user.sessionToken!,
+    );
+    expect(runtimeDetails.status).toBe(200);
+    const runtimeItems = (await runtimeDetails.json()).items;
+    expect(runtimeItems.map((item: { kind: string }) => item.kind)).toEqual([
+      'runtime-segment',
+      'assistant-segment',
+    ]);
+    expect(runtimeItems[1]).toMatchObject({
+      isTerminal: true,
+      segment: { kind: 'assistant', content: 'Bootstrap final response' },
+    });
   });
 });

@@ -1,0 +1,20 @@
+{
+  "dossier": "cluster-mesh-shared-engine",
+  "revision": "2026-08-29-r8",
+  "architectureHash": "aaf7cebfbd5ffed33493d3ffe084175374b8c502a66b41475d3d759ee3a3fab9",
+  "capturedAt": "2026-08-29T21:06:49.412Z",
+  "capturedFrom": "focus decision kit",
+  "status": "ACCEPTÉ EN RÉFÉRENCE par l'owner (D9: 'ce dossier est parfait, commit comme ref'). Nouvelles précisions r8 à capitaliser en spec evol.",
+  "owner_options_r8": { "D1": "C", "D2": "C", "D3": "A", "D4": "C", "D5": "C", "D6": "A", "D7": "C", "D8": null, "D9": "C", "D10": null, "D11": "C", "D12": "C" },
+  "nouvelles_remarques_r8": {
+    "D1": "REMARQUE PÉRIMÈTRE RE-FORMULÉE PAR OWNER (2026-08-29, tracée): la MODULARITÉ doit rester ENTIÈRE. Chaque lib doit pouvoir être intégrée INDÉPENDAMMENT hors cluster-mesh, et chaque fonction doit pouvoir être DÉSACTIVÉE. Chacune conserve son RUNTIME indépendant + ses DONNÉES + ses SECRETS ; le tout est OPTIMISÉ dans cluster-mesh MAIS cluster-mesh N'EST LE RUNTIME OBLIGATOIRE D'AUCUNE lib. => Owner préfère B plutôt que C dans ce contexte (à reconfirmer). Invariant transverse: aucune lib runtime-captive de cluster-mesh ; cluster-mesh = couche d'optimisation/composition/politique, pas un runtime imposé. IMPACT COHÉRENCE: reconsidérer D6 (owner avait mis A='mcp-platform+auth totalement intégrés') à la lumière de cet invariant — 'intégré/optimisé' ne doit pas signifier 'runtime-captif ni obligatoire'.",
+    "D1_option_corrigee": "B (remplace le C enregistré en r8) + invariant de modularité/désactivabilité",
+    "D3": "Pour graphify: il y a déjà un contrat h2a/graphify. cluster-mesh doit le REPRENDRE et SPLITTER h2a en h2a/sentropic très précisément (build en cours pour graphify memory).",
+    "D4": "session cli claude etc: LOCAL_ONLY = host local SEUL writer ; AUCUNE promesse de miroir app ; = non-miroir app dès le remote control. À concevoir rapidement.",
+    "D9": "Dossier ACCEPTÉ comme ref, à COMMITTER. Un REVERSEMENT doit se faire vers h2a/focus + éléments design system le cas échéant (le renderer ArchitectureView + composants).",
+    "D10": "OK pour le schéma et tableau comme décision. Les options (profils wire) ne semblent pas utiles → laisser sédimenter.",
+    "D11": "confirmé C",
+    "D12": "confirmé C"
+  },
+  "note_conductor": "Fichier de traçabilité r8. Le détail complet des ownerRemarks/responses par round (r6/r7/r8) vit dans .tmp/focus-cluster-mesh-decision-kit/dossier.json (revision r8, architectureHash aaf7cebf...). Ce fichier fige les options owner r8 + les nouvelles directives r8 pour la capitalisation en SPEC_EVOL et le plan de build."
+}

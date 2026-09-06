@@ -63,10 +63,11 @@ describe('Google Drive connector account storage', () => {
       },
     });
 
-  it('accepts Gmail provider rows', async () => {
+  it('keeps Gmail enrollment in the shared connector-account table after host cutover', async () => {
     const now = new Date();
+    const accountId = crypto.randomUUID();
     await db.insert(documentConnectorAccounts).values({
-      id: crypto.randomUUID(),
+      id: accountId,
       workspaceId: String(user.workspaceId),
       userId: user.id,
       provider: 'gmail',
@@ -85,6 +86,7 @@ describe('Google Drive connector account storage', () => {
 
     const accounts = await listConnectorAccounts(String(user.workspaceId), user.id, 'gmail');
     expect(accounts).toHaveLength(1);
+    expect(accounts[0]?.id).toBe(accountId);
     expect(accounts[0]?.provider).toBe('gmail');
   });
 

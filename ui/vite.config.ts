@@ -2,6 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  cacheDir: '/tmp/sentropic-ui-vite-cache',
   plugins: [sveltekit()],
   base: '/',
   // Dedupe svelte + the DS packages so a single instance is bundled even though

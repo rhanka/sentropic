@@ -27,4 +27,13 @@ describe('buildOpenCommentCounts', () => {
       root: 2,
     });
   });
+
+  it('ignores rows without a thread identity', () => {
+    expect(
+      buildOpenCommentCounts([
+        { thread_id: null, status: 'open', section_key: 'constraints' },
+        { status: 'open', section_key: 'domain' },
+      ]),
+    ).toEqual({});
+  });
 });

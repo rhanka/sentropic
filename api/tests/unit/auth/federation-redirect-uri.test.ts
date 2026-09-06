@@ -4,9 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * BR-39e go-live regression — federation default redirect URI must carry the `/api/v1` API mount
  * prefix (N4-adjacent guard, sibling of `federation-route-cookies.test.ts`).
  *
- * The API is mounted at `/api/v1` (`api/src/app.ts`: `app.route('/api/v1/auth', authRouter)`), and
- * `federationRouter` is nested at `/federation` under it (`api/src/routes/auth/index.ts`:
- * `authRouter.route('/federation', federationRouter)`). So the callback route is REALLY served at
+ * The Cluster Mesh `/auth` module projects this adapter at `/api/v1/auth/federation`, so the
+ * callback route is served at
  * `/api/v1/auth/federation/<provider>/callback`. `resolveOAuthIssuer` returns a BARE origin, so the
  * default redirect URI (used whenever the provider-specific `*_OAUTH_REDIRECT_URI` env is unset) MUST
  * append that full mount prefix itself — a bare `/auth/federation/...` default hits the SPA instead
@@ -14,12 +13,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  *
  * This test drives the REAL `federationRouter` (mirroring `federation-route-cookies.test.ts`) and
  * captures the `defaultRedirectUri` handed to `resolveFederationProvider`, so a future re-mount of the
- * federation router (e.g. under `apiRouter` instead of `authRouter`, or a renamed prefix) breaks this
+ * federation router under a renamed prefix breaks this
  * test rather than production.
  */
 
-const { brokerMock, resolveFederationProviderMock } = vi.hoisted(() => ({
+const { brokerMock, createFederationBrokerMock, resolveFederationProviderMock } = vi.hoisted(() => ({
   brokerMock: { start: vi.fn() },
+  createFederationBrokerMock: vi.fn(),
   resolveFederationProviderMock: vi.fn((providerId: string) => ({
     createAuthorizationUrl: () => 'https://accounts.google.com/o/oauth2/v2/auth',
     id: providerId,
@@ -28,7 +28,7 @@ const { brokerMock, resolveFederationProviderMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../src/services/auth/federation/broker', () => ({
-  createFederationBroker: () => brokerMock,
+  createFederationBroker: createFederationBrokerMock,
 }));
 
 vi.mock('../../../src/services/auth/federation/registry', () => ({
@@ -63,16 +63,17 @@ vi.mock('../../../src/services/session-manager', () => ({
   validateSession: vi.fn(async () => ({ role: 'user', sessionId: 'session-1', userId: 'user-1' })),
 }));
 
-const { federationRouter } = await import('../../../src/routes/auth/federation');
+const { createFederationRouter } = await import('../../../src/routes/namespaces/auth/federation');
+const federationRouter = createFederationRouter('/api/v1/oauth/authorize');
 
-// The path at which `federationRouter` is ACTUALLY mounted in production, per `api/src/app.ts`
-// (`app.route('/api/v1/auth', authRouter)`) + `api/src/routes/auth/index.ts`
-// (`authRouter.route('/federation', federationRouter)`). Kept as a literal (not imported) so this
+// The path at which the factory router is mounted by the Cluster Mesh `/auth` module. Kept as a
+// literal so this
 // test independently encodes the expectation rather than re-deriving it from the same source.
 const MOUNTED_FEDERATION_PATH = '/api/v1/auth/federation';
 
 describe('federation default redirect URI carries the /api/v1 API mount prefix (go-live regression)', () => {
   beforeEach(() => {
+    createFederationBrokerMock.mockReset().mockReturnValue(brokerMock);
     resolveFederationProviderMock.mockClear();
     brokerMock.start.mockResolvedValue({
       expiresAt: new Date(Date.now() + 600 * 1000),
@@ -114,5 +115,15 @@ describe('federation default redirect URI carries the /api/v1 API mount prefix (
     const path = new URL(defaultRedirectUri).pathname;
     expect(path.startsWith(`${MOUNTED_FEDERATION_PATH}/`)).toBe(true);
     expect(path).toBe(`${MOUNTED_FEDERATION_PATH}/google/callback`);
+  });
+
+  it('binds the upstream continuation to each host OAuth projection', async () => {
+    await createFederationRouter('/api/v1/oauth/authorize').request('/google/start');
+    await createFederationRouter('/api/v1/auth/oauth/authorize').request('/google/start');
+
+    expect(createFederationBrokerMock.mock.calls.map(([input]) => input.config.authorizeUrl)).toEqual([
+      'https://idp.example/api/v1/oauth/authorize',
+      'https://idp.example/api/v1/auth/oauth/authorize',
+    ]);
   });
 });

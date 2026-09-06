@@ -69,6 +69,9 @@ describe('tenant scoping (cross-tenant isolation)', () => {
     await expect(
       store.assign(tenantB, created.threadId, 'usr_x'),
     ).rejects.toBeInstanceOf(ThreadNotFoundError);
+    await expect(
+      store.editThread(tenantB, created.threadId, { content: 'hijack', assignedTo: 'usr_x' }),
+    ).rejects.toBeInstanceOf(ThreadNotFoundError);
 
     // The original row is untouched.
     const original = await store.get(tenantA, created.id);
