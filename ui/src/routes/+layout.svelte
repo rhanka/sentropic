@@ -203,11 +203,15 @@
 
   // Clear all user-scoped stores when the authenticated user changes (incl. logout),
   // to prevent cross-account data "bleed" in the UI.
+  const initialWorkspaceScope = $workspaceScope.selectedId ?? null;
+  let sessionHydrated = !$session.loading;
   let lastUserId: string | null = null;
   let lastAdminScope: string | null = null;
   $: {
     const currentUserId = $session.user?.id ?? null;
     const currentScope = $workspaceScope.selectedId ?? null;
+    const preserveInitialFolder =
+      !sessionHydrated && currentScope === initialWorkspaceScope;
 
     if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
       // A scope change changes the tenant fence on the SSE URL. Reconnect so
@@ -216,7 +220,9 @@
       organizationsStore.set([]);
       currentOrganizationId.set(null);
       foldersStore.set([]);
-      currentFolderId.set(null);
+      if (!preserveInitialFolder) {
+        currentFolderId.set(null);
+      }
       initiativesStore.set([]);
       queueStore.set({ jobs: [], isLoading: false, lastUpdate: null });
       // `me` représente le profil de l'utilisateur courant (pas le scope admin).
@@ -231,6 +237,10 @@
       if (currentUserId) {
         void loadUserWorkspaces();
       }
+    }
+
+    if (!$session.loading) {
+      sessionHydrated = true;
     }
   }
 
