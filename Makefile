@@ -534,6 +534,17 @@ typecheck-api: prepare-node-workspace ## Run API type checks
 typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
+.PHONY: lint-llm-mesh lint-llm-gateway
+lint-llm-mesh lint-llm-gateway: lint-llm-%: ## Lint an LLM routing package
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/llm-$* $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" \
+			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
+		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
+			"export default tseslint.config(...tseslint.configs.recommended, { rules: { '\''@typescript-eslint/no-empty-object-type'\'': '\''off'\'', '\''@typescript-eslint/no-explicit-any'\'': '\''off'\'', '\''@typescript-eslint/no-unused-vars'\'': '\''off'\'' } });" \
+			> "$$tool_dir/eslint.config.mjs"; \
+		"$$tool_dir/node_modules/.bin/eslint" --config "$$tool_dir/eslint.config.mjs" src tests'
+
 .PHONY: typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh publish-cluster-mesh publish-cluster-mesh-token
 typecheck-cluster-mesh: ## Run @sentropic/cluster-mesh type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
@@ -2764,15 +2775,21 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 	@mkdir -p .security
 	@echo "  📋 Step 1: Executing SCA scan..."
 	@if [ "$*" = "api" ] || [ "$*" = "ui" ]; then \
-		docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.23 sh -lc "npm audit --json || true" > .security/sca-$*.json; \
+		docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf sh -lc "npm audit --json --workspace sentropic-$* || true" > .security/sca-$*.json; \
 	else \
 		docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true; \
 	fi
+	@test -s .security/sca-$*.json || (echo "❌ SCA scanner emitted an empty report for $*" && exit 1)
 	@echo "  📋 Step 2: Parsing results to structured format..."
 	@bash scripts/security/security-parser.sh sca .security/sca-$*.json .security/sca-$*-parsed.yaml $* || exit 1
 	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
 	@bash scripts/security/security-compliance.sh sca $* || exit 1
 	@echo "✅ SCA scan completed for $*"
+
+.PHONY: test-security-parser
+test-security-parser: ## Verify security reports fail closed and preserve real findings
+	@bash -n scripts/security/security-parser.sh scripts/security/security-compliance.sh scripts/security/security-parser-test.sh
+	@bash scripts/security/security-parser-test.sh
 
 .PHONY: test-%-security-container
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
@@ -2782,17 +2799,17 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 	@if [ "$*" = "api" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
-		docker run --rm "$$IMAGE_NAME" sh -lc "npm audit --omit=dev --json || true" > .security/container-$*.json; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	elif [ "$*" = "ui" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
-		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	else \
 		IMAGE_NAME="sentropic-$*:latest"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
-		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
-	fi; \
-	true
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
+	fi
+	@test -s .security/container-$*.json || (echo "❌ Container scanner emitted an empty report for $*" && exit 1)
 	@echo "  📋 Step 2: Parsing results to structured format..."
 	@bash scripts/security/security-parser.sh container .security/container-$*.json .security/container-$*-parsed.yaml $* || exit 1
 	@echo "  📋 Step 3: Checking compliance against vulnerability register..."

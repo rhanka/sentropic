@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:24-alpine AS base
+FROM node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS base
 WORKDIR /workspace
 RUN apk add --no-cache zip
 COPY package.json package-lock.json* ./
@@ -12,7 +12,7 @@ RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-ro
 # Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
-RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
+RUN node .security/audit-gate.mjs --omit=dev --workspace sentropic-ui
 COPY . .
 
 FROM base AS development
@@ -38,7 +38,7 @@ RUN echo "VITE_EXTENSION_APP_BASE_URL=$VITE_EXTENSION_APP_BASE_URL"
 RUN npm run build
 CMD ["npm", "run", "build"]
 
-FROM nginx:1.29-alpine AS production
+FROM nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3 AS production
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
 COPY --from=build /workspace/ui/build /usr/share/nginx/html
 COPY ui/nginx/default.conf /etc/nginx/conf.d/default.conf

@@ -265,6 +265,19 @@ describe('createLlmMesh', () => {
     );
   });
 
+  it('exposes Gemini 3.8 Flash as a Cloud Code model copied from 3.7', () => {
+    const profile = getModelProfile('gemini', 'gemini-3.8-flash');
+
+    expect(profile).toMatchObject({
+      providerId: 'gemini', modelId: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash',
+      reasoningTier: 'advanced',
+    });
+    expect(profile?.capabilities).toEqual(
+      getModelProfile('gemini', 'gemini-3.7-flash')?.capabilities,
+    );
+    expect(getModelProfile('gcp', 'google/gemini-3.8-flash@gcp')).toBeNull();
+  });
+
   it('exposes Fable 5.1 and GPT-6 Astra with their family capabilities', () => {
     const fable = getModelProfile('anthropic', 'claude-fable-5-1');
     const astra = getModelProfile('openai', 'gpt-6-astra');
