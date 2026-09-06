@@ -203,20 +203,26 @@
 
   // Clear all user-scoped stores when the authenticated user changes (incl. logout),
   // to prevent cross-account data "bleed" in the UI.
+  const initialWorkspaceScope = $workspaceScope.selectedId ?? null;
+  let sessionHydrated = !$session.loading;
   let lastUserId: string | null = null;
   let lastAdminScope: string | null = null;
   $: {
     const currentUserId = $session.user?.id ?? null;
     const currentScope = $workspaceScope.selectedId ?? null;
+    const preserveInitialFolder =
+      !sessionHydrated && currentScope === initialWorkspaceScope;
 
     if (currentUserId !== lastUserId || currentScope !== lastAdminScope) {
-      // Ne pas reconnecter SSE à chaque changement de scope (stabilité, un seul SSE).
-      // On nettoie uniquement les caches côté UI.
-      streamHub.clearCaches();
+      // A scope change changes the tenant fence on the SSE URL. Reconnect so
+      // events cannot remain bound to the previously selected workspace.
+      streamHub.reset();
       organizationsStore.set([]);
       currentOrganizationId.set(null);
       foldersStore.set([]);
-      currentFolderId.set(null);
+      if (!preserveInitialFolder) {
+        currentFolderId.set(null);
+      }
       initiativesStore.set([]);
       queueStore.set({ jobs: [], isLoading: false, lastUpdate: null });
       // `me` représente le profil de l'utilisateur courant (pas le scope admin).
@@ -231,6 +237,10 @@
       if (currentUserId) {
         void loadUserWorkspaces();
       }
+    }
+
+    if (!$session.loading) {
+      sessionHydrated = true;
     }
   }
 

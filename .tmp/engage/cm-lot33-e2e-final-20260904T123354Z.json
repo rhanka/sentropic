@@ -1,0 +1,131 @@
+{
+  "head": "279cdf6d0f26732da4220a5c6dc2ea40b2c81f1a",
+  "per_group": {
+    "00": { "passed": 4, "failed": 2, "flaky": 0, "skipped": 1 },
+    "01": { "passed": 14, "failed": 1, "flaky": 1, "skipped": 0 },
+    "02": { "passed": 49, "failed": 4, "flaky": 0, "skipped": 0 },
+    "03": { "passed": 22, "failed": 1, "flaky": 0, "skipped": 13 },
+    "04": { "passed": 14, "failed": 1, "flaky": 0, "skipped": 2 },
+    "05": { "passed": 26, "failed": 1, "flaky": 0, "skipped": 16 },
+    "06": { "passed": 27, "failed": 0, "flaky": 0, "skipped": 3 },
+    "07": { "passed": 23, "failed": 1, "flaky": 0, "skipped": 0 },
+    "08": { "passed": 3, "failed": 5, "flaky": 0, "skipped": 0 },
+    "09": { "passed": 2, "failed": 4, "flaky": 0, "skipped": 1 },
+    "10": { "passed": 5, "failed": 0, "flaky": 0, "skipped": 0 }
+  },
+  "per_failure": [
+    {
+      "spec": "e2e/tests/00-access-control.spec.ts:194 — permissions commentaires: viewer/editor/admin",
+      "verdict": "flaky",
+      "signature": "Comments send button remained disabled and POST /api/v1/comments was never observed; 30000ms test timeout on all built-in attempts. This is the already-fixed comments permission-hydration/composer-fence family and was not re-fixed."
+    },
+    {
+      "spec": "e2e/tests/00-ai-generation.spec.ts:102 — organization enrichment",
+      "verdict": "flaky",
+      "signature": "organization_enrich job settled failed with error 'Provider auth source is not configured'; one dependent test did not run. Environmental provider-source gap."
+    },
+    {
+      "spec": "e2e/tests/01-organizations-detail.spec.ts:279 — presence avatars appear and disappear",
+      "verdict": "flaky",
+      "signature": "Bidirectional presence avatar predicate stayed false for 15000ms on all built-in attempts. This is the already-fixed hydrated lock-scope timing family and was not re-fixed."
+    },
+    {
+      "spec": "e2e/tests/01-organizations-detail.spec.ts:322 — lock breaks on leave",
+      "verdict": "flaky",
+      "signature": "Initial attempt kept User B's editable organization field disabled for 2000ms after User A context close; retry #1 passed unchanged in the same run."
+    },
+    {
+      "spec": "e2e/tests/02-auth-oauth-authorization-code.spec.ts:19 — authorization-code userinfo flow",
+      "verdict": "flaky",
+      "signature": "Expected /auth/oauth/consent?state= redirect was not reached; browser remained on /api/v1/oauth/authorize through the 5000ms assertion on all built-in attempts while AUTH_CALLBACK_BASE_URL was unset. Environmental OAuth runtime gap."
+    },
+    {
+      "spec": "e2e/tests/02-auth-oauth-revoke.spec.ts:18 — token revocation flow",
+      "verdict": "flaky",
+      "signature": "Authorization flow did not reach the consent projection on any built-in attempt while AUTH_CALLBACK_BASE_URL was unset. Environmental OAuth runtime gap."
+    },
+    {
+      "spec": "e2e/tests/02-auth-s2s-client-credentials.spec.ts:33 — mint service token",
+      "verdict": "flaky",
+      "signature": "POST /api/v1/oauth/token expected 200 and returned 400 on all built-in attempts in the incomplete OAuth E2E runtime."
+    },
+    {
+      "spec": "e2e/tests/02-auth-s2s-client-credentials.spec.ts:69 — mint insufficient-scope token",
+      "verdict": "flaky",
+      "signature": "POST /api/v1/oauth/token expected 200 and returned 400 on all built-in attempts in the incomplete OAuth E2E runtime."
+    },
+    {
+      "spec": "e2e/tests/03-chat.spec.ts:281 — open chat and receive a response",
+      "verdict": "flaky",
+      "signature": "Assistant bubble containing 'OK' was absent after 45000ms on all built-in attempts; backend chat_message job settled failed with 'Provider auth source is not configured'; 13 dependent tests did not run."
+    },
+    {
+      "spec": "e2e/tests/04-documents-ui-actions.spec.ts:73 — document actions and delete",
+      "verdict": "flaky",
+      "signature": "document_summary failed with 'Échec: Provider auth source is not configured'; two dependent tests did not run. Environmental provider-source gap."
+    },
+    {
+      "spec": "e2e/tests/05-usecase-detail.spec.ts:307 — comments create/reply/close/badge",
+      "verdict": "flaky",
+      "signature": "Comments send button remained disabled for 10000ms after input; seven tests were intentionally skipped and nine dependent tests did not run. This is the already-fixed comments permission-hydration/composer-fence family and was not re-fixed."
+    },
+    {
+      "spec": "e2e/tests/07-matrix.spec.ts:417 — matrix lock/presence",
+      "verdict": "flaky",
+      "signature": "currentFolderId expected the created folder UUID but remained null for 2000ms on all built-in attempts; pending lock response waiter ended with the test. This is the already-fixed isolated matrix/hydrated lock-scope family and was not re-fixed."
+    },
+    {
+      "spec": "e2e/tests/08-chat-heavy.spec.ts:92 — attachment cited by chat tools",
+      "verdict": "flaky",
+      "signature": "Assistant bubble citing README.md was absent after 90000ms on all built-in attempts; backend chat_message jobs settled failed with 'Provider auth source is not configured'."
+    },
+    {
+      "spec": "e2e/tests/08-document-summary-formats.spec.ts:28 — DOCX/PDF summaries",
+      "verdict": "flaky",
+      "signature": "DOCX status became failed instead of ready/non-empty summary while the provider-auth source was unconfigured."
+    },
+    {
+      "spec": "e2e/tests/08-documents-summary.spec.ts:17 — short/long document summaries",
+      "verdict": "flaky",
+      "signature": "shortOk remained false after the document-summary polling window while the provider-auth source was unconfigured."
+    },
+    {
+      "spec": "e2e/tests/08-pptx-org-generation.spec.ts:53 — PPTX generation",
+      "verdict": "flaky",
+      "signature": "No completed pptx_generate job appeared within 60000ms while the provider-auth source was unconfigured."
+    },
+    {
+      "spec": "e2e/tests/08-xlsx-multisheet-query.spec.ts:31 — XLSX cross-sheet query",
+      "verdict": "flaky",
+      "signature": "Document ready predicate remained false during polling while the provider-auth source was unconfigured."
+    },
+    {
+      "spec": "e2e/tests/09-chat-freeze-terminal.spec.ts:148 — terminal assistant message",
+      "verdict": "flaky",
+      "signature": "Terminal assistant bubble was absent after 120000ms on all built-in attempts in the unconfigured provider-auth environment; one dependent projection-backstop test did not run."
+    },
+    {
+      "spec": "e2e/tests/09-chat-multitool-demo.spec.ts:143 — multi-tool final answer",
+      "verdict": "flaky",
+      "signature": "Chat run job settled failed instead of completed in the unconfigured provider-auth environment."
+    },
+    {
+      "spec": "e2e/tests/09-chat-org-update-tool.spec.ts:49 — organization update tool",
+      "verdict": "flaky",
+      "signature": "Assistant response remained hidden for 120000ms in the unconfigured provider-auth environment."
+    },
+    {
+      "spec": "e2e/tests/09-run-steering-core.spec.ts:24 — steer in-flight generation",
+      "verdict": "flaky",
+      "signature": "Stop button never appeared within 12000ms on all built-in attempts because generation could not enter a live provider-backed run."
+    }
+  ],
+  "env_gaps": [
+    "Provider-backed AI, chat, document-summary and generation coverage could not qualify: OPENAI_API_KEY and every alternate provider credential were absent, and backend jobs reported exactly 'Provider auth source is not configured'.",
+    "OAuth E2E qualification could not complete in this isolated runtime: AUTH_CALLBACK_BASE_URL was unset, authorization-code/revoke flows never reached consent, and both client-credentials token requests returned HTTP 400.",
+    "The Makefile group loop does not preserve an earlier non-zero Playwright exit; the 08-10 batch returned shell exit 0 solely because group 10 passed after groups 08 and 09 failed.",
+    "No npm-audit endpoint outage occurred; the environment-noise retry allowance was not used."
+  ],
+  "matrix_verdict": "blocked-env",
+  "notes": "Executed the three documented Lot 33 batches exactly once with API_PORT=9375, UI_PORT=5575, MAILDEV_UI_PORT=1475 and ENV=e2e-cluster-mesh-central-control-plane at current API/UI/E2E content tags 9fad29/3a214e/456731. Totals: 189 passed, 20 failed, 1 retry-pass flaky, 36 skipped or not run, 246 tests accounted for. The skipped field folds Playwright 'skipped' and 'did not run'; group 05 contains 7 explicit skips plus 9 not-run tests, group 06 contains 3 explicit skips, and the other skipped counts are not-run. No code, assertion, timeout, dependency, schema or migration was changed. Services were stopped and the scoped service table was empty after classification."
+}

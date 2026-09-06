@@ -139,6 +139,9 @@ describe('createMcpAuth — verify() happy path', () => {
     });
     const mcp = makeMcp();
     const ctx = await mcp.verify(bearer(), { requiredScopes: ['mcp:tools:invoke'] });
+    const next = await mcp.verify(bearer('/mcp/invoke', 'tok-2'), {
+      requiredScopes: ['mcp:tools:invoke'],
+    });
 
     expect(verifyAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ token: 'tok', audience: RESOURCE, issuer: [AS] }),
@@ -150,6 +153,8 @@ describe('createMcpAuth — verify() happy path', () => {
       jkt: null,
     });
     expect(ctx.scopes).toContain('mcp:tools:invoke');
+    expect(next.sub).toBe('user-1');
+    expect(verifyAccessToken).toHaveBeenCalledTimes(2);
   });
 });
 

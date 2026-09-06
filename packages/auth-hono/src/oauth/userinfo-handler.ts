@@ -52,7 +52,7 @@ const verifyAccessToken = async (
   try {
     const jwks = createJwksService({ clock: options.ports.clock, jwksPort: options.ports.jwks });
     const result = await jwks.verifyJwt(token, {
-      audience: `${trimTrailingSlash(options.issuer)}/api/v1/auth/oauth/userinfo`,
+      audience: `${trimTrailingSlash(options.issuer)}${new URL(c.req.url).pathname}`,
       currentDate: options.ports.clock.now(),
       issuer: trimTrailingSlash(options.issuer),
     });

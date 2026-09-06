@@ -85,6 +85,20 @@ describe('wire events', () => {
     expect(sink.events).toHaveLength(0);
   });
 
+  it('emits one updated event per row for an atomic thread edit', async () => {
+    const { store, sink } = makeStore();
+    const root = await store.add(tenant, baseInput({ body: 'root' }));
+    await store.add(tenant, baseInput({ threadId: root.threadId, body: 'reply' }));
+    sink.clear();
+
+    await store.editThread(tenant, root.threadId, {
+      content: 'shared update',
+      assignedTo: 'usr_owner',
+    });
+    expect(sink.events.map((event) => event.type)).toEqual(['updated', 'updated']);
+    expect(sink.events.every((event) => event.threadId === root.threadId)).toBe(true);
+  });
+
   it('wraps a CommentEvent into an EventEnvelope for transport uniformity', async () => {
     const { store, sink } = makeStore();
     await store.add(tenant, baseInput());

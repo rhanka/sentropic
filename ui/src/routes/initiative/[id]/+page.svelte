@@ -24,6 +24,7 @@
   import { buildOpenCommentCounts } from '$lib/utils/comment-counts';
   import { Lock } from '@lucide/svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
+  import { buildLockScopeKey } from '$lib/utils/lock-scope';
 
   let useCase: any = undefined;
   let error = '';
@@ -38,6 +39,7 @@
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let lockTargetId: string | null = null;
+  let activeLockScopeKey: string | null = null;
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
@@ -362,7 +364,13 @@
   };
 
 
-  $: if (useCaseId && useCaseId !== lockTargetId) {
+  $: readyLockScopeKey = buildLockScopeKey({
+    hydrated: $workspaceScopeHydrated,
+    userId: $session.user?.id,
+    workspaceId,
+    targetId: useCaseId,
+  });
+  $: if (readyLockScopeKey && readyLockScopeKey !== activeLockScopeKey && useCaseId) {
     if (lockTargetId) {
       void leavePresence('initiative', lockTargetId);
       void releaseCurrentLock();
@@ -370,6 +378,7 @@
     lock = null;
     presenceUsers = [];
     presenceTotal = 0;
+    activeLockScopeKey = readyLockScopeKey;
     lockTargetId = useCaseId;
     subscribeLock(useCaseId);
     void syncLock();

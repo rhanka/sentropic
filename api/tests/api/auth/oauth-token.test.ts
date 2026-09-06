@@ -33,7 +33,7 @@ describe('OAuth token API route', () => {
   it('exchanges an approved authorization code for access and id tokens', async () => {
     const { code } = await issueAuthorizationCode();
 
-    const res = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
+    const res = await app.request('http://localhost:9197/api/v1/oauth/token', {
       body: new URLSearchParams({
         code,
         code_verifier: CODE_VERIFIER,
@@ -57,7 +57,7 @@ describe('OAuth token API route', () => {
     expect(typeof payload.access_token).toBe('string');
     expect(typeof payload.id_token).toBe('string');
 
-    const reuse = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
+    const reuse = await app.request('http://localhost:9197/api/v1/oauth/token', {
       body: new URLSearchParams({
         code,
         code_verifier: CODE_VERIFIER,
@@ -92,7 +92,7 @@ const issueAuthorizationCode = async (): Promise<{ code: string }> => {
   const consentLocation = new URL(authorize.headers.get('location') ?? '');
   const sealedState = consentLocation.searchParams.get('state') ?? '';
 
-  const decision = await app.request('http://localhost:9197/api/v1/auth/oauth/consent/decision', {
+  const decision = await app.request('http://localhost:9197/api/v1/oauth/consent/decision', {
     body: JSON.stringify({ decision: 'approve', state: sealedState }),
     headers: {
       Accept: 'application/json',
@@ -112,7 +112,7 @@ const issueAuthorizationCode = async (): Promise<{ code: string }> => {
 };
 
 const buildAuthorizeUrl = (): string => {
-  const url = new URL('http://localhost:9197/api/v1/auth/oauth/authorize');
+  const url = new URL('http://localhost:9197/api/v1/oauth/authorize');
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', CLIENT_ID);
   url.searchParams.set('redirect_uri', REDIRECT_URI);

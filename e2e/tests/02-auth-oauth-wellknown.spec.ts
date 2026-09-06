@@ -10,11 +10,11 @@ test.describe('OIDC discovery documents', () => {
       expect(discoveryResponse.ok()).toBe(true);
       const discovery = await discoveryResponse.json();
       expect(discovery).toMatchObject({
-        authorization_endpoint: `${API_BASE_URL}/api/v1/auth/oauth/authorize`,
+        authorization_endpoint: `${API_BASE_URL}/api/v1/oauth/authorize`,
         issuer: API_BASE_URL,
         jwks_uri: `${API_BASE_URL}/.well-known/jwks.json`,
-        token_endpoint: `${API_BASE_URL}/api/v1/auth/oauth/token`,
-        userinfo_endpoint: `${API_BASE_URL}/api/v1/auth/oauth/userinfo`,
+        token_endpoint: `${API_BASE_URL}/api/v1/oauth/token`,
+        userinfo_endpoint: `${API_BASE_URL}/api/v1/oauth/userinfo`,
       });
       expect(discovery.response_types_supported).toContain('code');
       expect(discovery.grant_types_supported).toContain('authorization_code');

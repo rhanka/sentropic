@@ -5,12 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
+import {
+  clusterMeshGenerations,
+  clusterMeshMcpServers,
+  clusterMeshNamespaceCutovers,
+} from '../../src/db/control-schema';
 import { documentConnectorAccounts } from '../../src/db/schema';
 import { GMAIL_PROVIDER } from '../../src/services/gmail-oauth';
 import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
 import { createJwksAdapter, type JwksAdapter } from '../../src/services/auth/jwks-adapter';
 import { cleanupAuthData, createTestUser, type TestUser } from '../utils/auth-helper';
 import { encryptSecret } from '../../src/services/secret-crypto';
+import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
+import { PostgresClusterMeshRuntimeStore } from '../../src/services/cluster-mesh/postgres-runtime-store';
 
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
@@ -195,6 +202,7 @@ describe('MCP connector-host routes', () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ ok: true, output: { messages: [{ id: 'message-1' }] } });
     const googleCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('https://gmail.googleapis.com/'));
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toHaveLength(1);
     expect((googleCall?.[1] as RequestInit).headers).toMatchObject({ Authorization: `Bearer ${gmailAccessToken}` });
     expect(JSON.stringify(body)).not.toContain(gmailAccessToken);
   });
@@ -207,6 +215,64 @@ describe('MCP connector-host routes', () => {
 
     expect(response.status).toBe(401);
     expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('https://gmail.googleapis.com/'))).toBe(false);
+  });
+
+  it('refuses provider effects after the product MCP author rolls back', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+    const cutovers = new PostgresClusterMeshCutoverStore();
+    const key = { compositionRoot: 'product' as const, namespace: '/mcp' as const };
+    await cutovers.activate({
+      ...key,
+      selectedGenerationId: 'cluster-mesh-session-v1',
+      previousGenerationId: 'legacy-api-mcp-v1',
+      activeAuthor: 'cluster-mesh-mcp-module',
+      status: 'active',
+      rollbackCheckpoint: { generationId: 'legacy-api-mcp-v1' },
+    });
+    await cutovers.rollback(key, 'legacy-api-mcp-v1');
+
+    try {
+      const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'invocation_refused', message: 'wrong_author' },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      await db.delete(clusterMeshNamespaceCutovers).where(and(
+        eq(clusterMeshNamespaceCutovers.compositionRoot, 'product'),
+        eq(clusterMeshNamespaceCutovers.namespace, '/mcp'),
+      ));
+    }
+  });
+
+  it('refuses provider effects when the MCP generation has a foreign supervisor', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken(['mcp:tools:invoke']);
+    const runtimeStore = new PostgresClusterMeshRuntimeStore();
+    await db.delete(clusterMeshMcpServers);
+    await db.delete(clusterMeshGenerations);
+    await runtimeStore.saveGeneration({
+      generationId: 'cluster-mesh-session-v1',
+      status: 'active',
+      supervisorRef: 'foreign-supervisor',
+      supervisorLeaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      maxConcurrent: 12,
+      poolSize: 4,
+    });
+
+    try {
+      const response = await invoke(token, { connectorId: 'gmail', capabilityRef: 'messages.list', input: {} });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'invocation_refused', message: 'mcp_control_unavailable' },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      await db.delete(clusterMeshMcpServers);
+      await db.delete(clusterMeshGenerations);
+    }
   });
 
   it('denies unallowlisted Gmail capabilities and unknown connectors without Google egress', async () => {
@@ -276,6 +342,22 @@ describe('MCP connector-host routes', () => {
     await expect(response.json()).resolves.toMatchObject({ ok: true, output: { id: 'message-1' } });
   });
 
+  it('returns deterministic initialize responses without provider effects', async () => {
+    const fetchMock = await installFetch();
+    const token = await issueToken([]);
+    const initialize = () => app.request('/api/v1/mcp', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'initialize' }),
+    });
+
+    const first = await (await initialize()).json();
+    const second = await (await initialize()).json();
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({ result: { protocolVersion: '2025-06-18' } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('returns a non-descriptive 400 for a malformed connector request', async () => {
     const token = await issueToken(['mcp:tools:invoke']);
 
@@ -325,13 +407,17 @@ describe('MCP authorization server selection', () => {
     // side effects (the skill registry parses SKILL.md files, among others) fails for reasons that
     // have nothing to do with what is under test here.
     vi.resetModules();
-    const { mcpRouter } = await import('../../src/routes/api/mcp');
-    const freshApp = new Hono();
-    freshApp.route('/api/v1/mcp', mcpRouter);
-
-    const res = await freshApp.request('/api/v1/mcp/.well-known/oauth-protected-resource');
-    expect(res.status).toBe(200);
-    const doc = (await res.json()) as { authorization_servers: string[] };
-    expect(doc.authorization_servers).toEqual(['https://idp.example.test']);
+    // Commit 8b7b38c0e captured the independent legacy/candidate PRM comparison before
+    // deleting the legacy module. Keep exercising the surviving author after deletion.
+    const { productMcpModule } = await import('../../src/routes/namespaces/mcp');
+    const candidate = new Hono().route('/api/v1/mcp', productMcpModule.createRouter({
+      context: { async verify() { throw new Error('not used by PRM'); } },
+      receipts: { async append() { throw new Error('not used by PRM'); } },
+    }));
+    const path = '/api/v1/mcp/.well-known/oauth-protected-resource';
+    const candidateResponse = await candidate.request(path);
+    expect(candidateResponse.status).toBe(200);
+    const candidateDoc = await candidateResponse.json() as { authorization_servers: string[] };
+    expect(candidateDoc.authorization_servers).toEqual(['https://idp.example.test']);
   });
 });

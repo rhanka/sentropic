@@ -4,7 +4,7 @@ import {
   emitUserAISettingsUpdated,
 } from '../../src/lib/utils/user-ai-settings-events';
 
-describe('user ai settings events', () => {
+describe('llm-mesh user AI settings event contract', () => {
   it('uses a Sentropic event namespace', () => {
     expect(USER_AI_SETTINGS_UPDATED_EVENT).toBe('sentropic:user-ai-settings-updated');
   });

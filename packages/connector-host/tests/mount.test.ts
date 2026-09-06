@@ -246,7 +246,7 @@ function expectMissing(result: AppToolResult | string): void {
 
 describe('connector host mount', () => {
   it('returns adapter results for invoke and readResource without secret leakage', async () => {
-    const { driver, audit } = createHost();
+    const { driver, audit, tenantResolve, accountResolve } = createHost();
 
     const invokeResult = resultOf(await driver.invoke(invokeRequest()));
     const resourceResult = await driver.readResource(invokeRequest({
@@ -259,6 +259,8 @@ describe('connector host mount', () => {
     expect(JSON.stringify({ invokeResult, resourceResult })).not.toContain(secretValue);
     expect(audit.dump()).not.toContain(secretValue);
     expect(audit.dump()).toContain('"name":"token"');
+    expect(tenantResolve).toHaveBeenCalledTimes(2);
+    expect(accountResolve).toHaveBeenCalledTimes(2);
   });
 
   it('surfaces a SecretEnvelopeError-shaped port failure as connector_secret_unreadable', async () => {
@@ -339,6 +341,15 @@ describe('connector host mount', () => {
 
     expectMissing(await driver.invoke(invokeRequest({ hints: { capabilityIds: ['another_capability'] } })));
     expect(accountResolve).not.toHaveBeenCalled();
+  });
+
+  it('never resolves a provider secret for unknown connector or capability requests', async () => {
+    const resolveSecret = vi.fn(async () => secretValue);
+    const { driver } = createHost({ secret: { resolve: resolveSecret } });
+
+    expectMissing(await driver.invoke(invokeRequest({ connectorId: 'unknown' })));
+    expectMissing(await driver.invoke(invokeRequest({ capabilityRef: 'unknown' })));
+    expect(resolveSecret).not.toHaveBeenCalled();
   });
 
   it('refuses a resolver principal mismatch through the explicit P1 structural guard', async () => {

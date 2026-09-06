@@ -424,64 +424,26 @@ test.describe('Configuration de la matrice', () => {
       const pageA = await userAContext.newPage();
       const pageB = await userBContext.newPage();
 
-      await pageA.goto(`/folders/${encodeURIComponent(folderId)}`);
-      await pageA.waitForLoadState('domcontentloaded');
-      await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
-      await ensureCurrentFolderId(pageA);
-
-      await pageA.click('a[href="/matrix"]');
-      await expect(pageA).toHaveURL(/\/matrix/);
+      const lockAcquired = pageA.waitForResponse(
+        (res) =>
+          res.url().includes('/api/v1/locks') &&
+          res.request().method() === 'POST' &&
+          res.status() === 201,
+        { timeout: 15_000 },
+      );
+      await pageA.goto('/matrix');
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageA);
-      const noFolderMessageA = pageA.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
-      if (await noFolderMessageA.isVisible().catch(() => false)) {
-        await pageA.evaluate((id) => {
-          try {
-            localStorage.setItem('currentFolderId', id);
-          } catch {
-            // ignore
-          }
-        }, folderId);
-        await pageA.reload({ waitUntil: 'domcontentloaded' });
-        await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
-      }
+      const lockResponse = await lockAcquired;
+      const lockBody = await lockResponse.json().catch(() => null);
+      expect(lockBody?.lock?.objectId).toBe(folderId);
+      expect(lockBody?.acquired).toBe(true);
 
-      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
-
-      await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
-      await pageB.waitForLoadState('domcontentloaded');
-      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
-      await expect
-        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 2_000 })
-        .toBe(folderId);
-      await expect
-        .poll(async () => pageB.evaluate(() => localStorage.getItem('currentFolderId')), { timeout: 2_000 })
-        .toBe(folderId);
-
-      await pageB.goto(`/folders/${encodeURIComponent(folderId)}`);
-      await pageB.waitForLoadState('domcontentloaded');
-      await expect(pageB.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
-      await ensureCurrentFolderId(pageB);
-
-      await pageB.click('a[href="/matrix"]');
-      await expect(pageB).toHaveURL(/\/matrix/);
+      await pageB.goto('/matrix');
       await pageB.waitForLoadState('domcontentloaded');
       await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageB);
-      const noFolderMessage = pageB.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
-      if (await noFolderMessage.isVisible().catch(() => false)) {
-        await pageB.evaluate((id) => {
-          try {
-            localStorage.setItem('currentFolderId', id);
-          } catch {
-            // ignore
-          }
-        }, folderId);
-        await pageB.reload({ waitUntil: 'domcontentloaded' });
-        await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
-      }
-      await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       await waitForLockedByOtherWithOptions(pageB, undefined, { requireDisabled: false });
       const requestButton = pageB.locator('button[aria-label="Demander le déverrouillage"]');

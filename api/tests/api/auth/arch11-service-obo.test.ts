@@ -18,7 +18,7 @@ import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 
 const ISSUER = 'http://localhost:9197';
 const RESOURCE = ISSUER;
-const TOKEN_URL = `${ISSUER}/api/v1/auth/oauth/token`;
+const TOKEN_URL = `${ISSUER}/api/v1/oauth/token`;
 
 const SINGLE_CLIENT_ID = 'arch11g1c-obo-single';
 const SINGLE_SECRET = 'arch11g1c-obo-single-secret-dev-only';

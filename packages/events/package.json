@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/events",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "description": "Wire-protocol StreamEvent taxonomy (v1) for @sentropic/* packages; re-exports transverse contracts from @sentropic/contracts.",
   "type": "module",
   "license": "MIT",
@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@sentropic/contracts": "^0.1.0"
+    "@sentropic/contracts": "^0.3.0"
   },
   "devDependencies": {
     "typescript": "5.4.5"

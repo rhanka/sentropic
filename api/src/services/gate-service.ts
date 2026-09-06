@@ -6,7 +6,7 @@
  * the `@sentropic/flow` façade (`flowRuntime.ports.approvalGate`).
  *
  * Lot 4 Slice 1 of BR-26: gate evaluation logic moved into the façade
- * adapter. Consumers (`tool-service`, `routes/api/initiatives`,
+ * adapter. Consumers (`tool-service`, `services/business/initiatives`,
  * `routes/api/workspaces`, `tests/api/gate-evaluation.test.ts`,
  * `tests/services/flow/replay.spec.ts`) still import named functions
  * from here; their call sites will be rebound to the façade at Lot N-3

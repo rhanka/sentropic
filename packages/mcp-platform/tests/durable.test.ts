@@ -348,7 +348,9 @@ describe('G2 — idempotency is scoped to the launch context', () => {
     const ctx = { idempotencyKey: 'idem-same', sub: 'user-7', sessionId: 'sess-7', tenant: 'tenant-z', connectorInstanceId: 'conn-7' };
     const a = adapter.launch({ envelope: envelope(ctx) });
     const b = adapter.launch({ envelope: envelope(ctx) });
+    const c = adapter.launch({ envelope: envelope(ctx) });
     expect(b.call.id).toBe(a.call.id);
+    expect(c.call.id).toBe(a.call.id);
     expect(store.all()).toHaveLength(1); // no duplicate
   });
 });

@@ -27,7 +27,7 @@ import { cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 const jwtWithPayload = (payload: Record<string, unknown>): string =>
   `header.${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')}.signature`;
 
-describe('llm account transports', () => {
+describe('provider-owned llm account transports', () => {
   afterEach(async () => {
     vi.unstubAllGlobals();
     await db.run(sql`DELETE FROM settings WHERE key = 'provider_connection_mode:anthropic'`);
@@ -141,7 +141,7 @@ describe('llm account transports', () => {
     expect(await getAnthropicTransportMode()).toBe('claude-code');
   });
 
-  it('acquires multiple Claude Code accounts with sticky affinity and cooldown failover', async () => {
+  it('keeps credential-bearing Claude Code acquisition provider-owned with sticky failover', async () => {
     const user = await createAuthenticatedUser('admin_app');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 

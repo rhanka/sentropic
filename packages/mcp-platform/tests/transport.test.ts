@@ -18,10 +18,14 @@ describe('InMemoryMcpServer / InMemoryMcpClient', () => {
   it('dispatches a request through a client-owned session', async () => {
     const server = echoServer();
     const client = new InMemoryMcpClient('claude.ai', server);
+    const secondClient = new InMemoryMcpClient('codex', server);
     client.connect();
+    secondClient.connect();
     const res = await client.send({ method: 'tools/list' });
+    const second = await secondClient.send({ method: 'tools/list' });
     expect(res.ok).toBe(true);
     if (res.ok) expect((res.result as { clientId: string }).clientId).toBe('claude.ai');
+    if (second.ok) expect((second.result as { clientId: string }).clientId).toBe('codex');
   });
 
   it('fails closed when a foreign client tries to reuse a session', async () => {

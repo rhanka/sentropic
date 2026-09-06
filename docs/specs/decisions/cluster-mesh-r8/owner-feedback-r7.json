@@ -1,0 +1,22 @@
+{
+  "dossier": "cluster-mesh-shared-engine",
+  "revision": "2026-08-29-r7",
+  "architectureHash": "a6773d377375088c863c1b5532d83fbce74eec51297a8de99b893c76ef9671ab",
+  "capturedAt": "2026-08-29T19:45:55.800Z",
+  "capturedFrom": "focus decision kit",
+  "answers": {
+    "D1": { "option": "C", "note": "J'avais émis une remarque pour changer le périmètre de la décision. tu devrais tracer ma demande. bloquant je veux ma réponse initiale" },
+    "D2": { "option": "C", "note": "" },
+    "D3": { "option": "A", "note": "bloquant: je veux la cible des librairies au meilleur des possibilités a date. il n'y a eu aucune réflexion. Meme si tu était sur C: tu définirais une logique. il faut une logique de capitalisation et généricité maximale. Dans CETTE page je veux un schéma qui reprend la comparaison avant apres et la proposition par librairie, quitte a proposer autant de décision que de librairies." },
+    "D4": { "option": "C", "note": "Nécessairement on est sur C. Mais je veux une décomposition par donnée sur ce qui est prime en local vs fichier: track (étant run = SQL + dump fichier pour chaque branche au merge?), memoire (idem?), contenu session (cli claude ou codex ou agy local, mais agent natif = local+SQLite et PgSQL miroir pour app en remote control), inbox + meta données session (live etc) = SQLite first? Il faut une présentation domaine de donnée par domaine de données. Pour graphify memoire on se repose sur l'orientation h2a+graphify deja existant pas de niaisage." },
+    "D5": { "option": "C", "note": "" },
+    "D6": { "option": "A", "note": "ton schema est pas clair. je dirais A si le mcp-platform et mcp-auth sont totalement intégrés a cluster-mesh et en ce sens offre cette capacité a h2a. Le pb du schema c que t'en a fait qu'un je suppose pour présenter C, et je ne comprend pas, si la lib mcp runtime est bien la lib mcp-platform ou non. or, pour moi le mcp client va deja taper en premier dans le runtime sur le cluster mesh (couche http) qui va router vers la lib mcp. donc tu es bon pour clarifier. si C est ce que j'ai dit, c ok pour C, mais faut quand meme mieux représenter ca ici" },
+    "D7": { "option": "C", "note": "encore une fois, le schema vs les options est pas clair. je dirais C, mais pour C avec remote control, cluster-mesh absorbe transcript, journal et payloads (donc C+A)" },
+    "D8": { "option": null, "note": "ok donc pas une décision si je comprends" },
+    "D9": { "option": "C", "note": "ok. TU devrais render les graphes et regarder pourquoi ca va encore pas au niveau overlap edge / carte sur les premiers" },
+    "D10": { "option": null, "note": "continuité autour d'oauth, mcp elicitation stp. il faut voir les normes nist aussi. a ce stade, j'estime que t'as pas travaillé, je ne sais pas si cela te freine. pour moi: mcp et oauth sont les lib qui portent les standards. le sujet nhi doit être porté par h2a pour la certification agent tant que tu n'as pas mis la jointure normative. et a 3 on doit s'assurer d'avoir les normes de sécurité de bout en bout. normalement mcp+oauth devraient suffir pour l'identification des agents, la certification des roles. h2a devrait a terme rester en norme des rôles et mcp couvrir la partie sécu si c'est bien fait" },
+    "D11": { "option": "C", "note": "mcp platform doit garantir la possibilité de gérer les 2 et faciliter la gestion des binding et le transport des auth, avec binding explicite et sécurisé" },
+    "D12": { "option": "C", "note": "le llm mesh doit pouvoir permettre, comme mcp, permettre le routage et des policy globales et par workspace (ex du mapping gw)" }
+  },
+  "_conductor_note": "Kit de retour owner sur r7 (capturé 2026-08-29T19:45:55Z). Contient réponses + nouvelles remarques nécessitant r8. BLOQUANTS: D1 (remarque périmètre antérieure à tracer + réponse initiale demandée), D3 (logique de capitalisation/généricité des librairies + schéma comparatif avant/après par librairie). D6 option passée à A (sous condition d'intégration totale mcp-platform+mcp-auth dans cluster-mesh). D7 = C+A. D8/D10 restent sans option (D10 = chapitre sécu à approfondir OAuth/MCP/NIST + NHI porté par h2a)."
+}

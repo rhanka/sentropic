@@ -77,6 +77,7 @@ describe('Google Drive OAuth helpers', () => {
     expect(url.origin + url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
     expect(url.searchParams.get('client_id')).toBe(config.clientId);
     expect(url.searchParams.get('redirect_uri')).toBe(config.redirectUri);
+    expect(url.searchParams.get('redirect_uri')).not.toContain('/connectors/');
     expect(url.searchParams.get('access_type')).toBe('offline');
     expect(url.searchParams.get('include_granted_scopes')).toBe('true');
     expect(url.searchParams.get('prompt')).toBe('consent');

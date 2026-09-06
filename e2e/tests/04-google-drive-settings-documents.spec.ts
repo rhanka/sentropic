@@ -53,6 +53,7 @@ test.describe('Google Drive settings and entity document surfaces', () => {
     accountEmail?: string | null;
   }) {
     await page.route(/\/api\/v1\/google-drive\/connection(?:\?.*)?$/, async (route) => {
+      expect(new URL(route.request().url()).pathname).toBe('/api/v1/google-drive/connection');
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

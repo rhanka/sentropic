@@ -66,3 +66,4 @@ export type { SkillEntry, HostId } from './skills/manifest.js';
 
 // Pure, arg-based CLI driver (the `harness` bin is a thin wrapper over this).
 export { runHarnessCli } from './cli/run.js';
+export { harnessCliCommandIntentAdapter } from './cli/command-intent.js';

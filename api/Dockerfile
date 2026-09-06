@@ -53,8 +53,10 @@ COPY api/package.json ./api/package.json
 COPY ui/package.json ./ui/package.json
 COPY packages/auth-hono/package.json ./packages/auth-hono/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
+COPY packages/events/package.json ./packages/events/package.json
 COPY packages/comments/package.json ./packages/comments/package.json
 COPY packages/auth-client/package.json ./packages/auth-client/package.json
+COPY packages/chat-core/package.json ./packages/chat-core/package.json
 COPY packages/chat-server/package.json ./packages/chat-server/package.json
 COPY packages/cluster-mesh/package.json ./packages/cluster-mesh/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
@@ -77,10 +79,13 @@ COPY . .
 RUN npm --workspace @sentropic/oauth-verify run build
 RUN npm --workspace @sentropic/auth-hono run build
 RUN npm --workspace @sentropic/auth-client run build
+RUN npm --workspace @sentropic/contracts run build
+RUN npm --workspace @sentropic/events run build
+RUN npm --workspace @sentropic/chat-core run build
+RUN npm --workspace @sentropic/chat-server run build
 RUN npm --workspace @sentropic/cluster-mesh run build
 RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/flow run build
-RUN npm --workspace @sentropic/contracts run build
 RUN npm --workspace @sentropic/comments run build
 RUN npm --workspace @sentropic/mcp-auth run build
 RUN npm --workspace @sentropic/mcp-platform run build

@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.1.0",
-  "description": "Federal-shaped cluster membership, trust, identity, device, and tenant-boundary contracts with a single-instance runtime.",
+  "version": "0.8.1",
+  "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -31,6 +31,11 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@sentropic/contracts": "^0.3.0",
+    "@sentropic/events": "^0.2.0",
+    "hono": "^4.10.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",

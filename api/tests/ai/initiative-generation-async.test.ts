@@ -6,7 +6,7 @@ import { db } from '../../src/db/client';
 import { chatStreamEvents, folders, initiatives, jobQueue, organizations, workflowTaskResults } from '../../src/db/schema';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
-import { hydrateInitiatives } from '../../src/routes/api/initiatives';
+import { hydrateInitiatives } from '../../src/services/business/initiatives';
 
 type AsyncFailureScope = {
   workspaceId?: string | null;

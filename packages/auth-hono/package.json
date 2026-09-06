@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/auth-hono",
-  "version": "0.15.0",
+  "version": "0.15.2",
   "description": "Reusable Hono authentication route factories, contracts, and server-side auth helpers for Sentropic-compatible apps.",
   "type": "module",
   "license": "MIT",

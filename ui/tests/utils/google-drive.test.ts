@@ -32,6 +32,7 @@ describe('google drive utils', () => {
     const result = await fetchGoogleDriveConnectionWith(requester);
 
     expect(requester).toHaveBeenCalledWith('/google-drive/connection');
+    expect(requester).not.toHaveBeenCalledWith(expect.stringContaining('/connectors/'));
     expect(result).toEqual(disconnectedAccount);
   });
 

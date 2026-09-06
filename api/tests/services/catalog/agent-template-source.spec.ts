@@ -14,6 +14,7 @@
  *     28-tool order oracle from the characterization spec)
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -67,6 +68,22 @@ describe('agentTemplateSource singleton', () => {
 
   it('is an instance of AgentTemplateSource', () => {
     expect(agentTemplateSource).toBeInstanceOf(AgentTemplateSource);
+  });
+});
+
+describe('/agents catalog boundary', () => {
+  it('does not take ownership of generic catalog discovery', () => {
+    const namespace = readFileSync(
+      new URL('../../../src/routes/namespaces/agents.ts', import.meta.url),
+      'utf8',
+    );
+    const ports = readFileSync(
+      new URL('../../../src/routes/namespaces/agents-ports.ts', import.meta.url),
+      'utf8',
+    );
+    expect(`${namespace}\n${ports}`).not.toMatch(
+      /agent-template-source|composite-catalog|search_catalog|['"]\/catalog/,
+    );
   });
 });
 
@@ -278,6 +295,19 @@ describe('§14 invariant — only code-level agent seeds are catalogued', () => 
 const AGENT_ONLY_KEYS = UNIQUE_AGENT_KEYS.filter(
   (key) => !ALL_FOUNDATION_TOOL_NAMES.includes(key),
 );
+const AI_IDEAS_TOOL_ORDER = [
+  'search_skills',
+  'search_catalog',
+  'workspace_list',
+  'initiative_search',
+  'web_search',
+  'web_extract',
+  'history_analyze',
+  'documents',
+  'comment_assistant',
+  'plan',
+  'document_generate',
+] as const;
 
 describe('0-regression — agent entries absent from resolveFoundationChatTools', () => {
   it('agent-only keys (not coinciding with foundation tool names) are NOT in the resolved tool set', () => {
@@ -307,10 +337,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
     }
   });
 
-  it('the tool count oracle is byte-identical after wiring the agent source (Lot 7: 31 tools)', () => {
-    // This mirrors the characterization spec §7 (updated in Lot 7):
-    // search_skills (index 0) + search_catalog (index 1, Lot 7 addition) + foundation tools.
-    // Adding the agent source to the composite registry must NOT add any tool to this count.
+  it('keeps the workspace-filtered tool count byte-identical after the /agents extraction', () => {
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
       workspaceId: 'ws-lot3-test',
@@ -318,8 +345,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
-    // 2 meta-tools (search_skills + search_catalog) + all foundation tools
-    expect(tools).toHaveLength(2 + ALL_FOUNDATION_TOOL_NAMES.length);
+    expect(tools).toHaveLength(AI_IDEAS_TOOL_ORDER.length);
     expect(tools[0]!.function.name).toBe('search_skills');
     expect(tools[1]!.function.name).toBe('search_catalog');
   });
@@ -335,9 +361,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
     expect(tools[0]!.function.name).toBe('search_skills');
   });
 
-  it('the exact tool name sequence includes search_catalog at index 1 (Lot 7 update)', () => {
-    // Lot 7 update: agent entries cause ZERO change to the foundation tool sequence.
-    // search_catalog is now at index 1 (added by Lot 7). Agent entries do NOT appear.
+  it('keeps the exact ai-ideas tool order without exposing agent entries', () => {
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
       workspaceId: 'ws-lot3-test',
@@ -347,42 +371,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
     });
     const names = tools.map((t) => t.function.name);
 
-    // Updated oracle (Lot 7): search_catalog inserted at index 1.
-    const EXPECTED_TOOL_ORDER = [
-      'search_skills',
-      'search_catalog',
-      'workspace_list',
-      'initiative_search',
-      'web_search',
-      'web_extract',
-      'organizations_list',
-      'organization_get',
-      'organization_update',
-      'folders_list',
-      'folder_get',
-      'folder_update',
-      'initiatives_list',
-      'read_initiative',
-      'update_initiative',
-      'solutions_list',
-      'solution_get',
-      'proposals_list',
-      'proposal_get',
-      'products_list',
-      'product_get',
-      'executive_summary_get',
-      'executive_summary_update',
-      'matrix_get',
-      'matrix_update',
-      'history_analyze',
-      'gate_review',
-      'documents',
-      'comment_assistant',
-      'plan',
-      'document_generate',
-    ] as const;
-
-    expect(names).toEqual(EXPECTED_TOOL_ORDER);
+    expect(names).toEqual(AI_IDEAS_TOOL_ORDER);
   });
 });
 

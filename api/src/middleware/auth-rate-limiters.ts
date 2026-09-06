@@ -5,10 +5,10 @@ import { env } from '../config/env';
 import { resolveClientIp } from '../utils/client-ip';
 
 /**
- * Auth rate limiters, shared by every app that mounts `authRouter`.
+ * Auth rate limiters, shared by every app that mounts a router from `createAuthRouter`.
  *
  * These MUST live outside `api/src/app.ts`: the standalone IdP
- * (`apps/auth-idp/idp-app.ts`) builds its own `new Hono()` and mounts `authRouter`
+ * (`apps/auth-idp/idp-app.ts`) builds its own `new Hono()` and mounts the factory router
  * directly, so it never instantiates the product app. Declaring the limiters only
  * on the product app left `auth.sent-tech.ca` — a public host serving
  * `/api/v1/auth/{login,register,magic-link}/*` against the same `users` table —
@@ -72,13 +72,22 @@ export const oauthIntrospectRateLimiter = rateLimiter({
 });
 
 /**
- * Register the auth limiters on an app that mounts `authRouter` under `/api/v1/auth`.
+ * Register the auth limiters on an app that mounts a router from `createAuthRouter` under `/api/v1/auth`.
  * Order matters: most specific route first, the catch-all last.
  * No-op when `DISABLE_RATE_LIMIT` is set (test environments).
  */
 export const applyAuthRateLimiters = (app: Hono): void => {
   if (env.DISABLE_RATE_LIMIT) return;
 
+  app.use('/api/v1/oauth/token', oauthTokenRateLimiter);
+  app.use('/api/v1/oauth/introspect', oauthIntrospectRateLimiter);
+  // Keep the product OAuth catch-all disjoint from endpoint-specific budgets.
+  app.use('/api/v1/oauth/*', (c, next) => {
+    if (c.req.path === '/api/v1/oauth/token' || c.req.path === '/api/v1/oauth/introspect') {
+      return next();
+    }
+    return authRateLimiter(c, next);
+  });
   app.use('/api/v1/auth/session*', authSessionRateLimiter);
   app.use('/api/v1/auth/login/*', authLoginRateLimiter);
   app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
@@ -89,6 +98,6 @@ export const applyAuthRateLimiters = (app: Hono): void => {
   // needs the permissive limiter; per-code throttling/single-use/expiry is enforced
   // in the device-code store.
   app.use('/api/v1/auth/device/*', authSessionRateLimiter);
-  // General auth routes last (excludes the already-matched routes above).
+  // General identity routes last; their baseline overlap with dedicated auth limiters is unchanged.
   app.use('/api/v1/auth/*', authRateLimiter);
 };

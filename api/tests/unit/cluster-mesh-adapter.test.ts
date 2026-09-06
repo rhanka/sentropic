@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ClusterMeshRuntimeStore, LocalWorkstationDescriptor, PtyActuatorPort } from '@sentropic/cluster-mesh';
 
 import {
   createClusterMeshAppAdapter,
+  resolveLiveQualificationConfig,
   type ClusterMeshAppDependencies,
 } from '../../src/services/cluster-mesh-adapter';
 
@@ -33,7 +35,27 @@ function dependencies(
 }
 
 describe('cluster mesh app adapter', () => {
-  it('should attach an approved workstation only after enrollment completion', async () => {
+  it('should reject shared-secret qualification in real production and allow the e2e production image', () => {
+    const qualification = {
+      CLUSTER_MESH_A1_QUALIFICATION: '1',
+      H2A_NATIVE_SOCKET: '/tmp/h2a.sock', H2A_ROOT: '/tmp/h2a',
+      CLUSTER_MESH_A1_EVIDENCE: 'qualification-secret',
+      CLUSTER_MESH_A1_TARGET_REGISTRATION: 'registration-1',
+    };
+
+    expect(() => resolveLiveQualificationConfig({ ...qualification, NODE_ENV: 'production' }))
+      .toThrow('shared-secret cluster mesh qualification is forbidden in production');
+    expect(resolveLiveQualificationConfig({
+      ...qualification,
+      NODE_ENV: 'production', DISABLE_RATE_LIMIT: 'true', ADMIN_EMAIL: 'e2e-admin@example.com',
+    })).toMatchObject({ evidence: 'qualification-secret', registrationId: 'registration-1' });
+    expect(resolveLiveQualificationConfig({ ...qualification, NODE_ENV: 'development' }))
+      .toMatchObject({ evidence: 'qualification-secret', registrationId: 'registration-1' });
+    expect(resolveLiveQualificationConfig({ ...qualification, CLUSTER_MESH_A1_QUALIFICATION: undefined }))
+      .toBeUndefined();
+  });
+
+  it('should expose an admitted workstation through a second adapter instance', async () => {
     const approved = {
       status: 'approved' as const,
       userId: 'user-1',
@@ -41,8 +63,26 @@ describe('cluster mesh app adapter', () => {
       deviceName: 'Laptop',
     };
     const pollDeviceCode = vi.fn(() => approved);
+    const attached: LocalWorkstationDescriptor[] = [];
+    const admission = {
+      generationId: 'generation-1',
+      store: {
+        async admitWorkstation(input: { sessionId: string; displayName: string; ownerSubject: string }) {
+          attached.push({
+          kind: 'workstation', deviceId: `device:${input.sessionId}`,
+          displayName: input.displayName, ownerSubject: input.ownerSubject, state: 'attached',
+        }); },
+        async listAdmittedWorkstations() { return attached; },
+      },
+      async ensureGeneration() {},
+    };
     const adapter = createClusterMeshAppAdapter(dependencies({
       pollDeviceCode,
+      sessionAdmission: admission,
+      async resolveTenant() { return { tenantId: 'tenant-acme' }; },
+    }));
+    const secondAdapter = createClusterMeshAppAdapter(dependencies({
+      sessionAdmission: admission,
       async resolveTenant() { return { tenantId: 'tenant-acme' }; },
     }));
 
@@ -51,9 +91,11 @@ describe('cluster mesh app adapter', () => {
       adapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' }),
     ).resolves.toEqual([expect.objectContaining({ kind: 'server' })]);
 
-    adapter.completeDeviceAttachment(approved);
+    await adapter.completeDeviceAttachment(approved, {
+      sessionId: 'stable-test', expiresAt: new Date('2099-01-01T00:00:00Z'),
+    });
 
-    expect(await adapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' })).toEqual([
+    expect(await secondAdapter.membership.listDirectory({ workspaceId: 'workspace-1', userId: 'user-1' })).toEqual([
       expect.objectContaining({ kind: 'server', nodeId: 'node:sentropic-local' }),
       expect.objectContaining({
         kind: 'workstation',
@@ -82,5 +124,43 @@ describe('cluster mesh app adapter', () => {
     await expect(
       adapter.boundaries.resolve({ workspaceId: 'workspace-1', userId: 'user-1' }),
     ).rejects.toMatchObject({ code: 'tenant_membership_required' });
+  });
+
+  it('should inject the PTY registration gate and fail closed before actuation', async () => {
+    const pty: PtyActuatorPort = {
+      kind: 'pty', isAvailable: vi.fn(async () => true),
+      actuate: vi.fn(async () => ({ effectRef: 'must-not-run' })),
+    };
+    const runtimeStore: ClusterMeshRuntimeStore = {
+      append: vi.fn(async () => undefined),
+      enqueueCommand: vi.fn(async () => true), find: vi.fn(async () => null),
+      markRegistrationLost: vi.fn(async () => true), reclaimExpiredCapacity: vi.fn(async () => 0),
+      reserveCapacity: vi.fn(async () => ({ ok: true, outcome: 'reserved' })),
+      saveGeneration: vi.fn(async () => undefined), saveMcpServer: vi.fn(async () => undefined),
+      saveRegistration: vi.fn(async () => undefined), updateCommand: vi.fn(async () => true),
+    };
+    const adapter = createClusterMeshAppAdapter(dependencies({
+      sessionControl: {
+        generationId: 'generation-1', runtimeStore, pty,
+        context: { async verify() { throw new Error('not used'); } },
+        cutovers: {
+          async find() { return null; }, async activate() {}, async rollback() {},
+        },
+        targets: { async inspect() { return 'unknown'; } },
+        ptyEvidence: 'BR75-SG1_source_gap',
+      },
+    }));
+
+    const decision = await adapter.sessionControl!.runtime.registration.authorize({
+      invocationId: 'invocation-1', correlationId: 'correlation-1', generationId: 'generation-1',
+      principal: { principalId: 'workload-1', kind: 'workload', verifierId: 'test' },
+      workspace: { bindingId: 'binding-1', workspaceId: 'workspace-1', revision: '1' },
+      scopes: ['session:drive'], policyRevision: '1', issuedAt: new Date().toISOString(),
+    });
+
+    expect(decision).toEqual({ ok: false, reason: 'missing_registration' });
+    expect(pty.isAvailable).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+    expect(adapter.sessionControl?.ptyEvidence).toBe('BR75-SG1_source_gap');
   });
 });

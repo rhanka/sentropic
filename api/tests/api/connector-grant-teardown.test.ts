@@ -337,7 +337,11 @@ describe('Connector grant teardown — the enumeration of deletion sites is comp
    * run rather than trusted as a stored snapshot, because a stored census of a living state is a
    * schedule, not a property.
    */
-  const KNOWN_CASCADING_DELETERS = ['api/admin.ts', 'api/me.ts', 'api/workspaces.ts'];
+  const KNOWN_CASCADING_DELETERS = [
+    'namespaces/auth/account.ts',
+    'namespaces/admin-product-authority.ts',
+    'namespaces/workspaces/product-workspaces.ts',
+  ];
 
   // Relative to `src/routes`, so the expectation reads identically wherever the repo lives — the
   // test container mounts it under /workspace, the host under the worktree path.
@@ -364,7 +368,7 @@ describe('Connector grant teardown — the enumeration of deletion sites is comp
       // Check the import DECLARATION, not a mention: an earlier version of this check matched the
       // module name inside a doc comment and passed on two files that had no import at all.
       expect(source, `${relPath} must import the teardown module`).toMatch(
-        /}\s*from\s*'\.\.\/\.\.\/services\/connector-grant-teardown';/,
+        /}\s*from\s*'(?:\.\.\/){2,3}services\/connector-grant-teardown';/,
       );
       expect(source, `${relPath} must capture grants before deleting`).toContain(
         'captureConnectorGrantsForTeardown(',

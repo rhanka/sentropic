@@ -20,6 +20,7 @@ import { CompositeCatalogRegistry } from '../../../src/services/catalog/composit
 import { CatalogExecutionSeam } from '../../../src/services/catalog/execution-seam';
 import { StandaloneToolSource } from '../../../src/services/catalog/sources/standalone-tool-source';
 import { StaticCatalogSource } from '../../../src/services/catalog/sources/static-source';
+import { CatalogResourceProvider } from '../../../src/services/resource-plane/providers/catalog-provider';
 
 // ---------------------------------------------------------------------------
 // Helpers — build isolated seam + registry instances for each test group
@@ -49,6 +50,37 @@ function makeSeamFixture() {
 // ---------------------------------------------------------------------------
 
 describe('CatalogExecutionSeam — standalone tool dispatch', () => {
+  it('does not invoke effect handlers during list, detail, or search discovery', () => {
+    const { registry, standaloneSource } = makeSeamFixture();
+    const handler = vi.fn(async () => ({ effected: true }));
+    standaloneSource.register({ tool: makeSampleTool('discover_only'), handler });
+
+    registry.list();
+    registry.get('discover_only');
+    registry.search('discover only');
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('keeps resource list/read/invoke outside the catalog execution seam', async () => {
+    const { registry, standaloneSource } = makeSeamFixture();
+    const handler = vi.fn(async () => ({ effected: true }));
+    standaloneSource.register({ tool: makeSampleTool('resource_data_only'), handler });
+    const provider = new CatalogResourceProvider(registry);
+    const principal = {
+      scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+      context: { permissionMode: 'open', roles: [], permissions: [], allowedTools: [] },
+    };
+    const dir = (await provider.resolvePath(['tools'], principal))!;
+    const listed = await provider.list(dir, {}, principal);
+    const resource = listed.entries.find(({ name }) => name === 'resource_data_only')!;
+    await expect(provider.read(resource.ref, {}, principal)).resolves.toMatchObject({
+      provenance: { provider: 'catalog', origin: 'seam-test' },
+    });
+    await expect(provider.invoke(resource.ref, { args: {} }, principal))
+      .rejects.toMatchObject({ code: 'unsupported' });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('invokes the handler for a registered standalone tool and returns handled:true', async () => {
     const { seam, standaloneSource } = makeSeamFixture();
     const handler = vi.fn(async (args: Record<string, unknown>) => ({

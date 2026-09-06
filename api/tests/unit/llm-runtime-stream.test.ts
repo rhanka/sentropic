@@ -2032,4 +2032,43 @@ describe('LLM stream event normalization', () => {
     ).rejects.toThrow('Image input is unsupported for cohere:command-a-03-2025');
     expect(streamGenerate).not.toHaveBeenCalled();
   });
+
+  it('delegates one canonical gateway stream to the current provider egress', async () => {
+    const [{ normalizeGatewayIngress }, { createApplicationGatewayRoutePlane }] = await Promise.all([
+      import('../../../packages/llm-gateway/src/index'),
+      import('../../src/services/llm-runtime/gateway-route-plane'),
+    ]);
+    const generate = vi.fn();
+    const stream = vi.fn(async () => (async function* () {
+      yield { type: 'content_delta' as const, data: { delta: 'one' } };
+      yield { type: 'done' as const, data: { finishReason: 'stop' as const } };
+    })());
+    const plane = createApplicationGatewayRoutePlane({ dispatch: { generate, stream } });
+    const subject = { principalRef: 'user-1', ownerScopeRef: 'workspace-1:user-1' };
+    const route = {
+      requestedModel: 'gpt-5.6-terra', requiredCapabilities: ['streaming' as const],
+      workspaceId: 'workspace-1', affinityKey: 'stream-request-1',
+    };
+    const canonical = normalizeGatewayIngress('openai-chat-completions', {
+      model: 'gpt-5.6-terra', stream: true,
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+    await plane.shadowRouteIntent({
+      cost: {
+        tenantId: 'tenant-1', workspaceId: 'workspace-1', principalId: 'user-1',
+        source: 'test', correlationId: 'stream-request-1',
+      },
+      subject, canonical, route,
+    });
+    const plan = await plane.planner.plan(subject, route);
+    const attempt = await plane.planner.prepareAttempt(
+      subject, plan.planRef, plan.candidateRefs[0]!, 'stream-request-1', 0,
+    );
+    const events: Array<{ type: string }> = [];
+    for await (const event of await attempt.stream(canonical.request)) events.push(event);
+
+    expect(events.map((event) => event.type)).toEqual(['content_delta', 'done']);
+    expect(stream).toHaveBeenCalledOnce();
+    expect(generate).not.toHaveBeenCalled();
+  });
 });

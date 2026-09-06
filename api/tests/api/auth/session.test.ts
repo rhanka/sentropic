@@ -8,6 +8,11 @@ describe('Session Management API Routes', () => {
   });
 
   describe('GET /api/v1/auth/session', () => {
+    it('should expose only the root-projected session facade', async () => {
+      expect((await app.request('/api/v1/auth/session')).status).toBe(401);
+      expect((await app.request('/api/v1/session')).status).toBe(404);
+    });
+
     it('should return 401 without session token', async () => {
       const res = await app.request('/api/v1/auth/session', {
         method: 'GET',

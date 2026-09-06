@@ -59,7 +59,7 @@ const EXPECTED_FIXTURES = [
   'resume-after-crash',
 ];
 
-describe('BR-26 golden trace replay', () => {
+describe('Flow standalone BR-26 golden trace replay', () => {
   it('discovers all 6 expected fixtures in api/tests/fixtures/golden/br26/', () => {
     const fixtures = loadAllFixtures();
     const ids = fixtures.map((f) => f.fixtureId).sort();

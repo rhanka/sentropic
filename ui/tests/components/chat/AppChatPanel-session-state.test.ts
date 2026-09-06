@@ -25,4 +25,10 @@ describe('AppChatPanel session state', () => {
     expect(source).toContain('hydrationGeneration === sessionHydrationGeneration;');
     expect(source).toContain('sessionHydrationGeneration += 1;');
   });
+
+  it('keeps runtime authentication outside chat-session hydration', () => {
+    const source = readFileSync(panelPath, 'utf8');
+    expect(source).toContain("from '$lib/chat/session-adapter'");
+    expect(source).not.toContain("'/auth/session'");
+  });
 });

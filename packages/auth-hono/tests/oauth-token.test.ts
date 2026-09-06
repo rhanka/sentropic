@@ -32,7 +32,7 @@ describe('OAuth token handler', () => {
     expect(body.token_type).toBe('Bearer');
     expect(body.expires_in).toBe(3600);
     expect(decodeJwt(body.access_token)).toMatchObject({
-      aud: 'http://localhost:9197/api/v1/auth/oauth/userinfo',
+      aud: 'http://localhost:9197/oauth/userinfo',
       client_id: 'example-rp',
       scope: 'openid profile email',
       sub: oauthUser.id,

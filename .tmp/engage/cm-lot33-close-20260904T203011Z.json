@@ -1,0 +1,16 @@
+{
+  "head": "db2bc85a2d9ec6d918bf2512d427cb322796145d",
+  "lot33_scope": "cluster-mesh group 10 green + branch UI regressions fixed + EX8 gated",
+  "deferred_to_ci": [
+    "01-presence",
+    "07-matrix",
+    "02/03/04/08/09 provider+oauth"
+  ],
+  "typecheck": {
+    "api": "pass",
+    "ui": "fail: make typecheck-ui stopped before TypeScript execution because reserved port 5575 was already allocated outside the empty compose project"
+  },
+  "sg1": "closed by real A1 drive, relaunch and LOST evidence",
+  "sg10": "attention: canonical /session admission remains process-local",
+  "sg11": "closed by singleton MCP and missing-generation refusal evidence"
+}

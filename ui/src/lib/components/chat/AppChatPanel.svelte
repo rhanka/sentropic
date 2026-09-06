@@ -3121,6 +3121,7 @@
         class="w-full"
         role="textbox"
         aria-label={$_('chat.composer.ariaLabel')}
+        aria-disabled={p.disabled}
         aria-multiline="true"
         tabindex="0"
         on:keydown={p.onKeyDown}
@@ -3386,6 +3387,7 @@
   streamClient={streamHub}
   labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
   commentHost={commentHost}
+  workspaceCanComment={$workspaceCanComment}
   {commentContextType}
   {commentContextId}
   {commentSectionKey}

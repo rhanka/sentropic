@@ -750,6 +750,12 @@ test.describe('Chat', () => {
     ]);
     expect(editResponse.ok()).toBeTruthy();
     expect(editRetryResponse.ok()).toBeTruthy();
+    expect(new URL(editResponse.url()).pathname).toMatch(
+      /^\/api\/v1\/chat\/messages\/[^/]+$/,
+    );
+    expect(new URL(editRetryResponse.url()).pathname).toMatch(
+      /^\/api\/v1\/chat\/messages\/[^/]+\/retry$/,
+    );
     const editRetryPayload = await editRetryResponse.json().catch(() => null);
     await waitForQueueJobSettled(page, String((editRetryPayload as any)?.jobId ?? ''));
     await waitForComposerIdle(page);
