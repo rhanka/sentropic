@@ -3,9 +3,8 @@ import {
   createGatewayRouter,
   stubGatewayConfig,
   type CostContext,
-  type CreateGatewayRouterOptions,
 } from '../../../../packages/llm-gateway/src/index';
-import { Hono, type MiddlewareHandler } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { requireAuth, type AuthUser } from '../../middleware/auth';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
@@ -16,6 +15,7 @@ export const GW_AUTHOR = 'llm-gateway-module';
 export const GW_PATHS = [
   '/healthz', '/readyz', '/v1/*', '/v1/models', '/v1/messages', '/v1/chat/completions',
 ] as const;
+const CALLER_TOKEN_HEADER = 'x-sentropic-internal-gateway-caller';
 const control = clusterMeshAdapter.sessionControl;
 if (!control) throw new Error('cluster mesh gateway cutover control is not configured');
 let activation: Promise<void> | undefined;
@@ -93,7 +93,7 @@ const resolveProductCaller = async (context: import('hono').Context): Promise<Co
 export interface CreateGwNamespaceModuleOptions {
   readonly enabled?: boolean;
   readonly authenticate?: MiddlewareHandler;
-  readonly resolveCallerOwnership?: CreateGatewayRouterOptions['resolveCallerOwnership'];
+  readonly resolveCallerOwnership?: (context: Context) => Promise<CostContext> | CostContext;
   readonly routePlane?: ReturnType<typeof createApplicationGatewayRoutePlane>;
 }
 
@@ -101,6 +101,20 @@ export const createGwNamespaceModule = (
   options: CreateGwNamespaceModuleOptions = {},
 ): ClusterMeshHonoNamespaceModule => {
   const routePlane = options.routePlane ?? createApplicationGatewayRoutePlane();
+  const resolveCallerOwnership = options.resolveCallerOwnership ?? resolveProductCaller;
+  const callers = new Map<string, CostContext>();
+  const config = {
+    ...stubGatewayConfig,
+    callerAuth: {
+      async verify(headers: Readonly<Record<string, string>>) {
+        const token = headers[CALLER_TOKEN_HEADER];
+        const cost = token ? callers.get(token) : undefined;
+        if (token) callers.delete(token);
+        delete (headers as Record<string, string>)[CALLER_TOKEN_HEADER];
+        return cost ? { ok: true, cost } : { ok: false, reason: 'verified caller unavailable' };
+      },
+    },
+  };
   return {
     namespace: '/gw',
     enabled: options.enabled ?? true,
@@ -108,12 +122,24 @@ export const createGwNamespaceModule = (
       const router = new Hono();
       applyAuthorFence(router);
       router.use('/v1/*', options.authenticate ?? requireAuth);
+      router.use('/v1/*', async (context, next) => {
+        const token = crypto.randomUUID();
+        try {
+          callers.set(token, await resolveCallerOwnership(context));
+        } catch {
+          // The gateway's caller-auth port maps a missing trusted projection to its frozen 401 shape.
+        }
+        context.req.raw.headers.set(CALLER_TOKEN_HEADER, token);
+        try {
+          await next();
+        } finally {
+          callers.delete(token);
+        }
+      });
       router.route('/', createGatewayRouter({
-        config: stubGatewayConfig,
+        config,
         routePlanner: routePlane.planner,
-        shadowRouteIntent: routePlane.shadowRouteIntent,
         routeMetering: { settleRoute() {} },
-        resolveCallerOwnership: options.resolveCallerOwnership ?? resolveProductCaller,
       }));
       return router;
     },
