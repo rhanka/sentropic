@@ -27,7 +27,7 @@ type TestTransitionSeed = {
   metadata?: Record<string, unknown>;
 };
 
-describe('Queue - generic workflow transition runtime', () => {
+describe('Queue - generic workflow transition runtime behind Flow ports', () => {
   let queueManager: any;
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
 

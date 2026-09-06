@@ -105,6 +105,9 @@ describe('streamHub', () => {
     
     expect(global.EventSource).toHaveBeenCalled();
     expect(mockEventSource).not.toBeNull();
+    const [url] = (global.EventSource as any).mock.calls[0];
+    expect(new URL(String(url)).pathname).toBe('/api/v1/streams/sse');
+    expect(String(url)).not.toContain('/streams/streams/');
   });
 
   it('should include workspace_id in SSE URL when scope is selected', async () => {

@@ -213,6 +213,19 @@ describe('McpCatalogSource.snapshot — synchronous, hot-path safe', () => {
 
     expect(factory).not.toHaveBeenCalled();
   });
+
+  it('composite discovery consumes a refreshed snapshot without reconnecting', async () => {
+    const server = createStubServer();
+    const factory = vi.fn(createTransportFactory(server));
+    const source = new McpCatalogSource({ serverName: 'discovery' }, factory);
+    await source.refresh();
+    const registry = new CompositeCatalogRegistry().addSource(source);
+
+    registry.list();
+    registry.get('greet_user');
+    registry.search('greet user');
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

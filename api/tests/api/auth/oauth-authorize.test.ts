@@ -56,7 +56,7 @@ describe('OAuth authorize API route', () => {
     expect(sealedState).toBeTruthy();
 
     const details = await app.request(
-      `http://localhost:9197/api/v1/auth/oauth/consent?state=${encodeURIComponent(sealedState ?? '')}`,
+      `http://localhost:9197/api/v1/oauth/consent?state=${encodeURIComponent(sealedState ?? '')}`,
       {
         headers: { Cookie: `session=${user.sessionToken}` },
       },
@@ -72,7 +72,7 @@ describe('OAuth authorize API route', () => {
 });
 
 const buildAuthorizeUrl = (): string => {
-  const url = new URL('http://localhost:9197/api/v1/auth/oauth/authorize');
+  const url = new URL('http://localhost:9197/api/v1/oauth/authorize');
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', CLIENT_ID);
   url.searchParams.set('redirect_uri', REDIRECT_URI);

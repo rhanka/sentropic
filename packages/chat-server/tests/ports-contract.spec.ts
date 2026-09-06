@@ -16,4 +16,21 @@ describe('chat-server ports contract', () => {
       createChatServer(deps, { routes: 'unknown' as never }),
     ).toThrow(/routes/i);
   });
+
+  it('exposes session lifecycle through an injected provider port', async () => {
+    const deps = createInMemoryChatServerDeps();
+    expect(deps.sessions).toBeDefined();
+
+    const created = await deps.sessions!.createSession({
+      userId: 'test-user',
+      workspaceId: 'test-workspace',
+      title: 'Port-owned session',
+    });
+    await expect(deps.sessions!.listSessions({
+      userId: 'test-user',
+      workspaceId: 'test-workspace',
+    })).resolves.toEqual([
+      expect.objectContaining({ id: created.sessionId, title: 'Port-owned session' }),
+    ]);
+  });
 });

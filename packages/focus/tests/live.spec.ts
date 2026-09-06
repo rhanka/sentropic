@@ -5,6 +5,7 @@ import {
   FocusLiveSessionDriver,
 } from "../src/index.js";
 import { TestOnlyInMemoryTrackOwnerSignaturePort } from "../src/live/in-memory.js";
+import type { FocusOwnerSignaturePort } from "../src/hono.js";
 import type {
   AuthenticatedOwnPrincipal,
   OwnerSignatureRequest,
@@ -180,6 +181,37 @@ class BarrierAsyncConstraintTrackOwnerSignaturePort implements TrackOwnerSignatu
 }
 
 describe("FocusLiveSession owner-signature gate", () => {
+  it("reuses the live session behind the injected Hono owner-signature port", async () => {
+    const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
+    let authorizedTarget: TrackNativeDecisionTarget | undefined;
+    const port: FocusOwnerSignaturePort = {
+      createSession: ({ track, authorize }) =>
+        makeLive(track, {
+          authorize: ({ owner, target }) => {
+            authorizedTarget = target;
+            return authorize(owner, target);
+          },
+        }),
+    };
+    const session = port.createSession({
+      principal: {
+        userId: OWNER.principalId,
+        sessionId: "verified-session",
+        authenticatedAt: OWNER.authenticatedAt,
+        workspaceId: REQUEST.target.workspace,
+      },
+      track: store,
+      authorize: async () => true,
+    });
+
+    await expect(session.sign(REQUEST)).resolves.toMatchObject({
+      status: "signed",
+      persisted: { target: REQUEST.target },
+    });
+    expect(authorizedTarget).toEqual(REQUEST.target);
+    expect(store.recordCount).toBe(1);
+  });
+
   it("records the authenticated owner as attester and trusted relayer provenance separately", async () => {
     const store = new TestOnlyInMemoryTrackOwnerSignaturePort();
     const result = await makeLive(store).sign(REQUEST);

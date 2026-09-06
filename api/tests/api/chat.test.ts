@@ -11,7 +11,7 @@ import { chatSessions, chatMessages, jobQueue, workspaces, workspaceMemberships 
 import { eq } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
 import { chatService } from '../../src/services/chat-service';
-import { DEFAULT_ALL_WS_LIMIT } from '../../src/routes/api/chat';
+import { DEFAULT_ALL_WS_LIMIT } from '../../src/routes/namespaces/chat';
 
 describe('Chat API Endpoints', () => {
   let user: any;

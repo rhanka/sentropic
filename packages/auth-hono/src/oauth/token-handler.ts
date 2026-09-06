@@ -68,7 +68,14 @@ export const createOAuthTokenHandler =
     const user = await options.ports.users.findById(codePayload.userId);
     if (!user) return oauthJsonError(c, 400, 'invalid_grant', 'Authorization code user is invalid.');
 
-    const tokens = await issueTokens(options, auth.client, codePayload, user, dpopJkt);
+    const tokens = await issueTokens(
+      options,
+      auth.client,
+      codePayload,
+      user,
+      dpopJkt,
+      resolveUserinfoAudience(options.issuer, c.req.raw, '/token'),
+    );
     return c.json(tokens);
   };
 
@@ -363,7 +370,8 @@ const issueTokens = async (
   client: OauthClientRecord,
   codePayload: AuthCodePayload,
   user: AuthHonoUserRecord,
-  dpopJkt: string | null
+  dpopJkt: string | null,
+  userinfoAudience: string,
 ) => {
   const accessTokenTtlSeconds = options.accessTokenTtlSeconds ?? 3600;
   const idTokenTtlSeconds = options.idTokenTtlSeconds ?? 3600;
@@ -385,10 +393,10 @@ const issueTokens = async (
   const jwks = createJwksService({ clock: options.ports.clock, jwksPort: options.ports.jwks });
   const accessJti = options.ports.random.uuid();
   // BR-39l Lot 2 (C3/C4): variable RFC 8707 audience. The access-token `aud` is the resource
-  // sealed at authorize time (single string), or the userinfo URL by default — byte-identical to
-  // auth-hono 0.5.0 when no `resource` was requested. The id_token `aud` (client_id) is untouched.
-  const accessAudience =
-    codePayload.resource ?? `${trimTrailingSlash(options.issuer)}/api/v1/auth/oauth/userinfo`;
+  // sealed at authorize time (single string), or the co-located userinfo URL by default. Deriving
+  // it from the mounted token path keeps reusable composition roots distinct. The id_token `aud`
+  // (client_id) is untouched.
+  const accessAudience = codePayload.resource ?? userinfoAudience;
   const accessToken = await jwks.signJwt(
     {
       acr: codePayload.acr,
@@ -467,6 +475,11 @@ const issueTokens = async (
   }
 
   return response;
+};
+
+const resolveUserinfoAudience = (issuer: string, request: Request, suffix: string): string => {
+  const path = new URL(request.url).pathname.replace(new RegExp(`${suffix}$`, 'u'), '/userinfo');
+  return `${trimTrailingSlash(issuer)}${path}`;
 };
 
 const tokenMeta = (input: {

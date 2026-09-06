@@ -102,6 +102,41 @@ describe('chat-server route mode contract', () => {
     ).toHaveProperty('status', 200);
   });
 
+  it('delegates app lifecycle and history routes to the session port', async () => {
+    const app = createChatServer(createInMemoryChatServerDeps(), {
+      routes: 'app-contract',
+    });
+    const created = await app.request('/chat/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionTitle: 'Factory session' }),
+    });
+    expect(created.status).toBe(200);
+    const { sessionId } = await created.json();
+
+    const listed = await app.request('/chat/sessions');
+    expect(await listed.json()).toEqual({
+      sessions: [expect.objectContaining({ id: sessionId, title: 'Factory session' })],
+    });
+
+    const history = await app.request(`/chat/sessions/${sessionId}/history`);
+    expect(history.status).toBe(200);
+    expect(history.headers.get('content-type')).toContain('application/x-ndjson');
+    expect((await history.text()).split('\n')[0]).toBe(JSON.stringify({
+      type: 'session_meta',
+      sessionId,
+      title: 'Factory session',
+      todoRuntime: null,
+      checkpoints: [],
+      documents: [],
+    }));
+
+    expect((await app.request(`/chat/sessions/${sessionId}`, {
+      method: 'DELETE',
+    })).status).toBe(200);
+    expect((await app.request(`/chat/sessions/${sessionId}/history`)).status).toBe(404);
+  });
+
   it('rejects study-spec futures that are not shipped in BR-42a0', async () => {
     const app = createChatServer(createInMemoryChatServerDeps(), {
       routes: 'canonical',

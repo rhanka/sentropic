@@ -1,11 +1,11 @@
+import { createConnectorAdminRouter } from '@sentropic/connector-host/hono';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import { documentConnectorAccounts } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
-import { gmailRouter } from '../../src/routes/api/gmail';
-import { googleDriveRouter } from '../../src/routes/api/google-drive';
+import { createProductConnectorAdminRouterOptions } from '../../src/routes/namespaces/connectors';
 import {
   GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY,
   GOOGLE_DRIVE_OAUTH_CLIENT_ID_SETTING_KEY,
@@ -27,9 +27,10 @@ function encodeJwtPayload(payload: Record<string, unknown>): string {
 async function createMountedGoogleDriveApp() {
   const app = new Hono();
   app.use('/api/v1/google-drive/*', requireAuth);
-  app.route('/api/v1/google-drive', googleDriveRouter);
   app.use('/api/v1/gmail/*', requireAuth);
-  app.route('/api/v1/gmail', gmailRouter);
+  app.route('/api/v1', createConnectorAdminRouter(
+    createProductConnectorAdminRouterOptions(),
+  ));
   return app;
 }
 

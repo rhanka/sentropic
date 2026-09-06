@@ -62,7 +62,9 @@ describe('authorizeRequest — tenant isolation & freshness', () => {
     const { deps, issuer } = buildDeps();
     const req: AuthzRequest = { token: tokenFor(issuer, ['widgets:read']), capabilityRef: 'list_widgets', connectorInstanceId: CONN, now: T };
     const r = await authorizeRequest(req, deps);
+    const next = await authorizeRequest(req, deps);
     expect(r.allowed).toBe(true);
+    expect(next.allowed).toBe(true);
     if (r.allowed) expect(r.tenantContext.tenantRef).toBe('tenant-a');
   });
 

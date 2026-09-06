@@ -23,7 +23,7 @@ const createJsonResponse = (body: unknown, init?: ResponseInit): Response =>
     },
   });
 
-describe('provider connections admin API', () => {
+describe('llm-mesh provider connections admin projection', () => {
   let admin: Awaited<ReturnType<typeof createAuthenticatedUser>>;
   let editor: Awaited<ReturnType<typeof createAuthenticatedUser>>;
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -81,6 +81,7 @@ describe('provider connections admin API', () => {
       true,
     );
     expect(payload).toMatchObject({ openaiTransportMode: 'token' });
+    expect(JSON.stringify(payload)).not.toMatch(/accessToken|refreshToken|provider_connection_secret/);
   });
 
   it('persists and exposes the OpenAI transport mode toggle', async () => {

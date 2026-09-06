@@ -1203,6 +1203,11 @@ describe('ChatRuntime integration — inter-lib full-flow composition', () => {
     expect(history.checkpoints[0]?.title).toBe('Snapshot before follow-up');
     expect(history.checkpoints[0]?.anchorMessageId).toBe(assistantMessageId);
 
+    const storedMessageIds = (await fixture.messageStore.listForSession(sessionId))
+      .map((message) => message.id);
+    expect(storedMessageIds).toEqual(['msg-user-1', assistantMessageId]);
+    expect(history.items.map((item) => item.message.id)).toEqual(['msg-user-1']);
+
     // Cross-check parity with the direct façade-level listCheckpoints
     // call (same data flowing through both Session→Checkpoint sibling
     // dispatch and the direct façade delegator).

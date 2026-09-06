@@ -30,6 +30,9 @@ export const chatMessagesUrl = (): string => '/chat/messages';
 export const chatMessageUrl = (messageId: string): string =>
   `/chat/messages/${encodePathSegment(messageId)}`;
 
+export const chatMessageRuntimeDetailsUrl = (messageId: string): string =>
+  `${chatMessageUrl(messageId)}/runtime-details`;
+
 export const chatMessageRetryUrl = (messageId: string): string =>
   `${chatMessageUrl(messageId)}/retry`;
 

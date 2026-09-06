@@ -294,6 +294,11 @@ describe('Session Store', () => {
 
       await initializeSession();
 
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/auth/session'),
+        expect.objectContaining({ method: 'GET' }),
+      );
+
       const state = get(session);
       expect(state.user).toEqual(user);
 

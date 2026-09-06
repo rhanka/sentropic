@@ -77,8 +77,11 @@ test.describe('Chat multi-tool demonstrative proof', () => {
   const readOrgTechnologies = async (
     api: import('@playwright/test').APIRequestContext,
     orgId: string,
+    workspaceId: string,
   ): Promise<string> => {
-    const res = await api.get(`/api/v1/organizations/${orgId}`);
+    const res = await api.get(
+      `/api/v1/organizations/${orgId}?workspace_id=${encodeURIComponent(workspaceId)}`,
+    );
     if (!res.ok()) return '';
     const body = await res.json().catch(() => null);
     const data = (body?.data ?? {}) as Record<string, unknown>;
@@ -181,7 +184,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceId),
     });
 
-    const before = await readOrgTechnologies(scopedApi, orgId);
+    const before = await readOrgTechnologies(scopedApi, orgId, workspaceId);
     expect(before).toBe(SEED_TECHNOLOGIES);
 
     // 1b. Attach a REAL document to the organization context so a chat-driven
@@ -396,7 +399,7 @@ test.describe('Chat multi-tool demonstrative proof', () => {
       // 4c. The organization technologies field actually CHANGED from the seed.
       const fieldStart = Date.now();
       while (Date.now() - fieldStart < 120_000) {
-        after = await readOrgTechnologies(scopedApi, orgId);
+        after = await readOrgTechnologies(scopedApi, orgId, workspaceId);
         if (after && after !== before) break;
         await page.waitForTimeout(2000);
       }

@@ -14,7 +14,7 @@ import {
 import { createId } from "../../src/utils/id";
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
 
-describe("Tasks API", () => {
+describe("Tasks API through the root-mounted workflows namespace", () => {
   let editor: any;
   let assignee: any;
 

@@ -50,6 +50,13 @@
       "when": 1786900000000,
       "tag": "0006_arch11_outbox_tenant_rekey",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788119188227,
+      "tag": "0007_cluster_mesh_r13",
+      "breakpoints": true
     }
   ]
 }

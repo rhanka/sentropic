@@ -29,6 +29,8 @@ import {
   readDecisionDossier,
 } from "../track/index.js";
 
+export { focusCliCommandIntentAdapter } from "./command-intent.js";
+
 /** The package version, read from the package manifest (single source of truth). */
 const pkg = createRequire(import.meta.url)("../../package.json") as {
   version: string;

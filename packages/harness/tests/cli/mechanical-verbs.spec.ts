@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runHarnessCli } from '../../src/cli/run.js';
+import { harnessCliCommandIntentAdapter } from '../../src/cli/command-intent.js';
 
 function capture(argv: string[]): { code: number; text: string } {
   const lines: string[] = [];
@@ -13,6 +14,12 @@ function json(argv: string[]): { code: number; obj: Record<string, unknown> } {
 }
 
 describe('harness verify (VerificationRun roll-up)', () => {
+  it('projects verification intent without running a check', () => {
+    expect(harnessCliCommandIntentAdapter.parseIntent(['verify', '--category', 'ci'])).toEqual({
+      runnerId: 'harness', source: '@sentropic/harness', argv: ['verify', '--category', 'ci'],
+    });
+  });
+
   it('tags the run with the requested category', () => {
     const { code, obj } = json(['verify', '--category', 'ci', '--json']);
     expect(code).toBe(0);

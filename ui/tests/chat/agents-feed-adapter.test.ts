@@ -3,6 +3,7 @@ import { buildAgentsListRows } from '@sentropic/chat-ui/state/agentsSort';
 import {
   compactAgentsActivity,
   projectAgentsFeed,
+  queueJobsToAppJobs,
   type AppChatSession,
   type AppJob,
 } from '$lib/chat/agents-feed-adapter';
@@ -99,6 +100,20 @@ describe('projectAgentsFeed — jobs', () => {
 });
 
 describe('projectAgentsFeed — D5 session-bound job merge', () => {
+  it('does not create a discovery row from agent configuration job metadata', () => {
+    const jobs = queueJobsToAppJobs([{
+      id: 'configured-turn',
+      type: 'chat_message',
+      status: 'processing',
+      createdAt: '2026-07-30T10:00:00.000Z',
+      data: { sessionId: 's1', agentConfig: { key: 'planner' } },
+    }]);
+    const entries = projectAgentsFeed({ sessions: [session({ id: 's1' })], jobs });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ id: 's1', kind: 'session', status: 'running' });
+  });
+
   it('does NOT show a session-bound job as its own row', () => {
     const entries = projectAgentsFeed({
       sessions: [session({ id: 's1' })],

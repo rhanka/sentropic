@@ -48,6 +48,12 @@ describe("Agent config API", () => {
     const putBody = await putRes.json();
     expect(putBody.items).toHaveLength(1);
     const root = putBody.items[0];
+    const [stored] = await db
+      .select({ key: agentDefinitions.key, config: agentDefinitions.config })
+      .from(agentDefinitions)
+      .where(eq(agentDefinitions.id, root.id))
+      .limit(1);
+    expect(stored).toEqual({ key: "planner", config: { model: "gpt-4.1-nano" } });
 
     const listRes = await authenticatedRequest(app, "GET", "/api/v1/agent-config", editor.sessionToken);
     expect(listRes.status).toBe(200);
@@ -79,6 +85,11 @@ describe("Agent config API", () => {
     expect(resetRes.status).toBe(200);
     const resetBody = await resetRes.json();
     expect(resetBody.item.id).toBe(root.id);
+
+    const doubledPath = await authenticatedRequest(
+      app, "GET", "/api/v1/agents/agent-config", editor.sessionToken,
+    );
+    expect(doubledPath.status).toBe(404);
   });
 
   it("supports copy/reset lifecycle (new canonical endpoints)", async () => {

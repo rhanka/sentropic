@@ -46,3 +46,6 @@ export type EventEnvelope<TPayload> = {
   redactedFields?: ReadonlyArray<string>;
   signature?: string;
 };
+
+export * from './cluster-mesh-namespace.js';
+export * from './verified-invocation-context.js';

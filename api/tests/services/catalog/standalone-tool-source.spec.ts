@@ -117,6 +117,18 @@ describe('StandaloneToolSource — tool entry shape', () => {
 // ---------------------------------------------------------------------------
 
 describe('StandaloneToolSource.snapshot — synchronous and always-fresh', () => {
+  it('keeps discovery snapshots effect-free', () => {
+    let calls = 0;
+    const source = new StandaloneToolSource('discovery-only');
+    source.register({
+      tool: SAMPLE_TOOL,
+      handler: async () => { calls += 1; return { effected: true }; },
+    });
+    source.snapshot();
+    source.snapshot();
+    expect(calls).toBe(0);
+  });
+
   it('snapshot() returns a plain array (not a Promise)', () => {
     const source = new StandaloneToolSource('test-sync');
     const result = source.snapshot();

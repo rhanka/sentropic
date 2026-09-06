@@ -1,10 +1,11 @@
+import { createConnectorAdminRouter } from '@sentropic/connector-host/hono';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import { documentConnectorAccounts } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
-import { googleDriveRouter } from '../../src/routes/api/google-drive';
+import { createProductConnectorAdminRouterOptions } from '../../src/routes/namespaces/connectors';
 import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
 import { GOOGLE_WORKSPACE_MIME_TYPES } from '../../src/services/google-drive-client';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../utils/auth-helper';
@@ -13,7 +14,9 @@ import { createConnectedGoogleDriveToken } from '../utils/google-drive-helper';
 async function createMountedGoogleDriveApp() {
   const app = new Hono();
   app.use('/api/v1/google-drive/*', requireAuth);
-  app.route('/api/v1/google-drive', googleDriveRouter);
+  app.route('/api/v1', createConnectorAdminRouter(
+    createProductConnectorAdminRouterOptions(),
+  ));
   return app;
 }
 

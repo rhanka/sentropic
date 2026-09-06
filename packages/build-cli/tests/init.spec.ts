@@ -173,8 +173,8 @@ describe('runInit — materialise the REAL chat-app template', () => {
             dependencies: Record<string, string>;
         };
         expect(pkg.name).toBe('demo');
-        expect(pkg.dependencies['@sentropic/chat-server']).toBe('^0.1.0');
-        expect(pkg.dependencies['@sentropic/chat-ui']).toBe('^0.1.1');
+        expect(pkg.dependencies['@sentropic/chat-server']).toBe('^0.4.0');
+        expect(pkg.dependencies['@sentropic/chat-ui']).toBe('^0.33.3');
         expect(pkg.dependencies['@sentropic/design-system-svelte']).toBe('^0.34.69');
     });
 

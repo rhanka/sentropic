@@ -4,11 +4,9 @@
 // MUST be confirmed with the user before merge (feedback_no_unvalidated_naming).
 //
 // Phase A0 (BR-39m): a THIN standalone IdP composition that REUSES the existing
-// auth surface with ZERO new auth code. It mounts the already-wired
-// `authRouter` (OAuth + register/login/session/consent handlers) and
-// `wellKnownRouter` (openid-configuration + jwks) — both of which already
-// compose `@sentropic/auth-hono` factories + the shared-DB Postgres adapters +
-// the JWKS adapter — onto a fresh Hono app.
+// auth surface with ZERO new auth code. It mounts the reusable Cluster Mesh
+// auth, session, and OAuth modules — all backed by the shared-DB Postgres
+// adapters and the JWKS adapter — onto a fresh Hono app.
 //
 // SHARED PHYSICAL DB (fork F1+F3 default): this module imports the SAME db
 // client and routers used by `api/`. It does NOT create a new database, does
@@ -27,12 +25,18 @@ import { join } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
+import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 
 import { env } from '../../api/src/config/env';
-import { authRouter } from '../../api/src/routes/auth';
 import { applyAuthRateLimiters } from '../../api/src/middleware/auth-rate-limiters';
-import { wellKnownRouter } from '../../api/src/routes/well-known';
 import { isOriginAllowed, parseAllowedOrigins } from '../../api/src/utils/cors';
+import { clusterMeshAdapter } from '../../api/src/services/cluster-mesh-adapter';
+import { createIdpSessionModule } from '../../api/src/routes/namespaces/session';
+import {
+  createOAuthNamespaceModule,
+  createOAuthWellKnownProjection,
+} from '../../api/src/routes/namespaces/oauth';
+import { idpAuthPlugin } from '../../api/src/routes/namespaces/auth';
 
 // BR-39m A0-bis — the human-facing login/register/magic-link/consent screens are
 // a minimal SvelteKit static front (apps/auth-idp/web) built to `web/build` with
@@ -61,8 +65,8 @@ const readSpaFallback = (): string | null => {
  *   - *    /api/v1/auth/oauth/*        (authorize, token, userinfo, consent, revoke, introspect)
  *   - *    /api/v1/auth/{register,login,session,credentials,magic-link,email,device}/*
  *
- * Rate limiting: this app builds its OWN `new Hono()` and mounts `authRouter`
- * directly, so the limiters declared on the product app in `api/src/app.ts` were
+ * Rate limiting: this app builds its OWN `new Hono()` and mounts the auth module
+ * directly, so limiters declared only on the product app in `api/src/app.ts` are
  * NEVER applied here — a previous comment claimed otherwise and was wrong. Since
  * `auth.sent-tech.ca` is a PUBLIC host serving
  * `/api/v1/auth/{login,register,magic-link}/*` against the same `users` table,
@@ -157,8 +161,23 @@ export const createIdpApp = (): Hono => {
   // host had none at all before.
   applyAuthRateLimiters(app);
 
-  app.route('/.well-known', wellKnownRouter);
-  app.route('/api/v1/auth', authRouter);
+  app.route('/.well-known', createOAuthWellKnownProjection({
+    compositionRoot: 'auth-idp',
+    publicPath: '/api/v1/auth/oauth',
+  }));
+  const authPlugin = idpAuthPlugin();
+  app.route('/api/v1/auth', createClusterMeshPlugin({
+    runtime: clusterMeshAdapter.sessionControl!.runtime,
+    namespaces: [
+      createIdpSessionModule(),
+      createOAuthNamespaceModule({
+        compositionRoot: 'auth-idp',
+        publicPath: '/api/v1/auth/oauth',
+      }),
+      authPlugin.module,
+    ],
+    mounts: { '/session': '/', '/auth': authPlugin.mount },
+  }));
 
   // Lightweight liveness/identity endpoint (kept off the SPA root path).
   app.get('/healthz', (c) =>

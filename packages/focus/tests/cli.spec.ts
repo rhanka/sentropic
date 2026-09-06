@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { run } from "../src/cli/index.js";
+import { focusCliCommandIntentAdapter, run } from "../src/cli/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const eventsPath = join(here, ".track", "events.jsonl");
@@ -57,6 +57,14 @@ const baseArgs = (format: string): string[] => [
 ];
 
 describe("focus CLI — renders a real decision dossier read-only", () => {
+  it("projects render intent without reading the Track log", () => {
+    expect(focusCliCommandIntentAdapter.parseIntent([DECISION_ID, "--workspace", "focus"]))
+      .toEqual({
+        runnerId: "focus", source: "@sentropic/focus/cli",
+        argv: [DECISION_ID, "--workspace", "focus"],
+      });
+  });
+
   it("renders the terminal surface (exit 0, title + outcome in stdout)", async () => {
     const c = capture();
     const code = await run(baseArgs("terminal"), c.deps);

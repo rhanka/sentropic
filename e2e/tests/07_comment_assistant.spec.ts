@@ -72,13 +72,13 @@ test.describe('Comment assistant', () => {
       data: { email: 'e2e-user-b@example.com', role: 'commenter' },
     });
     if (!addRes.ok() && addRes.status() !== 409) {
-      throw new Error(`Impossible d'ajouter user-b en commenter (status ${addRes.status()})`);
+      throw new Error(`Could not add user-b as commenter (status ${addRes.status()})`);
     }
 
     await userAApi.dispose();
   });
 
-  test('tool activé par défaut + payload tools inclut comment_assistant', async ({ page }) => {
+  test('tool is enabled by default and the tools payload includes comment_assistant', async ({ page }) => {
     await page.goto('/folders');
     await page.evaluate((wsId) => {
       try {
@@ -117,7 +117,7 @@ test.describe('Comment assistant', () => {
     expect(tools).toContain('comment_assistant');
   });
 
-  test('IA poste un commentaire + badge Assistant IA', async ({ browser }) => {
+  test('AI posts a comment with the AI Assistant badge', async ({ browser }) => {
     const pageBContext = await browser.newContext({ storageState: USER_B_STATE });
     const pageB = await pageBContext.newPage();
     await pageB.goto('/folders');

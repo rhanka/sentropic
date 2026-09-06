@@ -6,7 +6,7 @@
  *
  * Environment: jsdom via vitest.dom.config.ts (target: test-chat-ui-dom).
  */
-import { cleanup, render } from '@testing-library/svelte';
+import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import ChatPanelShell from '../src/components/ChatPanelShell.svelte';
 
@@ -80,6 +80,43 @@ describe('ChatPanelShell (gold shell assembly)', () => {
       props: { mode: 'ai', labels: LABELS, errorMsg: 'HTTP 502: Unknown error' },
     });
     getByText('HTTP 502: Unknown error');
+  });
+
+  it('reacts to workspace permission and comment input changes', async () => {
+    const commentHost = {
+      listComments: async () => ({ items: [] }),
+      createComment: async () => ({ id: 'comment-1', thread_id: 'thread-1' }),
+      updateComment: async () => ({ success: true }),
+      closeComment: async () => ({ success: true }),
+      reopenComment: async () => ({ success: true }),
+      deleteComment: async () => ({ success: true }),
+      listMentionMembers: async () => ({ items: [] }),
+      canComment: () => true,
+      canResolve: () => false,
+      resolveSectionLabel: () => null,
+      currentUser: () => null,
+      subscribeCommentUpdates: () => () => {},
+    } as never;
+    const props = {
+      mode: 'comments' as const,
+      labels: LABELS,
+      commentHost,
+      workspaceCanComment: false,
+      commentContextType: 'initiative',
+      commentContextId: 'initiative-1',
+    };
+    const { container, rerender } = render(ChatPanelShell, {
+      props,
+    });
+    const send = container.querySelector('button[aria-label="common.send"]');
+    expect(send).not.toBeNull();
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+
+    await rerender({ ...props, workspaceCanComment: true });
+    const input = container.querySelector('textarea[aria-label="chat.composer.ariaLabel"]');
+    expect(input).not.toBeNull();
+    await fireEvent.input(input as HTMLTextAreaElement, { target: { value: 'Reply' } });
+    expect((send as HTMLButtonElement).disabled).toBe(false);
   });
 
   const assistantItem = {

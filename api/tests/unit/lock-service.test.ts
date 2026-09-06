@@ -91,6 +91,32 @@ describe('lock-service', () => {
     expect(lock).toBeNull();
   });
 
+  it('keys lock ownership by workspace, object type and object id', async () => {
+    const objectId = `shared_${Date.now()}`;
+    const organization = await acquireLock({
+      userId: editor.id, workspaceId, objectType: 'organization', objectId,
+    });
+    const folder = await acquireLock({
+      userId: editorB.id, workspaceId, objectType: 'folder', objectId,
+    });
+    const otherWorkspace = await acquireLock({
+      userId: editorB.id,
+      workspaceId: editorB.workspaceId,
+      objectType: 'organization',
+      objectId,
+    });
+
+    expect(organization.acquired).toBe(true);
+    expect(folder.acquired).toBe(true);
+    expect(otherWorkspace.acquired).toBe(true);
+    await expect(getActiveLock(workspaceId, 'organization', objectId))
+      .resolves.toMatchObject({ workspaceId, objectType: 'organization', objectId });
+    await expect(getActiveLock(workspaceId, 'folder', objectId))
+      .resolves.toMatchObject({ workspaceId, objectType: 'folder', objectId });
+    await expect(getActiveLock(editorB.workspaceId, 'organization', objectId))
+      .resolves.toMatchObject({ workspaceId: editorB.workspaceId, objectType: 'organization', objectId });
+  });
+
   it('clears locks for a user (zero SSE connections)', async () => {
     const objectType = 'organization';
     const objectId = `org_clear_${Date.now()}`;

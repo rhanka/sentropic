@@ -81,4 +81,18 @@ describe('threading', () => {
       true,
     );
   });
+
+  it('atomically edits content and assignment across a thread', async () => {
+    const store = new InMemoryCommentStore();
+    const root = await store.add(tenant, baseInput({ body: 'root' }));
+    await store.add(tenant, baseInput({ threadId: root.threadId, body: 'reply' }));
+
+    const updated = await store.editThread(tenant, root.threadId, {
+      content: 'shared update',
+      assignedTo: 'usr_2',
+    });
+    expect(updated).toHaveLength(2);
+    expect(updated.every((row) => row.body === 'shared update')).toBe(true);
+    expect(updated.every((row) => row.assignedTo === 'usr_2')).toBe(true);
+  });
 });

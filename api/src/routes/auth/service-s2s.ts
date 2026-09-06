@@ -17,7 +17,10 @@ import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthServiceResource
  *   token via the `client_credentials` grant against this API's own IdP and
  *   calling the protected `/ping` route — the activation + UAT artifact.
  */
-export const serviceS2sRouter = new Hono();
+export interface CreateServiceS2sRouterOptions {
+  readonly oauthPublicPath: string;
+  readonly servicePublicPath: string;
+}
 
 const SERVICE_PING_SCOPE = 'service:ping';
 
@@ -38,12 +41,12 @@ const requireServicePing = (c: Context, next: () => Promise<void>) =>
     resource: resolveOAuthServiceResource(c.req.raw),
   })(c, next);
 
-serviceS2sRouter.get('/ping', requireServicePing, (c) => {
+const handleServicePing = (c: Context) => {
   const serviceClient = c.get('serviceClient') as { clientId?: string } | undefined;
   return c.json({ clientId: serviceClient?.clientId ?? null, service: 's2s', status: 'ok' });
-});
+};
 
-serviceS2sRouter.get('/self-check', async (c) => {
+const createSelfCheckHandler = (options: CreateServiceS2sRouterOptions) => async (c: Context) => {
   const clientId = env.OAUTH_SELF_SERVICE_CLIENT_ID;
   const clientSecret = env.OAUTH_SELF_SERVICE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -64,10 +67,11 @@ serviceS2sRouter.get('/self-check', async (c) => {
       issuer,
       resource,
       scope: [SERVICE_PING_SCOPE],
+      tokenEndpoint: `${origin}${options.oauthPublicPath}/token`,
     });
     const token = await authClient.getToken();
 
-    const pingResponse = await fetch(`${origin}/api/v1/auth/s2s/ping`, {
+    const pingResponse = await fetch(`${origin}${options.servicePublicPath}/ping`, {
       headers: { authorization: `${token.token_type} ${token.access_token}` },
     });
     const pingBody = await pingResponse.json().catch(() => null);
@@ -83,4 +87,8 @@ serviceS2sRouter.get('/self-check', async (c) => {
     logger.error({ err: error }, 'S2S self-check failed');
     return c.json({ error: 'self_check_failed', status: 'failed' }, 502);
   }
-});
+};
+
+export const createServiceS2sRouter = (options: CreateServiceS2sRouterOptions): Hono => new Hono()
+  .get('/ping', requireServicePing, handleServicePing)
+  .get('/self-check', createSelfCheckHandler(options));

@@ -5,7 +5,7 @@ import { db } from "../../src/db/client";
 import { workflowDefinitionTasks, workflowDefinitions, workspaceMemberships } from "../../src/db/schema";
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
 
-describe("Workflow config API", () => {
+describe("Workflow config API through the root-mounted workflows namespace", () => {
   let editor: any;
   let viewer: any;
 

@@ -18,6 +18,7 @@ import { createAuthenticatedUser, cleanupAuthData } from "../utils/auth-helper";
 import { todoOrchestrationService, type TodoActor } from "../../src/services/todo-orchestration";
 import { USE_CASE_GENERATION_WORKFLOW_KEY } from "../../src/config/default-workflows";
 import { queueManager } from "../../src/services/queue-manager";
+import { productResourceProjection } from "../../src/routes/namespaces/resources-product-ports";
 
 describe("Generic dispatch and backward compat", () => {
   let editor: any;
@@ -50,6 +51,30 @@ describe("Generic dispatch and backward compat", () => {
     }
     await cleanupAuthData();
     vi.restoreAllMocks();
+  });
+
+  it("keeps resource invoke refusal outside generic workflow dispatch", async () => {
+    await expect(productResourceProjection.dispatch({
+      verb: "invoke",
+      target: {
+        ref: { provider: "catalog", type: "skill", id: "skill:foundation:workspace" },
+      },
+      args: { args: {} },
+      principal: {
+        userId: editor.id,
+        scope: { tenantId: "sentropic", workspaceId: editor.workspaceId! },
+        context: {
+          userId: editor.id,
+          role: "editor",
+          workspaceType: "ai-priorities",
+          roles: ["editor"], permissions: [], permissionMode: "allowlist", allowedTools: [],
+        },
+      },
+    })).rejects.toMatchObject({ code: "unsupported" });
+    expect(processJobsSpy).not.toHaveBeenCalled();
+    const runs = await db.select().from(executionRuns)
+      .where(eq(executionRuns.workspaceId, editor.workspaceId));
+    expect(runs).toHaveLength(0);
   });
 
   describe("seedWorkflowsForType", () => {

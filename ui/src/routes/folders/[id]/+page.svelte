@@ -38,6 +38,7 @@
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { Trash2, Star, X, Minus, Loader2, Lock, FileSpreadsheet } from '@lucide/svelte';
   import { listComments } from '$lib/utils/comments';
+  import { buildLockScopeKey } from '$lib/utils/lock-scope';
 
   let isLoading = false;
   let matrix: MatrixConfig | null = null;
@@ -50,6 +51,7 @@
   let lockHubKey: string | null = null;
   let lockRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let lockTargetId: string | null = null;
+  let activeLockScopeKey: string | null = null;
   let lock: LockSnapshot | null = null;
   let lockLoading = false;
   let lockError: string | null = null;
@@ -487,7 +489,13 @@
   };
 
 
-  $: if (folderId && folderId !== lockTargetId) {
+  $: readyLockScopeKey = buildLockScopeKey({
+    hydrated: $workspaceScopeHydrated,
+    userId: $session.user?.id,
+    workspaceId,
+    targetId: folderId,
+  });
+  $: if (readyLockScopeKey && readyLockScopeKey !== activeLockScopeKey && folderId) {
     if (lockTargetId) {
       void leavePresence('folder', lockTargetId);
       void releaseCurrentLock();
@@ -495,6 +503,7 @@
     lock = null;
     presenceUsers = [];
     presenceTotal = 0;
+    activeLockScopeKey = readyLockScopeKey;
     lockTargetId = folderId;
     subscribeLock(folderId);
     void syncLock();

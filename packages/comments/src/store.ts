@@ -37,6 +37,13 @@ export interface CommentStore {
     patch: { body?: string },
   ): Promise<Comment>;
 
+  /** Atomically cascade content and assignment across an existing thread. */
+  editThread(
+    tenant: TenantContext,
+    threadId: string,
+    patch: { content: string; assignedTo: string },
+  ): Promise<Comment[]>;
+
   /** Per-row HARD delete. Deleting the root leaves surviving replies. */
   delete(tenant: TenantContext, id: string): Promise<void>;
 
