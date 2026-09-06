@@ -78,10 +78,10 @@ describe('chat-app generator golden', () => {
         const pkg = JSON.parse(byPath(render())['package.json']) as {
             dependencies: Record<string, string>;
         };
-        expect(pkg.dependencies['@sentropic/chat-server']).toBe('^0.1.0');
-        expect(pkg.dependencies['@sentropic/chat-ui']).toBe('^0.1.1');
+        expect(pkg.dependencies['@sentropic/chat-server']).toBe('^0.4.0');
+        expect(pkg.dependencies['@sentropic/chat-ui']).toBe('^0.33.3');
         expect(pkg.dependencies['@sentropic/chat-core']).toBe('^0.1.2');
-        expect(pkg.dependencies['@sentropic/llm-mesh']).toBe('^0.1.2');
+        expect(pkg.dependencies['@sentropic/llm-mesh']).toBe('^0.19.0');
         expect(pkg.dependencies['@sentropic/design-system-svelte']).toBe('^0.34.69');
         expect(pkg.dependencies['@sentropic/design-system-themes']).toBe('^0.11.0');
         expect(pkg.dependencies['@sentropic/design-system-tokens']).toBe('^0.11.0');
