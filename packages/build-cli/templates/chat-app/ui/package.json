@@ -13,7 +13,7 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@sentropic/chat-ui": "^0.1.1",
+    "@sentropic/chat-ui": "^0.33.3",
     "@sentropic/chat-core": "^0.1.2",
     "@sentropic/design-system-svelte": "^0.34.69",
     "@sentropic/design-system-themes": "^0.11.0",
