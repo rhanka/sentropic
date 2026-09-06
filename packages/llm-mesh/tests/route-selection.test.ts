@@ -67,7 +67,7 @@ describe('route candidate selection', () => {
         diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai',
         transportProviderId: 'codex',
-        supportedModelIds: ['gpt-5.6-terra'],
+        supportedModelIds: ['gpt-5.6-sol'],
         enrollmentCompletedAt: '2026-08-01T00:00:00Z',
         readiness: 'ready' as const,
         revision: 'r1',
@@ -96,7 +96,7 @@ describe('route candidate selection', () => {
     expect(candidates.map((candidate) => candidate.target.transportProviderId)).toEqual(['codex']);
   });
 
-  it('routes Fable 5.1 max to GPT-5.6 Sol max when no Anthropic account is enrolled', () => {
+  it('routes Fable 5.1 max to GPT-6 Astra max when no Anthropic account is enrolled', () => {
     const candidates = candidatesOf(selectRouteCandidates({
       request: { requestedModel: 'claude-fable-5-1-max' },
       policy: DEFAULT_ROUTE_POLICY,
@@ -104,7 +104,7 @@ describe('route candidate selection', () => {
       accounts: [{
         accountRef: 'codex-internal', diagnosticAccountRef: 'codex-redacted',
         targetProviderId: 'openai', transportProviderId: 'codex',
-        supportedModelIds: ['gpt-5.6-sol'],
+        supportedModelIds: ['gpt-6-astra'],
         enrollmentCompletedAt: '2026-09-03T00:00:00Z',
         readiness: 'ready', revision: 'r1',
       }],
@@ -112,7 +112,7 @@ describe('route candidate selection', () => {
 
     expect(candidates[0]?.target).toMatchObject({
       providerId: 'openai', transportProviderId: 'codex',
-      modelId: 'gpt-5.6-sol', effort: 'max', reason: 'alias',
+      modelId: 'gpt-6-astra', effort: 'max', reason: 'alias',
     });
   });
 
