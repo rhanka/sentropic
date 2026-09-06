@@ -56,6 +56,7 @@ COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/events/package.json ./packages/events/package.json
 COPY packages/comments/package.json ./packages/comments/package.json
 COPY packages/auth-client/package.json ./packages/auth-client/package.json
+COPY packages/chat-core/package.json ./packages/chat-core/package.json
 COPY packages/chat-server/package.json ./packages/chat-server/package.json
 COPY packages/cluster-mesh/package.json ./packages/cluster-mesh/package.json
 COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
@@ -80,6 +81,8 @@ RUN npm --workspace @sentropic/auth-hono run build
 RUN npm --workspace @sentropic/auth-client run build
 RUN npm --workspace @sentropic/contracts run build
 RUN npm --workspace @sentropic/events run build
+RUN npm --workspace @sentropic/chat-core run build
+RUN npm --workspace @sentropic/chat-server run build
 RUN npm --workspace @sentropic/cluster-mesh run build
 RUN npm --workspace @sentropic/llm-mesh run build
 RUN npm --workspace @sentropic/flow run build
