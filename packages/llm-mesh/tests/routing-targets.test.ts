@@ -62,6 +62,11 @@ describe('canonical model targets', () => {
       transportProviderId: 'cloud-code',
       model: 'gemini-3.7-flash',
     });
+    expect(resolve('gemini-3.8-flash')).toEqual({
+      providerId: 'gemini',
+      transportProviderId: 'cloud-code',
+      model: 'gemini-3.8-flash',
+    });
     expect(resolve('claude-fable-5-1')).toEqual({
       providerId: 'anthropic', transportProviderId: 'claude-code',
       model: 'claude-fable-5-1',
@@ -103,7 +108,7 @@ describe('canonical model targets', () => {
       {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-5.6-terra',
+        model: 'gpt-5.6-sol',
         effort: 'xhigh',
       },
       {
@@ -139,12 +144,12 @@ describe('canonical model targets', () => {
       {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-5.6-sol',
+        model: 'gpt-6-astra',
       },
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.8-flash',
       },
     ]);
     expect(resolveCandidates('gpt-5.6-terra')).toEqual([
@@ -180,8 +185,10 @@ describe('canonical model targets', () => {
       };
       const expectedPrimaryModel = candidates[0]?.model ?? '';
       expect(candidates[0]).toMatchObject(expectedPrimary);
+      const expectedCloudModel = alias.startsWith('claude-fable-')
+        ? 'gemini-3.8-flash' : 'gemini-3.7-flash';
       expect(candidates).toContainEqual(expect.objectContaining({
-        providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+        providerId: 'gemini', transportProviderId: 'cloud-code', model: expectedCloudModel,
       }));
       expect(descriptions.find((route) => route.requestedId === alias))
         .toMatchObject({
@@ -213,26 +220,39 @@ describe('canonical model targets', () => {
     }
   });
 
-  it('keeps every Fable 5.1 Codex fallback on GPT-5.6 Sol until GPT-6 GA', () => {
-    for (const [alias, effort] of [
-      ['claude-fable-5-1', undefined],
-      ['claude-fable-5-1-high', 'high'],
-      ['claude-fable-5-1-xhigh', 'xhigh'],
-      ['claude-fable-5-1-max', 'max'],
-    ] as const) {
+  it('routes every Fable 5 and 5.1 fallback through the GA models', () => {
+    for (const model of ['claude-fable-5', 'claude-fable-5-1']) {
+      for (const effort of [undefined, 'high', 'xhigh', 'max'] as const) {
+        const alias = effort ? `${model}-${effort}` : model;
+        const candidates = resolveCandidates(alias);
+        expect(candidates[1]).toEqual({
+          providerId: 'openai', transportProviderId: 'codex',
+          model: 'gpt-6-astra', ...(effort ? { effort } : {}),
+        });
+        expect(candidates[2]).toEqual({
+          providerId: 'gemini', transportProviderId: 'cloud-code',
+          model: 'gemini-3.8-flash', ...(effort ? { effort } : {}),
+        });
+      }
+    }
+  });
+
+  it('routes every Opus 5 Codex fallback through GPT-5.6 Sol', () => {
+    for (const effort of [undefined, 'high', 'xhigh'] as const) {
+      const alias = effort ? `claude-opus-5-${effort}` : 'claude-opus-5';
       const candidates = resolveCandidates(alias);
-      expect(candidates[0]).toEqual({
-        providerId: 'anthropic', transportProviderId: 'claude-code',
-        model: 'claude-fable-5-1', ...(effort ? { effort } : {}),
-      });
       expect(candidates[1]).toEqual({
         providerId: 'openai', transportProviderId: 'codex',
         model: 'gpt-5.6-sol', ...(effort ? { effort } : {}),
       });
+      expect(candidates[2]).toEqual({
+        providerId: 'gemini', transportProviderId: 'cloud-code',
+        model: 'gemini-3.7-flash', ...(effort ? { effort } : {}),
+      });
     }
   });
 
-  it('routes every Claude tier to the real Gemini 3.7 Flash transport', () => {
+  it('routes every Claude tier to its declared real Cloud Code transport', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
       'claude-opus-4-8', 'claude-opus-4-8-xhigh',
@@ -245,6 +265,8 @@ describe('canonical model targets', () => {
 
     for (const alias of aliases) {
       const candidates = resolveCandidates(alias);
+      const expectedModel = alias.startsWith('claude-fable-')
+        ? 'gemini-3.8-flash' : 'gemini-3.7-flash';
       const cloudCodeTargets = candidates.filter(
         ({ transportProviderId }) => transportProviderId === 'cloud-code',
       );
@@ -252,12 +274,12 @@ describe('canonical model targets', () => {
       expect(cloudCodeTargets[0]).toMatchObject({
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash',
+        model: expectedModel,
       });
       expect(resolveTargetCapabilitySource(cloudCodeTargets[0]!)).toMatchObject({
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash',
+        model: expectedModel,
       });
     }
   });
@@ -272,6 +294,9 @@ describe('canonical model targets', () => {
     }
     expect(resolveCandidates('gemini-3.7-flash')).toEqual([{
       providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.7-flash',
+    }]);
+    expect(resolveCandidates('gemini-3.8-flash')).toEqual([{
+      providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
     }]);
   });
 

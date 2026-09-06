@@ -23,6 +23,32 @@ if [ ! -f "$INPUT_FILE" ]; then
     exit 1
 fi
 
+if [ ! -s "$INPUT_FILE" ]; then
+    echo "Error: Input file $INPUT_FILE is empty; the scanner did not emit a report"
+    exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is required for parsing security scan output"
+    exit 1
+fi
+
+if ! jq empty "$INPUT_FILE" >/dev/null 2>&1; then
+    echo "Error: Input file $INPUT_FILE is not valid JSON"
+    exit 1
+fi
+
+if [ "$SCAN_TYPE" = "sca" ] || [ "$SCAN_TYPE" = "container" ]; then
+    if ! jq -e '
+        (has("auditReportVersion") and (.vulnerabilities | type == "object") and (.metadata.vulnerabilities | type == "object"))
+        or
+        (has("SchemaVersion") and (.ArtifactName | type == "string") and (.Results | type == "array"))
+    ' "$INPUT_FILE" >/dev/null 2>&1; then
+        echo "Error: Input file $INPUT_FILE is not a complete npm-audit or Trivy report"
+        exit 1
+    fi
+fi
+
 echo "🔍 Parsing $SCAN_TYPE results from $INPUT_FILE..."
 
 case "$SCAN_TYPE" in
@@ -171,6 +197,10 @@ case "$SCAN_TYPE" in
                         cp "${OUTPUT_FILE%.yaml}.json" "$OUTPUT_FILE"
                     fi
                 fi
+
+                # npm-audit output was fully handled above. Do not fall through
+                # into the Trivy parser and overwrite real findings with zero.
+                exit 0
             # For IaC, handle multiple JSON objects (one per file scanned)
             elif [ "$SCAN_TYPE" = "iac" ]; then
                 # Merge multiple JSON objects into array and extract findings
