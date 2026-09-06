@@ -534,6 +534,17 @@ typecheck-api: prepare-node-workspace ## Run API type checks
 typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
+.PHONY: lint-llm-mesh lint-llm-gateway
+lint-llm-mesh lint-llm-gateway: lint-llm-%: ## Lint an LLM routing package
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/llm-$* $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" \
+			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
+		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
+			"export default tseslint.config(...tseslint.configs.recommended, { rules: { '\''@typescript-eslint/no-empty-object-type'\'': '\''off'\'', '\''@typescript-eslint/no-explicit-any'\'': '\''off'\'', '\''@typescript-eslint/no-unused-vars'\'': '\''off'\'' } });" \
+			> "$$tool_dir/eslint.config.mjs"; \
+		"$$tool_dir/node_modules/.bin/eslint" --config "$$tool_dir/eslint.config.mjs" src tests'
+
 .PHONY: typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh publish-cluster-mesh publish-cluster-mesh-token
 typecheck-cluster-mesh: ## Run @sentropic/cluster-mesh type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit --typeRoots "$$tool_dir/node_modules/@types" -p tsconfig.json'
