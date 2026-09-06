@@ -26,6 +26,25 @@ fi
 PARSED_FILE=".security/${FILE_PREFIX}-${SERVICE}-parsed.yaml"
 ACCEPTED_FILE=".security/vulnerability-register.yaml"
 
+register_value() {
+    local finding_id="$1"
+    local field="$2"
+    awk -v finding_id="$finding_id" -v field="$field" '
+        $0 == "    " finding_id ":" { in_entry = 1; next }
+        in_entry && /^    [^[:space:]#][^:]*:/ { exit }
+        in_entry {
+            line = $0
+            sub(/^[[:space:]]+/, "", line)
+            if (index(line, field ":") == 1) {
+                sub(/^[^:]+:[[:space:]]*/, "", line)
+                gsub(/^["'\'' ]+|["'\'' ]+$/, "", line)
+                print line
+                exit
+            }
+        }
+    ' "$ACCEPTED_FILE"
+}
+
 if [ -z "$SCAN_TYPE" ] || [ -z "$SERVICE" ]; then
     echo "Usage: $0 <scan_type> <service>"
     echo "Example: $0 sast api"
@@ -114,17 +133,18 @@ if [ -n "$FINDINGS" ]; then
         
         echo "  Checking: $FINDING_ID in $FINDING_FILE:$FINDING_LINE ($FINDING_SEVERITY)"
         
-        # Check if this finding is accepted
-        if command -v yq >/dev/null 2>&1; then
-            ACCEPTED=$(yq -r ".vulnerability_register.vulnerabilities.\"$FINDING_ID\".category // \"\"" "$ACCEPTED_FILE" 2>/dev/null || echo "")
-        else
-            ACCEPTED=""
-        fi
+        CATEGORY=$(register_value "$FINDING_ID" category)
+        STATUS=$(register_value "$FINDING_ID" status)
+        REVIEW_DUE=$(register_value "$FINDING_ID" review_due)
+        TODAY=$(date -u +%F)
         
-        if [ -n "$ACCEPTED" ] && [ "$ACCEPTED" != "null" ] && [ "$ACCEPTED" != "" ]; then
-            echo "    ✅ ACCEPTED: $ACCEPTED"
+        if [ -n "$CATEGORY" ] && \
+           { [ "$STATUS" = "accepted" ] || [ "$STATUS" = "accepted_temporary" ]; } && \
+           [[ "$REVIEW_DUE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && \
+           [[ "$TODAY" < "$REVIEW_DUE" || "$TODAY" = "$REVIEW_DUE" ]]; then
+            echo "    ✅ ACCEPTED: $CATEGORY (review_due $REVIEW_DUE)"
         else
-            echo "    ❌ NOT ACCEPTED: Must be added to vulnerability-register.yaml"
+            echo "    ❌ NOT ACCEPTED: exact active entry with unexpired review_due required"
             echo "UNACCEPTED" >> "$TMP_FILE"
         fi
     done
