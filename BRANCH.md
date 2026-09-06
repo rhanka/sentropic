@@ -4,6 +4,7 @@
 
 - [x] Make clean root workspace installation and the five residual CI gates deterministic from `package-lock.json`.
 - [x] Preserve Cluster Mesh behavior while keeping `packages/llm-mesh/**` and `packages/llm-gateway/**` identical to `origin/main`.
+- [x] Preserve the persisted folder context on a direct Matrix load so lock/presence hydration can complete.
 
 ## Scope / Guardrails
 
@@ -36,6 +37,7 @@
 - [x] **Conditional Paths (allowed only through `BR75-EX9`)**
   - [x] `Makefile`
   - [x] `api/Dockerfile`
+  - [x] `ui/src/routes/+layout.svelte` (allowed only through `BR75-EX13`)
 - [x] **Exception process**
   - [x] Declare reason, exact paths, impact, rollback, and disposition in `## Feedback Loop` before commit.
 
@@ -51,6 +53,7 @@
 - [x] `BR75-EX11` — `acknowledge` — CI run `34041253178` exposed the same missing Chat Server declarations in `typecheck-lint-api`; exact path: `Makefile`; impact: make Chat Server build after Chat Core and include it in `prepare-node-workspace` so fresh API typechecks cannot consume an unbuilt workspace link; rollback: remove the prerequisite and preparation entry; disposition: required by the owner's clean API-gate acceptance.
 - [x] `BR75-RV97` — `acknowledge` — one persistent clean execution from `clean-node-modules` passed API typecheck/lint, Cluster Mesh 82/82 plus pack, MCP Platform 94/94 plus pack/API Extractor, Flow typecheck/build/pack, and the no-cache production API image `1b0b35db97c2`; selective/full/image installs resolved 280/1,490/1,187 packages from the 1,675-entry lock.
 - [x] `BR75-EX12` — `acknowledge` — CI run `34042409057` exposed that the `test-api-unit-integration` matrix failed at runtime with `ERR_MODULE_NOT_FOUND` for `@sentropic/chat-server/dist/index.js`: `up-api-test-ci` (CI test-stack preparation) omitted `build-chat-server` while `prepare-node-workspace` already builds it, so the mounted API imported an unbuilt workspace link (branch-new `api/src/routes/namespaces/streams-product-events.ts` is the first API runtime consumer of Chat Server; `main` never imported it); exact path: `Makefile`; impact: add `build-chat-server` to `up-api-test-ci` prerequisites so the CI test runtime builds Chat Server (transitively Chat Core, Events, Contracts) before the API starts; rollback: remove the prerequisite; disposition: required to make the API unit/integration matrix green for the cluster-mesh→main merge.
+- [x] `BR75-EX13` — `acknowledge` — CI run `34043685103` exposed that the root layout deleted the persisted `currentFolderId` while hydrating the initial authenticated session, so a direct `/matrix` load could not build its workspace-scoped lock key; exact path: `ui/src/routes/+layout.svelte`; impact: preserve the persisted folder only through initial session hydration while retaining clears for later user and workspace changes; rollback: remove the initial-hydration guard; disposition: required for the intended direct Matrix lock/presence flow and explicitly authorized by the owner.
 
 ## AI Flaky tests
 
@@ -81,3 +84,4 @@
   - [x] Commit atomically, stop the isolated stack, and push this branch without merging.
   - [x] Build the API image without host workspace outputs after CI exposed the missing Chat Core/Chat Server image build order.
   - [x] Build Chat Core and Chat Server declarations during clean workspace preparation before API typecheck/lint.
+  - [x] Preserve persisted Matrix folder context through initial session hydration without weakening later account/scope isolation.
