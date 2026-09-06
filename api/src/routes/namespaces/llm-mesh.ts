@@ -2,7 +2,7 @@ import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
 import {
   createLlmMeshRouter,
   type CreateLlmMeshRouterOptions,
-} from '@sentropic/llm-mesh/hono';
+} from './llm-mesh-router';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 

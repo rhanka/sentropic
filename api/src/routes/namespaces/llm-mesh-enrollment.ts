@@ -1,4 +1,4 @@
-import type { LlmMeshEnrollmentPort } from '@sentropic/llm-mesh/hono';
+import type { LlmMeshEnrollmentPort } from './llm-mesh-router';
 
 import {
   completeAntigravityEnrollment,
