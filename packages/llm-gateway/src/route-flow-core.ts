@@ -39,13 +39,6 @@ export interface RouteFlowDeps {
     readonly request: GatewayFlowRequest;
     readonly canonical: CanonicalIngressResult;
   }) => Omit<RoutePlanInput, 'requestedModel' | 'requiredCapabilities'>;
-  /** Compare deterministic ingress and route intent without dispatching a provider request. */
-  readonly shadowRouteIntent?: (input: {
-    readonly cost: CostContext;
-    readonly subject: VerifiedRoutingSubject;
-    readonly canonical: CanonicalIngressResult;
-    readonly route: RoutePlanInput;
-  }) => Promise<void> | void;
 }
 
 export interface PreparedRouteFlow {
@@ -70,9 +63,7 @@ export const prepareRouteFlow = async (
   if (deps.config.mode === 'cross-user-pool' && !deps.config.crossUserPoolEnabled) {
     throw new GatewayError('cross-user-disabled', 'cross-user pooling is disabled');
   }
-  const auth = request.verifiedCost
-    ? { ok: true as const, cost: request.verifiedCost }
-    : await deps.config.callerAuth.verify(request.headers);
+  const auth = await deps.config.callerAuth.verify(request.headers);
   if (!auth.ok || !auth.cost) {
     throw new GatewayError('caller-auth-failed', auth.reason ?? 'caller-auth failed');
   }
@@ -80,15 +71,13 @@ export const prepareRouteFlow = async (
   const subject = routingSubjectForCost(auth.cost);
   try {
     const routeInput = deps.routeInput?.({ cost: auth.cost, request, canonical });
-    const route = {
+    const plan = await deps.routePlanner.plan(subject, {
       ...routeInput,
       requestedModel: request.model,
       requiredCapabilities: canonical.requiredCapabilities,
       workspaceId: routeInput?.workspaceId ?? auth.cost.workspaceId,
       affinityKey: routeInput?.affinityKey ?? auth.cost.correlationId,
-    } satisfies RoutePlanInput;
-    await deps.shadowRouteIntent?.({ cost: auth.cost, subject, canonical, route });
-    const plan = await deps.routePlanner.plan(subject, route);
+    });
     return { cost: auth.cost, subject, canonical, plan };
   } catch (error) {
     await deps.metering.settleRoute({

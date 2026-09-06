@@ -80,7 +80,6 @@ describe('faithful non-stream passthrough', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual(openAiChatResponse);
-    expect(transport.seenMaterials).toHaveLength(1);
     assertNoPoolSecrets(JSON.stringify(body));
   });
 

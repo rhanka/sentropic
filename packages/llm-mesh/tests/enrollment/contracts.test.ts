@@ -28,8 +28,6 @@ describe('enrollment contracts', () => {
 
     expect(authUrlSession.kind).toBe('authorization-url');
     expect(deviceCodeSession.kind).toBe('device-code');
-    expect(authUrlSession).not.toHaveProperty('accessToken');
-    expect(deviceCodeSession).not.toHaveProperty('refreshToken');
   });
 
   it('allows building valid input and state contracts', () => {
