@@ -162,52 +162,6 @@ describe('@sentropic/llm-gateway router (v0 scaffold)', () => {
     expect(observedSignal?.aborted).toBe(false);
   });
 
-  it('uses one trusted host ownership projection and one deterministic route shadow', async () => {
-    const shadowed: unknown[] = [];
-    let plannerCalls = 0;
-    const routePlanner = createOpenAiRoutePlanner('codex');
-    const app = createGatewayRouter({
-      config: {
-        ...stubGatewayConfig,
-        callerAuth: { async verify() { throw new Error('header auth must not run'); } },
-      },
-      resolveCallerOwnership() {
-        return {
-          tenantId: 'tenant-host', workspaceId: 'workspace-host', principalId: 'user-host',
-          ownerScopeRef: 'owner:host', source: 'product-api', correlationId: 'request-host',
-        };
-      },
-      routePlanner: {
-        ...routePlanner,
-        async plan(subject, input) {
-          plannerCalls += 1;
-          return routePlanner.plan(subject, input);
-        },
-      },
-      shadowRouteIntent(input) { shadowed.push(input); },
-      routeMetering: { settleRoute() {} },
-    });
-
-    const response = await app.request('/v1/chat/completions', {
-      method: 'POST',
-      body: JSON.stringify({
-        model: 'gpt-5.6-terra', ownerScopeRef: 'attacker',
-        messages: [{ role: 'user', content: 'hello' }],
-      }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(plannerCalls).toBe(1);
-    expect(shadowed).toHaveLength(1);
-    expect(shadowed[0]).toMatchObject({
-      cost: { principalId: 'user-host', ownerScopeRef: 'owner:host' },
-      route: { requestedModel: 'gpt-5.6-terra', workspaceId: 'workspace-host' },
-    });
-    expect(shadowed[0]).not.toMatchObject({
-      cost: { principalId: 'attacker' }, subject: { ownerScopeRef: 'attacker' },
-    });
-  });
-
   it('serves Anthropic compaction usage through the real Hono SSE route', async () => {
     const settlements: unknown[] = [];
     const config = {

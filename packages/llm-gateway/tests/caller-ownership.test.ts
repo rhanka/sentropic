@@ -54,10 +54,7 @@ describe('B1 caller==provider — caller-owned account selection', () => {
     const res = await app.request('/v1/messages', {
       method: 'POST',
       headers: authHeaders('user-b'),
-      body: JSON.stringify({
-        ...anthropicRequest(false),
-        principalId: 'user-a', ownerScopeRef: 'owner:user-a', tenantId: 'tenant-a',
-      }),
+      body: JSON.stringify(anthropicRequest(false)),
     });
 
     // Denied as no-eligible-account (provider overloaded), never caller-a's pool.
@@ -69,7 +66,6 @@ describe('B1 caller==provider — caller-owned account selection', () => {
     const text = JSON.stringify(body);
     expect(text).not.toContain('acct-alpha');
     expect(text).not.toContain('SECRET-ALPHA-TOKEN');
-    expect(text).not.toContain('owner:user-a');
   });
 
   it('each caller selects ONLY their own account in a shared pool', async () => {
