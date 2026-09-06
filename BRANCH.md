@@ -24,6 +24,7 @@
   - [x] `packages/build-cli/tests/**`
   - [x] `api/src/routes/namespaces/**`
   - [x] `api/src/services/llm-runtime/gateway-route-plane.ts`
+  - [x] `.dockerignore`
 - [x] **Forbidden Paths (must not change in this residual)**
   - [x] `packages/llm-mesh/**`
   - [x] `packages/llm-gateway/**`
@@ -46,6 +47,7 @@
 - [x] `BR75-RV93` — `acknowledge` — the main merge removed the prior branch plan before residual CI repair; this compact residual plan restores the mandatory scope-check source while preserving the historical plan in commit `61812ce9b`.
 - [x] `BR75-RV94` — `acknowledge` — the owner-mandated recursive consumer audit found stale published-package ranges in the build-cli chat-app templates; exact paths: `packages/build-cli/templates/chat-app/**` and matching version-lock tests under `packages/build-cli/tests/**`; impact: generated apps consume the branch package versions instead of excluded 0.1 releases; rollback: restore the old template ranges and golden assertions.
 - [x] `BR75-RV95` — `acknowledge` — the final clean cycle exposed `npm error code ENOTCACHED` for an inferred `https://registry.npmjs.org/tsc` request from `npx --offline tsc`; invoking Contracts' declared `npm run build` prevents npm from inferring the unrelated `tsc` package and keeps the offline build deterministic.
+- [x] `BR75-EX10` — `acknowledge` — CI run `34040626703` exposed that API source imports `@sentropic/chat-server` while the image never compiled Chat Server or its Chat Core workspace dependency; exact paths: `api/Dockerfile` and `.dockerignore`; impact: copy both manifests, build Contracts/Events then Chat Core/Chat Server, and exclude host workspace `dist/` outputs so local image builds cannot mask a fresh-checkout failure; rollback: remove the two manifest/build steps and the workspace-dist ignore rule; disposition: required by the owner's clean-image acceptance.
 
 ## AI Flaky tests
 
@@ -74,3 +76,4 @@
   - [x] Pass `make scope-check` on the complete intended diff.
   - [x] Confirm lock entry count/version links, no LLM package diff, and final disk space above the 30G guard.
   - [x] Commit atomically, stop the isolated stack, and push this branch without merging.
+  - [x] Build the API image without host workspace outputs after CI exposed the missing Chat Core/Chat Server image build order.

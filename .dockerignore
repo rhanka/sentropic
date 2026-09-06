@@ -25,6 +25,7 @@ node_modules/
 # Build outputs and caches
 api/dist/
 api/.tsbuildinfo
+packages/*/dist/
 api/templates/.~lock*
 ui/build/
 ui/.svelte-kit/
