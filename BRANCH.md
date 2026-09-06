@@ -48,6 +48,7 @@
 - [x] `BR75-RV94` — `acknowledge` — the owner-mandated recursive consumer audit found stale published-package ranges in the build-cli chat-app templates; exact paths: `packages/build-cli/templates/chat-app/**` and matching version-lock tests under `packages/build-cli/tests/**`; impact: generated apps consume the branch package versions instead of excluded 0.1 releases; rollback: restore the old template ranges and golden assertions.
 - [x] `BR75-RV95` — `acknowledge` — the final clean cycle exposed `npm error code ENOTCACHED` for an inferred `https://registry.npmjs.org/tsc` request from `npx --offline tsc`; invoking Contracts' declared `npm run build` prevents npm from inferring the unrelated `tsc` package and keeps the offline build deterministic.
 - [x] `BR75-EX10` — `acknowledge` — CI run `34040626703` exposed that API source imports `@sentropic/chat-server` while the image never compiled Chat Server or its Chat Core workspace dependency; exact paths: `api/Dockerfile` and `.dockerignore`; impact: copy both manifests, build Contracts/Events then Chat Core/Chat Server, and exclude host workspace `dist/` outputs so local image builds cannot mask a fresh-checkout failure; rollback: remove the two manifest/build steps and the workspace-dist ignore rule; disposition: required by the owner's clean-image acceptance.
+- [x] `BR75-EX11` — `acknowledge` — CI run `34041253178` exposed the same missing Chat Server declarations in `typecheck-lint-api`; exact path: `Makefile`; impact: make Chat Server build after Chat Core and include it in `prepare-node-workspace` so fresh API typechecks cannot consume an unbuilt workspace link; rollback: remove the prerequisite and preparation entry; disposition: required by the owner's clean API-gate acceptance.
 
 ## AI Flaky tests
 
@@ -77,3 +78,4 @@
   - [x] Confirm lock entry count/version links, no LLM package diff, and final disk space above the 30G guard.
   - [x] Commit atomically, stop the isolated stack, and push this branch without merging.
   - [x] Build the API image without host workspace outputs after CI exposed the missing Chat Core/Chat Server image build order.
+  - [x] Build Chat Core and Chat Server declarations during clean workspace preparation before API typecheck/lint.
