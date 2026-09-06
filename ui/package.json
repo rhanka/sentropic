@@ -68,7 +68,7 @@
     "@sentropic/design-system-svelte": "^0.34.40",
     "@sentropic/design-system-themes": "^0.11.0",
     "@simplewebauthn/browser": "^13.2.2",
-    "@tiptap/core": "^3.6.5",
+    "@tiptap/core": "^3.30.4",
     "@tiptap/extension-placeholder": "^3.14.0",
     "@tiptap/pm": "^3.6.5",
     "@tiptap/starter-kit": "^3.6.5",
