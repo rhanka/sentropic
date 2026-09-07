@@ -119,6 +119,13 @@ describe('registration gate', () => {
     expect(mismatch.actuators.pty.isAvailable).not.toHaveBeenCalled();
   });
 
+  it('should fail closed with custody_required when the context carries no custody', async () => {
+    const denied = gate(registration);
+    await expect(denied.gate.authorize({ ...context, custody: undefined }))
+      .resolves.toEqual({ ok: false, reason: 'custody_required' });
+    expect(denied.actuators.pty.isAvailable).not.toHaveBeenCalled();
+  });
+
   it('should reject principal, workspace, custody and actuator mismatches distinctly', async () => {
     await expect(gate({ ...registration, principalId: 'workload-other' }).gate.authorize(context))
       .resolves.toEqual({ ok: false, reason: 'principal_mismatch' });
