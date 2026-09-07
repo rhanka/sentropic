@@ -7,6 +7,7 @@ export type RegistrationFailureReason =
   | 'generation_mismatch'
   | 'principal_mismatch'
   | 'workspace_mismatch'
+  | 'custody_required'
   | 'custody_mismatch'
   | 'actuator_unavailable';
 
@@ -115,11 +116,11 @@ export function createRegistrationGate(input: {
         registration.workspaceId !== context.workspace.workspaceId
         || reference.workspaceId !== context.workspace.workspaceId
       ) return { ok: false, reason: 'workspace_mismatch' };
+      if (!context.custody) return { ok: false, reason: 'custody_required' };
       if (
         registration.custodyEpoch !== reference.custodyEpoch
-        || (context.custody && context.custody.epoch !== registration.custodyEpoch)
-        || (context.custody
-          && context.custody.holderPrincipalId !== registration.custodyHolderPrincipalId)
+        || context.custody.epoch !== registration.custodyEpoch
+        || context.custody.holderPrincipalId !== registration.custodyHolderPrincipalId
       ) return { ok: false, reason: 'custody_mismatch' };
       if (
         reference.actuatorRef !== registration.actuatorRef
