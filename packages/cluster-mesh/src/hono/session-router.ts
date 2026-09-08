@@ -93,7 +93,7 @@ export function createSessionNamespaceModule(input: {
             status: 'pending',
           });
           if (!inserted) return c.json({ error: 'duplicate_command' }, 409);
-          const decision = await input.control.runtime.registration.authorize(context);
+          const decision = await input.control.runtime.registration.authorize(context, action);
           if (!decision.ok) {
             await input.control.runtime.receipts.verified(coordinates, 'refused', decision.reason);
             await input.control.store.updateCommand(intent.commandId, {
@@ -110,6 +110,18 @@ export function createSessionNamespaceModule(input: {
               }
             }
             return c.json({ error: decision.reason }, 409);
+          }
+          const resolvedInstruction = await input.control.instructions.resolve({
+            commandRef: intent.commandId,
+            registrationId: decision.registration.registrationId,
+            action,
+          });
+          if (!resolvedInstruction) {
+            await input.control.runtime.receipts.verified(coordinates, 'refused', 'command_unresolved');
+            await input.control.store.updateCommand(intent.commandId, {
+              status: 'refused', refusalReason: 'command_unresolved',
+            });
+            return c.json({ error: 'command_unresolved' }, 409);
           }
           const reservation = input.control.runtime.admission.reserveBeforeSpawn({
             reservationId: intent.commandId,
@@ -131,12 +143,19 @@ export function createSessionNamespaceModule(input: {
                 registration: decision.registration,
                 action,
                 commandRef: intent.commandId,
+                resolvedInstruction,
               });
             } catch {
               await input.control.store.updateCommand(intent.commandId, {
                 status: 'failed', refusalReason: 'actuation_failed',
               });
               return c.json({ error: 'actuation_failed' }, 502);
+            }
+            if (result.outcome !== 'acted') {
+              return c.json({
+                status: result.outcome, effectRef: result.effectRef,
+                ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),
+              });
             }
             const actedAt = (input.control.now ?? (() => new Date()))().toISOString();
             try {

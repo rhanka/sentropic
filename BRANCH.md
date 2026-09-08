@@ -1,10 +1,10 @@
-# Feature: cluster-mesh custody-mandatory hardening (0.9.0)
+# Feature: cluster-mesh custody and effect-semantics contract (0.9.0)
 
 ## Objective
-Make `context.custody` mandatory in the cluster-mesh registration gate (fail-closed): authorization is denied with a distinct `custody_required` reason when the invocation context carries no custody. Owner-ratified (Q4) versioned contract change, positioned as candidate lot-0 of the CLI→cluster-mesh migration so the contract bumps once.
+Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 effect-semantics contract, with OQ12 documented as source-gap / à-affiner.
 
 ## Scope / Guardrails
-- Scope limited to `packages/cluster-mesh` (runtime gate + reason type + version + gate test).
+- Scope limited to `packages/cluster-mesh` (runtime gate, session router, contracts, tests, and version).
 - No migration file (no schema change).
 - Make-only workflow, no direct Docker commands.
 - Root workspace reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -16,9 +16,7 @@ Make `context.custody` mandatory in the cluster-mesh registration gate (fail-clo
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/src/runtime/registration.ts`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/tests/registration.spec.ts`
+  - `packages/cluster-mesh/**`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -49,8 +47,19 @@ Make `context.custody` mandatory in the cluster-mesh registration gate (fail-clo
   - [x] `package.json`: bump `0.8.1 → 0.9.0` (pre-1.0 breaking semantics → minor).
   - [x] `tests/registration.spec.ts`: add "should fail closed with custody_required when the context carries no custody" (asserts deny + no actuator probing).
   - [ ] Lot gate:
-    - [ ] `make typecheck` (cluster-mesh) — pending
-    - [ ] cluster-mesh gate tests green (`registration.spec.ts`) — pending
+    - [x] `make typecheck-cluster-mesh`
+    - [x] cluster-mesh gate tests green (`registration.spec.ts`)
+
+- [ ] **Lot 2 — Effect semantics (locked OQ1/OQ2/OQ3 + documented OQ12)**
+  - [x] Add `ActuationOutcome`, `TargetLiveness`, `SignedInstruction`, and `CommandInstructionPort`.
+  - [x] Make actuator selection and registration authorization action-aware.
+  - [x] Resolve authenticated command instructions in the session router before actuation.
+  - [x] Record acted commands and receipts only for an `acted` outcome.
+  - [ ] Add focused contract, router, and hermetic fixture coverage.
+  - [ ] Document the OQ12 CLI delegation route invariant as source-gap / à-affiner.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-cluster-mesh`
+    - [ ] `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests/... ENV=test-cluster-mesh-0900`
 
 - [ ] **Lot N — Final validation** (HELD on owner GO)
   - [x] Bumped `packages/cluster-mesh/package.json` version.

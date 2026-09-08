@@ -44,12 +44,14 @@ function actuatorPorts(ptyAvailable: boolean, secondaryAvailable = true) {
   const pty: PtyActuatorPort = {
     kind: 'pty',
     isAvailable: vi.fn(async () => ptyAvailable),
-    actuate: vi.fn(async () => ({ effectRef: 'pty-effect' })),
+    probeState: vi.fn(async () => ptyAvailable ? 'alive' : 'unknown'),
+    actuate: vi.fn(async () => ({ effectRef: 'pty-effect', outcome: 'acted' })),
   };
   const secondary: SecondaryActuatorPort = {
     kind: 'secondary',
     isAvailable: vi.fn(async () => secondaryAvailable),
-    actuate: vi.fn(async () => ({ effectRef: 'secondary-effect' })),
+    probeState: vi.fn(async () => secondaryAvailable ? 'alive' : 'unknown'),
+    actuate: vi.fn(async () => ({ effectRef: 'secondary-effect', outcome: 'acted' })),
   };
   return { pty, secondary };
 }
@@ -74,25 +76,25 @@ function gate(
 describe('registration gate', () => {
   it('should prefer PTY and consult the secondary actuator only as fallback', async () => {
     const preferred = gate(registration);
-    const preferredDecision = await preferred.gate.authorize(context);
+    const preferredDecision = await preferred.gate.authorize(context, 'drive');
     expect(preferredDecision.ok && preferredDecision.actuator.kind).toBe('pty');
     expect(preferred.actuators.secondary.isAvailable).not.toHaveBeenCalled();
 
     const fallback = gate(registration, false);
-    const fallbackDecision = await fallback.gate.authorize(context);
+    const fallbackDecision = await fallback.gate.authorize(context, 'drive');
     expect(fallbackDecision.ok && fallbackDecision.actuator.kind).toBe('secondary');
   });
 
   it('should fail closed with distinct missing, revoked and stale reasons', async () => {
-    await expect(gate(null).gate.authorize(context)).resolves.toEqual({
+    await expect(gate(null).gate.authorize(context, 'drive')).resolves.toEqual({
       ok: false,
       reason: 'missing_registration',
     });
-    await expect(gate({ ...registration, status: 'revoked' }).gate.authorize(context)).resolves.toEqual({
+    await expect(gate({ ...registration, status: 'revoked' }).gate.authorize(context, 'drive')).resolves.toEqual({
       ok: false,
       reason: 'revoked_registration',
     });
-    await expect(gate({ ...registration, expiresAt: '2026-08-29T12:00:00.000Z' }).gate.authorize(context))
+    await expect(gate({ ...registration, expiresAt: '2026-08-29T12:00:00.000Z' }).gate.authorize(context, 'drive'))
       .resolves.toEqual({ ok: false, reason: 'stale_registration' });
   });
 
@@ -100,19 +102,19 @@ describe('registration gate', () => {
     await expect(gate({ ...registration, expiresAt: 'not-a-date' }).gate.authorize({
       ...context,
       registration: { ...context.registration!, expiresAt: 'not-a-date' },
-    })).resolves.toEqual({ ok: false, reason: 'stale_registration' });
+    }, 'drive')).resolves.toEqual({ ok: false, reason: 'stale_registration' });
   });
 
   it('should reject an expired registration lease as stale', async () => {
     await expect(gate({
       ...registration,
       leaseExpiresAt: '2026-08-29T12:00:00.000Z',
-    }).gate.authorize(context)).resolves.toEqual({ ok: false, reason: 'stale_registration' });
+    }).gate.authorize(context, 'drive')).resolves.toEqual({ ok: false, reason: 'stale_registration' });
   });
 
   it('should reject a registration from another generation before actuation', async () => {
     const mismatch = gate({ ...registration, generationId: 'generation-old' });
-    await expect(mismatch.gate.authorize(context)).resolves.toEqual({
+    await expect(mismatch.gate.authorize(context, 'drive')).resolves.toEqual({
       ok: false,
       reason: 'generation_mismatch',
     });
@@ -121,21 +123,21 @@ describe('registration gate', () => {
 
   it('should fail closed with custody_required when the context carries no custody', async () => {
     const denied = gate(registration);
-    await expect(denied.gate.authorize({ ...context, custody: undefined }))
+    await expect(denied.gate.authorize({ ...context, custody: undefined }, 'drive'))
       .resolves.toEqual({ ok: false, reason: 'custody_required' });
     expect(denied.actuators.pty.isAvailable).not.toHaveBeenCalled();
   });
 
   it('should reject principal, workspace, custody and actuator mismatches distinctly', async () => {
-    await expect(gate({ ...registration, principalId: 'workload-other' }).gate.authorize(context))
+    await expect(gate({ ...registration, principalId: 'workload-other' }).gate.authorize(context, 'drive'))
       .resolves.toEqual({ ok: false, reason: 'principal_mismatch' });
-    await expect(gate({ ...registration, workspaceId: 'workspace-other' }).gate.authorize(context))
+    await expect(gate({ ...registration, workspaceId: 'workspace-other' }).gate.authorize(context, 'drive'))
       .resolves.toEqual({ ok: false, reason: 'workspace_mismatch' });
     await expect(gate(registration).gate.authorize({
       ...context,
       custody: { ...context.custody!, holderPrincipalId: 'workload-other' },
-    })).resolves.toEqual({ ok: false, reason: 'custody_mismatch' });
-    await expect(gate(registration, false, false).gate.authorize(context))
+    }, 'drive')).resolves.toEqual({ ok: false, reason: 'custody_mismatch' });
+    await expect(gate(registration, false, false).gate.authorize(context, 'drive'))
       .resolves.toEqual({ ok: false, reason: 'actuator_unavailable' });
   });
 });

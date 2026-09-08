@@ -40,7 +40,8 @@ function fixture(input: {
   const pty = input.pty ?? {
     kind: 'pty' as const,
     async isAvailable() { return true; },
-    actuate: vi.fn(async () => ({ effectRef: 'tick-1' })),
+    async probeState() { return 'alive' as const; },
+    actuate: vi.fn(async () => ({ effectRef: 'tick-1', outcome: 'acted' as const })),
   };
   const runtime = createClusterMeshRuntime({
     generationId: 'generation-1', config: { capacity: { poolSize: 4 } },
@@ -72,6 +73,7 @@ function fixture(input: {
     projection: { session: '/', device: '/device', control: '/control' },
     control: {
       runtime, store, targets: { async inspect() { return input.target ?? 'alive'; } },
+      instructions: { async resolve() { return { kind: 'signed-instruction' }; } },
       author: { async ensureAuthor() { return { ok: true }; } },
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     },
@@ -96,7 +98,8 @@ describe('session namespace router', () => {
   ] as const)('fails closed before PTY for %s', async (record, reason) => {
     const pty: PtyActuatorPort = {
       kind: 'pty', isAvailable: vi.fn(async () => true),
-      actuate: vi.fn(async () => ({ effectRef: 'must-not-run' })),
+      probeState: vi.fn(async () => 'alive'),
+      actuate: vi.fn(async () => ({ effectRef: 'must-not-run', outcome: 'acted' })),
     };
     const { app } = fixture({ record, pty });
     const response = await app.request('/control/drive', {
@@ -125,7 +128,8 @@ describe('session namespace router', () => {
   it('reconciles an unavailable parked target to LOST without actuation', async () => {
     const pty: PtyActuatorPort = {
       kind: 'pty', isAvailable: vi.fn(async () => false),
-      actuate: vi.fn(async () => ({ effectRef: 'must-not-run' })),
+      probeState: vi.fn(async () => 'parked'),
+      actuate: vi.fn(async () => ({ effectRef: 'must-not-run', outcome: 'acted' })),
     };
     const { app, store } = fixture({ pty, target: 'parked' });
     expect((await app.request('/control/wake', {
@@ -143,7 +147,8 @@ describe('session namespace router', () => {
     const blocked = new Promise<void>((resolve) => { release = resolve; });
     const pty: PtyActuatorPort = {
       kind: 'pty', async isAvailable() { return true; },
-      actuate: vi.fn(async () => { await blocked; return { effectRef: 'tick' }; }),
+      async probeState() { return 'alive'; },
+      actuate: vi.fn(async () => { await blocked; return { effectRef: 'tick', outcome: 'acted' }; }),
     };
     const { app } = fixture({ pty });
     const requests = Array.from({ length: 12 }, (_, index) => app.request('/control/drive', {
