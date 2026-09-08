@@ -115,11 +115,11 @@ test('should prove the A1 session contract with injected fakes only', async () =
       author: { async ensureAuthor() { return { ok: true }; } }, now: () => now },
   });
   const app = module.createRouter({ context: runtime.context, receipts: runtime.receiptPort });
-  const act = (action: 'drive' | 'wake' | 'relaunch', commandId: string) =>
+  const act = (action: 'drive' | 'wake' | 'relaunch', commandRef: string) =>
     app.request(`/control/${action}`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ commandId, targetRegistrationId: registration.registrationId,
-        idempotencyKey: `key-${commandId}` }),
+      body: JSON.stringify({ commandRef, targetRegistrationId: registration.registrationId,
+        idempotencyKey: `key-${commandRef}` }),
     });
 
   const missing = await act('drive', 'command-missing');
