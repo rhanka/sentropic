@@ -167,6 +167,28 @@ export function createSessionNamespaceModule(input: {
           }
           await input.control.runtime.receipts.verified(coordinates, 'accepted');
           await input.control.store.updateCommand(intent.commandRef, { status: 'accepted' });
+          const persistOutcome = async (
+            update: { status: 'deferred' | 'failed'; refusalReason?: string },
+            outcome: {
+              status: 'deferred' | 'failed';
+              effectRef?: string;
+              actedTargets?: readonly string[];
+            },
+          ): Promise<Response | null> => {
+            try {
+              await input.control.store.updateCommand(intent.commandRef, update);
+              return null;
+            } catch {
+              await input.control.store.updateCommand(intent.commandRef, {
+                status: 'failed', refusalReason: 'post_effect_persistence_failed',
+              }).catch(() => false);
+              return c.json({
+                error: 'post_effect_persistence_failed', status: outcome.status,
+                ...(outcome.effectRef ? { effectRef: outcome.effectRef } : {}),
+                ...(outcome.actedTargets ? { actedTargets: outcome.actedTargets } : {}),
+              }, 500);
+            }
+          };
           try {
             let result;
             try {
@@ -177,22 +199,38 @@ export function createSessionNamespaceModule(input: {
                 resolvedInstruction,
               });
             } catch {
-              await input.control.store.updateCommand(intent.commandRef, {
-                status: 'failed', refusalReason: 'actuation_failed',
-              });
+              const persistenceFailure = await persistOutcome(
+                { status: 'failed', refusalReason: 'actuation_failed' },
+                { status: 'failed' },
+              );
+              if (persistenceFailure) return persistenceFailure;
               return c.json({ error: 'actuation_failed' }, 502);
             }
+            if (!result || typeof result !== 'object') {
+              const persistenceFailure = await persistOutcome(
+                { status: 'failed', refusalReason: 'actuation_failed' },
+                { status: 'failed' },
+              );
+              if (persistenceFailure) return persistenceFailure;
+              return c.json({ error: 'actuation_failed', status: 'failed' }, 502);
+            }
             if (result.outcome !== 'acted' && result.outcome !== 'deferred') {
-              await input.control.store.updateCommand(intent.commandRef, {
-                status: 'failed', refusalReason: 'actuation_failed',
-              });
+              const persistenceFailure = await persistOutcome(
+                { status: 'failed', refusalReason: 'actuation_failed' },
+                { status: 'failed', effectRef: result.effectRef, actedTargets: result.actedTargets },
+              );
+              if (persistenceFailure) return persistenceFailure;
               return c.json({
                 error: 'actuation_failed', status: 'failed', effectRef: result.effectRef,
                 ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),
               }, 502);
             }
             if (result.outcome === 'deferred') {
-              await input.control.store.updateCommand(intent.commandRef, { status: 'deferred' });
+              const persistenceFailure = await persistOutcome(
+                { status: 'deferred' },
+                { status: 'deferred', effectRef: result.effectRef, actedTargets: result.actedTargets },
+              );
+              if (persistenceFailure) return persistenceFailure;
               return c.json({
                 status: 'deferred', effectRef: result.effectRef,
                 ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),

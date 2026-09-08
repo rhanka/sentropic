@@ -377,6 +377,61 @@ describe('session namespace router', () => {
     expect(receipts).not.toContainEqual(expect.objectContaining({ stage: 'acted' }));
   });
 
+  it.each(['deferred', 'failed'] as const)(
+    'returns a final %s status when outcome persistence rejects',
+    async (outcome) => {
+      const pty: PtyActuatorPort = {
+        kind: 'pty', async isAvailable() { return true; },
+        async probeState() { return 'alive'; },
+        actuate: vi.fn(async () => ({ effectRef: `${outcome}-effect`, outcome })),
+      };
+      const { app, store } = fixture({ pty });
+      let rejected = false;
+      store.updateCommand.mockImplementation(async (_commandId, update) => {
+        if (!rejected && update.status === outcome) {
+          rejected = true;
+          throw new Error('outcome persistence rejected');
+        }
+        return true;
+      });
+
+      const response = await app.request('/control/drive', {
+        method: 'POST', body: JSON.stringify(command(`command-${outcome}-store-rejection`)),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      expect(response.status).toBe(500);
+      await expect(response.json()).resolves.toEqual({
+        error: 'post_effect_persistence_failed', status: outcome, effectRef: `${outcome}-effect`,
+      });
+      expect(store.updateCommand).toHaveBeenLastCalledWith(
+        `command-${outcome}-store-rejection`,
+        { status: 'failed', refusalReason: 'post_effect_persistence_failed' },
+      );
+    },
+  );
+
+  it('finalizes an undefined actuator result as failed', async () => {
+    const pty: PtyActuatorPort = {
+      kind: 'pty', async isAvailable() { return true; },
+      async probeState() { return 'alive'; },
+      actuate: vi.fn(async () => undefined as never),
+    };
+    const { app, receipts, store } = fixture({ pty });
+
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-undefined-result')),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({ error: 'actuation_failed', status: 'failed' });
+    expect(store.updateCommand).toHaveBeenLastCalledWith('command-undefined-result', {
+      status: 'failed', refusalReason: 'actuation_failed',
+    });
+    expect(receipts).not.toContainEqual(expect.objectContaining({ stage: 'acted' }));
+  });
+
   it.each(['failed', 'adapter-bug'] as const)(
     'maps a %s outcome to a persisted failed command and HTTP 502',
     async (outcome) => {
