@@ -99,11 +99,51 @@ const command = (id: string) => ({
   commandRef: id, targetRegistrationId: registration.registrationId, idempotencyKey: `key-${id}`,
 });
 
+function cliFixture(record: ClusterMeshRegistration | null = registration) {
+  const assembled = fixture({ record });
+  const sessionApp = new Hono().route('/auth', createClusterMeshPlugin({
+    runtime: assembled.runtime, namespaces: [assembled.module],
+  }));
+  const session: CliSessionDelegatePort = {
+    kind: 'session-control-http',
+    delegate: ({ method, path, headers, body }) => sessionApp.request(path, {
+      method, headers, body: JSON.stringify(body),
+    }),
+  };
+  const cliApp = new Hono().route('/api/v1', createClusterMeshPlugin({
+    runtime: assembled.runtime,
+    namespaces: [createCliNamespaceModule({
+      enabled: true,
+      generationId: 'generation-1',
+      adapters: [{
+        runnerId: 'harness', source: '@sentropic/harness',
+        parseIntent: (argv) => ({ runnerId: 'harness', source: '@sentropic/harness', argv }),
+      }],
+      session,
+    })],
+  }));
+  return { ...assembled, cliApp, sessionApp };
+}
+
 describe('session namespace router', () => {
   it('projects product session and device handlers under one namespace author', async () => {
     const { app } = fixture();
     expect((await app.request('/')).status).toBe(200);
     expect((await app.request('/device/code', { method: 'POST' })).status).toBe(200);
+  });
+
+  it('rejects a legacy commandId-only session control body', async () => {
+    const { app } = fixture();
+    const response = await app.request('/control/drive', {
+      method: 'POST',
+      body: JSON.stringify({
+        commandId: 'legacy-command', targetRegistrationId: registration.registrationId,
+        idempotencyKey: 'key-legacy-command',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'invalid_control_intent' });
   });
 
   it.each([
@@ -364,33 +404,7 @@ describe('session namespace router', () => {
   );
 
   it('composes CLI delegation at /auth/session/control through the registration gate', async () => {
-    const pty: PtyActuatorPort = {
-      kind: 'pty', isAvailable: vi.fn(async () => true),
-      probeState: vi.fn(async () => 'alive'),
-      actuate: vi.fn(async () => ({ effectRef: 'must-not-run', outcome: 'acted' })),
-    };
-    const { module, runtime, instructions } = fixture({ record: null, pty });
-    const sessionApp = new Hono().route('/auth', createClusterMeshPlugin({
-      runtime, namespaces: [module],
-    }));
-    const session: CliSessionDelegatePort = {
-      kind: 'session-control-http',
-      delegate: ({ method, path, headers, body }) => sessionApp.request(path, {
-        method, headers, body: JSON.stringify(body),
-      }),
-    };
-    const cliApp = new Hono().route('/api/v1', createClusterMeshPlugin({
-      runtime,
-      namespaces: [createCliNamespaceModule({
-        enabled: true,
-        generationId: 'generation-1',
-        adapters: [{
-          runnerId: 'harness', source: '@sentropic/harness',
-          parseIntent: (argv) => ({ runnerId: 'harness', source: '@sentropic/harness', argv }),
-        }],
-        session,
-      })],
-    }));
+    const { cliApp, sessionApp, instructions, pty } = cliFixture(null);
 
     const response = await cliApp.request('/api/v1/cli/delegations/drive', {
       method: 'POST',
@@ -413,5 +427,29 @@ describe('session namespace router', () => {
       headers: { 'content-type': 'application/json' },
     })).status).toBe(404);
     expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
+  it('resolves and actuates once for an authorized CLI delegation', async () => {
+    const { cliApp, instructions, pty } = cliFixture();
+    const response = await cliApp.request('/api/v1/cli/delegations/wake', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-cluster-mesh-invocation-id': 'command-cli-positive',
+      },
+      body: JSON.stringify({
+        runnerId: 'harness', argv: ['wake'], commandId: 'command-cli-positive',
+        targetRegistrationId: registration.registrationId,
+        idempotencyKey: 'key-command-cli-positive',
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: 'acted', effectRef: 'tick-1' });
+    expect(instructions.resolve).toHaveBeenCalledOnce();
+    expect(pty.actuate).toHaveBeenCalledOnce();
+    expect(pty.actuate).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'wake', commandRef: 'command-cli-positive',
+      resolvedInstruction: { kind: 'signed-instruction' },
+    }));
   });
 });
