@@ -1,9 +1,13 @@
 import type { VerifiedInvocationContext } from '../../contracts/src/index.js';
+import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createCliNamespaceModule,
+  createClusterMeshPlugin,
   createClusterMeshRuntime,
   createRegistrationGate,
   createSessionNamespaceModule,
+  type CliSessionDelegatePort,
   type ClusterMeshRegistration,
   type PtyActuatorPort,
   type SignedInstruction,
@@ -87,12 +91,12 @@ function fixture(input: {
   });
   return {
     app: module.createRouter({ context: runtime.context, receipts: runtime.receiptPort }),
-    pty, receipts, store, instructions,
+    module, runtime, pty, receipts, store, instructions,
   };
 }
 
 const command = (id: string) => ({
-  commandId: id, targetRegistrationId: registration.registrationId, idempotencyKey: `key-${id}`,
+  commandRef: id, targetRegistrationId: registration.registrationId, idempotencyKey: `key-${id}`,
 });
 
 describe('session namespace router', () => {
@@ -252,7 +256,55 @@ describe('session namespace router', () => {
     },
   );
 
-  it.todo(
-    'source-gap / à-affiner: CLI delegation routes compose with the session mount/projection and cannot bypass the session namespace gate',
-  );
+  it('composes CLI delegation at /auth/session/control through the registration gate', async () => {
+    const pty: PtyActuatorPort = {
+      kind: 'pty', isAvailable: vi.fn(async () => true),
+      probeState: vi.fn(async () => 'alive'),
+      actuate: vi.fn(async () => ({ effectRef: 'must-not-run', outcome: 'acted' })),
+    };
+    const { module, runtime, instructions } = fixture({ record: null, pty });
+    const sessionApp = new Hono().route('/auth', createClusterMeshPlugin({
+      runtime, namespaces: [module],
+    }));
+    const session: CliSessionDelegatePort = {
+      kind: 'session-control-http',
+      delegate: ({ method, path, headers, body }) => sessionApp.request(path, {
+        method, headers, body: JSON.stringify(body),
+      }),
+    };
+    const cliApp = new Hono().route('/api/v1', createClusterMeshPlugin({
+      runtime,
+      namespaces: [createCliNamespaceModule({
+        enabled: true,
+        generationId: 'generation-1',
+        adapters: [{
+          runnerId: 'harness', source: '@sentropic/harness',
+          parseIntent: (argv) => ({ runnerId: 'harness', source: '@sentropic/harness', argv }),
+        }],
+        session,
+      })],
+    }));
+
+    const response = await cliApp.request('/api/v1/cli/delegations/drive', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-cluster-mesh-invocation-id': 'command-cli',
+      },
+      body: JSON.stringify({
+        runnerId: 'harness', argv: ['drive'], commandId: 'command-cli',
+        targetRegistrationId: registration.registrationId, idempotencyKey: 'key-command-cli',
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'missing_registration' });
+    expect(pty.actuate).not.toHaveBeenCalled();
+    expect(instructions.resolve).not.toHaveBeenCalled();
+    expect((await sessionApp.request('/auth/session/drive', {
+      method: 'POST', body: JSON.stringify(command('command-bypass')),
+      headers: { 'content-type': 'application/json' },
+    })).status).toBe(404);
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
 });

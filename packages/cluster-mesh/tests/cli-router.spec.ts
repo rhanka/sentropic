@@ -86,7 +86,7 @@ describe('cluster mesh CLI router', () => {
         'x-correlation-id': 'correlation-1', 'x-cluster-mesh-evidence': 'evidence-1',
       },
       body: {
-        commandId: 'command-1', targetRegistrationId: 'registration-1', idempotencyKey: 'idem-1',
+        commandRef: 'command-1', targetRegistrationId: 'registration-1', idempotencyKey: 'idem-1',
       },
     });
   });

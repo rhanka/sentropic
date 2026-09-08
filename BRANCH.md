@@ -57,7 +57,9 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
   - [x] Resolve authenticated command instructions in the session router before actuation.
   - [x] Record acted commands and receipts only for an `acted` outcome.
   - [x] Add focused contract, router, and hermetic fixture coverage.
-  - [x] Document the OQ12 CLI delegation route invariant as source-gap / à-affiner.
+  - [x] Rename the CLI session delegate body field from `commandId` to OQ1 `commandRef`.
+  - [x] Document the exact `/auth/session/control` route-composition invariant and h2a Lot-0 mount-prefix source-gap.
+  - [x] Replace the OQ12 todo with a mounted CLI-to-session integration test covering the registration gate.
   - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh`
     - [x] `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests ENV=test-cluster-mesh-0900`
