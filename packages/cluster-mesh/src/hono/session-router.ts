@@ -35,8 +35,10 @@ export const isValidSessionControlIntent = (value: unknown): boolean => parseInt
  * projection.control` resolves EXACTLY `/auth/session/control`, matching the fixed
  * `CliSessionDelegatePort` template `/auth/session/control/:action`. A CLI delegation
  * reaches the actuator only through this verified session control (the PDP gate), never
- * directly. The exact mount prefix is pending h2a Lot-0 (source-gap); the resolved path
- * `/auth/session/control` is the invariant target.
+ * directly. This repository mounts the module at `/api/v1/auth/session/control`; the
+ * remaining source gap is the h2a client base URL including `/api/v1`, not this mount.
+ * Wire identity is preserved: CLI `commandId` == session body `commandRef` == evidence
+ * `invocationId` == store `commandId`.
  */
 export function createSessionNamespaceModule(input: {
   readonly handlers: SessionRouteHandlers;
@@ -85,6 +87,9 @@ export function createSessionNamespaceModule(input: {
           } catch {
             return c.json({ error: 'unverified_invocation_context' }, 401);
           }
+          if (context.registration?.registrationId !== intent.targetRegistrationId) {
+            return c.json({ error: 'registration_mismatch' }, 409);
+          }
           const coordinates = {
             commandId: intent.commandRef,
             invocationId: context.invocationId,
@@ -101,29 +106,47 @@ export function createSessionNamespaceModule(input: {
             status: 'pending',
           });
           if (!inserted) return c.json({ error: 'duplicate_command' }, 409);
-          const decision = await input.control.runtime.registration.authorize(context, action);
+          let decision;
+          try {
+            decision = await input.control.runtime.registration.authorize(context, action);
+          } catch {
+            await input.control.store.updateCommand(intent.commandRef, {
+              status: 'failed', refusalReason: 'authorization_failed',
+            });
+            return c.json({ error: 'authorization_failed' }, 502);
+          }
           if (!decision.ok) {
             await input.control.runtime.receipts.verified(coordinates, 'refused', decision.reason);
             await input.control.store.updateCommand(intent.commandRef, {
               status: 'refused', refusalReason: decision.reason,
             });
-            const actuatorRef = context.registration?.actuatorRef;
-            if (actuatorRef) {
-              const state = await input.control.targets.inspect(actuatorRef);
-              if (state === 'dead' || state === 'parked') {
-                await input.control.store.markRegistrationLost(
-                  context.registration!.registrationId,
-                  (input.control.now ?? (() => new Date()))().toISOString(),
-                );
+            if (decision.reason === 'actuator_unavailable') {
+              const actuatorRef = context.registration?.actuatorRef;
+              if (actuatorRef) {
+                const state = await input.control.targets.inspect(actuatorRef);
+                if (state === 'dead' || state === 'parked') {
+                  await input.control.store.markRegistrationLost(
+                    context.registration!.registrationId,
+                    (input.control.now ?? (() => new Date()))().toISOString(),
+                  );
+                }
               }
             }
             return c.json({ error: decision.reason }, 409);
           }
-          const resolvedInstruction = await input.control.instructions.resolve({
-            commandRef: intent.commandRef,
-            registrationId: decision.registration.registrationId,
-            action,
-          });
+          let resolvedInstruction;
+          try {
+            resolvedInstruction = await input.control.instructions.resolve({
+              commandRef: intent.commandRef,
+              registrationId: decision.registration.registrationId,
+              action,
+            });
+          } catch {
+            await input.control.store.updateCommand(intent.commandRef, {
+              status: 'failed', refusalReason: 'instruction_resolution_failed',
+            });
+            return c.json({ error: 'instruction_resolution_failed' }, 502);
+          }
           if (!resolvedInstruction) {
             await input.control.runtime.receipts.verified(coordinates, 'refused', 'command_unresolved');
             await input.control.store.updateCommand(intent.commandRef, {
@@ -159,11 +182,21 @@ export function createSessionNamespaceModule(input: {
               });
               return c.json({ error: 'actuation_failed' }, 502);
             }
-            if (result.outcome !== 'acted') {
-              return c.json({
-                status: result.outcome, effectRef: result.effectRef,
-                ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),
+            if (result.outcome !== 'acted' && result.outcome !== 'deferred') {
+              await input.control.store.updateCommand(intent.commandRef, {
+                status: 'failed', refusalReason: 'actuation_failed',
               });
+              return c.json({
+                error: 'actuation_failed', status: 'failed', effectRef: result.effectRef,
+                ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),
+              }, 502);
+            }
+            if (result.outcome === 'deferred') {
+              await input.control.store.updateCommand(intent.commandRef, { status: 'deferred' });
+              return c.json({
+                status: 'deferred', effectRef: result.effectRef,
+                ...(result.actedTargets ? { actedTargets: result.actedTargets } : {}),
+              }, 202);
             }
             const actedAt = (input.control.now ?? (() => new Date()))().toISOString();
             try {

@@ -16,6 +16,10 @@ export type ActuationOutcome = 'acted' | 'deferred' | 'failed';
 
 export type TargetLiveness = 'alive' | 'dead' | 'parked' | 'unknown';
 
+/**
+ * Nominal signed-instruction marker. The injected CommandInstructionPort is
+ * responsible for cryptographic verification and command/registration binding.
+ */
 export interface SignedInstruction {
   readonly kind: 'signed-instruction';
   readonly [k: string]: unknown;
@@ -51,6 +55,7 @@ export interface RegistrationLookupPort {
 export interface ActuationRequest {
   readonly registration: ClusterMeshRegistration;
   readonly action: 'drive' | 'wake' | 'relaunch';
+  /** Opaque, non-executable identifier. Actuators MUST NOT interpret it as an instruction. */
   readonly commandRef: string;
   readonly resolvedInstruction: SignedInstruction;
 }
