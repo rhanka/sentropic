@@ -130,6 +130,10 @@ describe('registration gate', () => {
       ok: false,
       reason: 'revoked_registration',
     });
+    await expect(gate({ ...registration, status: 'lost' }).gate.authorize(context, 'drive')).resolves.toEqual({
+      ok: false,
+      reason: 'stale_registration',
+    });
     await expect(gate({ ...registration, expiresAt: '2026-08-29T12:00:00.000Z' }).gate.authorize(context, 'drive'))
       .resolves.toEqual({ ok: false, reason: 'stale_registration' });
   });
@@ -161,6 +165,18 @@ describe('registration gate', () => {
     const denied = gate(registration);
     await expect(denied.gate.authorize({ ...context, custody: undefined }, 'drive'))
       .resolves.toEqual({ ok: false, reason: 'custody_required' });
+    expect(denied.actuators.pty.isAvailable).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['verified custody', { ...context, custody: { ...context.custody!, epoch: 4 } }],
+    ['registration reference', {
+      ...context, registration: { ...context.registration!, custodyEpoch: 4 },
+    }],
+  ] as const)('should reject a mismatched %s epoch before actuator probing', async (_source, requestContext) => {
+    const denied = gate(registration);
+    await expect(denied.gate.authorize(requestContext, 'drive'))
+      .resolves.toEqual({ ok: false, reason: 'custody_mismatch' });
     expect(denied.actuators.pty.isAvailable).not.toHaveBeenCalled();
   });
 
