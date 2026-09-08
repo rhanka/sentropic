@@ -139,6 +139,38 @@ describe('session namespace router', () => {
     expect(pty.actuate).not.toHaveBeenCalled();
   });
 
+  it('rejects a target registration that differs from verified context', async () => {
+    const { app, pty, store, instructions } = fixture({
+      context: (invocationId) => ({
+        ...verifiedContext(invocationId),
+        registration: { ...verifiedContext(invocationId).registration!, registrationId: 'registration-other' },
+      }),
+    });
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-registration-mismatch')),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'registration_mismatch' });
+    expect(store.enqueueCommand).not.toHaveBeenCalled();
+    expect(instructions.resolve).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
+  it('returns duplicate_command without repeating authorization or actuation', async () => {
+    const { app, runtime, pty, store } = fixture();
+    store.enqueueCommand.mockResolvedValueOnce(false);
+    const authorize = vi.spyOn(runtime.registration, 'authorize');
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-duplicate')),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'duplicate_command' });
+    expect(authorize).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
   it('refuses an unresolved command before admission or actuation', async () => {
     const { app, instructions, pty, receipts, store } = fixture({ instruction: null });
 
@@ -192,6 +224,59 @@ describe('session namespace router', () => {
     expect(pty.actuate).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['custody_mismatch', (invocationId: string) => ({
+      ...verifiedContext(invocationId),
+      custody: { ...verifiedContext(invocationId).custody!, holderPrincipalId: 'workload-other' },
+    })],
+    ['custody_required', (invocationId: string) => ({
+      ...verifiedContext(invocationId), custody: undefined,
+    })],
+  ] as const)('does not mark a parked registration LOST for %s', async (reason, context) => {
+    const { app, store } = fixture({ target: 'parked', context });
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command(`command-${reason}`)),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: reason });
+    expect(store.markRegistrationLost).not.toHaveBeenCalled();
+  });
+
+  it('finalizes an authorization throw as failed', async () => {
+    const pty: PtyActuatorPort = {
+      kind: 'pty', isAvailable: vi.fn(async () => { throw new Error('probe failed'); }),
+      probeState: vi.fn(async () => 'alive'),
+      actuate: vi.fn(async () => ({ effectRef: 'must-not-run', outcome: 'acted' })),
+    };
+    const { app, store } = fixture({ pty });
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-authorization-throw')),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({ error: 'authorization_failed' });
+    expect(store.updateCommand).toHaveBeenLastCalledWith('command-authorization-throw', {
+      status: 'failed', refusalReason: 'authorization_failed',
+    });
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
+  it('finalizes an instruction resolution throw as failed', async () => {
+    const { app, instructions, pty, store } = fixture();
+    instructions.resolve.mockRejectedValueOnce(new Error('resolver failed'));
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-resolver-throw')),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({ error: 'instruction_resolution_failed' });
+    expect(store.updateCommand).toHaveBeenLastCalledWith('command-resolver-throw', {
+      status: 'failed', refusalReason: 'instruction_resolution_failed',
+    });
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
   it('refuses the thirteenth concurrent action before PTY at the real runtime cap', async () => {
     let release!: () => void;
     const blocked = new Promise<void>((resolve) => { release = resolve; });
@@ -235,13 +320,30 @@ describe('session namespace router', () => {
     ]);
   });
 
-  it.each(['deferred', 'failed'] as const)(
-    'does not record an acted command or receipt for a %s outcome',
+  it('persists a deferred outcome and returns 202 without an acted receipt', async () => {
+    const pty: PtyActuatorPort = {
+      kind: 'pty', async isAvailable() { return true; },
+      async probeState() { return 'alive'; },
+      actuate: vi.fn(async () => ({ effectRef: 'deferred-effect', outcome: 'deferred' })),
+    };
+    const { app, receipts, store } = fixture({ pty });
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-deferred')),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({ status: 'deferred', effectRef: 'deferred-effect' });
+    expect(store.updateCommand.mock.calls.map(([, update]) => update.status)).toEqual(['accepted', 'deferred']);
+    expect(receipts).not.toContainEqual(expect.objectContaining({ stage: 'acted' }));
+  });
+
+  it.each(['failed', 'adapter-bug'] as const)(
+    'maps a %s outcome to a persisted failed command and HTTP 502',
     async (outcome) => {
       const pty: PtyActuatorPort = {
         kind: 'pty', async isAvailable() { return true; },
         async probeState() { return 'alive'; },
-        actuate: vi.fn(async () => ({ effectRef: `${outcome}-effect`, outcome })),
+        actuate: vi.fn(async () => ({ effectRef: `${outcome}-effect`, outcome: outcome as 'failed' })),
       };
       const { app, receipts, store } = fixture({ pty });
 
@@ -250,8 +352,13 @@ describe('session namespace router', () => {
         headers: { 'content-type': 'application/json' },
       });
 
-      await expect(response.json()).resolves.toEqual({ status: outcome, effectRef: `${outcome}-effect` });
-      expect(store.updateCommand.mock.calls.map(([, update]) => update.status)).toEqual(['accepted']);
+      expect(response.status).toBe(502);
+      await expect(response.json()).resolves.toEqual({
+        error: 'actuation_failed', status: 'failed', effectRef: `${outcome}-effect`,
+      });
+      expect(store.updateCommand).toHaveBeenLastCalledWith(`command-${outcome}`, {
+        status: 'failed', refusalReason: 'actuation_failed',
+      });
       expect(receipts).not.toContainEqual(expect.objectContaining({ stage: 'acted' }));
     },
   );
