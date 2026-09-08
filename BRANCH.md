@@ -30,7 +30,7 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
 
 ## Feedback Loop
 - `attention` — BR-CUS-A1: LANDING held pending owner sequencing arbitration (custody-mandatory as lot-0) + owner direct merge GO. Branch prepared, not pushed.
-- `attention` — BR-CUS-R1: consensus review selection remains failed because exact author model/effort metadata is unavailable; no GO verdict is claimed for the remediated working tree.
+- `attention` — BR-CUS-R1: consensus review selection for target `9427b448` remains failed because exact author model/effort metadata is unavailable; no GO verdict is claimed.
 - `resolved` — BR-CUS-EX1 (mechanical alias `BR75-EX14`): mandatory new contract fields (`instructions`, `probeState`, `outcome`) require adapting the repository's only consumer (`api/`); impact: 3 `api/` files; rollback: revert the API consumer commit; disposition: applied in the atomic API consumer commit.
 
 ## Orchestration Mode (AI-selected)
