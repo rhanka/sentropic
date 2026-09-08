@@ -74,7 +74,8 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
   - [x] Finalize failed, deferred, invalid, and thrown actuation paths without HTTP 200 fail-open behavior.
   - [x] Adapt the three API consumer sites under BR-CUS-EX1.
   - [x] Cover `lost` registration and both custody-epoch mismatch branches.
-  - [ ] Cover router security, outcome, delegation, and wire cases.
+  - [x] Cover router security and non-acted outcome cases.
+  - [ ] Cover OQ12 positive delegation and legacy session-wire rejection.
   - [x] Correct 0.9 claims and regenerate the effect-semantics review record.
 
 - [ ] **Lot N — Final validation** (HELD on owner GO)
