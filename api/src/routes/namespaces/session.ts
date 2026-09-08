@@ -76,6 +76,7 @@ const createModule = (
       runtime: control.runtime,
       store: control.store,
       targets: control.targets,
+      instructions: { resolve: async () => null },
       author: createAuthorPort({ compositionRoot, namespace: '/session' }),
     },
   });
