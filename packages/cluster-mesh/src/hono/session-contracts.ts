@@ -1,6 +1,7 @@
 import type { Handler } from 'hono';
 import type { ClusterMeshRuntimeStore } from '../persistence/ports.js';
 import type { ClusterMeshRuntime } from '../runtime/generation.js';
+import type { CommandInstructionPort } from '../runtime/registration.js';
 
 export interface SessionRouteHandlers {
   readonly current: Handler;
@@ -41,6 +42,7 @@ export interface SessionControlPorts {
     'enqueueCommand' | 'markRegistrationLost' | 'updateCommand'
   >;
   readonly targets: SessionTargetStatePort;
+  readonly instructions: CommandInstructionPort;
   readonly author: SessionAuthorSelectionPort;
   readonly now?: () => Date;
 }

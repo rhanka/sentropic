@@ -9,7 +9,25 @@ export type RegistrationFailureReason =
   | 'workspace_mismatch'
   | 'custody_required'
   | 'custody_mismatch'
-  | 'actuator_unavailable';
+  | 'actuator_unavailable'
+  | 'command_unresolved';
+
+export type ActuationOutcome = 'acted' | 'deferred' | 'failed';
+
+export type TargetLiveness = 'alive' | 'dead' | 'parked' | 'unknown';
+
+export interface SignedInstruction {
+  readonly kind: 'signed-instruction';
+  readonly [k: string]: unknown;
+}
+
+export interface CommandInstructionPort {
+  resolve(input: {
+    readonly commandRef: string;
+    readonly registrationId: string;
+    readonly action: 'drive' | 'wake' | 'relaunch';
+  }): Promise<SignedInstruction | null>;
+}
 
 export interface ClusterMeshRegistration {
   readonly registrationId: string;
@@ -34,22 +52,26 @@ export interface ActuationRequest {
   readonly registration: ClusterMeshRegistration;
   readonly action: 'drive' | 'wake' | 'relaunch';
   readonly commandRef: string;
+  readonly resolvedInstruction: SignedInstruction;
 }
 
 export interface ActuationResult {
   readonly effectRef: string;
+  readonly outcome: ActuationOutcome;
   readonly actedTargets?: readonly string[];
 }
 
 export interface PtyActuatorPort {
   readonly kind: 'pty';
   isAvailable(actuatorRef: string): Promise<boolean>;
+  probeState(actuatorRef: string): Promise<TargetLiveness>;
   actuate(input: ActuationRequest): Promise<ActuationResult>;
 }
 
 export interface SecondaryActuatorPort {
   readonly kind: 'secondary';
   isAvailable(actuatorRef: string): Promise<boolean>;
+  probeState(actuatorRef: string): Promise<TargetLiveness>;
   actuate(input: ActuationRequest): Promise<ActuationResult>;
 }
 
@@ -57,9 +79,17 @@ export type SessionActuatorPort = PtyActuatorPort | SecondaryActuatorPort;
 
 export async function selectPreferredActuator(input: {
   readonly actuatorRef: string;
+  readonly action: 'drive' | 'wake' | 'relaunch';
   readonly pty: PtyActuatorPort;
   readonly secondary?: SecondaryActuatorPort;
 }): Promise<SessionActuatorPort | null> {
+  if (input.action === 'relaunch') {
+    if (await input.pty.probeState(input.actuatorRef) !== 'unknown') return input.pty;
+    if (input.secondary && await input.secondary.probeState(input.actuatorRef) !== 'unknown') {
+      return input.secondary;
+    }
+    return null;
+  }
   if (await input.pty.isAvailable(input.actuatorRef)) return input.pty;
   if (input.secondary && await input.secondary.isAvailable(input.actuatorRef)) {
     return input.secondary;
@@ -76,7 +106,10 @@ export type RegistrationDecision =
   | { readonly ok: false; readonly reason: RegistrationFailureReason };
 
 export interface RegistrationGate {
-  authorize(context: VerifiedInvocationContext): Promise<RegistrationDecision>;
+  authorize(
+    context: VerifiedInvocationContext,
+    action: 'drive' | 'wake' | 'relaunch',
+  ): Promise<RegistrationDecision>;
 }
 
 export function createRegistrationGate(input: {
@@ -88,7 +121,7 @@ export function createRegistrationGate(input: {
 }): RegistrationGate {
   const now = input.now ?? (() => new Date());
   return {
-    async authorize(context) {
+    async authorize(context, action) {
       const reference = context.registration;
       if (!reference) return { ok: false, reason: 'missing_registration' };
       const registration = await input.registrations.find(reference.registrationId);
@@ -128,6 +161,7 @@ export function createRegistrationGate(input: {
       ) return { ok: false, reason: 'stale_registration' };
       const actuator = await selectPreferredActuator({
         actuatorRef: registration.actuatorRef,
+        action,
         pty: input.pty,
         secondary: input.secondary,
       });
