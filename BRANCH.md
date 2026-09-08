@@ -31,6 +31,8 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
 ## Feedback Loop
 - `attention` — BR-CUS-A1: LANDING held pending owner sequencing arbitration (custody-mandatory as lot-0) + owner direct merge GO. Branch prepared, not pushed.
 - `attention` — BR-CUS-R1: consensus review selection for target `9427b448` remains failed because exact author model/effort metadata is unavailable; no GO verdict is claimed.
+- `attention` — BR-CUS-SG1: the API control CHECK in frozen migration 0007 omits `deferred`; storing a `deferred` outcome is a source gap pending a future control migration and owner-gated schema decision. It is unreachable today because no API actuator emits `deferred`.
+- `attention` — BR-CUS-SG2 (under BR-CUS-EX1): the API uses an interim null `CommandInstructionPort`; live CLI qualification is disabled until a production port exists, with every control request returning 409 `command_unresolved` and no `effectRef`.
 - `resolved` — BR-CUS-EX1 (mechanical alias `BR75-EX14`): mandatory new contract fields (`instructions`, `probeState`, `outcome`) require adapting the repository's only consumer (`api/`); impact: 3 `api/` files; rollback: revert the API consumer commit; disposition: applied in the atomic API consumer commit.
 
 ## Orchestration Mode (AI-selected)
@@ -78,12 +80,12 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
   - [x] Cover OQ12 positive delegation and legacy session-wire rejection.
   - [x] Correct 0.9 claims and regenerate the effect-semantics review record.
 
-- [ ] **Lot 4 — Fold 2-among minor corrections**
+- [x] **Lot 4 — Fold 2-among minor corrections**
   - [x] Guard deferred/failed outcome persistence rejections with a structured 5xx response and terminal-failure fallback.
   - [x] Treat an undefined/non-object actuator result as a finalized failed command with HTTP 502.
   - [x] Add regression coverage for terminal outcome store rejection and an undefined actuator result.
-  - [ ] Declare the frozen `deferred` CHECK and disabled live CLI qualification source gaps.
-  - [ ] Complete the 0.9.0 breaking-change and review-record documentation.
+  - [x] Declare the frozen `deferred` CHECK and disabled live CLI qualification source gaps.
+  - [x] Complete the 0.9.0 breaking-change and review-record documentation.
 
 - [ ] **Lot N — Final validation** (HELD on owner GO)
   - [x] Bumped `packages/cluster-mesh/package.json` version.
