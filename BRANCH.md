@@ -78,6 +78,13 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
   - [x] Cover OQ12 positive delegation and legacy session-wire rejection.
   - [x] Correct 0.9 claims and regenerate the effect-semantics review record.
 
+- [ ] **Lot 4 — Fold 2-among minor corrections**
+  - [x] Guard deferred/failed outcome persistence rejections with a structured 5xx response and terminal-failure fallback.
+  - [x] Treat an undefined/non-object actuator result as a finalized failed command with HTTP 502.
+  - [x] Add regression coverage for terminal outcome store rejection and an undefined actuator result.
+  - [ ] Declare the frozen `deferred` CHECK and disabled live CLI qualification source gaps.
+  - [ ] Complete the 0.9.0 breaking-change and review-record documentation.
+
 - [ ] **Lot N — Final validation** (HELD on owner GO)
   - [x] Bumped `packages/cluster-mesh/package.json` version.
   - [x] `make typecheck-cluster-mesh ENV=test-cluster-mesh-reprise`.
