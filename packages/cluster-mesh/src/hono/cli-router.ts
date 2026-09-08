@@ -24,7 +24,7 @@ export interface CliSessionDelegatePort {
     readonly path: `/auth/session/control/${CliControlAction}`;
     readonly headers: Readonly<Record<string, string>>;
     readonly body: {
-      readonly commandId: string;
+      readonly commandRef: string;
       readonly targetRegistrationId: string;
       readonly idempotencyKey: string;
     };
@@ -138,7 +138,7 @@ export function createCliNamespaceModule(options: {
           path: `/auth/session/control/${action}`,
           headers,
           body: {
-            commandId: envelope.commandId,
+            commandRef: envelope.commandId,
             targetRegistrationId: envelope.targetRegistrationId,
             idempotencyKey: envelope.idempotencyKey,
           },
