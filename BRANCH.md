@@ -1,10 +1,10 @@
 # Feature: cluster-mesh custody and effect-semantics contract (0.9.0)
 
 ## Objective
-Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 effect-semantics contract, with OQ12 documented as source-gap / à-affiner.
+Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 effect-semantics contract, with OQ12 documented as a source gap requiring refinement.
 
 ## Scope / Guardrails
-- Scope limited to `packages/cluster-mesh` (runtime gate, session router, contracts, tests, and version).
+- Scope limited to `packages/cluster-mesh` plus the three `api/` consumer sites declared by BR-CUS-EX1.
 - No migration file (no schema change).
 - Make-only workflow, no direct Docker commands.
 - Root workspace reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -23,18 +23,20 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
   - `docker-compose*.yml`
   - `.cursor/rules/**`
 - **Conditional Paths (only with explicit `BRxx-EXn`)**:
+  - `api/src/**` (only under BR-CUS-EX1; mechanical alias BR75-EX14)
   - `api/drizzle/*.sql` (N-A here)
   - `.github/workflows/**`
 - **Exception process**: declare `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
 - `attention` — BR-CUS-A1: LANDING held pending owner sequencing arbitration (custody-mandatory as lot-0) + owner direct merge GO. Branch prepared, not pushed.
-- `attention` — BR-CUS-R1: consensus review selection failed because exact author model/effort metadata was unavailable; no review verdict claimed.
+- `attention` — BR-CUS-R1: consensus review selection remains failed because exact author model/effort metadata is unavailable; no GO verdict is claimed for the remediated working tree.
+- `resolved` — BR-CUS-EX1 (mechanical alias `BR75-EX14`): mandatory new contract fields (`instructions`, `probeState`, `outcome`) require adapting the repository's only consumer (`api/`); impact: 3 `api/` files; rollback: revert the API consumer commit.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single isolated contract change; single test cycle)
 - [ ] **Multi-branch**
-- Rationale: One small, orthogonal, breaking contract change in a single package.
+- Rationale: One orthogonal breaking contract change and its three fail-closed application consumers.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
@@ -56,15 +58,28 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
   - [x] Make actuator selection and registration authorization action-aware.
   - [x] Resolve authenticated command instructions in the session router before actuation.
   - [x] Record acted commands and receipts only for an `acted` outcome.
-  - [x] Add focused contract, router, and hermetic fixture coverage.
+  - [x] hermetic A1 red / source-gap pending h2a external-adapter update (needs probeState + outcome).
+  - [x] OQ1 is contract-only; end-to-end enforcement pending a production `CommandInstructionPort`.
+  - [x] The router runtime guard closes dangling-effect risk for dist adapters regardless of the A1 source gap.
   - [x] Rename the CLI session delegate body field from `commandId` to OQ1 `commandRef`.
-  - [x] Document the exact `/auth/session/control` route-composition invariant and h2a Lot-0 mount-prefix source-gap.
+  - [x] Document the exact `/auth/session/control` route-composition invariant and h2a client-base-URL source gap.
   - [x] Replace the OQ12 todo with a mounted CLI-to-session integration test covering the registration gate.
   - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh`
     - [x] `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests ENV=test-cluster-mesh-0900`
 
+- [x] **Lot 3 — Contract-review remediation**
+  - [x] Fence LOST reconciliation to `actuator_unavailable` authorization failures.
+  - [x] Bind the requested target registration to verified context.
+  - [x] Finalize failed, deferred, invalid, and thrown actuation paths without HTTP 200 fail-open behavior.
+  - [x] Adapt the three API consumer sites under BR-CUS-EX1.
+  - [x] Add regression coverage for all F6 and wire cases.
+  - [x] Correct 0.9 claims and regenerate the effect-semantics review record.
+
 - [ ] **Lot N — Final validation** (HELD on owner GO)
   - [x] Bumped `packages/cluster-mesh/package.json` version.
+  - [x] `make typecheck-cluster-mesh ENV=test-cluster-mesh-reprise`.
+  - [x] `make typecheck-api REGISTRY=local ENV=test-cluster-mesh-reprise`.
+  - [x] `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests ENV=test-cluster-mesh-reprise`.
   - [ ] PR body from `BRANCH.md`; h-cond runs 2-among review.
   - [ ] Merge only on owner direct GO + sequencing arbitration; then remove `BRANCH.md`, push, merge.

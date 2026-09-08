@@ -3,7 +3,7 @@
 Injectable Cluster Mesh control-plane contracts and a functional single-instance
 runtime.
 
-Version 0.8 adds the central generation, namespace, registration, admission,
+Version 0.9 adds the central generation, namespace, registration, admission,
 receipt, persistence-port, MCP-supervisor, and Hono plugin contracts used by the
 Sentropic product and standalone IdP composition roots. It retains the degenerate
 topology introduced in 0.1: one Sentropic server, its attached local workstations,
