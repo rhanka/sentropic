@@ -29,6 +29,7 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
 
 ## Feedback Loop
 - `attention` — BR-CUS-A1: LANDING held pending owner sequencing arbitration (custody-mandatory as lot-0) + owner direct merge GO. Branch prepared, not pushed.
+- `attention` — BR-CUS-R1: consensus review selection failed because exact author model/effort metadata was unavailable; no review verdict claimed.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single isolated contract change; single test cycle)
@@ -46,20 +47,20 @@ Make `context.custody` mandatory and implement the owner-ratified OQ1/OQ2/OQ3 ef
   - [x] `registration.ts`: deny when `!context.custody` (`custody_required`); drop the `&& context.custody` opt-in guards on epoch/holder checks (now unconditional).
   - [x] `package.json`: bump `0.8.1 → 0.9.0` (pre-1.0 breaking semantics → minor).
   - [x] `tests/registration.spec.ts`: add "should fail closed with custody_required when the context carries no custody" (asserts deny + no actuator probing).
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh`
     - [x] cluster-mesh gate tests green (`registration.spec.ts`)
 
-- [ ] **Lot 2 — Effect semantics (locked OQ1/OQ2/OQ3 + documented OQ12)**
+- [x] **Lot 2 — Effect semantics (locked OQ1/OQ2/OQ3 + documented OQ12)**
   - [x] Add `ActuationOutcome`, `TargetLiveness`, `SignedInstruction`, and `CommandInstructionPort`.
   - [x] Make actuator selection and registration authorization action-aware.
   - [x] Resolve authenticated command instructions in the session router before actuation.
   - [x] Record acted commands and receipts only for an `acted` outcome.
-  - [ ] Add focused contract, router, and hermetic fixture coverage.
-  - [ ] Document the OQ12 CLI delegation route invariant as source-gap / à-affiner.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-cluster-mesh`
-    - [ ] `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests/... ENV=test-cluster-mesh-0900`
+  - [x] Add focused contract, router, and hermetic fixture coverage.
+  - [x] Document the OQ12 CLI delegation route invariant as source-gap / à-affiner.
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh`
+    - [x] `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests ENV=test-cluster-mesh-0900`
 
 - [ ] **Lot N — Final validation** (HELD on owner GO)
   - [x] Bumped `packages/cluster-mesh/package.json` version.

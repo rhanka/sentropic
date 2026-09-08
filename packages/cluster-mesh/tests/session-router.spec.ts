@@ -6,6 +6,7 @@ import {
   createSessionNamespaceModule,
   type ClusterMeshRegistration,
   type PtyActuatorPort,
+  type SignedInstruction,
 } from '../src/index.js';
 
 const registration: ClusterMeshRegistration = {
@@ -34,6 +35,7 @@ function fixture(input: {
   pty?: PtyActuatorPort;
   target?: 'alive' | 'dead' | 'parked' | 'unknown';
   context?: (invocationId: string) => VerifiedInvocationContext;
+  instruction?: SignedInstruction | null;
   receiptFailureStage?: 'acted';
 } = {}) {
   const receipts: unknown[] = [];
@@ -64,6 +66,11 @@ function fixture(input: {
     updateCommand: vi.fn(async () => true),
     markRegistrationLost: vi.fn(async () => true),
   };
+  const instructions = {
+    resolve: vi.fn(async () => input.instruction === undefined
+      ? { kind: 'signed-instruction' as const }
+      : input.instruction),
+  };
   const ok = (c: { json(value: unknown): Response }) => c.json({ ok: true });
   const module = createSessionNamespaceModule({
     handlers: {
@@ -73,12 +80,15 @@ function fixture(input: {
     projection: { session: '/', device: '/device', control: '/control' },
     control: {
       runtime, store, targets: { async inspect() { return input.target ?? 'alive'; } },
-      instructions: { async resolve() { return { kind: 'signed-instruction' }; } },
+      instructions,
       author: { async ensureAuthor() { return { ok: true }; } },
       now: () => new Date('2026-08-30T12:00:00.000Z'),
     },
   });
-  return { app: module.createRouter({ context: runtime.context, receipts: runtime.receiptPort }), pty, receipts, store };
+  return {
+    app: module.createRouter({ context: runtime.context, receipts: runtime.receiptPort }),
+    pty, receipts, store, instructions,
+  };
 }
 
 const command = (id: string) => ({
@@ -123,6 +133,42 @@ describe('session namespace router', () => {
     expect(receipts).toEqual([]);
     expect(store.enqueueCommand).not.toHaveBeenCalled();
     expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unresolved command before admission or actuation', async () => {
+    const { app, instructions, pty, receipts, store } = fixture({ instruction: null });
+
+    const response = await app.request('/control/drive', {
+      method: 'POST', body: JSON.stringify(command('command-unresolved')),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'command_unresolved' });
+    expect(instructions.resolve).toHaveBeenCalledWith({
+      commandRef: 'command-unresolved', registrationId: registration.registrationId, action: 'drive',
+    });
+    expect(pty.actuate).not.toHaveBeenCalled();
+    expect(receipts).toContainEqual(expect.objectContaining({
+      stage: 'verified', decision: 'refused', reason: 'command_unresolved',
+    }));
+    expect(store.updateCommand).toHaveBeenCalledWith('command-unresolved', {
+      status: 'refused', refusalReason: 'command_unresolved',
+    });
+  });
+
+  it('passes the resolved signed instruction to the actuator', async () => {
+    const instruction = { kind: 'signed-instruction' as const, signature: 'opaque-signature' };
+    const { app, pty } = fixture({ instruction });
+
+    await app.request('/control/wake', {
+      method: 'POST', body: JSON.stringify(command('command-resolved')),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(pty.actuate).toHaveBeenCalledWith({
+      registration, action: 'wake', commandRef: 'command-resolved', resolvedInstruction: instruction,
+    });
   });
 
   it('reconciles an unavailable parked target to LOST without actuation', async () => {
@@ -184,4 +230,29 @@ describe('session namespace router', () => {
       'accepted', 'acted',
     ]);
   });
+
+  it.each(['deferred', 'failed'] as const)(
+    'does not record an acted command or receipt for a %s outcome',
+    async (outcome) => {
+      const pty: PtyActuatorPort = {
+        kind: 'pty', async isAvailable() { return true; },
+        async probeState() { return 'alive'; },
+        actuate: vi.fn(async () => ({ effectRef: `${outcome}-effect`, outcome })),
+      };
+      const { app, receipts, store } = fixture({ pty });
+
+      const response = await app.request('/control/drive', {
+        method: 'POST', body: JSON.stringify(command(`command-${outcome}`)),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      await expect(response.json()).resolves.toEqual({ status: outcome, effectRef: `${outcome}-effect` });
+      expect(store.updateCommand.mock.calls.map(([, update]) => update.status)).toEqual(['accepted']);
+      expect(receipts).not.toContainEqual(expect.objectContaining({ stage: 'acted' }));
+    },
+  );
+
+  it.todo(
+    'source-gap / à-affiner: CLI delegation routes compose with the session mount/projection and cannot bypass the session namespace gate',
+  );
 });

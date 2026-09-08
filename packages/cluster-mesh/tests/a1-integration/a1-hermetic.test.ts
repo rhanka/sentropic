@@ -12,7 +12,9 @@ import { createH2aPtyActuator, createH2aSessionTargetState,
 import type { createH2aPtyActuator as CreateH2aPtyActuator,
   createH2aSessionTargetState as CreateH2aSessionTargetState,
 } from '/home/antoinefa/src/h2a/tmp/pty-actuator-adapter/packages/h2a/dist/index.js';
-import type { ClusterMeshRegistration, PtyActuatorPort, SessionTargetStatePort } from '../../dist/index.js';
+import type {
+  ClusterMeshRegistration, CommandInstructionPort, PtyActuatorPort, SessionTargetStatePort,
+} from '../../dist/index.js';
 
 type Expect<T extends true> = T;
 type H2aPtySatisfiesClusterMesh = Expect<ReturnType<
@@ -75,6 +77,9 @@ test('should prove the A1 session contract with injected fakes only', async () =
   });
   const pty: PtyActuatorPort = createH2aPtyActuator(fakeDeps('pty'));
   const targets: SessionTargetStatePort = createH2aSessionTargetState(fakeDeps('targets'));
+  const instructions: CommandInstructionPort = {
+    async resolve({ commandRef }) { return { kind: 'signed-instruction', commandRef }; },
+  };
   const context = (invocationId: string) => ({
     invocationId, correlationId: invocationId, generationId: 'generation-a1',
     principal: { principalId: 'workload-a1', kind: 'workload' as const, verifierId: 'fake' },
@@ -106,7 +111,7 @@ test('should prove the A1 session contract with injected fakes only', async () =
     handlers: { current: ok, refresh: ok, extensionToken: ok, logout: ok, logoutAll: ok, list: ok },
     devices: { issue: ok, poll: ok, approve: ok },
     projection: { session: '/', device: '/device', control: '/control' },
-    control: { runtime, store, targets,
+    control: { runtime, store, targets, instructions,
       author: { async ensureAuthor() { return { ok: true }; } }, now: () => now },
   });
   const app = module.createRouter({ context: runtime.context, receipts: runtime.receiptPort });

@@ -30,6 +30,10 @@ const parseIntent = (value: unknown): ControlIntent | null => {
 
 export const isValidSessionControlIntent = (value: unknown): boolean => parseIntent(value) !== null;
 
+/**
+ * source-gap / à-affiner: A CLI delegation route MUST compose with the session
+ * mount/projection and cannot bypass the session namespace gate.
+ */
 export function createSessionNamespaceModule(input: {
   readonly handlers: SessionRouteHandlers;
   readonly devices: DeviceRouteHandlers;
