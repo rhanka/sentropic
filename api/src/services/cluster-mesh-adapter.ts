@@ -205,6 +205,7 @@ const ensureSessionGeneration = async () => {
 const unavailableH2aPtyPort: PtyActuatorPort = {
   kind: 'pty',
   async isAvailable() { return false; },
+  async probeState() { return 'unknown'; },
   async actuate() { throw new Error('BR75-SG1 h2a PTY adapter is unavailable'); },
 };
 

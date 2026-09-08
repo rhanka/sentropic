@@ -111,14 +111,25 @@ export function createLiveH2aPorts(input: { socketPath: string; root: string }) 
       if (ref !== LIVE_H2A_ACTUATOR_REF) return false;
       try { return (await state()).status === 'running'; } catch { return false; }
     },
+    async probeState(ref) {
+      if (ref !== LIVE_H2A_ACTUATOR_REF) return 'unknown';
+      try {
+        const current = await state();
+        return current.status === 'running' ? 'alive' : current.status === 'stopping' ? 'parked' : 'dead';
+      } catch { return 'unknown'; }
+    },
     actuate(request: ActuationRequest): Promise<ActuationResult> {
+      const instructionLine = request.resolvedInstruction?.instructionLine;
+      if (typeof instructionLine !== 'string' || !instructionLine.trim()) {
+        throw new Error('resolved instruction is not executable');
+      }
       return withClient(async (client) => {
         const before = await client.request<NativeState>('state', { id: targetId });
         if (before.status !== 'running') throw new Error('native target is not running');
         const lease = await client.request<NativeLease>('acquire-controller', {
           id: targetId, controllerId: `cluster-mesh-${request.commandRef}`, activity: 'automation',
         });
-        await client.request('write', { lease, data: `${request.action}:${request.commandRef}` });
+        await client.request('write', { lease, data: instructionLine });
         await client.request('release-controller', { lease });
         const ticked = await client.request<NativeState>('state', { id: targetId });
         let observed = ticked;
@@ -143,6 +154,7 @@ export function createLiveH2aPorts(input: { socketPath: string; root: string }) 
         ].join('\0')).digest('hex').slice(0, 24);
         return {
           effectRef: `h2a-pty:acted:${request.action}:${signature}`,
+          outcome: 'acted',
           actedTargets: [request.registration.registrationId],
         };
       });
