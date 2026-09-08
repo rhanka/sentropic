@@ -43,7 +43,7 @@ export interface StoredClusterMeshCommand {
   readonly targetRegistrationId: string;
   readonly idempotencyKey: string;
   readonly action: 'drive' | 'wake' | 'relaunch';
-  readonly status: 'pending' | 'accepted' | 'refused' | 'acted' | 'failed';
+  readonly status: 'pending' | 'accepted' | 'refused' | 'acted' | 'deferred' | 'failed';
   readonly refusalReason?: string;
   readonly actedAt?: string;
 }

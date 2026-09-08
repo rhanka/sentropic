@@ -76,6 +76,10 @@ const createModule = (
       runtime: control.runtime,
       store: control.store,
       targets: control.targets,
+      instructions: {
+        // BR-CUS-EX1 source gap: control stays fail-closed until a production resolver exists.
+        resolve: async () => null,
+      },
       author: createAuthorPort({ compositionRoot, namespace: '/session' }),
     },
   });
