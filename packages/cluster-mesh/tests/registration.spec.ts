@@ -85,6 +85,42 @@ describe('registration gate', () => {
     expect(fallbackDecision.ok && fallbackDecision.actuator.kind).toBe('secondary');
   });
 
+  it.each(['dead', 'parked'] as const)(
+    'should allow relaunch through PTY when the target is %s',
+    async (state) => {
+      const relaunch = gate(registration, false, false);
+      vi.mocked(relaunch.actuators.pty.probeState).mockResolvedValue(state);
+
+      const decision = await relaunch.gate.authorize(context, 'relaunch');
+
+      expect(decision.ok && decision.actuator.kind).toBe('pty');
+      expect(relaunch.actuators.pty.isAvailable).not.toHaveBeenCalled();
+      expect(relaunch.actuators.secondary.probeState).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['drive', 'wake'] as const)(
+    'should require an alive target for %s',
+    async (action) => {
+      const unavailable = gate(registration, false, false);
+      vi.mocked(unavailable.actuators.pty.probeState).mockResolvedValue('parked');
+
+      await expect(unavailable.gate.authorize(context, action))
+        .resolves.toEqual({ ok: false, reason: 'actuator_unavailable' });
+      expect(unavailable.actuators.pty.isAvailable).toHaveBeenCalledOnce();
+      expect(unavailable.actuators.pty.probeState).not.toHaveBeenCalled();
+    },
+  );
+
+  it('should reject relaunch when both actuator states are unknown', async () => {
+    const unavailable = gate(registration, false, false);
+
+    await expect(unavailable.gate.authorize(context, 'relaunch'))
+      .resolves.toEqual({ ok: false, reason: 'actuator_unavailable' });
+    expect(unavailable.actuators.pty.probeState).toHaveBeenCalledOnce();
+    expect(unavailable.actuators.secondary.probeState).toHaveBeenCalledOnce();
+  });
+
   it('should fail closed with distinct missing, revoked and stale reasons', async () => {
     await expect(gate(null).gate.authorize(context, 'drive')).resolves.toEqual({
       ok: false,
