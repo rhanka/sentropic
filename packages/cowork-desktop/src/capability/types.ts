@@ -23,12 +23,22 @@ export interface ScreenCapture {
     height: number;
 }
 
-export type TargetedNativeInput = {
-    kind: 'click';
-    x: number;
-    y: number;
-    button: MouseButton;
-};
+export type TargetedNativeInput =
+    | {
+        kind: 'click';
+        x: number;
+        y: number;
+        button: MouseButton;
+    }
+    | {
+        kind: 'type';
+        text: string;
+    }
+    | {
+        kind: 'scroll';
+        dx: number;
+        dy: number;
+    };
 
 export interface NativeActuationGuard {
     /** The per-lease cancellation signal; native work must observe it before and after each await. */

@@ -49,4 +49,21 @@ describe('ForegroundSurfaceGuard', () => {
         await expect(native.targetedInput?.({ kind: 'click', x: 100, y: 200, button: 'right' })).resolves.toBeUndefined();
         expect(calls).toEqual([{ kind: 'click', x: 100, y: 200, button: 'right' }]);
     });
+
+    it('delegates type and scroll to targetedInput and rejects on foreground drift', async () => {
+        const calls: unknown[] = [];
+        let measurements = 0;
+        const guard = new ForegroundSurfaceGuard({
+            measure: async () => (++measurements < 4
+                ? measuredNotepad()
+                : measuredNotepad({ hwnd: '2', processId: 99, executable: 'C:\\Windows\\System32\\cmd.exe', title: 'Command Prompt' })),
+            targetedInput: async (_token, input) => { calls.push(input); },
+        });
+        const token = await guard.acquire();
+        const native = guard.nativeGuard(token);
+        await expect(native.targetedInput?.({ kind: 'type', text: 'chunk1' })).resolves.toBeUndefined();
+        expect(calls).toEqual([{ kind: 'type', text: 'chunk1' }]);
+        // Drift occurs on next measurement
+        await expect(native.targetedInput?.({ kind: 'type', text: 'chunk2' })).rejects.toThrow(/drifted or is unavailable/);
+    });
 });

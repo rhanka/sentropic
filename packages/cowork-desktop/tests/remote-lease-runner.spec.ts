@@ -303,4 +303,49 @@ describe('RemoteLeaseRunner', () => {
         expect(calls.filter((call) => call.url.endsWith('/result'))).toHaveLength(1);
         expect(calls.find((call) => call.url.endsWith('/result'))?.body).toContain('PAS-FAIT');
     });
+
+    it('executes at most one chunk after Stop during a multi-chunk actuation', async () => {
+        const server = generateKeyPairSync('ed25519');
+        const device = generateKeyPairSync('ed25519');
+        const deviceId = randomUUID();
+        const expiry = new Date(Date.now() + 20_000).toISOString();
+        const fields = { leaseId: 'lease-chunk-stop', capability: 'input_action', targetDeviceId: deviceId, nonce: 'nonce', expiry };
+        const mac = sign(null, Buffer.from(canonical(fields)), server.privateKey).toString('base64url');
+        const chunksExecuted: string[] = [];
+        let firstChunkStarted!: () => void;
+        const started = new Promise<void>((resolve) => { firstChunkStarted = resolve; });
+        const provider = createMockCapabilityProvider();
+        provider.type = async (text, guard) => {
+            const CHUNK_SIZE = 10;
+            for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+                guard.throwIfAborted();
+                const chunk = text.slice(i, i + CHUNK_SIZE);
+                chunksExecuted.push(chunk);
+                if (i === 0) {
+                    firstChunkStarted();
+                    await new Promise((resolve) => setTimeout(resolve, 20));
+                }
+                guard.throwIfAborted();
+            }
+        };
+        const calls: Array<{ url: string; body?: string }> = [];
+        const runner = new RemoteLeaseRunner({
+            fetch: async (url, init) => {
+                const requestUrl = String(url);
+                calls.push({ url: requestUrl, body: typeof init?.body === 'string' ? init.body : undefined });
+                if (requestUrl.endsWith('/.well-known/jwks.json')) return new Response(JSON.stringify({ keys: [{ ...server.publicKey.export({ format: 'jwk' }), kid: 'oauth-key' }] }));
+                return new Response('{}');
+            },
+            apiBaseUrl: 'https://api.example.test/api/v1', getAccessToken: async () => 'bearer',
+            deviceIdentity: { deviceId, publicKey: '', sign: async (payload) => sign(null, Buffer.from(payload), device.privateKey).toString('base64url') },
+            consent: new ConsentManager({ store: createMemoryConsentStore(), prompt: async () => 'allow_once' }), context: guardedContext(provider),
+        });
+        const handling = runner.handleLease({ ...fields, expiresAt: expiry, scope: { capability: fields.capability, serverEnvelope: { kid: 'oauth-key', mac }, action: { action: 'type', text: 'abcdefghijklmnopqrstuvwxyz0123456789' } } });
+        await started;
+        await runner.stop();
+        await handling;
+        expect(chunksExecuted).toEqual(['abcdefghij']);
+        expect(calls.filter((call) => call.url.endsWith('/result'))).toHaveLength(1);
+        expect(calls.find((call) => call.url.endsWith('/result'))?.body).toContain('PAS-FAIT');
+    });
 });

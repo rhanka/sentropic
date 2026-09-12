@@ -50,24 +50,6 @@ const awaitNativeQuiescence = async <T>(guard: NativeActuationGuard, operation: 
     return result;
 };
 
-// The nut-js surface we actually use, declared structurally so we never need the
-// package's types at build time on Linux.
-type NutModule = {
-    mouse: {
-        setPosition(point: { x: number; y: number }): Promise<unknown>;
-    };
-    Point: new (x: number, y: number) => { x: number; y: number };
-    Button: Record<string, unknown>;
-    keyboard: {
-        type(text: string): Promise<unknown>;
-        pressKey(...keys: unknown[]): Promise<unknown>;
-        releaseKey(...keys: unknown[]): Promise<unknown>;
-    };
-    Key: Record<string, unknown>;
-    straightTo?: unknown;
-    leftClick?: () => Promise<unknown>;
-};
-
 export interface WindowsProviderOptions {
     /**
      * Maps a bare native specifier to its import target. Default: identity (bare
@@ -132,27 +114,44 @@ export const createWindowsCapabilityProvider = (
 
         async type(text: string, guard: NativeActuationGuard): Promise<void> {
             assertLiteralText(text);
-            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
             await guard.recheckAfterNativeAwait();
-            // This is the only literal-text primitive. Do not add clipboard,
-            // IME, pressKey, or key-combo fallbacks: those turn text into
-            // submission/navigation controls on a kiosk surface.
-            await awaitNativeQuiescence(guard, () => nut.keyboard.type(text));
+            if (!guard.targetedInput) {
+                throw new CapabilityUnavailableError(
+                    'input_action.type',
+                    'the measured HWND-targeted type primitive is unavailable.',
+                );
+            }
+            // Chunk literal text so each chunk runs in bounded wall-clock time (<= 250ms)
+            // and cancellation is observed promptly between chunks.
+            const CHUNK_SIZE = 10;
+            for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+                guard.throwIfAborted();
+                const chunk = text.slice(i, i + CHUNK_SIZE);
+                await awaitNativeQuiescence(guard, () => guard.targetedInput!({ kind: 'type', text: chunk }));
+                guard.throwIfAborted();
+            }
         },
 
         async scroll(dx: number, dy: number, guard: NativeActuationGuard): Promise<void> {
-            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
             await guard.recheckAfterNativeAwait();
-            const mouseFacade = nut.mouse as unknown as {
-                scrollDown?: (n: number) => Promise<unknown>;
-                scrollUp?: (n: number) => Promise<unknown>;
-                scrollLeft?: (n: number) => Promise<unknown>;
-                scrollRight?: (n: number) => Promise<unknown>;
-            };
-            if (dy > 0 && mouseFacade.scrollDown) await awaitNativeQuiescence(guard, () => mouseFacade.scrollDown!(dy));
-            else if (dy < 0 && mouseFacade.scrollUp) await awaitNativeQuiescence(guard, () => mouseFacade.scrollUp!(-dy));
-            if (dx > 0 && mouseFacade.scrollRight) await awaitNativeQuiescence(guard, () => mouseFacade.scrollRight!(dx));
-            else if (dx < 0 && mouseFacade.scrollLeft) await awaitNativeQuiescence(guard, () => mouseFacade.scrollLeft!(-dx));
+            if (!guard.targetedInput) {
+                throw new CapabilityUnavailableError(
+                    'input_action.scroll',
+                    'the measured HWND-targeted scroll primitive is unavailable.',
+                );
+            }
+            const MAX_STEP = 5;
+            let remX = dx;
+            let remY = dy;
+            while (remX !== 0 || remY !== 0) {
+                guard.throwIfAborted();
+                const stepX = Math.sign(remX) * Math.min(Math.abs(remX), MAX_STEP);
+                const stepY = Math.sign(remY) * Math.min(Math.abs(remY), MAX_STEP);
+                remX -= stepX;
+                remY -= stepY;
+                await awaitNativeQuiescence(guard, () => guard.targetedInput!({ kind: 'scroll', dx: stepX, dy: stepY }));
+                guard.throwIfAborted();
+            }
         },
     };
 };

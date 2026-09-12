@@ -62,6 +62,12 @@ export const createMockCapabilityProvider = (
         async type(text: string, guard: NativeActuationGuard): Promise<void> {
             await guard.recheckAfterNativeAwait();
             guard.throwIfAborted();
+            const CHUNK_SIZE = 10;
+            for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+                guard.throwIfAborted();
+                await guard.recheckAfterNativeAwait();
+                guard.throwIfAborted();
+            }
             calls.push({ kind: 'type', text });
             guard.throwIfAborted();
         },
