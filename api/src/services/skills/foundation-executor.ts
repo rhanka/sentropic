@@ -20,6 +20,7 @@ type FoundationExecutionOptions = {
   readonly sessionId: string;
   readonly assistantMessageId: string;
   readonly locale?: string;
+  readonly signal?: AbortSignal;
 };
 
 type FoundationContextType =
@@ -585,6 +586,7 @@ export async function executeFoundationSkillTool(
     sessionPrincipalSub: options.userId,
     sessionId: options.sessionId,
     workspaceId: sessionWorkspaceId,
+    abortSignal: options.signal,
   });
   if (seamResult.handled) {
     return {

@@ -110,7 +110,7 @@ for (const capability of COWORK_CAPABILITIES) {
         capabilityRef: capability,
         input: args,
         hints: { accountSelectorHint: selected.deviceId },
-        execution: { toolCallId: context.toolCallId, sessionId: context.sessionId },
+        execution: { toolCallId: context.toolCallId, sessionId: context.sessionId, abortSignal: context.abortSignal },
       });
     },
   });
