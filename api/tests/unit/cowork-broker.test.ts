@@ -179,5 +179,51 @@ describe('Cowork remote broker safety boundaries', () => {
       expect.objectContaining({ toolCallId: 'call-unverified', kind: 'lease_result', outcome: 'PAS-FAIT', settled: 'unverified', reason: 'quiescence_unconfirmed' }),
     ]));
   });
+
+  it('distinguishes reaper-forced revoke (unverified/quiescence_unconfirmed) from genuine device-attested stop (NEW-1)', async () => {
+    const audit: Array<Record<string, unknown>> = [];
+
+    // Reaper-forced revoke: lease executing, device never terminalizes -> unverified quiescence_unconfirmed
+    await createCoworkInvocationBroker({
+      broker: {
+        async issue() { return { ok: true as const, leaseId: 'lease-reaped-1' }; },
+        async wait() { return { outcome: 'PAS-FAIT', settled: 'unverified', reason: 'quiescence_unconfirmed' }; },
+        async revoke() {},
+      },
+      audit: (event) => { audit.push(event); },
+      userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-reaped',
+      capability: 'input_action', action: { action: 'click', x: 10, y: 20 },
+    })();
+
+    // Genuine device-attested stop: device confirms quiescence with signed PAS-FAIT -> attested stop_controller
+    await createCoworkInvocationBroker({
+      broker: {
+        async issue() { return { ok: true as const, leaseId: 'lease-attested-stop-1' }; },
+        async wait() { return { outcome: 'PAS-FAIT', settled: 'attested', reason: 'stop_controller' }; },
+        async revoke() {},
+      },
+      audit: (event) => { audit.push(event); },
+      userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-attested-stop',
+      capability: 'input_action', action: { action: 'type', text: 'hello' },
+    })();
+
+    expect(audit).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        toolCallId: 'call-reaped',
+        kind: 'lease_result',
+        outcome: 'PAS-FAIT',
+        reason: 'quiescence_unconfirmed',
+        settled: 'unverified',
+      }),
+      expect.objectContaining({
+        toolCallId: 'call-attested-stop',
+        kind: 'lease_result',
+        outcome: 'PAS-FAIT',
+        reason: 'stop_controller',
+        settled: 'attested',
+      }),
+    ]));
+  });
 });
+
 
