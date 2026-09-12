@@ -101,10 +101,14 @@ export class ForegroundSurfaceGuard {
             assertClickInBounds: (x, y) => this.assertClickInBounds(token, x, y),
             targetedInput: async (input) => {
                 throwIfAborted();
-                this.assertClickInBounds(token, input.x, input.y);
+                if (input.kind === 'click') {
+                    this.assertClickInBounds(token, input.x, input.y);
+                }
                 await this.recheck(token);
                 if (!this.probe.targetedInput) throw new Error('Cowork refused: HWND-targeted native input is unavailable.');
                 await this.probe.targetedInput(token, input);
+                throwIfAborted();
+                await this.recheck(token);
                 throwIfAborted();
             },
         };
@@ -180,7 +184,58 @@ public static class SentropicTargetedClick {
 if (-not [SentropicTargetedClick]::Click([Int64]$ExpectedHwnd, $ExpectedPid, $ScreenX, $ScreenY, $Button)) { exit 3 }
 `;
 
-/** Windows UAT integration: actual signed foreground measurement and HWND-targeted click. */
+const WINDOWS_TARGETED_TYPE_SCRIPT = String.raw`
+param([string]$ExpectedHwnd, [int]$ExpectedPid, [string]$Text)
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class SentropicTargetedType {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+  public static bool Type(long hwndValue, int expectedPid, string text) {
+    IntPtr hwnd = new IntPtr(hwndValue); if (GetForegroundWindow() != hwnd) return false;
+    uint pid; GetWindowThreadProcessId(hwnd, out pid); if (pid != expectedPid) return false;
+    foreach (char c in text) {
+      SendMessage(hwnd, 0x0102u /* WM_CHAR */, new IntPtr((int)c), IntPtr.Zero);
+    }
+    return true;
+  }
+}
+'@
+if (-not [SentropicTargetedType]::Type([Int64]$ExpectedHwnd, $ExpectedPid, $Text)) { exit 3 }
+`;
+
+const WINDOWS_TARGETED_SCROLL_SCRIPT = String.raw`
+param([string]$ExpectedHwnd, [int]$ExpectedPid, [int]$Dx, [int]$Dy)
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class SentropicTargetedScroll {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+  public static bool Scroll(long hwndValue, int expectedPid, int dx, int dy) {
+    IntPtr hwnd = new IntPtr(hwndValue); if (GetForegroundWindow() != hwnd) return false;
+    uint pid; GetWindowThreadProcessId(hwnd, out pid); if (pid != expectedPid) return false;
+    if (dy != 0) {
+      int delta = -dy * 120;
+      IntPtr wParam = new IntPtr((delta << 16) & 0xffff0000);
+      SendMessage(hwnd, 0x020Au /* WM_MOUSEWHEEL */, wParam, IntPtr.Zero);
+    }
+    if (dx != 0) {
+      int delta = dx * 120;
+      IntPtr wParam = new IntPtr((delta << 16) & 0xffff0000);
+      SendMessage(hwnd, 0x020Eu /* WM_MOUSEHWHEEL */, wParam, IntPtr.Zero);
+    }
+    return true;
+  }
+}
+'@
+if (-not [SentropicTargetedScroll]::Scroll([Int64]$ExpectedHwnd, $ExpectedPid, $Dx, $Dy)) { exit 3 }
+`;
+
+/** Windows UAT integration: actual signed foreground measurement and HWND-targeted click/type/scroll. */
 export const createWindowsForegroundSurfaceProbe = (): ForegroundSurfaceProbe => ({
     async measure(): Promise<ForegroundSurface | null> {
         if (process.platform !== 'win32') return null;
@@ -193,10 +248,22 @@ export const createWindowsForegroundSurfaceProbe = (): ForegroundSurfaceProbe =>
         } catch { return null; }
     },
     async targetedInput(surface, input): Promise<void> {
-        if (process.platform !== 'win32' || input.kind !== 'click') throw new Error('Cowork refused: HWND-targeted Windows click is unavailable.');
-        await execFileAsync('powershell.exe', [
-            '-NoProfile', '-NonInteractive', '-Command', WINDOWS_TARGETED_CLICK_SCRIPT,
-            surface.hwnd, String(surface.processId), String(input.x), String(input.y), input.button,
-        ], { windowsHide: true, timeout: 2_000, maxBuffer: 64 * 1024 });
+        if (process.platform !== 'win32') throw new Error('Cowork refused: HWND-targeted Windows input is unavailable.');
+        if (input.kind === 'click') {
+            await execFileAsync('powershell.exe', [
+                '-NoProfile', '-NonInteractive', '-Command', WINDOWS_TARGETED_CLICK_SCRIPT,
+                surface.hwnd, String(surface.processId), String(input.x), String(input.y), input.button,
+            ], { windowsHide: true, timeout: 2_000, maxBuffer: 64 * 1024 });
+        } else if (input.kind === 'type') {
+            await execFileAsync('powershell.exe', [
+                '-NoProfile', '-NonInteractive', '-Command', WINDOWS_TARGETED_TYPE_SCRIPT,
+                surface.hwnd, String(surface.processId), input.text,
+            ], { windowsHide: true, timeout: 2_000, maxBuffer: 64 * 1024 });
+        } else if (input.kind === 'scroll') {
+            await execFileAsync('powershell.exe', [
+                '-NoProfile', '-NonInteractive', '-Command', WINDOWS_TARGETED_SCROLL_SCRIPT,
+                surface.hwnd, String(surface.processId), String(input.dx), String(input.dy),
+            ], { windowsHide: true, timeout: 2_000, maxBuffer: 64 * 1024 });
+        }
     },
 });
