@@ -70,4 +70,114 @@ describe('Cowork remote broker safety boundaries', () => {
       });
     },
   );
+
+  it('revokes lease and fails closed with PAS-FAIT on post-issue exceptions (R3-02)', async () => {
+    const revoked: Array<{ leaseId: string; reason?: string }> = [];
+    const audit: Array<Record<string, unknown>> = [];
+    const invoke = createCoworkInvocationBroker({
+      broker: {
+        async issue() { return { ok: true as const, leaseId: 'lease-fault-1' }; },
+        async wait() { throw new Error('Uncaught broker transport failure'); },
+        async revoke(leaseId, _userId, reason) { revoked.push({ leaseId, reason }); },
+      },
+      audit: (event) => { audit.push(event); },
+      userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-fault',
+      capability: 'input_action', action: { action: 'click', x: 10, y: 10 },
+    });
+
+    const result = await invoke();
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'cowork_not_done', message: 'PAS-FAIT' },
+    });
+    expect(revoked).toEqual([{ leaseId: 'lease-fault-1', reason: 'fault' }]);
+    expect(audit).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'lease_issued', leaseId: 'lease-fault-1' }),
+      expect.objectContaining({ kind: 'lease_result', leaseId: 'lease-fault-1', outcome: 'PAS-FAIT', reason: 'fault', settled: 'unverified' }),
+    ]));
+  });
+
+  it('propagates controller Chat Stop AbortSignal to revoke lease and audit stop_controller (R3-01)', async () => {
+    const revoked: Array<{ leaseId: string; reason?: string }> = [];
+    const audit: Array<Record<string, unknown>> = [];
+    const controller = new AbortController();
+    const invoke = createCoworkInvocationBroker({
+      broker: {
+        async issue() { return { ok: true as const, leaseId: 'lease-stop-1' }; },
+        async wait(_leaseId, _timeoutMs, signal) {
+          if (signal?.aborted) return { outcome: 'PAS-FAIT', reason: 'stop_controller', settled: 'attested' };
+          return new Promise((resolve) => {
+            signal?.addEventListener('abort', () => {
+              resolve({ outcome: 'PAS-FAIT', reason: 'stop_controller', settled: 'attested' });
+            });
+          });
+        },
+        async revoke(leaseId, _userId, reason) { revoked.push({ leaseId, reason }); },
+      },
+      audit: (event) => { audit.push(event); },
+      userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-stop',
+      capability: 'input_action', action: { action: 'type', text: 'hello' },
+      signal: controller.signal,
+    });
+
+    const promise = invoke();
+    controller.abort();
+    const result = await promise;
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'cowork_not_done', message: 'PAS-FAIT' },
+    });
+    expect(revoked).toEqual([{ leaseId: 'lease-stop-1', reason: 'stop_controller' }]);
+    expect(audit).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'lease_result', leaseId: 'lease-stop-1', outcome: 'PAS-FAIT', reason: 'stop_controller', settled: 'attested' }),
+    ]));
+  });
+
+  it('records SOL-01 settled classifications accurately in audit (attested, not_started, unverified)', async () => {
+    const audit: Array<Record<string, unknown>> = [];
+
+    // Attested FAIT
+    await createCoworkInvocationBroker({
+      broker: {
+        async issue() { return { ok: true as const, leaseId: 'lease-attested' }; },
+        async wait() { return { outcome: 'FAIT', result: { ok: true }, settled: 'attested' }; },
+        async revoke() {},
+      },
+      audit: (event) => { audit.push(event); },
+      userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-attested',
+      capability: 'screen_capture', action: {},
+    })();
+
+    // Not started
+    await createCoworkInvocationBroker({
+      broker: {
+        async issue() { return { ok: false as const }; },
+        async wait() { return { outcome: 'PAS-FAIT', settled: 'not_started', reason: 'not_issuable' }; },
+        async revoke() {},
+      },
+      audit: (event) => { audit.push(event); },
+      userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-not-started',
+      capability: 'screen_capture', action: {},
+    })();
+
+    // Unverified quiescence timeout
+    await createCoworkInvocationBroker({
+      broker: {
+        async issue() { return { ok: true as const, leaseId: 'lease-unverified' }; },
+        async wait() { return { outcome: 'PAS-FAIT', settled: 'unverified', reason: 'quiescence_unconfirmed' }; },
+        async revoke() {},
+      },
+      audit: (event) => { audit.push(event); },
+      userId: 'user', workspaceId: 'workspace', sessionId: 'session', targetDeviceId: 'device', toolCallId: 'call-unverified',
+      capability: 'input_action', action: { action: 'click', x: 5, y: 5 },
+    })();
+
+    expect(audit).toEqual(expect.arrayContaining([
+      expect.objectContaining({ toolCallId: 'call-attested', kind: 'lease_result', outcome: 'FAIT', settled: 'attested' }),
+      expect.objectContaining({ toolCallId: 'call-not-started', kind: 'lease_denied', outcome: 'PAS-FAIT', settled: 'not_started', reason: 'not_issuable' }),
+      expect.objectContaining({ toolCallId: 'call-unverified', kind: 'lease_result', outcome: 'PAS-FAIT', settled: 'unverified', reason: 'quiescence_unconfirmed' }),
+    ]));
+  });
 });
+
