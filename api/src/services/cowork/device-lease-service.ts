@@ -440,6 +440,9 @@ export async function completeLease(input: {
   )) return { ok: false, reason: 'invalid_signature' };
 
   const now = new Date();
+  if (lease.status === 'revoked' && input.outcome === 'PAS-FAIT') {
+    return { ok: true, lease: toLease(lease) };
+  }
   const status = input.outcome === 'FAIT' ? 'consumed' : 'revoked';
   const completedScope = { ...scope, ...(input.result ? { result: input.result, resultDigest } : {}) };
   const [completed] = await db.update(coworkDeviceLeases).set({ status, consumedAt: now, scope: completedScope }).where(and(
@@ -459,7 +462,22 @@ export async function completeLease(input: {
 }
 
 /** Atomic lazy expiry is the fallback for an offline or malformed device result. */
-export type LeaseOutcome = { outcome: 'FAIT'; result: Record<string, unknown> } | { outcome: 'PAS-FAIT' };
+export type LeaseOutcome =
+  | { outcome: 'FAIT'; result: Record<string, unknown>; settled?: 'attested' }
+  | { outcome: 'PAS-FAIT'; settled?: 'attested' | 'unverified' | 'not_started'; reason?: string };
+
+export async function reapExecutingLeases(quiescenceBoundMs = 5_000): Promise<number> {
+  const cutoff = new Date(Date.now() - quiescenceBoundMs).toISOString();
+  const reaped = await db.update(coworkDeviceLeases)
+    .set({ status: 'revoked' })
+    .where(and(
+      eq(coworkDeviceLeases.status, 'executing'),
+      sql`${coworkDeviceLeases.scope} ? 'cancellationRequestedAt'`,
+      sql`(${coworkDeviceLeases.scope}->>'cancellationRequestedAt') <= ${cutoff}`,
+    ))
+    .returning();
+  return reaped.length;
+}
 
 export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | null> {
   const now = new Date();
@@ -470,12 +488,22 @@ export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | 
   ));
   const [lease] = await db.select({ status: coworkDeviceLeases.status, scope: coworkDeviceLeases.scope }).from(coworkDeviceLeases)
     .where(eq(coworkDeviceLeases.id, leaseId)).limit(1);
-  if (!lease) return { outcome: 'PAS-FAIT' };
+  if (!lease) return { outcome: 'PAS-FAIT', settled: 'not_started', reason: 'not_found' };
+  const scope = lease.scope as LeaseScope | null;
   if (lease.status === 'consumed') {
-    const result = (lease.scope as LeaseScope | null)?.result;
-    return result ? { outcome: 'FAIT', result } : { outcome: 'PAS-FAIT' };
+    const result = scope?.result;
+    return result ? { outcome: 'FAIT', result, settled: 'attested' } : { outcome: 'PAS-FAIT', settled: 'unverified', reason: 'malformed' };
   }
-  return ['expired', 'revoked'].includes(lease.status) ? { outcome: 'PAS-FAIT' } : null;
+  if (lease.status === 'expired') {
+    return { outcome: 'PAS-FAIT', settled: 'not_started', reason: 'expired' };
+  }
+  if (lease.status === 'revoked') {
+    if (scope?.cancellationRequestedAt) {
+      return { outcome: 'PAS-FAIT', settled: 'attested', reason: 'stop_controller' };
+    }
+    return { outcome: 'PAS-FAIT', settled: 'not_started', reason: 'revoked' };
+  }
+  return null;
 }
 
 /** Lot 4 will call this primitive before any external screen-side effect. */
