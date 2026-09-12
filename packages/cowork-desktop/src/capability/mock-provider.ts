@@ -11,8 +11,7 @@ export type MockProviderCall =
     | { kind: 'captureScreen'; options?: CaptureOptions }
     | { kind: 'mouseClick'; x: number; y: number; button: MouseButton }
     | { kind: 'type'; text: string }
-    | { kind: 'scroll'; dx: number; dy: number }
-    | { kind: 'key'; combo: string };
+    | { kind: 'scroll'; dx: number; dy: number };
 
 export interface MockCapabilityProvider extends DesktopCapabilityProvider {
     /** Ordered log of every capability call, for assertions. */
@@ -70,12 +69,6 @@ export const createMockCapabilityProvider = (
             await guard.recheckAfterNativeAwait();
             guard.throwIfAborted();
             calls.push({ kind: 'scroll', dx, dy });
-            guard.throwIfAborted();
-        },
-        async key(combo: string, guard: NativeActuationGuard): Promise<void> {
-            await guard.recheckAfterNativeAwait();
-            guard.throwIfAborted();
-            calls.push({ kind: 'key', combo });
             guard.throwIfAborted();
         },
     };
