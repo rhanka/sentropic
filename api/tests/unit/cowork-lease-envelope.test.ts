@@ -28,4 +28,27 @@ describe('Cowork server-signed lease envelope', () => {
     expect(verifyLeaseEnvelope({ ...fields, nonce: 'other-nonce' }, { kid: 'oauth-key', mac }, publicJwk)).toBe(false);
     expect(verifyLeaseEnvelope({ ...fields, expiry: '2030-01-02T00:00:00.000Z' }, { kid: 'oauth-key', mac }, publicJwk)).toBe(false);
   });
+
+  it('projects delivery scope to closed allowlist only, dropping invocation, result, metadata, or extra fields', async () => {
+    const { projectDeliveryScope } = await import('../../src/services/cowork/device-lease-service');
+    const scopeWithExtras = {
+      capability: 'input_action' as const,
+      serverEnvelope: { kid: 'k1', mac: 'm1' },
+      action: { action: 'type', text: 'hello' },
+      invocation: { principalId: 'u1', workspaceId: 'w1', sessionId: 's1', targetDeviceId: 'd1', capability: 'input_action', actionHash: 'h1' },
+      metadata: { secret: 'do-not-leak' },
+      result: { ok: true },
+      cancellationRequestedAt: '2026-09-12T00:00:00.000Z',
+    };
+    const projected = projectDeliveryScope(scopeWithExtras);
+    expect(projected).toEqual({
+      capability: 'input_action',
+      serverEnvelope: { kid: 'k1', mac: 'm1' },
+      action: { action: 'type', text: 'hello' },
+    });
+    expect(projected).not.toHaveProperty('invocation');
+    expect(projected).not.toHaveProperty('metadata');
+    expect(projected).not.toHaveProperty('result');
+    expect(projected).not.toHaveProperty('cancellationRequestedAt');
+  });
 });

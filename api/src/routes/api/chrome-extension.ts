@@ -17,6 +17,7 @@ import {
   issueLease,
   isLeaseCancellationRequested,
   listIssuedLeases,
+  projectDeliveryScope,
   revokeLease,
 } from '../../services/cowork/device-lease-service';
 import { verifyCoworkDeliveryProof } from '../../services/cowork/device-identity';
@@ -300,7 +301,7 @@ chromeExtensionRouter.get('/cowork-devices/:deviceId/leases', async (c) => {
   return c.json({ leases: leases.map((lease) => ({
     leaseId: lease.id,
     nonce: lease.nonce,
-    scope: lease.scope,
+    scope: projectDeliveryScope(lease.scope),
     expiresAt: lease.expiresAt,
   })) });
 });
