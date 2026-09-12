@@ -473,6 +473,7 @@ export type LeaseOutcome =
 
 export async function reapExecutingLeases(quiescenceBoundMs = 5_000): Promise<number> {
   const cutoff = new Date(Date.now() - quiescenceBoundMs).toISOString();
+  const now = new Date();
   const reaped = await db.update(coworkDeviceLeases)
     .set({
       status: 'revoked',
@@ -480,8 +481,10 @@ export async function reapExecutingLeases(quiescenceBoundMs = 5_000): Promise<nu
     })
     .where(and(
       eq(coworkDeviceLeases.status, 'executing'),
-      sql`${coworkDeviceLeases.scope} ? 'cancellationRequestedAt'`,
-      sql`(${coworkDeviceLeases.scope}->>'cancellationRequestedAt') <= ${cutoff}`,
+      sql`(
+        (${coworkDeviceLeases.scope} ? 'cancellationRequestedAt' AND (${coworkDeviceLeases.scope}->>'cancellationRequestedAt') <= ${cutoff})
+        OR ${coworkDeviceLeases.expiresAt} <= ${now}
+      )`,
     ))
     .returning();
   return reaped.length;
@@ -494,6 +497,7 @@ export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | 
     inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES),
     lte(coworkDeviceLeases.expiresAt, now),
   ));
+  await reapExecutingLeases();
   const [lease] = await db.select({
     status: coworkDeviceLeases.status,
     scope: coworkDeviceLeases.scope,

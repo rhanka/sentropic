@@ -80,6 +80,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
 - `resolved`: BR41c-EX5 authorizes the branch-local amendment to `api/drizzle/0041_cowork_device_identity_lease.sql` so the durable lease-state constraint and its partial idempotency index include the already-implemented `executing` state; impact is correctness of the migrated start transition and rollback is reverting the un-deployed branch migration before release.
 - `resolved`: BR-COWORK-EX6 authorizes `spec/SPEC_F3_MVP_PERMISSIONS_STOP_JOURNAL.md`, `spec/SPEC_EVOL_COWORK_DEVICE_IDENTITY_LEASE.md`, and `spec/SPEC_STUDY_COWORK_COMPUTER_USE_BENCHMARK.md` for F3 MVP permissions, stop/fail-closed, and journal contracts grounded on the ratified conditions and the four independent adversarial dossiers.
 - `resolved`: Architect and owner ratified the Feature 3 narrow Option-B surface. The remote execution path is now attached only to the isolated benign-kiosk VM MVP; it is not a general computer-use surface.
+- `resolved`: Cycle 5 remediation closes NEW-1 (reaper unverified quiescence_unconfirmed finalization), NEW-2 / J-3 (cross-surface planted-marker proof and positive controls), and NEW-3 (reap stale/faulted executing rows past fence/expiry to prevent device/account deletion deadlock while preserving within-fence fail-closed). NEW-4 (cross-process Stop relying on 25s TTL expiry) is an accepted MVP residual for single-instance isolated-VM.
 
 - `resolved`: I1–I5 are published by `docs/governance/surface-invariants.md` in the separate h2a governance repository (h2a PR #152). This checkout cites that cross-repository provenance and does not require the file locally. `origin/feat/d6a-agents-surface-fusion` (#502) is a secondary pointer only.
 - `attention`: `make test-api-endpoints SCOPE=tests/api/auth-device-code.spec.ts ENV=test-cowork-connector` could not run because the API service is absent after the isolated stack bootstrap (the compose API image build is unavailable in this checkout). The new scoped API suites remain pending on a runnable test stack.
@@ -200,9 +201,9 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Cycle 4 J-3: planted-marker witness suite proving sensitive text/scope/capture markers are absent from audit and logs while positive controls are preserved.
   - [x] Cycle 4 J-4: closed audit reason and settled enums on CoworkAuditEvent.
   - [x] Cycle 4 P-x: deleted unreachable key() chord primitive from desktop capability interface and providers.
-  - [x] Cycle 5 NEW-1: record settled: 'unverified', reason: 'quiescence_unconfirmed' on reaper-forced unquiesced executing rows; retain settled: 'attested', reason: 'stop_controller' exclusively when device-attested.
+- [x] Cycle 5 NEW-1: record settled: 'unverified', reason: 'quiescence_unconfirmed' on reaper-forced unquiesced executing rows; retain settled: 'attested', reason: 'stop_controller' exclusively when device-attested.
   - [x] Cycle 5 NEW-2 / J-3: add real cross-surface planted-marker test with negative witness invariants across delivery frame, capture result ingestion, and audit line + positive controls.
-  - [ ] Cycle 5 NEW-3: reap stale/faulted executing rows past fence/expiry so faulted rows never permanently block deletion while maintaining fail-closed fence.
+  - [x] Cycle 5 NEW-3: reap stale/faulted executing rows past fence/expiry so faulted rows never permanently block deletion while maintaining fail-closed fence.
   - [x] Cycle 5 NEW-4 (ACCEPTED residual): cross-process/client-disconnect Stop relies on 25s lease-TTL expiry for single-instance isolated-VM MVP.
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
 

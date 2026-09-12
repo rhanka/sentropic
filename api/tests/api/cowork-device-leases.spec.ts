@@ -351,4 +351,27 @@ describe('Cowork device authorization leases', () => {
     expect(await db.select().from(coworkDeviceLeases).where(eq(coworkDeviceLeases.deviceId, device.deviceId))).toEqual([]);
     expect(await db.select().from(coworkDevices).where(eq(coworkDevices.id, device.deviceId))).toEqual([]);
   });
+
+  it('blocks device deletion while executing within fence, but succeeds once fence/expiry elapses (NEW-3)', async () => {
+    const device = await seedCoworkDevice({ userId: user.id, presence: 'active' });
+    const activeExecutingId = crypto.randomUUID();
+    // 1. Within-fence executing lease blocks deletion (409 execution_in_progress)
+    await db.insert(coworkDeviceLeases).values({
+      id: activeExecutingId, deviceId: device.deviceId, userId: user.id, turnRef: 'exec-within-fence',
+      nonce: 'exec-nonce-1', scope: { cancellationRequestedAt: new Date().toISOString() }, status: 'executing',
+      issuedAt: new Date(), expiresAt: new Date(Date.now() + 25_000),
+    });
+    await expect(deleteCoworkDeviceWithLeaseRevocation(user.id, device.deviceId)).resolves.toEqual({
+      ok: false, reason: 'execution_in_progress',
+    });
+
+    // 2. Once fence expires (cancellationRequestedAt older than 5s), stale executing lease is reaped and deletion succeeds
+    const stalePastFence = new Date(Date.now() - 6_000).toISOString();
+    await db.update(coworkDeviceLeases).set({
+      scope: { cancellationRequestedAt: stalePastFence },
+    }).where(eq(coworkDeviceLeases.id, activeExecutingId));
+
+    await expect(deleteCoworkDeviceWithLeaseRevocation(user.id, device.deviceId)).resolves.toEqual({ ok: true });
+    expect(await db.select().from(coworkDevices).where(eq(coworkDevices.id, device.deviceId))).toEqual([]);
+  });
 });
