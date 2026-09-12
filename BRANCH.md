@@ -18,6 +18,9 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `spec/SPEC_EVOL_COWORK_CONNECTOR_HOST_MVP.md`
+  - `spec/SPEC_F3_MVP_PERMISSIONS_STOP_JOURNAL.md`
+  - `spec/SPEC_EVOL_COWORK_DEVICE_IDENTITY_LEASE.md`
+  - `spec/SPEC_STUDY_COWORK_COMPUTER_USE_BENCHMARK.md`
   - `packages/cowork-desktop/src/**`
   - `packages/cowork-desktop/tests/**`
   - `packages/cowork-desktop/packaging/**`
@@ -75,7 +78,9 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
 - `resolved`: BR-COWORK-EX3 authorizes `api/src/routes/api/chrome-extension.ts` solely to keep the published Cowork presence transport while routing `desktop_cowork` to durable ownership-checked storage; browser tab behavior is unchanged and rollback is the isolated desktop route branch.
 - `resolved`: BR-COWORK-EX4 authorizes `api/src/routes/api/admin.ts` and `api/src/routes/api/me.ts` solely to terminalize outstanding Cowork leases immediately before their existing user-delete cascades; impact is limited to #492 revoke-before-cascade and rollback is removal of those terminalization statements.
 - `resolved`: BR41c-EX5 authorizes the branch-local amendment to `api/drizzle/0041_cowork_device_identity_lease.sql` so the durable lease-state constraint and its partial idempotency index include the already-implemented `executing` state; impact is correctness of the migrated start transition and rollback is reverting the un-deployed branch migration before release.
+- `resolved`: BR-COWORK-EX6 authorizes `spec/SPEC_F3_MVP_PERMISSIONS_STOP_JOURNAL.md`, `spec/SPEC_EVOL_COWORK_DEVICE_IDENTITY_LEASE.md`, and `spec/SPEC_STUDY_COWORK_COMPUTER_USE_BENCHMARK.md` for F3 MVP permissions, stop/fail-closed, and journal contracts grounded on the ratified conditions and the four independent adversarial dossiers.
 - `resolved`: Architect and owner ratified the Feature 3 narrow Option-B surface. The remote execution path is now attached only to the isolated benign-kiosk VM MVP; it is not a general computer-use surface.
+
 - `resolved`: I1–I5 are published by `docs/governance/surface-invariants.md` in the separate h2a governance repository (h2a PR #152). This checkout cites that cross-repository provenance and does not require the file locally. `origin/feat/d6a-agents-surface-fusion` (#502) is a secondary pointer only.
 - `attention`: `make test-api-endpoints SCOPE=tests/api/auth-device-code.spec.ts ENV=test-cowork-connector` could not run because the API service is absent after the isolated stack bootstrap (the compose API image build is unavailable in this checkout). The new scoped API suites remain pending on a runnable test stack.
 - `deferred`: production/unattended takeover and BR-41c/d/e hardening are explicitly outside the same-day acceptance line.
@@ -186,7 +191,17 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Cycle 3 F-03: canonicalize one exact click/type/scroll schema at issuance and execution, reject malformed action shapes, and bind FAIT to the canonical action digest.
   - [x] Cycle 3 N-01: retain a canonical System32 Microsoft-signed Notepad identity and measured HWND client area in consent; fail closed on spoofed identity/out-of-bounds coordinates and use the Windows HWND-targeted click primitive (Windows UAT still required).
   - [x] Cycle 3 SOL-01: after a 200 start claim, propagate cancellation into every native operation, wait for provider quiescence before terminal PAS-FAIT, and fence late FAIT at the durable cancellation marker; Stop, server-timeout, and lease-expiry races are covered cross-platform (native Windows UAT still required).
+  - [x] Cycle 4 SOL-01: chunked abortable native actuation (<=250ms), Stop quiescence barrier, structured settlement outcome (attested/unverified/not_started), reaper for unquiesced executing leases, and late device PAS-FAIT acceptance.
+  - [x] Cycle 4 N-01: HWND-targeted click/type/scroll delivery guard rechecked before/after execution with fail-closed CapabilityUnavailableError on drift or missing targetedInput primitive (global-focus fallback deleted).
+  - [x] Cycle 4 R3-01: controller Chat Stop AbortSignal threaded into catalog tool invocation context and broker closure to immediately revoke/fence active leases.
+  - [x] Cycle 4 R3-02: post-issue exception-safe broker lifecycle guaranteeing uncaught errors revoke leases and report PAS-FAIT without leaving orphan execution authority.
+  - [x] Cycle 4 J-1: delivery frame (SSE & poll) closed projection emitting {leaseId, nonce, expiresAt, scope:{capability, serverEnvelope, action}} without verbatim scope.
+  - [x] Cycle 4 J-2: closed validCaptureResult key set (ok, screen, width, height, image only) rejecting unexpected metadata.
+  - [x] Cycle 4 J-3: planted-marker witness suite proving sensitive text/scope/capture markers are absent from audit and logs while positive controls are preserved.
+  - [x] Cycle 4 J-4: closed audit reason and settled enums on CoworkAuditEvent.
+  - [x] Cycle 4 P-x: deleted unreachable key() chord primitive from desktop capability interface and providers.
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
+
 - [ ] **Lot 5 — Integrated validation and Windows OVH UAT**
   - [ ] Run all Lot 1–4 typecheck/lint/tests plus `make test-api ENV=test-cowork-connector`; document any accepted AI flaky signature.
   - [ ] Build/package through existing Make targets with `ENV=test-cowork-connector` last; record exact artifact SHA-256 and branch HEAD.
