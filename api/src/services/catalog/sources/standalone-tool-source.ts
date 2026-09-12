@@ -56,6 +56,7 @@ export type CatalogToolInvocationContext = {
   sessionPrincipalSub: string;
   sessionId: string;
   workspaceId: string;
+  abortSignal?: AbortSignal;
 };
 
 export type StandaloneToolHandler = (

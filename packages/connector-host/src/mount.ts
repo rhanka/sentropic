@@ -23,7 +23,7 @@ export type ConnectorHostRequest = {
   input: unknown;
   hints?: Record<string, unknown>;
   /** Trusted execution metadata, never parsed from model tool arguments. */
-  execution?: { toolCallId: string; sessionId: string };
+  execution?: { toolCallId: string; sessionId: string; abortSignal?: AbortSignal };
 };
 
 export type ConnectorHostExposurePolicy = {
