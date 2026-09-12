@@ -68,38 +68,6 @@ type NutModule = {
     leftClick?: () => Promise<unknown>;
 };
 
-/** Resolve a `+`-separated combo (e.g. "Ctrl+Shift+S") to nut.js Key constants. */
-const resolveKeyCombo = (combo: string, Key: Record<string, unknown>): unknown[] => {
-    const aliases: Record<string, string> = {
-        ctrl: 'LeftControl',
-        control: 'LeftControl',
-        cmd: 'LeftSuper',
-        command: 'LeftSuper',
-        win: 'LeftSuper',
-        meta: 'LeftSuper',
-        super: 'LeftSuper',
-        alt: 'LeftAlt',
-        option: 'LeftAlt',
-        shift: 'LeftShift',
-        esc: 'Escape',
-        return: 'Enter',
-        del: 'Delete',
-    };
-    const tokens = combo
-        .split('+')
-        .map((t) => t.trim())
-        .filter(Boolean);
-    return tokens.map((token) => {
-        const lower = token.toLowerCase();
-        const nutName = aliases[lower] ?? token.charAt(0).toUpperCase() + token.slice(1);
-        const resolved = Key[nutName];
-        if (resolved === undefined) {
-            throw new CapabilityUnavailableError('input_action.key', `unknown key "${token}"`);
-        }
-        return resolved;
-    });
-};
-
 export interface WindowsProviderOptions {
     /**
      * Maps a bare native specifier to its import target. Default: identity (bare
@@ -185,14 +153,6 @@ export const createWindowsCapabilityProvider = (
             else if (dy < 0 && mouseFacade.scrollUp) await awaitNativeQuiescence(guard, () => mouseFacade.scrollUp!(-dy));
             if (dx > 0 && mouseFacade.scrollRight) await awaitNativeQuiescence(guard, () => mouseFacade.scrollRight!(dx));
             else if (dx < 0 && mouseFacade.scrollLeft) await awaitNativeQuiescence(guard, () => mouseFacade.scrollLeft!(-dx));
-        },
-
-        async key(combo: string, guard: NativeActuationGuard): Promise<void> {
-            const nut = await loadOptional<NutModule>('@nut-tree-fork/nut-js', 'input_action');
-            await guard.recheckAfterNativeAwait();
-            const keys = resolveKeyCombo(combo, nut.Key);
-            await awaitNativeQuiescence(guard, () => nut.keyboard.pressKey(...keys));
-            await awaitNativeQuiescence(guard, () => nut.keyboard.releaseKey(...keys.slice().reverse()));
         },
     };
 };

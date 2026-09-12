@@ -43,4 +43,10 @@ describe('Windows literal text path', () => {
             delete (globalThis as typeof globalThis & { __coworkLiteralCalls?: string[] }).__coworkLiteralCalls;
         }
     });
+
+    it('exposes no key chord primitive on the provider interface and fails action:key at schema', () => {
+        const provider = createWindowsCapabilityProvider();
+        expect('key' in provider).toBe(false);
+        expect((provider as Record<string, unknown>).key).toBeUndefined();
+    });
 });

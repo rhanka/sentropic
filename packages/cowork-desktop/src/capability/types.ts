@@ -81,12 +81,6 @@ export interface DesktopCapabilityProvider {
 
     /** Scroll by a relative delta (positive dy = down, positive dx = right). */
     scroll(dx: number, dy: number, guard: NativeActuationGuard): Promise<void>;
-
-    /**
-     * Press a key combination, e.g. `"Ctrl+C"`, `"Enter"`, `"Alt+Tab"`.
-     * Modifiers and the final key are `+`-separated.
-     */
-    key(combo: string, guard: NativeActuationGuard): Promise<void>;
 }
 
 /**
