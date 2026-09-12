@@ -444,7 +444,12 @@ export async function completeLease(input: {
     return { ok: true, lease: toLease(lease) };
   }
   const status = input.outcome === 'FAIT' ? 'consumed' : 'revoked';
-  const completedScope = { ...scope, ...(input.result ? { result: input.result, resultDigest } : {}) };
+  const completedScope = {
+    ...scope,
+    ...(input.result ? { result: input.result, resultDigest } : {}),
+    deviceSettled: true,
+    deviceSettledAt: now.toISOString(),
+  };
   const [completed] = await db.update(coworkDeviceLeases).set({ status, consumedAt: now, scope: completedScope }).where(and(
     eq(coworkDeviceLeases.id, input.leaseId),
     eq(coworkDeviceLeases.deviceId, input.deviceId),
@@ -469,7 +474,10 @@ export type LeaseOutcome =
 export async function reapExecutingLeases(quiescenceBoundMs = 5_000): Promise<number> {
   const cutoff = new Date(Date.now() - quiescenceBoundMs).toISOString();
   const reaped = await db.update(coworkDeviceLeases)
-    .set({ status: 'revoked' })
+    .set({
+      status: 'revoked',
+      scope: sql`jsonb_set(COALESCE(${coworkDeviceLeases.scope}, '{}'::jsonb), '{reaped}', 'true'::jsonb, true)`,
+    })
     .where(and(
       eq(coworkDeviceLeases.status, 'executing'),
       sql`${coworkDeviceLeases.scope} ? 'cancellationRequestedAt'`,
@@ -486,10 +494,19 @@ export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | 
     inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES),
     lte(coworkDeviceLeases.expiresAt, now),
   ));
-  const [lease] = await db.select({ status: coworkDeviceLeases.status, scope: coworkDeviceLeases.scope }).from(coworkDeviceLeases)
+  const [lease] = await db.select({
+    status: coworkDeviceLeases.status,
+    scope: coworkDeviceLeases.scope,
+    consumedAt: coworkDeviceLeases.consumedAt,
+  }).from(coworkDeviceLeases)
     .where(eq(coworkDeviceLeases.id, leaseId)).limit(1);
   if (!lease) return { outcome: 'PAS-FAIT', settled: 'not_started', reason: 'not_found' };
-  const scope = lease.scope as LeaseScope | null;
+  const scope = lease.scope as (LeaseScope & {
+    cancellationReason?: string;
+    cancellationAcknowledgedAt?: string;
+    deviceSettled?: boolean;
+    reaped?: boolean;
+  }) | null;
   if (lease.status === 'consumed') {
     const result = scope?.result;
     return result ? { outcome: 'FAIT', result, settled: 'attested' } : { outcome: 'PAS-FAIT', settled: 'unverified', reason: 'malformed' };
@@ -498,8 +515,15 @@ export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | 
     return { outcome: 'PAS-FAIT', settled: 'not_started', reason: 'expired' };
   }
   if (lease.status === 'revoked') {
-    if (scope?.cancellationRequestedAt) {
-      return { outcome: 'PAS-FAIT', settled: 'attested', reason: 'stop_controller' };
+    if (scope?.reaped || (scope?.cancellationRequestedAt && !lease.consumedAt && !scope?.cancellationAcknowledgedAt && !scope?.deviceSettled)) {
+      return { outcome: 'PAS-FAIT', settled: 'unverified', reason: 'quiescence_unconfirmed' };
+    }
+    if (scope?.cancellationRequestedAt || scope?.deviceSettled || scope?.cancellationAcknowledgedAt) {
+      return {
+        outcome: 'PAS-FAIT',
+        settled: 'attested',
+        reason: scope?.cancellationReason === 'timeout' ? 'timeout' : 'stop_controller',
+      };
     }
     return { outcome: 'PAS-FAIT', settled: 'not_started', reason: 'revoked' };
   }
@@ -508,7 +532,6 @@ export async function readLeaseOutcome(leaseId: string): Promise<LeaseOutcome | 
 
 /** Lot 4 will call this primitive before any external screen-side effect. */
 export async function revokeLease(leaseId: string, reason: string, userId?: string): Promise<LeaseResult> {
-  void reason; // Audit persistence is intentionally deferred with Lot 4's result protocol.
   const where = userId
     ? and(eq(coworkDeviceLeases.id, leaseId), eq(coworkDeviceLeases.userId, userId), inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES))
     : and(eq(coworkDeviceLeases.id, leaseId), inArray(coworkDeviceLeases.status, REVOCABLE_LEASE_STATUSES));
@@ -518,7 +541,11 @@ export async function revokeLease(leaseId: string, reason: string, userId?: stri
     eq(coworkDeviceLeases.id, leaseId), ...(userId ? [eq(coworkDeviceLeases.userId, userId)] : []),
   )).limit(1);
   if (current?.status === 'executing') {
-    const scope = { ...(current.scope as LeaseScope), cancellationRequestedAt: new Date().toISOString() };
+    const scope = {
+      ...(current.scope as LeaseScope),
+      cancellationRequestedAt: new Date().toISOString(),
+      ...(reason ? { cancellationReason: reason } : {}),
+    };
     await db.update(coworkDeviceLeases).set({ scope }).where(and(
       eq(coworkDeviceLeases.id, leaseId), eq(coworkDeviceLeases.status, 'executing'),
       ...(userId ? [eq(coworkDeviceLeases.userId, userId)] : []),
