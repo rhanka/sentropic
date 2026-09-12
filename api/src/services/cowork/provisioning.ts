@@ -142,7 +142,9 @@ export async function listCoworkWorkspaceExposureCapabilities(input: {
 }): Promise<CoworkRemoteCapability[]> {
   const rows = await db.select({ capability: coworkDeviceExposureGrants.capability }).from(coworkDeviceExposureGrants)
     .innerJoin(coworkDevices, eq(coworkDevices.id, coworkDeviceExposureGrants.deviceId))
-    .where(and(eq(coworkDeviceExposureGrants.workspaceId, input.workspaceId), eq(coworkDevices.userId, input.userId), eq(coworkDevices.status, 'active'));
+    .where(and(eq(coworkDeviceExposureGrants.workspaceId, input.workspaceId), eq(coworkDevices.userId, input.userId), eq(coworkDevices.status, 'active')));
+
   return [...new Set(rows.map((row) => row.capability).filter((capability): capability is CoworkRemoteCapability =>
-    COWORK_REMOTE_CAPABILITIES.includes(capability as CoworkRemoteCapability)));
+    (COWORK_REMOTE_CAPABILITIES as readonly string[]).includes(capability)))];
 }
+
