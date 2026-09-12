@@ -78,7 +78,7 @@ export function coworkActionHash(action: Record<string, unknown> | undefined): s
 
 export const coworkResultDigest = (result: Record<string, unknown> | undefined): string => coworkActionHash(result);
 
-function validCaptureResult(result: unknown, action: unknown): result is Record<string, unknown> {
+export function validCaptureResult(result: unknown, action: unknown): result is Record<string, unknown> {
   if (!isCoworkScreenCaptureAction(action)) return false;
   if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
   const value = result as Record<string, unknown>;
@@ -92,7 +92,7 @@ function validCaptureResult(result: unknown, action: unknown): result is Record<
   return Buffer.from(encoded, 'base64').byteLength > 0 && Buffer.from(encoded, 'base64').byteLength <= 4 * 1024 * 1024;
 }
 
-function validInputResult(result: unknown, expectedAction: unknown): result is Record<string, unknown> {
+export function validInputResult(result: unknown, expectedAction: unknown): result is Record<string, unknown> {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
   const value = result as Record<string, unknown>;
   const action = parseCoworkInputAction(expectedAction);

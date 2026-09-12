@@ -201,7 +201,7 @@ Build the architect- and owner-ratified same-day closed-alpha vertical slice in 
   - [x] Cycle 4 J-4: closed audit reason and settled enums on CoworkAuditEvent.
   - [x] Cycle 4 P-x: deleted unreachable key() chord primitive from desktop capability interface and providers.
   - [x] Cycle 5 NEW-1: record settled: 'unverified', reason: 'quiescence_unconfirmed' on reaper-forced unquiesced executing rows; retain settled: 'attested', reason: 'stop_controller' exclusively when device-attested.
-  - [ ] Cycle 5 NEW-2 / J-3: add real cross-surface planted-marker test with negative witness invariants across delivery frame, capture result ingestion, and audit line + positive controls.
+  - [x] Cycle 5 NEW-2 / J-3: add real cross-surface planted-marker test with negative witness invariants across delivery frame, capture result ingestion, and audit line + positive controls.
   - [ ] Cycle 5 NEW-3: reap stale/faulted executing rows past fence/expiry so faulted rows never permanently block deletion while maintaining fail-closed fence.
   - [x] Cycle 5 NEW-4 (ACCEPTED residual): cross-process/client-disconnect Stop relies on 25s lease-TTL expiry for single-instance isolated-VM MVP.
   - [ ] Acceptance: re-run the independent codex-sol adversarial leg; do not claim CLEAR before that result.
