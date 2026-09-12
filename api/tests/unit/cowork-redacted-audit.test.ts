@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { COWORK_AUDIT_REASONS, redactCoworkAudit, type CoworkAuditEvent } from '../../src/services/cowork/redacted-audit';
 
+import { projectDeliveryScope, validCaptureResult } from '../../src/services/cowork/device-lease-service';
+
 describe('Cowork redacted audit', () => {
   it('emits ids and outcome only, never action content, pixels, or secrets', () => {
     const event = redactCoworkAudit({ kind: 'lease_result', toolCallId: 'call', leaseId: 'lease', targetDeviceId: 'device', capability: 'input_action', outcome: 'FAIT' });
@@ -10,12 +12,69 @@ describe('Cowork redacted audit', () => {
     expect(event).toEqual({ kind: 'lease_result', toolCallId: 'call', leaseId: 'lease', targetDeviceId: 'device', capability: 'input_action', outcome: 'FAIT' });
   });
 
-  it('planted-marker test: drops sensitive witness markers while preserving allowlisted fields (J-3, J-4)', () => {
+  it('cross-surface planted-marker test: asserts witness absence across delivery frame, capture ingestion, and audit lines (NEW-2 / J-3 / §3.5)', () => {
     const M_TEXT = 'WITNESS-TEXT-f89a2b7c';
     const M_SCOPE = 'WITNESS-SCOPE-9e41d83a';
     const M_CAPTURE = 'FAKE-SECRET-IMAGE-113355';
 
-    const rawEvent = {
+    // Surface 1: Delivery SSE / Poll Frame projection (projectDeliveryScope)
+    const rawDeliveryScope = {
+      capability: 'input_action' as const,
+      serverEnvelope: { kid: 'oauth-key-1', mac: 'mac-proof-1' },
+      action: { action: 'type', text: M_TEXT },
+      // Planted witness markers in non-delivery fields
+      invocation: {
+        principalId: 'user-1', workspaceId: 'ws-1', sessionId: 'sess-1',
+        targetDeviceId: 'dev-1', capability: 'input_action', actionHash: 'hash-1',
+        secretNote: M_SCOPE,
+      },
+      metadata: { secret: M_SCOPE },
+      result: { secret: M_CAPTURE },
+      cancellationRequestedAt: '2026-09-12T00:00:00.000Z',
+    };
+
+    const deliveryFrame = projectDeliveryScope(rawDeliveryScope);
+    expect(deliveryFrame).not.toBeNull();
+    const serializedDelivery = JSON.stringify(deliveryFrame);
+
+    // Negative invariants: M_SCOPE and M_CAPTURE must NOT be present in delivery frame
+    expect(serializedDelivery).not.toContain(M_SCOPE);
+    expect(serializedDelivery).not.toContain(M_CAPTURE);
+    expect(deliveryFrame).not.toHaveProperty('invocation');
+    expect(deliveryFrame).not.toHaveProperty('metadata');
+    expect(deliveryFrame).not.toHaveProperty('result');
+    expect(deliveryFrame).not.toHaveProperty('cancellationRequestedAt');
+
+    // Positive controls: admitted field action.text MUST contain M_TEXT; frame key count == allowlist count (3)
+    expect(deliveryFrame!.action).toEqual({ action: 'type', text: M_TEXT });
+    expect(Object.keys(deliveryFrame!).sort()).toEqual(['action', 'capability', 'serverEnvelope']);
+    expect(Object.keys(deliveryFrame!).length).toBe(3);
+
+    // Surface 2: Device Capture Result Ingestion (validCaptureResult)
+    const validPng = 'data:image/png;base64,QUJD';
+    const smuggledMetadataCapture = {
+      ok: true, screen: 0, width: 1920, height: 1080, image: validPng,
+      metadata: { secret: M_CAPTURE },
+    };
+    const smuggledSecretFieldCapture = {
+      ok: true, screen: 0, width: 1920, height: 1080, image: validPng,
+      secret: M_CAPTURE,
+    };
+    const wellFormedCapture = {
+      ok: true, screen: 0, width: 1920, height: 1080, image: validPng,
+    };
+
+    // Negative invariant: smuggled metadata/secret is rejected before ingestion/persistence
+    expect(validCaptureResult(smuggledMetadataCapture, { action: 'screen_capture' })).toBe(false);
+    expect(validCaptureResult(smuggledSecretFieldCapture, { action: 'screen_capture' })).toBe(false);
+
+    // Positive controls: well-formed capture is accepted; allowed key count == exactly 5
+    expect(validCaptureResult(wellFormedCapture, { action: 'screen_capture' })).toBe(true);
+    expect(Object.keys(wellFormedCapture).sort()).toEqual(['height', 'image', 'ok', 'screen', 'width']);
+    expect(Object.keys(wellFormedCapture).length).toBe(5);
+
+    // Surface 3: Redacted Audit Line projection (redactCoworkAudit)
+    const rawAuditEvent = {
       kind: 'lease_result' as const,
       toolCallId: 'call-planted-1',
       leaseId: 'lease-planted-1',
@@ -24,23 +83,24 @@ describe('Cowork redacted audit', () => {
       outcome: 'PAS-FAIT' as const,
       reason: 'quiescence_unconfirmed' as const,
       settled: 'unverified' as const,
-      // Injected witness secrets
+      // Planted witness markers across candidate leak paths
       text: M_TEXT,
-      metadata: { note: M_SCOPE },
-      secret: M_CAPTURE,
       action: { type: 'type', text: M_TEXT },
+      scope: { metadata: { note: M_SCOPE } },
+      result: { secret: M_CAPTURE },
+      secret: M_CAPTURE,
     };
 
-    const redacted = redactCoworkAudit(rawEvent as unknown as CoworkAuditEvent);
-    const serialized = JSON.stringify(redacted);
+    const redactedAudit = redactCoworkAudit(rawAuditEvent as unknown as CoworkAuditEvent);
+    const serializedAudit = JSON.stringify(redactedAudit);
 
-    // Negative invariants: witness markers MUST NOT be present
-    expect(serialized).not.toContain(M_TEXT);
-    expect(serialized).not.toContain(M_SCOPE);
-    expect(serialized).not.toContain(M_CAPTURE);
+    // Negative invariants: none of M_TEXT, M_SCOPE, M_CAPTURE present in audit output
+    expect(serializedAudit).not.toContain(M_TEXT);
+    expect(serializedAudit).not.toContain(M_SCOPE);
+    expect(serializedAudit).not.toContain(M_CAPTURE);
 
-    // Positive controls: allowlisted keys and benign identifiers MUST be present
-    expect(redacted).toEqual({
+    // Positive controls: benign identifiers present; emitted key count == allowlist count (8)
+    expect(redactedAudit).toEqual({
       kind: 'lease_result',
       toolCallId: 'call-planted-1',
       leaseId: 'lease-planted-1',
@@ -50,16 +110,10 @@ describe('Cowork redacted audit', () => {
       reason: 'quiescence_unconfirmed',
       settled: 'unverified',
     });
-    expect(Object.keys(redacted).sort()).toEqual([
-      'capability',
-      'kind',
-      'leaseId',
-      'outcome',
-      'reason',
-      'settled',
-      'targetDeviceId',
-      'toolCallId',
+    expect(Object.keys(redactedAudit).sort()).toEqual([
+      'capability', 'kind', 'leaseId', 'outcome', 'reason', 'settled', 'targetDeviceId', 'toolCallId',
     ].sort());
+    expect(Object.keys(redactedAudit).length).toBe(8);
   });
 
   it('validates closed reason enum and drops unknown/free-text reasons (J-4)', () => {
