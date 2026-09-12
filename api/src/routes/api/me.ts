@@ -312,6 +312,21 @@ meRouter.delete('/', async (c) => {
       eq(coworkDeviceLeases.userId, userId),
       inArray(coworkDeviceLeases.status, ['issued', 'acknowledged']),
     ));
+    const cutoff = new Date(Date.now() - 5_000).toISOString();
+    const now = new Date();
+    await tx.update(coworkDeviceLeases)
+      .set({
+        status: 'revoked',
+        scope: sql`jsonb_set(COALESCE(${coworkDeviceLeases.scope}, '{}'::jsonb), '{reaped}', 'true'::jsonb, true)`,
+      })
+      .where(and(
+        eq(coworkDeviceLeases.userId, userId),
+        eq(coworkDeviceLeases.status, 'executing'),
+        sql`(
+          (${coworkDeviceLeases.scope} ? 'cancellationRequestedAt' AND (${coworkDeviceLeases.scope}->>'cancellationRequestedAt') <= ${cutoff})
+          OR ${coworkDeviceLeases.expiresAt} <= ${now}
+        )`,
+      ));
     const [executing] = await tx.select({ id: coworkDeviceLeases.id }).from(coworkDeviceLeases)
       .where(and(eq(coworkDeviceLeases.userId, userId), eq(coworkDeviceLeases.status, 'executing'))).limit(1);
     if (executing) throw new Error('cowork_execution_in_progress');
