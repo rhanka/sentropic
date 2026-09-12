@@ -28,6 +28,28 @@ export type LeaseScope = {
   result?: Record<string, unknown>;
   resultDigest?: string;
 } | null;
+export type DeliveryProjectedScope = {
+  capability: 'screen_capture' | 'input_action';
+  serverEnvelope: ServerSignedLeaseEnvelope;
+  action?: Record<string, unknown>;
+};
+
+export function projectDeliveryScope(scope: unknown): DeliveryProjectedScope | null {
+  if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return null;
+  const raw = scope as Record<string, unknown>;
+  const capability = raw.capability;
+  if (capability !== 'screen_capture' && capability !== 'input_action') return null;
+  const serverEnvelope = raw.serverEnvelope as ServerSignedLeaseEnvelope;
+  const projected: DeliveryProjectedScope = {
+    capability,
+    serverEnvelope,
+  };
+  if (raw.action !== undefined && typeof raw.action === 'object' && !Array.isArray(raw.action)) {
+    projected.action = raw.action as Record<string, unknown>;
+  }
+  return projected;
+}
+
 export type LeaseIssueScope = {
   capability: 'screen_capture' | 'input_action';
   action?: Record<string, unknown>;
@@ -60,6 +82,8 @@ function validCaptureResult(result: unknown, action: unknown): result is Record<
   if (!isCoworkScreenCaptureAction(action)) return false;
   if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
   const value = result as Record<string, unknown>;
+  const allowedKeys = new Set(['ok', 'screen', 'width', 'height', 'image']);
+  if (!Object.keys(value).every((key) => allowedKeys.has(key))) return false;
   if (value.ok !== true || value.screen !== 0
     || !Number.isInteger(value.width) || !Number.isInteger(value.height)
     || (value.width as number) < 1 || (value.height as number) < 1

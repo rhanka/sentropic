@@ -11,7 +11,7 @@ import { hydrateInitiative } from './initiatives';
 import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
-import { listIssuedLeases } from '../../services/cowork/device-lease-service';
+import { listIssuedLeases, projectDeliveryScope } from '../../services/cowork/device-lease-service';
 import { verifyCoworkDeliveryProof } from '../../services/cowork/device-identity';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import {
@@ -178,10 +178,11 @@ function sseCoworkLeaseEvent(lease: {
   scope: unknown;
   expiresAt: Date;
 }): string {
+  const scope = projectDeliveryScope(lease.scope);
   return `event: cowork_lease\nid: cowork_lease:${lease.id}\ndata: ${JSON.stringify({
     leaseId: lease.id,
     nonce: lease.nonce,
-    scope: lease.scope,
+    scope,
     expiresAt: lease.expiresAt.toISOString(),
   })}\n\n`;
 }
