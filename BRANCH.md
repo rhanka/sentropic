@@ -60,9 +60,9 @@ Normalize a nested, case-insensitive `UND_ERR_SOCKET` cause as a retryable netwo
   - [x] Add bounded, cycle-safe nested cause inspection for exact `UND_ERR_SOCKET` only.
   - [x] Preserve the outer normalized message/code/cause contract without copying nested text or fields.
   - [x] Re-run the exact regression test.
-- [ ] **Lot 3 — Publication metadata**
-  - [ ] Run the supported registry version audit target.
-  - [ ] Bump `@sentropic/llm-mesh` to the next valid patch and update the required lock manifest.
+- [x] **Lot 3 — Publication metadata**
+  - [x] Run the supported registry version audit target.
+  - [x] Bump `@sentropic/llm-mesh` to the next valid patch and update the required lock manifest.
 - [ ] **Lot 4 — Final validation**
   - [ ] Run `make lint-llm-mesh ENV=test-llm-mesh-underr`.
   - [ ] Run `make typecheck-llm-mesh ENV=test-llm-mesh-underr`.
