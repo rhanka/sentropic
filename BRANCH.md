@@ -63,10 +63,10 @@ Normalize a nested, case-insensitive `UND_ERR_SOCKET` cause as a retryable netwo
 - [x] **Lot 3 — Publication metadata**
   - [x] Run the supported registry version audit target.
   - [x] Bump `@sentropic/llm-mesh` to the next valid patch and update the required lock manifest.
-- [ ] **Lot 4 — Final validation**
-  - [ ] Run `make lint-llm-mesh ENV=test-llm-mesh-underr`.
-  - [ ] Run `make typecheck-llm-mesh ENV=test-llm-mesh-underr`.
-  - [ ] Run the exact test and full `make test-llm-mesh ENV=test-llm-mesh-underr`.
-  - [ ] Run `make build-llm-mesh ENV=test-llm-mesh-underr` and `make pack-llm-mesh ENV=test-llm-mesh-underr`.
-  - [ ] Run `make scope-check ENV=test-llm-mesh-underr` before every commit.
-  - [ ] Run final `harness check scope` and `harness check branch`.
+- [x] **Lot 4 — Final validation**
+  - [x] Run `make lint-llm-mesh ENV=test-llm-mesh-underr`.
+  - [x] Run `make typecheck-llm-mesh ENV=test-llm-mesh-underr`.
+  - [x] Run the exact test and full `make test-llm-mesh ENV=test-llm-mesh-underr`.
+  - [x] Run `make build-llm-mesh ENV=test-llm-mesh-underr` and `make pack-llm-mesh ENV=test-llm-mesh-underr`.
+  - [x] Run `make scope-check ENV=test-llm-mesh-underr` before every commit.
+  - [x] Run final `harness check scope` and `harness check branch`.
