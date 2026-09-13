@@ -55,6 +55,23 @@ const nestedErrorRecord = (record: Record<string, unknown> | null): Record<strin
   return asRecord(record?.error) || asRecord(record?.response);
 };
 
+const maxCauseDepth = 8;
+
+const hasNestedUndiciSocketCode = (record: Record<string, unknown> | null): boolean => {
+  const seen = new Set<Record<string, unknown>>();
+  let cause = asRecord(record?.cause);
+
+  for (let depth = 0; cause && depth < maxCauseDepth; depth += 1) {
+    if (seen.has(cause)) return false;
+    seen.add(cause);
+
+    if (readString(cause, 'code')?.toLowerCase() === 'und_err_socket') return true;
+    cause = asRecord(cause.cause);
+  }
+
+  return false;
+};
+
 const inferRetryReason = (
   statusCode: number | undefined,
   code: string | undefined,
@@ -117,8 +134,13 @@ export const normalizeProviderError = (
     readNumber(record, 'retryAfterMs') ||
     readNumber(nested, 'retryAfterMs') ||
     (typeof retryAfterSeconds === 'number' ? retryAfterSeconds * 1000 : undefined);
-  const retryable = isRetryableProviderError(statusCode, code, options);
-  const retryReason = retryable ? inferRetryReason(statusCode, code) ?? 'unknown' : undefined;
+  const hasSocketCause = hasNestedUndiciSocketCode(record);
+  const retryable = hasSocketCause || isRetryableProviderError(statusCode, code, options);
+  const retryReason = hasSocketCause
+    ? 'network'
+    : retryable
+      ? inferRetryReason(statusCode, code) ?? 'unknown'
+      : undefined;
 
   return {
     providerId,
