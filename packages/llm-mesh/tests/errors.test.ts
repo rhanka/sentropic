@@ -30,6 +30,18 @@ const listenOnLoopback = async (): Promise<{
 };
 
 describe('normalizeProviderError', () => {
+  it('should normalize a top-level undici socket error as a retryable network error', () => {
+    const socketError = Object.assign(new Error('socket closed'), { code: 'UND_ERR_SOCKET' });
+
+    expect(normalizeProviderError('openai', socketError)).toMatchObject({
+      message: 'socket closed',
+      code: 'UND_ERR_SOCKET',
+      retryable: true,
+      retryReason: 'network',
+      cause: socketError,
+    });
+  });
+
   it.each(['UND_ERR_SOCKET', 'und_err_socket', 'UnD_ErR_SoCkEt'])(
     'should normalize exact nested %s codes as retryable network errors',
     (socketCode) => {

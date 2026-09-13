@@ -33,7 +33,11 @@ Normalize a nested, case-insensitive `UND_ERR_SOCKET` cause as a retryable netwo
   - Declare `BR-UND-EXn` in `## Feedback Loop` before touching any path outside the allowed list.
 
 ## Feedback Loop
-- None.
+- [x] **BR-UND-F1 — LOW — Direct undici socket errors**
+  - [x] Reproduce Fable review finding: a top-level `UND_ERR_SOCKET` stayed non-retryable.
+  - [x] Classify the exact top-level code through the same bounded allow-list traversal.
+  - [x] Keep nested code promotion intentionally disabled; consumers use `retryReason: network`.
+  - [x] Verify the focused seven-test regression suite passes.
 
 ## AI Flaky tests
 - No provider/network/model calls are authorized; all tests must be hermetic and deterministic.
