@@ -16,6 +16,8 @@ export const CLOUD_CODE_AUTH_URL = 'https://accounts.google.com/o/oauth2/auth';
 export const CLOUD_CODE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const CLOUD_CODE_LOAD_CODE_ASSIST_URL =
   'https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
+export const CLOUD_CODE_ONBOARD_USER_URL =
+  'https://daily-cloudcode-pa.googleapis.com/v1internal:onboardUser';
 export const CLOUD_CODE_USER_AGENT =
   'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
 
@@ -39,6 +41,19 @@ export interface CloudCodeEnrollmentOptions {
   configResolver?: ConfigResolver;
   fetchFn?: typeof fetch;
 }
+
+interface CloudCodeAssistContext {
+  cloudaicompanionProject: string;
+  currentTier?: string;
+  allowedTiers: readonly string[];
+}
+
+const readTierId = (value: unknown): string | undefined => {
+  if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  if (!value || typeof value !== 'object') return undefined;
+  const id = (value as Record<string, unknown>).id;
+  return typeof id === 'string' && id.trim().length > 0 ? id.trim() : undefined;
+};
 
 export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   private readonly defaultClientId: string;
@@ -252,6 +267,22 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   }
 
   async resolve(credential: PreparedCredential): Promise<ResolvedProviderMetadata> {
+    let context = await this.loadCodeAssist(credential);
+    if (context.allowedTiers.includes('standard-tier') && context.currentTier !== 'standard-tier') {
+      await this.onboardUser(credential, context.cloudaicompanionProject, 'standard-tier');
+      context = await this.loadCodeAssist(credential);
+      if (context.currentTier !== 'standard-tier') {
+        throw new Error('Cloud Code onboarding did not activate the eligible standard-tier context');
+      }
+    }
+
+    return {
+      cloudaicompanionProject: context.cloudaicompanionProject,
+      cloudCodeUserAgentVersion: '1.1.10',
+    };
+  }
+
+  private async loadCodeAssist(credential: PreparedCredential): Promise<CloudCodeAssistContext> {
     const response = await this.fetchFn(CLOUD_CODE_LOAD_CODE_ASSIST_URL, {
       method: 'POST',
       headers: {
@@ -273,15 +304,51 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
       throw new Error(`Cloud Code loadCodeAssist failed (${response.status}): ${text}`);
     }
 
-    const payload = (await response.json()) as { cloudaicompanionProject?: string };
-    if (!payload.cloudaicompanionProject || payload.cloudaicompanionProject.trim().length === 0) {
+    const payload = (await response.json()) as Record<string, unknown>;
+    const project = typeof payload.cloudaicompanionProject === 'string'
+      ? payload.cloudaicompanionProject.trim()
+      : '';
+    if (!project) {
       throw new Error('Cloud Code loadCodeAssist returned no cloudaicompanionProject');
     }
 
     return {
-      cloudaicompanionProject: payload.cloudaicompanionProject.trim(),
-      cloudCodeUserAgentVersion: '1.1.10',
+      cloudaicompanionProject: project,
+      currentTier: readTierId(payload.currentTier) ?? readTierId(payload.tier),
+      allowedTiers: Array.isArray(payload.allowedTiers)
+        ? payload.allowedTiers.flatMap((tier) => readTierId(tier) ?? [])
+        : [],
     };
+  }
+
+  private async onboardUser(
+    credential: PreparedCredential,
+    cloudaicompanionProject: string,
+    tierId: string,
+  ): Promise<void> {
+    const response = await this.fetchFn(CLOUD_CODE_ONBOARD_USER_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${credential.accessToken}`,
+        'User-Agent': CLOUD_CODE_USER_AGENT,
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Client': 'gl-node/22.0.0 antigravity/0.1.0',
+        'Client-Metadata': JSON.stringify({
+          ideType: 'ANTIGRAVITY',
+          platform: 'PLATFORM_UNSPECIFIED',
+          pluginType: 'ANTIGRAVITY',
+        }),
+      },
+      body: JSON.stringify({
+        tierId,
+        cloudaicompanionProject,
+        metadata: { ideType: 'ANTIGRAVITY' },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud Code onboardUser failed (${response.status})`);
+    }
   }
 
   async refresh(input: RefreshInput): Promise<PreparedCredential> {
