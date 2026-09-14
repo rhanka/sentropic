@@ -55,7 +55,7 @@ Resolve the CloudCode `daily` 404 by fetching the account's model catalogue (`fe
   - [x] Resolve model x effort -> wire id: `<model>-<effort>` if in `models`, else `<model>-tiered` + `thinkingLevel`, else refuse fail-closed (clear error) before streaming.
   - [x] Wire the resolved id into `providerRequest` (replace verbatim base id).
   - [x] Tests: suffixed-exists, tiered-fallback, fail-closed-absent, no-regression.
-- [ ] **Lot 3 - Patch version and final gates**
-  - [ ] Bump `@sentropic/llm-mesh` 0.19.1 -> 0.19.2.
-  - [ ] Pass llm-mesh typecheck, build, and tests on a dedicated test ENV.
-  - [ ] Commit atomically; confirm no push, PR, or publish.
+- [x] **Lot 3 - Patch version and final gates**
+  - [x] Bump `@sentropic/llm-mesh` 0.19.1 -> 0.19.2.
+  - [x] Pass llm-mesh typecheck, build, and tests on a dedicated test ENV.
+  - [x] Commit atomically; confirm no push, PR, or publish.
