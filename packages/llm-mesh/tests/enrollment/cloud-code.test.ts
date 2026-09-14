@@ -5,6 +5,7 @@ import {
   CLOUD_CODE_CLIENT_ID,
   CLOUD_CODE_CLIENT_SECRET,
   CLOUD_CODE_LOAD_CODE_ASSIST_URL,
+  CLOUD_CODE_ONBOARD_USER_URL,
   CLOUD_CODE_TOKEN_URL,
   CLOUD_CODE_USER_AGENT,
   CloudCodeEnrollmentProvider,
@@ -198,6 +199,49 @@ describe('CloudCodeEnrollmentProvider', () => {
     const meta = await provider.resolve(cred);
     expect(meta.cloudaicompanionProject).toBe('sentropic-cloud-code-proj');
     expect(meta.cloudCodeUserAgentVersion).toBe('1.1.10');
+  });
+
+  it('onboards the standard tier when a Google AI Pro identity is eligible', async () => {
+    let loadCount = 0;
+    const mockFetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
+      if (url.toString() === CLOUD_CODE_LOAD_CODE_ASSIST_URL) {
+        loadCount += 1;
+        return new Response(JSON.stringify({
+          cloudaicompanionProject: 'pro-cloud-code-project',
+          currentTier: { id: loadCount === 1 ? 'free-tier' : 'standard-tier' },
+          allowedTiers: [{ id: 'free-tier' }, { id: 'standard-tier' }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.toString() === CLOUD_CODE_ONBOARD_USER_URL) {
+        expect(JSON.parse(String(options?.body))).toMatchObject({
+          tierId: 'standard-tier',
+          cloudaicompanionProject: 'pro-cloud-code-project',
+        });
+        return new Response(JSON.stringify({ done: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    const provider = new CloudCodeEnrollmentProvider({
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    await expect(provider.resolve({
+      accountId: 'pro-account',
+      accessToken: 'pro-access',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      authClientConfigVersion: 'v1.0.0',
+    })).resolves.toMatchObject({
+      cloudaicompanionProject: 'pro-cloud-code-project',
+    });
+
+    expect(mockFetch.mock.calls.map(([url]) => url.toString())).toEqual([
+      CLOUD_CODE_LOAD_CODE_ASSIST_URL,
+      CLOUD_CODE_ONBOARD_USER_URL,
+      CLOUD_CODE_LOAD_CODE_ASSIST_URL,
+    ]);
   });
 
   it('handles cancel idempotently', async () => {
