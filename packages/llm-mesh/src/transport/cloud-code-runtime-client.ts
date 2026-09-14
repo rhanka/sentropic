@@ -135,15 +135,17 @@ const cloudCodeToolConfig = (request: GenerateRequest): unknown => {
   };
 };
 
+const cloudCodeThinkingLevel = (request: GenerateRequest): 'LOW' | 'MEDIUM' | 'HIGH' | undefined => {
+  const effort = request.reasoning?.effort;
+  if (!effort || effort === 'none') return undefined;
+  return effort === 'low' ? 'LOW' : effort === 'medium' ? 'MEDIUM' : 'HIGH';
+};
+
 const cloudCodeThinkingConfig = (request: GenerateRequest): unknown => {
   if (!request.reasoning) return undefined;
   const config = {
-    ...(request.reasoning.effort && request.reasoning.effort !== 'none'
-      ? {
-          thinkingLevel: request.reasoning.effort === 'low'
-            ? 'LOW'
-            : request.reasoning.effort === 'medium' ? 'MEDIUM' : 'HIGH',
-        }
+    ...(cloudCodeThinkingLevel(request)
+      ? { thinkingLevel: cloudCodeThinkingLevel(request) }
       : {}),
     ...(request.reasoning.enabled !== undefined
       ? { includeThoughts: request.reasoning.enabled }
@@ -181,7 +183,31 @@ const contents = (messages: readonly LlmMeshMessage[]) => messages.flatMap((mess
   return [{ role: message.role === 'assistant' ? 'model' : 'user', parts }];
 });
 
-const providerRequest = (request: GenerateRequest): ProviderRequest => {
+const requestedModelId = (request: GenerateRequest): string => request.modelId
+  ?? (typeof request.model === 'string' ? request.model : DEFAULT_CLOUD_CODE_MODEL_ID);
+
+const resolveWireModelId = (
+  request: GenerateRequest,
+  catalogue: CloudCodeModelCatalogue,
+): string => {
+  const modelId = requestedModelId(request);
+  const available = new Set(catalogue.models);
+  const thinkingLevel = cloudCodeThinkingLevel(request);
+  if (thinkingLevel) {
+    const suffixedModelId = `${modelId}-${thinkingLevel.toLowerCase()}`;
+    if (available.has(suffixedModelId)) return suffixedModelId;
+  } else if (available.has(modelId)) {
+    return modelId;
+  }
+  const tieredModelId = `${modelId}-tiered`;
+  if (available.has(tieredModelId)) return tieredModelId;
+  const effort = thinkingLevel?.toLowerCase() ?? 'default';
+  throw new Error(
+    `Cloud Code model ${modelId} with effort ${effort} is not available in this account's catalogue`,
+  );
+};
+
+const providerRequest = (request: GenerateRequest, wireModelId: string): ProviderRequest => {
   const projections = request.tools?.map((tool) => ({
     tool,
     projection: projectCloudCodeSchema(tool.inputSchema, `tools.${tool.name}`),
@@ -189,8 +215,7 @@ const providerRequest = (request: GenerateRequest): ProviderRequest => {
   const droppedConstraints = projections.flatMap(({ projection }) =>
     projection.droppedConstraints);
   return {
-    modelId: request.modelId
-      ?? (typeof request.model === 'string' ? request.model : DEFAULT_CLOUD_CODE_MODEL_ID),
+    modelId: wireModelId,
     contents: contents(request.messages),
     systemInstruction: {
       parts: request.messages
@@ -287,9 +312,11 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
       runtime: { stableSessionId: String(metadata?.stableSessionId ?? 'route'), metadata },
       async recordOutcome() {},
     };
-    await this.getCatalogue(acquisition);
+    const catalogue = await this.getCatalogue(acquisition);
+    const wireModelId = resolveWireModelId(request, catalogue);
     return this.events(this.adapter.execute(
-      acquisition, providerRequest(request), request.signal ?? new AbortController().signal,
+      acquisition, providerRequest(request, wireModelId),
+      request.signal ?? new AbortController().signal,
     ));
   }
 
