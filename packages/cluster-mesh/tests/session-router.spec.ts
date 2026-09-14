@@ -7,6 +7,7 @@ import {
   createClusterMeshRuntime,
   createRegistrationGate,
   createSessionNamespaceModule,
+  GATEWAY_RELAUNCH_SCOPE,
   type CliSessionDelegatePort,
   type ClusterMeshRegistration,
   type PtyActuatorPort,
@@ -45,13 +46,15 @@ function fixture(input: {
   const receipts: unknown[] = [];
   const pty = input.pty ?? {
     kind: 'pty' as const,
-    async isAvailable() { return true; },
-    async probeState() { return 'alive' as const; },
+    isAvailable: vi.fn(async () => true),
+    probeState: vi.fn(async () => 'alive' as const),
     actuate: vi.fn(async () => ({ effectRef: 'tick-1', outcome: 'acted' as const })),
   };
+  const verify = vi.fn(async (request: { readonly invocationId: string }) =>
+    (input.context ?? verifiedContext)(request.invocationId));
   const runtime = createClusterMeshRuntime({
     generationId: 'generation-1', config: { capacity: { poolSize: 4 } },
-    context: { async verify(request) { return (input.context ?? verifiedContext)(request.invocationId); } },
+    context: { verify },
     registration: createRegistrationGate({
       generationId: 'generation-1',
       registrations: { async find() { return input.record === undefined ? registration : input.record; } },
@@ -91,7 +94,7 @@ function fixture(input: {
   });
   return {
     app: module.createRouter({ context: runtime.context, receipts: runtime.receiptPort }),
-    module, runtime, pty, receipts, store, instructions,
+    module, runtime, pty, receipts, store, instructions, verify,
   };
 }
 
@@ -144,6 +147,236 @@ describe('session namespace router', () => {
     });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'invalid_control_intent' });
+  });
+
+  it.each([
+    ['non-object', null],
+    ['array', []],
+    ['non-boolean', { gateway: 1 }],
+    ['truthy string', { gateway: 'true' }],
+    ['missing gateway', {}],
+    ['unexpected key', { gateway: false, namespace: 'gw' }],
+  ])('rejects a %s relaunch context before verification', async (_case, launchContext) => {
+    const { app, verify, runtime, store, instructions, pty } = fixture();
+    const authorize = vi.spyOn(runtime.registration, 'authorize');
+    const response = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({ ...command(`command-invalid-${_case}`), launchContext }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'invalid_control_intent' });
+    expect(verify).not.toHaveBeenCalled();
+    expect(store.enqueueCommand).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(instructions.resolve).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
+  it('rejects unexpected top-level authority fields under the strict schema', async () => {
+    const { app, verify, store } = fixture();
+    const response = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...command('command-body-scope'),
+        launchContext: { gateway: true },
+        scopes: [GATEWAY_RELAUNCH_SCOPE],
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'invalid_control_intent' });
+    expect(verify).not.toHaveBeenCalled();
+    expect(store.enqueueCommand).not.toHaveBeenCalled();
+  });
+
+  it.each(['drive', 'wake'] as const)(
+    'rejects launch context on %s before verification',
+    async (action) => {
+      const { app, verify, store, pty } = fixture();
+      const response = await app.request(`/control/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ ...command(`command-${action}-context`), launchContext: { gateway: false } }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error: 'invalid_control_intent' });
+      expect(verify).not.toHaveBeenCalled();
+      expect(store.enqueueCommand).not.toHaveBeenCalled();
+      expect(pty.actuate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('normalizes omitted relaunch context and binds it through the authorization decision', async () => {
+    const { app, runtime, pty, verify, store, instructions, receipts } = fixture();
+    const authorize = vi.spyOn(runtime.registration, 'authorize');
+    const response = await app.request('/control/relaunch', {
+      method: 'POST', body: JSON.stringify(command('command-default-context')),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(authorize).toHaveBeenCalledWith(expect.anything(), 'relaunch', {
+      launchContext: { gateway: false },
+    });
+    expect(verify.mock.calls[0]![0]).not.toHaveProperty('launchContext');
+    expect(store.enqueueCommand).toHaveBeenCalledWith({
+      commandId: 'command-default-context',
+      generationId: 'generation-1',
+      targetRegistrationId: registration.registrationId,
+      idempotencyKey: 'key-command-default-context',
+      action: 'relaunch',
+      status: 'pending',
+    });
+    expect(instructions.resolve).toHaveBeenCalledWith({
+      commandRef: 'command-default-context',
+      registrationId: registration.registrationId,
+      action: 'relaunch',
+    });
+    for (const receipt of receipts) expect(receipt).not.toHaveProperty('launchContext');
+    expect(pty.actuate).toHaveBeenCalledWith({
+      registration,
+      action: 'relaunch',
+      commandRef: 'command-default-context',
+      resolvedInstruction: { kind: 'signed-instruction' },
+      launchContext: { gateway: false },
+    });
+  });
+
+  it('forbids gateway relaunch before probe, resolution, reservation or actuation', async () => {
+    const { app, runtime, pty, instructions } = fixture();
+    const reserve = vi.spyOn(runtime.admission, 'reserveBeforeSpawn');
+    const response = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({ ...command('command-gateway-forbidden'), launchContext: { gateway: true } }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'gateway_forbidden' });
+    expect(pty.probeState).not.toHaveBeenCalled();
+    expect(instructions.resolve).not.toHaveBeenCalled();
+    expect(reserve).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
+  it('accepts gateway relaunch only from the verified invocation scope', async () => {
+    const { app, pty } = fixture({
+      context: (invocationId) => ({
+        ...verifiedContext(invocationId), scopes: [GATEWAY_RELAUNCH_SCOPE],
+      }),
+    });
+    const response = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({ ...command('command-gateway'), launchContext: { gateway: true } }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(pty.actuate).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'relaunch', launchContext: { gateway: true },
+    }));
+  });
+
+  it('does not accept gateway scope from headers or signed instructions', async () => {
+    const { app, pty, instructions } = fixture({
+      instruction: { kind: 'signed-instruction', scopes: [GATEWAY_RELAUNCH_SCOPE] },
+    });
+    const response = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...command('command-unverified-scope'), launchContext: { gateway: true },
+      }),
+      headers: {
+        'content-type': 'application/json',
+        'x-cluster-mesh-scopes': GATEWAY_RELAUNCH_SCOPE,
+      },
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: 'gateway_forbidden' });
+    expect(instructions.resolve).not.toHaveBeenCalled();
+    expect(pty.actuate).not.toHaveBeenCalled();
+  });
+
+  it('builds actuator launch context from the successful decision, not the request body', async () => {
+    const { app, runtime, pty } = fixture();
+    const authorize = vi.spyOn(runtime.registration, 'authorize').mockResolvedValueOnce({
+      ok: true,
+      action: 'relaunch',
+      registration,
+      actuator: pty,
+      launchContext: { gateway: false },
+    });
+    const response = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({ ...command('command-decision-bound'), launchContext: { gateway: true } }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(authorize).toHaveBeenCalledWith(expect.anything(), 'relaunch', {
+      launchContext: { gateway: true },
+    });
+    expect(pty.actuate).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'relaunch', launchContext: { gateway: false },
+    }));
+  });
+
+  it('keeps a duplicate relaunch command fenced when launch context changes', async () => {
+    const { app, runtime, store, pty } = fixture({
+      context: (invocationId) => ({
+        ...verifiedContext(invocationId), scopes: [GATEWAY_RELAUNCH_SCOPE],
+      }),
+    });
+    store.enqueueCommand.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const authorize = vi.spyOn(runtime.registration, 'authorize');
+    const first = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({ ...command('command-relaunch-duplicate'), launchContext: { gateway: false } }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const duplicate = await app.request('/control/relaunch', {
+      method: 'POST',
+      body: JSON.stringify({ ...command('command-relaunch-duplicate'), launchContext: { gateway: true } }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(first.status).toBe(200);
+    expect(duplicate.status).toBe(409);
+    await expect(duplicate.json()).resolves.toEqual({ error: 'duplicate_command' });
+    expect(authorize).toHaveBeenCalledOnce();
+    expect(pty.actuate).toHaveBeenCalledOnce();
+  });
+
+  it('preserves registration generation, custody epoch and logical acted targets on relaunch', async () => {
+    const pty: PtyActuatorPort = {
+      kind: 'pty',
+      isAvailable: vi.fn(async () => true),
+      probeState: vi.fn(async () => 'alive'),
+      actuate: vi.fn(async () => ({
+        effectRef: 'replacement-effect',
+        outcome: 'acted',
+        actedTargets: [registration.actuatorRef],
+      })),
+    };
+    const { app } = fixture({ pty });
+    const response = await app.request('/control/relaunch', {
+      method: 'POST', body: JSON.stringify(command('command-preserve-identity')),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: 'acted', effectRef: 'replacement-effect', actedTargets: ['h2a:session-1'],
+    });
+    expect(pty.actuate).toHaveBeenCalledWith(expect.objectContaining({
+      registration: expect.objectContaining({ generationId: 'generation-1', custodyEpoch: 1 }),
+      launchContext: { gateway: false },
+    }));
   });
 
   it.each([
