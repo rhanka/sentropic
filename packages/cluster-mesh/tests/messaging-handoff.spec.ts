@@ -39,6 +39,7 @@ function handoffFixture(input: {
   readonly actuatorThrows?: boolean;
   readonly registrationFailure?: RegistrationFailureReason;
   readonly instructionFailure?: boolean;
+  readonly custodyControlled?: true;
 } = {}) {
   const calls = { verified: 0, authorized: 0, resolved: 0, actuated: 0 };
   const seen = new Set<string>();
@@ -72,11 +73,14 @@ function handoffFixture(input: {
         custody: { custodyId: 'custody-1', holderPrincipalId: 'workload-1', epoch: 1 },
       };
     } },
-    registration: { async authorize() {
-      calls.authorized += 1;
-      return input.registrationFailure ? { ok: false, reason: input.registrationFailure }
-        : { ok: true, registration, actuator };
-    } },
+    registration: {
+      ...(input.custodyControlled ? { custodyControlled: true as const } : {}),
+      async authorize() {
+        calls.authorized += 1;
+        return input.registrationFailure ? { ok: false, reason: input.registrationFailure }
+          : { ok: true, registration, actuator };
+      },
+    },
     instructions: { async resolve() {
       calls.resolved += 1;
       return input.instructionFailure ? null : { kind: 'signed-instruction', signature: 'valid' };
@@ -95,6 +99,20 @@ describe('delivery to actuation handoff', () => {
     if (output.kind !== 'result') throw new Error('Expected result');
     expect(output.result).toBe(fixture.result);
     expect(fixture.calls).toEqual({ verified: 1, authorized: 1, resolved: 1, actuated: 1 });
+  });
+  it('fails closed on deferred actuation under custody without changing the non-custody result', async () => {
+    const delivery = await getDelivery(messagingFixture());
+    const result = { effectRef: 'effect-deferred', outcome: 'deferred' as const };
+    const nonCustody = handoffFixture({ result });
+    await expect(nonCustody.adapter.handoff({ delivery, intent, invocation: invocation() }))
+      .resolves.toMatchObject({ kind: 'result', result });
+    const custody = handoffFixture({ result, custodyControlled: true });
+    await expect(custody.adapter.handoff({ delivery, intent, invocation: invocation() }))
+      .resolves.toEqual({
+        kind: 'uncertain', deliveryId: delivery.deliveryId, commandRef: intent.commandRef,
+        actuationAttempted: 'unknown', reason: 'actuation_failed', effectRef: result.effectRef,
+      });
+    expect(custody.calls.actuated).toBe(1);
   });
   it('rejects substituted intent, invocation mismatch, and garbage custody tokens', async () => {
     const delivery = await getDelivery(messagingFixture());

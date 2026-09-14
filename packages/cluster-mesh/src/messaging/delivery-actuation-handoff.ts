@@ -88,6 +88,9 @@ export class DeliveryActuationHandoffAdapter implements DeliveryActuationHandoff
       };
       const result = await decision.actuator.actuate(actuationRequest);
       if (!this.validResult(result)) return this.uncertain(input, 'actuation_failed');
+      if (this.options.registration.custodyControlled && result.outcome === 'deferred') {
+        return this.uncertain(input, 'actuation_failed', result.effectRef);
+      }
       return { kind: 'result', deliveryId: delivery.deliveryId,
         commandRef: intent.commandRef, result };
     } catch { return this.uncertain(input, 'actuation_failed'); }
@@ -104,9 +107,11 @@ export class DeliveryActuationHandoffAdapter implements DeliveryActuationHandoff
   private uncertain(
     input: DeliveryActuationHandoffRequest,
     reason: 'actuation_failed' | 'handoff_unavailable',
+    effectRef?: string,
   ): DeliveryActuationHandoffResult {
     return { kind: 'uncertain', deliveryId: input.delivery.deliveryId,
-      commandRef: input.intent.commandRef, actuationAttempted: 'unknown', reason };
+      commandRef: input.intent.commandRef, actuationAttempted: 'unknown', reason,
+      ...(effectRef === undefined ? {} : { effectRef }) };
   }
 
   private validResult(value: ActuationResult): boolean {
