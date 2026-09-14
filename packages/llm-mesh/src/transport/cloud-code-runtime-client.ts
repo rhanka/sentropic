@@ -3,6 +3,10 @@ import type { AccountTransportAuthMaterial } from '../auth.js';
 import { getSecretAuthMaterial } from '../auth.js';
 import type { GeminiAdapterClient } from '../adapters.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from '../generation.js';
+import {
+  fetchAvailableModels,
+  type CloudCodeModelCatalogue,
+} from '../enrollment/cloud-code.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { ProviderRuntimeContext } from '../registry.js';
 import type { ProviderEvent, ProviderRequest } from '../service/facade.js';
@@ -226,7 +230,40 @@ const usage = (value: unknown): TokenUsage => {
 
 export class CloudCodeRuntimeClient implements GeminiAdapterClient {
   private readonly adapter: CloudCodeProviderAdapter;
-  constructor(fetchFn: typeof fetch = fetch) { this.adapter = new CloudCodeProviderAdapter(fetchFn); }
+  private readonly catalogueCache = new Map<string, Promise<CloudCodeModelCatalogue>>();
+
+  constructor(private readonly fetchFn: typeof fetch = fetch) {
+    this.adapter = new CloudCodeProviderAdapter(fetchFn);
+  }
+
+  private async getCatalogue(
+    acquisition: AccountTransportAcquisition,
+  ): Promise<CloudCodeModelCatalogue> {
+    const project = acquisition.runtime.metadata?.cloudaicompanionProject;
+    if (typeof project !== 'string' || project.trim().length === 0) {
+      throw new Error('Cloud Code model catalogue requires cloudaicompanionProject');
+    }
+    const cacheKey = [
+      acquisition.lease.accountId,
+      acquisition.lease.stableSessionId,
+      project.trim(),
+    ].join('\u001f');
+    const cached = this.catalogueCache.get(cacheKey);
+    if (cached) return cached;
+
+    const pending = fetchAvailableModels({
+      accessToken: acquisition.material.accessToken,
+      cloudaicompanionProject: project,
+      fetchFn: this.fetchFn,
+    });
+    this.catalogueCache.set(cacheKey, pending);
+    try {
+      return await pending;
+    } catch (error) {
+      if (this.catalogueCache.get(cacheKey) === pending) this.catalogueCache.delete(cacheKey);
+      throw error;
+    }
+  }
 
   async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
     const auth = getSecretAuthMaterial(context?.auth);
@@ -250,6 +287,7 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
       runtime: { stableSessionId: String(metadata?.stableSessionId ?? 'route'), metadata },
       async recordOutcome() {},
     };
+    await this.getCatalogue(acquisition);
     return this.events(this.adapter.execute(
       acquisition, providerRequest(request), request.signal ?? new AbortController().signal,
     ));
