@@ -262,6 +262,22 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('uses an announced base wire id with the requested thinking level', async () => {
+    const fetchFn = createFetch(['claude-sonnet-4-6']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'low' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } },
+    });
+  });
+
   it('falls back to an announced tiered wire id with the requested thinking level', async () => {
     const fetchFn = createFetch(['gemini-3.8-flash-tiered']);
     const client = new CloudCodeRuntimeClient(fetchFn);
