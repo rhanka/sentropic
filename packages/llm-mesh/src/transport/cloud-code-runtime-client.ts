@@ -196,9 +196,8 @@ const resolveWireModelId = (
   if (thinkingLevel) {
     const suffixedModelId = `${modelId}-${thinkingLevel.toLowerCase()}`;
     if (available.has(suffixedModelId)) return suffixedModelId;
-  } else if (available.has(modelId)) {
-    return modelId;
   }
+  if (available.has(modelId)) return modelId;
   const tieredModelId = `${modelId}-tiered`;
   if (available.has(tieredModelId)) return tieredModelId;
   const effort = thinkingLevel?.toLowerCase() ?? 'default';
@@ -255,6 +254,8 @@ const usage = (value: unknown): TokenUsage => {
 
 export class CloudCodeRuntimeClient implements GeminiAdapterClient {
   private readonly adapter: CloudCodeProviderAdapter;
+  // Intentionally no TTL/size cap: account/session-lease entries evict failed fetches only;
+  // a server-removed model id can therefore remain theoretically stale for the client's lifetime.
   private readonly catalogueCache = new Map<string, Promise<CloudCodeModelCatalogue>>();
 
   constructor(private readonly fetchFn: typeof fetch = fetch) {
