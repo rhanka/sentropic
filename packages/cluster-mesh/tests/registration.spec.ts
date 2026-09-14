@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { VerifiedInvocationContext } from '../../contracts/src/index.js';
 import {
   createRegistrationGate,
+  GATEWAY_RELAUNCH_SCOPE,
+  type ActuationRequest,
   type ClusterMeshRegistration,
   type PtyActuatorPort,
+  type RegistrationDecision,
+  type RelaunchLaunchContext,
   type SecondaryActuatorPort,
 } from '../src/runtime/registration.js';
 
@@ -119,6 +123,112 @@ describe('registration gate', () => {
       .resolves.toEqual({ ok: false, reason: 'actuator_unavailable' });
     expect(unavailable.actuators.pty.probeState).toHaveBeenCalledOnce();
     expect(unavailable.actuators.secondary.probeState).toHaveBeenCalledOnce();
+  });
+
+  it('should normalize an omitted relaunch context without rotating registration epochs', async () => {
+    const relaunch = gate(registration);
+
+    const decision = await relaunch.gate.authorize(context, 'relaunch');
+
+    expect(decision).toMatchObject({
+      ok: true,
+      action: 'relaunch',
+      launchContext: { gateway: false },
+      registration: { generationId: 'generation-1', custodyEpoch: 3 },
+    });
+  });
+
+  it('should authorize gateway false under ordinary relaunch custody', async () => {
+    const decision = await gate(registration).gate.authorize(context, 'relaunch', {
+      launchContext: { gateway: false },
+    });
+
+    expect(decision).toMatchObject({
+      ok: true, action: 'relaunch', launchContext: { gateway: false },
+    });
+  });
+
+  it('should require the exact verified gateway scope before actuator probing', async () => {
+    const denied = gate(registration);
+    await expect(denied.gate.authorize(context, 'relaunch', {
+      launchContext: { gateway: true },
+    })).resolves.toEqual({ ok: false, reason: 'gateway_forbidden' });
+    expect(denied.actuators.pty.probeState).not.toHaveBeenCalled();
+
+    const nearScope = gate(registration);
+    await expect(nearScope.gate.authorize({
+      ...context, scopes: [`${GATEWAY_RELAUNCH_SCOPE}:extra`],
+    }, 'relaunch', { launchContext: { gateway: true } }))
+      .resolves.toEqual({ ok: false, reason: 'gateway_forbidden' });
+    expect(nearScope.actuators.pty.probeState).not.toHaveBeenCalled();
+
+    const allowed = gate(registration);
+    await expect(allowed.gate.authorize({
+      ...context, scopes: [GATEWAY_RELAUNCH_SCOPE],
+    }, 'relaunch', { launchContext: { gateway: true } }))
+      .resolves.toMatchObject({
+        ok: true, action: 'relaunch', launchContext: { gateway: true },
+      });
+  });
+
+  it.each([
+    null,
+    true,
+    [],
+    {},
+    { launchContext: null },
+    { launchContext: {} },
+    { launchContext: { gateway: 1 } },
+    { launchContext: { gateway: '' } },
+    { launchContext: { gateway: false, namespace: 'gw' } },
+    { launchContext: { gateway: false }, scope: GATEWAY_RELAUNCH_SCOPE },
+  ])('should reject malformed relaunch attributes without truthiness coercion: %j', async (attributes) => {
+    const invalid = gate(registration);
+
+    await expect(invalid.gate.authorize(context, 'relaunch', attributes as never))
+      .resolves.toEqual({ ok: false, reason: 'invalid_launch_context' });
+    expect(invalid.actuators.pty.probeState).not.toHaveBeenCalled();
+  });
+
+  it.each(['drive', 'wake'] as const)(
+    'should reject launch context attributes for %s before actuator selection',
+    async (action) => {
+      const invalid = gate(registration);
+      await expect(invalid.gate.authorize(context, action, {
+        launchContext: { gateway: false },
+      })).resolves.toEqual({ ok: false, reason: 'invalid_launch_context' });
+      expect(invalid.actuators.pty.isAvailable).not.toHaveBeenCalled();
+    },
+  );
+
+  it('should keep custody and gateway authority conjunctive in one decision', async () => {
+    const custodyOnly = gate(registration);
+    await expect(custodyOnly.gate.authorize(context, 'relaunch', {
+      launchContext: { gateway: true },
+    })).resolves.toEqual({ ok: false, reason: 'gateway_forbidden' });
+
+    const scopeOnly = gate(registration);
+    await expect(scopeOnly.gate.authorize({
+      ...context, scopes: [GATEWAY_RELAUNCH_SCOPE], custody: undefined,
+    }, 'relaunch', { launchContext: { gateway: true } }))
+      .resolves.toEqual({ ok: false, reason: 'custody_required' });
+    expect(scopeOnly.actuators.pty.probeState).not.toHaveBeenCalled();
+  });
+
+  it('should preserve existing checks before validating relaunch attributes', async () => {
+    const missing = gate(null);
+    await expect(missing.gate.authorize(context, 'relaunch', null as never))
+      .resolves.toEqual({ ok: false, reason: 'missing_registration' });
+    expect(missing.actuators.pty.probeState).not.toHaveBeenCalled();
+  });
+
+  it('should discriminate successful decisions and actuation requests by action', () => {
+    type RelaunchDecision = Extract<RegistrationDecision, { ok: true; action: 'relaunch' }>;
+    type RelaunchRequest = Extract<ActuationRequest, { action: 'relaunch' }>;
+    type WakeRequest = Extract<ActuationRequest, { action: 'wake' }>;
+    expectTypeOf<RelaunchDecision['launchContext']>().toEqualTypeOf<RelaunchLaunchContext>();
+    expectTypeOf<RelaunchRequest['launchContext']>().toEqualTypeOf<RelaunchLaunchContext>();
+    expectTypeOf<WakeRequest['launchContext']>().toEqualTypeOf<undefined>();
   });
 
   it('should fail closed with distinct missing, revoked and stale reasons', async () => {

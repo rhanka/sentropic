@@ -1,5 +1,10 @@
 import { idempotencyKey } from '@sentropic/contracts';
 import { Hono, type MiddlewareHandler } from 'hono';
+import type {
+  ActuationRequest,
+  RelaunchLaunchContext,
+  SessionControlIntent,
+} from '../runtime/registration.js';
 import type { ClusterMeshHonoNamespaceModule } from './plugin.js';
 import type {
   DeviceRouteHandlers,
@@ -7,28 +12,68 @@ import type {
   SessionPathProjection,
   SessionRouteHandlers,
 } from './session-contracts.js';
+import type { CustodyInvocationContextRequest } from '../runtime/custody-types.js';
+import { CustodyTokenRejectedError } from '../runtime/custody-invocation-verifier.js';
 
 const path = (base: string, suffix = ''): string =>
   suffix ? `${base === '/' ? '' : base}${suffix}` : base;
 
-interface ControlIntent {
-  readonly commandRef: string;
-  readonly targetRegistrationId: string;
-  readonly idempotencyKey: string;
-}
+type SessionControlAction = 'drive' | 'wake' | 'relaunch';
 
-const parseIntent = (value: unknown): ControlIntent | null => {
+type WireSessionControlIntent = SessionControlIntent & { readonly custodyToken?: string };
+
+type ParsedControlIntent =
+  | { readonly action: 'drive' | 'wake'; readonly intent: WireSessionControlIntent }
+  | {
+      readonly action: 'relaunch';
+      readonly intent: WireSessionControlIntent & { readonly launchContext: RelaunchLaunchContext };
+    };
+
+const hasOnlyAllowedKeys = (value: object, allowed: readonly string[]): boolean =>
+  Reflect.ownKeys(value).every((key) => typeof key === 'string' && allowed.includes(key));
+
+const parseLaunchContext = (value: unknown): RelaunchLaunchContext | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (!hasOnlyAllowedKeys(value, ['gateway']) || !Object.hasOwn(value, 'gateway')) return null;
+  const gateway = (value as { readonly gateway?: unknown }).gateway;
+  return typeof gateway === 'boolean' ? { gateway } : null;
+};
+
+const parseIntent = (value: unknown, action: SessionControlAction): ParsedControlIntent | null => {
   if (!value || typeof value !== 'object') return null;
   const body = value as Record<string, unknown>;
+  if (Array.isArray(body) || !hasOnlyAllowedKeys(body, [
+    'commandRef', 'targetRegistrationId', 'idempotencyKey', 'custodyToken', 'launchContext',
+  ])) return null;
   if (
     typeof body.commandRef !== 'string' || !body.commandRef
     || typeof body.targetRegistrationId !== 'string' || !body.targetRegistrationId
     || typeof body.idempotencyKey !== 'string' || !body.idempotencyKey
+    || (body.custodyToken !== undefined
+      && (typeof body.custodyToken !== 'string' || !body.custodyToken))
   ) return null;
-  return body as unknown as ControlIntent;
+  const intent: WireSessionControlIntent = {
+    commandRef: body.commandRef,
+    targetRegistrationId: body.targetRegistrationId,
+    idempotencyKey: body.idempotencyKey,
+    ...(body.custodyToken === undefined ? {} : { custodyToken: body.custodyToken }),
+  };
+  const hasLaunchContext = Object.hasOwn(body, 'launchContext');
+  if (action !== 'relaunch') {
+    if (hasLaunchContext) return null;
+    return { action, intent };
+  }
+  const launchContext = hasLaunchContext
+    ? parseLaunchContext(body.launchContext)
+    : { gateway: false };
+  if (!launchContext) return null;
+  return { action, intent: { ...intent, launchContext } };
 };
 
-export const isValidSessionControlIntent = (value: unknown): boolean => parseIntent(value) !== null;
+export const isValidSessionControlIntent = (
+  value: unknown,
+  action: SessionControlAction = 'relaunch',
+): boolean => parseIntent(value, action) !== null;
 
 /**
  * The composition-root MUST mount the session module such that `[mount-prefix] +
@@ -69,11 +114,12 @@ export function createSessionNamespaceModule(input: {
 
       for (const action of ['drive', 'wake', 'relaunch'] as const) {
         router.post(path(input.projection.control, `/${action}`), ensureAuthor, async (c) => {
-          const intent = parseIntent(await c.req.json().catch(() => null));
-          if (!intent) return c.json({ error: 'invalid_control_intent' }, 400);
+          const parsed = parseIntent(await c.req.json().catch(() => null), action);
+          if (!parsed) return c.json({ error: 'invalid_control_intent' }, 400);
+          const { intent } = parsed;
           let context;
           try {
-            context = await ports.context.verify({
+            const contextRequest: CustodyInvocationContextRequest = {
               invocationId: intent.commandRef,
               correlationId: c.req.header('x-correlation-id') ?? intent.commandRef,
               generationId: input.control.runtime.generation.generationId,
@@ -83,8 +129,14 @@ export function createSessionNamespaceModule(input: {
               idempotencyKey: intent.idempotencyKey,
               receiptStages: ['transported', 'verified', 'acted'],
               authorizationEvidenceRef: c.req.header('x-cluster-mesh-evidence'),
-            });
-          } catch {
+              custodyToken: intent.custodyToken,
+              custodyAction: action,
+            };
+            context = await ports.context.verify(contextRequest);
+          } catch (error) {
+            if (error instanceof CustodyTokenRejectedError) {
+              return c.json({ error: 'custody_mismatch' }, 409);
+            }
             return c.json({ error: 'unverified_invocation_context' }, 401);
           }
           if (context.registration?.registrationId !== intent.targetRegistrationId) {
@@ -106,21 +158,12 @@ export function createSessionNamespaceModule(input: {
             status: 'pending',
           });
           if (!inserted) return c.json({ error: 'duplicate_command' }, 409);
-          let decision;
-          try {
-            decision = await input.control.runtime.registration.authorize(context, action);
-          } catch {
+          const refuse = async (reason: string) => {
+            await input.control.runtime.receipts.verified(coordinates, 'refused', reason);
             await input.control.store.updateCommand(intent.commandRef, {
-              status: 'failed', refusalReason: 'authorization_failed',
+              status: 'refused', refusalReason: reason,
             });
-            return c.json({ error: 'authorization_failed' }, 502);
-          }
-          if (!decision.ok) {
-            await input.control.runtime.receipts.verified(coordinates, 'refused', decision.reason);
-            await input.control.store.updateCommand(intent.commandRef, {
-              status: 'refused', refusalReason: decision.reason,
-            });
-            if (decision.reason === 'actuator_unavailable') {
+            if (reason === 'actuator_unavailable') {
               const actuatorRef = context.registration?.actuatorRef;
               if (actuatorRef) {
                 const state = await input.control.targets.inspect(actuatorRef);
@@ -132,13 +175,33 @@ export function createSessionNamespaceModule(input: {
                 }
               }
             }
-            return c.json({ error: decision.reason }, 409);
+            return c.json({ error: reason }, 409);
+          };
+          let decision;
+          if (!input.control.runtime.registration.custodyControlled) {
+            try {
+              decision = await input.control.runtime.registration.authorize(
+                context,
+                action,
+                parsed.action === 'relaunch'
+                  ? { launchContext: parsed.intent.launchContext }
+                  : undefined,
+              );
+            } catch {
+              await input.control.store.updateCommand(intent.commandRef, {
+                status: 'failed', refusalReason: 'authorization_failed',
+              });
+              return c.json({ error: 'authorization_failed' }, 502);
+            }
+            if (!decision.ok) return refuse(decision.reason);
           }
           let resolvedInstruction;
           try {
             resolvedInstruction = await input.control.instructions.resolve({
               commandRef: intent.commandRef,
-              registrationId: decision.registration.registrationId,
+              registrationId: decision?.ok
+                ? decision.registration.registrationId
+                : context.registration.registrationId,
               action,
             });
           } catch {
@@ -165,8 +228,10 @@ export function createSessionNamespaceModule(input: {
             });
             return c.json({ error: reservation.reason }, 429);
           }
-          await input.control.runtime.receipts.verified(coordinates, 'accepted');
-          await input.control.store.updateCommand(intent.commandRef, { status: 'accepted' });
+          if (!input.control.runtime.registration.custodyControlled) {
+            await input.control.runtime.receipts.verified(coordinates, 'accepted');
+            await input.control.store.updateCommand(intent.commandRef, { status: 'accepted' });
+          }
           const persistOutcome = async (
             update: { status: 'deferred' | 'failed'; refusalReason?: string },
             outcome: {
@@ -190,14 +255,39 @@ export function createSessionNamespaceModule(input: {
             }
           };
           try {
+            if (input.control.runtime.registration.custodyControlled) {
+              try {
+                decision = await input.control.runtime.registration.authorize(
+                  context,
+                  action,
+                  parsed.action === 'relaunch'
+                    ? { launchContext: parsed.intent.launchContext }
+                    : undefined,
+                );
+              } catch {
+                await input.control.store.updateCommand(intent.commandRef, {
+                  status: 'failed', refusalReason: 'authorization_failed',
+                });
+                return c.json({ error: 'authorization_failed' }, 502);
+              }
+              if (!decision.ok) return refuse(decision.reason);
+            }
+            if (!decision?.ok) throw new Error('authorization decision unavailable');
             let result;
             try {
-              result = await decision.actuator.actuate({
+              const actuationRequest: ActuationRequest = decision.action === 'relaunch' ? {
                 registration: decision.registration,
-                action,
+                action: decision.action,
                 commandRef: intent.commandRef,
                 resolvedInstruction,
-              });
+                launchContext: decision.launchContext,
+              } : {
+                registration: decision.registration,
+                action: decision.action,
+                commandRef: intent.commandRef,
+                resolvedInstruction,
+              };
+              result = await decision.actuator.actuate(actuationRequest);
             } catch {
               const persistenceFailure = await persistOutcome(
                 { status: 'failed', refusalReason: 'actuation_failed' },
@@ -205,6 +295,10 @@ export function createSessionNamespaceModule(input: {
               );
               if (persistenceFailure) return persistenceFailure;
               return c.json({ error: 'actuation_failed' }, 502);
+            }
+            if (input.control.runtime.registration.custodyControlled) {
+              await input.control.runtime.receipts.verified(coordinates, 'accepted');
+              await input.control.store.updateCommand(intent.commandRef, { status: 'accepted' });
             }
             if (!result || typeof result !== 'object') {
               const persistenceFailure = await persistOutcome(
@@ -214,7 +308,11 @@ export function createSessionNamespaceModule(input: {
               if (persistenceFailure) return persistenceFailure;
               return c.json({ error: 'actuation_failed', status: 'failed' }, 502);
             }
-            if (result.outcome !== 'acted' && result.outcome !== 'deferred') {
+            if (
+              result.outcome !== 'acted'
+              && (result.outcome !== 'deferred'
+                || input.control.runtime.registration.custodyControlled)
+            ) {
               const persistenceFailure = await persistOutcome(
                 { status: 'failed', refusalReason: 'actuation_failed' },
                 { status: 'failed', effectRef: result.effectRef, actedTargets: result.actedTargets },
