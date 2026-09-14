@@ -200,6 +200,57 @@ describe('CloudCodeEnrollmentProvider', () => {
     expect(meta.cloudCodeUserAgentVersion).toBe('1.1.10');
   });
 
+  it('prefers the paid entitlement over a free compatibility tier', async () => {
+    const mockFetch = vi.fn(async (url: string | URL | Request) => {
+      if (url.toString() === CLOUD_CODE_LOAD_CODE_ASSIST_URL) {
+        return new Response(JSON.stringify({
+          cloudaicompanionProject: 'pro-cloud-code-project',
+          currentTier: { id: 'free-tier' },
+          paidTier: { id: 'g1-pro-tier' },
+          allowedTiers: [{ id: 'free-tier' }, { id: 'standard-tier' }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    const provider = new CloudCodeEnrollmentProvider({
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    await expect(provider.resolve({
+      accountId: 'pro-account',
+      accessToken: 'pro-access',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      authClientConfigVersion: 'v1.0.0',
+    })).resolves.toMatchObject({
+      cloudaicompanionProject: 'pro-cloud-code-project',
+      cloudCodeTier: 'g1-pro-tier',
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a free Cloud Code tier without forcing unavailable onboarding', async () => {
+    const mockFetch = vi.fn(async () => new Response(JSON.stringify({
+      cloudaicompanionProject: 'free-cloud-code-project',
+      currentTier: { id: 'free-tier' },
+      allowedTiers: [{ id: 'free-tier' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const provider = new CloudCodeEnrollmentProvider({
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    await expect(provider.resolve({
+      accountId: 'free-account',
+      accessToken: 'free-access',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      authClientConfigVersion: 'v1.0.0',
+    })).resolves.toMatchObject({
+      cloudaicompanionProject: 'free-cloud-code-project',
+      cloudCodeTier: 'free-tier',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('handles cancel idempotently', async () => {
     const provider = new CloudCodeEnrollmentProvider({
       configResolver: { async resolveConfig() { return { clientId: 'test-client-id', clientSecret: 'test-secret' }; } },

@@ -33,7 +33,10 @@ describe('LocalAccountTransportService', () => {
             expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
             authClientConfigVersion: 'v1.0.0',
           },
-          metadata: { cloudaicompanionProject: 'test-project' },
+          metadata: {
+            cloudaicompanionProject: 'test-project',
+            cloudCodeTier: 'free-tier',
+          },
         };
       },
     } satisfies EnrollmentProvider & {
@@ -53,7 +56,11 @@ describe('LocalAccountTransportService', () => {
       configResolver,
     );
 
-    await enrollmentService.waitForCallback('enrollment-1');
+    const completion = await enrollmentService.waitForCallback('enrollment-1');
+    expect(completion).toMatchObject({
+      cloudCodeTier: 'free-tier',
+      warning: { code: 'cloud-code-free-tier' },
+    });
     const publicKey = 'sentropic-llm-mesh:acct_persisted_1:public';
     const legacyPublic = JSON.parse(await keyring.getSecret(publicKey) ?? '{}');
     legacyPublic.account.targetProviderId = 'google';

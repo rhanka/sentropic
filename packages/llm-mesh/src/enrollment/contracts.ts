@@ -88,6 +88,16 @@ export interface CompletedEnrollment {
   metadata?: ResolvedProviderMetadata;
 }
 
+export interface EnrollmentCompletion {
+  accountId: string;
+  label: string;
+  cloudCodeTier?: string;
+  warning?: {
+    code: 'cloud-code-free-tier';
+    message: string;
+  };
+}
+
 export interface EnrollmentProvider {
   start(input: StartEnrollmentInput): Promise<EnrollmentSession>;
   complete(input: CompleteEnrollmentInput): Promise<PreparedCredential>;

@@ -40,6 +40,19 @@ export interface CloudCodeEnrollmentOptions {
   fetchFn?: typeof fetch;
 }
 
+interface CloudCodeAssistContext {
+  cloudaicompanionProject: string;
+  currentTier?: string;
+  paidTier?: string;
+}
+
+const readTierId = (value: unknown): string | undefined => {
+  if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  if (!value || typeof value !== 'object') return undefined;
+  const id = (value as Record<string, unknown>).id;
+  return typeof id === 'string' && id.trim().length > 0 ? id.trim() : undefined;
+};
+
 export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   private readonly defaultClientId: string;
   private readonly defaultClientSecret: string;
@@ -252,6 +265,17 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   }
 
   async resolve(credential: PreparedCredential): Promise<ResolvedProviderMetadata> {
+    const context = await this.loadCodeAssist(credential);
+    const effectiveTier = context.paidTier ?? context.currentTier;
+
+    return {
+      cloudaicompanionProject: context.cloudaicompanionProject,
+      cloudCodeUserAgentVersion: '1.1.10',
+      ...(effectiveTier ? { cloudCodeTier: effectiveTier } : {}),
+    };
+  }
+
+  private async loadCodeAssist(credential: PreparedCredential): Promise<CloudCodeAssistContext> {
     const response = await this.fetchFn(CLOUD_CODE_LOAD_CODE_ASSIST_URL, {
       method: 'POST',
       headers: {
@@ -273,14 +297,18 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
       throw new Error(`Cloud Code loadCodeAssist failed (${response.status}): ${text}`);
     }
 
-    const payload = (await response.json()) as { cloudaicompanionProject?: string };
-    if (!payload.cloudaicompanionProject || payload.cloudaicompanionProject.trim().length === 0) {
+    const payload = (await response.json()) as Record<string, unknown>;
+    const project = typeof payload.cloudaicompanionProject === 'string'
+      ? payload.cloudaicompanionProject.trim()
+      : '';
+    if (!project) {
       throw new Error('Cloud Code loadCodeAssist returned no cloudaicompanionProject');
     }
 
     return {
-      cloudaicompanionProject: payload.cloudaicompanionProject.trim(),
-      cloudCodeUserAgentVersion: '1.1.10',
+      cloudaicompanionProject: project,
+      currentTier: readTierId(payload.currentTier) ?? readTierId(payload.tier),
+      paidTier: readTierId(payload.paidTier),
     };
   }
 
