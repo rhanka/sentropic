@@ -4,14 +4,62 @@ import {
   CLOUD_CODE_AUTH_URL,
   CLOUD_CODE_CLIENT_ID,
   CLOUD_CODE_CLIENT_SECRET,
+  CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL,
   CLOUD_CODE_LOAD_CODE_ASSIST_URL,
   CLOUD_CODE_TOKEN_URL,
   CLOUD_CODE_USER_AGENT,
   CloudCodeEnrollmentProvider,
+  fetchAvailableModels,
 } from '../../src/enrollment/cloud-code.js';
 import type { ConfigResolver } from '../../src/service/facade.js';
 
 describe('CloudCodeEnrollmentProvider', () => {
+  it('fetches and parses the account model catalogue with Antigravity headers', async () => {
+    const mockFetch = vi.fn(async () => new Response(JSON.stringify({
+      models: {
+        'gemini-3.8-flash-tiered': { displayName: 'Gemini 3.8 Flash' },
+        'gemini-3.6-flash-low': { displayName: 'Gemini 3.6 Flash Low' },
+      },
+      tieredModelIds: {
+        flash: ['gemini-3.8-flash-tiered'],
+        flashLite: ['gemini-3.1-flash-lite'],
+        pro: ['gemini-3.1-pro-high'],
+      },
+      defaultAgentModelId: 'gemini-3.8-flash-tiered',
+      deprecatedModelIds: ['gemini-2.5-flash'],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    await expect(fetchAvailableModels({
+      accessToken: 'test-access-token',
+      cloudaicompanionProject: 'project-1',
+      fetchFn: mockFetch as unknown as typeof fetch,
+    })).resolves.toEqual({
+      models: ['gemini-3.8-flash-tiered', 'gemini-3.6-flash-low'],
+      tieredModelIds: {
+        flash: ['gemini-3.8-flash-tiered'],
+        flashLite: ['gemini-3.1-flash-lite'],
+        pro: ['gemini-3.1-pro-high'],
+      },
+      defaultAgentModelId: 'gemini-3.8-flash-tiered',
+      deprecatedModelIds: ['gemini-2.5-flash'],
+    });
+    expect(mockFetch).toHaveBeenCalledWith(CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-access-token',
+        'User-Agent': CLOUD_CODE_USER_AGENT,
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Client': 'gl-node/22.0.0 antigravity/0.1.0',
+        'Client-Metadata': JSON.stringify({
+          ideType: 'ANTIGRAVITY',
+          platform: 'PLATFORM_UNSPECIFIED',
+          pluginType: 'ANTIGRAVITY',
+        }),
+      },
+      body: JSON.stringify({ project: 'project-1' }),
+    });
+  });
+
   it('matches the captured Antigravity OAuth contract for CLI enrollment', async () => {
     const provider = new CloudCodeEnrollmentProvider({
       configResolver: { async resolveConfig() { return {}; } },
