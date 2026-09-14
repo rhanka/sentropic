@@ -48,8 +48,8 @@ Resolve the CloudCode `daily` 404 by fetching the account's model catalogue (`fe
 
 ## Plan / Todo
 - [ ] **Lot 1 - Catalogue fetch**
-  - [ ] Add `fetchAvailableModels` (POST `/v1internal:fetchAvailableModels`, body `{"project": <cloudaicompanionProject>}`, Antigravity headers) to the CloudCode path.
-  - [ ] Parse root fields: `models` (keys), `tieredModelIds`, `defaultAgentModelId`, `deprecatedModelIds`.
+  - [x] Add `fetchAvailableModels` (POST `/v1internal:fetchAvailableModels`, body `{"project": <cloudaicompanionProject>}`, Antigravity headers) to the CloudCode path.
+  - [x] Parse root fields: `models` (keys), `tieredModelIds`, `defaultAgentModelId`, `deprecatedModelIds`.
   - [ ] Cache per session/lease (avoid a network call per stream); focused tests with mocked fetch.
 - [ ] **Lot 2 - Wire-id mapping + fail-closed**
   - [ ] Resolve model x effort -> wire id: `<model>-<effort>` if in `models`, else `<model>-tiered` + `thinkingLevel`, else refuse fail-closed (clear error) before streaming.
