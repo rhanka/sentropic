@@ -62,12 +62,11 @@ Correct Cloud Code onboarding so an eligible Google AI Pro identity selects its 
   - [x] Return the resolved Cloud Code tier and a free-tier warning from enrollment.
   - [x] Add service-level regression coverage.
   - [x] Pass focused tests and scope-check, then commit atomically.
-- [ ] **Lot 3 — Quota classification**
-  - [ ] Classify HTTP 403, `insufficient_quota`, and `RESOURCE_EXHAUSTED` as replayable quota errors.
-  - [ ] Add focused normalization tests.
-  - [ ] Pass focused tests and scope-check, then commit atomically.
-- [ ] **Lot 4 — Patch version and final gates**
-  - [ ] Bump `@sentropic/llm-mesh` from `0.19.0` to `0.19.1`.
-  - [ ] Pass `make typecheck-llm-mesh`, `make build-llm-mesh`, and `make test-llm-mesh`.
-  - [ ] Pass final scope and diff review.
-  - [ ] Commit the version bump atomically and confirm no push, PR, or publish occurred.
+- [x] **Lot 3 — Patch version and final gates**
+  - [x] Bump `@sentropic/llm-mesh` from `0.19.0` to `0.19.1`.
+  - [x] Pass `make typecheck-llm-mesh`, `make build-llm-mesh`, and `make test-llm-mesh`.
+  - [x] Pass final scope and diff review.
+  - [x] Commit the version bump atomically and confirm no push, PR, or publish occurred.
+
+## Deferred to 0.19.2
+- [ ] Quota classification (HTTP 403 / `insufficient_quota` / `RESOURCE_EXHAUSTED` → replayable quota). Split out of 0.19.1 per owner decision; requires rework (must gate 403 on a real quota signal, and wire the quota class into the CloudCode runtime retry path).
