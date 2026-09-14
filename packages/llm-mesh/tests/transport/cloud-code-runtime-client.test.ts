@@ -40,23 +40,25 @@ const streamResponse = () => new Response(new ReadableStream<Uint8Array>({
   },
 }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
 
-const catalogueResponse = () => new Response(JSON.stringify({
-  models: {
-    'gemini-3.5-flash': {},
-    'gemini-3.5-flash-high': {},
-    'gemini-3.1-flash-lite': {},
-    'gemini-3.7-flash-tiered': {},
-  },
+const defaultModelIds = [
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-high',
+  'gemini-3.1-flash-lite',
+  'gemini-3.7-flash-tiered',
+];
+
+const catalogueResponse = (modelIds = defaultModelIds) => new Response(JSON.stringify({
+  models: Object.fromEntries(modelIds.map((modelId) => [modelId, {}])),
   tieredModelIds: { flash: ['gemini-3.7-flash-tiered'], flashLite: [], pro: [] },
   defaultAgentModelId: 'gemini-3.7-flash-tiered',
   deprecatedModelIds: [],
 }), { status: 200, headers: { 'content-type': 'application/json' } });
 
-const createFetch = () => vi.fn(async (
+const createFetch = (modelIds = defaultModelIds) => vi.fn(async (
   url: string | URL | Request,
   _options?: RequestInit,
 ) => url.toString() === CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL
-  ? catalogueResponse()
+  ? catalogueResponse(modelIds)
   : streamResponse());
 
 const streamInit = (fetchFn: ReturnType<typeof createFetch>): RequestInit =>
@@ -92,7 +94,7 @@ describe('Cloud Code runtime client', () => {
     const init = streamInit(fetchFn);
     expect(init.headers).toMatchObject({ Authorization: 'Bearer secret-cloud-token' });
     expect(JSON.parse(String(init.body))).toMatchObject({
-      project: 'project-1', model: 'gemini-3.5-flash',
+      project: 'project-1', model: 'gemini-3.5-flash-high',
       request: {
         systemInstruction: { parts: [{ text: 'System' }] },
         contents: [{ role: 'user', parts: [
@@ -144,7 +146,7 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
-  it('defaults agy Cloud Code requests to the real Gemini 3.7 Flash model', async () => {
+  it('maps the default Gemini 3.7 Flash model to its announced tiered wire id', async () => {
     const fetchFn = createFetch();
     const client = new CloudCodeRuntimeClient(fetchFn);
 
@@ -153,7 +155,7 @@ describe('Cloud Code runtime client', () => {
     }, context);
 
     const init = streamInit(fetchFn);
-    expect(JSON.parse(String(init.body)).model).toBe('gemini-3.7-flash');
+    expect(JSON.parse(String(init.body)).model).toBe('gemini-3.7-flash-tiered');
     expect(response.modelId).toBe('gemini-3.7-flash');
   });
 
@@ -242,5 +244,53 @@ describe('Cloud Code runtime client', () => {
     expect(fetchFn.mock.calls.filter(
       ([url]) => url.toString() === CLOUD_CODE_STREAM_URL,
     )).toHaveLength(2);
+  });
+
+  it('uses an announced effort-suffixed wire id', async () => {
+    const fetchFn = createFetch(['gemini-3.6-flash-low', 'gemini-3.6-flash-tiered']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-3.6-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'low' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-3.6-flash-low',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } },
+    });
+  });
+
+  it('falls back to an announced tiered wire id with the requested thinking level', async () => {
+    const fetchFn = createFetch(['gemini-3.8-flash-tiered']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await client.generate({
+      providerId: 'gemini', modelId: 'gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'low' },
+    }, context);
+
+    expect(JSON.parse(String(streamInit(fetchFn).body))).toMatchObject({
+      model: 'gemini-3.8-flash-tiered',
+      request: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } },
+    });
+  });
+
+  it('refuses an unavailable model before opening a stream', async () => {
+    const fetchFn = createFetch(['gemini-3.8-flash-tiered']);
+    const client = new CloudCodeRuntimeClient(fetchFn);
+
+    await expect(client.generate({
+      providerId: 'gemini', modelId: 'gemini-9.9-unknown',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoning: { effort: 'low' },
+    }, context)).rejects.toThrow(
+      "Cloud Code model gemini-9.9-unknown with effort low is not available in this account's catalogue",
+    );
+    expect(fetchFn.mock.calls.some(
+      ([url]) => url.toString() === CLOUD_CODE_STREAM_URL,
+    )).toBe(false);
   });
 });
