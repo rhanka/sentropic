@@ -51,10 +51,10 @@ Resolve the CloudCode `daily` 404 by fetching the account's model catalogue (`fe
   - [x] Add `fetchAvailableModels` (POST `/v1internal:fetchAvailableModels`, body `{"project": <cloudaicompanionProject>}`, Antigravity headers) to the CloudCode path.
   - [x] Parse root fields: `models` (keys), `tieredModelIds`, `defaultAgentModelId`, `deprecatedModelIds`.
   - [x] Cache per session/lease (avoid a network call per stream); focused tests with mocked fetch.
-- [ ] **Lot 2 - Wire-id mapping + fail-closed**
-  - [ ] Resolve model x effort -> wire id: `<model>-<effort>` if in `models`, else `<model>-tiered` + `thinkingLevel`, else refuse fail-closed (clear error) before streaming.
-  - [ ] Wire the resolved id into `providerRequest` (replace verbatim base id).
-  - [ ] Tests: suffixed-exists, tiered-fallback, fail-closed-absent, no-regression.
+- [x] **Lot 2 - Wire-id mapping + fail-closed**
+  - [x] Resolve model x effort -> wire id: `<model>-<effort>` if in `models`, else `<model>-tiered` + `thinkingLevel`, else refuse fail-closed (clear error) before streaming.
+  - [x] Wire the resolved id into `providerRequest` (replace verbatim base id).
+  - [x] Tests: suffixed-exists, tiered-fallback, fail-closed-absent, no-regression.
 - [ ] **Lot 3 - Patch version and final gates**
   - [ ] Bump `@sentropic/llm-mesh` 0.19.1 -> 0.19.2.
   - [ ] Pass llm-mesh typecheck, build, and tests on a dedicated test ENV.
