@@ -16,6 +16,8 @@ export const CLOUD_CODE_AUTH_URL = 'https://accounts.google.com/o/oauth2/auth';
 export const CLOUD_CODE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 export const CLOUD_CODE_LOAD_CODE_ASSIST_URL =
   'https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
+export const CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL =
+  'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels';
 export const CLOUD_CODE_USER_AGENT =
   'antigravity/cli/1.1.10 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)';
 
@@ -45,6 +47,77 @@ interface CloudCodeAssistContext {
   currentTier?: string;
   paidTier?: string;
 }
+
+export interface CloudCodeModelCatalogue {
+  readonly models: readonly string[];
+  readonly tieredModelIds: Readonly<Record<string, readonly string[]>>;
+  readonly defaultAgentModelId?: string;
+  readonly deprecatedModelIds: readonly string[];
+}
+
+export interface FetchAvailableModelsInput {
+  accessToken: string;
+  cloudaicompanionProject: string;
+  fetchFn?: typeof fetch;
+}
+
+const antigravityHeaders = (accessToken: string): Record<string, string> => ({
+  Authorization: `Bearer ${accessToken}`,
+  'User-Agent': CLOUD_CODE_USER_AGENT,
+  'Content-Type': 'application/json',
+  'X-Goog-Api-Client': 'gl-node/22.0.0 antigravity/0.1.0',
+  'Client-Metadata': JSON.stringify({
+    ideType: 'ANTIGRAVITY',
+    platform: 'PLATFORM_UNSPECIFIED',
+    pluginType: 'ANTIGRAVITY',
+  }),
+});
+
+const stringList = (value: unknown): readonly string[] =>
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+
+export const fetchAvailableModels = async ({
+  accessToken,
+  cloudaicompanionProject,
+  fetchFn = fetch,
+}: FetchAvailableModelsInput): Promise<CloudCodeModelCatalogue> => {
+  const project = cloudaicompanionProject.trim();
+  if (!project) {
+    throw new Error('Cloud Code fetchAvailableModels requires cloudaicompanionProject');
+  }
+  const response = await fetchFn(CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL, {
+    method: 'POST',
+    headers: antigravityHeaders(accessToken),
+    body: JSON.stringify({ project }),
+  });
+  if (!response.ok) {
+    throw new Error(`Cloud Code fetchAvailableModels failed (${response.status})`);
+  }
+  const value = await response.json() as unknown;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Cloud Code fetchAvailableModels returned no models catalogue');
+  }
+  const payload = value as Record<string, unknown>;
+  if (!payload.models || typeof payload.models !== 'object' || Array.isArray(payload.models)) {
+    throw new Error('Cloud Code fetchAvailableModels returned no models catalogue');
+  }
+  const tieredModelIds = payload.tieredModelIds
+    && typeof payload.tieredModelIds === 'object'
+    && !Array.isArray(payload.tieredModelIds)
+    ? Object.fromEntries(Object.entries(payload.tieredModelIds).map(
+        ([tier, modelIds]) => [tier, stringList(modelIds)],
+      ))
+    : {};
+  const defaultAgentModelId = typeof payload.defaultAgentModelId === 'string'
+    ? payload.defaultAgentModelId.trim()
+    : '';
+  return {
+    models: Object.keys(payload.models),
+    tieredModelIds,
+    ...(defaultAgentModelId ? { defaultAgentModelId } : {}),
+    deprecatedModelIds: stringList(payload.deprecatedModelIds),
+  };
+};
 
 const readTierId = (value: unknown): string | undefined => {
   if (typeof value === 'string' && value.trim().length > 0) return value.trim();
@@ -278,17 +351,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
   private async loadCodeAssist(credential: PreparedCredential): Promise<CloudCodeAssistContext> {
     const response = await this.fetchFn(CLOUD_CODE_LOAD_CODE_ASSIST_URL, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${credential.accessToken}`,
-        'User-Agent': CLOUD_CODE_USER_AGENT,
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Client': 'gl-node/22.0.0 antigravity/0.1.0',
-        'Client-Metadata': JSON.stringify({
-          ideType: 'ANTIGRAVITY',
-          platform: 'PLATFORM_UNSPECIFIED',
-          pluginType: 'ANTIGRAVITY',
-        }),
-      },
+      headers: antigravityHeaders(credential.accessToken),
       body: JSON.stringify({ metadata: { ideType: 'ANTIGRAVITY' } }),
     });
 

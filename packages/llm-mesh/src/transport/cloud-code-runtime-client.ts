@@ -3,6 +3,10 @@ import type { AccountTransportAuthMaterial } from '../auth.js';
 import { getSecretAuthMaterial } from '../auth.js';
 import type { GeminiAdapterClient } from '../adapters.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from '../generation.js';
+import {
+  fetchAvailableModels,
+  type CloudCodeModelCatalogue,
+} from '../enrollment/cloud-code.js';
 import type { LlmMeshMessage } from '../messages.js';
 import type { ProviderRuntimeContext } from '../registry.js';
 import type { ProviderEvent, ProviderRequest } from '../service/facade.js';
@@ -131,15 +135,17 @@ const cloudCodeToolConfig = (request: GenerateRequest): unknown => {
   };
 };
 
+const cloudCodeThinkingLevel = (request: GenerateRequest): 'LOW' | 'MEDIUM' | 'HIGH' | undefined => {
+  const effort = request.reasoning?.effort;
+  if (!effort || effort === 'none') return undefined;
+  return effort === 'low' ? 'LOW' : effort === 'medium' ? 'MEDIUM' : 'HIGH';
+};
+
 const cloudCodeThinkingConfig = (request: GenerateRequest): unknown => {
   if (!request.reasoning) return undefined;
   const config = {
-    ...(request.reasoning.effort && request.reasoning.effort !== 'none'
-      ? {
-          thinkingLevel: request.reasoning.effort === 'low'
-            ? 'LOW'
-            : request.reasoning.effort === 'medium' ? 'MEDIUM' : 'HIGH',
-        }
+    ...(cloudCodeThinkingLevel(request)
+      ? { thinkingLevel: cloudCodeThinkingLevel(request) }
       : {}),
     ...(request.reasoning.enabled !== undefined
       ? { includeThoughts: request.reasoning.enabled }
@@ -177,7 +183,30 @@ const contents = (messages: readonly LlmMeshMessage[]) => messages.flatMap((mess
   return [{ role: message.role === 'assistant' ? 'model' : 'user', parts }];
 });
 
-const providerRequest = (request: GenerateRequest): ProviderRequest => {
+const requestedModelId = (request: GenerateRequest): string => request.modelId
+  ?? (typeof request.model === 'string' ? request.model : DEFAULT_CLOUD_CODE_MODEL_ID);
+
+const resolveWireModelId = (
+  request: GenerateRequest,
+  catalogue: CloudCodeModelCatalogue,
+): string => {
+  const modelId = requestedModelId(request);
+  const available = new Set(catalogue.models);
+  const thinkingLevel = cloudCodeThinkingLevel(request);
+  if (thinkingLevel) {
+    const suffixedModelId = `${modelId}-${thinkingLevel.toLowerCase()}`;
+    if (available.has(suffixedModelId)) return suffixedModelId;
+  }
+  if (available.has(modelId)) return modelId;
+  const tieredModelId = `${modelId}-tiered`;
+  if (available.has(tieredModelId)) return tieredModelId;
+  const effort = thinkingLevel?.toLowerCase() ?? 'default';
+  throw new Error(
+    `Cloud Code model ${modelId} with effort ${effort} is not available in this account's catalogue`,
+  );
+};
+
+const providerRequest = (request: GenerateRequest, wireModelId: string): ProviderRequest => {
   const projections = request.tools?.map((tool) => ({
     tool,
     projection: projectCloudCodeSchema(tool.inputSchema, `tools.${tool.name}`),
@@ -185,8 +214,7 @@ const providerRequest = (request: GenerateRequest): ProviderRequest => {
   const droppedConstraints = projections.flatMap(({ projection }) =>
     projection.droppedConstraints);
   return {
-    modelId: request.modelId
-      ?? (typeof request.model === 'string' ? request.model : DEFAULT_CLOUD_CODE_MODEL_ID),
+    modelId: wireModelId,
     contents: contents(request.messages),
     systemInstruction: {
       parts: request.messages
@@ -226,7 +254,42 @@ const usage = (value: unknown): TokenUsage => {
 
 export class CloudCodeRuntimeClient implements GeminiAdapterClient {
   private readonly adapter: CloudCodeProviderAdapter;
-  constructor(fetchFn: typeof fetch = fetch) { this.adapter = new CloudCodeProviderAdapter(fetchFn); }
+  // Intentionally no TTL/size cap: account/session-lease entries evict failed fetches only;
+  // a server-removed model id can therefore remain theoretically stale for the client's lifetime.
+  private readonly catalogueCache = new Map<string, Promise<CloudCodeModelCatalogue>>();
+
+  constructor(private readonly fetchFn: typeof fetch = fetch) {
+    this.adapter = new CloudCodeProviderAdapter(fetchFn);
+  }
+
+  private async getCatalogue(
+    acquisition: AccountTransportAcquisition,
+  ): Promise<CloudCodeModelCatalogue> {
+    const project = acquisition.runtime.metadata?.cloudaicompanionProject;
+    if (typeof project !== 'string' || project.trim().length === 0) {
+      throw new Error('Cloud Code model catalogue requires cloudaicompanionProject');
+    }
+    const cacheKey = [
+      acquisition.lease.accountId,
+      acquisition.lease.stableSessionId,
+      project.trim(),
+    ].join('\u001f');
+    const cached = this.catalogueCache.get(cacheKey);
+    if (cached) return cached;
+
+    const pending = fetchAvailableModels({
+      accessToken: acquisition.material.accessToken,
+      cloudaicompanionProject: project,
+      fetchFn: this.fetchFn,
+    });
+    this.catalogueCache.set(cacheKey, pending);
+    try {
+      return await pending;
+    } catch (error) {
+      if (this.catalogueCache.get(cacheKey) === pending) this.catalogueCache.delete(cacheKey);
+      throw error;
+    }
+  }
 
   async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
     const auth = getSecretAuthMaterial(context?.auth);
@@ -250,8 +313,11 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
       runtime: { stableSessionId: String(metadata?.stableSessionId ?? 'route'), metadata },
       async recordOutcome() {},
     };
+    const catalogue = await this.getCatalogue(acquisition);
+    const wireModelId = resolveWireModelId(request, catalogue);
     return this.events(this.adapter.execute(
-      acquisition, providerRequest(request), request.signal ?? new AbortController().signal,
+      acquisition, providerRequest(request, wireModelId),
+      request.signal ?? new AbortController().signal,
     ));
   }
 
