@@ -235,6 +235,7 @@ describe('CloudCodeEnrollmentProvider', () => {
       authClientConfigVersion: 'v1.0.0',
     })).resolves.toMatchObject({
       cloudaicompanionProject: 'pro-cloud-code-project',
+      cloudCodeTier: 'standard-tier',
     });
 
     expect(mockFetch.mock.calls.map(([url]) => url.toString())).toEqual([
@@ -242,6 +243,28 @@ describe('CloudCodeEnrollmentProvider', () => {
       CLOUD_CODE_ONBOARD_USER_URL,
       CLOUD_CODE_LOAD_CODE_ASSIST_URL,
     ]);
+  });
+
+  it('surfaces a free Cloud Code tier without forcing unavailable onboarding', async () => {
+    const mockFetch = vi.fn(async () => new Response(JSON.stringify({
+      cloudaicompanionProject: 'free-cloud-code-project',
+      currentTier: { id: 'free-tier' },
+      allowedTiers: [{ id: 'free-tier' }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const provider = new CloudCodeEnrollmentProvider({
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    await expect(provider.resolve({
+      accountId: 'free-account',
+      accessToken: 'free-access',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      authClientConfigVersion: 'v1.0.0',
+    })).resolves.toMatchObject({
+      cloudaicompanionProject: 'free-cloud-code-project',
+      cloudCodeTier: 'free-tier',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('handles cancel idempotently', async () => {

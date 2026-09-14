@@ -9,6 +9,7 @@ import type {
   AccountPublic,
   CompleteEnrollmentInput,
   CredentialEnvelope,
+  EnrollmentCompletion,
   EnrollmentProvider,
   EnrollmentSession,
   PreparedCredential,
@@ -97,7 +98,7 @@ export class LocalAccountTransportService {
     return provider.start(input);
   }
 
-  async waitForCallback(enrollmentId: string): Promise<{ accountId: string; label: string }> {
+  async waitForCallback(enrollmentId: string): Promise<EnrollmentCompletion> {
     const provider = this.providers.get('cloud-code');
     if (!provider?.waitForCallback) {
       throw new Error("No enrollment provider with 'waitForCallback' registered");
@@ -146,10 +147,23 @@ export class LocalAccountTransportService {
         account,
       );
     }
-    return { accountId: res.accountId, label: res.label };
+    const cloudCodeTier = typeof res.metadata?.cloudCodeTier === 'string'
+      ? res.metadata.cloudCodeTier
+      : undefined;
+    return {
+      accountId: res.accountId,
+      label: res.label,
+      ...(cloudCodeTier ? { cloudCodeTier } : {}),
+      ...(cloudCodeTier === 'free-tier' ? {
+        warning: {
+          code: 'cloud-code-free-tier',
+          message: 'Cloud Code enrollment resolved to free-tier; unattended workloads may exhaust quota.',
+        },
+      } : {}),
+    };
   }
 
-  async pollForCompletion(enrollmentId: string): Promise<{ accountId: string; label: string }> {
+  async pollForCompletion(enrollmentId: string): Promise<EnrollmentCompletion> {
     const provider = this.providers.get('codex');
     if (!provider?.pollForCompletion) {
       throw new Error("No enrollment provider with 'pollForCompletion' registered");
