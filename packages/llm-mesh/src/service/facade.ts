@@ -5,6 +5,7 @@ import type {
 import type { AccountTransportProviderId } from '../auth.js';
 import type {
   AccountPublic,
+  EnrollmentCompletion,
   EnrollmentProvider,
   EnrollmentSession,
   StartEnrollmentInput,
@@ -103,8 +104,8 @@ export interface LlmMeshFacade {
     providerId: AccountTransportProviderId,
     input: StartEnrollmentInput,
   ): Promise<EnrollmentSession>;
-  waitForCallback(enrollmentId: string): Promise<{ accountId: string; label: string }>;
-  pollForCompletion(enrollmentId: string): Promise<{ accountId: string; label: string }>;
+  waitForCallback(enrollmentId: string): Promise<EnrollmentCompletion>;
+  pollForCompletion(enrollmentId: string): Promise<EnrollmentCompletion>;
   cancel(enrollmentId: string): Promise<void>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
