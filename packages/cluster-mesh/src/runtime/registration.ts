@@ -1,4 +1,29 @@
 import type { VerifiedInvocationContext } from '@sentropic/contracts';
+import type {
+  CustodyTokenVerifierPort,
+  SourceVerifiedCustodyRef,
+} from './custody-types.js';
+
+export const GATEWAY_RELAUNCH_SCOPE = 'session:relaunch:gateway' as const;
+
+export interface RelaunchLaunchContext {
+  readonly gateway: boolean;
+}
+
+export type GatewayNamespace = 'gw' | 'no-gw';
+
+type SessionControlAction = 'drive' | 'wake' | 'relaunch';
+
+export interface SessionControlIntent {
+  readonly commandRef: string;
+  readonly targetRegistrationId: string;
+  readonly idempotencyKey: string;
+  readonly launchContext?: RelaunchLaunchContext;
+}
+
+export interface RelaunchAuthorizationAttributes {
+  readonly launchContext: RelaunchLaunchContext;
+}
 
 export type RegistrationFailureReason =
   | 'missing_registration'
@@ -9,6 +34,8 @@ export type RegistrationFailureReason =
   | 'workspace_mismatch'
   | 'custody_required'
   | 'custody_mismatch'
+  | 'invalid_launch_context'
+  | 'gateway_forbidden'
   | 'actuator_unavailable'
   | 'command_unresolved';
 
@@ -29,7 +56,7 @@ export interface CommandInstructionPort {
   resolve(input: {
     readonly commandRef: string;
     readonly registrationId: string;
-    readonly action: 'drive' | 'wake' | 'relaunch';
+    readonly action: SessionControlAction;
   }): Promise<SignedInstruction | null>;
 }
 
@@ -52,13 +79,18 @@ export interface RegistrationLookupPort {
   find(registrationId: string): Promise<ClusterMeshRegistration | null>;
 }
 
-export interface ActuationRequest {
+interface ActuationRequestBase {
   readonly registration: ClusterMeshRegistration;
-  readonly action: 'drive' | 'wake' | 'relaunch';
   /** Opaque, non-executable identifier. Actuators MUST NOT interpret it as an instruction. */
   readonly commandRef: string;
   readonly resolvedInstruction: SignedInstruction;
 }
+
+export type ActuationRequest = ActuationRequestBase & (
+  | { readonly action: 'drive'; readonly launchContext?: never }
+  | { readonly action: 'wake'; readonly launchContext?: never }
+  | { readonly action: 'relaunch'; readonly launchContext: RelaunchLaunchContext }
+);
 
 export interface ActuationResult {
   readonly effectRef: string;
@@ -84,7 +116,7 @@ export type SessionActuatorPort = PtyActuatorPort | SecondaryActuatorPort;
 
 export async function selectPreferredActuator(input: {
   readonly actuatorRef: string;
-  readonly action: 'drive' | 'wake' | 'relaunch';
+  readonly action: SessionControlAction;
   readonly pty: PtyActuatorPort;
   readonly secondary?: SecondaryActuatorPort;
 }): Promise<SessionActuatorPort | null> {
@@ -105,28 +137,76 @@ export async function selectPreferredActuator(input: {
 export type RegistrationDecision =
   | {
       readonly ok: true;
+      readonly action: 'drive';
       readonly registration: ClusterMeshRegistration;
       readonly actuator: SessionActuatorPort;
+      readonly launchContext?: never;
+    }
+  | {
+      readonly ok: true;
+      readonly action: 'wake';
+      readonly registration: ClusterMeshRegistration;
+      readonly actuator: SessionActuatorPort;
+      readonly launchContext?: never;
+    }
+  | {
+      readonly ok: true;
+      readonly action: 'relaunch';
+      readonly registration: ClusterMeshRegistration;
+      readonly actuator: SessionActuatorPort;
+      readonly launchContext: RelaunchLaunchContext;
     }
   | { readonly ok: false; readonly reason: RegistrationFailureReason };
 
 export interface RegistrationGate {
+  readonly custodyControlled?: true;
   authorize(
     context: VerifiedInvocationContext,
-    action: 'drive' | 'wake' | 'relaunch',
+    action: SessionControlAction,
+    attributes?: RelaunchAuthorizationAttributes,
   ): Promise<RegistrationDecision>;
 }
+
+const hasExactKeys = (value: object, keys: readonly (string | symbol)[]): boolean => {
+  const actual = Reflect.ownKeys(value);
+  return actual.length === keys.length && keys.every((key) => actual.includes(key));
+};
+
+const resolveLaunchContext = (
+  action: SessionControlAction,
+  attributes: RelaunchAuthorizationAttributes | undefined,
+): { readonly ok: true; readonly launchContext?: RelaunchLaunchContext } | { readonly ok: false } => {
+  if (action !== 'relaunch') return attributes === undefined ? { ok: true } : { ok: false };
+  if (attributes === undefined) return { ok: true, launchContext: { gateway: false } };
+  if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) return { ok: false };
+  if (!hasExactKeys(attributes, ['launchContext'])) return { ok: false };
+  const launchContext: unknown = attributes.launchContext;
+  if (!launchContext || typeof launchContext !== 'object' || Array.isArray(launchContext)) {
+    return { ok: false };
+  }
+  if (!hasExactKeys(launchContext, ['gateway'])) return { ok: false };
+  const gateway = (launchContext as { readonly gateway?: unknown }).gateway;
+  return typeof gateway === 'boolean'
+    ? { ok: true, launchContext: { gateway } }
+    : { ok: false };
+};
 
 export function createRegistrationGate(input: {
   readonly generationId: string;
   readonly registrations: RegistrationLookupPort;
   readonly pty: PtyActuatorPort;
   readonly secondary?: SecondaryActuatorPort;
+  readonly custodyTokens?: CustodyTokenVerifierPort;
   readonly now?: () => Date;
 }): RegistrationGate {
   const now = input.now ?? (() => new Date());
   return {
-    async authorize(context, action) {
+    ...(input.custodyTokens ? { custodyControlled: true as const } : {}),
+    async authorize(context, action, attributes) {
+      if (
+        input.custodyTokens
+        && (!context.custody || !('sourceToken' in context.custody))
+      ) return { ok: false, reason: 'custody_required' };
       const reference = context.registration;
       if (!reference) return { ok: false, reason: 'missing_registration' };
       const registration = await input.registrations.find(reference.registrationId);
@@ -164,6 +244,29 @@ export function createRegistrationGate(input: {
         reference.actuatorRef !== registration.actuatorRef
         || reference.expiresAt !== registration.expiresAt
       ) return { ok: false, reason: 'stale_registration' };
+      const resolved = resolveLaunchContext(action, attributes);
+      if (!resolved.ok) return { ok: false, reason: 'invalid_launch_context' };
+      if (
+        resolved.launchContext?.gateway === true
+        && !context.scopes.includes(GATEWAY_RELAUNCH_SCOPE)
+      ) return { ok: false, reason: 'gateway_forbidden' };
+      if (input.custodyTokens) {
+        const custody = context.custody as SourceVerifiedCustodyRef;
+        try {
+          const decision = await input.custodyTokens.consume(custody.sourceToken, {
+            audience: custody.sourceToken.audience,
+            registrationId: registration.registrationId,
+            action,
+            holderPrincipalId: registration.custodyHolderPrincipalId,
+            epoch: registration.custodyEpoch,
+            custodyId: custody.custodyId,
+            invocationId: context.invocationId,
+          });
+          if (!decision.ok) return { ok: false, reason: 'custody_mismatch' };
+        } catch {
+          return { ok: false, reason: 'custody_mismatch' };
+        }
+      }
       const actuator = await selectPreferredActuator({
         actuatorRef: registration.actuatorRef,
         action,
@@ -171,7 +274,11 @@ export function createRegistrationGate(input: {
         secondary: input.secondary,
       });
       if (!actuator) return { ok: false, reason: 'actuator_unavailable' };
-      return { ok: true, registration, actuator };
+      if (action === 'relaunch') {
+        return { ok: true, action, registration, actuator, launchContext: resolved.launchContext! };
+      }
+      if (action === 'drive') return { ok: true, action, registration, actuator };
+      return { ok: true, action: 'wake', registration, actuator };
     },
   };
 }
