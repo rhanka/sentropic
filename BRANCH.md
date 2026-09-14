@@ -58,10 +58,10 @@ Correct Cloud Code onboarding so an eligible Google AI Pro identity selects its 
   - [x] Select and confirm `standard-tier` when the identity is eligible.
   - [x] Add focused regression coverage.
   - [x] Pass focused enrollment tests and scope-check, then commit atomically.
-- [ ] **Lot 2 — Enrollment-time tier visibility**
-  - [ ] Return the resolved Cloud Code tier and a free-tier warning from enrollment.
-  - [ ] Add service-level regression coverage.
-  - [ ] Pass focused tests and scope-check, then commit atomically.
+- [x] **Lot 2 — Enrollment-time tier visibility**
+  - [x] Return the resolved Cloud Code tier and a free-tier warning from enrollment.
+  - [x] Add service-level regression coverage.
+  - [x] Pass focused tests and scope-check, then commit atomically.
 - [ ] **Lot 3 — Quota classification**
   - [ ] Classify HTTP 403, `insufficient_quota`, and `RESOURCE_EXHAUSTED` as replayable quota errors.
   - [ ] Add focused normalization tests.

@@ -279,6 +279,7 @@ export class CloudCodeEnrollmentProvider implements EnrollmentProvider {
     return {
       cloudaicompanionProject: context.cloudaicompanionProject,
       cloudCodeUserAgentVersion: '1.1.10',
+      ...(context.currentTier ? { cloudCodeTier: context.currentTier } : {}),
     };
   }
 
