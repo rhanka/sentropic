@@ -5,7 +5,6 @@ import {
   CLOUD_CODE_CLIENT_ID,
   CLOUD_CODE_CLIENT_SECRET,
   CLOUD_CODE_LOAD_CODE_ASSIST_URL,
-  CLOUD_CODE_ONBOARD_USER_URL,
   CLOUD_CODE_TOKEN_URL,
   CLOUD_CODE_USER_AGENT,
   CloudCodeEnrollmentProvider,
@@ -201,26 +200,15 @@ describe('CloudCodeEnrollmentProvider', () => {
     expect(meta.cloudCodeUserAgentVersion).toBe('1.1.10');
   });
 
-  it('onboards the standard tier when a Google AI Pro identity is eligible', async () => {
-    let loadCount = 0;
-    const mockFetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
+  it('prefers the paid entitlement over a free compatibility tier', async () => {
+    const mockFetch = vi.fn(async (url: string | URL | Request) => {
       if (url.toString() === CLOUD_CODE_LOAD_CODE_ASSIST_URL) {
-        loadCount += 1;
         return new Response(JSON.stringify({
           cloudaicompanionProject: 'pro-cloud-code-project',
-          currentTier: { id: loadCount === 1 ? 'free-tier' : 'standard-tier' },
+          currentTier: { id: 'free-tier' },
+          paidTier: { id: 'g1-pro-tier' },
           allowedTiers: [{ id: 'free-tier' }, { id: 'standard-tier' }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      if (url.toString() === CLOUD_CODE_ONBOARD_USER_URL) {
-        expect(JSON.parse(String(options?.body))).toMatchObject({
-          tierId: 'standard-tier',
-          cloudaicompanionProject: 'pro-cloud-code-project',
-        });
-        return new Response(JSON.stringify({ done: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
       }
       return new Response('Not found', { status: 404 });
     });
@@ -235,14 +223,10 @@ describe('CloudCodeEnrollmentProvider', () => {
       authClientConfigVersion: 'v1.0.0',
     })).resolves.toMatchObject({
       cloudaicompanionProject: 'pro-cloud-code-project',
-      cloudCodeTier: 'standard-tier',
+      cloudCodeTier: 'g1-pro-tier',
     });
 
-    expect(mockFetch.mock.calls.map(([url]) => url.toString())).toEqual([
-      CLOUD_CODE_LOAD_CODE_ASSIST_URL,
-      CLOUD_CODE_ONBOARD_USER_URL,
-      CLOUD_CODE_LOAD_CODE_ASSIST_URL,
-    ]);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces a free Cloud Code tier without forcing unavailable onboarding', async () => {

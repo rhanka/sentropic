@@ -1,7 +1,7 @@
-# Fix: Cloud Code Pro enrollment and quota fallback
+# Fix: Cloud Code enrollment visibility and quota fallback
 
 ## Objective
-Correct Cloud Code onboarding so an eligible Google AI Pro identity selects its paid Cloud Code tier, expose the resolved tier during enrollment, and classify quota failures as replayable provider errors.
+Distinguish Cloud Code's paid entitlement from its compatibility tier, expose the resolved tier during enrollment, and classify quota failures as replayable provider errors.
 
 ## Scope / Guardrails
 - Build on the supplied measured diagnosis; do not repeat live network probing.
@@ -53,9 +53,9 @@ Correct Cloud Code onboarding so an eligible Google AI Pro identity selects its 
   - [x] Verify the requested worktree is writable with a create/delete probe.
   - [x] Read the execution brief and measured diagnosis without repeating network probing.
   - [x] Trace OAuth client source, scopes, project discovery, tier selection, onboarding, runtime, gateway linkage, and ProviderId status.
-- [x] **Lot 1 — Pro-tier onboarding correction**
-  - [x] Parse current and allowed Cloud Code tiers from `loadCodeAssist`.
-  - [x] Select and confirm `standard-tier` when the identity is eligible.
+- [x] **Lot 1 — Pro-tier resolution correction**
+  - [x] Parse current and paid Cloud Code tiers from `loadCodeAssist`.
+  - [x] Prefer the server-provided paid entitlement without mutating an existing server enrollment.
   - [x] Add focused regression coverage.
   - [x] Pass focused enrollment tests and scope-check, then commit atomically.
 - [x] **Lot 2 — Enrollment-time tier visibility**
