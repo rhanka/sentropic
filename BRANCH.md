@@ -1,27 +1,31 @@
-# Fix: Clear dependency audit HIGH advisories
+# Fix: Cloud Code Pro enrollment and quota fallback
 
 ## Objective
-Clear the repo-wide npm audit gate with compatible dependency updates so API typechecking reaches TypeScript and exits successfully.
+Correct Cloud Code onboarding so an eligible Google AI Pro identity selects its paid Cloud Code tier, expose the resolved tier during enrollment, and classify quota failures as replayable provider errors.
 
 ## Scope / Guardrails
-- Scope limited to Tiptap, xmldom, and js-yaml dependency metadata plus the security exception files if no compatible patch exists.
-- Use compatible same-major releases; allowlist only when no non-breaking patched release is available.
-- Do not change package versions for the root, UI, or API applications.
-- Make-only and Docker-first workflow in `tmp/fix-deps-audit` with `ENV=test-deps-audit` last.
-- Do not push or open a pull request.
-- All new text is English.
+- Build on the supplied measured diagnosis; do not repeat live network probing.
+- Never read, print, or modify keyring, credential, or secret material.
+- Do not change `@sentropic/contracts`.
+- Keep the `@sentropic/llm-mesh` public contract backward-compatible and bump `0.19.0` to `0.19.1`.
+- Make-only gates on `ENV=test-llm-mesh-gemini`; never use `ENV=dev`.
+- Do not push, open a pull request, publish, or add attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `package.json`
-  - `package-lock.json`
-  - `api/package.json`
-  - `ui/package.json`
-  - `.security/audit-allowlist.json`
-  - `.security/vulnerability-register.yaml`
+  - `packages/llm-mesh/src/enrollment/cloud-code.ts`
+  - `packages/llm-mesh/src/enrollment/contracts.ts`
+  - `packages/llm-mesh/src/errors.ts`
+  - `packages/llm-mesh/src/service/facade.ts`
+  - `packages/llm-mesh/src/service/local-account-transport-service.ts`
+  - `packages/llm-mesh/tests/enrollment/cloud-code.test.ts`
+  - `packages/llm-mesh/tests/errors.test.ts`
+  - `packages/llm-mesh/tests/service/local-account-transport-service.test.ts`
+  - `packages/llm-mesh/package.json`
 - **Forbidden Paths (must not change in this branch)**:
-  - `packages/cluster-mesh/**`
+  - `packages/contracts/**`
+  - `packages/llm-gateway/**`
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -30,34 +34,40 @@ Clear the repo-wide npm audit gate with compatible dependency updates so API typ
 - **Conditional Paths (allowed only with explicit exception)**:
   - None.
 - **Exception process**:
-  - Declare a `BRDA-EXn` item in `## Feedback Loop` before touching a forbidden path.
+  - Declare a `BRGEM-EXn` item in `## Feedback Loop` before touching a forbidden path.
 
 ## Feedback Loop
-- [x] No exception is required for the scoped dependency and lockfile changes.
+- [x] No exception is required for the scoped package correction.
 
 ## AI Flaky tests
-- [x] N/A; the required audit, typecheck, and dependency-focused test gates are deterministic.
+- [x] N/A; all scoped tests use mocked provider responses.
 
 ## Orchestration Mode
 - [x] **Mono-branch**
 - [ ] **Multi-branch**
-- [x] One focused dependency-security correction with one final verification cycle.
+- [x] The enrollment, visibility, quota, and version lots are sequential and independently committed.
 
 ## Plan / Todo
-- [x] **Lot 0 — Reproduce and triage**
-  - [x] Verify `fix/deps-audit-gate` mechanically with `harness check branch`.
-  - [x] Reproduce the audit-gate failure for the three advisory groups.
-  - [x] Confirm patched same-major releases and inspect in-repo API usage.
-- [x] **Lot 1 — Compatible dependency remediation**
-  - [x] Align the Tiptap runtime set on a patched 3.x release.
-  - [x] Update xmldom to patched 0.9.x resolutions.
-  - [x] Update the js-yaml overrides to patched 3.15.x resolutions.
-  - [x] Regenerate the root workspace lockfile through the Make/Docker lane.
-  - [x] Confirm no new allowlist or vulnerability-register entry is required.
-- [x] **Lot 2 — Verification and handoff**
-  - [x] Pass the exact audit-gate command.
-  - [x] Pass API typechecking through `tsc --noEmit`.
-  - [x] Pass focused runtime dependency tests and UI typechecking for Tiptap.
-  - [x] Pass `make scope-check ENV=test-deps-audit` before each commit.
-  - [x] Commit atomically with selective staging and no attribution trailer.
-  - [x] Confirm the branch is not pushed and no pull request was opened.
+- [x] **Lot 0 — Evidence and scope**
+  - [x] Verify branch `fix/llm-mesh-gemini-enrollment` mechanically.
+  - [x] Verify the requested worktree is writable with a create/delete probe.
+  - [x] Read the execution brief and measured diagnosis without repeating network probing.
+  - [x] Trace OAuth client source, scopes, project discovery, tier selection, onboarding, runtime, gateway linkage, and ProviderId status.
+- [x] **Lot 1 — Pro-tier onboarding correction**
+  - [x] Parse current and allowed Cloud Code tiers from `loadCodeAssist`.
+  - [x] Select and confirm `standard-tier` when the identity is eligible.
+  - [x] Add focused regression coverage.
+  - [x] Pass focused enrollment tests and scope-check, then commit atomically.
+- [ ] **Lot 2 — Enrollment-time tier visibility**
+  - [ ] Return the resolved Cloud Code tier and a free-tier warning from enrollment.
+  - [ ] Add service-level regression coverage.
+  - [ ] Pass focused tests and scope-check, then commit atomically.
+- [ ] **Lot 3 — Quota classification**
+  - [ ] Classify HTTP 403, `insufficient_quota`, and `RESOURCE_EXHAUSTED` as replayable quota errors.
+  - [ ] Add focused normalization tests.
+  - [ ] Pass focused tests and scope-check, then commit atomically.
+- [ ] **Lot 4 — Patch version and final gates**
+  - [ ] Bump `@sentropic/llm-mesh` from `0.19.0` to `0.19.1`.
+  - [ ] Pass `make typecheck-llm-mesh`, `make build-llm-mesh`, and `make test-llm-mesh`.
+  - [ ] Pass final scope and diff review.
+  - [ ] Commit the version bump atomically and confirm no push, PR, or publish occurred.
