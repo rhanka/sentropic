@@ -52,5 +52,5 @@ Expose a public, ergonomic agent<->agent messaging client over the EXISTING M01 
 
 ## Plan / Todo
 - [x] **Lot 1 - messaging client** over BoundedLocalMessagingStore (sendMessage/receiveMessages/ack + signed envelope), exposed on the public index. Reuse store + signing; keep separate from actuation.
-- [ ] **Lot 2 - Tests** (no live network): send->receive->ack round-trip; kind carried; envelope signed/verified; at-least-once + ack semantics preserved; separation from actuation intent.
+- [x] **Lot 2 - Tests** (no live network): send->receive->ack round-trip; kind carried; envelope signed/verified; at-least-once + ack semantics preserved; separation from actuation intent.
 - [ ] **Lot 3 - Version + gates**: bump 0.10.0 -> 0.10.1; `make typecheck-cluster-mesh` + `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests` + `make typecheck-api REGISTRY=local`; commit atomically; no push/PR/publish.
