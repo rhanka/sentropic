@@ -71,6 +71,7 @@ export interface GenerateResponse {
   text: string;
   toolCalls: readonly ToolCall[];
   finishReason: FinishReason;
+  providerRawFinishReason?: string;
   usage?: TokenUsage;
   structuredOutput?: unknown;
   providerMetadata?: Record<string, unknown>;

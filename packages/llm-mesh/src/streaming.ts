@@ -28,6 +28,7 @@ export interface TokenUsage {
   inputTokens?: number;
   outputTokens?: number;
   reasoningTokens?: number;
+  thoughtsTokenCount?: number;
   totalTokens?: number;
   providerRawUsage?: unknown;
 }
@@ -87,6 +88,7 @@ export interface DoneEvent {
   type: 'done';
   data: {
     finishReason?: FinishReason;
+    providerRawFinishReason?: string;
     usage?: TokenUsage;
     responseId?: string;
     sentropicResponseId?: string;
