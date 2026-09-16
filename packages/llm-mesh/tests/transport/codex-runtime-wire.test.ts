@@ -57,6 +57,17 @@ describe('Codex runtime wire', () => {
     });
   });
 
+  it('passes through the optional maximum output token cap', () => {
+    const request = {
+      providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
+      messages: [{ role: 'user' as const, content: 'hello' }],
+    };
+
+    expect(buildCodexRuntimeRequest({ ...request, maxOutputTokens: 321 }).body)
+      .toMatchObject({ max_output_tokens: 321 });
+    expect(buildCodexRuntimeRequest(request).body).not.toHaveProperty('max_output_tokens');
+  });
+
   it('maps Codex SSE events to ordered canonical events', () => {
     expect(decodeCodexRuntimeEvent({
       type: 'response.output_text.delta', delta: 'hello',
