@@ -1,63 +1,56 @@
-# Fix: llm-mesh transport contract-fidelity (0.19.3)
+# feat: cluster-mesh agent-to-agent messaging client (0.10.1)
 
 ## Objective
-Close three measured transport contract-fidelity defects (CloudCode + Codex) so the public contract reaches the wire and terminal states are reported truthfully. Bump `@sentropic/llm-mesh` 0.19.2 -> 0.19.3.
+Expose a public, ergonomic agent<->agent messaging client over the EXISTING M01 `BoundedLocalMessagingStore`, so a consumer (h2a `h2a send`/`h2a_send`) can send a notify/wake/text message to a peer and drain+ack its inbox without reimplementing the store wiring or the envelope. Additive-only. Bump `@sentropic/cluster-mesh` 0.10.0 -> 0.10.1 (patch).
 
 ## Scope / Guardrails
-- Build on i-cond's measured receipts; do not re-run live network probing.
-- Never read, print, or modify keyring, credential, or secret material.
-- Do not change `@sentropic/contracts`. Additive-only, backward-compatible changes to llm-mesh's own public types.
-- Make-only gates on `ENV=test-*`; never `ENV=dev`.
-- Do not push, open a pull request, publish, or add attribution trailers.
+- REUSE the existing M01 store (`BoundedLocalMessagingStore` put/pop|drain/ack) — do NOT invent a 2nd channel.
+- SEPARATE from the actuation/custody seam: this is the messaging channel (notify/wake/text), NOT the session-control actuation path. Do NOT route through RegistrationGate/session-router; do NOT touch `ActuationRequest`/`ActuationResult`/`RegistrationDecision` (frozen), nor `@sentropic/contracts`, nor migration 0007. `MessageActuationIntent{kind:'session-control'}` stays the actuation path — the new client does not use it.
+- Strictly ADDITIVE: new client module + a Message envelope helper + one `index.ts` export line. Reuse existing types (`MeshMessage`, `MessagePayload`, `MessageAddress`, `PutMessageRequest`/`Result`, pop/drain, `AckMessageRequest`); if a `kind` discriminator is needed, add it additively/optionally.
+- Auth: reuse the existing signing (custody-crypto ed25519 / the store's product-authorization) — signed envelope, no new crypto.
+- Make-only gates on `ENV=test-*`; never `ENV=dev`. No push, PR, publish, or attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/llm-mesh/src/generation.ts`
-  - `packages/llm-mesh/src/streaming.ts`
-  - `packages/llm-mesh/src/codex.ts`
-  - `packages/llm-mesh/src/transport/cloud-code-runtime-client.ts`
-  - `packages/llm-mesh/src/transport/codex-runtime-wire.ts`
-  - `packages/llm-mesh/tests/transport/cloud-code-runtime-client.test.ts`
-  - `packages/llm-mesh/tests/transport/codex-runtime-wire.test.ts`
-  - `packages/llm-mesh/package.json`
+  - `packages/cluster-mesh/src/messaging/message-client.ts`
+  - `packages/cluster-mesh/src/messaging/index.ts`
+  - `packages/cluster-mesh/tests/messaging/message-client.spec.ts`
+  - `packages/cluster-mesh/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `packages/contracts/**`
-  - `packages/llm-gateway/**`
+  - `packages/cluster-mesh/src/runtime/registration.ts`
+  - `api/drizzle/0007_handy_morlocks.sql`
+  - `api/drizzle/control/0007_cluster_mesh_r13.sql`
+  - `api/drizzle/control/meta/0007_snapshot.json`
+  - `api/drizzle/meta/0007_snapshot.json`
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**`
-  - `api/drizzle/**`
 - **Conditional Paths (allowed only with explicit exception)**:
   - None.
 - **Exception process**:
-  - Declare a `BRFID-EXn` item in `## Feedback Loop` before touching a forbidden path.
+  - Declare a `BRSEND-EXn` item in `## Feedback Loop` before touching a forbidden path.
 
 ## Feedback Loop
-- [x] No exception is required for the scoped package correction.
+- [x] No exception is required for the scoped package addition.
 
 ## AI Flaky tests
-- [x] N/A; all transport responses are mocked.
+- [x] N/A; all messaging-client tests are hermetic and use the in-memory store.
 
 ## Orchestration Mode
 - [x] **Mono-branch**
 - [ ] **Multi-branch**
-- [x] The transport fidelity and version lots are sequential and independently committed.
+- [x] The client, tests, and version lots are sequential and independently committed.
+
+## Proposed API (owner/h-cond shape — confirm exact types against the store)
+- `sendMessage({ to: <peer instance/session id>, message, kind?: 'wake'|'notify'|'text' }) -> { ok: boolean, messageId }` (maps to store.put: MessageAddress mailbox = peer id, MessagePayload carries message+kind).
+- `receiveMessages({ instance }) -> MeshMessage[]` (maps to pop/drain for that mailbox).
+- `ack(messageId)` (maps to store.ack).
+- Placement inside cluster-mesh (files) = conductor/leg call; expose from `src/index.ts`.
 
 ## Plan / Todo
-- [x] **Lot 1 - CloudCode responseFormat**
-  - [x] Map `responseFormat: json-object` -> `generationConfig.responseMimeType = "application/json"`.
-  - [x] Map `responseFormat: json-schema` -> project `responseFormat.schema` to the Cloud Code subset (reuse `projectCloudCodeSchema`) -> `generationConfig.responseSchema`, with dropped-constraint diagnostics.
-  - [x] Wire-body test (json-object + json-schema). NOTE: responseMimeType is necessary-not-sufficient for the markdown fence (do not claim it fixes the fence).
-- [x] **Lot 2 - CloudCode finishReason fidelity**
-  - [x] `generate()` derives finishReason from the aggregated terminal event (mirror stream() MAX_TOKENS->'length'); stop hardcoding 'stop'.
-  - [x] Add `providerRawFinishReason` (additive optional) carrying the raw provider reason.
-  - [x] Expose `thoughtsTokenCount` from `usageMetadata` when present.
-  - [x] Tests: MAX_TOKENS SSE via BOTH generate() and stream().
-- [x] **Lot 3 - Codex max_output_tokens**
-  - [x] Stop dropping `max_output_tokens` (codex.ts:78 destructures it out); pass `maxOutputTokens` -> `max_output_tokens` on the Codex wire.
-  - [x] Wire-body test (cap present/enforced).
-- [ ] **Lot 4 - Version + gates**
-  - [x] Bump `@sentropic/llm-mesh` 0.19.2 -> 0.19.3.
-  - [ ] Pass llm-mesh typecheck, build, tests on a dedicated test ENV; commit atomically; no push/PR/publish.
+- [x] **Lot 1 - messaging client** over BoundedLocalMessagingStore (sendMessage/receiveMessages/ack + signed envelope), exposed on the public index. Reuse store + signing; keep separate from actuation.
+- [ ] **Lot 2 - Tests** (no live network): send->receive->ack round-trip; kind carried; envelope signed/verified; at-least-once + ack semantics preserved; separation from actuation intent.
+- [ ] **Lot 3 - Version + gates**: bump 0.10.0 -> 0.10.1; `make typecheck-cluster-mesh` + `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests` + `make typecheck-api REGISTRY=local`; commit atomically; no push/PR/publish.
