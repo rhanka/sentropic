@@ -40,6 +40,25 @@ const streamResponse = () => new Response(new ReadableStream<Uint8Array>({
   },
 }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
 
+const maxTokensStreamResponse = () => new Response(new ReadableStream<Uint8Array>({
+  start(controller) {
+    const payload = {
+      response: {
+        candidates: [{
+          content: { parts: [{ text: 'partial answer' }] },
+          finishReason: 'MAX_TOKENS',
+        }],
+        usageMetadata: {
+          promptTokenCount: 6, candidatesTokenCount: 8,
+          thoughtsTokenCount: 3, totalTokenCount: 17,
+        },
+      },
+    };
+    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`));
+    controller.close();
+  },
+}), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+
 const defaultModelIds = [
   'gemini-3.5-flash',
   'gemini-3.5-flash-high',
@@ -107,6 +126,63 @@ describe('Cloud Code runtime client', () => {
     });
   });
 
+  it('maps canonical response formats onto the Cloud Code generation config', async () => {
+    const jsonObjectFetch = createFetch();
+    await new CloudCodeRuntimeClient(jsonObjectFetch).generate({
+      providerId: 'gemini', modelId: 'gemini-3.5-flash',
+      messages: [{ role: 'user', content: 'return JSON' }],
+      responseFormat: { type: 'json-object' },
+    }, context);
+    const jsonObjectConfig = JSON.parse(String(streamInit(jsonObjectFetch).body))
+      .request.generationConfig;
+    expect(jsonObjectConfig).toMatchObject({ responseMimeType: 'application/json' });
+    expect(jsonObjectConfig).not.toHaveProperty('responseSchema');
+
+    const jsonSchemaFetch = createFetch();
+    const events = [];
+    for await (const event of await new CloudCodeRuntimeClient(jsonSchemaFetch).stream({
+      providerId: 'gemini', modelId: 'gemini-3.5-flash',
+      messages: [{ role: 'user', content: 'return JSON' }],
+      responseFormat: {
+        type: 'json-schema', name: 'answer',
+        schema: {
+          type: 'object', additionalProperties: false,
+          properties: { answer: { type: 'string', minLength: 1 } },
+          required: ['answer'],
+        },
+      },
+    }, context)) events.push(event);
+    expect(JSON.parse(String(streamInit(jsonSchemaFetch).body))).toMatchObject({
+      request: { generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'],
+        },
+      } },
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'status', data: expect.objectContaining({
+        metadata: expect.objectContaining({
+          code: 'cloud-code-schema-projection-loss',
+          droppedConstraints: expect.arrayContaining([
+            'responseFormat.schema.properties.answer:minLength',
+            'responseFormat.schema:additionalProperties',
+          ]),
+        }),
+      }),
+    }));
+
+    const textFetch = createFetch();
+    await new CloudCodeRuntimeClient(textFetch).generate({
+      providerId: 'gemini', modelId: 'gemini-3.5-flash',
+      messages: [{ role: 'user', content: 'return text' }],
+      responseFormat: { type: 'text' },
+    }, context);
+    const textConfig = JSON.parse(String(streamInit(textFetch).body)).request.generationConfig;
+    expect(textConfig).not.toHaveProperty('responseMimeType');
+    expect(textConfig).not.toHaveProperty('responseSchema');
+  });
+
   it('sends canonical tool results as Cloud Code function responses', async () => {
     const fetchFn = createFetch();
     const client = new CloudCodeRuntimeClient(fetchFn);
@@ -157,6 +233,33 @@ describe('Cloud Code runtime client', () => {
     const init = streamInit(fetchFn);
     expect(JSON.parse(String(init.body)).model).toBe('gemini-3.7-flash-tiered');
     expect(response.modelId).toBe('gemini-3.7-flash');
+  });
+
+  it('preserves a MAX_TOKENS terminal reason and thought-token usage', async () => {
+    const fetchFn = vi.fn(async (url: string | URL | Request) =>
+      url.toString() === CLOUD_CODE_FETCH_AVAILABLE_MODELS_URL
+        ? catalogueResponse()
+        : maxTokensStreamResponse());
+    const client = new CloudCodeRuntimeClient(fetchFn);
+    const request = {
+      providerId: 'gemini' as const, modelId: 'gemini-3.5-flash' as const,
+      messages: [{ role: 'user' as const, content: 'hello' }],
+    };
+
+    const events = [];
+    for await (const event of await client.stream(request, context)) events.push(event);
+    expect(events.at(-1)).toMatchObject({
+      type: 'done', data: {
+        finishReason: 'length', providerRawFinishReason: 'MAX_TOKENS',
+        usage: { thoughtsTokenCount: 3 },
+      },
+    });
+
+    expect(await client.generate(request, context)).toMatchObject({
+      text: 'partial answer', finishReason: 'length',
+      providerRawFinishReason: 'MAX_TOKENS',
+      usage: { thoughtsTokenCount: 3 },
+    });
   });
 
   it('surfaces Retry-After on a canonical error event', async () => {
