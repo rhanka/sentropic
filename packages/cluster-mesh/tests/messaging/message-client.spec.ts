@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  AGENT_MESSAGE_CONTENT_TYPE,
   ClusterMeshMessageClient,
   messageEnvelopeSignaturePayload,
   type AgentMessageKind,
@@ -64,6 +65,39 @@ describe('cluster mesh message client', () => {
         payload: messageEnvelopeSignaturePayload(received!.envelope),
         signatureBase64Url: received!.envelope.evidence.signatureBase64Url,
       })).toBe(true);
+    },
+  );
+
+  it.each(['application/json', AGENT_MESSAGE_CONTENT_TYPE])(
+    'should skip poison messages with content type %s without consuming them',
+    async (contentType) => {
+      const { fixture, receiver, sender } = clientFixture();
+      await sender.sendMessage({ to: 'agent-b', message: 'before' });
+      const poison = await fixture.store.put({
+        context: context('other-producer'),
+        destination: { kind: 'mailbox', mailboxId: 'agent-b' },
+        idempotencyKey: 'poison', payload: { contentType, value: 'not an envelope' },
+      });
+      expect(poison.ok).toBe(true);
+      if (!poison.ok) throw new Error('Expected accepted poison message');
+      await sender.sendMessage({ to: 'agent-b', message: 'after' });
+
+      const messages = await receiver.receiveMessages({ instance: 'agent-b' });
+      expect(messages.map(({ message }) => message)).toEqual(['before', 'after']);
+      for (const { messageId } of messages) {
+        await expect(receiver.ack(messageId)).resolves.toEqual({ ok: true, outcome: 'acked' });
+      }
+      await expect(receiver.ack(poison.messageId)).resolves.toEqual({
+        ok: false, reason: 'delivery_not_found',
+      });
+      fixture.advance(101);
+      await expect(fixture.store.pop({
+        context: context('other-consumer'), mailboxId: 'agent-b',
+      })).resolves.toMatchObject({
+        ok: true, outcome: 'delivery',
+        delivery: { message: { messageId: poison.messageId, payload: { contentType,
+          value: 'not an envelope' } }, deliveryAttempt: 2 },
+      });
     },
   );
 
