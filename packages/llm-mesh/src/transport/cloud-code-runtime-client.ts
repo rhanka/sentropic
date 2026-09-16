@@ -211,8 +211,13 @@ const providerRequest = (request: GenerateRequest, wireModelId: string): Provide
     tool,
     projection: projectCloudCodeSchema(tool.inputSchema, `tools.${tool.name}`),
   })) ?? [];
-  const droppedConstraints = projections.flatMap(({ projection }) =>
-    projection.droppedConstraints);
+  const responseProjection = request.responseFormat?.type === 'json-schema'
+    ? projectCloudCodeSchema(request.responseFormat.schema, 'responseFormat.schema')
+    : undefined;
+  const droppedConstraints = [
+    ...projections.flatMap(({ projection }) => projection.droppedConstraints),
+    ...(responseProjection?.droppedConstraints ?? []),
+  ];
   return {
     modelId: wireModelId,
     contents: contents(request.messages),
@@ -234,6 +239,10 @@ const providerRequest = (request: GenerateRequest, wireModelId: string): Provide
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.topP !== undefined ? { topP: request.topP } : {}),
       ...(request.maxOutputTokens !== undefined ? { maxOutputTokens: request.maxOutputTokens } : {}),
+      ...(request.responseFormat?.type === 'json-object' || responseProjection
+        ? { responseMimeType: 'application/json' }
+        : {}),
+      ...(responseProjection ? { responseSchema: responseProjection.schema } : {}),
       ...(cloudCodeThinkingConfig(request)
         ? { thinkingConfig: cloudCodeThinkingConfig(request) }
         : {}),
@@ -245,8 +254,10 @@ const usage = (value: unknown): TokenUsage => {
   const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const inputTokens = Number(record.promptTokenCount ?? record.promptTokens ?? 0);
   const outputTokens = Number(record.candidatesTokenCount ?? record.outputTokens ?? 0);
+  const thoughtsTokenCount = Number(record.thoughtsTokenCount);
   return {
     inputTokens, outputTokens,
+    ...(Number.isFinite(thoughtsTokenCount) ? { thoughtsTokenCount } : {}),
     totalTokens: Number(record.totalTokenCount ?? inputTokens + outputTokens),
     providerRawUsage: value,
   };
@@ -353,6 +364,7 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
         finishReason: sawToolCall || event.finishReason === 'FUNCTION_CALL'
           ? 'tool_calls'
           : event.finishReason === 'MAX_TOKENS' ? 'length' : 'stop',
+        ...(event.finishReason ? { providerRawFinishReason: event.finishReason } : {}),
         usage: usage(event.usage),
       } };
     }
@@ -360,17 +372,26 @@ export class CloudCodeRuntimeClient implements GeminiAdapterClient {
 
   async generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse> {
     let text = ''; let finalUsage: TokenUsage | undefined; const calls: ToolCall[] = [];
+    let finishReason: GenerateResponse['finishReason'] = 'stop';
+    let providerRawFinishReason: string | undefined;
     for await (const event of await this.stream(request, context)) {
       if (event.type === 'content_delta') text += event.data.delta;
-      else if (event.type === 'tool_call_start') calls.push(event.data);
+      else if (event.type === 'tool_call_start') {
+        calls.push(event.data); finishReason = 'tool_calls';
+      }
       else if (event.type === 'error') throw Object.assign(new Error(event.data.message), event.data);
-      else if (event.type === 'done') finalUsage = event.data.usage;
+      else if (event.type === 'done') {
+        finalUsage = event.data.usage;
+        finishReason = event.data.finishReason ?? finishReason;
+        providerRawFinishReason = event.data.providerRawFinishReason;
+      }
     }
     return {
       id: 'cloud_code_response', providerId: 'gemini',
       modelId: request.modelId ?? DEFAULT_CLOUD_CODE_MODEL_ID,
       message: { role: 'assistant', content: text, ...(calls.length ? { toolCalls: calls } : {}) },
-      text, toolCalls: calls, finishReason: calls.length ? 'tool_calls' : 'stop',
+      text, toolCalls: calls, finishReason,
+      ...(providerRawFinishReason ? { providerRawFinishReason } : {}),
       ...(finalUsage ? { usage: finalUsage } : {}),
     };
   }

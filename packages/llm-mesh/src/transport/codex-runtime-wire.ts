@@ -81,6 +81,9 @@ export const buildCodexRuntimeRequest = (request: GenerateRequest) =>
     } } : {}),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
     ...(request.topP !== undefined ? { top_p: request.topP } : {}),
+    ...(request.maxOutputTokens !== undefined
+      ? { max_output_tokens: request.maxOutputTokens }
+      : {}),
     include: ['reasoning.encrypted_content'],
   });
 

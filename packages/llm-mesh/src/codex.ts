@@ -75,8 +75,7 @@ export const stripCodexInputIds = (body: string): string => {
 export const prepareCodexResponsesRequest = (
   request: CodexResponsesRequestInput,
 ): CodexPreparedResponsesRequest => {
-  const { max_output_tokens: _maxOutputTokens, ...rest } = request;
-  return { url: CODEX_RESPONSES_URL, body: { ...rest, store: false } };
+  return { url: CODEX_RESPONSES_URL, body: { ...request, store: false } };
 };
 
 export interface CodexUsageDoneEvent {
