@@ -137,7 +137,13 @@ export class ClusterMeshMessageClient {
       if (!result.ok) throw new Error(`message receive failed: ${result.reason}`);
       if (result.outcome === 'empty') return messages;
       const { delivery } = result;
-      const envelope = decodeEnvelope(delivery.message);
+      let envelope: SignedAgentMessageEnvelope;
+      try {
+        envelope = decodeEnvelope(delivery.message);
+      } catch {
+        // Leave foreign or malformed messages unacknowledged until their lease expires.
+        continue;
+      }
       this.deliveries.set(delivery.message.messageId, {
         deliveryId: delivery.deliveryId, leaseId: delivery.lease.leaseId,
       });
