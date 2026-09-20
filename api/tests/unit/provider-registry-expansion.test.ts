@@ -46,7 +46,7 @@ describe('ProviderRegistry expansion', () => {
     ).toThrow('Provider not found');
   });
 
-  it('should list models from all 8 providers', () => {
+  it('should list models from all serving providers (muse lists none until its Lot 2 transport lands)', () => {
     const models = providerRegistry.listModels();
     const providerIdsInModels = [...new Set(models.map((m) => m.providerId))];
 
@@ -56,7 +56,7 @@ describe('ProviderRegistry expansion', () => {
     expect(providerIdsInModels).toContain('mistral');
     expect(providerIdsInModels).toContain('cohere');
     expect(providerIdsInModels).toContain('gcp');
-    expect(providerIdsInModels).toContain('muse');
+    expect(providerIdsInModels).not.toContain('muse');
   });
 
   it('should have correct capabilities per provider', () => {
