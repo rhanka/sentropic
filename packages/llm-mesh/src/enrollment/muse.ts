@@ -16,6 +16,25 @@ import type {
 
 export const MUSE_AUTH_FILE_SOURCE = 'muse-cli-auth-file';
 
+/** Marker recorded on accounts enrolled from a raw MUSE_API_KEY (pay-as-you-go). */
+export const MUSE_DIRECT_BILLING_TYPE = 'direct';
+
+/** Meta wire auth block for a direct-billed key (no CLI seat involved). */
+export interface MuseDirectAuthPayload {
+  auth_type: 'api_key';
+  user_api_key: string;
+}
+
+export const buildMuseDirectAuthPayload = (apiKey: string): MuseDirectAuthPayload => {
+  // textOf checks blankness but returns the untrimmed value; trim here so
+  // surrounding whitespace never reaches the wire payload.
+  const key = textOf(apiKey)?.trim();
+  if (!key) {
+    throw new Error('Muse direct API key is empty');
+  }
+  return { auth_type: 'api_key', user_api_key: key };
+};
+
 const defaultAuthFilePath = (): string =>
   join(homedir(), '.config', 'muse', 'auth.json');
 
@@ -49,6 +68,16 @@ const textOf = (value: unknown): string | null =>
 
 /** The CLI owns token lifecycle; mesh treats an import as fresh for one hour. */
 const IMPORT_TTL_MS = 3600 * 1000;
+
+/**
+ * Direct API keys have no mesh-visible rotation (no CLI store to re-read),
+ * so the credential outlives the CLI import window; mesh refresh cannot renew
+ * it and re-import is the rotation path. 90 days is the rotation horizon.
+ */
+const DIRECT_API_KEY_TTL_MS = 90 * 24 * 3600 * 1000;
+
+/** Version marker for credentials enrolled from a raw key (no CLI schema). */
+const DIRECT_API_KEY_CONFIG_VERSION = 'direct-api-key-v1';
 
 export class MuseEnrollmentProvider implements EnrollmentProvider {
   private readonly readAuthFile: (path: string) => Promise<string>;
@@ -134,6 +163,24 @@ export class MuseEnrollmentProvider implements EnrollmentProvider {
       expiresAt: new Date(Date.now() + IMPORT_TTL_MS).toISOString(),
       authClientConfigVersion: schemaVersion,
       ...(email ? { accountEmail: email } : {}),
+    };
+  }
+
+  /**
+   * Direct-billing import of a raw MUSE_API_KEY (pay-as-you-go, no CLI seat).
+   * No session round-trip: the key itself is the credential. Re-imports of
+   * the same key converge on one account; the `direct:` namespace keeps
+   * direct-key accounts distinct from CLI-login accounts even when the raw
+   * strings coincide (billing paths must never merge).
+   */
+  async importDirectApiKey(apiKey: string): Promise<PreparedCredential> {
+    const payload = buildMuseDirectAuthPayload(apiKey);
+    const accountId = `acct_muse_${createHash('sha256').update(`direct:${payload.user_api_key}`).digest('hex').slice(0, 12)}`;
+    return {
+      accountId,
+      accessToken: payload.user_api_key,
+      expiresAt: new Date(Date.now() + DIRECT_API_KEY_TTL_MS).toISOString(),
+      authClientConfigVersion: DIRECT_API_KEY_CONFIG_VERSION,
     };
   }
 
