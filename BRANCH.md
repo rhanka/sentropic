@@ -73,6 +73,9 @@
 - `acknowledge` BR75-D1 (owner 2026-09-20): opus `*-max` aliases get muse candidate at effort `max`; opus base codex side unchanged (`sol`/`terra`).
 - `acknowledge` BR75-D2 (owner 2026-09-20): proceed autonomously lot by lot until done (implementation loop).
 - `acknowledge` BR75-D3 (2026-09-20): shared objective loop `loop-mu94uk70` (`muse-enrollment`); joined as `sentropic-muse`; h2a-side Muse invited via peer channel with join instructions.
+- `acknowledge` BR75-F1 (pre-existing, out of scope): `packages/llm-gateway/tests/codex.test.ts` > max_output_tokens stripping fails identically on pristine `origin/main` (repro detached worktree, since removed); `prepareCodexResponsesRequest` is a pure spread, untouched by this branch. Left red, not loosened.
+- `acknowledge` BR75-D4 (2026-09-20): h2a-muse Q&A answered (A1 Lot 4 = package semver bumps + equivalences gate, no direct publish; A2 gate-lift signal = reported gateway version at Lot 4; A3 unit-level results only — order/efforts/3.8-high green in mesh+gateway unit tests, NO live probe run yet; live pooled proof delegated to h2a-muse with verdict on the loop).
+- `acknowledge` BR75-D5 (2026-09-20): wording discipline — unit green is reported as unit green; "probe/tested" is reserved for live runs (real enrollment, serving gateway).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -152,7 +155,7 @@
     - [ ] **E2E tests**
       - [ ] No E2E change expected; record `none`.
 
-- [ ] **Lot 3 — Routing candidates + council**
+- [x] **Lot 3 — Routing candidates + council (unit level; live probe pending)**
   - [ ] Audit existing default mapping and propose the muse-insertion alternative (least-change) for owner sign-off before editing.
   - [ ] Reprise point (verified 2026-09-20 on `origin/main`): `STANDARD_ROUTE_DEFINITIONS` is the mapping; GA switch already applied for fable (`claude-fable-5*` + `claude-fable-5-1*` → codex `gpt-6-astra` + cloud `gemini-3.8-flash`); opus + sonnet still on cloud `gemini-3.7-flash` (codex `gpt-5.6-sol`/`terra`/`luna`).
   - [ ] Insert muse candidate after faithful claude and before codex (`transportProviderId: muse`, `muse-spark-1.3[-contributor]`, fable-5 + fable-5-1→`max`, opus high/xhigh→`xhigh`), gated by `musePosition` config (`off | after-claude | first`, default `after-claude`).
@@ -176,8 +179,10 @@
     - [ ] **E2E tests**
       - [ ] Run only if gateway route behavior changed; otherwise record `none` with reason.
 
-- [ ] **Lot 4 — Versions + publication gates**
-  - [ ] Bump `packages/llm-mesh/package.json` semver for `src/**` change.
+- [ ] **Lot 4 — Versions + publication gates (BLOCKED until enrollment proofs)**
+  - [ ] Proof 1: real muse-code account smoke green (owner-authorized, test ENV only, cleanup verified).
+  - [ ] Proof 2: h2a pooled live verdict posted on `loop-mu94uk70`.
+  - [ ] Only then: bump `packages/llm-mesh/package.json` semver for `src/**` change.
   - [ ] Bump `packages/llm-gateway/package.json` semver + `llm-mesh` dep.
   - [ ] Verify `check-llm-model-equivalences` gate passes; no direct `npm publish`.
   - [ ] Record owner CI secret action for `MUSE_API_KEY` (BR75-Q4).
