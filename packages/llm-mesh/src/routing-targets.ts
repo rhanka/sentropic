@@ -27,7 +27,15 @@ export const defineLaunchAliases = (
   definitions.map(({ alias, ...target }) => [alias, target]),
 );
 
+export const MUSE_CONTRIBUTOR_MODEL = 'muse-spark-1.3-contributor';
+
 export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = {
+  'muse-spark-1.3': {
+    providerId: 'muse', transportProviderId: 'muse', model: 'muse-spark-1.3',
+  },
+  'muse-spark-1.3-contributor': {
+    providerId: 'muse', transportProviderId: 'muse', model: MUSE_CONTRIBUTOR_MODEL,
+  },
   'claude-sonnet-5': {
     providerId: 'anthropic', transportProviderId: 'claude-code', model: 'claude-sonnet-5',
   },
@@ -63,25 +71,62 @@ export const DEFAULT_TARGET_MAPPINGS: Readonly<Record<string, TargetMapping>> = 
   },
 };
 
-type StandardRouteDefinition = readonly [string, string, string, string?];
+export interface StandardRouteDefinition {
+  readonly requestedId: string;
+  readonly codexModel: string;
+  readonly cloudModel: string;
+  readonly effort?: string;
+  /** Codex-candidate effort override; defaults to the route effort. */
+  readonly codexEffort?: string;
+  /** Cloud-candidate effort override; defaults to the route effort. */
+  readonly cloudEffort?: string;
+}
+
+/**
+ * Muse insertion effort per launch alias (BR75-D1). Aliases absent from this
+ * map get no muse candidate. Tier default is contributor (BR75-Q3).
+ */
+export const MUSE_ROUTE_EFFORT: Readonly<Record<string, string>> = {
+  'claude-fable-5': 'max',
+  'claude-fable-5-high': 'max',
+  'claude-fable-5-xhigh': 'max',
+  'claude-fable-5-max': 'max',
+  'claude-fable-5-1': 'max',
+  'claude-fable-5-1-high': 'max',
+  'claude-fable-5-1-xhigh': 'max',
+  'claude-fable-5-1-max': 'max',
+  'claude-opus-5-high': 'xhigh',
+  'claude-opus-5-xhigh': 'xhigh',
+  'claude-opus-5-max': 'max',
+  'claude-opus-4-8-xhigh': 'xhigh',
+  'claude-opus-4-8-max': 'max',
+};
+
+/** Integrator-configurable muse position (BR75-Q2). Default `after-claude`. */
+export type MusePosition = 'off' | 'after-claude' | 'first';
+
+export const DEFAULT_MUSE_POSITION: MusePosition = 'after-claude';
+
 export const STANDARD_ROUTE_DEFINITIONS: readonly StandardRouteDefinition[] = [
-  ['claude-opus-5', 'gpt-5.6-sol', 'gemini-3.7-flash'],
-  ['claude-opus-5-high', 'gpt-5.6-sol', 'gemini-3.7-flash', 'high'],
-  ['claude-opus-5-xhigh', 'gpt-5.6-sol', 'gemini-3.7-flash', 'xhigh'],
-  ['claude-opus-4-8', 'gpt-5.6-terra', 'gemini-3.7-flash'],
-  ['claude-opus-4-8-xhigh', 'gpt-5.6-terra', 'gemini-3.7-flash', 'xhigh'],
-  ['claude-sonnet-5', 'gpt-5.6-luna', 'gemini-3.7-flash'],
-  ['claude-sonnet-5-xhigh', 'gpt-5.6-luna', 'gemini-3.7-flash', 'xhigh'],
-  ['claude-sonnet-4-6', 'gpt-5.6-luna', 'gemini-3.7-flash'],
+  { requestedId: 'claude-opus-5', codexModel: 'gpt-5.6-sol', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8', codexModel: 'gpt-5.6-terra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', codexEffort: 'medium', cloudEffort: 'high' },
+  { requestedId: 'claude-opus-4-8-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', codexEffort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5', codexModel: 'gpt-5.6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-5-xhigh', codexModel: 'gpt-5.6-luna', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-sonnet-4-6', codexModel: 'gpt-5.6-luna', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
   // GA switch applied: Fable 5 and 5.1 now use GPT-6 Astra.
-  ['claude-fable-5', 'gpt-6-astra', 'gemini-3.8-flash'],
-  ['claude-fable-5-high', 'gpt-6-astra', 'gemini-3.8-flash', 'high'],
-  ['claude-fable-5-xhigh', 'gpt-6-astra', 'gemini-3.8-flash', 'xhigh'],
-  ['claude-fable-5-max', 'gpt-6-astra', 'gemini-3.8-flash', 'max'],
-  ['claude-fable-5-1', 'gpt-6-astra', 'gemini-3.8-flash'],
-  ['claude-fable-5-1-high', 'gpt-6-astra', 'gemini-3.8-flash', 'high'],
-  ['claude-fable-5-1-xhigh', 'gpt-6-astra', 'gemini-3.8-flash', 'xhigh'],
-  ['claude-fable-5-1-max', 'gpt-6-astra', 'gemini-3.8-flash', 'max'],
+  { requestedId: 'claude-fable-5', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-high', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'high', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-xhigh', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'xhigh', cloudEffort: 'high' },
+  { requestedId: 'claude-fable-5-1-max', codexModel: 'gpt-6-astra', cloudModel: 'gemini-3.8-flash', effort: 'max', cloudEffort: 'high' },
 ];
 
 const ANTHROPIC_FAITHFUL_TRANSPORT_PROVIDERS: readonly string[] = ['claude-code'];
@@ -164,40 +209,78 @@ const firstTargetThatResolvesProfile = (
 ): TargetMapping =>
   targets.find((target) => hasModelProfile(target)) ?? targets[0]!;
 
+const museTarget = (requestedId: string): TargetMapping | undefined => {
+  const effort = MUSE_ROUTE_EFFORT[requestedId];
+  if (!effort) return undefined;
+  const candidate: TargetMapping = {
+    providerId: 'muse', transportProviderId: 'muse', model: MUSE_CONTRIBUTOR_MODEL, effort,
+  };
+  return hasModelProfile(candidate) ? candidate : undefined;
+};
+
 /**
  * A launch alias is an explicit user-facing routing contract, not benchmark
  * equivalence evidence. A known Claude id must reach its Anthropic target
- * before the permitted Codex and Cloud Code fallbacks.
+ * before the permitted Muse, Codex and Cloud Code fallbacks.
  */
 const launchAliasTargetsFor = (
-  requestedId: string,
-  codexModel: string,
-  cloudModel: string,
-  effort?: string,
+  definition: StandardRouteDefinition,
+  musePosition: MusePosition = DEFAULT_MUSE_POSITION,
 ): readonly TargetMapping[] => {
+  const { requestedId, codexModel, cloudModel, effort } = definition;
   const faithfulTarget = resolveFaithfulAnthropicTarget(requestedId, effort);
-  const codexCandidate = codexTarget(codexModel, effort);
+  const codexCandidate = codexTarget(
+    codexModel, definition.codexEffort ?? effort,
+  );
+  const cloudEffort = definition.cloudEffort ?? effort;
   const cloudCandidate: TargetMapping = {
     providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel,
-    ...(effort ? { effort } : {}),
+    ...(cloudEffort ? { effort: cloudEffort } : {}),
   };
+  const museCandidate = musePosition === 'off' ? undefined : museTarget(requestedId);
 
+  if (musePosition === 'first' && museCandidate) {
+    return [
+      museCandidate,
+      ...(faithfulTarget ? [faithfulTarget] : []),
+      codexCandidate,
+      cloudCandidate,
+    ];
+  }
   return [
     ...(faithfulTarget ? [faithfulTarget] : []),
+    ...(museCandidate ? [museCandidate] : []),
     codexCandidate,
     cloudCandidate,
   ];
 };
 
+const buildLaunchAliasRouteMappings = (
+  musePosition: MusePosition = DEFAULT_MUSE_POSITION,
+): Readonly<Record<string, readonly TargetMapping[]>> => Object.fromEntries(
+  STANDARD_ROUTE_DEFINITIONS.map((definition) => [
+    definition.requestedId,
+    launchAliasTargetsFor(definition, musePosition),
+  ]),
+);
+
 export const LAUNCH_ALIAS_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
-> = Object.fromEntries(STANDARD_ROUTE_DEFINITIONS.map(
-  ([
-    requestedId, codexModel, cloudModel, effort,
-  ]) => [requestedId, launchAliasTargetsFor(
-    requestedId, codexModel, cloudModel, effort,
-  )],
-));
+> = buildLaunchAliasRouteMappings();
+
+const launchAliasRouteMappingsByPosition = new Map<MusePosition, Readonly<
+  Record<string, readonly TargetMapping[]>
+>>([[DEFAULT_MUSE_POSITION, LAUNCH_ALIAS_ROUTE_MAPPINGS]]);
+
+const launchAliasRouteMappingsFor = (
+  musePosition: MusePosition = DEFAULT_MUSE_POSITION,
+): Readonly<Record<string, readonly TargetMapping[]>> => {
+  const cached = launchAliasRouteMappingsByPosition.get(musePosition);
+  if (cached) return cached;
+  const built = buildLaunchAliasRouteMappings(musePosition);
+  launchAliasRouteMappingsByPosition.set(musePosition, built);
+  return built;
+};
 
 export const CANONICAL_TARGET_ROUTE_MAPPINGS: Readonly<
   Record<string, readonly TargetMapping[]>
@@ -224,12 +307,45 @@ export const createStaticTargetResolver = (options: {
   readonly mappings: Readonly<Record<string, TargetMapping>>;
 }): ModelTargetResolver => (model) => options.mappings[model];
 
-export const createCanonicalTargetResolver = (): ModelTargetResolver =>
-  createStaticTargetResolver({ mappings: CANONICAL_TARGET_MAPPINGS });
+export interface CanonicalTargetResolverOptions {
+  readonly musePosition?: MusePosition;
+}
+
+const canonicalTargetMappingsFor = (
+  musePosition: MusePosition = DEFAULT_MUSE_POSITION,
+): Readonly<Record<string, TargetMapping>> => {
+  if (musePosition === DEFAULT_MUSE_POSITION) return CANONICAL_TARGET_MAPPINGS;
+  return Object.fromEntries(
+    Object.entries(launchAliasRouteMappingsFor(musePosition))
+      .map(([requestedId, targets]) => [
+        requestedId,
+        firstTargetThatResolvesProfile(targets),
+      ]),
+  );
+};
+
+export const createCanonicalTargetResolver = (
+  options: CanonicalTargetResolverOptions = {},
+): ModelTargetResolver => createStaticTargetResolver({
+  mappings: canonicalTargetMappingsFor(options.musePosition ?? DEFAULT_MUSE_POSITION),
+});
 
 export const createCanonicalTargetCandidatesResolver = (
-): ModelTargetCandidatesResolver => (model) =>
-  CANONICAL_TARGET_ROUTE_MAPPINGS[model] ?? [];
+  options: CanonicalTargetResolverOptions = {},
+): ModelTargetCandidatesResolver => {
+  const routeMappings = launchAliasRouteMappingsFor(
+    options.musePosition ?? DEFAULT_MUSE_POSITION,
+  );
+  const merged: Readonly<Record<string, readonly TargetMapping[]>> = {
+    ...Object.fromEntries(Object.entries(DEFAULT_TARGET_MAPPINGS).map(
+      ([requestedId, target]) => [requestedId, [target]],
+    )),
+    ...Object.fromEntries(Object.entries(routeMappings).map(
+      ([requestedId, targets]) => [requestedId, targets],
+    )),
+  };
+  return (model) => merged[model] ?? [];
+};
 
 export const describeTargetRoutes = (
   mappings: Readonly<Record<string, TargetMapping>>,
