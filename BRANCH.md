@@ -195,6 +195,7 @@
 
 - [ ] **Lot N-2** UAT
   - [ ] Owner criterion (2026-09-20): h2a-side BROWSER enrollment test of the siège (power) account — Playwright/navigateur validation of enroll/registry/resume/connect paths, redacted evidence, no secrets in logs. Merge blocked until posted.
+  - [ ] Owner criterion (2026-09-20): h2a-side `h2a run claude` via gateway with MUSE ACCOUNT ONLY — remove gemini enrollment first, so the run proves muse-only serving through the gw. Merge blocked until verdict posted.
   - [x] Web app (`none`: 0 UI files in merge-base diff — mesh/api/tests/spec only).
   - [ ] API/gateway headless checks
     - [ ] `muse exec` smoke via gateway route with `MUSE_API_KEY` name wiring. (2026-09-20 Lot 4 account-path substitute GREEN: `muse exec --reasoning-effort minimal` via logged-in account answered `ok`; key path stays RED 402 per Proof 2 — unbilled key, outside code — so the key-wired gateway smoke remains unrun.)
