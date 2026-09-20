@@ -10,12 +10,20 @@ export type EnrollmentSession =
       userCode: string;
       pollIntervalMs: number;
       expiresAt: string;
+    }
+  // File import (muse CLI auth file): no browser or device round-trip;
+  // completion reads the local CLI store via complete().
+  | {
+      kind: 'local-import';
+      enrollmentId: string;
+      source: string;
+      expiresAt: string;
     };
 
 // State persisted server-side / sentropic-side — NOT exported via facade to h2a
 export interface EnrollmentState {
   enrollmentId: string;
-  providerId: 'cloud-code' | 'codex' | 'claude-code';
+  providerId: 'cloud-code' | 'codex' | 'claude-code' | 'muse';
   ownerScope: string;
   pkceVerifier: string;
   pkceState: string;

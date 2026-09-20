@@ -216,6 +216,65 @@ export class LocalAccountTransportService {
     return { accountId: res.accountId, label: res.label };
   }
 
+  // Muse CLI import completion (BR75): no browser or device round-trip —
+  // the provider reads the local CLI store via complete(). The caller binds
+  // the explicit enrolling ownerScope (never inferred from stored state).
+  async completeMuseImport(
+    enrollmentId: string,
+    code: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion> {
+    const provider = this.providers.get('muse');
+    if (!provider) {
+      throw new Error("No enrollment provider 'muse' registered");
+    }
+    const credential = await provider.complete({ enrollmentId, code });
+    const label = `Muse (${credential.accountEmail ?? credential.accountId})`;
+    const ownerScope = this.requireOwnerScope(ownerScopeRef);
+    const removalBarrierRef = await this.removalBarrierForEnrollment(
+      credential.accountId,
+      ownerScope,
+    );
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId: credential.accountId,
+      ownerScopeRef: ownerScope,
+      accountLabel: label,
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      expiresAt: credential.expiresAt,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: undefined,
+    };
+    this.registerAccount(
+      account,
+      credential.authClientConfigVersion,
+      removalBarrierRef,
+    );
+    await this.persistCredential(
+      {
+        accountId: account.accountId,
+        accountLabel: label,
+        providerId: 'muse',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        accountId: account.accountId,
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt,
+        authClientConfigVersion: credential.authClientConfigVersion,
+      },
+      account,
+    );
+    return { accountId: credential.accountId, label };
+  }
+
   async cancel(enrollmentId: string): Promise<void> {
     for (const provider of this.providers.values()) {
       if (provider.cancel) {
