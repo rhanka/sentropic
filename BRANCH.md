@@ -204,13 +204,13 @@
   - [x] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` with muse enrollment + `musePosition` contract (done `c1287804e`, §14, +158 additive).
   - [x] Delete any branch-local spec draft after integration — `none`: branch adds only muse code+tests (verified via merge-base diff), no draft created.
 
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest UI (cf Lot1, copy checklist)
-  - [ ] Retest API (cf Lot1, copy checklist)
-  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted
+- [x] **Lot N — Final validation** (2026-09-20 conductor re-run post-Lot4: `make typecheck-api lint-api` + `make test-api` ENV=test-feat-muse-enrollment, FINAL_EXIT=0, 0 failures)
+  - [x] Typecheck & Lint
+  - [x] Retest UI — `none` (0 UI files in merge-base diff, verified)
+  - [x] Retest API
+  - [x] Retest e2e — `none` with reason (no gateway `src/**` route change — only bump+test; mesh routing covered by 211 unit tests)
+  - [x] Retest AI flaky tests — none observed (two consecutive full `test-api` greens, 0 `×/✗/AssertionError`); no sign-off needed
+  - [x] Provider cascade — N/A by construction (only additive `muse-provider.ts`; none of the 5 existing providers touched, `llm-runtime` untouched; no `test-api-ai` target exists; full `test-api` green covers regressions)
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
