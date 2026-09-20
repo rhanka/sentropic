@@ -124,6 +124,7 @@
       - [ ] No E2E change expected; record `none`.
 
 - [ ] **Lot 2 — Account transport path (Chapitre B)**
+  - [ ] Write the muse tests FIRST (TDD, mirrored on cloud-code): `packages/llm-mesh/tests/enrollment/muse.test.ts` mirrors `enrollment/cloud-code.test.ts` (start session shape, complete maps `meta.*` to `PreparedCredential`, secret redaction in errors like the `[redacted]` case, cancel path).
   - [ ] Add `muse` to `accountTransportProviderIds` + executable list in `packages/llm-mesh/src/auth.ts`.
   - [ ] Extend `packages/llm-mesh/src/enrollment/contracts.ts` provider union + add `enrollment/muse.ts` (import `~/.config/muse/auth.json` `meta.*`, no browser OAuth).
   - [ ] Register muse enrollment in `packages/llm-mesh/src/service/facade.ts`; add completion branch in `local-account-transport-service.ts`.
@@ -144,8 +145,11 @@
       - [ ] No E2E change expected; record `none`.
 
 - [ ] **Lot 3 — Routing candidates + council**
-  - [ ] Audit existing default mapping (`routing-targets.ts`, gateway router, `model-selection-legacy.ts`) and propose the muse-insertion alternative (least-change) for owner sign-off before editing.
-  - [ ] Add `muse-spark-1.3` target + `fable-5.1` id + `musePosition` config (`off | after-claude | first`, default `after-claude`) in `routing-targets.ts`.
+  - [ ] Audit existing default mapping and propose the muse-insertion alternative (least-change) for owner sign-off before editing.
+  - [ ] Reprise point (verified 2026-09-20): `STANDARD_ROUTE_DEFINITIONS` is the mapping; order per alias is faithful claude-code, then codex `gpt-5.6-*`, then cloud-code `gemini-3.7-flash`; `gemini-3.8` exists nowhere in src; `fable-5.1` is a new id (catalog has only `claude-fable-5`).
+  - [ ] Insert muse candidate after faithful claude and before codex (`transportProviderId: muse`, `muse-spark-1.3[-contributor]`, sonnet→`max`, opus high/xhigh→`xhigh`), gated by `musePosition` config (`off | after-claude | first`, default `after-claude`).
+  - [ ] Switch cloud fallback `gemini-3.7-flash` → new `gemini-3.8-flash` catalog model (forced `high` effort); keep `3.7` selectable unless owner says remove.
+  - [ ] Write routing tests FIRST (TDD): extend `routing-targets.test.ts` (candidate order claude→muse→codex→cloud, `musePosition` variants, `fable-5.1`, 3.8 fallback) + `route-selection.test.ts` before touching `routing-targets.ts`.
   - [ ] Set efforts: `sonnet5`/`sonnet-5.1` → `max`; `opus high`/`xhigh` → `xhigh`; keep Claude faithful first when account exists, then muse, then existing codex/cloud-code.
   - [ ] Regenerate equivalence council via `make llm-mesh-add-model` (`generated-model-council.ts`, `equivalence-council.ts`).
   - [ ] Handle `gemini-3.8-flash` per BR75-Q2 (`BR75-EXn` if catalog touched).
