@@ -168,6 +168,22 @@ describe('cloud-code account transport and runtime metadata', () => {
     expect('futureAccountTransportProviderIds' in authModule).toBe(false);
   });
 
+  it('includes muse as an executable account transport', () => {
+    expect(accountTransportProviderIds).toContain('muse');
+    expect(executableAccountTransportProviderIds).toContain('muse');
+  });
+
+  it('accepts muse account-transport material carrying an access token', () => {
+    expect(
+      validateAdapterAuthSource({
+        type: 'account-transport',
+        provider: 'muse',
+        accessToken: 'muse-access-token',
+        accountId: 'acct_muse_test',
+      }),
+    ).toEqual({ ok: true });
+  });
+
   it('validates CloudCodeRuntimeMetadata with isCloudCodeRuntimeMetadata guard', () => {
     const validMetadata: CloudCodeRuntimeMetadata = {
       cloudaicompanionProject: 'test-project-123',

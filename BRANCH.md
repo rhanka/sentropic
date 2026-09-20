@@ -29,7 +29,7 @@
   - `packages/llm-mesh/src/service/facade.ts`
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
   - `packages/llm-mesh/src/transport/muse*`
-  - `packages/llm-mesh/tests/*`
+  - `packages/llm-mesh/tests/**`
   - `packages/llm-gateway/src/router*`
   - `packages/llm-gateway/tests/*`
   - `api/src/services/providers/muse-provider.ts`
@@ -131,13 +131,13 @@
     - [ ] **E2E tests**
       - [ ] No E2E change expected; record `none`.
 
-- [ ] **Lot 2 — Account transport path (Chapitre B)**
-  - [ ] Write the muse tests FIRST (TDD, mirrored on cloud-code): `packages/llm-mesh/tests/enrollment/muse.test.ts` mirrors `enrollment/cloud-code.test.ts` (start session shape, complete maps `meta.*` to `PreparedCredential`, secret redaction in errors like the `[redacted]` case, cancel path).
-  - [ ] Add `muse` to `accountTransportProviderIds` + executable list in `packages/llm-mesh/src/auth.ts`.
-  - [ ] Extend `packages/llm-mesh/src/enrollment/contracts.ts` provider union + add `enrollment/muse.ts` (import `~/.config/muse/auth.json` `meta.*`, no browser OAuth).
-  - [ ] Register muse enrollment in `packages/llm-mesh/src/service/facade.ts`; add completion branch in `local-account-transport-service.ts`.
-  - [ ] Keyring: verify generic envelope path needs no change; gateway pool: verify no change (ownerUserId + kill-switch already generic).
-  - [ ] Cover the full enrollment round-trip by tests (import from `auth.json` shape, credential envelope, refresh dispatch, pooled owner-scoped completion).
+- [x] **Lot 2 — Account transport path (Chapitre B)**
+  - [x] Write the muse tests FIRST (TDD, mirrored on cloud-code): `packages/llm-mesh/tests/enrollment/muse.test.ts` mirrors `enrollment/cloud-code.test.ts` (start session shape, complete maps `meta.*` to `PreparedCredential`, secret redaction in errors like the `[redacted]` case, cancel path).
+  - [x] Add `muse` to `accountTransportProviderIds` + executable list in `packages/llm-mesh/src/auth.ts`.
+  - [x] Extend `packages/llm-mesh/src/enrollment/contracts.ts` provider union + `local-import` session kind + add `enrollment/muse.ts` (import `~/.config/muse/auth.json` `meta.*`, no browser OAuth; stable account id per login; refresh re-reads CLI store).
+  - [x] Register muse enrollment in `packages/llm-mesh/src/service/facade.ts`; add `completeMuseImport` (explicit owner binding) in `local-account-transport-service.ts` (`targetProviderId`/`transportProviderId: muse`).
+  - [x] Keyring: verify generic envelope path needs no change; gateway pool: verify no change (ownerUserId + kill-switch already generic).
+  - [x] Cover the full enrollment round-trip by tests (import from `auth.json` shape, credential envelope, refresh dispatch, pooled owner-scoped completion).
   - [ ] UAT: import personal muse account file-shape only (keys, no values); pooled `ownerUserId`-scoped check.
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api` ENV=test-feat-muse-enrollment

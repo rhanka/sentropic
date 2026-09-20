@@ -223,11 +223,10 @@ export const providerProfiles = {
     }),
   },
   // Meta Muse (Muse Code 1.3): agentic coding model served via the `muse`
-  // account transport (CLI login, Lot 2) or MUSE_API_KEY (Lot 1). Wire shape
-  // is unverified: structured output stays at the conservative
-  // `tool-input-schema` (partial) template until the Lot 2 transport proves
-  // the wire. No accountTransports listed until `muse` joins
-  // accountTransportProviderIds (Lot 2).
+  // account transport (CLI login import) or MUSE_API_KEY. Wire shape is
+  // unverified: structured output stays at the conservative
+  // `tool-input-schema` (partial) template until the transport proves the
+  // wire.
   muse: {
     providerId: 'muse',
     family: 'meta',
@@ -236,6 +235,7 @@ export const providerProfiles = {
     capabilities: capabilities({
       reasoningTier: 'advanced',
       structuredOutputLevel: 'tool-input-schema',
+      accountTransports: ['muse'],
     }),
   },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
