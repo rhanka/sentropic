@@ -146,9 +146,9 @@
 
 - [ ] **Lot 3 — Routing candidates + council**
   - [ ] Audit existing default mapping and propose the muse-insertion alternative (least-change) for owner sign-off before editing.
-  - [ ] Reprise point (verified 2026-09-20): `STANDARD_ROUTE_DEFINITIONS` is the mapping; order per alias is faithful claude-code, then codex `gpt-5.6-*`, then cloud-code `gemini-3.7-flash`; `gemini-3.8` exists nowhere in src; `fable-5.1` is a new id (catalog has only `claude-fable-5`).
-  - [ ] Insert muse candidate after faithful claude and before codex (`transportProviderId: muse`, `muse-spark-1.3[-contributor]`, sonnet→`max`, opus high/xhigh→`xhigh`), gated by `musePosition` config (`off | after-claude | first`, default `after-claude`).
-  - [ ] Switch cloud fallback `gemini-3.7-flash` → new `gemini-3.8-flash` catalog model (forced `high` effort); keep `3.7` selectable unless owner says remove.
+  - [ ] Reprise point (verified 2026-09-20 on `origin/main`): `STANDARD_ROUTE_DEFINITIONS` is the mapping; GA switch already applied for fable (`claude-fable-5*` + `claude-fable-5-1*` → codex `gpt-6-astra` + cloud `gemini-3.8-flash`); opus + sonnet still on cloud `gemini-3.7-flash` (codex `gpt-5.6-sol`/`terra`/`luna`).
+  - [ ] Insert muse candidate after faithful claude and before codex (`transportProviderId: muse`, `muse-spark-1.3[-contributor]`, fable-5 + fable-5-1→`max`, opus high/xhigh→`xhigh`), gated by `musePosition` config (`off | after-claude | first`, default `after-claude`).
+  - [ ] Switch remaining cloud fallback `gemini-3.7-flash` → `gemini-3.8-flash` (existing catalog model, forced `high` effort); keep `3.7` selectable unless owner says remove; leave codex side untouched.
   - [ ] Write routing tests FIRST (TDD): extend `routing-targets.test.ts` (candidate order claude→muse→codex→cloud, `musePosition` variants, `fable-5.1`, 3.8 fallback) + `route-selection.test.ts` before touching `routing-targets.ts`.
   - [ ] Set efforts: `sonnet5`/`sonnet-5.1` → `max`; `opus high`/`xhigh` → `xhigh`; keep Claude faithful first when account exists, then muse, then existing codex/cloud-code.
   - [ ] Regenerate equivalence council via `make llm-mesh-add-model` (`generated-model-council.ts`, `equivalence-council.ts`).
