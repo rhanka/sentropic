@@ -187,7 +187,7 @@
 
 - [ ] **Lot 4 — Versions + publication gates (BLOCKED until enrollment proofs)**
   - [x] Proof 1 (2026-09-20, owner-authorized real smoke): `local-import` session → account `acct_muse_…` enrolled → acquire OK with real token (never printed) → removed, keyring verified empty. Ephemeral in-memory service, `/tmp` script only, nothing committed, no secret in logs.
-  - [x] Proof 2: LIVE DISPATCH GREEN via account path (2026-09-20, conductor: `muse exec --reasoning-effort minimal` with logged-in power account, no key in env → model answered `ok`). Key path stays RED x3 on `loop-mu94uk70` (402 `billing_error`, latest `a0cfc7ef`): that key is not attached to a billed account — cause outside code. Gate-lift basis = account-path live serving proven; Lot 4 unblocked.
+  - [x] Proof 2: LIVE DISPATCH GREEN via account path (2026-09-20, conductor: `muse exec --reasoning-effort minimal` with logged-in power account, no key in env → model answered `ok`). Key path went GREEN 2026-09-20 (peer `muse:muse-h2a` direct on `loop-mu94uk70`: `muse exec --provider meta` minimal answered `ok`, billing fixed after owner added payment on `dev.meta.ai`; prior RED x3 with 402 `billing_error`). Both live paths green; Lot 4 done on this basis.
   - [x] Only then: bump `packages/llm-mesh/package.json` semver for `src/**` change. (2026-09-20 Lot 4: `0.19.3` → `0.20.0` minor, feature convention per `f54640c0a`/`044fb4249`.)
   - [x] Bump `packages/llm-gateway/package.json` semver + `llm-mesh` dep. (2026-09-20 Lot 4: `0.15.0` → `0.16.0`, dep `^0.19.0` → `^0.20.0`.)
   - [x] Verify `check-llm-model-equivalences` gate passes; no direct `npm publish`. (2026-09-20 Lot 4: `make check-llm-model-equivalences ENV=test-feat-muse-enrollment` exit 0; publish is CI OIDC only.)
