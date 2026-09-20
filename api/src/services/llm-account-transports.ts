@@ -1,4 +1,7 @@
 import { createHmac } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { pool, db } from '../db/client';
 import { env } from '../config/env';
@@ -46,6 +49,7 @@ export type LlmAccountTransportAcquisition = {
 
 export type CodexAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type ClaudeCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
+export type MuseAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type AntigravityAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type GeminiCodeAssistAccountTransportAcquisition = LlmAccountTransportAcquisition;
 export type CloudCodeAccountTransportAcquisition = LlmAccountTransportAcquisition;
@@ -109,6 +113,17 @@ export type CloudCodeTokenSecretPayload = {
   profile: Record<string, unknown> | null;
 };
 
+export type MuseTokenSecretPayload = {
+  accessToken: string;
+  refreshToken: null;
+  tokenType: 'bearer';
+  obtainedAt: string;
+  expiresAt: string | null;
+  source: 'muse-import' | 'muse-cli' | 'muse-refresh';
+  apiBaseUrl: string | null;
+  accountEmail: string | null;
+};
+
 export type GeminiCodeAssistTokenSecretPayload = {
   accessToken: string;
   refreshToken: string | null;
@@ -158,6 +173,9 @@ const ANTIGRAVITY_TRANSPORT_PROVIDER_ID = 'antigravity';
 
 const CLOUD_CODE_TARGET_PROVIDER_ID = 'gemini';
 const CLOUD_CODE_TRANSPORT_PROVIDER_ID = 'cloud-code';
+
+const MUSE_TARGET_PROVIDER_ID = 'muse';
+const MUSE_TRANSPORT_PROVIDER_ID = 'muse';
 const RESERVATION_TTL_MS = 5 * 60 * 1000;
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 
@@ -440,6 +458,50 @@ const buildClaudeCodeTokenPayload = (input: {
   profile: input.profile ?? null,
 });
 
+const buildMuseTokenPayload = (input: {
+  accessToken: string;
+  expiresAt?: string | null;
+  source: MuseTokenSecretPayload['source'];
+  apiBaseUrl?: string | null;
+  accountEmail?: string | null;
+}): MuseTokenSecretPayload => ({
+  accessToken: input.accessToken,
+  refreshToken: null,
+  tokenType: 'bearer',
+  obtainedAt: new Date().toISOString(),
+  expiresAt: input.expiresAt ?? null,
+  source: input.source,
+  apiBaseUrl: normalizeOptionalText(input.apiBaseUrl),
+  accountEmail: normalizeOptionalText(input.accountEmail),
+});
+
+const parseMuseTokenSecret = (
+  value: string | null | undefined,
+): MuseTokenSecretPayload | null => {
+  const decrypted = decryptSecretOrNull(value);
+  if (!decrypted) return null;
+  try {
+    const parsed = JSON.parse(decrypted) as Partial<MuseTokenSecretPayload> | null;
+    const accessToken = normalizeOptionalText(parsed?.accessToken);
+    if (!parsed || !accessToken) return null;
+    return {
+      accessToken,
+      refreshToken: null,
+      tokenType: 'bearer',
+      obtainedAt: normalizeOptionalText(parsed.obtainedAt) ?? new Date().toISOString(),
+      expiresAt: normalizeOptionalText(parsed.expiresAt),
+      source:
+        parsed.source === 'muse-cli' || parsed.source === 'muse-refresh'
+          ? parsed.source
+          : 'muse-import',
+      apiBaseUrl: normalizeOptionalText(parsed.apiBaseUrl),
+      accountEmail: normalizeOptionalText(parsed.accountEmail),
+    };
+  } catch {
+    return null;
+  }
+};
+
 const buildCloudCodeTokenPayload = (input: {
   accessToken: string;
   refreshToken?: string | null;
@@ -712,6 +774,154 @@ export const getPrimaryCodexAccountTransport = async (input: {
   };
 };
 
+export const storeMuseAccountTransport = async (input: {
+  ownerUserId: string;
+  externalAccountId: string;
+  accountLabel?: string | null;
+  accessToken: string;
+  expiresAt?: string | null;
+  apiBaseUrl?: string | null;
+  accountEmail?: string | null;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  const accessToken = normalizeOptionalText(input.accessToken);
+  const externalAccountId = normalizeOptionalText(input.externalAccountId);
+  if (!ownerUserId || !accessToken || !externalAccountId) return null;
+
+  const token = buildMuseTokenPayload({
+    accessToken,
+    expiresAt: input.expiresAt ?? null,
+    source: 'muse-import',
+    apiBaseUrl: normalizeOptionalText(input.apiBaseUrl),
+    accountEmail: normalizeOptionalText(input.accountEmail),
+  });
+  const now = new Date();
+  const accountId = createId();
+  const tokenSecret = encryptSecret(JSON.stringify(token));
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+
+  await db.run(sql`
+    INSERT INTO llm_provider_accounts (
+      id,
+      owner_user_id,
+      scope,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id,
+      account_label,
+      status,
+      token_secret,
+      token_expires_at,
+      connected_at,
+      disconnected_at,
+      last_error,
+      metadata,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${accountId},
+      ${ownerUserId},
+      'user',
+      ${MUSE_TARGET_PROVIDER_ID},
+      ${MUSE_TRANSPORT_PROVIDER_ID},
+      ${externalAccountId},
+      ${accountLabel},
+      'active',
+      ${tokenSecret},
+      ${token.expiresAt ? new Date(token.expiresAt) : null},
+      ${now},
+      NULL,
+      NULL,
+      ${JSON.stringify({ source: token.source })}::jsonb,
+      ${now},
+      ${now}
+    )
+    ON CONFLICT (
+      owner_user_id,
+      target_provider_id,
+      transport_provider_id,
+      external_account_id
+    )
+    WHERE external_account_id IS NOT NULL
+    DO UPDATE SET
+      account_label = COALESCE(EXCLUDED.account_label, llm_provider_accounts.account_label),
+      status = 'active',
+      token_secret = EXCLUDED.token_secret,
+      token_expires_at = EXCLUDED.token_expires_at,
+      connected_at = EXCLUDED.connected_at,
+      disconnected_at = NULL,
+      last_error = NULL,
+      metadata = EXCLUDED.metadata,
+      updated_at = EXCLUDED.updated_at
+  `);
+
+  return getPrimaryMuseAccountTransport({ ownerUserId });
+};
+
+export const getPrimaryMuseAccountTransport = async (input: {
+  ownerUserId: string;
+}): Promise<LlmAccountTransportPublic | null> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return null;
+  const rows = await db.all(sql`
+    SELECT
+      id,
+      target_provider_id as "targetProviderId",
+      transport_provider_id as "transportProviderId",
+      external_account_id as "externalAccountId",
+      account_label as "accountLabel",
+      status,
+      connected_at as "connectedAt",
+      disconnected_at as "disconnectedAt",
+      token_expires_at as "tokenExpiresAt",
+      last_error as "lastError",
+      updated_at as "updatedAt"
+    FROM llm_provider_accounts
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${MUSE_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${MUSE_TRANSPORT_PROVIDER_ID}
+      AND status <> 'disconnected'
+    ORDER BY
+      CASE status
+        WHEN 'active' THEN 0
+        WHEN 'cooldown' THEN 1
+        WHEN 'reauth_required' THEN 2
+        ELSE 3
+      END,
+      connected_at DESC NULLS LAST,
+      updated_at DESC NULLS LAST
+    LIMIT 1
+  `) as Array<{
+    id: string;
+    targetProviderId: string;
+    transportProviderId: string;
+    externalAccountId: string | null;
+    accountLabel: string | null;
+    status: LlmAccountTransportStatus;
+    connectedAt: Date | string | null;
+    disconnectedAt: Date | string | null;
+    tokenExpiresAt: Date | string | null;
+    lastError: string | null;
+    updatedAt: Date | string | null;
+  }>;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    targetProviderId: row.targetProviderId,
+    transportProviderId: row.transportProviderId,
+    externalAccountId: row.externalAccountId,
+    accountLabel: row.accountLabel,
+    status: row.status,
+    connectedAt: toIso(row.connectedAt),
+    disconnectedAt: toIso(row.disconnectedAt),
+    tokenExpiresAt: toIso(row.tokenExpiresAt),
+    lastError: row.lastError,
+    updatedAt: toIso(row.updatedAt),
+  };
+};
+
 export const getPrimaryClaudeCodeAccountTransport = async (input: {
   ownerUserId: string;
 }): Promise<LlmAccountTransportPublic | null> => {
@@ -773,6 +983,49 @@ export const getPrimaryClaudeCodeAccountTransport = async (input: {
     lastError: row.lastError,
     updatedAt: toIso(row.updatedAt),
   };
+};
+
+export const disconnectMuseAccountTransports = async (input: {
+  ownerUserId: string;
+}): Promise<void> => {
+  const ownerUserId = normalizeOptionalText(input.ownerUserId);
+  if (!ownerUserId) return;
+  const now = new Date();
+  await db.run(sql`
+    UPDATE llm_provider_accounts
+    SET
+      status = 'disconnected',
+      token_secret = NULL,
+      token_expires_at = NULL,
+      disconnected_at = ${now},
+      last_error = NULL,
+      updated_at = ${now}
+    WHERE owner_user_id = ${ownerUserId}
+      AND target_provider_id = ${MUSE_TARGET_PROVIDER_ID}
+      AND transport_provider_id = ${MUSE_TRANSPORT_PROVIDER_ID}
+  `);
+  await db.run(sql`
+    UPDATE llm_account_leases
+    SET status = 'invalidated', released_at = ${now}, updated_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${MUSE_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${MUSE_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
+  await db.run(sql`
+    UPDATE llm_account_reservations
+    SET status = 'completed', completed_at = ${now}
+    WHERE account_id IN (
+      SELECT id FROM llm_provider_accounts
+      WHERE owner_user_id = ${ownerUserId}
+        AND target_provider_id = ${MUSE_TARGET_PROVIDER_ID}
+        AND transport_provider_id = ${MUSE_TRANSPORT_PROVIDER_ID}
+    )
+      AND status = 'active'
+  `);
 };
 
 export const disconnectCodexAccountTransports = async (input: {
@@ -1422,6 +1675,93 @@ const refreshClaudeCodeTokenIfNeeded = async (input: {
   return refreshPromise;
 };
 
+const museRefreshes = new Map<string, Promise<MuseTokenSecretPayload | null>>();
+
+const defaultMuseAuthFilePath = (): string =>
+  join(homedir(), '.config', 'muse', 'auth.json');
+
+const readMuseCliEntry = async (
+  readAuthFile: (path: string) => Promise<string>,
+  authFilePath?: string | null,
+): Promise<{ accessToken: string; accountEmail: string | null; apiBaseUrl: string | null }> => {
+  const raw = await readAuthFile(authFilePath ?? defaultMuseAuthFilePath());
+  const parsed = JSON.parse(raw) as {
+    schema_version?: unknown;
+    providers?: Record<string, Record<string, unknown>>;
+  };
+  const meta = parsed?.providers?.meta;
+  if (!meta || typeof meta !== 'object') {
+    throw new Error('Muse CLI auth file has no meta provider entry');
+  }
+  const textOf = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim().length > 0 ? value : null;
+  const accessToken = textOf(meta.access_token) ?? textOf(meta.api_key);
+  if (!accessToken) {
+    throw new Error('Muse CLI auth file has no usable token for the meta provider');
+  }
+  return {
+    accessToken,
+    accountEmail: textOf(meta.user_email),
+    apiBaseUrl: textOf(meta.api_base_url),
+  };
+};
+
+export const refreshMuseTokenIfNeeded = async (
+  input: {
+    accountId: string;
+    externalAccountId: string | null;
+    token: MuseTokenSecretPayload;
+  },
+  readAuthFile: (path: string) => Promise<string> = (path) => readFile(path, 'utf8'),
+): Promise<MuseTokenSecretPayload | null> => {
+  if (!isTokenExpiring(input.token.expiresAt)) return input.token;
+
+  const existing = museRefreshes.get(input.accountId);
+  if (existing) return existing;
+
+  const refreshPromise = (async () => {
+    try {
+      // No OAuth refresh endpoint exists for Muse: the CLI owns token
+      // lifecycle, so refresh re-imports the current CLI store. In
+      // containers without the host CLI store mounted this fails and the
+      // account flips to reauth_required (same as a missing refresh token).
+      const entry = await readMuseCliEntry(readAuthFile);
+      const next = buildMuseTokenPayload({
+        accessToken: entry.accessToken,
+        expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+        source: 'muse-refresh',
+        apiBaseUrl: entry.apiBaseUrl,
+        accountEmail: entry.accountEmail,
+      });
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET token_secret = ${encryptSecret(JSON.stringify(next))},
+            token_expires_at = ${next.expiresAt ? new Date(next.expiresAt) : null},
+            status = 'active',
+            last_error = NULL,
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return next;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'unknown error';
+      await db.run(sql`
+        UPDATE llm_provider_accounts
+        SET status = 'reauth_required',
+            last_error = ${`Muse token refresh failed: ${detail}`},
+            updated_at = ${new Date()}
+        WHERE id = ${input.accountId}
+      `);
+      return null;
+    } finally {
+      museRefreshes.delete(input.accountId);
+    }
+  })();
+
+  museRefreshes.set(input.accountId, refreshPromise);
+  return refreshPromise;
+};
+
 export const refreshCloudCodeTokenIfNeeded = async (
   input: {
     accountId: string;
@@ -1913,6 +2253,25 @@ export const acquireClaudeCodeAccountTransport = async (input: {
     refreshTokenIfNeeded: refreshClaudeCodeTokenIfNeeded,
     invalidTokenMessage: 'Claude Code account token secret is missing or invalid.',
     reauthMessage: 'Claude Code account requires reauthentication.',
+  });
+
+export const acquireMuseAccountTransport = async (input: {
+  userId: string;
+  workspaceId?: string | null;
+  modelId: string;
+  affinityKey?: string | null;
+  requestId?: string | null;
+}): Promise<MuseAccountTransportAcquisition | null> =>
+  acquireDbAccountTransport({
+    ...input,
+    targetProviderId: MUSE_TARGET_PROVIDER_ID,
+    transportProviderId: MUSE_TRANSPORT_PROVIDER_ID,
+    defaultModelId: 'muse-spark-1.3-contributor',
+    stableSessionPrefix: 'muse',
+    parseTokenSecret: parseMuseTokenSecret,
+    refreshTokenIfNeeded: refreshMuseTokenIfNeeded,
+    invalidTokenMessage: 'Muse account token secret is missing or invalid.',
+    reauthMessage: 'Muse account requires reauthentication.',
   });
 
 export const acquireCloudCodeAccountTransport = async (input: {

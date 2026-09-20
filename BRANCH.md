@@ -40,6 +40,11 @@
   - `api/tests/unit/provider-credentials.test.ts`
   - `api/tests/unit/provider-registry-expansion.test.ts`
   - `api/tests/unit/provider-mesh-contract-proof.test.ts`
+  - `api/src/services/llm-account-transports.ts` (BR75-EX2)
+  - `api/src/services/provider-connections.ts` (BR75-EX2)
+  - `api/src/routes/namespaces/llm-mesh-enrollment.ts` (BR75-EX2)
+  - `api/src/routes/namespaces/llm-mesh-enrollment-intent.ts` (BR75-EX2)
+  - `api/tests/unit/llm-account-transports.test.ts` (BR75-EX2)
   - `packages/llm-mesh/package.json`
   - `packages/llm-gateway/package.json`
   - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
@@ -76,6 +81,7 @@
 - `acknowledge` BR75-F1 (pre-existing, out of scope): `packages/llm-gateway/tests/codex.test.ts` > max_output_tokens stripping fails identically on pristine `origin/main` (repro detached worktree, since removed); `prepareCodexResponsesRequest` is a pure spread, untouched by this branch. Left red, not loosened.
 - `acknowledge` BR75-D4 (2026-09-20): h2a-muse Q&A answered (A1 Lot 4 = package semver bumps + equivalences gate, no direct publish; A2 gate-lift signal = reported gateway version at Lot 4; A3 unit-level results only — order/efforts/3.8-high green in mesh+gateway unit tests, NO live probe run yet; live pooled proof delegated to h2a-muse with verdict on the loop).
 - `acknowledge` BR75-D5 (2026-09-20): wording discipline — unit green is reported as unit green; "probe/tested" is reserved for live runs (real enrollment, serving gateway).
+- `attention` BR75-EX2 (DB + HTTP enrollment surface for muse): reason — Chapitre B is unreachable remotely (404) without the same seams codex uses (DB lease store + refresh-if-needed + provider-connections + intent schemas + route cases); impact — additive muse cases only, no existing provider touched; rollback — delete the muse cases. Paths: `api/src/services/llm-account-transports.ts`, `api/src/services/provider-connections.ts`, `api/src/routes/namespaces/llm-mesh-enrollment.ts`, `api/src/routes/namespaces/llm-mesh-enrollment-intent.ts`, `api/tests/unit/llm-account-transports.test.ts`. (Unrelated to the pre-existing Makefile `BR75-EX1` string.)
 
 ## AI Flaky tests
 - Acceptance rule:
