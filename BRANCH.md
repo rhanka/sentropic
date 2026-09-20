@@ -1,56 +1,39 @@
-# feat: cluster-mesh agent-to-agent messaging client (0.10.1)
+# Fix: minio images to quay.io
 
 ## Objective
-Expose a public, ergonomic agent<->agent messaging client over the EXISTING M01 `BoundedLocalMessagingStore`, so a consumer (h2a `h2a send`/`h2a_send`) can send a notify/wake/text message to a peer and drain+ack its inbox without reimplementing the store wiring or the envelope. Additive-only. Bump `@sentropic/cluster-mesh` 0.10.0 -> 0.10.1 (patch).
+Repoint minio/minio and minio/mc images from the removed Docker Hub namespace to quay.io.
 
 ## Scope / Guardrails
-- REUSE the existing M01 store (`BoundedLocalMessagingStore` put/pop|drain/ack) — do NOT invent a 2nd channel.
-- SEPARATE from the actuation/custody seam: this is the messaging channel (notify/wake/text), NOT the session-control actuation path. Do NOT route through RegistrationGate/session-router; do NOT touch `ActuationRequest`/`ActuationResult`/`RegistrationDecision` (frozen), nor `@sentropic/contracts`, nor migration 0007. `MessageActuationIntent{kind:'session-control'}` stays the actuation path — the new client does not use it.
-- Strictly ADDITIVE: new client module + a Message envelope helper + one `index.ts` export line. Reuse existing types (`MeshMessage`, `MessagePayload`, `MessageAddress`, `PutMessageRequest`/`Result`, pop/drain, `AckMessageRequest`); if a `kind` discriminator is needed, add it additively/optionally.
-- Auth: reuse the existing signing (custody-crypto ed25519 / the store's product-authorization) — signed envelope, no new crypto.
-- Make-only gates on `ENV=test-*`; never `ENV=dev`. No push, PR, publish, or attribution trailers.
+- Scope limited to image refs in docker-compose.test.yml and docker-compose.dev.yml.
+- Make-only workflow, no direct Docker commands.
+- Branch development in isolated worktree `tmp/minio-quay`.
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `docker-compose.test.yml`
+  - `docker-compose.dev.yml`
   - `BRANCH.md`
-  - `packages/cluster-mesh/src/messaging/message-client.ts`
-  - `packages/cluster-mesh/src/messaging/index.ts`
-  - `packages/cluster-mesh/tests/messaging/message-client.spec.ts`
-  - `packages/cluster-mesh/package.json`
 - **Forbidden Paths (must not change in this branch)**:
-  - `packages/contracts/**`
-  - `packages/cluster-mesh/src/runtime/registration.ts`
-  - `api/drizzle/0007_handy_morlocks.sql`
-  - `api/drizzle/control/0007_cluster_mesh_r13.sql`
-  - `api/drizzle/control/meta/0007_snapshot.json`
-  - `api/drizzle/meta/0007_snapshot.json`
   - `Makefile`
-  - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-- **Conditional Paths (allowed only with explicit exception)**:
-  - None.
 - **Exception process**:
-  - Declare a `BRSEND-EXn` item in `## Feedback Loop` before touching a forbidden path.
+  - `MINIO-EX1`: `docker-compose*.yml` are default-forbidden but are the explicit target of this fix (4 image refs only, no other changes).
+  - Reason: Docker Hub removed the minio namespace; e2e `up-e2e` is blocked on pull.
+  - Impact: image registry source only; no config or behavior change.
+  - Rollback: revert the 4 refs to `minio/minio:latest` / `minio/mc:latest`.
 
 ## Feedback Loop
-- [x] No exception is required for the scoped package addition.
+- None.
 
-## AI Flaky tests
-- [x] N/A; all messaging-client tests are hermetic and use the in-memory store.
-
-## Orchestration Mode
-- [x] **Mono-branch**
-- [ ] **Multi-branch**
-- [x] The client, tests, and version lots are sequential and independently committed.
-
-## Proposed API (owner/h-cond shape — confirm exact types against the store)
-- `sendMessage({ to: <peer instance/session id>, message, kind?: 'wake'|'notify'|'text' }) -> { ok: boolean, messageId }` (maps to store.put: MessageAddress mailbox = peer id, MessagePayload carries message+kind).
-- `receiveMessages({ instance }) -> MeshMessage[]` (maps to pop/drain for that mailbox).
-- `ack(messageId)` (maps to store.ack).
-- Placement inside cluster-mesh (files) = conductor/leg call; expose from `src/index.ts`.
-
-## Plan / Todo
-- [x] **Lot 1 - messaging client** over BoundedLocalMessagingStore (sendMessage/receiveMessages/ack + signed envelope), exposed on the public index. Reuse store + signing; keep separate from actuation.
-- [x] **Lot 2 - Tests** (no live network): send->receive->ack round-trip; kind carried; envelope signed/verified; at-least-once + ack semantics preserved; separation from actuation intent.
-- [ ] **Lot 3 - Version + gates**: bump 0.10.0 -> 0.10.1; `make typecheck-cluster-mesh` + `make test-cluster-mesh SCOPE=packages/cluster-mesh/tests` + `make typecheck-api REGISTRY=local`; commit atomically; no push/PR/publish.
+## Plan / Todo (lot-based)
+- [x] **Lot 1 — Repoint minio images to quay.io**
+  - [x] Replace 4 image refs in docker-compose.test.yml and docker-compose.dev.yml
+  - [x] Verify quay.io manifests resolve (`minio:latest`, `mc:latest`)
+  - [x] Lot gate: scope-check + commit + push + PR
