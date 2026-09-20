@@ -890,3 +890,161 @@ Reviewers must challenge at least:
 - Reconciliation: all blocking and major findings are normative in v2. The
   reviewers requested no further owner decision. Product implementation is
   authorized; h2a integration remains gated on the exact package candidate.
+
+## 14. Muse enrollment + `musePosition` contract (BR-75, `feat/muse-enrollment`)
+
+This section records the Meta Muse Code 1.3 (`muse-spark-1.3`) enrollment as
+implemented. Every statement below traces to branch code or its tests; routing
+invariants from §2 still apply (mesh owns the candidate plan, gateway stays a
+thin data plane).
+
+### 14.1 Provider surface (mesh catalog)
+
+- `muse` is the 8th mesh provider id (`openai`, `gemini`, `anthropic`,
+  `mistral`, `cohere`, `gcp`, `local`, `muse`) in
+  `packages/llm-mesh/src/providers.ts`, with per-provider keys
+  `muse-spark-1.3` and `muse-spark-1.3-contributor`.
+- Provider profile (`packages/llm-mesh/src/catalog.ts`): family `meta`, label
+  `Meta Muse`, status `planned`, reasoning tier `advanced`, account transport
+  `['muse']`. Structured output stays at the conservative
+  `tool-input-schema` (partial) template until the transport proves the wire.
+  Both models carry `advanced` reasoning with vision.
+- The `-contributor` key is a discounted tier option (content may improve the
+  product); the gateway default is contributor (BR75-Q3). Tier is an option,
+  not a separate provider.
+- `MuseAdapter` is registered in the default adapters
+  (`packages/llm-mesh/src/adapters.ts`); the mesh registry exposes both Muse
+  model ids through it.
+- Equivalence council: both `muse:muse-spark-1.3` and
+  `muse:muse-spark-1.3-contributor` are listed in
+  `GENERATED_MODEL_COUNCIL_SOURCE.excludedModelKeys`
+  (`packages/llm-mesh/src/generated-model-council.ts`) — excluded for lack of
+  pinned benchmark evidence, consistent with §D3 (explicit, justified
+  exclusion instead of silent substitution).
+- Covered by `packages/llm-mesh/tests/muse.test.ts` (provider set 7→8,
+  adapter registration, Meta family) and the council expiry/unknown-key
+  checks in `packages/llm-mesh/src/equivalence-council.ts`.
+
+### 14.2 API-key path (Chapitre A)
+
+- Credential precedence in `resolveMuseApiKey`
+  (`api/src/services/providers/muse-provider.ts`): explicit per-call
+  credential first, then `MUSE_API_KEY` (CI secret name), then
+  `MODEL_API_KEY` (repo-root `.env` fallback, BR75-Q1). No other generic
+  name is read. Both names are optional strings in `api/src/config/env.ts`;
+  `api/src/services/provider-credentials.ts` delegates `muse` to
+  `resolveMuseApiKey()`.
+- The api registry (`api/src/services/provider-registry.ts`) holds 8
+  runtimes including `muse`; `listProviders`/`listModels` cover the 8 mesh
+  providers.
+- Runtime dispatch status: `MuseProviderRuntime.listModels()` returns `[]`
+  until a dispatch path exists — advertising unservable models would route
+  live traffic into a throw. `generate`/`streamGenerate` accept only mode
+  `'msp'` and otherwise reject with "direct dispatch is not configured".
+  Error normalization tags `providerId: 'muse'`, retryable on 429/5xx.
+- Covered by `api/tests/unit/muse-provider.test.ts`,
+  `api/tests/unit/provider-credentials.test.ts`, and
+  `api/tests/unit/provider-registry-expansion.test.ts` (asserts muse lists
+  no models yet).
+
+### 14.3 Account-transport path (Chapitre B, local CLI import)
+
+- Source of truth is the Muse CLI store `~/.config/muse/auth.json`, entry
+  `providers.meta` (mesh `packages/llm-mesh/src/enrollment/muse.ts`;
+  api mirror `readMuseCliEntry` in
+  `api/src/services/llm-account-transports.ts`). Token is
+  `access_token ?? api_key`; identity is `user_email`. There is no browser
+  or device OAuth round-trip — the CLI owns token lifecycle.
+- `start` opens a `local-import` session (`source: 'muse-cli-auth-file'`,
+  id `enr_muse_…`, 15-minute expiry). `complete` maps the `meta.*` entry to
+  a `PreparedCredential`: stable `acct_muse_…` id (SHA-256, 12 hex chars,
+  over email, else token, so re-imports converge on one account), 1-hour
+  import TTL, `authClientConfigVersion` from `schema_version`. Error paths
+  never leak file content (secret-redaction cases in tests). `cancel`
+  marks the session; completion afterwards is refused. `resolve` reports
+  provider `muse` + account id.
+- Refresh re-reads the CLI store for the same account and rejects a
+  changed login ("different login than the enrolled account"). Api-side,
+  `refreshMuseTokenIfNeeded` runs lazily on acquire only when the stored
+  token is expiring (single-flight per account); success rewrites the DB
+  secret with source `muse-refresh` and status `active`, failure flips the
+  account to `reauth_required`. There is no OAuth refresh endpoint.
+- Mesh wiring: `muse` is in `accountTransportProviderIds` and the
+  executable list (`packages/llm-mesh/src/auth.ts`); the facade
+  (`packages/llm-mesh/src/service/facade.ts`) registers
+  `MuseEnrollmentProvider` and exposes `completeMuseImport(enrollmentId,
+  code, ownerScopeRef)` — the caller binds the explicit enrolling owner,
+  never inferred from stored state
+  (`packages/llm-mesh/src/service/local-account-transport-service.ts`,
+  label `Muse (…)`).
+- DB lease (`api/src/services/llm-account-transports.ts`):
+  `storeMuseAccountTransport` upserts `llm_provider_accounts` with
+  target/transport `muse`/`muse` (conflict key owner + target + transport
+  + external account, source `muse-import`);
+  `acquireMuseAccountTransport` leases with default model
+  `muse-spark-1.3-contributor` and `stableSessionPrefix: 'muse'`;
+  `getPrimaryMuseAccountTransport` / `disconnectMuseAccountTransports`
+  complete the lifecycle. Secret envelope is
+  `MuseTokenSecretPayload` (`refreshToken: null`, source
+  `muse-import | muse-cli | muse-refresh`).
+- HTTP surface (`api/src/routes/namespaces/llm-mesh-enrollment*.ts`,
+  `api/src/services/provider-connections.ts`): intents `muse:start`
+  (accountLabel only), `muse:import` (enrollmentId + accessToken required;
+  apiBaseUrl, accountEmail, expiresAt, accountLabel optional),
+  `muse:disconnect`. Connection state label is `Meta Muse`; start issues a
+  pending CLI-import session, import derives the external account id with
+  the same `acct_muse_` scheme and requires the CLI store account email.
+- Covered by `packages/llm-mesh/tests/enrollment/muse.test.ts` (session
+  shape, `meta.*` mapping, stable id, `api_key` fallback, redaction,
+  cancel, refresh-by-reread, resolve) and
+  `api/tests/unit/llm-account-transports.test.ts` (store/acquire round
+  trip, multi-tenant `userId` isolation, expired-credential refresh on
+  acquire).
+
+### 14.4 `musePosition` routing contract
+
+- Type `MusePosition = 'off' | 'after-claude' | 'first'`
+  (`packages/llm-mesh/src/routing-targets.ts`); default
+  `DEFAULT_MUSE_POSITION = 'after-claude'`. Threaded through
+  `createCanonicalTargetResolver` /
+  `createCanonicalTargetCandidatesResolver` via
+  `CanonicalTargetResolverOptions`; per-position mappings are memoized.
+- Muse insertion efforts (`MUSE_ROUTE_EFFORT`, BR75-D1): `claude-fable-5[*]`
+  and `claude-fable-5-1[*]` (bare, `-high`, `-xhigh`, `-max`) → `max`;
+  `claude-opus-5-high` / `-xhigh` → `xhigh`; `claude-opus-5-max` → `max`;
+  `claude-opus-4-8-xhigh` → `xhigh`; `claude-opus-4-8-max` → `max`.
+- The muse candidate is always the contributor model
+  (`MUSE_CONTRIBUTOR_MODEL = 'muse-spark-1.3-contributor'`) at the mapped
+  effort, emitted only when a model profile backs it. Aliases absent from
+  `MUSE_ROUTE_EFFORT` get no muse candidate: `claude-sonnet-5`,
+  `claude-sonnet-5-xhigh`, `claude-sonnet-4-6` and the bare opus rows plan
+  3 candidates (faithful Claude → codex → cloud).
+- Candidate order for muse-bearing aliases: faithful Claude, then muse,
+  then codex, then cloud (`after-claude`, the default); `first` puts muse
+  before faithful Claude; `off` drops the muse candidate, leaving the
+  pre-existing 3-route plan. The canonical (single-target) resolver picks
+  the first profile-backed candidate, so faithful Claude stays primary
+  under the default.
+- Cloud fallback for every alias in `STANDARD_ROUTE_DEFINITIONS` is
+  `gemini-3.8-flash` at forced `high` effort; the codex side is unchanged
+  (`gpt-5.6-sol` / `gpt-5.6-terra` / `gpt-5.6-luna`, `gpt-6-astra` at
+  `medium` for opus high/xhigh rows, `high` for `-max` rows).
+- Covered by `packages/llm-mesh/tests/routing-targets.test.ts` (order
+  claude→muse→codex→cloud, `musePosition` variants, fable-5/5.1 `max`,
+  opus-max rows, 3.8-flash fallback, bare muse ids provider-faithful) and
+  `packages/llm-gateway/tests/target.test.ts` + `router.test.ts` (same
+  order/efforts on the gateway side).
+
+### 14.5 Runtime status and enrollment proofs
+
+- As of this writing the api runtime still lists no muse models
+  (§14.2): enrollment (both chapters) and routing candidates are unit
+  proven, but no live serving dispatch is claimed.
+- Proof 1 (green, 2026-09-20, owner-authorized): `local-import` session →
+  account `acct_muse_…` enrolled → acquire OK with real token (never
+  printed) → removed, keyring verified empty. Ephemeral in-memory service,
+  `/tmp` script only, nothing committed, no secret in logs.
+- Proof 2 (RED / open): pooled live dispatch verdict on `loop-mu94uk70`
+  is still pending. A live probe returned Meta billing 402, so no live
+  muse dispatch is claimed and Lot 4 version bumps stay blocked until a
+  pooled live verdict lands.
