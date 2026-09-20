@@ -1048,3 +1048,90 @@ thin data plane).
   is still pending. A live probe returned Meta billing 402, so no live
   muse dispatch is claimed and Lot 4 version bumps stay blocked until a
   pooled live verdict lands.
+
+### 14.6 Native device-flow enrollment — `MuseCodeEnrollmentProvider` (DESIGN CONTRACT, not yet implemented)
+
+Unlike 14.1–14.5, this subsection is NOT implemented in branch code. It is a
+design contract whose wire facts are sourced from **static analysis of the
+installed `muse` CLI** (wrapper `~/.local/bin/muse` in clear text + ELF
+`muse-bin-1.3.0-R3401.1`, read-only, no network, no secrets extracted — only
+endpoint literals, header names, and serde field names). Facts are tagged
+`[MEASURED]` (literal present in the binary) or `[GAP]` (not determinable
+statically; resolvable only by an owner-authorized live probe). It exists
+because the import-only path (14.3) **cannot maintain a live session by
+construction**: `~/.config/muse/auth.json` persists neither `refresh_token`
+nor an expiry, so mesh refresh can only re-import, never renew.
+
+**Why it matters.** The owner's stated criterion requires native enrollment
+("il faut aussi tester l'enrolemetn natif") and a working keepalive
+("que ca pete pas au bout de 1 min … aussi pour muse-code"). Only a
+mesh-driven device flow that keeps `refresh_token` in the keyring satisfies
+both. This is the peer-requested `MuseCodeEnrollmentProvider`.
+
+**Flow (three legs):**
+
+1. Authorize — `[MEASURED]` `POST https://auth.meta.com/oidc/device/authorization/`,
+   `client_id=1031625952748946` (public RFC 8628 client). Returns
+   `device_code`, `user_code`, `verification_uri_complete`, `expires_in`.
+   Surface the verification at `https://accountscenter.meta.com/muse_code/`.
+2. Poll token — `[MEASURED]` `POST https://auth.meta.com/oidc/device/token/`,
+   `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`,
+   `client_id`. Success = `TokenGrant{access_token, refresh_token, expires_in}`.
+   Handle `authorization_pending` / `slow_down` / `access_denied` /
+   `expired_token`.
+3. Mint API key — `[MEASURED]` `POST https://api.meta.ai/muse-code/key`,
+   header `x-api-version: 1.0.0`, body `{"dca_token": <access_token>}`
+   (`dca_token` is the only request field found adjacent to `KeyMintManager`).
+   Response struct `MintedKey` (14 fields, measured, all serde-optional):
+   `title, detail, api_key, require_payment, action_url, user_full_name,
+   user_email, is_subs_active, subs_tier_id, subs_tier_name,
+   is_subs_upgrade_available, has_payment_method, can_subscribe, subs_usage`,
+   with `subs_usage{window{window_duration_mins}, weekly{used_percent,
+   resets_at}}`.
+
+**Onboarding / payment (not a hard failure).** On `MODEL_API__ONBOARDING_REQUIRED`
+/ `4705001` / `4705002`, surface `action_url` to the enrolling user rather
+than failing hard — the account exists but needs onboarding or a payment
+method.
+
+**Quota MUST be surfaced, never swallowed (h-cond).** `subs_usage`
+(`weekly.used_percent`, `weekly.resets_at`) must reach a readable surface,
+even minimal. The worst failure mode observed across Codex/Opus this week was
+a tool going silent at quota exhaustion instead of saying it was out of
+credit; a paid metered service must not repeat it.
+
+**Security guarantee, by construction (h-cond).** `access_token`/`dca_token`
+and the minted `api_key` flow service → keyring only. They are never returned
+to, logged by, traced by, or messaged through an agent. The surface exposes
+"enrolled/authenticated", never the secret. `MintedKey` is deserialized on
+the keyring side, out of agent reach.
+
+**Keepalive / refresh (now possible).** Persist `refresh_token` + `expires_in`
+(the import-only path discards them). `refresh()` either replays
+`grant_type=refresh_token` against the token endpoint `[GAP: refresh grant
+string not isolated]`, or re-mints via KeyMint with a fresh `dca_token`.
+
+**GAPs — defensively handled, NOT blocking a build; a live probe only confirms:**
+
+- Auth mode of the mint call: whether an `Authorization: Bearer <token>`
+  header is required in addition to the body `[GAP]`. Defensive rule: send
+  body-only; on a single `401`, retry **once** with the Bearer header, then
+  fail up — **never loop**. This retry is an **unmeasured** hypothesis against
+  a production auth endpoint with the owner's token: two consecutive attempts
+  may trip attempt-counting or lockout whose policy we do not control, so the
+  bound is one and the first executor must know it is probing.
+- `Content-Type` `[GAP]`: use `application/json`.
+- `onboard` literal `[GAP]`: semantics undetermined (query param vs
+  discriminant); handled via the response onboarding fields above.
+- `base_url` `[GAP]`: not a `MintedKey` field; default to
+  `https://api.meta.ai/v1` (measured ClientBuilder default, matches
+  `auth.json.api_base_url`) unless the response carries one.
+- Exact success-field subset `[GAP]`: `MintedKey` fields are all optional →
+  deserialize permissively.
+
+**Separability.** Enrollment (this provider, mesh-side, `packages/llm-mesh`)
+and the Meta **serving leg** (gateway/daemon registry, h-runtime) are separate
+concerns: enroll produces a keyring credential; serve consumes it over the
+Meta wire (`https://api.meta.ai/v1`, api-key auth, `x-api-version: 1.0.0`).
+The serving leg does not depend on this provider's code — it depends on the
+same measured wire facts. Both must exist for §14.5 Proof 2 to go green.
