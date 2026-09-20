@@ -109,6 +109,9 @@ export interface EnrollmentCompletion {
 export interface EnrollmentProvider {
   start(input: StartEnrollmentInput): Promise<EnrollmentSession>;
   complete(input: CompleteEnrollmentInput): Promise<PreparedCredential>;
+  // Direct-key import (muse only): enroll a raw API key with no session
+  // round-trip. Optional like waitForCallback/pollForCompletion below.
+  importDirectApiKey?(apiKey: string): Promise<PreparedCredential>;
   resolve(credential: PreparedCredential): Promise<ResolvedProviderMetadata>;
   refresh(input: RefreshInput): Promise<PreparedCredential>;
   waitForCallback?(enrollmentId: string): Promise<CompletedEnrollment>;

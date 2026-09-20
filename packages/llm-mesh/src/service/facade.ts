@@ -113,6 +113,12 @@ export interface LlmMeshFacade {
     code: string,
     ownerScopeRef: string,
   ): Promise<EnrollmentCompletion>;
+  // Muse direct-key import (BR75): raw MUSE_API_KEY as a pay-as-you-go
+  // account; the caller binds the enrolling owner.
+  completeMuseDirectImport(
+    apiKey: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion>;
   cancel(enrollmentId: string): Promise<void>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
@@ -171,6 +177,9 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async completeMuseImport(enrollmentId, code, ownerScopeRef) {
       return service.completeMuseImport(enrollmentId, code, ownerScopeRef);
+    },
+    async completeMuseDirectImport(apiKey, ownerScopeRef) {
+      return service.completeMuseDirectImport(apiKey, ownerScopeRef);
     },
     async cancel(enrollmentId) {
       return service.cancel(enrollmentId);

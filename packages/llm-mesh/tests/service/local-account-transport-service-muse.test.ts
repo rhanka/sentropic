@@ -163,4 +163,57 @@ describe('LocalAccountTransportService muse import round-trip', () => {
     });
     expect(acquisition.material.accountId).toBe(completion.accountId);
   });
+
+  it('enrolls a direct-billed MUSE_API_KEY account and acquires it', async () => {
+    const { keyring, service } = setup();
+
+    const completion = await service.completeMuseDirectImport(
+      'muse-direct-key',
+      OWNER_SCOPE,
+    );
+    expect(completion.accountId).toMatch(/^acct_muse_/);
+    expect(completion.label).toContain('Muse');
+
+    const acquisition = await service.acquire({
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      ownerScopeRef: OWNER_SCOPE,
+    });
+    expect(acquisition.material).toMatchObject({
+      accountId: completion.accountId,
+      accessToken: 'muse-direct-key',
+    });
+
+    // The public record carries the direct-billing marker but never the key.
+    const publicRecord = await keyring.getSecret(
+      `sentropic-llm-mesh:${completion.accountId}:public`,
+    );
+    expect(publicRecord).toContain('direct');
+    expect(publicRecord).not.toContain('muse-direct-key');
+  });
+
+  it('re-imports of the same direct key converge on one account', async () => {
+    const { service } = setup();
+
+    const first = await service.completeMuseDirectImport('muse-direct-key', OWNER_SCOPE);
+    const second = await service.completeMuseDirectImport('muse-direct-key', OWNER_SCOPE);
+
+    expect(second.accountId).toBe(first.accountId);
+  });
+
+  it('refuses a direct import without an owner scope', async () => {
+    const { service } = setup();
+
+    await expect(
+      service.completeMuseDirectImport('muse-direct-key', '  '),
+    ).rejects.toThrow('ownerScope');
+  });
+
+  it('rejects a blank direct key without echoing it', async () => {
+    const { service } = setup();
+
+    await expect(service.completeMuseDirectImport('  ', OWNER_SCOPE)).rejects.toThrow(
+      /direct.*api key/i,
+    );
+  });
 });

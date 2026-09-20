@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { MuseEnrollmentProvider } from '../../src/enrollment/muse.js';
+import {
+  buildMuseDirectAuthPayload,
+  MuseEnrollmentProvider,
+} from '../../src/enrollment/muse.js';
 
 const AUTH_FILE = JSON.stringify({
   schema_version: 1,
@@ -147,5 +150,55 @@ describe('MuseEnrollmentProvider', () => {
     const metadata = await provider.resolve(credential);
 
     expect(metadata).toMatchObject({ provider: 'muse', accountId: credential.accountId });
+  });
+
+  it('imports a direct-billed MUSE_API_KEY as a stable credential', async () => {
+    const provider = providerWithFile(AUTH_FILE);
+
+    const first = await provider.importDirectApiKey('  muse-direct-key  ');
+    const second = await provider.importDirectApiKey('muse-direct-key');
+
+    expect(first.accountId).toMatch(/^acct_muse_/);
+    expect(first.accountId).toBe(second.accountId);
+    expect(first.accessToken).toBe('muse-direct-key');
+    expect(new Date(first.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('keeps direct-key accounts distinct from CLI-login accounts', async () => {
+    // No email in the CLI store: the login account id derives from the raw
+    // token, so importing that same string as a direct key must still land
+    // on a different account (billing paths must never merge).
+    const withoutEmail = JSON.stringify({
+      schema_version: 1,
+      providers: { meta: { access_token: 'muse-test-access-token' } },
+    });
+    const provider = providerWithFile(withoutEmail);
+    const session = await provider.start(startInput);
+    const loginCredential = await provider.complete({
+      enrollmentId: session.enrollmentId,
+      code: '',
+    });
+
+    const directCredential = await provider.importDirectApiKey('muse-test-access-token');
+
+    expect(loginCredential.accountId).toMatch(/^acct_muse_/);
+    expect(directCredential.accountId).not.toBe(loginCredential.accountId);
+  });
+
+  it('rejects a blank direct key without echoing it', async () => {
+    const provider = providerWithFile(AUTH_FILE);
+
+    await expect(provider.importDirectApiKey('   ')).rejects.toThrow(/direct.*api key/i);
+  });
+
+  it('builds the Meta direct auth payload from a key', () => {
+    expect(buildMuseDirectAuthPayload('muse-direct-key')).toEqual({
+      auth_type: 'api_key',
+      user_api_key: 'muse-direct-key',
+    });
+  });
+
+  it('refuses to build the Meta direct auth payload from a blank key', () => {
+    expect(() => buildMuseDirectAuthPayload('  ')).toThrow(/direct.*api key/i);
   });
 });
