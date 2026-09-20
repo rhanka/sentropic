@@ -106,16 +106,22 @@ describe('canonical model targets', () => {
         effort: 'xhigh',
       },
       {
+        providerId: 'muse',
+        transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor',
+        effort: 'xhigh',
+      },
+      {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-5.6-sol',
-        effort: 'xhigh',
+        model: 'gpt-6-astra',
+        effort: 'medium',
       },
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash',
-        effort: 'xhigh',
+        model: 'gemini-3.8-flash',
+        effort: 'high',
       },
     ]);
     expect(resolveCandidates('claude-sonnet-4-6')).toEqual([
@@ -132,7 +138,8 @@ describe('canonical model targets', () => {
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.8-flash',
+        effort: 'high',
       },
     ]);
     expect(resolveCandidates('claude-fable-5')).toEqual([
@@ -140,6 +147,12 @@ describe('canonical model targets', () => {
         providerId: 'anthropic',
         transportProviderId: 'claude-code',
         model: 'claude-fable-5',
+      },
+      {
+        providerId: 'muse',
+        transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor',
+        effort: 'max',
       },
       {
         providerId: 'openai',
@@ -150,6 +163,7 @@ describe('canonical model targets', () => {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
         model: 'gemini-3.8-flash',
+        effort: 'high',
       },
     ]);
     expect(resolveCandidates('gpt-5.6-terra')).toEqual([
@@ -164,7 +178,8 @@ describe('canonical model targets', () => {
   it('keeps faithful Anthropic routes only when profile-backed and keeps canonical alias kind', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
-      'claude-opus-4-8', 'claude-opus-4-8-xhigh',
+      'claude-opus-5-max',
+      'claude-opus-4-8', 'claude-opus-4-8-xhigh', 'claude-opus-4-8-max',
       'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max',
@@ -185,10 +200,8 @@ describe('canonical model targets', () => {
       };
       const expectedPrimaryModel = candidates[0]?.model ?? '';
       expect(candidates[0]).toMatchObject(expectedPrimary);
-      const expectedCloudModel = alias.startsWith('claude-fable-')
-        ? 'gemini-3.8-flash' : 'gemini-3.7-flash';
       expect(candidates).toContainEqual(expect.objectContaining({
-        providerId: 'gemini', transportProviderId: 'cloud-code', model: expectedCloudModel,
+        providerId: 'gemini', transportProviderId: 'cloud-code', model: 'gemini-3.8-flash',
       }));
       expect(descriptions.find((route) => route.requestedId === alias))
         .toMatchObject({
@@ -200,8 +213,8 @@ describe('canonical model targets', () => {
   });
 
   it('ensures every launch alias has a faithful Anthropic transport target', () => {
-    for (const [requestedId] of STANDARD_ROUTE_DEFINITIONS) {
-      const candidates = resolveCandidates(requestedId);
+    for (const definition of STANDARD_ROUTE_DEFINITIONS) {
+      const candidates = resolveCandidates(definition.requestedId);
       const faithfulTarget = faithfulAnthropicTargetFromCandidates(candidates);
       expect(faithfulTarget).toBeDefined();
       expect(faithfulTarget).toMatchObject({
@@ -212,9 +225,12 @@ describe('canonical model targets', () => {
   });
 
   it('preserves effort and never uses Flash Lite for standard aliases', () => {
-    for (const [alias, codexTarget] of Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS)) {
+    for (const [alias, primaryTarget] of Object.entries(LAUNCH_ALIAS_TARGET_MAPPINGS)) {
       const candidates = resolveCandidates(alias);
-      expect(candidates[1]?.effort).toBe(codexTarget.effort);
+      const faithfulCandidate = candidates.find(
+        (candidate) => candidate.transportProviderId === 'claude-code',
+      );
+      expect(faithfulCandidate?.effort).toBe(primaryTarget.effort);
       expect(candidates.map((candidate) => candidate.model))
         .not.toContain('gemini-3.1-flash-lite');
     }
@@ -226,36 +242,67 @@ describe('canonical model targets', () => {
         const alias = effort ? `${model}-${effort}` : model;
         const candidates = resolveCandidates(alias);
         expect(candidates[1]).toEqual({
+          providerId: 'muse', transportProviderId: 'muse',
+          model: 'muse-spark-1.3-contributor', effort: 'max',
+        });
+        expect(candidates[2]).toEqual({
           providerId: 'openai', transportProviderId: 'codex',
           model: 'gpt-6-astra', ...(effort ? { effort } : {}),
         });
-        expect(candidates[2]).toEqual({
+        expect(candidates[3]).toEqual({
           providerId: 'gemini', transportProviderId: 'cloud-code',
-          model: 'gemini-3.8-flash', ...(effort ? { effort } : {}),
+          model: 'gemini-3.8-flash', effort: 'high',
         });
       }
     }
   });
 
-  it('routes every Opus 5 Codex fallback through GPT-5.6 Sol', () => {
-    for (const effort of [undefined, 'high', 'xhigh'] as const) {
-      const alias = effort ? `claude-opus-5-${effort}` : 'claude-opus-5';
-      const candidates = resolveCandidates(alias);
-      expect(candidates[1]).toEqual({
-        providerId: 'openai', transportProviderId: 'codex',
-        model: 'gpt-5.6-sol', ...(effort ? { effort } : {}),
-      });
+  it('routes Opus 5 base through Sol and high/xhigh through Astra medium', () => {
+    expect(resolveCandidates('claude-opus-5')[1]).toEqual({
+      providerId: 'openai', transportProviderId: 'codex', model: 'gpt-5.6-sol',
+    });
+    for (const effort of ['high', 'xhigh'] as const) {
+      const candidates = resolveCandidates(`claude-opus-5-${effort}`);
       expect(candidates[2]).toEqual({
+        providerId: 'openai', transportProviderId: 'codex',
+        model: 'gpt-6-astra', effort: 'medium',
+      });
+      expect(candidates[3]).toEqual({
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash', ...(effort ? { effort } : {}),
+        model: 'gemini-3.8-flash', effort: 'high',
       });
     }
   });
 
-  it('routes every Claude tier to its declared real Cloud Code transport', () => {
+  it('routes new Opus max aliases through Astra high with a muse max candidate', () => {
+    for (const model of ['claude-opus-5', 'claude-opus-4-8']) {
+      const candidates = resolveCandidates(`${model}-max`);
+      expect(candidates).toEqual([
+        {
+          providerId: 'anthropic', transportProviderId: 'claude-code',
+          model, effort: 'max',
+        },
+        {
+          providerId: 'muse', transportProviderId: 'muse',
+          model: 'muse-spark-1.3-contributor', effort: 'max',
+        },
+        {
+          providerId: 'openai', transportProviderId: 'codex',
+          model: 'gpt-6-astra', effort: 'high',
+        },
+        {
+          providerId: 'gemini', transportProviderId: 'cloud-code',
+          model: 'gemini-3.8-flash', effort: 'high',
+        },
+      ]);
+    }
+  });
+
+  it('routes every Claude tier to 3.8 Flash on the Cloud Code transport', () => {
     const aliases = [
       'claude-opus-5', 'claude-opus-5-high', 'claude-opus-5-xhigh',
-      'claude-opus-4-8', 'claude-opus-4-8-xhigh',
+      'claude-opus-5-max',
+      'claude-opus-4-8', 'claude-opus-4-8-xhigh', 'claude-opus-4-8-max',
       'claude-sonnet-5', 'claude-sonnet-5-xhigh', 'claude-sonnet-4-6',
       'claude-fable-5', 'claude-fable-5-high', 'claude-fable-5-xhigh',
       'claude-fable-5-max',
@@ -265,8 +312,6 @@ describe('canonical model targets', () => {
 
     for (const alias of aliases) {
       const candidates = resolveCandidates(alias);
-      const expectedModel = alias.startsWith('claude-fable-')
-        ? 'gemini-3.8-flash' : 'gemini-3.7-flash';
       const cloudCodeTargets = candidates.filter(
         ({ transportProviderId }) => transportProviderId === 'cloud-code',
       );
@@ -274,14 +319,41 @@ describe('canonical model targets', () => {
       expect(cloudCodeTargets[0]).toMatchObject({
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: expectedModel,
+        model: 'gemini-3.8-flash',
       });
       expect(resolveTargetCapabilitySource(cloudCodeTargets[0]!)).toMatchObject({
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: expectedModel,
+        model: 'gemini-3.8-flash',
       });
     }
+  });
+
+  it('keeps bare Muse ids provider-faithful', () => {
+    expect(resolve('muse-spark-1.3')).toEqual({
+      providerId: 'muse',
+      transportProviderId: 'muse',
+      model: 'muse-spark-1.3',
+    });
+    expect(resolve('muse-spark-1.3-contributor')).toEqual({
+      providerId: 'muse',
+      transportProviderId: 'muse',
+      model: 'muse-spark-1.3-contributor',
+    });
+  });
+
+  it('honors the musePosition integrator option (off | after-claude | first)', () => {
+    const off = createCanonicalTargetCandidatesResolver({ musePosition: 'off' });
+    expect(off('claude-opus-5-xhigh').map((target) => target.transportProviderId))
+      .toEqual(['claude-code', 'codex', 'cloud-code']);
+
+    const first = createCanonicalTargetCandidatesResolver({ musePosition: 'first' });
+    expect(first('claude-opus-5-xhigh').map((target) => target.transportProviderId))
+      .toEqual(['muse', 'claude-code', 'codex', 'cloud-code']);
+
+    const afterClaude = createCanonicalTargetCandidatesResolver({ musePosition: 'after-claude' });
+    expect(afterClaude('claude-opus-5-xhigh').map((target) => target.transportProviderId))
+      .toEqual(['claude-code', 'muse', 'codex', 'cloud-code']);
   });
 
   it('keeps legacy Gemini capability aliases on 3.7 instead of 3.5', () => {
