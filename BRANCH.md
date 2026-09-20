@@ -16,6 +16,8 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `scripts/llm-model-equivalences/*`
   - `packages/llm-mesh/src/providers.ts`
   - `packages/llm-mesh/src/catalog.ts`
   - `packages/llm-mesh/src/adapters.ts`
@@ -37,6 +39,7 @@
   - `api/tests/unit/muse-provider.test.ts`
   - `api/tests/unit/provider-credentials.test.ts`
   - `api/tests/unit/provider-registry-expansion.test.ts`
+  - `api/tests/unit/provider-mesh-contract-proof.test.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-gateway/package.json`
   - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
@@ -108,11 +111,13 @@
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR75-EXn` exceptions if needed.
   - [ ] Resolve BR75-Q1, BR75-Q2, BR75-Q4 or defer with owner/date (BR75-Q3 decided: tier option, default contributor).
 
-- [ ] **Lot 1 — API-key path (Chapitre A)**
-  - [ ] Add muse provider surface in `packages/llm-mesh/src/providers.ts` + `catalog.ts` (`muse-spark-1.3` + `muse-spark-1.3-contributor`; tier exposed as option, default contributor per BR75-Q3).
-  - [ ] Add `MuseAdapter` in `packages/llm-mesh/src/adapters.ts` + default adapters.
-  - [ ] Add `api/src/services/providers/muse-provider.ts`, register in `provider-registry.ts`.
-  - [ ] Wire `MUSE_API_KEY` (CI) with fallback `MODEL_API_KEY` (root `.env`) in `provider-credentials.ts` + `api/src/config/env.ts`.
+- [x] **Lot 1 — API-key path (Chapitre A)**
+  - [x] Add muse provider surface in `packages/llm-mesh/src/providers.ts` + `catalog.ts` (`muse-spark-1.3` + `muse-spark-1.3-contributor`; tier exposed as option, default contributor per BR75-Q3).
+  - [x] Add `MuseAdapter` in `packages/llm-mesh/src/adapters.ts` + default adapters.
+  - [x] Add `api/src/services/providers/muse-provider.ts`, register in `provider-registry.ts`.
+  - [x] Wire `MUSE_API_KEY` (CI) with fallback `MODEL_API_KEY` (root `.env`) in `provider-credentials.ts` + `api/src/config/env.ts`.
+  - [x] Classify new models in equivalence council (excluded, no benchmark evidence) via `make refresh-llm-model-equivalences`.
+  - [x] Evolve `gcp.test.ts` counts 7→8 (provider addition, evolution not regression).
   - [ ] UAT: `muse exec` headless smoke against configured base URL; API-key wiring by name only, no secret value in repo.
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api` ENV=test-feat-muse-enrollment
