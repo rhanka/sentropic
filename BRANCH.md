@@ -61,9 +61,10 @@
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `attention` BR75-Q1 (contributor vs non-contributor): owner said contributor remisé for gateway; brief said non-contributor default for privacy; needs explicit default decision before Lot 1.
+- `attention` BR75-Q1 (env key): root `.env` holds `MODEL_API_KEY`; CI secret will be named `MUSE_API_KEY`; code reads `MUSE_API_KEY` with fallback `MODEL_API_KEY`.
 - `attention` BR75-Q2 (gemini-3.8/astra source-gap): absent from mesh/gateway/api code; PR oubliée suspected; needs confirm add-alongside-3.7 vs replace before Lot 3.
-- `attention` BR75-Q3 (MUSE_API_KEY CI secret): wiring by name only, no value in repo or env; owner action required before Lot 4.
+- `acknowledge` BR75-Q3 (tier): tier is an option, default `contributor` (remisé); both Chapitre A (API key) and Chapitre B (siège account) ship in this same branch; enrollment paths must be covered by tests.
+- `attention` BR75-Q4 (MUSE_API_KEY CI secret): wiring by name only, no value in repo or env; owner action required before Lot 4.
 - `acknowledge` BR75-N1: worktree based on `origin/main` `bbcb97e98` (local `main` was behind at `cb618e190`; worktree reset to `origin/main`).
 - `acknowledge` BR75-N2: resuming Claude session `21fe3355-ad7d-4071-a387-d54f58576693` (cwd sentropic, ended 2026-09-20 00:32 UTC on 529 + weekly limit).
 
@@ -102,13 +103,13 @@
   - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
   - [ ] Confirm scope and guardrails.
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR75-EXn` exceptions if needed.
-  - [ ] Resolve BR75-Q1, BR75-Q2, BR75-Q3 or defer with owner/date.
+  - [ ] Resolve BR75-Q1, BR75-Q2, BR75-Q4 or defer with owner/date (BR75-Q3 decided: tier option, default contributor).
 
 - [ ] **Lot 1 — API-key path (Chapitre A)**
-  - [ ] Add muse provider surface in `packages/llm-mesh/src/providers.ts` + `catalog.ts` (`muse-spark-1.3`, contributor variant per BR75-Q1).
+  - [ ] Add muse provider surface in `packages/llm-mesh/src/providers.ts` + `catalog.ts` (`muse-spark-1.3` + `muse-spark-1.3-contributor`; tier exposed as option, default contributor per BR75-Q3).
   - [ ] Add `MuseAdapter` in `packages/llm-mesh/src/adapters.ts` + default adapters.
   - [ ] Add `api/src/services/providers/muse-provider.ts`, register in `provider-registry.ts`.
-  - [ ] Wire `MUSE_API_KEY` in `provider-credentials.ts` + `api/src/config/env.ts` (fallback `MODEL_API_KEY` only if owner confirms).
+  - [ ] Wire `MUSE_API_KEY` (CI) with fallback `MODEL_API_KEY` (root `.env`) in `provider-credentials.ts` + `api/src/config/env.ts`.
   - [ ] UAT: `muse exec` headless smoke against configured base URL; API-key wiring by name only, no secret value in repo.
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api` ENV=test-feat-muse-enrollment
@@ -127,6 +128,7 @@
   - [ ] Extend `packages/llm-mesh/src/enrollment/contracts.ts` provider union + add `enrollment/muse.ts` (import `~/.config/muse/auth.json` `meta.*`, no browser OAuth).
   - [ ] Register muse enrollment in `packages/llm-mesh/src/service/facade.ts`; add completion branch in `local-account-transport-service.ts`.
   - [ ] Keyring: verify generic envelope path needs no change; gateway pool: verify no change (ownerUserId + kill-switch already generic).
+  - [ ] Cover the full enrollment round-trip by tests (import from `auth.json` shape, credential envelope, refresh dispatch, pooled owner-scoped completion).
   - [ ] UAT: import personal muse account file-shape only (keys, no values); pooled `ownerUserId`-scoped check.
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api` ENV=test-feat-muse-enrollment
@@ -142,6 +144,7 @@
       - [ ] No E2E change expected; record `none`.
 
 - [ ] **Lot 3 — Routing candidates + council**
+  - [ ] Audit existing default mapping (`routing-targets.ts`, gateway router, `model-selection-legacy.ts`) and propose the muse-insertion alternative (least-change) for owner sign-off before editing.
   - [ ] Add `muse-spark-1.3` target + `fable-5.1` id + `musePosition` config (`off | after-claude | first`, default `after-claude`) in `routing-targets.ts`.
   - [ ] Set efforts: `sonnet5`/`sonnet-5.1` → `max`; `opus high`/`xhigh` → `xhigh`; keep Claude faithful first when account exists, then muse, then existing codex/cloud-code.
   - [ ] Regenerate equivalence council via `make llm-mesh-add-model` (`generated-model-council.ts`, `equivalence-council.ts`).
@@ -165,7 +168,7 @@
   - [ ] Bump `packages/llm-mesh/package.json` semver for `src/**` change.
   - [ ] Bump `packages/llm-gateway/package.json` semver + `llm-mesh` dep.
   - [ ] Verify `check-llm-model-equivalences` gate passes; no direct `npm publish`.
-  - [ ] Record owner CI secret action for `MUSE_API_KEY` (BR75-Q3).
+  - [ ] Record owner CI secret action for `MUSE_API_KEY` (BR75-Q4).
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (no UI change; record `none` with reason)
