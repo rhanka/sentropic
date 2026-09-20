@@ -69,6 +69,7 @@
 - `acknowledge` BR75-N2: resuming Claude session `21fe3355-ad7d-4071-a387-d54f58576693` (cwd sentropic, ended 2026-09-20 00:32 UTC on 529 + weekly limit).
 - `acknowledge` BR75-D1 (owner 2026-09-20): opus `*-max` aliases get muse candidate at effort `max`; opus base codex side unchanged (`sol`/`terra`).
 - `acknowledge` BR75-D2 (owner 2026-09-20): proceed autonomously lot by lot until done (implementation loop).
+- `acknowledge` BR75-D3 (2026-09-20): shared objective loop `loop-mu94uk70` (`muse-enrollment`); joined as `sentropic-muse`; h2a-side Muse invited via peer channel with join instructions.
 
 ## AI Flaky tests
 - Acceptance rule:
