@@ -180,7 +180,7 @@
       - [ ] Run only if gateway route behavior changed; otherwise record `none` with reason.
 
 - [ ] **Lot 4 — Versions + publication gates (BLOCKED until enrollment proofs)**
-  - [ ] Proof 1: real muse-code account smoke green (owner-authorized, test ENV only, cleanup verified).
+  - [x] Proof 1 (2026-09-20, owner-authorized real smoke): `local-import` session → account `acct_muse_…` enrolled → acquire OK with real token (never printed) → removed, keyring verified empty. Ephemeral in-memory service, `/tmp` script only, nothing committed, no secret in logs.
   - [ ] Proof 2: h2a pooled live verdict posted on `loop-mu94uk70`.
   - [ ] Only then: bump `packages/llm-mesh/package.json` semver for `src/**` change.
   - [ ] Bump `packages/llm-gateway/package.json` semver + `llm-mesh` dep.
