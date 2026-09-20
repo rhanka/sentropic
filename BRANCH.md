@@ -67,6 +67,8 @@
 - `attention` BR75-Q4 (MUSE_API_KEY CI secret): wiring by name only, no value in repo or env; owner action required before Lot 4.
 - `acknowledge` BR75-N1: worktree based on `origin/main` `bbcb97e98` (local `main` was behind at `cb618e190`; worktree reset to `origin/main`).
 - `acknowledge` BR75-N2: resuming Claude session `21fe3355-ad7d-4071-a387-d54f58576693` (cwd sentropic, ended 2026-09-20 00:32 UTC on 529 + weekly limit).
+- `acknowledge` BR75-D1 (owner 2026-09-20): opus `*-max` aliases get muse candidate at effort `max`; opus base codex side unchanged (`sol`/`terra`).
+- `acknowledge` BR75-D2 (owner 2026-09-20): proceed autonomously lot by lot until done (implementation loop).
 
 ## AI Flaky tests
 - Acceptance rule:
