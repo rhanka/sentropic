@@ -3,6 +3,7 @@ import { ClaudeProviderRuntime } from './providers/claude-provider';
 import { CohereProviderRuntime } from './providers/cohere-provider';
 import { GeminiProviderRuntime } from './providers/gemini-provider';
 import { MistralProviderRuntime } from './providers/mistral-provider';
+import { MuseProviderRuntime } from './providers/muse-provider';
 import { OpenAIProviderRuntime } from './providers/openai-provider';
 import { GcpProviderRuntime } from './providers/gcp-provider';
 import { LocalProviderRuntime } from './providers/local-provider';
@@ -28,6 +29,7 @@ class ProviderRegistry {
     const cohere = new CohereProviderRuntime();
     const gcp = new GcpProviderRuntime();
     const local = new LocalProviderRuntime();
+    const muse = new MuseProviderRuntime();
 
     this.providers = new Map<ProviderId, ProviderRuntime>([
       ['openai', openai],
@@ -37,11 +39,12 @@ class ProviderRegistry {
       ['cohere', cohere],
       ['gcp', gcp],
       ['local', local],
+      ['muse', muse],
     ]);
     this.cloudCodePa = new CloudCodePaProviderRuntime();
   }
 
-  // Catalog surface: the 7 mesh providers only. `cloudcode-pa` is a transport
+  // Catalog surface: the 8 mesh providers only. `cloudcode-pa` is a transport
   // provider (no selectable catalog models) and is intentionally excluded.
   listProviders(): ProviderDescriptor[] {
     return [...this.providers.values()].map((runtime) => runtime.provider);

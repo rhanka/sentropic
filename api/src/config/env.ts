@@ -15,6 +15,10 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   MISTRAL_API_KEY: z.string().optional(),
   COHERE_API_KEY: z.string().optional(),
+  // Meta Muse (BR75): MUSE_API_KEY is the CI secret name; MODEL_API_KEY
+  // is the repo-root .env fallback (BR75-Q1).
+  MUSE_API_KEY: z.string().optional(),
+  MODEL_API_KEY: z.string().optional(),
   // GCP (Gemini-on-GCP / Model Garden, formerly Vertex AI) — config, not secrets.
   // The bearer is minted server-side from ADC (Application Default Credentials);
   // project/location travel as plain config. The `gcp` provider is treated as
