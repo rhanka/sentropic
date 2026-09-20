@@ -72,6 +72,46 @@ describe('LocalAccountTransportService muse import round-trip', () => {
     expect(owner).toContain(OWNER_SCOPE);
   });
 
+  it('refreshes an expired credential on acquire by re-reading the CLI store', async () => {
+    let content = AUTH_FILE;
+    const keyring = new InMemoryKeyring();
+    const providers = new Map<string, EnrollmentProvider>([
+      ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => content })],
+    ]);
+    const configResolver = { async resolveConfig() { return {}; } };
+    const service = new LocalAccountTransportService(keyring, providers, configResolver);
+
+    const session = await service.enroll('muse', {
+      configRef: 'default',
+      mode: 'cli',
+      redirectUri: 'http://127.0.0.1',
+      ownerScope: OWNER_SCOPE,
+    });
+    const completion = await service.completeMuseImport(
+      session.enrollmentId,
+      '',
+      OWNER_SCOPE,
+    );
+
+    // CLI rotates its store (e.g. background refresh); the mesh credential
+    // is expired by the time the next acquire runs with a future clock.
+    content = AUTH_FILE.replace('muse-roundtrip-access', 'muse-rotated-live');
+    const acquisition = await service.acquire({
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      ownerScopeRef: OWNER_SCOPE,
+      now: Date.now() + 2 * 3600 * 1000,
+    });
+
+    expect(acquisition.material.accountId).toBe(completion.accountId);
+    expect(acquisition.material.accessToken).toBe('muse-rotated-live');
+
+    const envelope = await keyring.getSecret(
+      `sentropic-llm-mesh:${completion.accountId}:envelope`,
+    );
+    expect(envelope).toContain('muse-rotated-live');
+  });
+
   it('refuses completion for a foreign owner scope', async () => {
     const { service } = setup();
     const session = await service.enroll('muse', {
