@@ -171,15 +171,15 @@
   - [ ] Regenerate equivalence council via `make llm-mesh-add-model` (`generated-model-council.ts`, `equivalence-council.ts`).
   - [ ] Handle `gemini-3.8-flash` per BR75-Q2 (`BR75-EXn` if catalog touched).
   - [ ] UAT: route-order check (Claude-first-if-account, then muse, then existing); no auto-fallback beyond account switch on muse credit exhaustion.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api` ENV=test-feat-muse-enrollment
-    - [ ] **API tests**
-      - [ ] Update `packages/llm-mesh/tests/routing-targets.test.ts`.
-      - [ ] Update `packages/llm-mesh/tests/route-selection.test.ts`.
-      - [ ] Update `packages/llm-mesh/tests/equivalence-council.test.ts`.
-      - [ ] Update `packages/llm-gateway/tests/target.test.ts`.
-      - [ ] Update `packages/llm-gateway/tests/router.test.ts`.
-      - [ ] Sub-lot gate: `make test-api ENV=test-feat-muse-enrollment`
+  - [x] Lot gate (verified 2026-09-20 conductor: typecheck-api + lint-api 0 errors; mesh 29f/211t; gateway 15/16 — only pre-existing codex BR75-F1 red; `make test-api` MAKE_EXIT=0):
+    - [x] `make typecheck-api` + `make lint-api` ENV=test-feat-muse-enrollment
+    - [x] **API tests**
+      - [x] Update `packages/llm-mesh/tests/routing-targets.test.ts`.
+      - [x] Update `packages/llm-mesh/tests/route-selection.test.ts`.
+      - [x] Update `packages/llm-mesh/tests/equivalence-council.test.ts`.
+      - [x] Update `packages/llm-gateway/tests/target.test.ts`.
+      - [x] Update `packages/llm-gateway/tests/router.test.ts`.
+      - [x] Sub-lot gate: `make test-api ENV=test-feat-muse-enrollment`
     - [ ] **UI tests (TypeScript only)**
       - [ ] No UI change expected; record `none`.
     - [ ] **E2E tests**
