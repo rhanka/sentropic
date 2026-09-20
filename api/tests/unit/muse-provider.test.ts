@@ -41,15 +41,9 @@ describe('MuseProviderRuntime', () => {
   });
 
   describe('listModels', () => {
-    it('should return both Muse Spark tiers', () => {
-      const models = runtime.listModels();
-      const ids = models.map((m) => m.modelId);
-
-      expect(ids).toEqual(['muse-spark-1.3', 'muse-spark-1.3-contributor']);
-      for (const model of models) {
-        expect(model.providerId).toBe('muse');
-        expect(model.reasoningTier).toBe('advanced');
-      }
+    it('should list nothing until a dispatch path exists (Lot 2 transport)', () => {
+      // Advertising unservable models would route traffic into a throw.
+      expect(runtime.listModels()).toEqual([]);
     });
   });
 

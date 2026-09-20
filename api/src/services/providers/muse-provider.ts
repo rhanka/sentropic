@@ -8,7 +8,6 @@ import type {
 } from '../provider-runtime';
 import {
   buildRuntimeProviderDescriptor,
-  listRuntimeModelsByProvider,
 } from '../provider-runtime';
 
 export type MuseGenerateRequest = {
@@ -49,7 +48,11 @@ export class MuseProviderRuntime implements ProviderRuntime {
   }
 
   listModels(): ModelCatalogEntry[] {
-    return listRuntimeModelsByProvider('muse');
+    // No dispatch path exists until the Lot 2 account transport lands
+    // (generate/streamGenerate reject until then). Advertising the catalog
+    // models now would route live traffic into a throw and force speculative
+    // stream fixtures, so the runtime lists nothing until it can serve.
+    return [];
   }
 
   validateCredential(credential?: string): CredentialValidationResult {

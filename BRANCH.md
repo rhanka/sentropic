@@ -117,7 +117,7 @@
 - [x] **Lot 1 — API-key path (Chapitre A)**
   - [x] Add muse provider surface in `packages/llm-mesh/src/providers.ts` + `catalog.ts` (`muse-spark-1.3` + `muse-spark-1.3-contributor`; tier exposed as option, default contributor per BR75-Q3).
   - [x] Add `MuseAdapter` in `packages/llm-mesh/src/adapters.ts` + default adapters.
-  - [x] Add `api/src/services/providers/muse-provider.ts`, register in `provider-registry.ts`.
+  - [x] Add `api/src/services/providers/muse-provider.ts`, register in `provider-registry.ts` (runtime `listModels()` returns `[]` until a dispatch path exists — advertising unservable models would route traffic into a throw and force speculative stream fixtures; flips in Lot 2 with real wire evidence).
   - [x] Wire `MUSE_API_KEY` (CI) with fallback `MODEL_API_KEY` (root `.env`) in `provider-credentials.ts` + `api/src/config/env.ts`.
   - [x] Classify new models in equivalence council (excluded, no benchmark evidence) via `make refresh-llm-model-equivalences`.
   - [x] Evolve `gcp.test.ts` counts 7→8 (provider addition, evolution not regression).
