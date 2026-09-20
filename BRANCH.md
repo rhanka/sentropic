@@ -201,7 +201,7 @@
     - [ ] Route-order check: Claude-first-if-account, then muse, then codex/cloud-code.
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` with muse enrollment + `musePosition` contract.
+  - [x] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` with muse enrollment + `musePosition` contract (done `c1287804e`, §14, +158 additive).
   - [ ] Delete any branch-local spec draft after integration (if created).
 
 - [ ] **Lot N — Final validation**
