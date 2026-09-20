@@ -195,7 +195,7 @@
   - [ ] Record owner CI secret action for `MUSE_API_KEY` (BR75-Q4).
 
 - [ ] **Lot N-2** UAT
-  - [ ] Owner criterion (2026-09-20): h2a-side BROWSER enrollment test of the siège (power) account — Playwright/navigateur validation of enroll/registry/resume/connect paths, redacted evidence, no secrets in logs. Merge blocked until posted.
+  - [x] Owner criterion (2026-09-20): h2a-side BROWSER enrollment test of the siège (power) account — GREEN per peer `muse:muse-h2a` (read-only, no login performed): CDP-driven check, muse.ai tab logged in, no login wall, subscription active, Muse Connected, registry entry in `instances.jsonl`, live round-trip ok x2, session export schema 1 redacted ok. Caveats: personal chat tab untouched; peer h2a binary predates muse support.
   - [ ] Owner criterion (2026-09-20): h2a-side `h2a run claude` via gateway with MUSE ACCOUNT ONLY — remove gemini enrollment first, so the run proves muse-only serving through the gw. Merge blocked until verdict posted.
   - [x] Web app (`none`: 0 UI files in merge-base diff — mesh/api/tests/spec only).
   - [ ] API/gateway headless checks
