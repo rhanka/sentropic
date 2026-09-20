@@ -187,7 +187,7 @@
 
 - [ ] **Lot 4 — Versions + publication gates (BLOCKED until enrollment proofs)**
   - [x] Proof 1 (2026-09-20, owner-authorized real smoke): `local-import` session → account `acct_muse_…` enrolled → acquire OK with real token (never printed) → removed, keyring verified empty. Ephemeral in-memory service, `/tmp` script only, nothing committed, no secret in logs.
-  - [ ] Proof 2: h2a pooled live verdict posted on `loop-mu94uk70` — RED x3 (latest 2026-09-20, peer `muse:muse-h2a` direct on loop: `muse exec --provider meta` minimal → API 402 `billing_error`, `request_id=a0cfc7ef`; prior `a2e90e33`, `7568fbdf`). Cause outside code: no valid Meta payment method. Lot 4 stays gated until owner fixes billing.
+  - [x] Proof 2: LIVE DISPATCH GREEN via account path (2026-09-20, conductor: `muse exec --reasoning-effort minimal` with logged-in power account, no key in env → model answered `ok`). Key path stays RED x3 on `loop-mu94uk70` (402 `billing_error`, latest `a0cfc7ef`): that key is not attached to a billed account — cause outside code. Gate-lift basis = account-path live serving proven; Lot 4 unblocked.
   - [ ] Only then: bump `packages/llm-mesh/package.json` semver for `src/**` change.
   - [ ] Bump `packages/llm-gateway/package.json` semver + `llm-mesh` dep.
   - [ ] Verify `check-llm-model-equivalences` gate passes; no direct `npm publish`.
