@@ -13,6 +13,7 @@ import type {
 import { ClaudeCodeEnrollmentProvider } from '../enrollment/claude-code.js';
 import { CloudCodeEnrollmentProvider } from '../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../enrollment/codex.js';
+import { MuseEnrollmentProvider } from '../enrollment/muse.js';
 import { EncryptedFileKeyring } from '../node/keyring/encrypted-file-keyring.js';
 import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
 import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
@@ -106,6 +107,12 @@ export interface LlmMeshFacade {
   ): Promise<EnrollmentSession>;
   waitForCallback(enrollmentId: string): Promise<EnrollmentCompletion>;
   pollForCompletion(enrollmentId: string): Promise<EnrollmentCompletion>;
+  // Muse CLI import completion (BR75): the caller binds the enrolling owner.
+  completeMuseImport(
+    enrollmentId: string,
+    code: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion>;
   cancel(enrollmentId: string): Promise<void>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
@@ -142,6 +149,7 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     ],
     ['codex', new CodexEnrollmentProvider({ configResolver: options.configResolver })],
     ['claude-code', new ClaudeCodeEnrollmentProvider()],
+    ['muse', new MuseEnrollmentProvider()],
   ]);
 
   const service = new LocalAccountTransportService(
@@ -160,6 +168,9 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async pollForCompletion(enrollmentId) {
       return service.pollForCompletion(enrollmentId);
+    },
+    async completeMuseImport(enrollmentId, code, ownerScopeRef) {
+      return service.completeMuseImport(enrollmentId, code, ownerScopeRef);
     },
     async cancel(enrollmentId) {
       return service.cancel(enrollmentId);
