@@ -38,7 +38,16 @@ export const authLoginRateLimiter = rateLimiter({
 
 export const authRateLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 10,
+  // Catch-all for the OAuth authorization flow (authorize + consent/decision +
+  // userinfo/revoke) — routes NOT covered by a specific limiter above. One login
+  // makes ~2-3 calls here, so 10/15min throttled a normal login to ~3 before
+  // "Too many requests". Raised to 40/15min: a sane per-client budget for the
+  // auth flow with retries. INTERIM caveat: preprod sits behind an L4 LB that
+  // SNATs the source (see utils/client-ip resolveClientIp; BR-#456), so this
+  // bucket is currently SHARED across all clients (one counter for everyone).
+  // Once proxy-protocol delivers the real client IP (#456), keying becomes
+  // per-client and this limit can be reviewed/re-tightened.
+  limit: 40,
   standardHeaders: 'draft-7',
   keyGenerator: ipKey,
 });
