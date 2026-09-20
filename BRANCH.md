@@ -202,7 +202,7 @@
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` with muse enrollment + `musePosition` contract (done `c1287804e`, §14, +158 additive).
-  - [ ] Delete any branch-local spec draft after integration (if created).
+  - [x] Delete any branch-local spec draft after integration — `none`: branch adds only muse code+tests (verified via merge-base diff), no draft created.
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
