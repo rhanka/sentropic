@@ -188,17 +188,17 @@
 - [ ] **Lot 4 — Versions + publication gates (BLOCKED until enrollment proofs)**
   - [x] Proof 1 (2026-09-20, owner-authorized real smoke): `local-import` session → account `acct_muse_…` enrolled → acquire OK with real token (never printed) → removed, keyring verified empty. Ephemeral in-memory service, `/tmp` script only, nothing committed, no secret in logs.
   - [x] Proof 2: LIVE DISPATCH GREEN via account path (2026-09-20, conductor: `muse exec --reasoning-effort minimal` with logged-in power account, no key in env → model answered `ok`). Key path stays RED x3 on `loop-mu94uk70` (402 `billing_error`, latest `a0cfc7ef`): that key is not attached to a billed account — cause outside code. Gate-lift basis = account-path live serving proven; Lot 4 unblocked.
-  - [ ] Only then: bump `packages/llm-mesh/package.json` semver for `src/**` change.
-  - [ ] Bump `packages/llm-gateway/package.json` semver + `llm-mesh` dep.
-  - [ ] Verify `check-llm-model-equivalences` gate passes; no direct `npm publish`.
+  - [x] Only then: bump `packages/llm-mesh/package.json` semver for `src/**` change. (2026-09-20 Lot 4: `0.19.3` → `0.20.0` minor, feature convention per `f54640c0a`/`044fb4249`.)
+  - [x] Bump `packages/llm-gateway/package.json` semver + `llm-mesh` dep. (2026-09-20 Lot 4: `0.15.0` → `0.16.0`, dep `^0.19.0` → `^0.20.0`.)
+  - [x] Verify `check-llm-model-equivalences` gate passes; no direct `npm publish`. (2026-09-20 Lot 4: `make check-llm-model-equivalences ENV=test-feat-muse-enrollment` exit 0; publish is CI OIDC only.)
   - [ ] Record owner CI secret action for `MUSE_API_KEY` (BR75-Q4).
 
 - [ ] **Lot N-2** UAT
-  - [ ] Web app (no UI change; record `none` with reason)
+  - [x] Web app (`none`: 0 UI files in merge-base diff — mesh/api/tests/spec only).
   - [ ] API/gateway headless checks
-    - [ ] `muse exec` smoke via gateway route with `MUSE_API_KEY` name wiring.
-    - [ ] Account-import check from `auth.json` shape (keys only).
-    - [ ] Route-order check: Claude-first-if-account, then muse, then codex/cloud-code.
+    - [ ] `muse exec` smoke via gateway route with `MUSE_API_KEY` name wiring. (2026-09-20 Lot 4 account-path substitute GREEN: `muse exec --reasoning-effort minimal` via logged-in account answered `ok`; key path stays RED 402 per Proof 2 — unbilled key, outside code — so the key-wired gateway smoke remains unrun.)
+    - [x] Account-import check from `auth.json` shape (keys only). (2026-09-20 Lot 4: keys-only introspection — top-level `providers` + `schema_version`, `providers.meta` entry — matches `enrollment/muse.ts` reader; no values printed.)
+    - [x] Route-order check: Claude-first-if-account, then muse, then codex/cloud-code. (2026-09-20 Lot 4 unit level: mesh `routing-targets` 16/16 + `route-selection` 15/15, gateway `target` 11/11 + `router` 9/9; live gateway route unavailable, key path 402s.)
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [x] Update `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` with muse enrollment + `musePosition` contract (done `c1287804e`, §14, +158 additive).
