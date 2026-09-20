@@ -16,6 +16,7 @@ import type {
   RefreshInput,
   StartEnrollmentInput,
 } from '../enrollment/contracts.js';
+import { MUSE_DIRECT_BILLING_TYPE } from '../enrollment/muse.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 import { listModelProfilesByProvider } from '../catalog.js';
 import type { LlmMesh } from '../mesh.js';
@@ -248,6 +249,72 @@ export class LocalAccountTransportService {
       status: 'active',
       enrollmentCompletedAt: now,
       metadata: undefined,
+    };
+    this.registerAccount(
+      account,
+      credential.authClientConfigVersion,
+      removalBarrierRef,
+    );
+    await this.persistCredential(
+      {
+        accountId: account.accountId,
+        accountLabel: label,
+        providerId: 'muse',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        accountId: account.accountId,
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt,
+        authClientConfigVersion: credential.authClientConfigVersion,
+      },
+      account,
+    );
+    return { accountId: credential.accountId, label };
+  }
+
+  // Muse direct-key import (BR75): a raw MUSE_API_KEY enrolled as a
+  // pay-as-you-go account — no CLI store, no session round-trip. The
+  // account metadata marks billing_type=direct + auth_type=api_key; the raw
+  // key lives only in the sealed credential envelope, never in the public
+  // record. The caller binds the explicit enrolling ownerScope.
+  async completeMuseDirectImport(
+    apiKey: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion> {
+    const provider = this.providers.get('muse');
+    if (!provider) {
+      throw new Error("No enrollment provider 'muse' registered");
+    }
+    if (typeof provider.importDirectApiKey !== 'function') {
+      throw new Error("Muse enrollment provider does not support direct API-key import");
+    }
+    const credential = await provider.importDirectApiKey(apiKey);
+    const label = 'Muse (direct API key)';
+    const ownerScope = this.requireOwnerScope(ownerScopeRef);
+    const removalBarrierRef = await this.removalBarrierForEnrollment(
+      credential.accountId,
+      ownerScope,
+    );
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId: credential.accountId,
+      ownerScopeRef: ownerScope,
+      accountLabel: label,
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      expiresAt: credential.expiresAt,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: {
+        billing_type: MUSE_DIRECT_BILLING_TYPE,
+        auth_type: 'api_key',
+      },
     };
     this.registerAccount(
       account,
