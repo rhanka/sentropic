@@ -175,6 +175,9 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
         'content-type': 'application/json',
         accept: 'application/json',
         'x-api-version': MUSE_KEY_MINT_API_VERSION,
+        // Live-probed 2026-09-21: body-only mints 401; the dca token must
+        // ALSO ride as Bearer alongside the { dca_token } body (200).
+        authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ dca_token: accessToken }),
     });
