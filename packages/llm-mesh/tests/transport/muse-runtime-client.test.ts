@@ -43,6 +43,18 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
     });
   });
 
+  it('sends the OpenAI param name max_tokens (Meta 400s max_output_tokens)', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ output_text: 'hi' }), { status: 200 }));
+    const client = new MuseRuntimeClient({ fetch: fetchFn });
+
+    await client.generate({ ...request, maxOutputTokens: 64 }, auth);
+
+    const [, init] = fetchFn.mock.calls[0]!;
+    const body = JSON.parse(String(init.body));
+    expect(body.max_tokens).toBe(64);
+    expect(body).not.toHaveProperty('max_output_tokens');
+  });
+
   it('forwards the gateway session id when the account carries one', async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ output_text: 'hi' }), { status: 200 }));
     const client = new MuseRuntimeClient({ fetch: fetchFn });
