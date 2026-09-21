@@ -230,12 +230,12 @@ describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
     try { return Object.fromEntries(new URLSearchParams(raw)); } catch { return raw; }
   };
   const fetchFor = (routes: Array<{ match: (url: string, body: unknown) => boolean; respond: () => unknown }>) => {
-    const calls: Array<{ url: string; body: unknown; contentType: string }> = [];
+    const calls: Array<{ url: string; body: unknown; contentType: string; authorization: string }> = [];
     const fetchFn = (async (url: unknown, init?: { body?: unknown; headers?: unknown }) => {
       const u = String(url);
       const body = decodeBody(init?.body);
       const headers = (init?.headers ?? {}) as Record<string, string>;
-      calls.push({ url: u, body, contentType: String(headers['content-type'] ?? '') });
+      calls.push({ url: u, body, contentType: String(headers['content-type'] ?? ''), authorization: String(headers['authorization'] ?? '') });
       const route = routes.find((r) => r.match(u, body));
       if (!route) throw new Error(`unexpected fetch: ${u}`);
       return route.respond();
@@ -281,6 +281,9 @@ describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
     expect(credential.accountEmail).toBe('native@example.test');
     const keyCall = calls.find((c) => c.url.includes('/muse-code/key'));
     expect(keyCall?.body).toMatchObject({ dca_token: 'dca-1' });
+    // Live-probed 2026-09-21: mint takes body-only for a 401; it needs
+    // Authorization: Bearer <dca_token> alongside the body (200).
+    expect(keyCall?.authorization).toBe('Bearer dca-1');
     const tokenCall = calls.find((c) => c.url.includes('/oidc/device/token/'));
     expect(tokenCall?.contentType).toContain('application/x-www-form-urlencoded');
     expect(tokenCall?.body).toMatchObject({
