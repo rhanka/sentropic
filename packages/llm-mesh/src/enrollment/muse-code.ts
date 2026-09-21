@@ -4,9 +4,10 @@
 // Wire facts [MEASURED] from static analysis of the installed muse CLI
 // (wrapper ~/.local/bin/muse + ELF muse-bin-1.3.0-R3401.1, read-only):
 // - authorize POST https://auth.meta.com/oidc/device/authorization/
-//   (client_id 1031625952748946, public RFC 8628 client);
-// - poll POST https://auth.meta.com/oidc/device/token/
-//   (grant_type urn:ietf:params:oauth:grant-type:device_code);
+//   (client_id 1031625952748946, public RFC 8628 client),
+//   form-encoded (JSON body gets a live 404 — probed 2026-09-21);
+// - poll POST https://auth.meta.com/oidc/device/token/ (form-encoded,
+//   grant_type urn:ietf:params:oauth:grant-type:device_code);
 // - mint POST https://api.meta.ai/muse-code/key, header x-api-version 1.0.0,
 //   body { dca_token } -> MintedKey{ api_key, user_email, ... } (all optional).
 // The wait/backoff/fail-up policy is mutualized in ./device-flow.ts
@@ -66,10 +67,12 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
   async start(input: StartEnrollmentInput): Promise<EnrollmentSession> {
     this.sequence += 1;
     const enrollmentId = `enr_musecode_${Date.now().toString(36)}_${this.sequence.toString(36)}`;
+    // Live-probed 2026-09-21: the Meta OIDC device endpoints take
+    // application/x-www-form-urlencoded (a JSON body gets a 404).
     const response = await this.fetchFn(MUSE_DEVICE_AUTHORIZATION_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ client_id: this.clientId }),
+      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      body: new URLSearchParams({ client_id: this.clientId }).toString(),
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -133,12 +136,12 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
   > {
     const response = await this.fetchFn(MUSE_DEVICE_TOKEN_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
+      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      body: new URLSearchParams({
         grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
         device_code: deviceCode,
         client_id: this.clientId,
-      }),
+      }).toString(),
     });
     if (!response.ok) {
       const raw = await response.text().catch(() => '');
@@ -269,12 +272,12 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
     }
     const response = await this.fetchFn(MUSE_DEVICE_TOKEN_URL, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
+      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: input.refreshToken,
         client_id: this.clientId,
-      }),
+      }).toString(),
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
