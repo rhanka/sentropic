@@ -14,14 +14,18 @@ import {
 // Serving wire facts [MEASURED] from static analysis of the installed muse
 // CLI (wrapper ~/.local/bin/muse + ELF muse-bin-1.3.0-R3401.1, read-only):
 // - base default https://api.meta.ai (ClientBuilder default);
-// - provider path /muse-code/models joined to the configured base URL;
+// - serving path /v1/chat/completions, OpenAI body (live-probed);
 // - Authorization: Bearer <api_key>;
 // - x-meta-ai-gateway-session-id header slot.
 // [GAP] message schema + session-id value: body is passed through from
 // requestOptions and the session header is sent only when provided —
 // nothing is invented for either.
+// Serving path CORRECTED by live probe (2026-09-21, 1 minimal call):
+// POST https://api.meta.ai/v1/chat/completions with an OpenAI body returns
+// 402 billing_not_configured (endpoint exists, call parsed; key billing is
+// the only blocker). /muse-code/models is GET-only (models list).
 const MUSE_DEFAULT_BASE_URL = 'https://api.meta.ai';
-const MUSE_SERVING_PATH = '/muse-code/models';
+const MUSE_SERVING_PATH = '/v1/chat/completions';
 
 export type MuseGenerateRequest = {
   mode: 'msp';

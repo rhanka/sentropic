@@ -29,6 +29,7 @@
   - `packages/llm-mesh/src/service/facade.ts`
   - `packages/llm-mesh/src/service/local-account-transport-service.ts`
   - `packages/llm-mesh/src/transport/muse*`
+  - `packages/llm-mesh/src/index.ts` (muse export line only, required to expose the muse runtime client)
   - `packages/llm-mesh/tests/**`
   - `packages/llm-gateway/src/router*`
   - `packages/llm-gateway/tests/*`
