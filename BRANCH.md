@@ -49,6 +49,9 @@
   - `packages/llm-mesh/package.json`
   - `packages/llm-gateway/package.json`
   - `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`
+  - `api/src/services/llm-runtime/mesh-dispatch.ts` (BR75-EX3)
+  - `api/tests/unit/llm-runtime-stream.test.ts` (BR75-EX3)
+  - `api/tests/api/models.test.ts` (BR75-EX3)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -84,6 +87,7 @@
 - `acknowledge` BR75-D5 (2026-09-20): wording discipline — unit green is reported as unit green; "probe/tested" is reserved for live runs (real enrollment, serving gateway).
 - `acknowledge` BR75-D6 (owner 2026-09-20): h2a-side gemini enrollment MAY BE REMOVED without re-enroll for the muse-only gateway UAT (`h2a run claude --model muse-spark-1.3 --effort low --gw`, headless). Owner-approved destructive step.
 - `attention` BR75-EX2 (DB + HTTP enrollment surface for muse): reason — Chapitre B is unreachable remotely (404) without the same seams codex uses (DB lease store + refresh-if-needed + provider-connections + intent schemas + route cases); impact — additive muse cases only, no existing provider touched; rollback — delete the muse cases. Paths: `api/src/services/llm-account-transports.ts`, `api/src/services/provider-connections.ts`, `api/src/routes/namespaces/llm-mesh-enrollment.ts`, `api/src/routes/namespaces/llm-mesh-enrollment-intent.ts`, `api/tests/unit/llm-account-transports.test.ts`. (Unrelated to the pre-existing Makefile `BR75-EX1` string.)
+- `attention` BR75-EX3 (api runtime dispatch + closed-world test updates for muse, 2026-09-21): reason — CI PR593 red (2 shards): newly advertised muse models had no stream fixture, catalog length 24→26, stale Lot-2 `not.toContain('muse')`; root cause — api `applicationLlmMesh` never routed muse to the api `MuseProviderRuntime` (transport-free mesh default adapter throws), so muse was unreachable via the api runtime; impact — 1 additive wiring line (`muse: applicationProviderClient`, no existing provider touched) + fixture/assertion updates only; rollback — `git checkout` the 4 files. Paths: `api/src/services/llm-runtime/mesh-dispatch.ts`, `api/tests/unit/llm-runtime-stream.test.ts`, `api/tests/api/models.test.ts` (`api/tests/unit/provider-registry-expansion.test.ts` already allowed).
 
 ## AI Flaky tests
 - Acceptance rule:

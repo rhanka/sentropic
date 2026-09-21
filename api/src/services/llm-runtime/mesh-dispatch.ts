@@ -430,6 +430,11 @@ const applicationLlmMesh = createLlmMesh({
       mistral: applicationProviderClient,
       cohere: applicationProviderClient,
       gcp: applicationProviderClient,
+      // Meta Muse (S4): route api-side muse calls through the api
+      // MuseProviderRuntime like every other serving sibling. Without this
+      // override the transport-free mesh MuseAdapter (no client) throws and
+      // the api runtime path can never serve muse.
+      muse: applicationProviderClient,
     }),
   ),
   hooks: {
