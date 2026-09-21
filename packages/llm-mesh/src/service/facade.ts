@@ -14,6 +14,7 @@ import { ClaudeCodeEnrollmentProvider } from '../enrollment/claude-code.js';
 import { CloudCodeEnrollmentProvider } from '../enrollment/cloud-code.js';
 import { CodexEnrollmentProvider } from '../enrollment/codex.js';
 import { MuseEnrollmentProvider } from '../enrollment/muse.js';
+import { MuseCodeEnrollmentProvider } from '../enrollment/muse-code.js';
 import { EncryptedFileKeyring } from '../node/keyring/encrypted-file-keyring.js';
 import { InMemoryKeyring } from '../node/keyring/in-memory-keyring.js';
 import { CloudCodeProviderAdapter } from '../transport/cloud-code-transport.js';
@@ -119,6 +120,13 @@ export interface LlmMeshFacade {
     apiKey: string,
     ownerScopeRef: string,
   ): Promise<EnrollmentCompletion>;
+  // Muse native device-flow completion (S5): Meta device grant + key mint;
+  // the caller binds the enrolling owner.
+  completeMuseDeviceImport(
+    enrollmentId: string,
+    ownerScopeRef: string,
+    maxAttempts?: number,
+  ): Promise<EnrollmentCompletion>;
   cancel(enrollmentId: string): Promise<void>;
 
   // Runtime gateway (Q3A — acquire per request, 0 token in SessionEntry)
@@ -156,6 +164,7 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     ['codex', new CodexEnrollmentProvider({ configResolver: options.configResolver })],
     ['claude-code', new ClaudeCodeEnrollmentProvider()],
     ['muse', new MuseEnrollmentProvider()],
+    ['muse-code', new MuseCodeEnrollmentProvider()],
   ]);
 
   const service = new LocalAccountTransportService(
@@ -180,6 +189,9 @@ export function createLlmMeshFacade(options: FacadeOptions): LlmMeshAdministrati
     },
     async completeMuseDirectImport(apiKey, ownerScopeRef) {
       return service.completeMuseDirectImport(apiKey, ownerScopeRef);
+    },
+    async completeMuseDeviceImport(enrollmentId, ownerScopeRef, maxAttempts) {
+      return service.completeMuseDeviceImport(enrollmentId, ownerScopeRef, maxAttempts);
     },
     async cancel(enrollmentId) {
       return service.cancel(enrollmentId);

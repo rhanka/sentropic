@@ -342,6 +342,82 @@ export class LocalAccountTransportService {
     return { accountId: credential.accountId, label };
   }
 
+  // Muse native device-flow completion (S5, §14.6): the `muse-code`
+  // provider polls the Meta device grant, mints a key, and persists the
+  // refresh token. Same persistence shape as the CLI import; metadata
+  // marks the seat-billed device path. The caller binds the ownerScope.
+  async completeMuseDeviceImport(
+    enrollmentId: string,
+    ownerScopeRef: string,
+    maxAttempts = 60,
+  ): Promise<EnrollmentCompletion> {
+    const provider = this.providers.get('muse-code');
+    if (!provider) {
+      throw new Error("No enrollment provider 'muse-code' registered");
+    }
+    // Same CompletedEnrollment shape as the codex device flow
+    // (mutualized handling); the caller binds the enrolling ownerScope and
+    // rejects a session opened for a different owner.
+    if (typeof provider.pollForCompletion !== 'function') {
+      throw new Error("Muse enrollment provider does not support device-flow polling");
+    }
+    const res = await provider.pollForCompletion(enrollmentId);
+    if (!res.credential) {
+      throw new Error(`Enrollment session ${enrollmentId} did not resolve a credential`);
+    }
+    const ownerScope = this.requireOwnerScope(ownerScopeRef);
+    if (res.ownerScope !== ownerScope) {
+      throw new Error(`Enrollment session ${enrollmentId} was opened for a different owner`);
+    }
+    const credential = res.credential;
+    const label = res.label;
+    const removalBarrierRef = await this.removalBarrierForEnrollment(
+      credential.accountId,
+      ownerScope,
+    );
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId: credential.accountId,
+      ownerScopeRef: ownerScope,
+      accountLabel: label,
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      expiresAt: credential.expiresAt,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: {
+        billing_type: 'seat',
+        auth_type: 'device-flow',
+      },
+    };
+    this.registerAccount(
+      account,
+      credential.authClientConfigVersion,
+      removalBarrierRef,
+    );
+    await this.persistCredential(
+      {
+        accountId: account.accountId,
+        accountLabel: label,
+        providerId: 'muse',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        accountId: account.accountId,
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt,
+        authClientConfigVersion: credential.authClientConfigVersion,
+      },
+      account,
+    );
+    return { accountId: credential.accountId, label };
+  }
+
   async cancel(enrollmentId: string): Promise<void> {
     for (const provider of this.providers.values()) {
       if (provider.cancel) {

@@ -202,3 +202,121 @@ describe('MuseEnrollmentProvider', () => {
     expect(() => buildMuseDirectAuthPayload('  ')).toThrow(/direct.*api key/i);
   });
 });
+
+describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
+  const startInputNative = {
+    configRef: 'default',
+    mode: 'cli' as const,
+    redirectUri: 'http://127.0.0.1',
+    ownerScope: 'tenant-1:user-1',
+  };
+
+  const jsonResponse = (payload: unknown, status = 200) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  });
+
+  const deviceGrant = { device_code: 'dev-1', user_code: 'USER-1', verification_uri_complete: 'https://accountscenter.meta.com/muse_code/approve?x=1', expires_in: 900, interval: 0 };
+  const tokenGrant = { access_token: 'dca-1', refresh_token: 'ref-1', expires_in: 3600 };
+  const minted = { api_key: 'minted-key-1', user_email: 'native@example.test', is_subs_active: true };
+
+  const fetchFor = (routes: Array<{ match: (url: string, body: unknown) => boolean; respond: () => unknown }>) => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    const fetchFn = (async (url: unknown, init?: { body?: unknown }) => {
+      const u = String(url);
+      let body: unknown = undefined;
+      try { body = init?.body ? JSON.parse(String(init.body)) : undefined; } catch { body = init?.body; }
+      calls.push({ url: u, body });
+      const route = routes.find((r) => r.match(u, body));
+      if (!route) throw new Error(`unexpected fetch: ${u}`);
+      return route.respond();
+    }) as typeof fetch;
+    return { fetchFn, calls };
+  };
+
+  it('starts a device-code session against the measured Meta endpoints', async () => {
+    const { fetchFn, calls } = fetchFor([
+      { match: (u) => u.includes('/oidc/device/authorization/'), respond: () => jsonResponse(deviceGrant) },
+    ]);
+    const { MuseCodeEnrollmentProvider } = await import('../../src/enrollment/muse-code.js');
+    const provider = new MuseCodeEnrollmentProvider({ fetchFn });
+
+    const session = await provider.start(startInputNative);
+
+    expect(session.kind).toBe('device-code');
+    if (session.kind === 'device-code') {
+      expect(session.userCode).toBe('USER-1');
+      expect(session.verificationUrl).toContain('accountscenter.meta.com/muse_code/');
+    }
+    expect(calls[0]?.url).toContain('auth.meta.com/oidc/device/authorization/');
+    expect(calls[0]?.body).toMatchObject({ client_id: expect.any(String) });
+  });
+
+  it('completes by polling, minting a key, and persisting the refresh token', async () => {
+    const { fetchFn, calls } = fetchFor([
+      { match: (u) => u.includes('/oidc/device/authorization/'), respond: () => jsonResponse(deviceGrant) },
+      { match: (u, b) => u.includes('/oidc/device/token/') && (b as {grant_type?: string})?.grant_type !== 'refresh_token', respond: () => jsonResponse(tokenGrant) },
+      { match: (u) => u.includes('/muse-code/key'), respond: () => jsonResponse(minted) },
+    ]);
+    const { MuseCodeEnrollmentProvider } = await import('../../src/enrollment/muse-code.js');
+    const provider = new MuseCodeEnrollmentProvider({ fetchFn });
+
+    const session = await provider.start(startInputNative);
+    const res = await provider.pollForCompletion(session.enrollmentId, 5);
+    const credential = res.credential!;
+
+    expect(credential.accountId).toMatch(/^acct_muse_/);
+    expect(credential.accessToken).toBe('minted-key-1');
+    expect(credential.refreshToken).toBe('ref-1');
+    expect(credential.accountEmail).toBe('native@example.test');
+    const keyCall = calls.find((c) => c.url.includes('/muse-code/key'));
+    expect(keyCall?.body).toMatchObject({ dca_token: 'dca-1' });
+  });
+
+  it('fails up on access_denied without minting', async () => {
+    const { fetchFn } = fetchFor([
+      { match: (u) => u.includes('/oidc/device/authorization/'), respond: () => jsonResponse(deviceGrant) },
+      { match: (u) => u.includes('/oidc/device/token/'), respond: () => jsonResponse({ error: 'access_denied' }, 400) },
+    ]);
+    const { MuseCodeEnrollmentProvider } = await import('../../src/enrollment/muse-code.js');
+    const provider = new MuseCodeEnrollmentProvider({ fetchFn });
+
+    const session = await provider.start(startInputNative);
+    await expect(provider.pollForCompletion(session.enrollmentId, 2)).rejects.toThrow(/denied/i);
+  });
+
+  it('refreshes via the refresh_token grant and re-mints', async () => {
+    const rotated = { api_key: 'minted-key-2', user_email: 'native@example.test' };
+    let tokenCalls = 0;
+    const { fetchFn } = fetchFor([
+      { match: (u) => u.includes('/oidc/device/authorization/'), respond: () => jsonResponse(deviceGrant) },
+      {
+        match: (u, b) => u.includes('/oidc/device/token/') && (b as {grant_type?: string})?.grant_type !== 'refresh_token',
+        respond: () => jsonResponse(tokenGrant),
+      },
+      { match: (u) => u.includes('/muse-code/key') && tokenCalls++ === 0, respond: () => jsonResponse(minted) },
+      { match: (u) => u.includes('/muse-code/key'), respond: () => jsonResponse(rotated) },
+      {
+        match: (u, b) => u.includes('/oidc/device/token/') && (b as {grant_type?: string})?.grant_type === 'refresh_token',
+        respond: () => jsonResponse({ access_token: 'dca-2', refresh_token: 'ref-2', expires_in: 3600 }),
+      },
+    ]);
+    const { MuseCodeEnrollmentProvider } = await import('../../src/enrollment/muse-code.js');
+    const provider = new MuseCodeEnrollmentProvider({ fetchFn });
+
+    const session = await provider.start(startInputNative);
+    const res = await provider.pollForCompletion(session.enrollmentId, 5);
+    const credential = res.credential!;
+    const refreshed = await provider.refresh({
+      accountId: credential.accountId,
+      refreshToken: credential.refreshToken,
+      credentialVersion: credential.authClientConfigVersion,
+    });
+
+    expect(refreshed.accountId).toBe(credential.accountId);
+    expect(refreshed.accessToken).toBe('minted-key-2');
+    expect(refreshed.refreshToken).toBe('ref-2');
+  });
+});

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { EnrollmentProvider } from '../../src/enrollment/contracts.js';
 import { MuseEnrollmentProvider } from '../../src/enrollment/muse.js';
+import { MuseCodeEnrollmentProvider } from '../../src/enrollment/muse-code.js';
 import { InMemoryKeyring } from '../../src/node/keyring/in-memory-keyring.js';
 import { LocalAccountTransportService } from '../../src/service/local-account-transport-service.js';
 
@@ -215,5 +216,76 @@ describe('LocalAccountTransportService muse import round-trip', () => {
     await expect(service.completeMuseDirectImport('  ', OWNER_SCOPE)).rejects.toThrow(
       /direct.*api key/i,
     );
+  });
+});
+
+describe('LocalAccountTransportService muse native device-flow round-trip (S5)', () => {
+  const jsonResponse = (payload: unknown, status = 200) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  });
+
+  const setupDevice = () => {
+    const routes: Array<{ match: (url: string) => boolean; respond: () => unknown }> = [
+      {
+        match: (u) => u.includes('/oidc/device/authorization/'),
+        respond: () => jsonResponse({ device_code: 'dev-1', user_code: 'USER-1', verification_uri_complete: 'https://accountscenter.meta.com/muse_code/a', expires_in: 900, interval: 0 }),
+      },
+      {
+        match: (u) => u.includes('/oidc/device/token/'),
+        respond: () => jsonResponse({ access_token: 'dca-1', refresh_token: 'ref-1', expires_in: 3600 }),
+      },
+      {
+        match: (u) => u.includes('/muse-code/key'),
+        respond: () => jsonResponse({ api_key: 'minted-svc-key', user_email: 'svc@example.test' }),
+      },
+    ];
+    const fetchFn = (async (url: unknown) => {
+      const route = routes.find((r) => r.match(String(url)));
+      if (!route) throw new Error(`unexpected fetch: ${String(url)}`);
+      return route.respond();
+    }) as typeof fetch;
+    const keyring = new InMemoryKeyring();
+    const providers = new Map<string, EnrollmentProvider>([
+      ['muse-code', new MuseCodeEnrollmentProvider({ fetchFn })],
+    ]);
+    const configResolver = { async resolveConfig() { return {}; } };
+    const service = new LocalAccountTransportService(keyring, providers, configResolver);
+    return { keyring, service };
+  };
+
+  it('enrolls via device flow, persists the refresh token, and acquires', async () => {
+    const { keyring, service } = setupDevice();
+
+    const session = await service.enroll('muse-code', {
+      configRef: 'default',
+      mode: 'cli',
+      redirectUri: 'http://127.0.0.1',
+      ownerScope: OWNER_SCOPE,
+    });
+    expect(session.kind).toBe('device-code');
+
+    const completion = await service.completeMuseDeviceImport(session.enrollmentId, OWNER_SCOPE, 5);
+    expect(completion.accountId).toMatch(/^acct_muse_/);
+
+    const acquisition = await service.acquire({
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      ownerScopeRef: OWNER_SCOPE,
+    });
+    expect(acquisition.material).toMatchObject({
+      accountId: completion.accountId,
+      accessToken: 'minted-svc-key',
+    });
+
+    // Refresh token persisted in the sealed envelope; public record carries
+    // the seat-billing marker and no secret.
+    const envelope = await keyring.getSecret(`sentropic-llm-mesh:${completion.accountId}:envelope`);
+    expect(envelope).toContain('ref-1');
+    const publicRecord = await keyring.getSecret(`sentropic-llm-mesh:${completion.accountId}:public`);
+    expect(publicRecord).toContain('seat');
+    expect(publicRecord).not.toContain('minted-svc-key');
   });
 });
