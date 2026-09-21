@@ -1451,9 +1451,33 @@ function addTransportEquivalentFixture(
   STREAM_TEST_MATRIX.push({ ...source, model, label });
 }
 
+// A provider whose runtime normalization reuses another provider's path
+// clones that provider's fixture and only overrides the identity. The rows
+// pin the normalizer (mocked provider chunks), not the live wire shape.
+function addSharedNormalizerFixture(
+  sourceProviderId: string,
+  sourceModel: string,
+  providerId: string,
+  model: string,
+  label: string,
+): void {
+  const source = STREAM_TEST_MATRIX.find(
+    (fixture) => fixture.providerId === sourceProviderId && fixture.model === sourceModel,
+  );
+  if (!source) throw new Error(`Missing stream fixture for ${sourceProviderId}:${sourceModel}`);
+  STREAM_TEST_MATRIX.push({ ...source, providerId, model, label });
+}
+
 addTransportEquivalentFixture('anthropic', 'claude-fable-5', 'claude-fable-5-1', 'Claude Fable 5.1');
 addTransportEquivalentFixture('openai', 'gpt-5.6-sol', 'gpt-6-astra', 'GPT-6 Astra');
 addTransportEquivalentFixture('gemini', 'gemini-3.7-flash', 'gemini-3.8-flash', 'Gemini 3.8 Flash');
+// Meta Muse (S4): callLLMStream falls through to the OpenAI Responses
+// normalization path for `muse`, and mesh-dispatch delegates to the registry
+// provider (spy-interposable like every other row). Clone the reasoning-model
+// fixture (muse tier is `advanced`, tools supported) for both catalog models.
+// [GAP] live Muse SSE chunk shape unverified — these rows pin the normalizer.
+addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-spark-1.3', 'Muse Spark 1.3');
+addSharedNormalizerFixture('openai', 'gpt-5.5', 'muse', 'muse-spark-1.3-contributor', 'Muse Spark 1.3 Contributor');
 
 // ---------------------------------------------------------------------------
 // Additional Cohere-specific tests that don't fit the matrix pattern
