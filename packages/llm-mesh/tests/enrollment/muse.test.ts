@@ -222,13 +222,20 @@ describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
   const tokenGrant = { access_token: 'dca-1', refresh_token: 'ref-1', expires_in: 3600 };
   const minted = { api_key: 'minted-key-1', user_email: 'native@example.test', is_subs_active: true };
 
+  const decodeBody = (raw: unknown): unknown => {
+    if (typeof raw !== 'string' || !raw) return undefined;
+    try { return JSON.parse(raw); } catch { /* not JSON */ }
+    // Live-probed 2026-09-21: Meta OIDC device endpoints take
+    // application/x-www-form-urlencoded (JSON bodies get a 404).
+    try { return Object.fromEntries(new URLSearchParams(raw)); } catch { return raw; }
+  };
   const fetchFor = (routes: Array<{ match: (url: string, body: unknown) => boolean; respond: () => unknown }>) => {
-    const calls: Array<{ url: string; body: unknown }> = [];
-    const fetchFn = (async (url: unknown, init?: { body?: unknown }) => {
+    const calls: Array<{ url: string; body: unknown; contentType: string }> = [];
+    const fetchFn = (async (url: unknown, init?: { body?: unknown; headers?: unknown }) => {
       const u = String(url);
-      let body: unknown = undefined;
-      try { body = init?.body ? JSON.parse(String(init.body)) : undefined; } catch { body = init?.body; }
-      calls.push({ url: u, body });
+      const body = decodeBody(init?.body);
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      calls.push({ url: u, body, contentType: String(headers['content-type'] ?? '') });
       const route = routes.find((r) => r.match(u, body));
       if (!route) throw new Error(`unexpected fetch: ${u}`);
       return route.respond();
@@ -252,6 +259,7 @@ describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
     }
     expect(calls[0]?.url).toContain('auth.meta.com/oidc/device/authorization/');
     expect(calls[0]?.body).toMatchObject({ client_id: expect.any(String) });
+    expect(calls[0]?.contentType).toContain('application/x-www-form-urlencoded');
   });
 
   it('completes by polling, minting a key, and persisting the refresh token', async () => {
@@ -273,6 +281,13 @@ describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
     expect(credential.accountEmail).toBe('native@example.test');
     const keyCall = calls.find((c) => c.url.includes('/muse-code/key'));
     expect(keyCall?.body).toMatchObject({ dca_token: 'dca-1' });
+    const tokenCall = calls.find((c) => c.url.includes('/oidc/device/token/'));
+    expect(tokenCall?.contentType).toContain('application/x-www-form-urlencoded');
+    expect(tokenCall?.body).toMatchObject({
+      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      device_code: expect.any(String),
+      client_id: expect.any(String),
+    });
   });
 
   it('fails up on access_denied without minting', async () => {
@@ -318,5 +333,23 @@ describe('MuseCodeEnrollmentProvider native device flow (S5)', () => {
     expect(refreshed.accountId).toBe(credential.accountId);
     expect(refreshed.accessToken).toBe('minted-key-2');
     expect(refreshed.refreshToken).toBe('ref-2');
+  });
+
+  it('sends the OIDC calls form-encoded (JSON bodies get a live 404)', async () => {
+    const quickGrant = { ...deviceGrant, interval: 1 };
+    const { fetchFn, calls } = fetchFor([
+      { match: (u) => u.includes('/oidc/device/authorization/'), respond: () => jsonResponse(quickGrant) },
+      { match: (u) => u.includes('/oidc/device/token/'), respond: () => jsonResponse({ error: 'authorization_pending' }, 400) },
+    ]);
+    const { MuseCodeEnrollmentProvider } = await import('../../src/enrollment/muse-code.js');
+    const provider = new MuseCodeEnrollmentProvider({ fetchFn });
+
+    const session = await provider.start(startInputNative);
+    await expect(provider.pollForCompletion(session.enrollmentId, 1)).rejects.toThrow(/did not complete after/);
+
+    const authCall = calls.find((c) => c.url.includes('/oidc/device/authorization/'));
+    const tokenCall = calls.find((c) => c.url.includes('/oidc/device/token/'));
+    expect(authCall?.contentType).toContain('application/x-www-form-urlencoded');
+    expect(tokenCall?.contentType).toContain('application/x-www-form-urlencoded');
   });
 });
