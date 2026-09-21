@@ -41,9 +41,9 @@ describe('MuseProviderRuntime', () => {
   });
 
   describe('listModels', () => {
-    it('should list nothing until a dispatch path exists (Lot 2 transport)', () => {
-      // Advertising unservable models would route traffic into a throw.
-      expect(runtime.listModels()).toEqual([]);
+    it('should advertise the muse models once dispatch exists', () => {
+      const ids = runtime.listModels().map((m) => m.id ?? m.modelId);
+      expect(ids).toContain('muse-spark-1.3');
     });
   });
 
@@ -84,10 +84,92 @@ describe('MuseProviderRuntime', () => {
   });
 
   describe('generate', () => {
-    it('should reject dispatch until the Lot 2 account transport lands', async () => {
+    it('should reject unsupported modes', async () => {
       await expect(
-        runtime.generate({ mode: 'msp', requestOptions: {} }),
-      ).rejects.toThrow('account transport');
+        runtime.generate({ mode: 'generate-content', requestOptions: {} }),
+      ).rejects.toThrow('unsupported mode');
+    });
+
+    it('should throw when no key is configured', async () => {
+      await expect(
+        runtime.generate({ mode: 'msp', requestOptions: { body: {} } }),
+      ).rejects.toThrow('Muse API key');
+    });
+
+    it('should POST the measured serving path with Bearer auth', async () => {
+      mockEnv.MUSE_API_KEY = 'test-muse-key';
+      const json = vi.fn(async () => ({ ok: true }));
+      const fetchMock = vi.fn(async () => ({ ok: true, json }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      try {
+        const out = await runtime.generate({
+          mode: 'msp',
+          requestOptions: { body: { hello: 'world' } },
+        });
+        expect(out).toEqual({ ok: true });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+        expect(url).toBe('https://api.meta.ai/muse-code/models');
+        expect(init.method).toBe('POST');
+        const headers = init.headers as Record<string, string>;
+        expect(headers.authorization).toBe('Bearer test-muse-key');
+        expect(JSON.parse(init.body as string)).toEqual({ hello: 'world' });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('should use the account-transport token when provided', async () => {
+      const json = vi.fn(async () => ({ ok: true }));
+      const fetchMock = vi.fn(async () => ({ ok: true, json }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      try {
+        await runtime.generate({
+          mode: 'msp',
+          requestOptions: { body: {} },
+          museAccountTransport: { accessToken: 'transport-token', accountId: 'acct_1' },
+        });
+        const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+        const headers = init.headers as Record<string, string>;
+        expect(headers.authorization).toBe('Bearer transport-token');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('should throw a provider error on non-2xx without leaking the key', async () => {
+      mockEnv.MUSE_API_KEY = 'super-secret-key';
+      const text = vi.fn(async () => 'billing_error');
+      const fetchMock = vi.fn(async () => ({ ok: false, status: 402, text }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      try {
+        const err = await runtime.generate({
+          mode: 'msp',
+          requestOptions: { body: {} },
+        }).catch((e: Error) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).not.toContain('super-secret-key');
+        expect(err.message).toContain('402');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
+
+  describe('streamGenerate', () => {
+    it('should reject unsupported modes', async () => {
+      await expect(
+        runtime.streamGenerate({ mode: 'stream', requestOptions: {} }),
+      ).rejects.toThrow('unsupported mode');
+    });
+
+    it('should throw when no key is configured', async () => {
+      await expect(
+        runtime.streamGenerate({ mode: 'msp', requestOptions: { body: {} } }) as Promise<unknown>,
+      ).rejects.toThrow('Muse API key');
     });
   });
 });
