@@ -102,8 +102,11 @@ export const MUSE_ROUTE_EFFORT: Readonly<Record<string, string>> = {
   'claude-opus-4-8-max': 'max',
 };
 
-/** Integrator-configurable muse position (BR75-Q2). Default `after-claude`. */
-export type MusePosition = 'off' | 'after-claude' | 'first';
+/**
+ * Integrator-configurable muse position (BR75-Q2). Default `after-claude`.
+ * `claude-last` orders codex, muse, cloud, then faithful claude (S6).
+ */
+export type MusePosition = 'off' | 'after-claude' | 'first' | 'claude-last';
 
 export const DEFAULT_MUSE_POSITION: MusePosition = 'after-claude';
 
@@ -245,6 +248,14 @@ const launchAliasTargetsFor = (
       ...(faithfulTarget ? [faithfulTarget] : []),
       codexCandidate,
       cloudCandidate,
+    ];
+  }
+  if (musePosition === 'claude-last') {
+    return [
+      codexCandidate,
+      ...(museCandidate ? [museCandidate] : []),
+      cloudCandidate,
+      ...(faithfulTarget ? [faithfulTarget] : []),
     ];
   }
   return [

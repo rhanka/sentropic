@@ -356,6 +356,15 @@ describe('canonical model targets', () => {
       .toEqual(['claude-code', 'muse', 'codex', 'cloud-code']);
   });
 
+  it('supports the claude-last order (codex, muse, cloud, claude)', () => {
+    const last = createCanonicalTargetCandidatesResolver({ musePosition: 'claude-last' });
+    expect(last('claude-opus-5-xhigh').map((target) => target.transportProviderId))
+      .toEqual(['codex', 'muse', 'cloud-code', 'claude-code']);
+    // Aliases without a muse candidate keep codex/cloud/claude order.
+    expect(last('claude-sonnet-5').map((target) => target.transportProviderId))
+      .toEqual(['codex', 'cloud-code', 'claude-code']);
+  });
+
   it('keeps legacy Gemini capability aliases on 3.7 instead of 3.5', () => {
     for (const model of ['gemini-3.6-flash', 'gemini-3.1-pro']) {
       expect(resolveTargetCapabilitySource({
