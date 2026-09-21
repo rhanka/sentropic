@@ -30,7 +30,7 @@ describe('Muse runtime client (mesh-side upstream transport)', () => {
 
     expect(fetchFn).toHaveBeenCalledOnce();
     const [url, init] = fetchFn.mock.calls[0]!;
-    expect(url).toBe('https://api.meta.ai/muse-code/models');
+    expect(url).toBe('https://api.meta.ai/v1/chat/completions');
     expect(init.headers).toMatchObject({ authorization: 'Bearer secret-muse-token' });
     expect(JSON.parse(String(init.body))).toMatchObject({
       model: 'muse-spark-1.3-contributor',

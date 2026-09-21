@@ -110,7 +110,7 @@ describe('MuseProviderRuntime', () => {
         expect(out).toEqual({ ok: true });
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-        expect(url).toBe('https://api.meta.ai/muse-code/models');
+        expect(url).toBe('https://api.meta.ai/v1/chat/completions');
         expect(init.method).toBe('POST');
         const headers = init.headers as Record<string, string>;
         expect(headers.authorization).toBe('Bearer test-muse-key');

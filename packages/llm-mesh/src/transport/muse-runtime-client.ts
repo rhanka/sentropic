@@ -20,7 +20,10 @@ export interface MuseRuntimeClientOptions {
 // Anthropic/OpenAI-adjacent shapes first and falls back to the raw JSON;
 // shapes observed live feed back here, nothing is asserted about Meta's.
 const MUSE_DEFAULT_BASE_URL = 'https://api.meta.ai';
-const MUSE_SERVING_PATH = '/muse-code/models';
+// Corrected by live probe (2026-09-21): POST /v1/chat/completions,
+// OpenAI body, returns 402 billing_not_configured (exists + parsed).
+// /muse-code/models is GET-only (models list).
+const MUSE_SERVING_PATH = '/v1/chat/completions';
 
 const textOf = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
