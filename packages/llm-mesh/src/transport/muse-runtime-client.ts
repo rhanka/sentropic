@@ -64,8 +64,15 @@ const extractText = (payload: unknown): string => {
       const content = (inner as Record<string, unknown>).content;
       if (typeof content === 'string' && content) return content;
     }
-    const delta = textOf(first.delta);
-    if (delta) return delta;
+    // Live Meta SSE chunks carry choices[].delta as an OBJECT
+    // ({ content, role }), not a string — read .content (probed 2026-09-22;
+    // the string-only read silently dropped every content delta).
+    const delta = first.delta;
+    if (typeof delta === 'string' && delta) return delta;
+    if (delta && typeof delta === 'object') {
+      const dContent = (delta as Record<string, unknown>).content;
+      if (typeof dContent === 'string' && dContent) return dContent;
+    }
   }
   return '';
 };
@@ -141,6 +148,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     request: GenerateRequest,
     context: ProviderRuntimeContext | undefined,
     accept: string,
+    stream = false,
   ): Promise<Response> {
     const auth = getSecretAuthMaterial(context?.auth);
     if (!auth || !('accessToken' in auth) || !auth.accessToken) {
@@ -149,10 +157,25 @@ export class MuseRuntimeClient implements MuseAdapterClient {
     const metadata = 'metadata' in auth ? auth.metadata : undefined;
     const stableSessionId = typeof metadata?.stableSessionId === 'string'
       ? metadata.stableSessionId : undefined;
+    // Live-probed 2026-09-22: Meta 400s mesh-shape tools; the serving wire
+    // takes OpenAI function tools ({ function: { name, description,
+    // parameters } }), so project them (200 with the projection).
+    const openAiTools = request.tools?.map((tool) => ({
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        ...(tool.description ? { description: tool.description } : {}),
+        parameters: tool.inputSchema,
+      },
+    }));
     const body: Record<string, unknown> = {
       model: request.modelId ?? 'muse-spark-1.3',
       messages: request.messages,
-      ...(request.tools ? { tools: request.tools } : {}),
+      // Live-probed 2026-09-22: without stream:true Meta answers 200 with a
+      // full JSON completion (content-type application/json) — no SSE frames,
+      // so the stream reader yields nothing and ends done/unknown.
+      ...(stream ? { stream: true } : {}),
+      ...(openAiTools?.length ? { tools: openAiTools } : {}),
       ...(request.toolChoice ? { tool_choice: request.toolChoice } : {}),
       ...(request.maxOutputTokens !== undefined ? { max_tokens: request.maxOutputTokens } : {}),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
@@ -185,7 +208,7 @@ export class MuseRuntimeClient implements MuseAdapterClient {
   }
 
   async stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult> {
-    const response = await this.post(request, context, 'text/event-stream');
+    const response = await this.post(request, context, 'text/event-stream', true);
     if (!response.body) {
       const done: StreamEvent = { type: 'done', data: { finishReason: 'unknown' } };
       return (async function* (): AsyncGenerator<StreamEvent> { yield done; })();
