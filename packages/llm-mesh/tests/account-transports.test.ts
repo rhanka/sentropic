@@ -5,6 +5,51 @@ import {
   InMemoryAccountTransportCoordinator,
 } from '../src/account-transports.js';
 
+describe('affinity lease vs planner re-route', () => {
+  it('yields a stale affinity lease when the planner pins a different account (live fallback)', async () => {
+    const coordinator = new InMemoryAccountTransportCoordinator(accounts);
+
+    const first = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      affinityKey: 'session-1',
+      requestId: 'req_1',
+      now: '2026-06-16T12:00:00.000Z',
+    });
+    const firstAccount = first.lease.accountId;
+    const other = firstAccount === 'codex-a' ? 'codex-b' : 'codex-a';
+
+    // Planner re-routed after an account-scoped failure: same affinity key,
+    // explicit pin on the surviving account. Must serve it, not throw on the
+    // stale lease.
+    const second = await coordinator.acquire({
+      accountId: other,
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      affinityKey: 'session-1',
+      requestId: 'req_2',
+      now: '2026-06-16T12:01:00.000Z',
+    });
+
+    expect(second.lease.accountId).toBe(other);
+    expect(second.material.accountId).toBe(other);
+
+    // The replaced lease is gone: a follow-up unpinned acquire under the same
+    // key serves the pinned account (no shadow state).
+    const third = await coordinator.acquire({
+      targetProviderId: 'openai',
+      transportProviderId: 'codex',
+      modelId: 'gpt-5.5',
+      affinityKey: 'session-1',
+      requestId: 'req_3',
+      now: '2026-06-16T12:02:00.000Z',
+    });
+    expect(third.lease.accountId).toBe(other);
+  });
+});
+
 const accounts = [
   {
     accountId: 'codex-a',
