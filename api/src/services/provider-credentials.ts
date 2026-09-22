@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { resolveMuseApiKey } from './providers/muse-provider';
 import type { ProviderId } from './provider-runtime';
 import { decryptSecretOrNull } from './secret-crypto';
 import { settingsService } from './settings';
@@ -29,6 +30,8 @@ const getEnvironmentCredential = (providerId: ProviderId): string | null => {
   if (providerId === 'anthropic') return normalizeCredential(env.ANTHROPIC_API_KEY);
   if (providerId === 'mistral') return normalizeCredential(env.MISTRAL_API_KEY);
   if (providerId === 'cohere') return normalizeCredential(env.COHERE_API_KEY);
+  // BR75-Q1: MUSE_API_KEY (CI) with MODEL_API_KEY (.env) fallback.
+  if (providerId === 'muse') return normalizeCredential(resolveMuseApiKey());
   // BR-43 / §B — `gcp` has NO stored string credential: its auth is an
   // ADC-minted short-lived bearer minted PRE-DISPATCH in mesh-dispatch's
   // toMeshAuthInput (carried as a `direct-token`). The string credential

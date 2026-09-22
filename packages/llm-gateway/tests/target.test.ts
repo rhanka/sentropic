@@ -153,27 +153,37 @@ describe('describeTargetRoutes (discovery)', () => {
     expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-opus-5-xhigh']).toEqual([
       MERGED['claude-opus-5-xhigh'],
       {
+        providerId: 'muse',
+        transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor',
+        effort: 'xhigh',
+      },
+      {
         providerId: 'openai',
         transportProviderId: 'codex',
-        model: 'gpt-5.6-sol',
-        effort: 'xhigh',
+        model: 'gpt-6-astra',
+        effort: 'medium',
       },
       {
         providerId: 'gemini',
         transportProviderId: 'cloud-code',
-        model: 'gemini-3.7-flash',
-        effort: 'xhigh',
+        model: 'gemini-3.8-flash',
+        effort: 'high',
       },
     ]);
     expect(CANONICAL_TARGET_ROUTE_MAPPINGS['claude-fable-5-1-max']).toEqual([
       MERGED['claude-fable-5-1-max'],
+      {
+        providerId: 'muse', transportProviderId: 'muse',
+        model: 'muse-spark-1.3-contributor', effort: 'max',
+      },
       {
         providerId: 'openai', transportProviderId: 'codex',
         model: 'gpt-6-astra', effort: 'max',
       },
       {
         providerId: 'gemini', transportProviderId: 'cloud-code',
-        model: 'gemini-3.8-flash', effort: 'max',
+        model: 'gemini-3.8-flash', effort: 'high',
       },
     ]);
     expect(describeCanonicalTargetRoutes()).toHaveLength(
@@ -190,27 +200,43 @@ describe('describeTargetRoutes (discovery)', () => {
     const resolveCandidates = createCanonicalTargetCandidatesResolver();
     expect(resolveCandidates('claude-opus-5-xhigh').map(
       (target) => target.transportProviderId,
-    )).toEqual(['claude-code', 'codex', 'cloud-code']);
-    expect(resolveCandidates('claude-fable-5-1-max')[1]).toMatchObject({
+    )).toEqual(['claude-code', 'muse', 'codex', 'cloud-code']);
+    expect(resolveCandidates('claude-fable-5-1-max')[2]).toMatchObject({
       transportProviderId: 'codex', model: 'gpt-6-astra', effort: 'max',
     });
   });
 
   it('exports every remapped Codex and Cloud Code fallback', () => {
     const resolveCandidates = createCanonicalTargetCandidatesResolver();
-    for (const [model, efforts, codexModel, cloudModel] of [
-      ['claude-fable-5', [undefined, 'high', 'xhigh', 'max'], 'gpt-6-astra', 'gemini-3.8-flash'],
-      ['claude-fable-5-1', [undefined, 'high', 'xhigh', 'max'], 'gpt-6-astra', 'gemini-3.8-flash'],
-      ['claude-opus-5', [undefined, 'high', 'xhigh'], 'gpt-5.6-sol', 'gemini-3.7-flash'],
-    ] as const) {
-      for (const effort of efforts) {
-        const alias = effort ? `${model}-${effort}` : model;
-        const suffix = effort ? { effort } : {};
-        expect(resolveCandidates(alias).slice(1)).toEqual([
-          { providerId: 'openai', transportProviderId: 'codex', model: codexModel, ...suffix },
-          { providerId: 'gemini', transportProviderId: 'cloud-code', model: cloudModel, ...suffix },
-        ]);
-      }
+    const Muse = (effort: string) => ({
+      providerId: 'muse', transportProviderId: 'muse',
+      model: 'muse-spark-1.3-contributor', effort,
+    });
+    const Codex = (model: string, effort?: string) => ({
+      providerId: 'openai', transportProviderId: 'codex', model,
+      ...(effort ? { effort } : {}),
+    });
+    const Cloud = () => ({
+      providerId: 'gemini', transportProviderId: 'cloud-code',
+      model: 'gemini-3.8-flash', effort: 'high',
+    });
+    const cases: ReadonlyArray<readonly [string, unknown[]]> = [
+      ['claude-fable-5', [Muse('max'), Codex('gpt-6-astra'), Cloud()]],
+      ['claude-fable-5-high', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
+      ['claude-fable-5-xhigh', [Muse('max'), Codex('gpt-6-astra', 'xhigh'), Cloud()]],
+      ['claude-fable-5-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
+      ['claude-fable-5-1-max', [Muse('max'), Codex('gpt-6-astra', 'max'), Cloud()]],
+      ['claude-opus-5', [Codex('gpt-5.6-sol'), Cloud()]],
+      ['claude-opus-5-high', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
+      ['claude-opus-5-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
+      ['claude-opus-5-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
+      ['claude-opus-4-8', [Codex('gpt-5.6-terra'), Cloud()]],
+      ['claude-opus-4-8-xhigh', [Muse('xhigh'), Codex('gpt-6-astra', 'medium'), Cloud()]],
+      ['claude-opus-4-8-max', [Muse('max'), Codex('gpt-6-astra', 'high'), Cloud()]],
+      ['claude-sonnet-5', [Codex('gpt-5.6-luna'), Cloud()]],
+    ];
+    for (const [alias, expected] of cases) {
+      expect(resolveCandidates(alias).slice(1)).toEqual(expected);
     }
   });
 

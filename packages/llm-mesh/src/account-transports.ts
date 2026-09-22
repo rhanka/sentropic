@@ -240,7 +240,17 @@ export class InMemoryAccountTransportCoordinator implements AccountTransportCoor
     this.expireCooldowns(now);
 
     const leaseKey = buildLeaseKey(input);
-    const existingLease = leaseKey ? this.leases.get(leaseKey) : undefined;
+    let existingLease = leaseKey ? this.leases.get(leaseKey) : undefined;
+    // Live-probed 2026-09-22 (T16 fallback): when the planner re-routes to a
+    // different account under the same affinity key (account-scoped failure),
+    // the stale lease shadows the explicit pin and acquire throws instead of
+    // serving the surviving account. An explicit accountId pin wins: drop the
+    // stale lease so selection + a fresh lease bind the pinned account.
+    if (existingLease && leaseKey && input.accountId
+      && existingLease.accountId !== input.accountId) {
+      this.leases.delete(leaseKey);
+      existingLease = undefined;
+    }
     const account = existingLease
       ? this.getLeasedAccount(existingLease, input, now)
       : this.selectAccount(input, now);

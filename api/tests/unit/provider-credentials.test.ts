@@ -67,6 +67,15 @@ describe('provider credential resolution', () => {
     expect(['environment', 'none']).toContain(resolved.source);
   });
 
+  it('resolves muse credential from environment when no user override', async () => {
+    const resolved = await resolveProviderCredential({
+      providerId: 'muse',
+    });
+
+    expect(resolved.providerId).toBe('muse');
+    expect(['environment', 'none']).toContain(resolved.source);
+  });
+
   it('resolves cohere credential from environment when no user override', async () => {
     const resolved = await resolveProviderCredential({
       providerId: 'cohere',

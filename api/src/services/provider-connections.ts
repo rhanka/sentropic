@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
@@ -16,12 +17,14 @@ import {
   disconnectAntigravityAccountTransports,
   disconnectClaudeCodeAccountTransports,
   disconnectCodexAccountTransports,
+  disconnectMuseAccountTransports,
   getPrimaryAntigravityAccountTransport,
   getPrimaryClaudeCodeAccountTransport,
   getPrimaryCodexAccountTransport,
   storeAntigravityAccountTransport,
   storeClaudeCodeAccountTransport,
   storeCodexAccountTransport,
+  storeMuseAccountTransport,
   type AntigravityAccountTransportAcquisition,
   type ClaudeCodeAccountTransportAcquisition,
   type CodexAccountTransportAcquisition,
@@ -45,7 +48,7 @@ import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { settingsService } from './settings';
 
-export type ProviderConnectionId = 'codex' | 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'antigravity';
+export type ProviderConnectionId = 'codex' | 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere' | 'antigravity' | 'muse';
 
 export type ProviderConnectionState = {
   providerId: ProviderConnectionId;
@@ -119,6 +122,8 @@ const CLAUDE_CODE_CONNECTION_PENDING_SECRET_KEY =
 const ANTIGRAVITY_CONNECTION_SETTINGS_KEY = 'provider_connection:antigravity';
 const ANTIGRAVITY_CONNECTION_PENDING_SECRET_KEY =
   'provider_connection_secret:antigravity_pending';
+const MUSE_CONNECTION_SETTINGS_KEY = 'provider_connection:muse';
+const MUSE_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:muse_pending';
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -1124,6 +1129,215 @@ export const disconnectClaudeCodeEnrollment = async (input: {
   ]);
 
   return toAnthropicProviderState(next, null, { credential: null, source: 'none' });
+};
+
+// ---------------------------------------------------------------------------
+// Muse enrollment (BR75): start issues a pending CLI-import session, import
+// stores the posted CLI store material (mirrors anthropic:import — no
+// browser/device round-trip exists for the Muse CLI), disconnect clears both
+// visible state and pooled transports. Token refresh re-reads the CLI store
+// (see refreshMuseTokenIfNeeded); there is no OAuth refresh endpoint.
+// ---------------------------------------------------------------------------
+
+type MusePendingEnrollmentPayload = {
+  enrollmentId: string;
+  expectedAccountLabel: string | null;
+};
+
+const readMuseConnection = async (
+  userId: string,
+): Promise<CodexConnectionPayload | null> => {
+  const raw = await settingsService.get(MUSE_CONNECTION_SETTINGS_KEY, {
+    userId,
+    fallbackToGlobal: false,
+  });
+  return parseCodexConnectionPayload(raw);
+};
+
+const readPendingMuseEnrollment = async (
+  userId: string,
+): Promise<MusePendingEnrollmentPayload | null> => {
+  const raw = await settingsService.get(MUSE_CONNECTION_PENDING_SECRET_KEY, {
+    userId,
+    fallbackToGlobal: false,
+  });
+  return parseSecretPayload<MusePendingEnrollmentPayload>(raw);
+};
+
+const writeMuseConnection = async (
+  userId: string,
+  payload: CodexConnectionPayload,
+): Promise<void> => {
+  await settingsService.set(
+    MUSE_CONNECTION_SETTINGS_KEY,
+    JSON.stringify(payload),
+    'Muse provider connection state for the current admin user.',
+    { userId },
+  );
+};
+
+const deleteMuseSecrets = async (userId: string): Promise<void> => {
+  await deleteUserScopedSetting(userId, MUSE_CONNECTION_PENDING_SECRET_KEY);
+};
+
+const toMuseProviderState = (
+  museConnection: CodexConnectionPayload | null,
+  museAccount?: LlmAccountTransportPublic | null,
+): ProviderConnectionState => {
+  const visibleStatus =
+    museConnection?.status === 'pending'
+      ? 'pending'
+      : museAccount && (museAccount.status === 'active' || museAccount.status === 'cooldown')
+        ? 'connected'
+        : museConnection?.status ?? 'disconnected';
+  const ready = visibleStatus === 'connected' && museAccount?.status !== 'cooldown';
+  return {
+    providerId: 'muse',
+    label: 'Meta Muse',
+    ready,
+    connectionStatus: visibleStatus,
+    enrollmentId: museConnection?.enrollmentId ?? null,
+    enrollmentUrl: museConnection?.enrollmentUrl ?? null,
+    enrollmentCode: museConnection?.enrollmentCode ?? null,
+    enrollmentExpiresAt: museConnection?.enrollmentExpiresAt ?? null,
+    managedBy: visibleStatus === 'disconnected' ? 'none' : 'admin_settings',
+    accountLabel: museAccount?.accountLabel ?? museConnection?.accountLabel ?? null,
+    updatedAt: museAccount?.updatedAt ?? museConnection?.updatedAt ?? null,
+    updatedByUserId: museConnection?.updatedByUserId ?? null,
+    canConfigure: true,
+  };
+};
+
+/**
+ * Stable external account id per login. Must match the mesh
+ * MuseEnrollmentProvider scheme (sha256, 12 hex chars, acct_muse_ prefix)
+ * so mesh and DB records correlate on the same login.
+ */
+const museExternalAccountIdForEmail = (email: string | null): string | null => {
+  if (!email) return null;
+  return `acct_muse_${createHash('sha256').update(email).digest('hex').slice(0, 12)}`;
+};
+
+export const startMuseEnrollment = async (input: {
+  accountLabel?: string | null;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const enrollmentId = createId();
+  const accountLabel = normalizeOptionalText(input.accountLabel);
+  const now = new Date().toISOString();
+  const visible: CodexConnectionPayload = {
+    status: 'pending',
+    enrollmentId,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+  const pending: MusePendingEnrollmentPayload = {
+    enrollmentId,
+    expectedAccountLabel: accountLabel,
+  };
+
+  await Promise.all([
+    deleteMuseSecrets(input.updatedByUserId),
+    writeMuseConnection(input.updatedByUserId, visible),
+    writeEncryptedSetting(
+      input.updatedByUserId,
+      MUSE_CONNECTION_PENDING_SECRET_KEY,
+      pending,
+      'Pending Muse CLI-import enrollment secret for the current admin user.',
+    ),
+  ]);
+
+  return toMuseProviderState(visible);
+};
+
+export const importMuseEnrollment = async (input: {
+  enrollmentId: string;
+  accessToken: string;
+  apiBaseUrl?: string | null;
+  accountEmail?: string | null;
+  expiresAt?: string | null;
+  accountLabel?: string | null;
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const [current, pending] = await Promise.all([
+    readMuseConnection(input.updatedByUserId),
+    readPendingMuseEnrollment(input.updatedByUserId),
+  ]);
+
+  if (!current || current.status !== 'pending' || current.enrollmentId !== input.enrollmentId) {
+    throw new Error('Invalid or expired Muse enrollment session.');
+  }
+  if (!pending || pending.enrollmentId !== input.enrollmentId) {
+    throw new Error('Missing pending Muse enrollment state.');
+  }
+
+  const accessToken = normalizeOptionalText(input.accessToken);
+  if (!accessToken) {
+    throw new Error('Muse import requires an access token from the CLI store.');
+  }
+  const accountEmail = normalizeOptionalText(input.accountEmail);
+  const externalAccountId = museExternalAccountIdForEmail(accountEmail);
+  if (!externalAccountId) {
+    throw new Error('Muse import requires the CLI store account email.');
+  }
+
+  const now = new Date().toISOString();
+  const requestedAccountLabel =
+    normalizeOptionalText(input.accountLabel) || pending.expectedAccountLabel;
+  const connectedAccountLabel = requestedAccountLabel ?? `Muse (${accountEmail})`;
+  const visible: CodexConnectionPayload = {
+    status: 'connected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: connectedAccountLabel,
+    updatedAt: now,
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  const [, storedAccount] = await Promise.all([
+    deleteMuseSecrets(input.updatedByUserId),
+    storeMuseAccountTransport({
+      ownerUserId: input.updatedByUserId,
+      externalAccountId,
+      accountLabel: connectedAccountLabel,
+      accessToken,
+      expiresAt: normalizeOptionalText(input.expiresAt),
+      apiBaseUrl: normalizeOptionalText(input.apiBaseUrl),
+      accountEmail,
+    }),
+    writeMuseConnection(input.updatedByUserId, visible),
+  ]);
+
+  return toMuseProviderState(visible, storedAccount ?? null);
+};
+
+export const disconnectMuseEnrollment = async (input: {
+  updatedByUserId: string;
+}): Promise<ProviderConnectionState> => {
+  const next: CodexConnectionPayload = {
+    status: 'disconnected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    accountLabel: null,
+    updatedAt: new Date().toISOString(),
+    updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+  };
+
+  await Promise.all([
+    writeMuseConnection(input.updatedByUserId, next),
+    deleteMuseSecrets(input.updatedByUserId),
+    disconnectMuseAccountTransports({ ownerUserId: input.updatedByUserId }),
+  ]);
+
+  return toMuseProviderState(next);
 };
 
 // ---------------------------------------------------------------------------
