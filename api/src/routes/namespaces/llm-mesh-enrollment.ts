@@ -7,11 +7,14 @@ import {
   disconnectAntigravityEnrollment,
   disconnectClaudeCodeEnrollment,
   disconnectCodexEnrollment,
+  disconnectMuseEnrollment,
   importAntigravityEnrollment,
   importClaudeCodeEnrollment,
+  importMuseEnrollment,
   startAntigravityEnrollment,
   startClaudeCodeEnrollment,
   startCodexEnrollment,
+  startMuseEnrollment,
 } from '../../services/provider-connections';
 import { parseLlmMeshEnrollmentIntent } from './llm-mesh-enrollment-intent';
 
@@ -79,6 +82,22 @@ const executeEnrollment = async (
         expiresAt: optionalText(payload.expiresAt), project: optionalText(payload.project),
         accountLabel: optionalText(payload.accountLabel), updatedByUserId: userId,
       });
+    case 'muse:start':
+      return startMuseEnrollment({
+        accountLabel: optionalText(payload.accountLabel), updatedByUserId: userId,
+      });
+    case 'muse:import':
+      return importMuseEnrollment({
+        enrollmentId: text(payload.enrollmentId),
+        accessToken: text(payload.accessToken),
+        apiBaseUrl: optionalText(payload.apiBaseUrl),
+        accountEmail: optionalText(payload.accountEmail),
+        expiresAt: optionalText(payload.expiresAt),
+        accountLabel: optionalText(payload.accountLabel),
+        updatedByUserId: userId,
+      });
+    case 'muse:disconnect':
+      return disconnectMuseEnrollment({ updatedByUserId: userId });
     default:
       return undefined;
   }
@@ -90,13 +109,14 @@ const CLIENT_ERROR_KEYS = new Set([
   'anthropic:import',
   'antigravity:complete',
   'antigravity:import',
+  'muse:import',
 ]);
 
 export const productLlmMeshEnrollmentPort: LlmMeshEnrollmentPort = {
   async handle({ principal, providerId, action, request }) {
     const key = `${providerId}:${action}`;
     const disconnect = action === 'disconnect'
-      && ['codex', 'anthropic', 'antigravity'].includes(providerId);
+      && ['codex', 'anthropic', 'antigravity', 'muse'].includes(providerId);
     const intent = disconnect
       ? { payload: {} as Record<string, unknown> }
       : await parseLlmMeshEnrollmentIntent(providerId, action, request);

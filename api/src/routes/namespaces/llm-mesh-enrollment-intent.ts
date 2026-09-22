@@ -29,6 +29,15 @@ const schemas = {
     project: z.string().trim().max(200).optional().nullable(),
     accountLabel,
   }),
+  'muse:start': z.object({ accountLabel }),
+  'muse:import': z.object({
+    enrollmentId,
+    accessToken: z.string().trim().min(1),
+    apiBaseUrl: z.string().trim().max(200).optional().nullable(),
+    accountEmail: z.string().trim().max(320).optional().nullable(),
+    expiresAt: z.string().trim().optional().nullable(),
+    accountLabel,
+  }),
 } as const;
 
 export type LlmMeshEnrollmentIntentKey = keyof typeof schemas;

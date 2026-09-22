@@ -10,9 +10,9 @@ describe('API LLM mesh contract proof', () => {
     const proof = createApiMeshContractProof();
 
     expect(proof.providers).toEqual(
-      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local']),
+      expect.arrayContaining(['openai', 'gemini', 'anthropic', 'mistral', 'cohere', 'gcp', 'local', 'muse']),
     );
-    expect(proof.providers).toHaveLength(7);
+    expect(proof.providers).toHaveLength(8);
     expect(proof.modelCount).toBeGreaterThanOrEqual(10);
     expect(proof.mesh.listModels().some((model) => model.modelId === 'gpt-5.5')).toBe(true);
   });

@@ -17,6 +17,8 @@ export const accountTransportProviderIds = [
   // (Cloud Code `cloudcode-pa.googleapis.com`). Replaced the dead classic
   // gemini-cli Code Assist path (see api/antigravity-provider-auth.ts).
   'antigravity',
+  // Muse: Meta Muse CLI login imported from the local CLI store (BR75).
+  'muse',
 ] as const;
 
 export type AccountTransportProviderId = (typeof accountTransportProviderIds)[number];
@@ -160,6 +162,7 @@ export const executableAccountTransportProviderIds = [
   'cloud-code',
   'claude-code',
   'antigravity',
+  'muse',
 ] as const satisfies readonly AccountTransportProviderId[];
 
 export const getSecretAuthMaterial = (

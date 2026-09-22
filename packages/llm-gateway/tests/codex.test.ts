@@ -59,7 +59,9 @@ describe('Codex OAuth Responses contract', () => {
       instructions: 'System',
       reasoning: { effort: 'xhigh' },
     });
-    expect(prepared.body.max_output_tokens).toBeUndefined();
+    // Aligned 2026-09-20 with ce7978261 (mainline intent: pass the cap through;
+    // mesh contract asserts the same in codex-runtime-wire.test.ts).
+    expect(prepared.body.max_output_tokens).toBe(123);
   });
 
   it('strips echoed input item ids before sending to the Codex backend', () => {

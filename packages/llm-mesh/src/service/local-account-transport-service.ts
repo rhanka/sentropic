@@ -16,6 +16,7 @@ import type {
   RefreshInput,
   StartEnrollmentInput,
 } from '../enrollment/contracts.js';
+import { MUSE_DIRECT_BILLING_TYPE } from '../enrollment/muse.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 import { listModelProfilesByProvider } from '../catalog.js';
 import type { LlmMesh } from '../mesh.js';
@@ -214,6 +215,207 @@ export class LocalAccountTransportService {
       );
     }
     return { accountId: res.accountId, label: res.label };
+  }
+
+  // Muse CLI import completion (BR75): no browser or device round-trip —
+  // the provider reads the local CLI store via complete(). The caller binds
+  // the explicit enrolling ownerScope (never inferred from stored state).
+  async completeMuseImport(
+    enrollmentId: string,
+    code: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion> {
+    const provider = this.providers.get('muse');
+    if (!provider) {
+      throw new Error("No enrollment provider 'muse' registered");
+    }
+    const credential = await provider.complete({ enrollmentId, code });
+    const label = `Muse (${credential.accountEmail ?? credential.accountId})`;
+    const ownerScope = this.requireOwnerScope(ownerScopeRef);
+    const removalBarrierRef = await this.removalBarrierForEnrollment(
+      credential.accountId,
+      ownerScope,
+    );
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId: credential.accountId,
+      ownerScopeRef: ownerScope,
+      accountLabel: label,
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      expiresAt: credential.expiresAt,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: undefined,
+    };
+    this.registerAccount(
+      account,
+      credential.authClientConfigVersion,
+      removalBarrierRef,
+    );
+    await this.persistCredential(
+      {
+        accountId: account.accountId,
+        accountLabel: label,
+        providerId: 'muse',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        accountId: account.accountId,
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt,
+        authClientConfigVersion: credential.authClientConfigVersion,
+      },
+      account,
+    );
+    return { accountId: credential.accountId, label };
+  }
+
+  // Muse direct-key import (BR75): a raw MUSE_API_KEY enrolled as a
+  // pay-as-you-go account — no CLI store, no session round-trip. The
+  // account metadata marks billing_type=direct + auth_type=api_key; the raw
+  // key lives only in the sealed credential envelope, never in the public
+  // record. The caller binds the explicit enrolling ownerScope.
+  async completeMuseDirectImport(
+    apiKey: string,
+    ownerScopeRef: string,
+  ): Promise<EnrollmentCompletion> {
+    const provider = this.providers.get('muse');
+    if (!provider) {
+      throw new Error("No enrollment provider 'muse' registered");
+    }
+    if (typeof provider.importDirectApiKey !== 'function') {
+      throw new Error("Muse enrollment provider does not support direct API-key import");
+    }
+    const credential = await provider.importDirectApiKey(apiKey);
+    const label = 'Muse (direct API key)';
+    const ownerScope = this.requireOwnerScope(ownerScopeRef);
+    const removalBarrierRef = await this.removalBarrierForEnrollment(
+      credential.accountId,
+      ownerScope,
+    );
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId: credential.accountId,
+      ownerScopeRef: ownerScope,
+      accountLabel: label,
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      expiresAt: credential.expiresAt,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: {
+        billing_type: MUSE_DIRECT_BILLING_TYPE,
+        auth_type: 'api_key',
+      },
+    };
+    this.registerAccount(
+      account,
+      credential.authClientConfigVersion,
+      removalBarrierRef,
+    );
+    await this.persistCredential(
+      {
+        accountId: account.accountId,
+        accountLabel: label,
+        providerId: 'muse',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        accountId: account.accountId,
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt,
+        authClientConfigVersion: credential.authClientConfigVersion,
+      },
+      account,
+    );
+    return { accountId: credential.accountId, label };
+  }
+
+  // Muse native device-flow completion (S5, §14.6): the `muse-code`
+  // provider polls the Meta device grant, mints a key, and persists the
+  // refresh token. Same persistence shape as the CLI import; metadata
+  // marks the seat-billed device path. The caller binds the ownerScope.
+  async completeMuseDeviceImport(
+    enrollmentId: string,
+    ownerScopeRef: string,
+    maxAttempts = 60,
+  ): Promise<EnrollmentCompletion> {
+    const provider = this.providers.get('muse-code');
+    if (!provider) {
+      throw new Error("No enrollment provider 'muse-code' registered");
+    }
+    // Same CompletedEnrollment shape as the codex device flow
+    // (mutualized handling); the caller binds the enrolling ownerScope and
+    // rejects a session opened for a different owner.
+    if (typeof provider.pollForCompletion !== 'function') {
+      throw new Error("Muse enrollment provider does not support device-flow polling");
+    }
+    const res = await provider.pollForCompletion(enrollmentId);
+    if (!res.credential) {
+      throw new Error(`Enrollment session ${enrollmentId} did not resolve a credential`);
+    }
+    const ownerScope = this.requireOwnerScope(ownerScopeRef);
+    if (res.ownerScope !== ownerScope) {
+      throw new Error(`Enrollment session ${enrollmentId} was opened for a different owner`);
+    }
+    const credential = res.credential;
+    const label = res.label;
+    const removalBarrierRef = await this.removalBarrierForEnrollment(
+      credential.accountId,
+      ownerScope,
+    );
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId: credential.accountId,
+      ownerScopeRef: ownerScope,
+      accountLabel: label,
+      targetProviderId: 'muse',
+      transportProviderId: 'muse',
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      expiresAt: credential.expiresAt,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: {
+        billing_type: 'seat',
+        auth_type: 'device-flow',
+      },
+    };
+    this.registerAccount(
+      account,
+      credential.authClientConfigVersion,
+      removalBarrierRef,
+    );
+    await this.persistCredential(
+      {
+        accountId: account.accountId,
+        accountLabel: label,
+        providerId: 'muse',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        accountId: account.accountId,
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt,
+        authClientConfigVersion: credential.authClientConfigVersion,
+      },
+      account,
+    );
+    return { accountId: credential.accountId, label };
   }
 
   async cancel(enrollmentId: string): Promise<void> {

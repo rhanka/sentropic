@@ -10,12 +10,20 @@ export type EnrollmentSession =
       userCode: string;
       pollIntervalMs: number;
       expiresAt: string;
+    }
+  // File import (muse CLI auth file): no browser or device round-trip;
+  // completion reads the local CLI store via complete().
+  | {
+      kind: 'local-import';
+      enrollmentId: string;
+      source: string;
+      expiresAt: string;
     };
 
 // State persisted server-side / sentropic-side — NOT exported via facade to h2a
 export interface EnrollmentState {
   enrollmentId: string;
-  providerId: 'cloud-code' | 'codex' | 'claude-code';
+  providerId: 'cloud-code' | 'codex' | 'claude-code' | 'muse';
   ownerScope: string;
   pkceVerifier: string;
   pkceState: string;
@@ -101,6 +109,9 @@ export interface EnrollmentCompletion {
 export interface EnrollmentProvider {
   start(input: StartEnrollmentInput): Promise<EnrollmentSession>;
   complete(input: CompleteEnrollmentInput): Promise<PreparedCredential>;
+  // Direct-key import (muse only): enroll a raw API key with no session
+  // round-trip. Optional like waitForCallback/pollForCompletion below.
+  importDirectApiKey?(apiKey: string): Promise<PreparedCredential>;
   resolve(credential: PreparedCredential): Promise<ResolvedProviderMetadata>;
   refresh(input: RefreshInput): Promise<PreparedCredential>;
   waitForCallback?(enrollmentId: string): Promise<CompletedEnrollment>;

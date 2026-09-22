@@ -10,17 +10,24 @@ import {
   acquireAntigravityAccountTransport,
   acquireClaudeCodeAccountTransport,
   acquireCloudCodeAccountTransport,
+  acquireMuseAccountTransport,
   getPrimaryCloudCodeAccountTransport,
+  getPrimaryMuseAccountTransport,
   inferCodexAccountIdFromToken,
   inferTokenExpiresAt,
+  refreshMuseTokenIfNeeded,
   storeAntigravityAccountTransport,
   refreshCloudCodeTokenIfNeeded,
   storeClaudeCodeAccountTransport,
   storeCloudCodeAccountTransport,
+  storeMuseAccountTransport,
 } from '../../src/services/llm-account-transports';
 import {
+  disconnectMuseEnrollment,
   getAnthropicTransportMode,
+  importMuseEnrollment,
   setAnthropicTransportMode,
+  startMuseEnrollment,
 } from '../../src/services/provider-connections';
 import { cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 
@@ -381,5 +388,174 @@ describe('provider-owned llm account transports', () => {
     const dbRow = (await db.all(sql`SELECT status, last_error FROM llm_provider_accounts WHERE id = ${stored!.id}`)) as Array<{ status: string; last_error: string | null }>;
     expect(dbRow[0]?.status).toBe('reauth_required');
     expect(dbRow[0]?.last_error).toContain('Cloud Code token refresh failed');
+  });
+
+  it('stores and acquires Muse account transport with multi-tenant userId isolation', async () => {
+    const user1 = await createAuthenticatedUser('admin_app');
+    const user2 = await createAuthenticatedUser('admin_app');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    await storeMuseAccountTransport({
+      ownerUserId: user1.id,
+      externalAccountId: 'acct_muse_testuser1',
+      accountLabel: 'Muse User 1',
+      accessToken: 'muse-access-user1',
+      apiBaseUrl: 'https://muse.test',
+      accountEmail: 'user1@example.test',
+      expiresAt,
+    });
+
+    const primary1 = await getPrimaryMuseAccountTransport({ ownerUserId: user1.id });
+    expect(primary1).not.toBeNull();
+    expect(primary1?.transportProviderId).toBe('muse');
+    expect(primary1?.targetProviderId).toBe('muse');
+
+    const acqUser2 = await acquireMuseAccountTransport({
+      userId: user2.id,
+      modelId: 'muse-spark-1.3-contributor',
+      affinityKey: 'session:user2',
+    });
+    expect(acqUser2).toBeNull();
+
+    const acqUser1 = await acquireMuseAccountTransport({
+      userId: user1.id,
+      modelId: 'muse-spark-1.3-contributor',
+      affinityKey: 'session:user1',
+    });
+    expect(acqUser1).not.toBeNull();
+    expect(acqUser1?.accessToken).toBe('muse-access-user1');
+    expect(acqUser1?.transportProviderId).toBe('muse');
+  });
+
+  it('refreshes Muse token on expiration by re-reading the CLI store (single-flight)', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+
+    const stored = await storeMuseAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'acct_muse_refresh',
+      accountLabel: 'Muse Refreshed',
+      accessToken: 'muse-access-old',
+      accountEmail: 'owner@example.test',
+      expiresAt: expiredAt,
+    });
+    expect(stored).not.toBeNull();
+
+    let readCount = 0;
+    const readAuthFile = async () => {
+      readCount++;
+      return JSON.stringify({
+        schema_version: 1,
+        providers: {
+          meta: { access_token: 'muse-access-new', user_email: 'owner@example.test' },
+        },
+      });
+    };
+
+    const tokenPayload = {
+      accessToken: 'muse-access-old',
+      refreshToken: null,
+      tokenType: 'bearer' as const,
+      obtainedAt: expiredAt,
+      expiresAt: expiredAt,
+      source: 'muse-import' as const,
+      apiBaseUrl: null,
+      accountEmail: 'owner@example.test',
+    };
+
+    const [res1, res2] = await Promise.all([
+      refreshMuseTokenIfNeeded(
+        { accountId: stored!.id, externalAccountId: 'acct_muse_refresh', token: tokenPayload },
+        readAuthFile,
+      ),
+      refreshMuseTokenIfNeeded(
+        { accountId: stored!.id, externalAccountId: 'acct_muse_refresh', token: tokenPayload },
+        readAuthFile,
+      ),
+    ]);
+
+    expect(readCount).toBe(1);
+    expect(res1?.accessToken).toBe('muse-access-new');
+    expect(res2?.accessToken).toBe('muse-access-new');
+
+    const dbRow = (await db.all(sql`SELECT status, last_error FROM llm_provider_accounts WHERE id = ${stored!.id}`)) as Array<{ status: string; last_error: string | null }>;
+    expect(dbRow[0]?.status).toBe('active');
+    expect(dbRow[0]?.last_error).toBeNull();
+  });
+
+  it('runs the muse start/import/disconnect cycle through provider-connections', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+
+    const started = await startMuseEnrollment({
+      accountLabel: 'Muse Cycle',
+      updatedByUserId: user.id,
+    });
+    expect(started.providerId).toBe('muse');
+    expect(started.connectionStatus).toBe('pending');
+    expect(started.enrollmentId).toBeTruthy();
+
+    const imported = await importMuseEnrollment({
+      enrollmentId: started.enrollmentId!,
+      accessToken: 'muse-cycle-access',
+      apiBaseUrl: 'https://muse.test',
+      accountEmail: 'cycle@example.test',
+      accountLabel: 'Muse Cycle',
+      updatedByUserId: user.id,
+    });
+    expect(imported.connectionStatus).toBe('connected');
+    expect(imported.ready).toBe(true);
+
+    const acquired = await acquireMuseAccountTransport({
+      userId: user.id,
+      modelId: 'muse-spark-1.3',
+      affinityKey: 'session:cycle',
+    });
+    expect(acquired?.accessToken).toBe('muse-cycle-access');
+
+    const disconnected = await disconnectMuseEnrollment({ updatedByUserId: user.id });
+    expect(disconnected.connectionStatus).toBe('disconnected');
+
+    const afterDisconnect = await acquireMuseAccountTransport({
+      userId: user.id,
+      modelId: 'muse-spark-1.3',
+      affinityKey: 'session:cycle',
+    });
+    expect(afterDisconnect).toBeNull();
+  });
+
+  it('marks account as reauth_required when the Muse CLI store is unreadable', async () => {
+    const user = await createAuthenticatedUser('admin_app');
+    const expiredAt = new Date(Date.now() - 60 * 1000).toISOString();
+
+    const stored = await storeMuseAccountTransport({
+      ownerUserId: user.id,
+      externalAccountId: 'acct_muse_gone',
+      accountLabel: 'Muse Gone',
+      accessToken: 'muse-access-old',
+      accountEmail: 'owner@example.test',
+      expiresAt: expiredAt,
+    });
+
+    const tokenPayload = {
+      accessToken: 'muse-access-old',
+      refreshToken: null,
+      tokenType: 'bearer' as const,
+      obtainedAt: expiredAt,
+      expiresAt: expiredAt,
+      source: 'muse-import' as const,
+      apiBaseUrl: null,
+      accountEmail: 'owner@example.test',
+    };
+
+    const res = await refreshMuseTokenIfNeeded(
+      { accountId: stored!.id, externalAccountId: 'acct_muse_gone', token: tokenPayload },
+      async () => { throw new Error('ENOENT'); },
+    );
+
+    expect(res).toBeNull();
+
+    const dbRow = (await db.all(sql`SELECT status, last_error FROM llm_provider_accounts WHERE id = ${stored!.id}`)) as Array<{ status: string; last_error: string | null }>;
+    expect(dbRow[0]?.status).toBe('reauth_required');
+    expect(dbRow[0]?.last_error).toContain('Muse token refresh failed');
   });
 });
