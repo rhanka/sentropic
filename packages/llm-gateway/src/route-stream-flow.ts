@@ -154,9 +154,15 @@ export const runRouteStreamFlow = async (
         outcome: classification.reason === 'cancelled' ? 'cancelled' : 'failed',
         usage: aggregateUsage(attempts), attempts,
       });
-      throw new GatewayError(
-        'pooled-account-unavailable', 'all planned streams failed', undefined, servedTargetFor(diagnostic),
-      );
+      // Same invalid-refusal preservation as the JSON flow: a terminal
+      // upstream 400 surfaces as bad-request, never as pooled 503.
+      throw classification.reason === 'invalid-request'
+        ? new GatewayError(
+          'bad-request', 'upstream refused the request as invalid', undefined, servedTargetFor(diagnostic),
+        )
+        : new GatewayError(
+          'pooled-account-unavailable', 'all planned streams failed', undefined, servedTargetFor(diagnostic),
+        );
     }
   }
   throw new GatewayError('no-eligible-account', 'route plan has no candidates');

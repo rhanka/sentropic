@@ -81,9 +81,9 @@ export const buildCodexRuntimeRequest = (request: GenerateRequest) =>
     } } : {}),
     ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
     ...(request.topP !== undefined ? { top_p: request.topP } : {}),
-    ...(request.maxOutputTokens !== undefined
-      ? { max_output_tokens: request.maxOutputTokens }
-      : {}),
+    // maxOutputTokens is intentionally NOT sent: the Codex backend answers
+    // 400 `Unsupported parameter: max_output_tokens` (live-proven). Other
+    // transports keep their own limit mapping; the cap is not applied here.
     include: ['reasoning.encrypted_content'],
   });
 
