@@ -13,6 +13,7 @@ import type {
   ResolvedProviderMetadata,
   StartEnrollmentInput,
 } from './contracts.js';
+import { mintMuseApiKey } from './muse-code.js';
 
 export const MUSE_AUTH_FILE_SOURCE = 'muse-cli-auth-file';
 
@@ -56,6 +57,7 @@ interface MuseAuthFile {
 export interface MuseEnrollmentOptions {
   readAuthFile?: (path: string) => Promise<string>;
   authFilePath?: string;
+  fetchFn?: typeof fetch;
 }
 
 interface MuseSession {
@@ -82,6 +84,7 @@ const DIRECT_API_KEY_CONFIG_VERSION = 'direct-api-key-v1';
 export class MuseEnrollmentProvider implements EnrollmentProvider {
   private readonly readAuthFile: (path: string) => Promise<string>;
   private readonly authFilePath: string;
+  private readonly fetchFn: typeof fetch;
   private readonly sessions = new Map<string, MuseSession>();
   private sequence = 0;
 
@@ -89,6 +92,18 @@ export class MuseEnrollmentProvider implements EnrollmentProvider {
     this.readAuthFile = options.readAuthFile
       ?? ((path) => readFile(path, 'utf8'));
     this.authFilePath = options.authFilePath ?? defaultAuthFilePath();
+    this.fetchFn = options.fetchFn ?? fetch;
+  }
+
+  /**
+   * Serving parity with the device path: the raw CLI login token is not a
+   * serving key (live 401), so complete mints one via the shared wire and
+   * returns it as the credential token. Stability (accountId, email) still
+   * derives from the CLI store entry.
+   */
+  private async mintServingKey(token: string): Promise<string> {
+    const minted = await mintMuseApiKey(token, this.fetchFn);
+    return minted.apiKey;
   }
 
   async start(input: StartEnrollmentInput): Promise<EnrollmentSession> {
@@ -193,7 +208,11 @@ export class MuseEnrollmentProvider implements EnrollmentProvider {
       throw new Error(`Enrollment session ${input.enrollmentId} was cancelled`);
     }
     const { entry: providerEntry, schemaVersion } = await this.readEntry();
-    return this.buildCredential(providerEntry, schemaVersion);
+    const credential = this.buildCredential(providerEntry, schemaVersion);
+    return {
+      ...credential,
+      accessToken: await this.mintServingKey(credential.accessToken),
+    };
   }
 
   async resolve(credential: PreparedCredential): Promise<ResolvedProviderMetadata> {
@@ -204,14 +223,29 @@ export class MuseEnrollmentProvider implements EnrollmentProvider {
   }
 
   async refresh(input: RefreshInput): Promise<PreparedCredential> {
-    // The CLI owns token lifecycle (login/refresh happens in muse itself);
-    // mesh refresh re-imports the current CLI store for the same account.
-    const { entry, schemaVersion } = await this.readEntry();
+    // Direct-billed keys have no CLI store to re-read and no rotation wire:
+    // re-import is the rotation path (same rule as documented on the TTL).
+    if (input.credentialVersion === DIRECT_API_KEY_CONFIG_VERSION) {
+      throw new Error('Muse token refresh failed: direct API keys do not rotate; re-import the key');
+    }
+    // The CLI owns login lifecycle; mesh refresh re-imports the current CLI
+    // store for the same account, then re-mints the serving key via the
+    // shared wire (same shape as the codex/cloud-code refresh errors).
+    let entry: MuseProviderEntry;
+    let schemaVersion: string;
+    try {
+      ({ entry, schemaVersion } = await this.readEntry());
+    } catch (error) {
+      throw new Error(`Muse token refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
     const credential = this.buildCredential(entry, schemaVersion);
     if (credential.accountId !== input.accountId) {
       throw new Error('Muse CLI store now holds a different login than the enrolled account');
     }
-    return credential;
+    return {
+      ...credential,
+      accessToken: await this.mintServingKey(credential.accessToken),
+    };
   }
 
   async cancel(enrollmentId: string): Promise<void> {

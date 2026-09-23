@@ -53,6 +53,47 @@ interface NativeSession {
 const textOf = (value: unknown): string | null =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 
+export interface MintedMuseApiKey {
+  apiKey: string;
+  email: string | null;
+}
+
+/**
+ * Shared Meta key-mint wire (POST /muse-code/key, JSON { dca_token } +
+ * Bearer, x-api-version 1.0.0 — live-probed 2026-09-21: body-only mints 401).
+ * Mutualized across the muse providers: the device path mints the grant
+ * token, the CLI-import path mints the stored login token. Same endpoint,
+ * same headers, same error shape — no new wire path.
+ */
+export async function mintMuseApiKey(
+  accessToken: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<MintedMuseApiKey> {
+  const response = await fetchFn(MUSE_KEY_MINT_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      'x-api-version': MUSE_KEY_MINT_API_VERSION,
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ dca_token: accessToken }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Muse key mint failed (${response.status}): ${text.slice(0, 200)}`);
+  }
+  const payload = (await response.json()) as {
+    api_key?: unknown;
+    user_email?: unknown;
+  };
+  const apiKey = textOf(payload.api_key);
+  if (!apiKey) {
+    throw new Error('Muse key mint returned no api_key');
+  }
+  return { apiKey, email: textOf(payload.user_email) };
+}
+
 export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
   private readonly clientId: string;
   private readonly fetchFn: typeof fetch;
@@ -165,35 +206,8 @@ export class MuseCodeEnrollmentProvider implements EnrollmentProvider {
     return { status: 'complete', payload };
   }
 
-  private async mintApiKey(accessToken: string): Promise<{
-    apiKey: string;
-    email: string | null;
-  }> {
-    const response = await this.fetchFn(MUSE_KEY_MINT_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-        'x-api-version': MUSE_KEY_MINT_API_VERSION,
-        // Live-probed 2026-09-21: body-only mints 401; the dca token must
-        // ALSO ride as Bearer alongside the { dca_token } body (200).
-        authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ dca_token: accessToken }),
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Muse key mint failed (${response.status}): ${text.slice(0, 200)}`);
-    }
-    const payload = (await response.json()) as {
-      api_key?: unknown;
-      user_email?: unknown;
-    };
-    const apiKey = textOf(payload.api_key);
-    if (!apiKey) {
-      throw new Error('Muse key mint returned no api_key');
-    }
-    return { apiKey, email: textOf(payload.user_email) };
+  private async mintApiKey(accessToken: string): Promise<MintedMuseApiKey> {
+    return mintMuseApiKey(accessToken, this.fetchFn);
   }
 
   private buildCredential(input: {
