@@ -29,6 +29,13 @@ const startInput = {
 
 const providerWithFile = (content: string) => new MuseEnrollmentProvider({
   readAuthFile: async () => content,
+  // complete() mints a serving key (parity); unit tests never hit the wire.
+  fetchFn: (async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ api_key: 'minted-test-key', user_email: 'owner@example.test' }),
+    text: async () => '{}',
+  })) as typeof fetch,
 });
 
 describe('MuseEnrollmentProvider', () => {
@@ -54,7 +61,7 @@ describe('MuseEnrollmentProvider', () => {
     });
 
     expect(credential.accountId).toMatch(/^acct_muse_/);
-    expect(credential.accessToken).toBe('muse-test-access-token');
+    expect(credential.accessToken).toBe('minted-test-key');
     expect(credential.accountEmail).toBe('owner@example.test');
     expect(credential.authClientConfigVersion).toBe('1');
     expect(new Date(credential.expiresAt).getTime()).toBeGreaterThan(Date.now());
@@ -86,7 +93,7 @@ describe('MuseEnrollmentProvider', () => {
       code: '',
     });
 
-    expect(credential.accessToken).toBe('only-api-key');
+    expect(credential.accessToken).toBe('minted-test-key');
   });
 
   it('rejects a missing meta provider without leaking file content', async () => {
@@ -117,10 +124,16 @@ describe('MuseEnrollmentProvider', () => {
     ).rejects.toThrow('cancelled');
   });
 
-  it('refreshes by re-reading the CLI auth file', async () => {
+  it('refreshes by re-reading the CLI auth file and re-minting the serving key', async () => {
     let content = AUTH_FILE;
     const provider = new MuseEnrollmentProvider({
       readAuthFile: async () => content,
+      fetchFn: (async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ api_key: 'muse-rotated-mint', user_email: 'owner@example.test' }),
+        text: async () => '{}',
+      })) as typeof fetch,
     });
     const session = await provider.start(startInput);
     const credential = await provider.complete({
@@ -136,7 +149,111 @@ describe('MuseEnrollmentProvider', () => {
     });
 
     expect(refreshed.accountId).toBe(credential.accountId);
-    expect(refreshed.accessToken).toBe('muse-rotated-token');
+    expect(refreshed.accessToken).toBe('muse-rotated-mint');
+  });
+
+  describe('CLI-import serving parity (BR76)', () => {
+    const jsonResponse = (payload: unknown, status = 200) => ({
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => payload,
+      text: async () => JSON.stringify(payload),
+    });
+
+    const mintFetch = (calls: Array<{ url: string; authorization: string }>, payload: unknown = { api_key: 'minted-serve-key', user_email: 'owner@example.test' }, status = 200) =>
+      (async (url: unknown, init?: { headers?: unknown }) => {
+        const headers = (init?.headers ?? {}) as Record<string, string>;
+        calls.push({ url: String(url), authorization: String(headers['authorization'] ?? '') });
+        return jsonResponse(payload, status);
+      }) as typeof fetch;
+
+    const providerWithMint = (content: string, calls: Array<{ url: string; authorization: string }>, payload?: unknown, status?: number) =>
+      new MuseEnrollmentProvider({
+        readAuthFile: async () => content,
+        fetchFn: mintFetch(calls, payload, status),
+      });
+
+    it('completes by minting a serving key from the CLI login token', async () => {
+      const calls: Array<{ url: string; authorization: string }> = [];
+      const provider = providerWithMint(AUTH_FILE, calls);
+      const session = await provider.start(startInput);
+
+      const credential = await provider.complete({
+        enrollmentId: session.enrollmentId,
+        code: '',
+      });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.url).toContain('/muse-code/key');
+      expect(calls[0]?.authorization).toBe('Bearer muse-test-access-token');
+      expect(credential.accessToken).toBe('minted-serve-key');
+      expect(credential.accountId).toMatch(/^acct_muse_/);
+      expect(credential.accountEmail).toBe('owner@example.test');
+    });
+
+    it('refreshes by re-reading the store and re-minting, keeping a stable account', async () => {
+      const calls: Array<{ url: string; authorization: string }> = [];
+      let content = AUTH_FILE;
+      const provider = new MuseEnrollmentProvider({
+        readAuthFile: async () => content,
+        fetchFn: mintFetch(calls),
+      });
+      const session = await provider.start(startInput);
+      const credential = await provider.complete({
+        enrollmentId: session.enrollmentId,
+        code: '',
+      });
+
+      content = AUTH_FILE.replace('muse-test-access-token', 'muse-rotated-token');
+      const refreshed = await provider.refresh({
+        accountId: credential.accountId,
+        refreshToken: undefined,
+        credentialVersion: credential.authClientConfigVersion,
+      });
+
+      expect(refreshed.accountId).toBe(credential.accountId);
+      expect(refreshed.accessToken).toBe('minted-serve-key');
+      expect(calls[calls.length - 1]?.authorization).toBe('Bearer muse-rotated-token');
+    });
+
+    it('rejects refresh when the store is unreadable with a mutualized error', async () => {
+      const calls: Array<{ url: string; authorization: string }> = [];
+      const provider = new MuseEnrollmentProvider({
+        readAuthFile: async () => { throw new Error('ENOENT'); },
+        fetchFn: mintFetch(calls),
+      });
+
+      await expect(provider.refresh({
+        accountId: 'acct_muse_deadbeef00',
+        refreshToken: undefined,
+        credentialVersion: '1',
+      })).rejects.toThrow(/Muse token refresh failed/);
+      expect(calls).toHaveLength(0);
+    });
+
+    it('rejects refresh of a direct-key account directing re-import', async () => {
+      const calls: Array<{ url: string; authorization: string }> = [];
+      const provider = providerWithMint(AUTH_FILE, calls);
+      const direct = await provider.importDirectApiKey('muse-direct-key');
+
+      await expect(provider.refresh({
+        accountId: direct.accountId,
+        refreshToken: undefined,
+        credentialVersion: direct.authClientConfigVersion,
+      })).rejects.toThrow(/re-import/i);
+      expect(calls).toHaveLength(0);
+    });
+
+    it('propagates mint failures instead of returning a raw token', async () => {
+      const calls: Array<{ url: string; authorization: string }> = [];
+      const provider = providerWithMint(AUTH_FILE, calls, { error: 'denied' }, 401);
+      const session = await provider.start(startInput);
+
+      await expect(provider.complete({
+        enrollmentId: session.enrollmentId,
+        code: '',
+      })).rejects.toThrow(/Muse key mint failed/);
+    });
   });
 
   it('resolves credential metadata to the muse provider', async () => {
