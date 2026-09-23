@@ -57,14 +57,18 @@ describe('Codex runtime wire', () => {
     });
   });
 
-  it('passes through the optional maximum output token cap', () => {
+  it('omits the maximum output token cap (rejected by the Codex backend)', () => {
     const request = {
       providerId: 'openai' as const, modelId: 'gpt-5.6-terra' as const,
       messages: [{ role: 'user' as const, content: 'hello' }],
     };
 
+    // Live-proven: chatgpt.com/backend-api/codex/responses answers 400
+    // `Unsupported parameter: max_output_tokens`. The Codex wire must not
+    // send it; other transports keep their own limit mapping. The cap is
+    // NOT applied by Codex.
     expect(buildCodexRuntimeRequest({ ...request, maxOutputTokens: 321 }).body)
-      .toMatchObject({ max_output_tokens: 321 });
+      .not.toHaveProperty('max_output_tokens');
     expect(buildCodexRuntimeRequest(request).body).not.toHaveProperty('max_output_tokens');
   });
 

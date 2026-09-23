@@ -147,6 +147,27 @@ describe('route JSON flow', () => {
     });
   });
 
+  it('surfaces an upstream invalid refusal as bad-request instead of pooled-account-unavailable', async () => {
+    const failed = (status: number): PreparedRouteAttempt => ({
+      attemptRef: `attempt-${status}`,
+      async generate() { throw { status }; },
+      async stream() { throw new Error('unused'); }, async recordOutcome() {},
+      async markCommitted() {}, async complete() {}, async releaseCancelled() {},
+    });
+
+    // Live-proven: Codex answers 400 `Unsupported parameter: max_output_tokens`.
+    // A 400 invalid is the caller's request, non-retryable — it must surface
+    // as 400 invalid_request_error, never as 503 pooled-account-unavailable.
+    const error = await runRouteJsonFlow({
+      config, routePlanner: routePlanner([failed(400), failed(400)]),
+      metering: { settleRoute() {} },
+    }, request).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { kind?: string }).kind).toBe('bad-request');
+  });
+
   it('does not try another candidate after a terminal auth failure', async () => {
     let secondCalls = 0;
     const failed = (status: number): PreparedRouteAttempt => ({
