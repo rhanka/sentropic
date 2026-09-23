@@ -190,6 +190,25 @@ describe('route stream flow', () => {
     expect(settlements[0]?.outcome).toBe('failed');
   });
 
+  it('surfaces an upstream invalid refusal as bad-request before any content', async () => {
+    const failing = (): PreparedRouteAttempt => ({
+      attemptRef: 'attempt-400',
+      async generate() { throw new Error('unused'); },
+      async stream(): Promise<AsyncIterable<StreamEvent>> { throw { status: 400 }; },
+      async recordOutcome() {}, async markCommitted() {}, async complete() {},
+      async releaseCancelled() {},
+    });
+
+    const error = await runRouteStreamFlow({
+      config, routePlanner: plannerFor([failing(), failing()]),
+      metering: { settleRoute() {} },
+    }, request).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { kind?: string }).kind).toBe('bad-request');
+  });
+
   it('releases and settles a committed stream when the consumer cancels', async () => {
     const hooks: string[] = [];
     const settlements: RouteRequestSettlement[] = [];

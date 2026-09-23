@@ -342,6 +342,51 @@ describe('opaque route planner', () => {
     )).rejects.toMatchObject({ code: 'invalid-plan' });
   });
 
+  it('never surfaces another transport diagnostic when no candidate matches', async () => {
+    // Live-proven: an explicit gpt-5.6-terra (codex) request with empty
+    // candidates surfaced `muse reauthenticate required` from listDiagnostics[0].
+    // Diagnostics bind to the requested route transports, or stay generic.
+    const museReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'muse',
+      message: 'muse reauthenticate required',
+    };
+    const directory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly typeof museReauth[]>;
+    };
+    directory.listDiagnostics = async () => [museReauth];
+    const planner = new InMemoryRoutePlanner({ directory });
+
+    const error = await planner.plan(routingSubject(), {
+      requestedModel: 'gpt-5.6-terra',
+    }).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { code?: string }).code).toBe('no-route');
+    expect(String((error as Error).message)).not.toContain('muse');
+  });
+
+  it('keeps a diagnostic bound to the requested transport', async () => {
+    const museReauth = {
+      code: 'reauth-required' as const, transportProviderId: 'muse',
+      message: 'muse reauthenticate required',
+    };
+    const directory = new FakeRouteDirectory([]) as FakeRouteDirectory & {
+      listDiagnostics: () => Promise<readonly typeof museReauth[]>;
+    };
+    directory.listDiagnostics = async () => [museReauth];
+    const planner = new InMemoryRoutePlanner({ directory });
+
+    const error = await planner.plan(routingSubject(), {
+      requestedModel: 'muse-spark-1.3',
+    }).then(
+      () => { throw new Error('expected rejection'); },
+      (error: unknown) => error,
+    );
+    expect((error as { code?: string }).code).toBe('no-route');
+    expect(String((error as Error).message)).toContain('muse reauthenticate required');
+  });
+
   it('rejects a plan after its named policy revision changes', async () => {
     const profiles = new InMemoryRoutePolicyProfiles([{
       name: 'coding', revision: 'r1', policy: DEFAULT_ROUTE_POLICY,
