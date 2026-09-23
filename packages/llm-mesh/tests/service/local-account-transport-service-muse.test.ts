@@ -23,10 +23,18 @@ const AUTH_FILE = JSON.stringify({
 
 const OWNER_SCOPE = 'tenant-1:user-1';
 
+// complete()/refresh() mint a serving key (parity); unit tests never hit the wire.
+const mintFetch = (async () => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ api_key: 'minted-roundtrip-key', user_email: 'owner@example.test' }),
+  text: async () => '{}',
+})) as typeof fetch;
+
 const setup = () => {
   const keyring = new InMemoryKeyring();
   const providers = new Map<string, EnrollmentProvider>([
-    ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => AUTH_FILE })],
+    ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => AUTH_FILE, fetchFn: mintFetch })],
   ]);
   const configResolver = { async resolveConfig() { return {}; } };
   const service = new LocalAccountTransportService(keyring, providers, configResolver);
@@ -60,13 +68,13 @@ describe('LocalAccountTransportService muse import round-trip', () => {
     });
     expect(acquisition.material).toMatchObject({
       accountId: completion.accountId,
-      accessToken: 'muse-roundtrip-access',
+      accessToken: 'minted-roundtrip-key',
     });
 
     // Keyring holds the generic envelope + public + owner records.
     const prefix = `sentropic-llm-mesh:${completion.accountId}`;
     const envelope = await keyring.getSecret(`${prefix}:envelope`);
-    expect(envelope).toContain('muse-roundtrip-access');
+    expect(envelope).toContain('minted-roundtrip-key');
     const publicRecord = await keyring.getSecret(`${prefix}:public`);
     expect(publicRecord).toContain('muse');
     const owner = await keyring.getSecret(`${prefix}:owner`);
@@ -77,7 +85,7 @@ describe('LocalAccountTransportService muse import round-trip', () => {
     let content = AUTH_FILE;
     const keyring = new InMemoryKeyring();
     const providers = new Map<string, EnrollmentProvider>([
-      ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => content })],
+      ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => content, fetchFn: mintFetch })],
     ]);
     const configResolver = { async resolveConfig() { return {}; } };
     const service = new LocalAccountTransportService(keyring, providers, configResolver);
@@ -105,12 +113,12 @@ describe('LocalAccountTransportService muse import round-trip', () => {
     });
 
     expect(acquisition.material.accountId).toBe(completion.accountId);
-    expect(acquisition.material.accessToken).toBe('muse-rotated-live');
+    expect(acquisition.material.accessToken).toBe('minted-roundtrip-key');
 
     const envelope = await keyring.getSecret(
       `sentropic-llm-mesh:${completion.accountId}:envelope`,
     );
-    expect(envelope).toContain('muse-rotated-live');
+    expect(envelope).toContain('minted-roundtrip-key');
   });
 
   it('refuses completion for a foreign owner scope', async () => {
@@ -130,7 +138,7 @@ describe('LocalAccountTransportService muse import round-trip', () => {
   it('restores the imported account in a fresh runtime service', async () => {
     const keyring = new InMemoryKeyring();
     const providers = new Map<string, EnrollmentProvider>([
-      ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => AUTH_FILE })],
+      ['muse', new MuseEnrollmentProvider({ readAuthFile: async () => AUTH_FILE, fetchFn: mintFetch })],
     ]);
     const configResolver = { async resolveConfig() { return {}; } };
     const enrollmentService = new LocalAccountTransportService(
