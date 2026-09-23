@@ -85,4 +85,5 @@ Bring the muse CLI-import path to full parity with codex/cloud-code and the muse
   - [x] Retest API (mesh suite 250/250, gateway 114/114)
   - [ ] Retest e2e — `none` with reason (no gateway route change)
   - [x] Live re-proof: forced-expiry refresh + 1 minimal serve via seat (scratch `/tmp/muse-br76-proof.mjs`, PROOF PASS)
+  - [x] VRAI test (owner-ordered, 2026-09-23): live h2a keyring emptied (`account rm` seat) then re-enrolled via branch code — import + forced-expiry refresh + serve `ok` (usage in 12/out 245), seat `active` in `h2a llm-mesh account ls`. Caveat: live resolves published 0.21.0 (no mint) → durability needs 0.21.1 merge+publish (PR598).
   - [ ] Push, PR, CI green — merge only on owner GO, no direct publish.
