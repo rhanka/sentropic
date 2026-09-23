@@ -67,22 +67,22 @@ Bring the muse CLI-import path to full parity with codex/cloud-code and the muse
   - Switch back to `tmp/muse-parity` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — Tests first (TDD red)**
-  - [ ] `muse.test.ts`: refresh mints via key endpoint, same accountId, minted token (mock fetchFn).
-  - [ ] `muse.test.ts`: complete mints via key endpoint (mock fetchFn).
-  - [ ] `muse.test.ts`: unreadable store on refresh → `Muse token refresh failed`, no leak.
-  - [ ] `muse.test.ts`: direct-key refresh → re-import error.
-  - [ ] `muse.test.ts`: mint failure propagates (`Muse key mint failed`).
-  - [ ] Lot gate: scoped mesh run red on new tests, green on old ones.
-- [ ] **Lot 2 — Shared mint + parity implementation**
-  - [ ] Export shared `mintMuseApiKey` from `muse-code.ts`; reuse in its private mint (no behavior change).
-  - [ ] `muse.ts`: `fetchFn` option (sibling pattern), mint at complete + refresh, direct-key guard, shared error shape.
-  - [ ] Evolve the re-read refresh test (minted token expected).
-  - [ ] Bump `packages/llm-mesh/package.json` `0.21.0` → `0.21.1`.
-  - [ ] Lot gate: `make typecheck` + `lint` + scoped mesh tests, `make scope-check`, all `ENV=test-fix-muse-provider-parity`.
+- [x] **Lot 1 — Tests first (TDD red)**
+  - [x] `muse.test.ts`: refresh mints via key endpoint, same accountId, minted token (mock fetchFn).
+  - [x] `muse.test.ts`: complete mints via key endpoint (mock fetchFn).
+  - [x] `muse.test.ts`: unreadable store on refresh → `Muse token refresh failed`, no leak.
+  - [x] `muse.test.ts`: direct-key refresh → re-import error.
+  - [x] `muse.test.ts`: mint failure propagates (`Muse key mint failed`).
+  - [x] Lot gate: scoped mesh run red on new tests (5 failed), green after (24/24).
+- [x] **Lot 2 — Shared mint + parity implementation**
+  - [x] Export shared `mintMuseApiKey` from `muse-code.ts`; reuse in its private mint (no behavior change).
+  - [x] `muse.ts`: `fetchFn` option (sibling pattern), mint at complete + refresh, direct-key guard, shared error shape.
+  - [x] Evolve the re-read refresh test (minted token expected).
+  - [x] Bump `packages/llm-mesh/package.json` `0.21.0` → `0.21.1`.
+  - [x] Lot gate: `make typecheck` + `lint` + scoped mesh tests, `make scope-check`, all `ENV=test-fix-muse-provider-parity`.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest API (mesh suite)
+  - [x] Typecheck & Lint
+  - [x] Retest API (mesh suite 250/250, gateway 114/114)
   - [ ] Retest e2e — `none` with reason (no gateway route change)
-  - [ ] Live re-proof: forced-expiry refresh + 1 minimal serve via seat (scratch `/tmp`, owner GO already given for soaks)
+  - [x] Live re-proof: forced-expiry refresh + 1 minimal serve via seat (scratch `/tmp/muse-br76-proof.mjs`, PROOF PASS)
   - [ ] Push, PR, CI green — merge only on owner GO, no direct publish.
