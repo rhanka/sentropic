@@ -76,7 +76,7 @@
   - [x] C8 — Remove issuer normalization; document exact registered absolute HTTP(S) values and test both trailing-slash configurations (final gates pending).
   - [x] C9 — Correct published VerifyToken/personal caller-auth comments to distinguish canonical service and session verification under D2.
   - [x] C10 — README migration covers ambiguity, malformed Authorization without fallback, and token spaces for all PersonalPassthroughCallerAuth instances.
-  - [ ] C11 — Prove successful router DPoP verification after trusted publicUrl reconstruction.
+  - [x] C11 — Add signed bound-DPoP router success regression: internal HTTP /v1/models, reconstructed external HTTPS URL, status 200 and exactly one planner listModels call (final gates pending).
   - [ ] C12 — Guard missing qualification directory and label workspace auth tarballs as development evidence.
   - [ ] C13 — Record O8 token-publish bypass risk without editing the target.
   - [ ] Final gates — typecheck, lint, full test, pack, candidate SHA-256, scope and cleanup.

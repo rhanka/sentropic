@@ -16,6 +16,23 @@ const fixture = async () => {
 };
 
 describe('canonical service auth bridge', () => {
+  it('accepts router DPoP against the trusted public URL despite internal HTTP ingress', async () => {
+    const f = await fixture(); const listModels = vi.fn(async () => []);
+    const app = createGatewayRouter({ config: { ...stubGatewayConfig,
+      callerAuth: new PersonalPassthroughCallerAuth({ verifyToken: f.bridge,
+        costContextResolver: new VerifiedCostContextResolver() }),
+    }, routePlanner: { listModels } as unknown as RoutePlanner,
+    routeMetering: { settleRoute: vi.fn() },
+    publicUrl: req => `https://gateway.test${new URL(req.url).pathname}` });
+    const token = await f.token({ cnf: { jkt: f.jkt } });
+    const dpop = await f.proof(token, { htm: 'GET', htu: 'https://gateway.test/v1/models' });
+    const response = await app.request('http://internal/v1/models', {
+      headers: { authorization: `DPoP ${token}`, dpop },
+    });
+    expect(response.status).toBe(200);
+    expect(listModels).toHaveBeenCalledTimes(1);
+    expect(f.resolvePrincipal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientId: 'service', jkt: f.jkt }));
+  });
   it.each(['', '/'])('matches the registered issuer exactly with suffix %j', async suffix => {
     const f = await fixture();
     const issuer = `${f.auth.issuer}${suffix}`;
