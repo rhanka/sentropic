@@ -37,7 +37,10 @@ beforeAll(() => {
   cpSync(tarball, join(qualification, 'candidate.tgz'));
   try {
     const metadata = JSON.parse(run('npm', ['view', '@sentropic/mcp-auth@0.2.1', '--json'], temp));
-    servicePublished = metadata.version === '0.2.1';
+    if (metadata.name !== '@sentropic/mcp-auth' || metadata.version !== '0.2.1') {
+      throw new Error('Registry metadata mismatch for service qualification');
+    }
+    servicePublished = true;
   } catch (error) {
     // Only the conductor-approved publication absence is a pending gate; network failures fail.
     if (!String((error as { stderr?: string }).stderr).includes('E404')) throw error;
