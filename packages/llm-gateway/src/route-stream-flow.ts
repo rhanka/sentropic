@@ -9,9 +9,6 @@ import { GatewayError } from './router/errors.js';
 import { RouteAttemptDispatch } from './route-attempt-dispatch.js';
 const defaultDispatch = new RouteAttemptDispatch();
 
-const usageFromEvent = (event: StreamEvent): SettleUsage | undefined =>
-  event.type === 'done' ? routeUsage(event.data.usage) : undefined;
-
 const servedTargetFor = (diagnostic: {
   readonly actualProviderId: string;
   readonly actualTransportProviderId: string;
@@ -133,134 +130,83 @@ export const runRouteStreamFlow = async (
 ): Promise<GatewayStreamResult> => {
   const prepared = await prepareRouteFlow(deps, request);
   const attempts: RouteAttemptSettlement[] = [];
+  const signal = request.signal ?? request.authContext.signal;
+  let settled = false;
+  const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
+    if (settled) return;
+    settled = true;
+    await deps.metering.settleRoute({ cost: prepared.cost, wire: request.wire, requestedModel: request.model,
+      outcome, usage: aggregateUsage(attempts), attempts });
+  };
   for (let index = 0; index < prepared.plan.candidateRefs.length; index += 1) {
     const candidateRef = prepared.plan.candidateRefs[index]!;
     const diagnostic = prepared.plan.diagnostics[index]!;
     let attempt: PreparedRouteAttempt | undefined;
     let iterator: AsyncIterator<StreamEvent> | undefined;
+    let committed = false;
+    let invoked = false;
     try {
+      signal?.throwIfAborted();
       attempt = await deps.routePlanner.prepareAttempt(
         prepared.subject, prepared.plan.planRef, candidateRef, prepared.cost.correlationId, index,
       );
       const preparedAttempt = attempt;
+      signal?.throwIfAborted();
+      invoked = true;
       const source = await (deps.dispatch ?? defaultDispatch).stream({ attempt: preparedAttempt, request: {
         ...prepared.canonical.request,
-        ...(request.signal ? { signal: request.signal } : {}),
+        ...(signal ? { signal } : {}),
       } });
       iterator = source[Symbol.asyncIterator]();
       let first = await iterator.next();
+      let responseId = prepared.cost.correlationId;
+      const headers: Record<string, string> = {};
       while (!first.done && (first.value.type === 'status' || first.value.type === 'tool_call_result')) {
-        first = await iterator.next();
-      }
-      if (first.done) throw { code: 'empty_stream' };
-      if (first.value.type === 'error') throw first.value.data;
-      await preparedAttempt.markCommitted();
-      let usage = usageFromEvent(first.value) ?? routeUsage();
-      let terminal = false;
-      const settle = async (outcome: 'success' | 'failed' | 'cancelled') => {
-        if (terminal) return;
-        terminal = true;
-        await deps.metering.settleRoute({
-          cost: prepared.cost, wire: request.wire, requestedModel: request.model,
-          outcome, usage: aggregateUsage(attempts), attempts,
-        });
-      };
-      const cancel = async () => {
-        await iterator?.return?.();
-        if (terminal) return;
-        await preparedAttempt.releaseCancelled();
-        attempts.push({
-          candidateRef, providerId: diagnostic.actualProviderId,
-          modelId: diagnostic.actualModelId,
-          transportProviderId: diagnostic.actualTransportProviderId,
-          outcome: 'cancelled', usage,
-        });
-        await settle('cancelled');
-      };
-      const tracked = (async function* (): AsyncGenerator<StreamEvent> {
-        let completed = false;
-        let providerErrorEmitted = false;
-        try {
-          yield first.value;
-          for (let next = await iterator!.next(); !next.done; next = await iterator!.next()) {
-            usage = usageFromEvent(next.value) ?? usage;
-            yield next.value;
-            if (next.value.type === 'error') {
-              providerErrorEmitted = true;
-              throw next.value.data;
+        signal?.throwIfAborted();
+        if (first.value.type === 'status') {
+          responseId = first.value.data.sentropicResponseId ?? responseId;
+          const metadataHeaders = first.value.data.metadata?.responseHeaders;
+          if (metadataHeaders && typeof metadataHeaders === 'object') {
+            for (const [key, value] of Object.entries(metadataHeaders)) {
+              if (typeof value === 'string') headers[key.toLowerCase()] = value;
             }
           }
-          completed = true;
-          await preparedAttempt.complete(attemptUsage(usage));
-          attempts.push({
-            candidateRef, providerId: diagnostic.actualProviderId,
-            modelId: diagnostic.actualModelId,
-            transportProviderId: diagnostic.actualTransportProviderId,
-            outcome: 'success', usage,
-          });
-          await settle('success');
-        } catch (error) {
-          const classification = classifyRouteError(error, request.signal?.aborted);
-          if (classification.reason === 'cancelled') await preparedAttempt.releaseCancelled();
-          else await preparedAttempt.recordOutcome(classification, attemptUsage(usage));
-          attempts.push({
-            candidateRef, providerId: diagnostic.actualProviderId,
-            modelId: diagnostic.actualModelId,
-            transportProviderId: diagnostic.actualTransportProviderId,
-            outcome: classification.reason, usage,
-          });
-          await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
-          if (classification.reason !== 'cancelled' && !providerErrorEmitted) {
-            yield {
-              type: 'error',
-              data: {
-                providerId: diagnostic.actualProviderId as never,
-                message: 'stream failed after commitment', retryable: false,
-              },
-            };
-          }
-        } finally {
-          if (!completed) await cancel();
         }
-      })();
-      const responseId = first.value.type === 'done'
-        ? first.value.data.responseId ?? prepared.cost.correlationId
-        : first.value.type === 'status'
-          ? first.value.data.sentropicResponseId ?? prepared.cost.correlationId
-          : prepared.cost.correlationId;
-      const encoded = encodeGatewayStream(
-        request.wire, diagnostic.actualModelId, responseId, tracked,
-        request.wire === 'anthropic-messages'
-          ? { anthropicInputTokens: estimateAnthropicInputTokens(prepared.canonical.request) }
-          : undefined,
-      );
-      return { servedTarget: servedTargetFor(diagnostic), stream: (async function* () {
-        try { yield* encoded; }
-        finally {
-          await encoded.return(undefined);
-          await cancel();
-        }
-      })() };
-    } catch (error) {
-      await iterator?.return?.();
-      const classification = classifyRouteError(error, request.signal?.aborted);
-      const usage = routeUsage();
-      if (attempt) {
-        if (classification.reason === 'cancelled') await attempt.releaseCancelled();
-        else await attempt.recordOutcome(classification, attemptUsage(usage));
+        first = await iterator.next();
       }
+      signal?.throwIfAborted();
+      if (first.done) throw { code: 'empty_stream' };
+      if (first.value.type === 'error') throw first.value.data;
+      if (first.value.type === 'done') responseId = first.value.data.responseId ?? responseId;
+      const execution = trackedExecution({ attempt: preparedAttempt, iterator, first: first.value,
+        prepared, request, target: servedTargetFor(diagnostic), candidateRef, attempts, responseId, settle });
+      const frame = await execution.encoded.next();
+      if (frame.done || typeof frame.value.raw !== "string" || !frame.value.raw) throw Error("empty encoded stream");
+      committed = true;
+      await preparedAttempt.markCommitted();
+      signal?.throwIfAborted();
+      return { servedTarget: servedTargetFor(diagnostic), headers, stream: execution.expose(frame) };
+    } catch (error) {
+      try { await iterator?.return?.(); } catch { /* Cleanup must not erase the terminal outcome. */ }
+      const classification = classifyRouteError(error, signal?.aborted);
+      const usage = invoked ? {
+        inputTokens: Math.min(1_000_000, estimateAnthropicInputTokens(prepared.canonical.request)),
+        outputTokens: 0, estimated: true,
+      } : routeUsage();
       attempts.push({
         candidateRef, providerId: diagnostic.actualProviderId,
         modelId: diagnostic.actualModelId,
         transportProviderId: diagnostic.actualTransportProviderId,
         outcome: classification.reason, usage,
       });
-      if (classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
-      await deps.metering.settleRoute({
-        cost: prepared.cost, wire: request.wire, requestedModel: request.model,
-        outcome: classification.reason === 'cancelled' ? 'cancelled' : 'failed',
-        usage: aggregateUsage(attempts), attempts,
-      });
+      try {
+        if (attempt) {
+          if (classification.reason === 'cancelled') await attempt.releaseCancelled();
+          else await attempt.recordOutcome(classification, attemptUsage(usage));
+        }
+      } catch (hookError) { await settle('failed'); throw hookError; }
+      if (!committed && classification.retryable && index + 1 < prepared.plan.candidateRefs.length) continue;
+      await settle(classification.reason === 'cancelled' ? 'cancelled' : 'failed');
       // Same terminal-class preservation as the JSON flow: a terminal
       // upstream refusal keeps its class, never a pooled 503.
       throw terminalGatewayError(
@@ -268,5 +214,6 @@ export const runRouteStreamFlow = async (
       );
     }
   }
+  await settle('failed');
   throw new GatewayError('no-eligible-account', 'route plan has no candidates');
 };
