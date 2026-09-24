@@ -1,7 +1,7 @@
 # Feature: Cluster mesh single lazy integration surface
 
 ## Objective
-- [ ] Deliver Lot E design and the dated control-plane amendment; implementation and h2a migration belong to later branches.
+- [x] Deliver Lot E design and the dated control-plane amendment; implementation and h2a migration belong to later branches.
 
 ## Scope / Guardrails
 - [x] Planning-only in `tmp/cluster-mesh-lazy-surface`, branch `spec/cluster-mesh-lazy-surface`, base `75032fc85`; mechanical branch check passed.
@@ -37,6 +37,6 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline**: read required rules/template, README/TODO/PLAN context, control-plane decisions, package exports, registration gates, F1–F7 branch and h2a imports at `75c1dc61`; create this branch plan first.
 - [x] **Lot 1 — New specification**: decide loader/type/version/error contracts; map every h2a symbol and MCP import; reconcile namespace mounting and F1; specify migration and implementation lots with file-level tests; commit spec with this checklist.
-- [ ] **Lot 2 — Amendment**: append dated verbatim decision, translation, preserved D1 and strengthened D14 with spec link; preserve all existing bytes; commit amendment with this checklist.
-- [ ] **Final validation**: `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` before each commit; review exact diffs; verify only allowed paths and two commits.
-- [ ] **Cleanup**: `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`.
+- [x] **Lot 2 — Amendment**: append dated verbatim decision, translation, preserved D1 and strengthened D14 with spec link; original 495 lines compare byte-for-byte equal; commit amendment with this checklist.
+- [x] **Final validation**: PASS `make scope-check API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` before each commit; exact diff/whitespace review; only allowed paths in the two-commit delivery.
+- [x] **Cleanup**: PASS `make down API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface`; PASS `make ps API_PORT=9425 UI_PORT=5625 MAILDEV_UI_PORT=1525 ENV=test-cluster-mesh-lazy-surface` (no services).
