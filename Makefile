@@ -658,7 +658,9 @@ LLM_ROUTING_PACK_DIR ?= /tmp/sentropic-llm-routing-pack
 
 .PHONY: package-llm-routing-candidates
 package-llm-routing-candidates: build-llm-mesh build-llm-gateway ## Build exact mesh/gateway/auth tarballs and print SHA-256 values
+	@test -d "$(CURDIR)/tmp/llm-gateway-qualification" || { echo "Missing tmp/llm-gateway-qualification/: run make test-llm-gateway with the same environment before packaging candidates." >&2; exit 1; }
 	@mkdir -p "$(LLM_ROUTING_PACK_DIR)"
+	@printf '%s\n' 'Workspace auth tarballs (mcp-auth 0.2.0 with its file: dependency; auth-hono 0.15.2): dev evidence, not release.' | tee "$(LLM_ROUTING_PACK_DIR)/AUTH-EVIDENCE.txt"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --pack-destination /artifacts >/dev/null'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -v "$(LLM_ROUTING_PACK_DIR):/artifacts" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; for pkg in oauth-verify mcp-auth auth-hono; do (cd packages/$$pkg && npm pack --pack-destination /artifacts >/dev/null); done; for pkg in llm-mesh llm-gateway oauth-verify mcp-auth auth-hono; do version="$$(node -p "require(\"./packages/$$pkg/package.json\").version")"; sha256sum "/artifacts/sentropic-$$pkg-$$version.tgz"; done; cp package-lock.json /artifacts/workspace-package-lock.json'
