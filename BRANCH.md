@@ -53,6 +53,7 @@
 - [ ] S8 tests: assembly/gate DOM suites, boundary/export assertions, updated ui/tests/components/chat/ChatWidget-*.test.ts; register each hunk.
   - [x] Add assembly and gate DOM coverage with real package routing and mount/dispose counters.
   - [x] Update temporary app ownership assertions to require package slots/routing; retain host policies and callbacks.
+  - [x] Synchronize reference ownership and add public gate/pager contract and takeover-removal assertions.
 - [ ] UAT web: floating/docked/fullscreen geometry, mobile burger, list/conversation/Back/focus, all-workspaces, jobs/comments and settings overflow.
 - [ ] UAT Chrome: overlay/sidepanel, comments suppression, auth/settings, single composer.
 - [ ] UAT VSCode: loading/auth/onboarding actions and theme parity.

@@ -1,5 +1,8 @@
 # Test change register — L-C-shell
 
+- ADD assertions to `packages/chat-ui/tests/export-surface.spec.ts`: runtime/declaration/snapshot agreement for widget header/gate and every pager prop, using the existing anchored contract table; no existing contracts changed.
+- ADD assertions to `packages/chat-ui/tests/chat-widget-boundary.test.ts`: widget override absent from source/type/snapshot, separate ChatPanel override retained, package composition and unclipped routing. Existing queue/API/i18n boundary assertions unchanged.
+
 - ADD `packages/chat-ui/tests/chat-widget-assembly.dom.spec.ts` and `tests/fixtures/ChatWidgetGateHarness.svelte`: exercise the final package assembly, all routes, plugin comments suppression, single bar/composer, persistent draft, slot ordering, unclipped header and gate transitions. Fixture supplies only host gate states; actual package routing/pager execute. Mount/dispose counters prove ready is not duplicated.
 
 Every entry requires independent astra-xhigh review. No timeout, skip or E2E assertion changes are authorized.
