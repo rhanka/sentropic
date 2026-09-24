@@ -36,6 +36,7 @@
     type LockSnapshot,
     type PresenceUser,
   } from '$lib/utils/object-lock';
+  import { createLockRenewal } from '$lib/utils/lock-renewal';
   import {
     downloadCompletedDocxJob,
     startDocxGeneration,
@@ -81,6 +82,7 @@
   let lockLoading = false;
   let lockError: string | null = null;
   let suppressAutoLock = false;
+  const lockRenewal = createLockRenewal();
   let presenceUsers: PresenceUser[] = [];
   let presenceTotal = 0;
   let commentCounts: Record<string, number> = {};
@@ -189,7 +191,9 @@
       if (evt?.type === 'lock_update') {
         if (evt.objectType !== 'folder') return;
         if (evt.objectId !== targetId) return;
+        const previousLock = lock;
         lock = evt?.data?.lock ?? null;
+        lockRenewal.observed(targetId, previousLock, lock, $session.user?.id);
         if (!lock && !$workspaceReadOnlyScope) {
           if (suppressAutoLock) {
             suppressAutoLock = false;
@@ -210,7 +214,7 @@
       }
       if (evt?.type === 'ping') {
         // A ping is sent once the SSE subscription is ready: re-assert a lock this page
-        // believes it holds, in case it was cleared while the subscription was not live.
+        // still intends to hold, in case it was cleared while the subscription was not live.
         void updatePresence();
         void refreshLock();
       }
@@ -227,6 +231,7 @@
       } else {
         const res = await acquireLock('folder', lockTargetId);
         lock = res.lock;
+        lockRenewal.acquired(lockTargetId, lock, $session.user?.id);
       }
       scheduleLockRefresh();
     } catch (e: any) {
@@ -249,17 +254,25 @@
   }
 
   const refreshLock = async () => {
-    if (!lockTargetId || !$session.user) return;
+    const targetId = lockTargetId;
+    const userId = $session.user?.id;
+    if (!targetId || !userId) return;
     if (!isLockedByMe) return;
     try {
-      const res = await acquireLock('folder', lockTargetId);
-      lock = res.lock;
+      const res = await lockRenewal.renew(
+        targetId,
+        userId,
+        () => acquireLock('folder', targetId),
+        () => releaseLock('folder', targetId)
+      );
+      if (res) lock = res.lock;
     } catch {
       // ignore refresh errors
     }
   };
 
   const releaseCurrentLock = async () => {
+    lockRenewal.release();
     if (!lockTargetId || !isLockedByMe) return;
     try {
       await releaseLock('folder', lockTargetId);
@@ -293,6 +306,7 @@
     if (!lockTargetId) return;
     if (lock?.unlockRequestedByUserId) {
       suppressAutoLock = true;
+      lockRenewal.release();
       await acceptUnlock('folder', lockTargetId);
       return;
     }
